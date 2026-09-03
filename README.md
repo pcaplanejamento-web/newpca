@@ -61,16 +61,28 @@ Volte ao dashboard para ver os indicadores.
 
    (equivale a `opennextjs-cloudflare build && opennextjs-cloudflare deploy`)
 
-### Deploy automático via GitHub (opcional)
+### Deploy automático a cada push (GitHub Actions)
 
-No painel da Cloudflare: **Workers & Pages → seu Worker → Settings → Builds → Connect** e escolha o
-repositório do GitHub. Configure:
+Já existe o workflow [.github/workflows/deploy.yml](.github/workflows/deploy.yml): a cada `push` na
+`main` ele cria/atualiza o D1, aplica migrações e publica o Worker — tudo nos servidores do GitHub.
 
-- **Build command:** `npx opennextjs-cloudflare build`
-- **Deploy command:** `npx wrangler deploy`
+Falta só **1 passo** (uma vez): criar um **API Token** na Cloudflare e guardá-lo como secret do repo.
 
-> O nome do Worker no painel deve ser igual ao `name` do `wrangler.jsonc` (`newpca`).
-> O Workers Builds **não** roda migrações — rode `npm run db:migrate:remote` sempre que o schema mudar.
+1. Cloudflare → **My Profile → API Tokens → Create Token** → template **"Edit Cloudflare Workers"**
+   (garanta permissões de **Workers Scripts: Edit** e **D1: Edit**). Copie o token.
+2. Adicione como secret do repositório:
+
+   ```bash
+   gh secret set CLOUDFLARE_API_TOKEN --repo pcaplanejamento-web/newpca
+   ```
+
+   (cole o token quando pedir). Opcional: `gh secret set CLOUDFLARE_ACCOUNT_ID` se sua conta tiver
+   mais de um account.
+3. Dispare o deploy: `gh workflow run "Deploy Cloudflare" --repo pcaplanejamento-web/newpca`
+   (ou simplesmente faça qualquer push). A URL sai no log do Actions.
+
+> O workflow reaproveita o `scripts/publish.sh`, então o mesmo fluxo funciona local (via `wrangler
+> login`) e no CI (via `CLOUDFLARE_API_TOKEN`).
 
 ## Prévia local no runtime real da Cloudflare (workerd)
 
