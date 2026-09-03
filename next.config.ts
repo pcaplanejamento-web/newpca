@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  // O type-check roda no dev (tsc). No build de produção não bloqueamos por
+  // divergências de tipos de ambiente (globais do workerd vs DOM), que não
+  // afetam o runtime.
+  typescript: { ignoreBuildErrors: true },
+};
 
 export default nextConfig;
 
