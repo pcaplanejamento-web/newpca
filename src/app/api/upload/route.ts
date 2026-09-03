@@ -13,6 +13,9 @@ function bad(message: string, status = 400) {
 
 // 6 linhas x 14 colunas = 84 parâmetros (< limite de 100 do D1 por statement).
 const CHUNK = 6;
+// Nº de statements por db.batch() — mantém cada batch pequeno para planilhas
+// grandes (2000+ linhas) não estourarem os limites de tamanho do D1.
+const BATCH_STMTS = 20;
 
 export async function POST(req: Request) {
   let json: unknown;
@@ -61,20 +64,24 @@ export async function POST(req: Request) {
 
     const unidadeId = u.id;
 
-    // 2) Substitui os itens da unidade: delete + inserts em UM batch (atômico).
-    const inserts = [];
-    for (let i = 0; i < normed.length; i += CHUNK) {
-      const slice = normed
-        .slice(i, i + CHUNK)
-        .map((r) => ({ unidadeId, ...r }));
-      inserts.push(db.insert(itens).values(slice));
-    }
-    const statements = [
-      db.delete(itens).where(eq(itens.unidadeId, unidadeId)),
-      ...inserts,
-    ] as [(typeof inserts)[number], ...(typeof inserts)[number][]];
+    // 2) Substitui os itens da unidade: apaga os antigos e insere em vários
+    //    lotes menores (cada batch com poucos statements). Isso mantém cada
+    //    escrita dentro dos limites do D1 e escala para planilhas grandes.
+    await db.delete(itens).where(eq(itens.unidadeId, unidadeId));
 
-    await db.batch(statements);
+    const rows = normed.map((r) => ({ unidadeId, ...r }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let pending: any[] = [];
+    const flush = async () => {
+      if (pending.length === 0) return;
+      await db.batch(pending as [(typeof pending)[number], ...(typeof pending)[number][]]);
+      pending = [];
+    };
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      pending.push(db.insert(itens).values(rows.slice(i, i + CHUNK)));
+      if (pending.length >= BATCH_STMTS) await flush();
+    }
+    await flush();
 
     return NextResponse.json({
       ok: true,
