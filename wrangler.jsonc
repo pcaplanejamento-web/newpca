@@ -12,9 +12,8 @@
     {
       "binding": "DB",
       "database_name": "newpca-db",
-      // Placeholder para dev local. Ao criar o banco real na Cloudflare
-      // (`wrangler d1 create newpca-db`), cole aqui o database_id retornado.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // ID do banco D1 'newpca-db' na conta Cloudflare.
+      "database_id": "132b761f-7a2b-4723-bd92-a95d51f977e6",
       "migrations_dir": "drizzle"
     }
   ]
