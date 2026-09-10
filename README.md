@@ -1,5 +1,9 @@
 # PCA Rio Verde — Sistema de Visualização
 
+> ⚠️ **Status (10/09/2026):** produção fora do ar e deploy bloqueado por token inválido.
+> A importação de planilhas grandes foi **corrigida** (upload em lotes) e validada localmente.
+> Diagnóstico completo e próximos passos em **[docs/AUDITORIA.md](./docs/AUDITORIA.md)**.
+
 Sistema em **Next.js** para importar e visualizar o **Plano de Contratações Anual (PCA)** da
 Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLite).
 

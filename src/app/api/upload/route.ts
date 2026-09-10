@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
-import { normalizarLinha } from "@/lib/normalize";
+import { normalizarLinha, type LinhaCrua } from "@/lib/normalize";
 import { uploadSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +11,25 @@ function bad(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
-// 6 linhas x 14 colunas = 84 parâmetros (< limite de 100 do D1 por statement).
-const CHUNK = 6;
-// Nº de statements por db.batch() — mantém cada batch pequeno para planilhas
-// grandes (2000+ linhas) não estourarem os limites de tamanho do D1.
-const BATCH_STMTS = 20;
+// 7 linhas x 14 colunas = 98 parâmetros (< limite de 100 do D1 por statement).
+// O cliente envia a planilha em lotes (ex.: 200 linhas/requisição), então cada
+// requisição faz ~29 statements num único db.batch() — bem dentro dos limites
+// de sub-requisições e CPU do Worker. Assim planilhas grandes sobem inteiras.
+const ROWS_PER_STMT = 7;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function inserts(db: ReturnType<typeof getDb>, unidadeId: number, rows: LinhaCrua[]): any[] {
+  const normed = rows.map(normalizarLinha);
+  const stmts = [];
+  for (let i = 0; i < normed.length; i += ROWS_PER_STMT) {
+    stmts.push(
+      db.insert(itens).values(
+        normed.slice(i, i + ROWS_PER_STMT).map((r) => ({ unidadeId, ...r })),
+      ),
+    );
+  }
+  return stmts;
+}
 
 export async function POST(req: Request) {
   let json: unknown;
@@ -30,67 +44,68 @@ export async function POST(req: Request) {
     return bad(parsed.error.issues[0]?.message ?? "Dados inválidos.", 422);
   }
 
-  const { codigo, municipio, nomeArquivo, rows } = parsed.data;
-  const normed = rows.map(normalizarLinha);
-  const totalItens = normed.length;
-  const valorTotal =
-    Math.round(normed.reduce((s, r) => s + (r.valorTotal ?? 0), 0) * 100) / 100;
-
   const db = getDb();
 
   try {
-    // 1) Upsert da unidade (por código) e recupera o id.
-    const [u] = await db
-      .insert(unidades)
-      .values({
-        codigo,
-        municipio,
-        nomeArquivo: nomeArquivo ?? null,
-        totalItens,
-        valorTotal,
-        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-      })
-      .onConflictDoUpdate({
-        target: unidades.codigo,
-        set: {
+    if (parsed.data.mode === "start") {
+      const { codigo, municipio, nomeArquivo, totalItens, valorTotal, rows } =
+        parsed.data;
+
+      // Cria/atualiza a unidade (por código) e recupera o id.
+      const [u] = await db
+        .insert(unidades)
+        .values({
+          codigo,
           municipio,
           nomeArquivo: nomeArquivo ?? null,
-          totalItens,
-          valorTotal,
+          totalItens: totalItens ?? rows.length,
+          valorTotal: valorTotal ?? 0,
           atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-        },
-      })
-      .returning({ id: unidades.id });
+        })
+        .onConflictDoUpdate({
+          target: unidades.codigo,
+          set: {
+            municipio,
+            nomeArquivo: nomeArquivo ?? null,
+            totalItens: totalItens ?? rows.length,
+            valorTotal: valorTotal ?? 0,
+            atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+          },
+        })
+        .returning({ id: unidades.id });
 
-    const unidadeId = u.id;
+      const unidadeId = u.id;
 
-    // 2) Substitui os itens da unidade: apaga os antigos e insere em vários
-    //    lotes menores (cada batch com poucos statements). Isso mantém cada
-    //    escrita dentro dos limites do D1 e escala para planilhas grandes.
-    await db.delete(itens).where(eq(itens.unidadeId, unidadeId));
+      // Substitui os itens: apaga os antigos e insere o 1º lote — tudo num
+      // único batch atômico.
+      const stmts = inserts(db, unidadeId, rows);
+      await db.batch([
+        db.delete(itens).where(eq(itens.unidadeId, unidadeId)),
+        ...stmts,
+      ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
 
-    const rows = normed.map((r) => ({ unidadeId, ...r }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let pending: any[] = [];
-    const flush = async () => {
-      if (pending.length === 0) return;
-      await db.batch(pending as [(typeof pending)[number], ...(typeof pending)[number][]]);
-      pending = [];
-    };
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      pending.push(db.insert(itens).values(rows.slice(i, i + CHUNK)));
-      if (pending.length >= BATCH_STMTS) await flush();
+      return NextResponse.json({
+        ok: true,
+        unidadeId,
+        codigo,
+        municipio,
+        inserted: rows.length,
+      });
     }
-    await flush();
 
-    return NextResponse.json({
-      ok: true,
-      unidadeId,
-      codigo,
-      municipio,
-      totalItens,
-      valorTotal,
-    });
+    // mode === "append": acrescenta um lote à unidade já criada.
+    const { unidadeId, rows } = parsed.data;
+    const [existe] = await db
+      .select({ id: unidades.id })
+      .from(unidades)
+      .where(eq(unidades.id, unidadeId))
+      .limit(1);
+    if (!existe) return bad("Unidade não encontrada para acrescentar itens.", 404);
+
+    const stmts = inserts(db, unidadeId, rows);
+    await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+
+    return NextResponse.json({ ok: true, unidadeId, inserted: rows.length });
   } catch (err) {
     console.error("Falha ao importar PCA:", err);
     return bad(

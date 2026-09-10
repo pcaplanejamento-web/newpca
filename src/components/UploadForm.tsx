@@ -31,6 +31,11 @@ export function UploadForm() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  // Linhas por requisição — mantém cada requisição pequena (dentro dos limites
+  // do Worker/D1), permitindo importar planilhas de qualquer tamanho.
+  const CHUNK = 200;
 
   async function handleFile(file: File) {
     setErro(null);
@@ -57,29 +62,48 @@ export function UploadForm() {
     if (!preview) return;
     setStatus("sending");
     setErro(null);
+    setProgress(0);
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          codigo: preview.codigo,
-          municipio: preview.municipio,
-          nomeArquivo: preview.nomeArquivo,
-          rows: preview.rows,
-        }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-      } & Resultado;
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Erro ao importar.");
+      const all = preview.rows;
+      let unidadeId: number | null = null;
+
+      for (let i = 0; i < all.length; i += CHUNK) {
+        const slice = all.slice(i, i + CHUNK);
+        const body =
+          i === 0
+            ? {
+                mode: "start" as const,
+                codigo: preview.codigo,
+                municipio: preview.municipio,
+                nomeArquivo: preview.nomeArquivo,
+                totalItens: preview.count,
+                valorTotal: preview.total,
+                rows: slice,
+              }
+            : { mode: "append" as const, unidadeId: unidadeId!, rows: slice };
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          unidadeId?: number;
+        };
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error ?? "Erro ao importar.");
+        }
+        if (i === 0) unidadeId = json.unidadeId ?? null;
+        setProgress(Math.round(((i + slice.length) / all.length) * 100));
       }
+
       setResultado({
-        codigo: json.codigo,
-        municipio: json.municipio,
-        totalItens: json.totalItens,
-        valorTotal: json.valorTotal,
+        codigo: preview.codigo,
+        municipio: preview.municipio,
+        totalItens: preview.count,
+        valorTotal: preview.total,
       });
       setStatus("done");
       router.refresh();
@@ -94,6 +118,7 @@ export function UploadForm() {
     setPreview(null);
     setErro(null);
     setResultado(null);
+    setProgress(0);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -249,7 +274,7 @@ export function UploadForm() {
               {status === "sending" ? (
                 <>
                   <IconSpinner className="h-[18px] w-[18px]" />
-                  Importando...
+                  Importando... {progress}%
                 </>
               ) : (
                 <>
@@ -267,6 +292,20 @@ export function UploadForm() {
               Cancelar
             </button>
           </div>
+
+          {status === "sending" && (
+            <div className="mt-4">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                Enviando {num(preview.count)} itens em lotes... {progress}%
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
