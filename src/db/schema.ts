@@ -56,7 +56,52 @@ export const itens = sqliteTable(
   ],
 );
 
+/**
+ * Usuários da plataforma. `role` = papel (RBAC básico); `status` controla o
+ * acesso (o primeiro usuário cadastrado vira admin/ativo; os demais entram
+ * como membro/pendente até um admin aprovar).
+ */
+export const usuarios = sqliteTable(
+  "usuarios",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    nome: text("nome").notNull(),
+    senhaHash: text("senha_hash").notNull(),
+    role: text("role", { enum: ["admin", "gestor", "membro"] })
+      .notNull()
+      .default("membro"),
+    status: text("status", { enum: ["ativo", "pendente", "inativo"] })
+      .notNull()
+      .default("pendente"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("usuarios_email_uq").on(t.email)],
+);
+
+/** Sessões (login por cookie). Guardamos apenas o hash do token. */
+export const sessoes = sqliteTable(
+  "sessoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    expiraEm: text("expira_em").notNull(),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("sessoes_token_uq").on(t.tokenHash),
+    index("sessoes_usuario_idx").on(t.usuarioId),
+  ],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
 export type NovoItem = typeof itens.$inferInsert;
+export type Usuario = typeof usuarios.$inferSelect;
+export type NovoUsuario = typeof usuarios.$inferInsert;
+export type Sessao = typeof sessoes.$inferSelect;

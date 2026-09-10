@@ -57,6 +57,16 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Telas de autenticação: sem sidebar/topbar, conteúdo centralizado.
+  if (pathname === "/login" || pathname === "/cadastro") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-950">
+        {children}
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen lg:flex">

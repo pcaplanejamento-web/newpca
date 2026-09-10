@@ -4,13 +4,16 @@ Auditoria completa e honesta do estado atual, do que o plano técnico (PDF envia
 
 ---
 
-## 1. Status atual — CRÍTICO 🔴
+## 1. Status atual — ✅ RESTAURADO (atualizado)
 
 | Item | Estado |
 |---|---|
-| Site em produção (`newpca.jhoneduardorioverde.workers.dev`) | **FORA DO AR** — todas as rotas retornam 404 (erro Cloudflare 1042) |
-| Pipeline de deploy (GitHub Actions) | **BLOQUEADO** — o secret `CLOUDFLARE_API_TOKEN` está inválido |
-| Código no GitHub | OK, íntegro (`main` @ `d2f4ab9`) |
+| Site em produção | **NO AR** — `newpca.jhoneduardorioverde.workers.dev` e domínio `governarv.com.br` |
+| Pipeline de deploy (GitHub Actions) | **OK** — token novo válido; push na `main` publica automaticamente |
+| Importação de planilha grande | **CORRIGIDA** (upload em lotes) e no ar |
+| Fase 1 — Autenticação | **EM CONSTRUÇÃO** (aditiva) — ver [FASE1-AUTENTICACAO.md](./FASE1-AUTENTICACAO.md) |
+
+> Histórico: o site chegou a ficar fora do ar (404/1042) e o deploy bloqueado por token revogado; ambos resolvidos em 10/09/2026 (token novo + redeploy).
 
 **Diagnóstico:** o código não mudou desde o último deploy verdadeiro (03/09, que ficou no ar respondendo 200). O site caiu **sem alteração de código** → causa é de infraestrutura/conta: o Worker/rota foi removido ou desativado. E o log do Actions mostra `wrangler` reportando *"não está logado"* mesmo com o secret presente → **o token de deploy foi revogado** (provavelmente junto com os tokens que você revogou por segurança).
 
