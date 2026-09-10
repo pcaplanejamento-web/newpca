@@ -31,8 +31,6 @@ export const situacaoStyle = (s?: string | null) =>
   "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
 
 // NATUREZA (coluna NATUREZA — ex.: INCLUSÃO 2027, INCLUSÃO 2026, EXCLUSÃO)
-export const NATUREZA_SUGESTOES = ["INCLUSÃO 2027", "INCLUSÃO 2026", "EXCLUSÃO"];
-
 /** Cor por palavra-chave (inclusão = verde/azul por ano; exclusão = vermelho). */
 export function naturezaStyle(n?: string | null): string {
   const s = (n ?? "").toUpperCase();

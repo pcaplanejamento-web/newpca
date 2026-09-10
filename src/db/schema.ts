@@ -126,6 +126,21 @@ export const protocolos = sqliteTable(
   ],
 );
 
+/**
+ * Listas de seleção gerenciáveis dos protocolos (secretaria, natureza,
+ * responsavel, distribuicao). O usuário cadastra novas opções pela tela.
+ */
+export const protocoloOpcoes = sqliteTable(
+  "protocolo_opcoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    categoria: text("categoria").notNull(),
+    valor: text("valor").notNull(),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.categoria, t.valor)],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -135,3 +150,4 @@ export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
 export type Protocolo = typeof protocolos.$inferSelect;
 export type NovoProtocolo = typeof protocolos.$inferInsert;
+export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;

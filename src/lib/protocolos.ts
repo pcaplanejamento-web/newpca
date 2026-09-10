@@ -1,8 +1,16 @@
-import { and, desc, eq, isNotNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
-import { protocolos } from "@/db/schema";
+import { protocoloOpcoes, protocolos } from "@/db/schema";
 import { SITUACAO } from "./protocolo-constantes";
+
+export const CATEGORIAS_OPCAO = [
+  "secretaria",
+  "natureza",
+  "responsavel",
+  "distribuicao",
+] as const;
+export type CategoriaOpcao = (typeof CATEGORIAS_OPCAO)[number];
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), hi);
 const dataOpc = z
@@ -101,21 +109,39 @@ export async function resumoProtocolos() {
   return { total, porSituacao, finalizados, emAberto: total - finalizados };
 }
 
-/** Valores distintos (para filtros e sugestões do formulário). */
-export async function opcoesProtocolos() {
-  const db = getDb();
-  const distintos = async (col: typeof protocolos.responsavel) => {
-    const rows = await db
-      .selectDistinct({ v: col })
-      .from(protocolos)
-      .where(isNotNull(col))
-      .orderBy(col);
-    return rows.map((r) => r.v).filter((v): v is string => !!v && v.trim() !== "");
+/** Lista as opções gerenciáveis (para os selects e a tela de gestão de listas). */
+export async function listarOpcoes() {
+  const rows = await getDb()
+    .select({
+      id: protocoloOpcoes.id,
+      categoria: protocoloOpcoes.categoria,
+      valor: protocoloOpcoes.valor,
+    })
+    .from(protocoloOpcoes)
+    .orderBy(protocoloOpcoes.categoria, protocoloOpcoes.valor);
+
+  const agrupado: Record<CategoriaOpcao, string[]> = {
+    secretaria: [],
+    natureza: [],
+    responsavel: [],
+    distribuicao: [],
   };
-  const [responsaveis, naturezas, distribuicoes] = await Promise.all([
-    distintos(protocolos.responsavel),
-    distintos(protocolos.natureza),
-    distintos(protocolos.distribuicao),
-  ]);
-  return { responsaveis, naturezas, distribuicoes };
+  for (const r of rows) {
+    if (r.categoria in agrupado) agrupado[r.categoria as CategoriaOpcao].push(r.valor);
+  }
+  return { rows, agrupado };
+}
+
+export async function adicionarOpcao(categoria: string, valor: string) {
+  const v = valor.trim();
+  if (!CATEGORIAS_OPCAO.includes(categoria as CategoriaOpcao) || !v) return null;
+  await getDb()
+    .insert(protocoloOpcoes)
+    .values({ categoria, valor: v })
+    .onConflictDoNothing();
+  return v;
+}
+
+export async function removerOpcao(id: number) {
+  await getDb().delete(protocoloOpcoes).where(eq(protocoloOpcoes.id, id));
 }

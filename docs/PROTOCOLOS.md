@@ -21,14 +21,25 @@ Migração: `drizzle/0003_protocolos_v2.sql`.
 
 ## Funcionalidades
 - KPIs: total, em aberto, em análise, finalizados.
-- Busca (protocolo/secretaria/natureza/responsável) + filtros por situação, responsável e natureza + paginação.
-- Criar/editar em modal (com sugestões de natureza/responsável/distribuição a partir dos valores já usados).
+- Busca + filtros (situação, responsável, natureza) + paginação.
+- **Edição na própria linha** (estilo planilha): "+ Adicionar linha" cria uma linha
+  editável; "Editar" torna a linha existente editável. Salvar/Cancelar inline.
+- **Tudo por seleção** (menos o nº do protocolo): secretaria, natureza, responsável,
+  situação e distribuição são `<select>`.
+- **Cadastro de opções na própria tela**: cada select tem "➕ Nova opção…"; e há
+  **"Gerenciar listas"** para adicionar/remover valores por categoria.
+
+## Listas de seleção (`protocolo_opcoes`, migração 0004)
+Categorias gerenciáveis: `secretaria`, `natureza`, `responsavel`, `distribuicao`
+(únicas por categoria+valor). `situacao` é fixa (workflow). Naturezas iniciais:
+INCLUSÃO 2027/2026, EXCLUSÃO.
 
 ## API
-- `GET /api/protocolos` — lista + resumo + opções (qualquer logado).
-- `POST /api/protocolos` — cria (admin/gestor).
-- `PATCH`/`DELETE /api/protocolos/[id]` (admin/gestor).
+- `GET /api/protocolos` — lista + resumo (qualquer logado).
+- `POST /api/protocolos` · `PATCH`/`DELETE /api/protocolos/[id]` (admin/gestor).
+- `GET /api/protocolos/opcoes` — listas de seleção · `POST` adiciona ·
+  `DELETE /api/protocolos/opcoes/[id]` remove (admin/gestor).
 
 ## Próximo passo
-- **Importar** a aba "Distribuição de Protocolos" exportada em `.xlsx` (mapeando
-  DATA, PROTOCOLO, SECRETARIA, NATUREZA, RESPONSÁVEL, SITUAÇÃO, DISTRIBUIÇÃO).
+- **Importar** a aba "Distribuição de Protocolos" (.xlsx), populando protocolos e
+  já cadastrando as opções (secretaria/natureza/responsável/distribuição) encontradas.

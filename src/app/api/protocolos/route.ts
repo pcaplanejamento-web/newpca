@@ -3,12 +3,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { protocolos } from "@/db/schema";
 import { getUsuarioAtual } from "@/lib/auth";
-import {
-  listarProtocolos,
-  opcoesProtocolos,
-  protocoloSchema,
-  resumoProtocolos,
-} from "@/lib/protocolos";
+import { listarProtocolos, protocoloSchema, resumoProtocolos } from "@/lib/protocolos";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +18,7 @@ export async function GET(req: Request) {
   if (!u) return NextResponse.json({ ok: false, error: "Não autenticado." }, { status: 401 });
 
   const sp = new URL(req.url).searchParams;
-  const [r, resumo, opcoes] = await Promise.all([
+  const [r, resumo] = await Promise.all([
     listarProtocolos({
       situacao: sp.get("situacao") ?? undefined,
       responsavel: sp.get("responsavel") ?? undefined,
@@ -33,9 +28,8 @@ export async function GET(req: Request) {
       pageSize: int(sp.get("pageSize")),
     }),
     resumoProtocolos(),
-    opcoesProtocolos(),
   ]);
-  return NextResponse.json({ ok: true, ...r, resumo, opcoes, podeEditar: podeEditar(u.role) });
+  return NextResponse.json({ ok: true, ...r, resumo, podeEditar: podeEditar(u.role) });
 }
 
 export async function POST(req: Request) {
