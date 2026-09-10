@@ -99,32 +99,20 @@ export const sessoes = sqliteTable(
 );
 
 /**
- * Protocolos — digitaliza a planilha de "Distribuição de Protocolos".
- * Cada protocolo tem número, assunto, secretaria de origem, responsável
- * (um usuário da equipe), situação no fluxo, prioridade e prazos.
+ * Protocolos — espelha a planilha "Distribuição de Protocolos":
+ * DATA · PROTOCOLO · SECRETARIA/ÓRGÃO · NATUREZA · RESPONSÁVEL · SITUAÇÃO · DISTRIBUIÇÃO.
  */
 export const protocolos = sqliteTable(
   "protocolos",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    numero: text("numero").notNull(),
-    assunto: text("assunto").notNull(),
-    secretaria: text("secretaria"),
-    responsavelId: integer("responsavel_id").references(() => usuarios.id, {
-      onDelete: "set null",
-    }),
-    status: text("status", {
-      enum: ["recebido", "em_andamento", "aguardando", "concluido", "arquivado"],
-    })
-      .notNull()
-      .default("recebido"),
-    prioridade: text("prioridade", { enum: ["baixa", "media", "alta"] })
-      .notNull()
-      .default("media"),
-    dataEntrada: text("data_entrada"),
-    prazo: text("prazo"),
-    dataConclusao: text("data_conclusao"),
-    observacoes: text("observacoes"),
+    data: text("data"), // DATA (ISO yyyy-mm-dd)
+    numero: text("numero").notNull(), // PROTOCOLO
+    secretaria: text("secretaria"), // SECRETARIA / ÓRGÃO (com o solicitante)
+    natureza: text("natureza"), // NATUREZA (ex.: INCLUSÃO 2027, EXCLUSÃO)
+    responsavel: text("responsavel"), // RESPONSÁVEL (Naty/Cris/Maria...)
+    situacao: text("situacao").notNull().default("em_analise"), // SITUAÇÃO
+    distribuicao: text("distribuicao"), // DISTRIBUIÇÃO (Naty/Cris/Maria...)
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),
@@ -132,9 +120,9 @@ export const protocolos = sqliteTable(
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [
-    index("protocolos_status_idx").on(t.status),
-    index("protocolos_resp_idx").on(t.responsavelId),
-    index("protocolos_prazo_idx").on(t.prazo),
+    index("protocolos_situacao_idx").on(t.situacao),
+    index("protocolos_natureza_idx").on(t.natureza),
+    index("protocolos_responsavel_idx").on(t.responsavel),
   ],
 );
 

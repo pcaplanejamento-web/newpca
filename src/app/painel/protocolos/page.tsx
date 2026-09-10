@@ -1,11 +1,10 @@
 import { ProtocolosClient } from "@/components/ProtocolosClient";
 import { getUsuarioAtual } from "@/lib/auth";
-import { usuariosAtivos } from "@/lib/protocolos";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProtocolosPage() {
-  const [atual, usuarios] = await Promise.all([getUsuarioAtual(), usuariosAtivos()]);
+  const atual = await getUsuarioAtual();
   const podeEditar = atual?.role === "admin" || atual?.role === "gestor";
 
   return (
@@ -18,7 +17,7 @@ export default async function ProtocolosPage() {
           Distribuição e acompanhamento dos protocolos da equipe.
         </p>
       </div>
-      <ProtocolosClient usuarios={usuarios} podeEditar={podeEditar} />
+      <ProtocolosClient podeEditar={podeEditar} />
     </div>
   );
 }

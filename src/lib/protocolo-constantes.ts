@@ -1,45 +1,47 @@
-// Constantes compartilhadas de Protocolos (puras — sem dependências de servidor,
-// podem ser importadas por componentes cliente e por rotas de API).
+// Constantes compartilhadas de Protocolos (puras — usadas no cliente e no servidor).
 
-export const STATUS_PROTOCOLO = [
-  "recebido",
+// SITUAÇÃO (coluna SITUAÇÃO da planilha)
+export const SITUACAO = [
+  "em_analise",
   "em_andamento",
-  "aguardando",
-  "concluido",
-  "arquivado",
+  "pendente",
+  "finalizado",
 ] as const;
-export type StatusProtocolo = (typeof STATUS_PROTOCOLO)[number];
+export type Situacao = (typeof SITUACAO)[number];
 
-export const STATUS_LABEL: Record<StatusProtocolo, string> = {
-  recebido: "Recebido",
+export const SITUACAO_LABEL: Record<string, string> = {
+  em_analise: "Em análise",
   em_andamento: "Em andamento",
-  aguardando: "Aguardando",
-  concluido: "Concluído",
-  arquivado: "Arquivado",
+  pendente: "Pendente",
+  finalizado: "Finalizado",
 };
 
-export const STATUS_STYLE: Record<StatusProtocolo, string> = {
-  recebido: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  em_andamento:
-    "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  aguardando:
-    "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
-  concluido:
+export const SITUACAO_STYLE: Record<string, string> = {
+  em_analise: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  em_andamento: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  pendente: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  finalizado:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  arquivado: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
 };
 
-export const PRIORIDADE_PROTOCOLO = ["baixa", "media", "alta"] as const;
-export type PrioridadeProtocolo = (typeof PRIORIDADE_PROTOCOLO)[number];
+export const situacaoLabel = (s?: string | null) =>
+  (s && SITUACAO_LABEL[s]) || s || "—";
+export const situacaoStyle = (s?: string | null) =>
+  (s && SITUACAO_STYLE[s]) ||
+  "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
 
-export const PRIORIDADE_LABEL: Record<PrioridadeProtocolo, string> = {
-  baixa: "Baixa",
-  media: "Média",
-  alta: "Alta",
-};
+// NATUREZA (coluna NATUREZA — ex.: INCLUSÃO 2027, INCLUSÃO 2026, EXCLUSÃO)
+export const NATUREZA_SUGESTOES = ["INCLUSÃO 2027", "INCLUSÃO 2026", "EXCLUSÃO"];
 
-export const PRIORIDADE_STYLE: Record<PrioridadeProtocolo, string> = {
-  baixa: "text-slate-500 dark:text-slate-400",
-  media: "text-amber-600 dark:text-amber-400",
-  alta: "text-red-600 dark:text-red-400",
-};
+/** Cor por palavra-chave (inclusão = verde/azul por ano; exclusão = vermelho). */
+export function naturezaStyle(n?: string | null): string {
+  const s = (n ?? "").toUpperCase();
+  if (s.includes("EXCLUS"))
+    return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300";
+  if (s.includes("INCLUS")) {
+    return s.includes("2027")
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      : "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300";
+  }
+  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+}
