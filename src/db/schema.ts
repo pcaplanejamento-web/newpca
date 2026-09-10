@@ -163,6 +163,56 @@ export const linhas = sqliteTable(
   (t) => [index("linhas_tabela_idx").on(t.tabelaId)],
 );
 
+/**
+ * Protocolos (módulo curado) — digitaliza a planilha "Distribuição de
+ * Protocolos". Os campos de seleção (orgao/natureza/responsavel/distribuicao)
+ * têm opções gerenciáveis em `protocoloOpcoes`; `situacao` é um enum fixo com
+ * cores próprias na interface. Só `numero` é obrigatório.
+ */
+export const protocolos = sqliteTable(
+  "protocolos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    numero: text("numero").notNull(),
+    data: text("data"), // ISO yyyy-mm-dd (data do protocolo)
+    orgao: text("orgao"),
+    orgaoSigla: text("orgao_sigla"),
+    natureza: text("natureza"),
+    responsavel: text("responsavel"),
+    situacao: text("situacao", {
+      enum: ["em_analise", "em_andamento", "finalizado", "devolvido", "cancelado"],
+    })
+      .notNull()
+      .default("em_analise"),
+    distribuicao: text("distribuicao"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, {
+      onDelete: "set null",
+    }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("protocolos_situacao_idx").on(t.situacao),
+    index("protocolos_natureza_idx").on(t.natureza),
+    index("protocolos_responsavel_idx").on(t.responsavel),
+    index("protocolos_data_idx").on(t.data),
+  ],
+);
+
+/** Opções gerenciáveis dos campos de seleção do protocolo. */
+export const protocoloOpcoes = sqliteTable(
+  "protocolo_opcoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    campo: text("campo", {
+      enum: ["orgao", "natureza", "responsavel", "distribuicao"],
+    }).notNull(),
+    valor: text("valor").notNull(),
+    ordem: integer("ordem").notNull().default(0),
+  },
+  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.campo, t.valor)],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -175,3 +225,8 @@ export type Coluna = typeof colunas.$inferSelect;
 export type ColunaOpcao = typeof colunaOpcoes.$inferSelect;
 export type Linha = typeof linhas.$inferSelect;
 export type TipoColuna = Coluna["tipo"];
+export type Protocolo = typeof protocolos.$inferSelect;
+export type NovoProtocolo = typeof protocolos.$inferInsert;
+export type SituacaoProtocolo = Protocolo["situacao"];
+export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;
+export type CampoOpcao = ProtocoloOpcao["campo"];

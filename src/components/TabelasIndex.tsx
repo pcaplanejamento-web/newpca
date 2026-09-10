@@ -47,7 +47,7 @@ export function TabelasIndex({ podeEditar }: { podeEditar: boolean }) {
       });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao criar.");
-      router.push(`/painel/protocolos/${j.id}`);
+      router.push(`/painel/ferramentas/tabelas/${j.id}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro ao criar tabela.");
     } finally {
@@ -68,7 +68,7 @@ export function TabelasIndex({ podeEditar }: { podeEditar: boolean }) {
       {tabelas.map((t) => (
         <Link
           key={t.id}
-          href={`/painel/protocolos/${t.id}`}
+          href={`/painel/ferramentas/tabelas/${t.id}`}
           className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-500/40"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">

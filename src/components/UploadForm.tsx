@@ -157,7 +157,7 @@ export function UploadForm() {
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
-            href="/painel"
+            href="/painel/ferramentas/pca"
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
           >
             Ver no dashboard

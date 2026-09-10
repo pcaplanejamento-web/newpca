@@ -1,23 +1,37 @@
-import { TabelasIndex } from "@/components/TabelasIndex";
+import { ProtocolosView } from "@/components/ProtocolosView";
 import { getUsuarioAtual } from "@/lib/auth";
+import {
+  SITUACOES,
+  getResumoProtocolos,
+  listarOpcoes,
+  listarProtocolos,
+} from "@/lib/protocolos";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProtocolosPage() {
+export default async function ProtocolosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const q = (await searchParams).q?.trim() || "";
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
+  const [inicial, resumo, opcoes] = await Promise.all([
+    listarProtocolos({ q, page: 1 }),
+    getResumoProtocolos(),
+    listarOpcoes(),
+  ]);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-          Protocolos e listas
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Suas tabelas de controle. Abra uma para editar ou crie uma nova.
-        </p>
-      </div>
-      <TabelasIndex podeEditar={podeEditar} />
-    </div>
+    <ProtocolosView
+      inicial={inicial}
+      resumo={resumo}
+      opcoes={opcoes}
+      situacoes={SITUACOES.map((s) => ({ valor: s.valor, label: s.label }))}
+      podeEditar={podeEditar}
+      buscaInicial={q}
+    />
   );
 }

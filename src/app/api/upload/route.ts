@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { exigirEditor } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
 import { normalizarLinha, type LinhaCrua } from "@/lib/normalize";
@@ -32,6 +33,9 @@ function inserts(db: ReturnType<typeof getDb>, unidadeId: number, rows: LinhaCru
 }
 
 export async function POST(req: Request) {
+  const auth = await exigirEditor();
+  if ("erro" in auth) return auth.erro;
+
   let json: unknown;
   try {
     json = await req.json();

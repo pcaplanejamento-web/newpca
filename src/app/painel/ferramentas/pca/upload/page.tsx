@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { UploadForm } from "@/components/UploadForm";
-import { IconBuilding } from "@/components/icons";
+import { IconBuilding, IconChevronLeft } from "@/components/icons";
 import { brl, dataBR, num } from "@/lib/format";
 import { getUnidades } from "@/lib/queries";
 
@@ -9,7 +10,14 @@ export default async function UploadPage() {
   const unidades = await getUnidades();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link
+        href="/painel/ferramentas/pca"
+        className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-800 dark:hover:text-white"
+      >
+        <IconChevronLeft className="h-4 w-4" /> Dashboard do PCA
+      </Link>
+
       <div>
         <h2 className="text-lg font-bold text-slate-800 dark:text-white">
           Importar Planilha do PCA
