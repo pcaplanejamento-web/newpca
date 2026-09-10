@@ -1,182 +1,113 @@
 import Link from "next/link";
-import { KpiCard } from "@/components/KpiCard";
-import { ChartCard } from "@/components/ChartCard";
-import { UnitFilter } from "@/components/UnitFilter";
-import { ItemTable } from "@/components/ItemTable";
-import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
-import { MensalChart } from "@/components/charts/MensalChart";
-import { UnidadeChart } from "@/components/charts/UnidadeChart";
-import { TopItensChart } from "@/components/charts/TopItensChart";
-import {
-  IconBox,
-  IconInbox,
-  IconTrend,
-  IconTrophy,
-  IconUpload,
-  IconWallet,
-} from "@/components/icons";
-import { brl, num } from "@/lib/format";
-import {
-  getAnos,
-  getClassificacoes,
-  getPorClassificacao,
-  getPorMes,
-  getPorUnidadeMedida,
-  getResumo,
-  getTopItens,
-  getUnidades,
-} from "@/lib/queries";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { IconBox, IconDashboard, IconTrend, IconUpload } from "@/components/icons";
 
-export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "PCA — Prefeitura de Rio Verde",
+};
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ unidade?: string }>;
-}) {
-  const sp = await searchParams;
-  const unidades = await getUnidades();
+const RECURSOS = [
+  {
+    Icon: IconDashboard,
+    titulo: "Indicadores",
+    texto: "Painéis com KPIs, gráficos e consulta detalhada das contratações.",
+  },
+  {
+    Icon: IconUpload,
+    titulo: "Importação de planilhas",
+    texto: "Suba o PCA em .xlsx e veja os dados normalizados na hora.",
+  },
+  {
+    Icon: IconBox,
+    titulo: "Gestão de protocolos",
+    texto: "Acompanhamento de protocolos e fluxos da equipe (em construção).",
+  },
+];
 
-  // Estado vazio: nenhuma planilha importada ainda.
-  if (unidades.length === 0) {
-    return (
-      <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
-          <IconInbox className="h-8 w-8" />
-        </div>
-        <h2 className="mt-5 text-lg font-bold text-slate-800 dark:text-white">
-          Nenhuma planilha importada
-        </h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Importe a planilha do PCA (.xlsx) para visualizar os indicadores,
-          gráficos e a consulta de itens.
-        </p>
-        <Link
-          href="/upload"
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-        >
-          <IconUpload className="h-[18px] w-[18px]" />
-          Importar planilha
-        </Link>
-      </div>
-    );
-  }
-
-  const parsedId = sp.unidade ? parseInt(sp.unidade, 10) : NaN;
-  const unidadeId =
-    Number.isFinite(parsedId) && unidades.some((u) => u.id === parsedId)
-      ? parsedId
-      : undefined;
-
-  const [resumo, porClass, porMes, porUnidade, top, classificacoes, anos] =
-    await Promise.all([
-      getResumo(unidadeId),
-      getPorClassificacao(unidadeId),
-      getPorMes(unidadeId),
-      getPorUnidadeMedida(unidadeId),
-      getTopItens(unidadeId, 10),
-      getClassificacoes(unidadeId),
-      getAnos(unidadeId),
-    ]);
-
+export default function LandingPage() {
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho + filtro */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-            Indicadores Gerais
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {unidadeId
-              ? "Dados da unidade selecionada"
-              : `Consolidado de ${num(resumo.numUnidades)} unidade(s)`}
-          </p>
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+      {/* Topo */}
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-700 text-sm font-black text-white">
+            RV
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-bold">PCA — Rio Verde</div>
+            <div className="hidden text-[11px] text-slate-500 sm:block dark:text-slate-400">
+              Planejamento de Contratações Anuais
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              href="/login"
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+            >
+              Entrar
+            </Link>
+          </div>
         </div>
-        <div className="sm:w-80">
-          <UnitFilter unidades={unidades} current={unidadeId} />
-        </div>
-      </div>
+      </header>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          title="Total Planejado"
-          value={brl(resumo.total)}
-          subtitle={`em ${num(resumo.count)} itens`}
-          icon={<IconWallet className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
-        />
-        <KpiCard
-          title="Qtd. de Itens"
-          value={num(resumo.count)}
-          subtitle={
-            unidadeId
-              ? "itens na unidade"
-              : `${num(resumo.numUnidades)} unidade(s)`
-          }
-          icon={<IconBox className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-emerald-500 to-green-600"
-        />
-        <KpiCard
-          title="Ticket Médio"
-          value={brl(resumo.ticket)}
-          subtitle="por item"
-          icon={<IconTrend className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-orange-500 to-amber-600"
-        />
-        <KpiCard
-          title="Maior Item"
-          value={brl(resumo.maiorValor)}
-          subtitle={resumo.maiorNome ?? "—"}
-          icon={<IconTrophy className="h-6 w-6" />}
-          gradient="bg-gradient-to-br from-fuchsia-500 to-purple-600"
-        />
-      </div>
+      {/* Hero */}
+      <main className="flex-1">
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+              <IconTrend className="h-4 w-4" />
+              Plataforma interna
+            </span>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">
+              Plano de Contratações Anual da{" "}
+              <span className="text-emerald-600 dark:text-emerald-400">
+                Prefeitura de Rio Verde
+              </span>
+            </h1>
+            <p className="mt-4 text-base text-slate-600 sm:text-lg dark:text-slate-300">
+              Centralize o planejamento, a importação de planilhas e o
+              acompanhamento das contratações da equipe em um só lugar.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Entrar na área da equipe
+              </Link>
+              <Link
+                href="/cadastro"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Solicitar cadastro
+              </Link>
+            </div>
+          </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard
-          title="Classificação dos Itens"
-          subtitle="Distribuição do valor por categoria"
-        >
-          <ClassificacaoChart data={porClass} />
-        </ChartCard>
+          {/* Recursos */}
+          <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {RECURSOS.map(({ Icon, titulo, texto }) => (
+              <div
+                key={titulo}
+                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
+                  <Icon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 font-semibold">{titulo}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {texto}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
 
-        <ChartCard
-          title="Cronograma Mensal"
-          subtitle="Valor planejado por mês desejado"
-        >
-          <MensalChart data={porMes} />
-        </ChartCard>
-
-        <ChartCard
-          title="Top 10 Itens por Valor"
-          subtitle="Maiores contratações planejadas"
-        >
-          <TopItensChart data={top} />
-        </ChartCard>
-
-        <ChartCard
-          title="Unidades de Medida"
-          subtitle="Itens por unidade de medida"
-        >
-          <UnidadeChart data={porUnidade} />
-        </ChartCard>
-      </div>
-
-      {/* Consulta de itens */}
-      <ChartCard
-        title="Consulta de Itens"
-        subtitle="Busque, filtre e ordene os itens do PCA"
-      >
-        <ItemTable
-          unidadeId={unidadeId}
-          classificacoes={classificacoes}
-          anos={anos}
-          showUnidade={!unidadeId}
-        />
-      </ChartCard>
+      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400 dark:border-slate-800">
+        Prefeitura Municipal de Rio Verde · PCA · uso interno
+      </footer>
     </div>
   );
 }

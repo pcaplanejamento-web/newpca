@@ -15,9 +15,11 @@ export default async function UploadPage() {
           Importar Planilha do PCA
         </h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Envie o arquivo <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">.xlsx</code>{" "}
-          da unidade. Os dados são normalizados e ficam disponíveis no
-          dashboard.
+          Envie o arquivo{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">
+            .xlsx
+          </code>{" "}
+          da unidade. Os dados são normalizados e ficam disponíveis no dashboard.
         </p>
       </div>
 

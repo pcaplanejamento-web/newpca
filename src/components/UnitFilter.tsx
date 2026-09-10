@@ -22,7 +22,7 @@ export function UnitFilter({
     if (v) params.set("unidade", v);
     else params.delete("unidade");
     const qs = params.toString();
-    router.push(qs ? `/?${qs}` : "/");
+    router.push(qs ? `/painel?${qs}` : "/painel");
   }
 
   return (

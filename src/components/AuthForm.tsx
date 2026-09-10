@@ -38,7 +38,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
         setPendente(true);
         return;
       }
-      router.push("/");
+      router.push("/painel");
       router.refresh();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Ocorreu um erro.");
