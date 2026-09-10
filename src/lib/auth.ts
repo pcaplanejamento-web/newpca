@@ -11,7 +11,11 @@ import { sessoes, usuarios } from "@/db/schema";
 
 const COOKIE = "pca_session";
 const SESSAO_DIAS = 7;
-const PBKDF2_ITER = 210_000;
+// 100.000 é o MÁXIMO permitido pelo Cloudflare Workers para PBKDF2
+// (acima disso o deriveBits lança "iteration counts above 100000 are not
+// supported"). É o teto do ambiente; combinado com salt aleatório + sessão
+// no servidor, é adequado para uso interno.
+const PBKDF2_ITER = 100_000;
 const enc = new TextEncoder();
 
 export type UsuarioSessao = {

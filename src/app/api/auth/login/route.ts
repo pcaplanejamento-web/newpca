@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // Hash "isca" para gastar tempo semelhante quando o e-mail não existe
 // (dificulta enumeração de usuários por timing).
 const HASH_ISCA =
-  "pbkdf2$210000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+  "pbkdf2$100000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
 
 export async function POST(req: Request) {
   let json: unknown;

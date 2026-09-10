@@ -9,7 +9,7 @@ Autenticação **própria e enxuta** (não Auth.js), 100% **Web Crypto** — mai
 confiável de operar no Cloudflare Workers sem testes locais, e com controle total
 do RBAC. Pode evoluir para login Google/Auth.js depois.
 
-- **Senhas:** PBKDF2-SHA256, 210.000 iterações, salt aleatório (padrão OWASP). `src/lib/auth.ts`
+- **Senhas:** PBKDF2-SHA256, **100.000 iterações** (teto do Cloudflare Workers — acima disso o runtime rejeita), salt aleatório. `src/lib/auth.ts`
 - **Sessão:** token aleatório de 32 bytes; guardamos só o **hash** no D1 (`sessoes`); cookie `httpOnly` + `Secure` + `SameSite=Lax`.
 - **RBAC:** coluna `role` em `usuarios` (`admin` | `gestor` | `membro`) + `status` (`ativo` | `pendente` | `inativo`).
 
