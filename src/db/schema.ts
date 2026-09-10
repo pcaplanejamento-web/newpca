@@ -99,46 +99,68 @@ export const sessoes = sqliteTable(
 );
 
 /**
- * Protocolos — espelha a planilha "Distribuição de Protocolos":
- * DATA · PROTOCOLO · SECRETARIA/ÓRGÃO · NATUREZA · RESPONSÁVEL · SITUAÇÃO · DISTRIBUIÇÃO.
+ * Tabelas dinâmicas ("listas de protocolos" e afins). Cada tabela tem colunas
+ * personalizáveis (texto/seleção/data/número) e linhas cujos valores ficam num
+ * JSON indexado por id da coluna. A "Distribuição de Protocolos" é a 1ª tabela.
  */
-export const protocolos = sqliteTable(
-  "protocolos",
+export const tabelas = sqliteTable("tabelas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  ordem: integer("ordem").notNull().default(0),
+  criadoPor: integer("criado_por").references(() => usuarios.id, {
+    onDelete: "set null",
+  }),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export const colunas = sqliteTable(
+  "colunas",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    data: text("data"), // DATA (ISO yyyy-mm-dd)
-    numero: text("numero").notNull(), // PROTOCOLO
-    secretaria: text("secretaria"), // SECRETARIA / ÓRGÃO (com o solicitante)
-    natureza: text("natureza"), // NATUREZA (ex.: INCLUSÃO 2027, EXCLUSÃO)
-    responsavel: text("responsavel"), // RESPONSÁVEL (Naty/Cris/Maria...)
-    situacao: text("situacao").notNull().default("em_analise"), // SITUAÇÃO
-    distribuicao: text("distribuicao"), // DISTRIBUIÇÃO (Naty/Cris/Maria...)
+    tabelaId: integer("tabela_id")
+      .notNull()
+      .references(() => tabelas.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    tipo: text("tipo", { enum: ["texto", "selecao", "data", "numero"] })
+      .notNull()
+      .default("texto"),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("colunas_tabela_idx").on(t.tabelaId)],
+);
+
+/** Opções das colunas do tipo "seleção". */
+export const colunaOpcoes = sqliteTable(
+  "coluna_opcoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    colunaId: integer("coluna_id")
+      .notNull()
+      .references(() => colunas.id, { onDelete: "cascade" }),
+    valor: text("valor").notNull(),
+  },
+  (t) => [uniqueIndex("coluna_opcoes_uq").on(t.colunaId, t.valor)],
+);
+
+export const linhas = sqliteTable(
+  "linhas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tabelaId: integer("tabela_id")
+      .notNull()
+      .references(() => tabelas.id, { onDelete: "cascade" }),
+    dados: text("dados").notNull().default("{}"), // JSON { [colunaId]: valor }
+    ordem: integer("ordem").notNull().default(0),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [
-    index("protocolos_situacao_idx").on(t.situacao),
-    index("protocolos_natureza_idx").on(t.natureza),
-    index("protocolos_responsavel_idx").on(t.responsavel),
-  ],
-);
-
-/**
- * Listas de seleção gerenciáveis dos protocolos (secretaria, natureza,
- * responsavel, distribuicao). O usuário cadastra novas opções pela tela.
- */
-export const protocoloOpcoes = sqliteTable(
-  "protocolo_opcoes",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    categoria: text("categoria").notNull(),
-    valor: text("valor").notNull(),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.categoria, t.valor)],
+  (t) => [index("linhas_tabela_idx").on(t.tabelaId)],
 );
 
 export type Unidade = typeof unidades.$inferSelect;
@@ -148,6 +170,8 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
-export type Protocolo = typeof protocolos.$inferSelect;
-export type NovoProtocolo = typeof protocolos.$inferInsert;
-export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;
+export type Tabela = typeof tabelas.$inferSelect;
+export type Coluna = typeof colunas.$inferSelect;
+export type ColunaOpcao = typeof colunaOpcoes.$inferSelect;
+export type Linha = typeof linhas.$inferSelect;
+export type TipoColuna = Coluna["tipo"];

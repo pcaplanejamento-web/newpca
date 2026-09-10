@@ -1,23 +1,23 @@
-import { ProtocolosClient } from "@/components/ProtocolosClient";
+import { TabelasIndex } from "@/components/TabelasIndex";
 import { getUsuarioAtual } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProtocolosPage() {
-  const atual = await getUsuarioAtual();
-  const podeEditar = atual?.role === "admin" || atual?.role === "gestor";
+  const u = await getUsuarioAtual();
+  const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-          Protocolos
+          Protocolos e listas
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Distribuição e acompanhamento dos protocolos da equipe.
+          Suas tabelas de controle. Abra uma para editar ou crie uma nova.
         </p>
       </div>
-      <ProtocolosClient podeEditar={podeEditar} />
+      <TabelasIndex podeEditar={podeEditar} />
     </div>
   );
 }

@@ -27,10 +27,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 Digitalizar a planilha de controle (aba *Distribuição de Protocolos*). Ver [PROTOCOLOS.md](./PROTOCOLOS.md).
 | | Item |
 |---|---|
-| ✅ | **CRUD** com as colunas reais da planilha: data, protocolo, secretaria/órgão, natureza, responsável, situação, distribuição |
-| ✅ | **Situação** (em análise · em andamento · pendente · finalizado) + **natureza** (inclusão/exclusão) com cores |
-| ✅ | **Filtros + busca + KPIs** (total, em aberto, em análise, finalizados) |
-| 🔜 | **Importar** a aba "Distribuição de Protocolos" (.xlsx) para popular |
+| ✅ | **Construtor de tabelas**: várias listas (cards), criar/renomear/excluir |
+| ✅ | **Colunas personalizáveis** por tipo (texto/seleção/data/número); opções cadastráveis na tela |
+| ✅ | **Edição na própria linha** (data padrão = hoje); busca + paginação; badges coloridos |
+| 🔜 | **Importar** a aba "Distribuição de Protocolos" (.xlsx) para uma tabela |
 | 💡 | Alertas de vencimento/SLA · Anexos · Comentários · Histórico de alterações |
 
 ## 3. Compilado PCA / Contratações (dashboard — expandir) 🔨

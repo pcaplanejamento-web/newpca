@@ -1,45 +1,33 @@
-# Módulo de Protocolos
+# Protocolos e Listas (tabelas dinâmicas)
 
-Espelha a planilha **"Distribuição de Protocolos"**. Fica em **`/painel/protocolos`** (requer login).
+Em **`/painel/protocolos`** (requer login). Evoluiu de uma tabela fixa para um
+**construtor de tabelas**: várias listas, colunas personalizáveis e edição na linha.
 
-## Colunas (iguais à planilha)
-| Campo | Coluna da planilha | Observação |
-|---|---|---|
-| `data` | DATA | data do protocolo (dd/mm/aaaa) |
-| `numero` | PROTOCOLO | número do protocolo |
-| `secretaria` | SECRETARIA / ÓRGÃO | órgão de origem (com o solicitante) |
-| `natureza` | NATUREZA | ex.: INCLUSÃO 2027, INCLUSÃO 2026, EXCLUSÃO (badge colorido) |
-| `responsavel` | RESPONSÁVEL | quem responde (Naty/Cris/Maria…) |
-| `situacao` | SITUAÇÃO | Em análise · Em andamento · Pendente · Finalizado |
-| `distribuicao` | DISTRIBUIÇÃO | para quem foi distribuído |
+## Conceito
+- **Tabelas** (`tabelas`) — cada "lista de protocolos" é uma tabela. Exibidas como **cards**; "Nova tabela" cria outra.
+- **Colunas** (`colunas`) — definidas pelo usuário, com **tipo**: `texto`, `selecao`, `data`, `numero`.
+- **Opções** (`coluna_opcoes`) — valores das colunas de seleção (cadastráveis na tela).
+- **Linhas** (`linhas`) — valores num JSON (`dados`) indexado pelo id da coluna.
 
-Migração: `drizzle/0003_protocolos_v2.sql`.
-
-## Permissões
-- **Todos os usuários ativos**: visualizam, buscam e filtram.
-- **Admin e Gestor**: criam, editam e excluem.
+A 1ª tabela já vem semeada: **"Distribuição de Protocolos"** com Data, Protocolo,
+Secretaria/Órgão, Natureza, Responsável, Situação, Distribuição (migração `0005`).
 
 ## Funcionalidades
-- KPIs: total, em aberto, em análise, finalizados.
-- Busca + filtros (situação, responsável, natureza) + paginação.
-- **Edição na própria linha** (estilo planilha): "+ Adicionar linha" cria uma linha
-  editável; "Editar" torna a linha existente editável. Salvar/Cancelar inline.
-- **Tudo por seleção** (menos o nº do protocolo): secretaria, natureza, responsável,
-  situação e distribuição são `<select>`.
-- **Cadastro de opções na própria tela**: cada select tem "➕ Nova opção…"; e há
-  **"Gerenciar listas"** para adicionar/remover valores por categoria.
+- **Cards** de tabelas; criar/renomear/excluir tabela.
+- **Configurar tabela**: adicionar/excluir colunas (com tipo) e gerenciar opções das colunas de seleção.
+- **Edição na própria linha**: "+ Adicionar linha" (colunas de **data** já vêm com **hoje**); "Editar" edita inline; cada célula respeita o tipo (input/date/number/select).
+- **Seleção com "➕ Nova opção…"** direto na célula. Busca + paginação.
+- Valores de seleção viram **badges coloridos** (cor determinística por valor).
 
-## Listas de seleção (`protocolo_opcoes`, migração 0004)
-Categorias gerenciáveis: `secretaria`, `natureza`, `responsavel`, `distribuicao`
-(únicas por categoria+valor). `situacao` é fixa (workflow). Naturezas iniciais:
-INCLUSÃO 2027/2026, EXCLUSÃO.
+## Permissões
+Todos os usuários ativos visualizam; **admin/gestor** criam/editam tabelas, colunas, opções e linhas.
 
 ## API
-- `GET /api/protocolos` — lista + resumo (qualquer logado).
-- `POST /api/protocolos` · `PATCH`/`DELETE /api/protocolos/[id]` (admin/gestor).
-- `GET /api/protocolos/opcoes` — listas de seleção · `POST` adiciona ·
-  `DELETE /api/protocolos/opcoes/[id]` remove (admin/gestor).
+- Tabelas: `GET/POST /api/tabelas`, `GET/PATCH/DELETE /api/tabelas/[id]`.
+- Colunas: `POST /api/tabelas/[id]/colunas`, `PATCH/DELETE /api/colunas/[id]`.
+- Opções: `POST/DELETE /api/colunas/[id]/opcoes`.
+- Linhas: `GET/POST /api/tabelas/[id]/linhas`, `PATCH/DELETE /api/linhas/[id]`.
 
 ## Próximo passo
-- **Importar** a aba "Distribuição de Protocolos" (.xlsx), populando protocolos e
-  já cadastrando as opções (secretaria/natureza/responsável/distribuição) encontradas.
+- **Importar** a aba `.xlsx` para dentro de uma tabela (mapeando as colunas e
+  cadastrando as opções encontradas).
