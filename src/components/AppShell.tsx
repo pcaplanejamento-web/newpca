@@ -7,6 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import {
   IconClose,
   IconDashboard,
+  IconFile,
   IconLogout,
   IconMenu,
   IconSpinner,
@@ -26,6 +27,7 @@ type NavItem = { href: string; label: string; Icon: typeof IconDashboard };
 function navItens(role: UsuarioSessao["role"]): NavItem[] {
   const itens: NavItem[] = [
     { href: "/painel", label: "Indicadores", Icon: IconDashboard },
+    { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile },
     { href: "/painel/upload", label: "Importar Planilha", Icon: IconUpload },
   ];
   if (role === "admin")

@@ -98,6 +98,46 @@ export const sessoes = sqliteTable(
   ],
 );
 
+/**
+ * Protocolos — digitaliza a planilha de "Distribuição de Protocolos".
+ * Cada protocolo tem número, assunto, secretaria de origem, responsável
+ * (um usuário da equipe), situação no fluxo, prioridade e prazos.
+ */
+export const protocolos = sqliteTable(
+  "protocolos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    numero: text("numero").notNull(),
+    assunto: text("assunto").notNull(),
+    secretaria: text("secretaria"),
+    responsavelId: integer("responsavel_id").references(() => usuarios.id, {
+      onDelete: "set null",
+    }),
+    status: text("status", {
+      enum: ["recebido", "em_andamento", "aguardando", "concluido", "arquivado"],
+    })
+      .notNull()
+      .default("recebido"),
+    prioridade: text("prioridade", { enum: ["baixa", "media", "alta"] })
+      .notNull()
+      .default("media"),
+    dataEntrada: text("data_entrada"),
+    prazo: text("prazo"),
+    dataConclusao: text("data_conclusao"),
+    observacoes: text("observacoes"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, {
+      onDelete: "set null",
+    }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("protocolos_status_idx").on(t.status),
+    index("protocolos_resp_idx").on(t.responsavelId),
+    index("protocolos_prazo_idx").on(t.prazo),
+  ],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -105,3 +145,5 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
+export type Protocolo = typeof protocolos.$inferSelect;
+export type NovoProtocolo = typeof protocolos.$inferInsert;

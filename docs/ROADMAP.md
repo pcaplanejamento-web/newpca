@@ -23,16 +23,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 | 💡 | Convite por e-mail · Recuperação de senha · 2FA · Login Google (SSO) |
 | 💡 | **Auditoria**: registro de quem fez o quê (login, edições, exclusões) |
 
-## 2. Gestão de Protocolos (o "coração" do plano) 🔜
-Digitalizar a planilha de controle (aba *Distribuição de Protocolos*).
+## 2. Gestão de Protocolos (o "coração" do plano) 🔨
+Digitalizar a planilha de controle (aba *Distribuição de Protocolos*). Ver [PROTOCOLOS.md](./PROTOCOLOS.md).
 | | Item |
 |---|---|
-| 🔜 | **CRUD de protocolos**: nº, assunto, secretaria, responsável, datas, prazo, status |
-| 🔜 | **Distribuição/atribuição** a um responsável ou time; fila de trabalho |
-| 🔜 | **Fluxo/estados** (recebido → em análise → concluído) com histórico e datas |
+| ✅ | **CRUD de protocolos**: nº, assunto, secretaria, responsável, datas, prazo, status, prioridade |
+| ✅ | **Distribuição/atribuição** a um responsável (usuário da equipe) |
+| ✅ | **Situação/fluxo** (recebido → em andamento → aguardando → concluído → arquivado) |
+| ✅ | **Filtros + busca + KPIs** (total, em aberto, vencidos, concluídos) |
 | 🔜 | **Importar** a planilha atual para popular os protocolos |
-| 💡 | Prazos, alertas de vencimento e SLA · Priorização |
-| 💡 | Anexos/documentos por protocolo · Comentários por protocolo · Busca avançada |
+| 💡 | Alertas de vencimento/SLA · Anexos · Comentários · Histórico de alterações |
 
 ## 3. Compilado PCA / Contratações (dashboard — expandir) 🔨
 | | Item |
