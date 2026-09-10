@@ -1,3 +1,11 @@
+DROP TABLE IF EXISTS `coluna_opcoes`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `linhas`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `colunas`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `tabelas`;
+--> statement-breakpoint
 DROP TABLE IF EXISTS `protocolo_opcoes`;
 --> statement-breakpoint
 DROP TABLE IF EXISTS `protocolos`;
@@ -50,20 +58,6 @@ CREATE INDEX `linhas_tabela_idx` ON `linhas` (`tabela_id`);
 --> statement-breakpoint
 INSERT INTO `tabelas` (`nome`,`ordem`) VALUES ('Distribuição de Protocolos', 0);
 --> statement-breakpoint
-INSERT INTO `colunas` (`tabela_id`,`nome`,`tipo`,`ordem`) VALUES
-	(1,'Data','data',0),
-	(1,'Protocolo','texto',1),
-	(1,'Secretaria / Órgão','selecao',2),
-	(1,'Natureza','selecao',3),
-	(1,'Responsável','selecao',4),
-	(1,'Situação','selecao',5),
-	(1,'Distribuição','selecao',6);
+INSERT INTO `colunas` (`tabela_id`,`nome`,`tipo`,`ordem`) VALUES (1,'Data','data',0),(1,'Protocolo','texto',1),(1,'Secretaria / Órgão','selecao',2),(1,'Natureza','selecao',3),(1,'Responsável','selecao',4),(1,'Situação','selecao',5),(1,'Distribuição','selecao',6);
 --> statement-breakpoint
-INSERT INTO `coluna_opcoes` (`coluna_id`,`valor`)
-	SELECT id,'INCLUSÃO 2027' FROM `colunas` WHERE tabela_id=1 AND nome='Natureza'
-	UNION ALL SELECT id,'INCLUSÃO 2026' FROM `colunas` WHERE tabela_id=1 AND nome='Natureza'
-	UNION ALL SELECT id,'EXCLUSÃO' FROM `colunas` WHERE tabela_id=1 AND nome='Natureza'
-	UNION ALL SELECT id,'Em análise' FROM `colunas` WHERE tabela_id=1 AND nome='Situação'
-	UNION ALL SELECT id,'Em andamento' FROM `colunas` WHERE tabela_id=1 AND nome='Situação'
-	UNION ALL SELECT id,'Pendente' FROM `colunas` WHERE tabela_id=1 AND nome='Situação'
-	UNION ALL SELECT id,'Finalizado' FROM `colunas` WHERE tabela_id=1 AND nome='Situação';
+INSERT INTO `coluna_opcoes` (`coluna_id`,`valor`) VALUES (4,'INCLUSÃO 2027'),(4,'INCLUSÃO 2026'),(4,'EXCLUSÃO'),(6,'Em análise'),(6,'Em andamento'),(6,'Pendente'),(6,'Finalizado');
