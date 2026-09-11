@@ -4,6 +4,12 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/Toast";
+import { getAparencia } from "@/lib/aparencia";
+import { aparenciaToCss } from "@/lib/theme";
+
+// Dinâmico: lê a aparência do ADM (cacheada, fail-safe) para injetar os tokens
+// no HTML inicial, sem flash.
+export const dynamic = "force-dynamic";
 
 // Fontes do design system (self-hosted, sem requisição externa): Geist (texto)
 // e Geist Mono (nº de protocolo, datas, contadores, ⌘K). Expõem
@@ -15,13 +21,18 @@ export const metadata: Metadata = {
     "Plataforma de Planejamento de Contratações Anuais da Prefeitura de Rio Verde.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const aparencia = await getAparencia();
+  const tokensCss = aparenciaToCss(aparencia);
+
   return (
     <html
       lang="pt-BR"
       className={`${GeistSans.variable} ${GeistMono.variable}`}
+      data-density={aparencia.density || undefined}
+      data-motion={aparencia.motion || undefined}
       suppressHydrationWarning
     >
       <body>
@@ -31,6 +42,10 @@ export default function RootLayout({
             hidratação, causando o flash branco→preto. Roda antes do ThemeProvider. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: shim de 1 linha com conteúdo 100% estático (sem dados do usuário). */}
         <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=(f)=>f;" }} />
+        {tokensCss && (
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado por aparenciaToCss (allowlist de tokens + valores só hex/número validados; anti-XSS).
+          <style id="theme-tokens" dangerouslySetInnerHTML={{ __html: tokensCss }} />
+        )}
         <ThemeProvider>
           {children}
           <Toaster />

@@ -215,6 +215,21 @@ export const protocoloOpcoes = sqliteTable(
   (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.campo, t.valor)],
 );
 
+/**
+ * Configuração global da plataforma (linha única, id = 1). `dados` guarda a
+ * APARÊNCIA controlada pelo ADM (tokens de cor claro/escuro + raio/densidade/
+ * motion + identidade) num JSON validado. Injetada sem flash no RootLayout.
+ */
+export const configuracoes = sqliteTable("configuracoes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  dados: text("dados").notNull().default("{}"),
+  atualizadoPor: integer("atualizado_por").references(() => usuarios.id, {
+    onDelete: "set null",
+  }),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -232,3 +247,4 @@ export type NovoProtocolo = typeof protocolos.$inferInsert;
 export type SituacaoProtocolo = Protocolo["situacao"];
 export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;
 export type CampoOpcao = ProtocoloOpcao["campo"];
+export type Configuracao = typeof configuracoes.$inferSelect;

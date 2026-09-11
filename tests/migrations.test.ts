@@ -47,6 +47,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
       "colunas",
       "coluna_opcoes",
       "linhas",
+      "configuracoes",
     ]) {
       assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
     }
