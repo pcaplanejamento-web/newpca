@@ -1,23 +1,187 @@
 @import "tailwindcss";
 
-/* Dark mode controlado por classe (next-themes attribute="class"). */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Tema por atributo único `data-theme` (next-themes attribute="data-theme").
+   Trocar o tema = trocar o valor do atributo; nenhum componente usa
+   @media prefers-color-scheme próprio. */
+@custom-variant dark ([data-theme="dark"] &);
 
+/* ============================================================================
+   DESIGN TOKENS — fonte da verdade (spec §2 cores, §3 semânticas, §5 métricas).
+   Regra: nenhum componente fixa cor NEUTRA; usa var(--token) via utilitários
+   (`bg-surface`, `text-text`, `border-border`, `rounded-card`, `shadow-ring`…).
+   Só as cores SEMÂNTICAS são hex cruas; suas tintas saem por color-mix (§7).
+   ========================================================================== */
 :root {
   color-scheme: light;
+
+  /* Neutros — claro (§2) */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #fafaf8;
+  --text: #1c1c22;
+  --text-2: #3f3f3a;
+  --muted: #8a8a80;
+  --faint: #b5b5aa;
+  --border: #f1f1eb;
+  --border-2: #e9e9e2;
+  --accent: #4f46e5;
+  --accent-soft: #eef0ff;
+  --track: #f1f1eb;
+  --sb-active: #fafaf8;
+  --kpi-bar: #e9e9e2;
+  --ring: 0 1px 2px rgba(17, 17, 12, 0.05), 0 8px 24px -12px rgba(17, 17, 12, 0.16);
+
+  /* Alvos de mistura das tintas semânticas (§7) — claro */
+  --tint-target: #000000; /* tinta = cor + preto */
+  --glow-target: #ffffff; /* glow  = cor + branco */
+
+  /* Semânticas — natureza (§3, iguais nos 2 temas) */
+  --nat-exclusao: #dc2626;
+  --nat-inclusao-2026: #d97706;
+  --nat-inclusao-2027: #16a34a;
+  --nat-correcao: #2563eb;
+  --nat-comunicacao: #9333ea;
+
+  /* Semânticas — situação (§3) */
+  --sit-em-analise: #ca8a04;
+  --sit-finalizado: #16a34a;
+  --sit-devolvido: #ea580c;
+  --sit-cancelado: #dc2626;
+
+  /* Avatar por pessoa (§3) */
+  --av-jhone: #6366f1;
+  --av-maria: #db2777;
+  --av-naty: #0d9488;
+  --av-cris: #d97706;
+  --av-thamires: #7c3aed;
+
+  /* Delta de KPI (§3) */
+  --delta-up: #16a34a;
+  --delta-down: #dc2626;
+
+  /* Raios (§5) */
+  --radius-canvas: 20px;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-chip: 9px;
+  --radius-segment: 11px;
+  --radius-pill: 20px;
+
+  /* Espaçamento / alturas (§5) — densidade padrão */
+  --pad-canvas: 18px;
+  --gap-block: 14px;
+  --gap-col: 16px;
+  --pad-card: 16px;
+  --cell-py: 13px;
+  --cell-px: 12px;
+  --h-header: 60px;
+  --h-control: 38px;
+  --h-control-sm: 34px;
+
+  /* Tipografia (Geist via pacote `geist`; fallbacks reais) */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  /* Motion (§39.15) */
+  --motion-duration: 0.2s;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
-.dark {
+
+/* Escuro (§2) — só neutros + alvos de mistura mudam; semânticas/raios/métricas iguais */
+[data-theme="dark"] {
   color-scheme: dark;
+  --bg: #08080c;
+  --surface: #14141b;
+  --surface-2: #191922;
+  --text: #f3f3f5;
+  --text-2: #c7c7d2;
+  --muted: #83839a;
+  --faint: #565668;
+  --border: #20202b;
+  --border-2: #282836;
+  --accent: #818cf8;
+  --accent-soft: #1e1e3a;
+  --track: #20202b;
+  --sb-active: #1c1c26;
+  --kpi-bar: #26263a;
+  --ring: 0 0 0 1px var(--border-2);
+  --tint-target: #ffffff;
+  --glow-target: var(--surface);
+}
+
+/* Densidade (§39.7) — attr no <html> */
+[data-density="compact"] {
+  --pad-card: 12px;
+  --gap-col: 12px;
+  --cell-py: 9px;
+  --h-control: 34px;
+  --h-control-sm: 31px;
+}
+[data-density="comfortable"] {
+  --pad-card: 20px;
+  --gap-col: 20px;
+  --cell-py: 16px;
+  --h-control: 42px;
+  --h-control-sm: 38px;
+}
+
+/* Motion (§39.15) — attr no <html>; acessibilidade tem prioridade */
+[data-motion="off"],
+[data-motion="reduced"] {
+  --motion-duration: 0s;
+}
+[data-motion="smooth"] {
+  --motion-duration: 0.35s;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0s;
+  }
+}
+
+/* Mapa dos tokens → utilitários Tailwind v4 (inline: leem a var viva, então
+   trocar o valor sob [data-theme] ou pelo ADM reflete sem recompilar).
+   Adiciona tokens SEM remover a paleta padrão (slate/emerald seguem válidos
+   durante a migração). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-2: var(--border-2);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-track: var(--track);
+  --color-sb-active: var(--sb-active);
+  --color-kpi-bar: var(--kpi-bar);
+
+  --radius-canvas: var(--radius-canvas);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --radius-chip: var(--radius-chip);
+  --radius-segment: var(--radius-segment);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-ring: var(--ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
   }
+  /* Fonte já migrada para o token (Geist). Superfícies migram nas fases F1/F2. */
   body {
     @apply bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100;
-    font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-sans);
   }
 }
 
