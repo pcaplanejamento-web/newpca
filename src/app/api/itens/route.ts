@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { exigirUsuario } from "@/lib/api-auth";
 import { getItens } from "@/lib/queries";
 
+// Público: os dados do PCA aparecem no dashboard público (home). Só a
+// importação (`/api/upload`) continua protegida.
 export const dynamic = "force-dynamic";
 
 function intParam(v: string | null): number | undefined {
@@ -11,8 +12,6 @@ function intParam(v: string | null): number | undefined {
 }
 
 export async function GET(req: Request) {
-  const a = await exigirUsuario();
-  if ("erro" in a) return a.erro;
   const sp = new URL(req.url).searchParams;
 
   const sortRaw = sp.get("sort");

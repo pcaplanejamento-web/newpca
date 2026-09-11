@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import { IconBuilding } from "./icons";
 
@@ -14,6 +14,7 @@ export function UnitFilter({
   current?: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
 
   function onChange(e: ChangeEvent<HTMLSelectElement>) {
@@ -22,7 +23,7 @@ export function UnitFilter({
     if (v) params.set("unidade", v);
     else params.delete("unidade");
     const qs = params.toString();
-    router.push(qs ? `/painel?${qs}` : "/painel");
+    router.push(qs ? `${pathname}?${qs}` : pathname);
   }
 
   return (
