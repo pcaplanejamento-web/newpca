@@ -11,9 +11,10 @@ import {
 } from "recharts";
 import type { Fatia } from "@/lib/queries";
 import { brl, num } from "@/lib/format";
-import { AXIS, GRID, ChartEmpty, TooltipBox } from "./shared";
+import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
 export function UnidadeChart({ data }: { data: Fatia[] }) {
+  const tk = useChartTokens();
   const rows = [...data]
     .sort((a, b) => b.count - a.count)
     .slice(0, 10)
@@ -28,10 +29,10 @@ export function UnidadeChart({ data }: { data: Fatia[] }) {
           data={rows}
           margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
         >
-          <CartesianGrid horizontal={false} stroke={GRID} />
+          <CartesianGrid horizontal={false} stroke={tk.grid} />
           <XAxis
             type="number"
-            tick={{ fontSize: 11, fill: AXIS }}
+            tick={{ fontSize: 11, fill: tk.axis }}
             axisLine={false}
             tickLine={false}
           />
@@ -39,28 +40,26 @@ export function UnidadeChart({ data }: { data: Fatia[] }) {
             type="category"
             dataKey="label"
             width={92}
-            tick={{ fontSize: 11, fill: AXIS }}
+            tick={{ fontSize: 11, fill: tk.axis }}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
-            cursor={{ fill: "rgba(148,163,184,0.12)" }}
+            cursor={{ fill: tk.cursor }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const p = payload[0].payload as Fatia;
               return (
                 <TooltipBox>
-                  <div className="font-semibold text-slate-800 dark:text-slate-100">
-                    {p.label}
-                  </div>
-                  <div className="text-slate-500 dark:text-slate-400">
+                  <div className="font-semibold text-text">{p.label}</div>
+                  <div className="text-muted">
                     {num(p.count)} itens · {brl(p.total)}
                   </div>
                 </TooltipBox>
               );
             }}
           />
-          <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} maxBarSize={22} />
+          <Bar dataKey="count" fill={CHART_COLORS[1]} radius={[0, 6, 6, 0]} maxBarSize={22} />
         </BarChart>
       </ResponsiveContainer>
     </div>

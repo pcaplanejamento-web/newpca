@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { type ReactNode, useEffect, useState } from "react";
 import { IconInbox } from "../icons";
 
-// Paleta categórica (funciona em tema claro e escuro).
+// Paleta categórica (dados, não neutros) — funciona em tema claro e escuro.
 export const CHART_COLORS = [
   "#3b82f6", // blue
   "#10b981", // emerald
@@ -17,8 +19,36 @@ export const CHART_COLORS = [
   "#eab308", // yellow
 ];
 
-export const AXIS = "#94a3b8"; // slate-400
-export const GRID = "rgba(148,163,184,0.22)";
+const DEFAULTS = {
+  axis: "#b5b5aa",
+  grid: "#e9e9e2",
+  accent: "#4f46e5",
+  cursor: "rgba(148,163,184,0.14)",
+};
+
+// Eixos/grade/accent dos gráficos LIDOS DOS TOKENS (Recharts precisa de cor
+// concreta, não `var()`), reavaliados quando o tema (`data-theme`) ou o preview
+// do ADM (style inline no <html>) muda. SSR usa defaults; o cliente resolve.
+export function useChartTokens() {
+  const [t, setT] = useState(DEFAULTS);
+  useEffect(() => {
+    const compute = () => {
+      const cs = getComputedStyle(document.documentElement);
+      const rd = (n: string, f: string) => cs.getPropertyValue(n).trim() || f;
+      setT({
+        axis: rd("--faint", DEFAULTS.axis),
+        grid: rd("--border-2", DEFAULTS.grid),
+        accent: rd("--accent", DEFAULTS.accent),
+        cursor: rd("--track", DEFAULTS.cursor),
+      });
+    };
+    compute();
+    const mo = new MutationObserver(compute);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
+    return () => mo.disconnect();
+  }, []);
+  return t;
+}
 
 export function ChartEmpty({ label = "Sem dados para exibir" }: { label?: string }) {
   return (

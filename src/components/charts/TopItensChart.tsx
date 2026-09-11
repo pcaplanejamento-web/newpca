@@ -11,9 +11,10 @@ import {
 } from "recharts";
 import type { TopItem } from "@/lib/queries";
 import { brl, brlCompact, dec } from "@/lib/format";
-import { AXIS, GRID, ChartEmpty, TooltipBox } from "./shared";
+import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
 export function TopItensChart({ data }: { data: TopItem[] }) {
+  const tk = useChartTokens();
   const rows = data
     .filter((d) => d.valor > 0)
     .map((d) => ({
@@ -33,11 +34,11 @@ export function TopItensChart({ data }: { data: TopItem[] }) {
           data={rows}
           margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
         >
-          <CartesianGrid horizontal={false} stroke={GRID} />
+          <CartesianGrid horizontal={false} stroke={tk.grid} />
           <XAxis
             type="number"
             tickFormatter={(v) => brlCompact(v)}
-            tick={{ fontSize: 11, fill: AXIS }}
+            tick={{ fontSize: 11, fill: tk.axis }}
             axisLine={false}
             tickLine={false}
           />
@@ -45,13 +46,13 @@ export function TopItensChart({ data }: { data: TopItem[] }) {
             type="category"
             dataKey="label"
             width={170}
-            tick={{ fontSize: 11, fill: AXIS }}
+            tick={{ fontSize: 11, fill: tk.axis }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v: string) => (v.length > 28 ? `${v.slice(0, 28)}…` : v)}
           />
           <Tooltip
-            cursor={{ fill: "rgba(148,163,184,0.12)" }}
+            cursor={{ fill: tk.cursor }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const p = payload[0].payload as {
@@ -63,23 +64,19 @@ export function TopItensChart({ data }: { data: TopItem[] }) {
               };
               return (
                 <TooltipBox>
-                  <div className="max-w-[240px] font-semibold text-slate-800 dark:text-slate-100">
-                    {p.label}
-                  </div>
-                  <div className="text-slate-500 dark:text-slate-400">
+                  <div className="max-w-[240px] font-semibold text-text">{p.label}</div>
+                  <div className="text-muted">
                     {brl(p.valor)}
                     {p.quantidade != null
                       ? ` · ${dec(p.quantidade)} ${p.unidadeMedida ?? ""}`
                       : ""}
                   </div>
-                  {p.codigo ? (
-                    <div className="text-slate-400">Unidade {p.codigo}</div>
-                  ) : null}
+                  {p.codigo ? <div className="text-faint">Unidade {p.codigo}</div> : null}
                 </TooltipBox>
               );
             }}
           />
-          <Bar dataKey="valor" fill="#a855f7" radius={[0, 6, 6, 0]} maxBarSize={22} />
+          <Bar dataKey="valor" fill={CHART_COLORS[3]} radius={[0, 6, 6, 0]} maxBarSize={22} />
         </BarChart>
       </ResponsiveContainer>
     </div>

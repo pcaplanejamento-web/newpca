@@ -46,10 +46,8 @@ export function ClassificacaoChart({ data }: { data: Fatia[] }) {
                 const s = payload[0].payload as Fatia;
                 return (
                   <TooltipBox>
-                    <div className="font-semibold text-slate-800 dark:text-slate-100">
-                      {s.label}
-                    </div>
-                    <div className="text-slate-500 dark:text-slate-400">
+                    <div className="font-semibold text-text">{s.label}</div>
+                    <div className="text-muted">
                       {brl(s.total)} · {num(s.count)} itens · {pct(s.total, total)}
                     </div>
                   </TooltipBox>
@@ -67,13 +65,10 @@ export function ClassificacaoChart({ data }: { data: Fatia[] }) {
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
             />
-            <span
-              className="flex-1 truncate text-slate-600 dark:text-slate-300"
-              title={s.label}
-            >
+            <span className="flex-1 truncate text-text-2" title={s.label}>
               {s.label}
             </span>
-            <span className="shrink-0 font-medium tabular-nums text-slate-800 dark:text-slate-100">
+            <span className="shrink-0 font-medium tabular-nums text-text">
               {pct(s.total, total)}
             </span>
           </li>

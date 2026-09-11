@@ -3,6 +3,11 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { ChartCard } from "@/components/ChartCard";
+import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
+import { MensalChart } from "@/components/charts/MensalChart";
+import { TopItensChart } from "@/components/charts/TopItensChart";
+import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
@@ -153,6 +158,36 @@ const COLUNAS: Column<Proto>[] = [
   },
 ];
 
+const G_CLASS = [
+  { label: "Serviço", total: 24_200_000, count: 225 },
+  { label: "Obras e Instalações", total: 24_100_000, count: 130 },
+  { label: "Prestação de Serviço", total: 18_600_000, count: 173 },
+  { label: "Material de Expediente", total: 16_100_000, count: 150 },
+  { label: "Material Elétrico", total: 7_100_000, count: 66 },
+  { label: "Consumo", total: 6_300_000, count: 59 },
+];
+const G_MES = [
+  { ano: 2027, mes: 1, total: 92_000_000, count: 210 },
+  { ano: 2027, mes: 3, total: 4_000_000, count: 40 },
+  { ano: 2027, mes: 4, total: 8_000_000, count: 55 },
+  { ano: 2027, mes: 6, total: 6_500_000, count: 48 },
+  { ano: 2027, mes: 7, total: 11_800_000, count: 62 },
+];
+const G_TOP = [
+  { nome: "Energia elétrica", valor: 11_800_000, quantidade: 12, unidadeMedida: "MWh", codigo: "0001" },
+  { nome: "Auxiliar de serviços gerais", valor: 8_400_000, quantidade: 40, unidadeMedida: "posto", codigo: "0002" },
+  { nome: "Fornecimento e instalação de equipamentos", valor: 6_100_000, quantidade: 8, unidadeMedida: "un", codigo: "0003" },
+  { nome: "Reforma da rodoviária", valor: 4_900_000, quantidade: 1, unidadeMedida: "obra", codigo: "0004" },
+  { nome: "Reforma de ecoponto", valor: 4_200_000, quantidade: 1, unidadeMedida: "obra", codigo: "0005" },
+];
+const G_UNID = [
+  { label: "Unidade", total: 60_000_000, count: 520 },
+  { label: "Mês", total: 12_000_000, count: 120 },
+  { label: "Kg", total: 5_000_000, count: 70 },
+  { label: "Metro", total: 3_000_000, count: 44 },
+  { label: "Serviço", total: 2_400_000, count: 30 },
+];
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -261,6 +296,23 @@ export function Catalogo() {
           <KpiStat label="Em análise" value="41" cor="var(--sit-em-analise)" delta={{ dir: "up", value: "5" }} spark={[20, 30, 25, 35, 45, 60, 70]} hint="aguardando" />
           <KpiStat label="Finalizados" value="63" cor="var(--sit-finalizado)" delta={{ dir: "up", value: "11" }} spark={[35, 40, 50, 55, 65, 75, 90]} hint="no mês" />
           <KpiStat label="Devolvidos" value="12" cor="var(--sit-devolvido)" delta={{ dir: "down", value: "2" }} spark={[60, 50, 45, 40, 30, 25, 20]} hint="vs. mês anterior" />
+        </div>
+      </Secao>
+
+      <Secao titulo="Gráficos (Recharts, eixos por token)">
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
+          <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
+            <ClassificacaoChart data={G_CLASS} />
+          </ChartCard>
+          <ChartCard title="Cronograma Mensal" subtitle="Valor planejado por mês desejado">
+            <MensalChart data={G_MES} />
+          </ChartCard>
+          <ChartCard title="Top Itens por Valor" subtitle="Maiores contratações planejadas">
+            <TopItensChart data={G_TOP} />
+          </ChartCard>
+          <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
+            <UnidadeChart data={G_UNID} />
+          </ChartCard>
         </div>
       </Secao>
 
