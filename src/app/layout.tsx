@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { Toaster } from "@/components/Toast";
 
 // Fontes do design system (self-hosted, sem requisição externa): Geist (texto)
 // e Geist Mono (nº de protocolo, datas, contadores, ⌘K). Expõem
@@ -30,7 +31,10 @@ export default function RootLayout({
             hidratação, causando o flash branco→preto. Roda antes do ThemeProvider. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: shim de 1 linha com conteúdo 100% estático (sem dados do usuário). */}
         <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=(f)=>f;" }} />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
