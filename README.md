@@ -49,6 +49,21 @@ Volte ao dashboard para ver os indicadores.
 
 > `npm run dev` usa o D1 **local** (em `.wrangler/state`). O D1 remoto (produção) é separado.
 
+## Qualidade (testes, lint, type-check)
+
+```bash
+npm test           # node:test (type stripping nativo) — lógica pura + cadeia de migrações
+npm run lint       # Biome
+npm run typecheck  # tsc --noEmit (rode `npm run cf-typegen` antes p/ gerar cloudflare-env.d.ts)
+```
+
+- Testes ficam em `tests/*.test.ts` (sem dependências extras — só Node): formatação,
+  normalização, validações Zod, criptografia de senha e a cadeia `drizzle/*.sql` aplicada em
+  `node:sqlite`.
+- O **portão de qualidade** do CI (`.github/workflows/ci.yml` em PRs e `deploy.yml` na `main`)
+  roda lint + testes (bloqueiam) e type-check (informativo). Regras de engenharia para manter o
+  sistema saudável: **[CLAUDE.md](./CLAUDE.md)**.
+
 ## Deploy (Cloudflare)
 
 1. Aplique a migração no banco **remoto** (produção):
@@ -68,7 +83,8 @@ Volte ao dashboard para ver os indicadores.
 ### Deploy automático a cada push (GitHub Actions)
 
 Já existe o workflow [.github/workflows/deploy.yml](.github/workflows/deploy.yml): a cada `push` na
-`main` ele cria/atualiza o D1, aplica migrações e publica o Worker — tudo nos servidores do GitHub.
+`main` ele roda o **portão de qualidade** (type-check + lint + testes) e, passando, cria/atualiza o
+D1, aplica migrações e publica o Worker — tudo nos servidores do GitHub.
 
 Falta só **1 passo** (uma vez): criar um **API Token** na Cloudflare e guardá-lo como secret do repo.
 

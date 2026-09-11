@@ -96,7 +96,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | | Item |
 |---|---|
 | ✅ | Responsivo + toque + tema claro/escuro |
-| 🔜 | Reativar type-check no CI · Testes automatizados |
+| ✅ | **Testes** (`node:test`) + **lint** (Biome) + **type-check** com **portão de qualidade na CI** (`ci.yml`/`deploy.yml`); error boundaries (`error.tsx`/`not-found.tsx`); observabilidade do Worker. Regras em [CLAUDE.md](../CLAUDE.md). |
+| 🔜 | Tornar o type-check **bloqueante** (hoje informativo) quando o baseline de tipos estiver limpo |
 | 🔜 | Deploy via **Workers Builds** (evita quebra quando um token é revogado) |
 | 💡 | **PWA** (instalar no celular) · Acessibilidade (WCAG) · Backups do D1 |
 
