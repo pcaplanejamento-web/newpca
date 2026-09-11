@@ -7,7 +7,7 @@ import { IconAlert } from "@/components/icons";
 // Error boundary global (App Router): captura erros de renderização das páginas
 // e oferece recuperação sem derrubar a aplicação inteira. Renderiza dentro do
 // layout raiz (tema/fonte já aplicados).
-export default function Error({
+export default function ErrorBoundary({
   error,
   reset,
 }: {
