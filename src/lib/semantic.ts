@@ -27,6 +27,12 @@ export function situacaoVar(situacao?: string | null): string {
   return SIT_VAR[situacao ?? ""] ?? "var(--faint)";
 }
 
+/** Feedback de UI (banners/estados/ações) → var da cor de feedback. */
+export type Feedback = "ok" | "warn" | "danger" | "info";
+export function feedbackVar(kind: Feedback): string {
+  return `var(--${kind})`;
+}
+
 const AV_KNOWN: Record<string, string> = {
   jhone: "var(--av-jhone)",
   maria: "var(--av-maria)",

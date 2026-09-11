@@ -2,8 +2,8 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { DateFilterHeader, type IntervaloData } from "./DateFilterHeader";
-import { IconChevronLeft, IconChevronRight } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
+import { Pager } from "./Pager";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
 // **filtro em TODOS os cabeçalhos** (multi-select por padrão; **filtro de datas**
@@ -251,29 +251,7 @@ export function DataTable<R>({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted">
         <span>{footer ?? `${total} registro${total === 1 ? "" : "s"}`}</span>
-        {pageSize && pages > 1 && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={pg <= 1}
-              onClick={() => setPage(pg - 1)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface"
-            >
-              <IconChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="px-2 tabular-nums">
-              {pg} / {pages}
-            </span>
-            <button
-              type="button"
-              disabled={pg >= pages}
-              onClick={() => setPage(pg + 1)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface"
-            >
-              <IconChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        )}
+        {pageSize && <Pager page={pg} pages={pages} onChange={setPage} />}
       </div>
     </div>
   );

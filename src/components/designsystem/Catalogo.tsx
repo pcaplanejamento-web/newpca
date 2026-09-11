@@ -13,11 +13,26 @@ import { type Column, DataTable } from "@/components/DataTable";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import * as Icons from "@/components/icons";
-import { IconArrowRight, IconBox, IconFile, IconLayers, IconMail, IconPlus, IconUpload } from "@/components/icons";
+import {
+  IconArrowRight,
+  IconBox,
+  IconClipboard,
+  IconClock,
+  IconFile,
+  IconLayers,
+  IconMail,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+  IconWallet,
+} from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
+import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
+import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { Segmented } from "@/components/Segmented";
+import { StatCard } from "@/components/StatCard";
 import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
@@ -198,6 +213,8 @@ export function Catalogo() {
   const [tsel, setTsel] = useState<Set<string | number>>(new Set());
   const [busca, setBusca] = useState("");
   const [check, setCheck] = useState(true);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [pag, setPag] = useState(2);
 
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -249,6 +266,7 @@ export function Catalogo() {
         <div className="flex flex-wrap items-center gap-3">
           <Button icon={<IconPlus className="h-[18px] w-[18px]" />}>Novo Protocolo</Button>
           <Button variant="accent" icon={<IconArrowRight className="h-4 w-4" />}>Entrar</Button>
+          <Button variant="danger" icon={<IconTrash className="h-4 w-4" />}>Excluir</Button>
           <Button variant="secondary">Secundário</Button>
           <Button variant="icon" aria-label="Exportar">
             <IconUpload className="h-[18px] w-[18px]" />
@@ -296,6 +314,15 @@ export function Catalogo() {
           <KpiStat label="Em análise" value="41" cor="var(--sit-em-analise)" delta={{ dir: "up", value: "5" }} spark={[20, 30, 25, 35, 45, 60, 70]} hint="aguardando" />
           <KpiStat label="Finalizados" value="63" cor="var(--sit-finalizado)" delta={{ dir: "up", value: "11" }} spark={[35, 40, 50, 55, 65, 75, 90]} hint="no mês" />
           <KpiStat label="Devolvidos" value="12" cor="var(--sit-devolvido)" delta={{ dir: "down", value: "2" }} spark={[60, 50, 45, 40, 30, 25, 20]} hint="vs. mês anterior" />
+        </div>
+      </Secao>
+
+      <Secao titulo="StatCard (tile de estatística)">
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total" value="122" tone="blue" icon={<IconClipboard className="h-5 w-5" />} hint="protocolos" />
+          <StatCard label="Finalizados" value="63" tone="emerald" icon={<IconWallet className="h-5 w-5" />} hint="no mês" />
+          <StatCard label="Em análise" value="41" tone="amber" icon={<IconClock className="h-5 w-5" />} active />
+          <StatCard label="Devolvidos" value="12" tone="orange" icon={<IconBox className="h-5 w-5" />} hint="vs. anterior" />
         </div>
       </Secao>
 
@@ -397,6 +424,26 @@ export function Catalogo() {
             <p className="mt-1 text-[12px] text-muted">Elevação padrão dos cards (spec §2).</p>
           </div>
         </div>
+      </Secao>
+
+      <Secao titulo="Modal (bottom-sheet no mobile) & Paginação">
+        <div className="flex flex-wrap items-center gap-4">
+          <Button variant="secondary" onClick={() => setModalAberto(true)}>
+            Abrir modal
+          </Button>
+          <Pager page={pag} pages={8} onChange={setPag} />
+        </div>
+        <Modal open={modalAberto} onClose={() => setModalAberto(false)} titulo="Exemplo de modal">
+          <p className="text-[13px] text-text-2">
+            No mobile vira bottom-sheet; no desktop, painel central. Fecha no Esc, no fundo e no X.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModalAberto(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => setModalAberto(false)}>Confirmar</Button>
+          </div>
+        </Modal>
       </Secao>
 
       <Secao titulo="Tabela (seleção de linhas + filtro no cabeçalho)">
