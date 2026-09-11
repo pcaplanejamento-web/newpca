@@ -35,6 +35,9 @@ export default async function RootLayout({
       data-motion={aparencia.motion || undefined}
       data-elevation={aparencia.elevation === "soft" ? "soft" : undefined}
       data-kpi={aparencia.kpi === "filled" ? "filled" : undefined}
+      data-icons={aparencia.icones?.fill === "duotone" ? "filled" : undefined}
+      data-icon-anim={aparencia.icones?.anim === "hover" ? "hover" : undefined}
+      data-icon-tint={aparencia.icones?.tint ? "" : undefined}
       suppressHydrationWarning
     >
       <body>

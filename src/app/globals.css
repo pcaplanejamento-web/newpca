@@ -174,6 +174,28 @@
   box-shadow: 0 10px 30px -8px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
+/* Ícones (lucide) controlados pelo ADM — renderizam já editados (tokens/atributos
+   injetados no layout). Só a ESPESSURA é global por padrão (não conflita com cor);
+   TOM, PREENCHIDO (duotone) e ANIMAÇÃO são opt-in por atributo no <html>, para não
+   sobrepor as cores contextuais dos ícones. */
+.lucide {
+  stroke-width: var(--icon-stroke, 2);
+}
+[data-icon-tint] .lucide {
+  color: var(--icon-tint);
+}
+[data-icons="filled"] .lucide {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+[data-icon-anim="hover"] .lucide {
+  transition: transform var(--motion-duration) var(--motion-ease);
+}
+[data-icon-anim="hover"] a:hover .lucide,
+[data-icon-anim="hover"] button:hover .lucide {
+  transform: scale(1.14);
+}
+
 /* Mapa dos tokens → utilitários Tailwind v4 (inline: leem a var viva, então
    trocar o valor sob [data-theme] ou pelo ADM reflete sem recompilar).
    Adiciona tokens SEM remover a paleta padrão (slate/emerald seguem válidos

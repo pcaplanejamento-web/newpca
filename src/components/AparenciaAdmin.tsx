@@ -7,7 +7,7 @@ import { ColorField } from "@/components/ColorField";
 import { Segmented } from "@/components/Segmented";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
-import { IconLayers } from "@/components/icons";
+import { IconBell, IconClipboard, IconFile, IconLayers, IconTrash, IconUser } from "@/components/icons";
 import { type Aparencia, aparenciaToCss, DEFAULT_CORES, TOKENS_COR } from "@/lib/theme";
 
 // Painel de Personalização do ADM (spec §39). Só componentes do design-system.
@@ -51,6 +51,11 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   const [motion, setMotion] = useState(inicial.motion ?? "default");
   const [elevation, setElevation] = useState<"ring" | "soft">(inicial.elevation ?? "ring");
   const [kpi, setKpi] = useState<"outline" | "filled">(inicial.kpi ?? "outline");
+  const [iconStroke, setIconStroke] = useState(inicial.icones?.stroke ?? 2);
+  const [iconFill, setIconFill] = useState<"none" | "duotone">(inicial.icones?.fill ?? "none");
+  const [iconAnim, setIconAnim] = useState<"none" | "hover">(inicial.icones?.anim ?? "none");
+  const [iconTintOn, setIconTintOn] = useState(!!inicial.icones?.tint);
+  const [iconTint, setIconTint] = useState(inicial.icones?.tint ?? "#4f46e5");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -72,7 +77,19 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
     else root.removeAttribute("data-elevation");
     if (kpi === "filled") root.setAttribute("data-kpi", "filled");
     else root.removeAttribute("data-kpi");
-  }, [cores, radius, density, motion, elevation, kpi]);
+    root.style.setProperty("--icon-stroke", String(iconStroke));
+    if (iconTintOn) {
+      root.style.setProperty("--icon-tint", iconTint);
+      root.setAttribute("data-icon-tint", "");
+    } else {
+      root.style.removeProperty("--icon-tint");
+      root.removeAttribute("data-icon-tint");
+    }
+    if (iconFill === "duotone") root.setAttribute("data-icons", "filled");
+    else root.removeAttribute("data-icons");
+    if (iconAnim === "hover") root.setAttribute("data-icon-anim", "hover");
+    else root.removeAttribute("data-icon-anim");
+  }, [cores, radius, density, motion, elevation, kpi, iconStroke, iconFill, iconAnim, iconTintOn, iconTint]);
   useEffect(
     () => () => {
       document.getElementById("preview-aparencia")?.remove();
@@ -91,7 +108,15 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       const res = await fetch("/api/admin/aparencia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cores, radius, density, motion, elevation, kpi }),
+        body: JSON.stringify({
+          cores,
+          radius,
+          density,
+          motion,
+          elevation,
+          kpi,
+          icones: { stroke: iconStroke, tint: iconTintOn ? iconTint : undefined, fill: iconFill, anim: iconAnim },
+        }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -115,6 +140,11 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       setMotion("default");
       setElevation("ring");
       setKpi("outline");
+      setIconStroke(2);
+      setIconFill("none");
+      setIconAnim("none");
+      setIconTintOn(false);
+      setIconTint("#4f46e5");
       toast.success("Aparência restaurada ao padrão.");
     } catch {
       toast.error("Erro ao restaurar.");
@@ -218,6 +248,73 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
     </div>
   );
 
+  const abaIcones = (
+    <div className="max-w-md space-y-5">
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">
+          Espessura do traço · {iconStroke.toFixed(2)}
+        </span>
+        <input
+          type="range"
+          min={1}
+          max={3}
+          step={0.25}
+          value={iconStroke}
+          onChange={(e) => setIconStroke(Number(e.target.value))}
+          className="w-full accent-[var(--accent)]"
+        />
+      </div>
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">Preenchimento</span>
+        <Segmented
+          value={iconFill}
+          onChange={(v) => setIconFill(v as "none" | "duotone")}
+          options={[
+            { value: "none", label: "Contorno" },
+            { value: "duotone", label: "Preenchido" },
+          ]}
+        />
+      </div>
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">Animação</span>
+        <Segmented
+          value={iconAnim}
+          onChange={(v) => setIconAnim(v as "none" | "hover")}
+          options={[
+            { value: "none", label: "Nenhuma" },
+            { value: "hover", label: "Suave (hover)" },
+          ]}
+        />
+      </div>
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">Tom dos ícones</span>
+        <Segmented
+          value={iconTintOn ? "cor" : "ctx"}
+          onChange={(v) => setIconTintOn(v === "cor")}
+          options={[
+            { value: "ctx", label: "Contextual" },
+            { value: "cor", label: "Cor fixa" },
+          ]}
+        />
+        {iconTintOn && (
+          <div className="mt-2">
+            <ColorField value={iconTint} onChange={setIconTint} label="Tom dos ícones" />
+          </div>
+        )}
+      </div>
+      <div className="rounded-control border border-border bg-surface-2 p-3">
+        <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">Prévia</span>
+        <div className="flex flex-wrap items-center gap-4 text-text-2">
+          <IconClipboard className="h-6 w-6" />
+          <IconUser className="h-6 w-6" />
+          <IconBell className="h-6 w-6" />
+          <IconFile className="h-6 w-6" />
+          <IconTrash className="h-6 w-6" />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -240,6 +337,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
           tabs={[
             { key: "cores", label: "Cores", content: abaCores },
             { key: "layout", label: "Bordas · Densidade · Motion", content: abaLayout },
+            { key: "icones", label: "Ícones", content: abaIcones },
           ]}
         />
       </div>

@@ -35,6 +35,13 @@ export type Aparencia = {
   elevation?: "ring" | "soft";
   /** Estilo dos KPIs: "outline" (contorno, padrão) ou "filled" (preenchido). */
   kpi?: "outline" | "filled";
+  /** Ícones (lucide): espessura, tom global (opcional), preenchido e animação. */
+  icones?: {
+    stroke?: number;
+    tint?: string;
+    fill?: "none" | "duotone";
+    anim?: "none" | "hover";
+  };
   identidade?: { nome?: string; subtitulo?: string; favicon?: string };
 };
 
@@ -62,6 +69,18 @@ export function aparenciaToCss(a: Aparencia): string {
     css +=
       `:root{--radius-card:${r}px;--radius-control:${Math.max(6, r - 4)}px;` +
       `--radius-chip:${Math.max(4, r - 5)}px;--radius-segment:${Math.max(6, r - 3)}px;}`;
+  }
+  if (a.icones) {
+    const linhas: string[] = [];
+    if (typeof a.icones.stroke === "number" && Number.isFinite(a.icones.stroke)) {
+      // clampa e limita casas decimais — só número entra no CSS.
+      const s = Math.round(Math.max(1, Math.min(3, a.icones.stroke)) * 100) / 100;
+      linhas.push(`--icon-stroke:${s};`);
+    }
+    if (typeof a.icones.tint === "string" && HEX.test(a.icones.tint)) {
+      linhas.push(`--icon-tint:${a.icones.tint};`);
+    }
+    if (linhas.length) css += `:root{${linhas.join("")}}`;
   }
   return css;
 }

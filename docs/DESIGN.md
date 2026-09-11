@@ -67,6 +67,12 @@ componente fixa cor **neutra** (só `var(--token)`); a única hex crua é **sem�
   ano + meses + intervalo) + ordenar. `DataTable` deriva os anos por coluna.
 - **Gráficos** (`charts/`): eixos/grade/cursor **lidos dos tokens** via `useChartTokens()`
   (reavalia ao trocar tema ou no preview do ADM); séries na paleta `CHART_COLORS`.
+- **Ícones controlados pelo ADM** (`lucide`, renderizam já editados): **espessura** (`--icon-stroke`),
+  **preenchido** (duotone via `[data-icons=filled] .lucide { fill: currentColor; fill-opacity }` — o
+  lucide é só contorno), **animação** (`[data-icon-anim=hover]`) e **tom** global opcional
+  (`[data-icon-tint] .lucide { color: var(--icon-tint) }`; por padrão o ícone herda a cor do contexto).
+  Aba "Ícones" no painel do ADM + Theme Playground; injeção via `layout.tsx` + `aparenciaToCss` (só
+  número/hex validados).
 - **Controle do ADM** (`/painel/aparencia` + Theme Playground): cores (claro/escuro), raio,
   densidade, motion, **elevação dos cards** (Anel `--ring` ↔ Sombra suave `--shadow-soft`,
   via `:root[data-elevation=soft]`) e **estilo dos KPIs** (Contorno ↔ Preenchido, via

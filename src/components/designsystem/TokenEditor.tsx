@@ -32,6 +32,9 @@ export function TokenEditor() {
   const [motion, setMotion] = useState("default");
   const [elevation, setElevation] = useState("ring");
   const [kpi, setKpi] = useState("outline");
+  const [iconStroke, setIconStroke] = useState(2);
+  const [iconFill, setIconFill] = useState("none");
+  const [iconAnim, setIconAnim] = useState("none");
   useEffect(() => setMounted(true), []);
 
   const tema = mounted && resolvedTheme === "dark" ? "dark" : "light";
@@ -57,20 +60,36 @@ export function TokenEditor() {
     if (v === padrao) root().removeAttribute(a);
     else root().setAttribute(a, v);
   }
+  function mudarIconStroke(v: number) {
+    setIconStroke(v);
+    root().style.setProperty("--icon-stroke", String(v));
+  }
+  function mudarIconFill(v: string) {
+    setIconFill(v);
+    if (v === "duotone") root().setAttribute("data-icons", "filled");
+    else root().removeAttribute("data-icons");
+  }
+  function mudarIconAnim(v: string) {
+    setIconAnim(v);
+    if (v === "hover") root().setAttribute("data-icon-anim", "hover");
+    else root().removeAttribute("data-icon-anim");
+  }
   function resetar() {
-    for (const p of ["--accent", "--radius-card", "--radius-control", "--radius-chip"]) {
+    for (const p of ["--accent", "--radius-card", "--radius-control", "--radius-chip", "--icon-stroke"]) {
       root().style.removeProperty(p);
     }
-    root().removeAttribute("data-density");
-    root().removeAttribute("data-motion");
-    root().removeAttribute("data-elevation");
-    root().removeAttribute("data-kpi");
+    for (const a of ["data-density", "data-motion", "data-elevation", "data-kpi", "data-icons", "data-icon-anim"]) {
+      root().removeAttribute(a);
+    }
     setAccent("#4f46e5");
     setRadius(14);
     setDensity("default");
     setMotion("default");
     setElevation("ring");
     setKpi("outline");
+    setIconStroke(2);
+    setIconFill("none");
+    setIconAnim("none");
   }
 
   return (
@@ -161,6 +180,41 @@ export function TokenEditor() {
               { value: "reduced", label: "Reduzido" },
               { value: "default", label: "Padrão" },
               { value: "smooth", label: "Suave" },
+            ]}
+          />
+        </Campo>
+
+        <Campo titulo={`Traço dos ícones · ${iconStroke.toFixed(2)}`}>
+          <input
+            type="range"
+            aria-label="Espessura dos ícones"
+            min={1}
+            max={3}
+            step={0.25}
+            value={iconStroke}
+            onChange={(e) => mudarIconStroke(Number(e.target.value))}
+            className="mt-2 w-full accent-[var(--accent)]"
+          />
+        </Campo>
+
+        <Campo titulo="Ícones — preenchimento">
+          <Segmented
+            value={iconFill}
+            onChange={mudarIconFill}
+            options={[
+              { value: "none", label: "Contorno" },
+              { value: "duotone", label: "Preenchido" },
+            ]}
+          />
+        </Campo>
+
+        <Campo titulo="Ícones — animação">
+          <Segmented
+            value={iconAnim}
+            onChange={mudarIconAnim}
+            options={[
+              { value: "none", label: "Nenhuma" },
+              { value: "hover", label: "Hover" },
             ]}
           />
         </Campo>
