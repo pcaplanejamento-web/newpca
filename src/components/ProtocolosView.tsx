@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
-import { NaturezaTag, SituacaoDot } from "./StatusTag";
+import { Button } from "./Button";
 import { Fab } from "./Fab";
-import { ProtocoloCard } from "./ProtocoloCard";
+import { cellCls as inp, filterCls as filtroCls, labelSmCls as labelEd } from "./formStyles";
 import {
   IconAlert,
   IconCheck,
-  IconChevronLeft,
-  IconChevronRight,
   IconClose,
   IconInbox,
   IconPencil,
@@ -17,7 +15,9 @@ import {
   IconSpinner,
   IconTrash,
 } from "./icons";
-import { cellCls as inp, filterCls as filtroCls, labelSmCls as labelEd } from "./formStyles";
+import { Pager } from "./Pager";
+import { ProtocoloCard } from "./ProtocoloCard";
+import { NaturezaTag, SituacaoDot } from "./StatusTag";
 import { dataBR } from "@/lib/format";
 import type { OpcoesPorCampo, ProtocoloLista, ResumoProtocolos } from "@/lib/protocolos";
 import type { CampoOpcao, SituacaoProtocolo } from "@/db/schema";
@@ -133,7 +133,7 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
       </td>
       <td className="px-4 py-2">
         <input value={draft.numero} onChange={(e) => set({ numero: e.target.value })} placeholder="Nº *" className={inp} />
-        {erro && <span className="mt-1 block text-[11px] text-red-600 dark:text-red-400">{erro}</span>}
+        {erro && <span className="mt-1 block text-[11px]" style={{ color: "var(--danger)" }}>{erro}</span>}
       </td>
       <td className="px-4 py-2">
         <div className="space-y-1">
@@ -155,10 +155,10 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
       </td>
       <td className="px-4 py-2">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={onSalvar} disabled={salvando} aria-label="Salvar" className="rounded-md bg-text p-1.5 text-surface transition hover:opacity-90 disabled:opacity-60">
+          <button type="button" onClick={onSalvar} disabled={salvando} aria-label="Salvar" className="rounded-control bg-text p-1.5 text-surface transition hover:opacity-90 disabled:opacity-60">
             {salvando ? <IconSpinner className="h-4 w-4" /> : <IconCheck className="h-4 w-4" />}
           </button>
-          <button type="button" onClick={onCancelar} disabled={salvando} aria-label="Cancelar" className="rounded-md border border-slate-300 p-1.5 text-slate-500 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800">
+          <button type="button" onClick={onCancelar} disabled={salvando} aria-label="Cancelar" className="rounded-control border border-border-2 p-1.5 text-muted transition hover:bg-surface-2 disabled:opacity-60">
             <IconClose className="h-4 w-4" />
           </button>
         </div>
@@ -206,18 +206,17 @@ function CardEdicaoMobile({ draft, set, situacoes, opcoes, adicionarOpcao, onSal
         </div>
       </div>
       {erro && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+        <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: "var(--danger)" }}>
           <IconAlert className="h-4 w-4" /> {erro}
         </div>
       )}
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={onSalvar} disabled={salvando} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60">
-          {salvando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconCheck className="h-[18px] w-[18px]" />}
+        <Button onClick={onSalvar} loading={salvando} icon={<IconCheck className="h-[18px] w-[18px]" />} className="flex-1">
           Salvar
-        </button>
-        <button type="button" onClick={onCancelar} disabled={salvando} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+        </Button>
+        <Button variant="secondary" onClick={onCancelar} disabled={salvando}>
           Cancelar
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -403,18 +402,13 @@ export function ProtocolosView({
     <div className="space-y-5">
       {/* Cabeçalho + contagem */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-muted">
           {resumo.total} protocolo{resumo.total === 1 ? "" : "s"} · {resumo.emAnalise} em análise
         </p>
         {podeEditar && (
-          <button
-            type="button"
-            onClick={iniciarNovo}
-            className="hidden items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface shadow-sm transition hover:opacity-90 lg:inline-flex"
-          >
-            <IconPlus className="h-[18px] w-[18px]" />
+          <Button onClick={iniciarNovo} icon={<IconPlus className="h-[18px] w-[18px]" />} className="hidden lg:inline-flex">
             Novo protocolo
-          </button>
+          </Button>
         )}
       </div>
 
@@ -453,38 +447,30 @@ export function ProtocolosView({
           ))}
         </select>
         {filtrando && (
-          <button
-            type="button"
-            onClick={() => mudarFiltro({ natureza: "", situacao: "", responsavel: "", ano: "" })}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          >
+          <Button variant="ghost" onClick={() => mudarFiltro({ natureza: "", situacao: "", responsavel: "", ano: "" })}>
             Limpar
-          </button>
+          </Button>
         )}
         {carregando && (
-          <span className="inline-flex items-center gap-1.5 px-1 text-xs text-slate-400">
+          <span className="inline-flex items-center gap-1.5 px-1 text-xs text-faint">
             <IconSpinner className="h-3.5 w-3.5" /> Atualizando…
           </span>
         )}
       </div>
 
       {vazio ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center dark:border-slate-700 dark:bg-slate-900">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
+        <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface px-6 py-14 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2 text-faint">
             <IconInbox className="h-7 w-7" />
           </div>
-          <h3 className="mt-4 text-base font-bold text-slate-800 dark:text-surface">Nenhum protocolo encontrado</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h3 className="mt-4 text-base font-bold text-text">Nenhum protocolo encontrado</h3>
+          <p className="mt-1 text-sm text-muted">
             {filtrando ? "Ajuste os filtros para ver mais resultados." : "Adicione o primeiro protocolo para começar."}
           </p>
           {podeEditar && (
-            <button
-              type="button"
-              onClick={iniciarNovo}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
-            >
-              <IconPlus className="h-[18px] w-[18px]" /> Novo protocolo
-            </button>
+            <Button onClick={iniciarNovo} icon={<IconPlus className="h-[18px] w-[18px]" />} className="mt-5">
+              Novo protocolo
+            </Button>
           )}
         </div>
       ) : (
@@ -502,9 +488,9 @@ export function ProtocolosView({
           </div>
 
           {/* Desktop: tabela (edição inline na própria linha) */}
-          <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
+          <div className="hidden overflow-x-auto rounded-card border border-border bg-surface lg:block">
             <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
+              <thead className="border-b border-border bg-surface-2 text-xs uppercase tracking-wide text-faint">
                 <tr>
                   <Th>Data</Th>
                   <Th>Protocolo</Th>
@@ -522,12 +508,12 @@ export function ProtocolosView({
                   editId === p.id ? (
                     <LinhaEdicaoDesktop key={p.id} {...edProps} />
                   ) : (
-                    <tr key={p.id} className="group transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">{p.data ? dataBR(p.data) : "—"}</td>
+                    <tr key={p.id} className="group transition hover:bg-surface-2">
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">{p.data ? dataBR(p.data) : "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-text">{p.numero}</td>
                       <td className="max-w-[18rem] px-4 py-3">
-                        <div className="truncate font-medium text-slate-700 dark:text-slate-200">{p.orgao ?? "—"}</div>
-                        {p.orgaoSigla && <div className="text-xs text-slate-400">{p.orgaoSigla}</div>}
+                        <div className="truncate font-medium text-text-2">{p.orgao ?? "—"}</div>
+                        {p.orgaoSigla && <div className="text-xs text-faint">{p.orgaoSigla}</div>}
                       </td>
                       <td className="px-4 py-3">
                         {p.natureza ? <NaturezaTag natureza={p.natureza} /> : <span className="text-faint">—</span>}
@@ -536,23 +522,23 @@ export function ProtocolosView({
                         {p.responsavel ? (
                           <div className="flex items-center gap-2">
                             <Avatar nome={p.responsavel} size="sm" />
-                            <span className="text-slate-700 dark:text-slate-200">{p.responsavel}</span>
+                            <span className="text-text-2">{p.responsavel}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-faint">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <SituacaoDot situacao={p.situacao} label={labelSituacao(p.situacao)} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{p.distribuicao ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-text-2">{p.distribuicao ?? "—"}</td>
                       {podeEditar && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1 opacity-0 transition group-hover:opacity-100">
-                            <button type="button" aria-label="Editar" onClick={() => iniciarEdicao(p)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-700">
+                            <button type="button" aria-label="Editar" onClick={() => iniciarEdicao(p)} className="rounded-control p-1.5 text-faint transition hover:bg-surface-2 hover:text-accent">
                               <IconPencil className="h-4 w-4" />
                             </button>
-                            <button type="button" aria-label="Excluir" onClick={() => excluir(p)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
+                            <button type="button" aria-label="Excluir" onClick={() => excluir(p)} className="rounded-control p-1.5 text-faint transition hover:bg-surface-2 hover:text-[var(--danger)]">
                               <IconTrash className="h-4 w-4" />
                             </button>
                           </div>
@@ -568,29 +554,9 @@ export function ProtocolosView({
       )}
 
       {/* Paginação */}
-      {pagina.pages > 1 && (
-        <div className="flex items-center justify-center gap-3">
-          <button
-            type="button"
-            disabled={page <= 1 || carregando}
-            onClick={() => irParaPagina(Math.max(1, page - 1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            <IconChevronLeft className="h-4 w-4" /> Anterior
-          </button>
-          <span className="text-sm text-slate-500 dark:text-slate-400">
-            {pagina.page} / {pagina.pages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= pagina.pages || carregando}
-            onClick={() => irParaPagina(Math.min(pagina.pages, page + 1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            Próxima <IconChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <div className="flex justify-center">
+        <Pager page={page} pages={pagina.pages} onChange={irParaPagina} />
+      </div>
 
       {/* FAB (mobile) */}
       {podeEditar && editId === null && <Fab onClick={iniciarNovo} label="Novo" />}
