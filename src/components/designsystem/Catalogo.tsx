@@ -3,11 +3,15 @@
 import { type ReactNode, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { ColorField } from "@/components/ColorField";
 import { FilterChip } from "@/components/FilterChip";
-import { IconPlus, IconUpload } from "@/components/icons";
+import { IconBox, IconFile, IconLayers, IconPlus, IconUpload } from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
+import { MultiSelectHeader } from "@/components/MultiSelectHeader";
+import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { Segmented } from "@/components/Segmented";
 import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
+import { Tabs } from "@/components/Tabs";
 import { TokenEditor } from "./TokenEditor";
 
 // Biblioteca de componentes (spec §39.25) — rota pública `/design-system`.
@@ -74,8 +78,21 @@ const SITUACOES: { v: string; l: string }[] = [
   { v: "cancelado", l: "Cancelado" },
 ];
 
+const ORGAOS = [
+  "Secretaria Municipal de Saúde",
+  "Secretaria Municipal de Educação",
+  "Secretaria de Infraestrutura",
+  "Procuradoria-Geral do Município",
+  "Gabinete do Prefeito",
+  "Secretaria de Meio Ambiente",
+  "Secretaria de Assistência Social",
+];
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
+  const [cor, setCor] = useState("#4f46e5");
+  const [orgaos, setOrgaos] = useState<string[]>([]);
+  const [sortOrgao, setSortOrgao] = useState<"asc" | "desc" | null>(null);
 
   return (
     <div className="min-h-dvh bg-bg text-text">
@@ -202,6 +219,85 @@ export function Catalogo() {
             <FilterChip label="Natureza" />
             <FilterChip label="Órgão" active />
             <FilterChip label="Período" />
+          </div>
+        </Secao>
+
+        <Secao titulo="Seletor de cor (conta-gotas + salvos)">
+          <div className="flex flex-wrap items-center gap-4">
+            <ColorField value={cor} onChange={setCor} label="Cor primária" />
+            <div className="flex items-center gap-2 text-[13px] text-text-2">
+              <span
+                className="h-6 w-6 rounded-md border border-border-2"
+                style={{ background: cor }}
+              />
+              <span className="font-mono">{cor}</span>
+            </div>
+          </div>
+        </Secao>
+
+        <Secao titulo="Abas (swipe no mobile, sublinhado animado)">
+          <Tabs
+            tabs={[
+              {
+                key: "orc",
+                label: "Orçamentário",
+                icon: <IconBox className="h-4 w-4" />,
+                content: (
+                  <p className="text-[13px] text-text-2">
+                    Conteúdo do orçamentário. No celular, arraste para o lado para trocar de aba.
+                  </p>
+                ),
+              },
+              {
+                key: "frotas",
+                label: "Frotas",
+                icon: <IconLayers className="h-4 w-4" />,
+                content: <p className="text-[13px] text-text-2">Conteúdo de frotas.</p>,
+              },
+              {
+                key: "docs",
+                label: "Documentos",
+                icon: <IconFile className="h-4 w-4" />,
+                content: <p className="text-[13px] text-text-2">Conteúdo de documentos.</p>,
+              },
+            ]}
+          />
+        </Secao>
+
+        <Secao titulo="Filtro de cabeçalho & Período">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="rounded-control border border-border bg-surface-2 px-2">
+              <MultiSelectHeader
+                label="Órgão"
+                options={ORGAOS}
+                value={orgaos}
+                onApply={setOrgaos}
+                onSort={setSortOrgao}
+                sortDir={sortOrgao}
+              />
+            </div>
+            <PeriodoPicker anos={[2027, 2026, 2025]} value={{ preset: "todo" }} />
+          </div>
+          <p className="mt-2 text-[12px] text-faint">
+            {orgaos.length > 0 && orgaos.length < ORGAOS.length
+              ? `${orgaos.length} órgão(s) filtrado(s)`
+              : "Sem filtro"}
+            {sortOrgao ? ` · ordem ${sortOrgao === "asc" ? "crescente" : "decrescente"}` : ""}
+          </p>
+        </Secao>
+
+        <Secao titulo="Sombra suave (contorno suave)">
+          <div className="flex flex-wrap gap-4">
+            <div className="rounded-card bg-surface p-5 shadow-soft">
+              <p className="text-[13px] font-semibold text-text">Card com --shadow-soft</p>
+              <p className="mt-1 text-[12px] text-muted">
+                Elevação suave para popovers e cards flutuantes.
+              </p>
+            </div>
+            <div className="rounded-card border border-border bg-surface p-5 shadow-ring">
+              <p className="text-[13px] font-semibold text-text">Card com --ring</p>
+              <p className="mt-1 text-[12px] text-muted">Elevação padrão dos cards (spec §2).</p>
+            </div>
           </div>
         </Secao>
 
