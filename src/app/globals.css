@@ -42,8 +42,9 @@
   --nat-correcao: #2563eb;
   --nat-comunicacao: #9333ea;
 
-  /* Semânticas — situação (§3) */
+  /* Semânticas — situação (§3; +em-andamento para o enum atual do app) */
   --sit-em-analise: #ca8a04;
+  --sit-em-andamento: #2563eb;
   --sit-finalizado: #16a34a;
   --sit-devolvido: #ea580c;
   --sit-cancelado: #dc2626;
