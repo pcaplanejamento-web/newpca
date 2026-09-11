@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { ColorField } from "@/components/ColorField";
+import { type Column, DataTable } from "@/components/DataTable";
 import { FilterChip } from "@/components/FilterChip";
 import * as Icons from "@/components/icons";
 import { IconBox, IconFile, IconLayers, IconPlus, IconUpload } from "@/components/icons";
@@ -67,6 +68,63 @@ const ICONES = (
   Object.entries(Icons) as [string, (p: { className?: string }) => ReactNode][]
 ).filter(([k]) => k.startsWith("Icon"));
 
+type Proto = {
+  id: number;
+  data: string;
+  orgao: string;
+  sigla: string;
+  natureza: string;
+  responsavel: string;
+  situacao: string;
+};
+const SIT_LABEL: Record<string, string> = {
+  em_analise: "Em análise",
+  em_andamento: "Em andamento",
+  finalizado: "Finalizado",
+  devolvido: "Devolvido",
+  cancelado: "Cancelado",
+};
+const PROTOS: Proto[] = [
+  { id: 118223, data: "02/09/2026", orgao: "Secretaria Municipal de Saúde", sigla: "SMS", natureza: "INCLUSÃO 2027", responsavel: "Naty", situacao: "em_analise" },
+  { id: 115282, data: "28/08/2026", orgao: "Secretaria Municipal de Educação", sigla: "SME", natureza: "EXCLUSÃO", responsavel: "Cris", situacao: "finalizado" },
+  { id: 117904, data: "30/08/2026", orgao: "Secretaria de Infraestrutura", sigla: "SEINFRA", natureza: "CORREÇÃO", responsavel: "Thamires", situacao: "em_analise" },
+  { id: 116540, data: "25/08/2026", orgao: "Diretoria de Logística e Transporte", sigla: "DLT", natureza: "INCLUSÃO 2026", responsavel: "Naty", situacao: "devolvido" },
+  { id: 118990, data: "04/09/2026", orgao: "Secretaria Municipal da Fazenda", sigla: "SEFAZ", natureza: "COMUNICAÇÃO INTERNA", responsavel: "", situacao: "em_analise" },
+  { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", natureza: "EXCLUSÃO", responsavel: "Naty", situacao: "cancelado" },
+];
+const COLUNAS: Column<Proto>[] = [
+  { key: "data", header: "Data", minWidth: 96, render: (r) => <span className="font-mono text-[12px] text-muted">{r.data}</span> },
+  { key: "id", header: "Protocolo", minWidth: 96, render: (r) => <span className="font-mono font-semibold text-text">{r.id}</span> },
+  {
+    key: "orgao",
+    header: "Órgão",
+    minWidth: 220,
+    filterOptions: ORGAOS,
+    render: (r) => (
+      <div className="min-w-0">
+        <div className="truncate font-medium text-text">{r.orgao}</div>
+        <div className="text-[11px] text-faint">{r.sigla}</div>
+      </div>
+    ),
+  },
+  { key: "natureza", header: "Natureza", minWidth: 172, render: (r) => <NaturezaTag natureza={r.natureza} /> },
+  {
+    key: "responsavel",
+    header: "Responsável",
+    minWidth: 150,
+    render: (r) =>
+      r.responsavel ? (
+        <div className="flex items-center gap-2">
+          <Avatar nome={r.responsavel} size="sm" />
+          <span className="text-text-2">{r.responsavel}</span>
+        </div>
+      ) : (
+        <span className="text-faint">—</span>
+      ),
+  },
+  { key: "situacao", header: "Situação", minWidth: 130, render: (r) => <SituacaoDot situacao={r.situacao} label={SIT_LABEL[r.situacao] ?? "—"} /> },
+];
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -74,6 +132,12 @@ export function Catalogo() {
   const [sortOrgao, setSortOrgao] = useState<"asc" | "desc" | null>(null);
   const [framed, setFramed] = useState(false);
   const [device, setDevice] = useState("desktop");
+  const [tsel, setTsel] = useState<Set<string | number>>(new Set());
+  const [tfilters, setTfilters] = useState<Record<string, string[]>>({});
+  const [tsort, setTsort] = useState<{ key: string | null; dir: "asc" | "desc" | null }>({
+    key: null,
+    dir: null,
+  });
 
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -237,6 +301,30 @@ export function Catalogo() {
             <p className="mt-1 text-[12px] text-muted">Elevação padrão dos cards (spec §2).</p>
           </div>
         </div>
+      </Secao>
+
+      <Secao titulo="Tabela (seleção de linhas + filtro no cabeçalho)">
+        <DataTable
+          columns={COLUNAS}
+          rows={PROTOS}
+          getKey={(r) => r.id}
+          selectable
+          selected={tsel}
+          onSelected={setTsel}
+          filters={tfilters}
+          onFilter={(k, v) => setTfilters((f) => ({ ...f, [k]: v }))}
+          sortKey={tsort.key}
+          sortDir={tsort.dir}
+          onSort={(k, d) => setTsort({ key: k, dir: d })}
+          footer={
+            <>
+              <span>{tsel.size > 0 ? `${tsel.size} selecionada(s)` : `${PROTOS.length} protocolos`}</span>
+              <span className="font-mono">
+                1–{PROTOS.length} de {PROTOS.length}
+              </span>
+            </>
+          }
+        />
       </Secao>
     </>
   );
