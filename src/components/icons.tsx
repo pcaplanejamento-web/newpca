@@ -25,6 +25,7 @@ import {
   Menu,
   Moon,
   Package,
+  Palette,
   Pencil,
   Plus,
   Save,
@@ -81,6 +82,7 @@ export const IconCamera = Camera;
 export const IconKey = KeyRound;
 export const IconImage = ImageIcon;
 export const IconSave = Save;
+export const IconPalette = Palette;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

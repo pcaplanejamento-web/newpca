@@ -9,6 +9,23 @@ export const TOKENS_COR = [
 ] as const;
 export type TokenCor = (typeof TOKENS_COR)[number];
 
+/** Defaults de fábrica (espelham globals.css §2) — para o painel do ADM iniciar
+ * os seletores e para "restaurar padrão". */
+export const DEFAULT_CORES: { light: Record<TokenCor, string>; dark: Record<TokenCor, string> } = {
+  light: {
+    bg: "#ffffff", surface: "#ffffff", "surface-2": "#fafaf8", text: "#1c1c22",
+    "text-2": "#3f3f3a", muted: "#8a8a80", faint: "#b5b5aa", border: "#f1f1eb",
+    "border-2": "#e9e9e2", accent: "#4f46e5", "accent-soft": "#eef0ff",
+    track: "#f1f1eb", "sb-active": "#fafaf8", "kpi-bar": "#e9e9e2",
+  },
+  dark: {
+    bg: "#08080c", surface: "#14141b", "surface-2": "#191922", text: "#f3f3f5",
+    "text-2": "#c7c7d2", muted: "#83839a", faint: "#565668", border: "#20202b",
+    "border-2": "#282836", accent: "#818cf8", "accent-soft": "#1e1e3a",
+    track: "#20202b", "sb-active": "#1c1c26", "kpi-bar": "#26263a",
+  },
+};
+
 export type Aparencia = {
   cores?: { light?: Record<string, string>; dark?: Record<string, string> };
   radius?: number;

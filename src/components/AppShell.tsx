@@ -17,6 +17,7 @@ import {
   IconFile,
   IconLogout,
   IconMenu,
+  IconPalette,
   IconSearch,
   IconShield,
   IconSpinner,
@@ -59,6 +60,7 @@ const SECOES: NavSecao[] = [
     titulo: "Administração",
     itens: [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
+      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
       {
         href: "/painel/equipes",
         label: "Equipes",
