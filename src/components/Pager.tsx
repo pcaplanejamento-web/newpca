@@ -2,9 +2,9 @@
 
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
-// Paginação do design system: anterior/próxima + "página / total". Fonte única —
-// substitui os pagers digitados à mão em DataTable/ItemTable/TabelaEditor/
-// ProtocolosView. Não renderiza nada quando há uma página só. Por token.
+// Paginação do design system: anterior/próxima + "página / total". Fonte única
+// (DataTable, ItemTable, ProtocolosView…). Não renderiza nada quando há uma
+// página só. Por token.
 export function Pager({
   page,
   pages,

@@ -9,7 +9,6 @@ import {
   IconClock,
   IconFile,
   IconPlus,
-  IconTool,
 } from "@/components/icons";
 import { ProtocoloCard } from "@/components/ProtocoloCard";
 import { StatCard } from "@/components/StatCard";
@@ -73,22 +72,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
-
-      <Link
-        href="/painel/ferramentas"
-        className="group flex items-center gap-4 rounded-card border border-border bg-surface p-5 shadow-ring transition-colors hover:border-border-2"
-      >
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-accent text-surface">
-          <IconTool className="h-6 w-6" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-text">Ferramentas</h3>
-          <p className="mt-0.5 text-sm text-muted">
-            Dashboard do PCA, tabelas dinâmicas e importação de planilhas.
-          </p>
-        </div>
-        <IconChevronRight className="h-5 w-5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5" />
-      </Link>
     </div>
   );
 }

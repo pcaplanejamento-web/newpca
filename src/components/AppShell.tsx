@@ -9,11 +9,8 @@ import { Dropdown } from "./Dropdown";
 import { SearchField } from "./Field";
 import { ThemeToggle } from "./ThemeToggle";
 import {
-  IconActivity,
   IconBell,
   IconBox,
-  IconClipboard,
-  IconClock,
   IconClose,
   IconDashboard,
   IconFile,
@@ -22,7 +19,6 @@ import {
   IconPalette,
   IconShield,
   IconSpinner,
-  IconTool,
   IconUser,
   IconUsers,
 } from "./icons";
@@ -47,24 +43,20 @@ type NavSecao = { titulo: string; itens: NavItem[] };
 
 const SECOES: NavSecao[] = [
   {
-    titulo: "Ferramentas",
+    titulo: "Módulos",
     itens: [
       { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true },
       { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile },
       { href: "/painel/pca", label: "PCA", Icon: IconBox },
-      { href: "/painel/atividades", label: "Atividades", Icon: IconActivity },
-      { href: "/painel/pendencias", label: "Pendências", Icon: IconClock },
-      { href: "/painel/ferramentas", label: "Ferramentas", Icon: IconTool },
     ],
   },
   {
     titulo: "Administração",
     itens: [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
-      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
       { href: "/painel/equipes", label: "Equipes", Icon: IconUsers, roles: ["admin", "gestor"] },
       { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
-      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClipboard, roles: ["admin"] },
+      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
     ],
   },
 ];

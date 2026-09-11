@@ -101,71 +101,6 @@ export const sessoes = sqliteTable(
 );
 
 /**
- * Tabelas dinâmicas ("listas de protocolos" e afins). Cada tabela tem colunas
- * personalizáveis (texto/seleção/data/número) e linhas cujos valores ficam num
- * JSON indexado por id da coluna. A "Distribuição de Protocolos" é a 1ª tabela.
- */
-export const tabelas = sqliteTable("tabelas", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  nome: text("nome").notNull(),
-  descricao: text("descricao"),
-  ordem: integer("ordem").notNull().default(0),
-  criadoPor: integer("criado_por").references(() => usuarios.id, {
-    onDelete: "set null",
-  }),
-  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-});
-
-export const colunas = sqliteTable(
-  "colunas",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    tabelaId: integer("tabela_id")
-      .notNull()
-      .references(() => tabelas.id, { onDelete: "cascade" }),
-    nome: text("nome").notNull(),
-    tipo: text("tipo", { enum: ["texto", "selecao", "data", "numero"] })
-      .notNull()
-      .default("texto"),
-    ordem: integer("ordem").notNull().default(0),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [index("colunas_tabela_idx").on(t.tabelaId)],
-);
-
-/** Opções das colunas do tipo "seleção". */
-export const colunaOpcoes = sqliteTable(
-  "coluna_opcoes",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    colunaId: integer("coluna_id")
-      .notNull()
-      .references(() => colunas.id, { onDelete: "cascade" }),
-    valor: text("valor").notNull(),
-  },
-  (t) => [uniqueIndex("coluna_opcoes_uq").on(t.colunaId, t.valor)],
-);
-
-export const linhas = sqliteTable(
-  "linhas",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    tabelaId: integer("tabela_id")
-      .notNull()
-      .references(() => tabelas.id, { onDelete: "cascade" }),
-    dados: text("dados").notNull().default("{}"), // JSON { [colunaId]: valor }
-    ordem: integer("ordem").notNull().default(0),
-    criadoPor: integer("criado_por").references(() => usuarios.id, {
-      onDelete: "set null",
-    }),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [index("linhas_tabela_idx").on(t.tabelaId)],
-);
-
-/**
  * Protocolos (módulo curado) — digitaliza a planilha "Distribuição de
  * Protocolos". Os campos de seleção (orgao/natureza/responsavel/distribuicao)
  * têm opções gerenciáveis em `protocoloOpcoes`; `situacao` é um enum fixo com
@@ -237,10 +172,6 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
-export type Tabela = typeof tabelas.$inferSelect;
-export type Coluna = typeof colunas.$inferSelect;
-export type ColunaOpcao = typeof colunaOpcoes.$inferSelect;
-export type Linha = typeof linhas.$inferSelect;
 export type TipoColuna = Coluna["tipo"];
 export type Protocolo = typeof protocolos.$inferSelect;
 export type NovoProtocolo = typeof protocolos.$inferInsert;
