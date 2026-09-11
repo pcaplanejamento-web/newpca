@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { brl, dataBR, dec, num } from "@/lib/format";
+import { Skeleton } from "./Skeleton";
 import {
   IconChevronLeft,
   IconChevronRight,
   IconSearch,
   IconSort,
-  IconSpinner,
 } from "./icons";
 
 type Row = {
@@ -196,11 +196,13 @@ export function ItemTable({
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-slate-400">
-                  <IconSpinner className="mx-auto h-6 w-6" />
-                </td>
-              </tr>
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i}>
+                  <td colSpan={9} className="px-3 py-2">
+                    <Skeleton className="h-8 w-full rounded-lg" />
+                  </td>
+                </tr>
+              ))
             ) : erro ? (
               <tr>
                 <td colSpan={9} className="px-3 py-12 text-center text-red-500">

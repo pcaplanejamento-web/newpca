@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
 import { Avatar } from "./Avatar";
+import { SkeletonLinhas } from "./Skeleton";
 import { inputCls, labelCls } from "./formStyles";
 import {
   IconAlert,
@@ -130,8 +131,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
   if (lista === null) {
     return (
-      <div className="flex justify-center py-12 text-slate-400">
-        <IconSpinner className="h-6 w-6" />
+      <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+        <SkeletonLinhas linhas={6} />
       </div>
     );
   }

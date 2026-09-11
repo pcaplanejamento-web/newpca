@@ -34,6 +34,7 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - `Fab` — ação flutuante (só mobile; acima da bottom-nav). No desktop a ação fica no cabeçalho.
 - `EmConstrucao` / `AcessoRestrito` — estados padrão para abas em desenvolvimento / sem permissão.
 - `KpiCard` — tile colorido em gradiente (dashboard do PCA). Distinto do `StatCard` (plano).
+- `Skeleton` / `SkeletonCard` / `SkeletonLinhas` — placeholders com **shimmer** (`.animate-shimmer`, keyframe em `globals.css`). Usados no **skeleton de rota** (`src/app/painel/loading.tsx`, aparece na navegação) e nas listas enquanto carregam (Usuários, Tabelas, Itens). Padrão completo (skeleton/shimmer/otimista/offline): pendências = optimistic UI e offline/PWA.
 
 ## Filtros
 - Sempre visíveis: busca (cresce) + botão **Filtros** (abre avançado) + **chips** de situação roláveis.

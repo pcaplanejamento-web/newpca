@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
+import { Skeleton } from "./Skeleton";
 import { IconFile, IconSpinner } from "./icons";
 
 type Tabela = {
@@ -57,8 +58,10 @@ export function TabelasIndex({ podeEditar }: { podeEditar: boolean }) {
 
   if (tabelas === null) {
     return (
-      <div className="flex justify-center py-12 text-slate-400">
-        <IconSpinner className="h-6 w-6" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-[168px] rounded-2xl" />
+        ))}
       </div>
     );
   }
