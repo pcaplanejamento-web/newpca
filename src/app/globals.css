@@ -184,9 +184,10 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
-  /* Fonte já migrada para o token (Geist). Superfícies migram nas fases F1/F2. */
   body {
-    @apply bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100;
+    @apply antialiased;
+    background: var(--surface-2);
+    color: var(--text);
     font-family: var(--font-sans);
   }
 }
