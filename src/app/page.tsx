@@ -11,8 +11,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
 import { brl, brlCompact, num } from "@/lib/format";
 import {
-  getAnos,
-  getClassificacoes,
+  getItensTodos,
   getPorClassificacao,
   getPorMes,
   getPorUnidadeMedida,
@@ -76,14 +75,13 @@ export default async function HomePage({
   const unidadeId =
     Number.isFinite(parsedId) && unidades.some((u) => u.id === parsedId) ? parsedId : undefined;
 
-  const [resumo, porClass, porMes, porUnidade, top, classificacoes, anos] = await Promise.all([
+  const [resumo, porClass, porMes, porUnidade, top, itensTodos] = await Promise.all([
     getResumo(unidadeId),
     getPorClassificacao(unidadeId),
     getPorMes(unidadeId),
     getPorUnidadeMedida(unidadeId),
     getTopItens(unidadeId, 10),
-    getClassificacoes(unidadeId),
-    getAnos(unidadeId),
+    getItensTodos(unidadeId),
   ]);
 
   return (
@@ -129,12 +127,7 @@ export default async function HomePage({
         </div>
 
         <ChartCard title="Consulta de Itens" subtitle="Busque, filtre e ordene os itens do PCA">
-          <ItemTable
-            unidadeId={unidadeId}
-            classificacoes={classificacoes}
-            anos={anos}
-            showUnidade={!unidadeId}
-          />
+          <ItemTable rows={itensTodos} showUnidade={!unidadeId} />
         </ChartCard>
       </main>
     </div>

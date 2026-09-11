@@ -272,6 +272,47 @@ export async function getItens(params: ItensQuery) {
   };
 }
 
+export type ItemRow = {
+  id: number;
+  idProduto: string | null;
+  sequencial: number | null;
+  nomeProduto: string | null;
+  unidadeMedida: string | null;
+  quantidade: number | null;
+  valorReferencia: number | null;
+  valorTotal: number | null;
+  classificacao: string | null;
+  dataDesejada: string | null;
+  codigo: string | null;
+  municipio: string | null;
+};
+
+/** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
+ * e pagina no CLIENTE (DataTable). Ordenado por valor desc por padrão. */
+export async function getItensTodos(unidadeId?: number, limite = 5000): Promise<ItemRow[]> {
+  const db = getDb();
+  return db
+    .select({
+      id: itens.id,
+      idProduto: itens.idProduto,
+      sequencial: itens.sequencial,
+      nomeProduto: itens.nomeProduto,
+      unidadeMedida: itens.unidadeMedidaNorm,
+      quantidade: itens.quantidade,
+      valorReferencia: itens.valorReferencia,
+      valorTotal: itens.valorTotal,
+      classificacao: itens.classificacaoNorm,
+      dataDesejada: itens.dataDesejada,
+      codigo: unidades.codigo,
+      municipio: unidades.municipio,
+    })
+    .from(itens)
+    .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
+    .where(filtroUnidade(unidadeId))
+    .orderBy(desc(itens.valorTotal))
+    .limit(limite);
+}
+
 /** Classificações distintas (para o filtro da tabela). */
 export async function getClassificacoes(unidadeId?: number): Promise<string[]> {
   const db = getDb();
