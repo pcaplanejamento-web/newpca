@@ -11,6 +11,8 @@ import { ThemeToggle } from "./ThemeToggle";
 import {
   IconBell,
   IconBox,
+  IconCheck,
+  IconChevronDown,
   IconClose,
   IconDashboard,
   IconFile,
@@ -38,6 +40,8 @@ type NavItem = {
   Icon: typeof IconDashboard;
   roles?: Role[];
   exact?: boolean;
+  /** Chave de aba gerenciável por permissão (só nos módulos). */
+  aba?: string;
 };
 type NavSecao = { titulo: string; itens: NavItem[] };
 
@@ -45,9 +49,9 @@ const SECOES: NavSecao[] = [
   {
     titulo: "Módulos",
     itens: [
-      { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true },
-      { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile },
-      { href: "/painel/pca", label: "PCA", Icon: IconBox },
+      { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true, aba: "dashboard" },
+      { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile, aba: "protocolos" },
+      { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
     ],
   },
   {
@@ -61,11 +65,13 @@ const SECOES: NavSecao[] = [
   },
 ];
 
-/** Seções/itens visíveis para o papel dado. */
-function secoesVisiveis(role: Role): NavSecao[] {
+/** Seções/itens visíveis para o papel + permissão de abas do grupo ativo. */
+function secoesVisiveis(role: Role, abas: Set<string>): NavSecao[] {
   return SECOES.map((s) => ({
     ...s,
-    itens: s.itens.filter((i) => !i.roles || i.roles.includes(role)),
+    itens: s.itens.filter(
+      (i) => (!i.roles || i.roles.includes(role)) && (!i.aba || abas.has(i.aba)),
+    ),
   })).filter((s) => s.itens.length > 0);
 }
 
@@ -89,11 +95,19 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
+function NavLinks({
+  role,
+  abas,
+  onNavigate,
+}: {
+  role: Role;
+  abas: Set<string>;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   return (
     <div className="flex flex-col gap-5">
-      {secoesVisiveis(role).map((secao) => (
+      {secoesVisiveis(role, abas).map((secao) => (
         <div key={secao.titulo}>
           <p className="mb-2 px-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
@@ -212,9 +226,87 @@ function SinoNotificacoes() {
   );
 }
 
-export function AppShell({ children, usuario }: { children: ReactNode; usuario: UsuarioSessao }) {
+type GrupoNav = { id: number; nome: string };
+
+/** Seletor de grupo ativo no cabeçalho. Troca o grupo (cookie) e recarrega. */
+function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number | null }) {
+  const router = useRouter();
+  const [trocando, setTrocando] = useState(false);
+  if (grupos.length === 0) return null;
+  const ativo = grupos.find((g) => g.id === ativoId) ?? grupos[0];
+
+  async function trocar(id: number, close: () => void) {
+    close();
+    if (id === ativo.id) return;
+    setTrocando(true);
+    try {
+      await fetch("/api/grupos/ativo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grupoId: id }),
+      });
+      router.refresh();
+    } finally {
+      setTrocando(false);
+    }
+  }
+
+  return (
+    <Dropdown
+      align="start"
+      ariaLabel="Grupo ativo"
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-[var(--h-control-sm)] text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60"
+      width={220}
+      trigger={
+        <>
+          {trocando ? (
+            <IconSpinner className="h-3.5 w-3.5" />
+          ) : (
+            <IconUsers className="h-3.5 w-3.5 opacity-70" />
+          )}
+          <span className="max-w-[9rem] truncate">{ativo.nome}</span>
+          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </>
+      }
+    >
+      {(close) => (
+        <div className="p-1">
+          {grupos.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => trocar(g.id, close)}
+              className={`flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
+                g.id === ativo.id ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+              }`}
+            >
+              <IconUsers className="h-4 w-4 shrink-0 opacity-70" />
+              <span className="min-w-0 truncate">{g.nome}</span>
+              {g.id === ativo.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+export function AppShell({
+  children,
+  usuario,
+  grupos,
+  grupoAtivoId,
+  abas,
+}: {
+  children: ReactNode;
+  usuario: UsuarioSessao;
+  grupos: GrupoNav[];
+  grupoAtivoId: number | null;
+  abas: string[];
+}) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
+  const abasSet = new Set(abas);
 
   return (
     <div className="min-h-dvh bg-bg text-text lg:flex">
@@ -224,7 +316,7 @@ export function AppShell({ children, usuario }: { children: ReactNode; usuario: 
           <Brand />
         </div>
         <div className="mt-7 flex-1 overflow-y-auto px-1">
-          <NavLinks role={usuario.role} />
+          <NavLinks role={usuario.role} abas={abasSet} />
         </div>
         <div className="pt-6">
           <UserMenu usuario={usuario} />
@@ -248,7 +340,7 @@ export function AppShell({ children, usuario }: { children: ReactNode; usuario: 
               </button>
             </div>
             <div className="mt-7 flex-1 overflow-y-auto px-1">
-              <NavLinks role={usuario.role} onNavigate={fecharMenu} />
+              <NavLinks role={usuario.role} abas={abasSet} onNavigate={fecharMenu} />
             </div>
             <div className="pt-6">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
@@ -274,6 +366,7 @@ export function AppShell({ children, usuario }: { children: ReactNode; usuario: 
           <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 
           <div className="ml-auto flex items-center gap-1.5">
+            <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             <SinoNotificacoes />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="lg:hidden">
