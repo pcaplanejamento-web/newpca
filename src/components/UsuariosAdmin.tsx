@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
 import { Avatar } from "./Avatar";
+import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
-import { inputCls, labelCls } from "./formStyles";
+import { inputCls, labelCls, selectCls } from "./formStyles";
 import {
   IconAlert,
   IconCheck,
-  IconClose,
   IconPencil,
   IconSave,
   IconSpinner,
@@ -194,7 +194,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
                       value={u.role}
                       disabled={souEu || busy}
                       onChange={(e) => patch(u.id, { role: e.target.value as Role })}
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      className={selectCls}
                     >
                       <option value="admin">Administrador</option>
                       <option value="gestor">Gestor</option>
@@ -269,68 +269,46 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       </div>
 
       {/* Modal: editar dados do usuário */}
-      {editando && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-          <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => setEditando(null)}
-          />
-          <form
-            onSubmit={salvarEdicao}
-            className="relative w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl dark:bg-slate-900"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800 dark:text-white">
-                Editar usuário
-              </h3>
-              <button
-                type="button"
-                aria-label="Fechar"
-                onClick={() => setEditando(null)}
-                className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <IconClose className="h-5 w-5" />
-              </button>
+      <Modal open={!!editando} onClose={() => setEditando(null)} titulo="Editar usuário">
+        <form onSubmit={salvarEdicao}>
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls}>Nome completo</label>
+              <input className={inputCls} value={edNome} onChange={(e) => setEdNome(e.target.value)} required />
             </div>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className={labelCls}>Nome completo</label>
-                <input className={inputCls} value={edNome} onChange={(e) => setEdNome(e.target.value)} required />
-              </div>
-              <div>
-                <label className={labelCls}>E-mail</label>
-                <input type="email" className={inputCls} value={edEmail} onChange={(e) => setEdEmail(e.target.value)} required />
-              </div>
-              <div>
-                <label className={labelCls}>Matrícula</label>
-                <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
-              </div>
+            <div>
+              <label className={labelCls}>E-mail</label>
+              <input type="email" className={inputCls} value={edEmail} onChange={(e) => setEdEmail(e.target.value)} required />
             </div>
-            {erroEd && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-                <IconAlert className="h-4 w-4 shrink-0" /> {erroEd}
-              </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              <button
-                type="submit"
-                disabled={salvandoEd}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-              >
-                {salvandoEd ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconSave className="h-[18px] w-[18px]" />}
-                Salvar
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditando(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Cancelar
-              </button>
+            <div>
+              <label className={labelCls}>Matrícula</label>
+              <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
             </div>
-          </form>
-        </div>
-      )}
+          </div>
+          {erroEd && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+              <IconAlert className="h-4 w-4 shrink-0" /> {erroEd}
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            <button
+              type="submit"
+              disabled={salvandoEd}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {salvandoEd ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconSave className="h-[18px] w-[18px]" />}
+              Salvar
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(null)}
+              className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

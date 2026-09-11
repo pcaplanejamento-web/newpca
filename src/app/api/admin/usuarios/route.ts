@@ -1,16 +1,14 @@
 import { desc } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
-import { getUsuarioAtual } from "@/lib/auth";
+import { exigirAdmin } from "@/lib/api-auth";
+import { ok } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const atual = await getUsuarioAtual();
-  if (!atual || atual.role !== "admin") {
-    return NextResponse.json({ ok: false, error: "Sem permissão." }, { status: 403 });
-  }
+  const guard = await exigirAdmin();
+  if ("erro" in guard) return guard.erro;
 
   const lista = await getDb()
     .select({
@@ -26,5 +24,5 @@ export async function GET() {
     .from(usuarios)
     .orderBy(desc(usuarios.criadoEm));
 
-  return NextResponse.json({ ok: true, usuarios: lista, meuId: atual.id });
+  return ok({ usuarios: lista, meuId: guard.u.id });
 }

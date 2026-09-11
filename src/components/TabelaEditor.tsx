@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
+import { Modal } from "./Modal";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -441,13 +442,7 @@ function ConfigTabela({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl dark:bg-slate-900">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-800 dark:text-white">Configurar tabela</h3>
-          <button type="button" onClick={onFechar} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar"><IconClose className="h-5 w-5" /></button>
-        </div>
-
+    <Modal open onClose={onFechar} titulo="Configurar tabela" size="lg" scrollable fecharNoBackdrop={false}>
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Nome da tabela</span>
           <div className="flex gap-2">
@@ -496,7 +491,6 @@ function ConfigTabela({
         <div className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-800">
           <button type="button" onClick={excluirTabela} className="text-sm font-semibold text-red-600 hover:underline dark:text-red-400">Excluir esta tabela</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

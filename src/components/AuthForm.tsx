@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { inputCls } from "./formStyles";
+import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconSpinner } from "./icons";
 
 export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
@@ -88,7 +88,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
       <div className="space-y-3">
         {isCad && (
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label className={labelCls}>
               Nome
             </label>
             <input
@@ -101,7 +101,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
           </div>
         )}
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          <label className={labelCls}>
             E-mail
           </label>
           <input
@@ -115,7 +115,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          <label className={labelCls}>
             Senha
           </label>
           <input

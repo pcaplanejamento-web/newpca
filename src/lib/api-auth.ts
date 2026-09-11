@@ -22,6 +22,17 @@ export async function exigirEditor(): Promise<
   return r;
 }
 
+/** Exige admin. */
+export async function exigirAdmin(): Promise<
+  { u: UsuarioSessao } | { erro: NextResponse }
+> {
+  const r = await exigirUsuario();
+  if ("erro" in r) return r;
+  if (r.u.role !== "admin")
+    return { erro: NextResponse.json({ ok: false, error: "Sem permissão." }, { status: 403 }) };
+  return r;
+}
+
 export const intId = (v: string) => {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;

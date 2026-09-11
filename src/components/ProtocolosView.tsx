@@ -17,6 +17,7 @@ import {
   IconSpinner,
   IconTrash,
 } from "./icons";
+import { cellCls as inp, filterCls as filtroCls, labelSmCls as labelEd } from "./formStyles";
 import { dataBR } from "@/lib/format";
 import type { OpcoesPorCampo, ProtocoloLista, ResumoProtocolos } from "@/lib/protocolos";
 import type { CampoOpcao, SituacaoProtocolo } from "@/db/schema";
@@ -34,12 +35,6 @@ type Draft = {
   situacao: SituacaoProtocolo;
   distribuicao: string;
 };
-
-const inp =
-  "w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-emerald-500/20";
-const filtroCls =
-  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:focus:ring-emerald-500/20";
-const labelEd = "mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400";
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 function draftDe(p?: ProtocoloLista | null): Draft {
