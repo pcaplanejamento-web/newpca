@@ -36,11 +36,9 @@ export function StatCard({
   return (
     <Comp
       {...(clickable ? { type: "button" as const, onClick } : {})}
-      className={`flex items-center gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition dark:bg-slate-900 ${
-        active
-          ? "border-emerald-400 ring-1 ring-emerald-400/40 dark:border-emerald-500/50"
-          : "border-slate-200 dark:border-slate-800"
-      } ${clickable ? "hover:border-slate-300 hover:shadow dark:hover:border-slate-700" : ""}`}
+      className={`flex items-center gap-3 rounded-card border bg-surface p-4 text-left shadow-ring transition-colors ${
+        active ? "border-accent ring-1 ring-accent/40" : "border-border"
+      } ${clickable ? "hover:border-border-2" : ""}`}
     >
       {icon && (
         <div
@@ -50,17 +48,9 @@ export function StatCard({
         </div>
       )}
       <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-          {label}
-        </div>
-        <div className="mt-0.5 text-xl font-bold leading-tight text-slate-800 dark:text-white">
-          {value}
-        </div>
-        {hint && (
-          <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">
-            {hint}
-          </div>
-        )}
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</div>
+        <div className="mt-0.5 text-xl font-bold leading-tight text-text">{value}</div>
+        {hint && <div className="truncate text-[11px] text-faint">{hint}</div>}
       </div>
     </Comp>
   );

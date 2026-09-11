@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { ThemeToggle } from "./ThemeToggle";
@@ -61,24 +61,9 @@ const SECOES: NavSecao[] = [
     itens: [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
-      {
-        href: "/painel/equipes",
-        label: "Equipes",
-        Icon: IconUsers,
-        roles: ["admin", "gestor"],
-      },
-      {
-        href: "/painel/permissoes",
-        label: "Permissões",
-        Icon: IconShield,
-        roles: ["admin"],
-      },
-      {
-        href: "/painel/auditoria",
-        label: "Auditoria",
-        Icon: IconClipboard,
-        roles: ["admin"],
-      },
+      { href: "/painel/equipes", label: "Equipes", Icon: IconUsers, roles: ["admin", "gestor"] },
+      { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
+      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClipboard, roles: ["admin"] },
     ],
   },
 ];
@@ -97,18 +82,14 @@ function itemAtivo(pathname: string, item: NavItem): boolean {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/painel" className="flex items-center gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-700 text-sm font-black text-white shadow-sm">
+    <Link href="/painel" className="flex items-center gap-2.5">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
         RV
       </div>
       {!compact && (
         <div className="leading-tight">
-          <div className="text-sm font-bold text-slate-900 dark:text-white">
-            Plataforma PCA
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            Equipe PCA · Rio Verde
-          </div>
+          <div className="text-[14px] font-semibold text-text">Plataforma PCA</div>
+          <div className="text-[11px] text-muted">Equipe PCA · Rio Verde</div>
         </div>
       )}
     </Link>
@@ -121,10 +102,10 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
     <div className="flex flex-col gap-5">
       {secoesVisiveis(role).map((secao) => (
         <div key={secao.titulo}>
-          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="mb-2 px-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
           </p>
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-0.5">
             {secao.itens.map((item) => {
               const active = itemAtivo(pathname, item);
               const { Icon } = item;
@@ -133,13 +114,16 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
                   key={item.href}
                   href={item.href}
                   onClick={onNavigate}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  className={`flex items-center gap-[11px] rounded-chip border px-3 py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
                     active
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+                      ? "border-border-2 bg-sb-active font-semibold text-text"
+                      : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
                   }`}
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon
+                    className={`h-[17px] w-[17px] ${active ? "text-accent" : ""}`}
+                    strokeWidth={1.8}
+                  />
                   {item.label}
                 </Link>
               );
@@ -151,13 +135,7 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
   );
 }
 
-function UserMenu({
-  usuario,
-  onNavigate,
-}: {
-  usuario: UsuarioSessao;
-  onNavigate?: () => void;
-}) {
+function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?: () => void }) {
   const router = useRouter();
   const [saindo, setSaindo] = useState(false);
 
@@ -173,31 +151,26 @@ function UserMenu({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+    <div className="rounded-card border border-border p-3">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
         title="Meu perfil"
-        className="-m-1 flex items-center gap-2 rounded-lg p-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+        className="-m-1 flex items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-2"
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="min-w-0">
-          <div
-            className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100"
-            title={usuario.nome}
-          >
+          <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
             {usuario.nome}
           </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            {ROLE_LABEL[usuario.role]}
-          </div>
+          <div className="text-[11px] text-muted">{ROLE_LABEL[usuario.role]}</div>
         </div>
       </Link>
       <button
         type="button"
         onClick={sair}
         disabled={saindo}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-control border border-border-2 px-3 py-2 text-xs font-semibold text-text-2 transition-colors hover:bg-surface-2 disabled:opacity-60"
       >
         {saindo ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />}
         Sair
@@ -218,13 +191,13 @@ function BuscaGlobal({ className = "" }: { className?: string }) {
       }}
       className={`relative ${className}`}
     >
-      <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Buscar protocolos..."
         aria-label="Buscar protocolos"
-        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:ring-emerald-500/20"
+        className="w-full rounded-control border border-border-2 bg-surface-2 py-2 pl-9 pr-3 text-sm text-text-2 outline-none transition-colors placeholder:text-faint focus-visible:border-accent focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-accent/30"
       />
     </form>
   );
@@ -238,20 +211,16 @@ function SinoNotificacoes() {
         type="button"
         aria-label="Notificações"
         onClick={() => setAberto((v) => !v)}
-        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        className="rounded-control p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text-2"
       >
         <IconBell className="h-5 w-5" />
       </button>
       {aberto && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setAberto(false)} />
-          <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Notificações
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Você está em dia. Nada por aqui ainda.
-            </p>
+          <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-card border border-border bg-surface p-4 text-center shadow-soft">
+            <p className="text-sm font-semibold text-text">Notificações</p>
+            <p className="mt-1 text-xs text-muted">Você está em dia. Nada por aqui ainda.</p>
           </div>
         </>
       )}
@@ -259,20 +228,14 @@ function SinoNotificacoes() {
   );
 }
 
-export function AppShell({
-  children,
-  usuario,
-}: {
-  children: ReactNode;
-  usuario: UsuarioSessao;
-}) {
+export function AppShell({ children, usuario }: { children: ReactNode; usuario: UsuarioSessao }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
 
   return (
-    <div className="min-h-screen lg:flex">
+    <div className="min-h-dvh bg-bg text-text lg:flex">
       {/* Sidebar desktop */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white px-4 py-5 lg:flex dark:border-slate-800 dark:bg-slate-900">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 lg:flex">
         <div className="px-1">
           <Brand />
         </div>
@@ -288,14 +251,14 @@ export function AppShell({
       {menuAberto && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={fecharMenu} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-white px-4 py-5 shadow-xl dark:bg-slate-900">
+          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface px-4 py-5 shadow-soft">
             <div className="flex items-center justify-between px-1">
               <Brand />
               <button
                 type="button"
                 aria-label="Fechar menu"
                 onClick={fecharMenu}
-                className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-control p-1.5 text-muted transition-colors hover:bg-surface-2"
               >
                 <IconClose className="h-5 w-5" />
               </button>
@@ -312,21 +275,18 @@ export function AppShell({
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-slate-200 bg-white/80 px-4 backdrop-blur-md sm:px-6 dark:border-slate-800 dark:bg-slate-900/80">
-          {/* Botão hambúrguer (mobile) */}
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border bg-surface/85 px-4 backdrop-blur-md sm:px-6">
           <button
             type="button"
             aria-label="Abrir menu"
             onClick={() => setMenuAberto(true)}
-            className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
+            className="rounded-control p-2 text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
           >
             <IconMenu className="h-5 w-5" />
           </button>
-          {/* Marca (mobile) — a sidebar some abaixo de lg */}
           <div className="lg:hidden">
             <Brand compact />
           </div>
-          {/* Busca (desktop) */}
           <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 
           <div className="ml-auto flex items-center gap-1.5">
@@ -338,7 +298,6 @@ export function AppShell({
           </div>
         </header>
 
-        {/* Conteúdo — padding inferior no mobile para não ficar sob a bottom-nav */}
         <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">{children}</main>
       </div>
 
