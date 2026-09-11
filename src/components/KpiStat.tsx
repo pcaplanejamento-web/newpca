@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { IconArrowDown, IconArrowUp } from "./icons";
 
 // KPI card (spec §6.4): barra de acento à esquerda, número em Geist com
 // tabular-nums, delta com seta (SEM pílula), mini-gráfico de 7 barras (as 2
@@ -35,7 +36,12 @@ export function KpiStat({
             className="inline-flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold"
             style={{ color: delta.dir === "up" ? "var(--delta-up)" : "var(--delta-down)" }}
           >
-            {delta.dir === "up" ? "↑" : "↓"} {delta.value}
+            {delta.dir === "up" ? (
+              <IconArrowUp className="h-3.5 w-3.5" />
+            ) : (
+              <IconArrowDown className="h-3.5 w-3.5" />
+            )}
+            {delta.value}
           </span>
         )}
       </div>

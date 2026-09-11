@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { IconChevronDown } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronDown } from "./icons";
 import { type Periodo, PeriodoCorpo, periodoParaIntervalo } from "./PeriodoPicker";
 
 // Filtro de DATA no cabeçalho da tabela. Reutiliza o MESMO componente de período
@@ -41,8 +41,8 @@ export function DateFilterHeader({
       trigger={
         <span className="flex w-full items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">
           <span className="truncate">{label}</span>
-          {sortDir === "asc" && <span aria-hidden>▲</span>}
-          {sortDir === "desc" && <span aria-hidden>▼</span>}
+          {sortDir === "asc" && <IconArrowUp className="h-3 w-3 shrink-0" />}
+          {sortDir === "desc" && <IconArrowDown className="h-3 w-3 shrink-0" />}
           <IconChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 ${ativo ? "text-accent" : "opacity-60"}`} />
         </span>
       }
@@ -57,9 +57,9 @@ export function DateFilterHeader({
                   onSort("asc");
                   close();
                 }}
-                className={btn}
+                className={`${btn} inline-flex items-center justify-center gap-1`}
               >
-                ↑ Crescente
+                <IconArrowUp className="h-3.5 w-3.5" /> Crescente
               </button>
               <button
                 type="button"
@@ -67,9 +67,9 @@ export function DateFilterHeader({
                   onSort("desc");
                   close();
                 }}
-                className={btn}
+                className={`${btn} inline-flex items-center justify-center gap-1`}
               >
-                ↓ Decrescente
+                <IconArrowDown className="h-3.5 w-3.5" /> Decrescente
               </button>
             </div>
           )}

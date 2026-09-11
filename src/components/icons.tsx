@@ -3,7 +3,9 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   ArrowUpDown,
   Bell,
   Building2,
@@ -94,6 +96,8 @@ export const IconLock = Lock;
 export const IconEye = Eye;
 export const IconEyeOff = EyeOff;
 export const IconArrowRight = ArrowRight;
+export const IconArrowUp = ArrowUp;
+export const IconArrowDown = ArrowDown;
 export const IconCalendar = Calendar;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */

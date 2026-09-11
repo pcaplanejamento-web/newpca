@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
+import { Dropdown } from "./Dropdown";
+import { SearchField } from "./Field";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   IconActivity,
@@ -18,7 +20,6 @@ import {
   IconLogout,
   IconMenu,
   IconPalette,
-  IconSearch,
   IconShield,
   IconSpinner,
   IconTool,
@@ -189,42 +190,33 @@ function BuscaGlobal({ className = "" }: { className?: string }) {
         const termo = q.trim();
         router.push(termo ? `/painel/protocolos?q=${encodeURIComponent(termo)}` : "/painel/protocolos");
       }}
-      className={`relative ${className}`}
+      className={className}
     >
-      <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
-      <input
+      <SearchField
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onClear={() => setQ("")}
         placeholder="Buscar protocolos..."
         aria-label="Buscar protocolos"
-        className="w-full rounded-control border border-border-2 bg-surface-2 py-2 pl-9 pr-3 text-sm text-text-2 outline-none transition-colors placeholder:text-faint focus-visible:border-accent focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-accent/30"
       />
     </form>
   );
 }
 
 function SinoNotificacoes() {
-  const [aberto, setAberto] = useState(false);
   return (
-    <div className="relative">
-      <button
-        type="button"
-        aria-label="Notificações"
-        onClick={() => setAberto((v) => !v)}
-        className="rounded-control p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text-2"
-      >
-        <IconBell className="h-5 w-5" />
-      </button>
-      {aberto && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setAberto(false)} />
-          <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-card border border-border bg-surface p-4 text-center shadow-soft">
-            <p className="text-sm font-semibold text-text">Notificações</p>
-            <p className="mt-1 text-xs text-muted">Você está em dia. Nada por aqui ainda.</p>
-          </div>
-        </>
-      )}
-    </div>
+    <Dropdown
+      align="end"
+      ariaLabel="Notificações"
+      triggerClassName="rounded-control p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text-2"
+      trigger={<IconBell className="h-5 w-5" />}
+      width={256}
+    >
+      <div className="p-2 text-center">
+        <p className="text-sm font-semibold text-text">Notificações</p>
+        <p className="mt-1 text-xs text-muted">Você está em dia. Nada por aqui ainda.</p>
+      </div>
+    </Dropdown>
   );
 }
 

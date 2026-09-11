@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { IconChevronDown } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronDown } from "./icons";
 
 // Filtro de cabeçalho de tabela (spec do usuário): ordenar (crescente/decrescente)
 // + busca + "Selecionar todos" + checkboxes + Aplicar/Cancelar/Remover.
@@ -37,8 +37,8 @@ export function MultiSelectHeader({
       trigger={
         <span className="flex w-full items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">
           <span className="truncate">{label}</span>
-          {sortDir === "asc" && <span aria-hidden>▲</span>}
-          {sortDir === "desc" && <span aria-hidden>▼</span>}
+          {sortDir === "asc" && <IconArrowUp className="h-3 w-3 shrink-0" />}
+          {sortDir === "desc" && <IconArrowDown className="h-3 w-3 shrink-0" />}
           <IconChevronDown
             className={`ml-auto h-3.5 w-3.5 shrink-0 ${filtrado ? "text-accent" : "opacity-60"}`}
           />
@@ -110,11 +110,11 @@ function Painel({
     <div className="flex max-h-[min(70vh,420px)] w-full flex-col">
       {onSort && (
         <div className="flex gap-2 p-2">
-          <button type="button" onClick={() => onSort("asc")} className={`${btn} text-text-2 hover:bg-surface-2`}>
-            ↑ Crescente
+          <button type="button" onClick={() => onSort("asc")} className={`${btn} inline-flex items-center justify-center gap-1 text-text-2 hover:bg-surface-2`}>
+            <IconArrowUp className="h-3.5 w-3.5" /> Crescente
           </button>
-          <button type="button" onClick={() => onSort("desc")} className={`${btn} text-text-2 hover:bg-surface-2`}>
-            ↓ Decrescente
+          <button type="button" onClick={() => onSort("desc")} className={`${btn} inline-flex items-center justify-center gap-1 text-text-2 hover:bg-surface-2`}>
+            <IconArrowDown className="h-3.5 w-3.5" /> Decrescente
           </button>
         </div>
       )}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { brl, dataBR, dec, num } from "@/lib/format";
 import { Skeleton } from "./Skeleton";
-import { IconChevronLeft, IconChevronRight, IconSearch, IconSort } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconChevronRight, IconSearch, IconSort } from "./icons";
 
 type Row = {
   id: number;
@@ -259,7 +259,7 @@ function Th({
       >
         {children}
         <IconSort className="h-3.5 w-3.5 opacity-60" />
-        {active && <span className="text-[10px]">{dir === "asc" ? "▲" : "▼"}</span>}
+        {active && (dir === "asc" ? <IconArrowUp className="h-3 w-3" /> : <IconArrowDown className="h-3 w-3" />)}
       </button>
     </th>
   );
