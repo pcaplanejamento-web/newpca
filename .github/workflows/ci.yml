@@ -1,0 +1,40 @@
+name: CI
+
+# Qualidade em Pull Requests (sem deploy). O push na main é coberto pelo
+# portão de qualidade do deploy.yml, evitando execução duplicada.
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # cloudflare-env.d.ts é gerado (não versionado) — só o type-check (informativo)
+      # depende dele; não pode bloquear o CI.
+      - name: Gerar tipos do Cloudflare
+        run: npm run cf-typegen
+        continue-on-error: true
+
+      - name: Type-check (informativo)
+        run: npm run typecheck
+        continue-on-error: true
+
+      - name: Lint (Biome)
+        run: npm run lint
+
+      - name: Testes (Vitest)
+        run: npm test

@@ -19,6 +19,7 @@ function bad(message: string, status = 400) {
 const ROWS_PER_STMT = 7;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
 function inserts(db: ReturnType<typeof getDb>, unidadeId: number, rows: LinhaCrua[]): any[] {
   const normed = rows.map(normalizarLinha);
   const stmts = [];

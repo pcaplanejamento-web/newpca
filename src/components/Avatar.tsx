@@ -51,6 +51,7 @@ export function Avatar({
   if (foto && !erro) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
+      // biome-ignore lint/performance/noImgElement: foto é data-URL base64 redimensionada no cliente; next/image não otimiza data-URL.
       <img
         src={foto}
         alt={nome}

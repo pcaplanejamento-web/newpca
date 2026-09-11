@@ -4,6 +4,9 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Workers Logs: logs/traces do Worker no painel da Cloudflare (ajuda a
+  // diagnosticar produção). Baixo custo e sem impacto no código.
+  "observability": { "enabled": true },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

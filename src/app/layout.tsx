@@ -26,6 +26,7 @@ export default function RootLayout({
             script inline do next-themes; sem esta definição global o script
             falhava ("__name is not defined") e o tema só era aplicado após a
             hidratação, causando o flash branco→preto. Roda antes do ThemeProvider. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: shim de 1 linha com conteúdo 100% estático (sem dados do usuário). */}
         <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=(f)=>f;" }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>

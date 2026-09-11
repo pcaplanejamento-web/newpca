@@ -9,9 +9,17 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write .",
+    "test": "node --experimental-strip-types --experimental-sqlite --test 'tests/**/*.test.ts'",
+    "test:watch": "node --experimental-strip-types --experimental-sqlite --test --watch 'tests/**/*.test.ts'",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply newpca-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply newpca-db --remote"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.6",
@@ -26,6 +34,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
     "@types/react": "^19",
