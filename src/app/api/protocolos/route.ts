@@ -25,6 +25,7 @@ export async function GET(req: Request) {
       situacao: sp.get("situacao") ?? undefined,
       natureza: sp.get("natureza") ?? undefined,
       responsavel: sp.get("responsavel") ?? undefined,
+      ano: sp.get("ano") ?? undefined,
       page: int(sp.get("page")),
       pageSize: int(sp.get("pageSize")),
     }),

@@ -3,6 +3,7 @@ import { getUsuarioAtual } from "@/lib/auth";
 import {
   SITUACOES,
   getResumoProtocolos,
+  listarAnos,
   listarOpcoes,
   listarProtocolos,
 } from "@/lib/protocolos";
@@ -21,10 +22,11 @@ export default async function ProtocolosPage({
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
-  const [inicial, resumo, opcoes] = await Promise.all([
+  const [inicial, resumo, opcoes, anos] = await Promise.all([
     listarProtocolos({ q, situacao, page: 1 }),
     getResumoProtocolos(),
     listarOpcoes(),
+    listarAnos(),
   ]);
 
   return (
@@ -33,6 +35,7 @@ export default async function ProtocolosPage({
       resumo={resumo}
       opcoes={opcoes}
       situacoes={SITUACOES.map((s) => ({ valor: s.valor, label: s.label }))}
+      anos={anos}
       podeEditar={podeEditar}
       buscaInicial={q}
       situacaoInicial={situacao}

@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-import { Badge, hashTone, situacaoTone } from "./Badge";
+import { Badge, naturezaTone, situacaoTone } from "./Badge";
 import { dataBR } from "@/lib/format";
 import type { ProtocoloLista } from "@/lib/protocolos";
 
@@ -55,7 +55,7 @@ export function ProtocoloCard({
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
         {p.natureza ? (
-          <Badge tone={hashTone(p.natureza)}>{p.natureza}</Badge>
+          <Badge tone={naturezaTone(p.natureza)} dot>{p.natureza}</Badge>
         ) : (
           <span className="text-xs text-slate-400">Sem natureza</span>
         )}

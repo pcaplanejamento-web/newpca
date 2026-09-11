@@ -154,9 +154,21 @@ export type ProtocoloListaOpts = {
   situacao?: string;
   natureza?: string;
   responsavel?: string;
+  ano?: string;
   page?: number;
   pageSize?: number;
 };
+
+/** Anos distintos presentes (para o filtro de Período). */
+export async function listarAnos(): Promise<string[]> {
+  const rows = await getDb()
+    .select({ ano: sql<string>`substr(${protocolos.data}, 1, 4)` })
+    .from(protocolos)
+    .where(sql`${protocolos.data} IS NOT NULL AND ${protocolos.data} <> ''`)
+    .groupBy(sql`substr(${protocolos.data}, 1, 4)`)
+    .orderBy(desc(sql`substr(${protocolos.data}, 1, 4)`));
+  return rows.map((r) => r.ano).filter((a): a is string => !!a);
+}
 
 const SELECT_PROTOCOLO = {
   id: protocolos.id,
@@ -189,6 +201,8 @@ export async function listarProtocolos(opts: ProtocoloListaOpts) {
     conds.push(eq(protocolos.situacao, opts.situacao as SituacaoProtocolo));
   if (opts.natureza) conds.push(eq(protocolos.natureza, opts.natureza));
   if (opts.responsavel) conds.push(eq(protocolos.responsavel, opts.responsavel));
+  if (opts.ano && /^\d{4}$/u.test(opts.ano))
+    conds.push(like(protocolos.data, `${opts.ano}%`));
   if (opts.q && opts.q.trim()) {
     const term = `%${opts.q.trim().toLowerCase()}%`;
     conds.push(

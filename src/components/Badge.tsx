@@ -70,6 +70,18 @@ export function hashTone(texto?: string | null): Tone {
   return AUTO[Math.abs(h) % AUTO.length];
 }
 
+/** Tom por natureza — cores fixas para os valores conhecidos (como no print),
+ *  com fallback determinístico para valores novos. */
+export function naturezaTone(natureza?: string | null): Tone {
+  const n = (natureza ?? "").toUpperCase();
+  if (n.startsWith("INCLUSÃO 2027") || n.startsWith("INCLUSAO 2027")) return "emerald";
+  if (n.startsWith("INCLUSÃO") || n.startsWith("INCLUSAO")) return "amber";
+  if (n.startsWith("EXCLUSÃO") || n.startsWith("EXCLUSAO")) return "red";
+  if (n.startsWith("CORREÇÃO") || n.startsWith("CORRECAO")) return "blue";
+  if (n.startsWith("COMUNICAÇÃO") || n.startsWith("COMUNICACAO")) return "violet";
+  return hashTone(natureza);
+}
+
 export function Badge({
   children,
   tone = "slate",
