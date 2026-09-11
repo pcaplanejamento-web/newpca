@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
-import { Badge, naturezaTone, situacaoTone } from "./Badge";
+import { NaturezaTag, SituacaoDot } from "./StatusTag";
 import { Fab } from "./Fab";
 import { ProtocoloCard } from "./ProtocoloCard";
 import {
@@ -127,7 +127,7 @@ function SelSituacao({
 /** Linha editável (desktop). Componente estável para não perder o foco ao digitar. */
 function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
   return (
-    <tr className="bg-emerald-50/40 align-top dark:bg-emerald-500/5">
+    <tr className="bg-accent-soft align-top">
       <td className="px-4 py-2">
         <input type="date" value={draft.data} onChange={(e) => set({ data: e.target.value })} className={inp} />
       </td>
@@ -155,7 +155,7 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
       </td>
       <td className="px-4 py-2">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={onSalvar} disabled={salvando} aria-label="Salvar" className="rounded-md bg-emerald-600 p-1.5 text-white transition hover:bg-emerald-700 disabled:opacity-60">
+          <button type="button" onClick={onSalvar} disabled={salvando} aria-label="Salvar" className="rounded-md bg-text p-1.5 text-surface transition hover:opacity-90 disabled:opacity-60">
             {salvando ? <IconSpinner className="h-4 w-4" /> : <IconCheck className="h-4 w-4" />}
           </button>
           <button type="button" onClick={onCancelar} disabled={salvando} aria-label="Cancelar" className="rounded-md border border-slate-300 p-1.5 text-slate-500 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800">
@@ -170,7 +170,7 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
 /** Card editável (mobile). Componente estável para não perder o foco ao digitar. */
 function CardEdicaoMobile({ draft, set, situacoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
   return (
-    <div className="rounded-2xl border border-emerald-300 bg-white p-4 shadow-sm dark:border-emerald-500/40 dark:bg-slate-900">
+    <div className="rounded-card border border-accent bg-surface p-4 shadow-ring">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className={labelEd}>Protocolo *</label>
@@ -211,7 +211,7 @@ function CardEdicaoMobile({ draft, set, situacoes, opcoes, adicionarOpcao, onSal
         </div>
       )}
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={onSalvar} disabled={salvando} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">
+        <button type="button" onClick={onSalvar} disabled={salvando} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60">
           {salvando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconCheck className="h-[18px] w-[18px]" />}
           Salvar
         </button>
@@ -410,7 +410,7 @@ export function ProtocolosView({
           <button
             type="button"
             onClick={iniciarNovo}
-            className="hidden items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 lg:inline-flex"
+            className="hidden items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface shadow-sm transition hover:opacity-90 lg:inline-flex"
           >
             <IconPlus className="h-[18px] w-[18px]" />
             Novo protocolo
@@ -473,7 +473,7 @@ export function ProtocolosView({
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
             <IconInbox className="h-7 w-7" />
           </div>
-          <h3 className="mt-4 text-base font-bold text-slate-800 dark:text-white">Nenhum protocolo encontrado</h3>
+          <h3 className="mt-4 text-base font-bold text-slate-800 dark:text-surface">Nenhum protocolo encontrado</h3>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {filtrando ? "Ajuste os filtros para ver mais resultados." : "Adicione o primeiro protocolo para começar."}
           </p>
@@ -481,7 +481,7 @@ export function ProtocolosView({
             <button
               type="button"
               onClick={iniciarNovo}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
             >
               <IconPlus className="h-[18px] w-[18px]" /> Novo protocolo
             </button>
@@ -516,7 +516,7 @@ export function ProtocolosView({
                   {podeEditar && <th className="px-4 py-3" />}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {editId === "novo" && <LinhaEdicaoDesktop {...edProps} />}
                 {pagina.rows.map((p) =>
                   editId === p.id ? (
@@ -524,13 +524,13 @@ export function ProtocolosView({
                   ) : (
                     <tr key={p.id} className="group transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">{p.data ? dataBR(p.data) : "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">{p.numero}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-text">{p.numero}</td>
                       <td className="max-w-[18rem] px-4 py-3">
                         <div className="truncate font-medium text-slate-700 dark:text-slate-200">{p.orgao ?? "—"}</div>
                         {p.orgaoSigla && <div className="text-xs text-slate-400">{p.orgaoSigla}</div>}
                       </td>
                       <td className="px-4 py-3">
-                        {p.natureza ? <Badge tone={naturezaTone(p.natureza)} dot>{p.natureza}</Badge> : <span className="text-slate-400">—</span>}
+                        {p.natureza ? <NaturezaTag natureza={p.natureza} /> : <span className="text-faint">—</span>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         {p.responsavel ? (
@@ -543,7 +543,7 @@ export function ProtocolosView({
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge tone={situacaoTone(p.situacao)} dot>{labelSituacao(p.situacao)}</Badge>
+                        <SituacaoDot situacao={p.situacao} label={labelSituacao(p.situacao)} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-300">{p.distribuicao ?? "—"}</td>
                       {podeEditar && (
