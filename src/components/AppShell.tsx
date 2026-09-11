@@ -147,7 +147,13 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
   );
 }
 
-function UserMenu({ usuario }: { usuario: UsuarioSessao }) {
+function UserMenu({
+  usuario,
+  onNavigate,
+}: {
+  usuario: UsuarioSessao;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
   const [saindo, setSaindo] = useState(false);
 
@@ -164,7 +170,12 @@ function UserMenu({ usuario }: { usuario: UsuarioSessao }) {
 
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-      <div className="flex items-center gap-2">
+      <Link
+        href="/painel/perfil"
+        onClick={onNavigate}
+        title="Meu perfil"
+        className="-m-1 flex items-center gap-2 rounded-lg p-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+      >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="min-w-0">
           <div
@@ -177,7 +188,7 @@ function UserMenu({ usuario }: { usuario: UsuarioSessao }) {
             {ROLE_LABEL[usuario.role]}
           </div>
         </div>
-      </div>
+      </Link>
       <button
         type="button"
         onClick={sair}
@@ -289,7 +300,7 @@ export function AppShell({
               <NavLinks role={usuario.role} onNavigate={fecharMenu} />
             </div>
             <div className="pt-6">
-              <UserMenu usuario={usuario} />
+              <UserMenu usuario={usuario} onNavigate={fecharMenu} />
             </div>
           </aside>
         </div>

@@ -172,7 +172,7 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       {/* Dados do perfil */}
       <form onSubmit={salvarPerfil} className={cardCls}>
         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Dados do perfil</h3>
@@ -273,7 +273,7 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
       </form>
 
       {/* Aparência */}
-      <div className={`flex items-center justify-between ${cardCls}`}>
+      <div className={`flex items-center justify-between lg:col-span-2 ${cardCls}`}>
         <div>
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Aparência</div>
           <div className="text-xs text-slate-500 dark:text-slate-400">Alternar tema claro / escuro</div>
@@ -286,7 +286,7 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
         type="button"
         onClick={sair}
         disabled={saindo}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-500/10"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60 lg:col-span-2 dark:border-slate-800 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-500/10"
       >
         {saindo ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />}
         Sair da conta

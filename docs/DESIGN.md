@@ -17,7 +17,9 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 | Menu completo | na própria sidebar (gated por papel) | **Menu hambúrguer** → drawer com a **mesma navegação da sidebar** (`NavLinks` + `UserMenu`), gated por papel |
 | Topo | busca global + sino + tema | **hambúrguer** + marca + sino + tema + avatar (→ Perfil) |
 
-`AppShell` (`src/components/AppShell.tsx`) monta sidebar (desktop) + topbar + drawer do hambúrguer (mobile) + `<BottomNav>`. `secoesVisiveis(role)` filtra itens por papel e alimenta a sidebar **e** o drawer. A tela **Perfil** (`PerfilView`) é só conta/preferências/sair (a navegação completa fica no hambúrguer/sidebar).
+`AppShell` (`src/components/AppShell.tsx`) monta sidebar (desktop) + topbar + drawer do hambúrguer (mobile) + `<BottomNav>`. `secoesVisiveis(role)` filtra itens por papel e alimenta a sidebar **e** o drawer. **Acesso ao Perfil:** o **card do usuário** (avatar + nome, no rodapé da sidebar/drawer, `UserMenu`) é um link para `/painel/perfil`; no mobile também há a aba *Perfil* na bottom-nav e o avatar da topbar. A tela **Perfil** (`PerfilView`) é só conta/preferências/sair (a navegação completa fica no hambúrguer/sidebar).
+
+**Layout desktop:** aproveitar toda a largura — evitar coluna estreita centralizada (ex.: Perfil usa `grid lg:grid-cols-2`). No mobile, empilhar.
 
 ## Listas (tabela ↔ cards)
 - **Desktop:** `<table>` dentro de container `rounded-2xl` (`hidden lg:block`).
