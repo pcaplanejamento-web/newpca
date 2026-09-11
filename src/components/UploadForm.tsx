@@ -1,18 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { normalizarLinha } from "@/lib/normalize";
-import { parsePlanilha, type PlanilhaParseada } from "@/lib/parse-xlsx";
-import {
-  IconAlert,
-  IconCheck,
-  IconFile,
-  IconSpinner,
-  IconUpload,
-} from "./icons";
+import { type PlanilhaParseada, parsePlanilha } from "@/lib/parse-xlsx";
+import { Button } from "./Button";
+import { Callout } from "./Callout";
+import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
 
 type Preview = PlanilhaParseada & { total: number; count: number };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
@@ -125,50 +120,41 @@ export function UploadForm() {
   // ---- Sucesso ----
   if (status === "done" && resultado) {
     return (
-      <div className="animate-fade-in-up rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <div
+        className="animate-fade-in-up rounded-card border p-6"
+        style={{
+          borderColor: "color-mix(in srgb, var(--ok) 30%, transparent)",
+          background: "color-mix(in srgb, var(--ok) 8%, var(--surface))",
+        }}
+      >
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-surface">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full text-white" style={{ background: "var(--ok)" }}>
             <IconCheck className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="font-bold text-emerald-800 dark:text-emerald-300">
+            <h3 className="font-bold" style={{ color: "var(--ok)" }}>
               Planilha importada com sucesso!
             </h3>
-            <p className="text-sm text-emerald-700/80 dark:text-emerald-300/80">
+            <p className="text-sm text-muted">
               {resultado.municipio} · unidade {resultado.codigo}
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-900/40">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Itens</div>
-            <div className="text-lg font-bold text-slate-800 dark:text-surface">
-              {num(resultado.totalItens)}
-            </div>
+          <div className="rounded-control border border-border bg-surface p-3">
+            <div className="text-xs text-muted">Itens</div>
+            <div className="text-lg font-bold text-text">{num(resultado.totalItens)}</div>
           </div>
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-900/40">
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Valor total
-            </div>
-            <div className="text-lg font-bold text-slate-800 dark:text-surface">
-              {brl(resultado.valorTotal)}
-            </div>
+          <div className="rounded-control border border-border bg-surface p-3">
+            <div className="text-xs text-muted">Valor total</div>
+            <div className="text-lg font-bold text-text">{brl(resultado.valorTotal)}</div>
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
-          >
-            Ver no dashboard
-          </Link>
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
+          <Button href="/">Ver no dashboard</Button>
+          <Button variant="secondary" onClick={reset}>
             Importar outra
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -189,10 +175,8 @@ export function UploadForm() {
           const f = e.dataTransfer.files?.[0];
           if (f) handleFile(f);
         }}
-        className={`rounded-2xl border-2 border-dashed p-8 text-center transition ${
-          dragging
-            ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10"
-            : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+        className={`rounded-card border-2 border-dashed p-8 text-center transition ${
+          dragging ? "border-accent bg-accent-soft" : "border-border-2 bg-surface"
         }`}
       >
         <input
@@ -205,103 +189,70 @@ export function UploadForm() {
             if (f) handleFile(f);
           }}
         />
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
           <IconUpload className="h-7 w-7" />
         </div>
-        <p className="mt-4 text-sm font-medium text-slate-700 dark:text-slate-200">
-          Arraste a planilha do PCA aqui ou
-        </p>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
-        >
-          <IconFile className="h-[18px] w-[18px]" />
-          Escolher arquivo .xlsx
-        </button>
-        <p className="mt-3 text-xs text-slate-400">
-          O arquivo é lido no seu navegador. Reimportar a mesma unidade
-          (Código) substitui os itens anteriores.
+        <p className="mt-4 text-sm font-medium text-text-2">Arraste a planilha do PCA aqui ou</p>
+        <div className="mt-2 flex justify-center">
+          <Button onClick={() => inputRef.current?.click()} icon={<IconFile className="h-[18px] w-[18px]" />}>
+            Escolher arquivo .xlsx
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-faint">
+          O arquivo é lido no seu navegador. Reimportar a mesma unidade (Código) substitui os itens anteriores.
         </p>
       </div>
 
       {/* Erro */}
       {erro && status === "error" && (
-        <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-          <IconAlert className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-semibold">Não foi possível importar</p>
-            <p className="text-red-600/90 dark:text-red-300/80">{erro}</p>
-          </div>
-        </div>
+        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
+          <p className="font-semibold">Não foi possível importar</p>
+          <p className="opacity-90">{erro}</p>
+        </Callout>
       )}
 
       {/* Parsing */}
       {status === "parsing" && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          <IconSpinner className="h-5 w-5" />
+        <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />} className="mt-4">
           Lendo a planilha...
-        </div>
+        </Callout>
       )}
 
       {/* Preview + confirmar */}
       {preview && (status === "ready" || status === "sending") && (
-        <div className="mt-4 animate-fade-in-up rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <IconFile className="h-[18px] w-[18px] text-emerald-600" />
+        <div className="mt-4 animate-fade-in-up rounded-card border border-border bg-surface p-5 shadow-ring">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text">
+            <IconFile className="h-[18px] w-[18px] text-accent" />
             {preview.nomeArquivo}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Field label="Unidade (Código)" value={preview.codigo} />
-            <Field label="Município" value={preview.municipio} span />
-            <Field label="Itens" value={num(preview.count)} />
+            <InfoTile label="Unidade (Código)" value={preview.codigo} />
+            <InfoTile label="Município" value={preview.municipio} span />
+            <InfoTile label="Itens" value={num(preview.count)} />
           </div>
-          <div className="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Valor total estimado
-            </div>
-            <div className="text-xl font-bold text-slate-800 dark:text-surface">
-              {brl(preview.total)}
-            </div>
+          <div className="mt-3 rounded-control bg-surface-2 p-3">
+            <div className="text-xs text-muted">Valor total estimado</div>
+            <div className="text-xl font-bold text-text">{brl(preview.total)}</div>
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
+            <Button
               disabled={status === "sending"}
               onClick={enviar}
-              className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
+              icon={status === "sending" ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconUpload className="h-[18px] w-[18px]" />}
             >
-              {status === "sending" ? (
-                <>
-                  <IconSpinner className="h-[18px] w-[18px]" />
-                  Importando... {progress}%
-                </>
-              ) : (
-                <>
-                  <IconUpload className="h-[18px] w-[18px]" />
-                  Importar {num(preview.count)} itens
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              disabled={status === "sending"}
-              onClick={reset}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
+              {status === "sending" ? `Importando... ${progress}%` : `Importar ${num(preview.count)} itens`}
+            </Button>
+            <Button variant="secondary" disabled={status === "sending"} onClick={reset}>
               Cancelar
-            </button>
+            </Button>
           </div>
 
           {status === "sending" && (
             <div className="mt-4">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
+              <div className="h-2 w-full overflow-hidden rounded-full bg-track">
+                <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
-              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1.5 text-xs text-muted">
                 Enviando {num(preview.count)} itens em lotes... {progress}%
               </p>
             </div>
@@ -312,19 +263,11 @@ export function UploadForm() {
   );
 }
 
-function Field({
-  label,
-  value,
-  span,
-}: {
-  label: string;
-  value: string;
-  span?: boolean;
-}) {
+function InfoTile({ label, value, span }: { label: string; value: string; span?: boolean }) {
   return (
     <div className={span ? "col-span-2" : ""}>
-      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="truncate font-semibold text-slate-800 dark:text-slate-100" title={value}>
+      <div className="text-xs text-muted">{label}</div>
+      <div className="truncate font-semibold text-text" title={value}>
         {value}
       </div>
     </div>

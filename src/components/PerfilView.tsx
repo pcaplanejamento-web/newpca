@@ -1,21 +1,15 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "./Avatar";
-import { ThemeToggle } from "./ThemeToggle";
-import { inputCls, labelCls } from "./formStyles";
-import {
-  IconAlert,
-  IconCamera,
-  IconCheck,
-  IconKey,
-  IconLogout,
-  IconSave,
-  IconSpinner,
-  IconTrash,
-} from "./icons";
+import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
+import { Avatar } from "./Avatar";
+import { Button } from "./Button";
+import { Callout } from "./Callout";
+import { PasswordField } from "./Field";
+import { inputCls, labelCls } from "./formStyles";
+import { IconAlert, IconCamera, IconCheck, IconKey, IconLogout, IconSave, IconTrash } from "./icons";
+import { ThemeToggle } from "./ThemeToggle";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
   admin: "Administrador",
@@ -55,21 +49,13 @@ function Aviso({ msg }: { msg: Msg }) {
   if (!msg) return null;
   const ok = msg.tipo === "ok";
   return (
-    <div
-      className={`mt-3 flex items-center gap-2 rounded-lg border p-3 text-sm ${
-        ok
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-          : "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-      }`}
-    >
-      {ok ? <IconCheck className="h-4 w-4 shrink-0" /> : <IconAlert className="h-4 w-4 shrink-0" />}
+    <Callout kind={ok ? "ok" : "danger"} icon={ok ? <IconCheck className="h-4 w-4" /> : <IconAlert className="h-4 w-4" />} className="mt-3">
       {msg.texto}
-    </div>
+    </Callout>
   );
 }
 
-const cardCls =
-  "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
+const cardCls = "rounded-card border border-border bg-surface p-5 shadow-ring";
 
 export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
   const router = useRouter();
@@ -175,31 +161,21 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       {/* Dados do perfil */}
       <form onSubmit={salvarPerfil} className={cardCls}>
-        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Dados do perfil</h3>
+        <h3 className="text-sm font-bold text-text">Dados do perfil</h3>
 
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
           {/* Foto */}
           <div className="flex flex-col items-center gap-2">
             <Avatar nome={nome || usuario.nome} foto={foto} size="xl" />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={escolherFoto}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              <IconCamera className="h-4 w-4" /> Alterar foto
-            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={escolherFoto} />
+            <Button variant="secondary" onClick={() => fileRef.current?.click()} icon={<IconCamera className="h-4 w-4" />}>
+              Alterar foto
+            </Button>
             {foto && (
               <button
                 type="button"
                 onClick={() => setFoto(null)}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 transition hover:text-red-500"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-faint transition hover:text-[var(--danger)]"
               >
                 <IconTrash className="h-3 w-3" /> Remover
               </button>
@@ -220,8 +196,8 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
               <label className={labelCls} htmlFor="p-matricula">Matrícula</label>
               <input id="p-matricula" className={inputCls} value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="Opcional" />
             </div>
-            <div className="text-xs text-slate-400">
-              Papel: <span className="font-semibold text-slate-500 dark:text-slate-300">{ROLE_LABEL[usuario.role]}</span>
+            <div className="text-xs text-faint">
+              Papel: <span className="font-semibold text-text-2">{ROLE_LABEL[usuario.role]}</span>
             </div>
           </div>
         </div>
@@ -229,68 +205,50 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
         <Aviso msg={msgPerfil} />
 
         <div className="mt-4 flex justify-end">
-          <button
-            type="submit"
-            disabled={salvando}
-            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
-          >
-            {salvando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconSave className="h-[18px] w-[18px]" />}
+          <Button type="submit" loading={salvando} icon={<IconSave className="h-[18px] w-[18px]" />}>
             Salvar
-          </button>
+          </Button>
         </div>
       </form>
 
       {/* Trocar senha */}
       <form onSubmit={trocarSenha} className={cardCls}>
-        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-text">
           <IconKey className="h-4 w-4" /> Trocar senha
         </h3>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <label className={labelCls} htmlFor="s-atual">Senha atual</label>
-            <input id="s-atual" type="password" className={inputCls} value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" required />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="s-nova">Nova senha</label>
-            <input id="s-nova" type="password" className={inputCls} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} required />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="s-conf">Confirmar</label>
-            <input id="s-conf" type="password" className={inputCls} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} required />
-          </div>
+          <PasswordField label="Senha atual" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" required />
+          <PasswordField label="Nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} required />
+          <PasswordField label="Confirmar" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} required />
         </div>
         <Aviso msg={msgSenha} />
         <div className="mt-4 flex justify-end">
-          <button
-            type="submit"
-            disabled={trocando}
-            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
-          >
-            {trocando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconKey className="h-[18px] w-[18px]" />}
+          <Button type="submit" loading={trocando} icon={<IconKey className="h-[18px] w-[18px]" />}>
             Trocar senha
-          </button>
+          </Button>
         </div>
       </form>
 
       {/* Aparência */}
       <div className={`flex items-center justify-between lg:col-span-2 ${cardCls}`}>
         <div>
-          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Aparência</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">Alternar tema claro / escuro</div>
+          <div className="text-sm font-semibold text-text-2">Aparência</div>
+          <div className="text-xs text-muted">Alternar tema claro / escuro</div>
         </div>
         <ThemeToggle />
       </div>
 
       {/* Sair */}
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         onClick={sair}
-        disabled={saindo}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60 lg:col-span-2 dark:border-slate-800 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-500/10"
+        loading={saindo}
+        icon={<IconLogout className="h-4 w-4" />}
+        style={{ color: "var(--danger)" }}
+        className="w-full lg:col-span-2"
       >
-        {saindo ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />}
         Sair da conta
-      </button>
+      </Button>
     </div>
   );
 }
