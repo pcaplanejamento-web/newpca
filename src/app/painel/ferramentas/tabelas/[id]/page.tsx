@@ -26,7 +26,7 @@ export default async function TabelaPage({
     <div className="space-y-4">
       <Link
         href="/painel/ferramentas/tabelas"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-800 dark:hover:text-white"
+        className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-text"
       >
         <IconChevronLeft className="h-4 w-4" /> Voltar às tabelas
       </Link>

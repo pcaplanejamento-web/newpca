@@ -250,7 +250,7 @@ export function AppShell({ children, usuario }: { children: ReactNode; usuario: 
       {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
       {menuAberto && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={fecharMenu} />
+          <div className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface px-4 py-5 shadow-soft">
             <div className="flex items-center justify-between px-1">
               <Brand />

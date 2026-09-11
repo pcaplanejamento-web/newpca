@@ -13,7 +13,7 @@ export default async function TabelasPage() {
     <div className="space-y-6">
       <Link
         href="/painel/ferramentas"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-800 dark:hover:text-white"
+        className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-text"
       >
         <IconChevronLeft className="h-4 w-4" /> Ferramentas
       </Link>

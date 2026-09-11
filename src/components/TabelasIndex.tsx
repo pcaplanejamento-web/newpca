@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
+import { IconFile, IconPlus, IconSpinner } from "./icons";
 import { Skeleton } from "./Skeleton";
-import { IconFile, IconSpinner } from "./icons";
 
 type Tabela = {
   id: number;
@@ -72,21 +72,19 @@ export function TabelasIndex({ podeEditar }: { podeEditar: boolean }) {
         <Link
           key={t.id}
           href={`/painel/ferramentas/tabelas/${t.id}`}
-          className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-500/40"
+          className="group rounded-card border border-border bg-surface p-5 shadow-ring transition hover:border-accent/40 hover:shadow-soft"
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <IconFile className="h-6 w-6" />
           </div>
-          <h3 className="mt-4 font-semibold text-slate-800 group-hover:text-emerald-700 dark:text-slate-100 dark:group-hover:text-emerald-300">
+          <h3 className="mt-4 font-semibold text-text transition-colors group-hover:text-accent">
             {t.nome}
           </h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-sm text-muted">
             {t.linhas} linha(s) · {t.colunas} coluna(s)
           </p>
           {t.atualizadoEm && (
-            <p className="mt-2 text-[11px] text-slate-400">
-              atualizada em {dataBR(t.atualizadoEm)}
-            </p>
+            <p className="mt-2 text-[11px] text-faint">atualizada em {dataBR(t.atualizadoEm)}</p>
           )}
         </Link>
       ))}
@@ -96,15 +94,15 @@ export function TabelasIndex({ podeEditar }: { podeEditar: boolean }) {
           type="button"
           onClick={novaTabela}
           disabled={criando}
-          className="flex min-h-[168px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 p-5 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-600 disabled:opacity-60 dark:border-slate-700 dark:text-slate-400"
+          className="flex min-h-[168px] flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 p-5 text-muted transition hover:border-accent hover:text-accent disabled:opacity-60"
         >
-          {criando ? <IconSpinner className="h-6 w-6" /> : <span className="text-3xl leading-none">+</span>}
+          {criando ? <IconSpinner className="h-6 w-6" /> : <IconPlus className="h-6 w-6" />}
           <span className="text-sm font-semibold">Nova tabela</span>
         </button>
       )}
 
       {tabelas.length === 0 && !podeEditar && (
-        <p className="text-sm text-slate-400">Nenhuma tabela disponível.</p>
+        <p className="text-sm text-faint">Nenhuma tabela disponível.</p>
       )}
     </div>
   );

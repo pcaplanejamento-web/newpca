@@ -34,6 +34,7 @@ import {
   IconWallet,
 } from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
+import { LinkCard } from "@/components/LinkCard";
 import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
@@ -439,6 +440,13 @@ export function Catalogo() {
             <span className="text-[13px] text-text-2">Alternador de tema</span>
             <ThemeToggle />
           </div>
+        </div>
+      </Secao>
+
+      <Secao titulo="Cards de navegação (LinkCard)">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <LinkCard href="#" titulo="Tabelas dinâmicas" descricao="Listas com colunas personalizáveis." icon={<IconLayers className="h-6 w-6" />} />
+          <LinkCard href="#" titulo="Relatórios" descricao="Exportações e visões consolidadas." icon={<IconClipboard className="h-6 w-6" />} />
         </div>
       </Secao>
 
