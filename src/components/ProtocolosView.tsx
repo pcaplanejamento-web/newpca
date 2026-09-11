@@ -315,8 +315,15 @@ export function ProtocolosView({
   const recarregar = useCallback(() => carregar(filtros, page), [carregar, filtros, page]);
 
   function mudarFiltro(patch: Partial<Filtros>) {
+    setEditId(null); // evita linha em edição órfã ao filtrar
+    setErroEdit(null);
     setFiltros((f) => ({ ...f, ...patch }));
     setPage(1);
+  }
+
+  function irParaPagina(alvo: number) {
+    setEditId(null);
+    setPage(alvo);
   }
 
   const adicionarOpcao = useCallback(async (campo: CampoOpcao, valor: string) => {
@@ -411,7 +418,7 @@ export function ProtocolosView({
           <button
             type="button"
             onClick={iniciarNovo}
-            className="hidden items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 sm:inline-flex"
+            className="hidden items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 lg:inline-flex"
           >
             <IconPlus className="h-[18px] w-[18px]" />
             Novo protocolo
@@ -574,7 +581,7 @@ export function ProtocolosView({
           <button
             type="button"
             disabled={page <= 1 || carregando}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => irParaPagina(Math.max(1, page - 1))}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <IconChevronLeft className="h-4 w-4" /> Anterior
@@ -585,7 +592,7 @@ export function ProtocolosView({
           <button
             type="button"
             disabled={page >= pagina.pages || carregando}
-            onClick={() => setPage((p) => Math.min(pagina.pages, p + 1))}
+            onClick={() => irParaPagina(Math.min(pagina.pages, page + 1))}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Próxima <IconChevronRight className="h-4 w-4" />

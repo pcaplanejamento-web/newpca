@@ -11,9 +11,11 @@ import {
   IconBell,
   IconClipboard,
   IconClock,
+  IconClose,
   IconDashboard,
   IconFile,
   IconLogout,
+  IconMenu,
   IconSearch,
   IconShield,
   IconSpinner,
@@ -78,7 +80,7 @@ const SECOES: NavSecao[] = [
 ];
 
 /** Seções/itens visíveis para o papel dado. */
-export function secoesVisiveis(role: Role): NavSecao[] {
+function secoesVisiveis(role: Role): NavSecao[] {
   return SECOES.map((s) => ({
     ...s,
     itens: s.itens.filter((i) => !i.roles || i.roles.includes(role)),
@@ -109,7 +111,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NavLinks({ role }: { role: Role }) {
+function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <div className="flex flex-col gap-5">
@@ -126,6 +128,7 @@ function NavLinks({ role }: { role: Role }) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={onNavigate}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                     active
                       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
@@ -248,6 +251,9 @@ export function AppShell({
   children: ReactNode;
   usuario: UsuarioSessao;
 }) {
+  const [menuAberto, setMenuAberto] = useState(false);
+  const fecharMenu = () => setMenuAberto(false);
+
   return (
     <div className="min-h-screen lg:flex">
       {/* Sidebar desktop */}
@@ -263,9 +269,44 @@ export function AppShell({
         </div>
       </aside>
 
+      {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
+      {menuAberto && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={fecharMenu} />
+          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-white px-4 py-5 shadow-xl dark:bg-slate-900">
+            <div className="flex items-center justify-between px-1">
+              <Brand />
+              <button
+                type="button"
+                aria-label="Fechar menu"
+                onClick={fecharMenu}
+                className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <IconClose className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-7 flex-1 overflow-y-auto px-1">
+              <NavLinks role={usuario.role} onNavigate={fecharMenu} />
+            </div>
+            <div className="pt-6">
+              <UserMenu usuario={usuario} />
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur-md sm:px-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-slate-200 bg-white/80 px-4 backdrop-blur-md sm:px-6 dark:border-slate-800 dark:bg-slate-900/80">
+          {/* Botão hambúrguer (mobile) */}
+          <button
+            type="button"
+            aria-label="Abrir menu"
+            onClick={() => setMenuAberto(true)}
+            className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <IconMenu className="h-5 w-5" />
+          </button>
           {/* Marca (mobile) — a sidebar some abaixo de lg */}
           <div className="lg:hidden">
             <Brand compact />
@@ -276,11 +317,7 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-1.5">
             <SinoNotificacoes />
             <ThemeToggle />
-            <Link
-              href="/painel/perfil"
-              aria-label="Meu perfil"
-              className="lg:hidden"
-            >
+            <Link href="/painel/perfil" aria-label="Meu perfil" className="lg:hidden">
               <Avatar nome={usuario.nome} size="sm" />
             </Link>
           </div>

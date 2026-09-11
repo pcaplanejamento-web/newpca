@@ -13,11 +13,11 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 ## Navegação
 | | Desktop (`lg+`) | Mobile (`< lg`) |
 |---|---|---|
-| Primária | **Sidebar** com 2 seções: *Ferramentas* / *Administração* | **Bottom-nav** (Painel · Protocolos · Atividades · Perfil) |
-| Secundária/admin | na própria sidebar (gated por papel) | tela **Perfil** lista tudo (gated por papel) |
-| Topo | busca global + sino + tema | marca + sino + tema + avatar (→ Perfil) |
+| Rápida | **Sidebar** com 2 seções: *Ferramentas* / *Administração* | **Bottom-nav** (Painel · Protocolos · Atividades · Perfil) |
+| Menu completo | na própria sidebar (gated por papel) | **Menu hambúrguer** → drawer com a **mesma navegação da sidebar** (`NavLinks` + `UserMenu`), gated por papel |
+| Topo | busca global + sino + tema | **hambúrguer** + marca + sino + tema + avatar (→ Perfil) |
 
-`AppShell` (`src/components/AppShell.tsx`) monta sidebar + topbar + `<BottomNav>`. `secoesVisiveis(role)` filtra itens por papel e é reutilizada na tela **Perfil** (`PerfilView`).
+`AppShell` (`src/components/AppShell.tsx`) monta sidebar (desktop) + topbar + drawer do hambúrguer (mobile) + `<BottomNav>`. `secoesVisiveis(role)` filtra itens por papel e alimenta a sidebar **e** o drawer. A tela **Perfil** (`PerfilView`) é só conta/preferências/sair (a navegação completa fica no hambúrguer/sidebar).
 
 ## Listas (tabela ↔ cards)
 - **Desktop:** `<table>` dentro de container `rounded-2xl` (`hidden lg:block`).

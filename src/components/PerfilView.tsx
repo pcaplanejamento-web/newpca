@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { secoesVisiveis } from "./AppShell";
 import { Avatar } from "./Avatar";
 import { ThemeToggle } from "./ThemeToggle";
 import { IconLogout, IconSpinner } from "./icons";
@@ -15,10 +13,10 @@ const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
   membro: "Membro",
 };
 
-/** Tela de Perfil — no mobile também é o menu completo (a sidebar some abaixo de lg). */
+/** Tela de Perfil: conta, preferências e sair. A navegação completa fica no menu
+ *  hambúrguer (mobile) e na sidebar (desktop). */
 export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [saindo, setSaindo] = useState(false);
 
   async function sair() {
@@ -61,39 +59,6 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
           </div>
         </div>
         <ThemeToggle />
-      </div>
-
-      {/* Menu completo (essencial no mobile) */}
-      <div className="space-y-5 lg:hidden">
-        {secoesVisiveis(usuario.role).map((secao) => (
-          <div key={secao.titulo}>
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              {secao.titulo}
-            </p>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-              {secao.itens.map((item) => {
-                const active = item.exact
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
-                const { Icon } = item;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm font-medium transition last:border-b-0 dark:border-slate-800 ${
-                      active
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50"
-                    }`}
-                  >
-                    <Icon className="h-[18px] w-[18px]" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Sair */}
