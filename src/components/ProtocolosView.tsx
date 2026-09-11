@@ -40,6 +40,7 @@ export function ProtocolosView({
   situacoes,
   podeEditar,
   buscaInicial = "",
+  situacaoInicial = "",
 }: {
   inicial: Pagina;
   resumo: ResumoProtocolos;
@@ -47,13 +48,14 @@ export function ProtocolosView({
   situacoes: SituacaoOpcao[];
   podeEditar: boolean;
   buscaInicial?: string;
+  situacaoInicial?: string;
 }) {
   const [pagina, setPagina] = useState<Pagina>(inicial);
   const [resumo, setResumo] = useState(resumoInicial);
   const [opcoes, setOpcoes] = useState(opcoesInicial);
   const [filtros, setFiltros] = useState<Filtros>({
     q: buscaInicial,
-    situacao: "",
+    situacao: situacaoInicial,
     natureza: "",
     responsavel: "",
   });
