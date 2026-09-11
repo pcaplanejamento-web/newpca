@@ -36,7 +36,10 @@ export function KpiStat({
           </span>
         )}
       </div>
-      <div className="mt-1 pl-2 text-[33px] font-bold leading-[0.95] tracking-[-0.03em] text-text tabular-nums">
+      <div
+        className="mt-1 min-w-0 truncate pl-2 text-[clamp(1.4rem,7vw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
+        title={typeof value === "string" ? value : undefined}
+      >
         {value}
       </div>
       {spark && spark.length > 0 && (

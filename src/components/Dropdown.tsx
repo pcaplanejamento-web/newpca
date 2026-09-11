@@ -1,10 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-// Popover genérico (base de FilterChip/MultiSelect/ColorField/Período). O
-// `trigger` carrega o próprio visual (é envolvido num botão acessível). Fecha
-// no clique-fora e no Esc; painel com sombra suave (--shadow-soft).
+// Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período).
+// O painel é renderizado em PORTAL (position: fixed no body) para NUNCA ser
+// recortado por containers com overflow (ex.: cabeçalho de tabela) e é mantido
+// dentro da tela. Fecha no clique-fora e no Esc; sombra suave.
 export function Dropdown({
   trigger,
   children,
@@ -23,27 +25,52 @@ export function Dropdown({
   ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, w: 224 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
+  const reposicionar = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const w = Math.min(width ?? Math.max(224, r.width), window.innerWidth - 16);
+    let left = align === "end" ? r.right - w : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    setPos({ top: Math.round(r.bottom + 6), left: Math.round(left), w });
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reposiciona só ao abrir.
+  useLayoutEffect(() => {
+    if (open) reposicionar();
+  }, [open]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: assina só ao abrir; reposicionar lê props/refs estáveis.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
+    const onMove = () => reposicionar();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
     };
   }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block max-w-full">
+    <div className="inline-block max-w-full">
       <button
+        ref={triggerRef}
         type="button"
         aria-label={ariaLabel}
         aria-expanded={open}
@@ -53,17 +80,18 @@ export function Dropdown({
       >
         {trigger}
       </button>
-      {open && (
-        <div
-          role="menu"
-          className={`absolute z-40 mt-1.5 rounded-card border border-border bg-surface p-2 shadow-soft ${
-            align === "end" ? "right-0" : "left-0"
-          } ${panelClassName}`}
-          style={width ? { width } : { minWidth: 224 }}
-        >
-          {typeof children === "function" ? children(() => setOpen(false)) : children}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="menu"
+            className={`fixed z-[200] max-h-[min(80vh,520px)] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`}
+            style={{ top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)" }}
+          >
+            {typeof children === "function" ? children(() => setOpen(false)) : children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

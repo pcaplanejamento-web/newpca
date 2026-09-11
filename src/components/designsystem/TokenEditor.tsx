@@ -1,17 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/Button";
-import { IconMoon, IconSun } from "@/components/icons";
+import { ColorField } from "@/components/ColorField";
+import { IconPalette } from "@/components/icons";
+import { Segmented } from "@/components/Segmented";
 
 // Theme Playground (spec §39.25): edita os CSS vars ao vivo em
-// document.documentElement — todo o catálogo reflete na hora. É o mesmo editor
-// reutilizado no painel do ADM (persistência é outra camada).
+// document.documentElement — todo o catálogo reflete na hora. Desenho por cards,
+// com componentes do próprio design system (Segmented, ColorField, Button).
 const root = () => document.documentElement;
-const selCls =
-  "h-[var(--h-control-sm)] rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted";
+
+function Campo({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div className="rounded-control border border-border bg-surface-2 p-3">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+        {titulo}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export function TokenEditor() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -22,7 +32,7 @@ export function TokenEditor() {
   const [motion, setMotion] = useState("default");
   useEffect(() => setMounted(true), []);
 
-  const isDark = mounted && resolvedTheme === "dark";
+  const tema = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   function mudarAccent(v: string) {
     setAccent(v);
@@ -32,14 +42,17 @@ export function TokenEditor() {
     setRadius(v);
     root().style.setProperty("--radius-card", `${v}px`);
     root().style.setProperty("--radius-control", `${Math.max(6, v - 4)}px`);
+    root().style.setProperty("--radius-chip", `${Math.max(4, v - 5)}px`);
   }
-  function mudarAttr(attr: string, v: string, set: (s: string) => void) {
+  function attr(a: string, v: string, set: (s: string) => void) {
     set(v);
-    if (v === "default") root().removeAttribute(attr);
-    else root().setAttribute(attr, v);
+    if (v === "default") root().removeAttribute(a);
+    else root().setAttribute(a, v);
   }
   function resetar() {
-    for (const p of ["--accent", "--radius-card", "--radius-control"]) root().style.removeProperty(p);
+    for (const p of ["--accent", "--radius-card", "--radius-control", "--radius-chip"]) {
+      root().style.removeProperty(p);
+    }
     root().removeAttribute("data-density");
     root().removeAttribute("data-motion");
     setAccent("#4f46e5");
@@ -49,34 +62,39 @@ export function TokenEditor() {
   }
 
   return (
-    <div className="rounded-card border border-border bg-surface p-4 shadow-ring">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[13px] font-semibold text-text">Theme Playground</h2>
-        <span className="text-[11px] text-faint">edita os tokens ao vivo</span>
+    <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">
+            <IconPalette className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-text">Theme Playground</h2>
+            <p className="text-[12px] text-muted">Edite os tokens e veja o catálogo mudar ao vivo</p>
+          </div>
+        </div>
+        <Button variant="ghost" onClick={resetar}>
+          Restaurar
+        </Button>
       </div>
-      <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <span className={labelCls}>Tema</span>
-          <Button
-            variant="secondary"
-            icon={isDark ? <IconSun className="h-4 w-4" /> : <IconMoon className="h-4 w-4" />}
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-          >
-            {isDark ? "Escuro" : "Claro"}
-          </Button>
-        </div>
-        <div>
-          <span className={labelCls}>Accent</span>
-          <input
-            type="color"
-            aria-label="Cor de destaque"
-            value={accent}
-            onChange={(e) => mudarAccent(e.target.value)}
-            className="h-[var(--h-control-sm)] w-16 cursor-pointer rounded-control border border-border-2 bg-surface p-1"
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Campo titulo="Tema">
+          <Segmented
+            value={tema}
+            onChange={(v) => setTheme(v)}
+            options={[
+              { value: "light", label: "Claro" },
+              { value: "dark", label: "Escuro" },
+            ]}
           />
-        </div>
-        <div>
-          <span className={labelCls}>Raio · {radius}px</span>
+        </Campo>
+
+        <Campo titulo="Cor de destaque">
+          <ColorField value={accent} onChange={mudarAccent} label="Accent" />
+        </Campo>
+
+        <Campo titulo={`Raio dos cards · ${radius}px`}>
           <input
             type="range"
             aria-label="Raio dos cards"
@@ -84,37 +102,34 @@ export function TokenEditor() {
             max={24}
             value={radius}
             onChange={(e) => mudarRadius(Number(e.target.value))}
-            className="w-40 accent-[var(--accent)]"
+            className="mt-2 w-full accent-[var(--accent)]"
           />
-        </div>
-        <div>
-          <span className={labelCls}>Densidade</span>
-          <select
+        </Campo>
+
+        <Campo titulo="Densidade">
+          <Segmented
             value={density}
-            onChange={(e) => mudarAttr("data-density", e.target.value, setDensity)}
-            className={selCls}
-          >
-            <option value="compact">Compacta</option>
-            <option value="default">Padrão</option>
-            <option value="comfortable">Confortável</option>
-          </select>
-        </div>
-        <div>
-          <span className={labelCls}>Motion</span>
-          <select
+            onChange={(v) => attr("data-density", v, setDensity)}
+            options={[
+              { value: "compact", label: "Compacta" },
+              { value: "default", label: "Padrão" },
+              { value: "comfortable", label: "Confortável" },
+            ]}
+          />
+        </Campo>
+
+        <Campo titulo="Animações">
+          <Segmented
             value={motion}
-            onChange={(e) => mudarAttr("data-motion", e.target.value, setMotion)}
-            className={selCls}
-          >
-            <option value="off">Desativado</option>
-            <option value="reduced">Reduzido</option>
-            <option value="default">Padrão</option>
-            <option value="smooth">Suave</option>
-          </select>
-        </div>
-        <Button variant="ghost" onClick={resetar}>
-          Restaurar
-        </Button>
+            onChange={(v) => attr("data-motion", v, setMotion)}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "reduced", label: "Reduzido" },
+              { value: "default", label: "Padrão" },
+              { value: "smooth", label: "Suave" },
+            ]}
+          />
+        </Campo>
       </div>
     </div>
   );

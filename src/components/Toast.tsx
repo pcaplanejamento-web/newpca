@@ -35,53 +35,55 @@ const COR: Record<Variant, string> = {
 };
 
 export function Toaster() {
-  const [items, setItems] = useState<ToastItem[]>([]);
+  // Um único banner por vez: um toast novo SUBSTITUI o anterior (nunca empilha).
+  const [item, setItem] = useState<ToastItem | null>(null);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const l = (t: ToastItem) => {
-      setItems((prev) => [...prev, t]);
+      setItem(t);
+      if (timer) clearTimeout(timer);
       if (t.duration > 0) {
-        setTimeout(() => setItems((prev) => prev.filter((x) => x.id !== t.id)), t.duration);
+        timer = setTimeout(() => setItem((cur) => (cur?.id === t.id ? null : cur)), t.duration);
       }
     };
     listeners.push(l);
     return () => {
       listeners = listeners.filter((x) => x !== l);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
-  const remover = (id: number) => setItems((prev) => prev.filter((x) => x.id !== id));
+  if (!item) return null;
 
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center p-4 sm:justify-end"
     >
-      {items.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className="animate-fade-in-up pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-card border border-border bg-surface p-3 shadow-soft"
+      <div
+        key={item.id}
+        role="status"
+        className="animate-fade-in-up pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-card border border-border bg-surface p-3 shadow-soft"
+      >
+        <span
+          aria-hidden
+          className="mt-1 h-2 w-2 shrink-0 rounded-full"
+          style={{
+            background: COR[item.variant],
+            boxShadow: `0 0 0 3px color-mix(in srgb, ${COR[item.variant]} 16%, var(--glow-target))`,
+          }}
+        />
+        <p className="min-w-0 flex-1 text-[13px] text-text">{item.msg}</p>
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={() => setItem(null)}
+          className="shrink-0 rounded-md p-0.5 text-faint transition-colors hover:bg-surface-2 hover:text-text-2"
         >
-          <span
-            aria-hidden
-            className="mt-1 h-2 w-2 shrink-0 rounded-full"
-            style={{
-              background: COR[t.variant],
-              boxShadow: `0 0 0 3px color-mix(in srgb, ${COR[t.variant]} 16%, var(--glow-target))`,
-            }}
-          />
-          <p className="min-w-0 flex-1 text-[13px] text-text">{t.msg}</p>
-          <button
-            type="button"
-            aria-label="Fechar"
-            onClick={() => remover(t.id)}
-            className="shrink-0 rounded-md p-0.5 text-faint transition-colors hover:bg-surface-2 hover:text-text-2"
-          >
-            <IconClose className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
+          <IconClose className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

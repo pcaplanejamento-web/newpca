@@ -9,7 +9,7 @@ import { ItemTable } from "@/components/ItemTable";
 import { KpiStat } from "@/components/KpiStat";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
-import { brl, num } from "@/lib/format";
+import { brl, brlCompact, num } from "@/lib/format";
 import {
   getAnos,
   getClassificacoes,
@@ -97,7 +97,7 @@ export default async function HomePage({
         </div>
 
         <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
-          <KpiStat label="Total Planejado" value={brl(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
+          <KpiStat label="Total Planejado" value={brlCompact(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
           <KpiStat
             label="Qtd. de Itens"
             value={num(resumo.count)}
@@ -107,7 +107,7 @@ export default async function HomePage({
           <KpiStat label="Ticket Médio" value={brl(resumo.ticket)} cor="var(--sit-em-analise)" hint="por item" />
           <KpiStat
             label="Maior Item"
-            value={brl(resumo.maiorValor)}
+            value={brlCompact(resumo.maiorValor)}
             cor="var(--sit-devolvido)"
             hint={resumo.maiorNome ?? "—"}
           />

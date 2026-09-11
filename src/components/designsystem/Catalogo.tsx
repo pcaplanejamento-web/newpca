@@ -93,13 +93,27 @@ const PROTOS: Proto[] = [
   { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", natureza: "EXCLUSÃO", responsavel: "Naty", situacao: "cancelado" },
 ];
 const COLUNAS: Column<Proto>[] = [
-  { key: "data", header: "Data", minWidth: 96, render: (r) => <span className="font-mono text-[12px] text-muted">{r.data}</span> },
-  { key: "id", header: "Protocolo", minWidth: 96, render: (r) => <span className="font-mono font-semibold text-text">{r.id}</span> },
+  {
+    key: "data",
+    header: "Data",
+    minWidth: 110,
+    filter: "date",
+    value: (r) => r.data.split("/").reverse().join("-"),
+    render: (r) => <span className="font-mono text-[12px] text-muted">{r.data}</span>,
+  },
+  {
+    key: "id",
+    header: "Protocolo",
+    minWidth: 100,
+    value: (r) => String(r.id),
+    render: (r) => <span className="font-mono font-semibold text-text">{r.id}</span>,
+  },
   {
     key: "orgao",
     header: "Órgão",
     minWidth: 220,
     filterOptions: ORGAOS,
+    value: (r) => r.orgao,
     render: (r) => (
       <div className="min-w-0">
         <div className="truncate font-medium text-text">{r.orgao}</div>
@@ -107,11 +121,18 @@ const COLUNAS: Column<Proto>[] = [
       </div>
     ),
   },
-  { key: "natureza", header: "Natureza", minWidth: 172, render: (r) => <NaturezaTag natureza={r.natureza} /> },
+  {
+    key: "natureza",
+    header: "Natureza",
+    minWidth: 172,
+    value: (r) => r.natureza,
+    render: (r) => <NaturezaTag natureza={r.natureza} />,
+  },
   {
     key: "responsavel",
     header: "Responsável",
     minWidth: 150,
+    value: (r) => r.responsavel || "—",
     render: (r) =>
       r.responsavel ? (
         <div className="flex items-center gap-2">
@@ -122,7 +143,13 @@ const COLUNAS: Column<Proto>[] = [
         <span className="text-faint">—</span>
       ),
   },
-  { key: "situacao", header: "Situação", minWidth: 130, render: (r) => <SituacaoDot situacao={r.situacao} label={SIT_LABEL[r.situacao] ?? "—"} /> },
+  {
+    key: "situacao",
+    header: "Situação",
+    minWidth: 130,
+    value: (r) => SIT_LABEL[r.situacao] ?? "—",
+    render: (r) => <SituacaoDot situacao={r.situacao} label={SIT_LABEL[r.situacao] ?? "—"} />,
+  },
 ];
 
 export function Catalogo() {
@@ -133,11 +160,6 @@ export function Catalogo() {
   const [framed, setFramed] = useState(false);
   const [device, setDevice] = useState("desktop");
   const [tsel, setTsel] = useState<Set<string | number>>(new Set());
-  const [tfilters, setTfilters] = useState<Record<string, string[]>>({});
-  const [tsort, setTsort] = useState<{ key: string | null; dir: "asc" | "desc" | null }>({
-    key: null,
-    dir: null,
-  });
 
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -311,19 +333,8 @@ export function Catalogo() {
           selectable
           selected={tsel}
           onSelected={setTsel}
-          filters={tfilters}
-          onFilter={(k, v) => setTfilters((f) => ({ ...f, [k]: v }))}
-          sortKey={tsort.key}
-          sortDir={tsort.dir}
-          onSort={(k, d) => setTsort({ key: k, dir: d })}
-          footer={
-            <>
-              <span>{tsel.size > 0 ? `${tsel.size} selecionada(s)` : `${PROTOS.length} protocolos`}</span>
-              <span className="font-mono">
-                1–{PROTOS.length} de {PROTOS.length}
-              </span>
-            </>
-          }
+          pageSize={4}
+          footer={tsel.size > 0 ? `${tsel.size} selecionada(s)` : undefined}
         />
       </Secao>
     </>

@@ -1,22 +1,30 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import { DateFilterHeader, type IntervaloData } from "./DateFilterHeader";
+import { IconChevronLeft, IconChevronRight } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 
-// Tabela do design system (spec §6.6 + pedido do usuário): seleção de linhas
-// (checkbox + selecionar todos) e filtro/ordenação no cabeçalho (MultiSelectHeader).
-// Por token; rola horizontalmente no mobile (o container não estoura a página).
+// Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
+// **filtro em TODOS os cabeçalhos** (multi-select por padrão; **filtro de datas**
+// nas colunas de data), ordenação e **paginação** — tudo interno. Por token; rola
+// no mobile sem estourar a página.
 export type Column<R> = {
   key: string;
   header: string;
   render?: (row: R) => ReactNode;
   align?: "left" | "right";
-  sortable?: boolean;
+  /** "values" (padrão), "date" (intervalo DE/ATÉ) ou "none" (sem filtro). */
+  filter?: "values" | "date" | "none";
+  /** Opções fixas do multi-select; se omitido, derivadas de `value`. */
   filterOptions?: string[];
+  /** Valor textual da célula: p/ derivar opções, ordenar e filtrar (datas em ISO). */
+  value?: (row: R) => string;
   minWidth?: number;
 };
 
 type Key = string | number;
+type FiltroValor = string[] | IntervaloData;
 
 export function DataTable<R>({
   columns,
@@ -25,13 +33,9 @@ export function DataTable<R>({
   selectable = false,
   selected,
   onSelected,
-  sortKey = null,
-  sortDir = null,
-  onSort,
-  filters = {},
-  onFilter,
-  minWidth = 720,
+  pageSize,
   footer,
+  minWidth = 720,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -39,21 +43,78 @@ export function DataTable<R>({
   selectable?: boolean;
   selected?: Set<Key>;
   onSelected?: (s: Set<Key>) => void;
-  sortKey?: string | null;
-  sortDir?: "asc" | "desc" | null;
-  onSort?: (key: string, dir: "asc" | "desc") => void;
-  filters?: Record<string, string[]>;
-  onFilter?: (key: string, values: string[]) => void;
-  minWidth?: number;
+  pageSize?: number;
   footer?: ReactNode;
+  minWidth?: number;
 }) {
-  const sel = selected ?? new Set<Key>();
-  const todos = rows.length > 0 && rows.every((r) => sel.has(getKey(r)));
+  const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
+  const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
+  const [page, setPage] = useState(1);
 
+  const opcoes = useMemo(() => {
+    const o: Record<string, string[]> = {};
+    for (const c of columns) {
+      if ((c.filter ?? "values") === "values") {
+        o[c.key] = c.filterOptions ??
+          (c.value ? [...new Set(rows.map((r) => c.value?.(r) ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")) : []);
+      }
+    }
+    return o;
+  }, [columns, rows]);
+
+  const filtradas = useMemo(() => {
+    return rows.filter((r) => {
+      for (const c of columns) {
+        const f = filters[c.key];
+        if (!f || !c.value) continue;
+        if ((c.filter ?? "values") === "date" && !Array.isArray(f)) {
+          const v = c.value(r);
+          if (f.de && v < f.de) return false;
+          if (f.ate && v > f.ate) return false;
+        } else if (Array.isArray(f) && f.length > 0) {
+          const opts = opcoes[c.key] ?? [];
+          if (f.length < opts.length && !f.includes(c.value(r))) return false;
+        }
+      }
+      return true;
+    });
+  }, [rows, columns, filters, opcoes]);
+
+  const ordenadas = useMemo(() => {
+    if (!sort.key) return filtradas;
+    const col = columns.find((c) => c.key === sort.key);
+    if (!col?.value) return filtradas;
+    const getV = col.value;
+    const arr = [...filtradas].sort((a, b) => {
+      const va = getV(a);
+      const vb = getV(b);
+      const na = Number(va);
+      const nb = Number(vb);
+      const cmp =
+        va !== "" && vb !== "" && !Number.isNaN(na) && !Number.isNaN(nb)
+          ? na - nb
+          : va.localeCompare(vb, "pt-BR");
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtradas, sort, columns]);
+
+  const total = ordenadas.length;
+  const pages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+  const pg = Math.min(page, pages);
+  const visiveis = pageSize ? ordenadas.slice((pg - 1) * pageSize, pg * pageSize) : ordenadas;
+
+  const sel = selected ?? new Set<Key>();
+  const todos = visiveis.length > 0 && visiveis.every((r) => sel.has(getKey(r)));
+
+  function aplicarFiltro(key: string, v: FiltroValor) {
+    setFilters((f) => ({ ...f, [key]: v }));
+    setPage(1);
+  }
   function alternarTodos() {
     const n = new Set(sel);
-    if (todos) for (const r of rows) n.delete(getKey(r));
-    else for (const r of rows) n.add(getKey(r));
+    if (todos) for (const r of visiveis) n.delete(getKey(r));
+    else for (const r of visiveis) n.add(getKey(r));
     onSelected?.(n);
   }
   function alternar(k: Key) {
@@ -65,6 +126,7 @@ export function DataTable<R>({
 
   const cell = "px-[var(--cell-px)] py-[var(--cell-py)] align-middle";
   const head = "px-[var(--cell-px)] py-3 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint";
+  const sortDe = (k: string) => (sort.key === k ? sort.dir : null);
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-surface shadow-ring">
@@ -83,40 +145,44 @@ export function DataTable<R>({
                   />
                 </th>
               )}
-              {columns.map((c) => (
-                <th
-                  key={c.key}
-                  className={`${head} ${c.align === "right" ? "text-right" : "text-left"}`}
-                  style={c.minWidth ? { minWidth: c.minWidth } : undefined}
-                >
-                  {c.filterOptions ? (
-                    <MultiSelectHeader
-                      label={c.header}
-                      options={c.filterOptions}
-                      value={filters[c.key] ?? []}
-                      onApply={(v) => onFilter?.(c.key, v)}
-                      onSort={onSort ? (d) => onSort(c.key, d) : undefined}
-                      sortDir={sortKey === c.key ? sortDir : null}
-                      align={c.align === "right" ? "end" : "start"}
-                    />
-                  ) : c.sortable && onSort ? (
-                    <button
-                      type="button"
-                      onClick={() => onSort(c.key, sortKey === c.key && sortDir === "asc" ? "desc" : "asc")}
-                      className="inline-flex items-center gap-1 uppercase tracking-[0.05em] hover:text-text-2"
-                    >
-                      {c.header}
-                      {sortKey === c.key && <span aria-hidden>{sortDir === "asc" ? "▲" : "▼"}</span>}
-                    </button>
-                  ) : (
-                    <span>{c.header}</span>
-                  )}
-                </th>
-              ))}
+              {columns.map((c) => {
+                const tipo = c.filter ?? "values";
+                const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
+                return (
+                  <th
+                    key={c.key}
+                    className={`${head} ${c.align === "right" ? "text-right" : "text-left"}`}
+                    style={c.minWidth ? { minWidth: c.minWidth } : undefined}
+                  >
+                    {tipo === "date" ? (
+                      <DateFilterHeader
+                        label={c.header}
+                        value={filters[c.key] as IntervaloData}
+                        onApply={(v) => aplicarFiltro(c.key, v)}
+                        onSort={(d) => setSort({ key: c.key, dir: d })}
+                        sortDir={sortDe(c.key)}
+                        align={alinha}
+                      />
+                    ) : tipo === "values" && (opcoes[c.key]?.length ?? 0) > 0 ? (
+                      <MultiSelectHeader
+                        label={c.header}
+                        options={opcoes[c.key]}
+                        value={(filters[c.key] as string[]) ?? []}
+                        onApply={(v) => aplicarFiltro(c.key, v)}
+                        onSort={(d) => setSort({ key: c.key, dir: d })}
+                        sortDir={sortDe(c.key)}
+                        align={alinha}
+                      />
+                    ) : (
+                      <span>{c.header}</span>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {visiveis.map((r) => {
               const k = getKey(r);
               const marcada = sel.has(k);
               return (
@@ -148,21 +214,46 @@ export function DataTable<R>({
                 </tr>
               );
             })}
-            {rows.length === 0 && (
+            {visiveis.length === 0 && (
               <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-12 text-center text-[13px] text-faint">
-                  Nenhum registro.
+                <td
+                  colSpan={columns.length + (selectable ? 1 : 0)}
+                  className="px-4 py-12 text-center text-[13px] text-faint"
+                >
+                  Nenhum registro com os filtros atuais.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      {footer && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted">
-          {footer}
-        </div>
-      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted">
+        <span>{footer ?? `${total} registro${total === 1 ? "" : "s"}`}</span>
+        {pageSize && pages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={pg <= 1}
+              onClick={() => setPage(pg - 1)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface"
+            >
+              <IconChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="px-2 tabular-nums">
+              {pg} / {pages}
+            </span>
+            <button
+              type="button"
+              disabled={pg >= pages}
+              onClick={() => setPage(pg + 1)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface"
+            >
+              <IconChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
