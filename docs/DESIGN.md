@@ -51,3 +51,24 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 
 ## Verificação
 Testar cada tela em **375px** e **≥1280px**, nos **dois temas**: sidebar↔bottom-nav, tabela↔cards, botão↔FAB, modal↔bottom-sheet.
+
+## Design System por tokens (Fase 4) — componentes desta fase
+Biblioteca única em `/design-system` (`Catalogo`). **Só se usa componente do DS**; nenhum
+componente fixa cor **neutra** (só `var(--token)`); a única hex crua é **semântica/dados**.
+- **Campos** (`src/components/Field.tsx`): `TextField`, `PasswordField` (cadeado + olho),
+  `SearchField` (busca + limpar) e `Checkbox` — rótulo forte, ícone à esquerda, **anel de
+  foco accent** (glow), superfície preenchida, toque ≥44px. Referência viva: tela de acesso
+  (`AuthForm`, login/cadastro).
+- **Button**: variante **`accent`** (preenchida + `shadow-accent`) para CTAs; primária segue
+  neutra (`--text`).
+- **Dropdown** (base de todos os popovers): renderiza em **portal** (`position: fixed`) e
+  **abre para cima/baixo** limitando a altura à viewport — filtros/menus **nunca cortados**.
+- **Filtro de data** das tabelas = **mesmo** seletor de Período (`PeriodoCorpo`: presets +
+  ano + meses + intervalo) + ordenar. `DataTable` deriva os anos por coluna.
+- **Gráficos** (`charts/`): eixos/grade/cursor **lidos dos tokens** via `useChartTokens()`
+  (reavalia ao trocar tema ou no preview do ADM); séries na paleta `CHART_COLORS`.
+- **Controle do ADM** (`/painel/aparencia` + Theme Playground): cores (claro/escuro), raio,
+  densidade, motion, **elevação dos cards** (Anel `--ring` ↔ Sombra suave `--shadow-soft`,
+  via `:root[data-elevation=soft]`) e **estilo dos KPIs** (Contorno ↔ Preenchido, via
+  `[data-kpi=filled] .kpi-card` com `color-mix` na cor do KPI). Injeção server-side sem flash
+  (`layout.tsx`) + validação Zod (allowlist anti-XSS em `lib/theme.ts`).
