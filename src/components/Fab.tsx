@@ -19,7 +19,7 @@ export function Fab({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="fixed bottom-[4.75rem] right-4 z-30 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/30 transition active:scale-95 hover:bg-emerald-700 lg:hidden"
+      className="fixed bottom-[4.75rem] right-4 z-30 inline-flex items-center gap-2 rounded-full bg-text px-5 py-3.5 text-sm font-semibold text-surface shadow-soft transition active:scale-95 hover:opacity-90 lg:hidden"
     >
       {icon ?? <IconPlus className="h-5 w-5" />}
       {label}

@@ -232,7 +232,7 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
           <button
             type="submit"
             disabled={salvando}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
           >
             {salvando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconSave className="h-[18px] w-[18px]" />}
             Salvar
@@ -264,7 +264,7 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
           <button
             type="submit"
             disabled={trocando}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
           >
             {trocando ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconKey className="h-[18px] w-[18px]" />}
             Trocar senha

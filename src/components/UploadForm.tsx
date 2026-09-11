@@ -127,7 +127,7 @@ export function UploadForm() {
     return (
       <div className="animate-fade-in-up rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-500/30 dark:bg-emerald-500/10">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-surface">
             <IconCheck className="h-6 w-6" />
           </div>
           <div>
@@ -142,7 +142,7 @@ export function UploadForm() {
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-900/40">
             <div className="text-xs text-slate-500 dark:text-slate-400">Itens</div>
-            <div className="text-lg font-bold text-slate-800 dark:text-white">
+            <div className="text-lg font-bold text-slate-800 dark:text-surface">
               {num(resultado.totalItens)}
             </div>
           </div>
@@ -150,7 +150,7 @@ export function UploadForm() {
             <div className="text-xs text-slate-500 dark:text-slate-400">
               Valor total
             </div>
-            <div className="text-lg font-bold text-slate-800 dark:text-white">
+            <div className="text-lg font-bold text-slate-800 dark:text-surface">
               {brl(resultado.valorTotal)}
             </div>
           </div>
@@ -158,7 +158,7 @@ export function UploadForm() {
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
           >
             Ver no dashboard
           </Link>
@@ -214,7 +214,7 @@ export function UploadForm() {
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90"
         >
           <IconFile className="h-[18px] w-[18px]" />
           Escolher arquivo .xlsx
@@ -260,7 +260,7 @@ export function UploadForm() {
             <div className="text-xs text-slate-500 dark:text-slate-400">
               Valor total estimado
             </div>
-            <div className="text-xl font-bold text-slate-800 dark:text-white">
+            <div className="text-xl font-bold text-slate-800 dark:text-surface">
               {brl(preview.total)}
             </div>
           </div>
@@ -269,7 +269,7 @@ export function UploadForm() {
               type="button"
               disabled={status === "sending"}
               onClick={enviar}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
             >
               {status === "sending" ? (
                 <>

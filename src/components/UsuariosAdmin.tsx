@@ -224,7 +224,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
                           type="button"
                           disabled={busy}
                           onClick={() => patch(u.id, { status: "ativo" })}
-                          className={`${btn} inline-flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-700`}
+                          className={`${btn} inline-flex items-center gap-1 bg-text text-surface hover:opacity-90`}
                         >
                           <IconCheck className="h-3.5 w-3.5" /> Aprovar
                         </button>
@@ -294,7 +294,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             <button
               type="submit"
               disabled={salvandoEd}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-text px-4 py-2.5 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
             >
               {salvandoEd ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconSave className="h-[18px] w-[18px]" />}
               Salvar

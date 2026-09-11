@@ -48,10 +48,10 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
   if (pendente) {
     return (
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-surface">
           <IconCheck className="h-6 w-6" />
         </div>
-        <h2 className="mt-4 text-lg font-bold text-slate-800 dark:text-white">
+        <h2 className="mt-4 text-lg font-bold text-slate-800 dark:text-surface">
           Conta criada!
         </h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
@@ -60,7 +60,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
         </p>
         <Link
           href="/login"
-          className="mt-5 inline-block text-sm font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+          className="mt-5 inline-block text-sm font-semibold text-accent hover:underline"
         >
           Voltar para o login
         </Link>
@@ -74,10 +74,10 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
       className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900"
     >
       <div className="mb-6 flex flex-col items-center text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-700 text-base font-black text-white shadow-sm">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-text text-base font-black text-surface shadow-sm">
           RV
         </div>
-        <h1 className="mt-3 text-lg font-bold text-slate-900 dark:text-white">
+        <h1 className="mt-3 text-lg font-bold text-slate-900 dark:text-surface">
           {isCad ? "Criar conta" : "Entrar na plataforma"}
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -143,7 +143,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
       <button
         type="submit"
         disabled={loading}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-text px-4 py-3 text-sm font-semibold text-surface transition hover:opacity-90 disabled:opacity-60"
       >
         {loading ? (
           <IconSpinner className="h-[18px] w-[18px]" />
@@ -158,7 +158,7 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
         {isCad ? "Já tem conta?" : "Ainda não tem conta?"}{" "}
         <Link
           href={isCad ? "/login" : "/cadastro"}
-          className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+          className="font-semibold text-accent hover:underline"
         >
           {isCad ? "Entrar" : "Criar conta"}
         </Link>
