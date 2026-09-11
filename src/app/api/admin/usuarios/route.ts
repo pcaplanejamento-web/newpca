@@ -17,6 +17,8 @@ export async function GET() {
       id: usuarios.id,
       nome: usuarios.nome,
       email: usuarios.email,
+      matricula: usuarios.matricula,
+      foto: usuarios.foto,
       role: usuarios.role,
       status: usuarios.status,
       criadoEm: usuarios.criadoEm,

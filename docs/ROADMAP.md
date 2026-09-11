@@ -20,9 +20,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 | | Item |
 |---|---|
 | ✅ | Login, cadastro, sessão, aprovação de cadastros pelo admin |
-| 🔜 | **Times/Secretarias**: vincular usuários a setores; filtrar dados por time |
-| 🔜 | **Permissões finas** (RBAC): o que cada papel pode ver/editar por módulo |
-| 🔜 | **Perfil do usuário**: editar nome, trocar senha, foto/avatar |
+| ✅ | **Perfil do usuário**: editar nome, e-mail, **matrícula**, trocar senha e **foto** (base64, redimensionada no cliente) — a foto reflete no avatar do menu. Admin edita esses dados em Usuários. |
+| 🔜 | **Times/Secretarias**: vincular usuários a setores; filtrar dados por time (dados separados por equipe) |
+| 🔜 | **Permissões finas** (RBAC): níveis de acesso configuráveis → telas por equipe |
 | 💡 | Convite por e-mail · Recuperação de senha · 2FA · Login Google (SSO) |
 | 💡 | **Auditoria**: registro de quem fez o quê (login, edições, exclusões) |
 

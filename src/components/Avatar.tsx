@@ -1,4 +1,9 @@
-// Avatar com iniciais + cor determinística (mesma pessoa → mesma cor).
+"use client";
+
+import { useState } from "react";
+
+// Avatar: mostra a foto cadastrada; sem foto (ou se falhar o carregamento),
+// cai para as iniciais com cor determinística (mesma pessoa → mesma cor).
 const CORES = [
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
   "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
@@ -27,17 +32,35 @@ const DIM = {
   sm: "h-7 w-7 text-[10px]",
   md: "h-8 w-8 text-xs",
   lg: "h-10 w-10 text-sm",
+  xl: "h-20 w-20 text-xl",
 } as const;
 
 export function Avatar({
   nome,
+  foto,
   size = "md",
   className = "",
 }: {
   nome: string;
+  foto?: string | null;
   size?: keyof typeof DIM;
   className?: string;
 }) {
+  const [erro, setErro] = useState(false);
+
+  if (foto && !erro) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={foto}
+        alt={nome}
+        title={nome}
+        onError={() => setErro(true)}
+        className={`${DIM[size]} shrink-0 rounded-full object-cover ${className}`}
+      />
+    );
+  }
+
   const cor = CORES[hash(nome) % CORES.length];
   return (
     <div

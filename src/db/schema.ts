@@ -68,6 +68,8 @@ export const usuarios = sqliteTable(
     email: text("email").notNull(),
     nome: text("nome").notNull(),
     senhaHash: text("senha_hash").notNull(),
+    matricula: text("matricula"),
+    foto: text("foto"), // data-URL base64 (avatar redimensionado no cliente)
     role: text("role", { enum: ["admin", "gestor", "membro"] })
       .notNull()
       .default("membro"),

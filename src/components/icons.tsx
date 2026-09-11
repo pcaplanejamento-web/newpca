@@ -6,6 +6,7 @@ import {
   ArrowUpDown,
   Bell,
   Building2,
+  Camera,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -14,7 +15,9 @@ import {
   Clock,
   FileText,
   Filter,
+  Image as ImageIcon,
   Inbox,
+  KeyRound,
   Layers,
   LayoutDashboard,
   Loader2,
@@ -24,6 +27,7 @@ import {
   Package,
   Pencil,
   Plus,
+  Save,
   Search,
   Shield,
   Sun,
@@ -73,6 +77,10 @@ export const IconFilter = Filter;
 export const IconTrash = Trash2;
 export const IconPencil = Pencil;
 export const IconChevronDown = ChevronDown;
+export const IconCamera = Camera;
+export const IconKey = KeyRound;
+export const IconImage = ImageIcon;
+export const IconSave = Save;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

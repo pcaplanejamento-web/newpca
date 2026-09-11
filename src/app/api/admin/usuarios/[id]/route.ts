@@ -1,15 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { getUsuarioAtual } from "@/lib/auth";
+import { adminUsuarioSchema } from "@/lib/auth-validation";
 
 export const dynamic = "force-dynamic";
-
-const ROLES = ["admin", "gestor", "membro"] as const;
-const STATUS = ["ativo", "pendente", "inativo"] as const;
-type Role = (typeof ROLES)[number];
-type Status = (typeof STATUS)[number];
 
 async function exigirAdmin() {
   const atual = await getUsuarioAtual();
@@ -30,31 +26,19 @@ export async function PATCH(
     return NextResponse.json({ ok: false, error: "ID inválido." }, { status: 400 });
   }
 
-  let body: { role?: string; status?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido." }, { status: 400 });
+  const parsed = adminUsuarioSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+      { status: 422 },
+    );
   }
-
-  const set: { role?: Role; status?: Status; atualizadoEm: ReturnType<typeof sql> } = {
-    atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-  };
-  if (body.role !== undefined) {
-    if (!ROLES.includes(body.role as Role))
-      return NextResponse.json({ ok: false, error: "Papel inválido." }, { status: 422 });
-    set.role = body.role as Role;
-  }
-  if (body.status !== undefined) {
-    if (!STATUS.includes(body.status as Status))
-      return NextResponse.json({ ok: false, error: "Status inválido." }, { status: 422 });
-    set.status = body.status as Status;
-  }
+  const { nome, email, matricula, role, status } = parsed.data;
 
   // Impede o admin de remover o próprio acesso (evita lockout).
   if (
     id === atual.id &&
-    ((set.role && set.role !== "admin") || (set.status && set.status !== "ativo"))
+    ((role && role !== "admin") || (status && status !== "ativo"))
   ) {
     return NextResponse.json(
       { ok: false, error: "Você não pode remover o próprio acesso de administrador." },
@@ -62,7 +46,31 @@ export async function PATCH(
     );
   }
 
-  await getDb().update(usuarios).set(set).where(eq(usuarios.id, id));
+  const db = getDb();
+
+  // E-mail é único: rejeita se já pertence a outro usuário.
+  if (email !== undefined) {
+    const [dono] = await db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(and(eq(usuarios.email, email), ne(usuarios.id, id)))
+      .limit(1);
+    if (dono)
+      return NextResponse.json(
+        { ok: false, error: "Este e-mail já está em uso." },
+        { status: 409 },
+      );
+  }
+
+  const set = {
+    ...(nome !== undefined ? { nome } : {}),
+    ...(email !== undefined ? { email } : {}),
+    ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
+    ...(role !== undefined ? { role } : {}),
+    ...(status !== undefined ? { status } : {}),
+    atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+  };
+  await db.update(usuarios).set(set).where(eq(usuarios.id, id));
   return NextResponse.json({ ok: true });
 }
 

@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { inputCls } from "./formStyles";
 import { IconAlert, IconCheck, IconSpinner } from "./icons";
-
-const inputCls =
-  "w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-emerald-500/20";
 
 export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
   const router = useRouter();

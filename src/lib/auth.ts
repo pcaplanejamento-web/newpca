@@ -22,6 +22,8 @@ export type UsuarioSessao = {
   id: number;
   email: string;
   nome: string;
+  matricula: string | null;
+  foto: string | null;
   role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
 };
@@ -83,6 +85,30 @@ export async function verificarSenha(senha: string, armazenado: string): Promise
   return iguaisEmTempoConstante(hash, hashHex);
 }
 
+/**
+ * Troca a senha do usuário: confere a senha atual e grava o novo hash.
+ * Retorna `false` se a senha atual estiver incorreta (o chamado decide a msg).
+ */
+export async function atualizarSenha(
+  usuarioId: number,
+  atual: string,
+  nova: string,
+): Promise<boolean> {
+  const db = getDb();
+  const [row] = await db
+    .select({ senhaHash: usuarios.senhaHash })
+    .from(usuarios)
+    .where(eq(usuarios.id, usuarioId))
+    .limit(1);
+  if (!row || !(await verificarSenha(atual, row.senhaHash))) return false;
+  const novoHash = await hashSenha(nova);
+  await db
+    .update(usuarios)
+    .set({ senhaHash: novoHash, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(usuarios.id, usuarioId));
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // sessões
 // ---------------------------------------------------------------------------
@@ -126,6 +152,8 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       id: usuarios.id,
       email: usuarios.email,
       nome: usuarios.nome,
+      matricula: usuarios.matricula,
+      foto: usuarios.foto,
       role: usuarios.role,
       status: usuarios.status,
     })

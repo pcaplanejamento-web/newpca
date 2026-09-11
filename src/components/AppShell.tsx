@@ -165,7 +165,7 @@ function UserMenu({ usuario }: { usuario: UsuarioSessao }) {
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-center gap-2">
-        <Avatar nome={usuario.nome} />
+        <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="min-w-0">
           <div
             className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100"
@@ -318,7 +318,7 @@ export function AppShell({
             <SinoNotificacoes />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="lg:hidden">
-              <Avatar nome={usuario.nome} size="sm" />
+              <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
             </Link>
           </div>
         </header>
