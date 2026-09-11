@@ -54,7 +54,7 @@ const SECOES: NavSecao[] = [
     titulo: "Administração",
     itens: [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
-      { href: "/painel/equipes", label: "Equipes", Icon: IconUsers, roles: ["admin", "gestor"] },
+      { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, roles: ["admin"] },
       { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
     ],

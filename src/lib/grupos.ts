@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
+import { ABAS } from "./abas";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 
@@ -11,14 +12,6 @@ import { getDb } from "./db";
  * permissão de abas (vê todas), mas os dados seguem o grupo ativo.
  */
 const COOKIE_GRUPO = "pca_grupo";
-
-/** Abas de módulo que uma permissão pode liberar (gate de navegação). */
-export const ABAS = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "protocolos", label: "Protocolos" },
-  { key: "pca", label: "PCA" },
-] as const;
-export type AbaKey = (typeof ABAS)[number]["key"];
 
 export type GrupoResumo = { id: number; nome: string; permissaoId: number | null };
 
