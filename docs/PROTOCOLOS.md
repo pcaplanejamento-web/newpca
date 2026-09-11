@@ -1,12 +1,17 @@
 # Protocolos
 
-O módulo **Protocolos** (`/painel/protocolos`) digitaliza a planilha
-"Distribuição de Protocolos". É um módulo **curado** (campos fixos + opções
-gerenciáveis), com apresentação responsiva (tabela no desktop, cards no mobile).
+A página **Protocolos** (`/painel/protocolos`) tem **duas abas** (seletor
+`ProtocolosTabs`, `?aba=`):
 
-> O **construtor de tabelas dinâmicas** genérico (listas com colunas livres)
-> continua existindo, agora em **Ferramentas → Tabelas dinâmicas**
-> (`/painel/ferramentas/tabelas`). Ver [DESIGN.md](./DESIGN.md).
+1. **Protocolos** — módulo **curado** (campos fixos + opções gerenciáveis) que
+   digitaliza a planilha "Distribuição de Protocolos", responsivo (tabela no
+   desktop, cards no mobile).
+2. **Tabelas** — o **construtor de tabelas dinâmicas** genérico (listas com
+   colunas livres), **como antes**: `TabelasIndex` (cards) → editor em
+   `/painel/protocolos/tabelas/[id]` (`TabelaEditor`).
+
+> O construtor genérico ficava em `/painel/ferramentas/tabelas`; foi consolidado
+> aqui, dentro de Protocolos. Ver [DESIGN.md](./DESIGN.md).
 
 ## Modelo de dados (migração `0006`)
 - **`protocolos`** — `numero` (obrigatório), `data`, `orgao`, `orgao_sigla`,
@@ -42,5 +47,7 @@ Todos os usuários ativos **visualizam**; **admin/gestor** criam, editam e exclu
   `PATCH/DELETE /api/protocolos/[id]` · `POST/DELETE /api/protocolos/opcoes`.
 
 ## Componentes
-`ProtocolosView` (orquestra), `ProtocoloCard` (mobile), `NovoProtocoloModal`
-(+ `CampoSelecao`), reutilizando `StatCard`, `Badge`, `Avatar`, `Fab`.
+`ProtocolosTabs` (seletor Protocolos/Tabelas) → `ProtocolosView` (orquestra o
+módulo curado) + `TabelasIndex`/`TabelaEditor` (construtor genérico).
+`ProtocoloCard` (mobile), `NovoProtocoloModal` (+ `CampoSelecao`), reutilizando
+`StatCard`, `Badge`, `Avatar`, `Fab`.

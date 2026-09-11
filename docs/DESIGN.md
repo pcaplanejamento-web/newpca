@@ -30,6 +30,7 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - `Fab` — ação flutuante (só mobile; acima da bottom-nav). No desktop a ação fica no cabeçalho.
 - `EmConstrucao` / `AcessoRestrito` — estados padrão para abas em desenvolvimento / sem permissão.
 - `KpiCard` — tile colorido em gradiente (dashboard do PCA). Distinto do `StatCard` (plano).
+- **Abas in-page (segmented control)** — seletor de modo dentro de uma página (ex.: `ProtocolosTabs`: *Protocolos* ↔ *Tabelas*): pílulas num trilho `rounded-xl`, **largura total no mobile** (`w-full`) e compacto no desktop (`sm:w-auto sm:inline-flex`); ativo com `bg-white`/`dark:bg-slate-900` + sombra.
 
 ## Filtros
 - Sempre visíveis: busca (cresce) + botão **Filtros** (abre avançado) + **chips** de situação roláveis.

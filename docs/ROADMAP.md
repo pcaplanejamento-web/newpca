@@ -12,7 +12,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
 ### Fase 1 (padrão de design + navegação) — entregue
-✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** curado (filtros, busca, paginação, CRUD, opções inline) · ✅ **Ferramentas** (Dashboard do PCA + Importar + Tabelas dinâmicas movidos para cá) · ✅ guarda de auth em `/api/itens` e `/api/upload` · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
+✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** com 2 abas: *Protocolos* curado (filtros, busca, paginação, CRUD, opções inline) + *Tabelas* (construtor de tabelas dinâmicas, como antes) · ✅ **Ferramentas** (Dashboard do PCA + Importar) · ✅ guarda de auth em `/api/itens` e `/api/upload` · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
 
 ---
 
