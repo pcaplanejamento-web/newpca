@@ -1,10 +1,8 @@
 // Skeleton com shimmer, reutilizável (apresentação — sem estado).
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
-    <div
-      className={`relative overflow-hidden rounded-md bg-slate-200/70 dark:bg-slate-700/40 ${className}`}
-    >
-      <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-white/10" />
+    <div className={`relative overflow-hidden rounded-md bg-border ${className}`}>
+      <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10" />
     </div>
   );
 }

@@ -7,14 +7,12 @@ export function AcessoRestrito({
   mensagem?: string;
 }) {
   return (
-    <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
+    <div className="mx-auto max-w-lg rounded-card border border-border bg-surface p-8 text-center shadow-ring">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-card bg-surface-2 text-faint">
         <IconShield className="h-7 w-7" />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-slate-800 dark:text-white">
-        Acesso restrito
-      </h2>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{mensagem}</p>
+      <h2 className="mt-4 text-lg font-bold text-text">Acesso restrito</h2>
+      <p className="mt-2 text-sm text-muted">{mensagem}</p>
     </div>
   );
 }

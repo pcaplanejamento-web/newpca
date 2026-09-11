@@ -20,6 +20,17 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login; `GET /api/itens` liberado) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
+✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
+**`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField
+[conta-gotas+swatches], PeriodoPicker, MultiSelectHeader, Tabs [swipe], Toast, DataTable
+[seleção+filtro], ícones) + **Theme Playground** + preview mobile · ✅ **Home pública
+redesenhada** (tokens/Geist) · ✅ **Painel de Aparência do ADM** (`/painel/aparencia`):
+cores claro/escuro, raio, densidade, motion, presets; **persistido no D1** e **injetado sem
+flash** (anti-XSS) · ✅ **Chrome do painel** (AppShell/nav/inputs) por token · 🔨 Propagação do
+redesign ao conteúdo das telas logadas (Protocolos [status ✅], Dashboard, Usuários, Ferramentas).
+Regras em [../CLAUDE.md](../CLAUDE.md); a `/design-system` é a **fonte única** de componentes.
+
 ---
 
 ## 1. Acesso, Usuários e Equipe (Fase 1 — continuar)
@@ -89,6 +100,7 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | | Item |
 |---|---|
 | ✅ | Gestão de usuários (aprovar, papel, ativar/excluir) |
+| ✅ | **Aparência (Personalização §39)**: Design Tokens + painel do ADM (`/painel/aparencia`) — cores/raio/densidade/motion + presets, persistido no D1 e injetado sem flash |
 | 🔜 | Configurações da plataforma (ano do PCA, secretarias, listas) |
 | 💡 | Painel de auditoria e uso |
 
