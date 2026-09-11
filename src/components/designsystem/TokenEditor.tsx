@@ -30,6 +30,8 @@ export function TokenEditor() {
   const [radius, setRadius] = useState(14);
   const [density, setDensity] = useState("default");
   const [motion, setMotion] = useState("default");
+  const [elevation, setElevation] = useState("ring");
+  const [kpi, setKpi] = useState("outline");
   useEffect(() => setMounted(true), []);
 
   const tema = mounted && resolvedTheme === "dark" ? "dark" : "light";
@@ -49,16 +51,26 @@ export function TokenEditor() {
     if (v === "default") root().removeAttribute(a);
     else root().setAttribute(a, v);
   }
+  // Elevação (ring/soft) e KPIs (outline/filled): o valor "padrão" remove o attr.
+  function attrPadrao(a: string, v: string, padrao: string, set: (s: string) => void) {
+    set(v);
+    if (v === padrao) root().removeAttribute(a);
+    else root().setAttribute(a, v);
+  }
   function resetar() {
     for (const p of ["--accent", "--radius-card", "--radius-control", "--radius-chip"]) {
       root().style.removeProperty(p);
     }
     root().removeAttribute("data-density");
     root().removeAttribute("data-motion");
+    root().removeAttribute("data-elevation");
+    root().removeAttribute("data-kpi");
     setAccent("#4f46e5");
     setRadius(14);
     setDensity("default");
     setMotion("default");
+    setElevation("ring");
+    setKpi("outline");
   }
 
   return (
@@ -114,6 +126,28 @@ export function TokenEditor() {
               { value: "compact", label: "Compacta" },
               { value: "default", label: "Padrão" },
               { value: "comfortable", label: "Confortável" },
+            ]}
+          />
+        </Campo>
+
+        <Campo titulo="Elevação dos cards">
+          <Segmented
+            value={elevation}
+            onChange={(v) => attrPadrao("data-elevation", v, "ring", setElevation)}
+            options={[
+              { value: "ring", label: "Anel" },
+              { value: "soft", label: "Sombra suave" },
+            ]}
+          />
+        </Campo>
+
+        <Campo titulo="Estilo dos KPIs">
+          <Segmented
+            value={kpi}
+            onChange={(v) => attrPadrao("data-kpi", v, "outline", setKpi)}
+            options={[
+              { value: "outline", label: "Contorno" },
+              { value: "filled", label: "Preenchido" },
             ]}
           />
         </Campo>

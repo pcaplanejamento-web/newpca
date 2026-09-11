@@ -7,13 +7,14 @@ import { IconSpinner } from "./icons";
 // Botão do design system (spec §6.8), 100% por token. Substitui a recipe
 // `bg-emerald-600 …` repetida. Primário = ação neutra (--text); ícone/secundário
 // em superfície. Altura pela densidade (--h-control); foco visível.
-type Variant = "primary" | "secondary" | "icon" | "ghost";
+type Variant = "primary" | "secondary" | "icon" | "ghost" | "accent";
 
 const VARIANT: Record<Variant, string> = {
   primary: "bg-text text-surface hover:opacity-90",
   secondary: "border border-border-2 bg-surface text-text hover:bg-surface-2",
   icon: "border border-border-2 bg-surface text-text-2 hover:bg-surface-2",
   ghost: "text-text-2 hover:bg-surface-2",
+  accent: "bg-accent text-white shadow-accent hover:brightness-[1.06]",
 };
 
 type Props = {

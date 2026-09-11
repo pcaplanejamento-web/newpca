@@ -31,6 +31,10 @@ export type Aparencia = {
   radius?: number;
   density?: "compact" | "default" | "comfortable";
   motion?: "off" | "reduced" | "default" | "smooth";
+  /** Elevação dos cards: "ring" (anel/sombra padrão) ou "soft" (sombra suave). */
+  elevation?: "ring" | "soft";
+  /** Estilo dos KPIs: "outline" (contorno, padrão) ou "filled" (preenchido). */
+  kpi?: "outline" | "filled";
   identidade?: { nome?: string; subtitulo?: string; favicon?: string };
 };
 

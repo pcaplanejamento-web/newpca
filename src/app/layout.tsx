@@ -33,6 +33,8 @@ export default async function RootLayout({
       className={`${GeistSans.variable} ${GeistMono.variable}`}
       data-density={aparencia.density || undefined}
       data-motion={aparencia.motion || undefined}
+      data-elevation={aparencia.elevation === "soft" ? "soft" : undefined}
+      data-kpi={aparencia.kpi === "filled" ? "filled" : undefined}
       suppressHydrationWarning
     >
       <body>

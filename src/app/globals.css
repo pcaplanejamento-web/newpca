@@ -146,6 +146,24 @@
   }
 }
 
+/* Elevação dos cards (ADM §39): "ring" (padrão) ↔ "soft" (sombra suave).
+   Troca global — todo card com shadow-ring reflete de uma vez. */
+:root[data-elevation="soft"] {
+  --ring: var(--shadow-soft);
+}
+
+/* KPIs preenchidos (ADM §39): tinta sutil na cor do próprio KPI (color-mix
+   nativo, adapta a tema e ao accent do ADM). "outline" = padrão (sem regra). */
+[data-kpi="filled"] .kpi-card {
+  background-color: color-mix(in srgb, var(--kpi-accent, var(--accent)) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--kpi-accent, var(--accent)) 26%, var(--border));
+}
+
+/* Glow accent do CTA (prints do login) — sombra tingida pela cor de destaque. */
+.shadow-accent {
+  box-shadow: 0 10px 30px -8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 /* Mapa dos tokens → utilitários Tailwind v4 (inline: leem a var viva, então
    trocar o valor sob [data-theme] ou pelo ADM reflete sem recompilar).
    Adiciona tokens SEM remover a paleta padrão (slate/emerald seguem válidos

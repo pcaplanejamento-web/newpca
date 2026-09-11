@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 // KPI card (spec §6.4): barra de acento à esquerda, número em Geist com
 // tabular-nums, delta com seta (SEM pílula), mini-gráfico de 7 barras (as 2
@@ -19,7 +19,10 @@ export function KpiStat({
   hint?: string;
 }) {
   return (
-    <div className="relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+    <div
+      className="kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring"
+      style={{ "--kpi-accent": cor } as CSSProperties}
+    >
       <span
         aria-hidden
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"

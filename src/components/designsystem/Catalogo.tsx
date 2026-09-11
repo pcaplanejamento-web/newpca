@@ -5,9 +5,10 @@ import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
+import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import * as Icons from "@/components/icons";
-import { IconBox, IconFile, IconLayers, IconPlus, IconUpload } from "@/components/icons";
+import { IconArrowRight, IconBox, IconFile, IconLayers, IconMail, IconPlus, IconUpload } from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -160,6 +161,8 @@ export function Catalogo() {
   const [framed, setFramed] = useState(false);
   const [device, setDevice] = useState("desktop");
   const [tsel, setTsel] = useState<Set<string | number>>(new Set());
+  const [busca, setBusca] = useState("");
+  const [check, setCheck] = useState(true);
 
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -210,6 +213,7 @@ export function Catalogo() {
       <Secao titulo="Botões">
         <div className="flex flex-wrap items-center gap-3">
           <Button icon={<IconPlus className="h-[18px] w-[18px]" />}>Novo Protocolo</Button>
+          <Button variant="accent" icon={<IconArrowRight className="h-4 w-4" />}>Entrar</Button>
           <Button variant="secondary">Secundário</Button>
           <Button variant="icon" aria-label="Exportar">
             <IconUpload className="h-[18px] w-[18px]" />
@@ -217,6 +221,24 @@ export function Catalogo() {
           <Button variant="ghost">Ghost</Button>
           <Button loading>Carregando</Button>
           <Button disabled>Desativado</Button>
+        </div>
+      </Secao>
+
+      <Secao titulo="Campos de formulário (ícone + foco accent)">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextField
+            label="Email ou usuário"
+            icon={<IconMail className="h-5 w-5" />}
+            placeholder="voce@empresa.com"
+            defaultValue=""
+          />
+          <PasswordField defaultValue="segredo123" />
+        </div>
+        <div className="mt-4 max-w-md">
+          <SearchField value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Pesquisar protocolos…" />
+        </div>
+        <div className="mt-4">
+          <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />
         </div>
       </Secao>
 

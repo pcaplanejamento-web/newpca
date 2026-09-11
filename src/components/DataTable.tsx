@@ -62,6 +62,26 @@ export function DataTable<R>({
     return o;
   }, [columns, rows]);
 
+  // Anos presentes em cada coluna de data — alimentam a grade "Ano" do período.
+  const anosData = useMemo(() => {
+    const m: Record<string, number[]> = {};
+    for (const c of columns) {
+      if ((c.filter ?? "values") === "date" && c.value) {
+        const ys = [
+          ...new Set(
+            rows
+              .map((r) => c.value?.(r)?.slice(0, 4))
+              .filter((s): s is string => !!s && /^\d{4}$/.test(s)),
+          ),
+        ]
+          .map(Number)
+          .sort((a, b) => b - a);
+        m[c.key] = ys.length ? ys : [new Date().getFullYear()];
+      }
+    }
+    return m;
+  }, [columns, rows]);
+
   const filtradas = useMemo(() => {
     return rows.filter((r) => {
       for (const c of columns) {
@@ -158,6 +178,7 @@ export function DataTable<R>({
                       <DateFilterHeader
                         label={c.header}
                         value={filters[c.key] as IntervaloData}
+                        anos={anosData[c.key]}
                         onApply={(v) => aplicarFiltro(c.key, v)}
                         onSort={(d) => setSort({ key: c.key, dir: d })}
                         sortDir={sortDe(c.key)}

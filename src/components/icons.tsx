@@ -3,9 +3,11 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   ArrowUpDown,
   Bell,
   Building2,
+  Calendar,
   Camera,
   Check,
   ChevronDown,
@@ -13,6 +15,8 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Eye,
+  EyeOff,
   FileText,
   Filter,
   Image as ImageIcon,
@@ -21,7 +25,9 @@ import {
   Layers,
   LayoutDashboard,
   Loader2,
+  Lock,
   LogOut,
+  Mail,
   Menu,
   Moon,
   Package,
@@ -83,6 +89,12 @@ export const IconKey = KeyRound;
 export const IconImage = ImageIcon;
 export const IconSave = Save;
 export const IconPalette = Palette;
+export const IconMail = Mail;
+export const IconLock = Lock;
+export const IconEye = Eye;
+export const IconEyeOff = EyeOff;
+export const IconArrowRight = ArrowRight;
+export const IconCalendar = Calendar;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

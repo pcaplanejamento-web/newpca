@@ -25,18 +25,37 @@ export function Dropdown({
   ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, w: 224 });
+  const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Posiciona o painel (fixed) e decide abrir para BAIXO ou para CIMA conforme o
+  // espaço disponível; sempre limita a altura à viewport (rola por dentro). Assim
+  // o filtro NUNCA é cortado, mesmo quando o gatilho está no rodapé da tela.
   const reposicionar = () => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const w = Math.min(width ?? Math.max(224, r.width), window.innerWidth - 16);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 6;
+    const w = Math.min(width ?? Math.max(224, r.width), vw - 16);
     let left = align === "end" ? r.right - w : r.left;
-    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-    setPos({ top: Math.round(r.bottom + 6), left: Math.round(left), w });
+    left = Math.max(8, Math.min(left, vw - w - 8));
+    const espacoAbaixo = vh - r.bottom - 8;
+    const espacoAcima = r.top - 8;
+    const desejada = panelRef.current?.scrollHeight ?? 0;
+    const abrirAcima = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
+    let top: number;
+    let maxH: number;
+    if (abrirAcima) {
+      maxH = espacoAcima;
+      top = Math.max(8, r.top - gap - Math.min(desejada || maxH, maxH));
+    } else {
+      top = r.bottom + gap;
+      maxH = espacoAbaixo;
+    }
+    setPos({ top: Math.round(top), left: Math.round(left), w, maxH: Math.max(140, Math.round(maxH)) });
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reposiciona só ao abrir.
@@ -85,8 +104,14 @@ export function Dropdown({
           <div
             ref={panelRef}
             role="menu"
-            className={`fixed z-[200] max-h-[min(80vh,520px)] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`}
-            style={{ top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)" }}
+            className={`fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`}
+            style={{
+              top: pos.top,
+              left: pos.left,
+              width: pos.w,
+              maxWidth: "calc(100vw - 16px)",
+              maxHeight: pos.maxH,
+            }}
           >
             {typeof children === "function" ? children(() => setOpen(false)) : children}
           </div>,

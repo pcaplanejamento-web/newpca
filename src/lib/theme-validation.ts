@@ -10,6 +10,8 @@ export const aparenciaSchema = z.object({
   radius: z.number().min(0).max(24).optional(),
   density: z.enum(["compact", "default", "comfortable"]).optional(),
   motion: z.enum(["off", "reduced", "default", "smooth"]).optional(),
+  elevation: z.enum(["ring", "soft"]).optional(),
+  kpi: z.enum(["outline", "filled"]).optional(),
   identidade: z
     .object({
       nome: z.string().trim().max(60).optional(),

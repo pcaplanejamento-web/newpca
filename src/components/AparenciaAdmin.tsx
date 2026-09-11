@@ -49,6 +49,8 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   const [radius, setRadius] = useState(inicial.radius ?? 14);
   const [density, setDensity] = useState(inicial.density ?? "default");
   const [motion, setMotion] = useState(inicial.motion ?? "default");
+  const [elevation, setElevation] = useState<"ring" | "soft">(inicial.elevation ?? "ring");
+  const [kpi, setKpi] = useState<"outline" | "filled">(inicial.kpi ?? "outline");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -63,9 +65,14 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       document.head.appendChild(el);
     }
     el.textContent = aparenciaToCss({ cores, radius });
-    document.documentElement.setAttribute("data-density", density);
-    document.documentElement.setAttribute("data-motion", motion);
-  }, [cores, radius, density, motion]);
+    const root = document.documentElement;
+    root.setAttribute("data-density", density);
+    root.setAttribute("data-motion", motion);
+    if (elevation === "soft") root.setAttribute("data-elevation", "soft");
+    else root.removeAttribute("data-elevation");
+    if (kpi === "filled") root.setAttribute("data-kpi", "filled");
+    else root.removeAttribute("data-kpi");
+  }, [cores, radius, density, motion, elevation, kpi]);
   useEffect(
     () => () => {
       document.getElementById("preview-aparencia")?.remove();
@@ -84,7 +91,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       const res = await fetch("/api/admin/aparencia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cores, radius, density, motion }),
+        body: JSON.stringify({ cores, radius, density, motion, elevation, kpi }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -106,6 +113,8 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       setRadius(14);
       setDensity("default");
       setMotion("default");
+      setElevation("ring");
+      setKpi("outline");
       toast.success("Aparência restaurada ao padrão.");
     } catch {
       toast.error("Erro ao restaurar.");
@@ -168,6 +177,28 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
             { value: "compact", label: "Compacta" },
             { value: "default", label: "Padrão" },
             { value: "comfortable", label: "Confortável" },
+          ]}
+        />
+      </div>
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">Elevação dos cards</span>
+        <Segmented
+          value={elevation}
+          onChange={(v) => setElevation(v as "ring" | "soft")}
+          options={[
+            { value: "ring", label: "Anel" },
+            { value: "soft", label: "Sombra suave" },
+          ]}
+        />
+      </div>
+      <div>
+        <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">Estilo dos KPIs</span>
+        <Segmented
+          value={kpi}
+          onChange={(v) => setKpi(v as "outline" | "filled")}
+          options={[
+            { value: "outline", label: "Contorno" },
+            { value: "filled", label: "Preenchido" },
           ]}
         />
       </div>
