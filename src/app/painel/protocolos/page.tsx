@@ -1,4 +1,4 @@
-import { ProtocolosTabs } from "@/components/ProtocolosTabs";
+import { ProtocolosView } from "@/components/ProtocolosView";
 import { getUsuarioAtual } from "@/lib/auth";
 import {
   SITUACOES,
@@ -12,13 +12,12 @@ export const dynamic = "force-dynamic";
 export default async function ProtocolosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; situacao?: string; aba?: string }>;
+  searchParams: Promise<{ q?: string; situacao?: string }>;
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() || "";
   // Só aceita situações válidas (evita filtro inválido vindo da URL).
   const situacao = SITUACOES.some((s) => s.valor === sp.situacao) ? sp.situacao! : "";
-  const abaInicial = sp.aba === "tabelas" ? "tabelas" : "protocolos";
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
@@ -29,8 +28,7 @@ export default async function ProtocolosPage({
   ]);
 
   return (
-    <ProtocolosTabs
-      abaInicial={abaInicial}
+    <ProtocolosView
       inicial={inicial}
       resumo={resumo}
       opcoes={opcoes}

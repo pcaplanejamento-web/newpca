@@ -8,6 +8,7 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - **Tema claro/escuro:** `@custom-variant dark` (classe `.dark` via `next-themes`). Todo componente define as duas variantes com `dark:`.
 - **Um breakpoint decide a apresentação:** `lg` (1024px). Acima = desktop; abaixo = mobile. Nada de "só rolar a tabela" — cada componente tem as **duas** apresentações.
 - **Toque:** alvos ≥ 40px, `active:scale`, chips/botões espaçados; nada depende de hover.
+- **Fundações (padrão):** fonte **Inter** (`next/font`, self-hosted, var `--font-inter` no `<body>`); ícones da biblioteca padrão **lucide-react** (reexportados como `Icon*` em `src/components/icons.tsx`); estilo com **Tailwind CSS v4**; gráficos com **Recharts**. **Sem emoji** na interface.
 
 ## Navegação
 | | Desktop (`lg+`) | Mobile (`< lg`) |
@@ -30,7 +31,6 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - `Fab` — ação flutuante (só mobile; acima da bottom-nav). No desktop a ação fica no cabeçalho.
 - `EmConstrucao` / `AcessoRestrito` — estados padrão para abas em desenvolvimento / sem permissão.
 - `KpiCard` — tile colorido em gradiente (dashboard do PCA). Distinto do `StatCard` (plano).
-- **Abas in-page (segmented control)** — seletor de modo dentro de uma página (ex.: `ProtocolosTabs`: *Protocolos* ↔ *Tabelas*): pílulas num trilho `rounded-xl`, **largura total no mobile** (`w-full`) e compacto no desktop (`sm:w-auto sm:inline-flex`); ativo com `bg-white`/`dark:bg-slate-900` + sombra.
 
 ## Filtros
 - Sempre visíveis: busca (cresce) + botão **Filtros** (abre avançado) + **chips** de situação roláveis.

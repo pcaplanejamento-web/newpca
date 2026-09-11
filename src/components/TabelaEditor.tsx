@@ -335,7 +335,7 @@ function CelulaEdicao({
       >
         <option value="">—</option>
         {lista.map((o) => <option key={o} value={o}>{o}</option>)}
-        <option value="__novo__">➕ Nova opção…</option>
+        <option value="__novo__">+ Nova opção…</option>
       </select>
     );
   }

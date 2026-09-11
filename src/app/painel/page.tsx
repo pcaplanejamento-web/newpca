@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-            {primeiroNome ? `Olá, ${primeiroNome} 👋` : "Dashboard"}
+            {primeiroNome ? `Olá, ${primeiroNome}` : "Dashboard"}
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Visão geral dos protocolos do PCA.

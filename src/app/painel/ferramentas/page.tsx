@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { IconChevronRight, IconDashboard, IconUpload } from "@/components/icons";
+import {
+  IconChevronRight,
+  IconDashboard,
+  IconLayers,
+  IconUpload,
+} from "@/components/icons";
 import { getUsuarioAtual } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +16,13 @@ const FERRAMENTAS = [
     descricao: "Indicadores, gráficos e consulta dos itens do Plano de Contratações.",
     Icon: IconDashboard,
     tone: "from-blue-500 to-indigo-600",
+  },
+  {
+    href: "/painel/ferramentas/tabelas",
+    titulo: "Tabelas dinâmicas",
+    descricao: "Crie listas com colunas personalizáveis (texto, seleção, data, número).",
+    Icon: IconLayers,
+    tone: "from-emerald-500 to-green-600",
   },
   {
     href: "/painel/ferramentas/pca/upload",
