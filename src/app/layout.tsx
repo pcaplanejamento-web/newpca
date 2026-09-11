@@ -22,6 +22,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
       <body>
+        {/* Shim: o bundle OpenNext/esbuild injeta chamadas `__name(...)` no
+            script inline do next-themes; sem esta definição global o script
+            falhava ("__name is not defined") e o tema só era aplicado após a
+            hidratação, causando o flash branco→preto. Roda antes do ThemeProvider. */}
+        <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=(f)=>f;" }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

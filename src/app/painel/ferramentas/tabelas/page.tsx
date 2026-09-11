@@ -17,14 +17,6 @@ export default async function TabelasPage() {
       >
         <IconChevronLeft className="h-4 w-4" /> Ferramentas
       </Link>
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-          Tabelas dinâmicas
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Listas com colunas personalizáveis. Abra uma para editar ou crie uma nova.
-        </p>
-      </div>
       <TabelasIndex podeEditar={podeEditar} />
     </div>
   );

@@ -41,13 +41,6 @@ export default async function FerramentasPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Ferramentas</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Utilitários da plataforma: dashboard do PCA, tabelas e importação.
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {itens.map(({ href, titulo, descricao, Icon, tone }) => (
           <Link

@@ -408,12 +408,9 @@ export function ProtocolosView({
     <div className="space-y-5">
       {/* Cabeçalho + contagem */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Protocolos</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {resumo.total} protocolo{resumo.total === 1 ? "" : "s"} · {resumo.emAnalise} em análise
-          </p>
-        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {resumo.total} protocolo{resumo.total === 1 ? "" : "s"} · {resumo.emAnalise} em análise
+        </p>
         {podeEditar && (
           <button
             type="button"

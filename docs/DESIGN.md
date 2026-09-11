@@ -9,6 +9,7 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - **Um breakpoint decide a apresentação:** `lg` (1024px). Acima = desktop; abaixo = mobile. Nada de "só rolar a tabela" — cada componente tem as **duas** apresentações.
 - **Toque:** alvos ≥ 40px, `active:scale`, chips/botões espaçados; nada depende de hover.
 - **Fundações (padrão):** fonte **Inter** (`next/font`, self-hosted, var `--font-inter` no `<body>`); ícones da biblioteca padrão **lucide-react** (reexportados como `Icon*` em `src/components/icons.tsx`); estilo com **Tailwind CSS v4**; gráficos com **Recharts**. **Sem emoji** na interface.
+- **Sem cabeçalho redundante:** não repetir o nome da tela num título + descrição; a aba ativa no menu já indica onde o usuário está. Mantêm-se apenas ações, dados úteis (contagens) e estados (acesso restrito / vazio / sucesso). Render **sem flash** (tema aplicado antes da pintura — shim de `__name` no `layout.tsx`).
 
 ## Navegação
 | | Desktop (`lg+`) | Mobile (`< lg`) |

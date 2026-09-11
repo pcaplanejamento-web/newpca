@@ -94,19 +94,9 @@ export default async function PcaDashboardPage({
 
   return (
     <div className="space-y-6">
-      {voltar}
-      {/* Cabeçalho + filtro */}
+      {/* Filtro de unidade */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-            Dashboard do PCA
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {unidadeId
-              ? "Dados da unidade selecionada"
-              : `Consolidado de ${num(resumo.numUnidades)} unidade(s)`}
-          </p>
-        </div>
+        {voltar}
         <div className="sm:w-80">
           <UnitFilter unidades={unidades} current={unidadeId} />
         </div>

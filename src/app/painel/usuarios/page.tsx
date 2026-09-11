@@ -19,17 +19,5 @@ export default async function UsuariosPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-          Usuários
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Aprove novos cadastros, defina papéis e gerencie o acesso da equipe.
-        </p>
-      </div>
-      <UsuariosAdmin meuId={atual.id} />
-    </div>
-  );
+  return <UsuariosAdmin meuId={atual.id} />;
 }
