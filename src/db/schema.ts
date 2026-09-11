@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -122,6 +123,8 @@ export const protocolos = sqliteTable(
       .notNull()
       .default("em_analise"),
     distribuicao: text("distribuicao"),
+    // Grupo dono do protocolo (dados por grupo). NULL = legado/sem grupo.
+    grupoId: integer("grupo_id").references(() => grupos.id, { onDelete: "set null" }),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),
@@ -133,6 +136,7 @@ export const protocolos = sqliteTable(
     index("protocolos_natureza_idx").on(t.natureza),
     index("protocolos_responsavel_idx").on(t.responsavel),
     index("protocolos_data_idx").on(t.data),
+    index("protocolos_grupo_idx").on(t.grupoId),
   ],
 );
 
@@ -146,8 +150,10 @@ export const protocoloOpcoes = sqliteTable(
     }).notNull(),
     valor: text("valor").notNull(),
     ordem: integer("ordem").notNull().default(0),
+    // Opções por grupo (cada grupo tem seu vocabulário). NULL = legado.
+    grupoId: integer("grupo_id").references(() => grupos.id, { onDelete: "set null" }),
   },
-  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.campo, t.valor)],
+  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.campo, t.valor, t.grupoId)],
 );
 
 /**
@@ -165,6 +171,41 @@ export const configuracoes = sqliteTable("configuracoes", {
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * RBAC por GRUPO. Uma `permissao` define quais abas ficam disponíveis (JSON de
+ * keys). Um `grupo` aponta para uma permissão; membros do grupo compartilham a
+ * permissão E os dados (protocolos/opções carregam `grupo_id`). Um usuário pode
+ * estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho.
+ */
+export const permissoes = sqliteTable("permissoes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export const grupos = sqliteTable("grupos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  permissaoId: integer("permissao_id").references(() => permissoes.id, { onDelete: "set null" }),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export const usuarioGrupos = sqliteTable(
+  "usuario_grupos",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    grupoId: integer("grupo_id")
+      .notNull()
+      .references(() => grupos.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.grupoId] })],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -172,10 +213,12 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
-export type TipoColuna = Coluna["tipo"];
 export type Protocolo = typeof protocolos.$inferSelect;
 export type NovoProtocolo = typeof protocolos.$inferInsert;
 export type SituacaoProtocolo = Protocolo["situacao"];
 export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;
 export type CampoOpcao = ProtocoloOpcao["campo"];
 export type Configuracao = typeof configuracoes.$inferSelect;
+export type Permissao = typeof permissoes.$inferSelect;
+export type Grupo = typeof grupos.$inferSelect;
+export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
