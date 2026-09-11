@@ -1,8 +1,10 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
+import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { Callout } from "@/components/Callout";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
@@ -10,12 +12,17 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
+import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
+import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import {
+  IconAlert,
   IconArrowRight,
   IconBox,
+  IconCheck,
   IconClipboard,
   IconClock,
   IconFile,
@@ -410,6 +417,41 @@ export function Catalogo() {
           <Button variant="secondary" onClick={() => toast.info("Isto é um aviso informativo.")}>Info</Button>
           <Button variant="secondary" onClick={() => toast.warning("Atenção: revise os dados.")}>Alerta</Button>
           <Button variant="secondary" onClick={() => toast.error("Falha ao salvar. Tente novamente.")}>Erro</Button>
+        </div>
+      </Secao>
+
+      <Secao titulo="Callout (feedback) & estados">
+        <div className="space-y-2">
+          <Callout kind="ok" icon={<IconCheck className="h-4 w-4" />}>Operação concluída com sucesso.</Callout>
+          <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>Atenção: revise os dados antes de continuar.</Callout>
+          <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>Falha ao salvar. Tente novamente.</Callout>
+          <Callout kind="info">Dica: use os filtros do cabeçalho para refinar a lista.</Callout>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-card border border-border bg-surface p-4">
+            <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">Skeleton</span>
+            <Skeleton className="h-8 w-full rounded-control" />
+            <div className="mt-3">
+              <SkeletonLinhas linhas={3} />
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-3 rounded-card border border-border bg-surface p-4">
+            <span className="text-[13px] text-text-2">Alternador de tema</span>
+            <ThemeToggle />
+          </div>
+        </div>
+      </Secao>
+
+      <Secao titulo="Acesso restrito & Em construção">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
+          <EmConstrucao
+            titulo="Auditoria"
+            descricao="Este módulo está em desenvolvimento."
+            icon={<IconClock className="h-5 w-5" />}
+            fase="Fase 5"
+            itens={["Registro de alterações", "Filtro por usuário", "Exportação"]}
+          />
         </div>
       </Secao>
 

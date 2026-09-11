@@ -72,3 +72,20 @@ componente fixa cor **neutra** (só `var(--token)`); a única hex crua é **sem�
   via `:root[data-elevation=soft]`) e **estilo dos KPIs** (Contorno ↔ Preenchido, via
   `[data-kpi=filled] .kpi-card` com `color-mix` na cor do KPI). Injeção server-side sem flash
   (`layout.tsx`) + validação Zod (allowlist anti-XSS em `lib/theme.ts`).
+
+## Auditoria de componentização (Fase 5) — primitivos e migrações
+Passe para tornar o DS de fato a fonte única (sem cor **neutra** hardcoded; toda UI por componente).
+- **Tokens de feedback** `--ok/--warn/--danger/--info` (`globals.css`) + `feedbackVar()` (`lib/semantic.ts`);
+  fundos suaves por `color-mix`. **`--scrim`** (escurece o fundo de modais/drawers nos 2 temas).
+- **`Callout`** (novo): banner de feedback (info/sucesso/alerta/erro) por token — fonte única de avisos/erros.
+- **`Button`** ganha a variante **`danger`** (ações destrutivas). **`Pager`** (novo): paginação única
+  (anterior/próxima + x/y); `DataTable` e as telas migradas usam-no (fim dos pagers digitados à mão).
+- **`Modal`** tokenizado (scrim/superfície/texto por token; fechar = `Button` icon). **`Badge`**/**`StatCard`**:
+  mapa de tons → um token por tom (`toneVar`), fundo/contorno por `color-mix` (sem slate/emerald/... hardcoded).
+- **Telas migradas** (sem cor hardcoded, controles por componente): `UsuariosAdmin` (→`DataTable`+`Button`+
+  `Badge`+`Callout`), `TabelaEditor` e `ProtocolosView` (grades editáveis inline — mantêm a tabela própria,
+  mas botões→`Button`, busca→`SearchField`, paginação→`Pager`, chips→`Badge`, avisos→`Callout`, tudo por token).
+- **Pendente (próxima fatia):** `ItemTable` (troca do motor por `DataTable` client-side depende de rever o
+  teto de 200 linhas do `getItens` na home pública), `PerfilView`/`UploadForm` (botões/inputs), `AppShell`
+  (busca→`SearchField`, notificações→`Dropdown`), app-pages (`ferramentas` card inline→`LinkCard`), glyphs
+  `▲▼↑↓`→`Icon*`, remoção do `Badge` legado quando ninguém usar `Tone`.
