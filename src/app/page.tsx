@@ -1,14 +1,14 @@
-import Link from "next/link";
-import { KpiCard } from "@/components/KpiCard";
+import { Button } from "@/components/Button";
 import { ChartCard } from "@/components/ChartCard";
-import { UnitFilter } from "@/components/UnitFilter";
-import { ItemTable } from "@/components/ItemTable";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
-import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
-import { IconBox, IconInbox, IconTrend, IconTrophy, IconWallet } from "@/components/icons";
+import { UnidadeChart } from "@/components/charts/UnidadeChart";
+import { IconInbox } from "@/components/icons";
+import { ItemTable } from "@/components/ItemTable";
+import { KpiStat } from "@/components/KpiStat";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UnitFilter } from "@/components/UnitFilter";
 import { brl, num } from "@/lib/format";
 import {
   getAnos,
@@ -25,27 +25,20 @@ export const dynamic = "force-dynamic";
 
 function Topo() {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-      <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-700 text-sm font-black text-white shadow-sm">
+    <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-md">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
             RV
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-bold text-slate-900 dark:text-white">Plataforma PCA</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">
-              Prefeitura de Rio Verde
-            </div>
+            <div className="text-[14px] font-semibold text-text">Plataforma PCA</div>
+            <div className="text-[11px] text-muted">Prefeitura de Rio Verde · GO</div>
           </div>
-        </Link>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
-          <Link
-            href="/login"
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-          >
-            Entrar
-          </Link>
+          <Button href="/login">Entrar</Button>
         </div>
       </div>
     </header>
@@ -62,17 +55,15 @@ export default async function HomePage({
 
   if (unidades.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <div className="min-h-dvh bg-bg text-text">
         <Topo />
-        <main className="px-4 py-10 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
+        <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+          <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+            <div className="grid h-16 w-16 place-items-center rounded-card bg-surface-2 text-faint">
               <IconInbox className="h-8 w-8" />
             </div>
-            <p className="mt-5 text-base font-bold text-slate-800 dark:text-white">
-              Dados do PCA em breve
-            </p>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-5 text-base font-bold text-text">Dados do PCA em breve</p>
+            <p className="mt-2 text-sm text-muted">
               A equipe ainda não publicou a planilha do Plano de Contratações Anual.
             </p>
           </div>
@@ -96,47 +87,33 @@ export default async function HomePage({
   ]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+    <div className="min-h-dvh bg-bg text-text">
       <Topo />
-      <main className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl space-y-[var(--gap-col)] px-4 py-6 sm:px-6">
         <div className="flex justify-end">
-          <div className="sm:w-80">
+          <div className="w-full sm:w-80">
             <UnitFilter unidades={unidades} current={unidadeId} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            title="Total Planejado"
-            value={brl(resumo.total)}
-            subtitle={`em ${num(resumo.count)} itens`}
-            icon={<IconWallet className="h-6 w-6" />}
-            gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
-          />
-          <KpiCard
-            title="Qtd. de Itens"
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
+          <KpiStat label="Total Planejado" value={brl(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
+          <KpiStat
+            label="Qtd. de Itens"
             value={num(resumo.count)}
-            subtitle={unidadeId ? "itens na unidade" : `${num(resumo.numUnidades)} unidade(s)`}
-            icon={<IconBox className="h-6 w-6" />}
-            gradient="bg-gradient-to-br from-emerald-500 to-green-600"
+            cor="var(--sit-finalizado)"
+            hint={unidadeId ? "itens na unidade" : `${num(resumo.numUnidades)} unidade(s)`}
           />
-          <KpiCard
-            title="Ticket Médio"
-            value={brl(resumo.ticket)}
-            subtitle="por item"
-            icon={<IconTrend className="h-6 w-6" />}
-            gradient="bg-gradient-to-br from-orange-500 to-amber-600"
-          />
-          <KpiCard
-            title="Maior Item"
+          <KpiStat label="Ticket Médio" value={brl(resumo.ticket)} cor="var(--sit-em-analise)" hint="por item" />
+          <KpiStat
+            label="Maior Item"
             value={brl(resumo.maiorValor)}
-            subtitle={resumo.maiorNome ?? "—"}
-            icon={<IconTrophy className="h-6 w-6" />}
-            gradient="bg-gradient-to-br from-fuchsia-500 to-purple-600"
+            cor="var(--sit-devolvido)"
+            hint={resumo.maiorNome ?? "—"}
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
           <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
             <ClassificacaoChart data={porClass} />
           </ChartCard>

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { Tone } from "./Badge";
 
-// Tile de estatística "plano" (superfície neutra + chip colorido) — o padrão do
-// print para Dashboard/Protocolos. Distinto do KpiCard (fundo em gradiente).
+// Tile de estatística "plano" (superfície neutra + chip colorido). Usado no
+// Dashboard. (O KPI do design system é o KpiStat, spec §6.4.)
 const CHIP: Record<Tone, string> = {
   emerald: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
   amber: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",

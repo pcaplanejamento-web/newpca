@@ -27,15 +27,13 @@ export function UnitFilter({
   }
 
   return (
-    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <IconBuilding className="h-[18px] w-[18px] shrink-0 text-slate-400" />
-      <span className="hidden shrink-0 text-slate-500 sm:inline dark:text-slate-400">
-        Unidade:
-      </span>
+    <label className="flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 py-2 text-sm">
+      <IconBuilding className="h-[18px] w-[18px] shrink-0 text-faint" />
+      <span className="hidden shrink-0 text-muted sm:inline">Unidade:</span>
       <select
         value={current ?? ""}
         onChange={onChange}
-        className="min-w-0 flex-1 bg-transparent font-medium text-slate-800 outline-none dark:text-slate-100"
+        className="min-w-0 flex-1 bg-transparent font-medium text-text outline-none"
       >
         <option value="">Todas as unidades</option>
         {unidades.map((u) => (

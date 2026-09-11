@@ -3,12 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { brl, dataBR, dec, num } from "@/lib/format";
 import { Skeleton } from "./Skeleton";
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconSearch,
-  IconSort,
-} from "./icons";
+import { IconChevronLeft, IconChevronRight, IconSearch, IconSort } from "./icons";
 
 type Row = {
   id: number;
@@ -25,15 +20,11 @@ type Row = {
   municipio: string | null;
 };
 
-type Resp = {
-  rows: Row[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pages: number;
-};
-
+type Resp = { rows: Row[]; total: number; page: number; pageSize: number; pages: number };
 type Sort = "valor" | "nome" | "seq" | "quantidade";
+
+const selCls =
+  "rounded-control border border-border-2 bg-surface px-3 py-2 text-sm text-text-2 outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 export function ItemTable({
   unidadeId,
@@ -59,13 +50,11 @@ export function ItemTable({
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
-  // debounce da busca
   useEffect(() => {
     const t = setTimeout(() => setQDeb(q), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  // volta pra página 1 quando muda filtro/unidade
   useEffect(() => {
     setPage(1);
   }, [qDeb, classificacao, ano, sort, dir, unidadeId]);
@@ -119,23 +108,18 @@ export function ItemTable({
 
   return (
     <div>
-      {/* filtros */}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative flex-1 sm:min-w-[220px]">
-          <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar produto..."
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-emerald-500/20"
+            className="w-full rounded-control border border-border-2 bg-surface py-2 pl-9 pr-3 text-sm text-text outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent/40"
           />
         </div>
 
-        <select
-          value={classificacao}
-          onChange={(e) => setClassificacao(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-        >
+        <select value={classificacao} onChange={(e) => setClassificacao(e.target.value)} className={selCls}>
           <option value="">Todas as classificações</option>
           {classificacoes.map((c) => (
             <option key={c} value={c}>
@@ -145,11 +129,7 @@ export function ItemTable({
         </select>
 
         {anos.length > 0 && (
-          <select
-            value={ano}
-            onChange={(e) => setAno(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-          >
+          <select value={ano} onChange={(e) => setAno(e.target.value)} className={selCls}>
             <option value="">Todos os anos</option>
             {anos.map((a) => (
               <option key={a} value={a}>
@@ -160,37 +140,18 @@ export function ItemTable({
         )}
       </div>
 
-      {/* tabela */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-card border border-border">
         <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
-              <Th onClick={() => toggleSort("seq")} active={sort === "seq"} dir={dir}>
-                Seq.
-              </Th>
-              <Th onClick={() => toggleSort("nome")} active={sort === "nome"} dir={dir}>
-                Produto
-              </Th>
+            <tr className="border-b border-border bg-surface-2 text-left text-[10.5px] uppercase tracking-[0.05em] text-faint">
+              <Th onClick={() => toggleSort("seq")} active={sort === "seq"} dir={dir}>Seq.</Th>
+              <Th onClick={() => toggleSort("nome")} active={sort === "nome"} dir={dir}>Produto</Th>
               <th className="px-3 py-2.5 font-semibold">Classificação</th>
               {showUnidade && <th className="px-3 py-2.5 font-semibold">Unid.</th>}
               <th className="px-3 py-2.5 font-semibold">Medida</th>
-              <Th
-                onClick={() => toggleSort("quantidade")}
-                active={sort === "quantidade"}
-                dir={dir}
-                right
-              >
-                Qtd.
-              </Th>
+              <Th onClick={() => toggleSort("quantidade")} active={sort === "quantidade"} dir={dir} right>Qtd.</Th>
               <th className="px-3 py-2.5 text-right font-semibold">Vlr. Ref.</th>
-              <Th
-                onClick={() => toggleSort("valor")}
-                active={sort === "valor"}
-                dir={dir}
-                right
-              >
-                Vlr. Total
-              </Th>
+              <Th onClick={() => toggleSort("valor")} active={sort === "valor"} dir={dir} right>Vlr. Total</Th>
               <th className="px-3 py-2.5 font-semibold">Data</th>
             </tr>
           </thead>
@@ -199,64 +160,48 @@ export function ItemTable({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i}>
                   <td colSpan={9} className="px-3 py-2">
-                    <Skeleton className="h-8 w-full rounded-lg" />
+                    <Skeleton className="h-8 w-full rounded-control" />
                   </td>
                 </tr>
               ))
             ) : erro ? (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-red-500">
+                <td colSpan={9} className="px-3 py-12 text-center text-[color:var(--sit-cancelado)]">
                   {erro}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-12 text-center text-faint">
                   Nenhum item encontrado com os filtros atuais.
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
-                >
-                  <td className="px-3 py-2.5 text-slate-400 tabular-nums">
-                    {r.sequencial ?? "—"}
-                  </td>
+                <tr key={r.id} className="border-b border-border transition-colors last:border-0 hover:bg-surface-2">
+                  <td className="px-3 py-2.5 text-faint tabular-nums">{r.sequencial ?? "—"}</td>
                   <td className="max-w-[320px] px-3 py-2.5">
-                    <span
-                      className="block truncate font-medium text-slate-800 dark:text-slate-100"
-                      title={r.nomeProduto ?? ""}
-                    >
+                    <span className="block truncate font-medium text-text" title={r.nomeProduto ?? ""}>
                       {r.nomeProduto ?? "—"}
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="inline-block max-w-[180px] truncate rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={r.classificacao ?? ""}>
+                    <span className="inline-block max-w-[180px] truncate rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-text-2" title={r.classificacao ?? ""}>
                       {r.classificacao ?? "—"}
                     </span>
                   </td>
-                  {showUnidade && (
-                    <td className="px-3 py-2.5 text-slate-500 tabular-nums">
-                      {r.codigo ?? "—"}
-                    </td>
-                  )}
-                  <td className="px-3 py-2.5 text-slate-500">
-                    {r.unidadeMedida ?? "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums dark:text-slate-300">
+                  {showUnidade && <td className="px-3 py-2.5 text-muted tabular-nums">{r.codigo ?? "—"}</td>}
+                  <td className="px-3 py-2.5 text-muted">{r.unidadeMedida ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-right text-text-2 tabular-nums">
                     {r.quantidade != null ? dec(r.quantidade) : "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums dark:text-slate-300">
+                  <td className="px-3 py-2.5 text-right text-text-2 tabular-nums">
                     {r.valorReferencia != null ? brl(r.valorReferencia) : "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-slate-800 tabular-nums dark:text-slate-100">
+                  <td className="px-3 py-2.5 text-right font-semibold text-text tabular-nums">
                     {r.valorTotal != null ? brl(r.valorTotal) : "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-500 tabular-nums">
-                    {dataBR(r.dataDesejada)}
-                  </td>
+                  <td className="px-3 py-2.5 text-muted tabular-nums">{dataBR(r.dataDesejada)}</td>
                 </tr>
               ))
             )}
@@ -264,28 +209,23 @@ export function ItemTable({
         </table>
       </div>
 
-      {/* paginação */}
       <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">
-          {loading ? "Carregando..." : faixa}
-        </span>
+        <span className="text-muted">{loading ? "Carregando..." : faixa}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 enabled:hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:enabled:hover:bg-slate-800"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface-2"
           >
             <IconChevronLeft className="h-4 w-4" />
           </button>
-          <span className="px-2 text-slate-500 tabular-nums dark:text-slate-400">
-            {page} / {pages}
-          </span>
+          <span className="px-2 text-muted tabular-nums">{page} / {pages}</span>
           <button
             type="button"
             disabled={page >= pages}
             onClick={() => setPage((p) => Math.min(pages, p + 1))}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 enabled:hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:enabled:hover:bg-slate-800"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface-2"
           >
             <IconChevronRight className="h-4 w-4" />
           </button>
@@ -313,8 +253,8 @@ function Th({
       <button
         type="button"
         onClick={onClick}
-        className={`inline-flex items-center gap-1 uppercase transition hover:text-slate-800 dark:hover:text-slate-200 ${
-          active ? "text-emerald-600 dark:text-emerald-400" : ""
+        className={`inline-flex items-center gap-1 uppercase transition-colors hover:text-text-2 ${
+          active ? "text-accent" : ""
         } ${right ? "flex-row-reverse" : ""}`}
       >
         {children}

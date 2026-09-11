@@ -22,7 +22,7 @@ export const GRID = "rgba(148,163,184,0.22)";
 
 export function ChartEmpty({ label = "Sem dados para exibir" }: { label?: string }) {
   return (
-    <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
+    <div className="flex h-48 flex-col items-center justify-center gap-2 text-faint">
       <IconInbox className="h-8 w-8" />
       <span className="text-xs">{label}</span>
     </div>
@@ -31,7 +31,7 @@ export function ChartEmpty({ label = "Sem dados para exibir" }: { label?: string
 
 export function TooltipBox({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-800">
+    <div className="rounded-control border border-border bg-surface px-3 py-2 text-xs text-text shadow-soft">
       {children}
     </div>
   );
