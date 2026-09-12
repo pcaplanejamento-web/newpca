@@ -13,6 +13,8 @@ type LinhaComp = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number | null;
+  valorUnitario: number | null;
+  valorTotal: number | null;
 };
 
 const COLS: Column<LinhaComp>[] = [
@@ -35,6 +37,18 @@ const COLS: Column<LinhaComp>[] = [
     header: "Qtd.",
     align: "right",
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
+  },
+  {
+    key: "vunit",
+    header: "Vlr. unit.",
+    align: "right",
+    render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
+  },
+  {
+    key: "vtot",
+    header: "Vlr. total",
+    align: "right",
+    render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—"),
   },
 ];
 
@@ -77,6 +91,8 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
               descricao: it.descricao,
               unidade: it.unidade,
               quantidade: it.quantidade,
+              valorUnitario: it.valorUnitario,
+              valorTotal: it.valorTotal,
             })),
           );
           const subtotal = g.dfds.reduce((s, d) => s + (d.valorEstimado ?? 0), 0);
@@ -96,7 +112,7 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
                 columns={COLS}
                 rows={linhas}
                 getKey={(r) => r.id}
-                minWidth={760}
+                minWidth={940}
                 footer={`${linhas.length} ${linhas.length === 1 ? "item" : "itens"}`}
               />
             </section>

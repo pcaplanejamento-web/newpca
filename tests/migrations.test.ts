@@ -88,6 +88,29 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(idx.includes("dfds_numero_uq"), "índice dfds_numero_uq ausente");
   });
 
+  it("0013 adiciona campos completos do DFD", () => {
+    const dfd = nomes(db, "SELECT name FROM pragma_table_info('dfds')");
+    for (const c of ["matricula", "email", "telefone", "valor_total", "secoes"]) {
+      assert.ok(dfd.includes(c), `coluna ausente em dfds: ${c}`);
+    }
+    const item = nomes(db, "SELECT name FROM pragma_table_info('dfd_itens')");
+    for (const c of ["valor_unitario", "valor_total"]) {
+      assert.ok(item.includes(c), `coluna ausente em dfd_itens: ${c}`);
+    }
+  });
+
+  it("0014 semeia as repartições da Prefeitura de Rio Verde", () => {
+    const cods = nomes(db, "SELECT codigo AS name FROM reparticoes");
+    for (const c of ["GP", "CGM", "AMT", "AMAE", "SME", "SMS", "SETIA"]) {
+      assert.ok(cods.includes(c), `repartição ausente: ${c}`);
+    }
+    // idempotência: nenhum código duplicado após aplicar a cadeia.
+    const dup = db
+      .prepare("SELECT codigo, COUNT(*) n FROM reparticoes GROUP BY codigo HAVING n > 1")
+      .all() as Array<Record<string, unknown>>;
+    assert.equal(dup.length, 0, `códigos duplicados: ${dup.map((d) => d.codigo).join(", ")}`);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

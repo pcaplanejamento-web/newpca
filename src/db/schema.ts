@@ -267,7 +267,12 @@ export const dfds = sqliteTable(
       onDelete: "set null",
     }),
     responsavel: text("responsavel"),
-    valorEstimado: real("valor_estimado"), // único total estimado do DFD
+    matricula: text("matricula"),
+    email: text("email"),
+    telefone: text("telefone"),
+    valorEstimado: real("valor_estimado"), // estimativa da nota (Seção 4)
+    valorTotal: real("valor_total"), // total da tabela (soma dos itens)
+    secoes: text("secoes"), // JSON: {numero,titulo,texto}[] das demais seções
     nomeArquivo: text("nome_arquivo"),
     totalItens: integer("total_itens").default(0),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
@@ -295,6 +300,8 @@ export const dfdItens = sqliteTable(
     descricao: text("descricao"),
     unidade: text("unidade"), // unidade de medida (ex.: "DIAS")
     quantidade: real("quantidade"),
+    valorUnitario: real("valor_unitario"),
+    valorTotal: real("valor_total"),
     sequencial: integer("sequencial"), // ordem estável de exibição
   },
   (t) => [index("dfd_itens_dfd_idx").on(t.dfdId)],

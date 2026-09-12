@@ -17,6 +17,17 @@ type ItemPreview = DfdParseado["itens"][number] & { _k: number };
 
 const norm = (s: string) => stripAccents(s.trim().toUpperCase());
 
+/** Chave de NOME p/ casar secretarias com siglas divergentes (ignora acentos,
+ * conectores e "MUNICIPAL"). Ex.: "SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL"
+ * e "Secretaria de Infraestrutura Rural" → "SECRETARIA INFRAESTRUTURA RURAL". */
+const chaveNome = (s: string) =>
+  stripAccents(s)
+    .toUpperCase()
+    .replace(/\b(DE|DA|DO|DAS|DOS|E|MUNICIPAL)\b/g, " ")
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+
 const COLS: Column<ItemPreview>[] = [
   { key: "item", header: "Item", align: "right", render: (r) => r.item ?? "—" },
   {
@@ -36,6 +47,18 @@ const COLS: Column<ItemPreview>[] = [
     header: "Qtd.",
     align: "right",
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
+  },
+  {
+    key: "vunit",
+    header: "Vlr. unit.",
+    align: "right",
+    render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
+  },
+  {
+    key: "vtot",
+    header: "Vlr. total",
+    align: "right",
+    render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—"),
   },
 ];
 
@@ -66,8 +89,17 @@ export function DfdUploadForm({
     try {
       const d = await parseDfd(file);
       let matched: number | null = null;
+      // 1) casa a sigla do Setor Requisitante com o código da repartição.
       if (d.siglaSetor) {
         const r = reparticoes.find((x) => norm(x.codigo) === d.siglaSetor);
+        if (r) matched = r.id;
+      }
+      // 2) fallback pelo NOME da secretaria (cobre sigla divergente, ex.: SMIR × SIR).
+      if (matched == null && d.setorRequisitante) {
+        const nomeSetor =
+          d.setorRequisitante.split(/\s+[-–—]\s+/).slice(1).join(" - ") || d.setorRequisitante;
+        const alvo = chaveNome(nomeSetor);
+        const r = alvo ? reparticoes.find((x) => chaveNome(x.nome) === alvo) : undefined;
         if (r) matched = r.id;
       }
       setPreview(d);
@@ -97,9 +129,14 @@ export function DfdUploadForm({
           setorRequisitante: preview.setorRequisitante,
           siglaSetor: preview.siglaSetor,
           responsavel: preview.responsavel,
+          matricula: preview.matricula,
+          email: preview.email,
+          telefone: preview.telefone,
           reparticaoId: repId,
           valorEstimado: preview.valorEstimado,
+          valorTotal: preview.valorTotal,
           nomeArquivo: preview.nomeArquivo,
+          secoes: preview.secoes,
           itens: preview.itens,
         }),
       });
@@ -241,15 +278,34 @@ export function DfdUploadForm({
             <Campo label="Objeto" valor={preview.objeto ?? "—"} span />
             <Campo label="Órgão/Entidade" valor={preview.orgaoEntidade ?? "—"} span />
             <Campo label="Setor Requisitante" valor={preview.setorRequisitante ?? "—"} span />
-            <Campo label="Responsável" valor={preview.responsavel ?? "—"} span />
+            <Campo label="Responsável" valor={preview.responsavel ?? "—"} />
+            <Campo label="Matrícula" valor={preview.matricula ?? "—"} />
+            <Campo label="E-mail" valor={preview.email ?? "—"} span />
+            <Campo label="Telefone" valor={preview.telefone ?? "—"} />
           </div>
 
-          <div className="rounded-control bg-surface-2 p-3">
-            <div className="text-xs text-muted">Valor estimado da contratação</div>
-            <div className="text-xl font-bold text-text">
-              {preview.valorEstimado != null ? brl(preview.valorEstimado) : "—"}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-control bg-surface-2 p-3">
+              <div className="text-xs text-muted">Valor estimado (nota)</div>
+              <div className="text-xl font-bold text-text">
+                {preview.valorEstimado != null ? brl(preview.valorEstimado) : "—"}
+              </div>
+            </div>
+            <div className="rounded-control bg-surface-2 p-3">
+              <div className="text-xs text-muted">Valor total (tabela)</div>
+              <div className="text-xl font-bold text-text">
+                {preview.valorTotal != null ? brl(preview.valorTotal) : "—"}
+              </div>
             </div>
           </div>
+
+          {preview.secoes.length > 0 && (
+            <p className="text-xs text-muted">
+              + {preview.secoes.length} seç{preview.secoes.length === 1 ? "ão" : "ões"} capturada
+              {preview.secoes.length === 1 ? "" : "s"} (identificação, justificativa, previsão,
+              fundamentação legal…) — visíveis ao abrir o DFD.
+            </p>
+          )}
 
           {/* Repartição (auto-detectada, confirmável) */}
           <div>

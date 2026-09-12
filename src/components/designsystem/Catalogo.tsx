@@ -218,8 +218,8 @@ const G_UNID = [
 // Dados de exemplo p/ as vitrines de DFD/PCA (o upload em si — que carrega o
 // SheetJS — fica fora do catálogo, como o UploadForm, para não pesar esta rota).
 const DFD_ITENS_DEMO = [
-  { id: 1, item: 1, codigo: "5241937263", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 1 – MÉDIO PORTE), LANÇA 28,80 M", unidade: "DIAS", quantidade: 56 },
-  { id: 2, item: 2, codigo: "5241937264", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M", unidade: "DIAS", quantidade: 20 },
+  { id: 1, item: 1, codigo: "5241937263", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 1 – MÉDIO PORTE), LANÇA 28,80 M", unidade: "DIAS", quantidade: 56, valorUnitario: 3256.12, valorTotal: 182342.72 },
+  { id: 2, item: 2, codigo: "5241937264", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M", unidade: "DIAS", quantidade: 20, valorUnitario: 8000, valorTotal: 160000 },
 ];
 
 const DFD_DEMO = {
@@ -231,12 +231,21 @@ const DFD_DEMO = {
   orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE",
   setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL",
   responsavel: "CLAUDIO LUIZ DE SOUSA",
+  matricula: "1043055",
+  email: "claudioluiz99685320@gmail.com",
+  telefone: "(64) 99968-5320",
   valorEstimado: 342342.72,
+  valorTotal: 342342.72,
   totalItens: 2,
   atualizadoEm: null,
   reparticaoId: 1,
   reparticaoCodigo: "SMIR",
   reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
+  secoes: [
+    { numero: 2, titulo: "IDENTIFICAÇÃO DA DEMANDA", texto: "DISPENSA DE LICITAÇÃO PARA CONTRATAÇÃO DE ITENS FRACASSADOS, PROCESSO Nº 92654/2025." },
+    { numero: 3, titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "A malha viária rural depende de içamento de peças pré-moldadas; o Município não dispõe de guindaste próprio." },
+    { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "LEI 14.133/2021." },
+  ],
   itens: DFD_ITENS_DEMO,
 };
 
@@ -270,7 +279,7 @@ const PCA_DEMO = {
           setorRequisitante: "SMS",
           valorEstimado: 170000,
           totalItens: 1,
-          itens: [{ id: 3, item: 1, codigo: "9910011", descricao: "SERINGA DESCARTÁVEL 5ML", unidade: "CENTO", quantidade: 300 }],
+          itens: [{ id: 3, item: 1, codigo: "9910011", descricao: "SERINGA DESCARTÁVEL 5ML", unidade: "CENTO", quantidade: 300, valorUnitario: 566.67, valorTotal: 170000 }],
         },
       ],
     },

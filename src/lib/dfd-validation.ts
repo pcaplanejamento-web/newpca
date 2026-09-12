@@ -14,6 +14,14 @@ const dfdItemSchema = z.object({
   descricao: textoOpc,
   unidade: z.string().trim().max(100).optional().nullable(),
   quantidade: z.number().optional().nullable(),
+  valorUnitario: z.number().optional().nullable(),
+  valorTotal: z.number().optional().nullable(),
+});
+
+const dfdSecaoSchema = z.object({
+  numero: z.number().int().nonnegative(),
+  titulo: z.string().trim().max(300),
+  texto: z.string().max(10000),
 });
 
 /** Importa (ou substitui, por `numero`) um DFD parseado no navegador. */
@@ -26,9 +34,14 @@ export const dfdImportSchema = z.object({
   setorRequisitante: textoOpc,
   siglaSetor: z.string().trim().max(60).optional().nullable(),
   responsavel: textoCurtoOpc,
+  matricula: textoCurtoOpc,
+  email: textoCurtoOpc,
+  telefone: textoCurtoOpc,
   reparticaoId: z.number().int().positive().optional().nullable(),
   valorEstimado: z.number().nonnegative().optional().nullable(),
+  valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
+  secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
   itens: z.array(dfdItemSchema).min(1, "O DFD não tem itens.").max(MAX_ITENS),
 });
 

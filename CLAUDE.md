@@ -81,10 +81,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
   o grupo/repartição **"Geral"** e migram os dados/usuários existentes para lá — por isso o uso atual não muda.
 
-## PCA por DFD (importar e compilar) — migração `0012`
+## PCA por DFD (importar e compilar) — migrações `0012`/`0013`
 - **DFD** = um formulário (`.xlsx`) lido **no navegador** (`src/lib/parse-dfd.ts`, com `raw:false` p/ o texto
   formatado — preserva o código longo — e o núcleo puro/testável `parse-dfd-core.ts`); vira `dfds`/`dfd_itens`
-  e é vinculado a uma **repartição** por **auto-match da sigla do Setor Requisitante** (confirmável no import).
+  e é vinculado a uma **repartição** por **auto-match da sigla do Setor Requisitante** (com fallback pelo NOME
+  da secretaria, p/ siglas divergentes; confirmável no import).
+- **Captura completa (migração `0013`):** o parser extrai TODO o formulário — cabeçalho (nº/planejamento/
+  tipo/objeto/órgão/setor/responsável/**matrícula/e-mail/telefone**), a tabela da Seção 4 com **valor unitário
+  e total por item** + **total geral**, o **valor estimado** (nota "R$"), e o **texto das demais seções
+  numeradas** (2,3,5,6,7,8,9…) num coletor genérico salvo em `dfds.secoes` (JSON). O detalhe (`/painel/pca/dfd/[id]`)
+  mostra tudo ao clicar em "Ver".
 - **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
   edição já gerada) — plano consolidado da Prefeitura, **escopo por repartição** (sem `grupo_id`, como as
   `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch

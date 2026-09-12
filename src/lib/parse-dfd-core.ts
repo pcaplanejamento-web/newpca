@@ -4,13 +4,13 @@ import { parseIntBR, parseNumberBR, stripAccents } from "./normalize.ts";
  * Núcleo PURO do parser de DFD (Documento de Formalização da Demanda).
  *
  * Recebe uma matriz de células (array de arrays, texto formatado — ver
- * `parse-dfd.ts`) e extrai os metadados do cabeçalho + a tabela de itens da
- * Seção 4. Sem SheetJS e sem D1 → testável isoladamente no Node.
- *
- * O DFD é um FORMULÁRIO (não uma tabela achatada): rótulos "Label: valor" no
- * cabeçalho, uma tabela ITEM/CÓDIGO/DESCRIÇÃO/UNIDADE/QUANTIDADE (sem preço por
- * item) e um único valor estimado embutido numa nota.
+ * `parse-dfd.ts`) e extrai TODAS as informações do formulário: metadados do
+ * cabeçalho (Seção 1), a tabela de itens da Seção 4 (com valores, quando houver)
+ * e o texto das demais seções numeradas (2, 3, 5, 6, 7, 8, 9…). Sem SheetJS e sem
+ * D1 → testável isoladamente no Node.
  */
+
+export type DfdSecao = { numero: number; titulo: string; texto: string };
 
 export type DfdItemParseado = {
   item: number | null;
@@ -18,6 +18,8 @@ export type DfdItemParseado = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number | null;
+  valorUnitario: number | null;
+  valorTotal: number | null;
 };
 
 export type DfdParseado = {
@@ -29,8 +31,13 @@ export type DfdParseado = {
   setorRequisitante: string | null;
   siglaSetor: string | null;
   responsavel: string | null;
-  valorEstimado: number | null;
+  matricula: string | null;
+  email: string | null;
+  telefone: string | null;
+  valorEstimado: number | null; // da nota "R$ ..." (Seção 4)
+  valorTotal: number | null; // total da tabela (soma dos itens / linha "VALOR TOTAL")
   nomeArquivo: string;
+  secoes: DfdSecao[];
   itens: DfdItemParseado[];
 };
 
@@ -48,6 +55,15 @@ function txt(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }
 
+/** Primeira célula não-vazia da linha (para detectar seção/rótulo). */
+function primeiraCelula(row: unknown[]): string {
+  for (const c of row) {
+    const t = txt(c);
+    if (t) return t;
+  }
+  return "";
+}
+
 // Cabeçalho da tabela de itens (Seção 4). Chave = norm da célula.
 const CABECALHO_ITEM: Record<string, keyof ColMap> = {
   ITEM: "item",
@@ -57,6 +73,11 @@ const CABECALHO_ITEM: Record<string, keyof ColMap> = {
   QUANTIDADE: "quantidade",
   QTD: "quantidade",
   QTDE: "quantidade",
+  "VALOR UNITARIO": "valorUnitario",
+  "VL UNITARIO": "valorUnitario",
+  "VALOR UNIT": "valorUnitario",
+  "VALOR TOTAL": "valorTotal",
+  "VL TOTAL": "valorTotal",
 };
 
 type ColMap = {
@@ -65,6 +86,8 @@ type ColMap = {
   descricao?: number;
   unidade?: number;
   quantidade?: number;
+  valorUnitario?: number;
+  valorTotal?: number;
 };
 
 /** Primeiro grupo capturado não-vazio ao aplicar `re` a alguma célula. */
@@ -78,6 +101,46 @@ function buscar(cells: string[], re: RegExp): string | null {
 }
 
 const RE_VALOR = /R\$\s*([\d.]+,\d{2})/;
+
+/** Ruído de cabeçalho/rodapé repetido nas quebras de página (não é conteúdo). */
+function ehRuido(s: string): boolean {
+  const n = norm(s);
+  return (
+    n.startsWith("CENTI") ||
+    n.startsWith("EMITIDO EM") ||
+    n.startsWith("PAGINA ") ||
+    n === "ESTADO DE GOIAS" ||
+    n === "PREFEITURA MUNICIPAL DE RIO VERDE" ||
+    n.startsWith("DOCUMENTO DE FORMALIZACAO") ||
+    /NUMERO DFD/.test(n) ||
+    n.startsWith("TIPO DFD")
+  );
+}
+
+/**
+ * Coleta as SEÇÕES numeradas ("N - TÍTULO" + texto abaixo). Pula a Seção 1 (área
+ * requisitante — vira campos estruturados) e a Seção 4 (tabela de itens). O texto
+ * de cada seção junta as linhas até a próxima seção, ignorando o ruído de página.
+ */
+function coletarSecoes(aoa: unknown[][]): DfdSecao[] {
+  const brutas: { numero: number; titulo: string; linhas: string[] }[] = [];
+  let atual: { numero: number; titulo: string; linhas: string[] } | null = null;
+  for (const row of aoa) {
+    const cell = primeiraCelula(row ?? []);
+    if (!cell) continue;
+    const m = cell.match(/^(\d{1,2})\s*[-–—]\s*(.+)$/);
+    if (m) {
+      atual = { numero: Number(m[1]), titulo: m[2].trim(), linhas: [] };
+      brutas.push(atual);
+      continue;
+    }
+    if (atual && !ehRuido(cell)) atual.linhas.push(cell);
+  }
+  return brutas
+    .filter((s) => s.numero !== 1 && s.numero !== 4)
+    .map((s) => ({ numero: s.numero, titulo: s.titulo, texto: s.linhas.join("\n").trim() }))
+    .filter((s) => s.texto.length > 0);
+}
 
 export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdParseado {
   // Lista achatada de textos de células não-vazias (p/ regex de cabeçalho).
@@ -95,7 +158,10 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
   const tipo = buscar(cells, /Tipo\s+DFD\s*:?\s*(.+)/i);
   const orgaoEntidade = buscar(cells, /[ÓO]rg[ãa]o\s*\/?\s*Entidade\s*:?\s*(.+)/i);
   const setorRequisitante = buscar(cells, /Setor\s+Requisitante\s*:?\s*(.+)/i);
-  const responsavel = buscar(cells, /Respons[áa]vel(?:\s+pela\s+Demanda)?\s*:?\s*(.+)/i);
+  const responsavel = buscar(cells, /Respons[áa]vel\s+pela\s+Demanda\s*:?\s*(.+)/i);
+  const matricula = buscar(cells, /Matr[íi]cula\s*:?\s*(\S.*)$/i);
+  const email = buscar(cells, /E-?mail\s*:?\s*([^\s]+@[^\s]+)/i);
+  const telefone = buscar(cells, /Telefone\s*:?\s*(\S.*)$/i);
 
   // objeto = texto antes de "Número DFD" na célula que o contém (ex.: F5).
   const celNumero = cells.find((s) => /N[úu]mero\s+DFD/i.test(s));
@@ -144,6 +210,7 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
   }
 
   const itens: DfdItemParseado[] = [];
+  let valorTotalGrand: number | null = null;
   if (headerRow >= 0) {
     const col = (row: unknown[], i?: number) => (i == null ? null : row[i]);
     for (let r = headerRow + 1; r < aoa.length; r++) {
@@ -155,17 +222,28 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
       const codigo = txt(col(row, colMap.codigo)) || null;
       const descricao = txt(col(row, colMap.descricao)) || null;
       // Uma linha só é item se o ITEM é um inteiro puro E há código/descrição —
-      // assim a NOTA logo após a tabela (texto longo) encerra a leitura.
-      if (!ehItem || (!codigo && !descricao)) break;
+      // assim a linha "VALOR TOTAL" (grand total) e a NOTA encerram a leitura.
+      if (!ehItem || (!codigo && !descricao)) {
+        // linha de total: "VALOR TOTAL" na tabela → captura o grand total.
+        if (colMap.valorTotal != null && /VALOR TOTAL/.test(norm(row.map(txt).join(" ")))) {
+          valorTotalGrand = parseNumberBR(col(row, colMap.valorTotal));
+        }
+        break;
+      }
       itens.push({
         item: parseIntBR(itemTxt),
         codigo,
         descricao,
         unidade: txt(col(row, colMap.unidade)) || null,
         quantidade: parseNumberBR(col(row, colMap.quantidade)),
+        valorUnitario: parseNumberBR(col(row, colMap.valorUnitario)),
+        valorTotal: parseNumberBR(col(row, colMap.valorTotal)),
       });
     }
   }
+
+  const somaItens = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+  const valorTotal = valorTotalGrand ?? (somaItens > 0 ? Math.round(somaItens * 100) / 100 : null);
 
   if (!numero) {
     throw new Error(
@@ -187,8 +265,13 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
     setorRequisitante,
     siglaSetor,
     responsavel,
+    matricula,
+    email,
+    telefone,
     valorEstimado,
+    valorTotal,
     nomeArquivo,
+    secoes: coletarSecoes(aoa),
     itens,
   };
 }

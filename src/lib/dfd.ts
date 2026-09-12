@@ -9,8 +9,8 @@ import type { DfdImportPayload, GerarPcaPayload } from "./dfd-validation";
  * são o plano CONSOLIDADO da Prefeitura (globais). Sem `grupo_id`.
  */
 
-// dfd_itens = 7 colunas vinculadas por linha → 14×7 = 98 (< limite de 100 do D1).
-const ROWS_PER_STMT = 14;
+// dfd_itens = 9 colunas vinculadas por linha → 11×9 = 99 (< limite de 100 do D1).
+const ROWS_PER_STMT = 11;
 
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
 function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdImportPayload["itens"]): any[] {
@@ -25,6 +25,8 @@ function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdImp
           descricao: it.descricao ?? null,
           unidade: it.unidade ?? null,
           quantidade: it.quantidade ?? null,
+          valorUnitario: it.valorUnitario ?? null,
+          valorTotal: it.valorTotal ?? null,
           sequencial: i + j + 1,
         })),
       ),
@@ -42,6 +44,7 @@ export type DfdResumo = {
   setorRequisitante: string | null;
   responsavel: string | null;
   valorEstimado: number | null;
+  valorTotal: number | null;
   totalItens: number | null;
   atualizadoEm: string | null;
   reparticaoId: number | null;
@@ -56,9 +59,34 @@ export type DfdItemRow = {
   descricao: string | null;
   unidade: string | null;
   quantidade: number | null;
+  valorUnitario: number | null;
+  valorTotal: number | null;
 };
 
-export type DfdDetalhe = DfdResumo & { orgaoEntidade: string | null; itens: DfdItemRow[] };
+export type DfdSecaoRow = { numero: number; titulo: string; texto: string };
+
+export type DfdDetalhe = DfdResumo & {
+  orgaoEntidade: string | null;
+  matricula: string | null;
+  email: string | null;
+  telefone: string | null;
+  secoes: DfdSecaoRow[];
+  itens: DfdItemRow[];
+};
+
+/** Lê o JSON de `secoes` com tolerância a dados inválidos. */
+function parseSecoes(json: string | null): DfdSecaoRow[] {
+  if (!json) return [];
+  try {
+    const arr: unknown = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((s): s is DfdSecaoRow => !!s && typeof s === "object" && "titulo" in s)
+      .map((s) => ({ numero: Number(s.numero) || 0, titulo: String(s.titulo ?? ""), texto: String(s.texto ?? "") }));
+  } catch {
+    return [];
+  }
+}
 
 const colunasDfd = {
   id: dfds.id,
@@ -69,6 +97,7 @@ const colunasDfd = {
   setorRequisitante: dfds.setorRequisitante,
   responsavel: dfds.responsavel,
   valorEstimado: dfds.valorEstimado,
+  valorTotal: dfds.valorTotal,
   totalItens: dfds.totalItens,
   atualizadoEm: dfds.atualizadoEm,
   reparticaoId: dfds.reparticaoId,
@@ -89,7 +118,14 @@ export async function listarDfds(reparticaoId?: number): Promise<DfdResumo[]> {
 export async function getDfd(id: number): Promise<DfdDetalhe | null> {
   const db = getDb();
   const [d] = await db
-    .select({ ...colunasDfd, orgaoEntidade: dfds.orgaoEntidade })
+    .select({
+      ...colunasDfd,
+      orgaoEntidade: dfds.orgaoEntidade,
+      matricula: dfds.matricula,
+      email: dfds.email,
+      telefone: dfds.telefone,
+      secoes: dfds.secoes,
+    })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .where(eq(dfds.id, id))
@@ -103,11 +139,13 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
       descricao: dfdItens.descricao,
       unidade: dfdItens.unidade,
       quantidade: dfdItens.quantidade,
+      valorUnitario: dfdItens.valorUnitario,
+      valorTotal: dfdItens.valorTotal,
     })
     .from(dfdItens)
     .where(eq(dfdItens.dfdId, id))
     .orderBy(asc(dfdItens.sequencial));
-  return { ...d, itens };
+  return { ...d, secoes: parseSecoes(d.secoes), itens };
 }
 
 /** Cria (ou substitui, pelo `numero`) um DFD e seus itens (batch atômico). */
@@ -125,7 +163,12 @@ export async function criarOuSubstituirDfd(
     siglaSetor: dados.siglaSetor ?? null,
     reparticaoId: dados.reparticaoId ?? null,
     responsavel: dados.responsavel ?? null,
+    matricula: dados.matricula ?? null,
+    email: dados.email ?? null,
+    telefone: dados.telefone ?? null,
     valorEstimado: dados.valorEstimado ?? null,
+    valorTotal: dados.valorTotal ?? null,
+    secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
     nomeArquivo: dados.nomeArquivo ?? null,
     totalItens: dados.itens.length,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
@@ -248,6 +291,8 @@ export async function getPca(id: number): Promise<PcaDetalhe | null> {
           descricao: dfdItens.descricao,
           unidade: dfdItens.unidade,
           quantidade: dfdItens.quantidade,
+          valorUnitario: dfdItens.valorUnitario,
+          valorTotal: dfdItens.valorTotal,
         })
         .from(dfdItens)
         .where(inArray(dfdItens.dfdId, ids))
@@ -264,6 +309,8 @@ export async function getPca(id: number): Promise<PcaDetalhe | null> {
       descricao: it.descricao,
       unidade: it.unidade,
       quantidade: it.quantidade,
+      valorUnitario: it.valorUnitario,
+      valorTotal: it.valorTotal,
     });
     itensPorDfd.set(it.dfdId, arr);
   }
