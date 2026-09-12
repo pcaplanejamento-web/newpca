@@ -11,6 +11,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import {
   IconBell,
   IconBox,
+  IconBuilding,
   IconCheck,
   IconChevronDown,
   IconClose,
@@ -59,6 +60,7 @@ const SECOES: NavSecao[] = [
     itens: [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
       { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, roles: ["admin"] },
+      { href: "/painel/reparticoes", label: "Repartições", Icon: IconBuilding, roles: ["admin"] },
       { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
     ],
@@ -291,18 +293,87 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
   );
 }
 
+type ReparticaoNav = { id: number; codigo: string; nome: string };
+
+/** Seletor de repartição ativa no cabeçalho (entre as do grupo ativo). */
+function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav[]; ativaId: number | null }) {
+  const router = useRouter();
+  const [trocando, setTrocando] = useState(false);
+  if (reparticoes.length === 0) return null;
+  const ativa = reparticoes.find((r) => r.id === ativaId) ?? reparticoes[0];
+
+  async function trocar(id: number, close: () => void) {
+    close();
+    if (id === ativa.id) return;
+    setTrocando(true);
+    try {
+      await fetch("/api/reparticoes/ativo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reparticaoId: id }),
+      });
+      router.refresh();
+    } finally {
+      setTrocando(false);
+    }
+  }
+
+  return (
+    <Dropdown
+      align="start"
+      ariaLabel="Repartição ativa"
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-[var(--h-control-sm)] text-[13px] font-medium text-text-2 hover:bg-surface-2"
+      width={260}
+      trigger={
+        <>
+          {trocando ? (
+            <IconSpinner className="h-3.5 w-3.5" />
+          ) : (
+            <IconBuilding className="h-3.5 w-3.5 opacity-70" />
+          )}
+          <span className="max-w-[9rem] truncate">{ativa.nome}</span>
+          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </>
+      }
+    >
+      {(close) => (
+        <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
+          {reparticoes.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => trocar(r.id, close)}
+              className={`flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
+                r.id === ativa.id ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+              }`}
+            >
+              <span className="shrink-0 font-mono text-[10.5px] text-faint">{r.codigo}</span>
+              <span className="min-w-0 truncate">{r.nome}</span>
+              {r.id === ativa.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
 export function AppShell({
   children,
   usuario,
   grupos,
   grupoAtivoId,
   abas,
+  reparticoes,
+  reparticaoAtivaId,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
   grupos: GrupoNav[];
   grupoAtivoId: number | null;
   abas: string[];
+  reparticoes: ReparticaoNav[];
+  reparticaoAtivaId: number | null;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -366,6 +437,7 @@ export function AppShell({
           <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 
           <div className="ml-auto flex items-center gap-1.5">
+            <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
             <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             <SinoNotificacoes />
             <ThemeToggle />

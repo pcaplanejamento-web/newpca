@@ -28,6 +28,7 @@ import {
   IconFile,
   IconLayers,
   IconMail,
+  IconPencil,
   IconPlus,
   IconTrash,
   IconUpload,
@@ -39,6 +40,7 @@ import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
+import { ReorderTable } from "@/components/ReorderTable";
 import { Segmented } from "@/components/Segmented";
 import { StatCard } from "@/components/StatCard";
 import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
@@ -223,6 +225,13 @@ export function Catalogo() {
   const [check, setCheck] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [pag, setPag] = useState(2);
+  const [repsOrdem, setRepsOrdem] = useState([
+    { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
+    { id: 2, codigo: "AMMT", nome: "Agência Municipal de Mobilidade e Trânsito" },
+    { id: 3, codigo: "CGM", nome: "Controladoria Geral do Município" },
+    { id: 4, codigo: "FMS", nome: "Fundo Municipal da Saúde" },
+    { id: 5, codigo: "GP", nome: "Gabinete do Prefeito" },
+  ]);
 
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -494,6 +503,35 @@ export function Catalogo() {
             <Button onClick={() => setModalAberto(false)}>Confirmar</Button>
           </div>
         </Modal>
+      </Secao>
+
+      <Secao titulo="Tabela reordenável (arraste as linhas)">
+        <ReorderTable
+          items={repsOrdem}
+          getId={(r) => r.id}
+          minWidth={520}
+          dica="Arraste as linhas para reordenar (mouse ou toque)."
+          onReorder={(ids) =>
+            setRepsOrdem((prev) => {
+              const byId = new Map(prev.map((x) => [x.id, x]));
+              return ids.map((id) => byId.get(id as number)).filter((x): x is (typeof prev)[number] => !!x);
+            })
+          }
+          columns={[
+            { header: "#", minWidth: 40, render: (_r, i) => <span className="tabular-nums text-faint">{i + 1}</span> },
+            {
+              header: "Código",
+              minWidth: 90,
+              render: (r) => (
+                <span className="rounded-chip bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-accent">
+                  {r.codigo}
+                </span>
+              ),
+            },
+            { header: "Nome", minWidth: 240, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
+          ]}
+          acoes={() => <Button variant="ghost" aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />}
+        />
       </Secao>
 
       <Secao titulo="Tabela (seleção de linhas + filtro no cabeçalho)">

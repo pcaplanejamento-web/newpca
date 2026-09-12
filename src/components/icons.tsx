@@ -21,6 +21,7 @@ import {
   EyeOff,
   FileText,
   Filter,
+  GripVertical,
   Image as ImageIcon,
   Inbox,
   KeyRound,
@@ -36,6 +37,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Search,
   Shield,
@@ -99,6 +101,8 @@ export const IconArrowRight = ArrowRight;
 export const IconArrowUp = ArrowUp;
 export const IconArrowDown = ArrowDown;
 export const IconCalendar = Calendar;
+export const IconGrip = GripVertical;
+export const IconRefresh = RefreshCw;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

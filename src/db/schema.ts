@@ -206,6 +206,37 @@ export const usuarioGrupos = sqliteTable(
   (t) => [primaryKey({ columns: [t.usuarioId, t.grupoId] })],
 );
 
+/**
+ * Repartições (secretarias/órgãos). Lista GLOBAL ordenável (arraste as linhas).
+ * Cada grupo recebe acesso a um subconjunto (`grupo_reparticoes`); a repartição
+ * ativa é escolhida no cabeçalho (cookie), entre as que o grupo ativo acessa.
+ */
+export const reparticoes = sqliteTable(
+  "reparticoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    codigo: text("codigo").notNull(),
+    nome: text("nome").notNull(),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("reparticoes_ordem_idx").on(t.ordem)],
+);
+
+export const grupoReparticoes = sqliteTable(
+  "grupo_reparticoes",
+  {
+    grupoId: integer("grupo_id")
+      .notNull()
+      .references(() => grupos.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id")
+      .notNull()
+      .references(() => reparticoes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.grupoId, t.reparticaoId] })],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -222,3 +253,5 @@ export type Configuracao = typeof configuracoes.$inferSelect;
 export type Permissao = typeof permissoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
+export type Reparticao = typeof reparticoes.$inferSelect;
+export type GrupoReparticao = typeof grupoReparticoes.$inferSelect;

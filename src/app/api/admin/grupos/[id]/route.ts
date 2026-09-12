@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { grupos, usuarioGrupos } from "@/db/schema";
+import { grupoReparticoes, grupos, usuarioGrupos } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -16,6 +16,15 @@ async function trocarMembros(grupoId: number, membros: number[]) {
   }
 }
 
+async function trocarReparticoes(grupoId: number, reps: number[]) {
+  const db = getDb();
+  await db.delete(grupoReparticoes).where(eq(grupoReparticoes.grupoId, grupoId));
+  for (let i = 0; i < reps.length; i += 40) {
+    const lote = reps.slice(i, i + 40);
+    await db.insert(grupoReparticoes).values(lote.map((reparticaoId) => ({ grupoId, reparticaoId })));
+  }
+}
+
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
@@ -23,7 +32,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!id) return erro("ID inválido.");
   const corpo = await parseCorpo(grupoPatchSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, permissaoId, membros } = corpo.data;
+  const { nome, permissaoId, membros, reparticoes: reps } = corpo.data;
 
   const set = {
     ...(nome !== undefined ? { nome } : {}),
@@ -32,6 +41,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   };
   await getDb().update(grupos).set(set).where(eq(grupos.id, id));
   if (membros !== undefined) await trocarMembros(id, membros);
+  if (reps !== undefined) await trocarReparticoes(id, reps);
   return ok();
 }
 

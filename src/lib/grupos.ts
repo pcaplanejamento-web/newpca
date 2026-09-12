@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
+import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos } from "@/db/schema";
 import { ABAS } from "./abas";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
@@ -12,8 +12,10 @@ import { getDb } from "./db";
  * permissão de abas (vê todas), mas os dados seguem o grupo ativo.
  */
 const COOKIE_GRUPO = "pca_grupo";
+const COOKIE_REP = "pca_reparticao";
 
 export type GrupoResumo = { id: number; nome: string; permissaoId: number | null };
+export type ReparticaoResumo = { id: number; codigo: string; nome: string };
 
 /** Grupos aos quais o usuário pertence (ordenados por nome). */
 export async function gruposDoUsuario(usuarioId: number): Promise<GrupoResumo[]> {
@@ -72,4 +74,39 @@ export async function abasPermitidas(
   } catch {
     return new Set();
   }
+}
+
+/** Repartições que um grupo acessa (ordenadas pela ordem da tela de repartições). */
+export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoResumo[]> {
+  return getDb()
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome })
+    .from(grupoReparticoes)
+    .innerJoin(reparticoes, eq(grupoReparticoes.reparticaoId, reparticoes.id))
+    .where(eq(grupoReparticoes.grupoId, grupoId))
+    .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
+}
+
+/** Contexto de repartição: as acessíveis pelo grupo ativo + a ativa (cookie). */
+export async function getReparticaoContexto(
+  usuario?: UsuarioSessao | null,
+  grupoAtivo?: GrupoResumo | null,
+): Promise<{ lista: ReparticaoResumo[]; ativa: ReparticaoResumo | null }> {
+  const grupo = grupoAtivo === undefined ? await getGrupoAtivo(usuario) : grupoAtivo;
+  if (!grupo) return { lista: [], ativa: null };
+  const lista = await reparticoesDoGrupo(grupo.id);
+  if (lista.length === 0) return { lista, ativa: null };
+  const jar = await cookies();
+  const escolhida = Number(jar.get(COOKIE_REP)?.value);
+  return { lista, ativa: lista.find((r) => r.id === escolhida) ?? lista[0] };
+}
+
+export async function definirReparticaoAtiva(reparticaoId: number): Promise<void> {
+  const jar = await cookies();
+  jar.set(COOKIE_REP, String(reparticaoId), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 86_400,
+  });
 }

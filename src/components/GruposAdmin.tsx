@@ -10,20 +10,23 @@ import { IconPencil, IconPlus, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
 
-type Grupo = { id: number; nome: string; permissaoId: number | null; membros: number[] };
+type Grupo = { id: number; nome: string; permissaoId: number | null; membros: number[]; reparticoes: number[] };
 type PermOpt = { id: number; nome: string };
 type UserOpt = { id: number; nome: string; email: string };
+type RepOpt = { id: number; codigo: string; nome: string };
 
 export function GruposAdmin() {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
   const [perms, setPerms] = useState<PermOpt[]>([]);
   const [users, setUsers] = useState<UserOpt[]>([]);
+  const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
   const [erro, setErro] = useState<string | null>(null);
 
   const [editando, setEditando] = useState<Grupo | "novo" | null>(null);
   const [nome, setNome] = useState("");
   const [permissaoId, setPermissaoId] = useState<number | null>(null);
   const [membros, setMembros] = useState<Set<number>>(new Set());
+  const [reps, setReps] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -37,11 +40,13 @@ export function GruposAdmin() {
         grupos?: Grupo[];
         permissoes?: PermOpt[];
         usuarios?: UserOpt[];
+        reparticoes?: RepOpt[];
       };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setGrupos(j.grupos ?? []);
       setPerms(j.permissoes ?? []);
       setUsers(j.usuarios ?? []);
+      setRepsDisp(j.reparticoes ?? []);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
       setGrupos([]);
@@ -59,6 +64,7 @@ export function GruposAdmin() {
     setNome("");
     setPermissaoId(perms[0]?.id ?? null);
     setMembros(new Set());
+    setReps(new Set());
     setBusca("");
   }
   function abrirEdicao(g: Grupo) {
@@ -66,10 +72,18 @@ export function GruposAdmin() {
     setNome(g.nome);
     setPermissaoId(g.permissaoId);
     setMembros(new Set(g.membros));
+    setReps(new Set(g.reparticoes));
     setBusca("");
   }
   const toggleMembro = (id: number) =>
     setMembros((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleRep = (id: number) =>
+    setReps((s) => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id);
       else n.add(id);
@@ -91,7 +105,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, permissaoId, membros: [...membros] }),
+        body: JSON.stringify({ nome, permissaoId, membros: [...membros], reparticoes: [...reps] }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -180,6 +194,33 @@ export function GruposAdmin() {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <span className="mb-2 block text-[13.5px] font-bold text-text">
+              Repartições do grupo · {reps.size} selecionada(s)
+            </span>
+            {repsDisp.length === 0 ? (
+              <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
+                Nenhuma repartição cadastrada. Crie em Repartições.
+              </p>
+            ) : (
+              <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+                {repsDisp.map((r) => (
+                  <div key={r.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                    <Checkbox
+                      checked={reps.has(r.id)}
+                      onChange={() => toggleRep(r.id)}
+                      label={
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono text-[10.5px] text-faint">{r.codigo}</span>
+                          <span className="min-w-0 truncate text-[13px] text-text">{r.nome}</span>
+                        </span>
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <span className="mb-2 block text-[13.5px] font-bold text-text">
