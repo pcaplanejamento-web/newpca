@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { stripAccents } from "@/lib/normalize";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
+import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -80,14 +81,15 @@ export function DfdUploadForm({
 
   async function handleFile(file: File) {
     setErro(null);
-    if (!/\.xlsx?$/i.test(file.name)) {
+    const ehPdf = /\.pdf$/i.test(file.name);
+    if (!ehPdf && !/\.xlsx?$/i.test(file.name)) {
       setStatus("error");
-      setErro("Envie o arquivo .xlsx do DFD emitido.");
+      setErro("Envie o DFD em .xlsx ou .pdf (emitido pelo sistema).");
       return;
     }
     setStatus("parsing");
     try {
-      const d = await parseDfd(file);
+      const d = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
       let matched: number | null = null;
       // 1) casa a sigla do Setor Requisitante com o código da repartição.
       if (d.siglaSetor) {
@@ -229,7 +231,7 @@ export function DfdUploadForm({
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.pdf"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -239,10 +241,10 @@ export function DfdUploadForm({
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
           <IconUpload className="h-7 w-7" />
         </div>
-        <p className="mt-4 text-sm font-medium text-text-2">Arraste o DFD (.xlsx) aqui ou</p>
+        <p className="mt-4 text-sm font-medium text-text-2">Arraste o DFD (.xlsx ou .pdf) aqui ou</p>
         <div className="mt-2 flex justify-center">
           <Button onClick={() => inputRef.current?.click()} icon={<IconFile className="h-[18px] w-[18px]" />}>
-            Escolher DFD (.xlsx)
+            Escolher DFD (.xlsx ou .pdf)
           </Button>
         </div>
         <p className="mt-3 text-xs text-faint">
