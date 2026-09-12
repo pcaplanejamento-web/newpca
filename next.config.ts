@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   // `parse-dfd-pdf.ts`) para ler o DFD em PDF. Transpila o pacote e ignora a
   // dependência OPCIONAL `canvas` (módulo nativo do Node, só p/ rasterizar) —
   // aqui só extraímos TEXTO, então o bundler não deve tentar resolvê-la.
+  // Obs.: o build roda com **webpack** (`next build --webpack` no package.json),
+  // pois o Turbopack (padrão no Next 16) rejeita um `webpack` config e não
+  // aplicaria este alias.
   transpilePackages: ["pdfjs-dist"],
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
