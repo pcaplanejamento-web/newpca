@@ -6,7 +6,9 @@ import { itens, unidades } from "@/db/schema";
 // Unidades (para o filtro e cabeçalho)
 // ---------------------------------------------------------------------------
 
-export async function getUnidades() {
+/** Unidades importadas. Com `reparticaoId`, restringe às daquela repartição
+ * (visão do head); sem ele (Geral), lista todas. */
+export async function getUnidades(reparticaoId?: number) {
   const db = getDb();
   return db
     .select({
@@ -18,6 +20,7 @@ export async function getUnidades() {
       atualizadoEm: unidades.atualizadoEm,
     })
     .from(unidades)
+    .where(reparticaoId ? eq(unidades.reparticaoId, reparticaoId) : undefined)
     .orderBy(asc(unidades.municipio), asc(unidades.codigo));
 }
 

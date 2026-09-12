@@ -23,6 +23,7 @@ import type { OpcoesPorCampo, ProtocoloLista, ResumoProtocolos } from "@/lib/pro
 import type { CampoOpcao, SituacaoProtocolo } from "@/db/schema";
 
 type SituacaoOpcao = { valor: SituacaoProtocolo; label: string };
+type RepOpcao = { id: number; codigo: string; nome: string };
 type Filtros = { natureza: string; situacao: string; responsavel: string; ano: string };
 type Pagina = { rows: ProtocoloLista[]; total: number; page: number; pageSize: number; pages: number };
 type Draft = {
@@ -96,6 +97,7 @@ type EdicaoProps = {
   draft: Draft;
   set: (patch: Partial<Draft>) => void;
   situacoes: SituacaoOpcao[];
+  reparticoes: RepOpcao[];
   opcoes: OpcoesPorCampo;
   adicionarOpcao: (campo: CampoOpcao, valor: string) => Promise<void>;
   onSalvar: () => void;
@@ -103,6 +105,38 @@ type EdicaoProps = {
   salvando: boolean;
   erro: string | null;
 };
+
+/** Órgão = REPARTIÇÃO (regra do sistema). Guarda nome em `orgao` e sigla em `orgaoSigla`. */
+function SelReparticao({
+  value,
+  reparticoes,
+  onChange,
+}: {
+  value: string; // sigla (código) da repartição selecionada
+  reparticoes: RepOpcao[];
+  onChange: (codigo: string, nome: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        const codigo = e.target.value;
+        const r = reparticoes.find((x) => x.codigo === codigo);
+        onChange(codigo, r?.nome ?? "");
+      }}
+      className={inp}
+      aria-label="Órgão (repartição)"
+    >
+      <option value="">—</option>
+      {reparticoes.map((r) => (
+        <option key={r.id} value={r.codigo}>
+          {r.codigo} · {r.nome}
+        </option>
+      ))}
+      {value && !reparticoes.some((r) => r.codigo === value) && <option value={value}>{value}</option>}
+    </select>
+  );
+}
 
 function SelSituacao({
   value,
@@ -125,7 +159,7 @@ function SelSituacao({
 }
 
 /** Linha editável (desktop). Componente estável para não perder o foco ao digitar. */
-function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
+function LinhaEdicaoDesktop({ draft, set, situacoes, reparticoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
   return (
     <tr className="bg-accent-soft align-top">
       <td className="px-4 py-2">
@@ -136,10 +170,7 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
         {erro && <span className="mt-1 block text-[11px]" style={{ color: "var(--danger)" }}>{erro}</span>}
       </td>
       <td className="px-4 py-2">
-        <div className="space-y-1">
-          <CampoSelecao value={draft.orgao} opcoes={opcoes.orgao} onChange={(v) => set({ orgao: v })} onAdd={(v) => adicionarOpcao("orgao", v)} />
-          <input value={draft.orgaoSigla} onChange={(e) => set({ orgaoSigla: e.target.value })} placeholder="Sigla" className={inp} />
-        </div>
+        <SelReparticao value={draft.orgaoSigla} reparticoes={reparticoes} onChange={(codigo, nome) => set({ orgaoSigla: codigo, orgao: nome })} />
       </td>
       <td className="px-4 py-2">
         <CampoSelecao value={draft.natureza} opcoes={opcoes.natureza} onChange={(v) => set({ natureza: v })} onAdd={(v) => adicionarOpcao("natureza", v)} />
@@ -168,7 +199,7 @@ function LinhaEdicaoDesktop({ draft, set, situacoes, opcoes, adicionarOpcao, onS
 }
 
 /** Card editável (mobile). Componente estável para não perder o foco ao digitar. */
-function CardEdicaoMobile({ draft, set, situacoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
+function CardEdicaoMobile({ draft, set, situacoes, reparticoes, opcoes, adicionarOpcao, onSalvar, onCancelar, salvando, erro }: EdicaoProps) {
   return (
     <div className="rounded-card border border-accent bg-surface p-4 shadow-ring">
       <div className="grid grid-cols-2 gap-3">
@@ -185,12 +216,8 @@ function CardEdicaoMobile({ draft, set, situacoes, opcoes, adicionarOpcao, onSal
           <SelSituacao value={draft.situacao} situacoes={situacoes} onChange={(v) => set({ situacao: v })} />
         </div>
         <div className="col-span-2">
-          <label className={labelEd}>Secretaria / Órgão</label>
-          <CampoSelecao value={draft.orgao} opcoes={opcoes.orgao} onChange={(v) => set({ orgao: v })} onAdd={(v) => adicionarOpcao("orgao", v)} />
-        </div>
-        <div>
-          <label className={labelEd}>Sigla</label>
-          <input value={draft.orgaoSigla} onChange={(e) => set({ orgaoSigla: e.target.value })} className={inp} />
+          <label className={labelEd}>Órgão (repartição)</label>
+          <SelReparticao value={draft.orgaoSigla} reparticoes={reparticoes} onChange={(codigo, nome) => set({ orgaoSigla: codigo, orgao: nome })} />
         </div>
         <div>
           <label className={labelEd}>Natureza</label>
@@ -231,6 +258,8 @@ export function ProtocolosView({
   resumo: resumoInicial,
   opcoes: opcoesInicial,
   situacoes,
+  reparticoes = [],
+  reparticaoAtiva = null,
   anos = [],
   podeEditar,
   buscaInicial = "",
@@ -240,6 +269,10 @@ export function ProtocolosView({
   resumo: ResumoProtocolos;
   opcoes: OpcoesPorCampo;
   situacoes: SituacaoOpcao[];
+  /** Repartições que o grupo acessa (viram as opções de "Órgão"). */
+  reparticoes?: RepOpcao[];
+  /** Repartição ativa no head (padrão do órgão ao criar); null em "Geral". */
+  reparticaoAtiva?: RepOpcao | null;
   anos?: string[];
   podeEditar: boolean;
   buscaInicial?: string;
@@ -338,7 +371,13 @@ export function ProtocolosView({
 
   function iniciarNovo() {
     setEditId("novo");
-    setDraft(draftDe());
+    // Órgão padrão = repartição ativa no head (quando específica).
+    const base = draftDe();
+    if (reparticaoAtiva) {
+      base.orgao = reparticaoAtiva.nome;
+      base.orgaoSigla = reparticaoAtiva.codigo;
+    }
+    setDraft(base);
     setErroEdit(null);
   }
   function iniciarEdicao(p: ProtocoloLista) {
@@ -390,6 +429,7 @@ export function ProtocolosView({
     draft,
     set,
     situacoes,
+    reparticoes,
     opcoes,
     adicionarOpcao,
     onSalvar: salvar,

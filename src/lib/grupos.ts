@@ -118,6 +118,20 @@ export async function getReparticaoContexto(
   return { lista, ativa: lista.find((r) => r.id === escolhida) ?? lista[0] };
 }
 
+/**
+ * Repartição de FILTRO ativa: `{id, codigo}` quando é uma específica; `null` quando
+ * é "Geral" (código GERAL) ou não há — Geral = todas as permitidas (sem filtro por
+ * repartição). Usada para escopar protocolos (por órgão) e PCA (por unidade).
+ */
+export async function getReparticaoFiltro(
+  usuario?: UsuarioSessao | null,
+  grupoAtivo?: GrupoResumo | null,
+): Promise<{ id: number; codigo: string } | null> {
+  const { ativa } = await getReparticaoContexto(usuario, grupoAtivo);
+  if (!ativa || ativa.codigo.trim().toUpperCase() === "GERAL") return null;
+  return { id: ativa.id, codigo: ativa.codigo };
+}
+
 export async function definirReparticaoAtiva(reparticaoId: number): Promise<void> {
   const jar = await cookies();
   jar.set(COOKIE_REP, String(reparticaoId), {

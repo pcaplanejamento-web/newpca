@@ -3,12 +3,16 @@ import { UploadForm } from "@/components/UploadForm";
 import { IconBuilding, IconChevronRight, IconDashboard } from "@/components/icons";
 import { brl, dataBR, num } from "@/lib/format";
 import { getUsuarioAtual } from "@/lib/auth";
+import { getReparticaoFiltro } from "@/lib/grupos";
 import { getUnidades } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PcaPage() {
-  const [u, unidades] = await Promise.all([getUsuarioAtual(), getUnidades()]);
+  const u = await getUsuarioAtual();
+  // Head em "Geral" (rep=null) lista todas as unidades; senão só a da repartição.
+  const rep = await getReparticaoFiltro(u);
+  const unidades = await getUnidades(rep?.id);
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
   return (

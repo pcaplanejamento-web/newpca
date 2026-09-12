@@ -59,6 +59,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(cols.includes("foto"));
   });
 
+  it("0009/0010 criam RBAC por grupo e repartições", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of [
+      "permissoes",
+      "grupos",
+      "usuario_grupos",
+      "reparticoes",
+      "grupo_reparticoes",
+    ]) {
+      assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
+    }
+    const prot = nomes(db, "SELECT name FROM pragma_table_info('protocolos')");
+    assert.ok(prot.includes("grupo_id"));
+  });
+
+  it("0011 adiciona reparticao_id em unidades", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('unidades')");
+    assert.ok(cols.includes("reparticao_id"));
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

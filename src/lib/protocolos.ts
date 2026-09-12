@@ -3,12 +3,20 @@ import { z } from "zod";
 import { protocoloOpcoes, protocolos } from "@/db/schema";
 import type { CampoOpcao, SituacaoProtocolo } from "@/db/schema";
 import { getDb } from "./db";
-import { getGrupoAtivoId } from "./grupos";
+import { getGrupoAtivo, getGrupoAtivoId, getReparticaoFiltro } from "./grupos";
 
 /** id do grupo ativo, ou -1 (sentinela que não casa com nenhum protocolo/opção).
  * Todos os dados de protocolo são escopados por grupo (RBAC). */
 async function grupoAtual(): Promise<number> {
   return (await getGrupoAtivoId()) ?? -1;
+}
+
+/** Escopo de LISTAGEM: grupo ativo + repartição ativa do head (código do órgão).
+ * repCodigo=null quando o head está em "Geral" (todas as repartições do grupo). */
+async function escopo(): Promise<{ grupoId: number; repCodigo: string | null }> {
+  const grupo = await getGrupoAtivo();
+  const rep = await getReparticaoFiltro(undefined, grupo);
+  return { grupoId: grupo?.id ?? -1, repCodigo: rep?.codigo ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,11 +144,14 @@ export type ResumoProtocolos = {
 };
 
 export async function getResumoProtocolos(): Promise<ResumoProtocolos> {
-  const g = await grupoAtual();
+  const { grupoId, repCodigo } = await escopo();
+  const where = repCodigo
+    ? and(eq(protocolos.grupoId, grupoId), eq(protocolos.orgaoSigla, repCodigo))
+    : eq(protocolos.grupoId, grupoId);
   const rows = await getDb()
     .select({ situacao: protocolos.situacao, n: sql<number>`COUNT(*)` })
     .from(protocolos)
-    .where(eq(protocolos.grupoId, g))
+    .where(where)
     .groupBy(protocolos.situacao);
   const base: ResumoProtocolos = {
     total: 0,
@@ -181,13 +192,14 @@ export type ProtocoloListaOpts = {
 
 /** Anos distintos presentes (para o filtro de Período). */
 export async function listarAnos(): Promise<string[]> {
-  const g = await grupoAtual();
+  const { grupoId, repCodigo } = await escopo();
   const rows = await getDb()
     .select({ ano: sql<string>`substr(${protocolos.data}, 1, 4)` })
     .from(protocolos)
     .where(
       and(
-        eq(protocolos.grupoId, g),
+        eq(protocolos.grupoId, grupoId),
+        ...(repCodigo ? [eq(protocolos.orgaoSigla, repCodigo)] : []),
         sql`${protocolos.data} IS NOT NULL AND ${protocolos.data} <> ''`,
       ),
     )
@@ -222,7 +234,9 @@ export type ProtocoloLista = {
 
 export async function listarProtocolos(opts: ProtocoloListaOpts) {
   const db = getDb();
-  const conds = [eq(protocolos.grupoId, await grupoAtual())];
+  const { grupoId, repCodigo } = await escopo();
+  const conds = [eq(protocolos.grupoId, grupoId)];
+  if (repCodigo) conds.push(eq(protocolos.orgaoSigla, repCodigo));
   if (opts.situacao && SITUACAO_VALORES.includes(opts.situacao as SituacaoProtocolo))
     conds.push(eq(protocolos.situacao, opts.situacao as SituacaoProtocolo));
   if (opts.natureza) conds.push(eq(protocolos.natureza, opts.natureza));
@@ -267,11 +281,14 @@ export async function listarProtocolos(opts: ProtocoloListaOpts) {
 }
 
 export async function protocolosRecentes(limit = 5): Promise<ProtocoloLista[]> {
-  const g = await grupoAtual();
+  const { grupoId, repCodigo } = await escopo();
+  const where = repCodigo
+    ? and(eq(protocolos.grupoId, grupoId), eq(protocolos.orgaoSigla, repCodigo))
+    : eq(protocolos.grupoId, grupoId);
   const rows = await getDb()
     .select(SELECT_PROTOCOLO)
     .from(protocolos)
-    .where(eq(protocolos.grupoId, g))
+    .where(where)
     .orderBy(desc(protocolos.criadoEm), desc(protocolos.id))
     .limit(clamp(limit, 1, 20));
   return rows as ProtocoloLista[];

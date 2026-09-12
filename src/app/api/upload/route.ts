@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { exigirEditor } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
+import { getReparticaoFiltro } from "@/lib/grupos";
 import { normalizarLinha, type LinhaCrua } from "@/lib/normalize";
 import { uploadSchema } from "@/lib/validation";
 
@@ -56,27 +57,23 @@ export async function POST(req: Request) {
       const { codigo, municipio, nomeArquivo, totalItens, valorTotal, rows } =
         parsed.data;
 
+      // Repartição ativa no head vira dona da unidade. Em "Geral" (rep=null) a
+      // unidade fica sem repartição; ao RE-importar em Geral, preserva a atual.
+      const rep = await getReparticaoFiltro(auth.u);
+      const set = {
+        municipio,
+        nomeArquivo: nomeArquivo ?? null,
+        totalItens: totalItens ?? rows.length,
+        valorTotal: valorTotal ?? 0,
+        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+        ...(rep ? { reparticaoId: rep.id } : {}),
+      };
+
       // Cria/atualiza a unidade (por código) e recupera o id.
       const [u] = await db
         .insert(unidades)
-        .values({
-          codigo,
-          municipio,
-          nomeArquivo: nomeArquivo ?? null,
-          totalItens: totalItens ?? rows.length,
-          valorTotal: valorTotal ?? 0,
-          atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-        })
-        .onConflictDoUpdate({
-          target: unidades.codigo,
-          set: {
-            municipio,
-            nomeArquivo: nomeArquivo ?? null,
-            totalItens: totalItens ?? rows.length,
-            valorTotal: valorTotal ?? 0,
-            atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-          },
-        })
+        .values({ codigo, reparticaoId: rep?.id ?? null, ...set })
+        .onConflictDoUpdate({ target: unidades.codigo, set })
         .returning({ id: unidades.id });
 
       const unidadeId = u.id;

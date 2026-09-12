@@ -21,12 +21,20 @@ export const unidades = sqliteTable(
     codigo: text("codigo").notNull(),
     municipio: text("municipio").notNull(),
     nomeArquivo: text("nome_arquivo"),
+    // Repartição dona da unidade (definida no import pela repartição ativa no
+    // head). NULL = importada em "Geral" — visível só na visão Geral.
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
+      onDelete: "set null",
+    }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
     totalItens: integer("total_itens").default(0),
     valorTotal: real("valor_total").default(0),
   },
-  (t) => [uniqueIndex("unidades_codigo_uq").on(t.codigo)],
+  (t) => [
+    uniqueIndex("unidades_codigo_uq").on(t.codigo),
+    index("unidades_reparticao_idx").on(t.reparticaoId),
+  ],
 );
 
 export const itens = sqliteTable(

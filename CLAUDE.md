@@ -70,9 +70,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Repartições** (`reparticoes`: codigo+nome+ordem): lista global **reordenável** (tabela com arrasto,
   componente `ReorderTable` — Pointer Events, mouse+toque). Repartição ativa por cookie
   `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
-  `/api/reparticoes/ativo`. (Repartição ainda **não** escopa dados de protocolo — é acesso + contexto.)
-- Migrações `0009` (grupos/permissões) e `0010` (repartições) semeiam o grupo/repartição **"Geral"** e
-  migram os dados/usuários existentes para lá — por isso o uso atual não muda.
+  `/api/reparticoes/ativo`.
+- **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e
+  PCA. `getReparticaoFiltro()` devolve `{id,codigo}` da ativa, ou **`null` em "Geral"** (= todas, sem
+  filtro). **Órgão = repartição:** o campo "Órgão" do protocolo é escolhido da lista de repartições
+  (guarda `orgao`=nome, `orgao_sigla`=código); as listagens de `protocolos.ts` (`escopo()`) filtram por
+  `orgao_sigla = código`. No **PCA**, cada `unidade` recebe `reparticao_id` da repartição ativa no
+  import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
+  `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
+- Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
+  o grupo/repartição **"Geral"** e migram os dados/usuários existentes para lá — por isso o uso atual não muda.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
