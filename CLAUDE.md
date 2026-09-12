@@ -55,6 +55,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 
+## Grupos, Permissões e Repartições (RBAC por grupo)
+- **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
+  ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo tem **1 permissão** e acessa um conjunto
+  de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,
+  `/painel/reparticoes`. Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
+  `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
+- **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** (dashboard/
+  protocolos/pca) o grupo vê. **Admin ignora** (vê todas — regra firme). A nav em `AppShell` filtra
+  por `abasPermitidas`.
+- **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
+  `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
+  exige grupo ativo.
+- **Repartições** (`reparticoes`: codigo+nome+ordem): lista global **reordenável** (tabela com arrasto,
+  componente `ReorderTable` — Pointer Events, mouse+toque). Repartição ativa por cookie
+  `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
+  `/api/reparticoes/ativo`. (Repartição ainda **não** escopa dados de protocolo — é acesso + contexto.)
+- Migrações `0009` (grupos/permissões) e `0010` (repartições) semeiam o grupo/repartição **"Geral"** e
+  migram os dados/usuários existentes para lá — por isso o uso atual não muda.
+
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`
@@ -78,7 +97,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `StatusTag`
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
-  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho), `Modal`, `formStyles`.
+  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho), `Modal`, `formStyles`,
+  `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
+  por token), `Pager`, `LinkCard`, `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
+  Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
+  `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` legado só permanece pelo `Tone`/tons do `StatCard`.
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`

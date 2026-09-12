@@ -35,6 +35,7 @@ export function ReorderTable<T>({
   const [ordem, setOrdem] = useState<T[]>(items);
   const ordemRef = useRef<T[]>(items);
   const [dragId, setDragId] = useState<Id | null>(null);
+  const dragIdRef = useRef<Id | null>(null);
   const arrastando = useRef(false);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -53,13 +54,19 @@ export function ReorderTable<T>({
 
   function iniciar(e: ReactPointerEvent, id: Id) {
     e.preventDefault();
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    try {
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ambiente sem captura de ponteiro */
+    }
     arrastando.current = true;
+    dragIdRef.current = id;
     setDragId(id);
   }
 
   function mover(e: ReactPointerEvent) {
-    if (!arrastando.current || dragId == null) return;
+    const arrasto = dragIdRef.current;
+    if (!arrastando.current || arrasto == null) return;
     const body = bodyRef.current;
     if (!body) return;
     const linhas = Array.from(body.querySelectorAll<HTMLElement>("tr[data-row]"));
@@ -73,7 +80,7 @@ export function ReorderTable<T>({
       }
     }
     const atual = ordemRef.current;
-    const de = atual.findIndex((it) => getId(it) === dragId);
+    const de = atual.findIndex((it) => getId(it) === arrasto);
     if (de === -1 || de === alvo) return;
     const next = [...atual];
     const [m] = next.splice(de, 1);
@@ -83,8 +90,13 @@ export function ReorderTable<T>({
 
   function soltar(e: ReactPointerEvent) {
     if (!arrastando.current) return;
-    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    try {
+      (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     arrastando.current = false;
+    dragIdRef.current = null;
     setDragId(null);
     onReorder(ordemRef.current.map(getId));
   }

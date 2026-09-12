@@ -410,7 +410,13 @@ export function AppShell({
                 <IconClose className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-7 flex-1 overflow-y-auto px-1">
+            {(reparticoes.length > 0 || grupos.length > 0) && (
+              <div className="mt-5 flex flex-wrap gap-2 px-1 sm:hidden">
+                <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
+                <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
+              </div>
+            )}
+            <div className="mt-5 flex-1 overflow-y-auto px-1">
               <NavLinks role={usuario.role} abas={abasSet} onNavigate={fecharMenu} />
             </div>
             <div className="pt-6">
@@ -437,8 +443,10 @@ export function AppShell({
           <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 
           <div className="ml-auto flex items-center gap-1.5">
-            <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
-            <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
+              <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
+            </div>
             <SinoNotificacoes />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="lg:hidden">
