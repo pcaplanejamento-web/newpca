@@ -134,6 +134,12 @@ export function ReparticoesAdmin() {
         onReorder={(ids) => reordenar(ids as number[])}
         minWidth={560}
         dica="Arraste as linhas para reordenar. A nova ordem é salva automaticamente."
+        preview={(r) => (
+          <>
+            <span className="mr-1.5 font-mono text-[11px] font-semibold text-accent">{r.codigo}</span>
+            {r.nome}
+          </>
+        )}
         columns={[
           { header: "#", minWidth: 40, render: (_r, i) => <span className="tabular-nums text-faint">{i + 1}</span> },
           { header: "Código", minWidth: 100, render: (r) => <Badge tone="violet">{r.codigo}</Badge> },

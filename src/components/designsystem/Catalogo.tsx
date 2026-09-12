@@ -511,6 +511,12 @@ export function Catalogo() {
           getId={(r) => r.id}
           minWidth={520}
           dica="Arraste as linhas para reordenar (mouse ou toque)."
+          preview={(r) => (
+            <>
+              <span className="mr-1.5 font-mono text-[11px] font-semibold text-accent">{r.codigo}</span>
+              {r.nome}
+            </>
+          )}
           onReorder={(ids) =>
             setRepsOrdem((prev) => {
               const byId = new Map(prev.map((x) => [x.id, x]));

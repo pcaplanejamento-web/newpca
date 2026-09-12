@@ -86,14 +86,32 @@ export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoRes
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
 }
 
-/** Contexto de repartição: as acessíveis pelo grupo ativo + a ativa (cookie). */
+/** Todas as repartições (ordenadas) — o ADM vê todas no head. */
+export async function listarReparticoes(): Promise<ReparticaoResumo[]> {
+  return getDb()
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome })
+    .from(reparticoes)
+    .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
+}
+
+/**
+ * Contexto de repartição do cabeçalho. **Admin vê TODAS** (regra firme); os demais
+ * veem só as do grupo ativo (incluindo/excluindo "Geral" conforme o grupo). A ativa
+ * vem do cookie, validada contra a lista.
+ */
 export async function getReparticaoContexto(
   usuario?: UsuarioSessao | null,
   grupoAtivo?: GrupoResumo | null,
 ): Promise<{ lista: ReparticaoResumo[]; ativa: ReparticaoResumo | null }> {
-  const grupo = grupoAtivo === undefined ? await getGrupoAtivo(usuario) : grupoAtivo;
-  if (!grupo) return { lista: [], ativa: null };
-  const lista = await reparticoesDoGrupo(grupo.id);
+  const u = usuario === undefined ? await getUsuarioAtual() : usuario;
+  let lista: ReparticaoResumo[];
+  if (u?.role === "admin") {
+    lista = await listarReparticoes();
+  } else {
+    const grupo = grupoAtivo === undefined ? await getGrupoAtivo(u) : grupoAtivo;
+    if (!grupo) return { lista: [], ativa: null };
+    lista = await reparticoesDoGrupo(grupo.id);
+  }
   if (lista.length === 0) return { lista, ativa: null };
   const jar = await cookies();
   const escolhida = Number(jar.get(COOKIE_REP)?.value);
