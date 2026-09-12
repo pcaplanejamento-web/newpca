@@ -94,9 +94,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Importa `.xlsx` E `.pdf`:** o cabeçalho + seções são **compartilhados** em `src/lib/parse-dfd-comum.ts`
   (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
   tabela por coluna da matriz). `.pdf` → `parse-dfd-pdf`/`parse-dfd-pdf-core` (**pdf.js `pdfjs-dist`**, importado
-  DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`): a
-  tabela é remontada **por posição de coluna**, atribuindo cada trecho ao item de `y` mais próximo e **rejuntando
-  o código quebrado em 2 linhas**. Ambos produzem o mesmo `DfdParseado` → mesmo salvar/ver.
+  DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
+  build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**, atribuindo cada trecho
+  ao item de `y` mais próximo e **rejuntando o código quebrado em 2 linhas**. Ambos → mesmo `DfdParseado`.
+- **Banner flutuante único (`DfdView` dentro de `Modal`):** a MESMA visão completa é usada na **conferência da
+  importação** (`DfdUploadForm`) e na **visualização** do DFD já gravado (`PcaModuleView` "Ver" → `GET /api/dfd/[id]`).
+  **Só grava ao confirmar** (prévia no navegador; nada no D1 antes).
+- **Regras obrigatórias (`faltasObrigatorias`, `src/lib/dfd-validation.ts`) — fonte única cliente+servidor:** não
+  importa sem **valor unitário em todos os itens**, **repartição**, **justificativa** (§3), **previsão de entrega**
+  (§5), **prioridade** (§6) e **fundamentação legal** (§7). O banner **mostra o DFD e lista o que falta**, mas
+  **bloqueia o botão** "Importar"; o `POST /api/dfd` rejeita (422) por garantia.
 - **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
   edição já gerada) — plano consolidado da Prefeitura, **escopo por repartição** (sem `grupo_id`, como as
   `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch

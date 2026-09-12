@@ -1,10 +1,47 @@
 "use client";
 
-import type { DfdDetalhe, DfdItemRow } from "@/lib/dfd";
 import { brl, num } from "@/lib/format";
 import { type Column, DataTable } from "./DataTable";
 
-const COLS: Column<DfdItemRow>[] = [
+/**
+ * Visão COMPLETA do DFD — fonte única usada no banner flutuante tanto na
+ * IMPORTAÇÃO (prévia do arquivo lido) quanto na VISUALIZAÇÃO (DFD já gravado).
+ * Recebe uma forma estrutural (`DfdVisual`) satisfeita por `DfdParseado`
+ * (com a repartição escolhida) e por `DfdDetalhe`.
+ */
+export type DfdVisualItem = {
+  item: number | null;
+  codigo: string | null;
+  descricao: string | null;
+  unidade: string | null;
+  quantidade: number | null;
+  valorUnitario: number | null;
+  valorTotal: number | null;
+};
+
+export type DfdVisual = {
+  numero: string;
+  planejamento: string | null;
+  tipo: string | null;
+  objeto: string | null;
+  orgaoEntidade: string | null;
+  setorRequisitante: string | null;
+  responsavel: string | null;
+  matricula: string | null;
+  email: string | null;
+  telefone: string | null;
+  valorEstimado: number | null;
+  valorTotal: number | null;
+  reparticaoCodigo: string | null;
+  reparticaoNome: string | null;
+  totalItens: number | null;
+  itens: DfdVisualItem[];
+  secoes: { numero: number; titulo: string; texto: string }[];
+};
+
+type ItemK = DfdVisualItem & { _k: number };
+
+const COLS: Column<ItemK>[] = [
   { key: "item", header: "Item", align: "right", render: (r) => r.item ?? "—" },
   {
     key: "codigo",
@@ -34,21 +71,25 @@ const COLS: Column<DfdItemRow>[] = [
     key: "vtot",
     header: "Vlr. total",
     align: "right",
-    render: (r) => (r.valorTotal != null ? <span className="font-semibold">{brl(r.valorTotal)}</span> : "—"),
+    render: (r) =>
+      r.valorTotal != null ? <span className="font-semibold">{brl(r.valorTotal)}</span> : "—",
   },
 ];
 
-export function DfdDetalheView({ dfd }: { dfd: DfdDetalhe }) {
+export function DfdView({ dfd }: { dfd: DfdVisual }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem repartição";
+  const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
+
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-lg font-bold text-text">DFD {dfd.numero}</h2>
         <p className="mt-0.5 text-sm text-muted">
-          {[dfd.tipo, dfd.objeto].filter(Boolean).join(" · ") || "Documento de Formalização da Demanda"}
+          {[dfd.tipo, dfd.objeto].filter(Boolean).join(" · ") ||
+            "Documento de Formalização da Demanda"}
         </p>
       </div>
 
@@ -60,7 +101,7 @@ export function DfdDetalheView({ dfd }: { dfd: DfdDetalhe }) {
           <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
           <Campo label="Repartição" valor={rep} />
           <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
-          <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
+          <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} />
           <Campo label="Responsável" valor={dfd.responsavel ?? "—"} />
           <Campo label="Matrícula" valor={dfd.matricula ?? "—"} />
           <Campo label="E-mail" valor={dfd.email ?? "—"} />
@@ -91,8 +132,8 @@ export function DfdDetalheView({ dfd }: { dfd: DfdDetalhe }) {
         </h3>
         <DataTable
           columns={COLS}
-          rows={dfd.itens}
-          getKey={(r) => r.id}
+          rows={rows}
+          getKey={(r) => r._k}
           minWidth={820}
           footer={`${dfd.itens.length} ${dfd.itens.length === 1 ? "item" : "itens"}`}
         />

@@ -1,9 +1,42 @@
 import { z } from "zod";
+import { norm } from "./parse-dfd-comum.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
 
 const MAX_ITENS = 500;
+
+// Seções obrigatórias para importar um DFD (casadas pelo TÍTULO, tolerante ao número).
+const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
+  { kw: "JUSTIFICATIVA", rotulo: "justificativa da necessidade (Seção 3)" },
+  { kw: "PREVISAO DE ENTREGA", rotulo: "previsão de entrega/execução (Seção 5)" },
+  { kw: "PRIORIDADE", rotulo: "prioridade da compra/contratação (Seção 6)" },
+  { kw: "FUNDAMENTACAO LEGAL", rotulo: "fundamentação legal (Seção 7)" },
+];
+
+export type DfdConferencia = {
+  reparticaoId?: number | null;
+  itens: { valorUnitario?: number | null }[];
+  secoes: { titulo: string; texto: string }[];
+};
+
+/**
+ * Requisitos OBRIGATÓRIOS para importar um DFD. Retorna a lista de faltas
+ * (vazio = pode importar). É a fonte única da regra — usada no cliente (trava o
+ * botão "Importar") E no servidor (rejeita a gravação). Não permite importar
+ * sem: valor unitário em todos os itens, repartição, justificativa, previsão de
+ * entrega, prioridade e fundamentação legal.
+ */
+export function faltasObrigatorias(d: DfdConferencia): string[] {
+  const faltas: string[] = [];
+  if (d.itens.length === 0 || !d.itens.every((i) => i.valorUnitario != null && i.valorUnitario > 0))
+    faltas.push("valor unitário em todos os itens");
+  if (d.reparticaoId == null) faltas.push("repartição vinculada");
+  const tem = (kw: string) =>
+    d.secoes.some((s) => norm(s.titulo).includes(kw) && s.texto.trim().length > 0);
+  for (const s of SECOES_OBRIGATORIAS) if (!tem(s.kw)) faltas.push(s.rotulo);
+  return faltas;
+}
 
 const textoOpc = z.string().trim().max(4000).optional().nullable();
 const textoCurtoOpc = z.string().trim().max(255).optional().nullable();

@@ -81,17 +81,23 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         if (k && anchors[k] == null) anchors[k] = it.x;
       }
     }
-    const order = (
+    // Colunas presentes com sua âncora `x` (na ordem esperada).
+    const cols = (
       ["item", "codigo", "descricao", "unidade", "quantidade", "valorUnitario", "valorTotal"] as const
-    ).filter((k) => anchors[k] != null);
-    const itemBound = order.length > 1 ? (anchors[order[0]]! + anchors[order[1]]!) / 2 : 70;
+    )
+      .map((key) => ({ key, x: anchors[key] }))
+      .filter((c): c is { key: keyof DfdItemParseado; x: number } => c.x != null);
+    const [c0, c1] = cols;
+    const itemBound = c0 && c1 ? (c0.x + c1.x) / 2 : 70;
 
     const colOf = (x: number, str: string): keyof DfdItemParseado => {
       let idx = 0;
-      for (let i = 0; i < order.length - 1; i++) {
-        if (x >= (anchors[order[i]]! + anchors[order[i + 1]]!) / 2) idx = i + 1;
+      for (let i = 0; i < cols.length - 1; i++) {
+        const a = cols[i];
+        const b = cols[i + 1];
+        if (a && b && x >= (a.x + b.x) / 2) idx = i + 1;
       }
-      let c = order[idx];
+      let c: keyof DfdItemParseado = cols[idx]?.key ?? "descricao";
       // no vão código×descrição, dígitos puros = código; texto = descrição.
       if (c === "codigo" || c === "descricao") c = /^\d+$/.test(str.trim()) ? "codigo" : "descricao";
       return c;

@@ -20,6 +20,13 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### DFD: conferência em banner + regras de importação — entregue
+✅ Ao importar (ou clicar em "Ver"), o DFD aparece **completo num banner flutuante** (`DfdView` em `Modal`,
+reutilizado nos dois casos) — só grava no D1 **ao confirmar**. **Bloqueia a importação** (botão travado + lista
+explicativa do que falta, mas deixando conferir) quando não há **valor unitário** em todos os itens, **repartição**,
+**justificativa**, **previsão de entrega**, **prioridade** ou **fundamentação legal** (`faltasObrigatorias`,
+cliente+servidor). Visualização por `GET /api/dfd/[id]`.
+
 ### DFD em PDF (além do .xlsx) — entregue
 ✅ O import de DFD aceita **`.pdf`** além de `.xlsx`: leitura no navegador via **pdf.js** (`parse-dfd-pdf`),
 reaproveitando o cabeçalho/seções (`parse-dfd-comum`) e remontando a tabela por posição (rejunta o código

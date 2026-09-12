@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import type { DfdResumo, PcaResumo } from "@/lib/dfd";
+import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
 import { brl, dataBR, num } from "@/lib/format";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
+import { DfdView } from "./DfdView";
 import { TextField } from "./Field";
 import {
   IconAlert,
@@ -58,6 +59,23 @@ export function PcaModuleView({
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [salvando, setSalvando] = useState(false);
+  const [dfdView, setDfdView] = useState<DfdDetalhe | null>(null);
+  const [carregandoView, setCarregandoView] = useState<number | null>(null);
+
+  async function verDfd(id: number) {
+    setErro(null);
+    setCarregandoView(id);
+    try {
+      const res = await fetch(`/api/dfd/${id}`);
+      const j = (await res.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
+      if (!res.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
+      setDfdView(j.dfd);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
+    } finally {
+      setCarregandoView(null);
+    }
+  }
 
   async function excluirDfd(id: number, numero: string) {
     if (!confirm(`Excluir o DFD ${numero}?`)) return;
@@ -130,7 +148,7 @@ export function PcaModuleView({
       render: (r) =>
         acao(
           <>
-            <Button href={`/painel/pca/dfd/${r.id}`} variant="ghost">
+            <Button variant="ghost" onClick={() => verDfd(r.id)} loading={carregandoView === r.id}>
               Ver
             </Button>
             {podeEditar && (
@@ -349,6 +367,17 @@ export function PcaModuleView({
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Banner flutuante: visualizar o DFD completo (mesmo componente da importação) */}
+      <Modal
+        open={!!dfdView}
+        onClose={() => setDfdView(null)}
+        titulo={dfdView ? `DFD ${dfdView.numero}` : ""}
+        size="lg"
+        scrollable
+      >
+        {dfdView && <DfdView dfd={dfdView} />}
       </Modal>
     </div>
   );

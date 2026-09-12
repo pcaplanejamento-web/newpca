@@ -2,19 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { brl, num } from "@/lib/format";
+import { faltasObrigatorias } from "@/lib/dfd-validation";
+import { num } from "@/lib/format";
 import { stripAccents } from "@/lib/normalize";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { type Column, DataTable } from "./DataTable";
+import { DfdView, type DfdVisual } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { Modal } from "./Modal";
 
 type Rep = { id: number; codigo: string; nome: string };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
-type ItemPreview = DfdParseado["itens"][number] & { _k: number };
 
 const norm = (s: string) => stripAccents(s.trim().toUpperCase());
 
@@ -28,40 +29,6 @@ const chaveNome = (s: string) =>
     .replace(/[^A-Z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
-
-const COLS: Column<ItemPreview>[] = [
-  { key: "item", header: "Item", align: "right", render: (r) => r.item ?? "—" },
-  {
-    key: "codigo",
-    header: "Código",
-    render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
-  },
-  {
-    key: "descricao",
-    header: "Descrição",
-    minWidth: 300,
-    render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
-  },
-  { key: "unidade", header: "Unidade", render: (r) => r.unidade ?? "—" },
-  {
-    key: "quantidade",
-    header: "Qtd.",
-    align: "right",
-    render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
-  },
-  {
-    key: "vunit",
-    header: "Vlr. unit.",
-    align: "right",
-    render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
-  },
-  {
-    key: "vtot",
-    header: "Vlr. total",
-    align: "right",
-    render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—"),
-  },
-];
 
 export function DfdUploadForm({
   reparticoes,
@@ -78,9 +45,16 @@ export function DfdUploadForm({
   const [repId, setRepId] = useState<number | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [resultado, setResultado] = useState<{
+    numero: string;
+    itens: number;
+    repNome: string | null;
+    foraDoHead: boolean;
+  } | null>(null);
 
   async function handleFile(file: File) {
     setErro(null);
+    setResultado(null);
     const ehPdf = /\.pdf$/i.test(file.name);
     if (!ehPdf && !/\.xlsx?$/i.test(file.name)) {
       setStatus("error");
@@ -144,6 +118,12 @@ export function DfdUploadForm({
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Erro ao importar o DFD.");
+      setResultado({
+        numero: preview.numero,
+        itens: preview.itens.length,
+        repNome: reparticoes.find((r) => r.id === repId)?.nome ?? null,
+        foraDoHead: repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId,
+      });
       setStatus("done");
       router.refresh();
     } catch (e) {
@@ -161,53 +141,33 @@ export function DfdUploadForm({
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  // ---- Sucesso ----
-  if (status === "done" && preview) {
-    const foraDoHead =
-      repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
-    const repNome = reparticoes.find((r) => r.id === repId)?.nome;
-    return (
-      <div
-        className="animate-fade-in-up rounded-card border p-6"
-        style={{
-          borderColor: "color-mix(in srgb, var(--ok) 30%, transparent)",
-          background: "color-mix(in srgb, var(--ok) 8%, var(--surface))",
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-full text-white"
-            style={{ background: "var(--ok)" }}
-          >
-            <IconCheck className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="font-bold" style={{ color: "var(--ok)" }}>
-              DFD {preview.numero} importado!
-            </h3>
-            <p className="text-sm text-muted">
-              {num(preview.itens.length)} itens · {repNome ? `Repartição ${repNome}` : "sem repartição (visível em Geral)"}
-            </p>
-          </div>
-        </div>
-        {foraDoHead && (
-          <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-            Este DFD foi salvo na repartição <strong>{repNome}</strong>, diferente da ativa no
-            cabeçalho. Selecione essa repartição (ou "Geral") no topo para vê-lo na lista.
-          </Callout>
-        )}
-        <div className="mt-5">
-          <Button variant="secondary" onClick={reset}>
-            Importar outro DFD
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const rowsPreview: ItemPreview[] = preview
-    ? preview.itens.map((it, i) => ({ ...it, _k: i }))
+  const rep = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
+  const faltas = preview
+    ? faltasObrigatorias({ reparticaoId: repId, itens: preview.itens, secoes: preview.secoes })
     : [];
+  const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
+  const visual: DfdVisual | null = preview
+    ? {
+        numero: preview.numero,
+        planejamento: preview.planejamento,
+        tipo: preview.tipo,
+        objeto: preview.objeto,
+        orgaoEntidade: preview.orgaoEntidade,
+        setorRequisitante: preview.setorRequisitante,
+        responsavel: preview.responsavel,
+        matricula: preview.matricula,
+        email: preview.email,
+        telefone: preview.telefone,
+        valorEstimado: preview.valorEstimado,
+        valorTotal: preview.valorTotal,
+        reparticaoCodigo: rep?.codigo ?? null,
+        reparticaoNome: rep?.nome ?? null,
+        totalItens: preview.itens.length,
+        itens: preview.itens,
+        secoes: preview.secoes,
+      }
+    : null;
+  const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
     <div>
@@ -248,7 +208,8 @@ export function DfdUploadForm({
           </Button>
         </div>
         <p className="mt-3 text-xs text-faint">
-          O arquivo é lido no seu navegador. Reimportar o mesmo Número DFD substitui os itens.
+          O arquivo é lido no seu navegador e mostrado num banner para conferência — só grava ao confirmar.
+          Reimportar o mesmo Número DFD substitui os itens.
         </p>
       </div>
 
@@ -265,127 +226,128 @@ export function DfdUploadForm({
         </Callout>
       )}
 
-      {/* Preview + confirmar */}
-      {preview && (status === "ready" || status === "sending") && (
-        <div className="mt-4 animate-fade-in-up space-y-4 rounded-card border border-border bg-surface p-5 shadow-ring">
-          <div className="flex items-center gap-2 text-sm font-semibold text-text">
-            <IconFile className="h-[18px] w-[18px] text-accent" />
-            DFD {preview.numero}
-            {preview.tipo && <span className="text-muted">· {preview.tipo}</span>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Campo label="Nº DFD" valor={preview.numero} />
-            <Campo label="Planejamento" valor={preview.planejamento ?? "—"} />
-            <Campo label="Objeto" valor={preview.objeto ?? "—"} span />
-            <Campo label="Órgão/Entidade" valor={preview.orgaoEntidade ?? "—"} span />
-            <Campo label="Setor Requisitante" valor={preview.setorRequisitante ?? "—"} span />
-            <Campo label="Responsável" valor={preview.responsavel ?? "—"} />
-            <Campo label="Matrícula" valor={preview.matricula ?? "—"} />
-            <Campo label="E-mail" valor={preview.email ?? "—"} span />
-            <Campo label="Telefone" valor={preview.telefone ?? "—"} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-control bg-surface-2 p-3">
-              <div className="text-xs text-muted">Valor estimado (nota)</div>
-              <div className="text-xl font-bold text-text">
-                {preview.valorEstimado != null ? brl(preview.valorEstimado) : "—"}
-              </div>
+      {/* Sucesso */}
+      {status === "done" && resultado && (
+        <div
+          className="animate-fade-in-up mt-4 rounded-card border p-6"
+          style={{
+            borderColor: "color-mix(in srgb, var(--ok) 30%, transparent)",
+            background: "color-mix(in srgb, var(--ok) 8%, var(--surface))",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white"
+              style={{ background: "var(--ok)" }}
+            >
+              <IconCheck className="h-6 w-6" />
             </div>
-            <div className="rounded-control bg-surface-2 p-3">
-              <div className="text-xs text-muted">Valor total (tabela)</div>
-              <div className="text-xl font-bold text-text">
-                {preview.valorTotal != null ? brl(preview.valorTotal) : "—"}
-              </div>
+            <div>
+              <h3 className="font-bold" style={{ color: "var(--ok)" }}>
+                DFD {resultado.numero} importado!
+              </h3>
+              <p className="text-sm text-muted">
+                {num(resultado.itens)} itens{resultado.repNome ? ` · Repartição ${resultado.repNome}` : ""}
+              </p>
             </div>
           </div>
-
-          {preview.secoes.length > 0 && (
-            <p className="text-xs text-muted">
-              + {preview.secoes.length} seç{preview.secoes.length === 1 ? "ão" : "ões"} capturada
-              {preview.secoes.length === 1 ? "" : "s"} (identificação, justificativa, previsão,
-              fundamentação legal…) — visíveis ao abrir o DFD.
-            </p>
+          {resultado.foraDoHead && (
+            <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
+              Este DFD foi salvo na repartição <strong>{resultado.repNome}</strong>, diferente da ativa
+              no cabeçalho. Selecione essa repartição (ou "Geral") no topo para vê-lo na lista.
+            </Callout>
           )}
-
-          {/* Repartição (auto-detectada, confirmável) */}
-          <div>
-            <label className={labelCls} htmlFor="dfd-rep">
-              Repartição / órgão
-            </label>
-            <select
-              id="dfd-rep"
-              className={inputCls}
-              value={repId ?? ""}
-              onChange={(e) => {
-                setRepId(e.target.value ? Number(e.target.value) : null);
-                setAutoMatch(false);
-              }}
-            >
-              <option value="">— Sem repartição (visível em Geral) —</option>
-              {reparticoes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.codigo} · {r.nome}
-                </option>
-              ))}
-            </select>
-            {autoMatch ? (
-              <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
-                Repartição detectada automaticamente pela sigla do Setor Requisitante
-                {preview.siglaSetor ? ` (${preview.siglaSetor})` : ""}. Confirme ou ajuste.
-              </Callout>
-            ) : preview.siglaSetor && repId == null ? (
-              <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mt-2">
-                Não encontrei uma repartição com a sigla "{preview.siglaSetor}". Selecione manualmente.
-              </Callout>
-            ) : null}
-          </div>
-
-          <div>
-            <div className="mb-2 text-xs font-semibold text-muted">
-              Itens do DFD ({num(preview.itens.length)})
-            </div>
-            <DataTable
-              columns={COLS}
-              rows={rowsPreview}
-              getKey={(r) => r._k}
-              minWidth={640}
-              footer={`${preview.itens.length} ${preview.itens.length === 1 ? "item" : "itens"}`}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              disabled={status === "sending"}
-              onClick={enviar}
-              icon={
-                status === "sending" ? (
-                  <IconSpinner className="h-[18px] w-[18px]" />
-                ) : (
-                  <IconUpload className="h-[18px] w-[18px]" />
-                )
-              }
-            >
-              {status === "sending" ? "Importando..." : "Importar DFD"}
-            </Button>
-            <Button variant="secondary" disabled={status === "sending"} onClick={reset}>
-              Cancelar
+          <div className="mt-5">
+            <Button variant="secondary" onClick={reset}>
+              Importar outro DFD
             </Button>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function Campo({ label, valor, span }: { label: string; valor: string; span?: boolean }) {
-  return (
-    <div className={span ? "col-span-2" : ""}>
-      <div className="text-xs text-muted">{label}</div>
-      <div className="truncate font-semibold text-text" title={valor}>
-        {valor}
-      </div>
+      {/* Banner flutuante: conferir o DFD completo e importar (só grava ao confirmar) */}
+      <Modal
+        open={modalAberto}
+        onClose={() => reset()}
+        titulo={`Conferir e importar — DFD ${preview?.numero ?? ""}`}
+        size="lg"
+        scrollable
+        fecharNoBackdrop={false}
+      >
+        {visual && (
+          <div className="space-y-4">
+            {/* Repartição (auto-detectada, confirmável) */}
+            <div>
+              <label className={labelCls} htmlFor="dfd-rep">
+                Repartição / órgão <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                id="dfd-rep"
+                className={inputCls}
+                value={repId ?? ""}
+                onChange={(e) => {
+                  setRepId(e.target.value ? Number(e.target.value) : null);
+                  setAutoMatch(false);
+                }}
+              >
+                <option value="">— Selecione a repartição —</option>
+                {reparticoes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.codigo} · {r.nome}
+                  </option>
+                ))}
+              </select>
+              {autoMatch && (
+                <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
+                  Repartição detectada automaticamente
+                  {preview?.siglaSetor ? ` pela sigla "${preview.siglaSetor}"` : ""}. Confirme ou ajuste.
+                </Callout>
+              )}
+            </div>
+
+            {/* Validação obrigatória — mostra os erros, mas não bloqueia a conferência */}
+            {faltas.length > 0 && (
+              <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
+                <p className="font-semibold">Importação bloqueada — faltam dados obrigatórios:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 opacity-90">
+                  {faltas.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 opacity-90">
+                  Você pode conferir o DFD abaixo; a importação fica liberada quando estiver completo.
+                </p>
+              </Callout>
+            )}
+            {foraDoHead && faltas.length === 0 && (
+              <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
+                A repartição escolhida é diferente da ativa no cabeçalho — o DFD ficará visível ao
+                selecioná-la (ou "Geral") no topo.
+              </Callout>
+            )}
+
+            {/* Ações */}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" disabled={status === "sending"} onClick={() => reset()}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={enviar}
+                loading={status === "sending"}
+                disabled={faltas.length > 0 || status === "sending"}
+                icon={<IconUpload className="h-[18px] w-[18px]" />}
+              >
+                Importar DFD
+              </Button>
+            </div>
+
+            {/* Documento completo (conferência) */}
+            <div className="border-t border-border pt-4">
+              <DfdView dfd={visual} />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

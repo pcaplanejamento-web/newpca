@@ -12,7 +12,7 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
-import { DfdDetalheView } from "@/components/DfdDetalheView";
+import { DfdView } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
@@ -627,7 +627,7 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="DFD — visualização do documento importado">
-        <DfdDetalheView dfd={DFD_DEMO} />
+        <DfdView dfd={DFD_DEMO} />
       </Secao>
 
       <Secao titulo="PCA — compilação dos DFDs por repartição">

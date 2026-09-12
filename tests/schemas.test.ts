@@ -6,7 +6,7 @@ import {
   perfilSchema,
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
-import { dfdImportSchema, gerarPcaSchema } from "../src/lib/dfd-validation.ts";
+import { dfdImportSchema, faltasObrigatorias, gerarPcaSchema } from "../src/lib/dfd-validation.ts";
 import { uploadSchema } from "../src/lib/validation.ts";
 
 // Observação: os schemas de protocolos/tabelas vivem em módulos que também
@@ -84,5 +84,35 @@ describe("dfd-validation", () => {
     assert.equal(gerarPcaSchema.safeParse({ nome: "", dfdIds: [1] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [0] }).success, false);
+  });
+});
+
+describe("faltasObrigatorias (regras de import de DFD)", () => {
+  const completo = {
+    reparticaoId: 3,
+    itens: [{ valorUnitario: 100 }, { valorUnitario: 50 }],
+    secoes: [
+      { titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "x" },
+      { titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "y" },
+      { titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "Alto" },
+      { titulo: "FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133" },
+    ],
+  };
+
+  it("DFD completo → nenhuma falta (pode importar)", () => {
+    assert.deepEqual(faltasObrigatorias(completo), []);
+  });
+
+  it("bloqueia sem valor unitário em algum item", () => {
+    const f = faltasObrigatorias({ ...completo, itens: [{ valorUnitario: 100 }, { valorUnitario: null }] });
+    assert.ok(f.some((x) => /valor unit/i.test(x)));
+  });
+
+  it("bloqueia sem repartição", () => {
+    assert.ok(faltasObrigatorias({ ...completo, reparticaoId: null }).some((x) => /repartição/i.test(x)));
+  });
+
+  it("bloqueia sem justificativa/previsão/prioridade/fundamentação", () => {
+    assert.equal(faltasObrigatorias({ ...completo, secoes: [] }).length, 4);
   });
 });
