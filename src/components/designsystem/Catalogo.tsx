@@ -12,6 +12,8 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
+import { DfdDetalheView } from "@/components/DfdDetalheView";
+import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
@@ -212,6 +214,68 @@ const G_UNID = [
   { label: "Metro", total: 3_000_000, count: 44 },
   { label: "Serviço", total: 2_400_000, count: 30 },
 ];
+
+// Dados de exemplo p/ as vitrines de DFD/PCA (o upload em si — que carrega o
+// SheetJS — fica fora do catálogo, como o UploadForm, para não pesar esta rota).
+const DFD_ITENS_DEMO = [
+  { id: 1, item: 1, codigo: "5241937263", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 1 – MÉDIO PORTE), LANÇA 28,80 M", unidade: "DIAS", quantidade: 56 },
+  { id: 2, item: 2, codigo: "5241937264", descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M", unidade: "DIAS", quantidade: 20 },
+];
+
+const DFD_DEMO = {
+  id: 1,
+  numero: "1586",
+  planejamento: "1639",
+  tipo: "DFD-S — Solução / com ETP",
+  objeto: "AQUISIÇÃO DE SERVIÇO",
+  orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE",
+  setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL",
+  responsavel: "CLAUDIO LUIZ DE SOUSA",
+  valorEstimado: 342342.72,
+  totalItens: 2,
+  atualizadoEm: null,
+  reparticaoId: 1,
+  reparticaoCodigo: "SMIR",
+  reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
+  itens: DFD_ITENS_DEMO,
+};
+
+const PCA_DEMO = {
+  id: 1,
+  nome: "PCA 2026",
+  ano: 2026,
+  observacao: null,
+  totalDfds: 2,
+  totalItens: 3,
+  valorEstimado: 512342.72,
+  criadoEm: null,
+  grupos: [
+    {
+      reparticaoId: 1,
+      reparticaoCodigo: "SMIR",
+      reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
+      dfds: [
+        { id: 1, numero: "1586", objeto: "AQUISIÇÃO DE SERVIÇO", setorRequisitante: "SMIR", valorEstimado: 342342.72, totalItens: 2, itens: DFD_ITENS_DEMO },
+      ],
+    },
+    {
+      reparticaoId: 2,
+      reparticaoCodigo: "SMS",
+      reparticaoNome: "Secretaria Municipal de Saúde",
+      dfds: [
+        {
+          id: 2,
+          numero: "1720",
+          objeto: "AQUISIÇÃO DE MATERIAL",
+          setorRequisitante: "SMS",
+          valorEstimado: 170000,
+          totalItens: 1,
+          itens: [{ id: 3, item: 1, codigo: "9910011", descricao: "SERINGA DESCARTÁVEL 5ML", unidade: "CENTO", quantidade: 300 }],
+        },
+      ],
+    },
+  ],
+};
 
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
@@ -551,6 +615,14 @@ export function Catalogo() {
           pageSize={4}
           footer={tsel.size > 0 ? `${tsel.size} selecionada(s)` : undefined}
         />
+      </Secao>
+
+      <Secao titulo="DFD — visualização do documento importado">
+        <DfdDetalheView dfd={DFD_DEMO} />
+      </Secao>
+
+      <Secao titulo="PCA — compilação dos DFDs por repartição">
+        <PcaCompilacaoView pca={PCA_DEMO} />
       </Secao>
     </>
   );

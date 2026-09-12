@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { itens, unidades } from "@/db/schema";
 
@@ -183,98 +183,6 @@ export async function getTopItens(
   }));
 }
 
-/** Anos distintos presentes (para o filtro da tabela). */
-export async function getAnos(unidadeId?: number): Promise<number[]> {
-  const db = getDb();
-  const rows = await db
-    .selectDistinct({ ano: itens.anoDesejado })
-    .from(itens)
-    .where(and(filtroUnidade(unidadeId), isNotNull(itens.anoDesejado)))
-    .orderBy(asc(itens.anoDesejado));
-  return rows.map((r) => Number(r.ano)).filter((n) => Number.isFinite(n));
-}
-
-// ---------------------------------------------------------------------------
-// Tabela de itens (busca / filtro / ordenação / paginação)
-// ---------------------------------------------------------------------------
-
-export type ItensQuery = {
-  unidadeId?: number;
-  q?: string;
-  classificacao?: string;
-  ano?: number;
-  page?: number;
-  pageSize?: number;
-  sort?: "valor" | "nome" | "seq" | "quantidade";
-  dir?: "asc" | "desc";
-};
-
-const clamp = (n: number, lo: number, hi: number) =>
-  Math.min(Math.max(n, lo), hi);
-
-export async function getItens(params: ItensQuery) {
-  const db = getDb();
-  const conds = [] as (ReturnType<typeof eq> | undefined)[];
-  if (params.unidadeId) conds.push(eq(itens.unidadeId, params.unidadeId));
-  if (params.classificacao)
-    conds.push(eq(itens.classificacaoNorm, params.classificacao));
-  if (params.ano) conds.push(eq(itens.anoDesejado, params.ano));
-  if (params.q && params.q.trim()) {
-    const term = `%${params.q.trim().toLowerCase()}%`;
-    conds.push(like(sql`lower(${itens.nomeProduto})`, term));
-  }
-  const where = conds.length ? and(...conds) : undefined;
-
-  const pageSize = clamp(params.pageSize ?? 25, 5, 200);
-  const page = Math.max(params.page ?? 1, 1);
-  const offset = (page - 1) * pageSize;
-
-  const sortCol =
-    params.sort === "nome"
-      ? itens.nomeProduto
-      : params.sort === "seq"
-        ? itens.sequencial
-        : params.sort === "quantidade"
-          ? itens.quantidade
-          : itens.valorTotal;
-  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
-
-  const rows = await db
-    .select({
-      id: itens.id,
-      idProduto: itens.idProduto,
-      sequencial: itens.sequencial,
-      nomeProduto: itens.nomeProduto,
-      unidadeMedida: itens.unidadeMedidaNorm,
-      quantidade: itens.quantidade,
-      valorReferencia: itens.valorReferencia,
-      valorTotal: itens.valorTotal,
-      classificacao: itens.classificacaoNorm,
-      dataDesejada: itens.dataDesejada,
-      codigo: unidades.codigo,
-      municipio: unidades.municipio,
-    })
-    .from(itens)
-    .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
-    .where(where)
-    .orderBy(order)
-    .limit(pageSize)
-    .offset(offset);
-
-  const [{ n }] = await db
-    .select({ n: sql<number>`COUNT(*)` })
-    .from(itens)
-    .where(where);
-
-  return {
-    rows,
-    total: Number(n ?? 0),
-    page,
-    pageSize,
-    pages: Math.max(1, Math.ceil(Number(n ?? 0) / pageSize)),
-  };
-}
-
 export type ItemRow = {
   id: number;
   idProduto: string | null;
@@ -314,15 +222,4 @@ export async function getItensTodos(unidadeId?: number, limite = 5000): Promise<
     .where(filtroUnidade(unidadeId))
     .orderBy(desc(itens.valorTotal))
     .limit(limite);
-}
-
-/** Classificações distintas (para o filtro da tabela). */
-export async function getClassificacoes(unidadeId?: number): Promise<string[]> {
-  const db = getDb();
-  const rows = await db
-    .selectDistinct({ c: itens.classificacaoNorm })
-    .from(itens)
-    .where(filtroUnidade(unidadeId))
-    .orderBy(asc(itens.classificacaoNorm));
-  return rows.map((r) => r.c).filter((c): c is string => !!c);
 }

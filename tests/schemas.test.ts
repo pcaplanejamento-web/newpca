@@ -6,6 +6,7 @@ import {
   perfilSchema,
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
+import { dfdImportSchema, gerarPcaSchema } from "../src/lib/dfd-validation.ts";
 import { uploadSchema } from "../src/lib/validation.ts";
 
 // Observação: os schemas de protocolos/tabelas vivem em módulos que também
@@ -58,5 +59,30 @@ describe("validation (upload em lotes)", () => {
   it("rejeita lote vazio e modo desconhecido", () => {
     assert.equal(uploadSchema.safeParse({ mode: "start", codigo: "1", rows: [] }).success, false);
     assert.equal(uploadSchema.safeParse({ mode: "outro", rows: [{}] }).success, false);
+  });
+});
+
+describe("dfd-validation", () => {
+  it("dfdImportSchema exige numero e ao menos 1 item", () => {
+    const ok = dfdImportSchema.safeParse({
+      numero: "1586",
+      itens: [{ item: 1, codigo: "5241937263", quantidade: 56 }],
+    });
+    assert.equal(ok.success, true);
+    assert.equal(dfdImportSchema.safeParse({ numero: "", itens: [{}] }).success, false);
+    assert.equal(dfdImportSchema.safeParse({ numero: "1", itens: [] }).success, false);
+  });
+
+  it("dfdImportSchema faz coerce de numero e aceita reparticaoId/cabeçalho opcionais", () => {
+    const r = dfdImportSchema.parse({ numero: 1586, reparticaoId: 3, itens: [{ item: 1 }] });
+    assert.equal(r.numero, "1586");
+    assert.equal(r.reparticaoId, 3);
+  });
+
+  it("gerarPcaSchema exige nome e dfdIds positivos não-vazios", () => {
+    assert.equal(gerarPcaSchema.safeParse({ nome: "PCA 2026", dfdIds: [1, 2] }).success, true);
+    assert.equal(gerarPcaSchema.safeParse({ nome: "", dfdIds: [1] }).success, false);
+    assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [] }).success, false);
+    assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [0] }).success, false);
   });
 });

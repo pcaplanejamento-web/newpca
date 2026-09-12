@@ -79,6 +79,15 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(cols.includes("reparticao_id"));
   });
 
+  it("0012 cria tabelas DFD/PCA", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["dfds", "dfd_itens", "pcas", "pca_dfds"]) {
+      assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
+    }
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    assert.ok(idx.includes("dfds_numero_uq"), "índice dfds_numero_uq ausente");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -81,6 +81,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
   o grupo/repartição **"Geral"** e migram os dados/usuários existentes para lá — por isso o uso atual não muda.
 
+## PCA por DFD (importar e compilar) — migração `0012`
+- **DFD** = um formulário (`.xlsx`) lido **no navegador** (`src/lib/parse-dfd.ts`, com `raw:false` p/ o texto
+  formatado — preserva o código longo — e o núcleo puro/testável `parse-dfd-core.ts`); vira `dfds`/`dfd_itens`
+  e é vinculado a uma **repartição** por **auto-match da sigla do Setor Requisitante** (confirmável no import).
+- **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
+  edição já gerada) — plano consolidado da Prefeitura, **escopo por repartição** (sem `grupo_id`, como as
+  `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch
+  de `dfd_itens` a **14×7=98** params; `excluirDfd` bloqueia se o DFD está em alguma edição). Validação
+  só-schema em `src/lib/dfd-validation.ts`.
+- Rotas: `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]` (envelope+guardas).
+  UI em `/painel/pca` = `PcaModuleView` com 3 abas (**Planilha** [fluxo achatado atual, intacto] / **DFDs** /
+  **PCA**); detalhes em `/painel/pca/dfd/[id]` e `/painel/pca/edicao/[id]` (Server Components).
+
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`

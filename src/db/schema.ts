@@ -245,6 +245,95 @@ export const grupoReparticoes = sqliteTable(
   (t) => [primaryKey({ columns: [t.grupoId, t.reparticaoId] })],
 );
 
+/**
+ * DFD (Documento de Formalização da Demanda) — um formulário importado de `.xlsx`,
+ * vinculado a uma repartição/órgão (auto-detectada pela sigla do Setor
+ * Requisitante). Diferente da planilha achatada (`unidades`), o DFD traz metadados
+ * de cabeçalho + uma tabela de itens SEM preço/classificação/data por item e um
+ * único valor estimado total. Re-importar o mesmo `numero` substitui os itens.
+ */
+export const dfds = sqliteTable(
+  "dfds",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    numero: text("numero").notNull(), // "Número DFD" — identidade do documento
+    planejamento: text("planejamento"),
+    tipo: text("tipo"), // ex.: "DFD-S — Solução / com ETP"
+    objeto: text("objeto"), // natureza (ex.: "AQUISIÇÃO DE SERVIÇO")
+    orgaoEntidade: text("orgao_entidade"),
+    setorRequisitante: text("setor_requisitante"), // texto cru do DFD
+    siglaSetor: text("sigla_setor"), // sigla extraída (ex.: "SMIR") p/ auto-match
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
+      onDelete: "set null",
+    }),
+    responsavel: text("responsavel"),
+    valorEstimado: real("valor_estimado"), // único total estimado do DFD
+    nomeArquivo: text("nome_arquivo"),
+    totalItens: integer("total_itens").default(0),
+    criadoPor: integer("criado_por").references(() => usuarios.id, {
+      onDelete: "set null",
+    }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("dfds_numero_uq").on(t.numero),
+    index("dfds_reparticao_idx").on(t.reparticaoId),
+  ],
+);
+
+/** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */
+export const dfdItens = sqliteTable(
+  "dfd_itens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    dfdId: integer("dfd_id")
+      .notNull()
+      .references(() => dfds.id, { onDelete: "cascade" }),
+    item: integer("item"), // número do item na tabela do DFD
+    codigo: text("codigo"), // código do catálogo (TEXT: preserva zeros/precisão)
+    descricao: text("descricao"),
+    unidade: text("unidade"), // unidade de medida (ex.: "DIAS")
+    quantidade: real("quantidade"),
+    sequencial: integer("sequencial"), // ordem estável de exibição
+  },
+  (t) => [index("dfd_itens_dfd_idx").on(t.dfdId)],
+);
+
+/**
+ * Edição de PCA gerada — o plano consolidado da Prefeitura. Une DFDs selecionados
+ * (`pcaDfds`, por referência): DFDs novos NÃO alteram uma edição já gerada. Os
+ * totais são um retrato da geração; o detalhe é recomposto ao vivo a partir dos DFDs.
+ */
+export const pcas = sqliteTable("pcas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(), // ex.: "PCA 2026"
+  ano: integer("ano"),
+  observacao: text("observacao"),
+  totalDfds: integer("total_dfds").default(0),
+  totalItens: integer("total_itens").default(0),
+  valorEstimado: real("valor_estimado").default(0), // soma dos estimados dos DFDs
+  criadoPor: integer("criado_por").references(() => usuarios.id, {
+    onDelete: "set null",
+  }),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/** Vínculo N:N entre uma edição de PCA e os DFDs que ela une. */
+export const pcaDfds = sqliteTable(
+  "pca_dfds",
+  {
+    pcaId: integer("pca_id")
+      .notNull()
+      .references(() => pcas.id, { onDelete: "cascade" }),
+    dfdId: integer("dfd_id")
+      .notNull()
+      .references(() => dfds.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] })],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -263,3 +352,10 @@ export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
 export type Reparticao = typeof reparticoes.$inferSelect;
 export type GrupoReparticao = typeof grupoReparticoes.$inferSelect;
+export type Dfd = typeof dfds.$inferSelect;
+export type NovoDfd = typeof dfds.$inferInsert;
+export type DfdItem = typeof dfdItens.$inferSelect;
+export type NovoDfdItem = typeof dfdItens.$inferInsert;
+export type Pca = typeof pcas.$inferSelect;
+export type NovoPca = typeof pcas.$inferInsert;
+export type PcaDfd = typeof pcaDfds.$inferSelect;

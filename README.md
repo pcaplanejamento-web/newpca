@@ -129,7 +129,7 @@ src/
     page.tsx              Dashboard (Server Component, force-dynamic)
     upload/page.tsx       Importação da planilha
     api/upload/route.ts   Ingestão: valida (zod) → normaliza → grava no D1 (batch atômico)
-    api/itens/route.ts    Consulta paginada de itens (tabela)
+    api/dfd/route.ts      Importa DFD (form) → dfds/dfd_itens; api/pca gera edições
   components/             AppShell, KPIs, gráficos (Recharts), tabela, upload
   lib/
     parse-xlsx.ts         Lê o .xlsx no navegador (SheetJS)
