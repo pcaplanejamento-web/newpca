@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
 
@@ -8,8 +9,10 @@ const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg" } as const;
 
 /**
  * Modal compartilhado: bottom-sheet no mobile ↔ painel centralizado no desktop.
- * Fonte única para os diálogos (edição de usuário, configuração de tabela…).
  * Fecha no Esc; o clique no fundo fecha só quando `fecharNoBackdrop` (padrão).
+ * Renderiza via **portal em `document.body`** — assim o overlay `fixed` NÃO é
+ * afetado por ancestrais com `transform`/`overflow` (ex.: painel do `Tabs`), que
+ * quebrariam o posicionamento e recortariam o modal.
  */
 export function Modal({
   open,
@@ -28,6 +31,9 @@ export function Modal({
   fecharNoBackdrop?: boolean;
   children: ReactNode;
 }) {
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -37,9 +43,9 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !montado) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div
         className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm"
@@ -60,6 +66,7 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
