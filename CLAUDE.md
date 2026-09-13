@@ -185,6 +185,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   seções via `atualizarDfdCampos`; `PATCH /api/protocolo/[id]` edita a capa via `atualizarProtocolo`) e o
   `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
   toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
+- **DFD ao lado do protocolo gravado (mesma animação da importação):** o banner do protocolo gravado é
+  **mestre-detalhe** igual ao da importação — clicar num DFD abre `DfdConferir` como **LATERAL à direita** (mesmo
+  componente, animação e comportamento; a única diferença é o **cadeado**). O `Modal.lateral` ganhou
+  `acoesCabecalho` (cadeado próprio do lateral); em `DfdsView` o estado de edição do DFD é **reusado** — o modal
+  avulso do DFD só aparece **fora** de um protocolo (`open={!!dfdView && !protoView}`), senão vira o lateral do
+  protocolo; `fecharProto` fecha também o DFD do lateral.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

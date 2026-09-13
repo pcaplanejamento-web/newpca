@@ -97,7 +97,9 @@ página** (nada interage por trás). ✅ **Fechar o banner do DFD** agora é **a
 ✅ A tabela do protocolo **agrupa os DFDs por estado** (erros juntos, no topo, p/ tratar) — mudam de grupo ao mudar de
 estado. ✅ A **barra de edição em massa** fica **fixa no rodapé** do banner, com tamanho constante (controle do valor
 em cima; seletor + Aplicar + Limpar embaixo). ✅ O **dropdown de repartição** encolhe quando o banner do DFD abre ao
-lado, para as colunas caberem sem corte.
+lado, para as colunas caberem sem corte. ✅ O banner do **protocolo gravado** usa a **mesma animação da importação**:
+clicar num DFD abre-o **ao lado, à direita** (mestre-detalhe, mesmo componente/comportamento) — a única diferença é
+o cadeado de edição.
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
