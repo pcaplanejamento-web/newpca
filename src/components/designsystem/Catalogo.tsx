@@ -323,6 +323,8 @@ export function Catalogo() {
   const [busca, setBusca] = useState("");
   const [check, setCheck] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [mdAberto, setMdAberto] = useState(false);
+  const [mdLateral, setMdLateral] = useState(false);
   const [pag, setPag] = useState(2);
   const [repsOrdem, setRepsOrdem] = useState([
     { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
@@ -595,6 +597,15 @@ export function Catalogo() {
           <Button variant="secondary" onClick={() => setModalAberto(true)}>
             Abrir modal
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setMdLateral(false);
+              setMdAberto(true);
+            }}
+          >
+            Abrir modal com painel lateral
+          </Button>
           <Pager page={pag} pages={8} onChange={setPag} />
         </div>
         <Modal open={modalAberto} onClose={() => setModalAberto(false)} titulo="Exemplo de modal">
@@ -606,6 +617,41 @@ export function Catalogo() {
               Cancelar
             </Button>
             <Button onClick={() => setModalAberto(false)}>Confirmar</Button>
+          </div>
+        </Modal>
+
+        {/* Mestre-detalhe: um 2º banner aparece AO LADO (desktop) / cobre a tela (mobile). */}
+        <Modal
+          open={mdAberto}
+          onClose={() => setMdAberto(false)}
+          titulo="Banner principal"
+          size="lg"
+          lateral={{
+            aberto: mdLateral,
+            titulo: "Banner lateral",
+            onClose: () => setMdLateral(false),
+            rodape: (
+              <div className="flex justify-end">
+                <Button variant="secondary" onClick={() => setMdLateral(false)}>
+                  Fechar
+                </Button>
+              </div>
+            ),
+            children: (
+              <p className="text-[13px] text-text-2">
+                Este é o 2º banner, ao lado do principal — não dentro. No desktop os dois ficam lado a lado (o
+                principal desliza para a esquerda); no mobile, um por vez.
+              </p>
+            ),
+          }}
+        >
+          <p className="text-[13px] text-text-2">
+            Clique no botão para abrir o banner lateral ao lado deste.
+          </p>
+          <div className="mt-4">
+            <Button onClick={() => setMdLateral((v) => !v)}>
+              {mdLateral ? "Fechar lateral" : "Abrir lateral"}
+            </Button>
           </div>
         </Modal>
       </Secao>

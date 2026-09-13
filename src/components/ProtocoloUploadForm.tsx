@@ -30,7 +30,7 @@ import { type Column, DataTable } from "./DataTable";
 import { buildPrevisao, DfdConferir } from "./DfdConferir";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
-import { IconAlert, IconChevronLeft, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
@@ -61,7 +61,6 @@ export function ProtocoloUploadForm({
   const [erro, setErro] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [aberto, setAberto] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -100,13 +99,6 @@ export function ProtocoloUploadForm({
   const [relatorio, setRelatorio] = useState<{ numero: string; importados: number; bloqueados: { numero: string; motivo: string }[] } | null>(null);
 
   useEffect(() => () => void docRef.current?.destroy(), []);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 640px)");
-    const on = () => setIsDesktop(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
   useEffect(() => {
     if (!importando) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -459,8 +451,6 @@ export function ProtocoloUploadForm({
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const temDfds = (index?.dfds.length ?? 0) > 0;
-  // Colunas do split (grid animado): fechado = tabela cheia; aberto = lista+editor (desktop) / só editor (mobile).
-  const gridCols = abertoIdx < 0 ? "1fr 0fr" : isDesktop ? "minmax(0,2fr) minmax(0,3fr)" : "0fr 1fr";
 
   return (
     <div>
@@ -545,9 +535,57 @@ export function ProtocoloUploadForm({
         open={aberto}
         onClose={fechar}
         titulo={numero ? `Protocolo ${numero}` : "Novo protocolo"}
-        size="full"
+        size="lg"
         fecharNoBackdrop={false}
         bloqueado={importando}
+        lateral={
+          temDfds
+            ? {
+                aberto: abertoIdx >= 0,
+                titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
+                onClose: () => setAbertoIdx(-1),
+                rodape:
+                  abertoIdx >= 0 ? (
+                    <div className="flex items-center justify-between gap-3">
+                      {dfdAberto ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+                          style={{ color: estadoCor(estado(abertoIdx)) }}
+                        >
+                          <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(estado(abertoIdx)) }} />
+                          {ESTADO_ROTULO[estado(abertoIdx)]}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <Button variant="secondary" onClick={() => setAbertoIdx(-1)} disabled={importando}>
+                        Fechar
+                      </Button>
+                    </div>
+                  ) : undefined,
+                children: (
+                  <div key={abertoIdx} className="animate-fade-in-up">
+                    {carregandoIdx === abertoIdx || !dfdAberto ? (
+                      <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />}>
+                        Lendo o DFD...
+                      </Callout>
+                    ) : (
+                      <DfdConferir
+                        dfd={dfdAberto}
+                        reparticoes={reparticoes}
+                        reparticaoAtivaId={reparticaoAtivaId}
+                        repId={dfdRepIds[abertoIdx] ?? null}
+                        autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
+                        autoCampos={autoMap.get(abertoIdx) ?? []}
+                        onRepChange={(id) => setRepDfd(abertoIdx, id)}
+                        onSecoesChange={onSecoesAberto}
+                      />
+                    )}
+                  </div>
+                ),
+              }
+            : undefined
+        }
         rodape={
           <div className="flex flex-wrap items-center justify-between gap-3">
             {importando && progresso ? (
@@ -607,7 +645,7 @@ export function ProtocoloUploadForm({
           ) : (
             <section className="space-y-3">
               {/* Barra de edição em massa (quando há seleção) */}
-              {sel.size > 0 && abertoIdx < 0 && (
+              {sel.size > 0 && (
                 <div className="flex flex-wrap items-end gap-3 rounded-card border border-border bg-surface-2 p-3">
                   <div>
                     <span className="mb-1 block text-[11px] font-semibold uppercase text-muted">
@@ -673,82 +711,20 @@ export function ProtocoloUploadForm({
                 </div>
               )}
 
-              {/* Split-view: tabela/lista ↔ editor (grid animado) */}
-              <div className="overflow-hidden">
-                <div
-                  className="grid gap-0 sm:gap-4"
-                  style={{ gridTemplateColumns: gridCols, transition: "grid-template-columns var(--motion-duration) var(--motion-ease)" }}
-                >
-                  {/* Painel esquerdo: tabela (fechado) ou lista compacta (aberto) */}
-                  <div className="min-w-0 overflow-hidden">
-                    {abertoIdx < 0 ? (
-                      <DataTable
-                        columns={cols}
-                        rows={linhas}
-                        getKey={(r) => r.idx}
-                        selectable
-                        selected={sel}
-                        onSelected={setSel}
-                        onRowClick={(r) => abrir(r.idx)}
-                        pageSize={25}
-                        minWidth={640}
-                        footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar`}
-                      />
-                    ) : (
-                      <ul className="max-h-[60dvh] space-y-1 overflow-y-auto rounded-card border border-border bg-surface p-2">
-                        {(index?.dfds ?? []).map((di, i) => {
-                          const e = estado(i);
-                          return (
-                            <li key={di.numero}>
-                              <button
-                                type="button"
-                                onClick={() => abrir(i)}
-                                className={`flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] transition-colors ${
-                                  i === abertoIdx ? "bg-accent-soft text-text" : "hover:bg-surface-2"
-                                }`}
-                              >
-                                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(e) }} />
-                                <span className="font-mono">{di.numero}</span>
-                                <span className="ml-auto text-[11px] text-muted">{ESTADO_ROTULO[e]}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Painel direito: editor do DFD aberto */}
-                  <div className="min-w-0 overflow-hidden">
-                    {abertoIdx >= 0 && (
-                      <div className="animate-fade-in-up sm:border-l sm:border-border sm:pl-4">
-                        <div className="mb-3 flex items-center gap-2">
-                          <Button variant="ghost" icon={<IconChevronLeft className="h-4 w-4" />} onClick={() => setAbertoIdx(-1)}>
-                            Voltar
-                          </Button>
-                          <span className="text-sm font-bold text-text">DFD {index?.dfds[abertoIdx].numero}</span>
-                        </div>
-                        {carregandoIdx === abertoIdx || !dfdAberto ? (
-                          <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />}>
-                            Lendo o DFD...
-                          </Callout>
-                        ) : (
-                          <DfdConferir
-                            dfd={dfdAberto}
-                            reparticoes={reparticoes}
-                            reparticaoAtivaId={reparticaoAtivaId}
-                            repId={dfdRepIds[abertoIdx] ?? null}
-                            autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
-                            autoCampos={autoMap.get(abertoIdx) ?? []}
-                            onRepChange={(id) => setRepDfd(abertoIdx, id)}
-                            onSecoesChange={onSecoesAberto}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Tabela dos DFDs (banner principal). Clique numa linha abre o banner
+                  do DFD AO LADO (Modal `lateral`); trocar de DFD atualiza o lateral. */}
+              <DataTable
+                columns={cols}
+                rows={linhas}
+                getKey={(r) => r.idx}
+                selectable
+                selected={sel}
+                onSelected={setSel}
+                onRowClick={(r) => abrir(r.idx)}
+                pageSize={25}
+                minWidth={640}
+                footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar ao lado`}
+              />
             </section>
           )}
         </div>
