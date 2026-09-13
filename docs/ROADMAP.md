@@ -69,9 +69,10 @@ ENTREGA vira **MÊS/AAAA** (ou **ANUAL/AAAA** quando recorrente); o que não dá
 tratar (PRIORIDADE em `Segmented`, PREVISÃO por mês+ano+ANUAL, FUNDAMENTAÇÃO LEGAL em texto com padrão
 "Lei 14.133/2021"). Cada DFD mostra um **estado** — com erro / regularizado automaticamente / editado / regular /
 pendente. **Edição em massa**: selecione DFDs na tabela e aplique **repartição, prioridade, previsão ou fundamentação**
-aos vários de uma vez (a antiga "aplicar repartição a todos" virou seleção + massa). **Split-view animado**: clicar
-num DFD desliza a tabela para a esquerda e abre o editor à direita (lista compacta + editor lado a lado no desktop,
-overlay no mobile); trocar de DFD atualiza suave, fechar volta suave. **Clique na linha abre** em todas as tabelas de
+aos vários de uma vez (a antiga "aplicar repartição a todos" virou seleção + massa). **Banner do DFD AO LADO**
+(mestre-detalhe): clicar num DFD abre o banner do DFD **ao lado** do banner do protocolo (não dentro) — no desktop
+os dois ficam lado a lado e o principal desliza para a esquerda; no mobile o banner do DFD cobre a tela (um por
+vez); trocar de DFD atualiza suave, fechar volta suave. **Clique na linha abre** em todas as tabelas de
 DFD/protocolo (sem botão "Ver"). As **edições sobrevivem** ao envio (cache do parse por DFD). O sistema **separa as
 vias e recusa documento errado**: protocolo (capa ou vários DFDs) não entra pela aba DFDs, DFD avulso não entra pela
 aba Protocolos, e a repartição do protocolo é sugerida pelo **Interessado**. Setor **é** repartição (rótulo
