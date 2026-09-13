@@ -114,6 +114,7 @@ export function DfdsView({
 
   async function salvarDfd() {
     if (!dfdView || !dfdEdit) return;
+    const pid = protoView?.id ?? null; // editando dentro de um protocolo aberto?
     setSalvandoDfd(true);
     setErro(null);
     try {
@@ -130,6 +131,13 @@ export function DfdsView({
       setDfdRepEdit(null);
       setDfdTrancado(true);
       router.refresh();
+      // Se editado dentro de um protocolo aberto, recarrega a tabela dele (reflete a
+      // edição) sem re-travar/descartar a edição de metadados em andamento.
+      if (pid != null) {
+        const r2 = await fetch(`/api/protocolo/${pid}`);
+        const j2 = (await r2.json()) as { ok?: boolean; protocolo?: ProtocoloDetalhe };
+        if (r2.ok && j2.ok && j2.protocolo) setProtoView(j2.protocolo);
+      }
     } catch (e) {
       setSalvandoDfd(false);
       setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
