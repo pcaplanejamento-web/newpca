@@ -265,14 +265,38 @@ export function DfdUploadForm({
         </div>
       )}
 
-      {/* Banner flutuante: conferir o DFD completo e importar (só grava ao confirmar) */}
+      {/* Banner flutuante: conferir o DFD completo e importar (só grava ao confirmar).
+          Cabeçalho e botões ficam FIXOS (via Modal); o corpo rola. */}
       <Modal
         open={modalAberto}
         onClose={() => reset()}
         titulo={`Conferir e importar — DFD ${preview?.numero ?? ""}`}
         size="lg"
-        scrollable
         fecharNoBackdrop={false}
+        rodape={
+          visual ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[12px] text-muted">
+                {faltas.length > 0
+                  ? `${faltas.length} pendência${faltas.length === 1 ? "" : "s"} — importação bloqueada`
+                  : "Tudo certo — pronto para importar"}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="secondary" disabled={status === "sending"} onClick={() => reset()}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={enviar}
+                  loading={status === "sending"}
+                  disabled={faltas.length > 0 || status === "sending"}
+                  icon={<IconUpload className="h-[18px] w-[18px]" />}
+                >
+                  Importar DFD
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
       >
         {visual && (
           <div className="space-y-4">
@@ -315,7 +339,7 @@ export function DfdUploadForm({
                   ))}
                 </ul>
                 <p className="mt-1.5 opacity-90">
-                  Você pode conferir o DFD abaixo; a importação fica liberada quando estiver completo.
+                  Você pode conferir o DFD abaixo; a importação libera quando estiver completo.
                 </p>
               </Callout>
             )}
@@ -325,21 +349,6 @@ export function DfdUploadForm({
                 selecioná-la (ou "Geral") no topo.
               </Callout>
             )}
-
-            {/* Ações */}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="secondary" disabled={status === "sending"} onClick={() => reset()}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={enviar}
-                loading={status === "sending"}
-                disabled={faltas.length > 0 || status === "sending"}
-                icon={<IconUpload className="h-[18px] w-[18px]" />}
-              >
-                Importar DFD
-              </Button>
-            </div>
 
             {/* Documento completo (conferência) */}
             <div className="border-t border-border pt-4">

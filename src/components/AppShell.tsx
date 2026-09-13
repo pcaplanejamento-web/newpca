@@ -14,6 +14,7 @@ import {
   IconBuilding,
   IconCheck,
   IconChevronDown,
+  IconClipboard,
   IconClose,
   IconDashboard,
   IconFile,
@@ -52,6 +53,7 @@ const SECOES: NavSecao[] = [
     itens: [
       { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true, aba: "dashboard" },
       { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile, aba: "protocolos" },
+      { href: "/painel/dfds", label: "DFD", Icon: IconClipboard, aba: "dfd" },
       { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
     ],
   },

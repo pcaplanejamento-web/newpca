@@ -3,19 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
+import type { DfdResumo, PcaResumo } from "@/lib/dfd";
 import { brl, dataBR, num } from "@/lib/format";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { DfdUploadForm } from "./DfdUploadForm";
-import { DfdView } from "./DfdView";
 import { TextField } from "./Field";
 import {
   IconAlert,
   IconBuilding,
   IconChevronRight,
-  IconClipboard,
   IconDashboard,
   IconLayers,
   IconPlus,
@@ -33,24 +30,17 @@ type Unidade = {
   valorTotal: number | null;
   atualizadoEm: string | null;
 };
-type Rep = { id: number; codigo: string; nome: string };
 
 export function PcaModuleView({
   podeEditar,
   unidades,
-  dfds,
   todosDfds,
   pcas,
-  reparticoes,
-  reparticaoAtivaId,
 }: {
   podeEditar: boolean;
   unidades: Unidade[];
-  dfds: DfdResumo[];
   todosDfds: DfdResumo[];
   pcas: PcaResumo[];
-  reparticoes: Rep[];
-  reparticaoAtivaId: number | null;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -59,35 +49,6 @@ export function PcaModuleView({
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [salvando, setSalvando] = useState(false);
-  const [dfdView, setDfdView] = useState<DfdDetalhe | null>(null);
-  const [carregandoView, setCarregandoView] = useState<number | null>(null);
-
-  async function verDfd(id: number) {
-    setErro(null);
-    setCarregandoView(id);
-    try {
-      const res = await fetch(`/api/dfd/${id}`);
-      const j = (await res.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
-      if (!res.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
-      setDfdView(j.dfd);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
-    } finally {
-      setCarregandoView(null);
-    }
-  }
-
-  async function excluirDfd(id: number, numero: string) {
-    if (!confirm(`Excluir o DFD ${numero}?`)) return;
-    setErro(null);
-    const res = await fetch(`/api/dfd/${id}`, { method: "DELETE" });
-    const j = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok || !j.ok) {
-      setErro(j.error ?? "Não foi possível excluir o DFD.");
-      return;
-    }
-    router.refresh();
-  }
 
   async function excluirPca(id: number, nomePca: string) {
     if (!confirm(`Excluir a edição de PCA "${nomePca}"?`)) return;
@@ -120,50 +81,6 @@ export function PcaModuleView({
   }
 
   const acao = (children: ReactNode) => <div className="flex justify-end gap-1">{children}</div>;
-
-  const colsDfd: Column<DfdResumo>[] = [
-    {
-      key: "reparticao",
-      header: "Repartição",
-      value: (r) => r.reparticaoCodigo ?? "—",
-      render: (r) =>
-        r.reparticaoCodigo ? (
-          <span>
-            <span className="font-mono text-[12px] font-semibold text-accent">{r.reparticaoCodigo}</span>
-            <span className="text-muted"> · {r.reparticaoNome}</span>
-          </span>
-        ) : (
-          <span className="text-faint">Sem repartição</span>
-        ),
-    },
-    { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
-    { key: "objeto", header: "Objeto", filter: "none", minWidth: 200, render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span> },
-    { key: "setor", header: "Setor", filter: "none", minWidth: 160, render: (r) => <span className="line-clamp-1">{r.setorRequisitante ?? "—"}</span> },
-    { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens ?? 0) },
-    { key: "valor", header: "Estimado", align: "right", filter: "none", render: (r) => (r.valorEstimado != null ? brl(r.valorEstimado) : "—") },
-    {
-      key: "acoes",
-      header: "",
-      filter: "none",
-      render: (r) =>
-        acao(
-          <>
-            <Button variant="ghost" onClick={() => verDfd(r.id)} loading={carregandoView === r.id}>
-              Ver
-            </Button>
-            {podeEditar && (
-              <Button
-                variant="ghost"
-                aria-label="Excluir DFD"
-                onClick={() => excluirDfd(r.id, r.numero)}
-                icon={<IconTrash className="h-4 w-4" />}
-                style={{ color: "var(--danger)" }}
-              />
-            )}
-          </>,
-        ),
-    },
-  ];
 
   const colsPca: Column<PcaResumo>[] = [
     { key: "nome", header: "Edição", filter: "none", render: (r) => <span className="font-semibold text-text">{r.nome}</span> },
@@ -200,7 +117,7 @@ export function PcaModuleView({
     { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
     { key: "reparticao", header: "Repartição", value: (r) => r.reparticaoCodigo ?? "—", render: (r) => r.reparticaoCodigo ?? <span className="text-faint">—</span> },
     { key: "objeto", header: "Objeto", filter: "none", minWidth: 200, render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span> },
-    { key: "valor", header: "Estimado", align: "right", filter: "none", render: (r) => (r.valorEstimado != null ? brl(r.valorEstimado) : "—") },
+    { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(r.valorTotal ?? r.valorEstimado ?? 0) },
   ];
 
   // ---- Painel: Planilha (PCA) achatada — fluxo atual, intacto ----
@@ -258,31 +175,7 @@ export function PcaModuleView({
     </div>
   );
 
-  // ---- DFDs importados ----
-  const dfdsTab = (
-    <div className="space-y-6">
-      {podeEditar && <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} />}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold text-text-2">DFDs importados ({dfds.length})</h3>
-        {dfds.length === 0 ? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum DFD importado nesta visão. {podeEditar ? "Importe um DFD acima." : ""}
-          </p>
-        ) : (
-          <DataTable
-            columns={colsDfd}
-            rows={dfds}
-            getKey={(r) => r.id}
-            pageSize={25}
-            minWidth={900}
-            footer={`${dfds.length} DFD${dfds.length === 1 ? "" : "s"}`}
-          />
-        )}
-      </section>
-    </div>
-  );
-
-  // ---- Edições de PCA ----
+  // ---- Edições de PCA (une DFDs, importados na tela de DFD) ----
   const pcaTab = (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -323,12 +216,26 @@ export function PcaModuleView({
       <Tabs
         tabs={[
           { key: "planilha", label: "Planilha (PCA)", icon: <IconDashboard className="h-4 w-4" />, content: planilhaTab },
-          { key: "dfds", label: "DFDs", icon: <IconClipboard className="h-4 w-4" />, content: dfdsTab },
           { key: "pca", label: "PCA", icon: <IconLayers className="h-4 w-4" />, content: pcaTab },
         ]}
       />
 
-      <Modal open={modalGerar} onClose={() => setModalGerar(false)} titulo="Gerar edição de PCA" size="lg" scrollable>
+      <Modal
+        open={modalGerar}
+        onClose={() => setModalGerar(false)}
+        titulo="Gerar edição de PCA"
+        size="lg"
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModalGerar(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={gerar} loading={salvando} disabled={!nome.trim() || sel.size === 0}>
+              Gerar edição
+            </Button>
+          </div>
+        }
+      >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
@@ -342,7 +249,7 @@ export function PcaModuleView({
               DFDs a unir ({sel.size} selecionado{sel.size === 1 ? "" : "s"})
             </div>
             {todosDfds.length === 0 ? (
-              <Callout kind="info">Importe DFDs antes de gerar uma edição.</Callout>
+              <Callout kind="info">Importe DFDs (aba/menu "DFD") antes de gerar uma edição.</Callout>
             ) : (
               <DataTable
                 columns={colsPicker}
@@ -357,27 +264,7 @@ export function PcaModuleView({
               />
             )}
           </div>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModalGerar(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={gerar} loading={salvando} disabled={!nome.trim() || sel.size === 0}>
-              Gerar edição
-            </Button>
-          </div>
         </div>
-      </Modal>
-
-      {/* Banner flutuante: visualizar o DFD completo (mesmo componente da importação) */}
-      <Modal
-        open={!!dfdView}
-        onClose={() => setDfdView(null)}
-        titulo={dfdView ? `DFD ${dfdView.numero}` : ""}
-        size="lg"
-        scrollable
-      >
-        {dfdView && <DfdView dfd={dfdView} />}
       </Modal>
     </div>
   );

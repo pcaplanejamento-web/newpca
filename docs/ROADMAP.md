@@ -20,6 +20,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### DFD: tela dedicada + banner com header/footer fixos — entregue
+✅ DFD virou **tela própria** (`/painel/dfds`, aba **DFD** na nav — migração `0015` mantém o acesso de quem tinha
+`pca`); o PCA ficou só com Planilha + PCA. A tabela de DFDs tem **filtro em todas as colunas** + **somatório de
+itens e valores** (reativo aos filtros). O banner flutuante ganhou **cabeçalho e botões fixos** (o `Modal` agora
+usa portal em `document.body` + layout com `rodape`) e o conteúdo foi reorganizado (sem textos quebrados).
+
 ### DFD: conferência em banner + regras de importação — entregue
 ✅ Ao importar (ou clicar em "Ver"), o DFD aparece **completo num banner flutuante** (`DfdView` em `Modal`,
 reutilizado nos dois casos) — só grava no D1 **ao confirmar**. **Bloqueia a importação** (botão travado + lista

@@ -95,18 +95,18 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
 
       {/* Seção 1 — Área requisitante */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-        <h3 className="mb-3 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
+        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
           <Campo label="Nº DFD" valor={dfd.numero} />
           <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
-          <Campo label="Repartição" valor={rep} />
           <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
-          <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} />
+          <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
+          <Campo label="Repartição" valor={rep} span />
           <Campo label="Responsável" valor={dfd.responsavel ?? "—"} />
           <Campo label="Matrícula" valor={dfd.matricula ?? "—"} />
-          <Campo label="E-mail" valor={dfd.email ?? "—"} />
+          <Campo label="E-mail" valor={dfd.email ?? "—"} span />
           <Campo label="Telefone" valor={dfd.telefone ?? "—"} />
-        </div>
+        </dl>
       </section>
 
       {/* Valores */}
@@ -160,11 +160,9 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
 
 function Campo({ label, valor, span }: { label: string; valor: string; span?: boolean }) {
   return (
-    <div className={span ? "col-span-2 sm:col-span-1" : ""}>
-      <div className="text-xs text-muted">{label}</div>
-      <div className="break-words font-semibold text-text" title={valor}>
-        {valor}
-      </div>
+    <div className={span ? "sm:col-span-2" : ""}>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 break-words font-semibold leading-snug text-text">{valor}</dd>
     </div>
   );
 }

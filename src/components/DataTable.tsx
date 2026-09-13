@@ -35,6 +35,7 @@ export function DataTable<R>({
   onSelected,
   pageSize,
   footer,
+  resumo,
   minWidth = 720,
 }: {
   columns: Column<R>[];
@@ -45,6 +46,8 @@ export function DataTable<R>({
   onSelected?: (s: Set<Key>) => void;
   pageSize?: number;
   footer?: ReactNode;
+  /** Resumo (ex.: somatórios) calculado sobre as linhas FILTRADAS/ordenadas. */
+  resumo?: (linhas: R[]) => ReactNode;
   minWidth?: number;
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
@@ -250,7 +253,9 @@ export function DataTable<R>({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted">
-        <span>{footer ?? `${total} registro${total === 1 ? "" : "s"}`}</span>
+        <span>
+          {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
+        </span>
         {pageSize && <Pager page={pg} pages={pages} onChange={setPage} />}
       </div>
     </div>

@@ -111,6 +111,13 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(dup.length, 0, `códigos duplicados: ${dup.map((d) => d.codigo).join(", ")}`);
   });
 
+  it("0015 concede a aba 'dfd' a quem já tinha 'pca'", () => {
+    const row = db.prepare("SELECT abas FROM permissoes WHERE id = 1").get() as {
+      abas: string;
+    };
+    assert.ok(String(row.abas).includes("dfd"), `abas sem dfd: ${row.abas}`);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -9,17 +9,18 @@ const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg" } as const;
 
 /**
  * Modal compartilhado: bottom-sheet no mobile ↔ painel centralizado no desktop.
- * Fecha no Esc; o clique no fundo fecha só quando `fecharNoBackdrop` (padrão).
- * Renderiza via **portal em `document.body`** — assim o overlay `fixed` NÃO é
- * afetado por ancestrais com `transform`/`overflow` (ex.: painel do `Tabs`), que
- * quebrariam o posicionamento e recortariam o modal.
+ * Layout em coluna: **cabeçalho FIXO** + corpo rolável + **rodapé FIXO** opcional
+ * (`rodape`, ex.: botões de ação). Fecha no Esc; o clique no fundo fecha só quando
+ * `fecharNoBackdrop` (padrão). Renderiza via **portal em `document.body`** — assim o
+ * overlay `fixed` não é afetado por ancestrais com `transform`/`overflow` (ex.: o
+ * painel do `Tabs`), que quebrariam o posicionamento e recortariam o modal.
  */
 export function Modal({
   open,
   onClose,
   titulo,
   size = "md",
-  scrollable = false,
+  rodape,
   fecharNoBackdrop = true,
   children,
 }: {
@@ -27,7 +28,7 @@ export function Modal({
   onClose: () => void;
   titulo: string;
   size?: keyof typeof TAMANHO;
-  scrollable?: boolean;
+  rodape?: ReactNode;
   fecharNoBackdrop?: boolean;
   children: ReactNode;
 }) {
@@ -54,17 +55,18 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative w-full rounded-t-2xl border border-border bg-surface p-5 shadow-soft sm:rounded-2xl ${TAMANHO[size]} ${
-          scrollable ? "max-h-[92vh] overflow-y-auto" : ""
-        }`}
+        className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${TAMANHO[size]}`}
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-base font-bold text-text">{titulo}</h3>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <h3 className="min-w-0 truncate text-base font-bold text-text">{titulo}</h3>
           <Button variant="icon" aria-label="Fechar" onClick={onClose}>
             <IconClose className="h-5 w-5" />
           </Button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {rodape && (
+          <div className="shrink-0 border-t border-border bg-surface px-5 py-3">{rodape}</div>
+        )}
       </div>
     </div>,
     document.body,

@@ -176,7 +176,7 @@ export function GruposAdmin() {
         </div>
       )}
 
-      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"} size="lg" scrollable>
+      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"} size="lg">
         <form onSubmit={salvar} className="space-y-4">
           <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} required />
           <div>

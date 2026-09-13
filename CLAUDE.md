@@ -62,8 +62,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/painel/reparticoes`. Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** (dashboard/
-  protocolos/pca) o grupo vê. **Admin ignora** (vê todas — regra firme). A nav em `AppShell` filtra
-  por `abasPermitidas`.
+  protocolos/pca/**dfd**) o grupo vê. **Admin ignora** (vê todas — regra firme). A nav em `AppShell`
+  filtra por `abasPermitidas`. Abas em `src/lib/abas.ts`.
 - **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
   `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
   exige grupo ativo.
@@ -97,9 +97,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
   build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**, atribuindo cada trecho
   ao item de `y` mais próximo e **rejuntando o código quebrado em 2 linhas**. Ambos → mesmo `DfdParseado`.
+- **Tela própria de DFD** (`/painel/dfds` = `DfdsView`, aba **`dfd`**) — separada do PCA. `PcaModuleView` ficou só com
+  **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
+  **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,
+  reativo aos filtros (`DataTable` `resumo={(linhas)=>…}`). Migração `0015` concede a aba `dfd` a quem já tinha `pca`.
 - **Banner flutuante único (`DfdView` dentro de `Modal`):** a MESMA visão completa é usada na **conferência da
-  importação** (`DfdUploadForm`) e na **visualização** do DFD já gravado (`PcaModuleView` "Ver" → `GET /api/dfd/[id]`).
-  **Só grava ao confirmar** (prévia no navegador; nada no D1 antes).
+  importação** (`DfdUploadForm`) e na **visualização** do DFD gravado (`DfdsView` "Ver" → `GET /api/dfd/[id]`).
+  **Só grava ao confirmar**. O `Modal` renderiza via **portal em `document.body`** (escapa do `transform`/`overflow`
+  do `Tabs`) com **cabeçalho fixo** + corpo rolável + **rodapé fixo** (`rodape`, ex.: Cancelar/Importar).
 - **Regras obrigatórias (`faltasObrigatorias`, `src/lib/dfd-validation.ts`) — fonte única cliente+servidor:** não
   importa sem **valor unitário em todos os itens**, **repartição**, **justificativa** (§3), **previsão de entrega**
   (§5), **prioridade** (§6) e **fundamentação legal** (§7). O banner **mostra o DFD e lista o que falta**, mas
