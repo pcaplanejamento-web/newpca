@@ -171,7 +171,12 @@ export function DfdsView({
   }
 
   function fecharProto() {
-    if (salvandoProto) return;
+    if (salvandoProto || salvandoDfd) return;
+    // Fecha também um DFD aberto no lateral (senão o modal avulso do DFD reabriria).
+    setDfdView(null);
+    setDfdEdit(null);
+    setDfdRepEdit(null);
+    setDfdTrancado(true);
     setProtoView(null);
     setProtoEdit(null);
     setProtoTrancado(true);
@@ -428,6 +433,46 @@ export function DfdsView({
     </div>
   );
 
+  // Partes do banner do DFD gravado — reusadas no modal avulso E como LATERAL do
+  // protocolo (mesmo componente/animação da importação; só muda onde é montado).
+  const dfdCadeado =
+    podeEditar && dfdView ? (
+      <Button
+        variant="icon"
+        aria-label={dfdTrancado ? "Destravar edição" : "Travar edição"}
+        title={dfdTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
+        onClick={() => (dfdTrancado ? destrancarDfd() : setDfdTrancado(true))}
+      >
+        {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+      </Button>
+    ) : undefined;
+  const dfdRodape =
+    podeEditar && dfdView && !dfdTrancado ? (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-[12px] text-accent">Edição destravada — as alterações são gravadas no banco.</span>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={fecharDfd} disabled={salvandoDfd}>
+            Fechar
+          </Button>
+          <Button onClick={salvarDfd} loading={salvandoDfd}>
+            Salvar alterações
+          </Button>
+        </div>
+      </div>
+    ) : undefined;
+  const dfdCorpo = dfdEdit ? (
+    <DfdConferir
+      dfd={dfdEdit}
+      reparticoes={reparticoes}
+      reparticaoAtivaId={reparticaoAtivaId}
+      repId={dfdRepEdit}
+      autoMatch={false}
+      readOnly={!podeEditar || dfdTrancado}
+      onRepChange={setDfdRepEdit}
+      onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
+    />
+  ) : null;
+
   return (
     <div className="space-y-4">
       {erro && (
@@ -443,63 +488,40 @@ export function DfdsView({
         ]}
       />
 
-      {/* Banner do DFD gravado = MESMO componente da importação (`DfdConferir`).
-          Começa travado; o cadeado (+ confirmação) libera a edição — salva no D1. */}
+      {/* Banner do DFD gravado (aba DFDs) = MESMO componente da importação (`DfdConferir`).
+          Dentro de um protocolo, ele aparece como LATERAL do banner do protocolo (abaixo). */}
       <Modal
-        open={!!dfdView}
+        open={!!dfdView && !protoView}
         onClose={fecharDfd}
         titulo={dfdView ? `DFD ${dfdView.numero}` : ""}
         size="lg"
         bloqueado={salvandoDfd}
-        acoesCabecalho={
-          podeEditar && dfdView ? (
-            <Button
-              variant="icon"
-              aria-label={dfdTrancado ? "Destravar edição" : "Travar edição"}
-              title={dfdTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
-              onClick={() => (dfdTrancado ? destrancarDfd() : setDfdTrancado(true))}
-            >
-              {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
-            </Button>
-          ) : undefined
-        }
-        rodape={
-          podeEditar && !dfdTrancado ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[12px] text-accent">Edição destravada — as alterações são gravadas no banco.</span>
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={fecharDfd} disabled={salvandoDfd}>
-                  Fechar
-                </Button>
-                <Button onClick={salvarDfd} loading={salvandoDfd}>
-                  Salvar alterações
-                </Button>
-              </div>
-            </div>
-          ) : undefined
-        }
+        acoesCabecalho={dfdCadeado}
+        rodape={dfdRodape}
       >
-        {dfdEdit && (
-          <DfdConferir
-            dfd={dfdEdit}
-            reparticoes={reparticoes}
-            reparticaoAtivaId={reparticaoAtivaId}
-            repId={dfdRepEdit}
-            autoMatch={false}
-            readOnly={!podeEditar || dfdTrancado}
-            onRepChange={setDfdRepEdit}
-            onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
-          />
-        )}
+        {dfdCorpo}
       </Modal>
 
-      {/* Banner do protocolo gravado — mesmo padrão editável/travado do DFD. */}
+      {/* Banner do protocolo gravado — MESMO componente/animação da importação: ao
+          clicar num DFD, ele abre como LATERAL à direita (mestre-detalhe). + cadeado. */}
       <Modal
         open={!!protoView}
         onClose={fecharProto}
         titulo={protoView ? `Protocolo ${protoView.numero}` : ""}
         size="xl"
-        bloqueado={salvandoProto}
+        bloqueado={salvandoProto || salvandoDfd}
+        lateral={
+          protoView
+            ? {
+                aberto: !!dfdView,
+                titulo: dfdView ? `DFD ${dfdView.numero}` : "DFD",
+                acoesCabecalho: dfdCadeado,
+                rodape: dfdRodape,
+                onClose: fecharDfd,
+                children: dfdCorpo,
+              }
+            : undefined
+        }
         acoesCabecalho={
           podeEditar && protoView ? (
             <Button

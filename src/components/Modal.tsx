@@ -14,6 +14,8 @@ export type ModalLateral = {
   titulo: string;
   children: ReactNode;
   rodape?: ReactNode;
+  /** Slot de botões à esquerda do X do lateral (ex.: cadeado de edição). */
+  acoesCabecalho?: ReactNode;
   onClose: () => void;
 };
 
@@ -124,13 +126,23 @@ export function Modal({
   const lateralAberto = !!lateral?.aberto;
   // Mantém o lateral montado durante o fechamento (fecha ANIMADO, simétrico ao abrir).
   const [mostrarLateral, setMostrarLateral] = useState(false);
-  const cacheLateral = useRef<{ titulo: string; rodape: ReactNode; children: ReactNode } | null>(null);
+  const cacheLateral = useRef<{
+    titulo: string;
+    rodape: ReactNode;
+    acoesCabecalho: ReactNode;
+    children: ReactNode;
+  } | null>(null);
   useEffect(() => {
     if (lateralAberto) setMostrarLateral(true);
     else if (!open) setMostrarLateral(false); // fechou o modal todo — não guarda o lateral antigo
   }, [lateralAberto, open]);
   if (lateral && lateralAberto) {
-    cacheLateral.current = { titulo: lateral.titulo, rodape: lateral.rodape, children: lateral.children };
+    cacheLateral.current = {
+      titulo: lateral.titulo,
+      rodape: lateral.rodape,
+      acoesCabecalho: lateral.acoesCabecalho,
+      children: lateral.children,
+    };
   }
 
   useEffect(() => {
@@ -211,6 +223,7 @@ export function Modal({
               titulo={conteudoLateral.titulo}
               onClose={lateral.onClose}
               rodape={conteudoLateral.rodape}
+              acoesCabecalho={conteudoLateral.acoesCabecalho}
               bloqueado={bloqueado}
             >
               {conteudoLateral.children}
