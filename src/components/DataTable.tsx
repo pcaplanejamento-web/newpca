@@ -69,10 +69,7 @@ export function DataTable<R>({
   const [autoRows, setAutoRows] = useState<number | null>(null);
   useEffect(() => {
     if (!fillHeight) return;
-    const ALT_LINHA = 45; // px por linha (cell py + texto)
-    const ALT_CABECALHO = 44; // thead
-    const ALT_RODAPE = 46; // barra do rodapé/pager
-    const RESERVA = 48; // respiro até a borda inferior (padding do main + folga)
+    const RESERVA = 32; // respiro até a borda inferior (padding do main + folga)
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
@@ -83,8 +80,12 @@ export function DataTable<R>({
       }
       const top = el.getBoundingClientRect().top;
       if (top <= 0) return; // ainda não posicionada — mantém o fallback
-      const corpo = window.innerHeight - top - RESERVA - ALT_CABECALHO - ALT_RODAPE;
-      const n = Math.floor(corpo / ALT_LINHA);
+      // Mede as alturas REAIS (linha varia com o conteúdo — ex.: botões de ação).
+      const altLinha = el.querySelector("tbody tr")?.getBoundingClientRect().height || 48;
+      const altCabecalho = el.querySelector("thead")?.getBoundingClientRect().height || 44;
+      const altRodape = 48; // barra do rodapé/pager
+      const corpo = window.innerHeight - top - RESERVA - altCabecalho - altRodape;
+      const n = Math.floor(corpo / Math.max(altLinha, 30));
       setAutoRows(Math.max(4, Math.min(n, 60)));
     };
     calc();
