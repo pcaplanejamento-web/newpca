@@ -518,7 +518,7 @@ export function ProtocoloUploadForm({
                   <label className={labelCls} htmlFor="rep-todos">
                     Aplicar repartição a todos
                   </label>
-                  <select id="rep-todos" className={inputCls} defaultValue="" onChange={(e) => e.target.value && aplicarRepTodos(Number(e.target.value))}>
+                  <select id="rep-todos" className={inputCls} value="" onChange={(e) => e.target.value && aplicarRepTodos(Number(e.target.value))}>
                     <option value="">— Escolha para aplicar a todos —</option>
                     {reparticoes.map((r) => (
                       <option key={r.id} value={r.id}>

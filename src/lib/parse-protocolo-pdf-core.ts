@@ -22,7 +22,7 @@ export type ProtocoloMeta = {
   valorCapa: number | null; // "Valor" da capa
   observacao: string | null;
   localReparticao: string | null; // texto cru (ex.: "COMPRAS FMAS")
-  nomeArquivo: string;
+  nomeArquivo: string | null;
 };
 
 /** Um DFD detectado no bundle — só cabeçalho + páginas (parse completo é depois). */

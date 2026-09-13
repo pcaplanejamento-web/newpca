@@ -36,9 +36,11 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
     workerPronto = true;
   }
 
-  let doc: Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
+  // O `destroy` fica na LOADING TASK (não no PDFDocumentProxy) — guardamos a task.
+  const task = pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false });
+  let doc: Awaited<typeof task.promise>;
   try {
-    doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
+    doc = await task.promise;
   } catch {
     throw new Error("Não consegui ler o PDF. Confirme que é um PDF com texto (não digitalizado).");
   }
@@ -57,7 +59,7 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       page.cleanup(); // libera os recursos da página (streaming)
       return items;
     },
-    destroy: () => doc.destroy(),
+    destroy: () => task.destroy(),
   };
 }
 
