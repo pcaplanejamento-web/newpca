@@ -31,6 +31,7 @@ import {
   IconClock,
   IconFile,
   IconLayers,
+  IconLock,
   IconMail,
   IconPencil,
   IconPlus,
@@ -632,6 +633,11 @@ export function Catalogo() {
             aberto: mdLateral,
             titulo: "Banner lateral",
             onClose: () => setMdLateral(false),
+            acoesCabecalho: (
+              <Button variant="icon" aria-label="Cadeado (demo)" title="Cadeado do lateral">
+                <IconLock className="h-5 w-5" />
+              </Button>
+            ),
             rodape: (
               <div className="flex justify-end">
                 <Button variant="secondary" onClick={() => setMdLateral(false)}>
