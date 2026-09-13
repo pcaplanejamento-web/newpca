@@ -4,22 +4,53 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { DfdDetalhe, DfdResumo } from "@/lib/dfd";
 import { brl, num } from "@/lib/format";
+import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "@/lib/protocolo";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
+import { DfdConferir } from "./DfdConferir";
 import { DfdUploadForm } from "./DfdUploadForm";
-import { DfdView } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconClipboard, IconFile, IconLayers, IconTrash } from "./icons";
+import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
-import { ProtocoloView } from "./ProtocoloView";
+import { ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
 import { Tabs } from "./Tabs";
 
 type Rep = { id: number; codigo: string; nome: string };
 
 const valorDe = (r: DfdResumo) => r.valorTotal ?? r.valorEstimado ?? 0;
+
+/** DFD gravado (`DfdDetalhe`) → forma editável (`DfdParseado`) do `DfdConferir`. */
+function detalheParaParseado(d: DfdDetalhe): DfdParseado {
+  return {
+    numero: d.numero,
+    planejamento: d.planejamento,
+    tipo: d.tipo,
+    objeto: d.objeto,
+    orgaoEntidade: d.orgaoEntidade,
+    setorRequisitante: d.setorRequisitante,
+    siglaSetor: null,
+    responsavel: d.responsavel,
+    matricula: d.matricula,
+    email: d.email,
+    telefone: d.telefone,
+    valorEstimado: d.valorEstimado,
+    valorTotal: d.valorTotal,
+    nomeArquivo: "",
+    secoes: d.secoes,
+    itens: d.itens.map((it) => ({
+      item: it.item,
+      codigo: it.codigo,
+      descricao: it.descricao,
+      unidade: it.unidade,
+      quantidade: it.quantidade,
+      valorUnitario: it.valorUnitario,
+      valorTotal: it.valorTotal,
+    })),
+  };
+}
 
 export function DfdsView({
   podeEditar,
@@ -36,11 +67,21 @@ export function DfdsView({
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
-  const [dfdView, setDfdView] = useState<DfdDetalhe | null>(null);
   const [protoView, setProtoView] = useState<ProtocoloDetalhe | null>(null);
+  const [protoEdit, setProtoEdit] = useState<ProtocoloEdicaoValores | null>(null);
+  const [protoTrancado, setProtoTrancado] = useState(true);
+  const [salvandoProto, setSalvandoProto] = useState(false);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
   const [salvandoVinc, setSalvandoVinc] = useState(false);
+
+  // Banner do DFD gravado = MESMO componente da importação (`DfdConferir`), começa
+  // TRAVADO; destravar (cadeado + confirmação) libera a edição — salva direto no D1.
+  const [dfdView, setDfdView] = useState<DfdDetalhe | null>(null);
+  const [dfdEdit, setDfdEdit] = useState<DfdParseado | null>(null);
+  const [dfdRepEdit, setDfdRepEdit] = useState<number | null>(null);
+  const [dfdTrancado, setDfdTrancado] = useState(true);
+  const [salvandoDfd, setSalvandoDfd] = useState(false);
 
   async function verDfd(id: number) {
     setErro(null);
@@ -49,8 +90,49 @@ export function DfdsView({
       const j = (await res.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
       if (!res.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
       setDfdView(j.dfd);
+      setDfdEdit(detalheParaParseado(j.dfd));
+      setDfdRepEdit(j.dfd.reparticaoId);
+      setDfdTrancado(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
+    }
+  }
+
+  function fecharDfd() {
+    if (salvandoDfd) return;
+    setDfdView(null);
+    setDfdEdit(null);
+    setDfdRepEdit(null);
+    setDfdTrancado(true);
+  }
+
+  function destrancarDfd() {
+    if (confirm("Destravar este DFD para edição? As alterações são gravadas diretamente no banco de dados.")) {
+      setDfdTrancado(false);
+    }
+  }
+
+  async function salvarDfd() {
+    if (!dfdView || !dfdEdit) return;
+    setSalvandoDfd(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/dfd/${dfdView.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reparticaoId: dfdRepEdit, secoes: dfdEdit.secoes }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");
+      setSalvandoDfd(false);
+      setDfdView(null);
+      setDfdEdit(null);
+      setDfdRepEdit(null);
+      setDfdTrancado(true);
+      router.refresh();
+    } catch (e) {
+      setSalvandoDfd(false);
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     }
   }
 
@@ -72,9 +154,62 @@ export function DfdsView({
       const res = await fetch(`/api/protocolo/${id}`);
       const j = (await res.json()) as { ok?: boolean; error?: string; protocolo?: ProtocoloDetalhe };
       if (!res.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
-      setProtoView(j.protocolo);
+      const p = j.protocolo;
+      setProtoView(p);
+      setProtoEdit({
+        data: p.data ?? "",
+        interessado: p.interessado ?? "",
+        documento: p.documento ?? "",
+        assunto: p.assunto ?? "",
+        observacao: p.observacao ?? "",
+        reparticaoId: p.reparticaoId,
+      });
+      setProtoTrancado(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
+    }
+  }
+
+  function fecharProto() {
+    if (salvandoProto) return;
+    setProtoView(null);
+    setProtoEdit(null);
+    setProtoTrancado(true);
+  }
+
+  function destrancarProto() {
+    if (confirm("Destravar este protocolo para edição? As alterações são gravadas diretamente no banco de dados.")) {
+      setProtoTrancado(false);
+    }
+  }
+
+  async function salvarProto() {
+    if (!protoView || !protoEdit) return;
+    setSalvandoProto(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/protocolo/${protoView.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: protoEdit.data || null,
+          interessado: protoEdit.interessado || null,
+          documento: protoEdit.documento || null,
+          assunto: protoEdit.assunto || null,
+          observacao: protoEdit.observacao || null,
+          reparticaoId: protoEdit.reparticaoId,
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");
+      setSalvandoProto(false);
+      setProtoView(null);
+      setProtoEdit(null);
+      setProtoTrancado(true);
+      router.refresh();
+    } catch (e) {
+      setSalvandoProto(false);
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     }
   }
 
@@ -308,14 +443,107 @@ export function DfdsView({
         ]}
       />
 
-      {/* Banner: DFD completo (mesmo componente da importação) */}
-      <Modal open={!!dfdView} onClose={() => setDfdView(null)} titulo={dfdView ? `DFD ${dfdView.numero}` : ""} size="lg">
-        {dfdView && <DfdView dfd={dfdView} />}
+      {/* Banner do DFD gravado = MESMO componente da importação (`DfdConferir`).
+          Começa travado; o cadeado (+ confirmação) libera a edição — salva no D1. */}
+      <Modal
+        open={!!dfdView}
+        onClose={fecharDfd}
+        titulo={dfdView ? `DFD ${dfdView.numero}` : ""}
+        size="lg"
+        bloqueado={salvandoDfd}
+        acoesCabecalho={
+          podeEditar && dfdView ? (
+            <Button
+              variant="icon"
+              aria-label={dfdTrancado ? "Destravar edição" : "Travar edição"}
+              title={dfdTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
+              onClick={() => (dfdTrancado ? destrancarDfd() : setDfdTrancado(true))}
+            >
+              {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+            </Button>
+          ) : undefined
+        }
+        rodape={
+          podeEditar && !dfdTrancado ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[12px] text-accent">Edição destravada — as alterações são gravadas no banco.</span>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={fecharDfd} disabled={salvandoDfd}>
+                  Fechar
+                </Button>
+                <Button onClick={salvarDfd} loading={salvandoDfd}>
+                  Salvar alterações
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
+      >
+        {dfdEdit && (
+          <DfdConferir
+            dfd={dfdEdit}
+            reparticoes={reparticoes}
+            reparticaoAtivaId={reparticaoAtivaId}
+            repId={dfdRepEdit}
+            autoMatch={false}
+            readOnly={!podeEditar || dfdTrancado}
+            onRepChange={setDfdRepEdit}
+            onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
+          />
+        )}
       </Modal>
 
-      {/* Banner: protocolo completo + seus DFDs */}
-      <Modal open={!!protoView} onClose={() => setProtoView(null)} titulo={protoView ? `Protocolo ${protoView.numero}` : ""} size="xl">
-        {protoView && <ProtocoloView protocolo={protoView} onVerDfd={verDfd} />}
+      {/* Banner do protocolo gravado — mesmo padrão editável/travado do DFD. */}
+      <Modal
+        open={!!protoView}
+        onClose={fecharProto}
+        titulo={protoView ? `Protocolo ${protoView.numero}` : ""}
+        size="xl"
+        bloqueado={salvandoProto}
+        acoesCabecalho={
+          podeEditar && protoView ? (
+            <Button
+              variant="icon"
+              aria-label={protoTrancado ? "Destravar edição" : "Travar edição"}
+              title={protoTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
+              onClick={() => (protoTrancado ? destrancarProto() : setProtoTrancado(true))}
+            >
+              {protoTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+            </Button>
+          ) : undefined
+        }
+        rodape={
+          podeEditar && !protoTrancado ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[12px] text-accent">Edição destravada — as alterações são gravadas no banco.</span>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={fecharProto} disabled={salvandoProto}>
+                  Fechar
+                </Button>
+                <Button onClick={salvarProto} loading={salvandoProto}>
+                  Salvar alterações
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
+      >
+        {protoView && (
+          <ProtocoloView
+            protocolo={protoView}
+            onVerDfd={verDfd}
+            edicao={
+              podeEditar && protoEdit
+                ? {
+                    trancado: protoTrancado,
+                    reparticoes,
+                    valores: protoEdit,
+                    onChange: (patch) => setProtoEdit((v) => (v ? { ...v, ...patch } : v)),
+                  }
+                : undefined
+            }
+          />
+        )}
       </Modal>
 
       {/* Vincular DFD a um protocolo (rule 4) */}

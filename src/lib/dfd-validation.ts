@@ -124,10 +124,30 @@ export const startProtocoloSchema = z.object({
   protocolo: protocoloMetaSchema,
 });
 
+/** Edição de um protocolo já gravado (banner destravado) — sem `numero` (chave do
+ * processo) nem `nomeArquivo`; todos os campos opcionais. */
+export const editarProtocoloSchema = protocoloMetaSchema.omit({ numero: true, nomeArquivo: true }).partial();
+
 /** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */
 export const vincularDfdSchema = z.object({
   protocoloId: z.number().int().positive().nullable(),
 });
+
+/**
+ * Edição de um DFD JÁ GRAVADO (banner destravado): `protocoloId` (vincular),
+ * `reparticaoId` e/ou `secoes` (tratamento). Cada campo é opcional; `undefined` = não
+ * mexe. Exige ao menos um campo presente.
+ */
+export const editarDfdSchema = z
+  .object({
+    protocoloId: z.number().int().positive().nullable().optional(),
+    reparticaoId: z.number().int().positive().nullable().optional(),
+    secoes: z.array(dfdSecaoSchema).max(50).optional(),
+  })
+  .refine(
+    (d) => d.protocoloId !== undefined || d.reparticaoId !== undefined || d.secoes !== undefined,
+    { message: "Nada para editar." },
+  );
 
 /** Gera uma edição de PCA unindo os DFDs selecionados. */
 export const gerarPcaSchema = z.object({

@@ -88,6 +88,17 @@ fillHeight`, sem scroll vertical do navegador); as demais tabelas ficam em **≤
 "Protocolar" fica bloqueado enquanto houver DFD com erro. ✅ Com o **banner do DFD ao lado**, a tabela do protocolo
 **se ajusta** para caber sem scroll lateral. ✅ Estado **"regularizado automaticamente" agora aparece em verde**.
 
+### Editar DFD/protocolo já gravado (mesmo banner, com cadeado) + polimentos do banner — entregue
+✅ Clicar num **DFD ou protocolo já gravado** abre o **mesmo banner da importação** (`DfdConferir` / `ProtocoloView`
+editável), começando **travado**. Um **cadeado** ao lado do X **destrava** (com confirmação) e libera a edição; um
+**"Salvar alterações"** grava **direto no banco** (repartição e seções do DFD; capa do protocolo) e reflete em todas
+as telas. Só admin/gestor edita; escopo por repartição em toda escrita. ✅ O **banner flutuante trava o scroll da
+página** (nada interage por trás). ✅ **Fechar o banner do DFD** agora é **animado e simétrico** ao abrir (sem corte).
+✅ A tabela do protocolo **agrupa os DFDs por estado** (erros juntos, no topo, p/ tratar) — mudam de grupo ao mudar de
+estado. ✅ A **barra de edição em massa** fica **fixa no rodapé** do banner, com tamanho constante (controle do valor
+em cima; seletor + Aplicar + Limpar embaixo). ✅ O **dropdown de repartição** encolhe quando o banner do DFD abre ao
+lado, para as colunas caberem sem corte.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

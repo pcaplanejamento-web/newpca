@@ -405,6 +405,7 @@ export function ProtocoloUploadForm({
         <div className="flex items-center gap-1.5">
           <select
             className={selectCls}
+            style={compacta ? { maxWidth: 150 } : undefined}
             aria-label={`Repartição do DFD ${index?.dfds[r.idx].numero}`}
             value={dfdRepIds[r.idx] ?? ""}
             onChange={(e) => setRepDfd(r.idx, e.target.value ? Number(e.target.value) : null)}
@@ -455,6 +456,9 @@ export function ProtocoloUploadForm({
   ];
 
   const linhas = (index?.dfds ?? []).map((_, idx) => ({ idx }));
+  // Agrupa por estado (erros no topo, p/ tratar) — muda de grupo ao mudar de estado.
+  const ORDEM_ESTADO: Record<EstadoDfd, number> = { erro: 0, editado: 1, regularizado: 2, regular: 3, pendente: 4 };
+  const linhasOrdenadas = [...linhas].sort((a, b) => ORDEM_ESTADO[estado(a.idx)] - ORDEM_ESTADO[estado(b.idx)]);
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhas.filter(({ idx }) => estado(idx) === "erro").length;
@@ -463,6 +467,72 @@ export function ProtocoloUploadForm({
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const temDfds = (index?.dfds.length ?? 0) > 0;
+
+  // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
+  // cima = controle do valor (altura fixa); baixo = seletor do campo + Aplicar + Limpar.
+  const barraMassa = sel.size > 0 && !importando && (
+    <div className="mb-3 rounded-card border border-border bg-surface-2 p-3">
+      <div className="flex min-h-[42px] flex-wrap items-center gap-2">
+        {bulkCampo === "reparticao" && (
+          <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkRep ?? ""} onChange={(e) => setBulkRep(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">— Repartição —</option>
+            {reparticoes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.codigo} · {r.nome}
+              </option>
+            ))}
+          </select>
+        )}
+        {bulkCampo === "prioridade" && (
+          <Segmented<Prioridade | "">
+            value={bulkPrio}
+            options={[
+              { value: "ALTA", label: "Alta" },
+              { value: "MÉDIA", label: "Média" },
+              { value: "BAIXA", label: "Baixa" },
+            ]}
+            onChange={setBulkPrio}
+          />
+        )}
+        {bulkCampo === "previsao" && (
+          <>
+            <select className={inputCls} style={{ width: "auto", flex: "0 1 140px" }} value={bulkMes} disabled={bulkAnual} onChange={(e) => setBulkMes(e.target.value)}>
+              <option value="">— Mês —</option>
+              {MESES.map((m) => (
+                <option key={m} value={m}>
+                  {m[0] + m.slice(1).toLowerCase()}
+                </option>
+              ))}
+            </select>
+            <input className={inputCls} style={{ width: 84 }} inputMode="numeric" maxLength={4} placeholder="Ano" value={bulkAno} onChange={(e) => setBulkAno(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+            <Checkbox label="Anual" checked={bulkAnual} onChange={(e) => setBulkAnual(e.target.checked)} />
+          </>
+        )}
+        {bulkCampo === "fundamentacao" && (
+          <div className="min-w-[220px] flex-1">
+            <TextField aria-label="Fundamentação legal" value={bulkFund} onChange={(e) => setBulkFund(e.target.value)} />
+          </div>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Segmented<CampoBulk>
+          value={bulkCampo}
+          options={[
+            { value: "reparticao", label: "Repartição" },
+            { value: "prioridade", label: "Prioridade" },
+            { value: "previsao", label: "Previsão" },
+            { value: "fundamentacao", label: "Fund. legal" },
+          ]}
+          onChange={setBulkCampo}
+        />
+        <Button onClick={aplicarBulk}>Aplicar</Button>
+        <Button variant="ghost" onClick={() => setSel(new Set())}>
+          Limpar
+        </Button>
+        <span className="ml-auto text-[11px] font-semibold uppercase text-muted">{sel.size} selecionado(s)</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -594,12 +664,14 @@ export function ProtocoloUploadForm({
             : undefined
         }
         rodape={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {importando && progresso ? (
-              <div className="min-w-[200px] flex-1">
-                <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
-              </div>
-            ) : (
+          <div>
+            {barraMassa}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {importando && progresso ? (
+                <div className="min-w-[200px] flex-1">
+                  <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
+                </div>
+              ) : (
               <span
                 className="text-[12px]"
                 style={{ color: dfdsComErro > 0 ? "var(--danger)" : "var(--muted)" }}
@@ -622,6 +694,7 @@ export function ProtocoloUploadForm({
               <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
                 Protocolar
               </Button>
+              </div>
             </div>
           </div>
         }
@@ -658,78 +731,11 @@ export function ProtocoloUploadForm({
             </Callout>
           ) : (
             <section className="space-y-3">
-              {/* Barra de edição em massa (quando há seleção) */}
-              {sel.size > 0 && (
-                <div className="flex flex-wrap items-end gap-3 rounded-card border border-border bg-surface-2 p-3">
-                  <div>
-                    <span className="mb-1 block text-[11px] font-semibold uppercase text-muted">
-                      Editar {sel.size} selecionado(s)
-                    </span>
-                    <Segmented<CampoBulk>
-                      value={bulkCampo}
-                      options={[
-                        { value: "reparticao", label: "Repartição" },
-                        { value: "prioridade", label: "Prioridade" },
-                        { value: "previsao", label: "Previsão" },
-                        { value: "fundamentacao", label: "Fund. legal" },
-                      ]}
-                      onChange={setBulkCampo}
-                    />
-                  </div>
-                  <div className="flex flex-1 flex-wrap items-center gap-2">
-                    {bulkCampo === "reparticao" && (
-                      <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkRep ?? ""} onChange={(e) => setBulkRep(e.target.value ? Number(e.target.value) : null)}>
-                        <option value="">— Repartição —</option>
-                        {reparticoes.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.codigo} · {r.nome}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {bulkCampo === "prioridade" && (
-                      <Segmented<Prioridade | "">
-                        value={bulkPrio}
-                        options={[
-                          { value: "ALTA", label: "Alta" },
-                          { value: "MÉDIA", label: "Média" },
-                          { value: "BAIXA", label: "Baixa" },
-                        ]}
-                        onChange={setBulkPrio}
-                      />
-                    )}
-                    {bulkCampo === "previsao" && (
-                      <>
-                        <select className={inputCls} style={{ width: "auto", flex: "0 1 140px" }} value={bulkMes} disabled={bulkAnual} onChange={(e) => setBulkMes(e.target.value)}>
-                          <option value="">— Mês —</option>
-                          {MESES.map((m) => (
-                            <option key={m} value={m}>
-                              {m[0] + m.slice(1).toLowerCase()}
-                            </option>
-                          ))}
-                        </select>
-                        <input className={inputCls} style={{ width: 84 }} inputMode="numeric" maxLength={4} placeholder="Ano" value={bulkAno} onChange={(e) => setBulkAno(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-                        <Checkbox label="Anual" checked={bulkAnual} onChange={(e) => setBulkAnual(e.target.checked)} />
-                      </>
-                    )}
-                    {bulkCampo === "fundamentacao" && (
-                      <div className="min-w-[220px] flex-1">
-                        <TextField aria-label="Fundamentação legal" value={bulkFund} onChange={(e) => setBulkFund(e.target.value)} />
-                      </div>
-                    )}
-                    <Button onClick={aplicarBulk}>Aplicar aos {sel.size}</Button>
-                    <Button variant="ghost" onClick={() => setSel(new Set())}>
-                      Limpar
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               {/* Tabela dos DFDs (banner principal). Clique numa linha abre o banner
                   do DFD AO LADO (Modal `lateral`); trocar de DFD atualiza o lateral. */}
               <DataTable
                 columns={cols}
-                rows={linhas}
+                rows={linhasOrdenadas}
                 getKey={(r) => r.idx}
                 selectable
                 selected={sel}

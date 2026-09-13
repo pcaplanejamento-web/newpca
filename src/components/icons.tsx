@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   Loader2,
   Lock,
+  LockOpen,
   LogOut,
   Mail,
   Menu,
@@ -95,6 +96,7 @@ export const IconSave = Save;
 export const IconPalette = Palette;
 export const IconMail = Mail;
 export const IconLock = Lock;
+export const IconLockOpen = LockOpen;
 export const IconEye = Eye;
 export const IconEyeOff = EyeOff;
 export const IconArrowRight = ArrowRight;

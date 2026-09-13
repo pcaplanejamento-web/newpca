@@ -136,10 +136,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
   **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
 - **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
-  /api/dfd/[id]`, `DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)` com a
-  `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro** por
-  `numero` (não sobrescreve DFD de repartição inacessível); `PATCH` valida também o **protocolo alvo**. Teto de
-  `totalItens` (100k) e `rows` (1000/lote) no Zod; Drizzle parametriza (sem SQL injection).
+  /api/dfd/[id]`, `PATCH`/`DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)`
+  com a `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro**
+  por `numero` (não sobrescreve DFD de repartição inacessível). O `PATCH /api/dfd/[id]` (`editarDfdSchema`) vincula a
+  protocolo E/OU edita **repartição/seções** (não move p/ repartição inacessível); o `PATCH /api/protocolo/[id]`
+  (`editarProtocoloSchema`) edita a **capa** (sem `numero`). Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
+  Drizzle parametriza (sem SQL injection).
 - Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
 - **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota
@@ -173,6 +175,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com **erro** (ou ainda analisando) — não se protocola um processo com DFDs defeituosos (o `POST` segue validando por
   garantia). Com o **banner do DFD aberto ao lado**, a tabela do protocolo **se ajusta** (colunas sem `minWidth` e sem
   a coluna "Situação") p/ caber sem scroll lateral. Estado **"regularizado automaticamente" = verde** (`estadoCor`).
+  A tabela do protocolo **agrupa por estado** (erros no topo p/ tratar; o DFD muda de grupo ao mudar de estado); a
+  **barra de edição em massa** fica FIXA no rodapé do banner (tamanho constante: controle do valor em cima; seletor
+  do campo + Aplicar + Limpar embaixo).
+- **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
+  abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
+  **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
+  campos ficam editáveis e um **"Salvar alterações"** grava **direto no D1** (`PATCH /api/dfd/[id]` edita repartição/
+  seções via `atualizarDfdCampos`; `PATCH /api/protocolo/[id]` edita a capa via `atualizarProtocolo`) e o
+  `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
+  toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -199,8 +211,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
   `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
-  `Dropzone` (importação: soltar OU clicar p/ escolher), `Modal` (+ painel
-  `lateral` mestre-detalhe: 2º banner ao lado), `formStyles`,
+  `Dropzone` (importação: soltar OU clicar p/ escolher), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  de botões à esquerda do X, ex.: cadeado; + painel `lateral` mestre-detalhe: 2º banner ao lado, com **fechar
+  animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback

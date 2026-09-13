@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
@@ -23,6 +23,7 @@ function Painel({
   onClose,
   rodape,
   bloqueado = false,
+  acoesCabecalho,
   className = "",
   children,
 }: {
@@ -30,6 +31,7 @@ function Painel({
   onClose?: () => void;
   rodape?: ReactNode;
   bloqueado?: boolean;
+  acoesCabecalho?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
@@ -42,11 +44,14 @@ function Painel({
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
         <h3 className="min-w-0 truncate text-base font-bold text-text">{titulo}</h3>
-        {onClose && !bloqueado && (
-          <Button variant="icon" aria-label="Fechar" onClick={onClose}>
-            <IconClose className="h-5 w-5" />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {acoesCabecalho}
+          {onClose && !bloqueado && (
+            <Button variant="icon" aria-label="Fechar" onClick={onClose}>
+              <IconClose className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
       {rodape && <div className="shrink-0 border-t border-border bg-surface px-5 py-3">{rodape}</div>}
@@ -61,13 +66,16 @@ function Painel({
  * `fecharNoBackdrop` (padrão). Com **`bloqueado`** (ex.: durante uma gravação em
  * andamento) NÃO fecha por nada — sem X, sem Esc, sem backdrop. Renderiza via
  * **portal em `document.body`** — assim o overlay `fixed` não é afetado por
- * ancestrais com `transform`/`overflow` (ex.: o painel do `Tabs`).
+ * ancestrais com `transform`/`overflow` (ex.: o painel do `Tabs`). Enquanto aberto,
+ * **trava o scroll da página** (nada interage por trás). `acoesCabecalho` = slot de
+ * botões à esquerda do X (ex.: cadeado de edição).
  *
  * **Mestre-detalhe** (`lateral`): quando presente, um **2º banner** aparece AO LADO
  * do principal (não dentro). No desktop os dois ficam lado a lado (o principal
  * desliza para a esquerda e o lateral surge à direita, via `grid-template-columns`
- * + `max-width` animados por token de motion); no mobile o lateral cobre a tela
- * (um por vez). Esc fecha primeiro o lateral, depois o modal.
+ * + `max-width` animados); no mobile o lateral cobre a tela (um por vez). O fechar
+ * do lateral é ANIMADO (simétrico ao abrir) — o conteúdo fica montado até a
+ * transição terminar. Esc fecha primeiro o lateral, depois o modal.
  */
 export function Modal({
   open,
@@ -77,6 +85,7 @@ export function Modal({
   rodape,
   fecharNoBackdrop = true,
   bloqueado = false,
+  acoesCabecalho,
   lateral,
   children,
 }: {
@@ -87,6 +96,7 @@ export function Modal({
   rodape?: ReactNode;
   fecharNoBackdrop?: boolean;
   bloqueado?: boolean;
+  acoesCabecalho?: ReactNode;
   lateral?: ModalLateral;
   children: ReactNode;
 }) {
@@ -101,7 +111,28 @@ export function Modal({
     return () => mq.removeEventListener("change", on);
   }, []);
 
+  // Trava o scroll da página enquanto o modal está aberto (nada interage por trás).
+  useEffect(() => {
+    if (!open) return;
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = anterior;
+    };
+  }, [open]);
+
   const lateralAberto = !!lateral?.aberto;
+  // Mantém o lateral montado durante o fechamento (fecha ANIMADO, simétrico ao abrir).
+  const [mostrarLateral, setMostrarLateral] = useState(false);
+  const cacheLateral = useRef<{ titulo: string; rodape: ReactNode; children: ReactNode } | null>(null);
+  useEffect(() => {
+    if (lateralAberto) setMostrarLateral(true);
+    else if (!open) setMostrarLateral(false); // fechou o modal todo — não guarda o lateral antigo
+  }, [lateralAberto, open]);
+  if (lateral && lateralAberto) {
+    cacheLateral.current = { titulo: lateral.titulo, rodape: lateral.rodape, children: lateral.children };
+  }
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -127,7 +158,14 @@ export function Modal({
     return createPortal(
       <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
         {scrim}
-        <Painel titulo={titulo} onClose={onClose} rodape={rodape} bloqueado={bloqueado} className={TAMANHO[size]}>
+        <Painel
+          titulo={titulo}
+          onClose={onClose}
+          rodape={rodape}
+          bloqueado={bloqueado}
+          acoesCabecalho={acoesCabecalho}
+          className={TAMANHO[size]}
+        >
           {children}
         </Painel>
       </div>,
@@ -139,6 +177,7 @@ export function Modal({
   // Principal um pouco maior (comporta tabelas largas); no mobile mostra 1 por vez.
   const cols = !lateralAberto ? "1fr 0fr" : isDesktop ? "minmax(0,1.1fr) minmax(0,1fr)" : "0fr 1fr";
   const maxW = !isDesktop ? "100%" : lateralAberto ? "84rem" : "64rem";
+  const conteudoLateral = lateralAberto ? lateral : cacheLateral.current;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -151,16 +190,30 @@ export function Modal({
           transition:
             "grid-template-columns var(--motion-duration) var(--motion-ease), max-width var(--motion-duration) var(--motion-ease)",
         }}
+        onTransitionEnd={(e) => {
+          if (e.propertyName === "grid-template-columns" && !lateralAberto) setMostrarLateral(false);
+        }}
       >
         <div className="min-w-0 overflow-hidden">
-          <Painel titulo={titulo} onClose={onClose} rodape={rodape} bloqueado={bloqueado}>
+          <Painel
+            titulo={titulo}
+            onClose={onClose}
+            rodape={rodape}
+            bloqueado={bloqueado}
+            acoesCabecalho={acoesCabecalho}
+          >
             {children}
           </Painel>
         </div>
         <div className="min-w-0 overflow-hidden">
-          {lateralAberto && (
-            <Painel titulo={lateral.titulo} onClose={lateral.onClose} rodape={lateral.rodape} bloqueado={bloqueado}>
-              {lateral.children}
+          {mostrarLateral && conteudoLateral && (
+            <Painel
+              titulo={conteudoLateral.titulo}
+              onClose={lateral.onClose}
+              rodape={conteudoLateral.rodape}
+              bloqueado={bloqueado}
+            >
+              {conteudoLateral.children}
             </Painel>
           )}
         </div>

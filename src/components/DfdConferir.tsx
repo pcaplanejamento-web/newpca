@@ -60,6 +60,7 @@ export function DfdConferir({
   repId,
   autoMatch,
   autoCampos = [],
+  readOnly = false,
   onRepChange,
   onSecoesChange,
 }: {
@@ -69,6 +70,8 @@ export function DfdConferir({
   repId: number | null;
   autoMatch: boolean;
   autoCampos?: CampoTratavel[];
+  /** Trava a edição (banner de visualização/edição travado). */
+  readOnly?: boolean;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
 }) {
@@ -113,6 +116,7 @@ export function DfdConferir({
           id="dfd-rep"
           className={inputCls}
           value={repId ?? ""}
+          disabled={readOnly}
           onChange={(e) => onRepChange(e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">— Selecione a repartição —</option>
@@ -140,6 +144,7 @@ export function DfdConferir({
             </span>
             <Segmented<Prioridade | "">
               value={prio ?? ""}
+              disabled={readOnly}
               options={[
                 { value: "ALTA", label: "Alta" },
                 { value: "MÉDIA", label: "Média" },
@@ -159,7 +164,7 @@ export function DfdConferir({
                 className={inputCls}
                 style={{ width: "auto", flex: "1 1 120px" }}
                 value={mesSel}
-                disabled={anual}
+                disabled={anual || readOnly}
                 onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, false))}
               >
                 <option value="">— Mês —</option>
@@ -176,6 +181,7 @@ export function DfdConferir({
                 placeholder="Ano"
                 maxLength={4}
                 value={anoSel}
+                disabled={readOnly}
                 onChange={(e) => {
                   const ano = e.target.value.replace(/\D/g, "").slice(0, 4);
                   setSecao(vCfg, buildPrevisao(mesSel, ano, anual));
@@ -184,6 +190,7 @@ export function DfdConferir({
               <Checkbox
                 label="Anual"
                 checked={anual}
+                disabled={readOnly}
                 onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.checked))}
               />
             </div>
@@ -199,11 +206,12 @@ export function DfdConferir({
                 <TextField
                   aria-label="Fundamentação legal"
                   value={fund}
+                  disabled={readOnly}
                   onChange={(e) => setSecao(fCfg, e.target.value)}
                   placeholder="Ex.: Lei 14.133/2021"
                 />
               </div>
-              {!fund.trim() && (
+              {!readOnly && !fund.trim() && (
                 <button
                   type="button"
                   className="rounded-control border border-border-2 px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-soft"

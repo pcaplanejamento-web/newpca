@@ -230,6 +230,20 @@ export async function appendDfdItens(
   return { inserted: itens.length };
 }
 
+/**
+ * Edita campos de um DFD JÁ GRAVADO (banner destravado): repartição e/ou seções
+ * (tratamento). Não toca nos itens. Grava direto no D1 (`atualizadoEm` renovado).
+ */
+export async function atualizarDfdCampos(
+  id: number,
+  campos: { reparticaoId?: number | null; secoes?: DfdSecaoRow[] },
+): Promise<void> {
+  const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
+  if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
+  if (campos.secoes !== undefined) set.secoes = campos.secoes.length > 0 ? JSON.stringify(campos.secoes) : null;
+  await getDb().update(dfds).set(set).where(eq(dfds.id, id));
+}
+
 /** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
 export async function getDfdReparticao(id: number): Promise<{ reparticaoId: number | null } | null> {
   const [r] = await getDb()

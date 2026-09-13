@@ -7,15 +7,19 @@ export function Segmented<T extends string>({
   options,
   onChange,
   className = "",
+  disabled = false,
 }: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
   className?: string;
+  /** Desabilita a interação (ex.: banner de edição travado). */
+  disabled?: boolean;
 }) {
   return (
     <div
       role="tablist"
+      aria-disabled={disabled || undefined}
       className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment border border-border bg-surface-2 p-[3px] ${className}`}
     >
       {options.map((o) => {
@@ -26,8 +30,9 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
+            disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`whitespace-nowrap rounded-chip px-3 py-1.5 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+            className={`whitespace-nowrap rounded-chip px-3 py-1.5 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 ${
               active
                 ? "bg-surface text-text shadow-sm"
                 : "text-muted hover:text-text-2"

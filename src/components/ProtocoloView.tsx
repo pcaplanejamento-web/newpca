@@ -2,6 +2,24 @@
 
 import { brl, dataBR, num } from "@/lib/format";
 import { type Column, DataTable } from "./DataTable";
+import { TextField } from "./Field";
+import { inputCls, labelCls } from "./formStyles";
+
+/** Campos editáveis do protocolo (banner destravado). */
+export type ProtocoloEdicaoValores = {
+  data: string;
+  interessado: string;
+  documento: string;
+  assunto: string;
+  observacao: string;
+  reparticaoId: number | null;
+};
+export type ProtocoloEdicao = {
+  trancado: boolean;
+  reparticoes: { id: number; codigo: string; nome: string }[];
+  valores: ProtocoloEdicaoValores;
+  onChange: (patch: Partial<ProtocoloEdicaoValores>) => void;
+};
 
 /**
  * Visão COMPLETA (read-only) do protocolo — metadados da capa + a lista dos DFDs
@@ -42,10 +60,13 @@ const valorDfd = (d: ProtocoloVisualDfd) => d.valorTotal ?? d.valorEstimado ?? 0
 export function ProtocoloView({
   protocolo,
   onVerDfd,
+  edicao,
 }: {
   protocolo: ProtocoloVisual;
   onVerDfd?: (id: number) => void;
+  edicao?: ProtocoloEdicao;
 }) {
+  const editando = !!edicao && !edicao.trancado;
   const rep =
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
@@ -84,17 +105,47 @@ export function ProtocoloView({
 
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
-        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-          <Campo label="Nº do processo" valor={protocolo.numero} />
-          <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
-          <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
-          <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
-          <Campo label="Valor (capa)" valor={protocolo.valorCapa != null ? brl(protocolo.valorCapa) : "—"} />
-          <Campo label="Assunto" valor={protocolo.assunto ?? "—"} span />
-          <Campo label="Observação" valor={protocolo.observacao ?? "—"} span />
-          <Campo label="Repartição" valor={rep} span />
-          <Campo label="Local (capa)" valor={protocolo.localReparticao ?? "—"} span />
-        </dl>
+        {editando && edicao ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField label="Data/Hora" value={edicao.valores.data} onChange={(e) => edicao.onChange({ data: e.target.value })} />
+            <TextField label="CPF/CNPJ" value={edicao.valores.documento} onChange={(e) => edicao.onChange({ documento: e.target.value })} />
+            <div className="sm:col-span-2">
+              <TextField label="Interessado" value={edicao.valores.interessado} onChange={(e) => edicao.onChange({ interessado: e.target.value })} />
+            </div>
+            <TextField label="Assunto" value={edicao.valores.assunto} onChange={(e) => edicao.onChange({ assunto: e.target.value })} />
+            <TextField label="Observação" value={edicao.valores.observacao} onChange={(e) => edicao.onChange({ observacao: e.target.value })} />
+            <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="proto-edit-rep">
+                Repartição
+              </label>
+              <select
+                id="proto-edit-rep"
+                className={inputCls}
+                value={edicao.valores.reparticaoId ?? ""}
+                onChange={(e) => edicao.onChange({ reparticaoId: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— Selecione a repartição —</option>
+                {edicao.reparticoes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.codigo} · {r.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+            <Campo label="Nº do processo" valor={protocolo.numero} />
+            <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
+            <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
+            <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
+            <Campo label="Valor (capa)" valor={protocolo.valorCapa != null ? brl(protocolo.valorCapa) : "—"} />
+            <Campo label="Assunto" valor={protocolo.assunto ?? "—"} span />
+            <Campo label="Observação" valor={protocolo.observacao ?? "—"} span />
+            <Campo label="Repartição" valor={rep} span />
+            <Campo label="Local (capa)" valor={protocolo.localReparticao ?? "—"} span />
+          </dl>
+        )}
       </section>
 
       <div className="grid grid-cols-3 gap-3">
