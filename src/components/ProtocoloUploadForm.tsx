@@ -85,7 +85,7 @@ export function ProtocoloUploadForm({
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
   const [carregandoIdx, setCarregandoIdx] = useState<number | null>(null);
-  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
   const [bulkCampo, setBulkCampo] = useState<CampoBulk>("reparticao");
   const [bulkRep, setBulkRep] = useState<number | null>(null);
   const [bulkPrio, setBulkPrio] = useState<Prioridade | "">("");
@@ -274,7 +274,7 @@ export function ProtocoloUploadForm({
   };
 
   async function aplicarBulk() {
-    const idxs = [...sel];
+    const idxs = [...sel].map(Number); // chaves são idx numéricos
     if (idxs.length === 0) return;
     if (bulkCampo === "reparticao") {
       setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? bulkRep : x)));
