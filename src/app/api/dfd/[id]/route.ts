@@ -7,7 +7,8 @@ import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 
 export const dynamic = "force-dynamic";
 
-/** DFD completo (para o banner de visualização) — escopado por repartição. */
+/** DFD completo (para o banner de visualização). Leitura segue o escopo da LISTA
+ * (que em "Geral" mostra tudo) — o aperto de segurança é nas ESCRITAS, abaixo. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -15,10 +16,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("ID inválido.");
   const dfd = await getDfd(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
-    return erro("Sem acesso a este DFD.", 403);
-  }
   return ok({ dfd });
 }
 
