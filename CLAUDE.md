@@ -101,14 +101,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,
   reativo aos filtros (`DataTable` `resumo={(linhas)=>…}`). Migração `0015` concede a aba `dfd` a quem já tinha `pca`.
-- **Banner flutuante único (`DfdView` dentro de `Modal`):** a MESMA visão completa é usada na **conferência da
-  importação** (`DfdUploadForm`) e na **visualização** do DFD gravado (`DfdsView` "Ver" → `GET /api/dfd/[id]`).
+- **Conferência/edição única (`DfdConferir`) + banner (`Modal`):** o CORPO de conferência/edição do DFD é UM
+  componente **controlado** — `DfdConferir` (select "Setor / Repartição" + bloco **Tratamento** + lista de faltas
+  ao vivo + `DfdView` read-only refletindo as edições). É o MESMO no **import avulso** (`DfdUploadForm`) e **por DFD
+  dentro do protocolo** (split-view). A **visualização** do DFD gravado (`DfdsView`, **clique na linha** →
+  `GET /api/dfd/[id]`) usa `DfdView` puro. Um único mapeador `DfdParseado`→`DfdVisual` (`toVisual`, em `DfdConferir`).
   **Só grava ao confirmar**. O `Modal` renderiza via **portal em `document.body`** (escapa do `transform`/`overflow`
-  do `Tabs`) com **cabeçalho fixo** + corpo rolável + **rodapé fixo** (`rodape`, ex.: Cancelar/Importar).
+  do `Tabs`) com **cabeçalho fixo** + corpo rolável + **rodapé fixo** (`rodape`); larguras `md/lg/xl/full` e
+  **`bloqueado`** (sem X/Esc/backdrop) durante a gravação.
 - **Regras obrigatórias (`faltasObrigatorias`, `src/lib/dfd-validation.ts`) — fonte única cliente+servidor:** não
   importa sem **valor unitário em todos os itens**, **repartição**, **justificativa** (§3), **previsão de entrega**
   (§5), **prioridade** (§6) e **fundamentação legal** (§7). O banner **mostra o DFD e lista o que falta**, mas
   **bloqueia o botão** "Importar"; o `POST /api/dfd` rejeita (422) por garantia.
+- **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
+  ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
+  `normPrioridade`) e PREVISÃO DE ENTREGA (`MÊS/AAAA` ou `ANUAL/AAAA` p/ recorrente — `normPrevisao`); o que não dá
+  para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
+  PREVISÃO (mês + ano + toggle ANUAL) e FUNDAMENTAÇÃO LEGAL (`TextField`, padrão "Lei 14.133/2021") — só componentes
+  do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio normal (sem migração). Cada DFD ganha um
+  **estado** (`estadoDfd`: com erro › editado › regularizado › regular › pendente; cor por token `--danger/--info/
+  --warn/--ok/--muted`). Setor **é** repartição (rótulo unificado; a "regularização" é gravar `reparticaoId`).
 - **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
   edição já gerada) — plano consolidado da Prefeitura, **escopo por repartição** (sem `grupo_id`, como as
   `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch
@@ -141,8 +153,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   protocolado**. `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
   `protocolo.ts` (`iniciarProtocolo` = `POST /api/protocolo` `start-protocolo`; totais **ao vivo**), `GET`/`DELETE
   /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular). UI na **aba Protocolos** de `DfdsView`
-  (`ProtocoloUploadForm` → banner: metadados + "aplicar repartição a todos" + tabela **paginada** dos DFDs [rep. por
-  DFD, situação novo/substitui/move] + `DfdView` sob demanda; `ProtocoloView` read-only, catalogado). Sem nova aba.
+  (`ProtocoloUploadForm` → banner `full`: metadados + **repartição do protocolo pelo Interessado** + **split-view
+  animado** [tabela dos DFDs ↔ `DfdConferir` do DFD aberto, `grid-template-columns` animado por token de motion;
+  **clique na linha** abre; desktop = lista compacta + editor lado a lado, mobile = overlay] + **seleção/edição em
+  massa** [repartição/prioridade/previsão/fundamentação nos N selecionados] + **estado por DFD**. Analisa/normaliza
+  em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
+  sobreviverem** ao envio; `protocolar` usa a cópia do cache e só re-parseia o que faltou. `ProtocoloView` read-only,
+  catalogado). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
+  "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
+  Sem nova aba.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -167,7 +186,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `StatusTag`
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
-  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho), `Modal`, `formStyles`,
+  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha), `Modal`, `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback

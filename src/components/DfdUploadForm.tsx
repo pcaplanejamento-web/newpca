@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { type CampoTratavel, normalizarSecoesDfd } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -10,9 +11,8 @@ import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { DfdView, type DfdVisual } from "./DfdView";
-import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconBuilding, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { DfdConferir } from "./DfdConferir";
+import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
@@ -33,6 +33,7 @@ export function DfdUploadForm({
   const [preview, setPreview] = useState<DfdParseado | null>(null);
   const [repId, setRepId] = useState<number | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
+  const [autoCampos, setAutoCampos] = useState<CampoTratavel[]>([]);
   const [dragging, setDragging] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [resultado, setResultado] = useState<{
@@ -64,9 +65,11 @@ export function DfdUploadForm({
     }
     setStatus("parsing");
     try {
-      const d = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
+      const parsed = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
+      const { dfd: d, auto } = normalizarSecoesDfd(parsed); // padroniza PRIORIDADE/PREVISÃO
       const matched = casarReparticao(d, reparticoes);
       setPreview(d);
+      setAutoCampos(auto);
       setRepId(matched);
       setAutoMatch(matched != null);
       setStatus("ready");
@@ -125,35 +128,13 @@ export function DfdUploadForm({
     setErro(null);
     setRepId(null);
     setAutoMatch(false);
+    setAutoCampos([]);
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  const rep = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
   const faltas = preview
     ? faltasObrigatorias({ reparticaoId: repId, itens: preview.itens, secoes: preview.secoes })
     : [];
-  const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
-  const visual: DfdVisual | null = preview
-    ? {
-        numero: preview.numero,
-        planejamento: preview.planejamento,
-        tipo: preview.tipo,
-        objeto: preview.objeto,
-        orgaoEntidade: preview.orgaoEntidade,
-        setorRequisitante: preview.setorRequisitante,
-        responsavel: preview.responsavel,
-        matricula: preview.matricula,
-        email: preview.email,
-        telefone: preview.telefone,
-        valorEstimado: preview.valorEstimado,
-        valorTotal: preview.valorTotal,
-        reparticaoCodigo: rep?.codigo ?? null,
-        reparticaoNome: rep?.nome ?? null,
-        totalItens: preview.itens.length,
-        itens: preview.itens,
-        secoes: preview.secoes,
-      }
-    : null;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -262,7 +243,7 @@ export function DfdUploadForm({
         fecharNoBackdrop={false}
         bloqueado={status === "sending"}
         rodape={
-          visual ? (
+          preview ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               {status === "sending" ? (
                 <div className="min-w-[180px] flex-1">
@@ -294,63 +275,20 @@ export function DfdUploadForm({
           ) : undefined
         }
       >
-        {visual && (
-          <div className="space-y-4">
-            {/* Repartição (auto-detectada, confirmável) */}
-            <div>
-              <label className={labelCls} htmlFor="dfd-rep">
-                Repartição / órgão <span style={{ color: "var(--danger)" }}>*</span>
-              </label>
-              <select
-                id="dfd-rep"
-                className={inputCls}
-                value={repId ?? ""}
-                onChange={(e) => {
-                  setRepId(e.target.value ? Number(e.target.value) : null);
-                  setAutoMatch(false);
-                }}
-              >
-                <option value="">— Selecione a repartição —</option>
-                {reparticoes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.codigo} · {r.nome}
-                  </option>
-                ))}
-              </select>
-              {autoMatch && (
-                <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
-                  Repartição detectada automaticamente
-                  {preview?.siglaSetor ? ` pela sigla "${preview.siglaSetor}"` : ""}. Confirme ou ajuste.
-                </Callout>
-              )}
-            </div>
-
-            {/* Validação obrigatória — mostra os erros, mas não bloqueia a conferência */}
-            {faltas.length > 0 && (
-              <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
-                <p className="font-semibold">Importação bloqueada — faltam dados obrigatórios:</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5 opacity-90">
-                  {faltas.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-                <p className="mt-1.5 opacity-90">
-                  Você pode conferir o DFD abaixo; a importação libera quando estiver completo.
-                </p>
-              </Callout>
-            )}
-            {foraDoHead && faltas.length === 0 && (
-              <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
-                A repartição escolhida é diferente da ativa no cabeçalho — o DFD ficará visível ao
-                selecioná-la (ou "Geral") no topo.
-              </Callout>
-            )}
-
-            {/* Documento completo (conferência) */}
-            <div className="border-t border-border pt-4">
-              <DfdView dfd={visual} />
-            </div>
-          </div>
+        {preview && (
+          <DfdConferir
+            dfd={preview}
+            reparticoes={reparticoes}
+            reparticaoAtivaId={reparticaoAtivaId}
+            repId={repId}
+            autoMatch={autoMatch}
+            autoCampos={autoCampos}
+            onRepChange={(id) => {
+              setRepId(id);
+              setAutoMatch(false);
+            }}
+            onSecoesChange={(secoes) => setPreview((p) => (p ? { ...p, secoes } : p))}
+          />
         )}
       </Modal>
     </div>

@@ -319,6 +319,7 @@ export function Catalogo() {
   const [framed, setFramed] = useState(false);
   const [device, setDevice] = useState("desktop");
   const [tsel, setTsel] = useState<Set<string | number>>(new Set());
+  const [tclick, setTclick] = useState<string | number | null>(null);
   const [busca, setBusca] = useState("");
   const [check, setCheck] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
@@ -644,7 +645,7 @@ export function Catalogo() {
         />
       </Secao>
 
-      <Secao titulo="Tabela (seleção de linhas + filtro no cabeçalho)">
+      <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha)">
         <DataTable
           columns={COLUNAS}
           rows={PROTOS}
@@ -652,8 +653,15 @@ export function Catalogo() {
           selectable
           selected={tsel}
           onSelected={setTsel}
+          onRowClick={(r) => setTclick(r.id)}
           pageSize={4}
-          footer={tsel.size > 0 ? `${tsel.size} selecionada(s)` : undefined}
+          footer={
+            tclick != null
+              ? `Linha aberta: ${tclick} (clique na linha; controles internos não disparam)`
+              : tsel.size > 0
+                ? `${tsel.size} selecionada(s)`
+                : "Clique numa linha para abrir"
+          }
         />
       </Secao>
 

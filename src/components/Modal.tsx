@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
 
-const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg", xl: "sm:max-w-4xl" } as const;
+const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg", xl: "sm:max-w-4xl", full: "sm:max-w-6xl" } as const;
 
 /**
  * Modal compartilhado: bottom-sheet no mobile ↔ painel centralizado no desktop.

@@ -1,5 +1,6 @@
 import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
+import { classificarPdf, paginasDeItens } from "./parse-protocolo-pdf-core.ts";
 
 /**
  * Parser do DFD em PDF — roda NO NAVEGADOR. Usa o `pdf.js` (`pdfjs-dist`),
@@ -79,5 +80,14 @@ export async function extractPdfItems(file: File): Promise<PdfItem[]> {
 }
 
 export async function parseDfdPdf(file: File): Promise<DfdParseado> {
-  return parseDfdFromPdfItems(await extractPdfItems(file), file.name);
+  const items = await extractPdfItems(file);
+  // Separa as vias: um PDF de protocolo (capa/vários DFDs) NÃO entra pela via do DFD.
+  const tipo = classificarPdf(paginasDeItens(items));
+  if (tipo === "protocolo") {
+    throw new Error("Isto é um PROTOCOLO (vários DFDs) — importe pela aba Protocolos.");
+  }
+  if (tipo === "desconhecido") {
+    throw new Error('Não reconheci um DFD neste PDF. Envie o DFD emitido (com "Número DFD").');
+  }
+  return parseDfdFromPdfItems(items, file.name);
 }

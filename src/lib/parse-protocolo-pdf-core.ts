@@ -1,5 +1,6 @@
 import { parseNumberBR } from "./normalize.ts";
 import { buscar, extrairCabecalho } from "./parse-dfd-comum.ts";
+import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 /**
  * Núcleo PURO do parser de PROTOCOLO em PDF (o "processo" que empacota vários
@@ -48,6 +49,37 @@ const RE_NUM_DFD = /N[úu]mero\s+DFD\s*:?\s*(\d+)/i;
 /** A página é a CAPA DO PROCESSO? (tem "CAPA DO PROCESSO" ou "Número Processo"). */
 function ehCapa(lines: string[]): boolean {
   return lines.some((s) => /CAPA DO PROCESSO/i.test(s) || /N[úu]mero\s+Processo/i.test(s));
+}
+
+/** Texto por página a partir dos trechos crus (agrupa por página + reconstrói linhas). */
+export function paginasDeItens(items: PdfItem[]): PaginaTexto[] {
+  const porPagina = new Map<number, PdfItem[]>();
+  for (const it of items) {
+    const arr = porPagina.get(it.page) ?? [];
+    arr.push(it);
+    porPagina.set(it.page, arr);
+  }
+  return [...porPagina.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([page, its]) => ({ page, lines: linhasDeTexto(its) }));
+}
+
+/**
+ * Classifica um PDF (pelas linhas por página) — separa as vias de importação e
+ * recusa documento errado: **capa** OU **≥2 "Número DFD"** = protocolo; **1** DFD
+ * sem capa = DFD avulso; **nenhum** sinal = desconhecido.
+ */
+export function classificarPdf(paginas: PaginaTexto[]): "protocolo" | "dfd" | "desconhecido" {
+  const numeros = new Set<string>();
+  let temCapa = false;
+  for (const p of paginas) {
+    const n = buscar(p.lines, RE_NUM_DFD);
+    if (n) numeros.add(n);
+    else if (ehCapa(p.lines)) temCapa = true;
+  }
+  if (temCapa || numeros.size >= 2) return "protocolo";
+  if (numeros.size === 1) return "dfd";
+  return "desconhecido";
 }
 
 /** Metadados da capa a partir das linhas de texto da página inicial. */

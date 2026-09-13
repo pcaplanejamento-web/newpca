@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
-import { indexarProtocolo, type PaginaTexto } from "../src/lib/parse-protocolo-pdf-core.ts";
+import { classificarPdf, indexarProtocolo, type PaginaTexto } from "../src/lib/parse-protocolo-pdf-core.ts";
 
 // Índice LEVE do protocolo: recebe o texto por página (barato) e detecta a capa +
 // os DFDs (nº, páginas, cabeçalho) sem remontar tabelas. O parse completo por DFD
@@ -115,5 +115,22 @@ describe("indexarProtocolo (índice leve)", () => {
     const items = protocoloItems();
     const p7 = items.filter((i) => i.page === 7);
     assert.throws(() => parseDfdFromPdfItems(p7, "proto.pdf"), /itens|Número DFD/i);
+  });
+});
+
+describe("classificarPdf (separa as vias / recusa documento errado)", () => {
+  it("capa + vários DFDs → protocolo", () => {
+    assert.equal(classificarPdf(paginasDe(protocoloItems())), "protocolo");
+  });
+  it("um único DFD sem capa → dfd", () => {
+    assert.equal(classificarPdf(paginasDe(dfdNaPagina(1, "100"))), "dfd");
+  });
+  it("dois DFDs sem capa → protocolo (bundle)", () => {
+    const items = [...dfdNaPagina(1, "100"), ...dfdNaPagina(2, "200")];
+    assert.equal(classificarPdf(paginasDe(items)), "protocolo");
+  });
+  it("sem Número DFD e sem capa → desconhecido", () => {
+    const items = [f(1, 100, 700, "DOCUMENTO QUALQUER SEM DFD")];
+    assert.equal(classificarPdf(paginasDe(items)), "desconhecido");
   });
 });

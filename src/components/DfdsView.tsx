@@ -37,16 +37,13 @@ export function DfdsView({
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [dfdView, setDfdView] = useState<DfdDetalhe | null>(null);
-  const [carregandoView, setCarregandoView] = useState<number | null>(null);
   const [protoView, setProtoView] = useState<ProtocoloDetalhe | null>(null);
-  const [carregandoProto, setCarregandoProto] = useState<number | null>(null);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
   const [salvandoVinc, setSalvandoVinc] = useState(false);
 
   async function verDfd(id: number) {
     setErro(null);
-    setCarregandoView(id);
     try {
       const res = await fetch(`/api/dfd/${id}`);
       const j = (await res.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
@@ -54,8 +51,6 @@ export function DfdsView({
       setDfdView(j.dfd);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
-    } finally {
-      setCarregandoView(null);
     }
   }
 
@@ -73,7 +68,6 @@ export function DfdsView({
 
   async function verProtocolo(id: number) {
     setErro(null);
-    setCarregandoProto(id);
     try {
       const res = await fetch(`/api/protocolo/${id}`);
       const j = (await res.json()) as { ok?: boolean; error?: string; protocolo?: ProtocoloDetalhe };
@@ -81,8 +75,6 @@ export function DfdsView({
       setProtoView(j.protocolo);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
-    } finally {
-      setCarregandoProto(null);
     }
   }
 
@@ -173,30 +165,24 @@ export function DfdsView({
       key: "acoes",
       header: "",
       filter: "none",
-      render: (r) => (
-        <div className="flex justify-end gap-1">
-          <Button variant="ghost" onClick={() => verDfd(r.id)} loading={carregandoView === r.id}>
-            Ver
-          </Button>
-          {podeEditar && (
-            <>
-              <Button
-                variant="ghost"
-                aria-label="Vincular a protocolo"
-                onClick={() => abrirVincular(r)}
-                icon={<IconLayers className="h-4 w-4" />}
-              />
-              <Button
-                variant="ghost"
-                aria-label="Excluir DFD"
-                onClick={() => excluirDfd(r.id, r.numero)}
-                icon={<IconTrash className="h-4 w-4" />}
-                style={{ color: "var(--danger)" }}
-              />
-            </>
-          )}
-        </div>
-      ),
+      render: (r) =>
+        podeEditar ? (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              aria-label="Vincular a protocolo"
+              onClick={() => abrirVincular(r)}
+              icon={<IconLayers className="h-4 w-4" />}
+            />
+            <Button
+              variant="ghost"
+              aria-label="Excluir DFD"
+              onClick={() => excluirDfd(r.id, r.numero)}
+              icon={<IconTrash className="h-4 w-4" />}
+              style={{ color: "var(--danger)" }}
+            />
+          </div>
+        ) : null,
     },
   ];
 
@@ -228,12 +214,9 @@ export function DfdsView({
       key: "acoes",
       header: "",
       filter: "none",
-      render: (r) => (
-        <div className="flex justify-end gap-1">
-          <Button variant="ghost" onClick={() => verProtocolo(r.id)} loading={carregandoProto === r.id}>
-            Ver
-          </Button>
-          {podeEditar && (
+      render: (r) =>
+        podeEditar ? (
+          <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
               aria-label="Excluir protocolo"
@@ -241,9 +224,8 @@ export function DfdsView({
               icon={<IconTrash className="h-4 w-4" />}
               style={{ color: "var(--danger)" }}
             />
-          )}
-        </div>
-      ),
+          </div>
+        ) : null,
     },
   ];
 
@@ -267,6 +249,7 @@ export function DfdsView({
             columns={colsProto}
             rows={protocolos}
             getKey={(r) => r.id}
+            onRowClick={(r) => verProtocolo(r.id)}
             pageSize={25}
             minWidth={820}
             resumo={(linhas) =>
@@ -294,6 +277,7 @@ export function DfdsView({
             columns={colsDfd}
             rows={dfds}
             getKey={(r) => r.id}
+            onRowClick={(r) => verDfd(r.id)}
             pageSize={25}
             minWidth={1040}
             resumo={(linhas) =>

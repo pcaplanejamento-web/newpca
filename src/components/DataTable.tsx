@@ -37,6 +37,7 @@ export function DataTable<R>({
   footer,
   resumo,
   minWidth = 720,
+  onRowClick,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -49,6 +50,8 @@ export function DataTable<R>({
   /** Resumo (ex.: somatórios) calculado sobre as linhas FILTRADAS/ordenadas. */
   resumo?: (linhas: R[]) => ReactNode;
   minWidth?: number;
+  /** Clique na LINHA (abre o item). Ignora cliques em controles (input/select/button/a/label). */
+  onRowClick?: (row: R) => void;
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
@@ -212,9 +215,25 @@ export function DataTable<R>({
               return (
                 <tr
                   key={k}
+                  onClick={
+                    onRowClick
+                      ? (e) => {
+                          if ((e.target as HTMLElement).closest("input,select,button,a,label")) return;
+                          onRowClick(r);
+                        }
+                      : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if (e.key === "Enter") onRowClick(r);
+                        }
+                      : undefined
+                  }
+                  {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
                   className={`border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
-                    marcada ? "bg-accent-soft/60" : ""
-                  }`}
+                    onRowClick ? "cursor-pointer" : ""
+                  } ${marcada ? "bg-accent-soft/60" : ""}`}
                 >
                   {selectable && (
                     <td className="w-10 px-3">

@@ -61,6 +61,22 @@ rollback do DFD parcial; append idempotente), o banner fica **travado** durante 
 interrompe) e **toda escrita** (DFD e protocolo) é **escopada por repartição** (403 fora do escopo; anti-sequestro
 por número).
 
+### DFD editável dentro do protocolo (mesmo componente) + tratamento + edição em massa + split-view — entregue
+✅ Dentro do protocolo, cada DFD agora abre o **mesmo componente de conferência/edição** do DFD avulso
+(`DfdConferir`) — com a **mesma análise de problemas** e a possibilidade de **tratar** os campos que faltam ou estão
+fora do padrão. **Normalização automática** (puros/testáveis): PRIORIDADE vira só **ALTA/MÉDIA/BAIXA** e PREVISÃO DE
+ENTREGA vira **MÊS/AAAA** (ou **ANUAL/AAAA** quando recorrente); o que não dá para padronizar fica para o usuário
+tratar (PRIORIDADE em `Segmented`, PREVISÃO por mês+ano+ANUAL, FUNDAMENTAÇÃO LEGAL em texto com padrão
+"Lei 14.133/2021"). Cada DFD mostra um **estado** — com erro / regularizado automaticamente / editado / regular /
+pendente. **Edição em massa**: selecione DFDs na tabela e aplique **repartição, prioridade, previsão ou fundamentação**
+aos vários de uma vez (a antiga "aplicar repartição a todos" virou seleção + massa). **Split-view animado**: clicar
+num DFD desliza a tabela para a esquerda e abre o editor à direita (lista compacta + editor lado a lado no desktop,
+overlay no mobile); trocar de DFD atualiza suave, fechar volta suave. **Clique na linha abre** em todas as tabelas de
+DFD/protocolo (sem botão "Ver"). As **edições sobrevivem** ao envio (cache do parse por DFD). O sistema **separa as
+vias e recusa documento errado**: protocolo (capa ou vários DFDs) não entra pela aba DFDs, DFD avulso não entra pela
+aba Protocolos, e a repartição do protocolo é sugerida pelo **Interessado**. Setor **é** repartição (rótulo
+unificado). Sem migração (usa `dfds.secoes`).
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { brl, dataBR, num } from "@/lib/format";
-import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 
 /**
@@ -74,20 +73,6 @@ export function ProtocoloView({
     },
     { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens ?? 0) },
     { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(valorDfd(r)) },
-    ...(onVerDfd
-      ? [
-          {
-            key: "ver",
-            header: "",
-            filter: "none" as const,
-            render: (r: ProtocoloVisualDfd) => (
-              <Button variant="ghost" onClick={() => onVerDfd(r.id)}>
-                Ver
-              </Button>
-            ),
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -129,6 +114,7 @@ export function ProtocoloView({
             columns={cols}
             rows={protocolo.dfds}
             getKey={(r) => r.id}
+            onRowClick={onVerDfd ? (r) => onVerDfd(r.id) : undefined}
             minWidth={620}
             pageSize={25}
             footer={`${protocolo.dfds.length} DFD${protocolo.dfds.length === 1 ? "" : "s"}`}

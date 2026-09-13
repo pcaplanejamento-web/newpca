@@ -279,3 +279,61 @@ export function linhaTemConteudo(row: LinhaCrua): boolean {
   const id = row.idProduto == null ? "" : String(row.idProduto).trim();
   return nome.length > 0 || id.length > 0;
 }
+
+// ---------------------------------------------------------------------------
+// Normalização de seções tratáveis do DFD (PRIORIDADE / PREVISÃO DE ENTREGA).
+// Puro/testável. `auto=true` = corrigiu/padronizou; `valor=null` = precisa de
+// tratamento manual. O texto canônico é gravado de volta em `secoes[i].texto`.
+// ---------------------------------------------------------------------------
+
+export type Prioridade = "ALTA" | "MÉDIA" | "BAIXA";
+
+/** PRIORIDADE → só ALTA/MÉDIA/BAIXA (auto-corrige variações; vazio/estranho → null). */
+export function normPrioridade(texto: string | null | undefined): { valor: Prioridade | null; auto: boolean } {
+  const raw = String(texto ?? "").trim();
+  if (!raw) return { valor: null, auto: false };
+  const s = stripAccents(cleanUpper(raw)).replace(/^PRIORIDADE\s*/, "").trim();
+  let valor: Prioridade | null = null;
+  if (/\b(ALTA|ALTO|URGENTE|URGENCIA)\b/.test(s)) valor = "ALTA";
+  else if (/\b(MEDIA|MEDIO|NORMAL|MODERAD[AO])\b/.test(s)) valor = "MÉDIA";
+  else if (/\b(BAIXA|BAIXO)\b/.test(s)) valor = "BAIXA";
+  if (valor == null) return { valor: null, auto: false };
+  return { valor, auto: cleanUpper(raw) !== valor };
+}
+
+export const MESES = [
+  "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO",
+  "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO",
+];
+const MESES_SEM = MESES.map(stripAccents); // sem acento p/ casar
+
+/**
+ * PREVISÃO DE ENTREGA/EXECUÇÃO → `MÊS/AAAA` (ex.: `FEVEREIRO/2027`), ou `ANUAL/AAAA`
+ * quando recorrente (mensal/ao longo do ano). Aceita `dd/mm/aaaa`, `mm/aaaa`,
+ * `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA`. Sem ano/irreconhecível → null (tratar).
+ */
+export function normPrevisao(texto: string | null | undefined): { valor: string | null; anual: boolean; auto: boolean } {
+  const raw = String(texto ?? "").trim();
+  if (!raw) return { valor: null, anual: false, auto: false };
+  const s = stripAccents(cleanUpper(raw));
+  const ano = s.match(/\b(20\d{2})\b/)?.[1] ?? null;
+  const recorrente = /\b(MENSAL|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL|TODO O ANO)\b|POR\s+\d+\s+MES/.test(s);
+  if (recorrente) {
+    if (!ano) return { valor: null, anual: true, auto: false };
+    const valor = `ANUAL/${ano}`;
+    return { valor, anual: true, auto: cleanUpper(raw) !== valor };
+  }
+  if (!ano) return { valor: null, anual: false, auto: false };
+  let mes: number | null = null;
+  const dmy = s.match(/\b(\d{1,2})\/(\d{1,2})\/20\d{2}\b/);
+  const my = s.match(/\b(\d{1,2})\/20\d{2}\b/);
+  if (dmy) mes = Number(dmy[2]);
+  else if (my) mes = Number(my[1]);
+  else {
+    const idx = MESES_SEM.findIndex((m) => new RegExp(`\\b${m}\\b`).test(s));
+    if (idx >= 0) mes = idx + 1;
+  }
+  if (mes == null || mes < 1 || mes > 12) return { valor: null, anual: false, auto: false };
+  const valor = `${MESES[mes - 1]}/${ano}`;
+  return { valor, anual: false, auto: cleanUpper(raw) !== valor };
+}
