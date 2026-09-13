@@ -1,5 +1,5 @@
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { dfdItens, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
+import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import type { DfdImportPayload, GerarPcaPayload } from "./dfd-validation";
 
@@ -50,6 +50,8 @@ export type DfdResumo = {
   reparticaoId: number | null;
   reparticaoCodigo: string | null;
   reparticaoNome: string | null;
+  protocoloId: number | null;
+  protocoloNumero: string | null;
 };
 
 export type DfdItemRow = {
@@ -103,6 +105,8 @@ const colunasDfd = {
   reparticaoId: dfds.reparticaoId,
   reparticaoCodigo: reparticoes.codigo,
   reparticaoNome: reparticoes.nome,
+  protocoloId: dfds.protocoloId,
+  protocoloNumero: dfdProtocolos.numero,
 };
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
@@ -111,7 +115,19 @@ export async function listarDfds(reparticaoId?: number): Promise<DfdResumo[]> {
     .select(colunasDfd)
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+    .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
+}
+
+/** DFDs vinculados a um protocolo (detalhe do protocolo). Reusa `colunasDfd`. */
+export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdResumo[]> {
+  return getDb()
+    .select(colunasDfd)
+    .from(dfds)
+    .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
+    .where(eq(dfds.protocoloId, protocoloId))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
 }
 
@@ -128,6 +144,7 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
     })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(eq(dfds.id, id))
     .limit(1);
   if (!d) return null;
@@ -162,6 +179,7 @@ export async function criarOuSubstituirDfd(
     setorRequisitante: dados.setorRequisitante ?? null,
     siglaSetor: dados.siglaSetor ?? null,
     reparticaoId: dados.reparticaoId ?? null,
+    protocoloId: dados.protocoloId ?? null,
     responsavel: dados.responsavel ?? null,
     matricula: dados.matricula ?? null,
     email: dados.email ?? null,

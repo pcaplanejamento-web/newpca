@@ -14,6 +14,7 @@ import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { DfdView } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
+import { ProtocoloView } from "@/components/ProtocoloView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
@@ -283,6 +284,29 @@ const PCA_DEMO = {
         },
       ],
     },
+  ],
+};
+
+// Protocolo (processo) com vários DFDs — visão read-only (o upload, que carrega
+// o pdf.js, fica fora do catálogo, como o DfdUploadForm).
+const PROTO_DEMO = {
+  numero: "144756/2026",
+  data: "09/09/2026 16:41:38",
+  interessado: "1008171 - FUNDO MUNICIPAL DOS DIREITOS DO IDOSO",
+  documento: "29.788.950/0001-04",
+  assunto: "INCLUSÃO - PCA",
+  observacao: "PCA 2027",
+  localReparticao: "COMPRAS FMAS",
+  valorCapa: 32705,
+  reparticaoCodigo: "SMIR",
+  reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
+  criadoEm: null,
+  totalDfds: 2,
+  totalItens: 3,
+  valorTotal: 512342.72,
+  dfds: [
+    { id: 1, numero: "1586", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72, valorEstimado: 342342.72 },
+    { id: 2, numero: "1720", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000 },
   ],
 };
 
@@ -628,6 +652,10 @@ export function Catalogo() {
 
       <Secao titulo="DFD — visualização do documento importado">
         <DfdView dfd={DFD_DEMO} />
+      </Secao>
+
+      <Secao titulo="Protocolo — processo com vários DFDs (visão)">
+        <ProtocoloView protocolo={PROTO_DEMO} />
       </Secao>
 
       <Secao titulo="PCA — compilação dos DFDs por repartição">

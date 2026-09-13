@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
-import { stripAccents } from "@/lib/normalize";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
+import { casarReparticao } from "@/lib/reparticao-match";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
@@ -16,19 +16,6 @@ import { Modal } from "./Modal";
 
 type Rep = { id: number; codigo: string; nome: string };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
-
-const norm = (s: string) => stripAccents(s.trim().toUpperCase());
-
-/** Chave de NOME p/ casar secretarias com siglas divergentes (ignora acentos,
- * conectores e "MUNICIPAL"). Ex.: "SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL"
- * e "Secretaria de Infraestrutura Rural" → "SECRETARIA INFRAESTRUTURA RURAL". */
-const chaveNome = (s: string) =>
-  stripAccents(s)
-    .toUpperCase()
-    .replace(/\b(DE|DA|DO|DAS|DOS|E|MUNICIPAL)\b/g, " ")
-    .replace(/[^A-Z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
 
 export function DfdUploadForm({
   reparticoes,
@@ -64,20 +51,7 @@ export function DfdUploadForm({
     setStatus("parsing");
     try {
       const d = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
-      let matched: number | null = null;
-      // 1) casa a sigla do Setor Requisitante com o código da repartição.
-      if (d.siglaSetor) {
-        const r = reparticoes.find((x) => norm(x.codigo) === d.siglaSetor);
-        if (r) matched = r.id;
-      }
-      // 2) fallback pelo NOME da secretaria (cobre sigla divergente, ex.: SMIR × SIR).
-      if (matched == null && d.setorRequisitante) {
-        const nomeSetor =
-          d.setorRequisitante.split(/\s+[-–—]\s+/).slice(1).join(" - ") || d.setorRequisitante;
-        const alvo = chaveNome(nomeSetor);
-        const r = alvo ? reparticoes.find((x) => chaveNome(x.nome) === alvo) : undefined;
-        if (r) matched = r.id;
-      }
+      const matched = casarReparticao(d, reparticoes);
       setPreview(d);
       setRepId(matched);
       setAutoMatch(matched != null);

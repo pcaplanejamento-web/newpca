@@ -118,6 +118,20 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(String(row.abas).includes("dfd"), `abas sem dfd: ${row.abas}`);
   });
 
+  it("0016 cria dfd_protocolos e vincula dfds.protocolo_id", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    assert.ok(tabelas.includes("dfd_protocolos"), "tabela dfd_protocolos ausente");
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('dfd_protocolos')");
+    for (const c of ["numero", "interessado", "documento", "assunto", "valor_capa", "reparticao_id"]) {
+      assert.ok(cols.includes(c), `coluna ausente em dfd_protocolos: ${c}`);
+    }
+    const dfd = nomes(db, "SELECT name FROM pragma_table_info('dfds')");
+    assert.ok(dfd.includes("protocolo_id"), "coluna dfds.protocolo_id ausente");
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    assert.ok(idx.includes("protocolos_dfd_numero_uq"), "índice único de numero ausente");
+    assert.ok(idx.includes("dfds_protocolo_idx"), "índice dfds_protocolo_idx ausente");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

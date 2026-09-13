@@ -35,6 +35,13 @@ const HDR: Record<string, keyof ColMap> = {
 };
 type ColMap = Partial<Record<keyof DfdItemParseado, number>>;
 
+/** Normaliza os trechos (colapsa espaços) e descarta os vazios. */
+function normalizar(bruto: PdfItem[]): PdfItem[] {
+  return bruto
+    .map((i) => ({ ...i, str: String(i.str ?? "").replace(/\s+/g, " ").trim() }))
+    .filter((i) => i.str);
+}
+
 /** Agrupa os trechos em linhas (mesma página + `y` dentro de 2pt), topo→base. */
 function agruparLinhas(items: PdfItem[]): PdfLine[] {
   const ord = [...items].sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
@@ -50,10 +57,17 @@ function agruparLinhas(items: PdfItem[]): PdfLine[] {
   return linhas;
 }
 
+/**
+ * Texto por linha (normalizado + agrupado por `y`) — mesma reconstrução usada no
+ * parser. Reaproveitado pelo parser de PROTOCOLO para detectar o "Número DFD" de
+ * cada página e fatiar o bundle em DFDs.
+ */
+export function linhasDeTexto(bruto: PdfItem[]): string[] {
+  return agruparLinhas(normalizar(bruto)).map((l) => l.items.map((i) => i.str).join(" "));
+}
+
 export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): DfdParseado {
-  const items = bruto
-    .map((i) => ({ ...i, str: String(i.str ?? "").replace(/\s+/g, " ").trim() }))
-    .filter((i) => i.str);
+  const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
 

@@ -8,10 +8,16 @@ import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
  * núcleo puro `parse-dfd-pdf-core.ts`.
  */
 export type { DfdParseado, DfdItemParseado } from "./parse-dfd-comum.ts";
+export type { PdfItem } from "./parse-dfd-pdf-core.ts";
 
 let workerPronto = false;
 
-export async function parseDfdPdf(file: File): Promise<DfdParseado> {
+/**
+ * Extrai os TRECHOS de texto posicionados (`{page,x,y,str}`) de um PDF, no
+ * navegador, via pdf.js (importado dinamicamente — fora do bundle do Worker).
+ * Compartilhado pelo parser de DFD e pelo de PROTOCOLO (bundle de vários DFDs).
+ */
+export async function extractPdfItems(file: File): Promise<PdfItem[]> {
   const buf = await file.arrayBuffer();
   const pdfjs = await import("pdfjs-dist");
   if (!workerPronto) {
@@ -27,7 +33,7 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
   try {
     doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
   } catch {
-    throw new Error("Não consegui ler o PDF. Confirme que é um DFD em PDF (com texto).");
+    throw new Error("Não consegui ler o PDF. Confirme que é um PDF com texto (não digitalizado).");
   }
 
   const items: PdfItem[] = [];
@@ -40,6 +46,9 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
       }
     }
   }
+  return items;
+}
 
-  return parseDfdFromPdfItems(items, file.name);
+export async function parseDfdPdf(file: File): Promise<DfdParseado> {
+  return parseDfdFromPdfItems(await extractPdfItems(file), file.name);
 }

@@ -246,11 +246,48 @@ export const grupoReparticoes = sqliteTable(
 );
 
 /**
+ * Protocolo (o "processo" administrativo) que empacota VÁRIOS DFDs. Entidade do
+ * domínio DFD, escopo por REPARTIÇÃO (como `dfds`/`unidades`; sem `grupo_id`).
+ * `numero` = "Número Processo" da capa, único. Excluir o protocolo NÃO apaga os
+ * DFDs — o vínculo `dfds.protocoloId` volta a NULL (FK `set null`).
+ */
+export const dfdProtocolos = sqliteTable(
+  "dfd_protocolos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    numero: text("numero").notNull(), // "Número Processo" (ex.: "144756/2026")
+    data: text("data"),
+    interessado: text("interessado"),
+    documento: text("documento"), // CPF/CNPJ do interessado
+    assunto: text("assunto"),
+    observacao: text("observacao"),
+    valorCapa: real("valor_capa"), // "Valor" da capa do processo
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
+      onDelete: "set null",
+    }),
+    localReparticao: text("local_reparticao"), // texto cru da capa (informativo)
+    nomeArquivo: text("nome_arquivo"),
+    // Totais (nº de DFDs, itens, valor somado) são recompostos AO VIVO em
+    // `protocolo.ts` — o vínculo é dinâmico (link/unlink/re-import), como em `pcas`.
+    criadoPor: integer("criado_por").references(() => usuarios.id, {
+      onDelete: "set null",
+    }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("protocolos_dfd_numero_uq").on(t.numero),
+    index("protocolos_dfd_reparticao_idx").on(t.reparticaoId),
+  ],
+);
+
+/**
  * DFD (Documento de Formalização da Demanda) — um formulário importado de `.xlsx`,
  * vinculado a uma repartição/órgão (auto-detectada pela sigla do Setor
  * Requisitante). Diferente da planilha achatada (`unidades`), o DFD traz metadados
  * de cabeçalho + uma tabela de itens SEM preço/classificação/data por item e um
  * único valor estimado total. Re-importar o mesmo `numero` substitui os itens.
+ * Pode pertencer a ≤1 protocolo (`protocoloId`, opcional).
  */
 export const dfds = sqliteTable(
   "dfds",
@@ -264,6 +301,9 @@ export const dfds = sqliteTable(
     setorRequisitante: text("setor_requisitante"), // texto cru do DFD
     siglaSetor: text("sigla_setor"), // sigla extraída (ex.: "SMIR") p/ auto-match
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
+      onDelete: "set null",
+    }),
+    protocoloId: integer("protocolo_id").references(() => dfdProtocolos.id, {
       onDelete: "set null",
     }),
     responsavel: text("responsavel"),
@@ -284,6 +324,7 @@ export const dfds = sqliteTable(
   (t) => [
     uniqueIndex("dfds_numero_uq").on(t.numero),
     index("dfds_reparticao_idx").on(t.reparticaoId),
+    index("dfds_protocolo_idx").on(t.protocoloId),
   ],
 );
 
@@ -359,6 +400,8 @@ export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
 export type Reparticao = typeof reparticoes.$inferSelect;
 export type GrupoReparticao = typeof grupoReparticoes.$inferSelect;
+export type DfdProtocolo = typeof dfdProtocolos.$inferSelect;
+export type NovoDfdProtocolo = typeof dfdProtocolos.$inferInsert;
 export type Dfd = typeof dfds.$inferSelect;
 export type NovoDfd = typeof dfds.$inferInsert;
 export type DfdItem = typeof dfdItens.$inferSelect;

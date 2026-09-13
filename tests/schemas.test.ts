@@ -6,7 +6,13 @@ import {
   perfilSchema,
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
-import { dfdImportSchema, faltasObrigatorias, gerarPcaSchema } from "../src/lib/dfd-validation.ts";
+import {
+  dfdImportSchema,
+  faltasObrigatorias,
+  gerarPcaSchema,
+  protocoloImportSchema,
+  vincularDfdSchema,
+} from "../src/lib/dfd-validation.ts";
 import { uploadSchema } from "../src/lib/validation.ts";
 
 // Observação: os schemas de protocolos/tabelas vivem em módulos que também
@@ -84,6 +90,37 @@ describe("dfd-validation", () => {
     assert.equal(gerarPcaSchema.safeParse({ nome: "", dfdIds: [1] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [0] }).success, false);
+  });
+
+  it("dfdImportSchema aceita protocoloId opcional/nullable", () => {
+    assert.equal(dfdImportSchema.parse({ numero: "1", itens: [{ item: 1 }] }).protocoloId ?? null, null);
+    assert.equal(dfdImportSchema.parse({ numero: "1", protocoloId: 7, itens: [{ item: 1 }] }).protocoloId, 7);
+    assert.equal(dfdImportSchema.safeParse({ numero: "1", protocoloId: 0, itens: [{ item: 1 }] }).success, false);
+  });
+
+  it("protocoloImportSchema exige numero do protocolo; dfds default = []", () => {
+    const r = protocoloImportSchema.parse({ protocolo: { numero: "144/2026" } });
+    assert.equal(r.protocolo.numero, "144/2026");
+    assert.deepEqual(r.dfds, []); // rule 3: protocolo sem DFDs
+    assert.equal(protocoloImportSchema.safeParse({ protocolo: { numero: "" } }).success, false);
+  });
+
+  it("protocoloImportSchema valida os DFDs embutidos (dfdImportSchema)", () => {
+    const ok = protocoloImportSchema.safeParse({
+      protocolo: { numero: "144/2026" },
+      dfds: [{ numero: "100", itens: [{ item: 1 }] }],
+    });
+    assert.equal(ok.success, true);
+    assert.equal(
+      protocoloImportSchema.safeParse({ protocolo: { numero: "1" }, dfds: [{ numero: "100", itens: [] }] }).success,
+      false,
+    );
+  });
+
+  it("vincularDfdSchema aceita id positivo ou null (desvincular)", () => {
+    assert.equal(vincularDfdSchema.safeParse({ protocoloId: 5 }).success, true);
+    assert.equal(vincularDfdSchema.safeParse({ protocoloId: null }).success, true);
+    assert.equal(vincularDfdSchema.safeParse({ protocoloId: 0 }).success, false);
   });
 });
 

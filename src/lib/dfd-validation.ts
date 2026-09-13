@@ -71,11 +71,41 @@ export const dfdImportSchema = z.object({
   email: textoCurtoOpc,
   telefone: textoCurtoOpc,
   reparticaoId: z.number().int().positive().optional().nullable(),
+  protocoloId: z.number().int().positive().optional().nullable(),
   valorEstimado: z.number().nonnegative().optional().nullable(),
   valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
   itens: z.array(dfdItemSchema).min(1, "O DFD não tem itens.").max(MAX_ITENS),
+});
+
+/** Metadados da capa do protocolo (editáveis no banner antes de protocolar). */
+const protocoloMetaSchema = z.object({
+  numero: z.coerce.string().trim().min(1, "Informe o número do protocolo.").max(60),
+  data: textoCurtoOpc,
+  interessado: textoOpc,
+  documento: textoCurtoOpc,
+  assunto: textoOpc,
+  observacao: z.string().trim().max(2000).optional().nullable(),
+  valorCapa: z.number().nonnegative().optional().nullable(),
+  reparticaoId: z.number().int().positive().optional().nullable(),
+  localReparticao: textoOpc,
+  nomeArquivo: textoCurtoOpc,
+});
+
+/**
+ * Protocola um processo com seus DFDs. Os DFDs aqui já são só os VÁLIDOS (o
+ * cliente não envia os com defeito; o servidor ainda roda `faltasObrigatorias`
+ * por DFD como garantia). `dfds` vazio = criar o protocolo sem DFDs (rule 3).
+ */
+export const protocoloImportSchema = z.object({
+  protocolo: protocoloMetaSchema,
+  dfds: z.array(dfdImportSchema).max(200).optional().default([]),
+});
+
+/** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */
+export const vincularDfdSchema = z.object({
+  protocoloId: z.number().int().positive().nullable(),
 });
 
 /** Gera uma edição de PCA unindo os DFDs selecionados. */
@@ -90,4 +120,5 @@ export const gerarPcaSchema = z.object({
 });
 
 export type DfdImportPayload = z.infer<typeof dfdImportSchema>;
+export type ProtocoloImportPayload = z.infer<typeof protocoloImportSchema>;
 export type GerarPcaPayload = z.infer<typeof gerarPcaSchema>;
