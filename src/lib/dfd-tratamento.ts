@@ -81,11 +81,11 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
   erro: "Com erro",
 };
 
-/** Cor semântica por estado (token). */
+/** Cor semântica por estado (token). Regularizado automaticamente = verde (é um sucesso). */
 export function estadoCor(e: EstadoDfd): string {
   if (e === "erro") return "var(--danger)";
   if (e === "editado") return "var(--info)";
-  if (e === "regularizado") return "var(--warn)";
+  if (e === "regularizado") return "var(--ok)";
   if (e === "regular") return "var(--ok)";
   return "var(--muted)";
 }

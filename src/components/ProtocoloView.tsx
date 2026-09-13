@@ -116,7 +116,7 @@ export function ProtocoloView({
             getKey={(r) => r.id}
             onRowClick={onVerDfd ? (r) => onVerDfd(r.id) : undefined}
             minWidth={620}
-            pageSize={25}
+            pageSize={20}
             footer={`${protocolo.dfds.length} DFD${protocolo.dfds.length === 1 ? "" : "s"}`}
           />
         )}

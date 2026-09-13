@@ -28,6 +28,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { buildPrevisao, DfdConferir } from "./DfdConferir";
+import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
@@ -55,12 +56,11 @@ export function ProtocoloUploadForm({
   dfdsExistentes?: DfdExistente[];
 }) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<PdfDoc | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [aberto, setAberto] = useState(false);
+  const [launcher, setLauncher] = useState(false); // banner lançador (soltar/escolher | criar manual)
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -391,13 +391,16 @@ export function ProtocoloUploadForm({
 
   const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
 
+  // Com o banner do DFD aberto ao lado, o principal fica estreito → colunas se ajustam
+  // (sem minWidths e sem a coluna "Situação") p/ caber sem scroll lateral.
+  const compacta = abertoIdx >= 0;
   const cols: Column<{ idx: number }>[] = [
     { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{index?.dfds[r.idx].numero}</span> },
     {
       key: "setor",
       header: "Setor / Repartição",
       filter: "none",
-      minWidth: 200,
+      minWidth: compacta ? undefined : 200,
       render: (r) => (
         <div className="flex items-center gap-1.5">
           <select
@@ -425,7 +428,7 @@ export function ProtocoloUploadForm({
       key: "estado",
       header: "Estado",
       filter: "none",
-      minWidth: 120,
+      minWidth: compacta ? undefined : 120,
       render: (r) => {
         const e = estado(r.idx);
         return (
@@ -436,67 +439,38 @@ export function ProtocoloUploadForm({
         );
       },
     },
-    {
-      key: "situacao",
-      header: "Situação",
-      filter: "none",
-      minWidth: 90,
-      render: (r) => <span className="text-[12px] text-muted">{SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")]}</span>,
-    },
+    ...(compacta
+      ? []
+      : [
+          {
+            key: "situacao",
+            header: "Situação",
+            filter: "none" as const,
+            minWidth: 90,
+            render: (r: { idx: number }) => (
+              <span className="text-[12px] text-muted">{SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")]}</span>
+            ),
+          },
+        ]),
   ];
 
   const linhas = (index?.dfds ?? []).map((_, idx) => ({ idx }));
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
-  const podeProtocolar = numero.trim().length > 0 && protoRepId != null && !importando;
+  // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
+  const dfdsComErro = linhas.filter(({ idx }) => estado(idx) === "erro").length;
+  const podeProtocolar =
+    numero.trim().length > 0 && protoRepId != null && !importando && !analisando && dfdsComErro === 0;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const temDfds = (index?.dfds.length ?? 0) > 0;
 
   return (
-    <div>
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) handleFile(f);
-        }}
-        className={`rounded-card border-2 border-dashed p-8 text-center transition ${
-          dragging ? "border-accent bg-accent-soft" : "border-border-2 bg-surface"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
-          }}
-        />
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-          <IconClipboard className="h-7 w-7" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-text-2">Arraste o protocolo (.pdf) aqui ou</p>
-        <div className="mt-2 flex flex-wrap justify-center gap-2">
-          <Button onClick={() => inputRef.current?.click()} icon={<IconFile className="h-[18px] w-[18px]" />}>
-            Escolher protocolo (.pdf)
-          </Button>
-          <Button variant="secondary" onClick={abrirVazio}>
-            Novo protocolo (sem PDF)
-          </Button>
-        </div>
-        <p className="mt-3 text-xs text-faint">
-          O sistema identifica cada DFD, analisa e trata os campos. DFD com pendência nunca é protocolado — aparece
-          no relatório ao final.
-        </p>
+    <div className="space-y-4">
+      {/* Botão único de importação (à direita) — abre o lançador */}
+      <div className="flex justify-end">
+        <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+          Importar protocolo
+        </Button>
       </div>
 
       {erro && status === "error" && (
@@ -529,6 +503,39 @@ export function ProtocoloUploadForm({
           )}
         </Callout>
       )}
+
+      {/* Lançador de importação — banner dividido ao meio: soltar/escolher | criar manual */}
+      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Importar protocolo" size="xl">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Dropzone
+            accept=".pdf"
+            onFile={(f) => {
+              setLauncher(false);
+              handleFile(f);
+            }}
+            titulo="Soltar o protocolo (.pdf)"
+            icon={<IconClipboard className="h-7 w-7" />}
+            dica="O sistema identifica cada DFD, analisa e trata os campos."
+          />
+          <div className="flex flex-col items-center justify-center rounded-card border border-border bg-surface-2 p-6 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface text-muted">
+              <IconFile className="h-7 w-7" />
+            </span>
+            <h4 className="mt-4 text-sm font-bold text-text">Criar manualmente</h4>
+            <p className="mt-1 text-xs text-muted">Sem PDF — você preenche os dados e adiciona/vincula DFDs depois.</p>
+            <Button
+              variant="secondary"
+              className="mt-4"
+              onClick={() => {
+                setLauncher(false);
+                abrirVazio();
+              }}
+            >
+              Novo protocolo (sem PDF)
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Banner */}
       <Modal
@@ -593,10 +600,17 @@ export function ProtocoloUploadForm({
                 <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
               </div>
             ) : (
-              <span className="text-[12px] text-muted">
+              <span
+                className="text-[12px]"
+                style={{ color: dfdsComErro > 0 ? "var(--danger)" : "var(--muted)" }}
+              >
                 {!temDfds
                   ? "Sem DFDs — cria só o protocolo."
-                  : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição${analisando ? " · analisando..." : ""}`}
+                  : analisando
+                    ? `Analisando ${index?.dfds.length} DFD(s)...`
+                    : dfdsComErro > 0
+                      ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
+                      : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
               </span>
             )}
             <div className="flex gap-2">
@@ -721,8 +735,8 @@ export function ProtocoloUploadForm({
                 selected={sel}
                 onSelected={setSel}
                 onRowClick={(r) => abrir(r.idx)}
-                pageSize={25}
-                minWidth={640}
+                pageSize={compacta ? 12 : 20}
+                minWidth={compacta ? 320 : 640}
                 footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar ao lado`}
               />
             </section>

@@ -383,8 +383,8 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-bg text-text lg:flex">
-      {/* Sidebar desktop */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 lg:flex">
+      {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 lg:flex lg:sticky lg:top-0 lg:h-dvh">
         <div className="px-1">
           <Brand />
         </div>

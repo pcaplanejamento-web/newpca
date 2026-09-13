@@ -78,6 +78,16 @@ vias e recusa documento errado**: protocolo (capa ou vários DFDs) não entra pe
 aba Protocolos, e a repartição do protocolo é sugerida pelo **Interessado**. Setor **é** repartição (rótulo
 unificado). Sem migração (usa `dfds.secoes`).
 
+### Importação por botão único + tabelas que preenchem o display + polimentos — entregue
+✅ **Um único botão "Importar"** à direita em cada tela (Protocolos, DFD, Planilha PCA) abre um **banner lançador**
+(`Dropzone` reutilizável: **solte** o arquivo ou **clique** para escolher); no protocolo o banner é **dividido ao
+meio** — importar arquivo **|** criar protocolo manualmente. Isso liberou espaço: as **tabelas de DFDs/Protocolos
+(telas DFD e PCA)** agora **ajustam as linhas por página para preencher a altura do display** no desktop (`DataTable
+fillHeight`, sem scroll vertical do navegador); as demais tabelas ficam em **≤20 linhas/página**. ✅ **Sidebar fixa**
+(altura do display, com scroll interno na navegação se houver muitas abas). ✅ **Não protocola com erro:** o botão
+"Protocolar" fica bloqueado enquanto houver DFD com erro. ✅ Com o **banner do DFD ao lado**, a tabela do protocolo
+**se ajusta** para caber sem scroll lateral. ✅ Estado **"regularizado automaticamente" agora aparece em verde**.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

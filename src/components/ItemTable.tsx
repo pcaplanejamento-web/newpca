@@ -123,7 +123,7 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
         columns={colunas}
         rows={filtradas}
         getKey={(r) => r.id}
-        pageSize={25}
+        pageSize={20}
         minWidth={showUnidade ? 900 : 820}
         footer={`${filtradas.length} item${filtradas.length === 1 ? "" : "s"}`}
       />

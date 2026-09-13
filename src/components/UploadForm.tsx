@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { brl, num } from "@/lib/format";
 import { normalizarLinha } from "@/lib/normalize";
 import { type PlanilhaParseada, parsePlanilha } from "@/lib/parse-xlsx";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
 type Preview = PlanilhaParseada & { total: number; count: number };
@@ -21,12 +23,11 @@ type Resultado = {
 
 export function UploadForm() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [launcher, setLauncher] = useState(false); // banner lançador de importação
   const [progress, setProgress] = useState(0);
 
   // Linhas por requisição — mantém cada requisição pequena (dentro dos limites
@@ -115,7 +116,6 @@ export function UploadForm() {
     setErro(null);
     setResultado(null);
     setProgress(0);
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   // ---- Sucesso ----
@@ -162,47 +162,27 @@ export function UploadForm() {
   }
 
   return (
-    <div>
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) handleFile(f);
-        }}
-        className={`rounded-card border-2 border-dashed p-8 text-center transition ${
-          dragging ? "border-accent bg-accent-soft" : "border-border-2 bg-surface"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
-          }}
-        />
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-          <IconUpload className="h-7 w-7" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-text-2">Arraste a planilha do PCA aqui ou</p>
-        <div className="mt-2 flex justify-center">
-          <Button onClick={() => inputRef.current?.click()} icon={<IconFile className="h-[18px] w-[18px]" />}>
-            Escolher arquivo .xlsx
-          </Button>
-        </div>
-        <p className="mt-3 text-xs text-faint">
-          O arquivo é lido no seu navegador. Reimportar a mesma unidade (Código) substitui os itens anteriores.
-        </p>
+    <div className="space-y-4">
+      {/* Botão único de importação (à direita) — abre o lançador */}
+      <div className="flex justify-end">
+        <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+          Importar planilha
+        </Button>
       </div>
+
+      {/* Lançador: soltar/escolher a planilha (.xlsx) */}
+      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Importar planilha do PCA" size="lg">
+        <Dropzone
+          accept=".xlsx,.xls"
+          onFile={(f) => {
+            setLauncher(false);
+            handleFile(f);
+          }}
+          titulo="Soltar a planilha do PCA (.xlsx)"
+          icon={<IconUpload className="h-7 w-7" />}
+          dica="Lida no navegador. Reimportar a mesma unidade (Código) substitui os itens anteriores."
+        />
+      </Modal>
 
       {/* Erro */}
       {erro && status === "error" && (

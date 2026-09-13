@@ -250,7 +250,8 @@ export function DfdsView({
             rows={protocolos}
             getKey={(r) => r.id}
             onRowClick={(r) => verProtocolo(r.id)}
-            pageSize={25}
+            fillHeight
+            pageSize={12}
             minWidth={820}
             resumo={(linhas) =>
               `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(
@@ -278,7 +279,8 @@ export function DfdsView({
             rows={dfds}
             getKey={(r) => r.id}
             onRowClick={(r) => verDfd(r.id)}
-            pageSize={25}
+            fillHeight
+            pageSize={12}
             minWidth={1040}
             resumo={(linhas) =>
               `${linhas.length} DFD${linhas.length === 1 ? "" : "s"} · ${num(

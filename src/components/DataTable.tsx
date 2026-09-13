@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DateFilterHeader, type IntervaloData } from "./DateFilterHeader";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -38,6 +38,7 @@ export function DataTable<R>({
   resumo,
   minWidth = 720,
   onRowClick,
+  fillHeight = false,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -52,10 +53,53 @@ export function DataTable<R>({
   minWidth?: number;
   /** Clique na LINHA (abre o item). Ignora cliques em controles (input/select/button/a/label). */
   onRowClick?: (row: R) => void;
+  /**
+   * Ajusta as linhas por página para PREENCHER a altura disponível até o rodapé do
+   * display (sem scroll vertical do navegador no desktop). Mede a distância do topo
+   * da tabela ao fim da viewport; recalcula no resize. Fallback = `pageSize` ?? 20.
+   */
+  fillHeight?: boolean;
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
   const [page, setPage] = useState(1);
+
+  // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [autoRows, setAutoRows] = useState<number | null>(null);
+  useEffect(() => {
+    if (!fillHeight) return;
+    const ALT_LINHA = 45; // px por linha (cell py + texto)
+    const ALT_CABECALHO = 44; // thead
+    const ALT_RODAPE = 46; // barra do rodapé/pager
+    const RESERVA = 48; // respiro até a borda inferior (padding do main + folga)
+    const calc = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      // Só no desktop (o mobile rola normalmente e tem bottom-nav fixa).
+      if (window.innerWidth < 1024) {
+        setAutoRows(null);
+        return;
+      }
+      const top = el.getBoundingClientRect().top;
+      if (top <= 0) return; // ainda não posicionada — mantém o fallback
+      const corpo = window.innerHeight - top - RESERVA - ALT_CABECALHO - ALT_RODAPE;
+      const n = Math.floor(corpo / ALT_LINHA);
+      setAutoRows(Math.max(4, Math.min(n, 60)));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    // Recalcula quando o layout acima da tabela muda (callouts, etc.).
+    const ro = new ResizeObserver(calc);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [fillHeight]);
+
+  // Linhas por página efetivas: fillHeight (medido) ou o pageSize informado.
+  const tamPagina = fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   const opcoes = useMemo(() => {
     const o: Record<string, string[]> = {};
@@ -126,9 +170,9 @@ export function DataTable<R>({
   }, [filtradas, sort, columns]);
 
   const total = ordenadas.length;
-  const pages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+  const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;
   const pg = Math.min(page, pages);
-  const visiveis = pageSize ? ordenadas.slice((pg - 1) * pageSize, pg * pageSize) : ordenadas;
+  const visiveis = tamPagina ? ordenadas.slice((pg - 1) * tamPagina, pg * tamPagina) : ordenadas;
 
   const sel = selected ?? new Set<Key>();
   const todos = visiveis.length > 0 && visiveis.every((r) => sel.has(getKey(r)));
@@ -155,7 +199,7 @@ export function DataTable<R>({
   const sortDe = (k: string) => (sort.key === k ? sort.dir : null);
 
   return (
-    <div className="overflow-hidden rounded-card border border-border bg-surface shadow-ring">
+    <div ref={wrapRef} className="overflow-hidden rounded-card border border-border bg-surface shadow-ring">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm" style={{ minWidth }}>
           <thead className="border-b border-border bg-surface-2">
@@ -275,7 +319,7 @@ export function DataTable<R>({
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
-        {pageSize && <Pager page={pg} pages={pages} onChange={setPage} />}
+        {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}
       </div>
     </div>
   );

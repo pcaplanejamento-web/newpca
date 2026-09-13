@@ -164,6 +164,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   catalogado). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
   "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
   Sem nova aba.
+- **Importação por botão único + lançador (`Dropzone`):** cada tela de importação (Protocolos, DFD, Planilha PCA) tem
+  **um botão "Importar" à direita** que abre um **banner lançador**; no protocolo ele é **dividido ao meio** (soltar/
+  escolher o PDF **|** criar protocolo manualmente). Isso libera espaço para as tabelas: as de **DFDs/Protocolos**
+  (telas DFD e PCA) usam `DataTable fillHeight` (linhas por página automáticas p/ preencher a altura do display no
+  desktop, sem scroll do navegador); as demais tabelas ficam em **≤20 linhas/página**.
+- **Protocolação bloqueada com DFD defeituoso:** o botão "Protocolar" fica **desabilitado** enquanto algum DFD estiver
+  com **erro** (ou ainda analisando) — não se protocola um processo com DFDs defeituosos (o `POST` segue validando por
+  garantia). Com o **banner do DFD aberto ao lado**, a tabela do protocolo **se ajusta** (colunas sem `minWidth` e sem
+  a coluna "Situação") p/ caber sem scroll lateral. Estado **"regularizado automaticamente" = verde** (`estadoCor`).
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -188,7 +197,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `StatusTag`
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
-  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha), `Modal` (+ painel
+  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
+  `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
+  `Dropzone` (importação: soltar OU clicar p/ escolher), `Modal` (+ painel
   `lateral` mestre-detalhe: 2º banner ao lado), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
@@ -201,7 +212,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **botão↔FAB**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav; sem overflow horizontal (conteúdo largo rola no próprio container); alvos
-  ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.**
+  ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
+  **fixa** (`lg:sticky lg:top-0 lg:h-dvh`) com **scroll interno** na navegação (a lista rola se houver muitas abas).
 - **Render correto desde o início** (sem flash/CLS): shim `__name` + `<style>` de tokens antes do
   `ThemeProvider` em `layout.tsx`. Skeleton/shimmer (`Skeleton.tsx`) só onde há espera real.
 - Erros: `src/app/error.tsx` (boundary, export `ErrorBoundary`) e `not-found.tsx`.

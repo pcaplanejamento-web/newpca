@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { type CampoTratavel, normalizarSecoesDfd } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
@@ -12,7 +12,8 @@ import { casarReparticao } from "@/lib/reparticao-match";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir } from "./DfdConferir";
-import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { Dropzone } from "./Dropzone";
+import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
@@ -27,14 +28,13 @@ export function DfdUploadForm({
   reparticaoAtivaId?: number | null;
 }) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<DfdParseado | null>(null);
   const [repId, setRepId] = useState<number | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [autoCampos, setAutoCampos] = useState<CampoTratavel[]>([]);
-  const [dragging, setDragging] = useState(false);
+  const [launcher, setLauncher] = useState(false); // banner lançador de importação
   const [progresso, setProgresso] = useState(0);
   const [resultado, setResultado] = useState<{
     numero: string;
@@ -129,7 +129,6 @@ export function DfdUploadForm({
     setRepId(null);
     setAutoMatch(false);
     setAutoCampos([]);
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   const faltas = preview
@@ -138,48 +137,27 @@ export function DfdUploadForm({
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
-    <div>
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) handleFile(f);
-        }}
-        className={`rounded-card border-2 border-dashed p-8 text-center transition ${
-          dragging ? "border-accent bg-accent-soft" : "border-border-2 bg-surface"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xlsx,.xls,.pdf"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
-          }}
-        />
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-          <IconUpload className="h-7 w-7" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-text-2">Arraste o DFD (.xlsx ou .pdf) aqui ou</p>
-        <div className="mt-2 flex justify-center">
-          <Button onClick={() => inputRef.current?.click()} icon={<IconFile className="h-[18px] w-[18px]" />}>
-            Escolher DFD (.xlsx ou .pdf)
-          </Button>
-        </div>
-        <p className="mt-3 text-xs text-faint">
-          O arquivo é lido no seu navegador e mostrado num banner para conferência — só grava ao confirmar.
-          Reimportar o mesmo Número DFD substitui os itens.
-        </p>
+    <div className="space-y-4">
+      {/* Botão único de importação (à direita) — abre o lançador */}
+      <div className="flex justify-end">
+        <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+          Importar DFD
+        </Button>
       </div>
+
+      {/* Lançador: soltar/escolher o DFD (.xlsx ou .pdf) */}
+      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Importar DFD" size="lg">
+        <Dropzone
+          accept=".xlsx,.xls,.pdf"
+          onFile={(f) => {
+            setLauncher(false);
+            handleFile(f);
+          }}
+          titulo="Soltar o DFD (.xlsx ou .pdf)"
+          icon={<IconUpload className="h-7 w-7" />}
+          dica="Lido no navegador e mostrado num banner para conferência — só grava ao confirmar. Reimportar o mesmo Número DFD substitui os itens."
+        />
+      </Modal>
 
       {erro && status === "error" && (
         <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">

@@ -40,6 +40,7 @@ import {
 } from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
+import { Dropzone } from "@/components/Dropzone";
 import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
@@ -325,6 +326,7 @@ export function Catalogo() {
   const [modalAberto, setModalAberto] = useState(false);
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
+  const [dzFile, setDzFile] = useState<string | null>(null);
   const [pag, setPag] = useState(2);
   const [repsOrdem, setRepsOrdem] = useState([
     { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
@@ -654,6 +656,20 @@ export function Catalogo() {
             </Button>
           </div>
         </Modal>
+      </Secao>
+
+      <Secao titulo="Dropzone (importação: soltar ou clicar para escolher)">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Dropzone
+            accept=".pdf"
+            onFile={(f) => setDzFile(f.name)}
+            titulo="Soltar o arquivo (.pdf)"
+            dica="Solte o arquivo ou clique para escolher no sistema."
+          />
+          <div className="flex items-center rounded-card border border-border bg-surface-2 p-4 text-[13px] text-muted">
+            {dzFile ? `Último arquivo escolhido: ${dzFile}` : "Nenhum arquivo escolhido ainda."}
+          </div>
+        </div>
       </Secao>
 
       <Secao titulo="Tabela reordenável (arraste as linhas)">

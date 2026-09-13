@@ -200,7 +200,7 @@ export function PcaModuleView({
           Nenhuma edição de PCA gerada ainda.
         </p>
       ) : (
-        <DataTable columns={colsPca} rows={pcas} getKey={(r) => r.id} minWidth={720} footer={`${pcas.length} ediç${pcas.length === 1 ? "ão" : "ões"}`} />
+        <DataTable columns={colsPca} rows={pcas} getKey={(r) => r.id} fillHeight pageSize={12} minWidth={720} footer={`${pcas.length} ediç${pcas.length === 1 ? "ão" : "ões"}`} />
       )}
     </div>
   );

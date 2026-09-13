@@ -135,7 +135,7 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           rows={rows}
           getKey={(r) => r._k}
           minWidth={820}
-          pageSize={50}
+          pageSize={20}
           footer={`${dfd.itens.length} ${dfd.itens.length === 1 ? "item" : "itens"}`}
         />
       </section>
