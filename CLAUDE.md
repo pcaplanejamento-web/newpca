@@ -112,23 +112,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
   edição já gerada) — plano consolidado da Prefeitura, **escopo por repartição** (sem `grupo_id`, como as
   `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch
-  de `dfd_itens` a **14×7=98** params; `excluirDfd` bloqueia se o DFD está em alguma edição). Validação
+  de `dfd_itens` a **11×9=99** params; `excluirDfd` bloqueia se o DFD está em alguma edição). Validação
   só-schema em `src/lib/dfd-validation.ts`.
-- Rotas: `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]` (envelope+guardas).
-  UI em `/painel/pca` = `PcaModuleView` com 3 abas (**Planilha** [fluxo achatado atual, intacto] / **DFDs** /
-  **PCA**); detalhes em `/painel/pca/dfd/[id]` e `/painel/pca/edicao/[id]` (Server Components).
-- **Protocolo → DFDs (migração `0016`):** um **protocolo** (o "processo") empacota **vários DFDs**; todo DFD vem
-  de um protocolo. Nova entidade `dfd_protocolos` (escopo por **repartição**, `numero`=Número Processo único; **sem
-  `grupo_id`**) + `dfds.protocoloId` nullable (FK `set null` → excluir o protocolo só desvincula). O **PDF do
-  protocolo** (bundle) é lido no navegador por `parse-protocolo-pdf`/`parse-protocolo-pdf-core`: fatia por
-  **"Número DFD"** (páginas consecutivas de mesmo número = 1 DFD; capa e "Assinaturas Digitais" separam) e
-  **reaproveita `parseDfdFromPdfItems` por DFD** (erro isola-se por DFD) + `extractPdfItems` (compartilhado com o
-  DFD). O auto-match de repartição virou puro em **`src/lib/reparticao-match.ts`** (`casarReparticao`, reusado no
-  DFD e por DFD do protocolo). Acesso em **`src/lib/protocolo.ts`** (totais recompostos **ao vivo**, como `pcas`).
-  Rotas `POST /api/protocolo` (grava só os DFDs sem `faltasObrigatorias` — **defeituoso nunca é protocolado**;
-  `dfds` vazio cria só o protocolo), `GET`/`DELETE /api/protocolo/[id]`, **`PATCH /api/dfd/[id]`** (vincular/
-  desvincular — rule 4). UI na **aba Protocolos** de `DfdsView` (`ProtocoloUploadForm` → banner com tabela COMPACTA
-  de DFDs [rep. por DFD + status] e `DfdView` sob demanda; `ProtocoloView` read-only, catalogado). Sem nova aba.
+- **Escrita de DFD em LOTES (escala a milhares de itens):** `dfd.ts` decompõe em `upsertDfdCabecalho` (cabeçalho +
+  apaga itens antigos + 1º lote) e `appendDfdItens` (lotes seguintes, **11×9=99** params). `POST /api/dfd` é uma
+  **discriminated union em `mode`** (`start-dfd` | `append-dfd-itens`, `dfdOpSchema`) — o cliente
+  (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de 200 com **barra de progresso** (`Progress`).
+  `start-dfd` re-valida `faltasObrigatorias` (defeituoso nunca grava, 422); idempotente por `numero` (retomável).
+- Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`
+  (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
+- **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota
+  **vários DFDs** (escala a **milhares**); todo DFD vem de um protocolo. Entidade `dfd_protocolos` (escopo por
+  **repartição**, `numero`=Número Processo único; sem `grupo_id`) + `dfds.protocoloId` nullable (FK `set null`).
+  O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
+  streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
+  com o cabeçalho; a geometria é descartada por página); (2) ao **Protocolar**, DFD a DFD: `parseDfdDoProtocolo`
+  (parse completo — matcher **O(n log n)**) → `faltasObrigatorias` → `enviarDfdEmLotes` (start-dfd/append) → descarta.
+  Barra de **progresso** + **relatório final** (importados / bloqueados com motivo); **defeituoso nunca é
+  protocolado**. `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
+  `protocolo.ts` (`iniciarProtocolo` = `POST /api/protocolo` `start-protocolo`; totais **ao vivo**), `GET`/`DELETE
+  /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular). UI na **aba Protocolos** de `DfdsView`
+  (`ProtocoloUploadForm` → banner: metadados + "aplicar repartição a todos" + tabela **paginada** dos DFDs [rep. por
+  DFD, situação novo/substitui/move] + `DfdView` sob demanda; `ProtocoloView` read-only, catalogado). Sem nova aba.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

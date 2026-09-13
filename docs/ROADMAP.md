@@ -42,12 +42,21 @@ quebrado). Mesmo resultado do `.xlsx` (validado no arquivo real). O `.xlsx` segu
 ✅ Um **protocolo** (o "processo" administrativo) reúne **vários DFDs**; todo DFD vem de um protocolo. O sistema
 importa o **PDF do protocolo** (bundle), **identifica cada DFD** (fatiamento por "Número DFD", reaproveitando o
 parser do DFD) e os importa junto com os **dados da capa** (nº processo, interessado, CPF/CNPJ, assunto, valor,
-observação, repartição). Banner de conferência com **tabela compacta dos DFDs** (repartição e status por DFD) e a
-visão completa (`DfdView`) sob demanda; **grava só os DFDs válidos** — DFD com pendência (`faltasObrigatorias`)
-**nunca é protocolado**. Também: **criar protocolo vazio** e **vincular/desvincular** um DFD a um protocolo depois
-(`PATCH /api/dfd/[id]`). Nova entidade `dfd_protocolos` + `dfds.protocolo_id` (migração `0016`), escopo por
-repartição; UI na **aba Protocolos** da tela de DFD (`DfdsView`), sem nova aba. Rotas `POST /api/protocolo`,
-`GET`/`DELETE /api/protocolo/[id]`.
+observação, repartição). Banner de conferência com metadados editáveis, **"aplicar repartição a todos"**, tabela
+**paginada** dos DFDs (repartição por DFD + situação novo/substitui/move) e a visão completa (`DfdView`) sob demanda;
+**grava só os DFDs válidos** — DFD com pendência (`faltasObrigatorias`) **nunca é protocolado**. Também: **criar
+protocolo vazio** e **vincular/desvincular** um DFD a um protocolo depois (`PATCH /api/dfd/[id]`). Nova entidade
+`dfd_protocolos` + `dfds.protocolo_id` (migração `0016`), escopo por repartição; UI na **aba Protocolos** da tela de
+DFD (`DfdsView`), sem nova aba. Rotas `POST /api/protocolo`, `GET`/`DELETE /api/protocolo/[id]`.
+
+### Importação em ESCALA (milhares de DFDs/itens) + barra de progresso — entregue
+✅ A importação (planilha, DFD avulso e protocolo) roda em **lotes** com **barra de progresso** (`Progress`, no
+`/design-system`). O protocolo é lido em **streaming**: um **índice leve** (só o texto por página, geometria
+descartada) lista os DFDs sem travar; ao protocolar, cada DFD é parseado, validado e enviado em lotes
+(`start-dfd`/`append-dfd-itens`, `POST /api/dfd`) e **descartado** — nunca segurando mais que 1 DFD por vez. Assim um
+protocolo com **milhares de DFDs** e um DFD com **milhares de itens** não estouram memória do navegador nem CPU/
+subrequests do Worker. O matcher da tabela do DFD passou a **O(n log n)**. Ao final, um **relatório** mostra os
+importados e os bloqueados (com o motivo).
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.

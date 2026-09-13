@@ -18,6 +18,7 @@ import { ProtocoloView } from "@/components/ProtocoloView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
+import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
@@ -546,6 +547,12 @@ export function Catalogo() {
             <span className="text-[13px] text-text-2">Alternador de tema</span>
             <ThemeToggle />
           </div>
+        </div>
+        <div className="mt-4">
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Progresso de importação
+          </span>
+          <Progress value={62} label="Enviando 1.240 itens em lotes... 62%" />
         </div>
       </Secao>
 

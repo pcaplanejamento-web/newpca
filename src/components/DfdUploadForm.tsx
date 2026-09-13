@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
+import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
@@ -13,6 +14,7 @@ import { DfdView, type DfdVisual } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
+import { Progress } from "./Progress";
 
 type Rep = { id: number; codigo: string; nome: string };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
@@ -32,6 +34,7 @@ export function DfdUploadForm({
   const [repId, setRepId] = useState<number | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [progresso, setProgresso] = useState(0);
   const [resultado, setResultado] = useState<{
     numero: string;
     itens: number;
@@ -66,11 +69,11 @@ export function DfdUploadForm({
     if (!preview) return;
     setStatus("sending");
     setErro(null);
+    setProgresso(0);
     try {
-      const res = await fetch("/api/dfd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Grava em LOTES de itens (start-dfd + append) — escala a milhares de itens.
+      await enviarDfdEmLotes(
+        {
           numero: preview.numero,
           planejamento: preview.planejamento,
           tipo: preview.tipo,
@@ -87,11 +90,10 @@ export function DfdUploadForm({
           valorTotal: preview.valorTotal,
           nomeArquivo: preview.nomeArquivo,
           secoes: preview.secoes,
-          itens: preview.itens,
-        }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Erro ao importar o DFD.");
+        },
+        preview.itens,
+        (enviados, total) => setProgresso(Math.round((enviados / total) * 100)),
+      );
       setResultado({
         numero: preview.numero,
         itens: preview.itens.length,
@@ -250,11 +252,17 @@ export function DfdUploadForm({
         rodape={
           visual ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[12px] text-muted">
-                {faltas.length > 0
-                  ? `${faltas.length} pendência${faltas.length === 1 ? "" : "s"} — importação bloqueada`
-                  : "Tudo certo — pronto para importar"}
-              </span>
+              {status === "sending" ? (
+                <div className="min-w-[180px] flex-1">
+                  <Progress value={progresso} label={`Enviando ${num(preview?.itens.length ?? 0)} itens... ${progresso}%`} />
+                </div>
+              ) : (
+                <span className="text-[12px] text-muted">
+                  {faltas.length > 0
+                    ? `${faltas.length} pendência${faltas.length === 1 ? "" : "s"} — importação bloqueada`
+                    : "Tudo certo — pronto para importar"}
+                </span>
+              )}
               <div className="flex gap-2">
                 <Button variant="secondary" disabled={status === "sending"} onClick={() => reset()}>
                   Cancelar

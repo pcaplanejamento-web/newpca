@@ -10,14 +10,21 @@ import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
 export type { DfdParseado, DfdItemParseado } from "./parse-dfd-comum.ts";
 export type { PdfItem } from "./parse-dfd-pdf-core.ts";
 
+/**
+ * Documento PDF aberto (streaming): o buffer/documento fica em memória UMA vez e
+ * as páginas são lidas SOB DEMANDA (`pageItems`) — para importar protocolos
+ * enormes sem acumular os trechos de todas as páginas (evita OOM do navegador).
+ */
+export type PdfDoc = {
+  numPages: number;
+  pageItems: (page: number) => Promise<PdfItem[]>;
+  destroy: () => Promise<void>;
+};
+
 let workerPronto = false;
 
-/**
- * Extrai os TRECHOS de texto posicionados (`{page,x,y,str}`) de um PDF, no
- * navegador, via pdf.js (importado dinamicamente — fora do bundle do Worker).
- * Compartilhado pelo parser de DFD e pelo de PROTOCOLO (bundle de vários DFDs).
- */
-export async function extractPdfItems(file: File): Promise<PdfItem[]> {
+/** Abre o PDF no navegador (pdf.js dinâmico) e devolve um handle streamável. */
+export async function abrirPdf(file: File): Promise<PdfDoc> {
   const buf = await file.arrayBuffer();
   const pdfjs = await import("pdfjs-dist");
   if (!workerPronto) {
@@ -36,17 +43,37 @@ export async function extractPdfItems(file: File): Promise<PdfItem[]> {
     throw new Error("Não consegui ler o PDF. Confirme que é um PDF com texto (não digitalizado).");
   }
 
-  const items: PdfItem[] = [];
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const tc = await page.getTextContent();
-    for (const it of tc.items) {
-      if ("str" in it && it.str?.trim()) {
-        items.push({ page: p, x: it.transform[4], y: it.transform[5], str: it.str });
+  return {
+    numPages: doc.numPages,
+    async pageItems(p: number) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      const items: PdfItem[] = [];
+      for (const it of tc.items) {
+        if ("str" in it && it.str?.trim()) {
+          items.push({ page: p, x: it.transform[4], y: it.transform[5], str: it.str });
+        }
       }
-    }
+      page.cleanup(); // libera os recursos da página (streaming)
+      return items;
+    },
+    destroy: () => doc.destroy(),
+  };
+}
+
+/**
+ * Extrai TODOS os trechos de um PDF (conveniência para PDFs pequenos — 1 DFD).
+ * Para protocolos grandes use `abrirPdf` + `pageItems` (streaming).
+ */
+export async function extractPdfItems(file: File): Promise<PdfItem[]> {
+  const doc = await abrirPdf(file);
+  try {
+    const items: PdfItem[] = [];
+    for (let p = 1; p <= doc.numPages; p++) items.push(...(await doc.pageItems(p)));
+    return items;
+  } finally {
+    await doc.destroy();
   }
-  return items;
 }
 
 export async function parseDfdPdf(file: File): Promise<DfdParseado> {

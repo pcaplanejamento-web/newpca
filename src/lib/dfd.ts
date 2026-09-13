@@ -1,7 +1,7 @@
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import type { DfdImportPayload, GerarPcaPayload } from "./dfd-validation";
+import type { DfdItemPayload, DfdMetaPayload, GerarPcaPayload } from "./dfd-validation";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -13,7 +13,7 @@ import type { DfdImportPayload, GerarPcaPayload } from "./dfd-validation";
 const ROWS_PER_STMT = 11;
 
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
-function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdImportPayload["itens"]): any[] {
+function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdItemPayload[], seqBase = 0): any[] {
   const stmts = [];
   for (let i = 0; i < itens.length; i += ROWS_PER_STMT) {
     stmts.push(
@@ -27,7 +27,7 @@ function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdImp
           quantidade: it.quantidade ?? null,
           valorUnitario: it.valorUnitario ?? null,
           valorTotal: it.valorTotal ?? null,
-          sequencial: i + j + 1,
+          sequencial: seqBase + i + j + 1, // continua a numeração entre lotes
         })),
       ),
     );
@@ -165,10 +165,16 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
   return { ...d, secoes: parseSecoes(d.secoes), itens };
 }
 
-/** Cria (ou substitui, pelo `numero`) um DFD e seus itens (batch atômico). */
-export async function criarOuSubstituirDfd(
-  dados: DfdImportPayload,
+/**
+ * `start-dfd`: cria (ou substitui, pelo `numero`) o CABEÇALHO do DFD, **apaga os
+ * itens antigos** e grava o 1º lote — tudo num `db.batch` atômico. `totalItens`
+ * é o total DECLARADO (o cliente envia os itens em lotes via `appendDfdItens`).
+ * Retomável: reexecutar zera e regrava. Base do import de 1 DFD e do protocolo.
+ */
+export async function upsertDfdCabecalho(
+  dados: DfdMetaPayload,
   criadoPor: number | null,
+  primeiroLote: DfdItemPayload[],
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
   const set = {
@@ -188,7 +194,7 @@ export async function criarOuSubstituirDfd(
     valorTotal: dados.valorTotal ?? null,
     secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
     nomeArquivo: dados.nomeArquivo ?? null,
-    totalItens: dados.itens.length,
+    totalItens: dados.totalItens ?? primeiroLote.length,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
   const [d] = await db
@@ -198,12 +204,31 @@ export async function criarOuSubstituirDfd(
     .returning({ id: dfds.id });
 
   const id = d.id;
-  const stmts = insertsItens(db, id, dados.itens);
+  const stmts = insertsItens(db, id, primeiroLote, 0);
   await db.batch([
     db.delete(dfdItens).where(eq(dfdItens.dfdId, id)),
     ...stmts,
   ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
   return { id, numero: dados.numero };
+}
+
+/** `append-dfd-itens`: acrescenta um lote de itens a um DFD já iniciado (batch). */
+export async function appendDfdItens(
+  dfdId: number,
+  itens: DfdItemPayload[],
+  seqBase: number,
+): Promise<{ inserted: number }> {
+  if (itens.length === 0) return { inserted: 0 };
+  const db = getDb();
+  const stmts = insertsItens(db, dfdId, itens, seqBase);
+  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  return { inserted: itens.length };
+}
+
+/** O DFD existe? (usado por `append-dfd-itens` para 404 antes de gravar.) */
+export async function dfdExiste(id: number): Promise<boolean> {
+  const [r] = await getDb().select({ id: dfds.id }).from(dfds).where(eq(dfds.id, id)).limit(1);
+  return !!r;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */

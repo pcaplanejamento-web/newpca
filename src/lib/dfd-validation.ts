@@ -4,7 +4,9 @@ import { norm } from "./parse-dfd-comum.ts";
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
 
-const MAX_ITENS = 500;
+// Itens por request (lote). Igual ao /api/upload — mantém cada db.batch dentro
+// dos limites do Worker/D1; DFDs com milhares de itens vão em vários lotes.
+const MAX_ROWS_POR_LOTE = 1000;
 
 // Seções obrigatórias para importar um DFD (casadas pelo TÍTULO, tolerante ao número).
 const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
@@ -57,8 +59,11 @@ const dfdSecaoSchema = z.object({
   texto: z.string().max(10000),
 });
 
-/** Importa (ou substitui, por `numero`) um DFD parseado no navegador. */
-export const dfdImportSchema = z.object({
+/**
+ * Cabeçalho do DFD (SEM os itens — que vão em lotes `start-dfd`/`append-dfd-itens`
+ * para escalar a milhares de itens). `totalItens` = total declarado pelo cliente.
+ */
+export const dfdMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Número do DFD ausente no arquivo.").max(50),
   planejamento: textoCurtoOpc,
   tipo: textoCurtoOpc,
@@ -76,11 +81,28 @@ export const dfdImportSchema = z.object({
   valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
-  itens: z.array(dfdItemSchema).min(1, "O DFD não tem itens.").max(MAX_ITENS),
+  totalItens: z.number().int().nonnegative().optional().nullable(),
 });
 
+/** `start-dfd`: cabeçalho + 1º lote de itens → cria/zera o DFD e devolve `dfdId`. */
+export const startDfdSchema = dfdMetaSchema.extend({
+  mode: z.literal("start-dfd"),
+  rows: z.array(dfdItemSchema).min(1, "O DFD não tem itens.").max(MAX_ROWS_POR_LOTE),
+});
+
+/** `append-dfd-itens`: acrescenta um lote de itens a um DFD já iniciado. */
+export const appendDfdItensSchema = z.object({
+  mode: z.literal("append-dfd-itens"),
+  dfdId: z.number().int().positive(),
+  desde: z.number().int().nonnegative(), // itens já gravados (base do sequencial)
+  rows: z.array(dfdItemSchema).min(1).max(MAX_ROWS_POR_LOTE),
+});
+
+/** Escrita de DFD em lotes (POST /api/dfd) — cobre DFD avulso e do protocolo. */
+export const dfdOpSchema = z.discriminatedUnion("mode", [startDfdSchema, appendDfdItensSchema]);
+
 /** Metadados da capa do protocolo (editáveis no banner antes de protocolar). */
-const protocoloMetaSchema = z.object({
+export const protocoloMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Informe o número do protocolo.").max(60),
   data: textoCurtoOpc,
   interessado: textoOpc,
@@ -93,14 +115,11 @@ const protocoloMetaSchema = z.object({
   nomeArquivo: textoCurtoOpc,
 });
 
-/**
- * Protocola um processo com seus DFDs. Os DFDs aqui já são só os VÁLIDOS (o
- * cliente não envia os com defeito; o servidor ainda roda `faltasObrigatorias`
- * por DFD como garantia). `dfds` vazio = criar o protocolo sem DFDs (rule 3).
- */
-export const protocoloImportSchema = z.object({
+/** `start-protocolo`: cria só o protocolo (capa) → devolve `protocoloId`. Os DFDs
+ * são enviados depois, em streaming (`POST /api/dfd`). */
+export const startProtocoloSchema = z.object({
+  mode: z.literal("start-protocolo"),
   protocolo: protocoloMetaSchema,
-  dfds: z.array(dfdImportSchema).max(200).optional().default([]),
 });
 
 /** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */
@@ -119,6 +138,9 @@ export const gerarPcaSchema = z.object({
     .max(1000),
 });
 
-export type DfdImportPayload = z.infer<typeof dfdImportSchema>;
-export type ProtocoloImportPayload = z.infer<typeof protocoloImportSchema>;
+export type DfdMetaPayload = z.infer<typeof dfdMetaSchema>;
+export type DfdItemPayload = z.infer<typeof dfdItemSchema>;
+export type ProtocoloMetaPayload = z.infer<typeof protocoloMetaSchema>;
+export type StartDfdPayload = z.infer<typeof startDfdSchema>;
+export type AppendDfdItensPayload = z.infer<typeof appendDfdItensSchema>;
 export type GerarPcaPayload = z.infer<typeof gerarPcaSchema>;

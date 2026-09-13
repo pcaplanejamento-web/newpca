@@ -28,7 +28,7 @@ const chaveNome = (s: string) =>
  * 2) fallback pelo NOME da secretaria (`chaveNome`, cobre sigla divergente).
  */
 export function casarReparticao(
-  dfd: { siglaSetor?: string | null; setorRequisitante?: string | null },
+  dfd: { siglaSetor?: string | null; setorRequisitante?: string | null; orgaoEntidade?: string | null },
   reparticoes: ReparticaoMatch[],
 ): number | null {
   // 1) casa a sigla do Setor Requisitante com o código da repartição.
@@ -41,6 +41,13 @@ export function casarReparticao(
     const nomeSetor =
       dfd.setorRequisitante.split(/\s+[-–—]\s+/).slice(1).join(" - ") || dfd.setorRequisitante;
     const alvo = chaveNome(nomeSetor);
+    const r = alvo ? reparticoes.find((x) => chaveNome(x.nome) === alvo) : undefined;
+    if (r) return r.id;
+  }
+  // 3) fallback pelo Órgão/Entidade (quando o Setor não casa, mas o órgão é a
+  // própria secretaria — ex.: setor genérico + órgão "SECRETARIA ...").
+  if (dfd.orgaoEntidade) {
+    const alvo = chaveNome(dfd.orgaoEntidade);
     const r = alvo ? reparticoes.find((x) => chaveNome(x.nome) === alvo) : undefined;
     if (r) return r.id;
   }

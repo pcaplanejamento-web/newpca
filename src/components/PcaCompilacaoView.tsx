@@ -113,6 +113,7 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
                 rows={linhas}
                 getKey={(r) => r.id}
                 minWidth={940}
+                pageSize={50}
                 footer={`${linhas.length} ${linhas.length === 1 ? "item" : "itens"}`}
               />
             </section>

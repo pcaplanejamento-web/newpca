@@ -1,11 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
-import { brl, num } from "@/lib/format";
+import { num } from "@/lib/format";
+import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
-import { parseProtocoloPdf, type ProtocoloDfdErro } from "@/lib/parse-protocolo-pdf";
+import {
+  indexarProtocoloPdf,
+  parseDfdDoProtocolo,
+  type PdfDoc,
+  type ProtocoloIndex,
+} from "@/lib/parse-protocolo-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -15,17 +21,13 @@ import { TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
+import { Progress } from "./Progress";
 
 type Rep = { id: number; codigo: string; nome: string };
+type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
-
-/** Metadados carregados da capa que não são editados no banner. */
-type Extra = {
-  documento: string | null;
-  localReparticao: string | null;
-  valorCapa: number | null;
-  nomeArquivo: string | null;
-};
+type Extra = { documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
+type Situacao = "novo" | "substitui" | "move";
 
 const EXTRA_VAZIO: Extra = { documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 
@@ -55,17 +57,19 @@ function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
 export function ProtocoloUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
+  dfdsExistentes = [],
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
+  dfdsExistentes?: DfdExistente[];
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const docRef = useRef<PdfDoc | null>(null); // documento pdf.js aberto (streaming)
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [aberto, setAberto] = useState(false);
-  const [salvando, setSalvando] = useState(false);
 
   // Metadados editáveis do protocolo.
   const [numero, setNumero] = useState("");
@@ -76,17 +80,31 @@ export function ProtocoloUploadForm({
   const [protoRepId, setProtoRepId] = useState<number | null>(null);
   const [extra, setExtra] = useState<Extra>(EXTRA_VAZIO);
 
-  // DFDs detectados + repartição por DFD + erros de parse + qual "Ver".
-  const [dfdsParsed, setDfdsParsed] = useState<DfdParseado[]>([]);
+  // Índice leve dos DFDs + repartição (auto e escolhida) por DFD.
+  const [index, setIndex] = useState<ProtocoloIndex | null>(null);
   const [dfdRepIds, setDfdRepIds] = useState<(number | null)[]>([]);
-  const [errosParse, setErrosParse] = useState<ProtocoloDfdErro[]>([]);
-  const [verIdx, setVerIdx] = useState<number | null>(null);
+  const [autoRepIds, setAutoRepIds] = useState<(number | null)[]>([]);
 
-  const [resultado, setResultado] = useState<{ numero: string; importados: number; bloqueados: number } | null>(null);
+  // "Ver" um DFD (parse sob demanda) + import streamado.
+  const [verDfd, setVerDfd] = useState<DfdParseado | null>(null);
+  const [verIdx, setVerIdx] = useState<number>(-1);
+  const [carregandoVer, setCarregandoVer] = useState<number | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
+  const [relatorio, setRelatorio] = useState<{ numero: string; importados: number; bloqueados: { numero: string; motivo: string }[] } | null>(null);
+
+  // Destrói o documento pdf.js ao desmontar (libera memória).
+  useEffect(() => () => void docRef.current?.destroy(), []);
+
+  function limparDoc() {
+    docRef.current?.destroy();
+    docRef.current = null;
+  }
 
   function abrirVazio() {
+    limparDoc();
     setErro(null);
-    setResultado(null);
+    setRelatorio(null);
     setNumero("");
     setData("");
     setInteressado("");
@@ -94,16 +112,16 @@ export function ProtocoloUploadForm({
     setObservacao("");
     setExtra(EXTRA_VAZIO);
     setProtoRepId(reparticaoAtivaId);
-    setDfdsParsed([]);
+    setIndex({ protocolo: { numero: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
     setDfdRepIds([]);
-    setErrosParse([]);
-    setVerIdx(null);
+    setAutoRepIds([]);
+    setVerDfd(null);
     setAberto(true);
   }
 
   async function handleFile(file: File) {
     setErro(null);
-    setResultado(null);
+    setRelatorio(null);
     if (!/\.pdf$/i.test(file.name)) {
       setStatus("error");
       setErro("Envie o protocolo em .pdf (o processo com os DFDs).");
@@ -111,176 +129,223 @@ export function ProtocoloUploadForm({
     }
     setStatus("parsing");
     try {
-      const r = await parseProtocoloPdf(file);
-      const p = r.protocolo;
+      limparDoc();
+      const { index: idx, doc } = await indexarProtocoloPdf(file);
+      docRef.current = doc;
+      const p = idx.protocolo;
+      // Robustez: PDF sem texto / sem DFDs / sem capa.
+      if (idx.dfds.length === 0 && p.numero == null) {
+        setStatus("error");
+        setErro(
+          "Não reconheci nenhum DFD nem a capa neste PDF. Confirme que é o PDF do processo com texto (não digitalizado).",
+        );
+        limparDoc();
+        return;
+      }
+      const autos = idx.dfds.map((d) => casarReparticao(d, reparticoes));
       setNumero(p.numero ?? "");
       setData(p.data ?? "");
       setInteressado(p.interessado ?? "");
       setAssunto(p.assunto ?? "");
       setObservacao(p.observacao ?? "");
-      setExtra({
-        documento: p.documento,
-        localReparticao: p.localReparticao,
-        valorCapa: p.valorCapa,
-        nomeArquivo: p.nomeArquivo,
-      });
-      const reps = r.dfds.map((d) => casarReparticao(d, reparticoes));
-      setDfdsParsed(r.dfds);
-      setDfdRepIds(reps);
-      setErrosParse(r.erros);
-      setProtoRepId(reps.find((x) => x != null) ?? reparticaoAtivaId);
-      setVerIdx(null);
+      setExtra({ documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
+      setIndex(idx);
+      setDfdRepIds(autos);
+      setAutoRepIds(autos);
+      setProtoRepId(autos.find((x) => x != null) ?? reparticaoAtivaId);
+      setVerDfd(null);
       setStatus("idle");
       setAberto(true);
     } catch (e) {
       setStatus("error");
       setErro(e instanceof Error ? e.message : "Falha ao ler o protocolo.");
+      limparDoc();
     }
   }
 
   function fechar() {
     setAberto(false);
-    setVerIdx(null);
+    setVerDfd(null);
+    limparDoc();
   }
 
   const repDe = (id: number | null) => reparticoes.find((r) => r.id === id) ?? null;
-  const faltasDe = (i: number) =>
-    faltasObrigatorias({ reparticaoId: dfdRepIds[i], itens: dfdsParsed[i].itens, secoes: dfdsParsed[i].secoes });
+  const nomeArq = extra.nomeArquivo ?? "protocolo.pdf";
 
-  const linhas = dfdsParsed.map((_, idx) => ({ idx }));
-  // Totais reativos (status por DFD depende da repartição escolhida) — barato p/ ≤200 DFDs.
-  const validos = dfdsParsed.reduce((n, _d, i) => n + (faltasDe(i).length === 0 ? 1 : 0), 0);
-  const bloqueados = dfdsParsed.length - validos;
+  const classificar = (dfdNumero: string): Situacao => {
+    const ex = dfdsExistentes.find((x) => x.numero.trim() === dfdNumero.trim());
+    if (!ex) return "novo";
+    if (ex.protocoloNumero && ex.protocoloNumero.trim() !== numero.trim()) return "move";
+    return "substitui";
+  };
 
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
   }
+  function aplicarRepTodos(id: number | null) {
+    setDfdRepIds((arr) => arr.map(() => id));
+  }
 
-  async function protocolar() {
-    setSalvando(true);
+  async function verUmDfd(idx: number) {
+    const doc = docRef.current;
+    const di = index?.dfds[idx];
+    if (!doc || !di) return;
+    setCarregandoVer(idx);
     setErro(null);
     try {
-      const dfds = dfdsParsed
-        .map((d, i) => ({ d, i }))
-        .filter(({ i }) => faltasDe(i).length === 0)
-        .map(({ d, i }) => ({
-          numero: d.numero,
-          planejamento: d.planejamento,
-          tipo: d.tipo,
-          objeto: d.objeto,
-          orgaoEntidade: d.orgaoEntidade,
-          setorRequisitante: d.setorRequisitante,
-          siglaSetor: d.siglaSetor,
-          responsavel: d.responsavel,
-          matricula: d.matricula,
-          email: d.email,
-          telefone: d.telefone,
-          reparticaoId: dfdRepIds[i],
-          valorEstimado: d.valorEstimado,
-          valorTotal: d.valorTotal,
-          nomeArquivo: d.nomeArquivo,
-          secoes: d.secoes,
-          itens: d.itens,
-        }));
-      const body = {
-        protocolo: {
-          numero,
-          data: data || null,
-          interessado: interessado || null,
-          documento: extra.documento,
-          assunto: assunto || null,
-          observacao: observacao || null,
-          valorCapa: extra.valorCapa,
-          reparticaoId: protoRepId,
-          localReparticao: extra.localReparticao,
-          nomeArquivo: extra.nomeArquivo,
-        },
-        dfds,
-      };
+      setVerDfd(await parseDfdDoProtocolo(doc, di, nomeArq));
+      setVerIdx(idx);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível ler este DFD.");
+    } finally {
+      setCarregandoVer(null);
+    }
+  }
+
+  async function protocolar() {
+    if (!index) return;
+    setImportando(true);
+    setErro(null);
+    setRelatorio(null);
+    try {
+      // 1) cria só o protocolo (capa).
       const res = await fetch("/api/protocolo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          mode: "start-protocolo",
+          protocolo: {
+            numero,
+            data: data || null,
+            interessado: interessado || null,
+            documento: extra.documento,
+            assunto: assunto || null,
+            observacao: observacao || null,
+            valorCapa: extra.valorCapa,
+            reparticaoId: protoRepId,
+            localReparticao: extra.localReparticao,
+            nomeArquivo: extra.nomeArquivo,
+          },
+        }),
       });
-      const j = (await res.json()) as { ok?: boolean; error?: string; importados?: number };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao protocolar.");
-      setResultado({ numero, importados: dfds.length, bloqueados: dfdsParsed.length - dfds.length });
+      const pj = (await res.json()) as { ok?: boolean; error?: string; protocoloId?: number };
+      if (!res.ok || !pj.ok || !pj.protocoloId) throw new Error(pj.error ?? "Erro ao criar o protocolo.");
+      const protocoloId = pj.protocoloId;
+
+      // 2) importa os DFDs em STREAMING (parse → valida → envia em lotes → descarta).
+      const doc = docRef.current;
+      const dfds = index.dfds;
+      const bloqueados: { numero: string; motivo: string }[] = [];
+      let importados = 0;
+      for (let i = 0; i < dfds.length; i++) {
+        const di = dfds[i];
+        setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
+        if (!doc) break;
+        let full: DfdParseado;
+        try {
+          full = await parseDfdDoProtocolo(doc, di, nomeArq);
+        } catch (e) {
+          bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
+          continue;
+        }
+        const faltas = faltasObrigatorias({ reparticaoId: dfdRepIds[i], itens: full.itens, secoes: full.secoes });
+        if (faltas.length > 0) {
+          bloqueados.push({ numero: di.numero, motivo: faltas.join(", ") });
+          continue;
+        }
+        try {
+          await enviarDfdEmLotes(
+            {
+              numero: full.numero,
+              planejamento: full.planejamento,
+              tipo: full.tipo,
+              objeto: full.objeto,
+              orgaoEntidade: full.orgaoEntidade,
+              setorRequisitante: full.setorRequisitante,
+              siglaSetor: full.siglaSetor,
+              responsavel: full.responsavel,
+              matricula: full.matricula,
+              email: full.email,
+              telefone: full.telefone,
+              reparticaoId: dfdRepIds[i],
+              protocoloId,
+              valorEstimado: full.valorEstimado,
+              valorTotal: full.valorTotal,
+              nomeArquivo: full.nomeArquivo,
+              secoes: full.secoes,
+            },
+            full.itens,
+          );
+          importados++;
+        } catch (e) {
+          bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
+        }
+        setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
+      }
+      setRelatorio({ numero, importados, bloqueados });
       fechar();
       router.refresh();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao protocolar.");
     } finally {
-      setSalvando(false);
+      setImportando(false);
+      setProgresso(null);
     }
   }
 
+  const SITUACAO: Record<Situacao, { txt: string; cor: string }> = {
+    novo: { txt: "Novo", cor: "var(--ok)" },
+    substitui: { txt: "Substitui", cor: "var(--warn)" },
+    move: { txt: "Move de outro protocolo", cor: "var(--warn)" },
+  };
+
   const cols: Column<{ idx: number }>[] = [
-    {
-      key: "numero",
-      header: "Nº DFD",
-      filter: "none",
-      render: (r) => <span className="font-mono">{dfdsParsed[r.idx].numero}</span>,
-    },
+    { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{index?.dfds[r.idx].numero}</span> },
     {
       key: "setor",
       header: "Setor",
       filter: "none",
       minWidth: 150,
-      render: (r) => <span className="line-clamp-1">{dfdsParsed[r.idx].setorRequisitante ?? "—"}</span>,
+      render: (r) => <span className="line-clamp-1">{index?.dfds[r.idx].setorRequisitante ?? "—"}</span>,
     },
     {
       key: "rep",
       header: "Repartição",
       filter: "none",
-      minWidth: 190,
+      minWidth: 200,
       render: (r) => (
-        <select
-          className={selectCls}
-          aria-label={`Repartição do DFD ${dfdsParsed[r.idx].numero}`}
-          value={dfdRepIds[r.idx] ?? ""}
-          onChange={(e) => setRepDfd(r.idx, e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">— Selecione —</option>
-          {reparticoes.map((rep) => (
-            <option key={rep.id} value={rep.id}>
-              {rep.codigo} · {rep.nome}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1.5">
+          <select
+            className={selectCls}
+            aria-label={`Repartição do DFD ${index?.dfds[r.idx].numero}`}
+            value={dfdRepIds[r.idx] ?? ""}
+            onChange={(e) => setRepDfd(r.idx, e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">— Selecione —</option>
+            {reparticoes.map((rep) => (
+              <option key={rep.id} value={rep.id}>
+                {rep.codigo} · {rep.nome}
+              </option>
+            ))}
+          </select>
+          {dfdRepIds[r.idx] != null && dfdRepIds[r.idx] === autoRepIds[r.idx] && (
+            <span className="shrink-0 text-[10px] font-semibold uppercase text-accent" title="Repartição detectada automaticamente">
+              auto
+            </span>
+          )}
+        </div>
       ),
     },
     {
-      key: "itens",
-      header: "Itens",
-      align: "right",
+      key: "situacao",
+      header: "Situação",
       filter: "none",
-      render: (r) => num(dfdsParsed[r.idx].itens.length),
-    },
-    {
-      key: "valor",
-      header: "Valor",
-      align: "right",
-      filter: "none",
-      render: (r) => brl(dfdsParsed[r.idx].valorTotal ?? dfdsParsed[r.idx].valorEstimado ?? 0),
-    },
-    {
-      key: "status",
-      header: "Status",
-      filter: "none",
-      minWidth: 150,
+      minWidth: 120,
       render: (r) => {
-        const f = faltasDe(r.idx);
-        return f.length === 0 ? (
-          <span className="inline-flex items-center gap-1 font-medium" style={{ color: "var(--ok)" }}>
-            <IconCheck className="h-4 w-4" /> Será protocolado
-          </span>
-        ) : (
-          <span
-            className="inline-flex items-center gap-1 font-medium"
-            style={{ color: "var(--danger)" }}
-            title={`Falta: ${f.join(", ")}`}
-          >
-            <IconAlert className="h-4 w-4" /> Bloqueado ({f.length})
+        const s = SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")];
+        return (
+          <span className="text-[12px] font-medium" style={{ color: s.cor }}>
+            {s.txt}
           </span>
         );
       },
@@ -290,15 +355,18 @@ export function ProtocoloUploadForm({
       header: "",
       filter: "none",
       render: (r) => (
-        <Button variant="ghost" onClick={() => setVerIdx(r.idx)}>
+        <Button variant="ghost" onClick={() => verUmDfd(r.idx)} loading={carregandoVer === r.idx}>
           Ver
         </Button>
       ),
     },
   ];
 
-  const podeProtocolar = numero.trim().length > 0 && protoRepId != null && !salvando;
-  const verDfd = verIdx != null ? dfdsParsed[verIdx] : null;
+  const linhas = (index?.dfds ?? []).map((_, idx) => ({ idx }));
+  const comRep = dfdRepIds.filter((x) => x != null).length;
+  const semRep = (index?.dfds.length ?? 0) - comRep;
+  const podeProtocolar = numero.trim().length > 0 && protoRepId != null && !importando;
+  const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
 
   return (
     <div>
@@ -342,8 +410,8 @@ export function ProtocoloUploadForm({
           </Button>
         </div>
         <p className="mt-3 text-xs text-faint">
-          O sistema identifica cada DFD no PDF e mostra tudo num banner para conferência — só grava ao protocolar.
-          DFD com pendência nunca é protocolado.
+          O sistema identifica cada DFD e importa em streaming (escala a milhares). DFD com pendência nunca é
+          protocolado — ele aparece no relatório ao final.
         </p>
       </div>
 
@@ -360,18 +428,27 @@ export function ProtocoloUploadForm({
         </Callout>
       )}
 
-      {resultado && (
-        <Callout kind="ok" icon={<IconCheck className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Protocolo {resultado.numero} salvo!</p>
+      {relatorio && (
+        <Callout kind={relatorio.bloqueados.length > 0 ? "warn" : "ok"} icon={<IconCheck className="h-5 w-5" />} className="mt-4">
+          <p className="font-semibold">Protocolo {relatorio.numero} salvo!</p>
           <p className="opacity-90">
-            {num(resultado.importados)} DFD{resultado.importados === 1 ? "" : "s"} protocolado
-            {resultado.importados === 1 ? "" : "s"}
-            {resultado.bloqueados > 0 ? ` · ${resultado.bloqueados} bloqueado(s) (pendências)` : ""}.
+            {num(relatorio.importados)} DFD{relatorio.importados === 1 ? "" : "s"} protocolado
+            {relatorio.importados === 1 ? "" : "s"}
+            {relatorio.bloqueados.length > 0 ? ` · ${relatorio.bloqueados.length} bloqueado(s)` : ""}.
           </p>
+          {relatorio.bloqueados.length > 0 && (
+            <ul className="mt-1.5 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-[12px] opacity-90">
+              {relatorio.bloqueados.map((b) => (
+                <li key={b.numero}>
+                  DFD {b.numero}: {b.motivo}
+                </li>
+              ))}
+            </ul>
+          )}
         </Callout>
       )}
 
-      {/* Banner: conferir o protocolo + DFDs e protocolar (só grava ao confirmar). */}
+      {/* Banner: conferir o protocolo + DFDs e protocolar (streaming). */}
       <Modal
         open={aberto}
         onClose={fechar}
@@ -380,21 +457,22 @@ export function ProtocoloUploadForm({
         fecharNoBackdrop={false}
         rodape={
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[12px] text-muted">
-              {dfdsParsed.length === 0
-                ? "Sem DFDs — o protocolo será criado vazio."
-                : `${validos} será(ão) protocolado(s) · ${bloqueados} bloqueado(s)`}
-            </span>
+            {importando && progresso ? (
+              <div className="min-w-[200px] flex-1">
+                <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}%`} />
+              </div>
+            ) : (
+              <span className="text-[12px] text-muted">
+                {(index?.dfds.length ?? 0) === 0
+                  ? "Sem DFDs — cria só o protocolo."
+                  : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição (serão bloqueados)`}
+              </span>
+            )}
             <div className="flex gap-2">
-              <Button variant="secondary" disabled={salvando} onClick={fechar}>
+              <Button variant="secondary" disabled={importando} onClick={fechar}>
                 Cancelar
               </Button>
-              <Button
-                onClick={protocolar}
-                loading={salvando}
-                disabled={!podeProtocolar}
-                icon={<IconUpload className="h-[18px] w-[18px]" />}
-              >
+              <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
                 Protocolar
               </Button>
             </div>
@@ -415,12 +493,7 @@ export function ProtocoloUploadForm({
               <label className={labelCls} htmlFor="proto-rep">
                 Repartição do protocolo <span style={{ color: "var(--danger)" }}>*</span>
               </label>
-              <select
-                id="proto-rep"
-                className={inputCls}
-                value={protoRepId ?? ""}
-                onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}
-              >
+              <select id="proto-rep" className={inputCls} value={protoRepId ?? ""} onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— Selecione a repartição —</option>
                 {reparticoes.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -431,54 +504,43 @@ export function ProtocoloUploadForm({
             </div>
           </section>
 
-          {errosParse.length > 0 && (
-            <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
-              <p className="font-semibold">
-                {errosParse.length} trecho(s) não reconhecido(s) como DFD e ignorado(s):
-              </p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 opacity-90">
-                {errosParse.map((e) => (
-                  <li key={`${e.ordem}-${e.numero}`}>
-                    DFD {e.numero ?? `#${e.ordem}`}: {e.erro}
-                  </li>
-                ))}
-              </ul>
+          {/* DFDs detectados */}
+          {(index?.dfds.length ?? 0) === 0 ? (
+            <Callout kind="info">
+              Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule
+              existentes.
             </Callout>
+          ) : (
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <h3 className="text-sm font-bold text-text">DFDs detectados ({index?.dfds.length})</h3>
+                <div className="min-w-[220px]">
+                  <label className={labelCls} htmlFor="rep-todos">
+                    Aplicar repartição a todos
+                  </label>
+                  <select id="rep-todos" className={inputCls} defaultValue="" onChange={(e) => e.target.value && aplicarRepTodos(Number(e.target.value))}>
+                    <option value="">— Escolha para aplicar a todos —</option>
+                    {reparticoes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.codigo} · {r.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <DataTable columns={cols} rows={linhas} getKey={(r) => r.idx} pageSize={25} minWidth={720} footer={`${index?.dfds.length} DFD(s) · ${comRep} com repartição`} />
+              <p className="text-xs text-faint">
+                Só os DFDs sem pendências (repartição, valor unitário, seções obrigatórias) são protocolados; os
+                demais entram no relatório ao final.
+              </p>
+            </section>
           )}
-
-          {/* DFDs detectados (tabela compacta; a visão completa carrega ao clicar "Ver") */}
-          <section>
-            <h3 className="mb-2 text-sm font-bold text-text">
-              DFDs detectados ({dfdsParsed.length})
-            </h3>
-            {dfdsParsed.length === 0 ? (
-              <Callout kind="info">
-                Nenhum DFD neste protocolo. Você pode criá-lo vazio e adicionar DFDs depois (na aba DFDs).
-              </Callout>
-            ) : (
-              <DataTable
-                columns={cols}
-                rows={linhas}
-                getKey={(r) => r.idx}
-                minWidth={760}
-                footer={`${dfdsParsed.length} DFD${dfdsParsed.length === 1 ? "" : "s"} · ${validos} ok · ${bloqueados} bloqueado(s)`}
-              />
-            )}
-            <p className="mt-2 text-xs text-faint">
-              Ajuste a repartição de cada DFD. Só os DFDs sem pendências serão protocolados.
-            </p>
-          </section>
         </div>
       </Modal>
 
       {/* Visão completa de um DFD (sob demanda) */}
-      <Modal
-        open={verDfd != null}
-        onClose={() => setVerIdx(null)}
-        titulo={verDfd ? `DFD ${verDfd.numero}` : ""}
-        size="lg"
-      >
-        {verDfd && verIdx != null && <DfdView dfd={toVisual(verDfd, repDe(dfdRepIds[verIdx]))} />}
+      <Modal open={verDfd != null} onClose={() => setVerDfd(null)} titulo={verDfd ? `DFD ${verDfd.numero}` : ""} size="lg">
+        {verDfd && <DfdView dfd={toVisual(verDfd, repDe(dfdRepIds[verIdx] ?? null))} />}
       </Modal>
     </div>
   );

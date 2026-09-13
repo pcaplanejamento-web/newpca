@@ -117,4 +117,38 @@ describe("parse-dfd-pdf-core", () => {
     const aoa = dfdPdf().filter((i) => !/Número DFD/.test(i.str));
     assert.throws(() => parseDfdFromPdfItems(aoa, "x.pdf"), /Número DFD/i);
   });
+
+  // Escala: um DFD com MILHARES de itens deve parsear correto e rápido (o matcher
+  // é O(n log n); com o antigo O(n²) isto travaria por segundos).
+  it("parseia um DFD com milhares de itens (matcher O(n log n))", () => {
+    const N = 2000;
+    const it: PdfItem[] = [
+      f(1, 150, 760, "AQUISIÇÃO Número DFD:1586 / Planejamento: 1"),
+      f(1, 48, 450, "ITEM"),
+      f(1, 85, 450, "CÓDIGO"),
+      f(1, 206, 450, "DESCRIÇÃO"),
+      f(1, 346, 450, "UNIDADE"),
+      f(1, 395, 450, "QUANTIDADE"),
+      f(1, 458, 450, "UNITÁRIO"),
+      f(1, 507, 450, "VALOR TOTAL"),
+    ];
+    for (let i = 1; i <= N; i++) {
+      const y = 440 - i * 8; // cada item numa linha própria (>2pt de distância)
+      it.push(f(1, 55, y, String(i)));
+      it.push(f(1, 82, y, String(100000 + i))); // código (dígitos)
+      it.push(f(1, 123, y, `PRODUTO ${i}`));
+      it.push(f(1, 353, y, "UN"));
+      it.push(f(1, 419, y, "1,0000"));
+      it.push(f(1, 466, y, "2,0000"));
+      it.push(f(1, 515, y, "2,0000"));
+    }
+    const t0 = Date.now();
+    const d = parseDfdFromPdfItems(it, "grande.pdf");
+    assert.equal(d.itens.length, N);
+    assert.equal(d.itens[0].item, 1);
+    assert.equal(d.itens[0].codigo, "100001");
+    assert.equal(d.itens[N - 1].item, N);
+    assert.ok(d.itens.every((x) => x.valorUnitario === 2)); // cada fragmento no bucket certo
+    assert.ok(Date.now() - t0 < 4000, "parse de DFD grande deve ser rápido");
+  });
 });

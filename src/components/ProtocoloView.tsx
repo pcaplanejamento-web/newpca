@@ -130,6 +130,7 @@ export function ProtocoloView({
             rows={protocolo.dfds}
             getKey={(r) => r.id}
             minWidth={620}
+            pageSize={25}
             footer={`${protocolo.dfds.length} DFD${protocolo.dfds.length === 1 ? "" : "s"}`}
           />
         )}

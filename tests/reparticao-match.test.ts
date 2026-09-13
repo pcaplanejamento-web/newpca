@@ -23,8 +23,23 @@ describe("reparticao-match (casarReparticao)", () => {
     assert.equal(r, 2); // casa "Secretaria de Infraestrutura Rural" por chaveNome
   });
 
-  it("nenhum match → null", () => {
-    assert.equal(casarReparticao({ siglaSetor: "XYZ", setorRequisitante: "XYZ - Desconhecido" }, reps), null);
+  it("fallback pelo ÓRGÃO/ENTIDADE quando o setor não casa", () => {
+    // setor genérico não casa; órgão = a própria secretaria.
+    const r = casarReparticao(
+      { siglaSetor: null, setorRequisitante: "GABINETE", orgaoEntidade: "SECRETARIA MUNICIPAL DE EDUCAÇÃO" },
+      reps,
+    );
+    assert.equal(r, 1);
+  });
+
+  it("nenhum match → null (sigla/setor/órgão fora da lista)", () => {
+    assert.equal(
+      casarReparticao(
+        { siglaSetor: "XYZ", setorRequisitante: "XYZ - Desconhecido", orgaoEntidade: "FUNDO MUNICIPAL DO IDOSO" },
+        reps,
+      ),
+      null,
+    );
   });
 
   it("sem setor → null", () => {

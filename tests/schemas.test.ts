@@ -7,10 +7,10 @@ import {
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
 import {
-  dfdImportSchema,
+  dfdOpSchema,
   faltasObrigatorias,
   gerarPcaSchema,
-  protocoloImportSchema,
+  startProtocoloSchema,
   vincularDfdSchema,
 } from "../src/lib/dfd-validation.ts";
 import { uploadSchema } from "../src/lib/validation.ts";
@@ -69,20 +69,39 @@ describe("validation (upload em lotes)", () => {
 });
 
 describe("dfd-validation", () => {
-  it("dfdImportSchema exige numero e ao menos 1 item", () => {
-    const ok = dfdImportSchema.safeParse({
-      numero: "1586",
-      itens: [{ item: 1, codigo: "5241937263", quantidade: 56 }],
-    });
-    assert.equal(ok.success, true);
-    assert.equal(dfdImportSchema.safeParse({ numero: "", itens: [{}] }).success, false);
-    assert.equal(dfdImportSchema.safeParse({ numero: "1", itens: [] }).success, false);
+  it("dfdOpSchema start-dfd: exige numero e ao menos 1 item (rows)", () => {
+    assert.equal(
+      dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1586", rows: [{ item: 1, valorUnitario: 2 }] }).success,
+      true,
+    );
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "", rows: [{ item: 1 }] }).success, false);
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", rows: [] }).success, false);
   });
 
-  it("dfdImportSchema faz coerce de numero e aceita reparticaoId/cabeçalho opcionais", () => {
-    const r = dfdImportSchema.parse({ numero: 1586, reparticaoId: 3, itens: [{ item: 1 }] });
-    assert.equal(r.numero, "1586");
-    assert.equal(r.reparticaoId, 3);
+  it("dfdOpSchema start-dfd: coerce de numero + protocoloId/totalItens opcionais", () => {
+    const r = dfdOpSchema.parse({
+      mode: "start-dfd",
+      numero: 1586,
+      reparticaoId: 3,
+      protocoloId: 7,
+      totalItens: 1200,
+      rows: [{ item: 1 }],
+    });
+    assert.equal(r.mode, "start-dfd");
+    if (r.mode === "start-dfd") {
+      assert.equal(r.numero, "1586");
+      assert.equal(r.protocoloId, 7);
+      assert.equal(r.totalItens, 1200);
+    }
+  });
+
+  it("dfdOpSchema append-dfd-itens: dfdId positivo + desde >=0 + rows", () => {
+    assert.equal(
+      dfdOpSchema.safeParse({ mode: "append-dfd-itens", dfdId: 5, desde: 200, rows: [{ item: 2 }] }).success,
+      true,
+    );
+    assert.equal(dfdOpSchema.safeParse({ mode: "append-dfd-itens", dfdId: 0, desde: 0, rows: [{ item: 1 }] }).success, false);
+    assert.equal(dfdOpSchema.safeParse({ mode: "append-dfd-itens", dfdId: 5, desde: -1, rows: [{ item: 1 }] }).success, false);
   });
 
   it("gerarPcaSchema exige nome e dfdIds positivos não-vazios", () => {
@@ -92,29 +111,9 @@ describe("dfd-validation", () => {
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [0] }).success, false);
   });
 
-  it("dfdImportSchema aceita protocoloId opcional/nullable", () => {
-    assert.equal(dfdImportSchema.parse({ numero: "1", itens: [{ item: 1 }] }).protocoloId ?? null, null);
-    assert.equal(dfdImportSchema.parse({ numero: "1", protocoloId: 7, itens: [{ item: 1 }] }).protocoloId, 7);
-    assert.equal(dfdImportSchema.safeParse({ numero: "1", protocoloId: 0, itens: [{ item: 1 }] }).success, false);
-  });
-
-  it("protocoloImportSchema exige numero do protocolo; dfds default = []", () => {
-    const r = protocoloImportSchema.parse({ protocolo: { numero: "144/2026" } });
-    assert.equal(r.protocolo.numero, "144/2026");
-    assert.deepEqual(r.dfds, []); // rule 3: protocolo sem DFDs
-    assert.equal(protocoloImportSchema.safeParse({ protocolo: { numero: "" } }).success, false);
-  });
-
-  it("protocoloImportSchema valida os DFDs embutidos (dfdImportSchema)", () => {
-    const ok = protocoloImportSchema.safeParse({
-      protocolo: { numero: "144/2026" },
-      dfds: [{ numero: "100", itens: [{ item: 1 }] }],
-    });
-    assert.equal(ok.success, true);
-    assert.equal(
-      protocoloImportSchema.safeParse({ protocolo: { numero: "1" }, dfds: [{ numero: "100", itens: [] }] }).success,
-      false,
-    );
+  it("startProtocoloSchema exige o numero do protocolo (capa)", () => {
+    assert.equal(startProtocoloSchema.safeParse({ mode: "start-protocolo", protocolo: { numero: "144/2026" } }).success, true);
+    assert.equal(startProtocoloSchema.safeParse({ mode: "start-protocolo", protocolo: { numero: "" } }).success, false);
   });
 
   it("vincularDfdSchema aceita id positivo ou null (desvincular)", () => {

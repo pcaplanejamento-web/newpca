@@ -8,6 +8,7 @@ import { type PlanilhaParseada, parsePlanilha } from "@/lib/parse-xlsx";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { Progress } from "./Progress";
 
 type Preview = PlanilhaParseada & { total: number; count: number };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
@@ -249,12 +250,7 @@ export function UploadForm() {
 
           {status === "sending" && (
             <div className="mt-4">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-track">
-                <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${progress}%` }} />
-              </div>
-              <p className="mt-1.5 text-xs text-muted">
-                Enviando {num(preview.count)} itens em lotes... {progress}%
-              </p>
+              <Progress value={progress} label={`Enviando ${num(preview.count)} itens em lotes... ${progress}%`} />
             </div>
           )}
         </div>

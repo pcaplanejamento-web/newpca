@@ -1,19 +1,16 @@
 import { parseNumberBR } from "./normalize.ts";
-import { buscar, type DfdParseado } from "./parse-dfd-comum.ts";
-import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
+import { buscar, extrairCabecalho } from "./parse-dfd-comum.ts";
 
 /**
- * Núcleo PURO do parser de PROTOCOLO em PDF — o "processo" administrativo que
- * empacota VÁRIOS DFDs. Recebe os trechos de texto com posição (`{page,x,y,str}`)
- * já extraídos pelo pdf.js (ver `parse-protocolo-pdf.ts`) e:
- *  - detecta o "Número DFD" de cada página (mesma regex do cabeçalho do DFD) e
- *    agrupa páginas CONSECUTIVAS de mesmo número → 1 DFD (páginas de "Assinaturas
- *    Digitais" e a capa não têm Número DFD e servem de separador);
- *  - reaproveita `parseDfdFromPdfItems` por grupo (validado no PDF real) —
- *    capturando erro POR DFD para não derrubar os demais;
- *  - extrai os metadados da CAPA DO PROCESSO (Número Processo, Interessado,
- *    CPF/CNPJ, Assunto, Valor, Observação, Local repartição) via `buscar`.
- * Sem pdf.js/D1 aqui → testável no Node com trechos sintéticos.
+ * Núcleo PURO do parser de PROTOCOLO em PDF (o "processo" que empacota vários
+ * DFDs). Para ESCALAR a milhares de DFDs, o protocolo é lido em 2 passos:
+ *  1. **índice leve** (aqui): recebe o TEXTO por página (`{page, lines}` — barato,
+ *     sem geometria) e devolve a capa + a lista de DFDs detectados, cada um só com
+ *     o CABEÇALHO (nº, setor, órgão, objeto) e suas páginas. Não remonta tabelas →
+ *     memória O(nº de DFDs), sem travar.
+ *  2. **parse completo por DFD** (no import/no "Ver"): `parseDfdFromPdfItems` sobre
+ *     as páginas daquele DFD, sob demanda (ver `parse-protocolo-pdf.ts`).
+ * Testável no Node com páginas sintéticas.
  */
 
 export type ProtocoloMeta = {
@@ -28,13 +25,23 @@ export type ProtocoloMeta = {
   nomeArquivo: string;
 };
 
-export type ProtocoloDfdErro = { ordem: number; numero: string | null; erro: string };
-
-export type ProtocoloParseado = {
-  protocolo: ProtocoloMeta;
-  dfds: DfdParseado[];
-  erros: ProtocoloDfdErro[];
+/** Um DFD detectado no bundle — só cabeçalho + páginas (parse completo é depois). */
+export type DfdIndexado = {
+  numero: string;
+  pages: number[];
+  setorRequisitante: string | null;
+  siglaSetor: string | null;
+  orgaoEntidade: string | null;
+  objeto: string | null;
 };
+
+export type ProtocoloIndex = {
+  protocolo: ProtocoloMeta;
+  dfds: DfdIndexado[];
+};
+
+/** Texto (linhas reconstruídas) de UMA página — a entrada barata do índice. */
+export type PaginaTexto = { page: number; lines: string[] };
 
 const RE_NUM_DFD = /N[úu]mero\s+DFD\s*:?\s*(\d+)/i;
 
@@ -61,60 +68,50 @@ function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
   return { numero, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
 }
 
-export function parseProtocoloFromPdfItems(bruto: PdfItem[], nomeArquivo: string): ProtocoloParseado {
-  // Trechos por página, na ordem das páginas.
-  const porPagina = new Map<number, PdfItem[]>();
-  for (const it of bruto) {
-    const arr = porPagina.get(it.page) ?? [];
-    arr.push(it);
-    porPagina.set(it.page, arr);
-  }
-  const paginas = [...porPagina.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([page, items]) => {
-      const lines = linhasDeTexto(items);
-      return { page, items, numero: buscar(lines, RE_NUM_DFD), lines };
-    });
+/**
+ * Índice leve do protocolo a partir do texto por página. Agrupa páginas
+ * CONSECUTIVAS de mesmo "Número DFD" (os números não são monotônicos → por run) e
+ * extrai só o cabeçalho de cada DFD. A capa é a 1ª página sem "Número DFD" que se
+ * pareça com a capa do processo.
+ */
+export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): ProtocoloIndex {
+  const comNum = paginas.map((p) => ({ ...p, numero: buscar(p.lines, RE_NUM_DFD) }));
 
-  // Capa = 1ª página sem "Número DFD" que se pareça com a capa do processo.
   let capaLines: string[] = [];
-  for (const p of paginas) {
+  for (const p of comNum) {
     if (p.numero == null && ehCapa(p.lines)) {
       capaLines = p.lines;
       break;
     }
   }
 
-  // Fatia em RUNS de páginas consecutivas com o mesmo "Número DFD" (os números
-  // não são monotônicos → agrupar por run, não por valor).
-  const grupos: { numero: string; items: PdfItem[] }[] = [];
-  let cur: { numero: string; items: PdfItem[] } | null = null;
-  for (const p of paginas) {
+  const grupos: { numero: string; pages: number[]; lines: string[] }[] = [];
+  let cur: { numero: string; pages: number[]; lines: string[] } | null = null;
+  for (const p of comNum) {
     if (p.numero == null) {
-      cur = null; // capa/separador encerra o run atual
+      cur = null; // capa/separador encerra o run
       continue;
     }
-    if (cur && cur.numero === p.numero) cur.items.push(...p.items);
-    else {
-      cur = { numero: p.numero, items: [...p.items] };
+    if (cur && cur.numero === p.numero) {
+      cur.pages.push(p.page);
+      cur.lines.push(...p.lines);
+    } else {
+      cur = { numero: p.numero, pages: [p.page], lines: [...p.lines] };
       grupos.push(cur);
     }
   }
 
-  // Cada DFD reaproveita o core do DFD; erro fica isolado por DFD.
-  const dfds: DfdParseado[] = [];
-  const erros: ProtocoloDfdErro[] = [];
-  grupos.forEach((g, i) => {
-    try {
-      dfds.push(parseDfdFromPdfItems(g.items, nomeArquivo));
-    } catch (e) {
-      erros.push({
-        ordem: i + 1,
-        numero: g.numero,
-        erro: e instanceof Error ? e.message : "Falha ao ler o DFD.",
-      });
-    }
+  const dfds: DfdIndexado[] = grupos.map((g) => {
+    const cab = extrairCabecalho(g.lines);
+    return {
+      numero: g.numero,
+      pages: g.pages,
+      setorRequisitante: cab.setorRequisitante,
+      siglaSetor: cab.siglaSetor,
+      orgaoEntidade: cab.orgaoEntidade,
+      objeto: cab.objeto,
+    };
   });
 
-  return { protocolo: extrairCapa(capaLines, nomeArquivo), dfds, erros };
+  return { protocolo: extrairCapa(capaLines, nomeArquivo), dfds };
 }

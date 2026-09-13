@@ -66,6 +66,33 @@ export function linhasDeTexto(bruto: PdfItem[]): string[] {
   return agruparLinhas(normalizar(bruto)).map((l) => l.items.map((i) => i.str).join(" "));
 }
 
+/**
+ * Índice do valor mais próximo de `target` num array **ordenado por `y` DESC**
+ * (`ys`), via busca binária — O(log n). Empate = menor índice (maior `y`), igual
+ * à varredura linear original. Destrava DFDs com milhares de itens (antes O(n²)).
+ */
+function nearestByY(ys: number[], target: number): number {
+  let lo = 0;
+  let hi = ys.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ys[mid] <= target) hi = mid;
+    else lo = mid + 1;
+  }
+  // O mais próximo num array monotônico é um dos vizinhos do ponto de inserção.
+  let best = -1;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (const i of [lo - 1, lo]) {
+    if (i < 0 || i >= ys.length) continue;
+    const d = Math.abs(ys[i] - target);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): DfdParseado {
   const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
@@ -155,18 +182,11 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       valorTotal: null,
     }));
 
+    // buckets já estão em `y` DESC (itemNums foi ordenado) → busca binária O(log n).
+    const bucketYs = buckets.map((b) => b.y);
     for (const f of bodyFrags) {
       if (buckets.length === 0) break;
-      let bi = 0;
-      let best = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < buckets.length; i++) {
-        const d = Math.abs(buckets[i].y - f.y);
-        if (d < best) {
-          best = d;
-          bi = i;
-        }
-      }
-      const b = buckets[bi];
+      const b = buckets[nearestByY(bucketYs, f.y)];
       const c = colOf(f.x, f.str);
       if (c === "codigo") b.codigo.push(f);
       else if (c === "descricao") b.descricao.push(f);

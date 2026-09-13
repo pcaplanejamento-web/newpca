@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { PdfItem } from "../src/lib/parse-dfd-pdf-core.ts";
-import { parseProtocoloFromPdfItems } from "../src/lib/parse-protocolo-pdf-core.ts";
+import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
+import { indexarProtocolo, type PaginaTexto } from "../src/lib/parse-protocolo-pdf-core.ts";
 
-// Fixture = trechos posicionados (como o pdf.js entrega) de um PROTOCOLO:
-// p1 = CAPA DO PROCESSO; p2-3 = DFD 100 (multi-página, mesmo número → 1 DFD);
-// p4 = separador (sem Número DFD); p5 = DFD 200; p6 = separador; p7 = DFD 300
-// MALFORMADO (tem Número DFD mas sem tabela → erro ISOLADO, não derruba os outros).
+// Índice LEVE do protocolo: recebe o texto por página (barato) e detecta a capa +
+// os DFDs (nº, páginas, cabeçalho) sem remontar tabelas. O parse completo por DFD
+// (`parseDfdFromPdfItems`) é testado em parse-dfd-pdf.test.ts e exercitado aqui.
+// Fixture: p1 = CAPA; p2-3 = DFD 100 (multi-página, mesmo número → 1 DFD);
+// p4 = separador; p5 = DFD 200; p6 = separador; p7 = DFD 300 sem tabela.
 
 const f = (page: number, x: number, y: number, str: string): PdfItem => ({ page, x, y, str });
 
-/** Um DFD válido e compacto numa página (cabeçalho + tabela com 1 item). */
 function dfdNaPagina(page: number, numero: string): PdfItem[] {
   return [
     f(page, 150, 760, `AQUISIÇÃO Número DFD:${numero} / Planejamento: 1`),
@@ -34,7 +34,7 @@ function dfdNaPagina(page: number, numero: string): PdfItem[] {
   ];
 }
 
-function protocoloPdf(): PdfItem[] {
+function protocoloItems(): PdfItem[] {
   return [
     // p1 = capa
     f(1, 100, 800, "CAPA DO PROCESSO 12345/2026"),
@@ -44,52 +44,76 @@ function protocoloPdf(): PdfItem[] {
     f(1, 38, 726, "Data documento: Valor: Número do documento: 40,00"),
     f(1, 38, 712, "Observação: PCA 2027"),
     f(1, 38, 698, "Usuário: Local repartição: joao.silva SME EDUCACAO"),
-    // p2-3 = DFD 100 (mesmo número em páginas consecutivas → 1 só DFD)
+    // p2-3 = DFD 100 (mesmo número em páginas consecutivas → 1 DFD)
     ...dfdNaPagina(2, "100"),
     f(3, 150, 760, "AQUISIÇÃO Número DFD:100 / Planejamento: 1"),
-    // p4 = separador (Assinaturas Digitais, sem Número DFD)
+    // p4 = separador (sem Número DFD)
     f(4, 100, 700, "Assinaturas Digitais"),
     // p5 = DFD 200
     ...dfdNaPagina(5, "200"),
     // p6 = separador
     f(6, 100, 700, "Assinaturas Digitais"),
-    // p7 = DFD 300 MALFORMADO (número, mas sem tabela)
+    // p7 = DFD 300 sem tabela (número presente; parse completo falharia)
     f(7, 150, 760, "AQUISIÇÃO Número DFD:300 / Planejamento: 1"),
     f(7, 38, 700, "1 - ÁREA REQUISITANTE DA DEMANDA"),
   ];
 }
 
-describe("parse-protocolo-pdf-core", () => {
+/** Converte os trechos em texto por página (o que o navegador passa ao índice). */
+function paginasDe(items: PdfItem[]): PaginaTexto[] {
+  const byPage = new Map<number, PdfItem[]>();
+  for (const it of items) {
+    const a = byPage.get(it.page) ?? [];
+    a.push(it);
+    byPage.set(it.page, a);
+  }
+  return [...byPage.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([page, its]) => ({ page, lines: linhasDeTexto(its) }));
+}
+
+describe("indexarProtocolo (índice leve)", () => {
   it("extrai os metadados da CAPA DO PROCESSO", () => {
-    const r = parseProtocoloFromPdfItems(protocoloPdf(), "proto.pdf");
-    assert.equal(r.protocolo.numero, "12345/2026");
-    assert.equal(r.protocolo.data, "01/02/2026 10:00:00");
-    assert.equal(r.protocolo.interessado, "42 - FUNDO EXEMPLO");
-    assert.equal(r.protocolo.documento, "11.222.333/0001-44");
-    assert.equal(r.protocolo.assunto, "INCLUSÃO - PCA");
-    assert.equal(r.protocolo.valorCapa, 40);
-    assert.equal(r.protocolo.observacao, "PCA 2027");
-    assert.equal(r.protocolo.localReparticao, "SME EDUCACAO"); // usuário removido
-    assert.equal(r.protocolo.nomeArquivo, "proto.pdf");
+    const idx = indexarProtocolo(paginasDe(protocoloItems()), "proto.pdf");
+    assert.equal(idx.protocolo.numero, "12345/2026");
+    assert.equal(idx.protocolo.data, "01/02/2026 10:00:00");
+    assert.equal(idx.protocolo.interessado, "42 - FUNDO EXEMPLO");
+    assert.equal(idx.protocolo.documento, "11.222.333/0001-44");
+    assert.equal(idx.protocolo.assunto, "INCLUSÃO - PCA");
+    assert.equal(idx.protocolo.valorCapa, 40);
+    assert.equal(idx.protocolo.observacao, "PCA 2027");
+    assert.equal(idx.protocolo.localReparticao, "SME EDUCACAO");
+    assert.equal(idx.protocolo.nomeArquivo, "proto.pdf");
   });
 
-  it("fatia o bundle em DFDs por 'Número DFD' (páginas consecutivas = 1 DFD)", () => {
-    const r = parseProtocoloFromPdfItems(protocoloPdf(), "proto.pdf");
-    assert.equal(r.dfds.length, 2);
+  it("detecta os DFDs por 'Número DFD' (páginas consecutivas = 1 DFD) + cabeçalho", () => {
+    const idx = indexarProtocolo(paginasDe(protocoloItems()), "proto.pdf");
     assert.deepEqual(
-      r.dfds.map((d) => d.numero),
-      ["100", "200"],
+      idx.dfds.map((d) => d.numero),
+      ["100", "200", "300"],
     );
-    assert.equal(r.dfds[0].itens.length, 1);
-    assert.equal(r.dfds[0].itens[0].valorUnitario, 10);
-    assert.equal(r.dfds[0].setorRequisitante, "SME - SECRETARIA MUNICIPAL DE EDUCAÇÃO");
+    assert.deepEqual(idx.dfds[0].pages, [2, 3]); // multi-página agrupado
+    assert.deepEqual(idx.dfds[1].pages, [5]);
+    assert.deepEqual(idx.dfds[2].pages, [7]);
+    assert.equal(idx.dfds[0].setorRequisitante, "SME - SECRETARIA MUNICIPAL DE EDUCAÇÃO");
+    assert.equal(idx.dfds[0].siglaSetor, "SME");
+    assert.equal(idx.dfds[2].setorRequisitante, null); // DFD 300 sem setor
   });
 
-  it("isola o DFD malformado num erro (sem derrubar os válidos)", () => {
-    const r = parseProtocoloFromPdfItems(protocoloPdf(), "proto.pdf");
-    assert.equal(r.erros.length, 1);
-    assert.equal(r.erros[0].numero, "300");
-    assert.equal(r.erros[0].ordem, 3);
-    assert.match(r.erros[0].erro, /itens/i);
+  it("as páginas de um DFD detectado fazem o parse completo (integração)", () => {
+    const items = protocoloItems();
+    const idx = indexarProtocolo(paginasDe(items), "proto.pdf");
+    const dfd100 = idx.dfds[0];
+    const itensDfd = items.filter((i) => dfd100.pages.includes(i.page));
+    const d = parseDfdFromPdfItems(itensDfd, "proto.pdf");
+    assert.equal(d.numero, "100");
+    assert.equal(d.itens.length, 1);
+    assert.equal(d.itens[0].valorUnitario, 10);
+  });
+
+  it("um DFD sem tabela (300) lança no parse completo → vira bloqueado no import", () => {
+    const items = protocoloItems();
+    const p7 = items.filter((i) => i.page === 7);
+    assert.throws(() => parseDfdFromPdfItems(p7, "proto.pdf"), /itens|Número DFD/i);
   });
 });

@@ -1,40 +1,31 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { faltasObrigatorias, protocoloImportSchema } from "@/lib/dfd-validation";
+import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { importarProtocoloComDfds } from "@/lib/protocolo";
+import { iniciarProtocolo } from "@/lib/protocolo";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Protocola um processo com seus DFDs. Grava só os DFDs VÁLIDOS — o defeituoso
- * (falha em `faltasObrigatorias`) NUNCA é protocolado (re-validado aqui, além do
- * cliente). `dfds` vazio cria só o protocolo (rule 3).
+ * `start-protocolo`: cria só o protocolo (capa) e devolve `protocoloId`. Os DFDs
+ * são enviados DEPOIS, em streaming, DFD a DFD (`POST /api/dfd` com o `protocoloId`)
+ * — para escalar a milhares de DFDs sem estourar CPU/memória/subrequests do Worker.
  */
 export async function POST(req: Request) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
 
-  const p = await parseCorpo(protocoloImportSchema, req);
+  const p = await parseCorpo(startProtocoloSchema, req);
   if ("resp" in p) return p.resp;
-  const { protocolo, dfds } = p.data;
+  const { protocolo } = p.data;
 
-  // Repartições acessíveis ao usuário (admin: todas).
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (id: number | null | undefined) => id == null || lista.some((r) => r.id === id);
-  if (!acessivel(protocolo.reparticaoId)) {
-    return erro("Repartição do protocolo inválida ou sem acesso.", 403);
-  }
-
-  // DFD com defeito NUNCA é protocolado.
-  const validos = dfds.filter((d) => faltasObrigatorias(d).length === 0);
-  const bloqueados = dfds.length - validos.length;
-  for (const d of validos) {
-    if (!acessivel(d.reparticaoId)) {
-      return erro(`DFD ${d.numero}: repartição inválida ou sem acesso.`, 403);
+  if (protocolo.reparticaoId != null) {
+    const { lista } = await getReparticaoContexto(a.u);
+    if (!lista.some((r) => r.id === protocolo.reparticaoId)) {
+      return erro("Repartição do protocolo inválida ou sem acesso.", 403);
     }
   }
 
-  const r = await importarProtocoloComDfds(protocolo, validos, a.u.id);
-  return ok({ id: r.id, numero: r.numero, importados: r.importados, bloqueados });
+  const r = await iniciarProtocolo(protocolo, a.u.id);
+  return ok({ protocoloId: r.id, numero: r.numero });
 }

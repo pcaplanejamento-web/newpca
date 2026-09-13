@@ -249,7 +249,13 @@ export function DfdsView({
 
   const protocolosTab = (
     <div className="space-y-6">
-      {podeEditar && <ProtocoloUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} />}
+      {podeEditar && (
+        <ProtocoloUploadForm
+          reparticoes={reparticoes}
+          reparticaoAtivaId={reparticaoAtivaId}
+          dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
+        />
+      )}
       <section>
         <h3 className="mb-3 text-sm font-semibold text-text-2">Protocolos ({protocolos.length})</h3>
         {protocolos.length === 0 ? (
