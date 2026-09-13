@@ -56,7 +56,10 @@ descartada) lista os DFDs sem travar; ao protocolar, cada DFD é parseado, valid
 (`start-dfd`/`append-dfd-itens`, `POST /api/dfd`) e **descartado** — nunca segurando mais que 1 DFD por vez. Assim um
 protocolo com **milhares de DFDs** e um DFD com **milhares de itens** não estouram memória do navegador nem CPU/
 subrequests do Worker. O matcher da tabela do DFD passou a **O(n log n)**. Ao final, um **relatório** mostra os
-importados e os bloqueados (com o motivo).
+importados e os bloqueados (com o motivo). A gravação é **all-or-nothing por DFD** (retry de falha transitória +
+rollback do DFD parcial; append idempotente), o banner fica **travado** durante a protocolação (não fecha, não
+interrompe) e **toda escrita** (DFD e protocolo) é **escopada por repartição** (403 fora do escopo; anti-sequestro
+por número).
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.

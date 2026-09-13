@@ -7,6 +7,8 @@ import { norm } from "./parse-dfd-comum.ts";
 // Itens por request (lote). Igual ao /api/upload — mantém cada db.batch dentro
 // dos limites do Worker/D1; DFDs com milhares de itens vão em vários lotes.
 const MAX_ROWS_POR_LOTE = 1000;
+// Teto generoso de itens declarados por DFD (anti-abuso; um DFD real tem dezenas).
+const MAX_ITENS_DFD = 100_000;
 
 // Seções obrigatórias para importar um DFD (casadas pelo TÍTULO, tolerante ao número).
 const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
@@ -81,7 +83,7 @@ export const dfdMetaSchema = z.object({
   valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
-  totalItens: z.number().int().nonnegative().optional().nullable(),
+  totalItens: z.number().int().nonnegative().max(MAX_ITENS_DFD).optional().nullable(),
 });
 
 /** `start-dfd`: cabeçalho + 1º lote de itens → cria/zera o DFD e devolve `dfdId`. */

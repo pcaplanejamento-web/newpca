@@ -95,6 +95,11 @@ describe("dfd-validation", () => {
     }
   });
 
+  it("dfdOpSchema start-dfd: teto de totalItens (anti-abuso)", () => {
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", totalItens: 100000, rows: [{ item: 1 }] }).success, true);
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", totalItens: 100001, rows: [{ item: 1 }] }).success, false);
+  });
+
   it("dfdOpSchema append-dfd-itens: dfdId positivo + desde >=0 + rows", () => {
     assert.equal(
       dfdOpSchema.safeParse({ mode: "append-dfd-itens", dfdId: 5, desde: 200, rows: [{ item: 2 }] }).success,

@@ -119,6 +119,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **discriminated union em `mode`** (`start-dfd` | `append-dfd-itens`, `dfdOpSchema`) — o cliente
   (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de 200 com **barra de progresso** (`Progress`).
   `start-dfd` re-valida `faltasObrigatorias` (defeituoso nunca grava, 422); idempotente por `numero` (retomável).
+- **Gravação garantida (all-or-nothing por DFD):** `enviarDfdEmLotes` faz **retry** de falha transitória (rede/5xx;
+  4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. `appendDfdItens`
+  é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
+  **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
+- **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
+  /api/dfd/[id]`, `DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)` com a
+  `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro** por
+  `numero` (não sobrescreve DFD de repartição inacessível); `PATCH` valida também o **protocolo alvo**. Teto de
+  `totalItens` (100k) e `rows` (1000/lote) no Zod; Drizzle parametriza (sem SQL injection).
 - Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
 - **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota

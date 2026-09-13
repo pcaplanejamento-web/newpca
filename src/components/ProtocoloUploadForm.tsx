@@ -96,6 +96,17 @@ export function ProtocoloUploadForm({
   // Destrói o documento pdf.js ao desmontar (libera memória).
   useEffect(() => () => void docRef.current?.destroy(), []);
 
+  // Enquanto protocola, avisa antes de fechar/atualizar a aba (não interromper).
+  useEffect(() => {
+    if (!importando) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [importando]);
+
   function limparDoc() {
     docRef.current?.destroy();
     docRef.current = null;
@@ -455,11 +466,12 @@ export function ProtocoloUploadForm({
         titulo={numero ? `Protocolo ${numero}` : "Novo protocolo"}
         size="xl"
         fecharNoBackdrop={false}
+        bloqueado={importando}
         rodape={
           <div className="flex flex-wrap items-center justify-between gap-3">
             {importando && progresso ? (
               <div className="min-w-[200px] flex-1">
-                <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}%`} />
+                <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
               </div>
             ) : (
               <span className="text-[12px] text-muted">
@@ -469,9 +481,11 @@ export function ProtocoloUploadForm({
               </span>
             )}
             <div className="flex gap-2">
-              <Button variant="secondary" disabled={importando} onClick={fechar}>
-                Cancelar
-              </Button>
+              {!importando && (
+                <Button variant="secondary" onClick={fechar}>
+                  Cancelar
+                </Button>
+              )}
               <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
                 Protocolar
               </Button>

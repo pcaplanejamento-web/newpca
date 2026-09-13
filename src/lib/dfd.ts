@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import type { DfdItemPayload, DfdMetaPayload, GerarPcaPayload } from "./dfd-validation";
@@ -221,14 +221,33 @@ export async function appendDfdItens(
   if (itens.length === 0) return { inserted: 0 };
   const db = getDb();
   const stmts = insertsItens(db, dfdId, itens, seqBase);
-  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  // Idempotente: apaga o que já houver ALÉM de `seqBase` antes de gravar o lote —
+  // reenviar o mesmo lote (retry) não duplica itens. Atômico no mesmo db.batch.
+  await db.batch([
+    db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), gt(dfdItens.sequencial, seqBase))),
+    ...stmts,
+  ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
   return { inserted: itens.length };
 }
 
-/** O DFD existe? (usado por `append-dfd-itens` para 404 antes de gravar.) */
-export async function dfdExiste(id: number): Promise<boolean> {
-  const [r] = await getDb().select({ id: dfds.id }).from(dfds).where(eq(dfds.id, id)).limit(1);
-  return !!r;
+/** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
+export async function getDfdReparticao(id: number): Promise<{ reparticaoId: number | null } | null> {
+  const [r] = await getDb()
+    .select({ reparticaoId: dfds.reparticaoId })
+    .from(dfds)
+    .where(eq(dfds.id, id))
+    .limit(1);
+  return r ?? null;
+}
+
+/** Repartição do DFD com esse `numero` (anti-sequestro no `start-dfd`); `null` se não existe. */
+export async function getReparticaoDfdNumero(numero: string): Promise<{ reparticaoId: number | null } | null> {
+  const [r] = await getDb()
+    .select({ reparticaoId: dfds.reparticaoId })
+    .from(dfds)
+    .where(eq(dfds.numero, numero))
+    .limit(1);
+  return r ?? null;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */

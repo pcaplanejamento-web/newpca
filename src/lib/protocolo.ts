@@ -138,6 +138,16 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null): Pr
     .where(eq(dfds.id, dfdId));
 }
 
+/** Repartição de um protocolo (para o guard de acesso nas escritas); `null` se não existe. */
+export async function getProtocoloReparticao(id: number): Promise<{ reparticaoId: number | null } | null> {
+  const [r] = await getDb()
+    .select({ reparticaoId: dfdProtocolos.reparticaoId })
+    .from(dfdProtocolos)
+    .where(eq(dfdProtocolos.id, id))
+    .limit(1);
+  return r ?? null;
+}
+
 /** Exclui o protocolo. Os DFDs permanecem (FK `set null` desvincula). */
 export async function excluirProtocolo(id: number): Promise<void> {
   await getDb().delete(dfdProtocolos).where(eq(dfdProtocolos.id, id));

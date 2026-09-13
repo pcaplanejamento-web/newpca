@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -41,6 +41,17 @@ export function DfdUploadForm({
     repNome: string | null;
     foraDoHead: boolean;
   } | null>(null);
+
+  // Enquanto grava (lotes), avisa antes de fechar/atualizar a aba.
+  useEffect(() => {
+    if (status !== "sending") return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [status]);
 
   async function handleFile(file: File) {
     setErro(null);
@@ -249,12 +260,13 @@ export function DfdUploadForm({
         titulo={`Conferir e importar — DFD ${preview?.numero ?? ""}`}
         size="lg"
         fecharNoBackdrop={false}
+        bloqueado={status === "sending"}
         rodape={
           visual ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               {status === "sending" ? (
                 <div className="min-w-[180px] flex-1">
-                  <Progress value={progresso} label={`Enviando ${num(preview?.itens.length ?? 0)} itens... ${progresso}%`} />
+                  <Progress value={progresso} label={`Enviando ${num(preview?.itens.length ?? 0)} itens... ${progresso}% — não feche esta janela`} />
                 </div>
               ) : (
                 <span className="text-[12px] text-muted">
@@ -264,9 +276,11 @@ export function DfdUploadForm({
                 </span>
               )}
               <div className="flex gap-2">
-                <Button variant="secondary" disabled={status === "sending"} onClick={() => reset()}>
-                  Cancelar
-                </Button>
+                {status !== "sending" && (
+                  <Button variant="secondary" onClick={() => reset()}>
+                    Cancelar
+                  </Button>
+                )}
                 <Button
                   onClick={enviar}
                   loading={status === "sending"}
