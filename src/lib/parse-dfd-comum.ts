@@ -105,7 +105,12 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
   const planejamento = buscar(linhas, /Planejamento\s*:?\s*(\d+)/i);
   const tipo = buscar(linhas, /Tipo\s+DFD\s*:?\s*(.+)/i);
   const orgaoEntidade = buscar(linhas, /[ÓO]rg[ãa]o\s*\/?\s*Entidade\s*:?\s*(.+)/i);
-  const setorRequisitante = buscar(linhas, /Setor\s+Requisitante\s*:?\s*(.+)/i);
+  // para antes de um rótulo seguinte na mesma linha (ex.: "... Data: 31/08/2026")
+  // p/ não vazar valor no Setor — igual ao Responsável parar antes de "Matrícula".
+  const setorRequisitante = buscar(
+    linhas,
+    /Setor\s+Requisitante\s*:?\s*(.+?)(?:\s+Data\s*:|$)/i,
+  );
   const responsavel = buscar(
     linhas,
     /Respons[áa]vel\s+pela\s+Demanda\s*:?\s*(.+?)(?:\s+Matr[íi]cula\b|$)/i,
