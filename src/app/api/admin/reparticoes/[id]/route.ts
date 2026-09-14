@@ -4,6 +4,7 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { reparticaoSchema } from "@/lib/rbac-validation";
+import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       codigo: corpo.data.codigo,
       nome: corpo.data.nome,
       numeroInteressado: corpo.data.numeroInteressado ?? null,
-      responsavelDfd: corpo.data.responsavelDfd ?? null,
+      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));

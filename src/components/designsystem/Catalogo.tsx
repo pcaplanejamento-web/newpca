@@ -42,6 +42,7 @@ import {
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { Dropzone } from "@/components/Dropzone";
+import { ListaEditavel } from "@/components/ListaEditavel";
 import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
@@ -328,6 +329,7 @@ export function Catalogo() {
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
   const [dzFile, setDzFile] = useState<string | null>(null);
+  const [listaDemo, setListaDemo] = useState<string[]>(["Ana Souza", "Carlos Lima"]);
   const [pag, setPag] = useState(2);
   const [repsOrdem, setRepsOrdem] = useState([
     { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
@@ -675,6 +677,19 @@ export function Catalogo() {
           <div className="flex items-center rounded-card border border-border bg-surface-2 p-4 text-[13px] text-muted">
             {dzFile ? `Último arquivo escolhido: ${dzFile}` : "Nenhum arquivo escolhido ainda."}
           </div>
+        </div>
+      </Secao>
+
+      <Secao titulo="Lista editável (vários valores: adicionar/remover)">
+        <div className="max-w-md">
+          <ListaEditavel
+            valores={listaDemo}
+            onChange={setListaDemo}
+            placeholder="Nome"
+            itemAria="Nome"
+            addLabel="Adicionar nome"
+          />
+          <p className="mt-2 text-[12px] text-muted">Valores: {listaDemo.filter(Boolean).join(", ") || "—"}</p>
         </div>
       </Secao>
 

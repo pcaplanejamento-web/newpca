@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
 import { IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { ListaEditavel } from "./ListaEditavel";
 import { Modal } from "./Modal";
 import { ReorderTable } from "./ReorderTable";
 import { SkeletonLinhas } from "./Skeleton";
@@ -16,7 +17,7 @@ type Rep = {
   nome: string;
   ordem: number;
   numeroInteressado: string | null;
-  responsavelDfd: string | null;
+  responsaveis: string[];
 };
 
 export function ReparticoesAdmin() {
@@ -26,7 +27,7 @@ export function ReparticoesAdmin() {
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
   const [numeroInteressado, setNumeroInteressado] = useState("");
-  const [responsavelDfd, setResponsavelDfd] = useState("");
+  const [responsaveis, setResponsaveis] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
 
@@ -58,14 +59,14 @@ export function ReparticoesAdmin() {
     setCodigo("");
     setNome("");
     setNumeroInteressado("");
-    setResponsavelDfd("");
+    setResponsaveis([]);
   }
   function abrirEdicao(r: Rep) {
     setEditando(r);
     setCodigo(r.codigo);
     setNome(r.nome);
     setNumeroInteressado(r.numeroInteressado ?? "");
-    setResponsavelDfd(r.responsavelDfd ?? "");
+    setResponsaveis(r.responsaveis);
   }
 
   async function salvar(e: FormEvent) {
@@ -81,7 +82,7 @@ export function ReparticoesAdmin() {
           codigo,
           nome,
           numeroInteressado: numeroInteressado.trim() || null,
-          responsavelDfd: responsavelDfd.trim() || null,
+          responsaveis: responsaveis.map((s) => s.trim()).filter(Boolean),
         }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
@@ -173,11 +174,13 @@ export function ReparticoesAdmin() {
               ),
           },
           {
-            header: "Responsável (DFDs)",
-            minWidth: 160,
+            header: "Responsáveis (DFDs)",
+            minWidth: 180,
             render: (r) =>
-              r.responsavelDfd ? (
-                <span className="line-clamp-1 text-text-2">{r.responsavelDfd}</span>
+              r.responsaveis.length > 0 ? (
+                <span className="line-clamp-1 text-text-2" title={r.responsaveis.join(", ")}>
+                  {r.responsaveis.join(", ")}
+                </span>
               ) : (
                 <span className="text-faint">—</span>
               ),
@@ -201,12 +204,16 @@ export function ReparticoesAdmin() {
             onChange={(e) => setNumeroInteressado(e.target.value)}
             placeholder="Ex.: 1008171"
           />
-          <TextField
-            label="Responsável por DFDs"
-            value={responsavelDfd}
-            onChange={(e) => setResponsavelDfd(e.target.value)}
-            placeholder="Nome do responsável pelos DFDs"
-          />
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-2">Responsáveis por DFDs</span>
+            <ListaEditavel
+              valores={responsaveis}
+              onChange={setResponsaveis}
+              placeholder="Nome do responsável"
+              itemAria="Responsável"
+              addLabel="Adicionar responsável"
+            />
+          </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
               Cancelar

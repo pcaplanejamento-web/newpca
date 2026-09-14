@@ -20,9 +20,9 @@ export const grupoPatchSchema = grupoCreateSchema.partial();
 export const reparticaoSchema = z.object({
   codigo: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome da repartição.").max(160),
-  // Cadastro do ADM (opcionais): nº do interessado e nome do responsável por DFDs.
+  // Cadastro do ADM (opcionais): nº do interessado e VÁRIOS responsáveis por DFDs.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
-  responsavelDfd: z.string().trim().max(160).optional().nullable(),
+  responsaveis: z.array(z.string().trim().max(160)).max(30).optional().default([]),
 });
 
 export const reordenarSchema = z.object({
