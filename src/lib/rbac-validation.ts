@@ -17,12 +17,26 @@ export const grupoCreateSchema = z.object({
 
 export const grupoPatchSchema = grupoCreateSchema.partial();
 
+const responsavelTemporarioSchema = z.object({
+  nome: z.string().trim().max(160),
+  inicio: z.string().trim().max(10), // "YYYY-MM-DD"
+  fim: z.string().trim().max(10),
+  ato: z.string().trim().max(200).nullable().default(null), // portaria/decreto
+});
+
 export const reparticaoSchema = z.object({
   codigo: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome da repartição.").max(160),
-  // Cadastro do ADM (opcionais): nº do interessado e VÁRIOS responsáveis por DFDs.
+  // Cadastro do ADM (opcionais): nº do interessado e responsáveis por DFDs (1 padrão + N
+  // temporários com período/ato). Durante o período do temporário, ele é o efetivo.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
-  responsaveis: z.array(z.string().trim().max(160)).max(30).optional().default([]),
+  responsaveis: z
+    .object({
+      padrao: z.string().trim().max(160).default(""),
+      temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
+    })
+    .optional()
+    .default({ padrao: "", temporarios: [] }),
 });
 
 export const reordenarSchema = z.object({

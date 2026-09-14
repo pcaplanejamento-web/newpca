@@ -101,12 +101,15 @@ lado, para as colunas caberem sem corte. ✅ O banner do **protocolo gravado** u
 clicar num DFD abre-o **ao lado, à direita** (mestre-detalhe, mesmo componente/comportamento) — a única diferença é
 o cadeado de edição.
 
-### Repartições: número do interessado + responsáveis por DFDs — entregue
-✅ A tela de **Repartições** (`/painel/reparticoes`, admin) agora permite **cadastrar o número do interessado** e
-**vários responsáveis por DFDs** de cada repartição (o campo virou uma **lista** editável — adicionar/remover — com o
-componente `ListaEditavel`). Migração `0017` adicionou `numero_interessado`/`responsavel_dfd` (nullable); os
-responsáveis são guardados como **JSON array** na coluna `responsavel_dfd` (sem migração nova, com parse tolerante ao
-valor antigo).
+### Repartições: número do interessado + responsáveis (padrão + temporários) — entregue
+✅ A tela de **Repartições** (`/painel/reparticoes`, admin) permite **cadastrar o número do interessado** e os
+**responsáveis por DFDs** de cada repartição: **1 responsável padrão** + **vários temporários**, cada temporário com
+**data de início e fim** e, opcionalmente, a **portaria/decreto** que o nomeia. Durante o período de um temporário,
+**ele assume no lugar do padrão** (o padrão fica **em cinza**); fora do período, o temporário fica **em cinza** e o
+padrão volta a valer — com **estados** visuais (Agendado/Vigente/Encerrado). Migração `0017` já havia adicionado
+`numero_interessado`/`responsavel_dfd`; os responsáveis são guardados como **JSON** na coluna `responsavel_dfd` (sem
+migração nova, com parse tolerante aos formatos anteriores). Componente `ResponsaveisEditor` + lógica pura em
+`reparticao-responsaveis.ts`.
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.

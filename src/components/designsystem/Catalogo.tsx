@@ -42,7 +42,8 @@ import {
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { Dropzone } from "@/components/Dropzone";
-import { ListaEditavel } from "@/components/ListaEditavel";
+import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
+import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
@@ -329,7 +330,10 @@ export function Catalogo() {
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
   const [dzFile, setDzFile] = useState<string | null>(null);
-  const [listaDemo, setListaDemo] = useState<string[]>(["Ana Souza", "Carlos Lima"]);
+  const [respDemo, setRespDemo] = useState<Responsaveis>({
+    padrao: "Ana Souza",
+    temporarios: [{ nome: "Carlos Lima", inicio: "2026-01-01", fim: "2026-12-31", ato: "Portaria 123/2026" }],
+  });
   const [pag, setPag] = useState(2);
   const [repsOrdem, setRepsOrdem] = useState([
     { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
@@ -680,16 +684,9 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Lista editável (vários valores: adicionar/remover)">
-        <div className="max-w-md">
-          <ListaEditavel
-            valores={listaDemo}
-            onChange={setListaDemo}
-            placeholder="Nome"
-            itemAria="Nome"
-            addLabel="Adicionar nome"
-          />
-          <p className="mt-2 text-[12px] text-muted">Valores: {listaDemo.filter(Boolean).join(", ") || "—"}</p>
+      <Secao titulo="Responsáveis (1 padrão + N temporários com período/estado)">
+        <div className="max-w-lg">
+          <ResponsaveisEditor valor={respDemo} onChange={setRespDemo} />
         </div>
       </Secao>
 

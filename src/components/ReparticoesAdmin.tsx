@@ -4,11 +4,17 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import {
+  hojeISO,
+  RESPONSAVEIS_VAZIO,
+  type Responsaveis,
+  responsavelVigente,
+} from "@/lib/reparticao-responsaveis";
 import { TextField } from "./Field";
 import { IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
-import { ListaEditavel } from "./ListaEditavel";
 import { Modal } from "./Modal";
 import { ReorderTable } from "./ReorderTable";
+import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { SkeletonLinhas } from "./Skeleton";
 
 type Rep = {
@@ -17,7 +23,7 @@ type Rep = {
   nome: string;
   ordem: number;
   numeroInteressado: string | null;
-  responsaveis: string[];
+  responsaveis: Responsaveis;
 };
 
 export function ReparticoesAdmin() {
@@ -27,9 +33,10 @@ export function ReparticoesAdmin() {
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
   const [numeroInteressado, setNumeroInteressado] = useState("");
-  const [responsaveis, setResponsaveis] = useState<string[]>([]);
+  const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
+  const hoje = hojeISO();
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -59,7 +66,7 @@ export function ReparticoesAdmin() {
     setCodigo("");
     setNome("");
     setNumeroInteressado("");
-    setResponsaveis([]);
+    setResponsaveis(RESPONSAVEIS_VAZIO);
   }
   function abrirEdicao(r: Rep) {
     setEditando(r);
@@ -82,7 +89,7 @@ export function ReparticoesAdmin() {
           codigo,
           nome,
           numeroInteressado: numeroInteressado.trim() || null,
-          responsaveis: responsaveis.map((s) => s.trim()).filter(Boolean),
+          responsaveis,
         }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
@@ -174,16 +181,22 @@ export function ReparticoesAdmin() {
               ),
           },
           {
-            header: "Responsáveis (DFDs)",
+            header: "Responsável (DFDs)",
             minWidth: 180,
-            render: (r) =>
-              r.responsaveis.length > 0 ? (
-                <span className="line-clamp-1 text-text-2" title={r.responsaveis.join(", ")}>
-                  {r.responsaveis.join(", ")}
+            render: (r) => {
+              const vig = responsavelVigente(r.responsaveis, hoje);
+              if (!vig) return <span className="text-faint">—</span>;
+              return (
+                <span className="line-clamp-1 text-text-2" title={vig.nome}>
+                  {vig.nome}
+                  {vig.tipo === "temporario" && (
+                    <span className="ml-1.5 text-[10px] font-semibold uppercase" style={{ color: "var(--info)" }}>
+                      temp.
+                    </span>
+                  )}
                 </span>
-              ) : (
-                <span className="text-faint">—</span>
-              ),
+              );
+            },
           },
         ]}
         acoes={(r) => (
@@ -205,14 +218,8 @@ export function ReparticoesAdmin() {
             placeholder="Ex.: 1008171"
           />
           <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-text-2">Responsáveis por DFDs</span>
-            <ListaEditavel
-              valores={responsaveis}
-              onChange={setResponsaveis}
-              placeholder="Nome do responsável"
-              itemAria="Responsável"
-              addLabel="Adicionar responsável"
-            />
+            <span className="mb-2 block text-[13px] font-semibold text-text">Responsáveis por DFDs</span>
+            <ResponsaveisEditor valor={responsaveis} onChange={setResponsaveis} />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
