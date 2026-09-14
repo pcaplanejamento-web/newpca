@@ -67,8 +67,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
   `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
   exige grupo ativo.
-- **Repartições** (`reparticoes`: codigo+nome+ordem): lista global **reordenável** (tabela com arrasto,
-  componente `ReorderTable` — Pointer Events, mouse+toque). Repartição ativa por cookie
+- **Repartições** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**responsavel_dfd**, cadastro do ADM,
+  nullable — migração `0017`): lista global **reordenável** (tabela com arrasto,
+  componente `ReorderTable` — Pointer Events, mouse+toque). CRUD em `ReparticoesAdmin` (`reparticaoSchema`).
+  Repartição ativa por cookie
   `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
   `/api/reparticoes/ativo`.
 - **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e

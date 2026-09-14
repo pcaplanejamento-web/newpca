@@ -101,6 +101,11 @@ lado, para as colunas caberem sem corte. ✅ O banner do **protocolo gravado** u
 clicar num DFD abre-o **ao lado, à direita** (mestre-detalhe, mesmo componente/comportamento) — a única diferença é
 o cadeado de edição.
 
+### Repartições: número do interessado + responsável por DFDs — entregue
+✅ A tela de **Repartições** (`/painel/reparticoes`, admin) agora permite **cadastrar o número do interessado** e o
+**nome do responsável por DFDs** de cada repartição (campos opcionais no formulário e colunas na tabela). Migração
+`0017` adiciona as colunas `numero_interessado`/`responsavel_dfd` (nullable — o uso atual não muda).
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 
