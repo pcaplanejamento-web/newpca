@@ -1,7 +1,7 @@
 "use client";
 
 import { brl, dataBR, num } from "@/lib/format";
-import type { Assinatura } from "@/lib/parse-dfd-comum";
+import { type Assinatura, buracosSequencia } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { type Column, DataTable } from "./DataTable";
 import { IconFile, IconShield } from "./icons";
@@ -104,6 +104,8 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
   // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4).
   const apoioItens = dfd.secoes.find((s) => s.numero === 4)?.texto ?? "";
   const secoesGerais = dfd.secoes.filter((s) => s.numero !== 4);
+  // Buracos na sequência de ITEM (normal: itens removidos) — só APONTA, não é erro.
+  const buracos = buracosSequencia(dfd.itens);
 
   return (
     <div className="space-y-5">
@@ -167,6 +169,13 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
               {apoioItens}
             </p>
           </div>
+        )}
+        {buracos.length > 0 && (
+          <p className="mt-2 text-xs text-muted">
+            Sequência interna com números pulados (normal — itens removidos/fracassados): faltam nº{" "}
+            {buracos.slice(0, 40).join(", ")}
+            {buracos.length > 40 ? "…" : ""}.
+          </p>
         )}
       </section>
 

@@ -182,35 +182,23 @@ export function extrairAssinaturas(linhas: string[]): Assinatura[] {
 }
 
 /**
- * GARANTIA anti-perda de itens. **A numeração da coluna ITEM PODE ter buracos
- * legítimos** — itens removidos/fracassados deixam o número pulado (ex.: 8, 10,
- * 11…) e os CÓDIGOS seguem sequenciais; isso NÃO é perda. A leitura multipágina já
- * varre TODAS as páginas do DFD (sem `break` que trunque), então todo item presente
- * é lido. O sinal de perda REAL é a **corrupção**: quando o número de um item não é
- * lido, o código dele "gruda" no item vizinho, formando um código anormalmente
- * longo (dois códigos juntos) ou com repetição/duplicidade de itens. Só isso lança
- * erro (para nunca gravar dado trocado). Puro/testável.
+ * Números FALTANDO na sequência interna dos itens (de `min` a `max`). **Buracos são
+ * NORMAIS** — itens removidos/fracassados pulam o número (ex.: 8, 10, 11…) e os
+ * códigos seguem sequenciais; isso **NÃO é perda nem erro**, só um apontamento
+ * informativo. A leitura multipágina já varre TODAS as páginas do DFD (sem `break`
+ * que trunque), então todo item presente é lido. Puro/testável.
  */
-export function reconciliarItens(itens: DfdItemParseado[]): void {
-  // Código com muitos dígitos = 2 códigos grudados (item sem número no vizinho).
-  const corrompido = itens.find((i) => i.codigo != null && i.codigo.replace(/\D/g, "").length > 14);
-  if (corrompido) {
-    throw new Error(
-      `Leitura suspeita da tabela de itens (código anormal no item ${corrompido.item ?? "?"}: ` +
-        `"${corrompido.codigo}") — provável item sem número no PDF grudado no vizinho. O DFD NÃO ` +
-        "foi importado para evitar dado trocado.",
-    );
-  }
-  // Número de item repetido = a linha de um item foi lida em dobro (casamento errado).
+export function buracosSequencia(itens: DfdItemParseado[]): number[] {
   const nums = itens
     .map((i) => i.item)
     .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
-  if (new Set(nums).size !== nums.length) {
-    throw new Error(
-      "Leitura suspeita da tabela de itens (número de item repetido) — o DFD NÃO foi importado " +
-        "para evitar dado trocado.",
-    );
-  }
+  if (nums.length < 2) return [];
+  const uniq = new Set(nums);
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const out: number[] = [];
+  for (let i = min; i <= max; i++) if (!uniq.has(i)) out.push(i);
+  return out;
 }
 
 export type Cabecalho = {

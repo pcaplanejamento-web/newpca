@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
 import { type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
@@ -201,22 +202,21 @@ describe("parse-dfd-pdf-core", () => {
     assert.ok(d.secoes.find((s) => s.numero === 5));
   });
 
-  it("numeração com BURACO legítimo (item removido/fracassado) importa normalmente", () => {
-    // Remove TODO o item 4 (número + código + descrição + valores) → 1,2,3,5,6, como
-    // um item fracassado que some da tabela. NÃO é perda → não deve lançar.
+  it("numeração com BURACO no sequencial (item removido) importa normal e só APONTA o buraco", () => {
+    // Remove TODO o item 4 → 1,2,3,5,6, como um item fracassado que some da tabela.
+    // Buracos no sequencial são NORMAIS → NÃO bloqueia nem lança; só é apontado.
     const semItem4 = dfdMultipagina().filter((it) => !(it.page === 2 && it.y >= 356 && it.y <= 366));
     const d = parseDfdFromPdfItems(semItem4, "multi.pdf");
     assert.deepEqual(
       d.itens.map((i) => i.item),
       [1, 2, 3, 5, 6],
     );
+    assert.deepEqual(buracosSequencia(d.itens), [4]); // aponta o nº pulado
   });
 
-  it("RECONCILIAÇÃO: lança erro quando o código de um item GRUDA no vizinho (item sem número)", () => {
-    // Remove só o NÚMERO do item 4 (mantém código/descrição) → o código do item 4
-    // gruda no item 3 (código anormalmente longo) = perda real → deve lançar.
-    const semNum4 = dfdMultipagina().filter((it) => !(it.page === 2 && it.str === "4" && it.x < 70));
-    assert.throws(() => parseDfdFromPdfItems(semNum4, "multi.pdf"), /Leitura suspeita|código anormal/i);
+  it("buracosSequencia: sequência completa não tem buraco", () => {
+    const d = parseDfdFromPdfItems(dfdMultipagina(), "multi.pdf");
+    assert.deepEqual(buracosSequencia(d.itens), []);
   });
 
   it("lança erro claro quando falta o Número DFD", () => {

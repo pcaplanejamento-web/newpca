@@ -6,7 +6,6 @@ import {
   ehRuido,
   extrairCabecalho,
   norm,
-  reconciliarItens,
   TITULO_SECAO_ITENS,
   txt,
 } from "./parse-dfd-comum.ts";
@@ -147,9 +146,6 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
       "Não encontrei itens na Seção 4 (ITEM / CÓDIGO / DESCRIÇÃO / UNIDADE / QUANTIDADE).",
     );
   }
-  // GARANTIA anti-perda: numeração dos itens deve ser contígua 1..N.
-  reconciliarItens(itens);
-
   const secoes = coletarSecoes(leadings);
   if (apoioSecao4) secoes.push({ numero: 4, titulo: TITULO_SECAO_ITENS, texto: apoioSecao4 });
   secoes.sort((a, b) => a.numero - b.numero);

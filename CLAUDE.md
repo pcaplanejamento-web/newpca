@@ -129,18 +129,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
   build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**, atribuindo cada trecho
   ao item de `y` mais próximo e **rejuntando o código quebrado em 2 linhas**. Ambos → mesmo `DfdParseado`.
-- **Tabelas MULTIPÁGINA (crítico) + garantia anti-perda:** uma tabela de itens pode ocupar **dezenas de páginas**
-  (ex.: 692 itens em 29 págs). O `parse-dfd-pdf-core` é **100% ciente de página**: o cabeçalho do documento e o de
-  coluna **se repetem por página** e são **pulados** (`ehRuido` + detector de cabeçalho), nunca encerram a tabela;
-  `y` reinicia por página → itens/valores são casados **por (página,y)**; a ordem é `(página, y desc)`. O texto de
+- **Tabelas MULTIPÁGINA (crítico) + reconhecimento CIRÚRGICO dos componentes:** uma tabela de itens pode ocupar
+  **dezenas de páginas** e um único item pode ter uma **descrição enorme que atravessa páginas**. O `parse-dfd-pdf-core`
+  é **100% ciente de página**: (a) em cada página, tudo ACIMA do cabeçalho de coluna repetido é o **cabeçalho do
+  documento** (ESTADO DE GOIÁS / órgão / DOCUMENTO… / Número DFD / Tipo DFD) e é **pulado** (`viuColuna` por página) —
+  senão o nome do órgão grudaria na descrição de um item; (b) só uma seção `N - …` **à margem esquerda** encerra a
+  tabela (um "2-52" no meio de uma descrição NÃO é seção); (c) uma descrição **acima de todos os itens da página** é
+  continuação do **último item da página anterior** (item que "virou a página"). O **`coletarSecoes` recebe só as
+  linhas FORA da tabela** (`[hi, tableEndIdx)` removido) — senão "…IEC 60601-**2-52**, SISTEMA DE GESTÃO…" viraria uma
+  falsa "seção 2 - 52". `y` reinicia por página → itens/valores casados **por (página,y)**; ordem `(página, y desc)`. O texto de
   **apoio** abaixo da tabela (parágrafo antes da Seção 5) é capturado e vira uma **seção 4** (exibida abaixo da
-  tabela no `DfdView`). **A numeração da coluna ITEM PODE ter buracos legítimos** (itens removidos/fracassados
-  pulam o número — ex.: 8, 10, 11… — com os CÓDIGOS ainda sequenciais); isso **não é perda**. Um dígito à DIREITA
-  do início do texto da descrição (`descStartX` = menor `x` de texto na zona) é conteúdo da descrição (ex.: nº de
-  peça "40300050630"), **não código** — senão poluiria o código. **`reconciliarItens`** só bloqueia **perda REAL**:
-  código anormalmente longo (2 códigos grudados = item sem número no vizinho) ou número de item repetido. Validado
-  contra um protocolo real de **581 páginas / 104 DFDs** (harness pdf.js): **104/104 importam** todos os itens.
-  Testes: fixture multipágina real, buraco legítimo (importa) e código grudado (lança).
+  tabela no `DfdView`). **A numeração da coluna ITEM PODE ter buracos** (itens removidos/fracassados pulam o número
+  — ex.: 8, 10, 11… — com os CÓDIGOS ainda sequenciais): isso é **NORMAL, não bloqueia nem é erro**. `buracosSequencia`
+  (puro) só **aponta** os números pulados e o `DfdView` mostra uma nota informativa (muted) abaixo da tabela. Um
+  dígito à DIREITA do início do texto da descrição (`descStartX` = menor `x` de texto na zona) é conteúdo da
+  descrição (ex.: nº de peça "40300050630"), **não código** — senão poluiria o código. Validado contra um protocolo
+  real de **581 páginas / 104 DFDs** (harness pdf.js): **104/104 importam** todos os itens. Testes: fixture
+  multipágina real, buraco no sequencial (importa + aponta), sequência completa (sem nota).
 - **Tela própria de DFD** (`/painel/dfds` = `DfdsView`, aba **`dfd`**) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,

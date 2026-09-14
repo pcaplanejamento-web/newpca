@@ -7,7 +7,6 @@ import {
   extrairAssinaturas,
   extrairCabecalho,
   norm,
-  reconciliarItens,
   TITULO_SECAO_ITENS,
 } from "./parse-dfd-comum.ts";
 
@@ -114,6 +113,9 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
   const itens: DfdItemParseado[] = [];
   let valorTotalGrand: number | null = null;
   let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
+  // Índice da linha onde a tabela ENCERRA (na próxima seção "5 - …" à margem
+  // esquerda) — usado para dar ao `coletarSecoes` só as linhas FORA da tabela.
+  let tableEndIdx = linhas.length;
 
   if (hi >= 0) {
     // Âncoras (x) de cada coluna — "VALOR UNITÁRIO" pode vir só como "UNITÁRIO"
@@ -184,6 +186,10 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     const itemNums: { page: number; y: number; n: number }[] = [];
     const apoioLinhas: string[] = [];
     let fimTabela = false; // após a última linha de item vem o texto de apoio
+    // Páginas cujo CABEÇALHO DE COLUNA já apareceu — acima dele (por página) fica o
+    // CABEÇALHO DO DOCUMENTO repetido (ESTADO DE GOIÁS / <órgão> / DOCUMENTO… / Número
+    // DFD / Tipo DFD), que deve ser pulado para não grudar na descrição de um item.
+    const viuColuna = new Set<number>([linhas[hi].page]);
 
     // Varre TODAS as páginas do DFD (a tabela pode ocupar dezenas de páginas). O
     // cabeçalho do documento/coluna e o rodapé se REPETEM por página e são pulados
@@ -194,9 +200,19 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       const minx = Math.min(...l.items.map((i) => i.x));
       const temNum = l.items.some(ehNumItem);
 
-      if (ehSecaoHeading(joined)) break; // "5 - ..." → fim da Seção 4
-      if (ehRuido(joined)) continue; // cabeçalho do documento / rodapé (Centi/Emitido/Página)
-      if (ehCabecalhoColuna(joined)) continue; // cabeçalho de coluna repetido por página
+      // Só uma seção "N - …" À MARGEM ESQUERDA encerra a tabela; um "2-52" no MEIO de
+      // uma descrição (indentado) NÃO é seção.
+      if (minx < itemBound && ehSecaoHeading(joined)) {
+        tableEndIdx = k;
+        break;
+      }
+      if (ehCabecalhoColuna(joined)) {
+        viuColuna.add(l.page);
+        continue; // cabeçalho de coluna repetido por página
+      }
+      // Antes do cabeçalho de coluna DESTA página = cabeçalho do documento repetido → pula.
+      if (!viuColuna.has(l.page)) continue;
+      if (ehRuido(joined)) continue; // rodapé (Centi/Emitido/Página) e afins
       // Linha do TOTAL GERAL ("VALOR TOTAL" + número) — captura, mas NÃO encerra.
       if (/VALOR TOTAL/.test(joined) && !temNum) {
         const v = l.items.find((i) => colOf(i.x, i.str) === "valorTotal" && /\d/.test(i.str));
@@ -238,19 +254,31 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     }));
 
     // Índice de buckets POR PÁGINA (ys já em DESC dentro da página) → casa cada
-    // fragmento ao item da MESMA página (o `y` reinicia entre páginas).
-    const idxPorPagina = new Map<number, { ys: number[]; bi: number[] }>();
+    // fragmento ao item da MESMA página (o `y` reinicia entre páginas). Também guarda
+    // o topo (maior `y` = 1º item) e o 1º índice de cada página para tratar
+    // DESCRIÇÕES QUE ATRAVESSAM a página (continuam no topo da página seguinte).
+    const idxPorPagina = new Map<number, { ys: number[]; bi: number[]; topo: number; first: number }>();
     buckets.forEach((b, i) => {
-      const g = idxPorPagina.get(b.page) ?? { ys: [], bi: [] };
-      g.ys.push(b.y);
-      g.bi.push(i);
-      idxPorPagina.set(b.page, g);
+      const g = idxPorPagina.get(b.page);
+      if (!g) idxPorPagina.set(b.page, { ys: [b.y], bi: [i], topo: b.y, first: i });
+      else {
+        g.ys.push(b.y);
+        g.bi.push(i);
+        if (b.y > g.topo) g.topo = b.y;
+      }
     });
     for (const f of bodyFrags) {
       const g = idxPorPagina.get(f.page);
-      if (!g || g.ys.length === 0) continue;
-      const b = buckets[g.bi[nearestByY(g.ys, f.y)]];
       const c = colOf(f.x, f.str);
+      let b: Bucket | undefined;
+      if (c === "descricao" && g && f.y > g.topo && g.first > 0) {
+        // Descrição ACIMA de todos os itens da página = continuação do ÚLTIMO item da
+        // página anterior (texto do item que "virou a página").
+        b = buckets[g.first - 1];
+      } else if (g && g.ys.length > 0) {
+        b = buckets[g.bi[nearestByY(g.ys, f.y)]];
+      }
+      if (!b) continue;
       if (c === "codigo") b.codigo.push(f);
       else if (c === "descricao") b.descricao.push(f);
       else if (c === "unidade") {
@@ -293,13 +321,12 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       "Não encontrei itens na Seção 4 do PDF (ITEM / CÓDIGO / DESCRIÇÃO / UNIDADE / QUANTIDADE).",
     );
   }
-  // GARANTIA anti-perda: se a numeração dos itens não for contígua 1..N, a leitura
-  // ficou incompleta (ex.: tabela multipágina truncada) → NÃO grava pela metade.
-  reconciliarItens(itens);
-
-  // Seções: `coletarSecoes` já entrega as demais (sem a 4); acrescenta o TEXTO DE
-  // APOIO da Seção 4 (parágrafo abaixo da tabela) como uma seção 4, na ordem.
-  const secoes = coletarSecoes(lineTexts);
+  // Seções: coleta APENAS as linhas FORA da tabela de itens ([hi, tableEndIdx)) —
+  // senão o texto de um item (ex.: "…IEC 60601-2-52, SISTEMA DE GESTÃO…") viraria uma
+  // "seção 2 - 52…". As seções 1/2/3 ficam antes do cabeçalho da tabela; 5/6/7/8/9
+  // depois do fim da tabela. O apoio da Seção 4 (abaixo da tabela) é acrescentado.
+  const linhasFora = hi >= 0 ? [...lineTexts.slice(0, hi), ...lineTexts.slice(tableEndIdx)] : lineTexts;
+  const secoes = coletarSecoes(linhasFora);
   if (apoioSecao4) secoes.push({ numero: 4, titulo: TITULO_SECAO_ITENS, texto: apoioSecao4 });
   secoes.sort((a, b) => a.numero - b.numero);
 
