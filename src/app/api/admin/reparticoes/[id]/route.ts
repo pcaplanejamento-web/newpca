@@ -16,7 +16,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in corpo) return corpo.resp;
   await getDb()
     .update(reparticoes)
-    .set({ codigo: corpo.data.codigo, nome: corpo.data.nome, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .set({
+      codigo: corpo.data.codigo,
+      nome: corpo.data.nome,
+      numeroInteressado: corpo.data.numeroInteressado ?? null,
+      responsavelDfd: corpo.data.responsavelDfd ?? null,
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+    })
     .where(eq(reparticoes.id, id));
   return ok();
 }

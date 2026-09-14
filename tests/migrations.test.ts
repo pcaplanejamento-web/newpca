@@ -132,6 +132,12 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(idx.includes("dfds_protocolo_idx"), "índice dfds_protocolo_idx ausente");
   });
 
+  it("0017 adiciona numero_interessado e responsavel_dfd em reparticoes", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('reparticoes')");
+    assert.ok(cols.includes("numero_interessado"), "coluna numero_interessado ausente");
+    assert.ok(cols.includes("responsavel_dfd"), "coluna responsavel_dfd ausente");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

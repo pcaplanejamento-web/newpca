@@ -226,6 +226,8 @@ export const reparticoes = sqliteTable(
     codigo: text("codigo").notNull(),
     nome: text("nome").notNull(),
     ordem: integer("ordem").notNull().default(0),
+    numeroInteressado: text("numero_interessado"), // nº do interessado (cadastro do ADM)
+    responsavelDfd: text("responsavel_dfd"), // nome do responsável por DFDs
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

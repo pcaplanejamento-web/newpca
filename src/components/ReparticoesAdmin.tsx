@@ -10,7 +10,14 @@ import { Modal } from "./Modal";
 import { ReorderTable } from "./ReorderTable";
 import { SkeletonLinhas } from "./Skeleton";
 
-type Rep = { id: number; codigo: string; nome: string; ordem: number };
+type Rep = {
+  id: number;
+  codigo: string;
+  nome: string;
+  ordem: number;
+  numeroInteressado: string | null;
+  responsavelDfd: string | null;
+};
 
 export function ReparticoesAdmin() {
   const [lista, setLista] = useState<Rep[] | null>(null);
@@ -18,6 +25,8 @@ export function ReparticoesAdmin() {
   const [editando, setEditando] = useState<Rep | "novo" | null>(null);
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
+  const [numeroInteressado, setNumeroInteressado] = useState("");
+  const [responsavelDfd, setResponsavelDfd] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
 
@@ -48,11 +57,15 @@ export function ReparticoesAdmin() {
     setEditando("novo");
     setCodigo("");
     setNome("");
+    setNumeroInteressado("");
+    setResponsavelDfd("");
   }
   function abrirEdicao(r: Rep) {
     setEditando(r);
     setCodigo(r.codigo);
     setNome(r.nome);
+    setNumeroInteressado(r.numeroInteressado ?? "");
+    setResponsavelDfd(r.responsavelDfd ?? "");
   }
 
   async function salvar(e: FormEvent) {
@@ -64,7 +77,12 @@ export function ReparticoesAdmin() {
       const r = await fetch(novo ? "/api/admin/reparticoes" : `/api/admin/reparticoes/${(editando as Rep).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo, nome }),
+        body: JSON.stringify({
+          codigo,
+          nome,
+          numeroInteressado: numeroInteressado.trim() || null,
+          responsavelDfd: responsavelDfd.trim() || null,
+        }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -132,7 +150,7 @@ export function ReparticoesAdmin() {
         items={lista}
         getId={(r) => r.id}
         onReorder={(ids) => reordenar(ids as number[])}
-        minWidth={560}
+        minWidth={820}
         dica="Arraste as linhas para reordenar. A nova ordem é salva automaticamente."
         preview={(r) => (
           <>
@@ -143,7 +161,27 @@ export function ReparticoesAdmin() {
         columns={[
           { header: "#", minWidth: 40, render: (_r, i) => <span className="tabular-nums text-faint">{i + 1}</span> },
           { header: "Código", minWidth: 100, render: (r) => <Badge tone="violet">{r.codigo}</Badge> },
-          { header: "Nome da repartição", minWidth: 260, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
+          { header: "Nome da repartição", minWidth: 240, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
+          {
+            header: "Nº interessado",
+            minWidth: 120,
+            render: (r) =>
+              r.numeroInteressado ? (
+                <span className="font-mono text-[12px] text-text-2">{r.numeroInteressado}</span>
+              ) : (
+                <span className="text-faint">—</span>
+              ),
+          },
+          {
+            header: "Responsável (DFDs)",
+            minWidth: 160,
+            render: (r) =>
+              r.responsavelDfd ? (
+                <span className="line-clamp-1 text-text-2">{r.responsavelDfd}</span>
+              ) : (
+                <span className="text-faint">—</span>
+              ),
+          },
         ]}
         acoes={(r) => (
           <div className="flex justify-end gap-1">
@@ -157,6 +195,18 @@ export function ReparticoesAdmin() {
         <form onSubmit={salvar} className="space-y-4">
           <TextField label="Sigla (código)" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ex.: AMAE" required />
           <TextField label="Nome da repartição" value={nome} onChange={(e) => setNome(e.target.value)} required />
+          <TextField
+            label="Número do interessado"
+            value={numeroInteressado}
+            onChange={(e) => setNumeroInteressado(e.target.value)}
+            placeholder="Ex.: 1008171"
+          />
+          <TextField
+            label="Responsável por DFDs"
+            value={responsavelDfd}
+            onChange={(e) => setResponsavelDfd(e.target.value)}
+            placeholder="Nome do responsável pelos DFDs"
+          />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
               Cancelar
