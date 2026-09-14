@@ -155,6 +155,16 @@ a Seção 5 é **um OU outro** — uma **data** (`MÊS/AAAA`) **ou** recorrente 
 vira `ANUAL/AAAA`). Reconhece as várias escritas (`ANUAL(MENTE)`, `MENSAL(MENTE)`, `AO LONGO DO ANO`…) e **regulariza**
 a que não estiver padronizada; o editor (mês + ano + `Anual`) deixa o usuário controlar sem bugs.
 
+### Protocolo: capa IMUTÁVEL + trava por valor zerado/divergente — entregue
+✅ **Os dados da capa não podem ser alterados em nenhum tempo:** no preview de PDF os campos da capa ficam **somente
+leitura** (`disabled`/`readOnly`, via `origemPdf`) e no protocolo já gravado (`ProtocoloView`) são sempre read-only;
+só a **repartição** (roteamento/escopo — não é dado da capa) continua editável (seletor obrigatório no import, cadeado
+no gravado). O servidor reforça: `editarProtocoloSchema`/`atualizarProtocolo` só aceitam **repartição** (a capa é
+imutável via API também). O **"criar manual" (sem PDF)** segue editável (o usuário está criando a capa, não alterando
+uma lida). **Não protocola** com o **Valor da capa zerado/nulo** OU **diferente da somatória** dos valores dos DFDs —
+divergência **trava** e o usuário **substitui** a capa pela somatória para liberar (a conciliação acontece uma única
+vez, na importação, antes de gravar).
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

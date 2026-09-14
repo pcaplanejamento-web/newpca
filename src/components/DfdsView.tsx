@@ -166,15 +166,8 @@ export function DfdsView({
       if (!res.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
       const p = j.protocolo;
       setProtoView(p);
-      setProtoEdit({
-        data: p.data ?? "",
-        interessado: p.interessado ?? "",
-        documento: p.documento ?? "",
-        assunto: p.assunto ?? "",
-        observacao: p.observacao ?? "",
-        reparticaoId: p.reparticaoId,
-        valorCapa: p.valorCapa ?? null,
-      });
+      // Só a repartição é editável — os dados da capa são imutáveis.
+      setProtoEdit({ reparticaoId: p.reparticaoId });
       setProtoTrancado(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
@@ -207,15 +200,8 @@ export function DfdsView({
       const res = await fetch(`/api/protocolo/${protoView.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          data: protoEdit.data || null,
-          interessado: protoEdit.interessado || null,
-          documento: protoEdit.documento || null,
-          assunto: protoEdit.assunto || null,
-          observacao: protoEdit.observacao || null,
-          reparticaoId: protoEdit.reparticaoId,
-          valorCapa: protoEdit.valorCapa,
-        }),
+        // Só a repartição — os dados da capa são imutáveis (o servidor também recusa).
+        body: JSON.stringify({ reparticaoId: protoEdit.reparticaoId }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");

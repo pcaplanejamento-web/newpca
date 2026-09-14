@@ -191,7 +191,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com a `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro**
   por `numero` (não sobrescreve DFD de repartição inacessível). O `PATCH /api/dfd/[id]` (`editarDfdSchema`) vincula a
   protocolo E/OU edita **repartição/seções** (não move p/ repartição inacessível); o `PATCH /api/protocolo/[id]`
-  (`editarProtocoloSchema`) edita a **capa** (sem `numero`). Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
+  (`editarProtocoloSchema`) edita **SÓ a repartição** — os **dados da capa são IMUTÁVEIS** (nunca editáveis; o schema
+  não aceita alterá-los). Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
   Drizzle parametriza (sem SQL injection).
 - Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
@@ -215,12 +216,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`animate-fade-in-up`). Analisa/normaliza
   em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
   sobreviverem** ao envio; `protocolar` usa a cópia do cache e só re-parseia o que faltou. `ProtocoloView` read-only,
-  catalogado). **Conferência do valor da capa (regras 3/4):** o preview mostra TODOS os dados da capa igual ao
-  gravado (Id do processo, CPF/CNPJ, **Valor da capa**, Local) + **mini banners** (`StatMini`) de total de DFDs +
-  **somatória dos valores dos DFDs** (valor do DFD = soma dos itens, `valorTotal`). O Valor da capa é **conferido
-  contra a somatória** (`valoresBatem`, tolerância 1 centavo): divergência **trava a protocolação** e o usuário pode
-  **substituir** a capa pela somatória (um clique) para liberar. `ProtocoloView` faz a mesma conferência (aponta e,
-  destravado, substitui). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
+  catalogado). **Capa IMUTÁVEL + conferência do valor:** os **dados da capa não são editáveis em nenhum tempo** —
+  no preview de PDF os campos ficam **`disabled/readOnly`** (`origemPdf`), e no `ProtocoloView` gravado são sempre
+  read-only; só a **repartição** (roteamento, não é dado da capa) permanece editável (seletor obrigatório no import,
+  cadeado no gravado). Exceção: o **Valor da capa** é lido só-leitura e **conciliado** uma única vez na importação. O
+  preview mostra TODOS os dados da capa igual ao gravado (Id, CPF/CNPJ, **Valor da capa**, Local) + **mini banners**
+  (`StatMini`) de total de DFDs + **somatória dos valores dos DFDs** (valor do DFD = soma dos itens, `valorTotal`).
+  **NÃO protocola** com o Valor da capa **zerado/nulo** OU **diferente** da somatória (`valoresBatem`, tolerância 1
+  centavo) — divergência **trava** e o usuário **substitui** a capa pela somatória (um clique) para liberar.
+  `ProtocoloView` só **aponta** a divergência (não substitui — capa imutável). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
   "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
   Sem nova aba.
 - **Importação por botão único + lançador (`Dropzone`):** cada tela de importação (Protocolos, DFD, Planilha PCA) tem
@@ -239,7 +243,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
   campos ficam editáveis e um **"Salvar alterações"** grava **direto no D1** (`PATCH /api/dfd/[id]` edita repartição/
-  seções via `atualizarDfdCampos`; `PATCH /api/protocolo/[id]` edita a capa via `atualizarProtocolo`) e o
+  seções via `atualizarDfdCampos`; `PATCH /api/protocolo/[id]` edita **só a repartição** via `atualizarProtocolo` — a
+  capa é imutável) e o
   `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
   toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
 - **DFD ao lado do protocolo gravado (mesma animação da importação):** o banner do protocolo gravado é

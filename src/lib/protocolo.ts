@@ -135,27 +135,16 @@ export async function iniciarProtocolo(
 }
 
 /**
- * Edita um protocolo JÁ GRAVADO (banner destravado). Não mexe no `numero` (chave do
- * processo) nem nos DFDs. Grava direto no D1 (`atualizadoEm` renovado).
+ * Edita um protocolo JÁ GRAVADO (banner destravado). Os DADOS DA CAPA são IMUTÁVEIS
+ * — só a **repartição** (roteamento/escopo) muda. Grava direto no D1 (`atualizadoEm`
+ * renovado).
  */
 export async function atualizarProtocolo(
   id: number,
-  campos: Partial<{
-    idExterno: string | null;
-    data: string | null;
-    interessado: string | null;
-    documento: string | null;
-    assunto: string | null;
-    observacao: string | null;
-    valorCapa: number | null;
-    reparticaoId: number | null;
-    localReparticao: string | null;
-  }>,
+  campos: { reparticaoId?: number | null },
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
-  for (const [k, v] of Object.entries(campos)) {
-    if (v !== undefined) set[k] = v;
-  }
+  if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
   await getDb().update(dfdProtocolos).set(set).where(eq(dfdProtocolos.id, id));
 }
 

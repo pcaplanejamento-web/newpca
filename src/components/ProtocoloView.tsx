@@ -2,23 +2,19 @@
 
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
-import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert } from "./icons";
 import { StatMini } from "./StatMini";
 
-/** Campos editáveis do protocolo (banner destravado). */
+/**
+ * Campo editável do protocolo (banner destravado). Os DADOS DA CAPA são IMUTÁVEIS
+ * (nunca editáveis) — só a **repartição** (roteamento/escopo, não é dado da capa)
+ * pode ser ajustada.
+ */
 export type ProtocoloEdicaoValores = {
-  data: string;
-  interessado: string;
-  documento: string;
-  assunto: string;
-  observacao: string;
   reparticaoId: number | null;
-  valorCapa: number | null;
 };
 export type ProtocoloEdicao = {
   trancado: boolean;
@@ -79,10 +75,9 @@ export function ProtocoloView({
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
       : "Sem repartição";
   // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
-  // seus itens). Divergência é apontada; no modo edição dá para substituir a capa
-  // pela somatória (regras 3/4). Em edição usa o valor sendo editado.
-  const valorCapaAtual = editando && edicao ? edicao.valores.valorCapa : protocolo.valorCapa;
-  const capaDivergente = valorCapaAtual != null && !valoresBatem(valorCapaAtual, protocolo.valorTotal);
+  // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
+  // acontece uma única vez, na importação, antes de gravar).
+  const capaDivergente = protocolo.valorCapa != null && !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
 
   const cols: Column<ProtocoloVisualDfd>[] = [
     { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
@@ -129,34 +124,28 @@ export function ProtocoloView({
       </div>
 
       {capaDivergente && (
-        <Callout kind={editando ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
+        <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
           <p className="font-semibold">O valor da capa diverge da somatória dos DFDs</p>
           <p className="mt-1 opacity-90">
-            Valor da capa: {brl(valorCapaAtual)} · Somatória dos DFDs: {brl(protocolo.valorTotal)}.
+            Valor da capa: {brl(protocolo.valorCapa)} · Somatória dos DFDs: {brl(protocolo.valorTotal)}.
           </p>
-          {editando && edicao && (
-            <div className="mt-2">
-              <Button variant="secondary" onClick={() => edicao.onChange({ valorCapa: protocolo.valorTotal })}>
-                Substituir pela somatória ({brl(protocolo.valorTotal)})
-              </Button>
-            </div>
-          )}
         </Callout>
       )}
 
+      {/* Dados da capa — SEMPRE somente leitura (imutáveis). Só a repartição
+          (roteamento) vira um seletor quando o banner está destravado. */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
-        {editando && edicao ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Id do processo" value={protocolo.idExterno ?? ""} disabled readOnly />
-            <TextField label="Valor (capa)" value={valorCapaAtual != null ? brl(valorCapaAtual) : "—"} disabled readOnly />
-            <TextField label="Data/Hora" value={edicao.valores.data} onChange={(e) => edicao.onChange({ data: e.target.value })} />
-            <TextField label="CPF/CNPJ" value={edicao.valores.documento} onChange={(e) => edicao.onChange({ documento: e.target.value })} />
-            <div className="sm:col-span-2">
-              <TextField label="Interessado" value={edicao.valores.interessado} onChange={(e) => edicao.onChange({ interessado: e.target.value })} />
-            </div>
-            <TextField label="Assunto" value={edicao.valores.assunto} onChange={(e) => edicao.onChange({ assunto: e.target.value })} />
-            <TextField label="Observação" value={edicao.valores.observacao} onChange={(e) => edicao.onChange({ observacao: e.target.value })} />
+        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+          <Campo label="Nº do processo" valor={protocolo.numero} />
+          <Campo label="Id do processo" valor={protocolo.idExterno ?? "—"} />
+          <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
+          <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
+          <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
+          <Campo label="Valor (capa)" valor={protocolo.valorCapa != null ? brl(protocolo.valorCapa) : "—"} />
+          <Campo label="Assunto" valor={protocolo.assunto ?? "—"} span />
+          <Campo label="Observação" valor={protocolo.observacao ?? "—"} span />
+          {editando && edicao ? (
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="proto-edit-rep">
                 Repartição
@@ -175,21 +164,11 @@ export function ProtocoloView({
                 ))}
               </select>
             </div>
-          </div>
-        ) : (
-          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-            <Campo label="Nº do processo" valor={protocolo.numero} />
-            <Campo label="Id do processo" valor={protocolo.idExterno ?? "—"} />
-            <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
-            <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
-            <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
-            <Campo label="Valor (capa)" valor={protocolo.valorCapa != null ? brl(protocolo.valorCapa) : "—"} />
-            <Campo label="Assunto" valor={protocolo.assunto ?? "—"} span />
-            <Campo label="Observação" valor={protocolo.observacao ?? "—"} span />
+          ) : (
             <Campo label="Repartição" valor={rep} span />
-            <Campo label="Local (capa)" valor={protocolo.localReparticao ?? "—"} span />
-          </dl>
-        )}
+          )}
+          <Campo label="Local (capa)" valor={protocolo.localReparticao ?? "—"} span />
+        </dl>
       </section>
 
       <section>

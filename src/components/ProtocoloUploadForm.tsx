@@ -68,6 +68,9 @@ export function ProtocoloUploadForm({
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
   const [launcher, setLauncher] = useState(false); // banner lançador (soltar/escolher | criar manual)
+  // Origem PDF → os dados da CAPA são IMUTÁVEIS (só leitura); no "criar manual" (sem
+  // PDF) o usuário digita a capa que está criando.
+  const [origemPdf, setOrigemPdf] = useState(false);
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -135,6 +138,7 @@ export function ProtocoloUploadForm({
   function abrirVazio() {
     limparDoc();
     resetCache();
+    setOrigemPdf(false); // criação manual: capa editável
     setErro(null);
     setRelatorio(null);
     setNumero("");
@@ -187,6 +191,7 @@ export function ProtocoloUploadForm({
       setAssunto(p.assunto ?? "");
       setObservacao(p.observacao ?? "");
       setExtra({ idExterno: p.idExterno, documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
+      setOrigemPdf(true); // capa lida do PDF: imutável (só leitura)
       setIndex(idx);
       setDfdRepIds(autos);
       setAutoRepIds(autos);
@@ -505,8 +510,10 @@ export function ProtocoloUploadForm({
   const somatorioDfds = [...parsed.values()].reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0);
   const itensDfds = [...parsed.values()].reduce((s, d) => s + d.itens.length, 0);
   const conciliavel = temDfds && !analisando && dfdsComErro === 0;
-  // Regra 3: Valor da capa tem de bater com a somatória dos DFDs; divergência trava.
-  const capaDivergente = conciliavel && !valoresBatem(extra.valorCapa, somatorioDfds);
+  // Regra 2: NÃO protocola com o Valor da capa **zerado/nulo** OU **diferente** da
+  // somatória dos valores dos DFDs — divergência trava (substituível pela somatória).
+  const capaZeradaOuNula = extra.valorCapa == null || extra.valorCapa <= 0;
+  const capaDivergente = conciliavel && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
   const podeProtocolar =
     numero.trim().length > 0 &&
     protoRepId != null &&
@@ -767,10 +774,14 @@ export function ProtocoloUploadForm({
           )}
           {capaDivergente && (
             <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
-              <p className="font-semibold">O valor da capa diverge da somatória dos DFDs</p>
+              <p className="font-semibold">
+                {capaZeradaOuNula
+                  ? "O valor da capa está zerado — não é possível protocolar"
+                  : "O valor da capa diverge da somatória dos DFDs"}
+              </p>
               <p className="mt-1 opacity-90">
                 Valor da capa: {extra.valorCapa != null ? brl(extra.valorCapa) : "—"} · Somatória dos DFDs:{" "}
-                {brl(somatorioDfds)}. Substitua o valor da capa para liberar a protocolação.
+                {brl(somatorioDfds)}. Substitua o valor da capa pela somatória para liberar a protocolação.
               </p>
               <div className="mt-2">
                 <Button variant="secondary" onClick={() => setExtra((x) => ({ ...x, valorCapa: somatorioDfds }))}>
@@ -782,15 +793,15 @@ export function ProtocoloUploadForm({
 
           {/* Metadados do protocolo */}
           <section className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Número do processo" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex.: 144756/2026" />
+            <TextField label="Número do processo" value={numero} onChange={(e) => setNumero(e.target.value)} disabled={origemPdf} readOnly={origemPdf} placeholder="Ex.: 144756/2026" />
             <TextField label="Id do processo" value={extra.idExterno ?? ""} disabled readOnly placeholder="—" />
-            <TextField label="Data/Hora" value={data} onChange={(e) => setData(e.target.value)} placeholder="—" />
-            <TextField label="CPF/CNPJ" value={extra.documento ?? ""} onChange={(e) => setExtra((x) => ({ ...x, documento: e.target.value || null }))} placeholder="—" />
+            <TextField label="Data/Hora" value={data} onChange={(e) => setData(e.target.value)} disabled={origemPdf} readOnly={origemPdf} placeholder="—" />
+            <TextField label="CPF/CNPJ" value={extra.documento ?? ""} onChange={(e) => setExtra((x) => ({ ...x, documento: e.target.value || null }))} disabled={origemPdf} readOnly={origemPdf} placeholder="—" />
             <div className="sm:col-span-2">
-              <TextField label="Interessado" value={interessado} onChange={(e) => setInteressado(e.target.value)} />
+              <TextField label="Interessado" value={interessado} onChange={(e) => setInteressado(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
             </div>
-            <TextField label="Assunto" value={assunto} onChange={(e) => setAssunto(e.target.value)} />
-            <TextField label="Observação" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
+            <TextField label="Assunto" value={assunto} onChange={(e) => setAssunto(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
+            <TextField label="Observação" value={observacao} onChange={(e) => setObservacao(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
             <TextField label="Valor (capa)" value={extra.valorCapa != null ? brl(extra.valorCapa) : "—"} disabled readOnly />
             <TextField label="Local (capa)" value={extra.localReparticao ?? ""} disabled readOnly placeholder="—" />
             <div className="sm:col-span-2">
