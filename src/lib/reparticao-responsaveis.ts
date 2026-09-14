@@ -1,24 +1,41 @@
 /**
- * Responsáveis por DFDs de uma repartição — modelo com **1 padrão** + **N temporários**
- * (cada um com período início/fim e, opcionalmente, portaria/decreto). Durante o período
- * de um temporário, ELE é o responsável efetivo (o padrão fica inativo). Guardado como
- * JSON na coluna `reparticoes.responsavel_dfd` (reaproveitada; sem migração). Puro/testável.
- * Parse tolerante: aceita o objeto novo, o array de nomes antigo E a string única antiga.
+ * Responsáveis por DFDs de uma repartição. Modelo: **N padrões** + **N temporários**.
+ * Todo responsável tem nome, matrícula, função e uma **nomeação** (ato: portaria/decreto/
+ * lei + número + link). O temporário tem, além disso, **período** (início/fim). No período
+ * de um temporário, ELE é o efetivo (os padrões ficam em cinza). Guardado como JSON na
+ * coluna `reparticoes.responsavel_dfd` (reaproveitada; sem migração). Puro/testável.
+ * Parse tolerante: aceita o objeto novo, o `{padrao,temporarios[ato]}` anterior, o array
+ * de nomes e a string única antigos.
  */
 
-export type ResponsavelTemporario = {
-  nome: string;
-  inicio: string; // "YYYY-MM-DD"
-  fim: string; // "YYYY-MM-DD"
-  ato: string | null; // portaria/decreto que nomeia (opcional)
-};
+export type TipoAto = "portaria" | "decreto" | "lei";
 
-export type Responsaveis = {
-  padrao: string;
-  temporarios: ResponsavelTemporario[];
-};
+export const TIPOS_ATO: { valor: TipoAto; rotulo: string }[] = [
+  { valor: "portaria", rotulo: "Portaria" },
+  { valor: "decreto", rotulo: "Decreto" },
+  { valor: "lei", rotulo: "Lei" },
+];
 
-export const RESPONSAVEIS_VAZIO: Responsaveis = { padrao: "", temporarios: [] };
+/** Ato que nomeia o responsável (opcional). */
+export type Nomeacao = { tipo: TipoAto | null; numero: string; link: string };
+/** Responsável (padrão ou base do temporário). */
+export type Responsavel = { nome: string; matricula: string; funcao: string; nomeacao: Nomeacao };
+/** Responsável temporário = responsável + período de vigência. */
+export type ResponsavelTemporario = Responsavel & { inicio: string; fim: string };
+export type Responsaveis = { padroes: Responsavel[]; temporarios: ResponsavelTemporario[] };
+
+export const RESPONSAVEIS_VAZIO: Responsaveis = { padroes: [], temporarios: [] };
+
+/** Fábricas — sempre objetos NOVOS (sem referências compartilhadas). */
+export function novaNomeacao(): Nomeacao {
+  return { tipo: null, numero: "", link: "" };
+}
+export function novoResponsavel(nome = ""): Responsavel {
+  return { nome, matricula: "", funcao: "", nomeacao: novaNomeacao() };
+}
+export function novoTemporario(): ResponsavelTemporario {
+  return { ...novoResponsavel(), inicio: "", fim: "" };
+}
 
 /** Data LOCAL de hoje em "YYYY-MM-DD" (comparável lexicograficamente com as datas ISO). */
 export function hojeISO(d: Date = new Date()): string {
@@ -28,45 +45,74 @@ export function hojeISO(d: Date = new Date()): string {
   return `${y}-${m}-${dia}`;
 }
 
-function normalizarTemporario(t: unknown): ResponsavelTemporario {
-  const o = (t ?? {}) as Record<string, unknown>;
-  const ato = o.ato == null ? null : String(o.ato).trim() || null;
+function txt(v: unknown): string {
+  return String(v ?? "").trim();
+}
+
+function normNomeacao(o: unknown): Nomeacao {
+  const oo = (o ?? {}) as Record<string, unknown>;
+  const tipo = oo.tipo === "portaria" || oo.tipo === "decreto" || oo.tipo === "lei" ? oo.tipo : null;
+  return { tipo, numero: txt(oo.numero), link: txt(oo.link) };
+}
+function normResponsavel(o: unknown): Responsavel {
+  const oo = (o ?? {}) as Record<string, unknown>;
+  return { nome: txt(oo.nome), matricula: txt(oo.matricula), funcao: txt(oo.funcao), nomeacao: normNomeacao(oo.nomeacao) };
+}
+function normTemporario(o: unknown): ResponsavelTemporario {
+  const oo = (o ?? {}) as Record<string, unknown>;
+  return { ...normResponsavel(oo), inicio: txt(oo.inicio), fim: txt(oo.fim) };
+}
+/** Temporário do formato ANTERIOR ({nome, inicio, fim, ato}) — `ato` (texto livre) vira o número. */
+function migrarTemporarioAntigo(o: unknown): ResponsavelTemporario {
+  const oo = (o ?? {}) as Record<string, unknown>;
+  const ato = txt(oo.ato);
   return {
-    nome: String(o.nome ?? "").trim(),
-    inicio: String(o.inicio ?? "").trim(),
-    fim: String(o.fim ?? "").trim(),
-    ato,
+    nome: txt(oo.nome),
+    matricula: "",
+    funcao: "",
+    nomeacao: { tipo: null, numero: ato, link: "" },
+    inicio: txt(oo.inicio),
+    fim: txt(oo.fim),
   };
 }
 
-/** Lê a coluna → `Responsaveis` (tolerante ao formato novo e aos antigos). */
+/** Lê a coluna → `Responsaveis` (tolerante aos formatos novo e antigos). */
 export function parseResponsaveis(raw: string | null | undefined): Responsaveis {
-  if (raw == null) return { padrao: "", temporarios: [] };
+  if (raw == null) return { padroes: [], temporarios: [] };
   const s = String(raw).trim();
-  if (!s) return { padrao: "", temporarios: [] };
+  if (!s) return { padroes: [], temporarios: [] };
 
-  // Formato novo: objeto { padrao, temporarios }.
   if (s.startsWith("{")) {
     try {
       const o = JSON.parse(s) as Record<string, unknown>;
       if (o && typeof o === "object" && !Array.isArray(o)) {
+        // Formato novo: { padroes: [...], temporarios: [...] }.
+        if (Array.isArray(o.padroes)) {
+          return {
+            padroes: o.padroes.map(normResponsavel).filter((r) => r.nome),
+            temporarios: Array.isArray(o.temporarios) ? o.temporarios.map(normTemporario).filter((t) => t.nome) : [],
+          };
+        }
+        // Formato anterior: { padrao: string, temporarios: [{nome, inicio, fim, ato}] }.
+        const padroes: Responsavel[] = [];
+        if (typeof o.padrao === "string" && o.padrao.trim()) padroes.push(novoResponsavel(o.padrao.trim()));
         const temporarios = Array.isArray(o.temporarios)
-          ? o.temporarios.map(normalizarTemporario).filter((t) => t.nome)
+          ? o.temporarios.map(migrarTemporarioAntigo).filter((t) => t.nome)
           : [];
-        return { padrao: typeof o.padrao === "string" ? o.padrao.trim() : "", temporarios };
+        return { padroes, temporarios };
       }
     } catch {
       /* cai no fallback */
     }
   }
 
-  // Formato antigo: array de nomes → o 1º vira o padrão.
+  // Formato antigo: array de nomes → 1º vira padrão.
   if (s.startsWith("[")) {
     try {
       const arr = JSON.parse(s);
       if (Array.isArray(arr)) {
-        const nome = arr.map((x) => String(x).trim()).find(Boolean) ?? "";
-        return { padrao: nome, temporarios: [] };
+        const nome = arr.map((x) => txt(x)).find(Boolean) ?? "";
+        return { padroes: nome ? [novoResponsavel(nome)] : [], temporarios: [] };
       }
     } catch {
       /* cai no fallback */
@@ -74,18 +120,26 @@ export function parseResponsaveis(raw: string | null | undefined): Responsaveis 
   }
 
   // Formato antigo: string única.
-  return { padrao: s, temporarios: [] };
+  return { padroes: [novoResponsavel(s)], temporarios: [] };
 }
 
-/** `Responsaveis` → texto para gravar (JSON), ou `null` se vazio. Descarta temporários
- * sem nome ou sem as duas datas. */
+function limparNomeacao(n: Nomeacao): Nomeacao {
+  if (!n.tipo) return { tipo: null, numero: "", link: "" }; // sem ato → zera número/link
+  return { tipo: n.tipo, numero: n.numero.trim(), link: n.link.trim() };
+}
+function limparResponsavel(r: Responsavel): Responsavel {
+  return { nome: r.nome.trim(), matricula: r.matricula.trim(), funcao: r.funcao.trim(), nomeacao: limparNomeacao(r.nomeacao) };
+}
+
+/** `Responsaveis` → JSON para gravar, ou `null` se vazio. Descarta responsáveis sem nome e
+ * temporários sem as duas datas. */
 export function serializeResponsaveis(r: Responsaveis): string | null {
-  const padrao = r.padrao.trim();
+  const padroes = r.padroes.map(limparResponsavel).filter((p) => p.nome);
   const temporarios = r.temporarios
-    .map((t) => ({ nome: t.nome.trim(), inicio: t.inicio.trim(), fim: t.fim.trim(), ato: t.ato?.trim() || null }))
+    .map((t) => ({ ...limparResponsavel(t), inicio: t.inicio.trim(), fim: t.fim.trim() }))
     .filter((t) => t.nome && t.inicio && t.fim);
-  if (!padrao && temporarios.length === 0) return null;
-  return JSON.stringify({ padrao, temporarios });
+  if (padroes.length === 0 && temporarios.length === 0) return null;
+  return JSON.stringify({ padroes, temporarios });
 }
 
 export type EstadoTemporario = "agendado" | "vigente" | "encerrado";
@@ -98,20 +152,22 @@ export function estadoTemporario(t: ResponsavelTemporario, hoje: string): Estado
   return "vigente";
 }
 
-/** O temporário VIGENTE hoje (o 1º cujo período cobre `hoje`), ou `null`. */
-export function temporarioVigente(r: Responsaveis, hoje: string): ResponsavelTemporario | null {
-  return (
-    r.temporarios.find((t) => t.nome && t.inicio && t.fim && t.inicio <= hoje && hoje <= t.fim) ?? null
-  );
+/** Temporários VIGENTES hoje (período cobre `hoje`). */
+export function temporariosVigentes(r: Responsaveis, hoje: string): ResponsavelTemporario[] {
+  return r.temporarios.filter((t) => t.nome && t.inicio && t.fim && t.inicio <= hoje && hoje <= t.fim);
 }
 
-/** Responsável EFETIVO hoje: o temporário vigente, senão o padrão. `null` se nenhum. */
-export function responsavelVigente(
+/** Os padrões ficam INATIVOS (cinza) quando há ao menos um temporário vigente. */
+export function padroesInativos(r: Responsaveis, hoje: string): boolean {
+  return temporariosVigentes(r, hoje).length > 0;
+}
+
+/** Responsáveis EFETIVOS hoje: os temporários vigentes, senão os padrões. */
+export function responsaveisVigentes(
   r: Responsaveis,
   hoje: string,
-): { nome: string; tipo: "temporario" | "padrao" } | null {
-  const t = temporarioVigente(r, hoje);
-  if (t) return { nome: t.nome, tipo: "temporario" };
-  const p = r.padrao.trim();
-  return p ? { nome: p, tipo: "padrao" } : null;
+): { resp: Responsavel; tipo: "temporario" | "padrao" }[] {
+  const temps = temporariosVigentes(r, hoje);
+  if (temps.length > 0) return temps.map((t) => ({ resp: t, tipo: "temporario" as const }));
+  return r.padroes.filter((p) => p.nome).map((p) => ({ resp: p, tipo: "padrao" as const }));
 }

@@ -71,11 +71,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nullable, migração `0017`): lista global **reordenável** (tabela com arrasto,
   componente `ReorderTable` — Pointer Events, mouse+toque). CRUD em `ReparticoesAdmin` (`reparticaoSchema`).
   `responsavel_dfd` guarda os **responsáveis por DFDs** como **JSON** (coluna reaproveitada, sem migração nova):
-  **1 padrão** + **N temporários** (cada um com **período** início/fim e **portaria/decreto** opcional). No período de
-  um temporário, **ele é o efetivo** (o padrão fica em cinza); fora do período, o temporário fica em cinza e o padrão
-  volta. Lógica pura/testável em `src/lib/reparticao-responsaveis.ts` (`parseResponsaveis`/`serializeResponsaveis`
-  tolerantes aos formatos antigos; `temporarioVigente`/`responsavelVigente`/`estadoTemporario`); UI no componente
-  `ResponsaveisEditor`. Repartição ativa por cookie
+  **N padrões** + **N temporários**. Todo responsável tem **nome, matrícula, função** e uma **nomeação** (ato:
+  `portaria`/`decreto`/`lei` + número + **link** do documento). O temporário tem, além disso, **período** início/fim.
+  No período de um temporário, **ele é o efetivo** (os padrões ficam em cinza); fora do período, o temporário fica em
+  cinza e os padrões voltam — com **estados** (Agendado/Vigente/Encerrado). Lógica pura/testável em
+  `src/lib/reparticao-responsaveis.ts` (`parseResponsaveis`/`serializeResponsaveis` tolerantes a TODOS os formatos
+  anteriores; `temporariosVigentes`/`responsaveisVigentes`/`padroesInativos`/`estadoTemporario`); UI no componente
+  `ResponsaveisEditor` (sub-campos compartilhados entre padrão e temporário). Repartição ativa por cookie
   `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
   `/api/reparticoes/ativo`.
 - **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e
@@ -224,8 +226,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
   `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
-  `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (responsável padrão + temporários
-  com período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
+  matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; + painel `lateral` mestre-detalhe: 2º banner ao lado, com **fechar
   animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback

@@ -8,7 +8,7 @@ import {
   hojeISO,
   RESPONSAVEIS_VAZIO,
   type Responsaveis,
-  responsavelVigente,
+  responsaveisVigentes,
 } from "@/lib/reparticao-responsaveis";
 import { TextField } from "./Field";
 import { IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
@@ -184,12 +184,14 @@ export function ReparticoesAdmin() {
             header: "Responsável (DFDs)",
             minWidth: 180,
             render: (r) => {
-              const vig = responsavelVigente(r.responsaveis, hoje);
-              if (!vig) return <span className="text-faint">—</span>;
+              const vigs = responsaveisVigentes(r.responsaveis, hoje);
+              if (vigs.length === 0) return <span className="text-faint">—</span>;
+              const nomes = vigs.map((v) => v.resp.nome).join(", ");
+              const temp = vigs.some((v) => v.tipo === "temporario");
               return (
-                <span className="line-clamp-1 text-text-2" title={vig.nome}>
-                  {vig.nome}
-                  {vig.tipo === "temporario" && (
+                <span className="line-clamp-1 text-text-2" title={nomes}>
+                  {nomes}
+                  {temp && (
                     <span className="ml-1.5 text-[10px] font-semibold uppercase" style={{ color: "var(--info)" }}>
                       temp.
                     </span>

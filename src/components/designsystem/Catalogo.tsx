@@ -331,8 +331,24 @@ export function Catalogo() {
   const [mdLateral, setMdLateral] = useState(false);
   const [dzFile, setDzFile] = useState<string | null>(null);
   const [respDemo, setRespDemo] = useState<Responsaveis>({
-    padrao: "Ana Souza",
-    temporarios: [{ nome: "Carlos Lima", inicio: "2026-01-01", fim: "2026-12-31", ato: "Portaria 123/2026" }],
+    padroes: [
+      {
+        nome: "Ana Souza",
+        matricula: "12345",
+        funcao: "Secretária",
+        nomeacao: { tipo: "portaria", numero: "10/2025", link: "https://exemplo.gov.br/portaria-10" },
+      },
+    ],
+    temporarios: [
+      {
+        nome: "Carlos Lima",
+        matricula: "67890",
+        funcao: "Diretor",
+        nomeacao: { tipo: "decreto", numero: "5/2026", link: "" },
+        inicio: "2026-01-01",
+        fim: "2026-12-31",
+      },
+    ],
   });
   const [pag, setPag] = useState(2);
   const [repsOrdem, setRepsOrdem] = useState([

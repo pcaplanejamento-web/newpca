@@ -101,15 +101,15 @@ lado, para as colunas caberem sem corte. ✅ O banner do **protocolo gravado** u
 clicar num DFD abre-o **ao lado, à direita** (mestre-detalhe, mesmo componente/comportamento) — a única diferença é
 o cadeado de edição.
 
-### Repartições: número do interessado + responsáveis (padrão + temporários) — entregue
+### Repartições: número do interessado + responsáveis (padrões/temporários, nomeação, matrícula/função) — entregue
 ✅ A tela de **Repartições** (`/painel/reparticoes`, admin) permite **cadastrar o número do interessado** e os
-**responsáveis por DFDs** de cada repartição: **1 responsável padrão** + **vários temporários**, cada temporário com
-**data de início e fim** e, opcionalmente, a **portaria/decreto** que o nomeia. Durante o período de um temporário,
-**ele assume no lugar do padrão** (o padrão fica **em cinza**); fora do período, o temporário fica **em cinza** e o
-padrão volta a valer — com **estados** visuais (Agendado/Vigente/Encerrado). Migração `0017` já havia adicionado
-`numero_interessado`/`responsavel_dfd`; os responsáveis são guardados como **JSON** na coluna `responsavel_dfd` (sem
-migração nova, com parse tolerante aos formatos anteriores). Componente `ResponsaveisEditor` + lógica pura em
-`reparticao-responsaveis.ts`.
+**responsáveis por DFDs** de cada repartição: **vários padrões** + **vários temporários**. **Todo responsável** tem
+**nome, matrícula e função** e uma **nomeação** — o ADM escolhe se é **portaria, decreto ou lei**, informa o número e
+um **link** para o documento. O temporário tem, além disso, **início e fim**. Durante o período de um temporário,
+**ele assume no lugar dos padrões** (os padrões ficam **em cinza**); fora do período, o temporário fica **em cinza** e
+os padrões voltam a valer — com **estados** visuais (Agendado/Vigente/Encerrado). Guardado como **JSON** na coluna
+`responsavel_dfd` (sem migração nova, com parse tolerante a TODOS os formatos anteriores). Componente
+`ResponsaveisEditor` (campos compartilhados entre padrão e temporário) + lógica pura em `reparticao-responsaveis.ts`.
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.

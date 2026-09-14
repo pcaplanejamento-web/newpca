@@ -17,26 +17,36 @@ export const grupoCreateSchema = z.object({
 
 export const grupoPatchSchema = grupoCreateSchema.partial();
 
-const responsavelTemporarioSchema = z.object({
+// Nomeação (ato) de um responsável: portaria/decreto/lei + número + link (todos opcionais).
+const nomeacaoSchema = z.object({
+  tipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
+  numero: z.string().trim().max(120).default(""),
+  link: z.string().trim().max(500).default(""),
+});
+const responsavelSchema = z.object({
   nome: z.string().trim().max(160),
-  inicio: z.string().trim().max(10), // "YYYY-MM-DD"
-  fim: z.string().trim().max(10),
-  ato: z.string().trim().max(200).nullable().default(null), // portaria/decreto
+  matricula: z.string().trim().max(60).default(""),
+  funcao: z.string().trim().max(120).default(""),
+  nomeacao: nomeacaoSchema.default({ tipo: null, numero: "", link: "" }),
+});
+const responsavelTemporarioSchema = responsavelSchema.extend({
+  inicio: z.string().trim().max(10).default(""), // "YYYY-MM-DD"
+  fim: z.string().trim().max(10).default(""),
 });
 
 export const reparticaoSchema = z.object({
   codigo: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome da repartição.").max(160),
-  // Cadastro do ADM (opcionais): nº do interessado e responsáveis por DFDs (1 padrão + N
-  // temporários com período/ato). Durante o período do temporário, ele é o efetivo.
+  // Cadastro do ADM (opcionais): nº do interessado e responsáveis por DFDs (N padrões + N
+  // temporários com período). Todo responsável tem matrícula/função + nomeação (ato+link).
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   responsaveis: z
     .object({
-      padrao: z.string().trim().max(160).default(""),
+      padroes: z.array(responsavelSchema).max(30).default([]),
       temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
     })
     .optional()
-    .default({ padrao: "", temporarios: [] }),
+    .default({ padroes: [], temporarios: [] }),
 });
 
 export const reordenarSchema = z.object({
