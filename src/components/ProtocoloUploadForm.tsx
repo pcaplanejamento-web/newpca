@@ -86,6 +86,9 @@ export function ProtocoloUploadForm({
   const [parsed, setParsed] = useState<Map<number, DfdParseado>>(new Map());
   const [autoMap, setAutoMap] = useState<Map<number, CampoTratavel[]>>(new Map());
   const [editados, setEditados] = useState<Set<number>>(new Set());
+  // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta no PDF) —
+  // vira estado "erro" com a mensagem, em vez de ficar "pendente" sem explicação.
+  const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
   const [analisando, setAnalisando] = useState(false);
 
   // Split-view (DFD aberto) + seleção/edição em massa.
@@ -123,6 +126,7 @@ export function ProtocoloUploadForm({
     setParsed(new Map());
     setAutoMap(new Map());
     setEditados(new Set());
+    setErrosParse(new Map());
     setSel(new Set());
     setAbertoIdx(-1);
   }
@@ -208,8 +212,10 @@ export function ProtocoloUploadForm({
         const { dfd, auto } = normalizarSecoesDfd(raw);
         setParsed((m) => new Map(m).set(i, dfd));
         if (auto.length) setAutoMap((m) => new Map(m).set(i, auto));
-      } catch {
-        // fica "pendente"; será tratado/bloqueado no import.
+      } catch (e) {
+        // Leitura falhou (ex.: item sem número no PDF → tabela incompleta). Guarda o
+        // motivo → estado "erro" com a mensagem (não fica "pendente" sem explicação).
+        setErrosParse((m) => new Map(m).set(i, e instanceof Error ? e.message : "Falha ao ler o DFD."));
       }
       if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0)); // cede o event loop
     }
@@ -238,6 +244,7 @@ export function ProtocoloUploadForm({
     });
 
   const estado = (idx: number): EstadoDfd => {
+    if (errosParse.has(idx)) return "erro"; // falha de leitura (ex.: tabela incompleta)
     const d = parsed.get(idx);
     if (!d) return "pendente";
     // Assinatura não conferida (PDF sem assinatura, sem responsável, ou assinante
@@ -455,10 +462,15 @@ export function ProtocoloUploadForm({
       minWidth: compacta ? undefined : 120,
       render: (r) => {
         const e = estado(r.idx);
+        const motivo = errosParse.get(r.idx);
         return (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoCor(e) }}>
+          <span
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+            style={{ color: estadoCor(e) }}
+            title={motivo ?? undefined}
+          >
             <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(e) }} />
-            {ESTADO_ROTULO[e]}
+            {motivo ? "Leitura incompleta" : ESTADO_ROTULO[e]}
           </span>
         );
       },
