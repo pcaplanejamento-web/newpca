@@ -9,17 +9,29 @@ import {
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import {
+  autorizadorDeResultado,
+  pdfExigeAssinatura,
+  type Responsaveis,
+  RESPONSAVEIS_VAZIO,
+  validarAssinatura,
+} from "@/lib/reparticao-responsaveis";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconBuilding } from "./icons";
+import { IconAlert, IconBuilding, IconCheck } from "./icons";
 import { Segmented } from "./Segmented";
 
-type Rep = { id: number; codigo: string; nome: string };
+type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 
-/** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`. */
+/** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
+ * A conferência da assinatura (autorizador) é resolvida ao vivo pela repartição
+ * escolhida — reflete a troca de repartição no banner. */
 export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
+  const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+    exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
+  });
   return {
     numero: d.numero,
     planejamento: d.planejamento,
@@ -38,6 +50,7 @@ export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
     totalItens: d.itens.length,
     itens: d.itens,
     secoes: d.secoes,
+    assinaturas: { lista: d.assinaturas, autorizador: autorizadorDeResultado(res) },
   };
 }
 
@@ -78,6 +91,11 @@ export function DfdConferir({
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   const faltas = faltasObrigatorias({ reparticaoId: repId, itens: dfd.itens, secoes: dfd.secoes });
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
+  // Conferência da assinatura contra o responsável da repartição escolhida
+  // (recalcula ao trocar de repartição, igual a `faltas`).
+  const resAssinatura = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+    exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
+  });
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
     onSecoesChange(setTextoSecao(dfd.secoes, cfg, texto));
@@ -234,6 +252,24 @@ export function DfdConferir({
               <li key={f}>{f}</li>
             ))}
           </ul>
+        </Callout>
+      )}
+      {/* Conferência da assinatura digital (bloqueia a gravação quando não confere) */}
+      {resAssinatura.status === "erro" && (
+        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
+          <p className="font-semibold">Assinatura digital não conferida (gravação bloqueada):</p>
+          <p className="mt-1 opacity-90">{resAssinatura.motivo}</p>
+        </Callout>
+      )}
+      {resAssinatura.status === "ok" && (
+        <Callout kind="ok" icon={<IconCheck className="h-4 w-4" />}>
+          Assinatura conferida: <span className="font-semibold">{resAssinatura.responsavel.nome}</span>
+          {resAssinatura.tipo === "temporario" ? " (responsável temporário)" : " (responsável padrão)"}.
+        </Callout>
+      )}
+      {resAssinatura.status === "sem-assinatura" && (
+        <Callout kind="info" icon={<IconAlert className="h-4 w-4" />}>
+          Documento sem assinatura digital (.xlsx) — segue sem conferência de assinante.
         </Callout>
       )}
       {foraDoHead && faltas.length === 0 && (

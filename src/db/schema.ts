@@ -315,6 +315,7 @@ export const dfds = sqliteTable(
     valorEstimado: real("valor_estimado"), // estimativa da nota (Seção 4)
     valorTotal: real("valor_total"), // total da tabela (soma dos itens)
     secoes: text("secoes"), // JSON: {numero,titulo,texto}[] das demais seções
+    assinaturas: text("assinaturas"), // JSON: Assinatura[] (assinaturas digitais do DFD)
     nomeArquivo: text("nome_arquivo"),
     totalItens: integer("total_itens").default(0),
     criadoPor: integer("criado_por").references(() => usuarios.id, {

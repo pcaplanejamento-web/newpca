@@ -41,6 +41,7 @@ import {
 } from "@/components/icons";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
+import { LinkExterno } from "@/components/LinkExterno";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -252,6 +253,29 @@ const DFD_DEMO = {
     { numero: 3, titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "A malha viária rural depende de içamento de peças pré-moldadas; o Município não dispõe de guindaste próprio." },
     { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "LEI 14.133/2021." },
   ],
+  assinaturas: {
+    lista: [
+      {
+        nome: "ISAAC PIRES CABRAL",
+        eCpf: "***.390.771-**",
+        usuario: "isaac.pires",
+        local: "BR",
+        data: "31/08/2026 16:20:00",
+        ip: "",
+        codigo: "PBfGdg58teX",
+        url: "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios",
+      },
+    ],
+    autorizador: {
+      tipo: "padrao" as const,
+      nome: "ISAAC PIRES CABRAL",
+      matricula: "1043055",
+      funcao: "Secretário",
+      nomeacao: { tipo: "portaria" as const, numero: "123/2026", link: "" },
+      assinaturaCodigo: "PBfGdg58teX",
+      assinaturaData: "31/08/2026 16:20:00",
+    },
+  },
   itens: DFD_ITENS_DEMO,
 };
 
@@ -589,6 +613,19 @@ export function Catalogo() {
           <LinkCard href="#" titulo="Tabelas dinâmicas" descricao="Listas com colunas personalizáveis." icon={<IconLayers className="h-6 w-6" />} />
           <LinkCard href="#" titulo="Relatórios" descricao="Exportações e visões consolidadas." icon={<IconClipboard className="h-6 w-6" />} />
         </div>
+      </Secao>
+
+      <Secao titulo="Link externo (LinkExterno)">
+        <p className="mb-3 text-sm text-muted">
+          Âncora externa (abre em nova aba, <code>rel=&quot;noopener noreferrer&quot;</code>) — único link externo do app.
+          Ex.: verificar a autenticidade de uma assinatura digital no site da Prefeitura.
+        </p>
+        <LinkExterno
+          href="https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios"
+          icon={<Icons.IconShield className="h-4 w-4" />}
+        >
+          Verificar autenticidade
+        </LinkExterno>
       </Secao>
 
       <Secao titulo="Acesso restrito & Em construção">

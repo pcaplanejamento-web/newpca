@@ -139,5 +139,6 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
     nomeArquivo,
     secoes: coletarSecoes(leadings),
     itens,
+    assinaturas: [], // .xlsx não tem página de assinatura digital
   };
 }

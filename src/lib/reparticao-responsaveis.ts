@@ -8,6 +8,8 @@
  * de nomes e a string única antigos.
  */
 
+import { type Assinatura, norm } from "./parse-dfd-comum.ts";
+
 export type TipoAto = "portaria" | "decreto" | "lei";
 
 export const TIPOS_ATO: { valor: TipoAto; rotulo: string }[] = [
@@ -170,4 +172,114 @@ export function responsaveisVigentes(
   const temps = temporariosVigentes(r, hoje);
   if (temps.length > 0) return temps.map((t) => ({ resp: t, tipo: "temporario" as const }));
   return r.padroes.filter((p) => p.nome).map((p) => ({ resp: p, tipo: "padrao" as const }));
+}
+
+// ————————————————————————————————————————————————————————————————————————————
+// Conferência da ASSINATURA DIGITAL do DFD contra os responsáveis da repartição.
+// Puro/testável — fonte única usada no cliente (banner) e no servidor (gravação).
+// ————————————————————————————————————————————————————————————————————————————
+
+/** Data da assinatura ("31/08/2026 16:20:00" | "31/08/2026") → ISO "2026-08-31"
+ * (comparável com `inicio`/`fim`); "" se não casar. */
+export function dataAssinaturaISO(data: string): string {
+  const m = String(data ?? "").match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+/** PDF exige assinatura (avulso/protocolo). O `.xlsx` nunca tem. */
+export function pdfExigeAssinatura(nomeArquivo: string | null | undefined): boolean {
+  return /\.pdf$/i.test(String(nomeArquivo ?? ""));
+}
+
+function mesmoNome(a: string, b: string): boolean {
+  const na = norm(a);
+  return na.length > 0 && na === norm(b);
+}
+
+/** O responsável que autorizou o DFD (assinatura que casou) — snapshot p/ exibição. */
+export type Autorizador = {
+  tipo: "padrao" | "temporario";
+  nome: string;
+  matricula: string;
+  funcao: string;
+  nomeacao: Nomeacao;
+  inicio?: string;
+  fim?: string;
+  assinaturaCodigo: string;
+  assinaturaData: string;
+};
+
+/**
+ * Resultado da conferência: `ok` (com o responsável que casou), `sem-assinatura`
+ * (informativo, só `.xlsx`) ou `erro` (bloqueia importar/protocolar/salvar).
+ */
+export type ResultadoAssinatura =
+  | { status: "ok"; tipo: "padrao" | "temporario"; assinatura: Assinatura; responsavel: Responsavel }
+  | { status: "sem-assinatura" }
+  | { status: "erro"; motivo: string };
+
+/**
+ * Confere as assinaturas do DFD contra os responsáveis da repartição:
+ * - sem assinatura → `erro` se PDF (exigeAssinatura), senão `sem-assinatura` (.xlsx);
+ * - com assinatura mas sem responsável cadastrado → `erro` (bloqueia até cadastrar);
+ * - vale se AO MENOS UMA assinatura casar (nome) com um **padrão**, ou com um
+ *   **temporário** cujo período cobre a data da assinatura; senão → `erro`.
+ */
+export function validarAssinatura(
+  assinaturas: Assinatura[],
+  responsaveis: Responsaveis,
+  opts: { exigeAssinatura: boolean },
+): ResultadoAssinatura {
+  if (assinaturas.length === 0) {
+    return opts.exigeAssinatura
+      ? { status: "erro", motivo: "DFD sem assinatura digital — o PDF precisa vir assinado." }
+      : { status: "sem-assinatura" };
+  }
+  if (responsaveis.padroes.length === 0 && responsaveis.temporarios.length === 0) {
+    return {
+      status: "erro",
+      motivo: "Repartição sem responsável por DFDs cadastrado — cadastre o responsável para conferir a assinatura.",
+    };
+  }
+  for (const a of assinaturas) {
+    const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
+    if (padrao) return { status: "ok", tipo: "padrao", assinatura: a, responsavel: padrao };
+  }
+  for (const a of assinaturas) {
+    const iso = dataAssinaturaISO(a.data);
+    const temp = responsaveis.temporarios.find(
+      (t) => mesmoNome(t.nome, a.nome) && t.inicio && t.fim && t.inicio <= iso && iso <= t.fim,
+    );
+    if (temp) return { status: "ok", tipo: "temporario", assinatura: a, responsavel: temp };
+  }
+  return {
+    status: "erro",
+    motivo:
+      "Assinante não é responsável autorizado desta repartição (ou fora do período do responsável temporário).",
+  };
+}
+
+/** `true` quando o resultado bloqueia a gravação. */
+export function bloqueiaAssinatura(r: ResultadoAssinatura): boolean {
+  return r.status === "erro";
+}
+
+/** Snapshot do responsável que autorizou (a partir de um resultado `ok`). */
+export function autorizadorDeResultado(r: ResultadoAssinatura): Autorizador | null {
+  if (r.status !== "ok") return null;
+  const base: Autorizador = {
+    tipo: r.tipo,
+    nome: r.responsavel.nome,
+    matricula: r.responsavel.matricula,
+    funcao: r.responsavel.funcao,
+    nomeacao: r.responsavel.nomeacao,
+    assinaturaCodigo: r.assinatura.codigo,
+    assinaturaData: r.assinatura.data,
+  };
+  if (r.tipo === "temporario") {
+    const t = r.responsavel as ResponsavelTemporario;
+    base.inicio = t.inicio;
+    base.fim = t.fim;
+  }
+  return base;
 }

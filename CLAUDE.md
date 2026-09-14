@@ -100,6 +100,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   e total por item** + **total geral**, o **valor estimado** (nota "R$"), e o **texto das demais seções
   numeradas** (2,3,5,6,7,8,9…) num coletor genérico salvo em `dfds.secoes` (JSON). O detalhe (`/painel/pca/dfd/[id]`)
   mostra tudo ao clicar em "Ver".
+- **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
+  "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
+  Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
+  puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). No
+  **protocolo** a página de assinatura é vista só no ÍNDICE (o parse completo só lê `dfd.pages`) → `indexarProtocolo`
+  anexa as assinaturas ao DFD anterior (`DfdIndexado.assinaturas`); no avulso PDF vêm de `parseDfdFromPdfItems`;
+  `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
+  `reparticao-responsaveis.ts`, puro/testável):** o assinante tem de bater (nome normalizado por `norm`) com um
+  **responsável padrão** OU um **temporário** cujo período cobre a **data da assinatura** (reusa `Responsaveis` de
+  `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
+  cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
+  sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
+  autorizado → bloqueia. O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
+  a repartição), carregando os responsáveis por `carregarResponsaveis` (`src/lib/reparticoes.ts`). O `DfdView`
+  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) + o **autorizador** (com período
+  e Portaria/Decreto se temporário) + botão **`LinkExterno`** "Verificar autenticidade" p/ o site oficial.
 - **Importa `.xlsx` E `.pdf`:** o cabeçalho + seções são **compartilhados** em `src/lib/parse-dfd-comum.ts`
   (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
   tabela por coluna da matriz). `.pdf` → `parse-dfd-pdf`/`parse-dfd-pdf-core` (**pdf.js `pdfjs-dist`**, importado
@@ -231,7 +247,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de botões à esquerda do X, ex.: cadeado; + painel `lateral` mestre-detalhe: 2º banner ao lado, com **fechar
   animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
-  por token), `Pager`, `LinkCard`, `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
+  por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
+  ex.: verificar assinatura digital), `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` legado só permanece pelo `Tone`/tons do `StatCard`.

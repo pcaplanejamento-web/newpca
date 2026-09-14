@@ -3,6 +3,7 @@ import {
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
+  extrairAssinaturas,
   extrairCabecalho,
   norm,
 } from "./parse-dfd-comum.ts";
@@ -238,5 +239,6 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     nomeArquivo,
     secoes: coletarSecoes(lineTexts),
     itens,
+    assinaturas: extrairAssinaturas(lineTexts),
   };
 }

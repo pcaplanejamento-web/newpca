@@ -111,6 +111,22 @@ os padrões voltam a valer — com **estados** visuais (Agendado/Vigente/Encerra
 `responsavel_dfd` (sem migração nova, com parse tolerante a TODOS os formatos anteriores). Componente
 `ResponsaveisEditor` (campos compartilhados entre padrão e temporário) + lógica pura em `reparticao-responsaveis.ts`.
 
+### DFD: assinatura digital (captura, conferência e verificação) — entregue
+✅ O sistema agora **captura e salva** os dados de **quem assinou o DFD** — a página "Assinaturas Digitais" que
+segue cada DFD no PDF traz **nome, e-CPF, usuário, data/hora e o código verificador** (ex.: `PBfGdg58teX`).
+`extrairAssinaturas` (puro) lê essas linhas (tratando o código que quebra para a linha de baixo e **várias
+assinaturas por página**); no protocolo elas são capturadas no **índice** e anexadas ao DFD anterior; guardadas em
+`dfds.assinaturas` (JSON, migração `0018`). **O banner confere a assinatura**: o assinante tem de ser um
+**responsável** cadastrado da repartição — um **padrão**, ou um **temporário** cujo **período cobre a data da
+assinatura** (reusa o cadastro de Responsáveis). **Não deixa importar/protocolar** (nem editar um DFD já gravado)
+com **assinatura não permitida**: PDF **sem assinatura bloqueia** (e trava o protocolo inteiro), repartição **sem
+responsável cadastrado bloqueia**, assinante não autorizado bloqueia; `.xlsx` (sem assinatura) segue permitido.
+A regra é a mesma no cliente e **reconferida no servidor** (`start-dfd` e `PATCH` ao trocar a repartição). O DFD
+gravado mostra a seção **Assinaturas Digitais** (assinante, CPF, usuário, data, código) + o **autorizador**
+(com período e Portaria/Decreto quando temporário) e um botão **Verificar autenticidade** (`LinkExterno`) para o
+site oficial da Prefeitura. Puro/testável (`validarAssinatura`, `dataAssinaturaISO`) e catalogado no
+`/design-system` (`LinkExterno`).
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

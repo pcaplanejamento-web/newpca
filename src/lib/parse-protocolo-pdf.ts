@@ -35,5 +35,7 @@ export async function indexarProtocoloPdf(file: File): Promise<{ index: Protocol
 export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArquivo: string) {
   const items: PdfItem[] = [];
   for (const p of dfd.pages) items.push(...(await doc.pageItems(p)));
-  return parseDfdFromPdfItems(items, nomeArquivo);
+  // As páginas do DFD não incluem a página de assinatura (fica fora de `pages`);
+  // as assinaturas vêm do índice (`dfd.assinaturas`).
+  return { ...parseDfdFromPdfItems(items, nomeArquivo), assinaturas: dfd.assinaturas };
 }

@@ -9,6 +9,12 @@ import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
+import {
+  pdfExigeAssinatura,
+  type Responsaveis,
+  RESPONSAVEIS_VAZIO,
+  validarAssinatura,
+} from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir } from "./DfdConferir";
@@ -17,7 +23,7 @@ import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
-type Rep = { id: number; codigo: string; nome: string };
+type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
 
 export function DfdUploadForm({
@@ -104,6 +110,7 @@ export function DfdUploadForm({
           valorTotal: preview.valorTotal,
           nomeArquivo: preview.nomeArquivo,
           secoes: preview.secoes,
+          assinaturas: preview.assinaturas,
         },
         preview.itens,
         (enviados, total) => setProgresso(Math.round((enviados / total) * 100)),
@@ -134,6 +141,14 @@ export function DfdUploadForm({
   const faltas = preview
     ? faltasObrigatorias({ reparticaoId: repId, itens: preview.itens, secoes: preview.secoes })
     : [];
+  // Conferência da assinatura (mesma regra do servidor) — bloqueia importar.
+  const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
+  const assinaturaBloqueia = preview
+    ? validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+        exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
+      }).status === "erro"
+    : false;
+  const bloqueado = faltas.length > 0 || assinaturaBloqueia;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -229,8 +244,8 @@ export function DfdUploadForm({
                 </div>
               ) : (
                 <span className="text-[12px] text-muted">
-                  {faltas.length > 0
-                    ? `${faltas.length} pendência${faltas.length === 1 ? "" : "s"} — importação bloqueada`
+                  {bloqueado
+                    ? "Importação bloqueada — confira as pendências acima"
                     : "Tudo certo — pronto para importar"}
                 </span>
               )}
@@ -243,7 +258,7 @@ export function DfdUploadForm({
                 <Button
                   onClick={enviar}
                   loading={status === "sending"}
-                  disabled={faltas.length > 0 || status === "sending"}
+                  disabled={bloqueado || status === "sending"}
                   icon={<IconUpload className="h-[18px] w-[18px]" />}
                 >
                   Importar DFD

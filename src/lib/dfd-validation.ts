@@ -61,6 +61,18 @@ const dfdSecaoSchema = z.object({
   texto: z.string().max(10000),
 });
 
+/** Uma assinatura digital lida do PDF (ver `Assinatura` em parse-dfd-comum). */
+const assinaturaSchema = z.object({
+  nome: z.string().trim().max(300).default(""),
+  eCpf: z.string().trim().max(60).default(""),
+  usuario: z.string().trim().max(120).default(""),
+  local: z.string().trim().max(120).default(""),
+  data: z.string().trim().max(40).default(""),
+  ip: z.string().trim().max(60).default(""),
+  codigo: z.string().trim().max(120).default(""),
+  url: z.string().trim().max(500).default(""),
+});
+
 /**
  * Cabeçalho do DFD (SEM os itens — que vão em lotes `start-dfd`/`append-dfd-itens`
  * para escalar a milhares de itens). `totalItens` = total declarado pelo cliente.
@@ -83,6 +95,7 @@ export const dfdMetaSchema = z.object({
   valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
+  assinaturas: z.array(assinaturaSchema).max(50).optional().default([]),
   totalItens: z.number().int().nonnegative().max(MAX_ITENS_DFD).optional().nullable(),
 });
 

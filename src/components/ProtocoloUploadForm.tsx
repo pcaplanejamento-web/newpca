@@ -24,6 +24,12 @@ import {
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
+import {
+  pdfExigeAssinatura,
+  type Responsaveis,
+  RESPONSAVEIS_VAZIO,
+  validarAssinatura,
+} from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -36,7 +42,7 @@ import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 
-type Rep = { id: number; codigo: string; nome: string };
+type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
@@ -225,9 +231,18 @@ export function ProtocoloUploadForm({
     return "substitui";
   };
 
+  /** Confere a assinatura do DFD contra o responsável da repartição escolhida. */
+  const confereAssinatura = (idx: number, d: DfdParseado) =>
+    validarAssinatura(d.assinaturas, reparticoes.find((r) => r.id === dfdRepIds[idx])?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+      exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
+    });
+
   const estado = (idx: number): EstadoDfd => {
     const d = parsed.get(idx);
     if (!d) return "pendente";
+    // Assinatura não conferida (PDF sem assinatura, sem responsável, ou assinante
+    // não autorizado) = erro → bloqueia protocolar (regra 6).
+    if (confereAssinatura(idx, d).status === "erro") return "erro";
     const faltas = faltasObrigatorias({ reparticaoId: dfdRepIds[idx], itens: d.itens, secoes: d.secoes });
     return estadoDfd(faltas.length, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx));
   };
@@ -349,6 +364,13 @@ export function ProtocoloUploadForm({
           bloqueados.push({ numero: di.numero, motivo: faltas.join(", ") });
           continue;
         }
+        // Confere a assinatura (mesma regra do servidor) — não protocola DFD com
+        // assinatura não permitida.
+        const resAss = confereAssinatura(i, full);
+        if (resAss.status === "erro") {
+          bloqueados.push({ numero: di.numero, motivo: resAss.motivo });
+          continue;
+        }
         try {
           await enviarDfdEmLotes(
             {
@@ -369,6 +391,7 @@ export function ProtocoloUploadForm({
               valorTotal: full.valorTotal,
               nomeArquivo: full.nomeArquivo,
               secoes: full.secoes,
+              assinaturas: full.assinaturas,
             },
             full.itens,
           );

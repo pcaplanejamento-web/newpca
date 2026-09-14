@@ -1,7 +1,21 @@
 "use client";
 
-import { brl, num } from "@/lib/format";
+import { brl, dataBR, num } from "@/lib/format";
+import type { Assinatura } from "@/lib/parse-dfd-comum";
+import { type Autorizador, type Nomeacao, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { type Column, DataTable } from "./DataTable";
+import { IconShield } from "./icons";
+import { LinkExterno } from "./LinkExterno";
+
+/** URL oficial de verificação da assinatura digital (site da Prefeitura). */
+const URL_VERIFICACAO = "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios";
+
+/** Texto do ato de nomeação (ex.: "Portaria nº 123"). */
+function atoTexto(n: Nomeacao): string {
+  if (!n.tipo) return "—";
+  const rotulo = TIPOS_ATO.find((t) => t.valor === n.tipo)?.rotulo ?? n.tipo;
+  return n.numero ? `${rotulo} nº ${n.numero}` : rotulo;
+}
 
 /**
  * Visão COMPLETA do DFD — fonte única usada no banner flutuante tanto na
@@ -37,6 +51,7 @@ export type DfdVisual = {
   totalItens: number | null;
   itens: DfdVisualItem[];
   secoes: { numero: number; titulo: string; texto: string }[];
+  assinaturas: { lista: Assinatura[]; autorizador: Autorizador | null };
 };
 
 type ItemK = DfdVisualItem & { _k: number };
@@ -155,15 +170,87 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           ))}
         </section>
       )}
+
+      {/* Assinaturas Digitais (Certificado Digital) */}
+      {dfd.assinaturas.lista.length > 0 && (
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+          <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais (Certificado Digital)</h3>
+          <p className="mb-4 text-xs text-muted">
+            Quem assina é o responsável que autorizou a consolidação do DFD no PCA. A autenticidade pode ser
+            conferida pelo código verificador no site oficial da Prefeitura.
+          </p>
+
+          {dfd.assinaturas.autorizador && (
+            <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <IconShield className="h-4 w-4" style={{ color: "var(--ok)" }} />
+                <span className="text-[13px] font-bold text-text">
+                  Responsável autorizador
+                  {dfd.assinaturas.autorizador.tipo === "temporario" ? " (temporário)" : ""}
+                </span>
+              </div>
+              <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+                <Campo label="Nome" valor={dfd.assinaturas.autorizador.nome} span />
+                <Campo label="Matrícula" valor={dfd.assinaturas.autorizador.matricula || "—"} />
+                <Campo label="Função" valor={dfd.assinaturas.autorizador.funcao || "—"} />
+                {dfd.assinaturas.autorizador.tipo === "temporario" && (
+                  <>
+                    <Campo
+                      label="Período do responsável temporário"
+                      valor={`${dataBR(dfd.assinaturas.autorizador.inicio)} — ${dataBR(dfd.assinaturas.autorizador.fim)}`}
+                      span
+                    />
+                    <Campo label="Ato de nomeação" valor={atoTexto(dfd.assinaturas.autorizador.nomeacao)} span />
+                  </>
+                )}
+              </dl>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {dfd.assinaturas.lista.map((a, i) => (
+              <div key={`${a.codigo}-${i}`} className="rounded-card border border-border-2 p-4">
+                <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+                  <Campo label="Assinante" valor={a.nome || "—"} span />
+                  <Campo label="CPF" valor={a.eCpf || "—"} />
+                  <Campo label="Usuário" valor={a.usuario || "—"} />
+                  <Campo label="Data/hora da assinatura" valor={a.data || "—"} />
+                  <Campo label="Código verificador" valor={a.codigo || "—"} mono />
+                </dl>
+                <div className="mt-3">
+                  <LinkExterno href={URL_VERIFICACAO} icon={<IconShield className="h-4 w-4" />}>
+                    Verificar autenticidade
+                  </LinkExterno>
+                  <p className="mt-1.5 text-xs text-muted">
+                    Confira pelo código <span className="font-mono">{a.codigo || "—"}</span> no endereço acima.
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-function Campo({ label, valor, span }: { label: string; valor: string; span?: boolean }) {
+function Campo({
+  label,
+  valor,
+  span,
+  mono,
+}: {
+  label: string;
+  valor: string;
+  span?: boolean;
+  mono?: boolean;
+}) {
   return (
     <div className={span ? "sm:col-span-2" : ""}>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words font-semibold leading-snug text-text">{valor}</dd>
+      <dd className={`mt-0.5 break-words font-semibold leading-snug text-text ${mono ? "font-mono" : ""}`}>
+        {valor}
+      </dd>
     </div>
   );
 }

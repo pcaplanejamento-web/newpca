@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import type { DfdItemPayload, DfdMetaPayload, GerarPcaPayload } from "./dfd-validation";
+import type { Assinatura } from "./parse-dfd-comum";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -73,6 +74,7 @@ export type DfdDetalhe = DfdResumo & {
   email: string | null;
   telefone: string | null;
   secoes: DfdSecaoRow[];
+  assinaturas: Assinatura[];
   itens: DfdItemRow[];
 };
 
@@ -85,6 +87,31 @@ function parseSecoes(json: string | null): DfdSecaoRow[] {
     return arr
       .filter((s): s is DfdSecaoRow => !!s && typeof s === "object" && "titulo" in s)
       .map((s) => ({ numero: Number(s.numero) || 0, titulo: String(s.titulo ?? ""), texto: String(s.texto ?? "") }));
+  } catch {
+    return [];
+  }
+}
+
+const S = (v: unknown): string => String(v ?? "");
+
+/** Lê o JSON de `assinaturas` (Assinatura[]) com tolerância a dados inválidos. */
+export function parseAssinaturas(json: string | null): Assinatura[] {
+  if (!json) return [];
+  try {
+    const arr: unknown = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+      .map((a) => ({
+        nome: S(a.nome),
+        eCpf: S(a.eCpf),
+        usuario: S(a.usuario),
+        local: S(a.local),
+        data: S(a.data),
+        ip: S(a.ip),
+        codigo: S(a.codigo),
+        url: S(a.url),
+      }));
   } catch {
     return [];
   }
@@ -141,6 +168,7 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
       email: dfds.email,
       telefone: dfds.telefone,
       secoes: dfds.secoes,
+      assinaturas: dfds.assinaturas,
     })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
@@ -162,7 +190,7 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
     .from(dfdItens)
     .where(eq(dfdItens.dfdId, id))
     .orderBy(asc(dfdItens.sequencial));
-  return { ...d, secoes: parseSecoes(d.secoes), itens };
+  return { ...d, secoes: parseSecoes(d.secoes), assinaturas: parseAssinaturas(d.assinaturas), itens };
 }
 
 /**
@@ -193,6 +221,7 @@ export async function upsertDfdCabecalho(
     valorEstimado: dados.valorEstimado ?? null,
     valorTotal: dados.valorTotal ?? null,
     secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
+    assinaturas: dados.assinaturas && dados.assinaturas.length > 0 ? JSON.stringify(dados.assinaturas) : null,
     nomeArquivo: dados.nomeArquivo ?? null,
     totalItens: dados.totalItens ?? primeiroLote.length,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
@@ -252,6 +281,20 @@ export async function getDfdReparticao(id: number): Promise<{ reparticaoId: numb
     .where(eq(dfds.id, id))
     .limit(1);
   return r ?? null;
+}
+
+/** Assinaturas + nome do arquivo de um DFD gravado (para reconferir a assinatura ao
+ * mudar a repartição no PATCH); `null` se não existe. */
+export async function getDfdAssinaturas(
+  id: number,
+): Promise<{ nomeArquivo: string | null; assinaturas: Assinatura[] } | null> {
+  const [r] = await getDb()
+    .select({ nomeArquivo: dfds.nomeArquivo, assinaturas: dfds.assinaturas })
+    .from(dfds)
+    .where(eq(dfds.id, id))
+    .limit(1);
+  if (!r) return null;
+  return { nomeArquivo: r.nomeArquivo, assinaturas: parseAssinaturas(r.assinaturas) };
 }
 
 /** Repartição do DFD com esse `numero` (anti-sequestro no `start-dfd`); `null` se não existe. */

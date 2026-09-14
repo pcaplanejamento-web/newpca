@@ -6,6 +6,7 @@ import type { DfdDetalhe, DfdResumo } from "@/lib/dfd";
 import { brl, num } from "@/lib/format";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "@/lib/protocolo";
+import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -18,7 +19,7 @@ import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
 import { Tabs } from "./Tabs";
 
-type Rep = { id: number; codigo: string; nome: string };
+type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 
 const valorDe = (r: DfdResumo) => r.valorTotal ?? r.valorEstimado ?? 0;
 
@@ -40,6 +41,7 @@ function detalheParaParseado(d: DfdDetalhe): DfdParseado {
     valorTotal: d.valorTotal,
     nomeArquivo: "",
     secoes: d.secoes,
+    assinaturas: d.assinaturas,
     itens: d.itens.map((it) => ({
       item: it.item,
       codigo: it.codigo,

@@ -19,6 +19,23 @@ export type DfdItemParseado = {
   valorTotal: number | null;
 };
 
+/**
+ * Uma assinatura digital lida da página "Assinaturas Digitais (Certificado
+ * Digital)" que segue cada DFD no PDF. O `codigo` (e-Assinatura) é o verificador
+ * usado no site oficial; `data` é crua ("31/08/2026 16:20:00"); `ip` costuma vir
+ * vazio. Pode haver mais de uma assinatura na mesma página.
+ */
+export type Assinatura = {
+  nome: string;
+  eCpf: string;
+  usuario: string;
+  local: string;
+  data: string;
+  ip: string;
+  codigo: string;
+  url: string;
+};
+
 export type DfdParseado = {
   numero: string;
   planejamento: string | null;
@@ -36,6 +53,7 @@ export type DfdParseado = {
   nomeArquivo: string;
   secoes: DfdSecao[];
   itens: DfdItemParseado[];
+  assinaturas: Assinatura[];
 };
 
 /** UPPER + sem acento + espaços colapsados (p/ casar rótulos/cabeçalhos). */
@@ -70,13 +88,56 @@ export function ehRuido(s: string): boolean {
   return (
     n.startsWith("CENTI") ||
     n.startsWith("EMITIDO EM") ||
+    n.startsWith("EMITIDO POR") ||
     n.startsWith("PAGINA ") ||
     n === "ESTADO DE GOIAS" ||
     n === "PREFEITURA MUNICIPAL DE RIO VERDE" ||
     n.startsWith("DOCUMENTO DE FORMALIZACAO") ||
     /NUMERO DFD/.test(n) ||
-    n.startsWith("TIPO DFD")
+    n.startsWith("TIPO DFD") ||
+    // Página de assinatura digital (capturada à parte por `extrairAssinaturas`) —
+    // não deve vazar para o texto das seções no fluxo avulso.
+    n.startsWith("ASSINATURA DIGITAL") ||
+    n.startsWith("ASSINATURAS DIGITAIS") ||
+    n.includes("E-ASSINATURA") ||
+    n.includes("AUTENTICACAORELATORIOS")
   );
+}
+
+/**
+ * Regex de UMA assinatura digital. Casa a linha "Assinatura digital - Nome: …" até
+ * o "e-Assinatura: <código> - <url>". Global (várias assinaturas por página) e
+ * tolerante ao IP vazio; roda sobre o texto ORIGINAL (preserva o caixa do nome e
+ * do código). Grupos: 1 nome, 2 e-CPF, 3 usuário, 4 local, 5 data, 6 IP, 7 código,
+ * 8 URL.
+ */
+const RE_ASSINATURA =
+  /Assinatura\s+digital\s*-\s*Nome:\s*(.+?)\s+e-?CPF:\s*(\S+)\s+Usu[aá]rio:\s*(\S+)\s+Local:\s*(.*?)\s+Data:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})\s+IP:\s*(\S*)\s*e-?Assinatura:\s*([A-Za-z0-9]+)\s*-\s*(https?:\/\/\S+)/gi;
+
+/**
+ * Extrai as assinaturas digitais da página "Assinaturas Digitais". Junta as linhas
+ * num único texto (o código costuma quebrar para a linha de baixo) e casa cada
+ * assinatura. Puro/testável.
+ */
+export function extrairAssinaturas(linhas: string[]): Assinatura[] {
+  const texto = linhas.join(" ");
+  const out: Assinatura[] = [];
+  RE_ASSINATURA.lastIndex = 0;
+  let m: RegExpExecArray | null = RE_ASSINATURA.exec(texto);
+  while (m !== null) {
+    out.push({
+      nome: m[1].trim(),
+      eCpf: m[2].trim(),
+      usuario: m[3].trim(),
+      local: m[4].trim(),
+      data: m[5].trim(),
+      ip: m[6].trim(),
+      codigo: m[7].trim(),
+      url: m[8].trim(),
+    });
+    m = RE_ASSINATURA.exec(texto);
+  }
+  return out;
 }
 
 export type Cabecalho = {

@@ -3,6 +3,8 @@ import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabe
 import { dfdOpSchema, faltasObrigatorias } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { carregarResponsaveis } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,12 @@ export async function POST(req: Request) {
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra repartição, sem acesso.", 403);
   }
+  // Conferência da ASSINATURA (garantia no servidor): PDF sem assinatura, sem
+  // responsável cadastrado, ou assinante não autorizado → não grava.
+  const res = validarAssinatura(d.assinaturas, await carregarResponsaveis(d.reparticaoId), {
+    exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
+  });
+  if (res.status === "erro") return erro(res.motivo, 422);
 
   const r = await upsertDfdCabecalho(d, a.u.id, d.rows);
   return ok({ dfdId: r.id, numero: r.numero });

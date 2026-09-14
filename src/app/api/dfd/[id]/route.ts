@@ -1,9 +1,11 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
-import { atualizarDfdCampos, excluirDfd, getDfd, getDfdReparticao } from "@/lib/dfd";
+import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao } from "@/lib/dfd";
 import { editarDfdSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
+import { pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { carregarResponsaveis } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (p.data.reparticaoId !== undefined || p.data.secoes !== undefined) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à repartição de destino.", 403);
+    }
+    // Ao mudar a repartição, reconfere a assinatura já gravada contra o responsável
+    // da NOVA repartição (regra 6: não salvar com assinatura não permitida).
+    if (p.data.reparticaoId != null) {
+      const ctx = await getDfdAssinaturas(id);
+      const res = validarAssinatura(ctx?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {
+        exigeAssinatura: pdfExigeAssinatura(ctx?.nomeArquivo),
+      });
+      if (res.status === "erro") return erro(res.motivo, 422);
     }
     await atualizarDfdCampos(id, { reparticaoId: p.data.reparticaoId, secoes: p.data.secoes });
   }

@@ -1,5 +1,5 @@
 import { parseNumberBR } from "./normalize.ts";
-import { buscar, extrairCabecalho } from "./parse-dfd-comum.ts";
+import { type Assinatura, buscar, extrairAssinaturas, extrairCabecalho } from "./parse-dfd-comum.ts";
 import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 /**
@@ -34,6 +34,9 @@ export type DfdIndexado = {
   siglaSetor: string | null;
   orgaoEntidade: string | null;
   objeto: string | null;
+  /** Assinaturas da página que segue o DFD (capturadas já no índice — o parse
+   * completo só lê `pages`, sem a página de assinatura). */
+  assinaturas: Assinatura[];
 };
 
 export type ProtocoloIndex = {
@@ -117,18 +120,26 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
     }
   }
 
-  const grupos: { numero: string; pages: number[]; lines: string[] }[] = [];
-  let cur: { numero: string; pages: number[]; lines: string[] } | null = null;
+  type Grupo = { numero: string; pages: number[]; lines: string[]; assinaturas: Assinatura[] };
+  const grupos: Grupo[] = [];
+  let cur: Grupo | null = null;
   for (const p of comNum) {
     if (p.numero == null) {
-      cur = null; // capa/separador encerra o run
+      // Capa/separador encerra o run. A 1ª página sem "Número DFD" após um DFD é a
+      // página de assinaturas: captura as assinaturas no DFD anterior (`cur`) SEM
+      // empurrar as linhas para `cur.lines` (cabeçalho/seções ficam limpos).
+      if (cur) {
+        const ass = extrairAssinaturas(p.lines);
+        if (ass.length > 0) cur.assinaturas = ass;
+      }
+      cur = null;
       continue;
     }
     if (cur && cur.numero === p.numero) {
       cur.pages.push(p.page);
       cur.lines.push(...p.lines);
     } else {
-      cur = { numero: p.numero, pages: [p.page], lines: [...p.lines] };
+      cur = { numero: p.numero, pages: [p.page], lines: [...p.lines], assinaturas: [] };
       grupos.push(cur);
     }
   }
@@ -142,6 +153,7 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
       siglaSetor: cab.siglaSetor,
       orgaoEntidade: cab.orgaoEntidade,
       objeto: cab.objeto,
+      assinaturas: g.assinaturas,
     };
   });
 
