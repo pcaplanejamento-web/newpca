@@ -23,6 +23,16 @@ export type DfdItemParseado = {
 export const TITULO_SECAO_ITENS = "QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA";
 
 /**
+ * Código curto do TIPO do DFD (`DFD-S`/`DFD-R`/`DFD-O`/`DFD-E`) a partir do texto
+ * completo do tipo (ex.: "DFD-S — Solução / com ETP" → "DFD-S"). `null` se não casar.
+ * É uma das informações mais importantes do DFD (mostrada no cabeçalho).
+ */
+export function tipoCurtoDfd(tipo: string | null | undefined): string | null {
+  const m = String(tipo ?? "").match(/DFD-([SROE])\b/i);
+  return m ? `DFD-${m[1].toUpperCase()}` : null;
+}
+
+/**
  * Uma assinatura lida das páginas que seguem cada DFD no PDF. Dois formatos:
  * - **certificado**: "Assinaturas Digitais (Certificado Digital)" → "Assinatura
  *   digital - Nome: … e-Assinatura: <código>";

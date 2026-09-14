@@ -106,7 +106,15 @@ export function ProtocoloView({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-bold text-text">Protocolo {protocolo.numero}</h2>
+        {/* Head — nº do processo + as infos mais importantes ao lado: Id e Assunto. */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h2 className="text-lg font-bold text-text">Protocolo {protocolo.numero}</h2>
+          {protocolo.idExterno && (
+            <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+              Id {protocolo.idExterno}
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-sm text-muted">{protocolo.assunto || "Processo administrativo"}</p>
       </div>
 

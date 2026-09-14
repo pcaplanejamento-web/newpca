@@ -1,8 +1,14 @@
 "use client";
 
+import {
+  ESTADO_ITEM_ROTULO,
+  estadoItem,
+  estadoItemCor,
+  itemComErro,
+} from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
-import { type Assinatura, buracosSequencia } from "@/lib/parse-dfd-comum";
+import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { type Column, DataTable } from "./DataTable";
 import { IconFile, IconShield } from "./icons";
@@ -62,36 +68,57 @@ export type DfdVisual = {
 
 type ItemK = DfdVisualItem & { _k: number };
 
+// Colunas da tabela de itens (Seção 4) — com ESTADO por item e filtro/ordenação em
+// todas (via `value`), igual às demais tabelas do sistema.
 const COLS: Column<ItemK>[] = [
-  { key: "item", header: "Item", align: "right", render: (r) => r.item ?? "—" },
+  {
+    key: "estado",
+    header: "Estado",
+    value: (r) => ESTADO_ITEM_ROTULO[estadoItem(r)],
+    render: (r) => {
+      const e = estadoItem(r);
+      return (
+        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoItemCor(e) }}>
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoItemCor(e) }} />
+          {ESTADO_ITEM_ROTULO[e]}
+        </span>
+      );
+    },
+  },
+  { key: "item", header: "Item", align: "right", value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
+    value: (r) => r.codigo ?? "",
     render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
   },
   {
     key: "descricao",
     header: "Descrição",
-    minWidth: 300,
+    minWidth: 260,
+    value: (r) => r.descricao ?? "",
     render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
   },
-  { key: "unidade", header: "Unidade", render: (r) => r.unidade ?? "—" },
+  { key: "unidade", header: "Unidade", value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
   {
     key: "quantidade",
     header: "Qtd.",
     align: "right",
+    value: (r) => String(r.quantidade ?? ""),
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
   },
   {
     key: "vunit",
     header: "Vlr. unit.",
     align: "right",
+    value: (r) => String(r.valorUnitario ?? ""),
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {
     key: "vtot",
     header: "Vlr. total",
     align: "right",
+    value: (r) => String(r.valorTotal ?? ""),
     render: (r) =>
       r.valorTotal != null ? <span className="font-semibold">{brl(r.valorTotal)}</span> : "—",
   },
@@ -102,7 +129,12 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem repartição";
+  const tipoCod = tipoCurtoDfd(dfd.tipo);
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
+  // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA (como a de DFDs
+  // no protocolo); os regulares na tabela principal.
+  const rowsErro = rows.filter((r) => itemComErro(r));
+  const rowsOk = rows.filter((r) => !itemComErro(r));
   // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4).
   const apoioItens = dfd.secoes.find((s) => s.numero === 4)?.texto ?? "";
   const secoesGerais = dfd.secoes.filter((s) => s.numero !== 4);
@@ -112,7 +144,21 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-bold text-text">DFD {dfd.numero}</h2>
+        {/* Head — nº do DFD + as infos mais importantes ao lado: tipo (DFD-S/R/O/E)
+            e nº de planejamento. */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h2 className="text-lg font-bold text-text">DFD {dfd.numero}</h2>
+          {tipoCod && (
+            <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+              {tipoCod}
+            </span>
+          )}
+          {dfd.planejamento && (
+            <span className="text-[12.5px] text-muted">
+              Planejamento <span className="font-semibold text-text-2">{dfd.planejamento}</span>
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-sm text-muted">
           {[dfd.tipo, dfd.objeto].filter(Boolean).join(" · ") ||
             "Documento de Formalização da Demanda"}
@@ -150,19 +196,48 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
         </dl>
       </section>
 
-      {/* Seção 4 — Itens */}
+      {/* Seção 4 — Itens (os com pendência numa tabela SEPARADA) */}
       <section>
         <h3 className="mb-2 text-sm font-bold text-text">
           4 · Itens ({num(dfd.totalItens ?? dfd.itens.length)})
         </h3>
-        <DataTable
-          columns={COLS}
-          rows={rows}
-          getKey={(r) => r._k}
-          minWidth={820}
-          pageSize={20}
-          footer={`${dfd.itens.length} ${dfd.itens.length === 1 ? "item" : "itens"}`}
-        />
+        {rowsErro.length > 0 && (
+          <div className="mb-4">
+            <h4
+              className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold"
+              style={{ color: "var(--danger)" }}
+            >
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--danger)" }} />
+              Itens com pendência ({num(rowsErro.length)})
+            </h4>
+            <DataTable
+              columns={COLS}
+              rows={rowsErro}
+              getKey={(r) => r._k}
+              minWidth={860}
+              pageSize={10}
+              resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"} com pendência`}
+            />
+          </div>
+        )}
+        {rowsOk.length > 0 && (
+          <>
+            {rowsErro.length > 0 && (
+              <h4 className="mb-1.5 text-[13px] font-bold text-text">Itens regulares ({num(rowsOk.length)})</h4>
+            )}
+            <DataTable
+              columns={COLS}
+              rows={rowsOk}
+              getKey={(r) => r._k}
+              minWidth={860}
+              pageSize={20}
+              resumo={(l) => {
+                const soma = l.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+                return `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(soma)}`;
+              }}
+            />
+          </>
+        )}
         {apoioItens && (
           <div className="mt-3 rounded-card border border-border-2 bg-surface-2 p-4">
             <div className="mb-1 text-xs font-semibold text-muted">Observações da estimativa</div>

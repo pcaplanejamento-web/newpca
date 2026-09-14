@@ -8,6 +8,7 @@ import {
   type EstadoDfd,
   estadoCor,
   estadoDfd,
+  linhasRelatorioProtocolo,
   normalizarSecoesDfd,
   setTextoSecao,
   TRATAVEIS,
@@ -16,7 +17,7 @@ import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { brl, num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { MESES, type Prioridade, valoresBatem } from "@/lib/normalize";
-import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
   parseDfdDoProtocolo,
@@ -36,10 +37,11 @@ import { type Column, DataTable } from "./DataTable";
 import { buildPrevisao, DfdConferir } from "./DfdConferir";
 import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
-import { inputCls, labelCls, selectCls } from "./formStyles";
+import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
+import { RelatorioErros } from "./RelatorioErros";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 
@@ -71,6 +73,7 @@ export function ProtocoloUploadForm({
   // Origem PDF → os dados da CAPA são IMUTÁVEIS (só leitura); no "criar manual" (sem
   // PDF) o usuário digita a capa que está criando.
   const [origemPdf, setOrigemPdf] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false); // banner de relatório de erros
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -428,45 +431,32 @@ export function ProtocoloUploadForm({
 
   const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
 
-  // Com o banner do DFD aberto ao lado, o principal fica estreito → colunas se ajustam
-  // (sem minWidths e sem a coluna "Situação") p/ caber sem scroll lateral.
-  const compacta = abertoIdx >= 0;
+  const compacta = abertoIdx >= 0; // DFD aberto ao lado → tabela estreita (rola no eixo x)
+  // Acessores por linha (puxam do cache de parse + repartição atribuída).
+  const repCod = (idx: number): string => {
+    const id = dfdRepIds[idx];
+    const c = id != null ? reparticoes.find((r) => r.id === id)?.codigo : null;
+    return c ?? index?.dfds[idx].siglaSetor ?? "—";
+  };
+  const tipoCod = (idx: number): string => tipoCurtoDfd(parsed.get(idx)?.tipo) ?? "—";
+  const planNum = (idx: number): string => parsed.get(idx)?.planejamento ?? "";
+  const qtdItens = (idx: number): number | null => parsed.get(idx)?.itens.length ?? null;
+  const valorItens = (idx: number): number | null => {
+    const d = parsed.get(idx);
+    return d ? (d.valorTotal ?? d.valorEstimado ?? null) : null;
+  };
+  const estadoRotulo = (idx: number): string =>
+    errosParse.has(idx) ? "Leitura incompleta" : ESTADO_ROTULO[estado(idx)];
+
+  // Colunas EXATAS (na ordem): seleção (via `selectable`) · Estado · Situação · Nº DFD ·
+  // Nº Planejamento · Sigla · Tipo · Itens · Valor total. Todas com filtro/ordenação (via
+  // `value`). A repartição é atribuída pela edição em massa ou abrindo o DFD ao lado.
   const cols: Column<{ idx: number }>[] = [
-    { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{index?.dfds[r.idx].numero}</span> },
-    {
-      key: "setor",
-      header: "Setor / Repartição",
-      filter: "none",
-      minWidth: compacta ? undefined : 200,
-      render: (r) => (
-        <div className="flex items-center gap-1.5">
-          <select
-            className={selectCls}
-            style={compacta ? { maxWidth: 150 } : undefined}
-            aria-label={`Repartição do DFD ${index?.dfds[r.idx].numero}`}
-            value={dfdRepIds[r.idx] ?? ""}
-            onChange={(e) => setRepDfd(r.idx, e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">— Selecione —</option>
-            {reparticoes.map((rep) => (
-              <option key={rep.id} value={rep.id}>
-                {rep.codigo} · {rep.nome}
-              </option>
-            ))}
-          </select>
-          {dfdRepIds[r.idx] != null && dfdRepIds[r.idx] === autoRepIds[r.idx] && (
-            <span className="shrink-0 text-[10px] font-semibold uppercase text-accent" title="Detectada automaticamente">
-              auto
-            </span>
-          )}
-        </div>
-      ),
-    },
     {
       key: "estado",
       header: "Estado",
-      filter: "none",
-      minWidth: compacta ? undefined : 120,
+      minWidth: 118,
+      value: (r) => estadoRotulo(r.idx),
       render: (r) => {
         const e = estado(r.idx);
         const motivo = errosParse.get(r.idx);
@@ -476,34 +466,78 @@ export function ProtocoloUploadForm({
             style={{ color: estadoCor(e) }}
             title={motivo ?? undefined}
           >
-            <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(e) }} />
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(e) }} />
             {motivo ? "Leitura incompleta" : ESTADO_ROTULO[e]}
           </span>
         );
       },
     },
-    ...(compacta
-      ? []
-      : [
-          {
-            key: "situacao",
-            header: "Situação",
-            filter: "none" as const,
-            minWidth: 90,
-            render: (r: { idx: number }) => (
-              <span className="text-[12px] text-muted">{SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")]}</span>
-            ),
-          },
-        ]),
+    {
+      key: "situacao",
+      header: "Situação",
+      minWidth: 86,
+      value: (r) => SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")],
+      render: (r) => (
+        <span className="text-[12px] text-muted">{SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")]}</span>
+      ),
+    },
+    {
+      key: "numero",
+      header: "Nº DFD",
+      value: (r) => index?.dfds[r.idx].numero ?? "",
+      render: (r) => <span className="font-mono text-[12px]">{index?.dfds[r.idx].numero}</span>,
+    },
+    {
+      key: "planejamento",
+      header: "Nº Plan.",
+      value: (r) => planNum(r.idx),
+      render: (r) => <span className="font-mono text-[12px]">{planNum(r.idx) || "—"}</span>,
+    },
+    {
+      key: "sigla",
+      header: "Sigla",
+      value: (r) => repCod(r.idx),
+      render: (r) => (
+        <span className="inline-flex items-center gap-1">
+          <span className="font-mono text-[12px] font-semibold text-accent">{repCod(r.idx)}</span>
+          {dfdRepIds[r.idx] != null && dfdRepIds[r.idx] === autoRepIds[r.idx] && (
+            <span className="text-[9px] font-semibold uppercase text-accent" title="Detectada automaticamente">
+              auto
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { key: "tipo", header: "Tipo", value: (r) => tipoCod(r.idx), render: (r) => <span className="text-[12px]">{tipoCod(r.idx)}</span> },
+    {
+      key: "itens",
+      header: "Itens",
+      align: "right",
+      value: (r) => String(qtdItens(r.idx) ?? ""),
+      render: (r) => {
+        const q = qtdItens(r.idx);
+        return q == null ? <span className="text-faint">…</span> : num(q);
+      },
+    },
+    {
+      key: "valor",
+      header: "Valor total",
+      align: "right",
+      value: (r) => String(valorItens(r.idx) ?? ""),
+      render: (r) => {
+        const v = valorItens(r.idx);
+        return v == null ? <span className="text-faint">…</span> : brl(v);
+      },
+    },
   ];
 
   const linhas = (index?.dfds ?? []).map((_, idx) => ({ idx }));
-  // Agrupa por estado (erros no topo, p/ tratar) — muda de grupo ao mudar de estado.
-  const ORDEM_ESTADO: Record<EstadoDfd, number> = { erro: 0, editado: 1, regularizado: 2, regular: 3, pendente: 4 };
-  const linhasOrdenadas = [...linhas].sort((a, b) => ORDEM_ESTADO[estado(a.idx)] - ORDEM_ESTADO[estado(b.idx)]);
+  // DFDs com erro numa tabela SEPARADA (regra 2); os demais na tabela principal.
+  const linhasErro = linhas.filter(({ idx }) => estado(idx) === "erro");
+  const linhasOk = linhas.filter(({ idx }) => estado(idx) !== "erro");
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
-  const dfdsComErro = linhas.filter(({ idx }) => estado(idx) === "erro").length;
+  const dfdsComErro = linhasErro.length;
   const temDfds = (index?.dfds.length ?? 0) > 0;
   // Somatória dos valores dos DFDs (valor do DFD = soma dos seus itens). Só é completa
   // quando todos foram analisados e nenhum está com erro.
@@ -523,6 +557,30 @@ export function ProtocoloUploadForm({
     !capaDivergente;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
+
+  // Relatório de erros do protocolo (copiável) — motivo por DFD com erro + capa.
+  const motivoErroDfd = (idx: number): string => {
+    const parseErr = errosParse.get(idx);
+    if (parseErr) return parseErr;
+    const d = parsed.get(idx);
+    if (!d) return "ainda analisando";
+    const resAss = confereAssinatura(idx, d);
+    if (resAss.status === "erro") return resAss.motivo;
+    const fs = faltasObrigatorias({ reparticaoId: dfdRepIds[idx], itens: d.itens, secoes: d.secoes });
+    return fs.length > 0 ? fs.join(", ") : "erro";
+  };
+  const capaMotivo = capaDivergente
+    ? capaZeradaOuNula
+      ? "valor da capa zerado/nulo"
+      : `valor da capa (${extra.valorCapa != null ? brl(extra.valorCapa) : "—"}) diferente da somatória dos DFDs (${brl(somatorioDfds)})`
+    : null;
+  const temErroProto = dfdsComErro > 0 || capaDivergente;
+  const relatorioLinhas = linhasRelatorioProtocolo({
+    numero,
+    idExterno: extra.idExterno,
+    capaMotivo,
+    dfdsComErro: linhasErro.map(({ idx }) => ({ numero: index?.dfds[idx].numero ?? "?", motivo: motivoErroDfd(idx) })),
+  });
 
   // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
   // cima = controle do valor (altura fixa); baixo = seletor do campo + Aplicar + Limpar.
@@ -744,6 +802,15 @@ export function ProtocoloUploadForm({
               </span>
             )}
             <div className="flex gap-2">
+              {!importando && temErroProto && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setRelatorioAberto(true)}
+                  icon={<IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                >
+                  Relatório de erro
+                </Button>
+              )}
               {!importando && (
                 <Button variant="secondary" onClick={fechar}>
                   Cancelar
@@ -758,6 +825,17 @@ export function ProtocoloUploadForm({
         }
       >
         <div className="space-y-5">
+          {/* Head — nº do processo + as infos mais importantes ao lado: Id e Assunto. */}
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <h3 className="text-base font-bold text-text">Protocolo {numero || "novo"}</h3>
+            {extra.idExterno && (
+              <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+                Id {extra.idExterno}
+              </span>
+            )}
+            {assunto && <span className="min-w-0 truncate text-[12.5px] text-muted">{assunto}</span>}
+          </div>
+
           {/* Head — mini banners (um por informação) + conferência do valor da capa */}
           {temDfds && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -825,25 +903,60 @@ export function ProtocoloUploadForm({
               existentes.
             </Callout>
           ) : (
-            <section className="space-y-3">
-              {/* Tabela dos DFDs (banner principal). Clique numa linha abre o banner
-                  do DFD AO LADO (Modal `lateral`); trocar de DFD atualiza o lateral. */}
-              <DataTable
-                columns={cols}
-                rows={linhasOrdenadas}
-                getKey={(r) => r.idx}
-                selectable
-                selected={sel}
-                onSelected={setSel}
-                onRowClick={(r) => abrir(r.idx)}
-                pageSize={compacta ? 12 : 20}
-                minWidth={compacta ? 320 : 640}
-                footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar ao lado`}
-              />
+            <section className="space-y-4">
+              {/* DFDs com erro numa tabela SEPARADA (regra 2); clique numa linha abre o
+                  DFD AO LADO (Modal `lateral`). Filtro/ordenação em todas as colunas. */}
+              {linhasErro.length > 0 && (
+                <div>
+                  <h4
+                    className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold"
+                    style={{ color: "var(--danger)" }}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ background: "var(--danger)" }} />
+                    DFDs com erro ({num(linhasErro.length)})
+                  </h4>
+                  <DataTable
+                    columns={cols}
+                    rows={linhasErro}
+                    getKey={(r) => r.idx}
+                    selectable
+                    selected={sel}
+                    onSelected={setSel}
+                    onRowClick={(r) => abrir(r.idx)}
+                    pageSize={compacta ? 8 : 12}
+                    minWidth={720}
+                    footer={`${linhasErro.length} DFD(s) com erro — trate antes de protocolar`}
+                  />
+                </div>
+              )}
+              <div>
+                {linhasErro.length > 0 && (
+                  <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(linhasOk.length)})</h4>
+                )}
+                <DataTable
+                  columns={cols}
+                  rows={linhasOk}
+                  getKey={(r) => r.idx}
+                  selectable
+                  selected={sel}
+                  onSelected={setSel}
+                  onRowClick={(r) => abrir(r.idx)}
+                  pageSize={compacta ? 12 : 20}
+                  minWidth={720}
+                  footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar ao lado`}
+                />
+              </div>
             </section>
           )}
         </div>
       </Modal>
+
+      <RelatorioErros
+        open={relatorioAberto}
+        onClose={() => setRelatorioAberto(false)}
+        titulo={`Erros do protocolo ${numero || ""}`.trim()}
+        linhas={relatorioLinhas}
+      />
     </div>
   );
 }

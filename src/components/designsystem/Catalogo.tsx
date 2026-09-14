@@ -49,6 +49,7 @@ import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
+import { RelatorioErros } from "@/components/RelatorioErros";
 import { ReorderTable } from "@/components/ReorderTable";
 import { Segmented } from "@/components/Segmented";
 import { StatCard } from "@/components/StatCard";
@@ -359,6 +360,7 @@ export function Catalogo() {
   const [busca, setBusca] = useState("");
   const [check, setCheck] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
   const [dzFile, setDzFile] = useState<string | null>(null);
@@ -508,6 +510,29 @@ export function Catalogo() {
           <StatMini label="Total de DFDs" value="104" tone="accent" />
           <StatMini label="Somatória dos DFDs" value="R$ 32.705,00" tone="warn" hint="capa diverge" />
         </div>
+      </Secao>
+
+      <Secao titulo="RelatorioErros (banner de erros copiável — DFD/Protocolo)">
+        <Button
+          variant="secondary"
+          onClick={() => setRelatorioAberto(true)}
+          icon={<IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+        >
+          Relatório de erro
+        </Button>
+        <RelatorioErros
+          open={relatorioAberto}
+          onClose={() => setRelatorioAberto(false)}
+          titulo="Erros do protocolo 97608/2026"
+          linhas={[
+            "Protocolo 97608/2026 — Id 2273524",
+            "Capa:",
+            "  - valor da capa zerado/nulo",
+            "DFDs com erro (2):",
+            "  - DFD 531: valor unitário em todos os itens",
+            "  - DFD 389: assinante não autorizado",
+          ]}
+        />
       </Secao>
 
       <Secao titulo="Gráficos (Recharts, eixos por token)">

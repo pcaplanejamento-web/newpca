@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { DfdDetalhe, DfdResumo } from "@/lib/dfd";
+import {
+  ESTADO_PROTOCOLO_ROTULO,
+  estadoProtocolo,
+  estadoProtocoloCor,
+  SITUACAO_PROTOCOLO_ROTULO,
+  situacaoProtocolo,
+} from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "@/lib/protocolo";
@@ -325,14 +332,44 @@ export function DfdsView({
   ];
 
   // ---- Colunas da tabela de Protocolos ----
+  // ESTADO = integridade do valor da capa × somatória; SITUAÇÃO = tem DFDs?; ID = "Id"
+  // da capa. Interessado saiu (redundante com Repartição).
   const colsProto: Column<ProtocoloResumo>[] = [
-    { key: "numero", header: "Nº processo", value: (r) => r.numero, render: (r) => <span className="font-mono">{r.numero}</span> },
     {
-      key: "interessado",
-      header: "Interessado",
-      minWidth: 200,
-      value: (r) => r.interessado ?? "—",
-      render: (r) => <span className="line-clamp-1">{r.interessado ?? "—"}</span>,
+      key: "estado",
+      header: "Estado",
+      minWidth: 110,
+      value: (r) => ESTADO_PROTOCOLO_ROTULO[estadoProtocolo(r)],
+      render: (r) => {
+        const e = estadoProtocolo(r);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoProtocoloCor(e) }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoProtocoloCor(e) }} />
+            {ESTADO_PROTOCOLO_ROTULO[e]}
+          </span>
+        );
+      },
+    },
+    {
+      key: "situacao",
+      header: "Situação",
+      minWidth: 96,
+      value: (r) => SITUACAO_PROTOCOLO_ROTULO[situacaoProtocolo(r)],
+      render: (r) => <span className="text-[12px] text-muted">{SITUACAO_PROTOCOLO_ROTULO[situacaoProtocolo(r)]}</span>,
+    },
+    { key: "numero", header: "Nº processo", value: (r) => r.numero, render: (r) => <span className="font-mono text-[12px]">{r.numero}</span> },
+    {
+      key: "idExterno",
+      header: "Id protocolo",
+      value: (r) => r.idExterno ?? "—",
+      render: (r) => <span className="font-mono text-[12px]">{r.idExterno ?? "—"}</span>,
+    },
+    {
+      key: "assunto",
+      header: "Assunto",
+      minWidth: 180,
+      value: (r) => r.assunto ?? "—",
+      render: (r) => <span className="line-clamp-1">{r.assunto ?? "—"}</span>,
     },
     {
       key: "reparticao",
@@ -390,7 +427,7 @@ export function DfdsView({
             onRowClick={(r) => verProtocolo(r.id)}
             fillHeight
             pageSize={12}
-            minWidth={820}
+            minWidth={900}
             resumo={(linhas) =>
               `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(
                 linhas.reduce((s, p) => s + p.totalDfds, 0),

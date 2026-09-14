@@ -165,6 +165,20 @@ uma lida). **Não protocola** com o **Valor da capa zerado/nulo** OU **diferente
 divergência **trava** e o usuário **substitui** a capa pela somatória para liberar (a conciliação acontece uma única
 vez, na importação, antes de gravar).
 
+### Tabelas com ESTADO por linha + erros separados + filtros + relatório copiável — entregue
+✅ **DFD (banner):** a tabela de **itens** ganhou uma coluna **Estado** por item (`Com erro` quando falta valor
+unitário/quantidade), **filtro/ordenação em todas as colunas** e os **itens com pendência numa tabela separada**
+(acima da de regulares). O **cabeçalho** do DFD passou a mostrar o **tipo** (badge **DFD-S/R/O/E**) e o **nº de
+planejamento** ao lado do nº — as infos mais importantes. Quando o DFD tem erro, um botão **"Relatório de erro"** ao
+pé do banner abre um `RelatorioErros` com **tudo listado para copiar**. **Protocolo (banner):** a **planilha de DFDs**
+passou a ter exatamente **seleção · Estado · Situação · Nº DFD · Nº Plan. · Sigla · Tipo · Itens · Valor total** (nessa
+ordem, larguras proporcionais, todas filtráveis); os **DFDs com erro** ficam numa **tabela separada**; o **head**
+mostra **Id + Assunto** ao lado do nº; o **valor da capa faltando/zerado** é apontado e trava; e há o mesmo botão de
+**relatório de erro** no rodapé. **Tela de DFDs → aba Protocolos:** a tabela ganhou **Estado** (integridade capa ×
+somatória), **Situação** (tem DFDs?), **Id protocolo** e **Assunto**, e perdeu **Interessado** (redundante com
+Repartição). Lógica pura/testável (`tipoCurtoDfd`, `itemComErro`/`estadoItem`, `estadoProtocolo`/`situacaoProtocolo`,
+`linhasRelatorioDfd`/`linhasRelatorioProtocolo`); novo componente **`RelatorioErros`** catalogado.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

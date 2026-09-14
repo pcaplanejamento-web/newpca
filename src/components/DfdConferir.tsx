@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import {
   type CampoTratavel,
+  faltasDoItem,
+  itemComErro,
+  linhasRelatorioDfd,
   setTextoSecao,
   textoSecao,
   TRATAVEIS,
@@ -16,11 +20,13 @@ import {
   solicitanteDeResultado,
   validarAssinatura,
 } from "@/lib/reparticao-responsaveis";
+import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck } from "./icons";
+import { RelatorioErros } from "./RelatorioErros";
 import { Segmented } from "./Segmented";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
@@ -92,6 +98,7 @@ export function DfdConferir({
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
 }) {
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   const faltas = faltasObrigatorias({ reparticaoId: repId, itens: dfd.itens, secoes: dfd.secoes });
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
@@ -99,6 +106,18 @@ export function DfdConferir({
   // (recalcula ao trocar de repartição, igual a `faltas`).
   const resAssinatura = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
     exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
+  });
+  // Itens com pendência + relatório de erros copiável (só aparece quando há erro).
+  const itensErro = dfd.itens.filter(itemComErro);
+  const assinaturaMotivo = resAssinatura.status === "erro" ? resAssinatura.motivo : null;
+  const temErro = faltas.length > 0 || !!assinaturaMotivo || itensErro.length > 0;
+  const relatorioLinhas = linhasRelatorioDfd({
+    numero: dfd.numero,
+    planejamento: dfd.planejamento,
+    tipo: dfd.tipo,
+    faltas,
+    assinaturaMotivo,
+    itensComErro: itensErro.map((it) => ({ item: it.item, codigo: it.codigo, faltas: faltasDoItem(it) })),
   });
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
@@ -289,6 +308,25 @@ export function DfdConferir({
       <div className="border-t border-border pt-4">
         <DfdView dfd={toVisual(dfd, rep)} />
       </div>
+
+      {/* Parte inferior — relatório de erro (só quando há erro) */}
+      {temErro && (
+        <div className="flex justify-end border-t border-border pt-4">
+          <Button
+            variant="secondary"
+            onClick={() => setRelatorioAberto(true)}
+            icon={<IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+          >
+            Relatório de erro
+          </Button>
+        </div>
+      )}
+      <RelatorioErros
+        open={relatorioAberto}
+        onClose={() => setRelatorioAberto(false)}
+        titulo={`Erros do DFD ${dfd.numero}`}
+        linhas={relatorioLinhas}
+      />
     </div>
   );
 }

@@ -234,11 +234,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   desktop, sem scroll do navegador); as demais tabelas ficam em **≤20 linhas/página**.
 - **Protocolação bloqueada com DFD defeituoso:** o botão "Protocolar" fica **desabilitado** enquanto algum DFD estiver
   com **erro** (ou ainda analisando) — não se protocola um processo com DFDs defeituosos (o `POST` segue validando por
-  garantia). Com o **banner do DFD aberto ao lado**, a tabela do protocolo **se ajusta** (colunas sem `minWidth` e sem
-  a coluna "Situação") p/ caber sem scroll lateral. Estado **"regularizado automaticamente" = verde** (`estadoCor`).
-  A tabela do protocolo **agrupa por estado** (erros no topo p/ tratar; o DFD muda de grupo ao mudar de estado); a
-  **barra de edição em massa** fica FIXA no rodapé do banner (tamanho constante: controle do valor em cima; seletor
-  do campo + Aplicar + Limpar embaixo).
+  garantia). Estado **"regularizado automaticamente" = verde** (`estadoCor`).
+  **Tabela de DFDs do protocolo (planilha)** — colunas EXATAS e nessa ordem: **seleção · Estado · Situação · Nº DFD ·
+  Nº Plan. · Sigla · Tipo (`tipoCurtoDfd` DFD-S/R/O/E) · Itens · Valor total**, **todas filtráveis/ordenáveis**
+  (`value`); a repartição vira a coluna **Sigla** (atribuição pela edição em massa ou abrindo o DFD ao lado, não mais
+  por select na linha). Os **DFDs com erro ficam numa tabela SEPARADA** (acima da de regulares). O **head** mostra
+  **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o `RelatorioErros`
+  (copiável). A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
+  campo + Aplicar + Limpar embaixo).
+- **Item/DFD com ESTADO + relatório de erro (DfdView/DfdConferir):** a **tabela de itens** (Seção 4) tem uma coluna
+  **Estado** por item (`estadoItem`: `Com erro` quando falta valor unitário/quantidade — `faltasDoItem`), **filtro em
+  todas as colunas** e os **itens com pendência numa tabela SEPARADA** (acima da de regulares). O **head do DFD**
+  mostra o **tipo** (badge DFD-S/R/O/E) e o **nº de planejamento** ao lado do nº do DFD. Quando o DFD tem erro (faltas
+  obrigatórias, assinatura ou itens), um botão **"Relatório de erro"** ao pé do `DfdConferir` abre o `RelatorioErros`.
+  Helpers puros em `dfd-tratamento.ts` (`itemComErro`/`estadoItem`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo` +
+  `estadoProtocolo`/`situacaoProtocolo` da tabela de protocolos).
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
@@ -286,7 +296,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
-  DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência), `ReorderTable` (tabela com arrasto entre linhas,
+  DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
+  `RelatorioErros` (banner/`Modal` com todos os erros de um DFD/Protocolo listados p/ **copiar** — `navigator.clipboard`
+  + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros), `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` legado só permanece pelo `Tone`/tons do `StatCard`.
