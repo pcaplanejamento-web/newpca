@@ -10,7 +10,7 @@ import {
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
-import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   pdfExigeAssinatura,
   type Responsaveis,
@@ -31,8 +31,9 @@ type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsavei
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
- * escolhida — reflete a troca de repartição no banner. */
-export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
+ * escolhida — reflete a troca de repartição no banner. O `anoPca` efetivo (herdado
+ * do protocolo / definido no avulso) pode sobrescrever o do parse. */
+export function toVisual(d: DfdParseado, rep: Rep | null, anoPca?: number | null): DfdVisual {
   const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
   });
@@ -47,6 +48,10 @@ export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
     matricula: d.matricula,
     email: d.email,
     telefone: d.telefone,
+    anoPca: anoPca !== undefined ? anoPca : d.anoPca,
+    numeroContrato: d.numeroContrato,
+    numeroAta: d.numeroAta,
+    numeroLicitacao: d.numeroLicitacao,
     valorEstimado: d.valorEstimado,
     valorTotal: d.valorTotal,
     reparticaoCodigo: rep?.codigo ?? null,
@@ -79,25 +84,42 @@ export function DfdConferir({
   reparticoes,
   reparticaoAtivaId = null,
   repId,
+  anoPca,
   autoMatch,
   autoCampos = [],
   readOnly = false,
   onRepChange,
   onSecoesChange,
+  onRefsChange,
 }: {
   dfd: DfdParseado;
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   repId: number | null;
+  /** Ano do PCA efetivo do DFD (herdado do protocolo / definido no avulso) — só exibição. */
+  anoPca?: number | null;
   autoMatch: boolean;
   autoCampos?: CampoTratavel[];
   /** Trava a edição (banner de visualização/edição travado). */
   readOnly?: boolean;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
+  /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
+  onRefsChange?: (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => void;
 }) {
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
+  // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
+  const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
+  const semReferencia = ehRenovacao && !dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao;
+  const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
+    const v = valor.trim() || null;
+    onRefsChange?.({
+      numeroContrato: campo === "numeroContrato" ? v : dfd.numeroContrato,
+      numeroAta: campo === "numeroAta" ? v : dfd.numeroAta,
+      numeroLicitacao: campo === "numeroLicitacao" ? v : dfd.numeroLicitacao,
+    });
+  };
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
   // Conferência da assinatura contra o responsável da repartição escolhida
   // (recalcula ao trocar de repartição, igual a `faltas`).
@@ -264,6 +286,47 @@ export function DfdConferir({
         </div>
       </section>
 
+      {/* Referências da RENOVAÇÃO (DFD-R) — contrato/ata/licitação. Aponta a ausência
+          (não trava) e permite preencher à mão. Só aparece para DFD-R. */}
+      {ehRenovacao && (
+        <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
+          <h3 className="mb-1 text-sm font-bold text-text">Referências da renovação</h3>
+          <p className="mb-3 text-xs text-muted">
+            Todo DFD-R deve mencionar um nº de contrato, ata (registro de preços) ou licitação. Preenchidos
+            automaticamente pela descrição; ajuste ou complete se necessário.
+          </p>
+          {semReferencia && (
+            <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
+              Nenhuma referência (contrato/ata/licitação) encontrada na descrição deste DFD-R. Informe ao menos uma
+              abaixo (não bloqueia a importação).
+            </Callout>
+          )}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextField
+              label="Nº do contrato"
+              value={dfd.numeroContrato ?? ""}
+              disabled={readOnly}
+              onChange={(e) => setRef("numeroContrato", e.target.value)}
+              placeholder="Ex.: 860/2025"
+            />
+            <TextField
+              label="Nº da ata (registro de preços)"
+              value={dfd.numeroAta ?? ""}
+              disabled={readOnly}
+              onChange={(e) => setRef("numeroAta", e.target.value)}
+              placeholder="Ex.: 045/2025"
+            />
+            <TextField
+              label="Nº da licitação"
+              value={dfd.numeroLicitacao ?? ""}
+              disabled={readOnly}
+              onChange={(e) => setRef("numeroLicitacao", e.target.value)}
+              placeholder="Ex.: 123/2025"
+            />
+          </div>
+        </section>
+      )}
+
       {/* Faltas CIRÚRGICAS (aponta o item/seção e o que fazer; bloqueia importar) */}
       {faltasCir.length > 0 && (
         <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
@@ -302,7 +365,7 @@ export function DfdConferir({
 
       {/* Documento completo (read-only, reflete as edições) */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep)} />
+        <DfdView dfd={toVisual(dfd, rep, anoPca)} />
       </div>
 
       {/* Parte inferior — relatório de erro (só quando há erro) */}

@@ -19,6 +19,9 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const { protocolo } = p.data;
 
+  // Regra: não protocola sem o PCA definido (o ano é herdado pelos DFDs).
+  if (protocolo.anoPca == null) return erro("Defina o PCA do protocolo antes de protocolar.", 422);
+
   if (protocolo.reparticaoId != null) {
     const { lista } = await getReparticaoContexto(a.u);
     if (!lista.some((r) => r.id === protocolo.reparticaoId)) {

@@ -1,5 +1,5 @@
 import { parseNumberBR } from "./normalize.ts";
-import { type Assinatura, buscar, extrairAssinaturas, extrairCabecalho } from "./parse-dfd-comum.ts";
+import { anoPcaDoTexto, type Assinatura, buscar, extrairAssinaturas, extrairCabecalho } from "./parse-dfd-comum.ts";
 import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 /**
@@ -17,6 +17,7 @@ import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
 export type ProtocoloMeta = {
   numero: string | null; // "Número Processo" (ex.: "144756/2026")
   idExterno: string | null; // "Id:" da capa (ex.: "2273524")
+  anoPca: number | null; // ano do PCA adivinhado da capa (usuário confirma/escolhe)
   data: string | null;
   interessado: string | null;
   documento: string | null; // CPF/CNPJ do interessado
@@ -110,7 +111,9 @@ function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
   // "Valor" da capa (sem "R$", ex.: "32.705,00").
   const linhaValor = lines.find((s) => /Valor\s*:/i.test(s) && /\d[\d.]*,\d{2}/.test(s));
   const valorCapa = linhaValor ? parseNumberBR(linhaValor.match(/(\d[\d.]*,\d{2})/)?.[1] ?? null) : null;
-  return { numero, idExterno, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
+  // Ano do PCA da capa (ex.: observação "...PCA DE 2027") — adivinha, o usuário confirma.
+  const anoPca = anoPcaDoTexto(lines.join(" \n "));
+  return { numero, idExterno, anoPca, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
 }
 
 /**

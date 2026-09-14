@@ -5,6 +5,7 @@ import {
   type DfdParseado,
   ehRuido,
   extrairCabecalho,
+  extrairRefsDfd,
   norm,
   TITULO_SECAO_ITENS,
   txt,
@@ -152,6 +153,7 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
 
   return {
     ...cab,
+    ...extrairRefsDfd(secoes, cab.objeto),
     numero: cab.numero,
     valorTotal,
     nomeArquivo,

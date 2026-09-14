@@ -24,7 +24,8 @@ export type DfdConferencia = {
  * (vazio = pode importar). É a fonte única da regra — usada no cliente (trava o
  * botão "Importar") E no servidor (rejeita a gravação). Não permite importar
  * sem: valor unitário em todos os itens, repartição, justificativa, previsão de
- * entrega, prioridade e fundamentação legal.
+ * entrega, prioridade e fundamentação legal. O **ano do PCA** é um portão à parte
+ * (herdado do protocolo / definido no avulso), conferido no envio, não aqui.
  */
 export function faltasObrigatorias(d: DfdConferencia): string[] {
   const faltas: string[] = [];
@@ -85,6 +86,10 @@ export const dfdMetaSchema = z.object({
   matricula: textoCurtoOpc,
   email: textoCurtoOpc,
   telefone: textoCurtoOpc,
+  anoPca: z.number().int().gte(2000).lte(2100).optional().nullable(),
+  numeroContrato: textoCurtoOpc,
+  numeroAta: textoCurtoOpc,
+  numeroLicitacao: textoCurtoOpc,
   reparticaoId: z.number().int().positive().optional().nullable(),
   protocoloId: z.number().int().positive().optional().nullable(),
   valorEstimado: z.number().nonnegative().optional().nullable(),
@@ -116,6 +121,7 @@ export const dfdOpSchema = z.discriminatedUnion("mode", [startDfdSchema, appendD
 export const protocoloMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Informe o número do protocolo.").max(60),
   idExterno: textoCurtoOpc,
+  anoPca: z.number().int().gte(2000).lte(2100).optional().nullable(),
   data: textoCurtoOpc,
   interessado: textoOpc,
   documento: textoCurtoOpc,
@@ -156,9 +162,19 @@ export const editarDfdSchema = z
     protocoloId: z.number().int().positive().nullable().optional(),
     reparticaoId: z.number().int().positive().nullable().optional(),
     secoes: z.array(dfdSecaoSchema).max(50).optional(),
+    // Referências de renovação (DFD-R): preenchíveis à mão quando o parser não achou.
+    numeroContrato: textoCurtoOpc,
+    numeroAta: textoCurtoOpc,
+    numeroLicitacao: textoCurtoOpc,
   })
   .refine(
-    (d) => d.protocoloId !== undefined || d.reparticaoId !== undefined || d.secoes !== undefined,
+    (d) =>
+      d.protocoloId !== undefined ||
+      d.reparticaoId !== undefined ||
+      d.secoes !== undefined ||
+      d.numeroContrato !== undefined ||
+      d.numeroAta !== undefined ||
+      d.numeroLicitacao !== undefined,
     { message: "Nada para editar." },
   );
 

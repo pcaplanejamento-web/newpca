@@ -33,6 +33,50 @@ export function tipoCurtoDfd(tipo: string | null | undefined): string | null {
 }
 
 /**
+ * Ano do PCA a partir de um texto (capa/observação/assunto do protocolo ou seções do
+ * DFD): "PCA 2027", "PCA DE 2027", "PCA/2027", "PLANO DE CONTRATAÇÕES ANUAL … 2027".
+ * `null` se não encontrar. Usado para ADIVINHAR o PCA (o usuário confirma/escolhe).
+ */
+export function anoPcaDoTexto(texto: string | null | undefined): number | null {
+  const s = String(texto ?? "");
+  const m =
+    s.match(/\bPCA\b[^0-9]{0,12}((?:19|20)\d{2})/i) ??
+    s.match(/PLANO\s+DE\s+CONTRATA[ÇC][ÕO]ES\s+ANUAL[^0-9]{0,20}((?:19|20)\d{2})/i);
+  const ano = m ? Number(m[1]) : null;
+  return ano != null && ano >= 2000 && ano <= 2100 ? ano : null;
+}
+
+const RE_CONTRATO = /\bCONTRATO\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
+const RE_ATA = /\b(?:ATA(?:\s+DE\s+REGISTRO\s+DE\s+PRE[ÇC]OS)?|ARP)\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
+const RE_LICITACAO =
+  /\b(?:LICITA[ÇC][ÃA]O|PREG[ÃA]O(?:\s+ELETR[ÔO]NICO)?|CONCORR[ÊE]NCIA|TOMADA\s+DE\s+PRE[ÇC]OS|PROCESSO\s+LICITAT[ÓO]RIO)\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
+
+function extrairRef(s: string, re: RegExp): string | null {
+  const m = s.match(re);
+  if (!m) return null;
+  const n = m[1].replace(/[.\-/]+$/, "").trim(); // tira separador solto no fim
+  return n.length > 0 ? n : null;
+}
+
+/**
+ * Referências de RENOVAÇÃO (DFD-R) num texto: nº de **contrato**, **ata** (de registro de
+ * preços) e **licitação** (pregão/concorrência/processo licitatório). Cada uma `null` se
+ * não achar. Todo DFD-R deveria mencionar ao menos uma (senão vira AVISO, não bloqueia).
+ */
+export function referenciasRenovacao(texto: string | null | undefined): {
+  contrato: string | null;
+  ata: string | null;
+  licitacao: string | null;
+} {
+  const s = String(texto ?? "");
+  return {
+    contrato: extrairRef(s, RE_CONTRATO),
+    ata: extrairRef(s, RE_ATA),
+    licitacao: extrairRef(s, RE_LICITACAO),
+  };
+}
+
+/**
  * Uma assinatura lida das páginas que seguem cada DFD no PDF. Dois formatos:
  * - **certificado**: "Assinaturas Digitais (Certificado Digital)" → "Assinatura
  *   digital - Nome: … e-Assinatura: <código>";
@@ -66,6 +110,10 @@ export type DfdParseado = {
   matricula: string | null;
   email: string | null;
   telefone: string | null;
+  anoPca: number | null; // ano do PCA adivinhado (o usuário confirma/escolhe)
+  numeroContrato: string | null; // referência de renovação (DFD-R)
+  numeroAta: string | null;
+  numeroLicitacao: string | null;
   valorEstimado: number | null;
   valorTotal: number | null;
   nomeArquivo: string;
@@ -73,6 +121,17 @@ export type DfdParseado = {
   itens: DfdItemParseado[];
   assinaturas: Assinatura[];
 };
+
+/** Adivinha o ano do PCA e as referências de renovação (DFD-R) do texto do DFD (objeto +
+ * seções). Reusado pelos parsers `.xlsx`/`.pdf`. */
+export function extrairRefsDfd(
+  secoes: DfdSecao[],
+  objeto: string | null,
+): { anoPca: number | null; numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null } {
+  const texto = [objeto ?? "", ...secoes.map((s) => s.texto)].join("\n");
+  const r = referenciasRenovacao(texto);
+  return { anoPca: anoPcaDoTexto(texto), numeroContrato: r.contrato, numeroAta: r.ata, numeroLicitacao: r.licitacao };
+}
 
 /** UPPER + sem acento + espaços colapsados (p/ casar rótulos/cabeçalhos). */
 export function norm(v: unknown): string {

@@ -98,6 +98,7 @@ export type ProtocoloVisualDfd = {
 export type ProtocoloVisual = {
   numero: string;
   idExterno: string | null;
+  anoPca: number | null;
   data: string | null;
   interessado: string | null;
   documento: string | null;
@@ -217,6 +218,9 @@ export function ProtocoloView({
           localReparticao={protocolo.localReparticao}
           editavel={false}
         >
+          <div>
+            <TextField label="PCA (ano)" value={protocolo.anoPca != null ? String(protocolo.anoPca) : "—"} disabled readOnly />
+          </div>
           {editando && edicao ? (
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="proto-edit-rep">

@@ -79,6 +79,10 @@ export type DfdDetalhe = DfdResumo & {
   matricula: string | null;
   email: string | null;
   telefone: string | null;
+  anoPca: number | null;
+  numeroContrato: string | null;
+  numeroAta: string | null;
+  numeroLicitacao: string | null;
   secoes: DfdSecaoRow[];
   assinaturas: Assinatura[];
   itens: DfdItemRow[];
@@ -174,6 +178,10 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
       matricula: dfds.matricula,
       email: dfds.email,
       telefone: dfds.telefone,
+      anoPca: dfds.anoPca,
+      numeroContrato: dfds.numeroContrato,
+      numeroAta: dfds.numeroAta,
+      numeroLicitacao: dfds.numeroLicitacao,
       secoes: dfds.secoes,
       assinaturas: dfds.assinaturas,
     })
@@ -225,6 +233,10 @@ export async function upsertDfdCabecalho(
     matricula: dados.matricula ?? null,
     email: dados.email ?? null,
     telefone: dados.telefone ?? null,
+    anoPca: dados.anoPca ?? null,
+    numeroContrato: dados.numeroContrato ?? null,
+    numeroAta: dados.numeroAta ?? null,
+    numeroLicitacao: dados.numeroLicitacao ?? null,
     valorEstimado: dados.valorEstimado ?? null,
     valorTotal: dados.valorTotal ?? null,
     secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
@@ -272,11 +284,20 @@ export async function appendDfdItens(
  */
 export async function atualizarDfdCampos(
   id: number,
-  campos: { reparticaoId?: number | null; secoes?: DfdSecaoRow[] },
+  campos: {
+    reparticaoId?: number | null;
+    secoes?: DfdSecaoRow[];
+    numeroContrato?: string | null;
+    numeroAta?: string | null;
+    numeroLicitacao?: string | null;
+  },
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
   if (campos.secoes !== undefined) set.secoes = campos.secoes.length > 0 ? JSON.stringify(campos.secoes) : null;
+  if (campos.numeroContrato !== undefined) set.numeroContrato = campos.numeroContrato || null;
+  if (campos.numeroAta !== undefined) set.numeroAta = campos.numeroAta || null;
+  if (campos.numeroLicitacao !== undefined) set.numeroLicitacao = campos.numeroLicitacao || null;
   await getDb().update(dfds).set(set).where(eq(dfds.id, id));
 }
 

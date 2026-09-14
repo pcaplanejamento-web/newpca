@@ -202,6 +202,18 @@ morto. Ambos catalogados.
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 
+### DFD/Protocolo: ano do PCA (obrigatório) + referências de renovação (DFD-R) — entregue
+✅ **Ano do PCA** gravado no protocolo e em cada DFD (`ano_pca`, migração `0021`). O sistema **adivinha o ano** pela
+descrição (`anoPcaDoTexto`) e o usuário **confirma/escolhe** no **`PcaPicker`** (novo componente do DS — `select` dos
+PCAs **cadastrados em Configurações**; guarda o **ano**). **Obrigatório:** não se protocola nem se importa DFD avulso
+sem PCA definido (cliente desabilita o botão; servidor rejeita 422). **Todos os DFDs do protocolo herdam** o ano do
+PCA do protocolo no envio. Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam **nº de contrato,
+ata (registro de preços) e licitação** (`numero_contrato`/`numero_ata`/`numero_licitacao`) para campos próprios; o
+`DfdConferir` mostra o bloco **Referências da renovação** (editável) e, sem nenhuma referência, um **aviso não-bloqueante**
+(aponta, não trava — preenchível à mão, inclusive num DFD gravado via `PATCH /api/dfd/[id]`). `DfdView` exibe o **Ano
+do PCA** e as referências; `ProtocoloView` exibe o **PCA (ano)**. `anoPca`/PCAs threadados da página → `DfdsView` →
+forms. Só componentes do design-system (catalogado). Testes de schema (anoPca/refs) + migração `0021`.
+
 ### Configurações do ADM: tela única (identidade do site + cadastro de PCAs + atalhos) — entregue
 ✅ Nova tela **`/painel/configuracoes`** (`ConfiguracoesAdmin`, admin) — ponto único de controle, reunindo **o novo + atalhos**. Abas: **Identidade** (definir **nome, subtítulo e favicon** do site — salvos no slot `identidade` já existente via `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar PCA por **nome + ano**, editar, **marcar 1 como ativo/vigente**, excluir — `/api/admin/pcas` + `/api/admin/pcas/[id]`, `exigirAdmin`) e **Mais** (`LinkCard` → aparência/repartições/grupos/permissões/usuários). A **identidade agora renderiza** de fato: `generateMetadata` (aba/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o cabeçalho público (`/`) — tudo via `getAparencia()` (cache 60s) com **fallback** aos textos padrão. PCA ganhou a coluna **`ativo`** (migração `0020`) e o **registro leve** (só nome+ano, sem unir DFDs — `gerarPca` intacto); badge **"Ativo"** no módulo PCA. Nav "Configurações" (`IconSettings`) no topo de Administração. Só componentes do design-system (catalogado).
 

@@ -18,6 +18,7 @@ export type ProtocoloResumo = {
   id: number;
   numero: string;
   idExterno: string | null;
+  anoPca: number | null;
   interessado: string | null;
   assunto: string | null;
   data: string | null;
@@ -50,6 +51,7 @@ export async function listarProtocolos(reparticaoId?: number): Promise<Protocolo
       id: dfdProtocolos.id,
       numero: dfdProtocolos.numero,
       idExterno: dfdProtocolos.idExterno,
+      anoPca: dfdProtocolos.anoPca,
       interessado: dfdProtocolos.interessado,
       assunto: dfdProtocolos.assunto,
       data: dfdProtocolos.data,
@@ -78,6 +80,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
       id: dfdProtocolos.id,
       numero: dfdProtocolos.numero,
       idExterno: dfdProtocolos.idExterno,
+      anoPca: dfdProtocolos.anoPca,
       interessado: dfdProtocolos.interessado,
       assunto: dfdProtocolos.assunto,
       data: dfdProtocolos.data,
@@ -115,6 +118,7 @@ export async function iniciarProtocolo(
   const db = getDb();
   const set = {
     idExterno: p.idExterno ?? null,
+    anoPca: p.anoPca ?? null,
     data: p.data ?? null,
     interessado: p.interessado ?? null,
     documento: p.documento ?? null,

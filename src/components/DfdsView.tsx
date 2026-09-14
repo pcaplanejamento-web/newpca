@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { DfdDetalhe, DfdResumo } from "@/lib/dfd";
+import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
 import {
   ESTADO_PROTOCOLO_ROTULO,
   estadoProtocolo,
@@ -46,6 +46,10 @@ function detalheParaParseado(d: DfdDetalhe): DfdParseado {
     matricula: d.matricula,
     email: d.email,
     telefone: d.telefone,
+    anoPca: d.anoPca,
+    numeroContrato: d.numeroContrato,
+    numeroAta: d.numeroAta,
+    numeroLicitacao: d.numeroLicitacao,
     valorEstimado: d.valorEstimado,
     valorTotal: d.valorTotal,
     nomeArquivo: "",
@@ -69,12 +73,14 @@ export function DfdsView({
   protocolos,
   reparticoes,
   reparticaoAtivaId,
+  pcas = [],
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
   protocolos: ProtocoloResumo[];
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
+  pcas?: PcaResumo[];
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -132,7 +138,13 @@ export function DfdsView({
       const res = await fetch(`/api/dfd/${dfdView.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reparticaoId: dfdRepEdit, secoes: dfdEdit.secoes }),
+        body: JSON.stringify({
+          reparticaoId: dfdRepEdit,
+          secoes: dfdEdit.secoes,
+          numeroContrato: dfdEdit.numeroContrato,
+          numeroAta: dfdEdit.numeroAta,
+          numeroLicitacao: dfdEdit.numeroLicitacao,
+        }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");
@@ -381,6 +393,7 @@ export function DfdsView({
           reparticoes={reparticoes}
           reparticaoAtivaId={reparticaoAtivaId}
           dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
+          pcas={pcas}
         />
       )}
       <section>
@@ -411,7 +424,7 @@ export function DfdsView({
 
   const dfdsTab = (
     <div className="space-y-6">
-      {podeEditar && <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} />}
+      {podeEditar && <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} />}
       <section>
         <h3 className="mb-3 text-sm font-semibold text-text-2">DFDs importados ({dfds.length})</h3>
         {dfds.length === 0 ? (
@@ -458,10 +471,12 @@ export function DfdsView({
       reparticoes={reparticoes}
       reparticaoAtivaId={reparticaoAtivaId}
       repId={dfdRepEdit}
+      anoPca={dfdEdit.anoPca}
       autoMatch={false}
       readOnly={!podeEditar || dfdTrancado}
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
+      onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
     />
   ) : null;
 

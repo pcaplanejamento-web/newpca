@@ -278,6 +278,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `acoesCabecalho` (cadeado próprio do lateral); em `DfdsView` o estado de edição do DFD é **reusado** — o modal
   avulso do DFD só aparece **fora** de um protocolo (`open={!!dfdView && !protoView}`), senão vira o lateral do
   protocolo; `fecharProto` fecha também o DFD do lateral.
+- **Ano do PCA + referências de renovação (migração `0021`) — `ano_pca` no protocolo e no DFD; `numero_contrato`/
+  `numero_ata`/`numero_licitacao` no DFD (tudo nullable):** ao ler o PDF, `anoPcaDoTexto` (`parse-dfd-comum.ts`, puro)
+  **adivinha o ano do PCA** da descrição ("PCA 2027", "PLANO DE CONTRATAÇÕES ANUAL … 2027"). O usuário **confirma ou
+  escolhe** o PCA no **`PcaPicker`** (componente do DS, `select` dos PCAs **cadastrados em Configurações** — guarda o
+  **ano** integer, não o id; pré-selecionado só se o ano adivinhado existir cadastrado). **Obrigatório:** não se
+  protocola nem se importa DFD avulso sem PCA definido (portão à parte de `faltasObrigatorias` — no cliente
+  desabilita o botão, e o servidor rejeita 422: `POST /api/protocolo` e `POST /api/dfd` `start-dfd`). **Todos os DFDs
+  do protocolo herdam o ano do PCA do protocolo** no envio (`ProtocoloUploadForm.protocolar` põe `anoPca` em cada
+  `enviarDfdEmLotes`). Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam nº de **contrato**,
+  **ata** (registro de preços) e **licitação** da descrição para campos próprios; o `DfdConferir` mostra um bloco
+  **Referências da renovação** (editável) e, se o DFD-R não tiver **nenhuma**, um **aviso não-bloqueante** (aponta,
+  não trava) — o usuário pode preencher à mão. O `DfdView` exibe **Ano do PCA** (Seção 1) e as referências (só DFD-R);
+  o `ProtocoloView` mostra o **PCA (ano)** na capa. Editar refs num DFD gravado vai pelo `PATCH /api/dfd/[id]`
+  (`editarDfdSchema` + `atualizarDfdCampos`). `anoPca` é threadado da página (`listarPcas`) → `DfdsView` → forms.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -314,7 +328,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
   `RelatorioErros` (banner/`Modal` com todos os erros de um DFD/Protocolo listados p/ **copiar** — `navigator.clipboard`
-  + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros), `ReorderTable` (tabela com arrasto entre linhas,
+  + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
+  `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
+  obrigatório), `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).

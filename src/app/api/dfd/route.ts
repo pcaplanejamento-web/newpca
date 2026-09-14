@@ -41,6 +41,9 @@ export async function POST(req: Request) {
   // start-dfd — regra obrigatória (mesma do cliente) sobre cabeçalho + 1º lote.
   const faltas = faltasObrigatorias({ reparticaoId: d.reparticaoId, itens: d.rows, secoes: d.secoes });
   if (faltas.length > 0) return erro(`Não é possível importar: falta ${faltas.join(", ")}.`, 422);
+  // Portão do PCA: todo DFD é gravado com o ano do PCA (herdado do protocolo ou
+  // definido no avulso). Sem ele, não grava (regra: não protocolar/importar sem PCA).
+  if (d.anoPca == null) return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
   if (!acessivel(d.reparticaoId)) return erro("Repartição inválida ou sem acesso.", 403);
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma repartição inacessível.
   const existente = await getReparticaoDfdNumero(d.numero);

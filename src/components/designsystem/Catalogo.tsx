@@ -14,6 +14,7 @@ import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
+import { PcaPicker } from "@/components/PcaPicker";
 import { ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
@@ -73,6 +74,22 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
       </h2>
       <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">{children}</div>
     </section>
+  );
+}
+
+/** Demo do seletor de PCA (controlado) — pré-selecionado pela detecção "PCA 2026". */
+function PcaPickerDemo() {
+  const [ano, setAno] = useState<number | null>(2026);
+  return (
+    <PcaPicker
+      pcas={[
+        { id: 1, nome: "PCA 2026", ano: 2026 },
+        { id: 2, nome: "PCA 2027", ano: 2027 },
+      ]}
+      value={ano}
+      detectado={2026}
+      onChange={setAno}
+    />
   );
 }
 
@@ -244,6 +261,10 @@ const DFD_DEMO = {
   matricula: "1043055",
   email: "claudioluiz99685320@gmail.com",
   telefone: "(64) 99968-5320",
+  anoPca: 2026,
+  numeroContrato: null,
+  numeroAta: null,
+  numeroLicitacao: null,
   valorEstimado: 342342.72,
   valorTotal: 342342.72,
   totalItens: 2,
@@ -330,6 +351,7 @@ const PCA_DEMO = {
 const PROTO_DEMO = {
   numero: "144756/2026",
   idExterno: "2273524",
+  anoPca: 2027,
   data: "09/09/2026 16:41:38",
   interessado: "1008171 - FUNDO MUNICIPAL DOS DIREITOS DO IDOSO",
   documento: "29.788.950/0001-04",
@@ -871,6 +893,12 @@ export function Catalogo() {
             { key: 3, numero: "1024", planejamento: "1066", sigla: "FMS", tipo: "DFD-R", itens: 0, valor: 0, estado: "erro", estadoMotivo: "Leitura incompleta da tabela", situacao: "Novo" },
           ]}
         />
+      </Secao>
+
+      <Secao titulo="PcaPicker (definição do PCA do processo — obrigatório)">
+        <div className="max-w-md">
+          <PcaPickerDemo />
+        </div>
       </Secao>
 
       <Secao titulo="DFD — visualização do documento importado">

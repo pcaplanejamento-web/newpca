@@ -6,6 +6,7 @@ import {
   ehRuido,
   extrairAssinaturas,
   extrairCabecalho,
+  extrairRefsDfd,
   norm,
   TITULO_SECAO_ITENS,
 } from "./parse-dfd-comum.ts";
@@ -332,6 +333,7 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
 
   return {
     ...cab,
+    ...extrairRefsDfd(secoes, cab.objeto),
     numero: cab.numero,
     valorTotal,
     nomeArquivo,

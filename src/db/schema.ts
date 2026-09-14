@@ -265,6 +265,7 @@ export const dfdProtocolos = sqliteTable(
     assunto: text("assunto"),
     observacao: text("observacao"),
     valorCapa: real("valor_capa"), // "Valor" da capa do processo
+    anoPca: integer("ano_pca"), // ano do PCA do processo (adivinhado da capa OU definido pelo usuário)
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
       onDelete: "set null",
     }),
@@ -313,6 +314,11 @@ export const dfds = sqliteTable(
     matricula: text("matricula"),
     email: text("email"),
     telefone: text("telefone"),
+    anoPca: integer("ano_pca"), // ano do PCA (herdado do protocolo, ou definido no DFD avulso)
+    // Renovação (DFD-R): referência do que se renova — capturada da descrição ou manual.
+    numeroContrato: text("numero_contrato"),
+    numeroAta: text("numero_ata"),
+    numeroLicitacao: text("numero_licitacao"),
     valorEstimado: real("valor_estimado"), // estimativa da nota (Seção 4)
     valorTotal: real("valor_total"), // total da tabela (soma dos itens)
     secoes: text("secoes"), // JSON: {numero,titulo,texto}[] das demais seções

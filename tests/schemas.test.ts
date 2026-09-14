@@ -9,6 +9,7 @@ import {
 import {
   cadastrarPcaSchema,
   dfdOpSchema,
+  editarDfdSchema,
   editarPcaSchema,
   faltasObrigatorias,
   gerarPcaSchema,
@@ -98,6 +99,32 @@ describe("dfd-validation", () => {
     }
   });
 
+  it("dfdOpSchema start-dfd: aceita anoPca (2000–2100) e referências de renovação", () => {
+    const r = dfdOpSchema.parse({
+      mode: "start-dfd",
+      numero: "959",
+      anoPca: 2027,
+      numeroContrato: "860/2025",
+      numeroAta: null,
+      numeroLicitacao: null,
+      rows: [{ item: 1, valorUnitario: 2 }],
+    });
+    if (r.mode === "start-dfd") {
+      assert.equal(r.anoPca, 2027);
+      assert.equal(r.numeroContrato, "860/2025");
+    }
+    // anoPca fora da faixa é rejeitado.
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", anoPca: 1999, rows: [{ item: 1 }] }).success, false);
+    assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", anoPca: 2101, rows: [{ item: 1 }] }).success, false);
+  });
+
+  it("editarDfdSchema aceita referências de renovação (DFD-R) e exige ao menos um campo", () => {
+    assert.equal(editarDfdSchema.safeParse({ numeroContrato: "860/2025" }).success, true);
+    assert.equal(editarDfdSchema.safeParse({ numeroAta: null }).success, true);
+    assert.equal(editarDfdSchema.safeParse({ reparticaoId: 3 }).success, true);
+    assert.equal(editarDfdSchema.safeParse({}).success, false); // nada para editar
+  });
+
   it("dfdOpSchema start-dfd: teto de totalItens (anti-abuso)", () => {
     assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", totalItens: 100000, rows: [{ item: 1 }] }).success, true);
     assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", totalItens: 100001, rows: [{ item: 1 }] }).success, false);
@@ -148,6 +175,15 @@ describe("dfd-validation", () => {
   it("startProtocoloSchema exige o numero do protocolo (capa)", () => {
     assert.equal(startProtocoloSchema.safeParse({ mode: "start-protocolo", protocolo: { numero: "144/2026" } }).success, true);
     assert.equal(startProtocoloSchema.safeParse({ mode: "start-protocolo", protocolo: { numero: "" } }).success, false);
+  });
+
+  it("startProtocoloSchema aceita o anoPca da capa (2000–2100)", () => {
+    const r = startProtocoloSchema.parse({ mode: "start-protocolo", protocolo: { numero: "144/2026", anoPca: 2027 } });
+    assert.equal(r.protocolo.anoPca, 2027);
+    assert.equal(
+      startProtocoloSchema.safeParse({ mode: "start-protocolo", protocolo: { numero: "1", anoPca: 1800 } }).success,
+      false,
+    );
   });
 
   it("vincularDfdSchema aceita id positivo ou null (desvincular)", () => {

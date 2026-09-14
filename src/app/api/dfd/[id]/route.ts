@@ -66,8 +66,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     await vincularDfd(id, p.data.protocoloId);
   }
 
-  // Editar repartição e/ou seções (tratamento). Não move p/ repartição inacessível.
-  if (p.data.reparticaoId !== undefined || p.data.secoes !== undefined) {
+  // Editar repartição, seções (tratamento) e/ou referências de renovação (DFD-R). Não
+  // move p/ repartição inacessível.
+  const editaCampos =
+    p.data.reparticaoId !== undefined ||
+    p.data.secoes !== undefined ||
+    p.data.numeroContrato !== undefined ||
+    p.data.numeroAta !== undefined ||
+    p.data.numeroLicitacao !== undefined;
+  if (editaCampos) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à repartição de destino.", 403);
     }
@@ -80,7 +87,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       });
       if (res.status === "erro") return erro(res.motivo, 422);
     }
-    await atualizarDfdCampos(id, { reparticaoId: p.data.reparticaoId, secoes: p.data.secoes });
+    await atualizarDfdCampos(id, {
+      reparticaoId: p.data.reparticaoId,
+      secoes: p.data.secoes,
+      numeroContrato: p.data.numeroContrato,
+      numeroAta: p.data.numeroAta,
+      numeroLicitacao: p.data.numeroLicitacao,
+    });
   }
 
   return ok();

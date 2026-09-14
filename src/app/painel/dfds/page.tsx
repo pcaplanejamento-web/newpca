@@ -1,6 +1,6 @@
 import { DfdsView } from "@/components/DfdsView";
 import { getUsuarioAtual } from "@/lib/auth";
-import { listarDfds } from "@/lib/dfd";
+import { listarDfds, listarPcas } from "@/lib/dfd";
 import { getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
 import { listarProtocolos } from "@/lib/protocolo";
 import { RESPONSAVEIS_VAZIO } from "@/lib/reparticao-responsaveis";
@@ -12,10 +12,11 @@ export default async function DfdsPage() {
   const u = await getUsuarioAtual();
   // Head em "Geral" (rep=null) mostra tudo; senão só o da repartição ativa.
   const rep = await getReparticaoFiltro(u);
-  const [dfds, protocolos, repCtx] = await Promise.all([
+  const [dfds, protocolos, repCtx, pcas] = await Promise.all([
     listarDfds(rep?.id),
     listarProtocolos(rep?.id),
     getReparticaoContexto(u),
+    listarPcas(),
   ]);
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
@@ -31,6 +32,7 @@ export default async function DfdsPage() {
       protocolos={protocolos}
       reparticoes={reparticoes}
       reparticaoAtivaId={repCtx.ativa?.id ?? null}
+      pcas={pcas}
     />
   );
 }

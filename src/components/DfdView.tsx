@@ -56,6 +56,10 @@ export type DfdVisual = {
   matricula: string | null;
   email: string | null;
   telefone: string | null;
+  anoPca: number | null;
+  numeroContrato: string | null;
+  numeroAta: string | null;
+  numeroLicitacao: string | null;
   valorEstimado: number | null;
   valorTotal: number | null;
   reparticaoCodigo: string | null;
@@ -171,6 +175,8 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
   const secoesGerais = dfd.secoes.filter((s) => s.numero !== 4);
   // Buracos na sequência de ITEM (normal: itens removidos) — só APONTA, não é erro.
   const buracos = buracosSequencia(dfd.itens);
+  // DFD de renovação → mostra as referências (contrato/ata/licitação).
+  const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
 
   return (
     <div className="space-y-5">
@@ -198,6 +204,7 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
         <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
           <Campo label="Nº DFD" valor={dfd.numero} />
           <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
+          <Campo label="Ano do PCA" valor={dfd.anoPca != null ? String(dfd.anoPca) : "—"} />
           <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
           <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
           <Campo label="Repartição" valor={rep} span />
@@ -207,6 +214,18 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           <Campo label="Telefone" valor={dfd.telefone ?? "—"} />
         </dl>
       </section>
+
+      {/* Referências da renovação (DFD-R): contrato/ata/licitação */}
+      {ehRenovacao && (
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+          <h3 className="mb-4 text-sm font-bold text-text">Referências da renovação</h3>
+          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
+            <Campo label="Nº do contrato" valor={dfd.numeroContrato ?? "—"} />
+            <Campo label="Nº da ata (registro de preços)" valor={dfd.numeroAta ?? "—"} />
+            <Campo label="Nº da licitação" valor={dfd.numeroLicitacao ?? "—"} />
+          </dl>
+        </section>
+      )}
 
       {/* Seção 4 — Itens (os com pendência numa tabela SEPARADA) */}
       <section>

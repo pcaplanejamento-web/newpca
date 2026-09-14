@@ -41,6 +41,7 @@ import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
+import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { CapaCampos, ProtocoloCabecalho } from "./ProtocoloView";
@@ -62,10 +63,12 @@ export function ProtocoloUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
   dfdsExistentes = [],
+  pcas = [],
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   dfdsExistentes?: DfdExistente[];
+  pcas?: PcaOpcao[];
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
@@ -86,6 +89,10 @@ export function ProtocoloUploadForm({
   const [observacao, setObservacao] = useState("");
   const [protoRepId, setProtoRepId] = useState<number | null>(null);
   const [extra, setExtra] = useState<Extra>(EXTRA_VAZIO);
+  // PCA do protocolo (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Os
+  // DFDs herdam este ano ao protocolar. Obrigatório para protocolar.
+  const [anoPca, setAnoPca] = useState<number | null>(null);
+  const [anoPcaDetectado, setAnoPcaDetectado] = useState<number | null>(null);
 
   // Índice leve + repartição por DFD.
   const [index, setIndex] = useState<ProtocoloIndex | null>(null);
@@ -153,8 +160,10 @@ export function ProtocoloUploadForm({
     setAssunto("");
     setObservacao("");
     setExtra(EXTRA_VAZIO);
+    setAnoPca(null);
+    setAnoPcaDetectado(null);
     setProtoRepId(reparticaoAtivaId);
-    setIndex({ protocolo: { numero: null, idExterno: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
+    setIndex({ protocolo: { numero: null, idExterno: null, anoPca: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
     setDfdRepIds([]);
     setAutoRepIds([]);
     setAberto(true);
@@ -197,6 +206,9 @@ export function ProtocoloUploadForm({
       setAssunto(p.assunto ?? "");
       setObservacao(p.observacao ?? "");
       setExtra({ idExterno: p.idExterno, documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
+      // Adivinha o PCA pela capa; pré-seleciona só se o ano existir cadastrado.
+      setAnoPcaDetectado(p.anoPca);
+      setAnoPca(p.anoPca != null && pcas.some((x) => x.ano === p.anoPca) ? p.anoPca : null);
       setOrigemPdf(true); // capa lida do PDF: imutável (só leitura)
       setIndex(idx);
       setDfdRepIds(autos);
@@ -307,6 +319,16 @@ export function ProtocoloUploadForm({
     setEditados((s) => new Set(s).add(abertoIdx));
   };
 
+  // Edição manual das referências de renovação (DFD-R) do DFD aberto no lateral.
+  const onRefsAberto = (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => {
+    setParsed((m) => {
+      const d = m.get(abertoIdx);
+      if (!d) return m;
+      return new Map(m).set(abertoIdx, { ...d, ...refs });
+    });
+    setEditados((s) => new Set(s).add(abertoIdx));
+  };
+
   async function aplicarBulk() {
     const idxs = [...sel].map(Number); // chaves são idx numéricos
     if (idxs.length === 0) return;
@@ -345,6 +367,7 @@ export function ProtocoloUploadForm({
           protocolo: {
             numero,
             idExterno: extra.idExterno,
+            anoPca,
             data: data || null,
             interessado: interessado || null,
             documento: extra.documento,
@@ -405,6 +428,11 @@ export function ProtocoloUploadForm({
               matricula: full.matricula,
               email: full.email,
               telefone: full.telefone,
+              // Regra: todos os DFDs do protocolo herdam o ano do PCA do protocolo.
+              anoPca,
+              numeroContrato: full.numeroContrato,
+              numeroAta: full.numeroAta,
+              numeroLicitacao: full.numeroLicitacao,
               reparticaoId: dfdRepIds[i],
               protocoloId,
               valorEstimado: full.valorEstimado,
@@ -479,6 +507,7 @@ export function ProtocoloUploadForm({
   const podeProtocolar =
     numero.trim().length > 0 &&
     protoRepId != null &&
+    anoPca != null &&
     !importando &&
     !analisando &&
     dfdsComErro === 0 &&
@@ -713,10 +742,12 @@ export function ProtocoloUploadForm({
                         reparticoes={reparticoes}
                         reparticaoAtivaId={reparticaoAtivaId}
                         repId={dfdRepIds[abertoIdx] ?? null}
+                        anoPca={anoPca}
                         autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
                         autoCampos={autoMap.get(abertoIdx) ?? []}
                         onRepChange={(id) => setRepDfd(abertoIdx, id)}
                         onSecoesChange={onSecoesAberto}
+                        onRefsChange={onRefsAberto}
                       />
                     )}
                   </div>
@@ -735,17 +766,19 @@ export function ProtocoloUploadForm({
               ) : (
               <span
                 className="text-[12px]"
-                style={{ color: dfdsComErro > 0 || capaDivergente ? "var(--danger)" : "var(--muted)" }}
+                style={{ color: dfdsComErro > 0 || capaDivergente || anoPca == null ? "var(--danger)" : "var(--muted)" }}
               >
-                {!temDfds
-                  ? "Sem DFDs — cria só o protocolo."
-                  : analisando
-                    ? `Analisando ${index?.dfds.length} DFD(s)...`
-                    : dfdsComErro > 0
-                      ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
-                      : capaDivergente
-                        ? "Valor da capa diverge da somatória — substitua para liberar"
-                        : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
+                {anoPca == null
+                  ? "Defina o PCA do processo para protocolar"
+                  : !temDfds
+                    ? "Sem DFDs — cria só o protocolo."
+                    : analisando
+                      ? `Analisando ${index?.dfds.length} DFD(s)...`
+                      : dfdsComErro > 0
+                        ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
+                        : capaDivergente
+                          ? "Valor da capa diverge da somatória — substitua para liberar"
+                          : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
               </span>
             )}
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -841,6 +874,10 @@ export function ProtocoloUploadForm({
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* PCA do protocolo (obrigatório) — os DFDs herdam este ano ao protocolar. */}
+              <div className="sm:col-span-2">
+                <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
               </div>
             </CapaCampos>
           </section>

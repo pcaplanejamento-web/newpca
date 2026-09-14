@@ -22,6 +22,7 @@ import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
+import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
@@ -30,15 +31,20 @@ type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
 export function DfdUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
+  pcas = [],
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
+  pcas?: PcaOpcao[];
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<DfdParseado | null>(null);
   const [repId, setRepId] = useState<number | null>(null);
+  // PCA do DFD (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Obrigatório.
+  const [anoPca, setAnoPca] = useState<number | null>(null);
+  const [anoPcaDetectado, setAnoPcaDetectado] = useState<number | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [autoCampos, setAutoCampos] = useState<CampoTratavel[]>([]);
   const [launcher, setLauncher] = useState(false); // banner lançador de importação
@@ -79,6 +85,9 @@ export function DfdUploadForm({
       setAutoCampos(auto);
       setRepId(matched);
       setAutoMatch(matched != null);
+      // Adivinha o PCA pela descrição; pré-seleciona só se o ano existir cadastrado.
+      setAnoPcaDetectado(d.anoPca);
+      setAnoPca(d.anoPca != null && pcas.some((p) => p.ano === d.anoPca) ? d.anoPca : null);
       setStatus("ready");
     } catch (e) {
       setStatus("error");
@@ -106,6 +115,10 @@ export function DfdUploadForm({
           matricula: preview.matricula,
           email: preview.email,
           telefone: preview.telefone,
+          anoPca,
+          numeroContrato: preview.numeroContrato,
+          numeroAta: preview.numeroAta,
+          numeroLicitacao: preview.numeroLicitacao,
           reparticaoId: repId,
           valorEstimado: preview.valorEstimado,
           valorTotal: preview.valorTotal,
@@ -135,6 +148,8 @@ export function DfdUploadForm({
     setPreview(null);
     setErro(null);
     setRepId(null);
+    setAnoPca(null);
+    setAnoPcaDetectado(null);
     setAutoMatch(false);
     setAutoCampos([]);
   }
@@ -149,7 +164,8 @@ export function DfdUploadForm({
         exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
       }).status === "erro"
     : false;
-  const bloqueado = faltas.length > 0 || assinaturaBloqueia;
+  // O PCA é obrigatório no envio de DFD avulso (regra: definir o PCA).
+  const bloqueado = faltas.length > 0 || assinaturaBloqueia || anoPca == null;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -275,19 +291,27 @@ export function DfdUploadForm({
         }
       >
         {preview && (
-          <DfdConferir
-            dfd={preview}
-            reparticoes={reparticoes}
-            reparticaoAtivaId={reparticaoAtivaId}
-            repId={repId}
-            autoMatch={autoMatch}
-            autoCampos={autoCampos}
-            onRepChange={(id) => {
-              setRepId(id);
-              setAutoMatch(false);
-            }}
-            onSecoesChange={(secoes) => setPreview((p) => (p ? { ...p, secoes } : p))}
-          />
+          <div className="space-y-4">
+            {/* PCA do DFD (obrigatório) — adivinhado pela descrição, confirmável. */}
+            <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
+              <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
+            </section>
+            <DfdConferir
+              dfd={preview}
+              reparticoes={reparticoes}
+              reparticaoAtivaId={reparticaoAtivaId}
+              repId={repId}
+              anoPca={anoPca}
+              autoMatch={autoMatch}
+              autoCampos={autoCampos}
+              onRepChange={(id) => {
+                setRepId(id);
+                setAutoMatch(false);
+              }}
+              onSecoesChange={(secoes) => setPreview((p) => (p ? { ...p, secoes } : p))}
+              onRefsChange={(refs) => setPreview((p) => (p ? { ...p, ...refs } : p))}
+            />
+          </div>
         )}
       </Modal>
     </div>
