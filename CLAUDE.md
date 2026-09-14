@@ -134,9 +134,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   coluna **se repetem por página** e são **pulados** (`ehRuido` + detector de cabeçalho), nunca encerram a tabela;
   `y` reinicia por página → itens/valores são casados **por (página,y)**; a ordem é `(página, y desc)`. O texto de
   **apoio** abaixo da tabela (parágrafo antes da Seção 5) é capturado e vira uma **seção 4** (exibida abaixo da
-  tabela no `DfdView`). **`reconciliarItens`** exige que os números lidos formem uma faixa **contígua** `min..max`
-  (a numeração pode não começar em 1); com buraco/repetição **lança erro** (nunca grava um DFD pela metade) — o
-  DFD entra em "bloqueados" no relatório com os itens faltantes. Testes: fixture multipágina real + caso que lança.
+  tabela no `DfdView`). **A numeração da coluna ITEM PODE ter buracos legítimos** (itens removidos/fracassados
+  pulam o número — ex.: 8, 10, 11… — com os CÓDIGOS ainda sequenciais); isso **não é perda**. Um dígito à DIREITA
+  do início do texto da descrição (`descStartX` = menor `x` de texto na zona) é conteúdo da descrição (ex.: nº de
+  peça "40300050630"), **não código** — senão poluiria o código. **`reconciliarItens`** só bloqueia **perda REAL**:
+  código anormalmente longo (2 códigos grudados = item sem número no vizinho) ou número de item repetido. Validado
+  contra um protocolo real de **581 páginas / 104 DFDs** (harness pdf.js): **104/104 importam** todos os itens.
+  Testes: fixture multipágina real, buraco legítimo (importa) e código grudado (lança).
 - **Tela própria de DFD** (`/painel/dfds` = `DfdsView`, aba **`dfd`**) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,

@@ -201,10 +201,22 @@ describe("parse-dfd-pdf-core", () => {
     assert.ok(d.secoes.find((s) => s.numero === 5));
   });
 
-  it("RECONCILIAÇÃO: lança erro quando um item some (tabela truncada) — não grava parcial", () => {
-    // Remove os fragmentos do item 4 (página 2) → numeração 1,2,3,5,6 (falta o 4).
-    const truncado = dfdMultipagina().filter((it) => !(it.page === 2 && it.y >= 356 && it.y <= 366));
-    assert.throws(() => parseDfdFromPdfItems(truncado, "multi.pdf"), /Leitura incompleta/i);
+  it("numeração com BURACO legítimo (item removido/fracassado) importa normalmente", () => {
+    // Remove TODO o item 4 (número + código + descrição + valores) → 1,2,3,5,6, como
+    // um item fracassado que some da tabela. NÃO é perda → não deve lançar.
+    const semItem4 = dfdMultipagina().filter((it) => !(it.page === 2 && it.y >= 356 && it.y <= 366));
+    const d = parseDfdFromPdfItems(semItem4, "multi.pdf");
+    assert.deepEqual(
+      d.itens.map((i) => i.item),
+      [1, 2, 3, 5, 6],
+    );
+  });
+
+  it("RECONCILIAÇÃO: lança erro quando o código de um item GRUDA no vizinho (item sem número)", () => {
+    // Remove só o NÚMERO do item 4 (mantém código/descrição) → o código do item 4
+    // gruda no item 3 (código anormalmente longo) = perda real → deve lançar.
+    const semNum4 = dfdMultipagina().filter((it) => !(it.page === 2 && it.str === "4" && it.x < 70));
+    assert.throws(() => parseDfdFromPdfItems(semNum4, "multi.pdf"), /Leitura suspeita|código anormal/i);
   });
 
   it("lança erro claro quando falta o Número DFD", () => {

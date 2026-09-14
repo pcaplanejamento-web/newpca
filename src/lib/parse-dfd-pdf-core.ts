@@ -135,6 +135,22 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       .filter((c): c is { key: keyof DfdItemParseado; x: number } => c.x != null);
     const [c0, c1] = cols;
     const itemBound = c0 && c1 ? (c0.x + c1.x) / 2 : 70;
+    // INÍCIO REAL do texto da descrição: o conteúdo é alinhado à esquerda, bem à
+    // esquerda do cabeçalho "DESCRIÇÃO" — então usamos o menor `x` de um fragmento
+    // de TEXTO (com letra) na zona código→unidade. Um dígito à DIREITA disso é
+    // conteúdo da descrição (ex.: nº de modelo "40300050630"), NÃO código.
+    const codAnchor = anchors.codigo ?? 0;
+    const uniAnchor = anchors.unidade ?? Number.POSITIVE_INFINITY;
+    let descStartX = anchors.descricao ?? Number.POSITIVE_INFINITY;
+    let minTexto = Number.POSITIVE_INFINITY;
+    for (let k = hi + 1; k < linhas.length; k++) {
+      for (const it of linhas[k].items) {
+        if (it.x > codAnchor + 5 && it.x < uniAnchor && /[A-Za-zÀ-ÿ]/.test(it.str) && it.x < minTexto) {
+          minTexto = it.x;
+        }
+      }
+    }
+    if (minTexto < Number.POSITIVE_INFINITY) descStartX = Math.min(descStartX, minTexto);
 
     const colOf = (x: number, str: string): keyof DfdItemParseado => {
       let idx = 0;
@@ -144,8 +160,12 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         if (a && b && x >= (a.x + b.x) / 2) idx = i + 1;
       }
       let c: keyof DfdItemParseado = cols[idx]?.key ?? "descricao";
-      // no vão código×descrição, dígitos puros = código; texto = descrição.
-      if (c === "codigo" || c === "descricao") c = /^\d+$/.test(str.trim()) ? "codigo" : "descricao";
+      // No vão código×descrição, dígitos puros = código; texto = descrição. Mas um
+      // dígito na área da descrição (x ≥ início do texto) fica descrição — senão um
+      // número no meio do texto vira "código" e o polui.
+      if (c === "codigo" || c === "descricao") {
+        c = /^\d+$/.test(str.trim()) && x < descStartX ? "codigo" : "descricao";
+      }
       return c;
     };
 
