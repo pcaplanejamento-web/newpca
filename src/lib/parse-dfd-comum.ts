@@ -134,7 +134,7 @@ const RE_ASSINATURA_A =
 // código: COD". Grupos: 1 nome, 2 CPF, 3 data, 4 código (o "utilizando o código:"
 // é o mais confiável; a ponte `[^]*?` tolera a URL/quebra entre a data e o código).
 const RE_ASSINATURA_B =
-  /Assinado digitalmente por\s+(.+?),\s*portador do CPF:\s*([\d.*\-]+),?\s*em\s+(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)[^]*?utilizando o c[oó]digo:\s*(\S+)/gi;
+  /Assinado digitalmente por\s+(.+?),\s*portador do CPF:\s*([\d.*-]+),?\s*em\s+(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)[\s\S]*?utilizando o c[oó]digo:\s*(\S+)/gi;
 
 /**
  * Extrai TODAS as assinaturas (formatos "certificado" e "sistema") das páginas que
