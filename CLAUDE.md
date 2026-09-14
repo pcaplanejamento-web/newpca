@@ -114,8 +114,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
   autorizado → bloqueia. O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
   a repartição), carregando os responsáveis por `carregarResponsaveis` (`src/lib/reparticoes.ts`). O `DfdView`
-  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) + o **autorizador** (com período
-  e Portaria/Decreto se temporário) + botão **`LinkExterno`** "Verificar autenticidade" p/ o site oficial.
+  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) + o **solicitante** — o
+  responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
+  (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
+  oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).
 - **Importa `.xlsx` E `.pdf`:** o cabeçalho + seções são **compartilhados** em `src/lib/parse-dfd-comum.ts`
   (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
   tabela por coluna da matriz). `.pdf` → `parse-dfd-pdf`/`parse-dfd-pdf-core` (**pdf.js `pdfjs-dist`**, importado

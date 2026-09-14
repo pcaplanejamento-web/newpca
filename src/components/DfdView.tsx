@@ -2,19 +2,23 @@
 
 import { brl, dataBR, num } from "@/lib/format";
 import type { Assinatura } from "@/lib/parse-dfd-comum";
-import { type Autorizador, type Nomeacao, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
+import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { type Column, DataTable } from "./DataTable";
-import { IconShield } from "./icons";
+import { IconFile, IconShield } from "./icons";
 import { LinkExterno } from "./LinkExterno";
 
 /** URL oficial de verificação da assinatura digital (site da Prefeitura). */
 const URL_VERIFICACAO = "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios";
 
+/** Rótulo do tipo de ato (Portaria/Decreto/Lei). */
+function rotuloAto(n: Nomeacao): string {
+  return n.tipo ? (TIPOS_ATO.find((t) => t.valor === n.tipo)?.rotulo ?? n.tipo) : "ato";
+}
+
 /** Texto do ato de nomeação (ex.: "Portaria nº 123"). */
 function atoTexto(n: Nomeacao): string {
   if (!n.tipo) return "—";
-  const rotulo = TIPOS_ATO.find((t) => t.valor === n.tipo)?.rotulo ?? n.tipo;
-  return n.numero ? `${rotulo} nº ${n.numero}` : rotulo;
+  return n.numero ? `${rotuloAto(n)} nº ${n.numero}` : rotuloAto(n);
 }
 
 /**
@@ -51,7 +55,7 @@ export type DfdVisual = {
   totalItens: number | null;
   itens: DfdVisualItem[];
   secoes: { numero: number; titulo: string; texto: string }[];
-  assinaturas: { lista: Assinatura[]; autorizador: Autorizador | null };
+  assinaturas: { lista: Assinatura[]; solicitante: Solicitante | null };
 };
 
 type ItemK = DfdVisualItem & { _k: number };
@@ -176,34 +180,44 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
           <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais (Certificado Digital)</h3>
           <p className="mb-4 text-xs text-muted">
-            Quem assina é o responsável que autorizou a consolidação do DFD no PCA. A autenticidade pode ser
+            Quem assina é o responsável que solicitou a consolidação do DFD no PCA. A autenticidade pode ser
             conferida pelo código verificador no site oficial da Prefeitura.
           </p>
 
-          {dfd.assinaturas.autorizador && (
+          {dfd.assinaturas.solicitante && (
             <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-4">
               <div className="mb-3 flex items-center gap-2">
                 <IconShield className="h-4 w-4" style={{ color: "var(--ok)" }} />
                 <span className="text-[13px] font-bold text-text">
-                  Responsável autorizador
-                  {dfd.assinaturas.autorizador.tipo === "temporario" ? " (temporário)" : ""}
+                  Responsável pela solicitação
+                  {dfd.assinaturas.solicitante.tipo === "temporario" ? " (temporário)" : ""}
                 </span>
               </div>
               <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-                <Campo label="Nome" valor={dfd.assinaturas.autorizador.nome} span />
-                <Campo label="Matrícula" valor={dfd.assinaturas.autorizador.matricula || "—"} />
-                <Campo label="Função" valor={dfd.assinaturas.autorizador.funcao || "—"} />
-                {dfd.assinaturas.autorizador.tipo === "temporario" && (
-                  <>
-                    <Campo
-                      label="Período do responsável temporário"
-                      valor={`${dataBR(dfd.assinaturas.autorizador.inicio)} — ${dataBR(dfd.assinaturas.autorizador.fim)}`}
-                      span
-                    />
-                    <Campo label="Ato de nomeação" valor={atoTexto(dfd.assinaturas.autorizador.nomeacao)} span />
-                  </>
+                <Campo label="Nome" valor={dfd.assinaturas.solicitante.nome} span />
+                <Campo label="Matrícula" valor={dfd.assinaturas.solicitante.matricula || "—"} />
+                <Campo label="Função" valor={dfd.assinaturas.solicitante.funcao || "—"} />
+                {dfd.assinaturas.solicitante.tipo === "temporario" && (
+                  <Campo
+                    label="Período do responsável temporário"
+                    valor={`${dataBR(dfd.assinaturas.solicitante.inicio)} — ${dataBR(dfd.assinaturas.solicitante.fim)}`}
+                    span
+                  />
+                )}
+                {dfd.assinaturas.solicitante.nomeacao.tipo && (
+                  <Campo label="Ato de nomeação" valor={atoTexto(dfd.assinaturas.solicitante.nomeacao)} span />
                 )}
               </dl>
+              {dfd.assinaturas.solicitante.nomeacao.link && (
+                <div className="mt-3">
+                  <LinkExterno
+                    href={dfd.assinaturas.solicitante.nomeacao.link}
+                    icon={<IconFile className="h-4 w-4" />}
+                  >
+                    Ver {rotuloAto(dfd.assinaturas.solicitante.nomeacao)}
+                  </LinkExterno>
+                </div>
+              )}
             </div>
           )}
 

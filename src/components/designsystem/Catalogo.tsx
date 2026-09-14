@@ -266,12 +266,16 @@ const DFD_DEMO = {
         url: "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios",
       },
     ],
-    autorizador: {
+    solicitante: {
       tipo: "padrao" as const,
       nome: "ISAAC PIRES CABRAL",
       matricula: "1043055",
       funcao: "Secretário",
-      nomeacao: { tipo: "portaria" as const, numero: "123/2026", link: "" },
+      nomeacao: {
+        tipo: "portaria" as const,
+        numero: "123/2026",
+        link: "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios",
+      },
       assinaturaCodigo: "PBfGdg58teX",
       assinaturaData: "31/08/2026 16:20:00",
     },

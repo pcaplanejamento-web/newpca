@@ -196,8 +196,9 @@ function mesmoNome(a: string, b: string): boolean {
   return na.length > 0 && na === norm(b);
 }
 
-/** O responsável que autorizou o DFD (assinatura que casou) — snapshot p/ exibição. */
-export type Autorizador = {
+/** O responsável que SOLICITOU a consolidação do DFD no PCA (assinatura que casou)
+ * — snapshot p/ exibição. Não é ele quem autoriza; é quem pede a inclusão. */
+export type Solicitante = {
   tipo: "padrao" | "temporario";
   nome: string;
   matricula: string;
@@ -264,10 +265,10 @@ export function bloqueiaAssinatura(r: ResultadoAssinatura): boolean {
   return r.status === "erro";
 }
 
-/** Snapshot do responsável que autorizou (a partir de um resultado `ok`). */
-export function autorizadorDeResultado(r: ResultadoAssinatura): Autorizador | null {
+/** Snapshot do responsável que solicitou a consolidação (a partir de um resultado `ok`). */
+export function solicitanteDeResultado(r: ResultadoAssinatura): Solicitante | null {
   if (r.status !== "ok") return null;
-  const base: Autorizador = {
+  const base: Solicitante = {
     tipo: r.tipo,
     nome: r.responsavel.nome,
     matricula: r.responsavel.matricula,

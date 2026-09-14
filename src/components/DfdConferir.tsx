@@ -10,10 +10,10 @@ import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import {
-  autorizadorDeResultado,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
+  solicitanteDeResultado,
   validarAssinatura,
 } from "@/lib/reparticao-responsaveis";
 import { Callout } from "./Callout";
@@ -26,7 +26,7 @@ import { Segmented } from "./Segmented";
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
- * A conferência da assinatura (autorizador) é resolvida ao vivo pela repartição
+ * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
  * escolhida — reflete a troca de repartição no banner. */
 export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
   const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
@@ -50,7 +50,7 @@ export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
     totalItens: d.itens.length,
     itens: d.itens,
     secoes: d.secoes,
-    assinaturas: { lista: d.assinaturas, autorizador: autorizadorDeResultado(res) },
+    assinaturas: { lista: d.assinaturas, solicitante: solicitanteDeResultado(res) },
   };
 }
 

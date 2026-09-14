@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Assinatura } from "../src/lib/parse-dfd-comum.ts";
 import {
-  autorizadorDeResultado,
   dataAssinaturaISO,
   novoResponsavel,
   novoTemporario,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
+  solicitanteDeResultado,
   validarAssinatura,
 } from "../src/lib/reparticao-responsaveis.ts";
 
@@ -87,16 +87,16 @@ describe("validarAssinatura", () => {
     assert.equal(r.status, "erro");
   });
 
-  it("autorizadorDeResultado traz o período e o ato do temporário", () => {
+  it("solicitanteDeResultado traz o período e o ato do temporário", () => {
     const r = validarAssinatura([mkAss("MARIA SOUSA", "15/08/2026 10:00:00")], comTemporario("MARIA SOUSA", "2026-08-01", "2026-08-31"), {
       exigeAssinatura: true,
     });
-    const aut = autorizadorDeResultado(r);
-    assert.ok(aut);
-    assert.equal(aut?.tipo, "temporario");
-    assert.equal(aut?.inicio, "2026-08-01");
-    assert.equal(aut?.fim, "2026-08-31");
-    assert.equal(aut?.nomeacao.numero, "123/2026");
-    assert.equal(aut?.assinaturaCodigo, "pVSGdg58teX");
+    const s = solicitanteDeResultado(r);
+    assert.ok(s);
+    assert.equal(s?.tipo, "temporario");
+    assert.equal(s?.inicio, "2026-08-01");
+    assert.equal(s?.fim, "2026-08-31");
+    assert.equal(s?.nomeacao.numero, "123/2026");
+    assert.equal(s?.assinaturaCodigo, "pVSGdg58teX");
   });
 });

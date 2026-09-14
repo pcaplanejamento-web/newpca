@@ -122,9 +122,10 @@ assinatura** (reusa o cadastro de Responsáveis). **Não deixa importar/protocol
 com **assinatura não permitida**: PDF **sem assinatura bloqueia** (e trava o protocolo inteiro), repartição **sem
 responsável cadastrado bloqueia**, assinante não autorizado bloqueia; `.xlsx` (sem assinatura) segue permitido.
 A regra é a mesma no cliente e **reconferida no servidor** (`start-dfd` e `PATCH` ao trocar a repartição). O DFD
-gravado mostra a seção **Assinaturas Digitais** (assinante, CPF, usuário, data, código) + o **autorizador**
-(com período e Portaria/Decreto quando temporário) e um botão **Verificar autenticidade** (`LinkExterno`) para o
-site oficial da Prefeitura. Puro/testável (`validarAssinatura`, `dataAssinaturaISO`) e catalogado no
+gravado mostra a seção **Assinaturas Digitais** (assinante, CPF, usuário, data, código) + o **responsável pela
+solicitação** — quem **pediu a consolidação** no PCA (não quem autoriza) — com período e ato (Portaria/Decreto/Lei)
+quando temporário, e **dois botões** `LinkExterno`: **Verificar autenticidade** (site oficial) e **Ver o ato de
+nomeação** (link cadastrado). Puro/testável (`validarAssinatura`, `dataAssinaturaISO`) e catalogado no
 `/design-system` (`LinkExterno`).
 
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
