@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SECOES_OBRIGATORIAS } from "./dfd-tratamento.ts";
 import { norm } from "./parse-dfd-comum.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
@@ -10,13 +11,7 @@ const MAX_ROWS_POR_LOTE = 1000;
 // Teto generoso de itens declarados por DFD (anti-abuso; um DFD real tem dezenas).
 const MAX_ITENS_DFD = 100_000;
 
-// Seções obrigatórias para importar um DFD (casadas pelo TÍTULO, tolerante ao número).
-const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
-  { kw: "JUSTIFICATIVA", rotulo: "justificativa da necessidade (Seção 3)" },
-  { kw: "PREVISAO DE ENTREGA", rotulo: "previsão de entrega/execução (Seção 5)" },
-  { kw: "PRIORIDADE", rotulo: "prioridade da compra/contratação (Seção 6)" },
-  { kw: "FUNDAMENTACAO LEGAL", rotulo: "fundamentação legal (Seção 7)" },
-];
+// Seções obrigatórias para importar um DFD — fonte única em `dfd-tratamento`.
 
 export type DfdConferencia = {
   reparticaoId?: number | null;

@@ -124,12 +124,43 @@ const COLS: Column<ItemK>[] = [
   },
 ];
 
+/**
+ * Cabeçalho FIXO do banner do DFD (vai no topo do `Modal`, não no corpo): nº do DFD +
+ * as infos mais importantes ao lado — **tipo** (badge DFD-S/R/O/E) e **nº de
+ * planejamento**. Uma linha só (o planejamento trunca no mobile).
+ */
+export function DfdCabecalho({
+  numero,
+  tipo,
+  planejamento,
+}: {
+  numero: string;
+  tipo: string | null;
+  planejamento: string | null;
+}) {
+  const cod = tipoCurtoDfd(tipo);
+  return (
+    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      <span className="shrink-0 text-base font-bold text-text">DFD {numero}</span>
+      {cod && (
+        <span className="shrink-0 rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+          {cod}
+        </span>
+      )}
+      {planejamento && (
+        <span className="truncate text-[12.5px] text-muted">
+          Planejamento <span className="font-semibold text-text-2">{planejamento}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function DfdView({ dfd }: { dfd: DfdVisual }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem repartição";
-  const tipoCod = tipoCurtoDfd(dfd.tipo);
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
   // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA (como a de DFDs
   // no protocolo); os regulares na tabela principal.
@@ -143,27 +174,8 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
 
   return (
     <div className="space-y-5">
-      <div>
-        {/* Head — nº do DFD + as infos mais importantes ao lado: tipo (DFD-S/R/O/E)
-            e nº de planejamento. */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <h2 className="text-lg font-bold text-text">DFD {dfd.numero}</h2>
-          {tipoCod && (
-            <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
-              {tipoCod}
-            </span>
-          )}
-          {dfd.planejamento && (
-            <span className="text-[12.5px] text-muted">
-              Planejamento <span className="font-semibold text-text-2">{dfd.planejamento}</span>
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 text-sm text-muted">
-          {[dfd.tipo, dfd.objeto].filter(Boolean).join(" · ") ||
-            "Documento de Formalização da Demanda"}
-        </p>
-      </div>
+      {/* O nº/tipo/planejamento do DFD ficam no cabeçalho FIXO do banner (`DfdCabecalho`),
+          não aqui. Nas telas soltas (catálogo) o `DfdCabecalho` é renderizado acima. */}
 
       {/* Head — mini banners (um por informação): total de itens + valor total.
           O valor total do DFD é a somatória dos valores dos itens (Seção 4). */}
@@ -216,7 +228,10 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
               getKey={(r) => r._k}
               minWidth={860}
               pageSize={10}
-              resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"} com pendência`}
+              resumo={(l) => {
+                const soma = l.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+                return `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(soma)}`;
+              }}
             />
           </div>
         )}

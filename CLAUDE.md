@@ -244,11 +244,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   campo + Aplicar + Limpar embaixo).
 - **Item/DFD com ESTADO + relatório de erro (DfdView/DfdConferir):** a **tabela de itens** (Seção 4) tem uma coluna
   **Estado** por item (`estadoItem`: `Com erro` quando falta valor unitário/quantidade — `faltasDoItem`), **filtro em
-  todas as colunas** e os **itens com pendência numa tabela SEPARADA** (acima da de regulares). O **head do DFD**
-  mostra o **tipo** (badge DFD-S/R/O/E) e o **nº de planejamento** ao lado do nº do DFD. Quando o DFD tem erro (faltas
-  obrigatórias, assinatura ou itens), um botão **"Relatório de erro"** ao pé do `DfdConferir` abre o `RelatorioErros`.
-  Helpers puros em `dfd-tratamento.ts` (`itemComErro`/`estadoItem`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo` +
-  `estadoProtocolo`/`situacaoProtocolo` da tabela de protocolos).
+  todas as colunas** e os **itens com pendência numa tabela SEPARADA** (acima da de regulares). O nº/tipo/planejamento
+  do DFD (e nº/Id/Assunto do protocolo) ficam no **cabeçalho FIXO do banner** (`Modal.cabecalho` = `DfdCabecalho`/
+  `ProtocoloCabecalho`) — NÃO se repetem no corpo. **Rodapé de TODA tabela = só os agregados das linhas** (`resumo`):
+  nº de itens/DFDs + somatória dos valores (nunca texto de ajuda). **Mensagens/relatórios CIRÚRGICOS:** `faltasCirurgicasDfd`
+  aponta EXATAMENTE o erro (quais itens, qual seção) e O QUE fazer; o relatório do protocolo sai em **formato de
+  DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto p/ devolver o processo. Quando há erro, o botão
+  **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
+  (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
+  [fonte única, reusada por `faltasObrigatorias`] + `estadoProtocolo`/`situacaoProtocolo`).
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
@@ -291,8 +295,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
   matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
-  de botões à esquerda do X, ex.: cadeado; + painel `lateral` mestre-detalhe: 2º banner ao lado, com **fechar
-  animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
+  de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
+  textual — ex.: `DfdCabecalho`/`ProtocoloCabecalho` com nº + badges (tipo/Id) + planejamento/assunto; + painel `lateral`
+  mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do

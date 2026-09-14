@@ -200,7 +200,19 @@ export function PcaModuleView({
           Nenhuma edição de PCA gerada ainda.
         </p>
       ) : (
-        <DataTable columns={colsPca} rows={pcas} getKey={(r) => r.id} fillHeight pageSize={12} minWidth={720} footer={`${pcas.length} ediç${pcas.length === 1 ? "ão" : "ões"}`} />
+        <DataTable
+          columns={colsPca}
+          rows={pcas}
+          getKey={(r) => r.id}
+          fillHeight
+          pageSize={12}
+          minWidth={720}
+          resumo={(l) =>
+            `${l.length} ediç${l.length === 1 ? "ão" : "ões"} · ${num(
+              l.reduce((s, p) => s + (p.totalItens ?? 0), 0),
+            )} itens · ${brl(l.reduce((s, p) => s + (p.valorEstimado ?? 0), 0))}`
+          }
+        />
       )}
     </div>
   );
@@ -260,7 +272,11 @@ export function PcaModuleView({
                 onSelected={setSel}
                 pageSize={8}
                 minWidth={560}
-                footer={`${todosDfds.length} DFD${todosDfds.length === 1 ? "" : "s"} disponíveis`}
+                resumo={(l) =>
+                  `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(
+                    l.reduce((s, d) => s + (d.totalItens ?? 0), 0),
+                  )} itens · ${brl(l.reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0))}`
+                }
               />
             )}
           </div>

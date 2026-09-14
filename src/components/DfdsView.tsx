@@ -19,11 +19,12 @@ import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { DfdConferir } from "./DfdConferir";
 import { DfdUploadForm } from "./DfdUploadForm";
+import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
-import { ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
+import { ProtocoloCabecalho, ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
 import { Tabs } from "./Tabs";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
@@ -529,6 +530,11 @@ export function DfdsView({
         open={!!dfdView && !protoView}
         onClose={fecharDfd}
         titulo={dfdView ? `DFD ${dfdView.numero}` : ""}
+        cabecalho={
+          dfdView ? (
+            <DfdCabecalho numero={dfdView.numero} tipo={dfdView.tipo} planejamento={dfdView.planejamento} />
+          ) : undefined
+        }
         size="lg"
         bloqueado={salvandoDfd}
         acoesCabecalho={dfdCadeado}
@@ -543,6 +549,15 @@ export function DfdsView({
         open={!!protoView}
         onClose={fecharProto}
         titulo={protoView ? `Protocolo ${protoView.numero}` : ""}
+        cabecalho={
+          protoView ? (
+            <ProtocoloCabecalho
+              numero={protoView.numero}
+              idExterno={protoView.idExterno}
+              assunto={protoView.assunto}
+            />
+          ) : undefined
+        }
         size="xl"
         bloqueado={salvandoProto || salvandoDfd}
         lateral={
@@ -550,6 +565,9 @@ export function DfdsView({
             ? {
                 aberto: !!dfdView,
                 titulo: dfdView ? `DFD ${dfdView.numero}` : "DFD",
+                cabecalho: dfdView ? (
+                  <DfdCabecalho numero={dfdView.numero} tipo={dfdView.tipo} planejamento={dfdView.planejamento} />
+                ) : undefined,
                 acoesCabecalho: dfdCadeado,
                 rodape: dfdRodape,
                 onClose: fecharDfd,

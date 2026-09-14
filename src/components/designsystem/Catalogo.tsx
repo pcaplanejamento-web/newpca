@@ -12,9 +12,9 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
-import { DfdView } from "@/components/DfdView";
+import { DfdCabecalho, DfdView } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
-import { ProtocoloView } from "@/components/ProtocoloView";
+import { ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
@@ -525,12 +525,20 @@ export function Catalogo() {
           onClose={() => setRelatorioAberto(false)}
           titulo="Erros do protocolo 97608/2026"
           linhas={[
-            "Protocolo 97608/2026 — Id 2273524",
-            "Capa:",
-            "  - valor da capa zerado/nulo",
-            "DFDs com erro (2):",
-            "  - DFD 531: valor unitário em todos os itens",
-            "  - DFD 389: assinante não autorizado",
+            "DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO",
+            "",
+            "Processo nº 97608/2026 (Id 2273524)",
+            "Interessado: FUNDO MUNICIPAL DE SAÚDE DE RIO VERDE",
+            "Assunto: INCLUSÃO - PCA",
+            "",
+            "Analisado o presente processo, constataram-se as pendências abaixo. Devolve-se para correção antes da protocolização:",
+            "",
+            '1. CAPA DO PROCESSO: Valor da capa ausente/zerado — informar o valor da capa (usar "Substituir pela somatória": R$ 269.705.678,89).',
+            "2. DFD 531 (DFD-R):",
+            "   - Informar o VALOR UNITÁRIO dos itens 3, 5, 8 (Seção 4).",
+            "   - Preencher a Fundamentação legal (Seção 7).",
+            "",
+            "Sanadas as pendências, reencaminhe-se o processo para nova análise e protocolização.",
           ]}
         />
       </Secao>
@@ -841,10 +849,17 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="DFD — visualização do documento importado">
+        {/* Cabeçalho FIXO (`DfdCabecalho`) — no app vai no topo do banner; solto, acima. */}
+        <div className="mb-4 border-b border-border pb-3">
+          <DfdCabecalho numero={DFD_DEMO.numero} tipo={DFD_DEMO.tipo} planejamento={DFD_DEMO.planejamento} />
+        </div>
         <DfdView dfd={DFD_DEMO} />
       </Secao>
 
       <Secao titulo="Protocolo — processo com vários DFDs (visão)">
+        <div className="mb-4 border-b border-border pb-3">
+          <ProtocoloCabecalho numero={PROTO_DEMO.numero} idExterno={PROTO_DEMO.idExterno} assunto={PROTO_DEMO.assunto} />
+        </div>
         <ProtocoloView protocolo={PROTO_DEMO} />
       </Secao>
 

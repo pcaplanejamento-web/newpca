@@ -8,6 +8,7 @@ import {
   type EstadoDfd,
   estadoCor,
   estadoDfd,
+  faltasCirurgicasDfd,
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
   setTextoSecao,
@@ -35,12 +36,14 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { buildPrevisao, DfdConferir } from "./DfdConferir";
+import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
+import { ProtocoloCabecalho } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
@@ -535,6 +538,12 @@ export function ProtocoloUploadForm({
   // DFDs com erro numa tabela SEPARADA (regra 2); os demais na tabela principal.
   const linhasErro = linhas.filter(({ idx }) => estado(idx) === "erro");
   const linhasOk = linhas.filter(({ idx }) => estado(idx) !== "erro");
+  // Rodapé das tabelas de DFDs = SÓ os agregados das linhas (nº de DFDs · itens · valor).
+  const resumoDfds = (l: { idx: number }[]) => {
+    const itens = l.reduce((s, r) => s + (qtdItens(r.idx) ?? 0), 0);
+    const valor = l.reduce((s, r) => s + (valorItens(r.idx) ?? 0), 0);
+    return `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(itens)} ${itens === 1 ? "item" : "itens"} · ${brl(valor)}`;
+  };
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhasErro.length;
@@ -558,28 +567,38 @@ export function ProtocoloUploadForm({
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
 
-  // Relatório de erros do protocolo (copiável) — motivo por DFD com erro + capa.
-  const motivoErroDfd = (idx: number): string => {
+  // Relatório de erros do protocolo em DESPACHO (copiável) — pendências CIRÚRGICAS por
+  // DFD com erro + capa (aponta o que corrigir e onde).
+  const faltasDoDfd = (idx: number): string[] => {
     const parseErr = errosParse.get(idx);
-    if (parseErr) return parseErr;
+    if (parseErr) return [`Leitura incompleta da tabela de itens (${parseErr}). Reenviar o DFD com a tabela completa.`];
     const d = parsed.get(idx);
-    if (!d) return "ainda analisando";
+    if (!d) return ["DFD ainda em análise — reabrir para conferir."];
     const resAss = confereAssinatura(idx, d);
-    if (resAss.status === "erro") return resAss.motivo;
-    const fs = faltasObrigatorias({ reparticaoId: dfdRepIds[idx], itens: d.itens, secoes: d.secoes });
-    return fs.length > 0 ? fs.join(", ") : "erro";
+    return faltasCirurgicasDfd({
+      itens: d.itens,
+      secoes: d.secoes,
+      reparticaoId: dfdRepIds[idx],
+      assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null,
+    });
   };
   const capaMotivo = capaDivergente
     ? capaZeradaOuNula
-      ? "valor da capa zerado/nulo"
-      : `valor da capa (${extra.valorCapa != null ? brl(extra.valorCapa) : "—"}) diferente da somatória dos DFDs (${brl(somatorioDfds)})`
+      ? `Valor da capa ausente/zerado — informar o valor da capa (usar "Substituir pela somatória": ${brl(somatorioDfds)}).`
+      : `Valor da capa (${extra.valorCapa != null ? brl(extra.valorCapa) : "—"}) diferente da somatória dos DFDs (${brl(somatorioDfds)}) — corrigir a capa (usar "Substituir pela somatória").`
     : null;
   const temErroProto = dfdsComErro > 0 || capaDivergente;
   const relatorioLinhas = linhasRelatorioProtocolo({
     numero,
     idExterno: extra.idExterno,
+    interessado: interessado || null,
+    assunto: assunto || null,
     capaMotivo,
-    dfdsComErro: linhasErro.map(({ idx }) => ({ numero: index?.dfds[idx].numero ?? "?", motivo: motivoErroDfd(idx) })),
+    dfds: linhasErro.map(({ idx }) => ({
+      numero: index?.dfds[idx].numero ?? "?",
+      tipo: parsed.get(idx)?.tipo ?? null,
+      faltas: faltasDoDfd(idx),
+    })),
   });
 
   // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
@@ -726,6 +745,7 @@ export function ProtocoloUploadForm({
         open={aberto}
         onClose={fechar}
         titulo={numero ? `Protocolo ${numero}` : "Novo protocolo"}
+        cabecalho={<ProtocoloCabecalho numero={numero || "novo"} idExterno={extra.idExterno} assunto={assunto || null} />}
         size="lg"
         fecharNoBackdrop={false}
         bloqueado={importando}
@@ -734,6 +754,14 @@ export function ProtocoloUploadForm({
             ? {
                 aberto: abertoIdx >= 0,
                 titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
+                cabecalho:
+                  abertoIdx >= 0 ? (
+                    <DfdCabecalho
+                      numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                      tipo={dfdAberto?.tipo ?? null}
+                      planejamento={dfdAberto?.planejamento ?? null}
+                    />
+                  ) : undefined,
                 onClose: () => setAbertoIdx(-1),
                 rodape:
                   abertoIdx >= 0 ? (
@@ -801,7 +829,7 @@ export function ProtocoloUploadForm({
                         : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
               </span>
             )}
-            <div className="flex gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {!importando && temErroProto && (
                 <Button
                   variant="secondary"
@@ -825,17 +853,6 @@ export function ProtocoloUploadForm({
         }
       >
         <div className="space-y-5">
-          {/* Head — nº do processo + as infos mais importantes ao lado: Id e Assunto. */}
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h3 className="text-base font-bold text-text">Protocolo {numero || "novo"}</h3>
-            {extra.idExterno && (
-              <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
-                Id {extra.idExterno}
-              </span>
-            )}
-            {assunto && <span className="min-w-0 truncate text-[12.5px] text-muted">{assunto}</span>}
-          </div>
-
           {/* Head — mini banners (um por informação) + conferência do valor da capa */}
           {temDfds && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -925,7 +942,7 @@ export function ProtocoloUploadForm({
                     onRowClick={(r) => abrir(r.idx)}
                     pageSize={compacta ? 8 : 12}
                     minWidth={720}
-                    footer={`${linhasErro.length} DFD(s) com erro — trate antes de protocolar`}
+                    resumo={resumoDfds}
                   />
                 </div>
               )}
@@ -943,7 +960,7 @@ export function ProtocoloUploadForm({
                   onRowClick={(r) => abrir(r.idx)}
                   pageSize={compacta ? 12 : 20}
                   minWidth={720}
-                  footer={`${index?.dfds.length} DFD(s) — clique numa linha para conferir/tratar ao lado`}
+                  resumo={resumoDfds}
                 />
               </div>
             </section>

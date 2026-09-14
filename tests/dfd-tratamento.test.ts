@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   estadoItem,
   estadoProtocolo,
+  faltasCirurgicasDfd,
   faltasDoItem,
   itemComErro,
   linhasRelatorioDfd,
@@ -69,36 +70,77 @@ describe("estado/situação do protocolo", () => {
   });
 });
 
+describe("faltasCirurgicasDfd (cirúrgico + acionável)", () => {
+  const sec = (titulo: string, texto: string) => ({ numero: 0, titulo, texto });
+  it("aponta os itens e o que fazer", () => {
+    const faltas = faltasCirurgicasDfd({
+      itens: [item({ item: 3, valorUnitario: null }), item({ item: 5, valorUnitario: 0 }), item({ item: 7, quantidade: null })],
+      secoes: [],
+      reparticaoId: 1,
+    });
+    const txt = faltas.join("\n");
+    assert.match(txt, /VALOR UNIT[ÁA]RIO dos itens 3, 5 \(Seção 4\)/);
+    assert.match(txt, /QUANTIDADE do item 7 \(Seção 4\)/);
+  });
+  it("aponta repartição, seções e assinatura", () => {
+    const faltas = faltasCirurgicasDfd({
+      itens: [item()],
+      secoes: [sec("JUSTIFICATIVA DA NECESSIDADE", "ok")], // só a 3 preenchida
+      reparticaoId: null,
+      assinaturaMotivo: "assinante não é responsável",
+    });
+    const txt = faltas.join("\n");
+    assert.match(txt, /Vincular o DFD à repartição/);
+    assert.match(txt, /Preencher a Previsão de entrega\/execução \(Seção 5\)/);
+    assert.match(txt, /Preencher a Prioridade/);
+    assert.match(txt, /Preencher a Fundamentação legal/);
+    assert.doesNotMatch(txt, /Justificativa/); // a 3 está preenchida
+    assert.match(txt, /Regularizar a assinatura digital: assinante não é responsável/);
+  });
+  it("DFD completo → sem faltas", () => {
+    const secs = [
+      sec("JUSTIFICATIVA", "j"),
+      sec("PREVISÃO DE ENTREGA", "MARÇO/2027"),
+      sec("PRIORIDADE", "ALTA"),
+      sec("FUNDAMENTAÇÃO LEGAL", "Lei 14.133/2021"),
+    ];
+    assert.deepEqual(faltasCirurgicasDfd({ itens: [item()], secoes: secs, reparticaoId: 1 }), []);
+  });
+});
+
 describe("relatório de erros (copiável)", () => {
-  it("DFD: cabeçalho + faltas + itens + assinatura", () => {
+  it("DFD: cabeçalho + lista cirúrgica de pendências", () => {
     const linhas = linhasRelatorioDfd({
       numero: "531",
       planejamento: "600",
       tipo: "DFD-S — Solução",
-      faltas: ["repartição vinculada"],
-      assinaturaMotivo: "assinante não autorizado",
-      itensComErro: [{ item: 3, codigo: "40300", faltas: ["valor unitário"] }],
+      faltas: ["Informar o VALOR UNITÁRIO do item 3 (Seção 4).", "Vincular o DFD à repartição/Setor requisitante responsável."],
     });
     const txt = linhas.join("\n");
     assert.match(txt, /DFD 531 \(DFD-S\) — Planejamento 600/);
-    assert.match(txt, /repartição vinculada/);
-    assert.match(txt, /assinante não autorizado/);
-    assert.match(txt, /item 3 \(cód\. 40300\): falta valor unitário/);
+    assert.match(txt, /Pendências a corrigir:/);
+    assert.match(txt, /1\. Informar o VALOR UNITÁRIO do item 3/);
   });
-  it("DFD sem erros → 'Sem erros.'", () => {
-    const linhas = linhasRelatorioDfd({ numero: "1", faltas: [], itensComErro: [] });
-    assert.equal(linhas[linhas.length - 1], "Sem erros.");
+  it("DFD sem pendências → 'Sem pendências.'", () => {
+    const linhas = linhasRelatorioDfd({ numero: "1", faltas: [] });
+    assert.equal(linhas[linhas.length - 1], "Sem pendências.");
   });
-  it("Protocolo: capa + DFDs com erro", () => {
+  it("Protocolo: DESPACHO com capa + DFDs cirúrgicos", () => {
     const linhas = linhasRelatorioProtocolo({
       numero: "97608/2026",
       idExterno: "2273524",
-      capaMotivo: "valor da capa zerado/nulo",
-      dfdsComErro: [{ numero: "531", motivo: "valor unitário em todos os itens" }],
+      interessado: "FUNDO MUNICIPAL DE SAÚDE",
+      assunto: "INCLUSÃO - PCA",
+      capaMotivo: "Valor da capa ausente/zerado — informar o valor da capa.",
+      dfds: [{ numero: "531", tipo: "DFD-R", faltas: ["Informar o VALOR UNITÁRIO dos itens 3, 5 (Seção 4)."] }],
     });
     const txt = linhas.join("\n");
-    assert.match(txt, /Protocolo 97608\/2026 — Id 2273524/);
-    assert.match(txt, /valor da capa zerado\/nulo/);
-    assert.match(txt, /DFD 531: valor unitário/);
+    assert.match(txt, /DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO/);
+    assert.match(txt, /Processo nº 97608\/2026 \(Id 2273524\)/);
+    assert.match(txt, /Interessado: FUNDO MUNICIPAL DE SAÚDE/);
+    assert.match(txt, /1\. CAPA DO PROCESSO: Valor da capa ausente\/zerado/);
+    assert.match(txt, /2\. DFD 531 \(DFD-R\):/);
+    assert.match(txt, /- Informar o VALOR UNITÁRIO dos itens 3, 5/);
+    assert.match(txt, /reencaminhe-se o processo/);
   });
 });

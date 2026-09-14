@@ -179,6 +179,16 @@ somatória), **Situação** (tem DFDs?), **Id protocolo** e **Assunto**, e perde
 Repartição). Lógica pura/testável (`tipoCurtoDfd`, `itemComErro`/`estadoItem`, `estadoProtocolo`/`situacaoProtocolo`,
 `linhasRelatorioDfd`/`linhasRelatorioProtocolo`); novo componente **`RelatorioErros`** catalogado.
 
+### Cabeçalho FIXO dos banners + rodapés só-somatório + relatório em DESPACHO — entregue
+✅ **Head no lugar certo:** o nº/tipo/planejamento do DFD e o nº/Id/Assunto do protocolo passaram para o **cabeçalho
+FIXO** do banner (`Modal.cabecalho` = `DfdCabecalho`/`ProtocoloCabecalho`), sem repetir no corpo. **Rodapés
+padronizados:** **toda** tabela do sistema mostra no rodapé **só os agregados das linhas** (nº de itens/DFDs +
+**somatória dos valores**) — nunca texto de ajuda. **Mensagens cirúrgicas:** as pendências agora apontam
+**exatamente** o erro (quais itens, qual seção) e **o que fazer** (`faltasCirurgicasDfd`); o **relatório do protocolo**
+sai em **formato de DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto para devolver o processo para
+correção. **Botões** do banner de protocolo **alinhados à direita**. `SECOES_OBRIGATORIAS` virou fonte única (reusada
+por `faltasObrigatorias`). Puro/testável.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

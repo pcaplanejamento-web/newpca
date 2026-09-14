@@ -114,7 +114,9 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
                 getKey={(r) => r.id}
                 minWidth={940}
                 pageSize={20}
-                footer={`${linhas.length} ${linhas.length === 1 ? "item" : "itens"}`}
+                resumo={(l) =>
+                  `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(l.reduce((s, r) => s + (r.valorTotal ?? 0), 0))}`
+                }
               />
             </section>
           );

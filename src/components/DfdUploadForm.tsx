@@ -18,6 +18,7 @@ import {
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir } from "./DfdConferir";
+import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
@@ -232,6 +233,11 @@ export function DfdUploadForm({
         open={modalAberto}
         onClose={() => reset()}
         titulo={`Conferir e importar — DFD ${preview?.numero ?? ""}`}
+        cabecalho={
+          preview ? (
+            <DfdCabecalho numero={preview.numero} tipo={preview.tipo} planejamento={preview.planejamento} />
+          ) : undefined
+        }
         size="lg"
         fecharNoBackdrop={false}
         bloqueado={status === "sending"}

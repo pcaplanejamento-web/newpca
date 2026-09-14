@@ -60,6 +60,32 @@ export type ProtocoloVisual = {
 
 const valorDfd = (d: ProtocoloVisualDfd) => d.valorTotal ?? d.valorEstimado ?? 0;
 
+/**
+ * Cabeçalho FIXO do banner do protocolo (topo do `Modal`, não o corpo): nº do processo +
+ * as infos mais importantes ao lado — **Id do protocolo** e **Assunto** (trunca no mobile).
+ */
+export function ProtocoloCabecalho({
+  numero,
+  idExterno,
+  assunto,
+}: {
+  numero: string;
+  idExterno: string | null;
+  assunto: string | null;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      <span className="shrink-0 text-base font-bold text-text">Protocolo {numero}</span>
+      {idExterno && (
+        <span className="shrink-0 rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+          Id {idExterno}
+        </span>
+      )}
+      {assunto && <span className="truncate text-[12.5px] text-muted">{assunto}</span>}
+    </div>
+  );
+}
+
 export function ProtocoloView({
   protocolo,
   onVerDfd,
@@ -105,18 +131,8 @@ export function ProtocoloView({
 
   return (
     <div className="space-y-5">
-      <div>
-        {/* Head — nº do processo + as infos mais importantes ao lado: Id e Assunto. */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <h2 className="text-lg font-bold text-text">Protocolo {protocolo.numero}</h2>
-          {protocolo.idExterno && (
-            <span className="rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
-              Id {protocolo.idExterno}
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 text-sm text-muted">{protocolo.assunto || "Processo administrativo"}</p>
-      </div>
+      {/* O nº/Id/Assunto do processo ficam no cabeçalho FIXO do banner (`ProtocoloCabecalho`),
+          não aqui. Nas telas soltas (catálogo) o `ProtocoloCabecalho` é renderizado acima. */}
 
       {/* Head — mini banners (um por informação): total de DFDs + somatória dos valores.
           2-up no mobile (a somatória em R$ cabe inteira) → 3-up a partir de sm. */}
@@ -193,7 +209,13 @@ export function ProtocoloView({
             onRowClick={onVerDfd ? (r) => onVerDfd(r.id) : undefined}
             minWidth={620}
             pageSize={20}
-            footer={`${protocolo.dfds.length} DFD${protocolo.dfds.length === 1 ? "" : "s"}`}
+            resumo={(l) =>
+              `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(
+                l.reduce((s, d) => s + (d.totalItens ?? 0), 0),
+              )} ${l.reduce((s, d) => s + (d.totalItens ?? 0), 0) === 1 ? "item" : "itens"} · ${brl(
+                l.reduce((s, d) => s + valorDfd(d), 0),
+              )}`
+            }
           />
         )}
       </section>

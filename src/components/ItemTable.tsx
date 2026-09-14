@@ -125,7 +125,9 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
         getKey={(r) => r.id}
         pageSize={20}
         minWidth={showUnidade ? 900 : 820}
-        footer={`${filtradas.length} item${filtradas.length === 1 ? "" : "s"}`}
+        resumo={(l) =>
+          `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(l.reduce((s, r) => s + (r.valorTotal ?? 0), 0))}`
+        }
       />
     </div>
   );

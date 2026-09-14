@@ -3,14 +3,12 @@
 import { useState } from "react";
 import {
   type CampoTratavel,
-  faltasDoItem,
-  itemComErro,
+  faltasCirurgicasDfd,
   linhasRelatorioDfd,
   setTextoSecao,
   textoSecao,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
-import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import {
@@ -100,24 +98,22 @@ export function DfdConferir({
 }) {
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
-  const faltas = faltasObrigatorias({ reparticaoId: repId, itens: dfd.itens, secoes: dfd.secoes });
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
   // Conferência da assinatura contra o responsável da repartição escolhida
   // (recalcula ao trocar de repartição, igual a `faltas`).
   const resAssinatura = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
     exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
   });
-  // Itens com pendência + relatório de erros copiável (só aparece quando há erro).
-  const itensErro = dfd.itens.filter(itemComErro);
+  // Pendências CIRÚRGICAS (aponta itens/seção e o que fazer). Sem a assinatura (que tem
+  // callout próprio); no relatório copiável ela entra.
   const assinaturaMotivo = resAssinatura.status === "erro" ? resAssinatura.motivo : null;
-  const temErro = faltas.length > 0 || !!assinaturaMotivo || itensErro.length > 0;
+  const faltasCir = faltasCirurgicasDfd({ itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId });
+  const temErro = faltasCir.length > 0 || !!assinaturaMotivo;
   const relatorioLinhas = linhasRelatorioDfd({
     numero: dfd.numero,
     planejamento: dfd.planejamento,
     tipo: dfd.tipo,
-    faltas,
-    assinaturaMotivo,
-    itensComErro: itensErro.map((it) => ({ item: it.item, codigo: it.codigo, faltas: faltasDoItem(it) })),
+    faltas: faltasCirurgicasDfd({ itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, assinaturaMotivo }),
   });
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
@@ -268,12 +264,12 @@ export function DfdConferir({
         </div>
       </section>
 
-      {/* Faltas (bloqueia importar, mas deixa conferir) */}
-      {faltas.length > 0 && (
+      {/* Faltas CIRÚRGICAS (aponta o item/seção e o que fazer; bloqueia importar) */}
+      {faltasCir.length > 0 && (
         <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
-          <p className="font-semibold">Faltam dados obrigatórios (importação bloqueada):</p>
+          <p className="font-semibold">Pendências a corrigir (importação bloqueada):</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 opacity-90">
-            {faltas.map((f) => (
+            {faltasCir.map((f) => (
               <li key={f}>{f}</li>
             ))}
           </ul>
@@ -297,7 +293,7 @@ export function DfdConferir({
           Documento sem assinatura digital (.xlsx) — segue sem conferência de assinante.
         </Callout>
       )}
-      {foraDoHead && faltas.length === 0 && (
+      {foraDoHead && faltasCir.length === 0 && (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
           A repartição escolhida é diferente da ativa no cabeçalho — selecione-a (ou "Geral") no topo para vê-lo na
           lista depois.

@@ -156,57 +156,111 @@ export function estadoItemCor(e: EstadoItem): string {
   return e === "erro" ? "var(--danger)" : "var(--ok)";
 }
 
-// ---- Relatório de erros (texto copiável) ----
+// ---- Faltas CIRÚRGICAS + relatório em formato de DESPACHO (copiável) ----
 
-/** Linhas do relatório de erros de UM DFD (copiável). Puro. */
+/** Seções obrigatórias do DFD (fonte única — `faltasObrigatorias` no `dfd-validation`
+ * também usa esta lista). O `rotulo` já indica a seção exata a corrigir. */
+export const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
+  { kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)" },
+  { kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)" },
+  { kw: "PRIORIDADE", rotulo: "Prioridade da compra/contratação (Seção 6)" },
+  { kw: "FUNDAMENTACAO LEGAL", rotulo: "Fundamentação legal (Seção 7)" },
+];
+
+function temSecaoPreenchida(secoes: DfdSecao[], kw: string): boolean {
+  return secoes.some((s) => norm(s.titulo).includes(kw) && s.texto.trim().length > 0);
+}
+
+/** Formata uma lista de nº de item ("3, 5, 8" — trunca se for enorme). */
+function listaItens(nums: number[]): string {
+  const s = nums.slice(0, 30).join(", ");
+  return nums.length > 30 ? `${s} … (+${nums.length - 30})` : s;
+}
+
+/**
+ * Faltas CIRÚRGICAS e ACIONÁVEIS de um DFD: aponta EXATAMENTE onde está o erro (quais
+ * itens, qual seção) e O QUE fazer para corrigir. Puro/testável. Alimenta o relatório
+ * (despacho) e o relatório do DFD.
+ */
+export function faltasCirurgicasDfd(d: {
+  itens: DfdItemParseado[];
+  secoes: DfdSecao[];
+  reparticaoId?: number | null;
+  assinaturaMotivo?: string | null;
+}): string[] {
+  const linhas: string[] = [];
+  const nums = (its: DfdItemParseado[]) =>
+    its.map((i) => i.item).filter((n): n is number => n != null);
+  const semVU = d.itens.filter((i) => i.valorUnitario == null || i.valorUnitario <= 0);
+  const semQtd = d.itens.filter((i) => i.quantidade == null);
+  if (semVU.length > 0)
+    linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
+  if (semQtd.length > 0)
+    linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
+  if (d.reparticaoId == null) linhas.push("Vincular o DFD à repartição/Setor requisitante responsável.");
+  for (const s of SECOES_OBRIGATORIAS)
+    if (!temSecaoPreenchida(d.secoes, s.kw)) linhas.push(`Preencher a ${s.rotulo}.`);
+  if (d.assinaturaMotivo) linhas.push(`Regularizar a assinatura digital: ${d.assinaturaMotivo}.`);
+  return linhas;
+}
+
+/** Relatório de UM DFD (lista cirúrgica de pendências, copiável). Puro. */
 export function linhasRelatorioDfd(info: {
   numero: string;
   planejamento?: string | null;
   tipo?: string | null;
-  faltas: string[];
-  itensComErro: { item: number | null; codigo: string | null; faltas: string[] }[];
-  assinaturaMotivo?: string | null;
+  faltas: string[]; // de `faltasCirurgicasDfd`
 }): string[] {
-  const linhas: string[] = [];
   const tipo = tipoCurtoDfd(info.tipo);
-  linhas.push(
+  const linhas: string[] = [
     `DFD ${info.numero}${tipo ? ` (${tipo})` : ""}${info.planejamento ? ` — Planejamento ${info.planejamento}` : ""}`,
-  );
-  if (info.faltas.length > 0) {
-    linhas.push("Dados obrigatórios faltando:");
-    for (const f of info.faltas) linhas.push(`  - ${f}`);
+  ];
+  if (info.faltas.length === 0) {
+    linhas.push("Sem pendências.");
+    return linhas;
   }
-  if (info.assinaturaMotivo) {
-    linhas.push("Assinatura digital:");
-    linhas.push(`  - ${info.assinaturaMotivo}`);
-  }
-  if (info.itensComErro.length > 0) {
-    linhas.push(`Itens com pendência (${info.itensComErro.length}):`);
-    for (const it of info.itensComErro) {
-      linhas.push(`  - item ${it.item ?? "?"}${it.codigo ? ` (cód. ${it.codigo})` : ""}: falta ${it.faltas.join(", ")}`);
-    }
-  }
-  if (linhas.length === 1) linhas.push("Sem erros.");
+  linhas.push("Pendências a corrigir:");
+  info.faltas.forEach((f, i) => {
+    linhas.push(`  ${i + 1}. ${f}`);
+  });
   return linhas;
 }
 
-/** Linhas do relatório de erros de UM PROTOCOLO (copiável). Puro. */
+/**
+ * Relatório de UM PROTOCOLO em formato de **DESPACHO DE DEVOLUÇÃO** — pronto para
+ * copiar e devolver o processo para correção. Cada pendência é cirúrgica (aponta o
+ * DFD/capa e o que fazer). Puro.
+ */
 export function linhasRelatorioProtocolo(info: {
   numero: string;
   idExterno?: string | null;
+  interessado?: string | null;
+  assunto?: string | null;
   capaMotivo?: string | null;
-  dfdsComErro: { numero: string; motivo: string }[];
+  dfds: { numero: string; tipo?: string | null; faltas: string[] }[]; // só os com pendência
 }): string[] {
-  const linhas: string[] = [];
-  linhas.push(`Protocolo ${info.numero}${info.idExterno ? ` — Id ${info.idExterno}` : ""}`);
+  const L: string[] = ["DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO", ""];
+  L.push(`Processo nº ${info.numero}${info.idExterno ? ` (Id ${info.idExterno})` : ""}`);
+  if (info.interessado) L.push(`Interessado: ${info.interessado}`);
+  if (info.assunto) L.push(`Assunto: ${info.assunto}`);
+  L.push("");
+  L.push(
+    "Analisado o presente processo, constataram-se as pendências abaixo. Devolve-se para correção antes da protocolização:",
+  );
+  L.push("");
+  let n = 1;
   if (info.capaMotivo) {
-    linhas.push("Capa:");
-    linhas.push(`  - ${info.capaMotivo}`);
+    L.push(`${n}. CAPA DO PROCESSO: ${info.capaMotivo}`);
+    n++;
   }
-  if (info.dfdsComErro.length > 0) {
-    linhas.push(`DFDs com erro (${info.dfdsComErro.length}):`);
-    for (const d of info.dfdsComErro) linhas.push(`  - DFD ${d.numero}: ${d.motivo}`);
+  for (const d of info.dfds) {
+    const tipo = tipoCurtoDfd(d.tipo);
+    L.push(`${n}. DFD ${d.numero}${tipo ? ` (${tipo})` : ""}:`);
+    for (const f of d.faltas) L.push(`   - ${f}`);
+    n++;
   }
-  if (linhas.length === 1) linhas.push("Sem erros.");
-  return linhas;
+  if (n === 1) L.push("Nenhuma pendência encontrada.");
+  L.push("");
+  L.push("Sanadas as pendências, reencaminhe-se o processo para nova análise e protocolização.");
+  return L;
 }

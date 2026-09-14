@@ -12,6 +12,8 @@ export type ModalLateral = {
   /** Aberto = o painel lateral desliza para o lado; fechado = colapsado (só o principal). */
   aberto: boolean;
   titulo: string;
+  /** Cabeçalho FIXO rico (ReactNode) — substitui o `titulo` textual no topo (ex.: nº + badges). */
+  cabecalho?: ReactNode;
   children: ReactNode;
   rodape?: ReactNode;
   /** Slot de botões à esquerda do X do lateral (ex.: cadeado de edição). */
@@ -22,6 +24,7 @@ export type ModalLateral = {
 /** Card de um banner (cabeçalho fixo + corpo rolável + rodapé fixo). Reutilizado pelos 2 painéis. */
 function Painel({
   titulo,
+  cabecalho,
   onClose,
   rodape,
   bloqueado = false,
@@ -30,6 +33,7 @@ function Painel({
   children,
 }: {
   titulo: string;
+  cabecalho?: ReactNode;
   onClose?: () => void;
   rodape?: ReactNode;
   bloqueado?: boolean;
@@ -45,7 +49,11 @@ function Painel({
       className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-        <h3 className="min-w-0 truncate text-base font-bold text-text">{titulo}</h3>
+        {cabecalho ? (
+          <div className="min-w-0 flex-1">{cabecalho}</div>
+        ) : (
+          <h3 className="min-w-0 truncate text-base font-bold text-text">{titulo}</h3>
+        )}
         <div className="flex shrink-0 items-center gap-1">
           {acoesCabecalho}
           {onClose && !bloqueado && (
@@ -83,6 +91,7 @@ export function Modal({
   open,
   onClose,
   titulo,
+  cabecalho,
   size = "md",
   rodape,
   fecharNoBackdrop = true,
@@ -94,6 +103,8 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   titulo: string;
+  /** Cabeçalho FIXO rico (ReactNode) — substitui o `titulo` textual no topo. */
+  cabecalho?: ReactNode;
   size?: keyof typeof TAMANHO;
   rodape?: ReactNode;
   fecharNoBackdrop?: boolean;
@@ -128,6 +139,7 @@ export function Modal({
   const [mostrarLateral, setMostrarLateral] = useState(false);
   const cacheLateral = useRef<{
     titulo: string;
+    cabecalho: ReactNode;
     rodape: ReactNode;
     acoesCabecalho: ReactNode;
     children: ReactNode;
@@ -139,6 +151,7 @@ export function Modal({
   if (lateral && lateralAberto) {
     cacheLateral.current = {
       titulo: lateral.titulo,
+      cabecalho: lateral.cabecalho,
       rodape: lateral.rodape,
       acoesCabecalho: lateral.acoesCabecalho,
       children: lateral.children,
@@ -172,6 +185,7 @@ export function Modal({
         {scrim}
         <Painel
           titulo={titulo}
+          cabecalho={cabecalho}
           onClose={onClose}
           rodape={rodape}
           bloqueado={bloqueado}
@@ -209,6 +223,7 @@ export function Modal({
         <div className="min-w-0 overflow-hidden">
           <Painel
             titulo={titulo}
+            cabecalho={cabecalho}
             onClose={onClose}
             rodape={rodape}
             bloqueado={bloqueado}
@@ -221,6 +236,7 @@ export function Modal({
           {mostrarLateral && conteudoLateral && (
             <Painel
               titulo={conteudoLateral.titulo}
+              cabecalho={conteudoLateral.cabecalho}
               onClose={lateral.onClose}
               rodape={conteudoLateral.rodape}
               acoesCabecalho={conteudoLateral.acoesCabecalho}
