@@ -115,14 +115,16 @@ export function ProtocoloView({
         <p className="mt-0.5 text-sm text-muted">{protocolo.assunto || "Processo administrativo"}</p>
       </div>
 
-      {/* Head — mini banners (um por informação): total de DFDs + somatória dos valores. */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Head — mini banners (um por informação): total de DFDs + somatória dos valores.
+          2-up no mobile (a somatória em R$ cabe inteira) → 3-up a partir de sm. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatMini label="Total de DFDs" value={num(protocolo.totalDfds)} />
         <StatMini label="Total de itens" value={num(protocolo.totalItens)} />
         <StatMini
           label="Somatória dos DFDs"
           value={brl(protocolo.valorTotal)}
           tone={capaDivergente ? "warn" : "default"}
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 

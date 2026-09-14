@@ -753,7 +753,7 @@ export function ProtocoloUploadForm({
         <div className="space-y-5">
           {/* Head — mini banners (um por informação) + conferência do valor da capa */}
           {temDfds && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <StatMini label="Total de DFDs" value={num(index?.dfds.length ?? 0)} />
               <StatMini label="Total de itens" value={num(itensDfds)} hint={analisando ? "analisando…" : undefined} />
               <StatMini
@@ -761,6 +761,7 @@ export function ProtocoloUploadForm({
                 value={brl(somatorioDfds)}
                 tone={capaDivergente ? "warn" : "default"}
                 hint={analisando ? "analisando…" : undefined}
+                className="col-span-2 sm:col-span-1"
               />
             </div>
           )}

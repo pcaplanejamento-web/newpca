@@ -20,14 +20,17 @@ export function StatMini({
   value,
   hint,
   tone = "default",
+  className = "",
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
   tone?: "default" | "accent" | "ok" | "warn" | "danger";
+  /** Utilitários extra (ex.: `col-span-2 sm:col-span-1` p/ ocupar a linha no mobile). */
+  className?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-card border border-border bg-surface p-4 shadow-ring">
+    <div className={`min-w-0 rounded-card border border-border bg-surface p-4 shadow-ring ${className}`}>
       <div className="truncate text-xs text-muted">{label}</div>
       <div
         className="mt-0.5 truncate text-lg font-bold leading-tight tabular-nums"
