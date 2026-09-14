@@ -76,6 +76,7 @@ describe("indexarProtocolo (índice leve)", () => {
   it("extrai os metadados da CAPA DO PROCESSO", () => {
     const idx = indexarProtocolo(paginasDe(protocoloItems()), "proto.pdf");
     assert.equal(idx.protocolo.numero, "12345/2026");
+    assert.equal(idx.protocolo.idExterno, "999"); // "Id:" da capa
     assert.equal(idx.protocolo.data, "01/02/2026 10:00:00");
     assert.equal(idx.protocolo.interessado, "42 - FUNDO EXEMPLO");
     assert.equal(idx.protocolo.documento, "11.222.333/0001-44");

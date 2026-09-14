@@ -173,6 +173,7 @@ export function DfdsView({
         assunto: p.assunto ?? "",
         observacao: p.observacao ?? "",
         reparticaoId: p.reparticaoId,
+        valorCapa: p.valorCapa ?? null,
       });
       setProtoTrancado(true);
     } catch (e) {
@@ -213,6 +214,7 @@ export function DfdsView({
           assunto: protoEdit.assunto || null,
           observacao: protoEdit.observacao || null,
           reparticaoId: protoEdit.reparticaoId,
+          valorCapa: protoEdit.valorCapa,
         }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };

@@ -17,6 +17,7 @@ type ProtocoloMeta = ProtocoloMetaPayload;
 export type ProtocoloResumo = {
   id: number;
   numero: string;
+  idExterno: string | null;
   interessado: string | null;
   assunto: string | null;
   data: string | null;
@@ -48,6 +49,7 @@ export async function listarProtocolos(reparticaoId?: number): Promise<Protocolo
     .select({
       id: dfdProtocolos.id,
       numero: dfdProtocolos.numero,
+      idExterno: dfdProtocolos.idExterno,
       interessado: dfdProtocolos.interessado,
       assunto: dfdProtocolos.assunto,
       data: dfdProtocolos.data,
@@ -75,6 +77,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
     .select({
       id: dfdProtocolos.id,
       numero: dfdProtocolos.numero,
+      idExterno: dfdProtocolos.idExterno,
       interessado: dfdProtocolos.interessado,
       assunto: dfdProtocolos.assunto,
       data: dfdProtocolos.data,
@@ -111,6 +114,7 @@ export async function iniciarProtocolo(
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
   const set = {
+    idExterno: p.idExterno ?? null,
     data: p.data ?? null,
     interessado: p.interessado ?? null,
     documento: p.documento ?? null,
@@ -137,6 +141,7 @@ export async function iniciarProtocolo(
 export async function atualizarProtocolo(
   id: number,
   campos: Partial<{
+    idExterno: string | null;
     data: string | null;
     interessado: string | null;
     documento: string | null;

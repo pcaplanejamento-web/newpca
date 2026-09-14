@@ -1,11 +1,13 @@
 "use client";
 
 import { brl, dataBR, num } from "@/lib/format";
+import { valoresBatem } from "@/lib/normalize";
 import { type Assinatura, buracosSequencia } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { type Column, DataTable } from "./DataTable";
 import { IconFile, IconShield } from "./icons";
 import { LinkExterno } from "./LinkExterno";
+import { StatMini } from "./StatMini";
 
 /** URL oficial de verificação da assinatura digital (site da Prefeitura). */
 const URL_VERIFICACAO = "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios";
@@ -117,6 +119,21 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
         </p>
       </div>
 
+      {/* Head — mini banners (um por informação): total de itens + valor total.
+          O valor total do DFD é a somatória dos valores dos itens (Seção 4). */}
+      <div className="grid grid-cols-2 gap-3">
+        <StatMini label="Total de itens" value={num(dfd.totalItens ?? dfd.itens.length)} />
+        <StatMini
+          label="Valor total"
+          value={dfd.valorTotal != null ? brl(dfd.valorTotal) : "—"}
+          hint={
+            dfd.valorEstimado != null && !valoresBatem(dfd.valorEstimado, dfd.valorTotal)
+              ? `Estimado (nota): ${brl(dfd.valorEstimado)}`
+              : undefined
+          }
+        />
+      </div>
+
       {/* Seção 1 — Área requisitante */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
@@ -132,22 +149,6 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           <Campo label="Telefone" valor={dfd.telefone ?? "—"} />
         </dl>
       </section>
-
-      {/* Valores */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-card border border-border bg-surface p-4 shadow-ring">
-          <div className="text-xs text-muted">Valor estimado (nota)</div>
-          <div className="text-lg font-bold text-text">
-            {dfd.valorEstimado != null ? brl(dfd.valorEstimado) : "—"}
-          </div>
-        </div>
-        <div className="rounded-card border border-border bg-surface p-4 shadow-ring">
-          <div className="text-xs text-muted">Valor total (tabela)</div>
-          <div className="text-lg font-bold text-text">
-            {dfd.valorTotal != null ? brl(dfd.valorTotal) : "—"}
-          </div>
-        </div>
-      </div>
 
       {/* Seção 4 — Itens */}
       <section>

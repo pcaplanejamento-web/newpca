@@ -54,10 +54,14 @@ export function toVisual(d: DfdParseado, rep: Rep | null): DfdVisual {
   };
 }
 
-/** Constrói o texto canônico da PREVISÃO a partir do editor. */
+/**
+ * Constrói o texto canônico da PREVISÃO a partir do editor. É **um OU outro**:
+ * ANUAL (com ano opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA`
+ * (exige mês E ano). Vazio = ainda a preencher.
+ */
 export function buildPrevisao(mes: string, ano: string, anual: boolean): string {
-  if (!ano) return "";
-  return anual ? `ANUAL/${ano}` : mes ? `${mes}/${ano}` : "";
+  if (anual) return ano ? `ANUAL/${ano}` : "ANUAL";
+  return mes && ano ? `${mes}/${ano}` : "";
 }
 
 /**
@@ -105,7 +109,9 @@ export function DfdConferir({
   const prio = normPrioridade(textoSecao(dfd.secoes, pCfg.kw)).valor;
   const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw)).valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
-  const anual = prev?.startsWith("ANUAL/") ?? false;
+  // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
+  // no anual (não deixa o mês grudar como se fosse mês quando é só "ANUAL").
+  const anual = !!prev && /^ANUAL(\/|$)/.test(prev);
   const mesSel = prev && !anual ? (prev.split("/")[0] ?? "") : "";
   const anoSel = prev ? (prev.split("/")[1] ?? "") : "";
 

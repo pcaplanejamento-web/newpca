@@ -164,7 +164,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **bloqueia o botão** "Importar"; o `POST /api/dfd` rejeita (422) por garantia.
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
-  `normPrioridade`) e PREVISÃO DE ENTREGA (`MÊS/AAAA` ou `ANUAL/AAAA` p/ recorrente — `normPrevisao`); o que não dá
+  `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
+  — `ANUAL` vale **sem ano**, com ano vira `ANUAL/AAAA`; reconhece `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`…
+  — `normPrevisao`); o que não dá
   para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
   PREVISÃO (mês + ano + toggle ANUAL) e FUNDAMENTAÇÃO LEGAL (`TextField`, padrão "Lei 14.133/2021") — só componentes
   do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio normal (sem migração). Cada DFD ganha um
@@ -195,7 +197,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
 - **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota
   **vários DFDs** (escala a **milhares**); todo DFD vem de um protocolo. Entidade `dfd_protocolos` (escopo por
-  **repartição**, `numero`=Número Processo único; sem `grupo_id`) + `dfds.protocoloId` nullable (FK `set null`).
+  **repartição**, `numero`=Número Processo único; **`idExterno`** = "Id:" da capa, migração `0019`; sem `grupo_id`) +
+  `dfds.protocoloId` nullable (FK `set null`).
   O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
   streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
   com o cabeçalho; a geometria é descartada por página); (2) ao **Protocolar**, DFD a DFD: `parseDfdDoProtocolo`
@@ -212,7 +215,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`animate-fade-in-up`). Analisa/normaliza
   em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
   sobreviverem** ao envio; `protocolar` usa a cópia do cache e só re-parseia o que faltou. `ProtocoloView` read-only,
-  catalogado). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
+  catalogado). **Conferência do valor da capa (regras 3/4):** o preview mostra TODOS os dados da capa igual ao
+  gravado (Id do processo, CPF/CNPJ, **Valor da capa**, Local) + **mini banners** (`StatMini`) de total de DFDs +
+  **somatória dos valores dos DFDs** (valor do DFD = soma dos itens, `valorTotal`). O Valor da capa é **conferido
+  contra a somatória** (`valoresBatem`, tolerância 1 centavo): divergência **trava a protocolação** e o usuário pode
+  **substituir** a capa pela somatória (um clique) para liberar. `ProtocoloView` faz a mesma conferência (aponta e,
+  destravado, substitui). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
   "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
   Sem nova aba.
 - **Importação por botão único + lançador (`Dropzone`):** cada tela de importação (Protocolos, DFD, Planilha PCA) tem
@@ -272,7 +280,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
-  ex.: verificar assinatura digital), `StatCard`, `ReorderTable` (tabela com arrasto entre linhas,
+  ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
+  DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência), `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` legado só permanece pelo `Tone`/tons do `StatCard`.

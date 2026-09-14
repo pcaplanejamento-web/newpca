@@ -120,6 +120,7 @@ export const dfdOpSchema = z.discriminatedUnion("mode", [startDfdSchema, appendD
 /** Metadados da capa do protocolo (editáveis no banner antes de protocolar). */
 export const protocoloMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Informe o número do protocolo.").max(60),
+  idExterno: textoCurtoOpc,
   data: textoCurtoOpc,
   interessado: textoOpc,
   documento: textoCurtoOpc,

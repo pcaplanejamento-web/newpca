@@ -141,6 +141,20 @@ PDF) são bloqueados com relatório claro. **2º formato de assinatura** ("Assin
 ser lido além do "Certificado Digital", e as assinaturas que vêm em **páginas separadas** após o DFD são todas
 acumuladas nele (192 assinaturas capturadas no protocolo real).
 
+### Protocolo: Id da capa + conferência do Valor da capa × somatória + mini banners de cabeçalho — entregue
+✅ **Id do processo:** a capa traz um **`Id:`** (ex.: `2273524`) além do Número Processo — agora é **lido, mostrado no
+preview e salvo** ao protocolar (`dfd_protocolos.idExterno`, migração `0019`). **Preview = gravado:** o banner de
+importação mostra **todos os dados da capa** iguais ao protocolo já gravado (Id, CPF/CNPJ, **Valor da capa**, Local).
+**Conferência do valor (regras 3/4):** o **Valor da capa** é comparado com a **somatória dos valores dos DFDs** (o
+valor de cada DFD é a **soma dos seus itens**); se **divergir**, aponta o erro e **trava a protocolação** — o usuário
+**substitui a capa pela somatória** em um clique para liberar (`valoresBatem`, tolerância de 1 centavo; puro/testável).
+`ProtocoloView` faz a mesma conferência (aponta; destravado, substitui). **Mini banners de cabeçalho (`StatMini`,
+novo no DS):** um por informação, no **head** do DFD (**Total de itens** · **Valor total**) e do Protocolo (**Total de
+DFDs** · **Total de itens** · **Somatória dos DFDs**), substituindo os cartões ad-hoc. **PREVISÃO "Anual" corrigida:**
+a Seção 5 é **um OU outro** — uma **data** (`MÊS/AAAA`) **ou** recorrente **`ANUAL`** (agora **válido sem ano**; com ano
+vira `ANUAL/AAAA`). Reconhece as várias escritas (`ANUAL(MENTE)`, `MENSAL(MENTE)`, `AO LONGO DO ANO`…) e **regulariza**
+a que não estiver padronizada; o editor (mês + ano + `Anual`) deixa o usuário controlar sem bugs.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

@@ -258,6 +258,7 @@ export const dfdProtocolos = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     numero: text("numero").notNull(), // "Número Processo" (ex.: "144756/2026")
+    idExterno: text("id_externo"), // "Id:" da capa do processo (ex.: "2273524")
     data: text("data"),
     interessado: text("interessado"),
     documento: text("documento"), // CPF/CNPJ do interessado

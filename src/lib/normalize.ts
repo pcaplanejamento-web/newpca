@@ -51,6 +51,16 @@ export function parseIntBR(v: unknown): number | null {
   return n == null ? null : Math.trunc(n);
 }
 
+/**
+ * Dois valores monetários "batem" (tolerância de 1 centavo p/ ruído de ponto
+ * flutuante). `null` de qualquer lado nunca bate — usado para conferir o Valor da
+ * capa do protocolo contra a somatória dos valores dos DFDs.
+ */
+export function valoresBatem(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) < 0.01;
+}
+
 export type DataParts = { iso: string; mes: number; ano: number } | null;
 
 /** Aceita Date (serial do Excel), "dd/mm/yyyy" ou ISO "yyyy-mm-dd". */
@@ -308,19 +318,25 @@ export const MESES = [
 const MESES_SEM = MESES.map(stripAccents); // sem acento p/ casar
 
 /**
- * PREVISÃO DE ENTREGA/EXECUÇÃO → `MÊS/AAAA` (ex.: `FEVEREIRO/2027`), ou `ANUAL/AAAA`
- * quando recorrente (mensal/ao longo do ano). Aceita `dd/mm/aaaa`, `mm/aaaa`,
- * `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA`. Sem ano/irreconhecível → null (tratar).
+ * PREVISÃO DE ENTREGA/EXECUÇÃO — é **um OU outro**: uma DATA (`MÊS/AAAA`, ex.:
+ * `FEVEREIRO/2027`) OU recorrente `ANUAL` (opcionalmente `ANUAL/AAAA`). Reconhece as
+ * várias escritas de cada forma:
+ *  - DATA: `dd/mm/aaaa`, `mm/aaaa`, `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA`.
+ *  - ANUAL: `ANUAL`, `ANUALMENTE`, `MENSAL(MENTE)`, `AO LONGO/DECORRER/DURANTE do ano`,
+ *    `TODO O ANO`, `POR N MESES` — com ou sem ano. Bare "ANUAL" (sem ano) é VÁLIDO.
+ * O que não casar nenhuma das duas → null (tratar à mão). Recorrente vence a data
+ * (não é possível os dois). `auto=true` = reconheceu mas a escrita não era canônica.
  */
 export function normPrevisao(texto: string | null | undefined): { valor: string | null; anual: boolean; auto: boolean } {
   const raw = String(texto ?? "").trim();
   if (!raw) return { valor: null, anual: false, auto: false };
   const s = stripAccents(cleanUpper(raw));
   const ano = s.match(/\b(20\d{2})\b/)?.[1] ?? null;
-  const recorrente = /\b(MENSAL|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL|TODO O ANO)\b|POR\s+\d+\s+MES/.test(s);
+  const recorrente =
+    /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES/.test(s);
   if (recorrente) {
-    if (!ano) return { valor: null, anual: true, auto: false };
-    const valor = `ANUAL/${ano}`;
+    // "Anual" é válido mesmo sem ano; com ano vira `ANUAL/AAAA` (contexto do PCA).
+    const valor = ano ? `ANUAL/${ano}` : "ANUAL";
     return { valor, anual: true, auto: cleanUpper(raw) !== valor };
   }
   if (!ano) return { valor: null, anual: false, auto: false };

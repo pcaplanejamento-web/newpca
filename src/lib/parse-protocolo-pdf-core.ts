@@ -16,6 +16,7 @@ import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 export type ProtocoloMeta = {
   numero: string | null; // "Número Processo" (ex.: "144756/2026")
+  idExterno: string | null; // "Id:" da capa (ex.: "2273524")
   data: string | null;
   interessado: string | null;
   documento: string | null; // CPF/CNPJ do interessado
@@ -94,6 +95,9 @@ export function classificarPdf(paginas: PaginaTexto[]): "protocolo" | "dfd" | "d
 /** Metadados da capa a partir das linhas de texto da página inicial. */
 function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
   const numero = buscar(lines, /N[úu]mero\s+Processo\s*:?\s*([\d/]+)/i);
+  // "Id:" da capa (ex.: "...Data /Hora: Id: 2273524 22/06/2026..."); ≥3 dígitos p/
+  // não casar rótulos soltos.
+  const idExterno = buscar(lines, /\bId\s*:\s*(\d{3,})/i);
   const data = buscar(lines, /(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)/);
   const interessado = buscar(lines, /Interessado\s*:?\s*(.+?)\s+CPF\/CNPJ\s*:/i);
   const documento = buscar(lines, /CPF\/CNPJ\s*:?\s*([\d./-]{11,})/i);
@@ -106,7 +110,7 @@ function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
   // "Valor" da capa (sem "R$", ex.: "32.705,00").
   const linhaValor = lines.find((s) => /Valor\s*:/i.test(s) && /\d[\d.]*,\d{2}/.test(s));
   const valorCapa = linhaValor ? parseNumberBR(linhaValor.match(/(\d[\d.]*,\d{2})/)?.[1] ?? null) : null;
-  return { numero, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
+  return { numero, idExterno, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
 }
 
 /**

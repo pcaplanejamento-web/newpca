@@ -52,6 +52,7 @@ import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { ReorderTable } from "@/components/ReorderTable";
 import { Segmented } from "@/components/Segmented";
 import { StatCard } from "@/components/StatCard";
+import { StatMini } from "@/components/StatMini";
 import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
@@ -326,6 +327,7 @@ const PCA_DEMO = {
 // o pdf.js, fica fora do catálogo, como o DfdUploadForm).
 const PROTO_DEMO = {
   numero: "144756/2026",
+  idExterno: "2273524",
   data: "09/09/2026 16:41:38",
   interessado: "1008171 - FUNDO MUNICIPAL DOS DIREITOS DO IDOSO",
   documento: "29.788.950/0001-04",
@@ -496,6 +498,15 @@ export function Catalogo() {
           <StatCard label="Finalizados" value="63" tone="emerald" icon={<IconWallet className="h-5 w-5" />} hint="no mês" />
           <StatCard label="Em análise" value="41" tone="amber" icon={<IconClock className="h-5 w-5" />} active />
           <StatCard label="Devolvidos" value="12" tone="orange" icon={<IconBox className="h-5 w-5" />} hint="vs. anterior" />
+        </div>
+      </Secao>
+
+      <Secao titulo="StatMini (mini banner de cabeçalho — DFD/Protocolo)">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatMini label="Total de itens" value="692" />
+          <StatMini label="Valor total" value="R$ 1.284.902,10" hint="Estimado (nota): R$ 1.280.000,00" />
+          <StatMini label="Total de DFDs" value="104" tone="accent" />
+          <StatMini label="Somatória dos DFDs" value="R$ 32.705,00" tone="warn" hint="capa diverge" />
         </div>
       </Secao>
 

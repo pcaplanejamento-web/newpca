@@ -13,9 +13,9 @@ import {
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
-import { num } from "@/lib/format";
+import { brl, num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
-import { MESES, type Prioridade } from "@/lib/normalize";
+import { MESES, type Prioridade, valoresBatem } from "@/lib/normalize";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
@@ -41,15 +41,16 @@ import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload 
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
+import { StatMini } from "./StatMini";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
-type Extra = { documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
+type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move";
 type CampoBulk = "reparticao" | "prioridade" | "previsao" | "fundamentacao";
 
-const EXTRA_VAZIO: Extra = { documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
+const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
 
 export function ProtocoloUploadForm({
@@ -143,7 +144,7 @@ export function ProtocoloUploadForm({
     setObservacao("");
     setExtra(EXTRA_VAZIO);
     setProtoRepId(reparticaoAtivaId);
-    setIndex({ protocolo: { numero: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
+    setIndex({ protocolo: { numero: null, idExterno: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
     setDfdRepIds([]);
     setAutoRepIds([]);
     setAberto(true);
@@ -185,7 +186,7 @@ export function ProtocoloUploadForm({
       setInteressado(p.interessado ?? "");
       setAssunto(p.assunto ?? "");
       setObservacao(p.observacao ?? "");
-      setExtra({ documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
+      setExtra({ idExterno: p.idExterno, documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
       setIndex(idx);
       setDfdRepIds(autos);
       setAutoRepIds(autos);
@@ -332,6 +333,7 @@ export function ProtocoloUploadForm({
           mode: "start-protocolo",
           protocolo: {
             numero,
+            idExterno: extra.idExterno,
             data: data || null,
             interessado: interessado || null,
             documento: extra.documento,
@@ -497,11 +499,23 @@ export function ProtocoloUploadForm({
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhas.filter(({ idx }) => estado(idx) === "erro").length;
+  const temDfds = (index?.dfds.length ?? 0) > 0;
+  // Somatória dos valores dos DFDs (valor do DFD = soma dos seus itens). Só é completa
+  // quando todos foram analisados e nenhum está com erro.
+  const somatorioDfds = [...parsed.values()].reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0);
+  const itensDfds = [...parsed.values()].reduce((s, d) => s + d.itens.length, 0);
+  const conciliavel = temDfds && !analisando && dfdsComErro === 0;
+  // Regra 3: Valor da capa tem de bater com a somatória dos DFDs; divergência trava.
+  const capaDivergente = conciliavel && !valoresBatem(extra.valorCapa, somatorioDfds);
   const podeProtocolar =
-    numero.trim().length > 0 && protoRepId != null && !importando && !analisando && dfdsComErro === 0;
+    numero.trim().length > 0 &&
+    protoRepId != null &&
+    !importando &&
+    !analisando &&
+    dfdsComErro === 0 &&
+    !capaDivergente;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
-  const temDfds = (index?.dfds.length ?? 0) > 0;
 
   // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
   // cima = controle do valor (altura fixa); baixo = seletor do campo + Aplicar + Limpar.
@@ -709,7 +723,7 @@ export function ProtocoloUploadForm({
               ) : (
               <span
                 className="text-[12px]"
-                style={{ color: dfdsComErro > 0 ? "var(--danger)" : "var(--muted)" }}
+                style={{ color: dfdsComErro > 0 || capaDivergente ? "var(--danger)" : "var(--muted)" }}
               >
                 {!temDfds
                   ? "Sem DFDs — cria só o protocolo."
@@ -717,7 +731,9 @@ export function ProtocoloUploadForm({
                     ? `Analisando ${index?.dfds.length} DFD(s)...`
                     : dfdsComErro > 0
                       ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
-                      : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
+                      : capaDivergente
+                        ? "Valor da capa diverge da somatória — substitua para liberar"
+                        : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
               </span>
             )}
             <div className="flex gap-2">
@@ -735,15 +751,47 @@ export function ProtocoloUploadForm({
         }
       >
         <div className="space-y-5">
+          {/* Head — mini banners (um por informação) + conferência do valor da capa */}
+          {temDfds && (
+            <div className="grid grid-cols-3 gap-3">
+              <StatMini label="Total de DFDs" value={num(index?.dfds.length ?? 0)} />
+              <StatMini label="Total de itens" value={num(itensDfds)} hint={analisando ? "analisando…" : undefined} />
+              <StatMini
+                label="Somatória dos DFDs"
+                value={brl(somatorioDfds)}
+                tone={capaDivergente ? "warn" : "default"}
+                hint={analisando ? "analisando…" : undefined}
+              />
+            </div>
+          )}
+          {capaDivergente && (
+            <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
+              <p className="font-semibold">O valor da capa diverge da somatória dos DFDs</p>
+              <p className="mt-1 opacity-90">
+                Valor da capa: {extra.valorCapa != null ? brl(extra.valorCapa) : "—"} · Somatória dos DFDs:{" "}
+                {brl(somatorioDfds)}. Substitua o valor da capa para liberar a protocolação.
+              </p>
+              <div className="mt-2">
+                <Button variant="secondary" onClick={() => setExtra((x) => ({ ...x, valorCapa: somatorioDfds }))}>
+                  Substituir pela somatória ({brl(somatorioDfds)})
+                </Button>
+              </div>
+            </Callout>
+          )}
+
           {/* Metadados do protocolo */}
           <section className="grid gap-3 sm:grid-cols-2">
             <TextField label="Número do processo" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex.: 144756/2026" />
+            <TextField label="Id do processo" value={extra.idExterno ?? ""} disabled readOnly placeholder="—" />
             <TextField label="Data/Hora" value={data} onChange={(e) => setData(e.target.value)} placeholder="—" />
+            <TextField label="CPF/CNPJ" value={extra.documento ?? ""} onChange={(e) => setExtra((x) => ({ ...x, documento: e.target.value || null }))} placeholder="—" />
             <div className="sm:col-span-2">
               <TextField label="Interessado" value={interessado} onChange={(e) => setInteressado(e.target.value)} />
             </div>
             <TextField label="Assunto" value={assunto} onChange={(e) => setAssunto(e.target.value)} />
             <TextField label="Observação" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
+            <TextField label="Valor (capa)" value={extra.valorCapa != null ? brl(extra.valorCapa) : "—"} disabled readOnly />
+            <TextField label="Local (capa)" value={extra.localReparticao ?? ""} disabled readOnly placeholder="—" />
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="proto-rep">
                 Repartição do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>

@@ -1,9 +1,14 @@
 "use client";
 
 import { brl, dataBR, num } from "@/lib/format";
+import { valoresBatem } from "@/lib/normalize";
+import { Button } from "./Button";
+import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
+import { IconAlert } from "./icons";
+import { StatMini } from "./StatMini";
 
 /** Campos editáveis do protocolo (banner destravado). */
 export type ProtocoloEdicaoValores = {
@@ -13,6 +18,7 @@ export type ProtocoloEdicaoValores = {
   assunto: string;
   observacao: string;
   reparticaoId: number | null;
+  valorCapa: number | null;
 };
 export type ProtocoloEdicao = {
   trancado: boolean;
@@ -39,6 +45,7 @@ export type ProtocoloVisualDfd = {
 
 export type ProtocoloVisual = {
   numero: string;
+  idExterno: string | null;
   data: string | null;
   interessado: string | null;
   documento: string | null;
@@ -71,6 +78,11 @@ export function ProtocoloView({
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
       : "Sem repartição";
+  // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
+  // seus itens). Divergência é apontada; no modo edição dá para substituir a capa
+  // pela somatória (regras 3/4). Em edição usa o valor sendo editado.
+  const valorCapaAtual = editando && edicao ? edicao.valores.valorCapa : protocolo.valorCapa;
+  const capaDivergente = valorCapaAtual != null && !valoresBatem(valorCapaAtual, protocolo.valorTotal);
 
   const cols: Column<ProtocoloVisualDfd>[] = [
     { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
@@ -103,10 +115,39 @@ export function ProtocoloView({
         <p className="mt-0.5 text-sm text-muted">{protocolo.assunto || "Processo administrativo"}</p>
       </div>
 
+      {/* Head — mini banners (um por informação): total de DFDs + somatória dos valores. */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatMini label="Total de DFDs" value={num(protocolo.totalDfds)} />
+        <StatMini label="Total de itens" value={num(protocolo.totalItens)} />
+        <StatMini
+          label="Somatória dos DFDs"
+          value={brl(protocolo.valorTotal)}
+          tone={capaDivergente ? "warn" : "default"}
+        />
+      </div>
+
+      {capaDivergente && (
+        <Callout kind={editando ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
+          <p className="font-semibold">O valor da capa diverge da somatória dos DFDs</p>
+          <p className="mt-1 opacity-90">
+            Valor da capa: {brl(valorCapaAtual)} · Somatória dos DFDs: {brl(protocolo.valorTotal)}.
+          </p>
+          {editando && edicao && (
+            <div className="mt-2">
+              <Button variant="secondary" onClick={() => edicao.onChange({ valorCapa: protocolo.valorTotal })}>
+                Substituir pela somatória ({brl(protocolo.valorTotal)})
+              </Button>
+            </div>
+          )}
+        </Callout>
+      )}
+
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
         {editando && edicao ? (
           <div className="grid gap-3 sm:grid-cols-2">
+            <TextField label="Id do processo" value={protocolo.idExterno ?? ""} disabled readOnly />
+            <TextField label="Valor (capa)" value={valorCapaAtual != null ? brl(valorCapaAtual) : "—"} disabled readOnly />
             <TextField label="Data/Hora" value={edicao.valores.data} onChange={(e) => edicao.onChange({ data: e.target.value })} />
             <TextField label="CPF/CNPJ" value={edicao.valores.documento} onChange={(e) => edicao.onChange({ documento: e.target.value })} />
             <div className="sm:col-span-2">
@@ -136,6 +177,7 @@ export function ProtocoloView({
         ) : (
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
             <Campo label="Nº do processo" valor={protocolo.numero} />
+            <Campo label="Id do processo" valor={protocolo.idExterno ?? "—"} />
             <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
             <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
             <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
@@ -147,12 +189,6 @@ export function ProtocoloView({
           </dl>
         )}
       </section>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Kpi label="DFDs" valor={num(protocolo.totalDfds)} />
-        <Kpi label="Itens" valor={num(protocolo.totalItens)} />
-        <Kpi label="Valor total" valor={brl(protocolo.valorTotal)} />
-      </div>
 
       <section>
         <h3 className="mb-2 text-sm font-bold text-text">DFDs do protocolo ({protocolo.dfds.length})</h3>
@@ -189,11 +225,3 @@ function Campo({ label, valor, span }: { label: string; valor: string; span?: bo
   );
 }
 
-function Kpi({ label, valor }: { label: string; valor: string }) {
-  return (
-    <div className="rounded-card border border-border bg-surface p-4 shadow-ring">
-      <div className="text-xs text-muted">{label}</div>
-      <div className="text-lg font-bold text-text">{valor}</div>
-    </div>
-  );
-}
