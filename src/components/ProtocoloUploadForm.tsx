@@ -34,7 +34,6 @@ import {
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { type Column, DataTable } from "./DataTable";
 import { buildPrevisao, DfdConferir } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
@@ -42,8 +41,9 @@ import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
+import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
-import { ProtocoloCabecalho } from "./ProtocoloView";
+import { CapaCampos, ProtocoloCabecalho } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
@@ -441,109 +441,28 @@ export function ProtocoloUploadForm({
     const c = id != null ? reparticoes.find((r) => r.id === id)?.codigo : null;
     return c ?? index?.dfds[idx].siglaSetor ?? "—";
   };
-  const tipoCod = (idx: number): string => tipoCurtoDfd(parsed.get(idx)?.tipo) ?? "—";
   const planNum = (idx: number): string => parsed.get(idx)?.planejamento ?? "";
   const qtdItens = (idx: number): number | null => parsed.get(idx)?.itens.length ?? null;
   const valorItens = (idx: number): number | null => {
     const d = parsed.get(idx);
     return d ? (d.valorTotal ?? d.valorEstimado ?? null) : null;
   };
-  const estadoRotulo = (idx: number): string =>
-    errosParse.has(idx) ? "Leitura incompleta" : ESTADO_ROTULO[estado(idx)];
-
-  // Colunas EXATAS (na ordem): seleção (via `selectable`) · Estado · Situação · Nº DFD ·
-  // Nº Planejamento · Sigla · Tipo · Itens · Valor total. Todas com filtro/ordenação (via
-  // `value`). A repartição é atribuída pela edição em massa ou abrindo o DFD ao lado.
-  const cols: Column<{ idx: number }>[] = [
-    {
-      key: "estado",
-      header: "Estado",
-      minWidth: 118,
-      value: (r) => estadoRotulo(r.idx),
-      render: (r) => {
-        const e = estado(r.idx);
-        const motivo = errosParse.get(r.idx);
-        return (
-          <span
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium"
-            style={{ color: estadoCor(e) }}
-            title={motivo ?? undefined}
-          >
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(e) }} />
-            {motivo ? "Leitura incompleta" : ESTADO_ROTULO[e]}
-          </span>
-        );
-      },
-    },
-    {
-      key: "situacao",
-      header: "Situação",
-      minWidth: 86,
-      value: (r) => SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")],
-      render: (r) => (
-        <span className="text-[12px] text-muted">{SITUACAO[classificar(index?.dfds[r.idx].numero ?? "")]}</span>
-      ),
-    },
-    {
-      key: "numero",
-      header: "Nº DFD",
-      value: (r) => index?.dfds[r.idx].numero ?? "",
-      render: (r) => <span className="font-mono text-[12px]">{index?.dfds[r.idx].numero}</span>,
-    },
-    {
-      key: "planejamento",
-      header: "Nº Plan.",
-      value: (r) => planNum(r.idx),
-      render: (r) => <span className="font-mono text-[12px]">{planNum(r.idx) || "—"}</span>,
-    },
-    {
-      key: "sigla",
-      header: "Sigla",
-      value: (r) => repCod(r.idx),
-      render: (r) => (
-        <span className="inline-flex items-center gap-1">
-          <span className="font-mono text-[12px] font-semibold text-accent">{repCod(r.idx)}</span>
-          {dfdRepIds[r.idx] != null && dfdRepIds[r.idx] === autoRepIds[r.idx] && (
-            <span className="text-[9px] font-semibold uppercase text-accent" title="Detectada automaticamente">
-              auto
-            </span>
-          )}
-        </span>
-      ),
-    },
-    { key: "tipo", header: "Tipo", value: (r) => tipoCod(r.idx), render: (r) => <span className="text-[12px]">{tipoCod(r.idx)}</span> },
-    {
-      key: "itens",
-      header: "Itens",
-      align: "right",
-      value: (r) => String(qtdItens(r.idx) ?? ""),
-      render: (r) => {
-        const q = qtdItens(r.idx);
-        return q == null ? <span className="text-faint">…</span> : num(q);
-      },
-    },
-    {
-      key: "valor",
-      header: "Valor total",
-      align: "right",
-      value: (r) => String(valorItens(r.idx) ?? ""),
-      render: (r) => {
-        const v = valorItens(r.idx);
-        return v == null ? <span className="text-faint">…</span> : brl(v);
-      },
-    },
-  ];
-
-  const linhas = (index?.dfds ?? []).map((_, idx) => ({ idx }));
-  // DFDs com erro numa tabela SEPARADA (regra 2); os demais na tabela principal.
-  const linhasErro = linhas.filter(({ idx }) => estado(idx) === "erro");
-  const linhasOk = linhas.filter(({ idx }) => estado(idx) !== "erro");
-  // Rodapé das tabelas de DFDs = SÓ os agregados das linhas (nº de DFDs · itens · valor).
-  const resumoDfds = (l: { idx: number }[]) => {
-    const itens = l.reduce((s, r) => s + (qtdItens(r.idx) ?? 0), 0);
-    const valor = l.reduce((s, r) => s + (valorItens(r.idx) ?? 0), 0);
-    return `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(itens)} ${itens === 1 ? "item" : "itens"} · ${brl(valor)}`;
-  };
+  // Uma linha NORMALIZADA por DFD para a planilha única (`PlanilhaDfds`). O `key` é o
+  // idx (chave da seleção/edição em massa). Estado/Situação/valores vêm do parse+validação.
+  const linhasDfd: LinhaDfd[] = (index?.dfds ?? []).map((di, idx) => ({
+    key: idx,
+    numero: di.numero,
+    planejamento: planNum(idx) || null,
+    sigla: repCod(idx),
+    auto: dfdRepIds[idx] != null && dfdRepIds[idx] === autoRepIds[idx],
+    tipo: tipoCurtoDfd(parsed.get(idx)?.tipo),
+    itens: qtdItens(idx),
+    valor: valorItens(idx),
+    estado: estado(idx),
+    estadoMotivo: errosParse.get(idx) ?? null,
+    situacao: SITUACAO[classificar(di.numero)],
+  }));
+  const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhasErro.length;
@@ -594,10 +513,10 @@ export function ProtocoloUploadForm({
     interessado: interessado || null,
     assunto: assunto || null,
     capaMotivo,
-    dfds: linhasErro.map(({ idx }) => ({
-      numero: index?.dfds[idx].numero ?? "?",
-      tipo: parsed.get(idx)?.tipo ?? null,
-      faltas: faltasDoDfd(idx),
+    dfds: linhasErro.map((l) => ({
+      numero: index?.dfds[l.key].numero ?? "?",
+      tipo: parsed.get(l.key)?.tipo ?? null,
+      faltas: faltasDoDfd(l.key),
     })),
   });
 
@@ -886,32 +805,44 @@ export function ProtocoloUploadForm({
             </Callout>
           )}
 
-          {/* Metadados do protocolo */}
-          <section className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Número do processo" value={numero} onChange={(e) => setNumero(e.target.value)} disabled={origemPdf} readOnly={origemPdf} placeholder="Ex.: 144756/2026" />
-            <TextField label="Id do processo" value={extra.idExterno ?? ""} disabled readOnly placeholder="—" />
-            <TextField label="Data/Hora" value={data} onChange={(e) => setData(e.target.value)} disabled={origemPdf} readOnly={origemPdf} placeholder="—" />
-            <TextField label="CPF/CNPJ" value={extra.documento ?? ""} onChange={(e) => setExtra((x) => ({ ...x, documento: e.target.value || null }))} disabled={origemPdf} readOnly={origemPdf} placeholder="—" />
-            <div className="sm:col-span-2">
-              <TextField label="Interessado" value={interessado} onChange={(e) => setInteressado(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
-            </div>
-            <TextField label="Assunto" value={assunto} onChange={(e) => setAssunto(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
-            <TextField label="Observação" value={observacao} onChange={(e) => setObservacao(e.target.value)} disabled={origemPdf} readOnly={origemPdf} />
-            <TextField label="Valor (capa)" value={extra.valorCapa != null ? brl(extra.valorCapa) : "—"} disabled readOnly />
-            <TextField label="Local (capa)" value={extra.localReparticao ?? ""} disabled readOnly placeholder="—" />
-            <div className="sm:col-span-2">
-              <label className={labelCls} htmlFor="proto-rep">
-                Repartição do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>
-              </label>
-              <select id="proto-rep" className={inputCls} value={protoRepId ?? ""} onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— Selecione a repartição —</option>
-                {reparticoes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.codigo} · {r.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Dados da capa — MESMA grade (`CapaCampos`) do protocolo gravado. Editável só
+              na criação manual (sem PDF); do PDF é imutável. */}
+          <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+            <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
+            <CapaCampos
+              numero={numero}
+              idExterno={extra.idExterno}
+              data={data}
+              documento={extra.documento ?? ""}
+              interessado={interessado}
+              assunto={assunto}
+              observacao={observacao}
+              valorCapa={extra.valorCapa}
+              localReparticao={extra.localReparticao}
+              editavel={!origemPdf}
+              onChange={(c, v) => {
+                if (c === "numero") setNumero(v);
+                else if (c === "data") setData(v);
+                else if (c === "interessado") setInteressado(v);
+                else if (c === "assunto") setAssunto(v);
+                else if (c === "observacao") setObservacao(v);
+                else setExtra((x) => ({ ...x, documento: v || null }));
+              }}
+            >
+              <div className="sm:col-span-2">
+                <label className={labelCls} htmlFor="proto-rep">
+                  Repartição do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>
+                </label>
+                <select id="proto-rep" className={inputCls} value={protoRepId ?? ""} onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Selecione a repartição —</option>
+                  {reparticoes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.codigo} · {r.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CapaCampos>
           </section>
 
           {!temDfds ? (
@@ -920,49 +851,17 @@ export function ProtocoloUploadForm({
               existentes.
             </Callout>
           ) : (
-            <section className="space-y-4">
-              {/* DFDs com erro numa tabela SEPARADA (regra 2); clique numa linha abre o
-                  DFD AO LADO (Modal `lateral`). Filtro/ordenação em todas as colunas. */}
-              {linhasErro.length > 0 && (
-                <div>
-                  <h4
-                    className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold"
-                    style={{ color: "var(--danger)" }}
-                  >
-                    <span className="h-2 w-2 rounded-full" style={{ background: "var(--danger)" }} />
-                    DFDs com erro ({num(linhasErro.length)})
-                  </h4>
-                  <DataTable
-                    columns={cols}
-                    rows={linhasErro}
-                    getKey={(r) => r.idx}
-                    selectable
-                    selected={sel}
-                    onSelected={setSel}
-                    onRowClick={(r) => abrir(r.idx)}
-                    pageSize={compacta ? 8 : 12}
-                    minWidth={720}
-                    resumo={resumoDfds}
-                  />
-                </div>
-              )}
-              <div>
-                {linhasErro.length > 0 && (
-                  <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(linhasOk.length)})</h4>
-                )}
-                <DataTable
-                  columns={cols}
-                  rows={linhasOk}
-                  getKey={(r) => r.idx}
-                  selectable
-                  selected={sel}
-                  onSelected={setSel}
-                  onRowClick={(r) => abrir(r.idx)}
-                  pageSize={compacta ? 12 : 20}
-                  minWidth={720}
-                  resumo={resumoDfds}
-                />
-              </div>
+            <section>
+              {/* Planilha ÚNICA de DFDs (a mesma do protocolo gravado e da aba DFDs):
+                  DFDs com erro em tabela separada; clique numa linha abre o DFD ao lado. */}
+              <PlanilhaDfds
+                linhas={linhasDfd}
+                selecionavel
+                selected={sel}
+                onSelected={setSel}
+                onRowClick={abrir}
+                compacta={compacta}
+              />
             </section>
           )}
         </div>

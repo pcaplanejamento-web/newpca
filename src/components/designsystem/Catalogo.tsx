@@ -49,6 +49,7 @@ import { Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
+import { PlanilhaDfds } from "@/components/PlanilhaDfds";
 import { RelatorioErros } from "@/components/RelatorioErros";
 import { ReorderTable } from "@/components/ReorderTable";
 import { Segmented } from "@/components/Segmented";
@@ -343,8 +344,8 @@ const PROTO_DEMO = {
   totalItens: 3,
   valorTotal: 512342.72,
   dfds: [
-    { id: 1, numero: "1586", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72, valorEstimado: 342342.72 },
-    { id: 2, numero: "1720", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000 },
+    { id: 1, numero: "1586", planejamento: "1639", tipo: "DFD-S — Solução / com ETP", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72, valorEstimado: 342342.72 },
+    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000 },
   ],
 };
 
@@ -845,6 +846,16 @@ export function Catalogo() {
                 ? `${tsel.size} selecionada(s)`
                 : "Clique numa linha para abrir"
           }
+        />
+      </Secao>
+
+      <Secao titulo="PlanilhaDfds (tabela ÚNICA de DFDs — banners + aba DFDs)">
+        <PlanilhaDfds
+          linhas={[
+            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", auto: true, tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", situacao: "Novo" },
+            { key: 2, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "regular", situacao: "Substitui" },
+            { key: 3, numero: "1024", planejamento: "1066", sigla: "FMS", tipo: "DFD-R", itens: 0, valor: 0, estado: "erro", estadoMotivo: "Leitura incompleta da tabela", situacao: "Novo" },
+          ]}
         />
       </Secao>
 

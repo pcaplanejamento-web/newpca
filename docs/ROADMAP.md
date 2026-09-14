@@ -189,6 +189,16 @@ sai em **formato de DESPACHO de devolução** (`linhasRelatorioProtocolo`) pront
 correção. **Botões** do banner de protocolo **alinhados à direita**. `SECOES_OBRIGATORIAS` virou fonte única (reusada
 por `faltasObrigatorias`). Puro/testável.
 
+### Tabela de DFDs e banner de protocolo UNIFICADOS (um só componente) — entregue
+✅ **Uma tabela de DFDs para tudo:** novo `PlanilhaDfds` (modelo `LinhaDfd`) é o **mesmo componente** que lista DFDs no
+banner de importação, no banner do protocolo **gravado** e na **aba DFDs** — mesmas colunas (Estado · Situação · Nº
+DFD · Nº Plan. · Sigla · Tipo · Protocolo · Itens · Valor · ações; as opcionais só aparecem quando há dado), mesma
+**separação dos DFDs com erro** numa tabela à parte e mesmo **rodapé de somatório**. **Uma grade de capa para tudo:**
+`CapaCampos` (a mesma grade de campos da capa) é usada no import e no gravado. **Banner do protocolo gravado = o do
+preview** (CapaCampos + StatMini + conciliação + PlanilhaDfds), só adicionando o **cadeado**. Removidas as
+tabelas/colunas duplicadas (`colsDfd`, o `cols` inline do protocolo e a tabela simples do `ProtocoloView`) — sem código
+morto. Ambos catalogados.
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

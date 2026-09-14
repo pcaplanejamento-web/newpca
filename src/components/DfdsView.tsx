@@ -11,7 +11,7 @@ import {
   situacaoProtocolo,
 } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
-import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
@@ -23,6 +23,7 @@ import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { ProtocoloCabecalho, ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
 import { Tabs } from "./Tabs";
@@ -263,74 +264,42 @@ export function DfdsView({
     }
   }
 
-  // ---- Colunas da tabela de DFDs ----
-  const colsDfd: Column<DfdResumo>[] = [
-    {
-      key: "reparticao",
-      header: "Repartição",
-      value: (r) => r.reparticaoCodigo ?? "—",
-      render: (r) =>
-        r.reparticaoCodigo ? (
-          <span>
-            <span className="font-mono text-[12px] font-semibold text-accent">{r.reparticaoCodigo}</span>
-            <span className="text-muted"> · {r.reparticaoNome}</span>
-          </span>
-        ) : (
-          <span className="text-faint">Sem repartição</span>
-        ),
-    },
-    { key: "numero", header: "Nº DFD", value: (r) => r.numero, render: (r) => <span className="font-mono">{r.numero}</span> },
-    {
-      key: "protocolo",
-      header: "Protocolo",
-      value: (r) => r.protocoloNumero ?? "—",
-      render: (r) =>
-        r.protocoloNumero ? (
-          <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
-    {
-      key: "objeto",
-      header: "Objeto",
-      minWidth: 180,
-      value: (r) => r.objeto ?? "—",
-      render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span>,
-    },
-    {
-      key: "setor",
-      header: "Setor",
-      minWidth: 150,
-      value: (r) => r.setorRequisitante ?? "—",
-      render: (r) => <span className="line-clamp-1">{r.setorRequisitante ?? "—"}</span>,
-    },
-    { key: "itens", header: "Itens", align: "right", value: (r) => String(r.totalItens ?? 0), render: (r) => num(r.totalItens ?? 0) },
-    { key: "valor", header: "Valor", align: "right", value: (r) => String(valorDe(r)), render: (r) => brl(valorDe(r)) },
-    {
-      key: "acoes",
-      header: "",
-      filter: "none",
-      render: (r) =>
-        podeEditar ? (
-          <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              aria-label="Vincular a protocolo"
-              onClick={() => abrirVincular(r)}
-              icon={<IconLayers className="h-4 w-4" />}
-            />
-            <Button
-              variant="ghost"
-              aria-label="Excluir DFD"
-              onClick={() => excluirDfd(r.id, r.numero)}
-              icon={<IconTrash className="h-4 w-4" />}
-              style={{ color: "var(--danger)" }}
-            />
-          </div>
-        ) : null,
-    },
-  ];
+  // ---- Planilha ÚNICA de DFDs (a MESMA dos banners) para a aba DFDs ----
+  // DFDs gravados já passaram pela validação → estado "regular" (sem tabela de erro);
+  // aqui aparece a coluna Protocolo e as ações (vincular/excluir).
+  const dfdPorId = new Map(dfds.map((d) => [d.id, d]));
+  const linhasDfdTab: LinhaDfd[] = dfds.map((d) => ({
+    key: d.id,
+    numero: d.numero,
+    planejamento: d.planejamento,
+    sigla: d.reparticaoCodigo ?? "—",
+    tipo: tipoCurtoDfd(d.tipo),
+    itens: d.totalItens,
+    valor: valorDe(d),
+    estado: "regular",
+    protocolo: d.protocoloNumero,
+  }));
+  const acoesDfd = (l: LinhaDfd) => {
+    const d = dfdPorId.get(l.key);
+    if (!podeEditar || !d) return null;
+    return (
+      <div className="flex justify-end gap-1">
+        <Button
+          variant="ghost"
+          aria-label="Vincular a protocolo"
+          onClick={() => abrirVincular(d)}
+          icon={<IconLayers className="h-4 w-4" />}
+        />
+        <Button
+          variant="ghost"
+          aria-label="Excluir DFD"
+          onClick={() => excluirDfd(d.id, d.numero)}
+          icon={<IconTrash className="h-4 w-4" />}
+          style={{ color: "var(--danger)" }}
+        />
+      </div>
+    );
+  };
 
   // ---- Colunas da tabela de Protocolos ----
   // ESTADO = integridade do valor da capa × somatória; SITUAÇÃO = tem DFDs?; ID = "Id"
@@ -450,20 +419,7 @@ export function DfdsView({
             Nenhum DFD importado nesta visão. {podeEditar ? "Importe um DFD acima." : ""}
           </p>
         ) : (
-          <DataTable
-            columns={colsDfd}
-            rows={dfds}
-            getKey={(r) => r.id}
-            onRowClick={(r) => verDfd(r.id)}
-            fillHeight
-            pageSize={12}
-            minWidth={1040}
-            resumo={(linhas) =>
-              `${linhas.length} DFD${linhas.length === 1 ? "" : "s"} · ${num(
-                linhas.reduce((s, d) => s + (d.totalItens ?? 0), 0),
-              )} itens · ${brl(linhas.reduce((s, d) => s + valorDe(d), 0))}`
-            }
-          />
+          <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} />
         )}
       </section>
     </div>

@@ -235,13 +235,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Protocolação bloqueada com DFD defeituoso:** o botão "Protocolar" fica **desabilitado** enquanto algum DFD estiver
   com **erro** (ou ainda analisando) — não se protocola um processo com DFDs defeituosos (o `POST` segue validando por
   garantia). Estado **"regularizado automaticamente" = verde** (`estadoCor`).
-  **Tabela de DFDs do protocolo (planilha)** — colunas EXATAS e nessa ordem: **seleção · Estado · Situação · Nº DFD ·
-  Nº Plan. · Sigla · Tipo (`tipoCurtoDfd` DFD-S/R/O/E) · Itens · Valor total**, **todas filtráveis/ordenáveis**
-  (`value`); a repartição vira a coluna **Sigla** (atribuição pela edição em massa ou abrindo o DFD ao lado, não mais
-  por select na linha). Os **DFDs com erro ficam numa tabela SEPARADA** (acima da de regulares). O **head** mostra
-  **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o `RelatorioErros`
-  (copiável). A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
-  campo + Aplicar + Limpar embaixo).
+  **Tabela ÚNICA de DFDs — `PlanilhaDfds` (`src/components/PlanilhaDfds.tsx`):** o MESMO componente lista DFDs em
+  TODO lugar — banner de importação, banner do protocolo GRAVADO (`ProtocoloView`) e a **aba DFDs** (`DfdsView`). Cada
+  tela mapeia seus dados (parse do PDF / D1) para o modelo `LinhaDfd`. Colunas: **[seleção] · Estado · [Situação] · Nº
+  DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · [Protocolo] · Itens · Valor total · [ações]** (as opcionais só
+  aparecem quando há dado), **todas filtráveis/ordenáveis**; os **DFDs com erro numa tabela SEPARADA** acima da de
+  regulares; **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição pela
+  edição em massa ou abrindo o DFD ao lado). **Capa em `CapaCampos`** (exportado de `ProtocoloView`) — a MESMA grade de
+  campos da capa na importação e no gravado (Id/Valor/Local sempre só-leitura; demais só-leitura salvo criação manual).
+  O **head** mostra **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o
+  `RelatorioErros`. A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
+  campo + Aplicar + Limpar embaixo). **Banner do protocolo gravado = mesmos blocos do de importação** (CapaCampos +
+  StatMini + conciliação + PlanilhaDfds), + o **cadeado**.
 - **Item/DFD com ESTADO + relatório de erro (DfdView/DfdConferir):** a **tabela de itens** (Seção 4) tem uma coluna
   **Estado** por item (`estadoItem`: `Com erro` quando falta valor unitário/quantidade — `faltasDoItem`), **filtro em
   todas as colunas** e os **itens com pendência numa tabela SEPARADA** (acima da de regulares). O nº/tipo/planejamento

@@ -1,12 +1,66 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { Callout } from "./Callout";
-import { type Column, DataTable } from "./DataTable";
+import { TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert } from "./icons";
+import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
+
+/** Campos da CAPA do protocolo (a MESMA grade na importação e no gravado). Id/Valor/Local
+ * são sempre só-leitura; os demais ficam só-leitura salvo `editavel` (criação manual). O
+ * controle de repartição entra por `children` (varia: obrigatório no import, cadeado no gravado). */
+export type CampoCapa = "numero" | "data" | "documento" | "interessado" | "assunto" | "observacao";
+export function CapaCampos({
+  numero,
+  idExterno,
+  data,
+  documento,
+  interessado,
+  assunto,
+  observacao,
+  valorCapa,
+  localReparticao,
+  editavel = false,
+  onChange,
+  children,
+}: {
+  numero: string;
+  idExterno: string | null;
+  data: string;
+  documento: string;
+  interessado: string;
+  assunto: string;
+  observacao: string;
+  valorCapa: number | null;
+  localReparticao: string | null;
+  editavel?: boolean;
+  onChange?: (campo: CampoCapa, valor: string) => void;
+  children?: ReactNode;
+}) {
+  const ro = !editavel;
+  const set = (c: CampoCapa) => (e: { target: { value: string } }) => onChange?.(c, e.target.value);
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <TextField label="Número do processo" value={numero} onChange={set("numero")} disabled={ro} readOnly={ro} placeholder="Ex.: 144756/2026" />
+      <TextField label="Id do processo" value={idExterno ?? ""} disabled readOnly placeholder="—" />
+      <TextField label="Data/Hora" value={data} onChange={set("data")} disabled={ro} readOnly={ro} placeholder="—" />
+      <TextField label="CPF/CNPJ" value={documento} onChange={set("documento")} disabled={ro} readOnly={ro} placeholder="—" />
+      <div className="sm:col-span-2">
+        <TextField label="Interessado" value={interessado} onChange={set("interessado")} disabled={ro} readOnly={ro} />
+      </div>
+      <TextField label="Assunto" value={assunto} onChange={set("assunto")} disabled={ro} readOnly={ro} />
+      <TextField label="Observação" value={observacao} onChange={set("observacao")} disabled={ro} readOnly={ro} />
+      <TextField label="Valor (capa)" value={valorCapa != null ? brl(valorCapa) : "—"} disabled readOnly />
+      <TextField label="Local (capa)" value={localReparticao ?? ""} disabled readOnly placeholder="—" />
+      {children}
+    </div>
+  );
+}
 
 /**
  * Campo editável do protocolo (banner destravado). Os DADOS DA CAPA são IMUTÁVEIS
@@ -32,6 +86,8 @@ export type ProtocoloEdicao = {
 export type ProtocoloVisualDfd = {
   id: number;
   numero: string;
+  planejamento: string | null;
+  tipo: string | null;
   setorRequisitante: string | null;
   reparticaoCodigo: string | null;
   totalItens: number | null;
@@ -105,29 +161,18 @@ export function ProtocoloView({
   // acontece uma única vez, na importação, antes de gravar).
   const capaDivergente = protocolo.valorCapa != null && !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
 
-  const cols: Column<ProtocoloVisualDfd>[] = [
-    { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
-    {
-      key: "setor",
-      header: "Setor",
-      filter: "none",
-      minWidth: 180,
-      render: (r) => <span className="line-clamp-1">{r.setorRequisitante ?? "—"}</span>,
-    },
-    {
-      key: "rep",
-      header: "Repartição",
-      filter: "none",
-      render: (r) =>
-        r.reparticaoCodigo ? (
-          <span className="font-mono text-[12px] font-semibold text-accent">{r.reparticaoCodigo}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
-    { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens ?? 0) },
-    { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(valorDfd(r)) },
-  ];
+  // Planilha ÚNICA de DFDs (a mesma da importação e da aba DFDs). Um DFD gravado já
+  // passou pela validação → estado "regular" (sem tabela de erro).
+  const linhasDfd: LinhaDfd[] = protocolo.dfds.map((d) => ({
+    key: d.id,
+    numero: d.numero,
+    planejamento: d.planejamento,
+    sigla: d.reparticaoCodigo ?? "—",
+    tipo: tipoCurtoDfd(d.tipo),
+    itens: d.totalItens,
+    valor: valorDfd(d),
+    estado: "regular",
+  }));
 
   return (
     <div className="space-y-5">
@@ -156,19 +201,22 @@ export function ProtocoloView({
         </Callout>
       )}
 
-      {/* Dados da capa — SEMPRE somente leitura (imutáveis). Só a repartição
-          (roteamento) vira um seletor quando o banner está destravado. */}
+      {/* Dados da capa — MESMA grade (`CapaCampos`) da importação, SEMPRE só-leitura
+          (imutáveis). Só a repartição (roteamento) vira um seletor quando destravado. */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
-        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-          <Campo label="Nº do processo" valor={protocolo.numero} />
-          <Campo label="Id do processo" valor={protocolo.idExterno ?? "—"} />
-          <Campo label="Data/Hora" valor={protocolo.data ?? "—"} />
-          <Campo label="Interessado" valor={protocolo.interessado ?? "—"} span />
-          <Campo label="CPF/CNPJ" valor={protocolo.documento ?? "—"} />
-          <Campo label="Valor (capa)" valor={protocolo.valorCapa != null ? brl(protocolo.valorCapa) : "—"} />
-          <Campo label="Assunto" valor={protocolo.assunto ?? "—"} span />
-          <Campo label="Observação" valor={protocolo.observacao ?? "—"} span />
+        <CapaCampos
+          numero={protocolo.numero}
+          idExterno={protocolo.idExterno}
+          data={protocolo.data ?? ""}
+          documento={protocolo.documento ?? ""}
+          interessado={protocolo.interessado ?? ""}
+          assunto={protocolo.assunto ?? ""}
+          observacao={protocolo.observacao ?? ""}
+          valorCapa={protocolo.valorCapa}
+          localReparticao={protocolo.localReparticao}
+          editavel={false}
+        >
           {editando && edicao ? (
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="proto-edit-rep">
@@ -189,10 +237,11 @@ export function ProtocoloView({
               </select>
             </div>
           ) : (
-            <Campo label="Repartição" valor={rep} span />
+            <div className="sm:col-span-2">
+              <TextField label="Repartição" value={rep} disabled readOnly />
+            </div>
           )}
-          <Campo label="Local (capa)" valor={protocolo.localReparticao ?? "—"} span />
-        </dl>
+        </CapaCampos>
       </section>
 
       <section>
@@ -202,21 +251,7 @@ export function ProtocoloView({
             Nenhum DFD vinculado a este protocolo ainda.
           </p>
         ) : (
-          <DataTable
-            columns={cols}
-            rows={protocolo.dfds}
-            getKey={(r) => r.id}
-            onRowClick={onVerDfd ? (r) => onVerDfd(r.id) : undefined}
-            minWidth={620}
-            pageSize={20}
-            resumo={(l) =>
-              `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(
-                l.reduce((s, d) => s + (d.totalItens ?? 0), 0),
-              )} ${l.reduce((s, d) => s + (d.totalItens ?? 0), 0) === 1 ? "item" : "itens"} · ${brl(
-                l.reduce((s, d) => s + valorDfd(d), 0),
-              )}`
-            }
-          />
+          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} />
         )}
       </section>
 
@@ -227,12 +262,4 @@ export function ProtocoloView({
   );
 }
 
-function Campo({ label, valor, span }: { label: string; valor: string; span?: boolean }) {
-  return (
-    <div className={span ? "sm:col-span-2" : ""}>
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words font-semibold leading-snug text-text">{valor}</dd>
-    </div>
-  );
-}
 
