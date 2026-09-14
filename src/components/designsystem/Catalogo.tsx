@@ -251,6 +251,7 @@ const DFD_DEMO = {
   secoes: [
     { numero: 2, titulo: "IDENTIFICAÇÃO DA DEMANDA", texto: "DISPENSA DE LICITAÇÃO PARA CONTRATAÇÃO DE ITENS FRACASSADOS, PROCESSO Nº 92654/2025." },
     { numero: 3, titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "A malha viária rural depende de içamento de peças pré-moldadas; o Município não dispõe de guindaste próprio." },
+    { numero: 4, titulo: "QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA", texto: "O quantitativo foi definido com base no levantamento das necessidades das unidades, considerando a reposição de itens obsoletos e as demandas operacionais." },
     { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "LEI 14.133/2021." },
   ],
   assinaturas: {
@@ -264,6 +265,7 @@ const DFD_DEMO = {
         ip: "",
         codigo: "PBfGdg58teX",
         url: "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios",
+        fonte: "certificado" as const,
       },
     ],
     solicitante: {

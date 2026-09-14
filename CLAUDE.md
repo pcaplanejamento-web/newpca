@@ -103,10 +103,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
-  puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). No
-  **protocolo** a página de assinatura é vista só no ÍNDICE (o parse completo só lê `dfd.pages`) → `indexarProtocolo`
-  anexa as assinaturas ao DFD anterior (`DfdIndexado.assinaturas`); no avulso PDF vêm de `parseDfdFromPdfItems`;
-  `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
+  puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
+  **DOIS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
+  `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`). O código pode ter caractere
+  não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
+  assinaturas de um DFD podem vir em **VÁRIAS páginas** (formatos e páginas diferentes), sempre depois do DFD. No
+  **protocolo** as páginas de assinatura são vistas só no ÍNDICE (o parse completo só lê `dfd.pages`) →
+  `indexarProtocolo` mantém um ponteiro `ultimoDfd` e **acumula (APPEND)** todas as assinaturas que seguem o DFD até
+  o próximo DFD; uma **CAPA/DESPACHO** é fronteira (assinatura de despacho não gruda no último DFD). No avulso PDF
+  vêm de `parseDfdFromPdfItems`; `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
   `reparticao-responsaveis.ts`, puro/testável):** o assinante tem de bater (nome normalizado por `norm`) com um
   **responsável padrão** OU um **temporário** cujo período cobre a **data da assinatura** (reusa `Responsaveis` de
   `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
@@ -124,6 +129,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
   build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**, atribuindo cada trecho
   ao item de `y` mais próximo e **rejuntando o código quebrado em 2 linhas**. Ambos → mesmo `DfdParseado`.
+- **Tabelas MULTIPÁGINA (crítico) + garantia anti-perda:** uma tabela de itens pode ocupar **dezenas de páginas**
+  (ex.: 692 itens em 29 págs). O `parse-dfd-pdf-core` é **100% ciente de página**: o cabeçalho do documento e o de
+  coluna **se repetem por página** e são **pulados** (`ehRuido` + detector de cabeçalho), nunca encerram a tabela;
+  `y` reinicia por página → itens/valores são casados **por (página,y)**; a ordem é `(página, y desc)`. O texto de
+  **apoio** abaixo da tabela (parágrafo antes da Seção 5) é capturado e vira uma **seção 4** (exibida abaixo da
+  tabela no `DfdView`). **`reconciliarItens`** exige que os números lidos formem uma faixa **contígua** `min..max`
+  (a numeração pode não começar em 1); com buraco/repetição **lança erro** (nunca grava um DFD pela metade) — o
+  DFD entra em "bloqueados" no relatório com os itens faltantes. Testes: fixture multipágina real + caso que lança.
 - **Tela própria de DFD** (`/painel/dfds` = `DfdsView`, aba **`dfd`**) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,

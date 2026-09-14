@@ -19,11 +19,18 @@ export type DfdItemParseado = {
   valorTotal: number | null;
 };
 
+/** Título canônico da Seção 4 (tabela de itens); usado p/ o texto de apoio dela. */
+export const TITULO_SECAO_ITENS = "QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA";
+
 /**
- * Uma assinatura digital lida da página "Assinaturas Digitais (Certificado
- * Digital)" que segue cada DFD no PDF. O `codigo` (e-Assinatura) é o verificador
- * usado no site oficial; `data` é crua ("31/08/2026 16:20:00"); `ip` costuma vir
- * vazio. Pode haver mais de uma assinatura na mesma página.
+ * Uma assinatura lida das páginas que seguem cada DFD no PDF. Dois formatos:
+ * - **certificado**: "Assinaturas Digitais (Certificado Digital)" → "Assinatura
+ *   digital - Nome: … e-Assinatura: <código>";
+ * - **sistema**: "Assinaturas Eletrônicas (Sistema)" → "Assinado digitalmente por
+ *   NOME, portador do CPF: … utilizando o código: <código>".
+ * O `codigo` é o verificador usado no site oficial; `data` é crua; `ip`/`usuario`/
+ * `local` podem vir vazios (o formato "sistema" não os traz). Pode haver mais de
+ * uma assinatura por página e em páginas diferentes, sempre após o DFD.
  */
 export type Assinatura = {
   nome: string;
@@ -34,6 +41,7 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
+  fonte: "certificado" | "sistema";
 };
 
 export type DfdParseado = {
@@ -95,11 +103,14 @@ export function ehRuido(s: string): boolean {
     n.startsWith("DOCUMENTO DE FORMALIZACAO") ||
     /NUMERO DFD/.test(n) ||
     n.startsWith("TIPO DFD") ||
-    // Página de assinatura digital (capturada à parte por `extrairAssinaturas`) —
-    // não deve vazar para o texto das seções no fluxo avulso.
+    // Páginas de assinatura (capturadas à parte por `extrairAssinaturas`) — não
+    // devem vazar para o texto das seções no fluxo avulso. Dois formatos:
     n.startsWith("ASSINATURA DIGITAL") ||
     n.startsWith("ASSINATURAS DIGITAIS") ||
+    n.startsWith("ASSINATURAS ELETRONICAS") ||
+    n.startsWith("ASSINADO DIGITALMENTE") ||
     n.includes("E-ASSINATURA") ||
+    n.includes("UTILIZANDO O CODIGO") ||
     n.includes("AUTENTICACAORELATORIOS")
   );
 }
@@ -111,19 +122,31 @@ export function ehRuido(s: string): boolean {
  * do código). Grupos: 1 nome, 2 e-CPF, 3 usuário, 4 local, 5 data, 6 IP, 7 código,
  * 8 URL.
  */
-const RE_ASSINATURA =
-  /Assinatura\s+digital\s*-\s*Nome:\s*(.+?)\s+e-?CPF:\s*(\S+)\s+Usu[aá]rio:\s*(\S+)\s+Local:\s*(.*?)\s+Data:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})\s+IP:\s*(\S*)\s*e-?Assinatura:\s*([A-Za-z0-9]+)\s*-\s*(https?:\/\/\S+)/gi;
+// Formato A — "Assinatura digital - Nome: … e-Assinatura: <código> - <url>".
+// Grupos: 1 nome, 2 e-CPF, 3 usuário, 4 local, 5 data, 6 IP, 7 código, 8 URL.
+// `IP:\s*([\d.]*)` = IP só dígitos/pontos (não engole o "e-" quando o IP vem vazio);
+// `e-?\s*Assinatura:` tolera o rótulo quebrado em 2 linhas ("IP: e-" + "Assinatura: …").
+const RE_ASSINATURA_A =
+  /Assinatura\s+digital\s*-\s*Nome:\s*(.+?)\s+e-?CPF:\s*(\S+)\s+Usu[aá]rio:\s*(\S+)\s+Local:\s*(.*?)\s+Data:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})\s+IP:\s*([\d.]*)\s*e-?\s*Assinatura:\s*(\S+?)\s*-\s*(https?:\/\/\S+)/gi;
+
+// Formato B — "Assinaturas Eletrônicas (Sistema)": "Assinado digitalmente por NOME,
+// portador do CPF: CPF, em DATA. Validar autenticidade em: …/COD - utilizando o
+// código: COD". Grupos: 1 nome, 2 CPF, 3 data, 4 código (o "utilizando o código:"
+// é o mais confiável; a ponte `[^]*?` tolera a URL/quebra entre a data e o código).
+const RE_ASSINATURA_B =
+  /Assinado digitalmente por\s+(.+?),\s*portador do CPF:\s*([\d.*\-]+),?\s*em\s+(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)[^]*?utilizando o c[oó]digo:\s*(\S+)/gi;
 
 /**
- * Extrai as assinaturas digitais da página "Assinaturas Digitais". Junta as linhas
- * num único texto (o código costuma quebrar para a linha de baixo) e casa cada
- * assinatura. Puro/testável.
+ * Extrai TODAS as assinaturas (formatos "certificado" e "sistema") das páginas que
+ * seguem o DFD. Junta as linhas num único texto (código/URL costumam quebrar de
+ * linha) e casa cada assinatura. Puro/testável.
  */
 export function extrairAssinaturas(linhas: string[]): Assinatura[] {
   const texto = linhas.join(" ");
   const out: Assinatura[] = [];
-  RE_ASSINATURA.lastIndex = 0;
-  let m: RegExpExecArray | null = RE_ASSINATURA.exec(texto);
+
+  RE_ASSINATURA_A.lastIndex = 0;
+  let m: RegExpExecArray | null = RE_ASSINATURA_A.exec(texto);
   while (m !== null) {
     out.push({
       nome: m[1].trim(),
@@ -134,10 +157,57 @@ export function extrairAssinaturas(linhas: string[]): Assinatura[] {
       ip: m[6].trim(),
       codigo: m[7].trim(),
       url: m[8].trim(),
+      fonte: "certificado",
     });
-    m = RE_ASSINATURA.exec(texto);
+    m = RE_ASSINATURA_A.exec(texto);
+  }
+
+  RE_ASSINATURA_B.lastIndex = 0;
+  let b: RegExpExecArray | null = RE_ASSINATURA_B.exec(texto);
+  while (b !== null) {
+    out.push({
+      nome: b[1].trim(),
+      eCpf: b[2].trim(),
+      usuario: "",
+      local: "",
+      data: b[3].trim(),
+      ip: "",
+      codigo: b[4].trim(),
+      url: "",
+      fonte: "sistema",
+    });
+    b = RE_ASSINATURA_B.exec(texto);
   }
   return out;
+}
+
+/**
+ * GARANTIA anti-perda de itens: a coluna ITEM é numerada de forma **contígua** — os
+ * números lidos devem formar uma sequência sem buracos de `min`..`max` (a numeração
+ * pode não começar em 1, ex.: DFD de renovação com um único item nº 7). Se houver
+ * BURACO (item no meio faltando) ou repetição, a leitura ficou incompleta (ex.:
+ * tabela multipágina truncada) → **lança erro** para NUNCA gravar um DFD pela
+ * metade, listando os números que faltam. Puro/testável.
+ */
+export function reconciliarItens(itens: DfdItemParseado[]): void {
+  const nums = itens
+    .map((i) => i.item)
+    .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  if (nums.length === 0) return; // sem numeração → o guard de itens vazios trata o resto
+  const uniq = new Set(nums);
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const esperado = max - min + 1;
+  if (uniq.size === nums.length && nums.length === esperado) return; // min..max contíguo, sem repetição
+  const faltando: number[] = [];
+  for (let i = min; i <= max; i++) if (!uniq.has(i)) faltando.push(i);
+  const detalhe = faltando.length
+    ? ` Faltam os itens: ${faltando.slice(0, 25).join(", ")}${faltando.length > 25 ? "…" : ""}.`
+    : " Há itens repetidos na leitura.";
+  throw new Error(
+    `Leitura incompleta da tabela de itens: li ${itens.length} item(ns) na faixa ${min}–${max}.` +
+      `${detalhe} O DFD NÃO foi importado para evitar perda de dados.`,
+  );
 }
 
 export type Cabecalho = {

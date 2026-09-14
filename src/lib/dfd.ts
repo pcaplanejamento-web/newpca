@@ -111,6 +111,7 @@ export function parseAssinaturas(json: string | null): Assinatura[] {
         ip: S(a.ip),
         codigo: S(a.codigo),
         url: S(a.url),
+        fonte: a.fonte === "sistema" ? ("sistema" as const) : ("certificado" as const),
       }));
   } catch {
     return [];

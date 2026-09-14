@@ -54,6 +54,12 @@ function ehCapa(lines: string[]): boolean {
   return lines.some((s) => /CAPA DO PROCESSO/i.test(s) || /N[úu]mero\s+Processo/i.test(s));
 }
 
+/** A página é um DESPACHO (encaminhamento do processo)? Fronteira: assinaturas
+ * depois de um despacho pertencem ao despacho, não ao último DFD. */
+function ehDespacho(lines: string[]): boolean {
+  return lines.some((s) => /\bDESPACHO\b/i.test(s));
+}
+
 /** Texto por página a partir dos trechos crus (agrupa por página + reconstrói linhas). */
 export function paginasDeItens(items: PdfItem[]): PaginaTexto[] {
   const porPagina = new Map<number, PdfItem[]>();
@@ -122,17 +128,21 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
 
   type Grupo = { numero: string; pages: number[]; lines: string[]; assinaturas: Assinatura[] };
   const grupos: Grupo[] = [];
-  let cur: Grupo | null = null;
+  let cur: Grupo | null = null; // run de páginas contíguas do MESMO DFD
+  let ultimoDfd: Grupo | null = null; // último DFD (recebe as assinaturas que o seguem)
   for (const p of comNum) {
     if (p.numero == null) {
-      // Capa/separador encerra o run. A 1ª página sem "Número DFD" após um DFD é a
-      // página de assinaturas: captura as assinaturas no DFD anterior (`cur`) SEM
-      // empurrar as linhas para `cur.lines` (cabeçalho/seções ficam limpos).
-      if (cur) {
-        const ass = extrairAssinaturas(p.lines);
-        if (ass.length > 0) cur.assinaturas = ass;
-      }
+      // Página separadora. As assinaturas de um DFD podem vir em VÁRIAS páginas
+      // (formatos "certificado" e "sistema"), sempre DEPOIS do DFD → acumula no
+      // último DFD (APPEND), sem empurrar as linhas para `cur.lines`. Uma CAPA ou
+      // DESPACHO é fronteira (impede que assinaturas de despacho grudem no DFD).
       cur = null;
+      const ass = extrairAssinaturas(p.lines);
+      if (ass.length > 0) {
+        if (ultimoDfd) ultimoDfd.assinaturas.push(...ass);
+      } else if (ehCapa(p.lines) || ehDespacho(p.lines)) {
+        ultimoDfd = null;
+      }
       continue;
     }
     if (cur && cur.numero === p.numero) {
@@ -142,6 +152,7 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
       cur = { numero: p.numero, pages: [p.page], lines: [...p.lines], assinaturas: [] };
       grupos.push(cur);
     }
+    ultimoDfd = cur;
   }
 
   const dfds: DfdIndexado[] = grupos.map((g) => {

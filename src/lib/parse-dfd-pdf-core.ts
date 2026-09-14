@@ -3,9 +3,12 @@ import {
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
+  ehRuido,
   extrairAssinaturas,
   extrairCabecalho,
   norm,
+  reconciliarItens,
+  TITULO_SECAO_ITENS,
 } from "./parse-dfd-comum.ts";
 
 /**
@@ -110,6 +113,7 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
 
   const itens: DfdItemParseado[] = [];
   let valorTotalGrand: number | null = null;
+  let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
 
   if (hi >= 0) {
     // Âncoras (x) de cada coluna — "VALOR UNITÁRIO" pode vir só como "UNITÁRIO"
@@ -146,33 +150,63 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     };
 
     const ehNumItem = (it: PdfItem) => it.x < itemBound && /^\d+$/.test(it.str);
+    // Cabeçalho de coluna repetido a cada página (não encerra a tabela).
+    const ehCabecalhoColuna = (j: string) =>
+      (/\bITEM\b/.test(j) && /QUANTIDADE/.test(j)) ||
+      j === "VALOR" ||
+      j === "UNITARIO" ||
+      j === "VALOR UNITARIO" ||
+      j === "VALOR TOTAL";
+    // Próxima seção numerada ("5 - ...") encerra a Seção 4.
+    const ehSecaoHeading = (j: string) => /^\d{1,2}\s*[-–—]\s/.test(j);
+
     const bodyFrags: PdfItem[] = [];
-    const itemNums: { y: number; n: number }[] = [];
+    const itemNums: { page: number; y: number; n: number }[] = [];
+    const apoioLinhas: string[] = [];
+    let fimTabela = false; // após a última linha de item vem o texto de apoio
+
+    // Varre TODAS as páginas do DFD (a tabela pode ocupar dezenas de páginas). O
+    // cabeçalho do documento/coluna e o rodapé se REPETEM por página e são pulados
+    // (nunca encerram a tabela); `y` reinicia por página → tudo é casado por página.
     for (let k = hi + 1; k < linhas.length; k++) {
       const l = linhas[k];
       const joined = norm(l.items.map((i) => i.str).join(" "));
       const minx = Math.min(...l.items.map((i) => i.x));
       const temNum = l.items.some(ehNumItem);
+
+      if (ehSecaoHeading(joined)) break; // "5 - ..." → fim da Seção 4
+      if (ehRuido(joined)) continue; // cabeçalho do documento / rodapé (Centi/Emitido/Página)
+      if (ehCabecalhoColuna(joined)) continue; // cabeçalho de coluna repetido por página
+      // Linha do TOTAL GERAL ("VALOR TOTAL" + número) — captura, mas NÃO encerra.
       if (/VALOR TOTAL/.test(joined) && !temNum) {
-        const v = l.items.find((i) => colOf(i.x, i.str) === "valorTotal");
-        valorTotalGrand = v ? parseNumberBR(v.str) : null;
-        break;
+        const v = l.items.find((i) => colOf(i.x, i.str) === "valorTotal" && /\d/.test(i.str));
+        if (v) valorTotalGrand = parseNumberBR(v.str);
+        continue;
       }
-      if (minx < 46) break; // saiu da tabela (nota/seção à margem esquerda)
+      // Texto de apoio: prosa à margem esquerda (sem número de item) DEPOIS da tabela.
+      if (fimTabela || (minx < itemBound && !temNum)) {
+        fimTabela = true;
+        apoioLinhas.push(l.items.map((i) => i.str).join(" "));
+        continue;
+      }
+      // Linha de item.
       for (const it of l.items) {
-        if (ehNumItem(it)) itemNums.push({ y: it.y, n: Number(it.str) });
+        if (ehNumItem(it)) itemNums.push({ page: it.page, y: it.y, n: Number(it.str) });
         else bodyFrags.push(it);
       }
     }
-    itemNums.sort((a, b) => b.y - a.y);
+    // Ordena por (página, y desc) — preserva a ordem real dos itens entre páginas.
+    itemNums.sort((a, b) => a.page - b.page || b.y - a.y);
+    apoioSecao4 = apoioLinhas.join(" ").replace(/\s+/g, " ").trim();
 
-    type Bucket = { item: number; y: number; codigo: PdfItem[]; descricao: PdfItem[] } & {
+    type Bucket = { page: number; item: number; y: number; codigo: PdfItem[]; descricao: PdfItem[] } & {
       unidade: string | null;
       quantidade: number | null;
       valorUnitario: number | null;
       valorTotal: number | null;
     };
     const buckets: Bucket[] = itemNums.map((n) => ({
+      page: n.page,
       item: n.n,
       y: n.y,
       codigo: [],
@@ -183,11 +217,19 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       valorTotal: null,
     }));
 
-    // buckets já estão em `y` DESC (itemNums foi ordenado) → busca binária O(log n).
-    const bucketYs = buckets.map((b) => b.y);
+    // Índice de buckets POR PÁGINA (ys já em DESC dentro da página) → casa cada
+    // fragmento ao item da MESMA página (o `y` reinicia entre páginas).
+    const idxPorPagina = new Map<number, { ys: number[]; bi: number[] }>();
+    buckets.forEach((b, i) => {
+      const g = idxPorPagina.get(b.page) ?? { ys: [], bi: [] };
+      g.ys.push(b.y);
+      g.bi.push(i);
+      idxPorPagina.set(b.page, g);
+    });
     for (const f of bodyFrags) {
-      if (buckets.length === 0) break;
-      const b = buckets[nearestByY(bucketYs, f.y)];
+      const g = idxPorPagina.get(f.page);
+      if (!g || g.ys.length === 0) continue;
+      const b = buckets[g.bi[nearestByY(g.ys, f.y)]];
       const c = colOf(f.x, f.str);
       if (c === "codigo") b.codigo.push(f);
       else if (c === "descricao") b.descricao.push(f);
@@ -198,7 +240,7 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       }
     }
 
-    const porPos = (a: PdfItem, b: PdfItem) => b.y - a.y || a.x - b.x;
+    const porPos = (a: PdfItem, b: PdfItem) => a.page - b.page || b.y - a.y || a.x - b.x;
     for (const b of buckets) {
       itens.push({
         item: b.item,
@@ -231,13 +273,22 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       "Não encontrei itens na Seção 4 do PDF (ITEM / CÓDIGO / DESCRIÇÃO / UNIDADE / QUANTIDADE).",
     );
   }
+  // GARANTIA anti-perda: se a numeração dos itens não for contígua 1..N, a leitura
+  // ficou incompleta (ex.: tabela multipágina truncada) → NÃO grava pela metade.
+  reconciliarItens(itens);
+
+  // Seções: `coletarSecoes` já entrega as demais (sem a 4); acrescenta o TEXTO DE
+  // APOIO da Seção 4 (parágrafo abaixo da tabela) como uma seção 4, na ordem.
+  const secoes = coletarSecoes(lineTexts);
+  if (apoioSecao4) secoes.push({ numero: 4, titulo: TITULO_SECAO_ITENS, texto: apoioSecao4 });
+  secoes.sort((a, b) => a.numero - b.numero);
 
   return {
     ...cab,
     numero: cab.numero,
     valorTotal,
     nomeArquivo,
-    secoes: coletarSecoes(lineTexts),
+    secoes,
     itens,
     assinaturas: extrairAssinaturas(lineTexts),
   };

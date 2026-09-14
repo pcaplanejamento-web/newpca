@@ -13,7 +13,7 @@ import {
 } from "../src/lib/reparticao-responsaveis.ts";
 
 function mkAss(nome: string, data = "31/08/2026 16:20:00", codigo = "pVSGdg58teX"): Assinatura {
-  return { nome, eCpf: "***.390.771-**", usuario: "isaac.pires", local: "BR", data, ip: "", codigo, url: "" };
+  return { nome, eCpf: "***.390.771-**", usuario: "isaac.pires", local: "BR", data, ip: "", codigo, url: "", fonte: "certificado" };
 }
 
 const padrao = (nome: string): Responsaveis => ({ padroes: [novoResponsavel(nome)], temporarios: [] });

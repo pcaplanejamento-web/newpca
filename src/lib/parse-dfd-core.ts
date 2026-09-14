@@ -3,8 +3,11 @@ import {
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
+  ehRuido,
   extrairCabecalho,
   norm,
+  reconciliarItens,
+  TITULO_SECAO_ITENS,
   txt,
 } from "./parse-dfd-comum.ts";
 
@@ -89,8 +92,10 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
 
   const itens: DfdItemParseado[] = [];
   let valorTotalGrand: number | null = null;
+  let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
   if (headerRow >= 0) {
     const col = (row: unknown[], i?: number) => (i == null ? null : row[i]);
+    let fim = aoa.length;
     for (let r = headerRow + 1; r < aoa.length; r++) {
       const row = aoa[r] ?? [];
       const vazia = row.every((c) => txt(c) === "");
@@ -104,6 +109,7 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
         if (colMap.valorTotal != null && /VALOR TOTAL/.test(norm(row.map(txt).join(" ")))) {
           valorTotalGrand = parseNumberBR(col(row, colMap.valorTotal));
         }
+        fim = r;
         break;
       }
       itens.push({
@@ -116,6 +122,16 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
         valorTotal: parseNumberBR(col(row, colMap.valorTotal)),
       });
     }
+    // Texto de apoio: linhas após a tabela até a próxima seção "N -" (pula total/ruído).
+    const apoio: string[] = [];
+    for (let k = fim; k < aoa.length; k++) {
+      const lead = primeiraCelula(aoa[k] ?? []);
+      if (!lead) continue;
+      if (/^\d{1,2}\s*[-–—]\s/.test(lead)) break;
+      if (ehRuido(lead) || /VALOR TOTAL/.test(norm(lead))) continue;
+      apoio.push(lead);
+    }
+    apoioSecao4 = apoio.join(" ").replace(/\s+/g, " ").trim();
   }
 
   const somaItens = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
@@ -131,13 +147,19 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
       "Não encontrei itens na Seção 4 (ITEM / CÓDIGO / DESCRIÇÃO / UNIDADE / QUANTIDADE).",
     );
   }
+  // GARANTIA anti-perda: numeração dos itens deve ser contígua 1..N.
+  reconciliarItens(itens);
+
+  const secoes = coletarSecoes(leadings);
+  if (apoioSecao4) secoes.push({ numero: 4, titulo: TITULO_SECAO_ITENS, texto: apoioSecao4 });
+  secoes.sort((a, b) => a.numero - b.numero);
 
   return {
     ...cab,
     numero: cab.numero,
     valorTotal,
     nomeArquivo,
-    secoes: coletarSecoes(leadings),
+    secoes,
     itens,
     assinaturas: [], // .xlsx não tem página de assinatura digital
   };

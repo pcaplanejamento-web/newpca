@@ -128,6 +128,19 @@ quando temporário, e **dois botões** `LinkExterno`: **Verificar autenticidade*
 nomeação** (link cadastrado). Puro/testável (`validarAssinatura`, `dataAssinaturaISO`) e catalogado no
 `/design-system` (`LinkExterno`).
 
+### DFD: tabelas multipágina (milhares de itens) + texto de apoio + 2º formato de assinatura — entregue
+✅ **Correção crítica de perda silenciosa:** a tabela de itens de um DFD pode ocupar **dezenas de páginas** (ex.:
+**692 itens em 29 páginas**). O parser antigo truncava na 1ª página **sem erro**. Agora o `parse-dfd-pdf-core` é
+**100% ciente de página**: pula o cabeçalho do documento/coluna repetido a cada página, casa itens e valores por
+`(página, y)` e preserva a ordem entre páginas — **captura TODOS os itens**. Uma **garantia anti-perda**
+(`reconciliarItens`) exige numeração **contígua**; se sobrar buraco (leitura incompleta) o DFD **não é gravado pela
+metade** (entra em "bloqueados" com os itens faltantes). O **texto de apoio** abaixo da tabela (estimativa) passou a
+ser capturado e é exibido logo abaixo dos itens. Validado contra um protocolo real de **581 páginas / 104 DFDs**
+(harness pdf.js): a grande maioria importa com contagem exata; os poucos com defeito de origem (item sem número no
+PDF) são bloqueados com relatório claro. **2º formato de assinatura** ("Assinaturas Eletrônicas (Sistema)") passou a
+ser lido além do "Certificado Digital", e as assinaturas que vêm em **páginas separadas** após o DFD são todas
+acumuladas nele (192 assinaturas capturadas no protocolo real).
+
 ### DFD → PCA (importar DFDs e compilar edições) — entregue
 ✅ Aba **PCA** (`/painel/pca`) com 3 abas: **Planilha** (fluxo achatado atual, intacto) · **DFDs** (importa o formulário DFD `.xlsx` no navegador via `parse-dfd`, vincula à repartição por auto-match da sigla do Setor Requisitante, lista/visualiza a tabela do DFD) · **PCA** (une DFDs selecionados numa **edição gerada e salva**, ex.: "PCA 2026", e mostra a compilação organizada por repartição). Escopo **por repartição** (como as `unidades`); sem `grupo_id`. Tabelas `dfds`/`dfd_itens`/`pcas`/`pca_dfds` (migração `0012`). Rotas `POST /api/dfd`, `DELETE /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`.
 

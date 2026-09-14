@@ -71,6 +71,7 @@ const assinaturaSchema = z.object({
   ip: z.string().trim().max(60).default(""),
   codigo: z.string().trim().max(120).default(""),
   url: z.string().trim().max(500).default(""),
+  fonte: z.enum(["certificado", "sistema"]).default("certificado"),
 });
 
 /**

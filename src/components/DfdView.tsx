@@ -101,6 +101,9 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem repartição";
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
+  // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4).
+  const apoioItens = dfd.secoes.find((s) => s.numero === 4)?.texto ?? "";
+  const secoesGerais = dfd.secoes.filter((s) => s.numero !== 4);
 
   return (
     <div className="space-y-5">
@@ -157,12 +160,20 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           pageSize={20}
           footer={`${dfd.itens.length} ${dfd.itens.length === 1 ? "item" : "itens"}`}
         />
+        {apoioItens && (
+          <div className="mt-3 rounded-card border border-border-2 bg-surface-2 p-4">
+            <div className="mb-1 text-xs font-semibold text-muted">Observações da estimativa</div>
+            <p className="whitespace-pre-line break-words text-[13.5px] leading-relaxed text-text-2">
+              {apoioItens}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Demais seções (2, 3, 5, 6, 7, 8, 9…) */}
-      {dfd.secoes.length > 0 && (
+      {secoesGerais.length > 0 && (
         <section className="space-y-3">
-          {dfd.secoes.map((s) => (
+          {secoesGerais.map((s) => (
             <div key={s.numero} className="rounded-card border border-border bg-surface p-5 shadow-ring">
               <h3 className="mb-1.5 text-sm font-bold text-text">
                 {s.numero} · {s.titulo}
@@ -224,6 +235,11 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => (
               <div key={`${a.codigo}-${i}`} className="rounded-card border border-border-2 p-4">
+                <div className="mb-2 text-xs font-semibold text-muted">
+                  {a.fonte === "sistema"
+                    ? "Assinatura Eletrônica (Sistema)"
+                    : "Assinatura Digital (Certificado Digital)"}
+                </div>
                 <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                   <Campo label="Assinante" valor={a.nome || "—"} span />
                   <Campo label="CPF" valor={a.eCpf || "—"} />

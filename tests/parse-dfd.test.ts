@@ -96,12 +96,13 @@ describe("parse-dfd-core", () => {
     assert.equal(d.valorTotal, 342342.72); // linha "VALOR TOTAL"
   });
 
-  it("coleta as demais seções (2, 3, 5, 7) ignorando 1 e 4", () => {
+  it("coleta as seções 2, 3, 4 (apoio), 5, 7 ignorando a 1 e as linhas de item", () => {
     const d = parseDfdFromMatriz(dfdCompleto(), "x.xlsx");
     const nums = d.secoes.map((s) => s.numero);
-    assert.deepEqual(nums, [2, 3, 5, 7]);
+    assert.deepEqual(nums, [2, 3, 4, 5, 7]);
     const s2 = d.secoes.find((s) => s.numero === 2);
     assert.ok(s2?.texto.startsWith("DISPENSA"));
+    assert.ok(d.secoes.find((s) => s.numero === 4)?.texto.includes("ESTIMATIVA"));
     assert.ok(d.secoes.find((s) => s.numero === 7)?.texto.includes("14.133"));
   });
 

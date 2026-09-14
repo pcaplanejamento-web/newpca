@@ -77,6 +77,68 @@ function dfdPdf(): PdfItem[] {
   ];
 }
 
+// ── Fixture MULTIPÁGINA: tabela que ocupa 3 páginas, com o cabeçalho do documento
+// E o cabeçalho de coluna REPETIDOS em cada página e o `y` REINICIADO por página
+// (exatamente como o pdf.js entrega). Cada página tem itens; a última tem o total
+// geral + texto de apoio + Seção 5. É o cenário que truncava a importação. ──
+const docHeader = (page: number): PdfItem[] => [
+  f(page, 150, 760, "ESTADO DE GOIÁS"),
+  f(page, 150, 750, "AQUISIÇÃO DE MATERIAL Número DFD:1586 / Planejamento: 1639"),
+  f(page, 150, 740, "Tipo DFD: DFD-O — Ordinário"),
+];
+const colHeader = (page: number): PdfItem[] => [
+  f(page, 48, 427, "ITEM"),
+  f(page, 85, 427, "CÓDIGO"),
+  f(page, 206, 427, "DESCRIÇÃO"),
+  f(page, 346, 427, "UNIDADE"),
+  f(page, 395, 427, "QUANTIDADE"),
+  f(page, 507, 427, "VALOR TOTAL"),
+  f(page, 458, 423, "UNITÁRIO"),
+];
+const footer = (page: number): PdfItem[] => [
+  f(page, 40, 40, `Centi ® e-Assinatura: ABC${page}dg58teX`),
+  f(page, 300, 40, `Emitido em 13/08/2026 por gisele.soares`),
+  f(page, 500, 40, `Página ${page} de 3`),
+];
+const item = (page: number, y: number, n: number, cod: string, desc: string): PdfItem[] => [
+  f(page, 55, y, String(n)),
+  f(page, 82, y + 4, cod),
+  f(page, 123, y, desc),
+  f(page, 353, y, "UNIDADE"),
+  f(page, 419, y, "10,0000"),
+  f(page, 466, y, "100,0000"),
+  f(page, 515, y, "1.000,0000"),
+];
+function dfdMultipagina(): PdfItem[] {
+  return [
+    ...docHeader(1),
+    f(1, 38, 620, "2 - IDENTIFICAÇÃO DA DEMANDA"),
+    f(1, 38, 606, "MATERIAL HOSPITALAR."),
+    f(1, 38, 450, "4 - QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA"),
+    ...colHeader(1),
+    ...item(1, 400, 1, "524000001", "ITEM UM DESCRICAO"),
+    ...item(1, 360, 2, "524000002", "ITEM DOIS DESCRICAO"),
+    ...footer(1),
+    // Página 2 — cabeçalhos REPETIDOS, `y` REINICIADO (mesma faixa da página 1).
+    ...docHeader(2),
+    ...colHeader(2),
+    ...item(2, 400, 3, "524000003", "ITEM TRES DESCRICAO"),
+    ...item(2, 360, 4, "524000004", "ITEM QUATRO DESCRICAO"),
+    ...footer(2),
+    // Página 3 — itens finais + total geral + texto de apoio + Seção 5.
+    ...docHeader(3),
+    ...colHeader(3),
+    ...item(3, 400, 5, "524000005", "ITEM CINCO DESCRICAO"),
+    ...item(3, 360, 6, "524000006", "ITEM SEIS DESCRICAO"),
+    f(3, 451, 321, "VALOR TOTAL"),
+    f(3, 515, 321, "6.000,0000"),
+    f(3, 38, 310, "O QUANTITATIVO FOI DEFINIDO COM BASE NO LEVANTAMENTO DAS NECESSIDADES."),
+    f(3, 38, 259, "5 - PREVISÃO DE ENTREGA/EXECUÇÃO"),
+    f(3, 38, 245, "ANUAL."),
+    ...footer(3),
+  ];
+}
+
 describe("parse-dfd-pdf-core", () => {
   it("extrai o cabeçalho (rótulos e valores em trechos separados)", () => {
     const d = parseDfdFromPdfItems(dfdPdf(), "DFD PDF.pdf");
@@ -106,11 +168,43 @@ describe("parse-dfd-pdf-core", () => {
     assert.equal(d.itens[1].valorTotal, 160000);
   });
 
-  it("coleta as seções 2, 5, 7 (ignora 1 e 4)", () => {
+  it("coleta as seções 2, 4 (apoio), 5, 7 (ignora a 1 e as linhas de item)", () => {
     const d = parseDfdFromPdfItems(dfdPdf(), "x.pdf");
     const nums = d.secoes.map((s) => s.numero);
-    assert.deepEqual(nums, [2, 5, 7]);
+    assert.deepEqual(nums, [2, 4, 5, 7]);
     assert.ok(d.secoes.find((s) => s.numero === 7)?.texto.includes("14.133"));
+    // Seção 4 = texto de apoio abaixo da tabela (não as linhas de item).
+    assert.ok(d.secoes.find((s) => s.numero === 4)?.texto.includes("ESTIMATIVA"));
+  });
+
+  it("captura TODOS os itens de uma tabela MULTIPÁGINA (cabeçalho repetido + y reiniciado)", () => {
+    const d = parseDfdFromPdfItems(dfdMultipagina(), "multi.pdf");
+    // 6 itens em 3 páginas — nenhum truncado.
+    assert.equal(d.itens.length, 6);
+    assert.deepEqual(
+      d.itens.map((i) => i.item),
+      [1, 2, 3, 4, 5, 6],
+    );
+    assert.deepEqual(
+      d.itens.map((i) => i.codigo),
+      ["524000001", "524000002", "524000003", "524000004", "524000005", "524000006"],
+    );
+    // Descrição casada com o item CERTO (sem vazamento entre páginas).
+    assert.ok(d.itens[2].descricao?.includes("TRES"));
+    assert.ok(d.itens[5].descricao?.includes("SEIS"));
+    // Valores por item preservados em todas as páginas.
+    assert.equal(d.itens[3].valorUnitario, 100);
+    assert.equal(d.itens[3].quantidade, 10);
+    // Total geral (última página) + texto de apoio.
+    assert.equal(d.valorTotal, 6000);
+    assert.ok(d.secoes.find((s) => s.numero === 4)?.texto.includes("QUANTITATIVO"));
+    assert.ok(d.secoes.find((s) => s.numero === 5));
+  });
+
+  it("RECONCILIAÇÃO: lança erro quando um item some (tabela truncada) — não grava parcial", () => {
+    // Remove os fragmentos do item 4 (página 2) → numeração 1,2,3,5,6 (falta o 4).
+    const truncado = dfdMultipagina().filter((it) => !(it.page === 2 && it.y >= 356 && it.y <= 366));
+    assert.throws(() => parseDfdFromPdfItems(truncado, "multi.pdf"), /Leitura incompleta/i);
   });
 
   it("lança erro claro quando falta o Número DFD", () => {
