@@ -67,10 +67,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
   `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
   exige grupo ativo.
-- **Repartições** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**responsavel_dfd**, cadastro do ADM,
-  nullable — migração `0017`): lista global **reordenável** (tabela com arrasto,
+- **Repartições** (`reparticoes`: codigo+nome+ordem + **numero_interessado** e **responsavel_dfd** — cadastro do ADM,
+  nullable, migração `0017`): lista global **reordenável** (tabela com arrasto,
   componente `ReorderTable` — Pointer Events, mouse+toque). CRUD em `ReparticoesAdmin` (`reparticaoSchema`).
-  Repartição ativa por cookie
+  `responsavel_dfd` guarda **VÁRIOS responsáveis** por DFDs como **JSON array** (coluna reaproveitada, sem migração
+  nova) — parse/serialize tolerante em `src/lib/reparticao-responsaveis.ts` (aceita o valor antigo/string única); a
+  UI usa o componente `ListaEditavel` (adicionar/remover). Repartição ativa por cookie
   `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
   `/api/reparticoes/ativo`.
 - **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e
@@ -219,7 +221,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
   `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
-  `Dropzone` (importação: soltar OU clicar p/ escolher), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  `Dropzone` (importação: soltar OU clicar p/ escolher), `ListaEditavel` (lista controlada de textos:
+  adicionar/remover), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; + painel `lateral` mestre-detalhe: 2º banner ao lado, com **fechar
   animado** simétrico ao abrir), `Segmented` (com `disabled`), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
