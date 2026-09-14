@@ -1,7 +1,13 @@
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import type { DfdItemPayload, DfdMetaPayload, GerarPcaPayload } from "./dfd-validation";
+import type {
+  CadastrarPcaPayload,
+  DfdItemPayload,
+  DfdMetaPayload,
+  EditarPcaPayload,
+  GerarPcaPayload,
+} from "./dfd-validation";
 import type { Assinatura } from "./parse-dfd-comum";
 
 /**
@@ -333,6 +339,7 @@ export type PcaResumo = {
   id: number;
   nome: string;
   ano: number | null;
+  ativo: boolean | null;
   totalDfds: number | null;
   totalItens: number | null;
   valorEstimado: number | null;
@@ -367,13 +374,14 @@ export async function listarPcas(): Promise<PcaResumo[]> {
       id: pcas.id,
       nome: pcas.nome,
       ano: pcas.ano,
+      ativo: pcas.ativo,
       totalDfds: pcas.totalDfds,
       totalItens: pcas.totalItens,
       valorEstimado: pcas.valorEstimado,
       criadoEm: pcas.criadoEm,
     })
     .from(pcas)
-    .orderBy(desc(pcas.criadoEm), desc(pcas.id));
+    .orderBy(desc(pcas.ativo), desc(pcas.criadoEm), desc(pcas.id));
 }
 
 /** Compilação de uma edição: DFDs agrupados por repartição (ordem da tela) + itens. */
@@ -508,4 +516,44 @@ export async function gerarPca(
 
 export async function excluirPca(id: number): Promise<void> {
   await getDb().delete(pcas).where(eq(pcas.id, id)); // cascade apaga pca_dfds
+}
+
+/**
+ * Registro leve de PCA (só nome + ano), cadastrado pelo ADM nas Configurações —
+ * sem unir DFDs (totais 0). O fluxo de EDIÇÃO consolidada segue em `gerarPca`.
+ */
+export async function cadastrarPca(
+  dados: CadastrarPcaPayload,
+  criadoPor: number | null,
+): Promise<{ id: number }> {
+  const [p] = await getDb()
+    .insert(pcas)
+    .values({
+      nome: dados.nome,
+      ano: dados.ano ?? null,
+      totalDfds: 0,
+      totalItens: 0,
+      valorEstimado: 0,
+      criadoPor: criadoPor ?? null,
+    })
+    .returning({ id: pcas.id });
+  return { id: p.id };
+}
+
+/** Renomeia/re-ano um PCA (registro ou edição); renova `atualizadoEm`. */
+export async function atualizarPca(id: number, dados: EditarPcaPayload): Promise<void> {
+  const campos: Partial<typeof pcas.$inferInsert> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
+  if (dados.nome !== undefined) campos.nome = dados.nome;
+  if (dados.ano !== undefined) campos.ano = dados.ano;
+  await getDb().update(pcas).set(campos).where(eq(pcas.id, id));
+}
+
+/** Marca UM PCA como o vigente (zera os demais numa transação — só 1 ativo). */
+export async function definirPcaAtivo(id: number): Promise<void> {
+  const db = getDb();
+  const stmts = [
+    db.update(pcas).set({ ativo: false }),
+    db.update(pcas).set({ ativo: true }).where(eq(pcas.id, id)),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
 }

@@ -21,6 +21,7 @@ import {
   IconLogout,
   IconMenu,
   IconPalette,
+  IconSettings,
   IconShield,
   IconSpinner,
   IconUser,
@@ -60,6 +61,7 @@ const SECOES: NavSecao[] = [
   {
     titulo: "Administração",
     itens: [
+      { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings, roles: ["admin"] },
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
       { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, roles: ["admin"] },
       { href: "/painel/reparticoes", label: "Repartições", Icon: IconBuilding, roles: ["admin"] },
@@ -83,16 +85,31 @@ function itemAtivo(pathname: string, item: NavItem): boolean {
   return item.exact ? pathname === item.href : pathname.startsWith(item.href);
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+/** Identidade do site definida pelo ADM (Configurações → Identidade). */
+type Identidade = { nome?: string; subtitulo?: string; favicon?: string };
+
+function Brand({ compact = false, identidade }: { compact?: boolean; identidade?: Identidade }) {
+  const nome = identidade?.nome?.trim() || "Plataforma PCA";
+  const subtitulo = identidade?.subtitulo?.trim() || "Equipe PCA · Rio Verde";
+  const favicon = identidade?.favicon?.trim();
   return (
     <Link href="/painel" className="flex items-center gap-2.5">
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
-        RV
-      </div>
+      {favicon ? (
+        // biome-ignore lint/performance/noImgElement: favicon é data-URL base64 definida pelo ADM; next/image não otimiza data-URL.
+        <img
+          src={favicon}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-[10px] object-cover"
+        />
+      ) : (
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
+          RV
+        </div>
+      )}
       {!compact && (
         <div className="leading-tight">
-          <div className="text-[14px] font-semibold text-text">Plataforma PCA</div>
-          <div className="text-[11px] text-muted">Equipe PCA · Rio Verde</div>
+          <div className="text-[14px] font-semibold text-text">{nome}</div>
+          <div className="text-[11px] text-muted">{subtitulo}</div>
         </div>
       )}
     </Link>
@@ -368,6 +385,7 @@ export function AppShell({
   abas,
   reparticoes,
   reparticaoAtivaId,
+  identidade,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -376,6 +394,7 @@ export function AppShell({
   abas: string[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
+  identidade?: Identidade;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -386,7 +405,7 @@ export function AppShell({
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 lg:flex lg:sticky lg:top-0 lg:h-dvh">
         <div className="px-1">
-          <Brand />
+          <Brand identidade={identidade} />
         </div>
         <div className="mt-7 flex-1 overflow-y-auto px-1">
           <NavLinks role={usuario.role} abas={abasSet} />
@@ -402,7 +421,7 @@ export function AppShell({
           <div className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface px-4 py-5 shadow-soft">
             <div className="flex items-center justify-between px-1">
-              <Brand />
+              <Brand identidade={identidade} />
               <button
                 type="button"
                 aria-label="Fechar menu"
@@ -440,7 +459,7 @@ export function AppShell({
             <IconMenu className="h-5 w-5" />
           </button>
           <div className="lg:hidden">
-            <Brand compact />
+            <Brand compact identidade={identidade} />
           </div>
           <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 

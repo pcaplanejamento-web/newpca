@@ -173,9 +173,29 @@ export const gerarPcaSchema = z.object({
     .max(1000),
 });
 
+/** Registro leve de PCA (Configurações do ADM): só nome + ano, sem unir DFDs. */
+export const cadastrarPcaSchema = z.object({
+  nome: z.coerce.string().trim().min(1, "Informe o nome do PCA.").max(120),
+  ano: z.number().int().gte(2000).lte(2100).optional().nullable(),
+});
+
+/** Edição de um PCA já cadastrado (nome e/ou ano). Exige ao menos um campo. */
+export const editarPcaSchema = z
+  .object({
+    nome: z.coerce.string().trim().min(1, "Informe o nome do PCA.").max(120).optional(),
+    ano: z.number().int().gte(2000).lte(2100).nullable().optional(),
+  })
+  .refine((d) => d.nome !== undefined || d.ano !== undefined, { message: "Nada para editar." });
+
+/** `PATCH /api/admin/pcas/[id]`: marcar como ativo (`{ativo:true}`) OU editar nome/ano. */
+export const patchPcaSchema = z.union([z.object({ ativo: z.literal(true) }), editarPcaSchema]);
+
 export type DfdMetaPayload = z.infer<typeof dfdMetaSchema>;
 export type DfdItemPayload = z.infer<typeof dfdItemSchema>;
 export type ProtocoloMetaPayload = z.infer<typeof protocoloMetaSchema>;
 export type StartDfdPayload = z.infer<typeof startDfdSchema>;
 export type AppendDfdItensPayload = z.infer<typeof appendDfdItensSchema>;
 export type GerarPcaPayload = z.infer<typeof gerarPcaSchema>;
+export type CadastrarPcaPayload = z.infer<typeof cadastrarPcaSchema>;
+export type EditarPcaPayload = z.infer<typeof editarPcaSchema>;
+export type PatchPcaPayload = z.infer<typeof patchPcaSchema>;

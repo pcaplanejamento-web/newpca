@@ -143,6 +143,11 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(cols.includes("assinaturas"), "coluna assinaturas ausente");
   });
 
+  it("0020 adiciona ativo em pcas", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('pcas')");
+    assert.ok(cols.includes("ativo"), "coluna pcas.ativo ausente");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

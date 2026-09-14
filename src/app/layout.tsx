@@ -15,11 +15,22 @@ export const dynamic = "force-dynamic";
 // e Geist Mono (nº de protocolo, datas, contadores, ⌘K). Expõem
 // --font-geist-sans / --font-geist-mono, consumidos por --font-sans/--font-mono.
 
-export const metadata: Metadata = {
-  title: "Plataforma PCA — Rio Verde",
-  description:
-    "Plataforma de Planejamento de Contratações Anuais da Prefeitura de Rio Verde.",
-};
+// Título/descrição/favicon vêm da identidade do site definida pelo ADM nas
+// Configurações (fallback: textos padrão). getAparencia é cacheado (60s) e
+// compartilha o resultado com o RootLayout no mesmo request.
+export async function generateMetadata(): Promise<Metadata> {
+  const { identidade } = await getAparencia();
+  const nome = identidade?.nome?.trim() || "Plataforma PCA — Rio Verde";
+  const descricao =
+    identidade?.subtitulo?.trim() ||
+    "Plataforma de Planejamento de Contratações Anuais da Prefeitura de Rio Verde.";
+  const favicon = identidade?.favicon?.trim();
+  return {
+    title: nome,
+    description: descricao,
+    ...(favicon ? { icons: { icon: favicon } } : {}),
+  };
+}
 
 export default async function RootLayout({
   children,

@@ -353,15 +353,18 @@ export const dfdItens = sqliteTable(
 );
 
 /**
- * Edição de PCA gerada — o plano consolidado da Prefeitura. Une DFDs selecionados
- * (`pcaDfds`, por referência): DFDs novos NÃO alteram uma edição já gerada. Os
- * totais são um retrato da geração; o detalhe é recomposto ao vivo a partir dos DFDs.
+ * PCA — o plano consolidado da Prefeitura. Pode ser (a) uma **edição gerada** unindo
+ * DFDs selecionados (`pcaDfds`, por referência; DFDs novos NÃO alteram uma edição já
+ * gerada) OU (b) um **registro leve** cadastrado pelo ADM (nome + ano, sem DFDs). Os
+ * totais são um retrato; o detalhe é recomposto ao vivo a partir dos DFDs. `ativo` marca
+ * UM PCA como o vigente/padrão (migração `0020`).
  */
 export const pcas = sqliteTable("pcas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(), // ex.: "PCA 2026"
   ano: integer("ano"),
   observacao: text("observacao"),
+  ativo: integer("ativo", { mode: "boolean" }).default(false), // 1 = PCA vigente (só um)
   totalDfds: integer("total_dfds").default(0),
   totalItens: integer("total_itens").default(0),
   valorEstimado: real("valor_estimado").default(0), // soma dos estimados dos DFDs

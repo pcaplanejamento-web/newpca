@@ -9,6 +9,7 @@ import { ItemTable } from "@/components/ItemTable";
 import { KpiStat } from "@/components/KpiStat";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
+import { getAparencia } from "@/lib/aparencia";
 import { brl, brlCompact, num } from "@/lib/format";
 import {
   getItensTodos,
@@ -19,20 +20,30 @@ import {
   getTopItens,
   getUnidades,
 } from "@/lib/queries";
+import type { Aparencia } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
-function Topo() {
+/** Cabeçalho público — nome/subtítulo/favicon definidos pelo ADM (fallback padrão). */
+function Topo({ identidade }: { identidade?: Aparencia["identidade"] }) {
+  const nome = identidade?.nome?.trim() || "Plataforma PCA";
+  const subtitulo = identidade?.subtitulo?.trim() || "Prefeitura de Rio Verde · GO";
+  const favicon = identidade?.favicon?.trim();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
-            RV
-          </div>
+          {favicon ? (
+            // biome-ignore lint/performance/noImgElement: favicon é data-URL base64 definida pelo ADM; next/image não otimiza data-URL.
+            <img src={favicon} alt="" className="h-9 w-9 shrink-0 rounded-[10px] object-cover" />
+          ) : (
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
+              RV
+            </div>
+          )}
           <div className="leading-tight">
-            <div className="text-[14px] font-semibold text-text">Plataforma PCA</div>
-            <div className="text-[11px] text-muted">Prefeitura de Rio Verde · GO</div>
+            <div className="text-[14px] font-semibold text-text">{nome}</div>
+            <div className="text-[11px] text-muted">{subtitulo}</div>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -50,12 +61,13 @@ export default async function HomePage({
   searchParams: Promise<{ unidade?: string }>;
 }) {
   const sp = await searchParams;
-  const unidades = await getUnidades();
+  const [unidades, aparencia] = await Promise.all([getUnidades(), getAparencia()]);
+  const identidade = aparencia.identidade;
 
   if (unidades.length === 0) {
     return (
       <div className="min-h-dvh bg-bg text-text">
-        <Topo />
+        <Topo identidade={identidade} />
         <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
           <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
             <div className="grid h-16 w-16 place-items-center rounded-card bg-surface-2 text-faint">
@@ -86,7 +98,7 @@ export default async function HomePage({
 
   return (
     <div className="min-h-dvh bg-bg text-text">
-      <Topo />
+      <Topo identidade={identidade} />
       <main className="mx-auto max-w-7xl space-y-[var(--gap-col)] px-4 py-6 sm:px-6">
         <div className="flex justify-end">
           <div className="w-full sm:w-80">

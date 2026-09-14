@@ -177,6 +177,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `unidades`; listagem via `getReparticaoFiltro`). Lógica em **`src/lib/dfd.ts`** (upsert por `numero`; batch
   de `dfd_itens` a **11×9=99** params; `excluirDfd` bloqueia se o DFD está em alguma edição). Validação
   só-schema em `src/lib/dfd-validation.ts`.
+- **PCA — registro leve + ativo (Configurações do ADM, migração `0020`):** além da edição (unir DFDs), um `pcas`
+  pode ser um **registro leve** (só nome+ano, totais 0) e **um** é marcado **`ativo`** (o vigente). Funções puras em
+  `dfd.ts`: `cadastrarPca({nome,ano})`, `atualizarPca(id,{nome?,ano?})`, `definirPcaAtivo(id)` (`db.batch`: zera todos
+  → liga 1). Schemas `cadastrarPcaSchema`/`editarPcaSchema`/`patchPcaSchema` (**`gerarPcaSchema` intacto**). API admin
+  `POST /api/admin/pcas` + `PATCH`/`DELETE /api/admin/pcas/[id]` (**`exigirAdmin`**; PATCH = `{ativo:true}` OU nome/ano).
+  Badge **"Ativo"** (`Badge`) no `PcaModuleView` e na tabela do Configurações. `listarPcas` ordena o ativo primeiro.
 - **Escrita de DFD em LOTES (escala a milhares de itens):** `dfd.ts` decompõe em `upsertDfdCabecalho` (cabeçalho +
   apaga itens antigos + 1º lote) e `appendDfdItens` (lotes seguintes, **11×9=99** params). `POST /api/dfd` é uma
   **discriminated union em `mode`** (`start-dfd` | `append-dfd-itens`, `dfdOpSchema`) — o cliente
@@ -311,11 +317,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros), `ReorderTable` (tabela com arrasto entre linhas,
   Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
-  `Badge.tsx` legado só permanece pelo `Tone`/tons do `StatCard`.
+  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +
   `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`.
+- **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
+  + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
+  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar/editar/ativar/excluir
+  via `/api/admin/pcas`) e **Mais** (`LinkCard` → aparência/repartições/grupos/permissões/usuários). A **identidade
+  renderiza** de fato: `generateMetadata` (título/descrição/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o
+  cabeçalho público (`/`), todos com `getAparencia()` (cache 60s) e **fallback** aos textos padrão. Nav item
+  "Configurações" (`IconSettings`) no topo de Administração. Sem migração nova (o slot `identidade` já existia).
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **botão↔FAB**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav; sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

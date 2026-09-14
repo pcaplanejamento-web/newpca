@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { getAparencia } from "@/lib/aparencia";
 import { getUsuarioAtual } from "@/lib/auth";
 import { abasPermitidas, getGrupoAtivo, getReparticaoContexto, gruposDoUsuario } from "@/lib/grupos";
 
@@ -13,7 +14,11 @@ export default async function PainelLayout({
   const usuario = await getUsuarioAtual();
   if (!usuario) redirect("/login");
 
-  const [grupos, ativo] = await Promise.all([gruposDoUsuario(usuario.id), getGrupoAtivo(usuario)]);
+  const [grupos, ativo, aparencia] = await Promise.all([
+    gruposDoUsuario(usuario.id),
+    getGrupoAtivo(usuario),
+    getAparencia(),
+  ]);
   const [abas, contexto] = await Promise.all([
     abasPermitidas(usuario, ativo).then((s) => [...s]),
     getReparticaoContexto(usuario, ativo),
@@ -27,6 +32,7 @@ export default async function PainelLayout({
       abas={abas}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
+      identidade={aparencia.identidade}
     >
       {children}
     </AppShell>

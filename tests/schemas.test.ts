@@ -7,9 +7,12 @@ import {
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
 import {
+  cadastrarPcaSchema,
   dfdOpSchema,
+  editarPcaSchema,
   faltasObrigatorias,
   gerarPcaSchema,
+  patchPcaSchema,
   startProtocoloSchema,
   vincularDfdSchema,
 } from "../src/lib/dfd-validation.ts";
@@ -114,6 +117,32 @@ describe("dfd-validation", () => {
     assert.equal(gerarPcaSchema.safeParse({ nome: "", dfdIds: [1] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [] }).success, false);
     assert.equal(gerarPcaSchema.safeParse({ nome: "X", dfdIds: [0] }).success, false);
+  });
+
+  it("cadastrarPcaSchema exige nome; ano é opcional e limitado a 2000–2100", () => {
+    assert.equal(cadastrarPcaSchema.safeParse({ nome: "PCA 2026", ano: 2026 }).success, true);
+    assert.equal(cadastrarPcaSchema.safeParse({ nome: "PCA 2026" }).success, true);
+    assert.equal(cadastrarPcaSchema.safeParse({ nome: "" }).success, false);
+    assert.equal(cadastrarPcaSchema.safeParse({ nome: "X", ano: 1999 }).success, false);
+    assert.equal(cadastrarPcaSchema.safeParse({ nome: "X", ano: 2101 }).success, false);
+    // não cadastra por registro leve unindo DFDs (isso é do gerarPcaSchema).
+    assert.equal("dfdIds" in cadastrarPcaSchema.parse({ nome: "X" }), false);
+  });
+
+  it("editarPcaSchema aceita nome e/ou ano, mas exige ao menos um campo", () => {
+    assert.equal(editarPcaSchema.safeParse({ nome: "Novo nome" }).success, true);
+    assert.equal(editarPcaSchema.safeParse({ ano: 2027 }).success, true);
+    assert.equal(editarPcaSchema.safeParse({ ano: null }).success, true);
+    assert.equal(editarPcaSchema.safeParse({}).success, false);
+    assert.equal(editarPcaSchema.safeParse({ nome: "" }).success, false);
+  });
+
+  it("patchPcaSchema: marca ativo ({ativo:true}) OU edita nome/ano", () => {
+    assert.equal(patchPcaSchema.safeParse({ ativo: true }).success, true);
+    assert.equal(patchPcaSchema.safeParse({ nome: "PCA 2026" }).success, true);
+    assert.equal(patchPcaSchema.safeParse({ ano: 2026 }).success, true);
+    assert.equal(patchPcaSchema.safeParse({ ativo: false }).success, false); // só true ativa
+    assert.equal(patchPcaSchema.safeParse({}).success, false);
   });
 
   it("startProtocoloSchema exige o numero do protocolo (capa)", () => {

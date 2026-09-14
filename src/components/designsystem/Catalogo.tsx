@@ -666,6 +666,20 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Configurações do ADM — atalhos de administração">
+        <p className="mb-3 text-sm text-muted">
+          Grade de atalhos da tela <code>/painel/configuracoes</code> (aba &quot;Mais&quot;) — leva às
+          telas admin já existentes. Só componentes do design-system (LinkCard + ícones).
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <LinkCard href="#" titulo="Aparência" descricao="Cores, layout, densidade e ícones." icon={<Icons.IconPalette className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Repartições" descricao="Setores e responsáveis por DFDs." icon={<Icons.IconBuilding className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Grupos" descricao="Grupos de acesso e suas repartições." icon={<Icons.IconUsers className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Permissões" descricao="Abas visíveis por grupo." icon={<Icons.IconShield className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Usuários" descricao="Contas, papéis e status de acesso." icon={<Icons.IconUser className="h-5 w-5" />} />
+        </div>
+      </Secao>
+
       <Secao titulo="Link externo (LinkExterno)">
         <p className="mb-3 text-sm text-muted">
           Âncora externa (abre em nova aba, <code>rel=&quot;noopener noreferrer&quot;</code>) — único link externo do app.

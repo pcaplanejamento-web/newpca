@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings,
   Shield,
   Sun,
   Trash2,
@@ -79,6 +80,7 @@ export const IconLogout = LogOut;
 export const IconActivity = Activity;
 export const IconClock = Clock;
 export const IconShield = Shield;
+export const IconSettings = Settings;
 export const IconBell = Bell;
 export const IconUser = User;
 export const IconTool = Wrench;

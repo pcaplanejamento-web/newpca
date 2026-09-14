@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import type { DfdResumo, PcaResumo } from "@/lib/dfd";
 import { brl, dataBR, num } from "@/lib/format";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -83,7 +84,21 @@ export function PcaModuleView({
   const acao = (children: ReactNode) => <div className="flex justify-end gap-1">{children}</div>;
 
   const colsPca: Column<PcaResumo>[] = [
-    { key: "nome", header: "Edição", filter: "none", render: (r) => <span className="font-semibold text-text">{r.nome}</span> },
+    {
+      key: "nome",
+      header: "Edição",
+      filter: "none",
+      render: (r) => (
+        <span className="flex items-center gap-2">
+          <span className="font-semibold text-text">{r.nome}</span>
+          {r.ativo && (
+            <Badge tone="emerald" dot>
+              Ativo
+            </Badge>
+          )}
+        </span>
+      ),
+    },
     { key: "ano", header: "Ano", align: "right", filter: "none", render: (r) => r.ano ?? "—" },
     { key: "dfds", header: "DFDs", align: "right", filter: "none", render: (r) => num(r.totalDfds ?? 0) },
     { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens ?? 0) },
