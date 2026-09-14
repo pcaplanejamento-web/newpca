@@ -700,7 +700,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Responsáveis (1 padrão + N temporários com período/estado)">
+      <Secao titulo="Responsáveis (N padrões + N temporários; nomeação portaria/decreto/lei + link, matrícula/função)">
         <div className="max-w-lg">
           <ResponsaveisEditor valor={respDemo} onChange={setRespDemo} />
         </div>
