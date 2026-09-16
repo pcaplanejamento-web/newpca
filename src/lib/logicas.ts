@@ -155,7 +155,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "avaliacao",
     titulo: "Exceções por tipo de DFD e categoria de protocolo",
     descricao:
-      "O nível pode ter exceções por tipo de DFD (DFD-S/R/O/E) e por categoria de protocolo. Como o assunto da capa é texto livre, as categorias são reconhecidas por palavras-chave (editáveis). A exceção mais específica vence o padrão global.",
+      "O nível pode ter exceções por tipo de DFD (DFD-S/R/O/E) e por categoria de protocolo. Como o assunto da capa é texto livre, ele é classificado em três categorias fixas — Inclusão, Exclusão e Alteração não onerosa — pela palavra que aparece no assunto. A exceção mais específica vence o padrão global.",
     fonte: "nivelDe / classificarAssunto",
     configuravelEm: { rotulo: "Avaliação" },
   },
