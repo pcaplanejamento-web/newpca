@@ -24,7 +24,7 @@ import { DfdConferir, mensagensDoDfd } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
-import { MensagensDfd } from "./MensagensDfd";
+import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
@@ -314,11 +314,11 @@ export function DfdUploadForm({
                   <Progress value={progresso} label={`Enviando ${num(preview?.itens.length ?? 0)} itens... ${progresso}% — não feche esta janela`} />
                 </div>
               ) : (
-                <span className="text-[12px] text-muted">
-                  {bloqueado
-                    ? "Importação bloqueada — abra 'Ver mensagens' para os detalhes"
-                    : "Tudo certo — pronto para importar"}
-                </span>
+                <BotaoVerMensagens
+                  mensagens={mensagens}
+                  aberto={mensagensAbertas}
+                  onToggle={() => setMensagensAbertas((v) => !v)}
+                />
               )}
               <div className="flex gap-2">
                 {status !== "sending" && (
@@ -354,9 +354,7 @@ export function DfdUploadForm({
               autoMatch={autoMatch}
               autoCampos={autoCampos}
               regras={regras}
-              mensagens={mensagens}
               ancoraAlvo={ancoraAlvo}
-              onVerMensagens={() => setMensagensAbertas(true)}
               onRepChange={(id) => {
                 setRepId(id);
                 setAutoMatch(false);

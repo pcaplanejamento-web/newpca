@@ -44,7 +44,7 @@ import {
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
-import { MensagensDfd } from "@/components/MensagensDfd";
+import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -957,6 +957,19 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="MensagensDfd (painel lateral de erro/atenção/acerto — clique navega no DFD)">
+        {/* BotaoVerMensagens — vai no rodapé fixo do banner do DFD, à esquerda do Fechar. */}
+        <div className="mb-4 flex justify-end border-b border-border pb-4">
+          <BotaoVerMensagens
+            mensagens={[
+              { chave: "a", status: "erro", texto: "", ancora: "" },
+              { chave: "b", status: "erro", texto: "", ancora: "" },
+              { chave: "c", status: "atencao", texto: "", ancora: "" },
+              { chave: "d", status: "acerto", texto: "", ancora: "" },
+              { chave: "e", status: "acerto", texto: "", ancora: "" },
+            ]}
+            onToggle={() => toast("Abrir/ocultar o painel de mensagens")}
+          />
+        </div>
         <div className="max-w-md">
           <MensagensDfd
             numero="1586"

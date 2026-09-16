@@ -232,12 +232,14 @@ botão de relatório aparece também quando só há atenção). Mensagem de aten
 ### DFD: painel LATERAL de mensagens (erro/atenção/acerto) navegável — entregue
 ✅ As mensagens de conferência **saíram do corpo** do banner do DFD para um **painel lateral** (`MensagensDfd`).
 `mensagensDfd` (puro, `dfd-tratamento`) monta a lista **COMPLETA** — erro/atenção/**acerto**, sem exceção (só omite
-pontos "ignorar" do ADM) — cada uma com uma **âncora** (id do componente no banner, via `data-ancora`). Um botão
-**"Ver mensagens"** no rodapé do DFD abre o painel: no **DFD avulso/gravado solto** ele surge **ao lado** (DFD +
-mensagens, mesma animação de lateral); **dentro de um protocolo** ele **substitui** o DFD no lateral (toggle, "Voltar
-ao DFD"). **Clicar numa mensagem** rola o banner até a âncora e a **destaca na cor do status** (erro/atenção/acerto).
-`mensagensDoDfd` (exportado de `DfdConferir`, confere a assinatura) é a fonte única (botão + painel); `contarMensagens`
-resume o botão. Reuso total (`Modal.lateral`, tokens); catalogado; testes de `mensagensDfd`. Sem migração.
+pontos "ignorar" do ADM) — cada uma com uma **âncora** (id do componente no banner, via `data-ancora`). O botão
+**`BotaoVerMensagens`** (Ver/Ocultar + numeração por status) fica no **RODAPÉ FIXO** do banner do DFD, **à esquerda do
+Fechar**. Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação), ficando **ambos
+manipuláveis** (o DFD NÃO é substituído): no **DFD avulso/gravado solto** = 2 painéis (`Modal.lateral`); **dentro de um
+protocolo** = **3 painéis proporcionais** (protocolo | DFD | mensagens) via o novo **`Modal.lateral2`** (colunas do grid
+animadas; 1 por vez no mobile). **Clicar numa mensagem** rola o DFD (que segue ao lado) até a âncora e a **destaca na
+cor do status**. `mensagensDoDfd` (exportado de `DfdConferir`, confere a assinatura) é a fonte única; "Copiar pendências"
+reusa `linhasRelatorioDfd`. Reuso total (tokens); catalogado; testes de `mensagensDfd`. Sem migração.
 
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em

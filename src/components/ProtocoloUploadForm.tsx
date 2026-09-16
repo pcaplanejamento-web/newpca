@@ -45,7 +45,7 @@ import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
-import { MensagensDfd } from "./MensagensDfd";
+import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
@@ -339,9 +339,8 @@ export function ProtocoloUploadForm({
     setMensagensAbertas(false);
     setAncoraAlvo(null);
   }
-  /** Clique numa mensagem: volta ao DFD e rola/destaca a âncora na cor do status. */
+  /** Clique numa mensagem: rola/destaca a âncora no DFD (que segue ao lado) na cor do status. */
   function irParaMensagem(m: { ancora: string; status: "erro" | "atencao" | "acerto" }) {
-    setMensagensAbertas(false);
     setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
   }
 
@@ -772,7 +771,7 @@ export function ProtocoloUploadForm({
           temDfds
             ? {
                 aberto: abertoIdx >= 0,
-                titulo: abertoIdx >= 0 ? `${mensagensAbertas ? "Mensagens — " : ""}DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
+                titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
                 cabecalho:
                   abertoIdx >= 0 ? (
                     <DfdCabecalho
@@ -781,17 +780,10 @@ export function ProtocoloUploadForm({
                       planejamento={dfdAberto?.planejamento ?? null}
                     />
                   ) : undefined,
-                // Mensagens abertas: o X volta ao DFD; senão fecha o DFD do lateral.
-                onClose: mensagensAbertas ? () => setMensagensAbertas(false) : fecharDfdLateral,
+                onClose: fecharDfdLateral,
                 rodape:
-                  abertoIdx < 0 ? undefined : mensagensAbertas ? (
-                    <div className="flex items-center justify-end gap-3">
-                      <Button variant="secondary" onClick={() => setMensagensAbertas(false)} disabled={importando}>
-                        Voltar ao DFD
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3">
+                  abertoIdx < 0 ? undefined : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       {dfdAberto ? (
                         <span
                           className="inline-flex items-center gap-1.5 text-[12px] font-medium"
@@ -803,9 +795,18 @@ export function ProtocoloUploadForm({
                       ) : (
                         <span />
                       )}
-                      <Button variant="secondary" onClick={fecharDfdLateral} disabled={importando}>
-                        Fechar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {dfdAberto && (
+                          <BotaoVerMensagens
+                            mensagens={mensagensAberto}
+                            aberto={mensagensAbertas}
+                            onToggle={() => setMensagensAbertas((v) => !v)}
+                          />
+                        )}
+                        <Button variant="secondary" onClick={fecharDfdLateral} disabled={importando}>
+                          Fechar
+                        </Button>
+                      </div>
                     </div>
                   ),
                 children: (
@@ -815,39 +816,39 @@ export function ProtocoloUploadForm({
                         Lendo o DFD...
                       </Callout>
                     ) : (
-                      <>
-                        {/* DFD mantido montado (só oculto) para as edições/scroll sobreviverem ao toggle. */}
-                        <div hidden={mensagensAbertas}>
-                          <DfdConferir
-                            dfd={dfdAberto}
-                            reparticoes={reparticoes}
-                            reparticaoAtivaId={reparticaoAtivaId}
-                            repId={dfdRepIds[abertoIdx] ?? null}
-                            anoPca={anoPca}
-                            autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
-                            autoCampos={autoMap.get(abertoIdx) ?? []}
-                            regras={regras}
-                            mensagens={mensagensAberto}
-                            ancoraAlvo={ancoraAlvo}
-                            onVerMensagens={() => setMensagensAbertas(true)}
-                            onRepChange={(id) => setRepDfd(abertoIdx, id)}
-                            onSecoesChange={onSecoesAberto}
-                            onRefsChange={onRefsAberto}
-                          />
-                        </div>
-                        {mensagensAbertas && (
-                          <div className="animate-fade-in-up">
-                            <MensagensDfd
-                              mensagens={mensagensAberto}
-                              numero={index?.dfds[abertoIdx]?.numero ?? ""}
-                              tipo={dfdAberto.tipo}
-                              onIrPara={irParaMensagem}
-                            />
-                          </div>
-                        )}
-                      </>
+                      <DfdConferir
+                        dfd={dfdAberto}
+                        reparticoes={reparticoes}
+                        reparticaoAtivaId={reparticaoAtivaId}
+                        repId={dfdRepIds[abertoIdx] ?? null}
+                        anoPca={anoPca}
+                        autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
+                        autoCampos={autoMap.get(abertoIdx) ?? []}
+                        regras={regras}
+                        ancoraAlvo={ancoraAlvo}
+                        onRepChange={(id) => setRepDfd(abertoIdx, id)}
+                        onSecoesChange={onSecoesAberto}
+                        onRefsChange={onRefsAberto}
+                      />
                     )}
                   </div>
+                ),
+              }
+            : undefined
+        }
+        lateral2={
+          temDfds
+            ? {
+                aberto: abertoIdx >= 0 && mensagensAbertas,
+                titulo: `Mensagens — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`,
+                onClose: () => setMensagensAbertas(false),
+                children: (
+                  <MensagensDfd
+                    mensagens={mensagensAberto}
+                    numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                    tipo={dfdAberto?.tipo}
+                    onIrPara={irParaMensagem}
+                  />
                 ),
               }
             : undefined

@@ -10,7 +10,40 @@ import {
   type StatusMensagem,
 } from "@/lib/dfd-tratamento";
 import { Button } from "./Button";
-import { IconCheck, IconClipboard } from "./icons";
+import { IconCheck, IconClipboard, IconLayers } from "./icons";
+
+const ORDEM: StatusMensagem[] = ["erro", "atencao", "acerto"];
+
+/**
+ * Botão "Ver mensagens" + a numeração por status (erro/atenção/acerto) — vai no RODAPÉ
+ * FIXO do banner do DFD, à esquerda do botão de fechar. Abre o painel `MensagensDfd`.
+ */
+export function BotaoVerMensagens({
+  mensagens,
+  aberto = false,
+  onToggle,
+}: {
+  mensagens: MensagemDfd[];
+  aberto?: boolean;
+  onToggle: () => void;
+}) {
+  const cont = contarMensagens(mensagens);
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex flex-wrap gap-2.5 text-[12px] font-semibold">
+        {ORDEM.map((s) => (
+          <span key={s} className="inline-flex items-center gap-1.5" style={{ color: STATUS_MENSAGEM_COR[s] }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: STATUS_MENSAGEM_COR[s] }} />
+            {cont[s]}
+          </span>
+        ))}
+      </div>
+      <Button variant="secondary" onClick={onToggle} icon={<IconLayers className="h-4 w-4" />}>
+        {aberto ? "Ocultar mensagens" : "Ver mensagens"}
+      </Button>
+    </div>
+  );
+}
 
 /**
  * Painel LATERAL de mensagens de um DFD — lista TODAS as conferências (erro · atenção ·
@@ -19,8 +52,6 @@ import { IconCheck, IconClipboard } from "./icons";
  * "Copiar pendências" gera o relatório copiável do DFD (`linhasRelatorioDfd`). Só
  * componentes/tokens do design-system; corpo de um `Modal` (não abre modal próprio).
  */
-const ORDEM: StatusMensagem[] = ["erro", "atencao", "acerto"];
-
 export function MensagensDfd({
   mensagens,
   numero,

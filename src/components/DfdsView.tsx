@@ -25,7 +25,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
-import { MensagensDfd } from "./MensagensDfd";
+import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
@@ -477,11 +477,26 @@ export function DfdsView({
         {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
       </Button>
     ) : undefined;
-  const dfdRodape =
-    podeEditar && dfdView && !dfdTrancado ? (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[12px] text-accent">Edição destravada — as alterações são gravadas no banco.</span>
-        <div className="flex gap-2">
+  // Mensagens (erro/atenção/acerto) do DFD gravado — botão (rodapé) + painel lateral. A
+  // categoria (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
+  const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
+  const categoriaDfd = protoView ? classificarAssunto(protoView.assunto) : null;
+  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd) : [];
+  const irParaMensagem = (m: { ancora: string; status: "erro" | "atencao" | "acerto" }) => {
+    // O painel de mensagens fica AO LADO do DFD (não substitui) → só rola/destaca a âncora.
+    setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
+  };
+  // Rodapé FIXO do banner do DFD: "Ver mensagens" + numeração à esquerda; ações de edição à direita.
+  const dfdRodape = dfdView ? (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <BotaoVerMensagens
+        mensagens={mensagens}
+        aberto={mensagensAbertas}
+        onToggle={() => setMensagensAbertas((v) => !v)}
+      />
+      {podeEditar && !dfdTrancado && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-accent">Edição destravada — salva no banco.</span>
           <Button variant="secondary" onClick={fecharDfd} disabled={salvandoDfd}>
             Fechar
           </Button>
@@ -489,17 +504,9 @@ export function DfdsView({
             Salvar alterações
           </Button>
         </div>
-      </div>
-    ) : undefined;
-  // Mensagens (erro/atenção/acerto) do DFD gravado — botão + painel lateral. A categoria
-  // (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
-  const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
-  const categoriaDfd = protoView ? classificarAssunto(protoView.assunto) : null;
-  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd) : [];
-  const irParaMensagem = (m: { ancora: string; status: "erro" | "atencao" | "acerto" }) => {
-    setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
-    if (protoView) setMensagensAbertas(false); // dentro do protocolo o painel substitui o DFD → volta ao DFD
-  };
+      )}
+    </div>
+  ) : undefined;
   const dfdCorpo = dfdEdit ? (
     <DfdConferir
       dfd={dfdEdit}
@@ -510,14 +517,15 @@ export function DfdsView({
       autoMatch={false}
       readOnly={!podeEditar || dfdTrancado}
       regras={regras}
-      mensagens={mensagens}
       ancoraAlvo={ancoraAlvo}
-      onVerMensagens={() => setMensagensAbertas(true)}
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
     />
   ) : null;
+  const mensagensPanel = (
+    <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
+  );
 
   return (
     <div className="space-y-4">
@@ -555,7 +563,7 @@ export function DfdsView({
                 aberto: mensagensAbertas,
                 titulo: `Mensagens — DFD ${dfdView.numero}`,
                 onClose: () => setMensagensAbertas(false),
-                children: <MensagensDfd mensagens={mensagens} numero={dfdView.numero} tipo={dfdView.tipo} onIrPara={irParaMensagem} />,
+                children: mensagensPanel,
               }
             : undefined
         }
@@ -584,32 +592,24 @@ export function DfdsView({
           protoView
             ? {
                 aberto: !!dfdView,
-                titulo: dfdView ? `${mensagensAbertas ? "Mensagens — " : ""}DFD ${dfdView.numero}` : "DFD",
+                titulo: dfdView ? `DFD ${dfdView.numero}` : "DFD",
                 cabecalho: dfdView ? (
                   <DfdCabecalho numero={dfdView.numero} tipo={dfdView.tipo} planejamento={dfdView.planejamento} />
                 ) : undefined,
-                // Nas mensagens some o cadeado (não se edita) e o X volta ao DFD.
-                acoesCabecalho: mensagensAbertas ? undefined : dfdCadeado,
-                rodape: mensagensAbertas ? (
-                  <div className="flex items-center justify-end gap-3">
-                    <Button variant="secondary" onClick={() => setMensagensAbertas(false)} disabled={salvandoDfd}>
-                      Voltar ao DFD
-                    </Button>
-                  </div>
-                ) : (
-                  dfdRodape
-                ),
-                onClose: mensagensAbertas ? () => setMensagensAbertas(false) : fecharDfd,
-                children: (
-                  <>
-                    <div hidden={mensagensAbertas}>{dfdCorpo}</div>
-                    {mensagensAbertas && (
-                      <div className="animate-fade-in-up">
-                        <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
-                      </div>
-                    )}
-                  </>
-                ),
+                acoesCabecalho: dfdCadeado,
+                rodape: dfdRodape,
+                onClose: fecharDfd,
+                children: dfdCorpo,
+              }
+            : undefined
+        }
+        lateral2={
+          protoView
+            ? {
+                aberto: !!dfdView && mensagensAbertas,
+                titulo: dfdView ? `Mensagens — DFD ${dfdView.numero}` : "Mensagens",
+                onClose: () => setMensagensAbertas(false),
+                children: mensagensPanel,
               }
             : undefined
         }

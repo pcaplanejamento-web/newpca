@@ -4,11 +4,9 @@ import { useEffect, useRef } from "react";
 import { editavelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
   type CampoTratavel,
-  contarMensagens,
   type MensagemDfd,
   mensagensDfd,
   setTextoSecao,
-  STATUS_MENSAGEM_COR,
   textoSecao,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
@@ -21,12 +19,11 @@ import {
   solicitanteDeResultado,
   validarAssinatura,
 } from "@/lib/reparticao-responsaveis";
-import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconBuilding, IconLayers } from "./icons";
+import { IconAlert, IconBuilding } from "./icons";
 import { Segmented } from "./Segmented";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
@@ -126,12 +123,10 @@ export function DfdConferir({
   autoCampos = [],
   readOnly = false,
   regras = regrasPadrao(),
-  mensagens = [],
   ancoraAlvo = null,
   onRepChange,
   onSecoesChange,
   onRefsChange,
-  onVerMensagens,
 }: {
   dfd: DfdParseado;
   reparticoes: Rep[];
@@ -145,16 +140,12 @@ export function DfdConferir({
   readOnly?: boolean;
   /** Regras de avaliação do ADM (edição de campos por nível). */
   regras?: RegrasAvaliacao;
-  /** Mensagens (erro/atenção/acerto) do DFD — do `mensagensDoDfd` do pai (só o contador do botão). */
-  mensagens?: MensagemDfd[];
   /** Pedido de rolagem/destaque de uma âncora (id + cor + nonce para repetir o clique). */
   ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
   onRefsChange?: (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => void;
-  /** Abre o painel lateral de mensagens (renderizado pelo pai). Sem ele, o botão some. */
-  onVerMensagens?: () => void;
 }) {
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
@@ -168,7 +159,6 @@ export function DfdConferir({
     });
   };
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
-  const cont = contarMensagens(mensagens);
 
   // Rolagem + DESTAQUE de uma âncora (ao clicar numa mensagem do painel lateral). O
   // elemento com `data-ancora` correspondente entra em vista e pulsa na cor do status.
@@ -393,28 +383,11 @@ export function DfdConferir({
         </Callout>
       )}
 
-      {/* Documento completo (read-only, reflete as edições) */}
+      {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
+          numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
         <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} />
       </div>
-
-      {/* Parte inferior — botão do painel de MENSAGENS (erro/atenção/acerto). As mensagens
-          não aparecem mais soltas no corpo: ficam no painel lateral, navegáveis. */}
-      {onVerMensagens && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-          <div className="flex flex-wrap gap-3 text-[12px] font-semibold">
-            {(["erro", "atencao", "acerto"] as const).map((s) => (
-              <span key={s} className="inline-flex items-center gap-1.5" style={{ color: STATUS_MENSAGEM_COR[s] }}>
-                <span className="h-2 w-2 rounded-full" style={{ background: STATUS_MENSAGEM_COR[s] }} />
-                {cont[s]}
-              </span>
-            ))}
-          </div>
-          <Button variant="secondary" onClick={onVerMensagens} icon={<IconLayers className="h-4 w-4" />}>
-            Ver mensagens
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
