@@ -281,6 +281,19 @@ responsáveis certos **sem tocar** `validarAssinatura`/`DfdConferir`/`POST /api/
 órgão é "única", o editor da unidade é substituído por uma nota; coluna **"Assinatura"** (Única/Por unidade) na lista
 de órgãos. `responsaveisSchema` compartilhado (unidade+órgão). Testes puros de `responsaveisEfetivos` + migração `0023`.
 
+### Catálogo de produtos (referência p/ padronização) — entregue
+✅ Novo **módulo Catálogo** (aba `catalogo`, `/painel/catalogo`): sobe **catálogos de produtos em PDF**, extrai os itens
+(**código, descrição, unidade de medida**) e os mostra em tabela consultável (busca + filtro por tipo). O **parser é
+dedicado** (`parse-catalogo-pdf`) e **detecta as colunas pelo cabeçalho, ordenadas por posição** — os catálogos variam
+muito (3–7 colunas, ordem diferente, Und antes/depois/2x da descrição, com/sem Nº de item, título/logo acima da tabela);
+reaproveita a camada pdf.js do DFD. **Código é ÚNICO GLOBAL** (o mesmo produto se repete entre catálogos nos PDFs reais →
+o envio **detecta e bloqueia conflitos**, com pré-checagem no preview). **Re-subir atualiza** um catálogo mesclando por
+código (descrição/unidade atualizadas, **tipos preservados**, ausentes mantidos). Cada item guarda os **tipos de DFD** a
+que se aplica (DFD-S/R/O/E), definíveis no envio, em **massa** (seleção) e por **item** (painel lateral, mestre-detalhe).
+Excluir o catálogo apaga os itens. **Isolado**: não interfere em PCA/DFD/itens — serve só p/ consulta e comparação futura.
+Migração `0024` (`catalogos`+`catalogo_itens`, índice único global, cascade). Novos: `TipoDfdPicker`, `CatalogoItemDetalhe`,
+`CatalogoView`. Testes: parser (9 layouts reais) + schemas + migração.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField

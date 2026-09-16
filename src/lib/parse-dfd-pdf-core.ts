@@ -24,7 +24,7 @@ import {
  */
 
 export type PdfItem = { page: number; x: number; y: number; str: string };
-type PdfLine = { page: number; y: number; items: PdfItem[] };
+export type PdfLine = { page: number; y: number; items: PdfItem[] };
 
 const HDR: Record<string, keyof ColMap> = {
   ITEM: "item",
@@ -40,14 +40,14 @@ const HDR: Record<string, keyof ColMap> = {
 type ColMap = Partial<Record<keyof DfdItemParseado, number>>;
 
 /** Normaliza os trechos (colapsa espaços) e descarta os vazios. */
-function normalizar(bruto: PdfItem[]): PdfItem[] {
+export function normalizar(bruto: PdfItem[]): PdfItem[] {
   return bruto
     .map((i) => ({ ...i, str: String(i.str ?? "").replace(/\s+/g, " ").trim() }))
     .filter((i) => i.str);
 }
 
 /** Agrupa os trechos em linhas (mesma página + `y` dentro de 2pt), topo→base. */
-function agruparLinhas(items: PdfItem[]): PdfLine[] {
+export function agruparLinhas(items: PdfItem[]): PdfLine[] {
   const ord = [...items].sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
   const linhas: PdfLine[] = [];
   let cur: PdfLine | null = null;
@@ -75,7 +75,7 @@ export function linhasDeTexto(bruto: PdfItem[]): string[] {
  * (`ys`), via busca binária — O(log n). Empate = menor índice (maior `y`), igual
  * à varredura linear original. Destrava DFDs com milhares de itens (antes O(n²)).
  */
-function nearestByY(ys: number[], target: number): number {
+export function nearestByY(ys: number[], target: number): number {
   let lo = 0;
   let hi = ys.length;
   while (lo < hi) {

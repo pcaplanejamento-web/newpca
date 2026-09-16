@@ -44,6 +44,8 @@ import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
+import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
+import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
@@ -76,6 +78,12 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
       <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">{children}</div>
     </section>
   );
+}
+
+/** Demo do seletor de tipos de DFD (conjunto, controlado). */
+function TipoDfdPickerDemo() {
+  const [tipos, setTipos] = useState<string[]>(["DFD-R"]);
+  return <TipoDfdPicker value={tipos} onChange={setTipos} />;
 }
 
 /** Demo do seletor de PCA (controlado) — pré-selecionado pela detecção "PCA 2026". */
@@ -954,6 +962,30 @@ export function Catalogo() {
               valorUnitario: 8000,
               valorTotal: 160000,
             }}
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="TipoDfdPicker (conjunto de tipos de DFD — usado no catálogo: envio, massa e item)">
+        <div className="max-w-md">
+          <TipoDfdPickerDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="CatalogoItemDetalhe (painel lateral do item do catálogo — tipos editáveis)">
+        <div className="max-w-md">
+          <CatalogoItemDetalhe
+            item={{
+              id: 1,
+              catalogoId: 1,
+              codigo: "5241948381",
+              codigoRaw: "5241948381",
+              descricao: "Hospedagem em apartamento individual, com ar condicionado, frigobar, TV, café da manhã.",
+              unidade: "UNIDADE",
+              sequencial: 1,
+              tipos: ["DFD-R", "DFD-E"],
+            }}
+            podeEditar
           />
         </div>
       </Secao>

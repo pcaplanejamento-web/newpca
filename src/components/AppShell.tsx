@@ -13,6 +13,7 @@ import {
   IconBox,
   IconBuilding,
   IconLandmark,
+  IconLayers,
   IconCheck,
   IconChevronDown,
   IconClipboard,
@@ -57,6 +58,7 @@ const SECOES: NavSecao[] = [
       { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile, aba: "protocolos" },
       { href: "/painel/dfds", label: "DFD", Icon: IconClipboard, aba: "dfd" },
       { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
+      { href: "/painel/catalogo", label: "Catálogo", Icon: IconLayers, aba: "catalogo" },
     ],
   },
   {

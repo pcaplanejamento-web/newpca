@@ -420,6 +420,50 @@ export const pcaDfds = sqliteTable(
   (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] })],
 );
 
+/**
+ * Catálogo de produtos — base de REFERÊNCIA para padronização de itens. Um catálogo
+ * é importado de um PDF e traz itens com CÓDIGO (único GLOBAL), DESCRIÇÃO e UNIDADE
+ * de medida. É ISOLADO (não referencia PCA/DFD/itens): serve só para consulta e para
+ * a comparação futura contra os itens dos DFDs. `tipos_padrao` = tipos de DFD default
+ * aplicados no envio; cada item guarda os seus em `tipos` (JSON de DFD-S/R/O/E).
+ */
+export const catalogos = sqliteTable("catalogos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  tiposPadrao: text("tipos_padrao").notNull().default("[]"), // JSON string[] de tipos de DFD
+  totalItens: integer("total_itens").notNull().default(0),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * Item de um catálogo. `codigo` é normalizado (só dígitos) e ÚNICO GLOBAL (índice
+ * único) — o mesmo produto tem um código canônico. `codigo_raw` guarda a forma
+ * original do PDF (ex.: "524.175.984"). Excluir o catálogo apaga os itens (cascade).
+ */
+export const catalogoItens = sqliteTable(
+  "catalogo_itens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    catalogoId: integer("catalogo_id")
+      .notNull()
+      .references(() => catalogos.id, { onDelete: "cascade" }),
+    codigo: text("codigo").notNull(), // normalizado só-dígitos (único global)
+    codigoRaw: text("codigo_raw"), // forma original do PDF (exibição)
+    descricao: text("descricao").notNull(),
+    unidade: text("unidade"), // unidade de medida (UNIDADE/CAIXA/KG/PAR/PACOTE...)
+    sequencial: integer("sequencial"), // "Item/Nº Seq" do arquivo (exibição)
+    tipos: text("tipos").notNull().default("[]"), // JSON string[] de tipos de DFD do item
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("catalogo_itens_catalogo_idx").on(t.catalogoId),
+    uniqueIndex("catalogo_itens_codigo_uq").on(t.codigo),
+  ],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -449,3 +493,7 @@ export type NovoDfdItem = typeof dfdItens.$inferInsert;
 export type Pca = typeof pcas.$inferSelect;
 export type NovoPca = typeof pcas.$inferInsert;
 export type PcaDfd = typeof pcaDfds.$inferSelect;
+export type Catalogo = typeof catalogos.$inferSelect;
+export type NovoCatalogo = typeof catalogos.$inferInsert;
+export type CatalogoItem = typeof catalogoItens.$inferSelect;
+export type NovoCatalogoItem = typeof catalogoItens.$inferInsert;

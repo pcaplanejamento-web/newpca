@@ -176,6 +176,29 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(org?.assinatura_unica, 0, "assinatura_unica deveria começar 0 (por unidade)");
   });
 
+  it("0024 cria catalogo/catalogo_itens (código único global + cascade)", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["catalogos", "catalogo_itens"]) {
+      assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
+    }
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    assert.ok(idx.includes("catalogo_itens_codigo_uq"), "índice único de código ausente");
+    // A aba 'catalogo' foi concedida a quem já tinha 'dfd'.
+    const perm = db.prepare("SELECT abas FROM permissoes WHERE id = 1").get() as { abas: string };
+    assert.ok(String(perm.abas).includes("catalogo"), `abas sem catalogo: ${perm.abas}`);
+    // Com FK ligada: unicidade GLOBAL do código + cascade ao excluir o catálogo.
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO catalogos (id, nome) VALUES (901, 'Cat A'), (902, 'Cat B')");
+    db.exec("INSERT INTO catalogo_itens (catalogo_id, codigo, descricao) VALUES (901, '5241924358', 'AGUA MINERAL')");
+    assert.throws(
+      () => db.exec("INSERT INTO catalogo_itens (catalogo_id, codigo, descricao) VALUES (902, '5241924358', 'AGUA 2')"),
+      "o mesmo código em outro catálogo deveria violar a unicidade global",
+    );
+    db.exec("DELETE FROM catalogos WHERE id = 901");
+    const restantes = db.prepare("SELECT COUNT(*) AS n FROM catalogo_itens WHERE catalogo_id = 901").get() as { n: number };
+    assert.equal(restantes.n, 0, "excluir o catálogo deveria apagar os itens (cascade)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

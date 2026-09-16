@@ -382,6 +382,42 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **relatório** (despacho): o `RelatorioErros` ganhou um `toggle` opcional (Checkbox) e o botão "Relatório" aparece
     também quando só há atenção (`FALTA_REFERENCIA_RENOVACAO` é a linha do despacho).
 
+## Catálogo de produtos (referência p/ padronização) — migração `0024`
+- **O que é:** base de REFERÊNCIA **isolada** (não toca PCA/DFD/itens) para, no futuro, comparar os itens dos DFDs contra
+  um catálogo e **padronizar**. Agora entrega: subir catálogos de PDF, consultar/excluir/atualizar e marcar cada item com
+  os **tipos de DFD** a que se aplica. Aba de módulo **`catalogo`** (`/painel/catalogo` = `CatalogoView`); **admin vê tudo**,
+  **editores** (admin/gestor) sobem/editam/excluem, demais com a aba **só consultam**. A migração `0024` concede a aba a
+  quem já tem `dfd`.
+- **Modelo (`catalogos` + `catalogo_itens`, sem FK p/ PCA/DFD):** `catalogos` (nome, `tipos_padrao` JSON, `total_itens`);
+  `catalogo_itens` (`codigo` normalizado só-dígitos + **índice ÚNICO GLOBAL**, `codigo_raw` p/ exibição, `descricao`,
+  `unidade`, `sequencial`, `tipos` JSON de DFD-S/R/O/E). Excluir o catálogo apaga os itens (cascade + delete explícito).
+  Acesso em `src/lib/catalogo.ts` (`listarCatalogos`/`getCatalogoItens`/`criarCatalogo`/`atualizarCatalogo`/
+  `upsertCatalogoItens`/`excluirCatalogo`/`codigosEmConflito`/`definirTiposItens`); schemas Zod em `catalogo-validation.ts`
+  (puro/testável).
+- **Parser DEDICADO (`parse-catalogo-pdf(-core).ts`):** os catálogos variam MUITO (3–7 colunas, ordem diferente, Und
+  antes/depois/2x da descrição, com/sem Nº de item, colunas Qtd/Valor vazias, título/logo acima da tabela) — por isso a
+  detecção de colunas é **pelo CABEÇALHO, ordenada por posição** (data-driven), ao contrário do parser de DFD (colunas
+  fixas). Reaproveita a camada pdf.js (`abrirPdf`/`extractPdfItems`/`PdfItem`) e `agruparLinhas`/`nearestByY`/`normalizar`
+  (agora **exportados** de `parse-dfd-pdf-core`). Cada LINHA é ancorada no **CÓDIGO** (todo item tem um; nem todo tem Nº);
+  descrição/unidade/Nº casam por `y` mais próximo, com **continuação entre páginas**; pula continuação de cabeçalho (ex.:
+  "DE MEDIDA"), junta unidade quebrada em 2 linhas, extrai o **título** ("CATÁLOGO"/"CATÁLAGO") como nome e aponta
+  **duplicados no arquivo**. Testado com fixtures dos 9 layouts reais (`tests/parse-catalogo-pdf.test.ts`).
+- **Import em LOTES (`importar-catalogo.ts` → `POST /api/catalogo`):** discriminada `start-catalogo`|`append-catalogo-itens`
+  (espelha `importar-dfd`: retry de transitório, all-or-nothing; só apaga o catálogo no rollback quando foi CRIADO agora).
+  **Código é ÚNICO GLOBAL:** todo lote confere `codigosEmConflito` — um código já presente em OUTRO catálogo → 422 (sem
+  isso o upsert por código sobrescreveria, em silêncio, item de outro catálogo). O preview pré-checa em
+  `POST /api/catalogo/verificar` e **bloqueia** "Importar" enquanto houver conflito; mostra também duplicados do arquivo.
+- **Atualizar (re-subir) = MESCLAR preservando (`upsertCatalogoItens`, `INSERT … ON CONFLICT(codigo) DO UPDATE`):** item
+  novo entra com o `tipos_padrao`; item que já existe tem só descrição/unidade/sequencial atualizados — os **`tipos`
+  configurados são PRESERVADOS**; ausentes NÃO são apagados. Recalcula `total_itens`.
+- **Tipos de DFD por item (`TIPOS_DFD` de `avaliacao-core`):** definíveis no **envio** (padrão do catálogo), em **massa**
+  (seleção na tabela → barra no rodapé) e por **item** (`Modal.lateral` = `CatalogoItemDetalhe`, mestre-detalhe com
+  `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos}`. Seletor **`TipoDfdPicker`** (chips de alternância).
+- **UI (`CatalogoView`):** lista de catálogos (cards) + botão "Importar" (`Dropzone`); abrir um catálogo → `Modal` (full)
+  com a tabela de itens (`DataTable`: busca + filtro por tipo + resumo) + seleção/edição em massa + detalhe no lateral.
+  Rotas: `POST /api/catalogo` (+ `/verificar`), `PATCH`/`DELETE /api/catalogo/[id]`, `PATCH /api/catalogo/itens` — todas
+  `exigirEditor`.
+
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`
@@ -424,7 +460,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
   clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
-  linha; mesmo lugar do painel de mensagens). Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
+  linha; mesmo lugar do painel de mensagens), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
+  catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis).
+  Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
