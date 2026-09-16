@@ -26,6 +26,7 @@ import {
 } from "./icons";
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
+import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -388,6 +389,11 @@ export function ConfiguracoesAdmin({
             { key: "identidade", label: "Identidade", content: abaIdentidade },
             { key: "pcas", label: "PCAs", content: abaPcas },
             { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },
+            {
+              key: "referencia",
+              label: "Referência",
+              content: <ReferenciaSistema regras={regras} pcas={pcas} identidade={identidade} />,
+            },
             { key: "mais", label: "Mais", content: abaMais },
           ]}
         />

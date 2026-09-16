@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  CATEGORIAS_PADRAO,
+  aplicarSinonimos,
   classificarAssunto,
+  editavelDe,
   nivelDe,
   type RegrasAvaliacao,
   regrasPadrao,
+  sinonimosDe,
 } from "../src/lib/avaliacao-core.ts";
-import { avaliarDfd } from "../src/lib/dfd-tratamento.ts";
+import { avaliarDfd, normalizarSecoesDfd } from "../src/lib/dfd-tratamento.ts";
 import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 
 // Monta uma conferência de DFD completa (nada falta); os testes removem 1 coisa.
@@ -27,19 +29,46 @@ function dfdCompleto() {
   };
 }
 
-describe("classificarAssunto", () => {
-  it("casa INCLUSÃO / EXCLUSÃO / ALTERAÇÃO NÃO ONEROSA (texto livre da capa)", () => {
-    assert.equal(classificarAssunto("INCLUSÃO - PCA", CATEGORIAS_PADRAO), "inclusao");
-    assert.equal(classificarAssunto("Exclusão de itens", CATEGORIAS_PADRAO), "exclusao");
-    assert.equal(
-      classificarAssunto("ALTERAÇÃO NÃO ONEROSA DO PCA", CATEGORIAS_PADRAO),
-      "alteracao-nao-onerosa",
-    );
+describe("classificarAssunto (categorias FIXAS)", () => {
+  it("casa INCLUSÃO / EXCLUSÃO / ALTERAÇÃO NÃO ONEROSA (palavra da capa)", () => {
+    assert.equal(classificarAssunto("INCLUSÃO - PCA"), "inclusao");
+    assert.equal(classificarAssunto("EXCLUSÃO de itens"), "exclusao");
+    assert.equal(classificarAssunto("ALTERAÇÃO NÃO ONEROSA DO PCA"), "alteracao-nao-onerosa");
   });
   it("devolve null quando nada casa ou está vazio", () => {
-    assert.equal(classificarAssunto("Assunto qualquer", CATEGORIAS_PADRAO), null);
-    assert.equal(classificarAssunto("", CATEGORIAS_PADRAO), null);
-    assert.equal(classificarAssunto(null, CATEGORIAS_PADRAO), null);
+    assert.equal(classificarAssunto("Assunto qualquer"), null);
+    assert.equal(classificarAssunto(""), null);
+    assert.equal(classificarAssunto(null), null);
+  });
+});
+
+describe("editável e ajuste automático por palavras-chave", () => {
+  it("editavelDe: padrão editável; false trava; campo sem suporte segue editável", () => {
+    assert.equal(editavelDe(regrasPadrao(), "dfd.previsao"), true);
+    assert.equal(editavelDe({ ...regrasPadrao(), editaveis: { "dfd.previsao": false } }, "dfd.previsao"), false);
+    assert.equal(editavelDe({ ...regrasPadrao(), editaveis: {} }, "dfd.anoPca"), true); // sem suportaEdicao
+  });
+  it("aplicarSinonimos: casa termo (acentos/caixa ignorados) → valor canônico", () => {
+    const regras = [{ termos: ["urgente", "imediato"], valor: "ALTA" }];
+    assert.equal(aplicarSinonimos("PRIORIDADE URGENTE", regras), "ALTA");
+    assert.equal(aplicarSinonimos("nada aqui", regras), null);
+    assert.equal(sinonimosDe(regrasPadrao(), "dfd.prioridade").length, 0);
+  });
+  it("normalizarSecoesDfd aplica sinônimos do ADM quando o ponto é automático", () => {
+    const dfd = {
+      numero: "1",
+      secoes: [{ numero: 6, titulo: "PRIORIDADE DA COMPRA", texto: "compra urgentíssima" }],
+      itens: [],
+    } as unknown as Parameters<typeof normalizarSecoesDfd>[0];
+    const regras: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      pontos: { "dfd.prioridade": "automatico" },
+      sinonimos: { "dfd.prioridade": [{ termos: ["URGENT"], valor: "ALTA" }] },
+    };
+    const { dfd: out, auto } = normalizarSecoesDfd(dfd, regras);
+    const sec = out.secoes.find((s) => s.numero === 6);
+    assert.equal(sec?.texto, "ALTA");
+    assert.ok(auto.includes("prioridade"));
   });
 });
 

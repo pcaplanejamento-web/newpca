@@ -1,8 +1,10 @@
 import {
+  aplicarSinonimos,
   type ChaveAvaliacao,
   nivelDe,
   type RegrasAvaliacao,
   regrasPadrao,
+  sinonimosDe,
 } from "./avaliacao-core.ts";
 import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
 import {
@@ -21,10 +23,10 @@ import {
 
 export type CampoTratavel = "prioridade" | "previsao" | "fundamentacao";
 
-export const TRATAVEIS: { campo: CampoTratavel; kw: string; titulo: string; numero: number }[] = [
-  { campo: "prioridade", kw: "PRIORIDADE", titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", numero: 6 },
-  { campo: "previsao", kw: "PREVISAO DE ENTREGA", titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", numero: 5 },
-  { campo: "fundamentacao", kw: "FUNDAMENTACAO LEGAL", titulo: "FUNDAMENTAÇÃO LEGAL", numero: 7 },
+export const TRATAVEIS: { campo: CampoTratavel; chave: ChaveAvaliacao; kw: string; titulo: string; numero: number }[] = [
+  { campo: "prioridade", chave: "dfd.prioridade", kw: "PRIORIDADE", titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", numero: 6 },
+  { campo: "previsao", chave: "dfd.previsao", kw: "PREVISAO DE ENTREGA", titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", numero: 5 },
+  { campo: "fundamentacao", chave: "dfd.fundamentacao", kw: "FUNDAMENTACAO LEGAL", titulo: "FUNDAMENTAÇÃO LEGAL", numero: 7 },
 ];
 
 export function acharSecao(secoes: DfdSecao[], kw: string): number {
@@ -52,24 +54,46 @@ export function setTextoSecao(
 }
 
 /**
- * Aplica a normalização AUTOMÁTICA das seções tratáveis (PRIORIDADE/PREVISÃO) —
- * grava o texto canônico e devolve quais campos foram auto-corrigidos. Rodar ao
- * parsear (conferência), para o usuário ver o valor padronizado e poder ajustar.
+ * Aplica a normalização AUTOMÁTICA das seções tratáveis — grava o texto canônico e
+ * devolve quais campos foram auto-corrigidos. Duas fontes, nesta ordem:
+ * 1) as PALAVRAS-CHAVE do ADM (`sinonimos`), quando o ponto está em nível "automático"
+ *    (troca o texto TODO da seção quando um termo casa);
+ * 2) a normalização embutida de PRIORIDADE/PREVISÃO (comportamento histórico).
+ * Com `regras` no padrão do catálogo, só a (2) roda — igual a hoje.
  */
-export function normalizarSecoesDfd(dfd: DfdParseado): { dfd: DfdParseado; auto: CampoTratavel[] } {
+export function normalizarSecoesDfd(
+  dfd: DfdParseado,
+  regras: RegrasAvaliacao = regrasPadrao(),
+): { dfd: DfdParseado; auto: CampoTratavel[] } {
   let secoes = dfd.secoes;
   const auto: CampoTratavel[] = [];
-  const [pCfg, vCfg] = TRATAVEIS;
+  const ctxTipo = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
 
-  const p = normPrioridade(textoSecao(secoes, pCfg.kw));
-  if (p.valor && p.auto) {
-    secoes = setTextoSecao(secoes, pCfg, p.valor);
-    auto.push("prioridade");
-  }
-  const v = normPrevisao(textoSecao(secoes, vCfg.kw));
-  if (v.valor && v.auto) {
-    secoes = setTextoSecao(secoes, vCfg, v.valor);
-    auto.push("previsao");
+  for (const cfg of TRATAVEIS) {
+    const raw = textoSecao(secoes, cfg.kw);
+    // (1) Palavras-chave do ADM (só quando o ponto está em "automático" — respeita a exceção por tipo).
+    if (nivelDe(regras, cfg.chave, ctxTipo) === "automatico") {
+      const custom = aplicarSinonimos(raw, sinonimosDe(regras, cfg.chave));
+      if (custom) {
+        secoes = setTextoSecao(secoes, cfg, custom);
+        auto.push(cfg.campo);
+        continue;
+      }
+    }
+    // (2) Normalização embutida (histórica) — só PRIORIDADE e PREVISÃO.
+    if (cfg.campo === "prioridade") {
+      const p = normPrioridade(raw);
+      if (p.valor && p.auto) {
+        secoes = setTextoSecao(secoes, cfg, p.valor);
+        auto.push("prioridade");
+      }
+    } else if (cfg.campo === "previsao") {
+      const v = normPrevisao(raw);
+      if (v.valor && v.auto) {
+        secoes = setTextoSecao(secoes, cfg, v.valor);
+        auto.push("previsao");
+      }
+    }
   }
   return { dfd: secoes === dfd.secoes ? dfd : { ...dfd, secoes }, auto };
 }

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   // Regra CONFIGURÁVEL (por categoria do assunto): se `protocolo.anoPca` for
   // fundamental, não protocola sem o PCA definido (o ano é herdado pelos DFDs).
   const regras = await getRegrasAvaliacao();
-  const categoria = classificarAssunto(protocolo.assunto, regras.categorias);
+  const categoria = classificarAssunto(protocolo.assunto);
   if (protocolo.anoPca == null && nivelDe(regras, "protocolo.anoPca", { categoria }) === "fundamental")
     return erro("Defina o PCA do protocolo antes de protocolar.", 422);
 

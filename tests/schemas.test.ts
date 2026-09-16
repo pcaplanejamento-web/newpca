@@ -214,15 +214,23 @@ describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
   it("recusa tipo de DFD desconhecido nas exceções", () => {
     assert.equal(avaliacaoSchema.safeParse({ exDfd: { "DFD-X": { "dfd.previsao": "ignorar" } } }).success, false);
   });
-  it("valida categorias (key kebab, label, termos)", () => {
+  it("editaveis só aceita pontos editáveis; booleano", () => {
+    assert.equal(avaliacaoSchema.safeParse({ editaveis: { "dfd.previsao": false } }).success, true);
+    assert.equal(avaliacaoSchema.safeParse({ editaveis: { "dfd.anoPca": false } }).success, false); // não editável
+  });
+  it("sinonimos só em pontos com ajuste automático; termos + valor", () => {
     assert.equal(
-      avaliacaoSchema.safeParse({ categorias: [{ key: "inclusao", label: "INCLUSÃO", termos: ["INCLUS"], ordem: 1 }] }).success,
+      avaliacaoSchema.safeParse({ sinonimos: { "dfd.prioridade": [{ termos: ["URGENTE"], valor: "ALTA" }] } }).success,
       true,
     );
     assert.equal(
-      avaliacaoSchema.safeParse({ categorias: [{ key: "A B", label: "x", termos: [], ordem: 1 }] }).success,
+      avaliacaoSchema.safeParse({ sinonimos: { "dfd.reparticao": [{ termos: ["x"], valor: "y" }] } }).success,
       false,
-    );
+    ); // sem suporte a automático
+    assert.equal(
+      avaliacaoSchema.safeParse({ sinonimos: { "dfd.prioridade": [{ termos: ["x"], valor: "" }] } }).success,
+      false,
+    ); // valor vazio
   });
 });
 

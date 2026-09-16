@@ -327,7 +327,7 @@ export function DfdsView({
   // da capa. Interessado saiu (redundante com Repartição).
   // Estado do protocolo respeitando o nível de `protocolo.valorCapa` por categoria (assunto).
   const estProto = (r: ProtocoloResumo) =>
-    estadoProtocolo(r, regras, { categoria: classificarAssunto(r.assunto, regras.categorias) });
+    estadoProtocolo(r, regras, { categoria: classificarAssunto(r.assunto) });
   const colsProto: Column<ProtocoloResumo>[] = [
     {
       key: "estado",

@@ -84,7 +84,7 @@ export function DfdUploadForm({
     setStatus("parsing");
     try {
       const parsed = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
-      const { dfd: d, auto } = normalizarSecoesDfd(parsed); // padroniza PRIORIDADE/PREVISÃO
+      const { dfd: d, auto } = normalizarSecoesDfd(parsed, regras); // padroniza (níveis/palavras-chave do ADM)
       const matched = casarReparticao(d, reparticoes);
       setPreview(d);
       setAutoCampos(auto);

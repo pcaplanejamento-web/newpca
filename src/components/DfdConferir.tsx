@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { editavelDe, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
   type CampoTratavel,
   faltasCirurgicasDfd,
@@ -163,6 +163,13 @@ export function DfdConferir({
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
     onSecoesChange(setTextoSecao(dfd.secoes, cfg, texto));
 
+  // Edição por campo (ADM): trava um campo mesmo fora do modo só-leitura global.
+  const roRep = readOnly || !editavelDe(regras, "dfd.reparticao");
+  const roPrio = readOnly || !editavelDe(regras, "dfd.prioridade");
+  const roPrev = readOnly || !editavelDe(regras, "dfd.previsao");
+  const roFund = readOnly || !editavelDe(regras, "dfd.fundamentacao");
+  const roRefs = readOnly || !editavelDe(regras, "dfd.referenciaRenovacao");
+
   // Valores atuais das seções tratáveis.
   const [pCfg, vCfg, fCfg] = TRATAVEIS;
   const prio = normPrioridade(textoSecao(dfd.secoes, pCfg.kw)).valor;
@@ -199,7 +206,7 @@ export function DfdConferir({
           id="dfd-rep"
           className={inputCls}
           value={repId ?? ""}
-          disabled={readOnly}
+          disabled={roRep}
           onChange={(e) => onRepChange(e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">— Selecione a repartição —</option>
@@ -227,7 +234,7 @@ export function DfdConferir({
             </span>
             <Segmented<Prioridade | "">
               value={prio ?? ""}
-              disabled={readOnly}
+              disabled={roPrio}
               options={[
                 { value: "ALTA", label: "Alta" },
                 { value: "MÉDIA", label: "Média" },
@@ -247,7 +254,7 @@ export function DfdConferir({
                 className={inputCls}
                 style={{ width: "auto", flex: "1 1 120px" }}
                 value={mesSel}
-                disabled={anual || readOnly}
+                disabled={anual || roPrev}
                 onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, false))}
               >
                 <option value="">— Mês —</option>
@@ -264,7 +271,7 @@ export function DfdConferir({
                 placeholder="Ano"
                 maxLength={4}
                 value={anoSel}
-                disabled={readOnly}
+                disabled={roPrev}
                 onChange={(e) => {
                   const ano = e.target.value.replace(/\D/g, "").slice(0, 4);
                   setSecao(vCfg, buildPrevisao(mesSel, ano, anual));
@@ -273,7 +280,7 @@ export function DfdConferir({
               <Checkbox
                 label="Anual"
                 checked={anual}
-                disabled={readOnly}
+                disabled={roPrev}
                 onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.checked))}
               />
             </div>
@@ -289,12 +296,12 @@ export function DfdConferir({
                 <TextField
                   aria-label="Fundamentação legal"
                   value={fund}
-                  disabled={readOnly}
+                  disabled={roFund}
                   onChange={(e) => setSecao(fCfg, e.target.value)}
                   placeholder="Ex.: Lei 14.133/2021"
                 />
               </div>
-              {!readOnly && !fund.trim() && (
+              {!roFund && !fund.trim() && (
                 <button
                   type="button"
                   className="rounded-control border border-border-2 px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-soft"
@@ -331,21 +338,21 @@ export function DfdConferir({
             <TextField
               label="Nº do contrato"
               value={dfd.numeroContrato ?? ""}
-              disabled={readOnly}
+              disabled={roRefs}
               onChange={(e) => setRef("numeroContrato", e.target.value)}
               placeholder="Ex.: 860/2025"
             />
             <TextField
               label="Nº da ata (registro de preços)"
               value={dfd.numeroAta ?? ""}
-              disabled={readOnly}
+              disabled={roRefs}
               onChange={(e) => setRef("numeroAta", e.target.value)}
               placeholder="Ex.: 045/2025"
             />
             <TextField
               label="Nº da licitação"
               value={dfd.numeroLicitacao ?? ""}
-              disabled={readOnly}
+              disabled={roRefs}
               onChange={(e) => setRef("numeroLicitacao", e.target.value)}
               placeholder="Ex.: 123/2025"
             />

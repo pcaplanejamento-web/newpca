@@ -240,7 +240,7 @@ export function ProtocoloUploadForm({
     for (let i = 0; i < total; i++) {
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
-        const { dfd, auto } = normalizarSecoesDfd(raw);
+        const { dfd, auto } = normalizarSecoesDfd(raw, regras);
         setParsed((m) => new Map(m).set(i, dfd));
         if (auto.length) setAutoMap((m) => new Map(m).set(i, auto));
       } catch (e) {
@@ -269,7 +269,7 @@ export function ProtocoloUploadForm({
   };
 
   // Categoria do protocolo (classifica o assunto livre) → aplica as exceções por categoria.
-  const categoria = classificarAssunto(assunto, regras.categorias);
+  const categoria = classificarAssunto(assunto);
 
   /** Confere a assinatura do DFD contra o responsável da repartição escolhida. */
   const confereAssinatura = (idx: number, d: DfdParseado) =>
@@ -412,7 +412,7 @@ export function ProtocoloUploadForm({
         if (!full) {
           if (!doc) break;
           try {
-            full = normalizarSecoesDfd(await parseDfdDoProtocolo(doc, di, nomeArq)).dfd;
+            full = normalizarSecoesDfd(await parseDfdDoProtocolo(doc, di, nomeArq), regras).dfd;
           } catch (e) {
             bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
             continue;

@@ -731,6 +731,30 @@ export function Catalogo() {
         </p>
       </Secao>
 
+      <Secao titulo="Referência do sistema (aba read-only)">
+        <p className="mb-3 text-sm text-muted">
+          A aba <code>/painel/configuracoes</code> → &quot;Referência&quot; lista TODAS as lógicas do sistema
+          (somente leitura): busca (SearchField) + filtro por domínio (FilterChip) + cards de regra com a
+          origem e um &quot;valor vigente&quot; (Badge) quando derivado do código.
+        </p>
+        <SearchField value="" onChange={() => {}} placeholder="Buscar uma regra ou comportamento…" aria-label="demo" />
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <FilterChip label="Todos" active />
+          <FilterChip label="Avaliação" />
+          <FilterChip label="Assinatura" />
+          <FilterChip label="Técnico" />
+        </div>
+        <div className="mt-3 max-w-md rounded-card border border-border bg-surface p-4 shadow-ring">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-text">Não protocola com DFD defeituoso</span>
+          </div>
+          <p className="mt-1 text-[13px] text-text-2">
+            O botão &quot;Protocolar&quot; fica desabilitado enquanto algum DFD estiver com erro.
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-faint">ProtocoloUploadForm</p>
+        </div>
+      </Secao>
+
       <Secao titulo="Link externo (LinkExterno)">
         <p className="mb-3 text-sm text-muted">
           Âncora externa (abre em nova aba, <code>rel=&quot;noopener noreferrer&quot;</code>) — único link externo do app.

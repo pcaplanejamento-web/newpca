@@ -170,17 +170,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Protocolo/DFD/Item** tem um **nível** — `fundamental` (bloqueia), `intermediario` (só avisa/ATENÇÃO âmbar),
   `automatico` (corrige sozinho onde há corretor), `ignorar`. O **catálogo** `CATALOGO_AVALIACAO` (fonte única: UI +
   defaults + validação) traz `niveisPermitidos`/`nivelPadrao` (os defaults reproduzem o comportamento atual — config
-  vazia ⇒ igual a hoje). `nivelDe(regras, chave, ctx)` resolve com **exceções por tipo de DFD** (`DFD-S/R/O/E`) e por
-  **categoria de Protocolo**; como o `assunto` da capa é texto livre, `classificarAssunto` casa por **palavras-chave**
-  (categorias editáveis). Armazenado na linha `configuracoes` id=1 (chave `avaliacao`, **sem migração**), lido por
-  `getRegrasAvaliacao()` (cache 60s, fail-safe) e gravado em `/api/admin/avaliacao` (`exigirAdmin`, preserva as chaves
-  irmãs da aparência). UI = aba **"Avaliação"** de `/painel/configuracoes` (`AvaliacaoAdmin`: sub-abas Protocolo/DFD/
-  Item + Categorias, com seletor de contexto p/ as exceções). As `regras` são threadadas server→cliente igual a
-  `pcas` (`painel/dfds/page.tsx` → `DfdsView` → `DfdUploadForm`/`ProtocoloUploadForm`/`DfdConferir`/`ProtocoloView`/
-  `DfdView`); o servidor reconfere em `/api/dfd`, `/api/protocolo`, `/api/dfd/[id]` (global + por-tipo; a categoria é
-  aplicada no cliente e no `POST /api/protocolo`). **Não configurável** (estrutural/técnico, permanece travado):
-  integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição, capa imutável. **Gates só-cliente**
-  (como hoje): conciliação do valor da capa e "sem DFD com erro".
+  vazia ⇒ igual a hoje) + as flags `suportaEdicao`/`suportaAuto`. `nivelDe(regras, chave, ctx)` resolve com **exceções
+  por tipo de DFD** (`DFD-S/R/O/E`, **fixos**) e por **categoria de Protocolo** (`INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO
+  ONEROSA`, **fixas** em `CATEGORIAS`; `classificarAssunto(assunto)` casa a palavra da capa). Além do nível, o ADM
+  controla, **por campo**: **`editaveis`** (`editavelDe` — se o usuário pode editar o campo na análise; travado ⇒
+  `disabled` no `DfdConferir`) e **`sinonimos`** (`aplicarSinonimos` — palavras-chave que, no nível `automatico`,
+  trocam o texto TODO da seção pelo valor canônico, dentro de `normalizarSecoesDfd`). Armazenado na linha
+  `configuracoes` id=1 (chave `avaliacao`, **sem migração**), lido por `getRegrasAvaliacao()` (cache 60s, fail-safe) e
+  gravado em `/api/admin/avaliacao` (`exigirAdmin`, preserva as chaves irmãs da aparência). UI = aba **"Avaliação"** de
+  `/painel/configuracoes` (`AvaliacaoAdmin`: sub-abas Protocolo/DFD/Item, seletor de contexto p/ as exceções de nível,
+  Checkbox de editável e editor de palavras-chave; `<select>` usa `selectCls`). As `regras` são threadadas
+  server→cliente igual a `pcas` (`painel/dfds/page.tsx` → `DfdsView` → `DfdUploadForm`/`ProtocoloUploadForm`/
+  `DfdConferir`/`ProtocoloView`/`DfdView`); o servidor reconfere em `/api/dfd`, `/api/protocolo`, `/api/dfd/[id]`
+  (global + por-tipo; a categoria é aplicada no cliente e no `POST /api/protocolo`). **Não configurável**
+  (estrutural/técnico, permanece travado): integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição,
+  capa imutável. **Gates só-cliente** (como hoje): conciliação do valor da capa e "sem DFD com erro".
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
   `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`

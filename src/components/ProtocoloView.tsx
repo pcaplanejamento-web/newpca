@@ -165,7 +165,7 @@ export function ProtocoloView({
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
       : "Sem repartição";
-  const categoria = classificarAssunto(protocolo.assunto, regras.categorias);
+  const categoria = classificarAssunto(protocolo.assunto);
   // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
   // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
   // acontece uma única vez, na importação, antes de gravar). "ignorar" desliga a nota.
