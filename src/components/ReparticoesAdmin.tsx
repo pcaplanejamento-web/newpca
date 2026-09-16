@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
   hojeISO,
@@ -12,8 +13,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { inputCls, labelCls } from "./formStyles";
-import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { SkeletonLinhas } from "./Skeleton";
@@ -29,18 +29,20 @@ type Rep = {
   responsaveis: Responsaveis;
 };
 
-type OrgaoOpcao = { id: number; sigla: string; nome: string };
-
-export function ReparticoesAdmin() {
+/**
+ * CRUD das UNIDADES de UM órgão — a tela vive DENTRO de `/painel/orgaos/[id]`.
+ * O órgão vem do escopo (URL), então a unidade herda `orgaoId` sem um seletor: toda
+ * unidade já nasce dentro do seu órgão. Ordenação por botões ↑/↓ (persistida).
+ */
+export function ReparticoesAdmin({ orgaoId, orgaoNome }: { orgaoId: number; orgaoNome: string }) {
+  const router = useRouter();
   const [lista, setLista] = useState<Rep[] | null>(null);
-  const [orgaosLista, setOrgaosLista] = useState<OrgaoOpcao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<Rep | "novo" | null>(null);
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
   const [numeroInteressado, setNumeroInteressado] = useState("");
   const [setorRequisitante, setSetorRequisitante] = useState("");
-  const [orgaoId, setOrgaoId] = useState<number | null>(null);
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
@@ -49,20 +51,15 @@ export function ReparticoesAdmin() {
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      const [rRep, rOrg] = await Promise.all([
-        fetch("/api/admin/reparticoes"),
-        fetch("/api/admin/orgaos"),
-      ]);
-      const jRep = (await rRep.json()) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
-      const jOrg = (await rOrg.json()) as { ok?: boolean; orgaos?: OrgaoOpcao[] };
-      if (!rRep.ok || !jRep.ok) throw new Error(jRep.error ?? "Erro ao carregar.");
-      setLista(jRep.reparticoes ?? []);
-      setOrgaosLista(jOrg.orgaos ?? []);
+      const r = await fetch(`/api/admin/reparticoes?orgaoId=${orgaoId}`);
+      const j = (await r.json()) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
+      setLista(j.reparticoes ?? []);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
       setLista([]);
     }
-  }, []);
+  }, [orgaoId]);
 
   useEffect(() => {
     carregar();
@@ -80,7 +77,6 @@ export function ReparticoesAdmin() {
     setNome("");
     setNumeroInteressado("");
     setSetorRequisitante("");
-    setOrgaoId(orgaosLista[0]?.id ?? null);
     setResponsaveis(RESPONSAVEIS_VAZIO);
   }
   function abrirEdicao(r: Rep) {
@@ -89,16 +85,11 @@ export function ReparticoesAdmin() {
     setNome(r.nome);
     setNumeroInteressado(r.numeroInteressado ?? "");
     setSetorRequisitante(r.setorRequisitante ?? "");
-    setOrgaoId(r.orgaoId ?? null);
     setResponsaveis(r.responsaveis);
   }
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
-    if (orgaoId == null) {
-      setErro("Selecione o órgão da unidade.");
-      return;
-    }
     setSalvando(true);
     setErro(null);
     try {
@@ -111,7 +102,7 @@ export function ReparticoesAdmin() {
           nome,
           numeroInteressado: numeroInteressado.trim() || null,
           setorRequisitante: setorRequisitante.trim() || null,
-          orgaoId,
+          orgaoId, // a unidade pertence ao órgão desta tela
           responsaveis,
         }),
       });
@@ -172,23 +163,12 @@ export function ReparticoesAdmin() {
     );
   }
 
-  const orgaoNome = new Map(orgaosLista.map((o) => [o.id, o]));
   const posDe = new Map(lista.map((r, i) => [r.id, i]));
 
   const colunas: Column<Rep>[] = [
     { key: "pos", header: "#", filter: "none", minWidth: 40, render: (r) => <span className="tabular-nums text-faint">{(posDe.get(r.id) ?? 0) + 1}</span> },
     { key: "codigo", header: "Sigla", filter: "none", minWidth: 90, render: (r) => <Badge tone="violet">{r.codigo}</Badge> },
     { key: "nome", header: "Nome da unidade", filter: "none", minWidth: 220, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
-    {
-      key: "orgao",
-      header: "Órgão",
-      filter: "none",
-      minWidth: 150,
-      render: (r) => {
-        const o = r.orgaoId != null ? orgaoNome.get(r.orgaoId) : null;
-        return o ? <span className="text-text-2" title={o.nome}>{o.sigla}</span> : <span className="text-faint">—</span>;
-      },
-    },
     {
       key: "numeroInteressado",
       header: "Nº interessado",
@@ -205,7 +185,7 @@ export function ReparticoesAdmin() {
       key: "setorRequisitante",
       header: "Setor Requisitante",
       filter: "none",
-      minWidth: 160,
+      minWidth: 180,
       render: (r) =>
         r.setorRequisitante ? (
           <span className="line-clamp-1 text-[12px] text-text-2" title={r.setorRequisitante}>{r.setorRequisitante}</span>
@@ -257,8 +237,16 @@ export function ReparticoesAdmin() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Cadastre as unidades e suas siglas. Use ↑/↓ para ordenar (salvo automaticamente).</p>
+      <div>
+        <Button variant="ghost" onClick={() => router.push("/painel/orgaos")} icon={<IconChevronLeft className="h-4 w-4" />}>
+          Órgãos
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold text-text">{orgaoNome}</h1>
+          <p className="text-sm text-muted">Unidades deste órgão. Use ↑/↓ para ordenar (salvo automaticamente).</p>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
             Recarregar
@@ -270,35 +258,17 @@ export function ReparticoesAdmin() {
       </div>
 
       {erro && <Callout kind="danger">{erro}</Callout>}
-      {orgaosLista.length === 0 && (
-        <Callout kind="warn">Cadastre ao menos um órgão em “Órgãos” antes de criar unidades — toda unidade pertence a um órgão.</Callout>
+
+      {lista.length === 0 ? (
+        <Callout kind="info">Nenhuma unidade neste órgão ainda. Clique em “Nova unidade” para cadastrar.</Callout>
+      ) : (
+        <DataTable columns={colunas} rows={lista} getKey={(r) => r.id} minWidth={900} />
       )}
 
-      <DataTable columns={colunas} rows={lista} getKey={(r) => r.id} minWidth={1040} />
-
-      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Nova unidade" : "Editar unidade"}>
+      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? `Nova unidade · ${orgaoNome}` : "Editar unidade"}>
         <form onSubmit={salvar} className="space-y-4">
           <TextField label="Sigla (código)" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ex.: AMAE" required />
           <TextField label="Nome da unidade" value={nome} onChange={(e) => setNome(e.target.value)} required />
-          <div>
-            <label className={labelCls} htmlFor="unidade-orgao">
-              Órgão <span style={{ color: "var(--danger)" }}>*</span>
-            </label>
-            <select
-              id="unidade-orgao"
-              className={inputCls}
-              value={orgaoId ?? ""}
-              onChange={(e) => setOrgaoId(e.target.value ? Number(e.target.value) : null)}
-              required
-            >
-              <option value="">— Selecione o órgão —</option>
-              {orgaosLista.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.sigla} · {o.nome}
-                </option>
-              ))}
-            </select>
-          </div>
           <TextField
             label="Número do interessado (identifica a unidade pelo Interessado do protocolo)"
             value={numeroInteressado}

@@ -13,7 +13,6 @@ import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
-  IconBuilding,
   IconLandmark,
   IconCheck,
   IconImage,
@@ -350,15 +349,9 @@ export function ConfiguracoesAdmin({
       />
       <LinkCard
         href="/painel/orgaos"
-        titulo="Órgãos"
-        descricao="Órgãos e o padrão de identificação do DFD."
+        titulo="Órgãos e Unidades"
+        descricao="Órgãos e, dentro de cada um, suas unidades (interessado, setor, responsáveis)."
         icon={<IconLandmark className="h-5 w-5" />}
-      />
-      <LinkCard
-        href="/painel/reparticoes"
-        titulo="Unidades"
-        descricao="Unidades, órgão e responsáveis por DFDs."
-        icon={<IconBuilding className="h-5 w-5" />}
       />
       <LinkCard
         href="/painel/grupos"

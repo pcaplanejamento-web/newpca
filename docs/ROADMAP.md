@@ -263,6 +263,14 @@ Ordenação das listas admin trocou o **arrasto** (`ReorderTable` removido) por 
 `PATCH .../ordem`). **"Geral"** virou **virtual** (todas as unidades; escondida do CRUD, não editável, concedível por
 grupo). Testes de matchers/divergência + preservação do legado na cadeia de migrações. Sem quebrar nada.
 
+### Órgão › Unidade: navegação em drill-down (Órgãos → Unidades do órgão) — entregue
+✅ Reorganização da administração: **um** item de nav **"Órgãos e Unidades"** (`/painel/orgaos`). **Clicar num órgão**
+abre `/painel/orgaos/[id]` = as **Unidades daquele órgão** (`ReparticoesAdmin` escopado; herda `orgao_id` do escopo,
+sem seletor de órgão). A tela solta **`/painel/reparticoes` foi removida**; o `GET /api/admin/reparticoes?orgaoId=`
+filtra por órgão. `OrgaosAdmin` ganhou `onRowClick`; `ReparticoesAdmin` ganhou cabeçalho com nome do órgão + voltar.
+Referências atualizadas (`AppShell`, `ConfiguracoesAdmin`, `logicas.ts`). Sem código morto (coluna/select de órgão
+removidos por redundância), responsivo, componentes do DS. Lint/testes verdes.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField

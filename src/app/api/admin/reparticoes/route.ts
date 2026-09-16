@@ -1,4 +1,4 @@
-import { asc, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
@@ -11,9 +11,13 @@ export const dynamic = "force-dynamic";
 /** A "Geral" é VIRTUAL (representa todas as unidades) — não entra no CRUD de unidades. */
 const CODIGO_GERAL = "GERAL";
 
-export async function GET() {
+export async function GET(req: Request) {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
+  // Escopo opcional por órgão (?orgaoId=): a tela de unidades vive DENTRO de um órgão.
+  const orgaoIdParam = new URL(req.url).searchParams.get("orgaoId");
+  const orgaoId = orgaoIdParam && /^\d+$/.test(orgaoIdParam) ? Number(orgaoIdParam) : null;
+  const semGeral = ne(reparticoes.codigo, CODIGO_GERAL); // esconde a Geral virtual do cadastro
   const rows = await getDb()
     .select({
       id: reparticoes.id,
@@ -26,7 +30,7 @@ export async function GET() {
       responsavelDfd: reparticoes.responsavelDfd,
     })
     .from(reparticoes)
-    .where(ne(reparticoes.codigo, CODIGO_GERAL)) // esconde a Geral virtual do cadastro
+    .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // A coluna guarda JSON; expõe como lista de nomes `responsaveis`.
   const lista = rows.map(({ responsavelDfd, ...r }) => ({ ...r, responsaveis: parseResponsaveis(responsavelDfd) }));

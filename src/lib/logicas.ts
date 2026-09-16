@@ -85,7 +85,7 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Ao importar, o DFD é vinculado a uma repartição automaticamente pela sigla do Setor Requisitante (com fallback pelo nome da secretaria, para siglas divergentes). O usuário confirma ou corrige no banner.",
     fonte: "reparticao-match",
-    configuravelEm: { rotulo: "Repartições", href: "/painel/reparticoes" },
+    configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
   },
   {
     id: "imp-conferir",
@@ -243,7 +243,7 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Cada repartição tem N responsáveis padrões e N temporários. No período de um temporário, ele é o efetivo (os padrões ficam em cinza); fora do período, volta aos padrões — com estados Agendado/Vigente/Encerrado. Cada responsável tem nome, matrícula, função e uma nomeação (ato + número + link).",
     fonte: "ResponsaveisEditor / reparticao-responsaveis",
-    configuravelEm: { rotulo: "Repartições", href: "/painel/reparticoes" },
+    configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
   },
 
   // ---- PCA ----
@@ -299,7 +299,7 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "A repartição ativa do cabeçalho filtra protocolos e PCA. Em 'Geral' (sem repartição) mostra tudo. Toda ESCRITA de DFD/protocolo é escopada por repartição (403 fora do escopo), com anti-sequestro por número.",
     fonte: "getReparticaoContexto / getReparticaoFiltro",
-    configuravelEm: { rotulo: "Repartições", href: "/painel/reparticoes" },
+    configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
   },
 
   // ---- Identidade & Aparência ----

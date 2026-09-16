@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -19,6 +20,7 @@ type Orgao = {
 };
 
 export function OrgaosAdmin() {
+  const router = useRouter();
   const [lista, setLista] = useState<Orgao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<Orgao | "novo" | null>(null);
@@ -172,7 +174,7 @@ export function OrgaosAdmin() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Cadastre os órgãos. O “Órgão/Entidade” identifica de qual órgão é o DFD. Use ↑/↓ para ordenar.</p>
+        <p className="text-sm text-muted">Clique num órgão para gerenciar suas unidades. O “Órgão/Entidade” identifica de qual órgão é o DFD. Use ↑/↓ para ordenar.</p>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
             Recarregar
@@ -185,7 +187,7 @@ export function OrgaosAdmin() {
 
       {erro && <Callout kind="danger">{erro}</Callout>}
 
-      <DataTable columns={colunas} rows={lista} getKey={(o) => o.id} minWidth={820} />
+      <DataTable columns={colunas} rows={lista} getKey={(o) => o.id} minWidth={820} onRowClick={(o) => router.push(`/painel/orgaos/${o.id}`)} />
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo órgão" : "Editar órgão"}>
         <form onSubmit={salvar} className="space-y-4">
