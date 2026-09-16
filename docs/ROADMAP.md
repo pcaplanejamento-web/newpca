@@ -229,6 +229,16 @@ botão de relatório aparece também quando só há atenção). Mensagem de aten
 ### Avaliação configurável pelo ADM (Protocolo / DFD / Item) — entregue
 ✅ Nova aba **Avaliação** em `/painel/configuracoes` (`AvaliacaoAdmin`, admin) — **controle total** de importação de DFD, correção de itens e protocolação. Para **cada dado** de Protocolo/DFD/Item o ADM define: o **nível** (**fundamental** bloqueia · **intermediário** só avisa/ATENÇÃO âmbar · **automático** corrige sozinho · **ignorar**); se o campo é **editável pelo usuário na análise** (`editaveis`/`editavelDe` → trava o controle no `DfdConferir`); e as **palavras-chave do ajuste automático** (`sinonimos`/`aplicarSinonimos` → no nível automático, um termo troca o texto todo da seção, dentro de `normalizarSecoesDfd`). Com **exceções de nível por tipo de DFD** (DFD-S/R/O/E, **fixos**) e por **categoria de Protocolo** (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, **fixas** — `classificarAssunto`). Núcleo puro/testável `avaliacao-core.ts` (catálogo `CATALOGO_AVALIACAO` = fonte única de UI/defaults/validação), loader cacheado `avaliacao.ts`, schema `avaliacao-validation.ts`, rota `/api/admin/avaliacao` (linha `configuracoes` id=1, chave `avaliacao`, **sem migração**). Toda a validação existente passou a **respeitar as regras**, com **defaults idênticos ao comportamento atual** (invariante coberto por teste). Regras threadadas server→cliente e reconferidas no servidor. Só componentes do design-system (catalogado). Permanecem **travados** (estrutural): integridade de parse, tetos do Zod, acesso por repartição, capa imutável.
 
+### DFD: painel LATERAL de mensagens (erro/atenção/acerto) navegável — entregue
+✅ As mensagens de conferência **saíram do corpo** do banner do DFD para um **painel lateral** (`MensagensDfd`).
+`mensagensDfd` (puro, `dfd-tratamento`) monta a lista **COMPLETA** — erro/atenção/**acerto**, sem exceção (só omite
+pontos "ignorar" do ADM) — cada uma com uma **âncora** (id do componente no banner, via `data-ancora`). Um botão
+**"Ver mensagens"** no rodapé do DFD abre o painel: no **DFD avulso/gravado solto** ele surge **ao lado** (DFD +
+mensagens, mesma animação de lateral); **dentro de um protocolo** ele **substitui** o DFD no lateral (toggle, "Voltar
+ao DFD"). **Clicar numa mensagem** rola o banner até a âncora e a **destaca na cor do status** (erro/atenção/acerto).
+`mensagensDoDfd` (exportado de `DfdConferir`, confere a assinatura) é a fonte única (botão + painel); `contarMensagens`
+resume o botão. Reuso total (`Modal.lateral`, tokens); catalogado; testes de `mensagensDfd`. Sem migração.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { type CampoTratavel, normalizarSecoesDfd } from "@/lib/dfd-tratamento";
+import { type CampoTratavel, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -20,10 +20,11 @@ import {
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { DfdConferir } from "./DfdConferir";
+import { DfdConferir, mensagensDoDfd } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
+import { MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
@@ -50,6 +51,9 @@ export function DfdUploadForm({
   // PCA do DFD (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Obrigatório.
   const [anoPca, setAnoPca] = useState<number | null>(null);
   const [anoPcaDetectado, setAnoPcaDetectado] = useState<number | null>(null);
+  // Painel lateral de mensagens (erro/atenção/acerto) + pedido de rolagem/destaque.
+  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [autoCampos, setAutoCampos] = useState<CampoTratavel[]>([]);
   const [launcher, setLauncher] = useState(false); // banner lançador de importação
@@ -155,6 +159,8 @@ export function DfdUploadForm({
     setRepId(null);
     setAnoPca(null);
     setAnoPcaDetectado(null);
+    setMensagensAbertas(false);
+    setAncoraAlvo(null);
     setAutoMatch(false);
     setAutoCampos([]);
   }
@@ -177,6 +183,8 @@ export function DfdUploadForm({
     : [];
   // Conferência da assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
+  // Mensagens (erro/atenção/acerto) do DFD — para o botão e o painel lateral. Avulso: sem categoria.
+  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null) : [];
   const assinaturaBloqueia = preview
     ? bloqueiaAssinatura(
         validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
@@ -279,6 +287,25 @@ export function DfdUploadForm({
         size="lg"
         fecharNoBackdrop={false}
         bloqueado={status === "sending"}
+        lateral={
+          preview
+            ? {
+                aberto: mensagensAbertas,
+                titulo: `Mensagens — DFD ${preview.numero}`,
+                onClose: () => setMensagensAbertas(false),
+                children: (
+                  <MensagensDfd
+                    mensagens={mensagens}
+                    numero={preview.numero}
+                    tipo={preview.tipo}
+                    onIrPara={(m) =>
+                      setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })
+                    }
+                  />
+                ),
+              }
+            : undefined
+        }
         rodape={
           preview ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -289,7 +316,7 @@ export function DfdUploadForm({
               ) : (
                 <span className="text-[12px] text-muted">
                   {bloqueado
-                    ? "Importação bloqueada — confira as pendências acima"
+                    ? "Importação bloqueada — abra 'Ver mensagens' para os detalhes"
                     : "Tudo certo — pronto para importar"}
                 </span>
               )}
@@ -327,6 +354,9 @@ export function DfdUploadForm({
               autoMatch={autoMatch}
               autoCampos={autoCampos}
               regras={regras}
+              mensagens={mensagens}
+              ancoraAlvo={ancoraAlvo}
+              onVerMensagens={() => setMensagensAbertas(true)}
               onRepChange={(id) => {
                 setRepId(id);
                 setAutoMatch(false);

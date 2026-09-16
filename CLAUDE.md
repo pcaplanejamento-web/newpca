@@ -287,6 +287,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
   (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
   [fonte única, reusada por `faltasObrigatorias`] + `estadoProtocolo`/`situacaoProtocolo`).
+- **Painel LATERAL de MENSAGENS do DFD (`MensagensDfd`) — todas as conferências, navegáveis:** as mensagens NÃO
+  aparecem mais soltas no corpo do banner do DFD. `mensagensDfd` (puro, `dfd-tratamento`) monta a lista COMPLETA
+  (erro/atenção/**acerto**, sem exceção — só omite pontos "ignorar" do ADM), cada uma com uma **âncora** (id do
+  componente: `reparticao`/`anoPca`/`justificativa`/`previsao`/`prioridade`/`fundamentacao`/`referenciaRenovacao`/
+  `itens`/`valor`/`assinatura`, marcadas com `data-ancora` no `DfdConferir`/`DfdView`). `mensagensDoDfd` (exportado de
+  `DfdConferir`) já confere a assinatura e é a **fonte única** (contador do botão + painel). Um botão **"Ver mensagens"**
+  no rodapé do corpo do DFD abre o **painel lateral** (`Modal.lateral`, mesma animação): **DFD avulso / DFD gravado
+  solto** → o painel abre AO LADO (DFD principal + mensagens laterais); **dentro de um protocolo** → o painel
+  **substitui** o DFD no lateral (toggle; "Voltar ao DFD" ou clicar numa mensagem volta). **Clicar numa mensagem**
+  rola o banner do DFD até a âncora e a **destaca na cor do status** (`ancoraAlvo` = {ancora, cor, nonce}; efeito de
+  `box-shadow` que pulsa e some). `contarMensagens` alimenta o resumo do botão.
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
@@ -360,8 +371,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `RelatorioErros` (banner/`Modal` com todos os erros de um DFD/Protocolo listados p/ **copiar** — `navigator.clipboard`
   + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
-  obrigatório), `ReorderTable` (tabela com arrasto entre linhas,
-  Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
+  obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
+  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro), `ReorderTable` (tabela com
+  arrasto entre linhas, Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com

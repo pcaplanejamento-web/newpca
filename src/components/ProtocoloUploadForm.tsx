@@ -15,6 +15,7 @@ import {
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
   setTextoSecao,
+  STATUS_MENSAGEM_COR,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
@@ -38,12 +39,13 @@ import {
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { buildPrevisao, DfdConferir } from "./DfdConferir";
+import { buildPrevisao, DfdConferir, mensagensDoDfd } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
+import { MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
@@ -117,6 +119,9 @@ export function ProtocoloUploadForm({
 
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
+  // No protocolo, o painel de MENSAGENS substitui o DFD no lateral (toggle) + rolagem/destaque.
+  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [carregandoIdx, setCarregandoIdx] = useState<number | null>(null);
   const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
   const [bulkCampo, setBulkCampo] = useState<CampoBulk>("reparticao");
@@ -316,6 +321,8 @@ export function ProtocoloUploadForm({
   async function abrir(idx: number) {
     setErro(null);
     setCarregandoIdx(idx);
+    setMensagensAbertas(false); // abre sempre no DFD (não nas mensagens)
+    setAncoraAlvo(null);
     try {
       await garantirParse(idx);
       setAbertoIdx(idx);
@@ -324,6 +331,18 @@ export function ProtocoloUploadForm({
     } finally {
       setCarregandoIdx(null);
     }
+  }
+
+  /** Fecha o DFD do lateral (e o painel de mensagens, se aberto). */
+  function fecharDfdLateral() {
+    setAbertoIdx(-1);
+    setMensagensAbertas(false);
+    setAncoraAlvo(null);
+  }
+  /** Clique numa mensagem: volta ao DFD e rola/destaca a âncora na cor do status. */
+  function irParaMensagem(m: { ancora: string; status: "erro" | "atencao" | "acerto" }) {
+    setMensagensAbertas(false);
+    setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
   }
 
   const onSecoesAberto = (secoes: DfdParseado["secoes"]) => {
@@ -544,6 +563,9 @@ export function ProtocoloUploadForm({
     numero.trim().length > 0 && !importando && !analisando && !bloqueadoPorRegra;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
+  const repAberto = abertoIdx >= 0 ? (reparticoes.find((r) => r.id === dfdRepIds[abertoIdx]) ?? null) : null;
+  // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
+  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria) : [];
 
   // Relatório de erros do protocolo em DESPACHO (copiável) — pendências CIRÚRGICAS por
   // DFD com erro + capa (aponta o que corrigir e onde).
@@ -750,7 +772,7 @@ export function ProtocoloUploadForm({
           temDfds
             ? {
                 aberto: abertoIdx >= 0,
-                titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
+                titulo: abertoIdx >= 0 ? `${mensagensAbertas ? "Mensagens — " : ""}DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
                 cabecalho:
                   abertoIdx >= 0 ? (
                     <DfdCabecalho
@@ -759,9 +781,16 @@ export function ProtocoloUploadForm({
                       planejamento={dfdAberto?.planejamento ?? null}
                     />
                   ) : undefined,
-                onClose: () => setAbertoIdx(-1),
+                // Mensagens abertas: o X volta ao DFD; senão fecha o DFD do lateral.
+                onClose: mensagensAbertas ? () => setMensagensAbertas(false) : fecharDfdLateral,
                 rodape:
-                  abertoIdx >= 0 ? (
+                  abertoIdx < 0 ? undefined : mensagensAbertas ? (
+                    <div className="flex items-center justify-end gap-3">
+                      <Button variant="secondary" onClick={() => setMensagensAbertas(false)} disabled={importando}>
+                        Voltar ao DFD
+                      </Button>
+                    </div>
+                  ) : (
                     <div className="flex items-center justify-between gap-3">
                       {dfdAberto ? (
                         <span
@@ -774,11 +803,11 @@ export function ProtocoloUploadForm({
                       ) : (
                         <span />
                       )}
-                      <Button variant="secondary" onClick={() => setAbertoIdx(-1)} disabled={importando}>
+                      <Button variant="secondary" onClick={fecharDfdLateral} disabled={importando}>
                         Fechar
                       </Button>
                     </div>
-                  ) : undefined,
+                  ),
                 children: (
                   <div key={abertoIdx} className="animate-fade-in-up">
                     {carregandoIdx === abertoIdx || !dfdAberto ? (
@@ -786,20 +815,37 @@ export function ProtocoloUploadForm({
                         Lendo o DFD...
                       </Callout>
                     ) : (
-                      <DfdConferir
-                        dfd={dfdAberto}
-                        reparticoes={reparticoes}
-                        reparticaoAtivaId={reparticaoAtivaId}
-                        repId={dfdRepIds[abertoIdx] ?? null}
-                        anoPca={anoPca}
-                        autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
-                        autoCampos={autoMap.get(abertoIdx) ?? []}
-                        regras={regras}
-                        categoria={categoria}
-                        onRepChange={(id) => setRepDfd(abertoIdx, id)}
-                        onSecoesChange={onSecoesAberto}
-                        onRefsChange={onRefsAberto}
-                      />
+                      <>
+                        {/* DFD mantido montado (só oculto) para as edições/scroll sobreviverem ao toggle. */}
+                        <div hidden={mensagensAbertas}>
+                          <DfdConferir
+                            dfd={dfdAberto}
+                            reparticoes={reparticoes}
+                            reparticaoAtivaId={reparticaoAtivaId}
+                            repId={dfdRepIds[abertoIdx] ?? null}
+                            anoPca={anoPca}
+                            autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
+                            autoCampos={autoMap.get(abertoIdx) ?? []}
+                            regras={regras}
+                            mensagens={mensagensAberto}
+                            ancoraAlvo={ancoraAlvo}
+                            onVerMensagens={() => setMensagensAbertas(true)}
+                            onRepChange={(id) => setRepDfd(abertoIdx, id)}
+                            onSecoesChange={onSecoesAberto}
+                            onRefsChange={onRefsAberto}
+                          />
+                        </div>
+                        {mensagensAbertas && (
+                          <div className="animate-fade-in-up">
+                            <MensagensDfd
+                              mensagens={mensagensAberto}
+                              numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                              tipo={dfdAberto.tipo}
+                              onIrPara={irParaMensagem}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ),

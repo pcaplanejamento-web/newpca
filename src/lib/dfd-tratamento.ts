@@ -282,6 +282,120 @@ export function avaliarDfd(
   return { bloqueantes, atencoes };
 }
 
+// ---- Mensagens COMPLETAS de um DFD (erro / atenção / acerto) para o painel lateral ----
+
+export type StatusMensagem = "erro" | "atencao" | "acerto";
+
+/**
+ * Uma mensagem de conferência do DFD: um ponto avaliado (item/seção/repartição/…) com
+ * o `status` (erro bloqueia · atenção avisa · acerto ok), o `texto` e a `ancora` — o id
+ * do componente correspondente no banner do DFD (para rolar/destacar ao clicar).
+ */
+export type MensagemDfd = { chave: string; status: StatusMensagem; texto: string; ancora: string };
+
+export const STATUS_MENSAGEM_COR: Record<StatusMensagem, string> = {
+  erro: "var(--danger)",
+  atencao: "var(--warn)",
+  acerto: "var(--ok)",
+};
+
+export const STATUS_MENSAGEM_ROTULO: Record<StatusMensagem, string> = {
+  erro: "Erro",
+  atencao: "Atenção",
+  acerto: "Acerto",
+};
+
+/** Entrada de avaliação para as mensagens (superset de `EntradaAvaliacaoDfd`). */
+export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
+  anoPca?: number | null;
+  valorEstimado?: number | null;
+  valorTotal?: number | null;
+  /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
+  assinatura?: { status: "ok" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
+};
+
+/**
+ * TODAS as mensagens de conferência de um DFD — erro, atenção E acerto, **sem exceção**
+ * (só omite pontos que o ADM marcou "ignorar"). Cada uma aponta uma `ancora` no banner.
+ * Puro/testável. É a fonte única do painel de mensagens (lista + rolagem/destaque) e do
+ * contador do botão "Ver mensagens". Respeita os níveis do ADM (config padrão ⇒ igual a
+ * hoje: os pontos fundamentais viram erro, os intermediários viram atenção).
+ */
+export function mensagensDfd(
+  d: EntradaMensagensDfd,
+  regras: RegrasAvaliacao = regrasPadrao(),
+  ctx?: { categoria?: string | null },
+): MensagemDfd[] {
+  const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
+  const out: MensagemDfd[] = [];
+  const add = (chave: ChaveAvaliacao, ancora: string, ok: boolean, faltaTexto: string, okTexto: string) => {
+    const n = nivelDe(regras, chave, c);
+    if (n === "ignorar") return;
+    if (ok) out.push({ chave, status: "acerto", texto: okTexto, ancora });
+    else out.push({ chave, status: n === "fundamental" ? "erro" : "atencao", texto: faltaTexto, ancora });
+  };
+  const plural = (n: number) => (n === 1 ? "item" : "itens");
+
+  // Repartição / Setor (topo do banner)
+  add("dfd.reparticao", "reparticao", d.reparticaoId != null,
+    "Repartição/Setor requisitante não vinculado.", "Repartição/Setor requisitante vinculado.");
+
+  // PCA (ano) — portão à parte, mas exibido como mensagem.
+  add("dfd.anoPca", "anoPca", d.anoPca != null,
+    "PCA (ano) do DFD não definido.", `PCA (ano) do DFD definido${d.anoPca != null ? `: ${d.anoPca}` : ""}.`);
+
+  // Seções tratáveis + justificativa (Tratamento e Seção 3)
+  for (const s of SECOES_OBRIGATORIAS) {
+    const ancora = s.chave.replace(/^dfd\./, "");
+    add(s.chave, ancora, temSecaoPreenchida(d.secoes, s.kw), `${s.rotulo} não preenchida.`, `${s.rotulo} preenchida.`);
+  }
+
+  // Referência de renovação — só para DFD-R
+  if (c.dfdTipo === "DFD-R") {
+    add("dfd.referenciaRenovacao", "referenciaRenovacao", !dfdRSemReferencia(d),
+      FALTA_REFERENCIA_RENOVACAO, "Referência de renovação informada (contrato, ata ou licitação).");
+  }
+
+  // Itens (Seção 4)
+  const total = d.itens.length;
+  const semVU = d.itens.filter((i) => i.valorUnitario == null || i.valorUnitario <= 0).length;
+  add("item.valorUnitario", "itens", total > 0 && semVU === 0,
+    total === 0 ? "Nenhum item na tabela (Seção 4)." : `Falta valor unitário em ${semVU} de ${total} ${plural(total)} (Seção 4).`,
+    `Valor unitário informado nos ${total} ${plural(total)} (Seção 4).`);
+  const semQtd = d.itens.filter((i) => i.quantidade === null).length;
+  add("item.quantidade", "itens", semQtd === 0,
+    `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
+
+  // Valor estimado (nota) × somatória
+  if (d.valorEstimado != null && d.valorTotal != null) {
+    add("dfd.valorEstimadoVsTotal", "valor", valoresBatem(d.valorEstimado, d.valorTotal),
+      "Valor estimado (nota) difere da somatória dos itens.", "Valor estimado confere com a somatória dos itens.");
+  }
+
+  // Assinatura digital
+  if (d.assinatura && nivelDe(regras, "dfd.assinatura", c) !== "ignorar") {
+    if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
+    else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
+    else out.push({
+      chave: "dfd.assinatura",
+      status: nivelDe(regras, "dfd.assinatura", c) === "fundamental" ? "erro" : "atencao",
+      texto: `Assinatura digital não conferida${d.assinatura.motivo ? `: ${d.assinatura.motivo}` : "."}`,
+      ancora: "assinatura",
+    });
+  }
+
+  return out;
+}
+
+/** Contagem por status (para o botão "Ver mensagens (N erros · M atenções · K ok)"). */
+export function contarMensagens(msgs: MensagemDfd[]): Record<StatusMensagem, number> {
+  return {
+    erro: msgs.filter((m) => m.status === "erro").length,
+    atencao: msgs.filter((m) => m.status === "atencao").length,
+    acerto: msgs.filter((m) => m.status === "acerto").length,
+  };
+}
+
 /**
  * Faltas CIRÚRGICAS e ACIONÁVEIS de um DFD: aponta EXATAMENTE onde está o erro (quais
  * itens, qual seção) e O QUE fazer para corrigir. Puro/testável. Alimenta o relatório

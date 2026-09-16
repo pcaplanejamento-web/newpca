@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { editavelDe, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { useEffect, useRef } from "react";
+import { editavelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
   type CampoTratavel,
-  faltasCirurgicasDfd,
-  linhasRelatorioDfd,
+  contarMensagens,
+  type MensagemDfd,
+  mensagensDfd,
   setTextoSecao,
+  STATUS_MENSAGEM_COR,
   textoSecao,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
@@ -24,8 +26,7 @@ import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconBuilding, IconCheck } from "./icons";
-import { RelatorioErros } from "./RelatorioErros";
+import { IconAlert, IconBuilding, IconLayers } from "./icons";
 import { Segmented } from "./Segmented";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
@@ -65,6 +66,41 @@ export function toVisual(d: DfdParseado, rep: Rep | null, anoPca?: number | null
 }
 
 /**
+ * TODAS as mensagens de conferência de um DFD (erro/atenção/acerto), já com a assinatura
+ * conferida contra o responsável da repartição escolhida. Fonte ÚNICA usada tanto pelo
+ * `DfdConferir` (contador do botão "Ver mensagens") quanto pelo painel lateral
+ * `MensagensDfd` (renderizado pelo pai) — os dois recebem exatamente a mesma lista.
+ */
+export function mensagensDoDfd(
+  d: DfdParseado,
+  rep: Rep | null,
+  anoPca: number | null | undefined,
+  regras: RegrasAvaliacao = regrasPadrao(),
+  categoria: string | null = null,
+): MensagemDfd[] {
+  const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+    exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
+  });
+  return mensagensDfd(
+    {
+      itens: d.itens,
+      secoes: d.secoes,
+      reparticaoId: rep?.id ?? null,
+      tipo: d.tipo,
+      numeroContrato: d.numeroContrato,
+      numeroAta: d.numeroAta,
+      numeroLicitacao: d.numeroLicitacao,
+      anoPca: anoPca !== undefined ? anoPca : d.anoPca,
+      valorEstimado: d.valorEstimado,
+      valorTotal: d.valorTotal,
+      assinatura: { status: res.status, motivo: res.status === "erro" ? res.motivo : null },
+    },
+    regras,
+    { categoria },
+  );
+}
+
+/**
  * Constrói o texto canônico da PREVISÃO a partir do editor. É **um OU outro**:
  * ANUAL (com ano opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA`
  * (exige mês E ano). Vazio = ainda a preencher.
@@ -90,10 +126,12 @@ export function DfdConferir({
   autoCampos = [],
   readOnly = false,
   regras = regrasPadrao(),
-  categoria = null,
+  mensagens = [],
+  ancoraAlvo = null,
   onRepChange,
   onSecoesChange,
   onRefsChange,
+  onVerMensagens,
 }: {
   dfd: DfdParseado;
   reparticoes: Rep[];
@@ -105,24 +143,22 @@ export function DfdConferir({
   autoCampos?: CampoTratavel[];
   /** Trava a edição (banner de visualização/edição travado). */
   readOnly?: boolean;
-  /** Regras de avaliação do ADM + a categoria do protocolo (para as exceções). */
+  /** Regras de avaliação do ADM (edição de campos por nível). */
   regras?: RegrasAvaliacao;
-  categoria?: string | null;
+  /** Mensagens (erro/atenção/acerto) do DFD — do `mensagensDoDfd` do pai (só o contador do botão). */
+  mensagens?: MensagemDfd[];
+  /** Pedido de rolagem/destaque de uma âncora (id + cor + nonce para repetir o clique). */
+  ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
   onRefsChange?: (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => void;
+  /** Abre o painel lateral de mensagens (renderizado pelo pai). Sem ele, o botão some. */
+  onVerMensagens?: () => void;
 }) {
-  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
-  const semReferencia =
-    ehRenovacao &&
-    !dfd.numeroContrato &&
-    !dfd.numeroAta &&
-    !dfd.numeroLicitacao &&
-    nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: "DFD-R", categoria }) !== "ignorar";
   const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
     const v = valor.trim() || null;
     onRefsChange?.({
@@ -132,33 +168,32 @@ export function DfdConferir({
     });
   };
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
-  // Conferência da assinatura contra o responsável da repartição escolhida
-  // (recalcula ao trocar de repartição, igual a `faltas`).
-  const resAssinatura = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-    exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
-  });
-  // Pendências CIRÚRGICAS (aponta itens/seção e o que fazer). Sem a assinatura (que tem
-  // callout próprio); no relatório copiável ela entra.
-  // Nível da assinatura (ADM): "ignorar" não mostra a pendência; senão entra como falta.
-  const nivelAssinatura = nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria });
-  const assinaturaMotivo =
-    nivelAssinatura !== "ignorar" && resAssinatura.status === "erro" ? resAssinatura.motivo : null;
-  const faltasCir = faltasCirurgicasDfd(
-    { itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, tipo: dfd.tipo },
-    regras,
-    { categoria },
-  );
-  const temErro = faltasCir.length > 0 || !!assinaturaMotivo;
-  const relatorioLinhas = linhasRelatorioDfd({
-    numero: dfd.numero,
-    planejamento: dfd.planejamento,
-    tipo: dfd.tipo,
-    faltas: faltasCirurgicasDfd(
-      { itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, assinaturaMotivo, tipo: dfd.tipo },
-      regras,
-      { categoria },
-    ),
-  });
+  const cont = contarMensagens(mensagens);
+
+  // Rolagem + DESTAQUE de uma âncora (ao clicar numa mensagem do painel lateral). O
+  // elemento com `data-ancora` correspondente entra em vista e pulsa na cor do status.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const destaqueRef = useRef<{ el: HTMLElement; timer: number } | null>(null);
+  useEffect(() => {
+    if (!ancoraAlvo || !bodyRef.current) return;
+    const el = bodyRef.current.querySelector<HTMLElement>(`[data-ancora="${ancoraAlvo.ancora}"]`);
+    if (!el) return;
+    if (destaqueRef.current) {
+      window.clearTimeout(destaqueRef.current.timer);
+      destaqueRef.current.el.style.boxShadow = "";
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.transition = "box-shadow 0.35s ease";
+    el.style.borderRadius = el.style.borderRadius || "14px";
+    el.style.boxShadow = `0 0 0 3px ${ancoraAlvo.cor}, 0 0 0 7px color-mix(in srgb, ${ancoraAlvo.cor} 22%, transparent)`;
+    const timer = window.setTimeout(() => {
+      el.style.boxShadow = "";
+    }, 2000);
+    destaqueRef.current = { el, timer };
+  }, [ancoraAlvo]);
+  useEffect(() => () => {
+    if (destaqueRef.current) window.clearTimeout(destaqueRef.current.timer);
+  }, []);
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
     onSecoesChange(setTextoSecao(dfd.secoes, cfg, texto));
@@ -196,9 +231,9 @@ export function DfdConferir({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={bodyRef}>
       {/* Setor / Repartição (setor = repartição) */}
-      <div>
+      <div data-ancora="reparticao">
         <label className={labelCls} htmlFor="dfd-rep">
           Setor / Repartição <span style={{ color: "var(--danger)" }}>*</span>
         </label>
@@ -228,7 +263,7 @@ export function DfdConferir({
         <h3 className="mb-3 text-sm font-bold text-text">Tratamento</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* PRIORIDADE */}
-          <div>
+          <div data-ancora="prioridade">
             <span className="mb-1.5 block text-[13px] font-medium text-text-2">
               Prioridade <Tag campo="prioridade" ok={prio != null} />
             </span>
@@ -245,7 +280,7 @@ export function DfdConferir({
           </div>
 
           {/* PREVISÃO */}
-          <div>
+          <div data-ancora="previsao">
             <span className="mb-1.5 block text-[13px] font-medium text-text-2">
               Previsão de entrega <Tag campo="previsao" ok={prev != null} />
             </span>
@@ -287,7 +322,7 @@ export function DfdConferir({
           </div>
 
           {/* FUNDAMENTAÇÃO */}
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2" data-ancora="fundamentacao">
             <span className="mb-1.5 block text-[13px] font-medium text-text-2">
               Fundamentação legal <Tag campo="fundamentacao" ok={fund.trim().length > 0} />
             </span>
@@ -318,22 +353,12 @@ export function DfdConferir({
       {/* Referências da RENOVAÇÃO (DFD-R) — contrato/ata/licitação. Aponta a ausência
           (não trava) e permite preencher à mão. Só aparece para DFD-R. */}
       {ehRenovacao && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
+        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="referenciaRenovacao">
           <h3 className="mb-1 text-sm font-bold text-text">Referências da renovação</h3>
           <p className="mb-3 text-xs text-muted">
             Todo DFD-R deve mencionar um nº de contrato, ata (registro de preços) ou licitação. Preenchidos
-            automaticamente pela descrição; ajuste ou complete se necessário.
+            automaticamente pela descrição; ajuste ou complete se necessário. As pendências ficam em "Ver mensagens".
           </p>
-          {semReferencia && (
-            <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
-              <p className="font-semibold">Atenção — DFD-R sem referência</p>
-              <p className="mt-1 opacity-90">
-                Nenhum nº de contrato, ata ou licitação foi encontrado na descrição. O DFD fica marcado como
-                <span className="font-semibold"> Atenção</span> (não bloqueia a importação). Informe ao menos uma
-                referência abaixo — ou inclua-o no relatório do protocolo.
-              </p>
-            </Callout>
-          )}
           <div className="grid gap-4 sm:grid-cols-3">
             <TextField
               label="Nº do contrato"
@@ -360,40 +385,8 @@ export function DfdConferir({
         </section>
       )}
 
-      {/* Faltas CIRÚRGICAS (aponta o item/seção e o que fazer; bloqueia importar) */}
-      {faltasCir.length > 0 && (
-        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
-          <p className="font-semibold">Pendências a corrigir (importação bloqueada):</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 opacity-90">
-            {faltasCir.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        </Callout>
-      )}
-      {/* Conferência da assinatura digital — o nível `dfd.assinatura` decide se bloqueia. */}
-      {assinaturaMotivo && (
-        <Callout kind={nivelAssinatura === "fundamental" ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
-          <p className="font-semibold">
-            {nivelAssinatura === "fundamental"
-              ? "Assinatura digital não conferida (gravação bloqueada):"
-              : "Assinatura digital não conferida (atenção — não bloqueia):"}
-          </p>
-          <p className="mt-1 opacity-90">{assinaturaMotivo}</p>
-        </Callout>
-      )}
-      {resAssinatura.status === "ok" && (
-        <Callout kind="ok" icon={<IconCheck className="h-4 w-4" />}>
-          Assinatura conferida: <span className="font-semibold">{resAssinatura.responsavel.nome}</span>
-          {resAssinatura.tipo === "temporario" ? " (responsável temporário)" : " (responsável padrão)"}.
-        </Callout>
-      )}
-      {resAssinatura.status === "sem-assinatura" && (
-        <Callout kind="info" icon={<IconAlert className="h-4 w-4" />}>
-          Documento sem assinatura digital (.xlsx) — segue sem conferência de assinante.
-        </Callout>
-      )}
-      {foraDoHead && faltasCir.length === 0 && (
+      {/* Dica de fluxo (não é conferência do DFD): repartição diferente da ativa no head. */}
+      {foraDoHead && (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
           A repartição escolhida é diferente da ativa no cabeçalho — selecione-a (ou "Geral") no topo para vê-lo na
           lista depois.
@@ -405,24 +398,23 @@ export function DfdConferir({
         <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} />
       </div>
 
-      {/* Parte inferior — relatório de erro (só quando há erro) */}
-      {temErro && (
-        <div className="flex justify-end border-t border-border pt-4">
-          <Button
-            variant="secondary"
-            onClick={() => setRelatorioAberto(true)}
-            icon={<IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-          >
-            Relatório de erro
+      {/* Parte inferior — botão do painel de MENSAGENS (erro/atenção/acerto). As mensagens
+          não aparecem mais soltas no corpo: ficam no painel lateral, navegáveis. */}
+      {onVerMensagens && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <div className="flex flex-wrap gap-3 text-[12px] font-semibold">
+            {(["erro", "atencao", "acerto"] as const).map((s) => (
+              <span key={s} className="inline-flex items-center gap-1.5" style={{ color: STATUS_MENSAGEM_COR[s] }}>
+                <span className="h-2 w-2 rounded-full" style={{ background: STATUS_MENSAGEM_COR[s] }} />
+                {cont[s]}
+              </span>
+            ))}
+          </div>
+          <Button variant="secondary" onClick={onVerMensagens} icon={<IconLayers className="h-4 w-4" />}>
+            Ver mensagens
           </Button>
         </div>
       )}
-      <RelatorioErros
-        open={relatorioAberto}
-        onClose={() => setRelatorioAberto(false)}
-        titulo={`Erros do DFD ${dfd.numero}`}
-        linhas={relatorioLinhas}
-      />
     </div>
   );
 }

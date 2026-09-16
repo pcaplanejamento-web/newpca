@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import {
+  contarMensagens,
   dfdRSemReferencia,
   estadoDfd,
   estadoItem,
@@ -10,6 +12,7 @@ import {
   itemComErro,
   linhasRelatorioDfd,
   linhasRelatorioProtocolo,
+  mensagensDfd,
   situacaoProtocolo,
 } from "../src/lib/dfd-tratamento.ts";
 import { tipoCurtoDfd } from "../src/lib/parse-dfd-comum.ts";
@@ -171,3 +174,57 @@ describe("relatório de erros (copiável)", () => {
     assert.match(txt, /reencaminhe-se o processo/);
   });
 });
+
+describe("mensagensDfd (painel de mensagens: erro/atenção/acerto)", () => {
+  const secOk = [
+    { numero: 3, titulo: "JUSTIFICATIVA DA NECESSIDADE", texto: "x" },
+    { numero: 5, titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "ANUAL" },
+    { numero: 6, titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "ALTA" },
+    { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" },
+  ];
+  const base = {
+    itens: [item({ item: 1, valorUnitario: 10, quantidade: 2 })],
+    secoes: secOk,
+    reparticaoId: 3,
+    tipo: "DFD-S",
+    anoPca: 2026,
+    valorEstimado: 20,
+    valorTotal: 20,
+    assinatura: { status: "ok" as const },
+  };
+
+  it("DFD-S completo → só acertos, todas com âncora; sem referência de renovação", () => {
+    const msgs = mensagensDfd(base);
+    assert.ok(msgs.length >= 6);
+    assert.ok(msgs.every((m) => m.status === "acerto"));
+    assert.ok(msgs.every((m) => typeof m.ancora === "string" && m.ancora.length > 0));
+    assert.equal(
+      msgs.some((m) => m.chave === "dfd.referenciaRenovacao"),
+      false,
+    );
+  });
+
+  it("faltas fundamentais viram ERRO; DFD-R sem referência vira ATENÇÃO", () => {
+    const msgs = mensagensDfd({
+      ...base,
+      tipo: "DFD-R",
+      reparticaoId: null,
+      itens: [item({ valorUnitario: null })],
+    });
+    const c = contarMensagens(msgs);
+    assert.ok(c.erro >= 2); // repartição + valor unitário (fundamentais no padrão)
+    assert.ok(
+      msgs.some((m) => m.chave === "dfd.referenciaRenovacao" && m.status === "atencao"),
+    );
+    assert.ok(msgs.some((m) => m.chave === "dfd.reparticao" && m.status === "erro" && m.ancora === "reparticao"));
+  });
+
+  it("respeita o nível 'ignorar' do ADM (o ponto some da lista)", () => {
+    const regras = { ...regrasPadrao(), pontos: { "item.quantidade": "ignorar" as const } };
+    const msgs = mensagensDfd({ ...base, itens: [item({ quantidade: null })] }, regras);
+    assert.equal(
+      msgs.some((m) => m.chave === "item.quantidade"),
+      false,
+    );
+  });
+})

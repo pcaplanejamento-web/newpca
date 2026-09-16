@@ -11,6 +11,7 @@ import {
   estadoProtocoloCor,
   SITUACAO_PROTOCOLO_ROTULO,
   situacaoProtocolo,
+  STATUS_MENSAGEM_COR,
 } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -19,11 +20,12 @@ import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { DfdConferir } from "./DfdConferir";
+import { DfdConferir, mensagensDoDfd } from "./DfdConferir";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
+import { MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
@@ -103,6 +105,9 @@ export function DfdsView({
   const [dfdRepEdit, setDfdRepEdit] = useState<number | null>(null);
   const [dfdTrancado, setDfdTrancado] = useState(true);
   const [salvandoDfd, setSalvandoDfd] = useState(false);
+  // Painel de MENSAGENS (erro/atenção/acerto) do DFD gravado + pedido de rolagem/destaque.
+  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
 
   async function verDfd(id: number) {
     setErro(null);
@@ -114,6 +119,8 @@ export function DfdsView({
       setDfdEdit(detalheParaParseado(j.dfd));
       setDfdRepEdit(j.dfd.reparticaoId);
       setDfdTrancado(true);
+      setMensagensAbertas(false); // abre sempre no DFD
+      setAncoraAlvo(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
     }
@@ -125,6 +132,8 @@ export function DfdsView({
     setDfdEdit(null);
     setDfdRepEdit(null);
     setDfdTrancado(true);
+    setMensagensAbertas(false);
+    setAncoraAlvo(null);
   }
 
   function destrancarDfd() {
@@ -206,6 +215,8 @@ export function DfdsView({
     setDfdEdit(null);
     setDfdRepEdit(null);
     setDfdTrancado(true);
+    setMensagensAbertas(false);
+    setAncoraAlvo(null);
     setProtoView(null);
     setProtoEdit(null);
     setProtoTrancado(true);
@@ -480,6 +491,15 @@ export function DfdsView({
         </div>
       </div>
     ) : undefined;
+  // Mensagens (erro/atenção/acerto) do DFD gravado — botão + painel lateral. A categoria
+  // (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
+  const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
+  const categoriaDfd = protoView ? classificarAssunto(protoView.assunto) : null;
+  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd) : [];
+  const irParaMensagem = (m: { ancora: string; status: "erro" | "atencao" | "acerto" }) => {
+    setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
+    if (protoView) setMensagensAbertas(false); // dentro do protocolo o painel substitui o DFD → volta ao DFD
+  };
   const dfdCorpo = dfdEdit ? (
     <DfdConferir
       dfd={dfdEdit}
@@ -490,6 +510,9 @@ export function DfdsView({
       autoMatch={false}
       readOnly={!podeEditar || dfdTrancado}
       regras={regras}
+      mensagens={mensagens}
+      ancoraAlvo={ancoraAlvo}
+      onVerMensagens={() => setMensagensAbertas(true)}
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
@@ -526,6 +549,16 @@ export function DfdsView({
         bloqueado={salvandoDfd}
         acoesCabecalho={dfdCadeado}
         rodape={dfdRodape}
+        lateral={
+          dfdView
+            ? {
+                aberto: mensagensAbertas,
+                titulo: `Mensagens — DFD ${dfdView.numero}`,
+                onClose: () => setMensagensAbertas(false),
+                children: <MensagensDfd mensagens={mensagens} numero={dfdView.numero} tipo={dfdView.tipo} onIrPara={irParaMensagem} />,
+              }
+            : undefined
+        }
       >
         {dfdCorpo}
       </Modal>
@@ -551,14 +584,32 @@ export function DfdsView({
           protoView
             ? {
                 aberto: !!dfdView,
-                titulo: dfdView ? `DFD ${dfdView.numero}` : "DFD",
+                titulo: dfdView ? `${mensagensAbertas ? "Mensagens — " : ""}DFD ${dfdView.numero}` : "DFD",
                 cabecalho: dfdView ? (
                   <DfdCabecalho numero={dfdView.numero} tipo={dfdView.tipo} planejamento={dfdView.planejamento} />
                 ) : undefined,
-                acoesCabecalho: dfdCadeado,
-                rodape: dfdRodape,
-                onClose: fecharDfd,
-                children: dfdCorpo,
+                // Nas mensagens some o cadeado (não se edita) e o X volta ao DFD.
+                acoesCabecalho: mensagensAbertas ? undefined : dfdCadeado,
+                rodape: mensagensAbertas ? (
+                  <div className="flex items-center justify-end gap-3">
+                    <Button variant="secondary" onClick={() => setMensagensAbertas(false)} disabled={salvandoDfd}>
+                      Voltar ao DFD
+                    </Button>
+                  </div>
+                ) : (
+                  dfdRodape
+                ),
+                onClose: mensagensAbertas ? () => setMensagensAbertas(false) : fecharDfd,
+                children: (
+                  <>
+                    <div hidden={mensagensAbertas}>{dfdCorpo}</div>
+                    {mensagensAbertas && (
+                      <div className="animate-fade-in-up">
+                        <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
+                      </div>
+                    )}
+                  </>
+                ),
               }
             : undefined
         }

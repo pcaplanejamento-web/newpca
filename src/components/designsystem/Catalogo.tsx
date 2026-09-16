@@ -44,6 +44,7 @@ import {
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
+import { MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -952,6 +953,23 @@ export function Catalogo() {
       <Secao titulo="PcaPicker (definição do PCA do processo — obrigatório)">
         <div className="max-w-md">
           <PcaPickerDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="MensagensDfd (painel lateral de erro/atenção/acerto — clique navega no DFD)">
+        <div className="max-w-md">
+          <MensagensDfd
+            numero="1586"
+            tipo="DFD-R — Renovação"
+            mensagens={[
+              { chave: "dfd.reparticao", status: "erro", texto: "Repartição/Setor requisitante não vinculado.", ancora: "reparticao" },
+              { chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 3 de 12 itens (Seção 4).", ancora: "itens" },
+              { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ata ou licitação.", ancora: "referenciaRenovacao" },
+              { chave: "dfd.previsao", status: "acerto", texto: "Previsão de entrega/execução (Seção 5) preenchida.", ancora: "previsao" },
+              { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" },
+            ]}
+            onIrPara={(m) => toast(`Rolar até: ${m.ancora}`)}
+          />
         </div>
       </Secao>
 

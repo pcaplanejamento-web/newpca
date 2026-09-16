@@ -189,7 +189,7 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
 
       {/* Head — mini banners (um por informação): total de itens + valor total.
           O valor total do DFD é a somatória dos valores dos itens (Seção 4). */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3" data-ancora="valor">
         <StatMini label="Total de itens" value={num(dfd.totalItens ?? dfd.itens.length)} />
         <StatMini
           label="Valor total"
@@ -203,7 +203,7 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
       </div>
 
       {/* Seção 1 — Área requisitante */}
-      <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+      <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="anoPca">
         <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
         <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
           <Campo label="Nº DFD" valor={dfd.numero} />
@@ -238,7 +238,7 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
       )}
 
       {/* Seção 4 — Itens (os com pendência numa tabela SEPARADA) */}
-      <section>
+      <section data-ancora="itens">
         <h3 className="mb-2 text-sm font-bold text-text">
           4 · Itens ({num(dfd.totalItens ?? dfd.itens.length)})
         </h3>
@@ -303,7 +303,11 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
       {secoesGerais.length > 0 && (
         <section className="space-y-3">
           {secoesGerais.map((s) => (
-            <div key={s.numero} className="rounded-card border border-border bg-surface p-5 shadow-ring">
+            <div
+              key={s.numero}
+              className="rounded-card border border-border bg-surface p-5 shadow-ring"
+              data-ancora={s.titulo.toUpperCase().includes("JUSTIFICATIVA") ? "justificativa" : undefined}
+            >
               <h3 className="mb-1.5 text-sm font-bold text-text">
                 {s.numero} · {s.titulo}
               </h3>
@@ -317,7 +321,7 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
 
       {/* Assinaturas Digitais (Certificado Digital) */}
       {dfd.assinaturas.lista.length > 0 && (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="assinatura">
           <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais (Certificado Digital)</h3>
           <p className="mb-4 text-xs text-muted">
             Quem assina é o responsável que solicitou a consolidação do DFD no PCA. A autenticidade pode ser
