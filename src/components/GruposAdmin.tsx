@@ -197,11 +197,11 @@ export function GruposAdmin() {
           </div>
           <div>
             <span className="mb-2 block text-[13.5px] font-bold text-text">
-              Repartições do grupo · {reps.size} selecionada(s)
+              Unidades do grupo · {reps.size} selecionada(s)
             </span>
             {repsDisp.length === 0 ? (
               <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
-                Nenhuma repartição cadastrada. Crie em Repartições.
+                Nenhuma unidade cadastrada. Crie em Unidades.
               </p>
             ) : (
               <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">

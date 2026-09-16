@@ -12,6 +12,7 @@ import {
 } from "@/lib/dfd-tratamento";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
   pdfExigeAssinatura,
   type Responsaveis,
@@ -26,7 +27,16 @@ import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding } from "./icons";
 import { Segmented } from "./Segmented";
 
-type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
+type Rep = {
+  id: number;
+  codigo: string;
+  nome: string;
+  orgaoId?: number | null;
+  setorRequisitante?: string | null;
+  numeroInteressado?: string | null;
+  responsaveis: Responsaveis;
+};
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
 export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number };
@@ -77,10 +87,15 @@ export function mensagensDoDfd(
   anoPca: number | null | undefined,
   regras: RegrasAvaliacao = regrasPadrao(),
   categoria: string | null = null,
+  orgaos: Orgao[] = [],
 ): MensagemDfd[] {
   const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
   });
+  // Divergência órgão × unidade (item 6.3): compara o "Órgão/Entidade" do DFD com o órgão da
+  // unidade SELECIONADA. Só quando há órgãos cadastrados e a unidade tem órgão.
+  const orgaoUnidadeDivergente =
+    orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(d.orgaoEntidade, rep.orgaoId, orgaos);
   return mensagensDfd(
     {
       itens: d.itens,
@@ -96,7 +111,7 @@ export function mensagensDoDfd(
       assinatura: { status: res.status, motivo: res.status === "erro" ? res.motivo : null },
     },
     regras,
-    { categoria },
+    { categoria, orgaoUnidadeDivergente },
   );
 }
 
@@ -126,6 +141,7 @@ export function DfdConferir({
   autoCampos = [],
   readOnly = false,
   regras = regrasPadrao(),
+  orgaos = [],
   ancoraAlvo = null,
   itemAtivo = null,
   onRepChange,
@@ -137,6 +153,8 @@ export function DfdConferir({
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   repId: number | null;
+  /** Órgãos cadastrados — p/ apontar a divergência Órgão/Entidade × órgão da unidade. */
+  orgaos?: Orgao[];
   /** Ano do PCA efetivo do DFD (herdado do protocolo / definido no avulso) — só exibição. */
   anoPca?: number | null;
   autoMatch: boolean;
@@ -157,6 +175,9 @@ export function DfdConferir({
   onItemClick?: (idx: number) => void;
 }) {
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
+  // Divergência órgão × unidade (item 6.3): o "Órgão/Entidade" do DFD aponta um órgão diferente
+  // do órgão da unidade selecionada. Não bloqueia — só avisa (âmbar).
+  const orgaoDivergente = orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(dfd.orgaoEntidade, rep.orgaoId, orgaos);
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
   const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
@@ -234,7 +255,7 @@ export function DfdConferir({
       {/* Setor / Repartição (setor = repartição) */}
       <div data-ancora="reparticao">
         <label className={labelCls} htmlFor="dfd-rep">
-          Setor / Repartição <span style={{ color: "var(--danger)" }}>*</span>
+          Setor / Unidade <span style={{ color: "var(--danger)" }}>*</span>
         </label>
         <select
           id="dfd-rep"
@@ -243,7 +264,7 @@ export function DfdConferir({
           disabled={roRep}
           onChange={(e) => onRepChange(e.target.value ? Number(e.target.value) : null)}
         >
-          <option value="">— Selecione a repartição —</option>
+          <option value="">— Selecione a unidade —</option>
           {reparticoes.map((r) => (
             <option key={r.id} value={r.id}>
               {r.codigo} · {r.nome}
@@ -252,7 +273,13 @@ export function DfdConferir({
         </select>
         {autoMatch && (
           <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
-            Repartição detectada automaticamente pelo setor. Confirme ou ajuste.
+            Unidade detectada automaticamente pelo setor. Confirme ou ajuste.
+          </Callout>
+        )}
+        {orgaoDivergente && (
+          <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mt-2">
+            O “Órgão/Entidade” do DFD{dfd.orgaoEntidade ? ` (“${dfd.orgaoEntidade}”)` : ""} diverge do órgão desta
+            unidade. Confira a unidade selecionada ou o cadastro do órgão.
           </Callout>
         )}
       </div>
@@ -387,7 +414,7 @@ export function DfdConferir({
       {/* Dica de fluxo (não é conferência do DFD): repartição diferente da ativa no head. */}
       {foraDoHead && (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
-          A repartição escolhida é diferente da ativa no cabeçalho — selecione-a (ou "Geral") no topo para vê-lo na
+          A unidade escolhida é diferente da ativa no cabeçalho — selecione-a (ou "Geral") no topo para vê-lo na
           lista depois.
         </Callout>
       )}

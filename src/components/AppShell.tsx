@@ -12,6 +12,7 @@ import {
   IconBell,
   IconBox,
   IconBuilding,
+  IconLandmark,
   IconCheck,
   IconChevronDown,
   IconClipboard,
@@ -64,7 +65,8 @@ const SECOES: NavSecao[] = [
       { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings, roles: ["admin"] },
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
       { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, roles: ["admin"] },
-      { href: "/painel/reparticoes", label: "Repartições", Icon: IconBuilding, roles: ["admin"] },
+      { href: "/painel/orgaos", label: "Órgãos", Icon: IconLandmark, roles: ["admin"] },
+      { href: "/painel/reparticoes", label: "Unidades", Icon: IconBuilding, roles: ["admin"] },
       { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
     ],
@@ -340,7 +342,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
   return (
     <Dropdown
       align="start"
-      ariaLabel="Repartição ativa"
+      ariaLabel="Unidade ativa"
       triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-[var(--h-control-sm)] text-[13px] font-medium text-text-2 hover:bg-surface-2"
       width={260}
       trigger={

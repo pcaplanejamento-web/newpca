@@ -25,6 +25,7 @@ import {
   Image as ImageIcon,
   Inbox,
   KeyRound,
+  Landmark,
   Layers,
   LayoutDashboard,
   Loader2,
@@ -61,6 +62,7 @@ export const IconUpload = Upload;
 export const IconMenu = Menu;
 export const IconClose = X;
 export const IconBuilding = Building2;
+export const IconLandmark = Landmark;
 export const IconWallet = Wallet;
 export const IconBox = Package;
 export const IconTrophy = Trophy;

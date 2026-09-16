@@ -8,11 +8,20 @@ import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
 export const dynamic = "force-dynamic";
 
+const CODIGO_GERAL = "GERAL";
+
+/** Recusa mexer na unidade VIRTUAL "Geral" (não é editável nem excluível). */
+async function ehGeral(id: number): Promise<boolean> {
+  const [r] = await getDb().select({ codigo: reparticoes.codigo }).from(reparticoes).where(eq(reparticoes.id, id)).limit(1);
+  return (r?.codigo ?? "").toUpperCase() === CODIGO_GERAL;
+}
+
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  if (await ehGeral(id)) return erro("A unidade 'Geral' é virtual e não pode ser editada.", 400);
   const corpo = await parseCorpo(reparticaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
   await getDb()
@@ -21,6 +30,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       codigo: corpo.data.codigo,
       nome: corpo.data.nome,
       numeroInteressado: corpo.data.numeroInteressado ?? null,
+      setorRequisitante: corpo.data.setorRequisitante ?? null,
+      orgaoId: corpo.data.orgaoId ?? null,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
@@ -33,7 +44,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if ("erro" in guard) return guard.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
-  // Vínculos grupo↔repartição caem por FK cascade.
+  if (await ehGeral(id)) return erro("A unidade 'Geral' é virtual e não pode ser excluída.", 400);
+  // Vínculos grupo↔unidade caem por FK cascade.
   await getDb().delete(reparticoes).where(eq(reparticoes.id, id));
   return ok();
 }

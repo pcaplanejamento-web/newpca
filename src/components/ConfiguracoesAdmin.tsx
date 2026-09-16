@@ -14,6 +14,7 @@ import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
   IconBuilding,
+  IconLandmark,
   IconCheck,
   IconImage,
   IconPalette,
@@ -348,15 +349,21 @@ export function ConfiguracoesAdmin({
         icon={<IconPalette className="h-5 w-5" />}
       />
       <LinkCard
+        href="/painel/orgaos"
+        titulo="Órgãos"
+        descricao="Órgãos e o padrão de identificação do DFD."
+        icon={<IconLandmark className="h-5 w-5" />}
+      />
+      <LinkCard
         href="/painel/reparticoes"
-        titulo="Repartições"
-        descricao="Setores e responsáveis por DFDs."
+        titulo="Unidades"
+        descricao="Unidades, órgão e responsáveis por DFDs."
         icon={<IconBuilding className="h-5 w-5" />}
       />
       <LinkCard
         href="/painel/grupos"
         titulo="Grupos"
-        descricao="Grupos de acesso e suas repartições."
+        descricao="Grupos de acesso e suas unidades."
         icon={<IconUsers className="h-5 w-5" />}
       />
       <LinkCard

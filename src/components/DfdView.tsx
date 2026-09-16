@@ -177,7 +177,7 @@ export function DfdView({
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
-      : "Sem repartição";
+      : "Sem unidade";
   // Nota "Estimado (nota)" quando o estimado difere da somatória — o ADM pode ocultar ("ignorar").
   const mostrarNotaEstimado =
     nivelDe(regras, "dfd.valorEstimadoVsTotal", { dfdTipo: tipoCurtoDfd(dfd.tipo) }) !== "ignorar";
@@ -223,7 +223,7 @@ export function DfdView({
           <Campo label="Ano do PCA" valor={dfd.anoPca != null ? String(dfd.anoPca) : "—"} />
           <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
           <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
-          <Campo label="Repartição" valor={rep} span />
+          <Campo label="Unidade" valor={rep} span />
           <Campo label="Responsável" valor={dfd.responsavel ?? "—"} />
           <Campo label="Matrícula" valor={dfd.matricula ?? "—"} />
           <Campo label="E-mail" valor={dfd.email ?? "—"} span />

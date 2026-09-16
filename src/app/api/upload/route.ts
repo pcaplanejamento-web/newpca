@@ -57,8 +57,8 @@ export async function POST(req: Request) {
       const { codigo, municipio, nomeArquivo, totalItens, valorTotal, rows } =
         parsed.data;
 
-      // Repartição ativa no head vira dona da unidade. Em "Geral" (rep=null) a
-      // unidade fica sem repartição; ao RE-importar em Geral, preserva a atual.
+      // Unidade ativa no head vira dona da planilha importada. Em "Geral" (rep=null)
+      // a planilha fica sem unidade dona; ao RE-importar em Geral, preserva a atual.
       const rep = await getReparticaoFiltro(auth.u);
       const set = {
         municipio,

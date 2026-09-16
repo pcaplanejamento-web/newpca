@@ -99,7 +99,7 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
           const titulo =
             g.reparticaoCodigo || g.reparticaoNome
               ? `${g.reparticaoCodigo ?? ""}${g.reparticaoNome ? ` · ${g.reparticaoNome}` : ""}`
-              : "Sem repartição";
+              : "Sem unidade";
           return (
             <section key={g.reparticaoId ?? "sem"} className="space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">

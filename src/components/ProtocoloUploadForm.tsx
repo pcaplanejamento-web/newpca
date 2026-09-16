@@ -29,7 +29,7 @@ import {
   type PdfDoc,
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
-import { casarReparticao } from "@/lib/reparticao-match";
+import { casarReparticao, casarUnidadePorInteressado } from "@/lib/reparticao-match";
 import {
   bloqueiaAssinatura,
   pdfExigeAssinatura,
@@ -56,7 +56,16 @@ import { RelatorioErros } from "./RelatorioErros";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 
-type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
+type Rep = {
+  id: number;
+  codigo: string;
+  nome: string;
+  orgaoId?: number | null;
+  setorRequisitante?: string | null;
+  numeroInteressado?: string | null;
+  responsaveis: Responsaveis;
+};
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
 type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
@@ -72,12 +81,14 @@ export function ProtocoloUploadForm({
   dfdsExistentes = [],
   pcas = [],
   regras = regrasPadrao(),
+  orgaos = [],
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   dfdsExistentes?: DfdExistente[];
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
+  orgaos?: Orgao[];
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
@@ -209,10 +220,9 @@ export function ProtocoloUploadForm({
       }
       docRef.current = doc;
       const autos = idx.dfds.map((d) => casarReparticao(d, reparticoes));
-      // Repartição do protocolo: pelo Interessado → senão 1º DFD casado → senão ativa.
-      const repInteressado = p.interessado
-        ? casarReparticao({ setorRequisitante: p.interessado, orgaoEntidade: p.interessado }, reparticoes)
-        : null;
+      // Unidade do protocolo: pelo Interessado (número cadastrado → senão nome) → senão 1º DFD
+      // casado → senão a ativa. O número do Interessado identifica a unidade (item 5).
+      const repInteressado = casarUnidadePorInteressado(p.interessado, reparticoes);
       setNumero(p.numero ?? "");
       setData(p.data ?? "");
       setInteressado(p.interessado ?? "");
@@ -565,7 +575,7 @@ export function ProtocoloUploadForm({
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const repAberto = abertoIdx >= 0 ? (reparticoes.find((r) => r.id === dfdRepIds[abertoIdx]) ?? null) : null;
   // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
-  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria) : [];
+  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos) : [];
 
   // Relatório de erros do protocolo em DESPACHO (copiável) — pendências CIRÚRGICAS por
   // DFD com erro + capa (aponta o que corrigir e onde).
@@ -627,7 +637,7 @@ export function ProtocoloUploadForm({
       <div className="flex min-h-[42px] flex-wrap items-center gap-2">
         {bulkCampo === "reparticao" && (
           <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkRep ?? ""} onChange={(e) => setBulkRep(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Repartição —</option>
+            <option value="">— Unidade —</option>
             {reparticoes.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.codigo} · {r.nome}
@@ -826,6 +836,7 @@ export function ProtocoloUploadForm({
                         autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
                         autoCampos={autoMap.get(abertoIdx) ?? []}
                         regras={regras}
+                        orgaos={orgaos}
                         ancoraAlvo={ancoraAlvo}
                         itemAtivo={painel?.tipo === "item" ? painel.idx : null}
                         onItemClick={(idx) => setPainel({ tipo: "item", idx })}
@@ -878,7 +889,7 @@ export function ProtocoloUploadForm({
                 {anoPcaBloqueia
                   ? "Defina o PCA do processo para protocolar"
                   : repBloqueia
-                    ? "Defina a repartição do processo para protocolar"
+                    ? "Defina a unidade do processo para protocolar"
                     : !temDfds
                       ? "Sem DFDs — cria só o protocolo."
                       : analisando
@@ -887,7 +898,7 @@ export function ProtocoloUploadForm({
                           ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
                           : capaBloqueia
                             ? "Valor da capa diverge da somatória — substitua para liberar"
-                            : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
+                            : `${index?.dfds.length} DFD(s) · ${semRep} sem unidade · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
               </span>
             )}
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -977,10 +988,10 @@ export function ProtocoloUploadForm({
             >
               <div className="sm:col-span-2">
                 <label className={labelCls} htmlFor="proto-rep">
-                  Repartição do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>
+                  Unidade do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <select id="proto-rep" className={inputCls} value={protoRepId ?? ""} onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}>
-                  <option value="">— Selecione a repartição —</option>
+                  <option value="">— Selecione a unidade —</option>
                   {reparticoes.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.codigo} · {r.nome}

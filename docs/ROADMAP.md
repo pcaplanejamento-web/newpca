@@ -249,6 +249,20 @@ animadas; 1 por vez no mobile). **Clicar numa mensagem** rola o DFD (que segue a
 cor do status**. `mensagensDoDfd` (exportado de `DfdConferir`, confere a assinatura) é a fonte única; "Copiar pendências"
 reusa `linhasRelatorioDfd`. Reuso total (tokens); catalogado; testes de `mensagensDfd`. Sem migração.
 
+### Órgão › Unidade: hierarquia, identificação por matchers e renomeação — entregue
+✅ **Rename UI-only** "Repartição" → **"Unidade"** (o código/tabela seguem `reparticao*`). Nova entidade **Órgão**
+(`orgaos`, migração `0022`) **acima** da unidade — tela `/painel/orgaos` (`OrgaosAdmin`) + `/api/admin/orgaos*`; toda
+unidade tem **órgão** (`reparticoes.orgao_id`). Migração **aditiva** que **preserva o legado** (semeia a Prefeitura e
+vincula as unidades atuais). **Identificação configurável:** o **Interessado** do protocolo casa a unidade pelo **número**
+cadastrado (`numero_interessado`), o **Setor Requisitante** do DFD casa a unidade (`setor_requisitante`), e o
+**Órgão/Entidade** do DFD casa o órgão (`orgaos.orgao_entidade`) — tudo no ponto único puro `reparticao-match.ts`
+(`casarUnidade`/`casarUnidadePorInteressado`/`casarOrgao`), com **invariante testado** (campos vazios ⇒ igual a hoje).
+**Divergência Órgão × Unidade** (item 6.3) vira **atenção âmbar configurável** (`dfd.orgaoUnidadeDivergente`, padrão
+intermediário) — Callout no `DfdConferir` + mensagem no painel; o servidor só bloqueia se elevada a fundamental.
+Ordenação das listas admin trocou o **arrasto** (`ReorderTable` removido) por **botões ↑/↓** no `DataTable` (reusa
+`PATCH .../ordem`). **"Geral"** virou **virtual** (todas as unidades; escondida do CRUD, não editável, concedível por
+grupo). Testes de matchers/divergência + preservação do legado na cadeia de migrações. Sem quebrar nada.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField

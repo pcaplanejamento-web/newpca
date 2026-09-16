@@ -1,12 +1,15 @@
-import { asc, sql } from "drizzle-orm";
+import { asc, ne, sql } from "drizzle-orm";
 import { reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
-import { ok, parseCorpo } from "@/lib/http";
+import { erro, ok, parseCorpo } from "@/lib/http";
 import { reparticaoSchema } from "@/lib/rbac-validation";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
 export const dynamic = "force-dynamic";
+
+/** A "Geral" é VIRTUAL (representa todas as unidades) — não entra no CRUD de unidades. */
+const CODIGO_GERAL = "GERAL";
 
 export async function GET() {
   const guard = await exigirAdmin();
@@ -18,9 +21,12 @@ export async function GET() {
       nome: reparticoes.nome,
       ordem: reparticoes.ordem,
       numeroInteressado: reparticoes.numeroInteressado,
+      setorRequisitante: reparticoes.setorRequisitante,
+      orgaoId: reparticoes.orgaoId,
       responsavelDfd: reparticoes.responsavelDfd,
     })
     .from(reparticoes)
+    .where(ne(reparticoes.codigo, CODIGO_GERAL)) // esconde a Geral virtual do cadastro
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // A coluna guarda JSON; expõe como lista de nomes `responsaveis`.
   const lista = rows.map(({ responsavelDfd, ...r }) => ({ ...r, responsaveis: parseResponsaveis(responsavelDfd) }));
@@ -32,6 +38,8 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(reparticaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
+  if (corpo.data.codigo.trim().toUpperCase() === CODIGO_GERAL)
+    return erro("O código 'GERAL' é reservado à unidade virtual.", 400);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
   const [row] = await db
@@ -41,6 +49,8 @@ export async function POST(req: Request) {
       nome: corpo.data.nome,
       ordem: Number(max) + 1,
       numeroInteressado: corpo.data.numeroInteressado ?? null,
+      setorRequisitante: corpo.data.setorRequisitante ?? null,
+      orgaoId: corpo.data.orgaoId ?? null,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
     })
     .returning({ id: reparticoes.id });

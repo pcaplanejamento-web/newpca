@@ -33,7 +33,16 @@ import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { ProtocoloCabecalho, ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
 import { Tabs } from "./Tabs";
 
-type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
+type Rep = {
+  id: number;
+  codigo: string;
+  nome: string;
+  numeroInteressado?: string | null;
+  setorRequisitante?: string | null;
+  orgaoId?: number | null;
+  responsaveis: Responsaveis;
+};
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
 
 const valorDe = (r: DfdResumo) => r.valorTotal ?? r.valorEstimado ?? 0;
 
@@ -80,6 +89,7 @@ export function DfdsView({
   reparticaoAtivaId,
   pcas = [],
   regras = regrasPadrao(),
+  orgaos = [],
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -88,6 +98,7 @@ export function DfdsView({
   reparticaoAtivaId: number | null;
   pcas?: PcaResumo[];
   regras?: RegrasAvaliacao;
+  orgaos?: Orgao[];
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -379,7 +390,7 @@ export function DfdsView({
     },
     {
       key: "reparticao",
-      header: "Repartição",
+      header: "Unidade",
       value: (r) => r.reparticaoCodigo ?? "—",
       render: (r) =>
         r.reparticaoCodigo ? (
@@ -419,6 +430,7 @@ export function DfdsView({
           dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
           pcas={pcas}
           regras={regras}
+          orgaos={orgaos}
         />
       )}
       <section>
@@ -450,7 +462,7 @@ export function DfdsView({
   const dfdsTab = (
     <div className="space-y-6">
       {podeEditar && (
-        <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} />
+        <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
       )}
       <section>
         <h3 className="mb-3 text-sm font-semibold text-text-2">DFDs importados ({dfds.length})</h3>
@@ -482,7 +494,7 @@ export function DfdsView({
   // categoria (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
   const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
   const categoriaDfd = protoView ? classificarAssunto(protoView.assunto) : null;
-  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd) : [];
+  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd, orgaos) : [];
   const irParaMensagem = (m: { ancora: string; status: "erro" | "atencao" | "acerto" }) => {
     // O painel de mensagens fica AO LADO do DFD (não substitui) → só rola/destaca a âncora.
     setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
@@ -518,6 +530,7 @@ export function DfdsView({
       autoMatch={false}
       readOnly={!podeEditar || dfdTrancado}
       regras={regras}
+      orgaos={orgaos}
       ancoraAlvo={ancoraAlvo}
       itemAtivo={painel?.tipo === "item" ? painel.idx : null}
       onItemClick={(idx) => setPainel({ tipo: "item", idx })}

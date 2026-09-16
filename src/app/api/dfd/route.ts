@@ -5,9 +5,11 @@ import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabe
 import { dfdOpSchema, faltasObrigatorias } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { listarOrgaos } from "@/lib/orgaos";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
-import { carregarResponsaveis } from "@/lib/reparticoes";
+import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +17,9 @@ export const dynamic = "force-dynamic";
  * Escrita de DFD em LOTES (cobre o DFD avulso e cada DFD do protocolo):
  * - `start-dfd`: cabeçalho + 1º lote → cria/zera o DFD (por `numero`), devolve `dfdId`.
  *   Garante a regra (defeituoso NUNCA grava) via `faltasObrigatorias`; exige que a
- *   repartição seja **acessível** e **anti-sequestro** por `numero`.
+ *   unidade seja **acessível** e **anti-sequestro** por `numero`.
  * - `append-dfd-itens`: acrescenta lotes ao `dfdId` (idempotente no servidor). Exige
- *   que a repartição do DFD seja acessível ao editor.
+ *   que a unidade do DFD seja acessível ao editor.
  */
 export async function POST(req: Request) {
   const a = await exigirEditor();
@@ -33,7 +35,7 @@ export async function POST(req: Request) {
   if (d.mode === "append-dfd-itens") {
     const dfd = await getDfdReparticao(d.dfdId);
     if (!dfd) return erro("DFD não encontrado para acrescentar itens.", 404);
-    if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à repartição deste DFD.", 403);
+    if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à unidade deste DFD.", 403);
     if (!d.rows.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
       return erro("Todos os itens precisam de valor unitário.", 422);
     }
@@ -63,11 +65,18 @@ export async function POST(req: Request) {
   // ano do PCA (herdado do protocolo ou definido no avulso). Sem ele, não grava.
   if (d.anoPca == null && nivelDe(regras, "dfd.anoPca", ctxAv) === "fundamental")
     return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
-  if (!acessivel(d.reparticaoId)) return erro("Repartição inválida ou sem acesso.", 403);
-  // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma repartição inacessível.
+  // Divergência órgão × unidade — portão à parte, só EXECUTA (e só bloqueia) quando o ADM
+  // elevou o ponto a "fundamental" (padrão intermediário = atenção, não bloqueia → sem custo).
+  if (nivelDe(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "fundamental" && d.reparticaoId != null) {
+    const [orgaos, orgaoUnidade] = await Promise.all([listarOrgaos(), orgaoIdDaReparticao(d.reparticaoId)]);
+    if (orgaoDivergeDaUnidade(d.orgaoEntidade, orgaoUnidade, orgaos))
+      return erro("O Órgão/Entidade do DFD diverge do órgão da unidade cadastrada.", 422);
+  }
+  if (!acessivel(d.reparticaoId)) return erro("Unidade inválida ou sem acesso.", 403);
+  // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
   const existente = await getReparticaoDfdNumero(d.numero);
   if (existente && !acessivel(existente.reparticaoId)) {
-    return erro("Já existe um DFD com esse número em outra repartição, sem acesso.", 403);
+    return erro("Já existe um DFD com esse número em outra unidade, sem acesso.", 403);
   }
   // Conferência da ASSINATURA (garantia no servidor), respeitando o nível `dfd.assinatura`:
   // PDF sem assinatura, sem responsável cadastrado, ou assinante não autorizado → não grava.

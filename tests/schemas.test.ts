@@ -255,8 +255,8 @@ describe("faltasObrigatorias (regras de import de DFD)", () => {
     assert.ok(f.some((x) => /valor unit/i.test(x)));
   });
 
-  it("bloqueia sem repartição", () => {
-    assert.ok(faltasObrigatorias({ ...completo, reparticaoId: null }).some((x) => /repartição/i.test(x)));
+  it("bloqueia sem unidade", () => {
+    assert.ok(faltasObrigatorias({ ...completo, reparticaoId: null }).some((x) => /unidade/i.test(x)));
   });
 
   it("bloqueia sem justificativa/previsão/prioridade/fundamentação", () => {

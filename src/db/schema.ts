@@ -219,6 +219,25 @@ export const usuarioGrupos = sqliteTable(
  * Cada grupo recebe acesso a um subconjunto (`grupo_reparticoes`); a repartição
  * ativa é escolhida no cabeçalho (cookie), entre as que o grupo ativo acessa.
  */
+/**
+ * Órgão = entidade organizacional ACIMA da unidade (repartição). Toda unidade
+ * pertence a um órgão (`reparticoes.orgao_id`). `orgao_entidade` é o padrão que
+ * casa o campo "Órgão/Entidade" do DFD → órgão. Lista global ordenável.
+ */
+export const orgaos = sqliteTable(
+  "orgaos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    sigla: text("sigla").notNull(),
+    orgaoEntidade: text("orgao_entidade"), // padrão do "Órgão/Entidade" do DFD → órgão (match)
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("orgaos_ordem_idx").on(t.ordem)],
+);
+
 export const reparticoes = sqliteTable(
   "reparticoes",
   {
@@ -226,12 +245,14 @@ export const reparticoes = sqliteTable(
     codigo: text("codigo").notNull(),
     nome: text("nome").notNull(),
     ordem: integer("ordem").notNull().default(0),
-    numeroInteressado: text("numero_interessado"), // nº do interessado (cadastro do ADM)
+    numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
+    setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs: JSON array de nomes (parseResponsaveis)
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("reparticoes_ordem_idx").on(t.ordem)],
+  (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
 );
 
 export const grupoReparticoes = sqliteTable(
@@ -413,6 +434,8 @@ export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
 export type Reparticao = typeof reparticoes.$inferSelect;
 export type GrupoReparticao = typeof grupoReparticoes.$inferSelect;
+export type Orgao = typeof orgaos.$inferSelect;
+export type NovoOrgao = typeof orgaos.$inferInsert;
 export type DfdProtocolo = typeof dfdProtocolos.$inferSelect;
 export type NovoDfdProtocolo = typeof dfdProtocolos.$inferInsert;
 export type Dfd = typeof dfds.$inferSelect;

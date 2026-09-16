@@ -148,6 +148,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(cols.includes("ativo"), "coluna pcas.ativo ausente");
   });
 
+  it("0022 cria orgaos, adiciona orgao_id/setor_requisitante e PRESERVA o legado", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    assert.ok(tabelas.includes("orgaos"), "tabela orgaos ausente");
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('reparticoes')");
+    // Colunas novas + as antigas continuam presentes (nada perdido no ALTER aditivo).
+    for (const c of ["orgao_id", "setor_requisitante", "numero_interessado", "responsavel_dfd", "codigo", "nome", "ordem"]) {
+      assert.ok(cols.includes(c), `coluna ausente em reparticoes: ${c}`);
+    }
+    // Órgão padrão semeado.
+    const org = db.prepare("SELECT nome FROM orgaos WHERE id = 1").get() as { nome: string } | undefined;
+    assert.ok(org?.nome?.includes("Rio Verde"), "órgão padrão (Prefeitura) ausente");
+    // Legado ADAPTADO: unidades pré-existentes (não-GERAL) vinculadas ao órgão 1…
+    const amae = db.prepare("SELECT orgao_id FROM reparticoes WHERE codigo = 'AMAE'").get() as { orgao_id: number | null } | undefined;
+    assert.equal(amae?.orgao_id, 1, "AMAE deveria estar no órgão 1 (Prefeitura)");
+    // …e a GERAL virtual permanece SEM órgão (representa todas as unidades).
+    const geral = db.prepare("SELECT orgao_id FROM reparticoes WHERE codigo = 'GERAL'").get() as { orgao_id: number | null } | undefined;
+    assert.equal(geral?.orgao_id, null, "GERAL não deve ter órgão");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

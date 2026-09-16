@@ -258,7 +258,7 @@ export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
 export function avaliarDfd(
   d: EntradaAvaliacaoDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
 ): AvaliacaoDfd {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const bloqueantes: string[] = [];
@@ -276,7 +276,11 @@ export function avaliarDfd(
   // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
   add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
-  add("dfd.reparticao", d.reparticaoId == null, "repartição vinculada");
+  add("dfd.reparticao", d.reparticaoId == null, "unidade vinculada");
+  // Divergência órgão × unidade: a flag é PRÉ-COMPUTADA pelo chamador (que tem o cadastro
+  // de órgãos/unidades) e passada no ctx — mantém `avaliarDfd` puro. Só bloqueia se o ADM
+  // elevar o ponto a "fundamental" (padrão = intermediário ⇒ atenção, não bloqueia).
+  add("dfd.orgaoUnidadeDivergente", ctx?.orgaoUnidadeDivergente === true, "órgão × unidade divergentes");
   for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
   add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ata ou licitação)");
   return { bloqueantes, atencoes };
@@ -324,7 +328,7 @@ export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
 export function mensagensDfd(
   d: EntradaMensagensDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
 ): MensagemDfd[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const out: MensagemDfd[] = [];
@@ -336,9 +340,17 @@ export function mensagensDfd(
   };
   const plural = (n: number) => (n === 1 ? "item" : "itens");
 
-  // Repartição / Setor (topo do banner)
+  // Unidade / Setor (topo do banner)
   add("dfd.reparticao", "reparticao", d.reparticaoId != null,
-    "Repartição/Setor requisitante não vinculado.", "Repartição/Setor requisitante vinculado.");
+    "Unidade/Setor requisitante não vinculado.", "Unidade/Setor requisitante vinculado.");
+
+  // Divergência órgão × unidade (item 6.3) — só APONTA quando há divergência real (a flag é
+  // pré-computada pelo chamador, que tem o cadastro). Ancorada no bloco da unidade; não
+  // bloqueia por padrão (intermediário). Sem acerto "coincidem" (evita ruído/falso-positivo).
+  if (ctx?.orgaoUnidadeDivergente === true) {
+    add("dfd.orgaoUnidadeDivergente", "reparticao", false,
+      "Órgão/Entidade do DFD diverge do órgão da unidade selecionada.", "");
+  }
 
   // PCA (ano) — portão à parte, mas exibido como mensagem.
   add("dfd.anoPca", "anoPca", d.anoPca != null,

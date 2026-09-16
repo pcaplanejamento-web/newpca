@@ -55,7 +55,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 
-## Grupos, Permissões e Repartições (RBAC por grupo)
+## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
+> **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
+> identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
+> **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo
+> importado) nem com a **Unidade de medida** do item (`itens.unidade_medida`) — três conceitos distintos.
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
   ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo tem **1 permissão** e acessa um conjunto
   de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,
@@ -67,9 +71,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
   `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
   exige grupo ativo.
-- **Repartições** (`reparticoes`: codigo+nome+ordem + **numero_interessado** e **responsavel_dfd** — cadastro do ADM,
-  nullable, migração `0017`): lista global **reordenável** (tabela com arrasto,
-  componente `ReorderTable` — Pointer Events, mouse+toque). CRUD em `ReparticoesAdmin` (`reparticaoSchema`).
+- **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
+  **orgao_id** (FK→`orgaos`, migração `0022`) + **responsavel_dfd** — cadastro do ADM, nullable): lista global
+  **reordenável por botões ↑/↓** (`DataTable` com colunas `filter:"none"`; persiste em
+  `PATCH /api/admin/reparticoes/ordem`). CRUD em `ReparticoesAdmin` (`reparticaoSchema`). Toda unidade pertence a um
+  **órgão** (select obrigatório). O `ReorderTable` foi **removido** (DataTable + ↑/↓ é o padrão de ordenação).
   `responsavel_dfd` guarda os **responsáveis por DFDs** como **JSON** (coluna reaproveitada, sem migração nova):
   **N padrões** + **N temporários**. Todo responsável tem **nome, matrícula, função** e uma **nomeação** (ato:
   `portaria`/`decreto`/`lei` + número + **link** do documento). O temporário tem, além disso, **período** início/fim.
@@ -77,14 +83,33 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cinza e os padrões voltam — com **estados** (Agendado/Vigente/Encerrado). Lógica pura/testável em
   `src/lib/reparticao-responsaveis.ts` (`parseResponsaveis`/`serializeResponsaveis` tolerantes a TODOS os formatos
   anteriores; `temporariosVigentes`/`responsaveisVigentes`/`padroesInativos`/`estadoTemporario`); UI no componente
-  `ResponsaveisEditor` (sub-campos compartilhados entre padrão e temporário). Repartição ativa por cookie
+  `ResponsaveisEditor` (sub-campos compartilhados entre padrão e temporário). Unidade ativa por cookie
   `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
   `/api/reparticoes/ativo`.
+- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD)+ordem, migração `0022`) —
+  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓), rotas
+  `/api/admin/orgaos*` (CRUD + `/ordem`). Excluir um órgão **não apaga** unidades (FK `set null`). Loader
+  `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
+  legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
+- **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
+  PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
+  autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada.
+- **Matchers (ponto ÚNICO puro `src/lib/reparticao-match.ts`):** `casarUnidade` (Setor Requisitante do DFD → unidade:
+  `setor_requisitante` configurado → sigla → nome → órgão-texto; `casarReparticao` é alias), `casarUnidadePorInteressado`
+  (Interessado do protocolo → unidade pelo **número** cadastrado → nome), `casarOrgao` (Órgão/Entidade do DFD → órgão),
+  `orgaoDivergeDaUnidade`/`divergenciaOrgaoUnidade`. Com os campos novos vazios, o resultado é **idêntico ao de hoje**
+  (invariante testado). Cadastros de match **threadados** ao cliente (`painel/dfds/page.tsx` enriquece as unidades +
+  `listarOrgaos()` → `DfdsView` → forms).
+- **Divergência Órgão × Unidade (item 6.3):** quando o "Órgão/Entidade" do DFD aponta um órgão diferente do órgão da
+  unidade selecionada, mostra **atenção âmbar** (Callout no `DfdConferir` + mensagem no painel), **configurável** —
+  ponto de avaliação `dfd.orgaoUnidadeDivergente` (padrão `intermediario`, não bloqueia). O servidor (`POST /api/dfd`)
+  só computa/bloqueia se elevado a `fundamental` (custo zero no padrão).
 - **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e
   PCA. `getReparticaoFiltro()` devolve `{id,codigo}` da ativa, ou **`null` em "Geral"** (= todas, sem
-  filtro). **Órgão = repartição:** o campo "Órgão" do protocolo é escolhido da lista de repartições
-  (guarda `orgao`=nome, `orgao_sigla`=código); as listagens de `protocolos.ts` (`escopo()`) filtram por
-  `orgao_sigla = código`. No **PCA**, cada `unidade` recebe `reparticao_id` da repartição ativa no
+  filtro). **Módulo Protocolos LEGADO (`protocolos.ts`) — "Órgão" = unidade:** ali o campo "Órgão" do
+  protocolo é escolhido da lista de unidades (guarda `orgao`=nome, `orgao_sigla`=código); `escopo()` filtra
+  por `orgao_sigla = código`. É **distinto** do novo Órgão-entidade (subsistema DFD acima). No **PCA**, cada
+  `unidade` (planilha) recebe `reparticao_id` da unidade ativa no
   import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
   `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
 - Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
@@ -386,9 +411,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
   clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
-  linha; mesmo lugar do painel de mensagens), `ReorderTable` (tabela com
-  arrasto entre linhas, Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
-  `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
+  linha; mesmo lugar do painel de mensagens). Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
+  botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
+  feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`

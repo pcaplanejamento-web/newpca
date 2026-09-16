@@ -34,7 +34,7 @@ export type DfdConferencia = {
 export function faltasObrigatorias(
   d: DfdConferencia,
   regras?: RegrasAvaliacao,
-  ctx?: { categoria?: string | null },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
 ): string[] {
   return avaliarDfd(d, regras, ctx).bloqueantes;
 }

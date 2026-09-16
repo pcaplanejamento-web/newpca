@@ -35,7 +35,6 @@ import {
   IconLayers,
   IconLock,
   IconMail,
-  IconPencil,
   IconPlus,
   IconTrash,
   IconUpload,
@@ -55,7 +54,6 @@ import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { PlanilhaDfds } from "@/components/PlanilhaDfds";
 import { RelatorioErros } from "@/components/RelatorioErros";
-import { ReorderTable } from "@/components/ReorderTable";
 import { Segmented } from "@/components/Segmented";
 import { StatCard } from "@/components/StatCard";
 import { StatMini } from "@/components/StatMini";
@@ -412,14 +410,6 @@ export function Catalogo() {
     ],
   });
   const [pag, setPag] = useState(2);
-  const [repsOrdem, setRepsOrdem] = useState([
-    { id: 1, codigo: "AMAE", nome: "Agência Municipal de Regulação de Água e Esgoto" },
-    { id: 2, codigo: "AMMT", nome: "Agência Municipal de Mobilidade e Trânsito" },
-    { id: 3, codigo: "CGM", nome: "Controladoria Geral do Município" },
-    { id: 4, codigo: "FMS", nome: "Fundo Municipal da Saúde" },
-    { id: 5, codigo: "GP", nome: "Gabinete do Prefeito" },
-  ]);
-
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
   }, []);
@@ -710,8 +700,8 @@ export function Catalogo() {
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <LinkCard href="#" titulo="Aparência" descricao="Cores, layout, densidade e ícones." icon={<Icons.IconPalette className="h-5 w-5" />} />
-          <LinkCard href="#" titulo="Repartições" descricao="Setores e responsáveis por DFDs." icon={<Icons.IconBuilding className="h-5 w-5" />} />
-          <LinkCard href="#" titulo="Grupos" descricao="Grupos de acesso e suas repartições." icon={<Icons.IconUsers className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Unidades" descricao="Unidades, órgão e responsáveis por DFDs." icon={<Icons.IconBuilding className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Grupos" descricao="Grupos de acesso e suas unidades." icon={<Icons.IconUsers className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Permissões" descricao="Abas visíveis por grupo." icon={<Icons.IconShield className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Usuários" descricao="Contas, papéis e status de acesso." icon={<Icons.IconUser className="h-5 w-5" />} />
         </div>
@@ -885,41 +875,6 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tabela reordenável (arraste as linhas)">
-        <ReorderTable
-          items={repsOrdem}
-          getId={(r) => r.id}
-          minWidth={520}
-          dica="Arraste as linhas para reordenar (mouse ou toque)."
-          preview={(r) => (
-            <>
-              <span className="mr-1.5 font-mono text-[11px] font-semibold text-accent">{r.codigo}</span>
-              {r.nome}
-            </>
-          )}
-          onReorder={(ids) =>
-            setRepsOrdem((prev) => {
-              const byId = new Map(prev.map((x) => [x.id, x]));
-              return ids.map((id) => byId.get(id as number)).filter((x): x is (typeof prev)[number] => !!x);
-            })
-          }
-          columns={[
-            { header: "#", minWidth: 40, render: (_r, i) => <span className="tabular-nums text-faint">{i + 1}</span> },
-            {
-              header: "Código",
-              minWidth: 90,
-              render: (r) => (
-                <span className="rounded-chip bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-accent">
-                  {r.codigo}
-                </span>
-              ),
-            },
-            { header: "Nome", minWidth: 240, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
-          ]}
-          acoes={() => <Button variant="ghost" aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />}
-        />
-      </Secao>
-
       <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha)">
         <DataTable
           columns={COLUNAS}
@@ -1018,7 +973,7 @@ export function Catalogo() {
         <ProtocoloView protocolo={PROTO_DEMO} />
       </Secao>
 
-      <Secao titulo="PCA — compilação dos DFDs por repartição">
+      <Secao titulo="PCA — compilação dos DFDs por unidade">
         <PcaCompilacaoView pca={PCA_DEMO} />
       </Secao>
     </>

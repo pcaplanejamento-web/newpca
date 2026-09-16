@@ -36,10 +36,12 @@ const responsavelTemporarioSchema = responsavelSchema.extend({
 
 export const reparticaoSchema = z.object({
   codigo: z.string().trim().min(1, "Informe a sigla.").max(30),
-  nome: z.string().trim().min(1, "Informe o nome da repartição.").max(160),
-  // Cadastro do ADM (opcionais): nº do interessado e responsáveis por DFDs (N padrões + N
-  // temporários com período). Todo responsável tem matrícula/função + nomeação (ato+link).
+  nome: z.string().trim().min(1, "Informe o nome da unidade.").max(160),
+  // Cadastro do ADM (opcionais): nº do interessado (identifica a unidade pelo Interessado do
+  // protocolo), padrão do Setor Requisitante do DFD e o órgão dono da unidade.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
+  setorRequisitante: z.string().trim().max(200).optional().nullable(),
+  orgaoId: z.number().int().positive().optional().nullable(),
   responsaveis: z
     .object({
       padroes: z.array(responsavelSchema).max(30).default([]),
@@ -53,6 +55,15 @@ export const reordenarSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1, "Lista vazia."),
 });
 
+// Órgão = entidade organizacional acima da unidade. `orgaoEntidade` é o padrão que casa o
+// campo "Órgão/Entidade" do DFD (opcional; cadastro do ADM).
+export const orgaoSchema = z.object({
+  sigla: z.string().trim().min(1, "Informe a sigla.").max(30),
+  nome: z.string().trim().min(1, "Informe o nome do órgão.").max(160),
+  orgaoEntidade: z.string().trim().max(200).optional().nullable(),
+});
+
 export type PermissaoInput = z.infer<typeof permissaoSchema>;
 export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
+export type OrgaoInput = z.infer<typeof orgaoSchema>;

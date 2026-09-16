@@ -6,7 +6,7 @@ import { atualizarProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparti
 
 export const dynamic = "force-dynamic";
 
-/** Protocolo completo + seus DFDs (banner de visualização) — escopado por repartição. */
+/** Protocolo completo + seus DFDs (banner de visualização) — escopado por unidade. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return ok({ protocolo });
 }
 
-/** Edita um protocolo já gravado (banner destravado) — escopo por repartição. */
+/** Edita um protocolo já gravado (banner destravado) — escopo por unidade. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
@@ -36,7 +36,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
   if (!acessivel(proto.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
   if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
-    return erro("Sem acesso à repartição de destino.", 403);
+    return erro("Sem acesso à unidade de destino.", 403);
   }
 
   await atualizarProtocolo(id, p.data);

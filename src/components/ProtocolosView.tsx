@@ -125,7 +125,7 @@ function SelReparticao({
         onChange(codigo, r?.nome ?? "");
       }}
       className={inp}
-      aria-label="Órgão (repartição)"
+      aria-label="Unidade"
     >
       <option value="">—</option>
       {reparticoes.map((r) => (
@@ -216,7 +216,7 @@ function CardEdicaoMobile({ draft, set, situacoes, reparticoes, opcoes, adiciona
           <SelSituacao value={draft.situacao} situacoes={situacoes} onChange={(v) => set({ situacao: v })} />
         </div>
         <div className="col-span-2">
-          <label className={labelEd}>Órgão (repartição)</label>
+          <label className={labelEd}>Unidade</label>
           <SelReparticao value={draft.orgaoSigla} reparticoes={reparticoes} onChange={(codigo, nome) => set({ orgaoSigla: codigo, orgao: nome })} />
         </div>
         <div>

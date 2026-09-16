@@ -40,8 +40,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
 }
 
 /**
- * Edita um DFD já gravado: vincular a protocolo (rule 4) e/ou editar repartição e
- * seções (tratamento, banner destravado). Escopo por repartição em toda escrita.
+ * Edita um DFD já gravado: vincular a protocolo (rule 4) e/ou editar unidade e
+ * seções (tratamento, banner destravado). Escopo por unidade em toda escrita.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
@@ -58,7 +58,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!dfd) return erro("DFD não encontrado.", 404);
   if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
 
-  // Vincular/desvincular a um protocolo (repartição do protocolo tem de ser acessível).
+  // Vincular/desvincular a um protocolo (unidade do protocolo tem de ser acessível).
   if (p.data.protocoloId !== undefined) {
     if (p.data.protocoloId != null) {
       const proto = await getProtocoloReparticao(p.data.protocoloId);
@@ -68,8 +68,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     await vincularDfd(id, p.data.protocoloId);
   }
 
-  // Editar repartição, seções (tratamento) e/ou referências de renovação (DFD-R). Não
-  // move p/ repartição inacessível.
+  // Editar unidade, seções (tratamento) e/ou referências de renovação (DFD-R). Não
+  // move p/ unidade inacessível.
   const editaCampos =
     p.data.reparticaoId !== undefined ||
     p.data.secoes !== undefined ||
@@ -78,10 +78,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     p.data.numeroLicitacao !== undefined;
   if (editaCampos) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
-      return erro("Sem acesso à repartição de destino.", 403);
+      return erro("Sem acesso à unidade de destino.", 403);
     }
-    // Ao mudar a repartição, reconfere a assinatura já gravada contra o responsável
-    // da NOVA repartição (regra 6: não salvar com assinatura não permitida).
+    // Ao mudar a unidade, reconfere a assinatura já gravada contra o responsável
+    // da NOVA unidade (regra 6: não salvar com assinatura não permitida).
     if (p.data.reparticaoId != null) {
       const ass = await getDfdAssinaturas(id);
       const res = validarAssinatura(ass?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {

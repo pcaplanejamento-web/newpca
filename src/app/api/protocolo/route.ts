@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (protocolo.reparticaoId != null) {
     const { lista } = await getReparticaoContexto(a.u);
     if (!lista.some((r) => r.id === protocolo.reparticaoId)) {
-      return erro("Repartição do protocolo inválida ou sem acesso.", 403);
+      return erro("Unidade do protocolo inválida ou sem acesso.", 403);
     }
   }
 

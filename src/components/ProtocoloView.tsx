@@ -167,7 +167,7 @@ export function ProtocoloView({
   const rep =
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
-      : "Sem repartição";
+      : "Sem unidade";
   const categoria = classificarAssunto(protocolo.assunto);
   // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
   // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
@@ -244,7 +244,7 @@ export function ProtocoloView({
           {editando && edicao ? (
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="proto-edit-rep">
-                Repartição
+                Unidade
               </label>
               <select
                 id="proto-edit-rep"
@@ -252,7 +252,7 @@ export function ProtocoloView({
                 value={edicao.valores.reparticaoId ?? ""}
                 onChange={(e) => edicao.onChange({ reparticaoId: e.target.value ? Number(e.target.value) : null })}
               >
-                <option value="">— Selecione a repartição —</option>
+                <option value="">— Selecione a unidade —</option>
                 {edicao.reparticoes.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.codigo} · {r.nome}
@@ -262,7 +262,7 @@ export function ProtocoloView({
             </div>
           ) : (
             <div className="sm:col-span-2">
-              <TextField label="Repartição" value={rep} disabled readOnly />
+              <TextField label="Unidade" value={rep} disabled readOnly />
             </div>
           )}
         </CapaCampos>

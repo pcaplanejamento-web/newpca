@@ -116,7 +116,7 @@ describe("faltasObrigatorias — INVARIANTE: config padrão == comportamento de 
     const f = faltasObrigatorias({ reparticaoId: null, itens: [], secoes: [] });
     assert.deepEqual(f, [
       "valor unitário em todos os itens",
-      "repartição vinculada",
+      "unidade vinculada",
       "Justificativa da necessidade (Seção 3)",
       "Previsão de entrega/execução (Seção 5)",
       "Prioridade da compra/contratação (Seção 6)",
@@ -147,8 +147,8 @@ describe("avaliarDfd — níveis e exceções", () => {
     const d = { ...dfdCompleto(), reparticaoId: null };
     const regras: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.reparticao": "intermediario" } };
     const r = avaliarDfd(d, regras);
-    assert.equal(r.bloqueantes.includes("repartição vinculada"), false);
-    assert.ok(r.atencoes.includes("repartição vinculada"));
+    assert.equal(r.bloqueantes.includes("unidade vinculada"), false);
+    assert.ok(r.atencoes.includes("unidade vinculada"));
   });
   it("DFD-R sem referência: atenção por padrão; fundamental por exceção de tipo", () => {
     const d = { ...dfdCompleto(), tipo: "DFD-R — Renovação / Ata vigente" };
@@ -167,6 +167,6 @@ describe("avaliarDfd — níveis e exceções", () => {
       exProtocolo: { exclusao: { "dfd.reparticao": "ignorar" } },
     };
     assert.deepEqual(avaliarDfd(d, regras, { categoria: "exclusao" }).bloqueantes, []);
-    assert.ok(avaliarDfd(d, regras, { categoria: "inclusao" }).bloqueantes.includes("repartição vinculada"));
+    assert.ok(avaliarDfd(d, regras, { categoria: "inclusao" }).bloqueantes.includes("unidade vinculada"));
   });
 });

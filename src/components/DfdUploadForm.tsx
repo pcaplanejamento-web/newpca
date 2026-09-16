@@ -30,7 +30,16 @@ import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
 
-type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
+type Rep = {
+  id: number;
+  codigo: string;
+  nome: string;
+  orgaoId?: number | null;
+  setorRequisitante?: string | null;
+  numeroInteressado?: string | null;
+  responsaveis: Responsaveis;
+};
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
 
 export function DfdUploadForm({
@@ -38,11 +47,13 @@ export function DfdUploadForm({
   reparticaoAtivaId = null,
   pcas = [],
   regras = regrasPadrao(),
+  orgaos = [],
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
+  orgaos?: Orgao[];
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -185,7 +196,7 @@ export function DfdUploadForm({
   // Conferência da assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
   // Mensagens (erro/atenção/acerto) do DFD — para o botão e o painel lateral. Avulso: sem categoria.
-  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null) : [];
+  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos) : [];
   const assinaturaBloqueia = preview
     ? bloqueiaAssinatura(
         validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
@@ -256,14 +267,14 @@ export function DfdUploadForm({
                 DFD {resultado.numero} importado!
               </h3>
               <p className="text-sm text-muted">
-                {num(resultado.itens)} itens{resultado.repNome ? ` · Repartição ${resultado.repNome}` : ""}
+                {num(resultado.itens)} itens{resultado.repNome ? ` · Unidade ${resultado.repNome}` : ""}
               </p>
             </div>
           </div>
           {resultado.foraDoHead && (
             <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-              Este DFD foi salvo na repartição <strong>{resultado.repNome}</strong>, diferente da ativa
-              no cabeçalho. Selecione essa repartição (ou "Geral") no topo para vê-lo na lista.
+              Este DFD foi salvo na unidade <strong>{resultado.repNome}</strong>, diferente da ativa
+              no cabeçalho. Selecione essa unidade (ou "Geral") no topo para vê-lo na lista.
             </Callout>
           )}
           <div className="mt-5">
@@ -361,6 +372,7 @@ export function DfdUploadForm({
               autoMatch={autoMatch}
               autoCampos={autoCampos}
               regras={regras}
+              orgaos={orgaos}
               ancoraAlvo={ancoraAlvo}
               itemAtivo={painel?.tipo === "item" ? painel.idx : null}
               onItemClick={(idx) => setPainel({ tipo: "item", idx })}
