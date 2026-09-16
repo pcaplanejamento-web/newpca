@@ -161,7 +161,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Regras obrigatórias (`faltasObrigatorias`, `src/lib/dfd-validation.ts`) — fonte única cliente+servidor:** não
   importa sem **valor unitário em todos os itens**, **repartição**, **justificativa** (§3), **previsão de entrega**
   (§5), **prioridade** (§6) e **fundamentação legal** (§7). O banner **mostra o DFD e lista o que falta**, mas
-  **bloqueia o botão** "Importar"; o `POST /api/dfd` rejeita (422) por garantia.
+  **bloqueia o botão** "Importar"; o `POST /api/dfd` rejeita (422) por garantia. **A regra agora é CONFIGURÁVEL pelo
+  ADM** (ver "Avaliação configurável"): `faltasObrigatorias(d, regras?, ctx?)` delega para `avaliarDfd`
+  (`dfd-tratamento`), que resolve o **nível** de cada ponto; com `regras` no padrão do catálogo devolve exatamente a
+  lista de hoje (**invariante coberto por teste**). O **ano do PCA** e a **assinatura** seguem como portões à parte,
+  também com nível próprio.
+- **Avaliação CONFIGURÁVEL pelo ADM (`avaliacao-core.ts` puro + `avaliacao.ts` loader):** cada dado de
+  **Protocolo/DFD/Item** tem um **nível** — `fundamental` (bloqueia), `intermediario` (só avisa/ATENÇÃO âmbar),
+  `automatico` (corrige sozinho onde há corretor), `ignorar`. O **catálogo** `CATALOGO_AVALIACAO` (fonte única: UI +
+  defaults + validação) traz `niveisPermitidos`/`nivelPadrao` (os defaults reproduzem o comportamento atual — config
+  vazia ⇒ igual a hoje). `nivelDe(regras, chave, ctx)` resolve com **exceções por tipo de DFD** (`DFD-S/R/O/E`) e por
+  **categoria de Protocolo**; como o `assunto` da capa é texto livre, `classificarAssunto` casa por **palavras-chave**
+  (categorias editáveis). Armazenado na linha `configuracoes` id=1 (chave `avaliacao`, **sem migração**), lido por
+  `getRegrasAvaliacao()` (cache 60s, fail-safe) e gravado em `/api/admin/avaliacao` (`exigirAdmin`, preserva as chaves
+  irmãs da aparência). UI = aba **"Avaliação"** de `/painel/configuracoes` (`AvaliacaoAdmin`: sub-abas Protocolo/DFD/
+  Item + Categorias, com seletor de contexto p/ as exceções). As `regras` são threadadas server→cliente igual a
+  `pcas` (`painel/dfds/page.tsx` → `DfdsView` → `DfdUploadForm`/`ProtocoloUploadForm`/`DfdConferir`/`ProtocoloView`/
+  `DfdView`); o servidor reconfere em `/api/dfd`, `/api/protocolo`, `/api/dfd/[id]` (global + por-tipo; a categoria é
+  aplicada no cliente e no `POST /api/protocolo`). **Não configurável** (estrutural/técnico, permanece travado):
+  integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição, capa imutável. **Gates só-cliente**
+  (como hoje): conciliação do valor da capa e "sem DFD com erro".
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
   `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
@@ -292,6 +311,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   não trava) — o usuário pode preencher à mão. O `DfdView` exibe **Ano do PCA** (Seção 1) e as referências (só DFD-R);
   o `ProtocoloView` mostra o **PCA (ano)** na capa. Editar refs num DFD gravado vai pelo `PATCH /api/dfd/[id]`
   (`editarDfdSchema` + `atualizarDfdCampos`). `anoPca` é threadado da página (`listarPcas`) → `DfdsView` → forms.
+  - **Estado de ATENÇÃO (DFD-R sem referência):** `EstadoDfd` ganhou **`atencao`** (âmbar `--warn`, precedência
+    **erro > atenção > editado > regularizado > regular**) — `dfdRSemReferencia` (puro) o define para o DFD-R sem
+    contrato/ata/licitação. Não bloqueia. O `PlanilhaDfds` **separa os DFDs em atenção numa tabela própria** (entre
+    erro e regulares), em TODA lista (import, protocolo gravado, aba DFDs — por isso `DfdResumo`/`colunasDfd` e
+    `ProtocoloVisualDfd` carregam as refs). No import, o usuário **escolhe incluir** os DFD-R em atenção no
+    **relatório** (despacho): o `RelatorioErros` ganhou um `toggle` opcional (Checkbox) e o botão "Relatório" aparece
+    também quando só há atenção (`FALTA_REFERENCIA_RENOVACAO` é a linha do despacho).
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -341,7 +367,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
   `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar/editar/ativar/excluir
-  via `/api/admin/pcas`) e **Mais** (`LinkCard` → aparência/repartições/grupos/permissões/usuários). A **identidade
+  via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
+  de DFD e categoria de protocolo; ver "Avaliação configurável") e **Mais** (`LinkCard` →
+  aparência/repartições/grupos/permissões/usuários). A **identidade
   renderiza** de fato: `generateMetadata` (título/descrição/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o
   cabeçalho público (`/`), todos com `getAparencia()` (cache 60s) e **fallback** aos textos padrão. Nav item
   "Configurações" (`IconSettings`) no topo de Administração. Sem migração nova (o slot `identidade` já existia).

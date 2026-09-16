@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
   type CampoTratavel,
   faltasCirurgicasDfd,
@@ -88,6 +89,8 @@ export function DfdConferir({
   autoMatch,
   autoCampos = [],
   readOnly = false,
+  regras = regrasPadrao(),
+  categoria = null,
   onRepChange,
   onSecoesChange,
   onRefsChange,
@@ -102,6 +105,9 @@ export function DfdConferir({
   autoCampos?: CampoTratavel[];
   /** Trava a edição (banner de visualização/edição travado). */
   readOnly?: boolean;
+  /** Regras de avaliação do ADM + a categoria do protocolo (para as exceções). */
+  regras?: RegrasAvaliacao;
+  categoria?: string | null;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
@@ -111,7 +117,12 @@ export function DfdConferir({
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
-  const semReferencia = ehRenovacao && !dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao;
+  const semReferencia =
+    ehRenovacao &&
+    !dfd.numeroContrato &&
+    !dfd.numeroAta &&
+    !dfd.numeroLicitacao &&
+    nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: "DFD-R", categoria }) !== "ignorar";
   const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
     const v = valor.trim() || null;
     onRefsChange?.({
@@ -128,14 +139,25 @@ export function DfdConferir({
   });
   // Pendências CIRÚRGICAS (aponta itens/seção e o que fazer). Sem a assinatura (que tem
   // callout próprio); no relatório copiável ela entra.
-  const assinaturaMotivo = resAssinatura.status === "erro" ? resAssinatura.motivo : null;
-  const faltasCir = faltasCirurgicasDfd({ itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId });
+  // Nível da assinatura (ADM): "ignorar" não mostra a pendência; senão entra como falta.
+  const nivelAssinatura = nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria });
+  const assinaturaMotivo =
+    nivelAssinatura !== "ignorar" && resAssinatura.status === "erro" ? resAssinatura.motivo : null;
+  const faltasCir = faltasCirurgicasDfd(
+    { itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, tipo: dfd.tipo },
+    regras,
+    { categoria },
+  );
   const temErro = faltasCir.length > 0 || !!assinaturaMotivo;
   const relatorioLinhas = linhasRelatorioDfd({
     numero: dfd.numero,
     planejamento: dfd.planejamento,
     tipo: dfd.tipo,
-    faltas: faltasCirurgicasDfd({ itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, assinaturaMotivo }),
+    faltas: faltasCirurgicasDfd(
+      { itens: dfd.itens, secoes: dfd.secoes, reparticaoId: repId, assinaturaMotivo, tipo: dfd.tipo },
+      regras,
+      { categoria },
+    ),
   });
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
@@ -297,8 +319,12 @@ export function DfdConferir({
           </p>
           {semReferencia && (
             <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
-              Nenhuma referência (contrato/ata/licitação) encontrada na descrição deste DFD-R. Informe ao menos uma
-              abaixo (não bloqueia a importação).
+              <p className="font-semibold">Atenção — DFD-R sem referência</p>
+              <p className="mt-1 opacity-90">
+                Nenhum nº de contrato, ata ou licitação foi encontrado na descrição. O DFD fica marcado como
+                <span className="font-semibold"> Atenção</span> (não bloqueia a importação). Informe ao menos uma
+                referência abaixo — ou inclua-o no relatório do protocolo.
+              </p>
             </Callout>
           )}
           <div className="grid gap-4 sm:grid-cols-3">
@@ -338,11 +364,15 @@ export function DfdConferir({
           </ul>
         </Callout>
       )}
-      {/* Conferência da assinatura digital (bloqueia a gravação quando não confere) */}
-      {resAssinatura.status === "erro" && (
-        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
-          <p className="font-semibold">Assinatura digital não conferida (gravação bloqueada):</p>
-          <p className="mt-1 opacity-90">{resAssinatura.motivo}</p>
+      {/* Conferência da assinatura digital — o nível `dfd.assinatura` decide se bloqueia. */}
+      {assinaturaMotivo && (
+        <Callout kind={nivelAssinatura === "fundamental" ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
+          <p className="font-semibold">
+            {nivelAssinatura === "fundamental"
+              ? "Assinatura digital não conferida (gravação bloqueada):"
+              : "Assinatura digital não conferida (atenção — não bloqueia):"}
+          </p>
+          <p className="mt-1 opacity-90">{assinaturaMotivo}</p>
         </Callout>
       )}
       {resAssinatura.status === "ok" && (
@@ -365,7 +395,7 @@ export function DfdConferir({
 
       {/* Documento completo (read-only, reflete as edições) */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep, anoPca)} />
+        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} />
       </div>
 
       {/* Parte inferior — relatório de erro (só quando há erro) */}

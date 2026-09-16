@@ -2,8 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
 import {
+  dfdRSemReferencia,
   ESTADO_PROTOCOLO_ROTULO,
   estadoProtocolo,
   estadoProtocoloCor,
@@ -74,6 +76,7 @@ export function DfdsView({
   reparticoes,
   reparticaoAtivaId,
   pcas = [],
+  regras = regrasPadrao(),
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -81,6 +84,7 @@ export function DfdsView({
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   pcas?: PcaResumo[];
+  regras?: RegrasAvaliacao;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -288,7 +292,12 @@ export function DfdsView({
     tipo: tipoCurtoDfd(d.tipo),
     itens: d.totalItens,
     valor: valorDe(d),
-    estado: "regular",
+    // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
+    estado:
+      dfdRSemReferencia(d) &&
+      nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignorar"
+        ? "atencao"
+        : "regular",
     protocolo: d.protocoloNumero,
   }));
   const acoesDfd = (l: LinhaDfd) => {
@@ -316,14 +325,17 @@ export function DfdsView({
   // ---- Colunas da tabela de Protocolos ----
   // ESTADO = integridade do valor da capa × somatória; SITUAÇÃO = tem DFDs?; ID = "Id"
   // da capa. Interessado saiu (redundante com Repartição).
+  // Estado do protocolo respeitando o nível de `protocolo.valorCapa` por categoria (assunto).
+  const estProto = (r: ProtocoloResumo) =>
+    estadoProtocolo(r, regras, { categoria: classificarAssunto(r.assunto, regras.categorias) });
   const colsProto: Column<ProtocoloResumo>[] = [
     {
       key: "estado",
       header: "Estado",
       minWidth: 110,
-      value: (r) => ESTADO_PROTOCOLO_ROTULO[estadoProtocolo(r)],
+      value: (r) => ESTADO_PROTOCOLO_ROTULO[estProto(r)],
       render: (r) => {
-        const e = estadoProtocolo(r);
+        const e = estProto(r);
         return (
           <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoProtocoloCor(e) }}>
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoProtocoloCor(e) }} />
@@ -394,6 +406,7 @@ export function DfdsView({
           reparticaoAtivaId={reparticaoAtivaId}
           dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
           pcas={pcas}
+          regras={regras}
         />
       )}
       <section>
@@ -424,7 +437,9 @@ export function DfdsView({
 
   const dfdsTab = (
     <div className="space-y-6">
-      {podeEditar && <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} />}
+      {podeEditar && (
+        <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} />
+      )}
       <section>
         <h3 className="mb-3 text-sm font-semibold text-text-2">DFDs importados ({dfds.length})</h3>
         {dfds.length === 0 ? (
@@ -474,6 +489,7 @@ export function DfdsView({
       anoPca={dfdEdit.anoPca}
       autoMatch={false}
       readOnly={!podeEditar || dfdTrancado}
+      regras={regras}
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
@@ -578,6 +594,7 @@ export function DfdsView({
           <ProtocoloView
             protocolo={protoView}
             onVerDfd={verDfd}
+            regras={regras}
             edicao={
               podeEditar && protoEdit
                 ? {

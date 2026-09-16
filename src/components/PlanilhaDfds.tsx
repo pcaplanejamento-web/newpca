@@ -152,7 +152,8 @@ export function PlanilhaDfds({
   };
 
   const erro = linhas.filter((l) => l.estado === "erro");
-  const ok = linhas.filter((l) => l.estado !== "erro");
+  const atencao = linhas.filter((l) => l.estado === "atencao");
+  const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao");
   const mw = temProtocolo ? 940 : 720;
   const comum = {
     columns: cols,
@@ -165,6 +166,9 @@ export function PlanilhaDfds({
     resumo,
   } as const;
 
+  // Só há tabelas "extras" (erro/atenção) quando há linhas nesse estado → o título
+  // "DFDs regulares" só aparece para separá-las de fato.
+  const temExtras = erro.length > 0 || atencao.length > 0;
   return (
     <div className="space-y-4">
       {erro.length > 0 && (
@@ -176,9 +180,18 @@ export function PlanilhaDfds({
           <DataTable rows={erro} pageSize={compacta ? 8 : 12} {...comum} />
         </div>
       )}
+      {atencao.length > 0 && (
+        <div>
+          <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--warn)" }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
+            DFDs em atenção ({num(atencao.length)})
+          </h4>
+          <DataTable rows={atencao} pageSize={compacta ? 8 : 12} {...comum} />
+        </div>
+      )}
       <div>
-        {erro.length > 0 && <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(ok.length)})</h4>}
-        {fillHeight && erro.length === 0 ? (
+        {temExtras && <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(ok.length)})</h4>}
+        {fillHeight && !temExtras ? (
           <DataTable rows={ok} fillHeight pageSize={12} {...comum} />
         ) : (
           <DataTable rows={ok} pageSize={compacta ? 12 : 20} {...comum} />

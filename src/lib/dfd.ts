@@ -59,6 +59,10 @@ export type DfdResumo = {
   reparticaoNome: string | null;
   protocoloId: number | null;
   protocoloNumero: string | null;
+  // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO nas listas sem abrir o DFD.
+  numeroContrato: string | null;
+  numeroAta: string | null;
+  numeroLicitacao: string | null;
 };
 
 export type DfdItemRow = {
@@ -80,9 +84,6 @@ export type DfdDetalhe = DfdResumo & {
   email: string | null;
   telefone: string | null;
   anoPca: number | null;
-  numeroContrato: string | null;
-  numeroAta: string | null;
-  numeroLicitacao: string | null;
   secoes: DfdSecaoRow[];
   assinaturas: Assinatura[];
   itens: DfdItemRow[];
@@ -145,6 +146,9 @@ const colunasDfd = {
   reparticaoNome: reparticoes.nome,
   protocoloId: dfds.protocoloId,
   protocoloNumero: dfdProtocolos.numero,
+  numeroContrato: dfds.numeroContrato,
+  numeroAta: dfds.numeroAta,
+  numeroLicitacao: dfds.numeroLicitacao,
 };
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
@@ -179,9 +183,6 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
       email: dfds.email,
       telefone: dfds.telefone,
       anoPca: dfds.anoPca,
-      numeroContrato: dfds.numeroContrato,
-      numeroAta: dfds.numeroAta,
-      numeroLicitacao: dfds.numeroLicitacao,
       secoes: dfds.secoes,
       assinaturas: dfds.assinaturas,
     })

@@ -1,10 +1,12 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { getRegrasAvaliacao } from "@/lib/avaliacao";
+import { nivelDe } from "@/lib/avaliacao-core";
 import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao } from "@/lib/dfd";
 import { editarDfdSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
-import { pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -81,11 +83,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     // Ao mudar a repartição, reconfere a assinatura já gravada contra o responsável
     // da NOVA repartição (regra 6: não salvar com assinatura não permitida).
     if (p.data.reparticaoId != null) {
-      const ctx = await getDfdAssinaturas(id);
-      const res = validarAssinatura(ctx?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {
-        exigeAssinatura: pdfExigeAssinatura(ctx?.nomeArquivo),
+      const ass = await getDfdAssinaturas(id);
+      const res = validarAssinatura(ass?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {
+        exigeAssinatura: pdfExigeAssinatura(ass?.nomeArquivo),
       });
-      if (res.status === "erro") return erro(res.motivo, 422);
+      // Respeita o nível `dfd.assinatura` do ADM (global aqui — o tipo do DFD não está em escopo).
+      const regras = await getRegrasAvaliacao();
+      if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura")))
+        return erro(res.motivo, 422);
     }
     await atualizarDfdCampos(id, {
       reparticaoId: p.data.reparticaoId,

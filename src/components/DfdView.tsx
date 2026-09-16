@@ -1,5 +1,6 @@
 "use client";
 
+import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
   ESTADO_ITEM_ROTULO,
   estadoItem,
@@ -160,11 +161,14 @@ export function DfdCabecalho({
   );
 }
 
-export function DfdView({ dfd }: { dfd: DfdVisual }) {
+export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regras?: RegrasAvaliacao }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem repartição";
+  // Nota "Estimado (nota)" quando o estimado difere da somatória — o ADM pode ocultar ("ignorar").
+  const mostrarNotaEstimado =
+    nivelDe(regras, "dfd.valorEstimadoVsTotal", { dfdTipo: tipoCurtoDfd(dfd.tipo) }) !== "ignorar";
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
   // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA (como a de DFDs
   // no protocolo); os regulares na tabela principal.
@@ -191,7 +195,7 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
           label="Valor total"
           value={dfd.valorTotal != null ? brl(dfd.valorTotal) : "—"}
           hint={
-            dfd.valorEstimado != null && !valoresBatem(dfd.valorEstimado, dfd.valorTotal)
+            mostrarNotaEstimado && dfd.valorEstimado != null && !valoresBatem(dfd.valorEstimado, dfd.valorTotal)
               ? `Estimado (nota): ${brl(dfd.valorEstimado)}`
               : undefined
           }
@@ -224,6 +228,12 @@ export function DfdView({ dfd }: { dfd: DfdVisual }) {
             <Campo label="Nº da ata (registro de preços)" valor={dfd.numeroAta ?? "—"} />
             <Campo label="Nº da licitação" valor={dfd.numeroLicitacao ?? "—"} />
           </dl>
+          {!dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--warn)" }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
+              Atenção: DFD-R sem referência de contrato, ata ou licitação.
+            </p>
+          )}
         </section>
       )}
 

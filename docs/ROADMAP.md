@@ -214,8 +214,20 @@ ata (registro de preços) e licitação** (`numero_contrato`/`numero_ata`/`numer
 do PCA** e as referências; `ProtocoloView` exibe o **PCA (ano)**. `anoPca`/PCAs threadados da página → `DfdsView` →
 forms. Só componentes do design-system (catalogado). Testes de schema (anoPca/refs) + migração `0021`.
 
+### DFD-R sem referência: estado de ATENÇÃO + tabela própria + relatório opcional — entregue
+✅ O DFD-R sem contrato/ata/licitação vira **estado "atenção"** (`EstadoDfd.atencao`, âmbar `--warn`, precedência
+erro > atenção > editado > regularizado > regular; `dfdRSemReferencia` puro). **Não bloqueia.** O `PlanilhaDfds`
+**separa os DFDs em atenção numa tabela própria** (entre erro e regulares) em TODA lista — importação, protocolo
+gravado e aba DFDs (por isso `DfdResumo`/`ProtocoloVisualDfd` passaram a carregar as refs). No import, o usuário
+**escolhe incluir** os DFD-R em atenção no **relatório/despacho** (`RelatorioErros` ganhou um `toggle` opcional; o
+botão de relatório aparece também quando só há atenção). Mensagem de atenção no `DfdConferir`/`DfdView`. Testes de
+`dfdRSemReferencia`/`estadoDfd`. Reuso total (só componentes do DS; catalogado).
+
 ### Configurações do ADM: tela única (identidade do site + cadastro de PCAs + atalhos) — entregue
 ✅ Nova tela **`/painel/configuracoes`** (`ConfiguracoesAdmin`, admin) — ponto único de controle, reunindo **o novo + atalhos**. Abas: **Identidade** (definir **nome, subtítulo e favicon** do site — salvos no slot `identidade` já existente via `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar PCA por **nome + ano**, editar, **marcar 1 como ativo/vigente**, excluir — `/api/admin/pcas` + `/api/admin/pcas/[id]`, `exigirAdmin`) e **Mais** (`LinkCard` → aparência/repartições/grupos/permissões/usuários). A **identidade agora renderiza** de fato: `generateMetadata` (aba/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o cabeçalho público (`/`) — tudo via `getAparencia()` (cache 60s) com **fallback** aos textos padrão. PCA ganhou a coluna **`ativo`** (migração `0020`) e o **registro leve** (só nome+ano, sem unir DFDs — `gerarPca` intacto); badge **"Ativo"** no módulo PCA. Nav "Configurações" (`IconSettings`) no topo de Administração. Só componentes do design-system (catalogado).
+
+### Avaliação configurável pelo ADM (Protocolo / DFD / Item) — entregue
+✅ Nova aba **Avaliação** em `/painel/configuracoes` (`AvaliacaoAdmin`, admin): o ADM define, para **cada dado** de Protocolo/DFD/Item, se é **fundamental** (bloqueia), **intermediário** (só avisa — ATENÇÃO âmbar), **automático** (corrige sozinho) ou **ignorar** — com **exceções por tipo de DFD** (DFD-S/R/O/E) e por **categoria de Protocolo**. Como o `assunto` da capa é texto livre, as categorias são **gerenciáveis por palavras-chave** (`classificarAssunto`). Núcleo puro/testável `avaliacao-core.ts` (catálogo `CATALOGO_AVALIACAO` = fonte única de UI/defaults/validação, `nivelDe`, `classificarAssunto`), loader cacheado `avaliacao.ts`, schema `avaliacao-validation.ts`, rota `/api/admin/avaliacao` (linha `configuracoes` id=1, chave `avaliacao`, **sem migração**). Toda a validação existente (`faltasObrigatorias`→`avaliarDfd`, `validarAssinatura`/`bloqueiaAssinatura`, capa×somatória, DFD-R sem referência, ano do PCA) passou a **respeitar os níveis**, com **defaults idênticos ao comportamento atual** (invariante coberto por teste). Regras threadadas server→cliente e reconferidas no servidor (`/api/dfd`, `/api/protocolo`, `/api/dfd/[id]`). Só componentes do design-system (catalogado). Permanecem **travados** (estrutural): integridade de parse, tetos do Zod, acesso por repartição, capa imutável.
 
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
@@ -299,6 +311,7 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | ✅ | Gestão de usuários (aprovar, papel, ativar/excluir) |
 | ✅ | **Aparência (Personalização §39)**: Design Tokens + painel do ADM (`/painel/aparencia`) — cores/raio/densidade/motion + presets, persistido no D1 e injetado sem flash |
 | ✅ | **Configurações (`/painel/configuracoes`)**: tela única do ADM — **identidade do site** (nome/subtítulo/favicon, renderizados), **cadastro de PCAs** (nome+ano, editar, marcar ativo, excluir) e **atalhos** para as telas admin |
+| ✅ | **Avaliação configurável** (aba Avaliação): níveis (fundamental/intermediário/automático/ignorar) por dado de Protocolo/DFD/Item, com exceções por tipo de DFD e categoria de protocolo |
 | 🔜 | Mais configurações da plataforma (secretarias/listas padrão, exercícios) |
 | 💡 | Painel de auditoria e uso |
 

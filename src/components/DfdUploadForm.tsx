@@ -2,14 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type CampoTratavel, normalizarSecoesDfd } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
 import {
+  bloqueiaAssinatura,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
@@ -32,10 +35,12 @@ export function DfdUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
   pcas = [],
+  regras = regrasPadrao(),
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   pcas?: PcaOpcao[];
+  regras?: RegrasAvaliacao;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -154,18 +159,35 @@ export function DfdUploadForm({
     setAutoCampos([]);
   }
 
+  // Avulso: sem protocolo → categoria nula; exceções por TIPO do DFD valem pelo `tipo`.
+  const ctxAv = { dfdTipo: preview ? tipoCurtoDfd(preview.tipo) : null };
   const faltas = preview
-    ? faltasObrigatorias({ reparticaoId: repId, itens: preview.itens, secoes: preview.secoes })
+    ? faltasObrigatorias(
+        {
+          reparticaoId: repId,
+          itens: preview.itens,
+          secoes: preview.secoes,
+          tipo: preview.tipo,
+          numeroContrato: preview.numeroContrato,
+          numeroAta: preview.numeroAta,
+          numeroLicitacao: preview.numeroLicitacao,
+        },
+        regras,
+      )
     : [];
-  // Conferência da assinatura (mesma regra do servidor) — bloqueia importar.
+  // Conferência da assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
   const assinaturaBloqueia = preview
-    ? validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-        exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
-      }).status === "erro"
+    ? bloqueiaAssinatura(
+        validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+          exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
+        }),
+        nivelDe(regras, "dfd.assinatura", ctxAv),
+      )
     : false;
-  // O PCA é obrigatório no envio de DFD avulso (regra: definir o PCA).
-  const bloqueado = faltas.length > 0 || assinaturaBloqueia || anoPca == null;
+  // O PCA é obrigatório no envio do DFD avulso quando `dfd.anoPca` for fundamental.
+  const anoPcaBloqueia = anoPca == null && nivelDe(regras, "dfd.anoPca", ctxAv) === "fundamental";
+  const bloqueado = faltas.length > 0 || assinaturaBloqueia || anoPcaBloqueia;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -304,6 +326,7 @@ export function DfdUploadForm({
               anoPca={anoPca}
               autoMatch={autoMatch}
               autoCampos={autoCampos}
+              regras={regras}
               onRepChange={(id) => {
                 setRepId(id);
                 setAutoMatch(false);

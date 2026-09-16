@@ -1,3 +1,9 @@
+import {
+  type ChaveAvaliacao,
+  nivelDe,
+  type RegrasAvaliacao,
+  regrasPadrao,
+} from "./avaliacao-core.ts";
 import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
 import {
   type DfdItemParseado,
@@ -69,11 +75,16 @@ export function normalizarSecoesDfd(dfd: DfdParseado): { dfd: DfdParseado; auto:
 }
 
 // ---- Estado por DFD (para a tabela do protocolo) ----
-export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "erro";
+export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "atencao" | "erro";
 
-/** Precedência: erro (faltas) > editado > regularizado (auto) > regular. */
-export function estadoDfd(faltas: number, auto: boolean, editado: boolean): EstadoDfd {
+/**
+ * Precedência: erro (faltas) > atenção (DFD-R sem referência) > editado > regularizado
+ * (auto) > regular. A ATENÇÃO **não bloqueia** — só sinaliza (ex.: DFD-R sem contrato/
+ * ata/licitação); fica acima de editado/regular para não se perder na lista.
+ */
+export function estadoDfd(faltas: number, auto: boolean, editado: boolean, atencao = false): EstadoDfd {
   if (faltas > 0) return "erro";
+  if (atencao) return "atencao";
   if (editado) return "editado";
   if (auto) return "regularizado";
   return "regular";
@@ -84,28 +95,50 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
   regular: "Regular",
   regularizado: "Regularizado",
   editado: "Editado",
+  atencao: "Atenção",
   erro: "Com erro",
 };
 
-/** Cor semântica por estado (token). Regularizado automaticamente = verde (é um sucesso). */
+/** Cor semântica por estado (token). Regularizado automaticamente = verde (é um sucesso);
+ * atenção = âmbar (`--warn`, não é erro). */
 export function estadoCor(e: EstadoDfd): string {
   if (e === "erro") return "var(--danger)";
+  if (e === "atencao") return "var(--warn)";
   if (e === "editado") return "var(--info)";
   if (e === "regularizado") return "var(--ok)";
   if (e === "regular") return "var(--ok)";
   return "var(--muted)";
 }
 
+/**
+ * DFD de RENOVAÇÃO (DFD-R) **sem nenhuma referência** (contrato/ata/licitação) → estado
+ * de **ATENÇÃO** (não bloqueia; só sinaliza que falta a referência da renovação). Puro.
+ */
+export function dfdRSemReferencia(d: {
+  tipo?: string | null;
+  numeroContrato?: string | null;
+  numeroAta?: string | null;
+  numeroLicitacao?: string | null;
+}): boolean {
+  return tipoCurtoDfd(d.tipo) === "DFD-R" && !d.numeroContrato && !d.numeroAta && !d.numeroLicitacao;
+}
+
+/** Pendência (atenção) de um DFD-R sem referência — texto para o relatório opcional. */
+export const FALTA_REFERENCIA_RENOVACAO =
+  "DFD de renovação (DFD-R) sem referência de contrato, ata (registro de preços) ou licitação — informar ao menos uma.";
+
 // ---- Estado/Situação de um PROTOCOLO já gravado (para a tabela de protocolos) ----
 // ESTADO = integridade do valor da capa × somatória dos DFDs; SITUAÇÃO = conteúdo.
 export type EstadoProtocolo = "regular" | "atencao";
 
-export function estadoProtocolo(p: {
-  valorCapa: number | null;
-  valorTotal: number;
-  totalDfds: number;
-}): EstadoProtocolo {
+export function estadoProtocolo(
+  p: { valorCapa: number | null; valorTotal: number; totalDfds: number },
+  regras: RegrasAvaliacao = regrasPadrao(),
+  ctx?: { categoria?: string | null },
+): EstadoProtocolo {
   if (p.totalDfds === 0) return "regular"; // sem DFDs: nada a conferir
+  // O ADM pode desligar a conferência do valor da capa ("ignorar").
+  if (nivelDe(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null }) === "ignorar") return "regular";
   if (p.valorCapa == null || p.valorCapa <= 0 || !valoresBatem(p.valorCapa, p.valorTotal)) return "atencao";
   return "regular";
 }
@@ -160,14 +193,14 @@ export function estadoItemCor(e: EstadoItem): string {
 
 /** Seções obrigatórias do DFD (fonte única — `faltasObrigatorias` no `dfd-validation`
  * também usa esta lista). O `rotulo` já indica a seção exata a corrigir. */
-export const SECOES_OBRIGATORIAS: { kw: string; rotulo: string }[] = [
-  { kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)" },
-  { kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)" },
-  { kw: "PRIORIDADE", rotulo: "Prioridade da compra/contratação (Seção 6)" },
-  { kw: "FUNDAMENTACAO LEGAL", rotulo: "Fundamentação legal (Seção 7)" },
+export const SECOES_OBRIGATORIAS: { chave: ChaveAvaliacao; kw: string; rotulo: string }[] = [
+  { chave: "dfd.justificativa", kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)" },
+  { chave: "dfd.previsao", kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)" },
+  { chave: "dfd.prioridade", kw: "PRIORIDADE", rotulo: "Prioridade da compra/contratação (Seção 6)" },
+  { chave: "dfd.fundamentacao", kw: "FUNDAMENTACAO LEGAL", rotulo: "Fundamentação legal (Seção 7)" },
 ];
 
-function temSecaoPreenchida(secoes: DfdSecao[], kw: string): boolean {
+function temSecaoPreenchida(secoes: { titulo: string; texto: string }[], kw: string): boolean {
   return secoes.some((s) => norm(s.titulo).includes(kw) && s.texto.trim().length > 0);
 }
 
@@ -177,30 +210,88 @@ function listaItens(nums: number[]): string {
   return nums.length > 30 ? `${s} … (+${nums.length - 30})` : s;
 }
 
+/** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
+export type EntradaAvaliacaoDfd = {
+  reparticaoId?: number | null;
+  itens: { valorUnitario?: number | null; quantidade?: number | null }[];
+  secoes: { titulo: string; texto: string }[];
+  tipo?: string | null;
+  numeroContrato?: string | null;
+  numeroAta?: string | null;
+  numeroLicitacao?: string | null;
+};
+
+export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
+
+/**
+ * Avaliação CONFIGURÁVEL de um DFD: para cada ponto (itens/seções/repartição/renovação)
+ * resolve o nível efetivo (`nivelDe`, com exceções por tipo de DFD e categoria de
+ * protocolo) e separa em **bloqueantes** (fundamental) e **atenções** (intermediário/
+ * automático). Com `regras` no padrão do catálogo os bloqueantes reproduzem EXATAMENTE
+ * a lista de `faltasObrigatorias` de hoje (invariante coberto por teste). Pura.
+ * Obs.: `dfd.anoPca` e `dfd.assinatura` são portões à parte (conferidos no envio).
+ */
+export function avaliarDfd(
+  d: EntradaAvaliacaoDfd,
+  regras: RegrasAvaliacao = regrasPadrao(),
+  ctx?: { categoria?: string | null },
+): AvaliacaoDfd {
+  const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
+  const bloqueantes: string[] = [];
+  const atencoes: string[] = [];
+  const add = (chave: ChaveAvaliacao, falta: boolean, rotulo: string) => {
+    if (!falta) return;
+    const n = nivelDe(regras, chave, c);
+    if (n === "fundamental") bloqueantes.push(rotulo);
+    else if (n === "intermediario" || n === "automatico") atencoes.push(rotulo);
+    // "ignorar": não entra em lugar nenhum.
+  };
+  // Ordem preserva a de `faltasObrigatorias` (valor unitário → repartição → seções).
+  const semVU = d.itens.length === 0 || !d.itens.every((i) => i.valorUnitario != null && i.valorUnitario > 0);
+  add("item.valorUnitario", semVU, "valor unitário em todos os itens");
+  // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
+  // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
+  add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
+  add("dfd.reparticao", d.reparticaoId == null, "repartição vinculada");
+  for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
+  add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ata ou licitação)");
+  return { bloqueantes, atencoes };
+}
+
 /**
  * Faltas CIRÚRGICAS e ACIONÁVEIS de um DFD: aponta EXATAMENTE onde está o erro (quais
  * itens, qual seção) e O QUE fazer para corrigir. Puro/testável. Alimenta o relatório
- * (despacho) e o relatório do DFD.
+ * (despacho) e o relatório do DFD. Respeita os níveis do ADM: pontos em "ignorar" não
+ * aparecem (config padrão ⇒ mesma saída de hoje).
  */
-export function faltasCirurgicasDfd(d: {
-  itens: DfdItemParseado[];
-  secoes: DfdSecao[];
-  reparticaoId?: number | null;
-  assinaturaMotivo?: string | null;
-}): string[] {
+export function faltasCirurgicasDfd(
+  d: {
+    itens: DfdItemParseado[];
+    secoes: DfdSecao[];
+    reparticaoId?: number | null;
+    assinaturaMotivo?: string | null;
+    tipo?: string | null;
+  },
+  regras: RegrasAvaliacao = regrasPadrao(),
+  ctx?: { categoria?: string | null },
+): string[] {
+  const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
+  const ativo = (chave: ChaveAvaliacao) => nivelDe(regras, chave, c) !== "ignorar";
   const linhas: string[] = [];
   const nums = (its: DfdItemParseado[]) =>
     its.map((i) => i.item).filter((n): n is number => n != null);
   const semVU = d.itens.filter((i) => i.valorUnitario == null || i.valorUnitario <= 0);
   const semQtd = d.itens.filter((i) => i.quantidade == null);
-  if (semVU.length > 0)
+  if (ativo("item.valorUnitario") && semVU.length > 0)
     linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
-  if (semQtd.length > 0)
+  if (ativo("item.quantidade") && semQtd.length > 0)
     linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
-  if (d.reparticaoId == null) linhas.push("Vincular o DFD à repartição/Setor requisitante responsável.");
+  if (ativo("dfd.reparticao") && d.reparticaoId == null)
+    linhas.push("Vincular o DFD à repartição/Setor requisitante responsável.");
   for (const s of SECOES_OBRIGATORIAS)
-    if (!temSecaoPreenchida(d.secoes, s.kw)) linhas.push(`Preencher a ${s.rotulo}.`);
-  if (d.assinaturaMotivo) linhas.push(`Regularizar a assinatura digital: ${d.assinaturaMotivo}.`);
+    if (ativo(s.chave) && !temSecaoPreenchida(d.secoes, s.kw)) linhas.push(`Preencher a ${s.rotulo}.`);
+  if (d.assinaturaMotivo && ativo("dfd.assinatura"))
+    linhas.push(`Regularizar a assinatura digital: ${d.assinaturaMotivo}.`);
   return linhas;
 }
 

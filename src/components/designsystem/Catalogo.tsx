@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { Avatar } from "@/components/Avatar";
+import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
 import { ChartCard } from "@/components/ChartCard";
@@ -367,7 +368,7 @@ const PROTO_DEMO = {
   valorTotal: 512342.72,
   dfds: [
     { id: 1, numero: "1586", planejamento: "1639", tipo: "DFD-S — Solução / com ETP", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72, valorEstimado: 342342.72 },
-    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000 },
+    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000, numeroAta: "045/2025" },
   ],
 };
 
@@ -384,6 +385,7 @@ export function Catalogo() {
   const [check, setCheck] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [relatorioAberto, setRelatorioAberto] = useState(false);
+  const [incluirAtencaoDemo, setIncluirAtencaoDemo] = useState(true);
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
   const [dzFile, setDzFile] = useState<string | null>(null);
@@ -546,7 +548,12 @@ export function Catalogo() {
         <RelatorioErros
           open={relatorioAberto}
           onClose={() => setRelatorioAberto(false)}
-          titulo="Erros do protocolo 97608/2026"
+          titulo="Relatório do protocolo 97608/2026"
+          toggle={{
+            label: "Incluir 1 DFD-R sem referência (atenção) no relatório",
+            checked: incluirAtencaoDemo,
+            onChange: setIncluirAtencaoDemo,
+          }}
           linhas={[
             "DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO",
             "",
@@ -560,6 +567,12 @@ export function Catalogo() {
             "2. DFD 531 (DFD-R):",
             "   - Informar o VALOR UNITÁRIO dos itens 3, 5, 8 (Seção 4).",
             "   - Preencher a Fundamentação legal (Seção 7).",
+            ...(incluirAtencaoDemo
+              ? [
+                  "3. DFD 712 (DFD-R):",
+                  "   - DFD de renovação (DFD-R) sem referência de contrato, ata (registro de preços) ou licitação — informar ao menos uma.",
+                ]
+              : []),
             "",
             "Sanadas as pendências, reencaminhe-se o processo para nova análise e protocolização.",
           ]}
@@ -700,6 +713,22 @@ export function Catalogo() {
           <LinkCard href="#" titulo="Permissões" descricao="Abas visíveis por grupo." icon={<Icons.IconShield className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Usuários" descricao="Contas, papéis e status de acesso." icon={<Icons.IconUser className="h-5 w-5" />} />
         </div>
+      </Secao>
+
+      <Secao titulo="Avaliação do ADM — níveis (Badge)">
+        <p className="mb-3 text-sm text-muted">
+          Vocabulário da tela <code>/painel/configuracoes</code> (aba &quot;Avaliação&quot;): cada dado de
+          Protocolo/DFD/Item recebe um nível. Cor por token (Badge).
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="red">Fundamental</Badge>
+          <Badge tone="amber">Intermediário</Badge>
+          <Badge tone="blue">Automático</Badge>
+          <Badge tone="slate">Ignorar</Badge>
+        </div>
+        <p className="mt-3 text-[12px] text-muted">
+          Fundamental bloqueia; intermediário só avisa (atenção); automático corrige sozinho; ignorar não avalia.
+        </p>
       </Secao>
 
       <Secao titulo="Link externo (LinkExterno)">
@@ -890,6 +919,7 @@ export function Catalogo() {
           linhas={[
             { key: 1, numero: "531", planejamento: "600", sigla: "FMS", auto: true, tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", situacao: "Novo" },
             { key: 2, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "regular", situacao: "Substitui" },
+            { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", situacao: "Novo" },
             { key: 3, numero: "1024", planejamento: "1066", sigla: "FMS", tipo: "DFD-R", itens: 0, valor: 0, estado: "erro", estadoMotivo: "Leitura incompleta da tabela", situacao: "Novo" },
           ]}
         />

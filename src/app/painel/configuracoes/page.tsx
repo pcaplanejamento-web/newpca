@@ -1,6 +1,7 @@
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { ConfiguracoesAdmin } from "@/components/ConfiguracoesAdmin";
 import { getAparencia } from "@/lib/aparencia";
+import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { getUsuarioAtual } from "@/lib/auth";
 import { listarPcas } from "@/lib/dfd";
 
@@ -12,6 +13,6 @@ export default async function ConfiguracoesPage() {
     return <AcessoRestrito mensagem="Somente administradores podem acessar as configurações." />;
   }
 
-  const [aparencia, pcas] = await Promise.all([getAparencia(), listarPcas()]);
-  return <ConfiguracoesAdmin identidade={aparencia.identidade} pcas={pcas} />;
+  const [aparencia, pcas, regras] = await Promise.all([getAparencia(), listarPcas(), getRegrasAvaliacao()]);
+  return <ConfiguracoesAdmin identidade={aparencia.identidade} pcas={pcas} regras={regras} />;
 }

@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useRef, useState } from "react";
+import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { PcaResumo } from "@/lib/dfd";
 import { dataBR, num } from "@/lib/format";
 import type { Aparencia } from "@/lib/theme";
+import { AvaliacaoAdmin } from "./AvaliacaoAdmin";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -64,9 +66,11 @@ function lerFavicon(file: File): Promise<string> {
 export function ConfiguracoesAdmin({
   identidade,
   pcas,
+  regras,
 }: {
   identidade?: Aparencia["identidade"];
   pcas: PcaResumo[];
+  regras: RegrasAvaliacao;
 }) {
   const router = useRouter();
 
@@ -383,6 +387,7 @@ export function ConfiguracoesAdmin({
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
             { key: "pcas", label: "PCAs", content: abaPcas },
+            { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },
             { key: "mais", label: "Mais", content: abaMais },
           ]}
         />

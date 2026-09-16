@@ -8,6 +8,7 @@
  * de nomes e a string única antigos.
  */
 
+import type { Nivel } from "./avaliacao-core.ts";
 import { type Assinatura, norm } from "./parse-dfd-comum.ts";
 
 export type TipoAto = "portaria" | "decreto" | "lei";
@@ -260,8 +261,13 @@ export function validarAssinatura(
   };
 }
 
-/** `true` quando o resultado bloqueia a gravação. */
-export function bloqueiaAssinatura(r: ResultadoAssinatura): boolean {
+/**
+ * `true` quando o resultado bloqueia a gravação. O nível de `dfd.assinatura` (ADM)
+ * decide: `fundamental` (padrão) bloqueia no erro (comportamento de hoje);
+ * `intermediario`/`ignorar` nunca bloqueiam (só avisam / ignoram).
+ */
+export function bloqueiaAssinatura(r: ResultadoAssinatura, nivel: Nivel = "fundamental"): boolean {
+  if (nivel !== "fundamental") return false;
   return r.status === "erro";
 }
 

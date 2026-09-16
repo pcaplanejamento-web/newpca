@@ -17,6 +17,7 @@ import {
   startProtocoloSchema,
   vincularDfdSchema,
 } from "../src/lib/dfd-validation.ts";
+import { avaliacaoSchema } from "../src/lib/avaliacao-validation.ts";
 import { uploadSchema } from "../src/lib/validation.ts";
 
 // Observação: os schemas de protocolos/tabelas vivem em módulos que também
@@ -190,6 +191,38 @@ describe("dfd-validation", () => {
     assert.equal(vincularDfdSchema.safeParse({ protocoloId: 5 }).success, true);
     assert.equal(vincularDfdSchema.safeParse({ protocoloId: null }).success, true);
     assert.equal(vincularDfdSchema.safeParse({ protocoloId: 0 }).success, false);
+  });
+});
+
+describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
+  it("aceita níveis permitidos por ponto e exceções por tipo/categoria", () => {
+    assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.previsao": "ignorar" } }).success, true);
+    assert.equal(
+      avaliacaoSchema.safeParse({ exDfd: { "DFD-R": { "dfd.referenciaRenovacao": "fundamental" } } }).success,
+      true,
+    );
+    assert.equal(
+      avaliacaoSchema.safeParse({ exProtocolo: { exclusao: { "protocolo.valorCapa": "ignorar" } } }).success,
+      true,
+    );
+  });
+  it("recusa ponto desconhecido e nível não permitido", () => {
+    assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.inexistente": "ignorar" } }).success, false);
+    // valorEstimadoVsTotal não permite "fundamental"
+    assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.valorEstimadoVsTotal": "fundamental" } }).success, false);
+  });
+  it("recusa tipo de DFD desconhecido nas exceções", () => {
+    assert.equal(avaliacaoSchema.safeParse({ exDfd: { "DFD-X": { "dfd.previsao": "ignorar" } } }).success, false);
+  });
+  it("valida categorias (key kebab, label, termos)", () => {
+    assert.equal(
+      avaliacaoSchema.safeParse({ categorias: [{ key: "inclusao", label: "INCLUSÃO", termos: ["INCLUS"], ordem: 1 }] }).success,
+      true,
+    );
+    assert.equal(
+      avaliacaoSchema.safeParse({ categorias: [{ key: "A B", label: "x", termos: [], ordem: 1 }] }).success,
+      false,
+    );
   });
 });
 

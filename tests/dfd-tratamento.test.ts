@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  dfdRSemReferencia,
+  estadoDfd,
   estadoItem,
   estadoProtocolo,
   faltasCirurgicasDfd,
@@ -67,6 +69,31 @@ describe("estado/situação do protocolo", () => {
     assert.equal(estadoProtocolo({ valorCapa: null, valorTotal: 0, totalDfds: 0 }), "regular");
     assert.equal(situacaoProtocolo({ totalDfds: 0 }), "vazio");
     assert.equal(situacaoProtocolo({ totalDfds: 2 }), "preenchido");
+  });
+});
+
+describe("dfdRSemReferencia (atenção do DFD-R) + estadoDfd", () => {
+  it("DFD-R sem nenhuma referência → true", () => {
+    assert.equal(
+      dfdRSemReferencia({ tipo: "DFD-R — Renovação", numeroContrato: null, numeroAta: null, numeroLicitacao: null }),
+      true,
+    );
+  });
+  it("DFD-R com qualquer referência → false", () => {
+    assert.equal(dfdRSemReferencia({ tipo: "DFD-R", numeroContrato: "860/2025", numeroAta: null, numeroLicitacao: null }), false);
+    assert.equal(dfdRSemReferencia({ tipo: "DFD-R", numeroContrato: null, numeroAta: "45/2025", numeroLicitacao: null }), false);
+    assert.equal(dfdRSemReferencia({ tipo: "DFD-R", numeroContrato: null, numeroAta: null, numeroLicitacao: "12/2025" }), false);
+  });
+  it("não é DFD-R (S/O/E) → nunca é atenção por referência", () => {
+    assert.equal(dfdRSemReferencia({ tipo: "DFD-S — Solução", numeroContrato: null, numeroAta: null, numeroLicitacao: null }), false);
+    assert.equal(dfdRSemReferencia({ tipo: null }), false);
+  });
+  it("estadoDfd: erro > atenção > editado > regularizado > regular", () => {
+    assert.equal(estadoDfd(1, true, true, true), "erro"); // faltas manda
+    assert.equal(estadoDfd(0, true, true, true), "atencao"); // atenção acima de editado/auto
+    assert.equal(estadoDfd(0, true, true, false), "editado");
+    assert.equal(estadoDfd(0, true, false, false), "regularizado");
+    assert.equal(estadoDfd(0, false, false, false), "regular");
   });
 });
 

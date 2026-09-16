@@ -2,12 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import {
+  avaliarDfd,
   type CampoTratavel,
   ESTADO_ROTULO,
   type EstadoDfd,
   estadoCor,
   estadoDfd,
+  FALTA_REFERENCIA_RENOVACAO,
   faltasCirurgicasDfd,
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
@@ -27,6 +30,7 @@ import {
 } from "@/lib/parse-protocolo-pdf";
 import { casarReparticao } from "@/lib/reparticao-match";
 import {
+  bloqueiaAssinatura,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
@@ -64,11 +68,13 @@ export function ProtocoloUploadForm({
   reparticaoAtivaId = null,
   dfdsExistentes = [],
   pcas = [],
+  regras = regrasPadrao(),
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   dfdsExistentes?: DfdExistente[];
   pcas?: PcaOpcao[];
+  regras?: RegrasAvaliacao;
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
@@ -80,6 +86,7 @@ export function ProtocoloUploadForm({
   // PDF) o usuário digita a capa que está criando.
   const [origemPdf, setOrigemPdf] = useState(false);
   const [relatorioAberto, setRelatorioAberto] = useState(false); // banner de relatório de erros
+  const [incluirAtencao, setIncluirAtencao] = useState(true); // incluir DFD-R sem referência no relatório
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -261,6 +268,9 @@ export function ProtocoloUploadForm({
     return "substitui";
   };
 
+  // Categoria do protocolo (classifica o assunto livre) → aplica as exceções por categoria.
+  const categoria = classificarAssunto(assunto, regras.categorias);
+
   /** Confere a assinatura do DFD contra o responsável da repartição escolhida. */
   const confereAssinatura = (idx: number, d: DfdParseado) =>
     validarAssinatura(d.assinaturas, reparticoes.find((r) => r.id === dfdRepIds[idx])?.responsaveis ?? RESPONSAVEIS_VAZIO, {
@@ -271,11 +281,17 @@ export function ProtocoloUploadForm({
     if (errosParse.has(idx)) return "erro"; // falha de leitura (ex.: tabela incompleta)
     const d = parsed.get(idx);
     if (!d) return "pendente";
-    // Assinatura não conferida (PDF sem assinatura, sem responsável, ou assinante
-    // não autorizado) = erro → bloqueia protocolar (regra 6).
-    if (confereAssinatura(idx, d).status === "erro") return "erro";
-    const faltas = faltasObrigatorias({ reparticaoId: dfdRepIds[idx], itens: d.itens, secoes: d.secoes });
-    return estadoDfd(faltas.length, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx));
+    const nivelAss = nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria });
+    // Assinatura não conferida — bloqueia só se `dfd.assinatura` for fundamental (regra 6).
+    const assRes = confereAssinatura(idx, d);
+    if (bloqueiaAssinatura(assRes, nivelAss)) return "erro";
+    // Avaliação configurável: bloqueantes (fundamental) → erro; atenções (intermediário/
+    // automático, incl. DFD-R sem referência e quantidade) → âmbar.
+    const av = avaliarDfd({ ...d, reparticaoId: dfdRepIds[idx] }, regras, { categoria });
+    if (av.bloqueantes.length > 0) return "erro";
+    const assAtencao = assRes.status === "erro" && nivelAss === "intermediario";
+    const atencao = av.atencoes.length > 0 || assAtencao;
+    return estadoDfd(0, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx), atencao);
   };
 
   function setRepDfd(idx: number, id: number | null) {
@@ -402,16 +418,27 @@ export function ProtocoloUploadForm({
             continue;
           }
         }
-        const faltas = faltasObrigatorias({ reparticaoId: dfdRepIds[i], itens: full.itens, secoes: full.secoes });
+        const faltas = faltasObrigatorias(
+          {
+            reparticaoId: dfdRepIds[i],
+            itens: full.itens,
+            secoes: full.secoes,
+            tipo: full.tipo,
+            numeroContrato: full.numeroContrato,
+            numeroAta: full.numeroAta,
+            numeroLicitacao: full.numeroLicitacao,
+          },
+          regras,
+          { categoria },
+        );
         if (faltas.length > 0) {
           bloqueados.push({ numero: di.numero, motivo: faltas.join(", ") });
           continue;
         }
-        // Confere a assinatura (mesma regra do servidor) — não protocola DFD com
-        // assinatura não permitida.
+        // Confere a assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
         const resAss = confereAssinatura(i, full);
-        if (resAss.status === "erro") {
-          bloqueados.push({ numero: di.numero, motivo: resAss.motivo });
+        if (bloqueiaAssinatura(resAss, nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(full.tipo), categoria }))) {
+          bloqueados.push({ numero: di.numero, motivo: resAss.status === "erro" ? resAss.motivo : "assinatura" });
           continue;
         }
         try {
@@ -491,6 +518,7 @@ export function ProtocoloUploadForm({
     situacao: SITUACAO[classificar(di.numero)],
   }));
   const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
+  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // DFD-R sem referência
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhasErro.length;
@@ -500,18 +528,20 @@ export function ProtocoloUploadForm({
   const somatorioDfds = [...parsed.values()].reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0);
   const itensDfds = [...parsed.values()].reduce((s, d) => s + d.itens.length, 0);
   const conciliavel = temDfds && !analisando && dfdsComErro === 0;
-  // Regra 2: NÃO protocola com o Valor da capa **zerado/nulo** OU **diferente** da
-  // somatória dos valores dos DFDs — divergência trava (substituível pela somatória).
+  // Regra 2 (configurável por `protocolo.valorCapa` + categoria): capa **zerada/nula** OU
+  // **diferente** da somatória dos DFDs. "ignorar" desliga; "fundamental" trava; senão avisa.
+  const nivelCapa = nivelDe(regras, "protocolo.valorCapa", { categoria });
   const capaZeradaOuNula = extra.valorCapa == null || extra.valorCapa <= 0;
-  const capaDivergente = conciliavel && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
+  const capaMismatch =
+    conciliavel && nivelCapa !== "ignorar" && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
+  const capaBloqueia = capaMismatch && nivelCapa === "fundamental";
+  // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
+  const repBloqueia = protoRepId == null && nivelDe(regras, "protocolo.reparticao", { categoria }) === "fundamental";
+  const anoPcaBloqueia = anoPca == null && nivelDe(regras, "protocolo.anoPca", { categoria }) === "fundamental";
+  const semErroBloqueia = dfdsComErro > 0 && nivelDe(regras, "protocolo.semDfdEmErro", { categoria }) === "fundamental";
+  const bloqueadoPorRegra = repBloqueia || anoPcaBloqueia || semErroBloqueia || capaBloqueia;
   const podeProtocolar =
-    numero.trim().length > 0 &&
-    protoRepId != null &&
-    anoPca != null &&
-    !importando &&
-    !analisando &&
-    dfdsComErro === 0 &&
-    !capaDivergente;
+    numero.trim().length > 0 && !importando && !analisando && !bloqueadoPorRegra;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
 
@@ -523,30 +553,49 @@ export function ProtocoloUploadForm({
     const d = parsed.get(idx);
     if (!d) return ["DFD ainda em análise — reabrir para conferir."];
     const resAss = confereAssinatura(idx, d);
-    return faltasCirurgicasDfd({
-      itens: d.itens,
-      secoes: d.secoes,
-      reparticaoId: dfdRepIds[idx],
-      assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null,
-    });
+    return faltasCirurgicasDfd(
+      {
+        itens: d.itens,
+        secoes: d.secoes,
+        reparticaoId: dfdRepIds[idx],
+        assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null,
+        tipo: d.tipo,
+      },
+      regras,
+      { categoria },
+    );
   };
-  const capaMotivo = capaDivergente
+  const capaMotivo = capaMismatch
     ? capaZeradaOuNula
       ? `Valor da capa ausente/zerado — informar o valor da capa (usar "Substituir pela somatória": ${brl(somatorioDfds)}).`
       : `Valor da capa (${extra.valorCapa != null ? brl(extra.valorCapa) : "—"}) diferente da somatória dos DFDs (${brl(somatorioDfds)}) — corrigir a capa (usar "Substituir pela somatória").`
     : null;
-  const temErroProto = dfdsComErro > 0 || capaDivergente;
+  const temErroProto = dfdsComErro > 0 || capaMismatch;
+  // O relatório (despacho) fica disponível quando há erro OU DFD-R em atenção (o usuário
+  // escolhe incluir os de atenção). Só de atenção também gera um despacho.
+  const temAtencao = linhasAtencao.length > 0;
+  const temRelatorio = temErroProto || temAtencao;
+  const dfdsRelatorio = [
+    ...linhasErro.map((l) => ({
+      numero: index?.dfds[l.key].numero ?? "?",
+      tipo: parsed.get(l.key)?.tipo ?? null,
+      faltas: faltasDoDfd(l.key),
+    })),
+    ...(incluirAtencao
+      ? linhasAtencao.map((l) => ({
+          numero: index?.dfds[l.key].numero ?? "?",
+          tipo: parsed.get(l.key)?.tipo ?? null,
+          faltas: [FALTA_REFERENCIA_RENOVACAO],
+        }))
+      : []),
+  ];
   const relatorioLinhas = linhasRelatorioProtocolo({
     numero,
     idExterno: extra.idExterno,
     interessado: interessado || null,
     assunto: assunto || null,
     capaMotivo,
-    dfds: linhasErro.map((l) => ({
-      numero: index?.dfds[l.key].numero ?? "?",
-      tipo: parsed.get(l.key)?.tipo ?? null,
-      faltas: faltasDoDfd(l.key),
-    })),
+    dfds: dfdsRelatorio,
   });
 
   // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
@@ -745,6 +794,8 @@ export function ProtocoloUploadForm({
                         anoPca={anoPca}
                         autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
                         autoCampos={autoMap.get(abertoIdx) ?? []}
+                        regras={regras}
+                        categoria={categoria}
                         onRepChange={(id) => setRepDfd(abertoIdx, id)}
                         onSecoesChange={onSecoesAberto}
                         onRefsChange={onRefsAberto}
@@ -766,29 +817,31 @@ export function ProtocoloUploadForm({
               ) : (
               <span
                 className="text-[12px]"
-                style={{ color: dfdsComErro > 0 || capaDivergente || anoPca == null ? "var(--danger)" : "var(--muted)" }}
+                style={{ color: bloqueadoPorRegra ? "var(--danger)" : "var(--muted)" }}
               >
-                {anoPca == null
+                {anoPcaBloqueia
                   ? "Defina o PCA do processo para protocolar"
-                  : !temDfds
-                    ? "Sem DFDs — cria só o protocolo."
-                    : analisando
-                      ? `Analisando ${index?.dfds.length} DFD(s)...`
-                      : dfdsComErro > 0
-                        ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
-                        : capaDivergente
-                          ? "Valor da capa diverge da somatória — substitua para liberar"
-                          : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · tudo certo`}
+                  : repBloqueia
+                    ? "Defina a repartição do processo para protocolar"
+                    : !temDfds
+                      ? "Sem DFDs — cria só o protocolo."
+                      : analisando
+                        ? `Analisando ${index?.dfds.length} DFD(s)...`
+                        : semErroBloqueia
+                          ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
+                          : capaBloqueia
+                            ? "Valor da capa diverge da somatória — substitua para liberar"
+                            : `${index?.dfds.length} DFD(s) · ${semRep} sem repartição · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
               </span>
             )}
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-              {!importando && temErroProto && (
+              {!importando && temRelatorio && (
                 <Button
                   variant="secondary"
                   onClick={() => setRelatorioAberto(true)}
-                  icon={<IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                  icon={<IconAlert className="h-4 w-4" style={{ color: temErroProto ? "var(--danger)" : "var(--warn)" }} />}
                 >
-                  Relatório de erro
+                  {temErroProto ? "Relatório de erro" : "Relatório de atenção"}
                 </Button>
               )}
               {!importando && (
@@ -813,22 +866,26 @@ export function ProtocoloUploadForm({
               <StatMini
                 label="Somatória dos DFDs"
                 value={brl(somatorioDfds)}
-                tone={capaDivergente ? "warn" : "default"}
+                tone={capaMismatch ? "warn" : "default"}
                 hint={analisando ? "analisando…" : undefined}
                 className="col-span-2 sm:col-span-1"
               />
             </div>
           )}
-          {capaDivergente && (
-            <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
+          {capaMismatch && (
+            <Callout kind={capaBloqueia ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
               <p className="font-semibold">
                 {capaZeradaOuNula
-                  ? "O valor da capa está zerado — não é possível protocolar"
-                  : "O valor da capa diverge da somatória dos DFDs"}
+                  ? capaBloqueia
+                    ? "O valor da capa está zerado — não é possível protocolar"
+                    : "O valor da capa está zerado (atenção — não bloqueia)"
+                  : capaBloqueia
+                    ? "O valor da capa diverge da somatória dos DFDs"
+                    : "O valor da capa diverge da somatória dos DFDs (atenção — não bloqueia)"}
               </p>
               <p className="mt-1 opacity-90">
                 Valor da capa: {extra.valorCapa != null ? brl(extra.valorCapa) : "—"} · Somatória dos DFDs:{" "}
-                {brl(somatorioDfds)}. Substitua o valor da capa pela somatória para liberar a protocolação.
+                {brl(somatorioDfds)}. Substitua o valor da capa pela somatória para conciliar.
               </p>
               <div className="mt-2">
                 <Button variant="secondary" onClick={() => setExtra((x) => ({ ...x, valorCapa: somatorioDfds }))}>
@@ -907,8 +964,17 @@ export function ProtocoloUploadForm({
       <RelatorioErros
         open={relatorioAberto}
         onClose={() => setRelatorioAberto(false)}
-        titulo={`Erros do protocolo ${numero || ""}`.trim()}
+        titulo={`Relatório do protocolo ${numero || ""}`.trim()}
         linhas={relatorioLinhas}
+        toggle={
+          temAtencao
+            ? {
+                label: `Incluir ${linhasAtencao.length} DFD-R sem referência (atenção) no relatório`,
+                checked: incluirAtencao,
+                onChange: setIncluirAtencao,
+              }
+            : undefined
+        }
       />
     </div>
   );

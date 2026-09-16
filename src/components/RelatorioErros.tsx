@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "./Button";
+import { Checkbox } from "./Field";
 import { IconAlert, IconCheck, IconClipboard } from "./icons";
 import { Modal } from "./Modal";
 
@@ -9,18 +10,22 @@ import { Modal } from "./Modal";
  * Banner (Modal) com TODOS os erros de um documento listados para **copiar** —
  * reutilizado pelo DFD e pelo Protocolo. Recebe as linhas já montadas (puras, de
  * `linhasRelatorioDfd`/`linhasRelatorioProtocolo`) e oferece "Copiar tudo"
- * (`navigator.clipboard`, com fallback de seleção). Só componentes do DS.
+ * (`navigator.clipboard`, com fallback de seleção). Um `toggle` opcional (Checkbox)
+ * permite ao usuário **incluir/excluir** um grupo de pendências (ex.: DFD-R em
+ * atenção) e recompor as linhas ao vivo. Só componentes do DS.
  */
 export function RelatorioErros({
   open,
   onClose,
   titulo,
   linhas,
+  toggle,
 }: {
   open: boolean;
   onClose: () => void;
   titulo: string;
   linhas: string[];
+  toggle?: { label: string; checked: boolean; onChange: (v: boolean) => void };
 }) {
   const [copiado, setCopiado] = useState(false);
   const texto = linhas.join("\n");
@@ -71,6 +76,11 @@ export function RelatorioErros({
           <IconAlert className="h-4 w-4" style={{ color: "var(--danger)" }} />
           <span>Copie e encaminhe para quem for corrigir o documento.</span>
         </div>
+        {toggle && (
+          <div className="rounded-card border border-border bg-surface-2 p-3">
+            <Checkbox label={toggle.label} checked={toggle.checked} onChange={(e) => toggle.onChange(e.target.checked)} />
+          </div>
+        )}
         <pre
           id="relatorio-erros-texto"
           className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-4 font-mono text-[12.5px] leading-relaxed text-text-2"

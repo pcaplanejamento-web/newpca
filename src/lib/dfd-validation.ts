@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { SECOES_OBRIGATORIAS } from "./dfd-tratamento.ts";
-import { norm } from "./parse-dfd-comum.ts";
+import type { RegrasAvaliacao } from "./avaliacao-core.ts";
+import { avaliarDfd } from "./dfd-tratamento.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
@@ -11,31 +11,32 @@ const MAX_ROWS_POR_LOTE = 1000;
 // Teto generoso de itens declarados por DFD (anti-abuso; um DFD real tem dezenas).
 const MAX_ITENS_DFD = 100_000;
 
-// Seções obrigatórias para importar um DFD — fonte única em `dfd-tratamento`.
-
+// Requisitos obrigatórios de um DFD — a regra agora é CONFIGURÁVEL pelo ADM
+// (`avaliarDfd` em `dfd-tratamento`, com níveis do catálogo). `tipo`/refs opcionais
+// habilitam as exceções por tipo de DFD.
 export type DfdConferencia = {
   reparticaoId?: number | null;
-  itens: { valorUnitario?: number | null }[];
+  itens: { valorUnitario?: number | null; quantidade?: number | null }[];
   secoes: { titulo: string; texto: string }[];
+  tipo?: string | null;
+  numeroContrato?: string | null;
+  numeroAta?: string | null;
+  numeroLicitacao?: string | null;
 };
 
 /**
- * Requisitos OBRIGATÓRIOS para importar um DFD. Retorna a lista de faltas
- * (vazio = pode importar). É a fonte única da regra — usada no cliente (trava o
- * botão "Importar") E no servidor (rejeita a gravação). Não permite importar
- * sem: valor unitário em todos os itens, repartição, justificativa, previsão de
- * entrega, prioridade e fundamentação legal. O **ano do PCA** é um portão à parte
- * (herdado do protocolo / definido no avulso), conferido no envio, não aqui.
+ * Faltas que BLOQUEIAM importar/protocolar um DFD (vazio = pode importar). Fonte única
+ * cliente+servidor. Delega para `avaliarDfd` (níveis do ADM); com `regras` no padrão do
+ * catálogo devolve exatamente a lista de hoje (valor unitário, repartição, §3/§5/§6/§7).
+ * `regras`/`ctx` opcionais aplicam os níveis e as exceções por tipo/categoria. O **ano do
+ * PCA** e a **assinatura** são portões à parte, conferidos no envio.
  */
-export function faltasObrigatorias(d: DfdConferencia): string[] {
-  const faltas: string[] = [];
-  if (d.itens.length === 0 || !d.itens.every((i) => i.valorUnitario != null && i.valorUnitario > 0))
-    faltas.push("valor unitário em todos os itens");
-  if (d.reparticaoId == null) faltas.push("repartição vinculada");
-  const tem = (kw: string) =>
-    d.secoes.some((s) => norm(s.titulo).includes(kw) && s.texto.trim().length > 0);
-  for (const s of SECOES_OBRIGATORIAS) if (!tem(s.kw)) faltas.push(s.rotulo);
-  return faltas;
+export function faltasObrigatorias(
+  d: DfdConferencia,
+  regras?: RegrasAvaliacao,
+  ctx?: { categoria?: string | null },
+): string[] {
+  return avaliarDfd(d, regras, ctx).bloqueantes;
 }
 
 const textoOpc = z.string().trim().max(4000).optional().nullable();

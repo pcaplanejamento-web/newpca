@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { dfdRSemReferencia } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -93,6 +95,10 @@ export type ProtocoloVisualDfd = {
   totalItens: number | null;
   valorTotal: number | null;
   valorEstimado: number | null;
+  // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO na lista.
+  numeroContrato?: string | null;
+  numeroAta?: string | null;
+  numeroLicitacao?: string | null;
 };
 
 export type ProtocoloVisual = {
@@ -147,20 +153,26 @@ export function ProtocoloView({
   protocolo,
   onVerDfd,
   edicao,
+  regras = regrasPadrao(),
 }: {
   protocolo: ProtocoloVisual;
   onVerDfd?: (id: number) => void;
   edicao?: ProtocoloEdicao;
+  regras?: RegrasAvaliacao;
 }) {
   const editando = !!edicao && !edicao.trancado;
   const rep =
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
       : "Sem repartição";
+  const categoria = classificarAssunto(protocolo.assunto, regras.categorias);
   // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
   // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
-  // acontece uma única vez, na importação, antes de gravar).
-  const capaDivergente = protocolo.valorCapa != null && !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
+  // acontece uma única vez, na importação, antes de gravar). "ignorar" desliga a nota.
+  const capaDivergente =
+    nivelDe(regras, "protocolo.valorCapa", { categoria }) !== "ignorar" &&
+    protocolo.valorCapa != null &&
+    !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
 
   // Planilha ÚNICA de DFDs (a mesma da importação e da aba DFDs). Um DFD gravado já
   // passou pela validação → estado "regular" (sem tabela de erro).
@@ -172,7 +184,12 @@ export function ProtocoloView({
     tipo: tipoCurtoDfd(d.tipo),
     itens: d.totalItens,
     valor: valorDfd(d),
-    estado: "regular",
+    // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
+    estado:
+      dfdRSemReferencia(d) &&
+      nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignorar"
+        ? "atencao"
+        : "regular",
   }));
 
   return (

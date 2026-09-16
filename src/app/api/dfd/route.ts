@@ -1,9 +1,12 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { getRegrasAvaliacao } from "@/lib/avaliacao";
+import { nivelDe } from "@/lib/avaliacao-core";
 import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { dfdOpSchema, faltasObrigatorias } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -38,24 +41,41 @@ export async function POST(req: Request) {
     return ok({ inserted: r.inserted });
   }
 
-  // start-dfd — regra obrigatória (mesma do cliente) sobre cabeçalho + 1º lote.
-  const faltas = faltasObrigatorias({ reparticaoId: d.reparticaoId, itens: d.rows, secoes: d.secoes });
+  // start-dfd — regra CONFIGURÁVEL (mesma do cliente) sobre cabeçalho + 1º lote.
+  // Níveis do ADM + exceções por TIPO de DFD (o `tipo` vem no corpo). A categoria do
+  // protocolo é aplicada no cliente; o servidor mantém global + por-tipo como garantia.
+  const regras = await getRegrasAvaliacao();
+  const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo) };
+  const faltas = faltasObrigatorias(
+    {
+      reparticaoId: d.reparticaoId,
+      itens: d.rows,
+      secoes: d.secoes,
+      tipo: d.tipo,
+      numeroContrato: d.numeroContrato,
+      numeroAta: d.numeroAta,
+      numeroLicitacao: d.numeroLicitacao,
+    },
+    regras,
+  );
   if (faltas.length > 0) return erro(`Não é possível importar: falta ${faltas.join(", ")}.`, 422);
-  // Portão do PCA: todo DFD é gravado com o ano do PCA (herdado do protocolo ou
-  // definido no avulso). Sem ele, não grava (regra: não protocolar/importar sem PCA).
-  if (d.anoPca == null) return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
+  // Portão do PCA (configurável): se `dfd.anoPca` for fundamental, todo DFD grava com o
+  // ano do PCA (herdado do protocolo ou definido no avulso). Sem ele, não grava.
+  if (d.anoPca == null && nivelDe(regras, "dfd.anoPca", ctxAv) === "fundamental")
+    return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
   if (!acessivel(d.reparticaoId)) return erro("Repartição inválida ou sem acesso.", 403);
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma repartição inacessível.
   const existente = await getReparticaoDfdNumero(d.numero);
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra repartição, sem acesso.", 403);
   }
-  // Conferência da ASSINATURA (garantia no servidor): PDF sem assinatura, sem
-  // responsável cadastrado, ou assinante não autorizado → não grava.
+  // Conferência da ASSINATURA (garantia no servidor), respeitando o nível `dfd.assinatura`:
+  // PDF sem assinatura, sem responsável cadastrado, ou assinante não autorizado → não grava.
   const res = validarAssinatura(d.assinaturas, await carregarResponsaveis(d.reparticaoId), {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
   });
-  if (res.status === "erro") return erro(res.motivo, 422);
+  if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura", ctxAv)))
+    return erro(res.motivo, 422);
 
   const r = await upsertDfdCabecalho(d, a.u.id, d.rows);
   return ok({ dfdId: r.id, numero: r.numero });
