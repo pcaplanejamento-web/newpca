@@ -271,6 +271,16 @@ filtra por órgão. `OrgaosAdmin` ganhou `onRowClick`; `ReparticoesAdmin` ganhou
 Referências atualizadas (`AppShell`, `ConfiguracoesAdmin`, `logicas.ts`). Sem código morto (coluna/select de órgão
 removidos por redundância), responsivo, componentes do DS. Lint/testes verdes.
 
+### Órgão: assinatura ÚNICA (uma para todas as unidades) ou por unidade — entregue
+✅ Cada **órgão** configura (`Segmented` no `OrgaosAdmin`) se a **assinatura (responsáveis por DFDs)** é **uma para
+todas as unidades** — definida no próprio órgão com o **mesmo `ResponsaveisEditor`** — ou **por unidade** (padrão,
+como antes). Migração `0023` (aditiva): `orgaos.assinatura_unica` + `orgaos.responsavel_dfd`. A resolução é **pura e
+única** (`responsaveisEfetivos`) aplicada nos dois pontos que carregam responsáveis (`carregarResponsaveis` servidor +
+`responsaveisPorReparticao` cliente, com `leftJoin` no órgão) → toda a conferência de assinatura passa a usar os
+responsáveis certos **sem tocar** `validarAssinatura`/`DfdConferir`/`POST /api/dfd`. No `ReparticoesAdmin`, quando o
+órgão é "única", o editor da unidade é substituído por uma nota; coluna **"Assinatura"** (Única/Por unidade) na lista
+de órgãos. `responsaveisSchema` compartilhado (unidade+órgão). Testes puros de `responsaveisEfetivos` + migração `0023`.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField

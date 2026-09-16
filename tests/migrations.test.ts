@@ -167,6 +167,15 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(geral?.orgao_id, null, "GERAL não deve ter órgão");
   });
 
+  it("0023 adiciona assinatura_unica e responsavel_dfd em orgaos (padrão = por unidade)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('orgaos')");
+    assert.ok(cols.includes("assinatura_unica"), "coluna assinatura_unica ausente");
+    assert.ok(cols.includes("responsavel_dfd"), "coluna responsavel_dfd ausente em orgaos");
+    // Default preserva o comportamento atual: cada unidade tem a sua assinatura (0).
+    const org = db.prepare("SELECT assinatura_unica FROM orgaos WHERE id = 1").get() as { assinatura_unica: number } | undefined;
+    assert.equal(org?.assinatura_unica, 0, "assinatura_unica deveria começar 0 (por unidade)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

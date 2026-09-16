@@ -3,6 +3,7 @@ import { orgaos } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       sigla: corpo.data.sigla,
       nome: corpo.data.nome,
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
+      assinaturaUnica: corpo.data.assinaturaUnica,
+      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(orgaos.id, id));

@@ -34,7 +34,16 @@ type Rep = {
  * O órgão vem do escopo (URL), então a unidade herda `orgaoId` sem um seletor: toda
  * unidade já nasce dentro do seu órgão. Ordenação por botões ↑/↓ (persistida).
  */
-export function ReparticoesAdmin({ orgaoId, orgaoNome }: { orgaoId: number; orgaoNome: string }) {
+export function ReparticoesAdmin({
+  orgaoId,
+  orgaoNome,
+  assinaturaUnica,
+}: {
+  orgaoId: number;
+  orgaoNome: string;
+  /** O órgão está em "assinatura única": os responsáveis vêm do órgão, não da unidade. */
+  assinaturaUnica: boolean;
+}) {
   const router = useRouter();
   const [lista, setLista] = useState<Rep[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -283,7 +292,14 @@ export function ReparticoesAdmin({ orgaoId, orgaoNome }: { orgaoId: number; orga
           />
           <div>
             <span className="mb-2 block text-[13px] font-semibold text-text">Responsáveis por DFDs</span>
-            <ResponsaveisEditor valor={responsaveis} onChange={setResponsaveis} />
+            {assinaturaUnica ? (
+              <Callout kind="info">
+                Este órgão usa <strong>assinatura única</strong>: os responsáveis são definidos no órgão “{orgaoNome}” e
+                valem para todas as unidades. Ajuste-os na tela de Órgãos.
+              </Callout>
+            ) : (
+              <ResponsaveisEditor valor={responsaveis} onChange={setResponsaveis} />
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setEditando(null)}>

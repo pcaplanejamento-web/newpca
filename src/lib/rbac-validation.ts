@@ -34,6 +34,16 @@ const responsavelTemporarioSchema = responsavelSchema.extend({
   fim: z.string().trim().max(10).default(""),
 });
 
+// Responsáveis por DFDs (N padrões + N temporários) — mesmo shape na unidade E no órgão
+// (assinatura única). Fonte única do schema.
+const responsaveisSchema = z
+  .object({
+    padroes: z.array(responsavelSchema).max(30).default([]),
+    temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
+  })
+  .optional()
+  .default({ padroes: [], temporarios: [] });
+
 export const reparticaoSchema = z.object({
   codigo: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome da unidade.").max(160),
@@ -42,13 +52,7 @@ export const reparticaoSchema = z.object({
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
   orgaoId: z.number().int().positive().optional().nullable(),
-  responsaveis: z
-    .object({
-      padroes: z.array(responsavelSchema).max(30).default([]),
-      temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
-    })
-    .optional()
-    .default({ padroes: [], temporarios: [] }),
+  responsaveis: responsaveisSchema,
 });
 
 export const reordenarSchema = z.object({
@@ -56,11 +60,14 @@ export const reordenarSchema = z.object({
 });
 
 // Órgão = entidade organizacional acima da unidade. `orgaoEntidade` é o padrão que casa o
-// campo "Órgão/Entidade" do DFD (opcional; cadastro do ADM).
+// campo "Órgão/Entidade" do DFD. `assinaturaUnica` = os `responsaveis` do órgão valem p/ TODAS
+// as unidades (senão cada unidade tem os seus). Tudo opcional (cadastro do ADM).
 export const orgaoSchema = z.object({
   sigla: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome do órgão.").max(160),
   orgaoEntidade: z.string().trim().max(200).optional().nullable(),
+  assinaturaUnica: z.boolean().default(false),
+  responsaveis: responsaveisSchema,
 });
 
 export type PermissaoInput = z.infer<typeof permissaoSchema>;

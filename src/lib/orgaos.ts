@@ -13,6 +13,8 @@ export type OrgaoResumo = {
   nome: string;
   orgaoEntidade: string | null;
   ordem: number;
+  /** 1 = os responsáveis do órgão valem p/ todas as unidades (assinatura única). */
+  assinaturaUnica: boolean;
 };
 
 export async function listarOrgaos(): Promise<OrgaoResumo[]> {
@@ -23,6 +25,7 @@ export async function listarOrgaos(): Promise<OrgaoResumo[]> {
       nome: orgaos.nome,
       orgaoEntidade: orgaos.orgaoEntidade,
       ordem: orgaos.ordem,
+      assinaturaUnica: orgaos.assinaturaUnica,
     })
     .from(orgaos)
     .orderBy(asc(orgaos.ordem), asc(orgaos.id));

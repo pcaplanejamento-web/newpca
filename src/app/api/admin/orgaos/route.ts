@@ -3,6 +3,7 @@ import { orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
+import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +18,14 @@ export async function GET() {
       nome: orgaos.nome,
       orgaoEntidade: orgaos.orgaoEntidade,
       ordem: orgaos.ordem,
+      assinaturaUnica: orgaos.assinaturaUnica,
+      responsavelDfd: orgaos.responsavelDfd,
     })
     .from(orgaos)
     .orderBy(asc(orgaos.ordem), asc(orgaos.id));
-  return ok({ orgaos: rows });
+  // A coluna guarda JSON; expõe como `responsaveis`.
+  const lista = rows.map(({ responsavelDfd, ...o }) => ({ ...o, responsaveis: parseResponsaveis(responsavelDfd) }));
+  return ok({ orgaos: lista });
 }
 
 export async function POST(req: Request) {
@@ -36,6 +41,8 @@ export async function POST(req: Request) {
       sigla: corpo.data.sigla,
       nome: corpo.data.nome,
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
+      assinaturaUnica: corpo.data.assinaturaUnica,
+      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       ordem: Number(max) + 1,
     })
     .returning({ id: orgaos.id });

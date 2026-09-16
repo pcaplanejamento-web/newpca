@@ -16,5 +16,5 @@ export default async function OrgaoUnidadesPage({ params }: { params: Promise<{ 
   if (!Number.isInteger(orgaoId) || orgaoId <= 0) notFound();
   const orgao = (await listarOrgaos()).find((o) => o.id === orgaoId);
   if (!orgao) notFound();
-  return <ReparticoesAdmin orgaoId={orgao.id} orgaoNome={orgao.nome} />;
+  return <ReparticoesAdmin orgaoId={orgao.id} orgaoNome={orgao.nome} assinaturaUnica={orgao.assinaturaUnica} />;
 }

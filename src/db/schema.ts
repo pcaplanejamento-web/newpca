@@ -232,6 +232,10 @@ export const orgaos = sqliteTable(
     sigla: text("sigla").notNull(),
     orgaoEntidade: text("orgao_entidade"), // padrão do "Órgão/Entidade" do DFD → órgão (match)
     ordem: integer("ordem").notNull().default(0),
+    // Assinatura ÚNICA: 1 = os responsáveis do órgão valem p/ TODAS as unidades (guardados aqui);
+    // 0 = cada unidade tem os seus (`reparticoes.responsavel_dfd`). Ver `responsaveisEfetivos`.
+    assinaturaUnica: integer("assinatura_unica", { mode: "boolean" }).notNull().default(false),
+    responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs do órgão (JSON), quando assinatura única
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

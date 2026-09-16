@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
-import { reparticoes } from "@/db/schema";
+import { orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { parseResponsaveis, RESPONSAVEIS_VAZIO, type Responsaveis } from "./reparticao-responsaveis";
+import { RESPONSAVEIS_VAZIO, type Responsaveis, responsaveisEfetivos } from "./reparticao-responsaveis";
 
 /**
  * Acesso aos RESPONSÁVEIS por DFDs das repartições (coluna `responsavel_dfd`, JSON).
@@ -10,27 +10,43 @@ import { parseResponsaveis, RESPONSAVEIS_VAZIO, type Responsaveis } from "./repa
  * Só escopo de request (usa `getDb`).
  */
 
-/** Responsáveis de UMA repartição (para conferir a assinatura no servidor); vazio se não houver. */
+/**
+ * Responsáveis EFETIVOS de UMA unidade (para conferir a assinatura no servidor); vazio se não
+ * houver. Resolve a fonte: órgão em "assinatura única" → os do órgão; senão os da unidade.
+ */
 export async function carregarResponsaveis(reparticaoId: number | null | undefined): Promise<Responsaveis> {
   if (reparticaoId == null) return RESPONSAVEIS_VAZIO;
   const [r] = await getDb()
-    .select({ responsavelDfd: reparticoes.responsavelDfd })
+    .select({
+      unidadeRaw: reparticoes.responsavelDfd,
+      assinaturaUnica: orgaos.assinaturaUnica,
+      orgaoRaw: orgaos.responsavelDfd,
+    })
     .from(reparticoes)
+    .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
     .where(eq(reparticoes.id, reparticaoId))
     .limit(1);
-  return parseResponsaveis(r?.responsavelDfd ?? null);
+  if (!r) return RESPONSAVEIS_VAZIO;
+  return responsaveisEfetivos({ assinaturaUnica: r.assinaturaUnica ?? false, orgaoRaw: r.orgaoRaw, unidadeRaw: r.unidadeRaw });
 }
 
-/** Mapa `reparticaoId → Responsaveis` (enriquece a lista de repartições dos banners). */
+/** Mapa `reparticaoId → Responsaveis` EFETIVOS (enriquece a lista de unidades dos banners). */
 export async function responsaveisPorReparticao(ids: number[]): Promise<Record<number, Responsaveis>> {
   const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
   if (uniq.length === 0) return {};
   const linhas = await getDb()
-    .select({ id: reparticoes.id, responsavelDfd: reparticoes.responsavelDfd })
+    .select({
+      id: reparticoes.id,
+      unidadeRaw: reparticoes.responsavelDfd,
+      assinaturaUnica: orgaos.assinaturaUnica,
+      orgaoRaw: orgaos.responsavelDfd,
+    })
     .from(reparticoes)
+    .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
     .where(inArray(reparticoes.id, uniq));
   const out: Record<number, Responsaveis> = {};
-  for (const l of linhas) out[l.id] = parseResponsaveis(l.responsavelDfd);
+  for (const l of linhas)
+    out[l.id] = responsaveisEfetivos({ assinaturaUnica: l.assinaturaUnica ?? false, orgaoRaw: l.orgaoRaw, unidadeRaw: l.unidadeRaw });
   return out;
 }
 

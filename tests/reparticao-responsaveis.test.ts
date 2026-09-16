@@ -4,6 +4,7 @@ import {
   estadoTemporario,
   parseResponsaveis,
   padroesInativos,
+  responsaveisEfetivos,
   responsaveisVigentes,
   serializeResponsaveis,
   temporariosVigentes,
@@ -94,5 +95,25 @@ describe("reparticao-responsaveis (N padrões + N temporários; matrícula/funç
       temporarios: [temp("Bia", "2026-01-01", "2026-03-01", { matricula: "2", funcao: "Dir", nomeacao: nom("decreto", "5", "") })],
     };
     assert.deepEqual(parseResponsaveis(serializeResponsaveis(r)), r);
+  });
+});
+
+describe("responsaveisEfetivos (assinatura única do órgão × por unidade)", () => {
+  const orgaoRaw = serializeResponsaveis({ padroes: [resp("ORGAO SIGNER")], temporarios: [] });
+  const unidadeRaw = serializeResponsaveis({ padroes: [resp("UNIDADE SIGNER")], temporarios: [] });
+
+  it("assinatura única ⇒ usa os responsáveis do ÓRGÃO", () => {
+    const r = responsaveisEfetivos({ assinaturaUnica: true, orgaoRaw, unidadeRaw });
+    assert.equal(r.padroes[0]?.nome, "ORGAO SIGNER");
+  });
+
+  it("por unidade (padrão) ⇒ usa os responsáveis da UNIDADE", () => {
+    const r = responsaveisEfetivos({ assinaturaUnica: false, orgaoRaw, unidadeRaw });
+    assert.equal(r.padroes[0]?.nome, "UNIDADE SIGNER");
+  });
+
+  it("assinatura única sem responsáveis no órgão ⇒ vazio (bloqueia até cadastrar)", () => {
+    const r = responsaveisEfetivos({ assinaturaUnica: true, orgaoRaw: null, unidadeRaw });
+    assert.deepEqual(r, { padroes: [], temporarios: [] });
   });
 });

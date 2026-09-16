@@ -145,6 +145,20 @@ export function serializeResponsaveis(r: Responsaveis): string | null {
   return JSON.stringify({ padroes, temporarios });
 }
 
+/**
+ * Responsáveis EFETIVOS de uma unidade para conferir a assinatura: quando o órgão está em
+ * "assinatura única" (`orgao.assinatura_unica`), valem os do ÓRGÃO (uma config p/ todas as
+ * unidades); senão, os da própria unidade. Puro — fonte única cliente+servidor (`carregarResponsaveis`
+ * / `responsaveisPorReparticao`). Os `*Raw` são o JSON cru de cada `responsavel_dfd`.
+ */
+export function responsaveisEfetivos(fonte: {
+  assinaturaUnica: boolean;
+  orgaoRaw: string | null | undefined;
+  unidadeRaw: string | null | undefined;
+}): Responsaveis {
+  return parseResponsaveis(fonte.assinaturaUnica ? fonte.orgaoRaw : fonte.unidadeRaw);
+}
+
 export type EstadoTemporario = "agendado" | "vigente" | "encerrado";
 
 /** Estado de um temporário em relação a `hoje` (datas incompletas → agendado). */
