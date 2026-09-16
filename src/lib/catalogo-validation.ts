@@ -73,3 +73,15 @@ export const patchItensTiposSchema = z.object({
   tipos: z.array(z.enum(TIPOS_DFD)),
 });
 export type PatchItensTiposPayload = z.infer<typeof patchItensTiposSchema>;
+
+// Editar UM item de catálogo (descrição/unidade/tipos); o código é imutável.
+export const patchItemSchema = z
+  .object({
+    descricao: z.string().trim().min(1).max(8000).optional(),
+    unidade: z.string().trim().max(60).nullable().optional(),
+    tipos: z.array(z.enum(TIPOS_DFD)).optional(),
+  })
+  .refine((v) => v.descricao !== undefined || v.unidade !== undefined || v.tipos !== undefined, {
+    message: "Nada para atualizar.",
+  });
+export type PatchItemPayload = z.infer<typeof patchItemSchema>;

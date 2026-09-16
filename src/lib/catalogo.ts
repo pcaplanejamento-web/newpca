@@ -218,3 +218,15 @@ export async function definirTiposItens(ids: number[], tipos: string[]): Promise
       .where(inArray(catalogoItens.id, uniq.slice(i, i + IN_CHUNK)));
   }
 }
+
+/** Edita os campos de UM item (descrição/unidade/tipos) — o código é imutável (chave global). */
+export async function atualizarCatalogoItem(
+  id: number,
+  campos: { descricao?: string; unidade?: string | null; tipos?: string[] },
+): Promise<void> {
+  const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
+  if (campos.descricao !== undefined) set.descricao = campos.descricao;
+  if (campos.unidade !== undefined) set.unidade = campos.unidade || null;
+  if (campos.tipos !== undefined) set.tipos = JSON.stringify(normalizarTipos(campos.tipos));
+  await getDb().update(catalogoItens).set(set).where(eq(catalogoItens.id, id));
+}

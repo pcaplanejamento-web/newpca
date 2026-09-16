@@ -1,5 +1,15 @@
-import { norm } from "./parse-dfd-comum.ts";
+import {
+  acharTitulo,
+  type CatalogoItemParseado,
+  type CatalogoParseado,
+  type ColKey,
+  duplicadosDe,
+  normalizarCodigo,
+  rotuloColuna,
+} from "./parse-catalogo-comum.ts";
 import { agruparLinhas, nearestByY, normalizar, type PdfItem, type PdfLine } from "./parse-dfd-pdf-core.ts";
+
+export type { CatalogoItemParseado, CatalogoParseado } from "./parse-catalogo-comum.ts";
 
 /**
  * Núcleo PURO do parser de CATÁLOGO de produtos a partir do PDF. Recebe os TRECHOS de
@@ -14,34 +24,7 @@ import { agruparLinhas, nearestByY, normalizar, type PdfItem, type PdfLine } fro
  * aqui → testável no Node com trechos sintéticos.
  */
 
-export type CatalogoItemParseado = {
-  sequencial: number | null;
-  codigo: string; // normalizado (só dígitos)
-  codigoRaw: string | null; // forma original do PDF (ex.: "524.175.984")
-  descricao: string;
-  unidade: string | null;
-};
-
-export type CatalogoParseado = {
-  nome: string | null; // título "CATÁLOGO ..." sugerido (editável no envio)
-  itens: CatalogoItemParseado[];
-  duplicadosNoArquivo: string[]; // códigos repetidos no próprio arquivo
-};
-
-type ColKey = "item" | "codigo" | "descricao" | "unidade";
 type Coluna = { key: ColKey; x: number };
-
-/** Classifica um TOKEN de cabeçalho numa coluna (ou null). Qtd/Valor/Unitário são
- * IGNORADOS (não viram coluna) — costumam vir vazios. */
-function rotuloColuna(str: string): ColKey | null {
-  const s = norm(str); // UPPER + sem acento + espaços colapsados
-  if (/QUANT|QTD|VALOR|UNIT|TOTAL|PRECO/.test(s)) return null;
-  if (/^COD/.test(s)) return "codigo"; // COD, CODIGO, "COD PRODUTO", "COD. PROD"
-  if (/^DESCRI/.test(s)) return "descricao";
-  if (/^UN(D|ID)/.test(s) || /^MED/.test(s)) return "unidade"; // UND, UNID, UNIDADE, UND.MED, MEDIDA
-  if (/^ITEM/.test(s) || /SEQ/.test(s)) return "item"; // ITEM, "Nº Seq"
-  return null;
-}
 
 /** Uma linha é cabeçalho de coluna se tem um rótulo de CÓDIGO e um de DESCRIÇÃO. */
 function linhaEhCabecalho(l: PdfLine): boolean {
@@ -88,15 +71,6 @@ function colOf(cols: Coluna[], x: number): ColKey {
   return cols[idx]?.key ?? "descricao";
 }
 
-/** Título "CATÁLOGO ..." antes do cabeçalho (nome sugerido); `null` se não houver. */
-function tituloDe(linhas: PdfLine[], ate: number): string | null {
-  for (let k = 0; k < ate && k < linhas.length; k++) {
-    const txt = linhas[k].items.map((i) => i.str).join(" ").replace(/\s+/g, " ").trim();
-    if (/CATAL[AO]GO/.test(norm(txt))) return txt; // "CATÁLOGO" e a variante "CATÁLAGO"
-  }
-  return null;
-}
-
 /** Monta a unidade de um item: agrupa por coluna (Und pode vir 2x — pega a mais longa)
  * e junta verticalmente cada coluna (célula que quebra em 2 linhas, ex.: "UNIDA"/"DE"). */
 function montarUnidade(frags: PdfItem[]): string | null {
@@ -128,10 +102,11 @@ export function parseCatalogoFromPdfItems(bruto: PdfItem[], _nomeArquivo: string
   const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
   const hi = linhas.findIndex(linhaEhCabecalho);
-  if (hi < 0) return { nome: tituloDe(linhas, linhas.length), itens: [], duplicadosNoArquivo: [] };
+  if (hi < 0)
+    return { nome: acharTitulo(linhas.map((l) => l.items.map((i) => i.str).join(" "))), itens: [], duplicadosNoArquivo: [] };
 
   const cols = colunas(linhas, hi);
-  const nome = tituloDe(linhas, hi);
+  const nome = acharTitulo(linhas.slice(0, hi).map((l) => l.items.map((i) => i.str).join(" ")));
 
   // Varre as páginas (a tabela pode ocupar dezenas). Na 1ª página o cabeçalho do
   // documento (logo/endereço/título) fica ACIMA do cabeçalho de coluna → excluído por
@@ -208,7 +183,7 @@ export function parseCatalogoFromPdfItems(bruto: PdfItem[], _nomeArquivo: string
   const itens: CatalogoItemParseado[] = [];
   for (const b of buckets) {
     const codigoRaw = b.cod.sort(porPos).map((f) => f.str).join("").trim() || null;
-    const codigo = (codigoRaw ?? "").replace(/\D/g, "");
+    const codigo = normalizarCodigo(codigoRaw);
     if (!codigo) continue; // sem código numérico → não é um item
     const descricao = b.desc
       .sort(porPos)
@@ -221,12 +196,5 @@ export function parseCatalogoFromPdfItems(bruto: PdfItem[], _nomeArquivo: string
     itens.push({ sequencial, codigo, codigoRaw, descricao, unidade: montarUnidade(b.uni) });
   }
 
-  const vistos = new Set<string>();
-  const dups = new Set<string>();
-  for (const it of itens) {
-    if (vistos.has(it.codigo)) dups.add(it.codigo);
-    else vistos.add(it.codigo);
-  }
-
-  return { nome, itens, duplicadosNoArquivo: [...dups] };
+  return { nome, itens, duplicadosNoArquivo: duplicadosDe(itens) };
 }

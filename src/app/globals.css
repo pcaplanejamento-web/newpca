@@ -262,6 +262,22 @@
   animation: fade-in-up 0.35s ease-out both;
 }
 
+/* Transição suave entre visões (lista de itens ↔ catálogo): as linhas parecem
+   se transformar nos cards e vice-versa (fade + leve escala). Respeita o motion. */
+@keyframes cat-morph {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-cat-morph {
+  animation: cat-morph 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Shimmer para skeletons de carregamento */
 @keyframes shimmer {
   0% {

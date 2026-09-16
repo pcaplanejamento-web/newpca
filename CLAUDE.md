@@ -385,23 +385,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 ## Catálogo de produtos (referência p/ padronização) — migração `0024`
 - **O que é:** base de REFERÊNCIA **isolada** (não toca PCA/DFD/itens) para, no futuro, comparar os itens dos DFDs contra
   um catálogo e **padronizar**. Agora entrega: subir catálogos de PDF, consultar/excluir/atualizar e marcar cada item com
-  os **tipos de DFD** a que se aplica. Aba de módulo **`catalogo`** (`/painel/catalogo` = `CatalogoView`); **admin vê tudo**,
+  os **tipos de DFD** a que se aplica. Importa **PDF ou planilha .xlsx**, **exporta** (XLSX/PDF), **edita** (nome/tipos do
+  catálogo e descrição/unidade/tipos de cada item) e alterna **duas visões** (Catálogo em cards / Lista de Itens numa
+  tabela única, com transição suave). Aba de módulo **`catalogo`** (`/painel/catalogo` = `CatalogoView`); **admin vê tudo**,
   **editores** (admin/gestor) sobem/editam/excluem, demais com a aba **só consultam**. A migração `0024` concede a aba a
   quem já tem `dfd`.
 - **Modelo (`catalogos` + `catalogo_itens`, sem FK p/ PCA/DFD):** `catalogos` (nome, `tipos_padrao` JSON, `total_itens`);
   `catalogo_itens` (`codigo` normalizado só-dígitos + **índice ÚNICO GLOBAL**, `codigo_raw` p/ exibição, `descricao`,
   `unidade`, `sequencial`, `tipos` JSON de DFD-S/R/O/E). Excluir o catálogo apaga os itens (cascade + delete explícito).
   Acesso em `src/lib/catalogo.ts` (`listarCatalogos`/`getCatalogoItens`/`criarCatalogo`/`atualizarCatalogo`/
-  `upsertCatalogoItens`/`excluirCatalogo`/`codigosEmConflito`/`definirTiposItens`); schemas Zod em `catalogo-validation.ts`
-  (puro/testável).
-- **Parser DEDICADO (`parse-catalogo-pdf(-core).ts`):** os catálogos variam MUITO (3–7 colunas, ordem diferente, Und
+  `upsertCatalogoItens`/`excluirCatalogo`/`codigosEmConflito`/`definirTiposItens`/`atualizarCatalogoItem`); schemas Zod em
+  `catalogo-validation.ts` (puro/testável).
+- **Parsers DEDICADOS (PDF e XLSX):** os catálogos variam MUITO (3–7 colunas, ordem diferente, Und
   antes/depois/2x da descrição, com/sem Nº de item, colunas Qtd/Valor vazias, título/logo acima da tabela) — por isso a
   detecção de colunas é **pelo CABEÇALHO, ordenada por posição** (data-driven), ao contrário do parser de DFD (colunas
   fixas). Reaproveita a camada pdf.js (`abrirPdf`/`extractPdfItems`/`PdfItem`) e `agruparLinhas`/`nearestByY`/`normalizar`
   (agora **exportados** de `parse-dfd-pdf-core`). Cada LINHA é ancorada no **CÓDIGO** (todo item tem um; nem todo tem Nº);
   descrição/unidade/Nº casam por `y` mais próximo, com **continuação entre páginas**; pula continuação de cabeçalho (ex.:
   "DE MEDIDA"), junta unidade quebrada em 2 linhas, extrai o **título** ("CATÁLOGO"/"CATÁLAGO") como nome e aponta
-  **duplicados no arquivo**. Testado com fixtures dos 9 layouts reais (`tests/parse-catalogo-pdf.test.ts`).
+  **duplicados no arquivo**. O **XLSX** (`parse-catalogo-xlsx(-core)`) usa SheetJS e a MESMA detecção por cabeçalho sobre a
+  matriz de células. As peças puras compartilhadas (rótulo de coluna, normalização do código, título, duplicados) ficam em
+  **`parse-catalogo-comum.ts`** (espelha `parse-dfd-comum`). Fixtures reais em `tests/parse-catalogo-pdf.test.ts` +
+  `tests/parse-catalogo-xlsx.test.ts`.
 - **Import em LOTES (`importar-catalogo.ts` → `POST /api/catalogo`):** discriminada `start-catalogo`|`append-catalogo-itens`
   (espelha `importar-dfd`: retry de transitório, all-or-nothing; só apaga o catálogo no rollback quando foi CRIADO agora).
   **Código é ÚNICO GLOBAL:** todo lote confere `codigosEmConflito` — um código já presente em OUTRO catálogo → 422 (sem
@@ -410,13 +415,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Atualizar (re-subir) = MESCLAR preservando (`upsertCatalogoItens`, `INSERT … ON CONFLICT(codigo) DO UPDATE`):** item
   novo entra com o `tipos_padrao`; item que já existe tem só descrição/unidade/sequencial atualizados — os **`tipos`
   configurados são PRESERVADOS**; ausentes NÃO são apagados. Recalcula `total_itens`.
+- **Exportar / editar (`exportar-catalogo.ts`, cliente):** baixa o catálogo em **`.xlsx`** (SheetJS) ou abre uma
+  **impressão em PDF** (janela formatada → salvar como PDF), sem dependência nova. **Editar** o catálogo (nome/tipos
+  padrão) via `PATCH /api/catalogo/[id]`; **editar um item** (descrição/unidade/tipos — o CÓDIGO é imutável) via
+  `PATCH /api/catalogo/item/[id]` (`atualizarCatalogoItem`, schema `patchItemSchema`).
 - **Tipos de DFD por item (`TIPOS_DFD` de `avaliacao-core`):** definíveis no **envio** (padrão do catálogo), em **massa**
   (seleção na tabela → barra no rodapé) e por **item** (`Modal.lateral` = `CatalogoItemDetalhe`, mestre-detalhe com
   `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos}`. Seletor **`TipoDfdPicker`** (chips de alternância).
-- **UI (`CatalogoView`):** lista de catálogos (cards) + botão "Importar" (`Dropzone`); abrir um catálogo → `Modal` (full)
-  com a tabela de itens (`DataTable`: busca + filtro por tipo + resumo) + seleção/edição em massa + detalhe no lateral.
-  Rotas: `POST /api/catalogo` (+ `/verificar`), `PATCH`/`DELETE /api/catalogo/[id]`, `PATCH /api/catalogo/itens` — todas
-  `exigirEditor`.
+- **UI (`CatalogoView`):** um **`Segmented`** alterna **Catálogo** (cards por catálogo; abrir → `Modal` full com a tabela
+  de itens — busca + filtro por tipo, seleção/edição em massa, exportar XLSX/PDF, editar, detalhe no `lateral`) e **Lista
+  de Itens** (todos os itens numa tabela única, com coluna Catálogo; clique abre o detalhe num banner). A troca de visão
+  anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
+  `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`), `PATCH`/`DELETE /api/catalogo/[id]`,
+  `PATCH /api/catalogo/itens`, `PATCH /api/catalogo/item/[id]` — todas `exigirEditor`.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -450,7 +461,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita
   do `lateral` (ex.: mensagens ao lado do DFD no protocolo; grid de colunas proporcionais animadas, 1 por vez no mobile)),
   `Segmented` (com `disabled`), `formStyles`,
-  `Field` (TextField/PasswordField/SearchField/Checkbox — ícone + foco accent), `Callout` (feedback
+  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),

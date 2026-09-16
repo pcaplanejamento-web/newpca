@@ -18,7 +18,7 @@ import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { EmConstrucao } from "@/components/EmConstrucao";
-import { Checkbox, PasswordField, SearchField, TextField } from "@/components/Field";
+import { Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
@@ -491,6 +491,9 @@ export function Catalogo() {
         </div>
         <div className="mt-4 max-w-md">
           <SearchField value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Pesquisar protocolos…" />
+        </div>
+        <div className="mt-4 max-w-md">
+          <TextArea label="Descrição (multi-linha)" placeholder="Digite uma descrição…" rows={3} />
         </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />

@@ -293,6 +293,11 @@ que se aplica (DFD-S/R/O/E), definíveis no envio, em **massa** (seleção) e po
 Excluir o catálogo apaga os itens. **Isolado**: não interfere em PCA/DFD/itens — serve só p/ consulta e comparação futura.
 Migração `0024` (`catalogos`+`catalogo_itens`, índice único global, cascade). Novos: `TipoDfdPicker`, `CatalogoItemDetalhe`,
 `CatalogoView`. Testes: parser (9 layouts reais) + schemas + migração.
+✅ **Melhorias:** importa também **`.xlsx`** (mesma detecção por cabeçalho sobre a matriz de células); **exporta** o
+catálogo em **XLSX** (SheetJS) ou **PDF** (impressão formatada); **edita** o catálogo (nome/tipos) e cada item
+(descrição/unidade/tipos — código imutável); duas visões por **`Segmented`** — Catálogo (cards) ↔ **Lista de Itens**
+(tabela única) — com transição suave (`animate-cat-morph`); redesign dos cards/detalhe. Núcleo puro compartilhado em
+`parse-catalogo-comum`; novo `TextArea` no DS. Rota `/api/catalogo/item/[id]`. Testes: + fixtures de XLSX.
 
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em

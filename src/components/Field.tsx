@@ -1,6 +1,6 @@
 "use client";
 
-import { type InputHTMLAttributes, type ReactNode, useId, useState } from "react";
+import { type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes, useId, useState } from "react";
 import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconSearch } from "./icons";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
@@ -118,5 +118,45 @@ export function Checkbox({
       </span>
       {label && <span className="text-[14px] text-text-2">{label}</span>}
     </label>
+  );
+}
+
+// Área de texto multi-linha (mesma linguagem do TextField: superfície + foco accent).
+export function TextArea({
+  label,
+  hint,
+  error,
+  id,
+  rows = 4,
+  ...rest
+}: {
+  label?: string;
+  hint?: ReactNode;
+  error?: string;
+  rows?: number;
+} & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className" | "rows">) {
+  const auto = useId();
+  const fid = id ?? auto;
+  return (
+    <div>
+      {label && (
+        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+          {label}
+        </label>
+      )}
+      <textarea
+        id={fid}
+        rows={rows}
+        className={`w-full resize-y rounded-control border bg-surface-2 px-3.5 py-2.5 text-[15px] leading-snug text-text outline-none transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20 ${
+          error ? "border-[var(--sit-devolvido)]" : "border-border-2"
+        }`}
+        {...rest}
+      />
+      {error ? (
+        <p className="mt-1.5 text-[12px] font-medium text-[var(--sit-devolvido)]">{error}</p>
+      ) : hint ? (
+        <p className="mt-1.5 text-[12px] text-muted">{hint}</p>
+      ) : null}
+    </div>
   );
 }
