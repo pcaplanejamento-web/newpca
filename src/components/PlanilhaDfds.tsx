@@ -39,6 +39,7 @@ export function PlanilhaDfds({
   selected,
   onSelected,
   onRowClick,
+  ativa = null,
   acoes,
   compacta = false,
   fillHeight = false,
@@ -48,6 +49,8 @@ export function PlanilhaDfds({
   selected?: Set<string | number>;
   onSelected?: (s: Set<string | number>) => void;
   onRowClick?: (key: number) => void;
+  /** DFD ATIVO (cujo banner está aberto ao lado) — linha destacada (mestre-detalhe). */
+  ativa?: number | null;
   acoes?: (l: LinhaDfd) => ReactNode;
   compacta?: boolean;
   fillHeight?: boolean;
@@ -162,6 +165,7 @@ export function PlanilhaDfds({
     selected,
     onSelected,
     onRowClick: onRowClick ? (r: LinhaDfd) => onRowClick(r.key) : undefined,
+    activeKey: ativa,
     minWidth: mw,
     resumo,
   } as const;

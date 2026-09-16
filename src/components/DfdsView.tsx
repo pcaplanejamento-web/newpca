@@ -20,11 +20,12 @@ import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { DfdConferir, mensagensDoDfd } from "./DfdConferir";
+import { DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
+import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
@@ -105,8 +106,8 @@ export function DfdsView({
   const [dfdRepEdit, setDfdRepEdit] = useState<number | null>(null);
   const [dfdTrancado, setDfdTrancado] = useState(true);
   const [salvandoDfd, setSalvandoDfd] = useState(false);
-  // Painel de MENSAGENS (erro/atenção/acerto) do DFD gravado + pedido de rolagem/destaque.
-  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  // Painel da DIREITA do DFD gravado: mensagens OU detalhe de um item + rolagem/destaque.
+  const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
 
   async function verDfd(id: number) {
@@ -119,7 +120,7 @@ export function DfdsView({
       setDfdEdit(detalheParaParseado(j.dfd));
       setDfdRepEdit(j.dfd.reparticaoId);
       setDfdTrancado(true);
-      setMensagensAbertas(false); // abre sempre no DFD
+      setPainel(null); // abre só o DFD (sem mensagens/detalhe do anterior)
       setAncoraAlvo(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
@@ -132,7 +133,7 @@ export function DfdsView({
     setDfdEdit(null);
     setDfdRepEdit(null);
     setDfdTrancado(true);
-    setMensagensAbertas(false);
+    setPainel(null);
     setAncoraAlvo(null);
   }
 
@@ -215,7 +216,7 @@ export function DfdsView({
     setDfdEdit(null);
     setDfdRepEdit(null);
     setDfdTrancado(true);
-    setMensagensAbertas(false);
+    setPainel(null);
     setAncoraAlvo(null);
     setProtoView(null);
     setProtoEdit(null);
@@ -491,8 +492,8 @@ export function DfdsView({
     <div className="flex flex-wrap items-center justify-between gap-3">
       <BotaoVerMensagens
         mensagens={mensagens}
-        aberto={mensagensAbertas}
-        onToggle={() => setMensagensAbertas((v) => !v)}
+        aberto={painel?.tipo === "mensagens"}
+        onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
       />
       {podeEditar && !dfdTrancado && (
         <div className="flex flex-wrap items-center gap-2">
@@ -518,14 +519,23 @@ export function DfdsView({
       readOnly={!podeEditar || dfdTrancado}
       regras={regras}
       ancoraAlvo={ancoraAlvo}
+      itemAtivo={painel?.tipo === "item" ? painel.idx : null}
+      onItemClick={(idx) => setPainel({ tipo: "item", idx })}
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
     />
   ) : null;
-  const mensagensPanel = (
+  // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).
+  const painelItem = painel?.tipo === "item" ? (dfdEdit?.itens[painel.idx] ?? null) : null;
+  const painelDireito = painelItem ? (
+    <ItemDetalhe item={painelItem} />
+  ) : (
     <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
   );
+  const painelTitulo = painelItem
+    ? `Item ${painelItem.item ?? (painel?.tipo === "item" ? painel.idx + 1 : "")} — DFD ${dfdView?.numero ?? ""}`
+    : `Mensagens — DFD ${dfdView?.numero ?? ""}`;
 
   return (
     <div className="space-y-4">
@@ -560,10 +570,10 @@ export function DfdsView({
         lateral={
           dfdView
             ? {
-                aberto: mensagensAbertas,
-                titulo: `Mensagens — DFD ${dfdView.numero}`,
-                onClose: () => setMensagensAbertas(false),
-                children: mensagensPanel,
+                aberto: painel != null,
+                titulo: painelTitulo,
+                onClose: () => setPainel(null),
+                children: painelDireito,
               }
             : undefined
         }
@@ -606,10 +616,10 @@ export function DfdsView({
         lateral2={
           protoView
             ? {
-                aberto: !!dfdView && mensagensAbertas,
-                titulo: dfdView ? `Mensagens — DFD ${dfdView.numero}` : "Mensagens",
-                onClose: () => setMensagensAbertas(false),
-                children: mensagensPanel,
+                aberto: !!dfdView && painel != null,
+                titulo: painelTitulo,
+                onClose: () => setPainel(null),
+                children: painelDireito,
               }
             : undefined
         }
@@ -645,6 +655,7 @@ export function DfdsView({
           <ProtocoloView
             protocolo={protoView}
             onVerDfd={verDfd}
+            dfdAtivo={dfdView?.id ?? null}
             regras={regras}
             edicao={
               podeEditar && protoEdit

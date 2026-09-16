@@ -38,6 +38,7 @@ export function DataTable<R>({
   resumo,
   minWidth = 720,
   onRowClick,
+  activeKey = null,
   fillHeight = false,
 }: {
   columns: Column<R>[];
@@ -53,6 +54,8 @@ export function DataTable<R>({
   minWidth?: number;
   /** Clique na LINHA (abre o item). Ignora cliques em controles (input/select/button/a/label). */
   onRowClick?: (row: R) => void;
+  /** Linha ATIVA (cuja detalhe está aberta ao lado) — destacada (mestre-detalhe). */
+  activeKey?: Key | null;
   /**
    * Ajusta as linhas por página para PREENCHER a altura disponível até o rodapé do
    * display (sem scroll vertical do navegador no desktop). Mede a distância do topo
@@ -257,6 +260,7 @@ export function DataTable<R>({
             {visiveis.map((r) => {
               const k = getKey(r);
               const marcada = sel.has(k);
+              const ativa = activeKey != null && k === activeKey;
               return (
                 <tr
                   key={k}
@@ -276,9 +280,10 @@ export function DataTable<R>({
                       : undefined
                   }
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
+                  style={ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : undefined}
                   className={`border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
                     onRowClick ? "cursor-pointer" : ""
-                  } ${marcada ? "bg-accent-soft/60" : ""}`}
+                  } ${ativa ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : ""}`}
                 >
                   {selectable && (
                     <td className="w-10 px-3">

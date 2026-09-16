@@ -28,6 +28,9 @@ import { Segmented } from "./Segmented";
 
 type Rep = { id: number; codigo: string; nome: string; responsaveis: Responsaveis };
 
+/** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
+export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number };
+
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
  * escolhida — reflete a troca de repartição no banner. O `anoPca` efetivo (herdado
@@ -124,9 +127,11 @@ export function DfdConferir({
   readOnly = false,
   regras = regrasPadrao(),
   ancoraAlvo = null,
+  itemAtivo = null,
   onRepChange,
   onSecoesChange,
   onRefsChange,
+  onItemClick,
 }: {
   dfd: DfdParseado;
   reparticoes: Rep[];
@@ -142,10 +147,14 @@ export function DfdConferir({
   regras?: RegrasAvaliacao;
   /** Pedido de rolagem/destaque de uma âncora (id + cor + nonce para repetir o clique). */
   ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
+  /** Índice do item ATIVO (detalhe aberto ao lado) — destacado na tabela de itens. */
+  itemAtivo?: number | null;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
   onRefsChange?: (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => void;
+  /** Clique numa linha de item (Seção 4) → abre o detalhe do item ao lado (renderizado pelo pai). */
+  onItemClick?: (idx: number) => void;
 }) {
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
@@ -386,7 +395,7 @@ export function DfdConferir({
       {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} />
+        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} onItemClick={onItemClick} itemAtivo={itemAtivo} />
       </div>
     </div>
   );

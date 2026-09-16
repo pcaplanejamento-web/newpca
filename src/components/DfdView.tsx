@@ -161,7 +161,19 @@ export function DfdCabecalho({
   );
 }
 
-export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regras?: RegrasAvaliacao }) {
+export function DfdView({
+  dfd,
+  regras = regrasPadrao(),
+  onItemClick,
+  itemAtivo = null,
+}: {
+  dfd: DfdVisual;
+  regras?: RegrasAvaliacao;
+  /** Clique numa linha de item da Seção 4 → abre o detalhe do item ao lado (índice do item). */
+  onItemClick?: (idx: number) => void;
+  /** Índice do item ATIVO (cujo detalhe está aberto ao lado) — destacado na tabela. */
+  itemAtivo?: number | null;
+}) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
@@ -257,6 +269,8 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
               getKey={(r) => r._k}
               minWidth={860}
               pageSize={10}
+              onRowClick={onItemClick ? (r) => onItemClick(r._k) : undefined}
+              activeKey={itemAtivo}
               resumo={(l) => {
                 const soma = l.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
                 return `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(soma)}`;
@@ -275,6 +289,8 @@ export function DfdView({ dfd, regras = regrasPadrao() }: { dfd: DfdVisual; regr
               getKey={(r) => r._k}
               minWidth={860}
               pageSize={20}
+              onRowClick={onItemClick ? (r) => onItemClick(r._k) : undefined}
+              activeKey={itemAtivo}
               resumo={(l) => {
                 const soma = l.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
                 return `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(soma)}`;

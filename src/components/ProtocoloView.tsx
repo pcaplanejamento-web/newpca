@@ -152,11 +152,14 @@ export function ProtocoloCabecalho({
 export function ProtocoloView({
   protocolo,
   onVerDfd,
+  dfdAtivo = null,
   edicao,
   regras = regrasPadrao(),
 }: {
   protocolo: ProtocoloVisual;
   onVerDfd?: (id: number) => void;
+  /** DFD ATIVO (banner aberto ao lado) — linha destacada na tabela (mestre-detalhe). */
+  dfdAtivo?: number | null;
   edicao?: ProtocoloEdicao;
   regras?: RegrasAvaliacao;
 }) {
@@ -272,7 +275,7 @@ export function ProtocoloView({
             Nenhum DFD vinculado a este protocolo ainda.
           </p>
         ) : (
-          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} />
+          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} ativa={dfdAtivo} />
         )}
       </section>
 

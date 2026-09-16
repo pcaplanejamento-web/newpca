@@ -20,10 +20,11 @@ import {
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { DfdConferir, mensagensDoDfd } from "./DfdConferir";
+import { DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
+import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
@@ -51,8 +52,8 @@ export function DfdUploadForm({
   // PCA do DFD (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Obrigatório.
   const [anoPca, setAnoPca] = useState<number | null>(null);
   const [anoPcaDetectado, setAnoPcaDetectado] = useState<number | null>(null);
-  // Painel lateral de mensagens (erro/atenção/acerto) + pedido de rolagem/destaque.
-  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  // Painel lateral da DIREITA: mensagens OU detalhe de um item (mestre-detalhe) + rolagem/destaque.
+  const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [autoMatch, setAutoMatch] = useState(false);
   const [autoCampos, setAutoCampos] = useState<CampoTratavel[]>([]);
@@ -159,7 +160,7 @@ export function DfdUploadForm({
     setRepId(null);
     setAnoPca(null);
     setAnoPcaDetectado(null);
-    setMensagensAbertas(false);
+    setPainel(null);
     setAncoraAlvo(null);
     setAutoMatch(false);
     setAutoCampos([]);
@@ -290,19 +291,25 @@ export function DfdUploadForm({
         lateral={
           preview
             ? {
-                aberto: mensagensAbertas,
-                titulo: `Mensagens — DFD ${preview.numero}`,
-                onClose: () => setMensagensAbertas(false),
-                children: (
-                  <MensagensDfd
-                    mensagens={mensagens}
-                    numero={preview.numero}
-                    tipo={preview.tipo}
-                    onIrPara={(m) =>
-                      setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })
-                    }
-                  />
-                ),
+                aberto: painel != null,
+                titulo:
+                  painel?.tipo === "item"
+                    ? `Item ${preview.itens[painel.idx]?.item ?? painel.idx + 1} — DFD ${preview.numero}`
+                    : `Mensagens — DFD ${preview.numero}`,
+                onClose: () => setPainel(null),
+                children:
+                  painel?.tipo === "item" && preview.itens[painel.idx] ? (
+                    <ItemDetalhe item={preview.itens[painel.idx]} />
+                  ) : (
+                    <MensagensDfd
+                      mensagens={mensagens}
+                      numero={preview.numero}
+                      tipo={preview.tipo}
+                      onIrPara={(m) =>
+                        setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })
+                      }
+                    />
+                  ),
               }
             : undefined
         }
@@ -316,8 +323,8 @@ export function DfdUploadForm({
               ) : (
                 <BotaoVerMensagens
                   mensagens={mensagens}
-                  aberto={mensagensAbertas}
-                  onToggle={() => setMensagensAbertas((v) => !v)}
+                  aberto={painel?.tipo === "mensagens"}
+                  onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
                 />
               )}
               <div className="flex gap-2">
@@ -355,6 +362,8 @@ export function DfdUploadForm({
               autoCampos={autoCampos}
               regras={regras}
               ancoraAlvo={ancoraAlvo}
+              itemAtivo={painel?.tipo === "item" ? painel.idx : null}
+              onItemClick={(idx) => setPainel({ tipo: "item", idx })}
               onRepChange={(id) => {
                 setRepId(id);
                 setAutoMatch(false);

@@ -44,6 +44,7 @@ import {
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
+import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
@@ -982,6 +983,22 @@ export function Catalogo() {
               { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" },
             ]}
             onIrPara={(m) => toast(`Rolar até: ${m.ancora}`)}
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="ItemDetalhe (painel lateral do item — abre ao clicar numa linha da Seção 4)">
+        <div className="max-w-md">
+          <ItemDetalhe
+            item={{
+              item: 2,
+              codigo: "5241937264",
+              descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M",
+              unidade: "DIAS",
+              quantidade: 20,
+              valorUnitario: 8000,
+              valorTotal: 160000,
+            }}
           />
         </div>
       </Secao>

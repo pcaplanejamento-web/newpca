@@ -229,6 +229,14 @@ botão de relatório aparece também quando só há atenção). Mensagem de aten
 ### Avaliação configurável pelo ADM (Protocolo / DFD / Item) — entregue
 ✅ Nova aba **Avaliação** em `/painel/configuracoes` (`AvaliacaoAdmin`, admin) — **controle total** de importação de DFD, correção de itens e protocolação. Para **cada dado** de Protocolo/DFD/Item o ADM define: o **nível** (**fundamental** bloqueia · **intermediário** só avisa/ATENÇÃO âmbar · **automático** corrige sozinho · **ignorar**); se o campo é **editável pelo usuário na análise** (`editaveis`/`editavelDe` → trava o controle no `DfdConferir`); e as **palavras-chave do ajuste automático** (`sinonimos`/`aplicarSinonimos` → no nível automático, um termo troca o texto todo da seção, dentro de `normalizarSecoesDfd`). Com **exceções de nível por tipo de DFD** (DFD-S/R/O/E, **fixos**) e por **categoria de Protocolo** (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, **fixas** — `classificarAssunto`). Núcleo puro/testável `avaliacao-core.ts` (catálogo `CATALOGO_AVALIACAO` = fonte única de UI/defaults/validação), loader cacheado `avaliacao.ts`, schema `avaliacao-validation.ts`, rota `/api/admin/avaliacao` (linha `configuracoes` id=1, chave `avaliacao`, **sem migração**). Toda a validação existente passou a **respeitar as regras**, com **defaults idênticos ao comportamento atual** (invariante coberto por teste). Regras threadadas server→cliente e reconferidas no servidor. Só componentes do design-system (catalogado). Permanecem **travados** (estrutural): integridade de parse, tetos do Zod, acesso por repartição, capa imutável.
 
+### DFD/Protocolo: detalhe do item ao lado + seleção marcada (mestre-detalhe) — entregue
+✅ **Clicar numa linha de item** da Seção 4 do DFD abre o **`ItemDetalhe`** (todas as infos do item + estado) no
+**MESMO painel da direita** usado pelas mensagens (o painel mostra mensagens OU o item — estado único `PainelDfd`).
+E a **seleção da esquerda fica MARCADA**: no protocolo, o **DFD aberto** é destacado na tabela de DFDs; no DFD, o
+**item aberto** é destacado na tabela de itens — os dados da direita sempre representam a seleção à esquerda
+(mestre-detalhe profissional). `DataTable` ganhou **`activeKey`** e `PlanilhaDfds` **`ativa`** (linha ativa destacada
+com barra de acento). Reuso total (tokens, `Modal.lateral`/`lateral2`); catalogado (`ItemDetalhe`); sem migração.
+
 ### DFD: painel LATERAL de mensagens (erro/atenção/acerto) navegável — entregue
 ✅ As mensagens de conferência **saíram do corpo** do banner do DFD para um **painel lateral** (`MensagensDfd`).
 `mensagensDfd` (puro, `dfd-tratamento`) monta a lista **COMPLETA** — erro/atenção/**acerto**, sem exceção (só omite

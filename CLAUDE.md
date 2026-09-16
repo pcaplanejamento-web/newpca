@@ -301,6 +301,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   um por vez — o mais à direita aberto; Esc fecha da direita p/ a esquerda). **Clicar numa mensagem** rola o banner do
   DFD (que segue ao lado) até a âncora e a **destaca na cor do status** (`ancoraAlvo` = {ancora, cor, nonce}; `box-shadow`
   que pulsa e some). `contarMensagens` alimenta a numeração; "Copiar pendências" no painel reusa `linhasRelatorioDfd`.
+- **Detalhe do ITEM no MESMO painel da direita + seleção MARCADA (mestre-detalhe):** clicar numa **linha de item**
+  da Seção 4 abre o **`ItemDetalhe`** (todas as infos do item + estado) no **mesmo lugar** do painel de mensagens
+  (o painel da direita mostra mensagens OU o item — estado único `PainelDfd` = `{tipo:"mensagens"}` | `{tipo:"item",idx}`,
+  exportado de `DfdConferir`). A seleção da esquerda fica **destacada** (`DataTable` ganhou `activeKey`; `PlanilhaDfds`,
+  `ativa`): no protocolo, o **DFD aberto** fica marcado na tabela de DFDs; no DFD, o **item aberto** fica marcado na
+  tabela da Seção 4 — os dados da direita SEMPRE representam a seleção marcada à esquerda. Trocar de DFD/fechar zera o
+  painel. `DfdView`/`DfdConferir` propagam `onItemClick(idx)` + `itemAtivo`.
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
@@ -361,7 +368,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
-  `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
+  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
   matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
@@ -377,7 +384,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
   obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
-  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro), `ReorderTable` (tabela com
+  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
+  numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
+  linha; mesmo lugar do painel de mensagens), `ReorderTable` (tabela com
   arrasto entre linhas, Pointer Events mouse+toque). `Button` tem variante `danger`; tokens de feedback
   `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).

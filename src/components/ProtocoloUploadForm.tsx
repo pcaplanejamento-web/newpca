@@ -39,12 +39,13 @@ import {
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { buildPrevisao, DfdConferir, mensagensDoDfd } from "./DfdConferir";
+import { buildPrevisao, DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
+import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
@@ -119,8 +120,8 @@ export function ProtocoloUploadForm({
 
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
-  // No protocolo, o painel de MENSAGENS substitui o DFD no lateral (toggle) + rolagem/destaque.
-  const [mensagensAbertas, setMensagensAbertas] = useState(false);
+  // Painel da DIREITA (lateral2) do DFD aberto: mensagens OU detalhe de um item + rolagem/destaque.
+  const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [carregandoIdx, setCarregandoIdx] = useState<number | null>(null);
   const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
@@ -321,7 +322,7 @@ export function ProtocoloUploadForm({
   async function abrir(idx: number) {
     setErro(null);
     setCarregandoIdx(idx);
-    setMensagensAbertas(false); // abre sempre no DFD (não nas mensagens)
+    setPainel(null); // abre só o DFD (sem mensagens/detalhe do DFD anterior)
     setAncoraAlvo(null);
     try {
       await garantirParse(idx);
@@ -333,10 +334,10 @@ export function ProtocoloUploadForm({
     }
   }
 
-  /** Fecha o DFD do lateral (e o painel de mensagens, se aberto). */
+  /** Fecha o DFD do lateral (e o painel da direita, se aberto). */
   function fecharDfdLateral() {
     setAbertoIdx(-1);
-    setMensagensAbertas(false);
+    setPainel(null);
     setAncoraAlvo(null);
   }
   /** Clique numa mensagem: rola/destaca a âncora no DFD (que segue ao lado) na cor do status. */
@@ -799,8 +800,8 @@ export function ProtocoloUploadForm({
                         {dfdAberto && (
                           <BotaoVerMensagens
                             mensagens={mensagensAberto}
-                            aberto={mensagensAbertas}
-                            onToggle={() => setMensagensAbertas((v) => !v)}
+                            aberto={painel?.tipo === "mensagens"}
+                            onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
                           />
                         )}
                         <Button variant="secondary" onClick={fecharDfdLateral} disabled={importando}>
@@ -826,6 +827,8 @@ export function ProtocoloUploadForm({
                         autoCampos={autoMap.get(abertoIdx) ?? []}
                         regras={regras}
                         ancoraAlvo={ancoraAlvo}
+                        itemAtivo={painel?.tipo === "item" ? painel.idx : null}
+                        onItemClick={(idx) => setPainel({ tipo: "item", idx })}
                         onRepChange={(id) => setRepDfd(abertoIdx, id)}
                         onSecoesChange={onSecoesAberto}
                         onRefsChange={onRefsAberto}
@@ -839,17 +842,23 @@ export function ProtocoloUploadForm({
         lateral2={
           temDfds
             ? {
-                aberto: abertoIdx >= 0 && mensagensAbertas,
-                titulo: `Mensagens — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`,
-                onClose: () => setMensagensAbertas(false),
-                children: (
-                  <MensagensDfd
-                    mensagens={mensagensAberto}
-                    numero={index?.dfds[abertoIdx]?.numero ?? ""}
-                    tipo={dfdAberto?.tipo}
-                    onIrPara={irParaMensagem}
-                  />
-                ),
+                aberto: abertoIdx >= 0 && painel != null,
+                titulo:
+                  painel?.tipo === "item"
+                    ? `Item ${dfdAberto?.itens[painel.idx]?.item ?? painel.idx + 1} — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`
+                    : `Mensagens — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`,
+                onClose: () => setPainel(null),
+                children:
+                  painel?.tipo === "item" && dfdAberto?.itens[painel.idx] ? (
+                    <ItemDetalhe item={dfdAberto.itens[painel.idx]} />
+                  ) : (
+                    <MensagensDfd
+                      mensagens={mensagensAberto}
+                      numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                      tipo={dfdAberto?.tipo}
+                      onIrPara={irParaMensagem}
+                    />
+                  ),
               }
             : undefined
         }
@@ -1001,6 +1010,7 @@ export function ProtocoloUploadForm({
                 selected={sel}
                 onSelected={setSel}
                 onRowClick={abrir}
+                ativa={abertoIdx >= 0 ? abertoIdx : null}
                 compacta={compacta}
               />
             </section>
