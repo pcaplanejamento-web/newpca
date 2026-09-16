@@ -35,6 +35,19 @@ export function exportarCatalogoXlsx(nome: string, itens: CatalogoItemExport[]) 
   XLSX.writeFile(wb, `${nomeSeguro(nome)}.xlsx`);
 }
 
+/** Baixa um MODELO .xlsx (cabeçalho + 1 linha de exemplo) para o usuário preencher e importar. */
+export function exportarModeloCatalogoXlsx() {
+  const aoa: (string | number)[][] = [
+    ["Item", "Código", "Descrição", "Unidade de Medida"],
+    ["1", "000000001", "EXEMPLO — apague esta linha e preencha com os seus itens", "UNIDADE"],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 6 }, { wch: 16 }, { wch: 72 }, { wch: 18 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Catálogo");
+  XLSX.writeFile(wb, "modelo-catalogo.xlsx");
+}
+
 const esc = (s: string) =>
   s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
 
@@ -59,7 +72,7 @@ td.c{text-align:center;white-space:nowrap}td.m{font-family:ui-monospace,Menlo,Co
 tr{break-inside:avoid}thead{display:table-header-group}@page{margin:14mm}
 </style></head><body><h1>${esc(nome)}</h1><p class="sub">${total} · Plataforma PCA</p>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Unid.</th><th>Tipos</th></tr></thead><tbody>${linhas}</tbody></table>
-<script>window.onload=function(){setTimeout(function(){window.print()},80)}<\/script></body></html>`;
+<script>window.onload=function(){setTimeout(function(){window.print()},80)}</script></body></html>`;
   w.document.write(html);
   w.document.close();
 }

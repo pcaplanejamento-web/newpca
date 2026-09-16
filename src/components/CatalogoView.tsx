@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo } from "@/lib/catalogo";
-import { exportarCatalogoPdf, exportarCatalogoXlsx } from "@/lib/exportar-catalogo";
+import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import { dataBR } from "@/lib/format";
 import { enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
@@ -392,15 +392,25 @@ export function CatalogoView({
             ]}
           />
           {podeEditar && (
-            <Button
-              icon={<IconUpload className="h-[18px] w-[18px]" />}
-              onClick={() => {
-                setPendingAlvo(null);
-                setLauncher(true);
-              }}
-            >
-              Importar
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                icon={<IconDownload className="h-[18px] w-[18px]" />}
+                onClick={exportarModeloCatalogoXlsx}
+                title="Baixar um modelo .xlsx para preencher e importar"
+              >
+                Exportar modelo
+              </Button>
+              <Button
+                icon={<IconUpload className="h-[18px] w-[18px]" />}
+                onClick={() => {
+                  setPendingAlvo(null);
+                  setLauncher(true);
+                }}
+              >
+                Importar
+              </Button>
+            </>
           )}
         </div>
       </div>

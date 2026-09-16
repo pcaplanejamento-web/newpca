@@ -416,7 +416,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   novo entra com o `tipos_padrao`; item que já existe tem só descrição/unidade/sequencial atualizados — os **`tipos`
   configurados são PRESERVADOS**; ausentes NÃO são apagados. Recalcula `total_itens`.
 - **Exportar / editar (`exportar-catalogo.ts`, cliente):** baixa o catálogo em **`.xlsx`** (SheetJS) ou abre uma
-  **impressão em PDF** (janela formatada → salvar como PDF), sem dependência nova. **Editar** o catálogo (nome/tipos
+  **impressão em PDF** (janela formatada → salvar como PDF), sem dependência nova. Um botão **"Exportar modelo"** (à
+  esquerda de "Importar", no cabeçalho) baixa um **modelo `.xlsx`** (`exportarModeloCatalogoXlsx` — cabeçalho
+  Item/Código/Descrição/Unidade + linha de exemplo) para o usuário preencher e importar. **Editar** o catálogo (nome/tipos
   padrão) via `PATCH /api/catalogo/[id]`; **editar um item** (descrição/unidade/tipos — o CÓDIGO é imutável) via
   `PATCH /api/catalogo/item/[id]` (`atualizarCatalogoItem`, schema `patchItemSchema`).
 - **Tipos de DFD por item (`TIPOS_DFD` de `avaliacao-core`):** definíveis no **envio** (padrão do catálogo), em **massa**
