@@ -16,5 +16,3 @@ export const integracoesSchema = z.object({
   // então aqui é só o liga/desliga.
   monitoramento: z.object({ ativo: z.boolean().default(false) }).default({ ativo: false }),
 });
-
-export type IntegracoesInput = z.infer<typeof integracoesSchema>;

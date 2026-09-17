@@ -15,7 +15,13 @@ export async function verificarTurnstile(
   const tokenPresente = typeof token === "string" && token.length > 0;
   if (!tokenPresente) return interpretarSiteverify(null, false);
   const secret = await decifrarSegredo(integ.turnstile.secret);
-  if (!secret) return { ok: true }; // sem segredo utilizável → fail-open
+  if (!secret) {
+    // Configurado mas o segredo não decifra (chave mestra ausente/rotacionada ou blob
+    // corrompido). Mantém o fail-open (não trava o login), mas deixa sinal no log do Worker
+    // — senão o captcha ficaria silenciosamente desligado. Nunca loga o segredo.
+    console.error("[turnstile] configurado, porém o segredo não pôde ser decifrado — captcha em fail-open (verifique INTEGRACOES_CHAVE).");
+    return { ok: true };
+  }
   try {
     const body = new URLSearchParams({ secret, response: token as string });
     if (ip) body.set("remoteip", ip);

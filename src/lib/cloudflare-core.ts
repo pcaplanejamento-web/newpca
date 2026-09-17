@@ -1,6 +1,7 @@
 /**
  * Núcleo PURO das integrações Cloudflare (Turnstile + monitoramento). Sem env/DB/fetch →
- * testável. Os fetchers server-side ficam em `turnstile.ts` e `monitoramento-cloudflare.ts`.
+ * testável. Os fetchers server-side ficam em `turnstile.ts` (siteverify) e em
+ * `cf-analytics.ts` (`getMetricasWorker`, que reusa os Worker Secrets do Armazenamento).
  */
 
 // ---- Turnstile (captcha) ----
