@@ -38,6 +38,38 @@ export async function listarOrgaos(): Promise<OrgaoResumo[]> {
     .orderBy(asc(orgaos.ordem), asc(orgaos.id));
 }
 
+/** Estrutura de UM órgão (para as travas de promover/rebaixar/dual). `propriaId` = a unidade
+ * "própria" (o órgão funciona também como unidade), se houver; `filhas` = unidades comuns. */
+export async function contarUnidadesDoOrgao(
+  orgaoId: number,
+): Promise<{ total: number; filhas: number; propriaId: number | null }> {
+  const rows = await getDb()
+    .select({ id: reparticoes.id, proprio: reparticoes.orgaoProprio })
+    .from(reparticoes)
+    .where(eq(reparticoes.orgaoId, orgaoId));
+  const propria = rows.find((r) => r.proprio);
+  return { total: rows.length, filhas: rows.filter((r) => !r.proprio).length, propriaId: propria?.id ?? null };
+}
+
+/** Mapa `orgaoId → {tambemUnidade, temUnidades}` para a LISTA de órgãos (badges + travas na UI).
+ * `tambemUnidade` = tem unidade própria (dual); `temUnidades` = tem unidade FILHA comum. */
+export type EstruturaOrgao = { tambemUnidade: boolean; temUnidades: boolean };
+export async function estruturaPorOrgao(): Promise<Record<number, EstruturaOrgao>> {
+  const rows = await getDb()
+    .select({
+      orgaoId: reparticoes.orgaoId,
+      proprias: sql<number>`SUM(CASE WHEN ${reparticoes.orgaoProprio} = 1 THEN 1 ELSE 0 END)`,
+      filhas: sql<number>`SUM(CASE WHEN ${reparticoes.orgaoProprio} = 0 THEN 1 ELSE 0 END)`,
+    })
+    .from(reparticoes)
+    .where(sql`${reparticoes.orgaoId} IS NOT NULL`)
+    .groupBy(reparticoes.orgaoId);
+  const out: Record<number, EstruturaOrgao> = {};
+  for (const r of rows)
+    if (r.orgaoId != null) out[r.orgaoId] = { tambemUnidade: Number(r.proprias) > 0, temUnidades: Number(r.filhas) > 0 };
+  return out;
+}
+
 /**
  * Ponto 8 — o órgão tem DFD/protocolo vinculado? Direto (`orgao_id`) OU via as suas unidades
  * (`reparticao_id` ∈ unidades do órgão). Se sim, não pode ser excluído — só OCULTADO.

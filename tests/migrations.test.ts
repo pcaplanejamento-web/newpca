@@ -258,6 +258,14 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(restantes.n, 0, "excluir o orçamento deveria apagar os lançamentos (cascade)");
   });
 
+  it("0029 adiciona orgao_proprio em reparticoes (default 0 preserva o legado)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('reparticoes')");
+    assert.ok(cols.includes("orgao_proprio"), "coluna orgao_proprio ausente");
+    // Nenhuma unidade nasce como "própria do órgão" — todas são filhas comuns.
+    const u = db.prepare("SELECT orgao_proprio FROM reparticoes WHERE codigo = 'AMAE'").get() as { orgao_proprio: number } | undefined;
+    assert.equal(u?.orgao_proprio, 0, "unidade legada deve começar como filha comum (0)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

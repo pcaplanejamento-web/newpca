@@ -73,6 +73,16 @@ export const orgaoSchema = z.object({
   responsaveis: responsaveisSchema,
 });
 
+// Rebaixar um órgão a unidade de OUTRO órgão (destino obrigatório).
+export const rebaixarOrgaoSchema = z.object({
+  orgaoDestino: z.number().int().positive(),
+});
+
+// Ligar/desligar "o órgão também funciona como unidade" (cria/remove a unidade própria).
+export const unidadePropriaSchema = z.object({
+  ativar: z.boolean(),
+});
+
 export type PermissaoInput = z.infer<typeof permissaoSchema>;
 export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;

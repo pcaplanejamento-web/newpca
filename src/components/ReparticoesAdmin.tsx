@@ -13,7 +13,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { SkeletonLinhas } from "./Skeleton";
@@ -26,6 +26,8 @@ type Rep = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
   orgaoId: number | null;
+  /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
+  orgaoProprio: boolean;
   oculto: boolean;
   responsaveis: Responsaveis;
 };
@@ -57,6 +59,7 @@ export function ReparticoesAdmin({
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
+  const [estruturando, setEstruturando] = useState(false); // promover/estrutura em andamento
   const hoje = hojeISO();
 
   const carregar = useCallback(async () => {
@@ -166,6 +169,24 @@ export function ReparticoesAdmin({
     await carregar();
   }
 
+  /** Requisito 1: PROMOVER esta unidade a órgão (ela deixa este órgão e vira um órgão novo). */
+  async function promover(r: Rep) {
+    if (!confirm(`Promover a unidade "${r.nome}" a órgão? Ela deixa de ser unidade de “${orgaoNome}” e passa a ser um órgão próprio.`)) return;
+    setEstruturando(true);
+    setErro(null);
+    try {
+      const resp = await fetch(`/api/admin/reparticoes/${r.id}/promover`, { method: "POST" });
+      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível promover.");
+      setEditando(null);
+      router.push("/painel/orgaos"); // o novo órgão aparece na lista de órgãos
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível promover.");
+    } finally {
+      setEstruturando(false);
+    }
+  }
+
   async function persistirOrdem(ids: number[]) {
     setErro(null);
     try {
@@ -202,6 +223,10 @@ export function ReparticoesAdmin({
   }
 
   const posDe = new Map(lista.map((r, i) => [r.id, i]));
+  // O órgão é DUAL (funciona também como unidade) quando tem a sua unidade própria. Nesse
+  // caso não recebe unidades-filhas (a própria é a única).
+  const ehDual = lista.some((r) => r.orgaoProprio);
+  const emEdicao = editando && editando !== "novo" ? (editando as Rep) : null;
 
   const colunas: Column<Rep>[] = [
     { key: "pos", header: "#", filter: "none", minWidth: 40, render: (r) => <span className="tabular-nums text-faint">{(posDe.get(r.id) ?? 0) + 1}</span> },
@@ -214,6 +239,7 @@ export function ReparticoesAdmin({
       render: (r) => (
         <span className="inline-flex items-center gap-2">
           <span className={`font-medium ${r.oculto ? "text-faint" : "text-text"}`}>{r.nome}</span>
+          {r.orgaoProprio && <Badge tone="cyan">Próprio órgão</Badge>}
           {r.oculto && <Badge tone="slate">Oculta</Badge>}
         </span>
       ),
@@ -278,7 +304,9 @@ export function ReparticoesAdmin({
             <Button variant="ghost" onClick={() => mover(r.id, 1)} disabled={idx === lista.length - 1} aria-label="Mover para baixo" icon={<IconArrowDown className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => toggleOculto(r)} aria-label={r.oculto ? "Reexibir" : "Ocultar"} icon={r.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => abrirEdicao(r)} aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => excluir(r)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
+            {!r.orgaoProprio && (
+              <Button variant="ghost" onClick={() => excluir(r)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
+            )}
           </div>
         );
       },
@@ -301,13 +329,26 @@ export function ReparticoesAdmin({
           <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
             Recarregar
           </Button>
-          <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
+          <Button
+            onClick={abrirNovo}
+            disabled={ehDual}
+            title={ehDual ? "Este órgão funciona como unidade (unidade própria) e não recebe unidades-filhas." : undefined}
+            icon={<IconPlus className="h-[18px] w-[18px]" />}
+          >
             Nova unidade
           </Button>
         </div>
       </div>
 
       {erro && <Callout kind="danger">{erro}</Callout>}
+
+      {ehDual && (
+        <Callout kind="info">
+          Este órgão <strong>também funciona como unidade</strong> (a “Próprio órgão” abaixo). Ele não recebe
+          unidades-filhas — ajuste o setor requisitante e os responsáveis dela normalmente. Para desfazer, use
+          “Deixar de ser unidade” no órgão.
+        </Callout>
+      )}
 
       {lista.length === 0 ? (
         <Callout kind="info">Nenhuma unidade neste órgão ainda. Clique em “Nova unidade” para cadastrar.</Callout>
@@ -351,6 +392,24 @@ export function ReparticoesAdmin({
             </Button>
           </div>
         </form>
+        {emEdicao && (
+          <div className="mt-4 space-y-2 border-t border-border pt-4">
+            <span className="block text-[13px] font-semibold text-text">Estrutura</span>
+            {emEdicao.orgaoProprio ? (
+              <Callout kind="info">
+                Esta é a <strong>unidade própria</strong> do órgão “{orgaoNome}” (o órgão também funciona como
+                unidade). Para removê-la, use “Deixar de ser unidade” na tela de órgãos.
+              </Callout>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] text-muted">Promover a unidade a um órgão próprio (ela sai deste órgão).</p>
+                <Button variant="secondary" onClick={() => promover(emEdicao)} loading={estruturando} icon={<IconLandmark className="h-4 w-4" />}>
+                  Promover a órgão
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

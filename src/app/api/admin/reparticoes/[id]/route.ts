@@ -54,6 +54,10 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
   if (await ehGeral(id)) return erro("A unidade 'Geral' é virtual e não pode ser excluída.", 400);
+  // A unidade própria de um órgão dual só sai pelo toggle "Também unidade" (mantém a semântica/histórico).
+  const [rp] = await getDb().select({ proprio: reparticoes.orgaoProprio }).from(reparticoes).where(eq(reparticoes.id, id)).limit(1);
+  if (rp?.proprio)
+    return erro("Esta é a unidade própria do órgão — use “Deixar de ser unidade” no órgão para removê-la.", 409);
   // Ponto 8: não exclui unidade com DFD/protocolo vinculado — só OCULTA (preserva o histórico).
   if (await unidadeTemVinculo(id))
     return erro("Esta unidade tem DFD/protocolo vinculado — não pode ser excluída. Oculte-a (deixa de aparecer para novos documentos, sem perder o histórico).", 409);

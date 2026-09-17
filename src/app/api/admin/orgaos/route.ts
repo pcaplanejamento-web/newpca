@@ -4,7 +4,7 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { numeroInteressadoEmUso } from "@/lib/orgaos";
+import { estruturaPorOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
@@ -27,8 +27,15 @@ export async function GET() {
     })
     .from(orgaos)
     .orderBy(asc(orgaos.ordem), asc(orgaos.id));
+  // Estrutura (dual / tem unidades-filhas) para os badges e as travas de rebaixar/dual na UI.
+  const estrutura = await estruturaPorOrgao();
   // A coluna guarda JSON; expõe como `responsaveis`.
-  const lista = rows.map(({ responsavelDfd, ...o }) => ({ ...o, responsaveis: parseResponsaveis(responsavelDfd) }));
+  const lista = rows.map(({ responsavelDfd, ...o }) => ({
+    ...o,
+    responsaveis: parseResponsaveis(responsavelDfd),
+    tambemUnidade: estrutura[o.id]?.tambemUnidade ?? false,
+    temUnidades: estrutura[o.id]?.temUnidades ?? false,
+  }));
   return ok({ orgaos: lista });
 }
 

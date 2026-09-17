@@ -4,7 +4,7 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { numeroInteressadoEmUso } from "@/lib/orgaos";
+import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
@@ -29,6 +29,7 @@ export async function GET(req: Request) {
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
       orgaoId: reparticoes.orgaoId,
+      orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
       responsavelDfd: reparticoes.responsavelDfd,
     })
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
   if ("resp" in corpo) return corpo.resp;
   if (corpo.data.codigo.trim().toUpperCase() === CODIGO_GERAL)
     return erro("O código 'GERAL' é reservado à unidade virtual.", 400);
+  // Um órgão que já funciona como unidade (tem a "unidade própria") não recebe unidades-filhas.
+  if (corpo.data.orgaoId != null && (await contarUnidadesDoOrgao(corpo.data.orgaoId)).propriaId != null)
+    return erro("Este órgão funciona como unidade (unidade própria) — não pode ter unidades-filhas. Desligue “Também unidade” no órgão para adicionar unidades.", 409);
   const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))

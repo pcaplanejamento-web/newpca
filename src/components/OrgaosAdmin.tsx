@@ -8,7 +8,8 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { selectCls } from "./formStyles";
+import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { Segmented } from "./Segmented";
@@ -23,6 +24,10 @@ type Orgao = {
   assinaturaUnica: boolean;
   numeroInteressado: string | null;
   oculto: boolean;
+  /** Funciona TAMBÉM como unidade (tem a unidade própria). */
+  tambemUnidade: boolean;
+  /** Tem unidades-filhas comuns (impede rebaixar e virar dual). */
+  temUnidades: boolean;
   responsaveis: Responsaveis;
 };
 
@@ -40,6 +45,8 @@ export function OrgaosAdmin() {
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
+  const [estruturando, setEstruturando] = useState(false); // rebaixar / tornar-unidade em andamento
+  const [destinoRebaixar, setDestinoRebaixar] = useState(""); // órgão destino do rebaixamento
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -83,6 +90,54 @@ export function OrgaosAdmin() {
     setAssinaturaUnica(o.assinaturaUnica);
     setFormOculto(o.oculto);
     setResponsaveis(o.responsaveis);
+    setDestinoRebaixar("");
+  }
+
+  /** Requisito 3: ligar/desligar "o órgão também funciona como unidade" (cria/remove a unidade própria). */
+  async function tornarUnidade(o: Orgao, ativar: boolean) {
+    if (!confirm(ativar ? `Fazer o órgão “${o.nome}” funcionar também como unidade?` : `“${o.nome}” deixa de funcionar como unidade? A unidade própria será removida.`)) return;
+    setEstruturando(true);
+    setErro(null);
+    try {
+      const resp = await fetch(`/api/admin/orgaos/${o.id}/unidade-propria`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativar }),
+      });
+      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível atualizar.");
+      setEditando(null);
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível atualizar.");
+    } finally {
+      setEstruturando(false);
+    }
+  }
+
+  /** Requisito 2: REBAIXAR o órgão a unidade de outro órgão (destino escolhido). */
+  async function rebaixar(o: Orgao) {
+    const destino = Number(destinoRebaixar);
+    if (!destino) return;
+    const nomeDestino = lista?.find((x) => x.id === destino)?.nome ?? "";
+    if (!confirm(`Rebaixar o órgão “${o.nome}” a unidade de “${nomeDestino}”? O órgão deixa de existir e vira uma unidade.`)) return;
+    setEstruturando(true);
+    setErro(null);
+    try {
+      const resp = await fetch(`/api/admin/orgaos/${o.id}/rebaixar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgaoDestino: destino }),
+      });
+      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível rebaixar.");
+      setEditando(null);
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível rebaixar.");
+    } finally {
+      setEstruturando(false);
+    }
   }
 
   /** Corpo do PATCH/POST a partir do estado do form (+ overrides). */
@@ -182,6 +237,10 @@ export function OrgaosAdmin() {
   }
 
   const posDe = new Map(lista.map((o, i) => [o.id, i]));
+  const emEdicao = editando && editando !== "novo" ? (editando as Orgao) : null;
+  // Órgãos de destino para rebaixar: todos menos o próprio e menos os que funcionam como
+  // unidade (esses não recebem unidades-filhas).
+  const destinos = emEdicao ? lista.filter((o) => o.id !== emEdicao.id && !o.tambemUnidade) : [];
 
   const colunas: Column<Orgao>[] = [
     { key: "pos", header: "#", filter: "none", minWidth: 40, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
@@ -194,6 +253,7 @@ export function OrgaosAdmin() {
       render: (o) => (
         <span className="inline-flex items-center gap-2">
           <span className={`font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
+          {o.tambemUnidade && <Badge tone="cyan">Também unidade</Badge>}
           {o.oculto && <Badge tone="slate">Oculto</Badge>}
         </span>
       ),
@@ -312,6 +372,52 @@ export function OrgaosAdmin() {
             </Button>
           </div>
         </form>
+        {emEdicao && (
+          <div className="mt-4 space-y-3 border-t border-border pt-4">
+            <span className="block text-[13px] font-semibold text-text">Estrutura</span>
+
+            {/* Requisito 3 — órgão que também funciona como unidade */}
+            {emEdicao.tambemUnidade ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] text-muted">Funciona também como unidade (unidade própria).</p>
+                <Button variant="secondary" onClick={() => tornarUnidade(emEdicao, false)} loading={estruturando} icon={<IconLayers className="h-4 w-4" />}>
+                  Deixar de ser unidade
+                </Button>
+              </div>
+            ) : emEdicao.temUnidades ? (
+              <Callout kind="info">Para funcionar também como unidade, o órgão não pode ter unidades-filhas.</Callout>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] text-muted">Fazer o órgão funcionar também como unidade (os dois status).</p>
+                <Button variant="secondary" onClick={() => tornarUnidade(emEdicao, true)} loading={estruturando} icon={<IconLayers className="h-4 w-4" />}>
+                  Também unidade
+                </Button>
+              </div>
+            )}
+
+            {/* Requisito 2 — rebaixar a unidade de outro órgão */}
+            {emEdicao.tambemUnidade || emEdicao.temUnidades ? (
+              <Callout kind="info">Para rebaixar o órgão a unidade, ele não pode ter unidades.</Callout>
+            ) : (
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <label className="min-w-0 flex-1">
+                  <span className="mb-1 block text-[13px] text-muted">Rebaixar este órgão a unidade de:</span>
+                  <select className={`${selectCls} w-full`} value={destinoRebaixar} onChange={(e) => setDestinoRebaixar(e.target.value)}>
+                    <option value="">Escolha o órgão de destino…</option>
+                    {destinos.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button variant="secondary" onClick={() => rebaixar(emEdicao)} disabled={!destinoRebaixar} loading={estruturando} icon={<IconLandmark className="h-4 w-4" />}>
+                  Rebaixar
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

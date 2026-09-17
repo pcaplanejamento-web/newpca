@@ -150,6 +150,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vinculado NÃO pode ser excluído** (`DELETE` → 409 via `orgaoTemVinculo`/`unidadeTemVinculo`); o ADM **oculta**
     (`OrgaosAdmin`/`ReparticoesAdmin`: ação ocultar/reexibir + badge). Ocultos **somem do uso futuro** (matchers e
     seletores de documento novo filtram), mas o **histórico é preservado**.
+- **Promover / rebaixar / órgão que TAMBÉM é unidade (migração `0029`):** a identidade transita entre as tabelas
+  `reparticoes`⇄`orgaos` (create+delete de UMA linha; **nada de FK é reapontado** ⇒ valem as mesmas travas do ponto 8).
+  Núcleo PURO/testável **`orgao-unidade-ops.ts`** (o MAPA dos campos que "seguem" na transformação + os predicados de
+  permissão sobre os fatos apurados no servidor). Travas de contagem em `orgaos.ts` (`contarUnidadesDoOrgao`,
+  `estruturaPorOrgao`). Ações no **modal de edição** (aba "Estrutura"), não como ícones de linha (mobile-friendly).
+  - **Promover unidade→órgão (req. 1):** `POST /api/admin/reparticoes/[id]/promover` cria o órgão com a identidade da
+    unidade e a **EXCLUI**. Barrado se a unidade tiver vínculo (seria excluída — ponto 8) ou for a unidade própria.
+    (`ReparticoesAdmin` → Estrutura → "Promover a órgão"; ao concluir vai para `/painel/orgaos`.)
+  - **Rebaixar órgão→unidade (req. 2):** `POST /api/admin/orgaos/[id]/rebaixar` `{orgaoDestino}` cria a unidade **sob o
+    destino escolhido** e **EXCLUI** o órgão. Barrado se o órgão tiver unidades (filhas ou própria) ou vínculo direto.
+    (`OrgaosAdmin` → Estrutura → seletor de destino + "Rebaixar".)
+  - **Órgão que TAMBÉM é unidade (req. 3 — dual):** `reparticoes.orgao_proprio=1` = a **unidade PRÓPRIA** que representa
+    o órgão. Um órgão é dual ⟺ tem a unidade própria (**só permitido p/ órgão SEM unidades-filhas**). `POST
+    /api/admin/orgaos/[id]/unidade-propria` `{ativar}` cria/remove a unidade própria (remover barrado se ela tiver
+    vínculo; a unidade própria também NÃO é excluível avulsa — só pelo toggle). Assim o órgão ganha os **dois status com
+    todas as funções**: a unidade própria é uma `reparticoes` NORMAL, então TODO o subsistema (DFD/protocolo/assinatura/
+    match/escopo por unidade/acesso por grupo) funciona **SEM mudança** (a chave continua `reparticoes.id`) — os matchers
+    não mudam (a própria é uma unidade não-oculta comum). Badges "Também unidade" (`OrgaosAdmin`) / "Próprio órgão"
+    (`ReparticoesAdmin`); "Nova unidade" desabilitada no órgão dual. Migração **aditiva** (`orgao_proprio` default 0 ⇒
+    nenhum órgão nasce dual; legado intacto).
 - **Divergência Órgão × Unidade (item 6.3):** quando o "Órgão/Entidade" do DFD aponta um órgão diferente do órgão da
   unidade selecionada, mostra **atenção âmbar** (Callout no `DfdConferir` + mensagem no painel), **configurável** —
   ponto de avaliação `dfd.orgaoUnidadeDivergente` (padrão `intermediario`, não bloqueia). O servidor (`POST /api/dfd`)

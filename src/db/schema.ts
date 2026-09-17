@@ -254,6 +254,9 @@ export const reparticoes = sqliteTable(
     numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
+    // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
+    // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
+    orgaoProprio: integer("orgao_proprio", { mode: "boolean" }).notNull().default(false),
     responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs: JSON array de nomes (parseResponsaveis)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),

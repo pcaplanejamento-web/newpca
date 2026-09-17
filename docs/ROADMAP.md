@@ -296,6 +296,17 @@ atenção). **Ocultar em vez de excluir** (ponto 8): órgão/unidade com DFD/pro
 seletores filtram) mas o histórico é preservado. **Ponto 7:** removida a lógica concorrente (`casarUnidadePorInteressado`
 → `casarPorInteressado` único). Testes de matchers/previsão/unicidade + migração `0027`. Sem quebrar nada.
 
+### Órgão/Unidade: promover, rebaixar e órgão que TAMBÉM é unidade — entregue
+✅ **Reorganização da hierarquia** (migração `0029`, aditiva — `reparticoes.orgao_proprio`). **Promover unidade→órgão**
+(cria o órgão com a identidade da unidade e a exclui; barrado com vínculo — ponto 8). **Rebaixar órgão→unidade**
+escolhendo o **órgão de destino** (cria a unidade sob ele e exclui o órgão; barrado se tiver unidades ou vínculo).
+**Órgão que também é unidade** (os dois status): uma **unidade própria** (`orgao_proprio=1`) representa o órgão — só p/
+órgão sem unidades-filhas; ligar/desligar cria/remove essa unidade. Como a unidade própria é uma `reparticoes` normal,
+**todo o subsistema (DFD/protocolo/assinatura/match/escopo/acesso) funciona sem mudança** e os matchers ficam intactos.
+A identidade só transita entre as tabelas (create+delete de 1 linha; nada de FK reapontado). Núcleo puro/testável
+`orgao-unidade-ops.ts` (mapa dos campos + permissões). Ações no modal de edição (aba "Estrutura"), badges "Também
+unidade"/"Próprio órgão". Testes puros + migração `0029`. Sem quebrar nada, sem código morto.
+
 ### Catálogo de produtos (referência p/ padronização) — entregue
 ✅ Novo **módulo Catálogo** (aba `catalogo`, `/painel/catalogo`): sobe **catálogos de produtos em PDF**, extrai os itens
 (**código, descrição, unidade de medida**) e os mostra em tabela consultável (busca + filtro por tipo). O **parser é
