@@ -20,6 +20,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Protocolo/DFD: dedup/sobrescrita por identificador — corrigido
+✅ Não coexistem dois protocolos com o mesmo **Id** (`idExterno` da capa): protocolar **sobrescreve** o de mesmo Id
+(`iniciarProtocolo` apaga o de mesmo Id + número diferente antes do upsert por número; `POST /api/protocolo` faz o
+**anti-sequestro por Id** — 403 se o Id já existe em unidade inacessível). O **DFD** já sobrescrevia por **número**
+(`upsertDfdCabecalho` onConflict em `numero`; planejamento é dado, atualizado no overwrite) — verificado.
+
 ### Capa do protocolo: campos multi-linha (Interessado etc.) nunca truncados — corrigido
 ✅ Ao importar um protocolo, o campo **Interessado** da capa vinha **VAZIO** quando o valor **quebrava em 2
 linhas** (a capa é um formulário de 2 colunas e o rótulo `CPF/CNPJ:` da direita caía numa linha própria ENTRE o

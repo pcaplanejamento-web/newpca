@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { dfdProtocolos, dfds, reparticoes } from "@/db/schema";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
@@ -131,12 +131,32 @@ export async function iniciarProtocolo(
     nomeArquivo: p.nomeArquivo ?? null,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
+  // Dedup por Id (regra do usuário): NÃO coexistem dois protocolos com o mesmo `idExterno`
+  // (Id da capa) — o novo SOBRESCREVE o de mesmo Id. O upsert por `numero` cobre o mesmo
+  // número; aqui removemos um eventual protocolo de MESMO Id e número DIFERENTE (os DFDs
+  // dele ficam órfãos por FK `set null`, como em qualquer exclusão de protocolo). O
+  // anti-sequestro (Id em unidade inacessível) é conferido na rota antes de chamar.
+  if (p.idExterno) {
+    await db.delete(dfdProtocolos).where(and(eq(dfdProtocolos.idExterno, p.idExterno), ne(dfdProtocolos.numero, p.numero)));
+  }
   const [row] = await db
     .insert(dfdProtocolos)
     .values({ numero: p.numero, criadoPor: criadoPor ?? null, ...set })
     .onConflictDoUpdate({ target: dfdProtocolos.numero, set })
     .returning({ id: dfdProtocolos.id });
   return { id: row.id, numero: p.numero };
+}
+
+/** Protocolo de mesmo `idExterno` (Id da capa) — para o anti-sequestro na protocolação. */
+export async function getProtocoloPorIdExterno(
+  idExterno: string,
+): Promise<{ id: number; numero: string; reparticaoId: number | null } | null> {
+  const [r] = await getDb()
+    .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, reparticaoId: dfdProtocolos.reparticaoId })
+    .from(dfdProtocolos)
+    .where(eq(dfdProtocolos.idExterno, idExterno))
+    .limit(1);
+  return r ?? null;
 }
 
 /**

@@ -5,7 +5,7 @@ import { classificarAssunto, nivelDe } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { iniciarProtocolo } from "@/lib/protocolo";
+import { getProtocoloPorIdExterno, iniciarProtocolo } from "@/lib/protocolo";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +29,17 @@ export async function POST(req: Request) {
   if (protocolo.anoPca == null && nivelDe(regras, "protocolo.anoPca", { categoria }) === "fundamental")
     return erro("Defina o PCA do protocolo antes de protocolar.", 422);
 
-  if (protocolo.reparticaoId != null) {
-    const { lista } = await getReparticaoContexto(a.u);
-    if (!lista.some((r) => r.id === protocolo.reparticaoId)) {
-      return erro("Unidade do protocolo inválida ou sem acesso.", 403);
+  const { lista } = await getReparticaoContexto(a.u);
+  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  if (protocolo.reparticaoId != null && !acessivel(protocolo.reparticaoId)) {
+    return erro("Unidade do protocolo inválida ou sem acesso.", 403);
+  }
+  // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não
+  // se ele estiver numa unidade INACESSÍVEL (não deixa sequestrar/apagar via re-import).
+  if (protocolo.idExterno) {
+    const existente = await getProtocoloPorIdExterno(protocolo.idExterno);
+    if (existente && existente.numero !== protocolo.numero && !acessivel(existente.reparticaoId)) {
+      return erro("Já existe um protocolo com esse Id em outra unidade, sem acesso.", 403);
     }
   }
 

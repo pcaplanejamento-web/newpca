@@ -338,7 +338,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota
   **vários DFDs** (escala a **milhares**); todo DFD vem de um protocolo. Entidade `dfd_protocolos` (escopo por
   **repartição**, `numero`=Número Processo único; **`idExterno`** = "Id:" da capa, migração `0019`; sem `grupo_id`) +
-  `dfds.protocoloId` nullable (FK `set null`).
+  `dfds.protocoloId` nullable (FK `set null`). **Dedup/sobrescrita por Id:** não coexistem dois protocolos com o
+  MESMO `idExterno` — protocolar **sobrescreve** o de mesmo Id (`iniciarProtocolo` apaga o de mesmo Id e número
+  diferente antes do upsert por `numero`; o `POST /api/protocolo` faz o **anti-sequestro por Id** — 403 se o Id já
+  existe em unidade inacessível). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
+  `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
   O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
   streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
   com o cabeçalho; a geometria é descartada por página, **EXCETO a da CAPA** — guardada p/ a extração coluna-aware).
