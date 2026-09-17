@@ -309,6 +309,16 @@ itens ao catálogo passa a valer na hora. Núcleo puro `catalogo-conferencia.ts`
 servidor em `/api/dfd` (só bloqueia se o ADM elevou a fundamental). Testes: veredito por linha, portão e **invariante**
 (config vazia ⇒ igual a hoje).
 
+### Import de DFD (PDF): descrição ILIMITADA por item, nunca truncada — corrigido
+✅ Um item pode ter uma **descrição enorme** (várias linhas). O parser casava cada trecho pela âncora (nº/código no
+MEIO da célula), então as **últimas linhas de um item vazavam para o próximo** → descrição **truncada** (ex.: item
+terminava em "…EMBALAGEM PLÁSTICA ATÓXICA DE" e perdia "400G. SIMILAR A MARCA TODDY… QUALIDADE"). Agora a **descrição**
+é casada pela **borda REAL da célula** — o **maior vão** entre as linhas na faixa entre duas âncoras (`itemPorCuts` +
+`cutsPorPagina` em `parse-dfd-pdf-core.ts`, puros/testáveis); número/código/valores seguem na âncora (`nearestByY`).
+O corte só ocorre num respiro **nítido**; vãos uniformes mantêm o ponto médio das âncoras → **zero regressão** em
+descrições curtas. A descrição alta vem **inteira** e não polui o item seguinte. Teste de regressão (fixture de 9
+linhas cuja última sumia) em `tests/parse-dfd-pdf.test.ts`.
+
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
 (binding cru → `.meta.size_after`), **tabela por tabela** (linhas · tamanho · % do total, ordenável + somatório no

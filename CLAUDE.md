@@ -172,8 +172,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
   tabela por coluna da matriz). `.pdf` → `parse-dfd-pdf`/`parse-dfd-pdf-core` (**pdf.js `pdfjs-dist`**, importado
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
-  build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**, atribuindo cada trecho
-  ao item de `y` mais próximo e **rejuntando o código quebrado em 2 linhas**. Ambos → mesmo `DfdParseado`.
+  build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**. Número/código/unidade/
+  valores ficam na **âncora** (1 faixa) → casados pelo `y` mais próximo (`nearestByY`) e **rejuntando o código quebrado
+  em 2 linhas**. Ambos → mesmo `DfdParseado`.
+- **Descrição ILIMITADA por item (crítico) — casada pela BORDA da célula, nunca truncada:** a descrição de um item
+  pode ter **dezenas de linhas**; com a âncora no MEIO da célula, as últimas linhas de um item ficavam mais perto da
+  âncora do PRÓXIMO e **vazavam para ele** (descrição truncada). A descrição é casada pela **borda REAL da célula** =
+  o **maior vão** entre as linhas de descrição na faixa entre duas âncoras (`itemPorCuts` + `cutsPorPagina`, puros);
+  o vão só vira borda se **destoa** dos demais (respiro nítido), senão cai no ponto médio das âncoras — **idêntico** ao
+  `nearestByY` de antes (zero regressão em descrições curtas). Assim uma descrição alta vem **inteira** e não polui o
+  item seguinte. Teste: fixture de 9 linhas cuja última sumia.
 - **Tabelas MULTIPÁGINA (crítico) + reconhecimento CIRÚRGICO dos componentes:** uma tabela de itens pode ocupar
   **dezenas de páginas** e um único item pode ter uma **descrição enorme que atravessa páginas**. O `parse-dfd-pdf-core`
   é **100% ciente de página**: (a) em cada página, tudo ACIMA do cabeçalho de coluna repetido é o **cabeçalho do

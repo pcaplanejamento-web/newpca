@@ -97,6 +97,25 @@ export function nearestByY(ys: number[], target: number): number {
   return best;
 }
 
+/**
+ * Item de um `y` dadas as FRONTEIRAS (`cuts`) de célula de uma página, em ordem `y`
+ * DESC — devolve quantas fronteiras estão ACIMA de `y` (estritamente). Complementa
+ * `nearestByY`: o número/código/valores ficam na âncora (1 faixa) e `nearestByY` os
+ * casa certo, mas a DESCRIÇÃO ocupa VÁRIAS linhas e, com a âncora no MEIO da célula,
+ * as últimas linhas de um item ficavam mais perto da âncora do PRÓXIMO e vazavam para
+ * ele (descrição truncada). A descrição é casada pela BORDA real da célula. O(log n).
+ */
+export function itemPorCuts(cuts: number[], y: number): number {
+  let lo = 0;
+  let hi = cuts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (cuts[mid] > y) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): DfdParseado {
   const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
@@ -268,6 +287,55 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         if (b.y > g.topo) g.topo = b.y;
       }
     });
+    // ── Fronteiras (cuts) de célula entre itens consecutivos, POR PÁGINA ──
+    // A descrição é ALTA (pode ter dezenas de linhas) e a âncora fica no MEIO da célula:
+    // por `nearestByY` as últimas linhas de um item vazavam para o próximo (descrição
+    // TRUNCADA). A borda REAL da célula é o "respiro" entre a última linha de um item e a
+    // primeira do seguinte = o MAIOR vão entre as linhas de descrição na faixa entre duas
+    // âncoras. Sem esse respiro nítido (descrição curta, ou vãos uniformes = uma única
+    // descrição comprida sem borda no meio) cai no ponto médio das âncoras — IDÊNTICO ao
+    // `nearestByY` de antes → zero regressão fora do caso de descrição alta.
+    const descYsPorPagina = new Map<number, number[]>();
+    for (const f of bodyFrags) {
+      if (colOf(f.x, f.str) !== "descricao") continue;
+      const arr = descYsPorPagina.get(f.page);
+      if (arr) arr.push(f.y);
+      else descYsPorPagina.set(f.page, [f.y]);
+    }
+    const cutsPorPagina = new Map<number, number[]>();
+    for (const [page, g] of idxPorPagina) {
+      const a = g.ys; // âncoras em `y` DESC
+      const cuts: number[] = [];
+      const dys = (descYsPorPagina.get(page) ?? []).slice().sort((x, y) => y - x); // DESC
+      let p = 0;
+      for (let j = 0; j < a.length - 1; j++) {
+        const hiA = a[j];
+        const loA = a[j + 1];
+        while (p < dys.length && dys[p] >= hiA) p++;
+        const band: number[] = [];
+        while (p < dys.length && dys[p] > loA) band.push(dys[p++]);
+        let cut = (hiA + loA) / 2; // ponto médio das âncoras (= nearestByY)
+        if (band.length >= 3) {
+          // O maior vão só é uma BORDA de célula se DESTOA dos demais (respiro nítido);
+          // vãos uniformes ⇒ mantém o ponto médio (não fatia uma descrição comprida).
+          let maxVao = -1;
+          let segVao = -1;
+          let idxMax = 0;
+          for (let i = 0; i < band.length - 1; i++) {
+            const vao = band[i] - band[i + 1];
+            if (vao > maxVao) {
+              segVao = maxVao;
+              maxVao = vao;
+              idxMax = i;
+            } else if (vao > segVao) segVao = vao;
+          }
+          if (maxVao >= segVao * 1.4) cut = (band[idxMax] + band[idxMax + 1]) / 2;
+        }
+        cuts.push(cut);
+      }
+      cutsPorPagina.set(page, cuts);
+    }
+
     for (const f of bodyFrags) {
       const g = idxPorPagina.get(f.page);
       const c = colOf(f.x, f.str);
@@ -276,7 +344,12 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         // Descrição ACIMA de todos os itens da página = continuação do ÚLTIMO item da
         // página anterior (texto do item que "virou a página").
         b = buckets[g.first - 1];
+      } else if (c === "descricao" && g && g.bi.length > 0) {
+        // Descrição → pela BORDA da célula (não pela âncora do meio): não trunca
+        // descrições altas nem vaza para o próximo item.
+        b = buckets[g.bi[itemPorCuts(cutsPorPagina.get(f.page) ?? [], f.y)]];
       } else if (g && g.ys.length > 0) {
+        // Número/código/unidade/valores ficam na âncora → o mais próximo em `y`.
         b = buckets[g.bi[nearestByY(g.ys, f.y)]];
       }
       if (!b) continue;

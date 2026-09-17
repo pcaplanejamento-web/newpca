@@ -140,6 +140,58 @@ function dfdMultipagina(): PdfItem[] {
   ];
 }
 
+// ── Fixture: descrição ALTA (várias linhas) com número/código/valores no MEIO da
+// célula (como o pdf.js entrega DFDs reais). As últimas linhas do item 1 ficam mais
+// perto da âncora do item 2 → com `nearestByY` vazavam para o item 2 (descrição
+// TRUNCADA, exatamente o bug relatado). O "respiro" da borda da célula (vão 338→322 =
+// 16, contra 9 das linhas internas) marca onde um item termina e o outro começa. ──
+function dfdDescricaoAlta(): PdfItem[] {
+  return [
+    f(1, 150, 760, "AQUISIÇÃO DE MATERIAL Número DFD:1395 / Planejamento: 1400"),
+    f(1, 38, 620, "2 - IDENTIFICAÇÃO DA DEMANDA"),
+    f(1, 38, 606, "AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS."),
+    f(1, 38, 450, "4 - QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA"),
+    f(1, 48, 427, "ITEM"),
+    f(1, 85, 427, "CÓDIGO"),
+    f(1, 206, 427, "DESCRIÇÃO"),
+    f(1, 346, 427, "UNIDADE"),
+    f(1, 395, 427, "QUANTIDADE"),
+    f(1, 507, 427, "VALOR TOTAL"),
+    f(1, 458, 423, "UNITÁRIO"),
+    // Item 1 — descrição de 9 linhas; âncora (nº/código/valores) na 5ª linha (meio).
+    f(1, 123, 410, "ACHOCOLATADO 400 GRAMAS ACHOCOLATADO EM PO,"),
+    f(1, 123, 401, "SENDO OBTIDAS POR MATERIAS PRIMAS SAS E LIMPAS,"),
+    f(1, 123, 392, "ISENTAS DE MATERIAS TERROSAS, PARASITAS, DETRITOS"),
+    f(1, 123, 383, "DE ANIMAIS, CASCAS DE SEMENTES DE CACAU E OUTROS"),
+    f(1, 82, 376, "524190442"),
+    f(1, 55, 374, "1"),
+    f(1, 123, 374, "DETRITOS VEGETAIS, ASPECTO, PO HOMOGENEO, COR"),
+    f(1, 353, 374, "UNIDADE"),
+    f(1, 419, 374, "10,0000"),
+    f(1, 466, 374, "5,1100"),
+    f(1, 515, 374, "51,1000"),
+    f(1, 82, 372, "7"),
+    f(1, 123, 365, "PROPRIA, CHEIRO E SABOR CARACTERISTICO,"),
+    f(1, 123, 356, "EMBALAGEM PLASTICA ATOXICA DE"),
+    f(1, 123, 347, "400G. SIMILAR A MARCA TODDY OU DE MELHOR"),
+    f(1, 123, 338, "QUALIDADE"),
+    // Item 2 — começa após o respiro da borda da célula (338 → 322).
+    f(1, 123, 322, "ACUCAR EM SACHE 5GR REFINADO. VALIDADE MINIMA DE"),
+    f(1, 82, 313, "5241913958"),
+    f(1, 55, 313, "2"),
+    f(1, 123, 313, "6 MESES NA ENTREGA. CAIXA COM 400 UNIDADES,"),
+    f(1, 353, 313, "CAIXA"),
+    f(1, 419, 313, "2,0000"),
+    f(1, 466, 313, "27,4800"),
+    f(1, 515, 313, "54,9600"),
+    f(1, 123, 304, "SIMILAR A MARCA UNIAO."),
+    f(1, 451, 285, "VALOR TOTAL"),
+    f(1, 515, 285, "106.060,0000"),
+    f(1, 38, 259, "5 - PREVISÃO DE ENTREGA/EXECUÇÃO"),
+    f(1, 38, 245, "ANUAL."),
+  ];
+}
+
 describe("parse-dfd-pdf-core", () => {
   it("extrai o cabeçalho (rótulos e valores em trechos separados)", () => {
     const d = parseDfdFromPdfItems(dfdPdf(), "DFD PDF.pdf");
@@ -200,6 +252,25 @@ describe("parse-dfd-pdf-core", () => {
     assert.equal(d.valorTotal, 6000);
     assert.ok(d.secoes.find((s) => s.numero === 4)?.texto.includes("QUANTITATIVO"));
     assert.ok(d.secoes.find((s) => s.numero === 5));
+  });
+
+  it("descrição ALTA (várias linhas) vem INTEIRA e não vaza para o próximo item", () => {
+    const d = parseDfdFromPdfItems(dfdDescricaoAlta(), "achocolatado.pdf");
+    assert.equal(d.itens.length, 2);
+    assert.equal(d.itens[0].item, 1);
+    assert.equal(d.itens[0].codigo, "5241904427"); // código rejuntado (2 linhas)
+    // A descrição do item 1 deve vir COMPLETA — da 1ª à 9ª linha (era truncada).
+    const desc1 = d.itens[0].descricao ?? "";
+    assert.ok(desc1.startsWith("ACHOCOLATADO 400 GRAMAS"), desc1);
+    assert.ok(desc1.includes("EMBALAGEM PLASTICA ATOXICA DE"), desc1);
+    assert.ok(desc1.includes("400G. SIMILAR A MARCA TODDY OU DE MELHOR"), desc1);
+    assert.ok(desc1.endsWith("QUALIDADE"), desc1); // última linha — a que sumia
+    // O item 2 NÃO recebe as linhas finais do item 1 (sem vazamento).
+    const desc2 = d.itens[1].descricao ?? "";
+    assert.equal(d.itens[1].codigo, "5241913958");
+    assert.ok(desc2.startsWith("ACUCAR EM SACHE"), desc2);
+    assert.ok(!desc2.includes("TODDY"), desc2);
+    assert.ok(!desc2.includes("QUALIDADE"), desc2);
   });
 
   it("numeração com BURACO no sequencial (item removido) importa normal e só APONTA o buraco", () => {
