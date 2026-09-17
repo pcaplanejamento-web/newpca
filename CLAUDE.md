@@ -128,12 +128,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
   autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada.
-- **Matchers (ponto ÚNICO puro `src/lib/reparticao-match.ts`):** `casarUnidade` (Setor Requisitante do DFD → unidade:
-  `setor_requisitante` configurado → sigla → nome → órgão-texto; `casarReparticao` é alias), `casarUnidadePorInteressado`
-  (Interessado do protocolo → unidade pelo **número** cadastrado → nome), `casarOrgao` (Órgão/Entidade do DFD → órgão),
-  `orgaoDivergeDaUnidade`/`divergenciaOrgaoUnidade`. Com os campos novos vazios, o resultado é **idêntico ao de hoje**
-  (invariante testado). Cadastros de match **threadados** ao cliente (`painel/dfds/page.tsx` enriquece as unidades +
-  `listarOrgaos()` → `DfdsView` → forms).
+- **Matchers (ponto ÚNICO puro `src/lib/reparticao-match.ts`) — IGNORAM entidades OCULTAS:** `casarUnidade` (Setor
+  Requisitante → unidade: `setor_requisitante` → sigla → nome → órgão-texto; `casarReparticao` é alias),
+  **`casarPorInteressado`** (Interessado do protocolo → **órgão OU unidade** pelo número cadastrado → nome; devolve
+  `{tipo,id}`), **`preverUnidade`** (assinatura → setor) e **`preverUnidadeDoDfd`** (identifica o órgão, ESCOPA as
+  unidades a ele e prevê — usado pelos forms), `casarOrgao` (Órgão/Entidade → órgão), `orgaoDivergeDaUnidade`/
+  `divergenciaOrgaoUnidade`. Campos novos vazios ⇒ resultado **idêntico ao de hoje** (invariante testado). Threadados ao
+  cliente (`painel/dfds/page.tsx` enriquece as unidades + `listarOrgaos()` → `DfdsView` → forms).
+- **Nº interessado no ÓRGÃO + identificação/registro do DFD + ocultar (migração `0027`):**
+  - **Nº interessado (ponto 1/2/3):** `orgaos.numero_interessado` (além do da unidade) — o protocolo pode vir em nome do
+    **órgão OU da unidade** (`casarPorInteressado`); o número é **ÚNICO GLOBAL** entre órgãos e unidades
+    (`numeroInteressadoEmUso`, checado nas rotas admin POST/PATCH → 409). O protocolo guarda `dfd_protocolos.orgao_id`
+    quando vem em nome do órgão (`protocoloMetaSchema`/`iniciarProtocolo`).
+  - **DFD identifica ÓRGÃO e escopa a UNIDADE (ponto 4/5):** o `DfdConferir` identifica o órgão pelo "Órgão/Entidade"
+    (`casarOrgao`), **escopa o seletor de unidade** às unidades daquele órgão, e o usuário escolhe a unidade; o auto-match
+    dos forms usa **`preverUnidadeDoDfd`** (assinatura→setor). Sem previsão, a **unidade fica obrigatória** (`dfd.reparticao`
+    fundamental — erro até definir). O DFD **registra órgão + unidade** — o servidor deriva `dfds.orgao_id` da unidade em
+    `upsertDfdCabecalho`. Ponto de avaliação CONFIGURÁVEL **`dfd.orgao`** ("Órgão identificado", padrão `intermediario`)
+    avisa quando o Órgão/Entidade não casa nenhum órgão cadastrado (flag via `ctx`, avaliadores puros).
+  - **Ocultar em vez de excluir (ponto 8):** `orgaos.oculto`/`reparticoes.oculto` — órgão/unidade **com DFD/protocolo
+    vinculado NÃO pode ser excluído** (`DELETE` → 409 via `orgaoTemVinculo`/`unidadeTemVinculo`); o ADM **oculta**
+    (`OrgaosAdmin`/`ReparticoesAdmin`: ação ocultar/reexibir + badge). Ocultos **somem do uso futuro** (matchers e
+    seletores de documento novo filtram), mas o **histórico é preservado**.
 - **Divergência Órgão × Unidade (item 6.3):** quando o "Órgão/Entidade" do DFD aponta um órgão diferente do órgão da
   unidade selecionada, mostra **atenção âmbar** (Callout no `DfdConferir` + mensagem no painel), **configurável** —
   ponto de avaliação `dfd.orgaoUnidadeDivergente` (padrão `intermediario`, não bloqueia). O servidor (`POST /api/dfd`)

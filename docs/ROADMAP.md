@@ -284,6 +284,18 @@ responsáveis certos **sem tocar** `validarAssinatura`/`DfdConferir`/`POST /api/
 órgão é "única", o editor da unidade é substituído por uma nota; coluna **"Assinatura"** (Única/Por unidade) na lista
 de órgãos. `responsaveisSchema` compartilhado (unidade+órgão). Testes puros de `responsaveisEfetivos` + migração `0023`.
 
+### Órgão/Unidade: Nº interessado no órgão (único), identificação do DFD, ocultar — entregue
+✅ **Nº interessado também no ÓRGÃO** (migração `0027`): o protocolo pode vir **em nome do órgão OU da unidade**
+(`casarPorInteressado` devolve `{tipo,id}`); o número é **ÚNICO GLOBAL** entre órgãos e unidades (checado nas rotas
+admin → 409). **No DFD:** identifica o **órgão** pelo "Órgão/Entidade" e **escopa o seletor de unidade** àquele órgão;
+o auto-match prevê a unidade por **assinatura → setor requisitante** (`preverUnidade`/`preverUnidadeDoDfd`) e, sem
+previsão, a **unidade fica obrigatória** (erro até o usuário definir). O DFD **registra órgão + unidade** (servidor
+deriva `dfds.orgao_id` da unidade). Novo ponto de avaliação **configurável** `dfd.orgao` (Órgão identificado; padrão
+atenção). **Ocultar em vez de excluir** (ponto 8): órgão/unidade com DFD/protocolo vinculado **não** pode ser excluído
+(`DELETE` → 409) — o ADM **oculta** (ação ocultar/reexibir + badge no admin); ocultos somem do uso futuro (matchers/
+seletores filtram) mas o histórico é preservado. **Ponto 7:** removida a lógica concorrente (`casarUnidadePorInteressado`
+→ `casarPorInteressado` único). Testes de matchers/previsão/unicidade + migração `0027`. Sem quebrar nada.
+
 ### Catálogo de produtos (referência p/ padronização) — entregue
 ✅ Novo **módulo Catálogo** (aba `catalogo`, `/painel/catalogo`): sobe **catálogos de produtos em PDF**, extrai os itens
 (**código, descrição, unidade de medida**) e os mostra em tabela consultável (busca + filtro por tipo). O **parser é
