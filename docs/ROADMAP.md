@@ -331,6 +331,12 @@ que faltava (um item pode ter O/S/R/E); se **divergir** (descrição/unidade), o
 ou **substituir** (exclui o existente e importa o novo). Código continua único global; substituições excluídas atomicamente.
 Núcleo `itensIguais` (puro), rotas `POST /api/catalogo/item` + `DELETE /api/catalogo/item/[id]` + `PATCH /api/catalogo/itens`
 (modo mesclar) + `criar-catalogo`. Sem migração.
+✅ **Item COMPARTILHADO entre catálogos (o MESMO item em vários, sem duplicar):** na importação, um conflito **idêntico**
+ganha a opção **Compartilhar** (além de Manter); um **divergente** pode ser **editado dos dois lados** (novo × existente) até
+ficarem iguais, o que **libera o Compartilhar**. O item passa a constar em vários catálogos, **herda a união dos tipos**, e ao
+abri-lo mostra **em quais catálogos está** (com opção de **remover de um** — reatribui a origem; se era o único, exclui).
+**Excluir um catálogo preserva os itens compartilhados** (ficam nos outros). Modelo aditivo `catalogos_extra` (JSON, migração
+`0028`), núcleo puro `catalogo-membros.ts`, rota `POST /api/catalogo/compartilhar`. Código segue único global.
 
 ### Import de DFD (PDF): descrição ILIMITADA por item, nunca truncada (inclui QUEBRA DE PÁGINA) — corrigido
 ✅ A âncora (nº/código/valores) fica no **MEIO da célula** → a descrição tem linhas ACIMA e ABAIXO do número. Casar

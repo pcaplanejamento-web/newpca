@@ -1122,6 +1122,7 @@ export function Catalogo() {
               unidade: "UNIDADE",
               sequencial: 1,
               tipos: ["DFD-R", "DFD-E"],
+              catalogosExtra: [],
             }}
             podeEditar
           />

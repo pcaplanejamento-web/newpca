@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 import {
   catalogoItemImportSchema,
   catalogoOpSchema,
+  compartilharItensSchema,
   criarItemSchema,
   normalizarTipos,
   patchCatalogoSchema,
   patchItensTiposSchema,
+  removerDoCatalogoSchema,
   tiposDfdSchema,
 } from "../src/lib/catalogo-validation.ts";
 
@@ -108,5 +110,25 @@ describe("catalogo-validation", () => {
     assert.deepEqual(r.tipos, ["DFD-O", "DFD-S"]);
     assert.throws(() => criarItemSchema.parse({ catalogoId: 1, codigo: "", descricao: "x" }));
     assert.throws(() => criarItemSchema.parse({ catalogoId: 1, codigo: "1", descricao: "" }));
+  });
+
+  it("catalogoOpSchema (start) tem compartilharItens com default []", () => {
+    const base = { mode: "start-catalogo", nome: "Cat", tiposPadrao: [], totalItens: 1, rows: [{ codigo: "1", descricao: "x" }] };
+    const ok = catalogoOpSchema.parse(base);
+    assert.deepEqual(ok.mode === "start-catalogo" ? ok.compartilharItens : "?", []);
+    const com = catalogoOpSchema.parse({ ...base, compartilharItens: [4, 9] });
+    assert.deepEqual(com.mode === "start-catalogo" ? com.compartilharItens : "?", [4, 9]);
+  });
+
+  it("compartilharItensSchema exige catalogoId e ao menos 1 item", () => {
+    assert.deepEqual(compartilharItensSchema.parse({ catalogoId: 2, itemIds: [1, 3] }), { catalogoId: 2, itemIds: [1, 3] });
+    assert.throws(() => compartilharItensSchema.parse({ catalogoId: 2, itemIds: [] }));
+    assert.throws(() => compartilharItensSchema.parse({ itemIds: [1] }));
+  });
+
+  it("removerDoCatalogoSchema exige catalogoId positivo (corpo do DELETE de item)", () => {
+    assert.deepEqual(removerDoCatalogoSchema.parse({ catalogoId: 5 }), { catalogoId: 5 });
+    assert.equal(removerDoCatalogoSchema.safeParse({}).success, false); // vazio → exclusão total
+    assert.equal(removerDoCatalogoSchema.safeParse({ catalogoId: 0 }).success, false);
   });
 });

@@ -6,7 +6,7 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { TextArea, TextField } from "./Field";
-import { IconAlert, IconPlus, IconSave, IconTrash } from "./icons";
+import { IconAlert, IconClose, IconLayers, IconPlus, IconSave, IconTrash } from "./icons";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 
 /**
@@ -22,9 +22,11 @@ export function CatalogoItemDetalhe({
   podeEditar,
   salvando = false,
   erro,
+  catalogos,
   onSalvar,
   onCriar,
   onExcluir,
+  onRemoverCatalogo,
 }: {
   item?: CatalogoItemRow;
   modo?: "editar" | "criar";
@@ -32,9 +34,13 @@ export function CatalogoItemDetalhe({
   salvando?: boolean;
   /** Erro do envio (ex.: código já existe) — exibido no formulário. */
   erro?: string | null;
+  /** Catálogos em que o item está (origem + compartilhados) — o mesmo item em vários. */
+  catalogos?: { id: number; nome: string; origem: boolean }[];
   onSalvar?: (campos: { descricao: string; unidade: string | null; tipos: string[] }) => void;
   onCriar?: (campos: { codigo: string; descricao: string; unidade: string | null; tipos: string[] }) => void;
   onExcluir?: () => void;
+  /** Remove o item de UM catálogo (desfaz o compartilhamento). */
+  onRemoverCatalogo?: (catalogoId: number) => void;
 }) {
   const criar = modo === "criar";
   const [codigo, setCodigo] = useState(item?.codigo ?? "");
@@ -94,6 +100,36 @@ export function CatalogoItemDetalhe({
         </span>
         {item.sequencial != null && <span className="text-xs text-muted">Item {item.sequencial}</span>}
       </div>
+
+      {/* Catálogos em que o item está (o MESMO item pode estar compartilhado em vários). */}
+      {catalogos && catalogos.length > 0 && (
+        <section className="rounded-card border border-border-2 bg-surface-2 p-3">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
+            <IconLayers className="h-3.5 w-3.5" />
+            {catalogos.length > 1 ? `Compartilhado em ${catalogos.length} catálogos` : "Catálogo"}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {catalogos.map((c) => (
+              <span key={c.id} className="inline-flex items-center gap-1 rounded-chip border border-border bg-surface px-2 py-1 text-[12px] text-text">
+                {c.nome}
+                {c.origem && <span className="text-[10px] text-faint">(origem)</span>}
+                {podeEditar && onRemoverCatalogo && catalogos.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Remover do catálogo ${c.nome}`}
+                    title="Remover deste catálogo"
+                    className="ml-0.5 grid h-4 w-4 place-items-center rounded-full text-muted transition-colors hover:text-[var(--danger)] disabled:opacity-50"
+                    disabled={salvando}
+                    onClick={() => onRemoverCatalogo(c.id)}
+                  >
+                    <IconClose className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
 
       {podeEditar ? (
         <>

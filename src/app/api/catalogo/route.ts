@@ -3,6 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import {
   atualizarCatalogo,
   codigosEmConflito,
+  compartilharItensNoCatalogo,
   criarCatalogo,
   excluirCatalogo,
   getCatalogo,
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
     const id = await criarCatalogo(d.nome, d.tiposPadrao);
     try {
       const r = await upsertCatalogoItens(id, d.rows, { excluirItens: d.excluirItens });
+      if (d.compartilharItens.length > 0) await compartilharItensNoCatalogo(id, d.compartilharItens);
       await registrarAuditoria({ usuario: a.u, acao: "importar", entidade: "catalogo", entidadeId: id, resumo: `Catálogo "${d.nome}" importado — ${r.inserted} ${r.inserted === 1 ? "item" : "itens"}`, depois: { nome: d.nome, itens: r.inserted } });
       return ok({ catalogoId: id, inserted: r.inserted });
     } catch (e) {
@@ -71,6 +73,7 @@ export async function POST(req: Request) {
   }
   await atualizarCatalogo(alvo, { nome: d.nome, tiposPadrao: d.tiposPadrao });
   const r = await upsertCatalogoItens(alvo, d.rows, { excluirItens: d.excluirItens });
+  if (d.compartilharItens.length > 0) await compartilharItensNoCatalogo(alvo, d.compartilharItens);
   await registrarAuditoria({ usuario: a.u, acao: "importar", entidade: "catalogo", entidadeId: alvo, resumo: `Catálogo "${d.nome}" atualizado — ${r.inserted} ${r.inserted === 1 ? "item" : "itens"}`, depois: { nome: d.nome, itens: r.inserted } });
   return ok({ catalogoId: alvo, inserted: r.inserted });
 }

@@ -1,7 +1,7 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { atualizarCatalogoItem, excluirCatalogoItem } from "@/lib/catalogo";
-import { patchItemSchema } from "@/lib/catalogo-validation";
+import { atualizarCatalogoItem, excluirCatalogoItem, removerItemDoCatalogo } from "@/lib/catalogo";
+import { patchItemSchema, removerDoCatalogoSchema } from "@/lib/catalogo-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +22,21 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return ok();
 }
 
-/** Exclui UM item do catálogo (recalcula o total) — só editor. */
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/**
+ * Corpo `{catalogoId}` opcional = REMOVER o item de UM catálogo (desfaz o compartilhamento;
+ * se era o único catálogo, exclui o item). Sem corpo = EXCLUSÃO total. Só editor.
+ */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const rem = removerDoCatalogoSchema.safeParse(await req.json().catch(() => ({})));
+  if (rem.success) {
+    await removerItemDoCatalogo(id, rem.data.catalogoId);
+    await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "catalogo_item", entidadeId: id, resumo: `Item #${id} removido do catálogo #${rem.data.catalogoId} (compartilhamento)`, antes: { catalogoId: rem.data.catalogoId } });
+    return ok();
+  }
   await excluirCatalogoItem(id);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "catalogo_item", entidadeId: id, resumo: `Item de catálogo #${id} excluído` });
   return ok();

@@ -463,6 +463,9 @@ export const catalogoItens = sqliteTable(
     unidade: text("unidade"), // unidade de medida (UNIDADE/CAIXA/KG/PAR/PACOTE...)
     sequencial: integer("sequencial"), // "Item/Nº Seq" do arquivo (exibição)
     tipos: text("tipos").notNull().default("[]"), // JSON string[] de tipos de DFD do item
+    // Catálogos ADICIONAIS em que o item está COMPARTILHADO (JSON number[]) — o mesmo item
+    // em vários catálogos, sem duplicar a linha. Pertencimento = [catalogo_id, ...este].
+    catalogosExtra: text("catalogos_extra").notNull().default("[]"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

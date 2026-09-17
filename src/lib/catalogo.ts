@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import { catalogoItens, catalogos } from "@/db/schema";
 import { type CatalogoRef, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
+import { comCatalogo, resolverRemocao } from "./catalogo-membros";
 import { type CatalogoItemImport, normalizarTipos } from "./catalogo-validation";
 import { getDb } from "./db";
 import { normalizarCodigo } from "./parse-catalogo-comum";
@@ -21,6 +22,17 @@ function parseTipos(raw: string | null | undefined): string[] {
   try {
     const v = JSON.parse(raw);
     return Array.isArray(v) ? normalizarTipos(v.map(String)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Parse de um JSON `number[]` (ex.: `catalogos_extra`) — tolerante a lixo. */
+function parseIds(raw: string | null | undefined): number[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? [...new Set(v.map(Number).filter((n) => Number.isInteger(n)))] : [];
   } catch {
     return [];
   }
@@ -53,13 +65,14 @@ export async function listarCatalogos(): Promise<CatalogoResumo[]> {
 
 export type CatalogoItemRow = {
   id: number;
-  catalogoId: number;
+  catalogoId: number; // catálogo de ORIGEM (home)
   codigo: string;
   codigoRaw: string | null;
   descricao: string;
   unidade: string | null;
   sequencial: number | null;
   tipos: string[];
+  catalogosExtra: number[]; // catálogos ADICIONAIS (item compartilhado); pertence a [catalogoId, ...este]
 };
 
 /** Itens na ordem do arquivo (`sequencial`). Sem `catalogoId` = de TODOS os catálogos
@@ -75,6 +88,7 @@ export async function getCatalogoItens(catalogoId?: number): Promise<CatalogoIte
     unidade: catalogoItens.unidade,
     sequencial: catalogoItens.sequencial,
     tipos: catalogoItens.tipos,
+    catalogosExtra: catalogoItens.catalogosExtra,
   };
   const linhas =
     catalogoId != null
@@ -87,7 +101,7 @@ export async function getCatalogoItens(catalogoId?: number): Promise<CatalogoIte
           .select(cols)
           .from(catalogoItens)
           .orderBy(asc(catalogoItens.catalogoId), asc(catalogoItens.sequencial), asc(catalogoItens.id));
-  return linhas.map((l) => ({ ...l, tipos: parseTipos(l.tipos) }));
+  return linhas.map((l) => ({ ...l, tipos: parseTipos(l.tipos), catalogosExtra: parseIds(l.catalogosExtra) }));
 }
 
 /** Um catálogo pelo id (`{id,nome}`) — para validar o alvo de uma atualização. `null` se não existe. */
@@ -161,13 +175,51 @@ export async function atualizarCatalogo(id: number, campos: { nome?: string; tip
   await getDb().update(catalogos).set(set).where(eq(catalogos.id, id));
 }
 
-/** Exclui um catálogo E seus itens (explícito + cascade de backstop), atômico. */
+/**
+ * Exclui um catálogo — PRESERVANDO os itens COMPARTILHADOS (que estão em outros catálogos).
+ * Item cuja origem era este catálogo mas está compartilhado → **reatribui a origem** a um
+ * dos outros; item compartilhado PARA este catálogo → remove só a associação; item cujo
+ * único catálogo era este → apagado (delete por origem + cascade). Recalcula os totais das
+ * origens reatribuídas. Atômico (`db.batch`).
+ */
 export async function excluirCatalogo(id: number): Promise<void> {
   const db = getDb();
-  await db.batch([
-    db.delete(catalogoItens).where(eq(catalogoItens.catalogoId, id)),
-    db.delete(catalogos).where(eq(catalogos.id, id)),
-  ]);
+  // Só os itens COMPARTILHADOS (extras ≠ []) podem ser afetados — os demais caem no delete.
+  const compartilhados = await db
+    .select({ id: catalogoItens.id, catalogoId: catalogoItens.catalogoId, catalogosExtra: catalogoItens.catalogosExtra })
+    .from(catalogoItens)
+    .where(ne(catalogoItens.catalogosExtra, "[]"));
+
+  // biome-ignore lint/suspicious/noExplicitAny: a tupla exigida por db.batch() do Drizzle é inviável de anotar.
+  const stmts: any[] = [];
+  const origensReatribuidas = new Set<number>();
+  for (const it of compartilhados) {
+    const extra = parseIds(it.catalogosExtra);
+    if (it.catalogoId === id) {
+      // Origem aqui + compartilhado → reatribui a origem (o item sobrevive nos outros).
+      const r = resolverRemocao(id, extra, id);
+      if (r === "excluir") continue; // sem outros catálogos → cai no delete por origem
+      stmts.push(
+        db.update(catalogoItens).set({ catalogoId: r.origem, catalogosExtra: JSON.stringify(r.extra), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(catalogoItens.id, it.id)),
+      );
+      origensReatribuidas.add(r.origem);
+    } else if (extra.includes(id)) {
+      // Origem em outro catálogo, compartilhado PARA este → remove só a associação.
+      stmts.push(
+        db.update(catalogoItens).set({ catalogosExtra: JSON.stringify(extra.filter((c) => c !== id)), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(catalogoItens.id, it.id)),
+      );
+    }
+  }
+  // Apaga os itens cuja ORIGEM ainda é este catálogo (só-home; reatribuídos já mudaram acima).
+  stmts.push(db.delete(catalogoItens).where(eq(catalogoItens.catalogoId, id)));
+  stmts.push(db.delete(catalogos).where(eq(catalogos.id, id)));
+  for (const cid of origensReatribuidas) {
+    stmts.push(
+      db.update(catalogos).set({ totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${cid})`, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(catalogos.id, cid)),
+    );
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: a tupla exigida por db.batch() do Drizzle é inviável de anotar.
+  await db.batch(stmts as [any, ...any[]]);
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: os tipos encadeados do query-builder do Drizzle p/ db.batch() são inviáveis de anotar.
@@ -343,6 +395,66 @@ export async function mesclarTiposEmItens(ids: number[], tiposNovos: string[]): 
       if (uniao.length !== atuais.length)
         await db.update(catalogoItens).set({ tipos: JSON.stringify(uniao), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(catalogoItens.id, l.id));
     }
+  }
+}
+
+/**
+ * COMPARTILHA itens EXISTENTES (idênticos) num catálogo destino: adiciona o destino aos
+ * `catalogos_extra` de cada item (sem duplicar a linha) e UNE os tipos padrão do destino aos
+ * tipos do item (herda os tipos dos dois lugares). O mesmo item passa a constar em vários
+ * catálogos. O total do destino é contado no CLIENTE (pertencimento) — não altera `total_itens`.
+ * `tiposPadrao` vem do próprio catálogo destino (fonte única).
+ */
+export async function compartilharItensNoCatalogo(catalogoId: number, itemIds: number[]): Promise<void> {
+  const uniq = [...new Set(itemIds)].filter((n) => Number.isInteger(n));
+  if (uniq.length === 0) return;
+  const db = getDb();
+  const [cat] = await db.select({ tiposPadrao: catalogos.tiposPadrao }).from(catalogos).where(eq(catalogos.id, catalogoId)).limit(1);
+  if (!cat) return;
+  const novos = parseTipos(cat.tiposPadrao);
+  for (let i = 0; i < uniq.length; i += IN_CHUNK) {
+    const linhas = await db
+      .select({ id: catalogoItens.id, catalogoId: catalogoItens.catalogoId, catalogosExtra: catalogoItens.catalogosExtra, tipos: catalogoItens.tipos })
+      .from(catalogoItens)
+      .where(inArray(catalogoItens.id, uniq.slice(i, i + IN_CHUNK)));
+    for (const l of linhas) {
+      const extra = comCatalogo(l.catalogoId, parseIds(l.catalogosExtra), catalogoId);
+      const uniao = normalizarTipos([...parseTipos(l.tipos), ...novos]);
+      await db
+        .update(catalogoItens)
+        .set({ catalogosExtra: JSON.stringify(extra), tipos: JSON.stringify(uniao), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+        .where(eq(catalogoItens.id, l.id));
+    }
+  }
+}
+
+/**
+ * Remove UM item de UM catálogo (desfaz o compartilhamento). Se o catálogo era a ORIGEM e o
+ * item está em OUTROS, REATRIBUI a origem; se era o ÚNICO catálogo, EXCLUI o item. Recalcula
+ * os totais das origens afetadas. `null`-safe se o item não existir.
+ */
+export async function removerItemDoCatalogo(itemId: number, catalogoId: number): Promise<void> {
+  const db = getDb();
+  const [item] = await db
+    .select({ catalogoId: catalogoItens.catalogoId, catalogosExtra: catalogoItens.catalogosExtra })
+    .from(catalogoItens)
+    .where(eq(catalogoItens.id, itemId))
+    .limit(1);
+  if (!item) return;
+  const r = resolverRemocao(item.catalogoId, parseIds(item.catalogosExtra), catalogoId);
+  if (r === "excluir") {
+    await excluirCatalogoItem(itemId);
+    return;
+  }
+  await db
+    .update(catalogoItens)
+    .set({ catalogoId: r.origem, catalogosExtra: JSON.stringify(r.extra), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(catalogoItens.id, itemId));
+  for (const cid of [...new Set([item.catalogoId, r.origem])]) {
+    await db
+      .update(catalogos)
+      .set({ totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${cid})`, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(catalogos.id, cid));
   }
 }
 

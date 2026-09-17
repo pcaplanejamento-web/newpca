@@ -508,6 +508,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (não importa) OU **substituir** (exclui o existente e importa este). Os "substituir" vão em `start-catalogo.excluirItens` e
   são removidos ATOMICAMENTE no MESMO `db.batch` do upsert (recalcula os totais do alvo E dos catálogos de origem); o gate de
   unicidade global os ignora. `podeImportar` não trava por conflito (só exige nome + algo a fazer).
+- **Item COMPARTILHADO entre catálogos (o MESMO item em vários, sem duplicar — migração `0028`):** a relação item↔catálogos
+  vira muitos-para-muitos de forma MÍNIMA — `catalogo_itens.catalogo_id` é a **ORIGEM** (home; código único e conferência
+  DFD inalterados) e a coluna nova **`catalogos_extra`** (JSON `number[]`, migração aditiva) guarda os catálogos ADICIONAIS.
+  **Pertencimento = `[catalogo_id, ...catalogos_extra]`** — a contagem por catálogo é feita no CLIENTE (o `CatalogoView` já
+  carrega tudo e agrupa por `membrosDoItem`), sem `json_each`; `total_itens` fica como contagem por origem. **Núcleo puro**
+  `catalogo-membros.ts` (`membrosDoItem`/`comCatalogo`/`resolverRemocao`, testável). Na **importação**, um conflito
+  **IDÊNTICO** ganha a opção **Compartilhar** (`Segmented` Manter | Compartilhar; "compartilhar/manter todos"); um
+  **DIVERGENTE** pode ser **editado dos dois lados** (novo × existente, `TextArea`/`TextField`, check ao vivo `itensIguais`)
+  para igualar e **liberar Compartilhar** (senão Manter | Substituir). Os "compartilhar" vão em
+  `start-catalogo.compartilharItens` → `compartilharItensNoCatalogo` (add ao `catalogos_extra` + **UNIÃO dos tipos** do
+  destino), ou pela rota `POST /api/catalogo/compartilhar` quando não há itens novos. O `CatalogoItemDetalhe` mostra o bloco
+  **"Catálogos deste item"** (chips com origem marcada) e permite **remover de um catálogo** (`DELETE /api/catalogo/item/[id]`
+  com corpo `{catalogoId}` → `removerItemDoCatalogo`: reatribui a origem se preciso; se era o único, exclui). **Excluir um
+  catálogo PRESERVA os itens compartilhados** (`excluirCatalogo` reatribui a origem dos compartilhados e só apaga os
+  só-home). Auditoria registra compartilhar/remover. Testes: `catalogo-membros` + schemas.
 - **Conformidade dos ITENS do DFD com o catálogo (o catálogo VALIDA os itens; configurável pelo ADM):** cada item do DFD é
   conferido contra o catálogo (a **referência**) casando pelo **código** (único global). Núcleo PURO/testável em
   **`src/lib/catalogo-conferencia.ts`** (sem `getDb`/JSX, como `reparticao-match`): `conferirItem(item, entry|null, dfdTipoCurto,

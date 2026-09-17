@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
 import { itensIguais } from "@/lib/catalogo-conferencia";
+import { membrosDoItem } from "@/lib/catalogo-membros";
 import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import { dataBR } from "@/lib/format";
 import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
@@ -15,7 +16,7 @@ import { Callout } from "./Callout";
 import { CatalogoItemDetalhe } from "./CatalogoItemDetalhe";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
-import { SearchField, TextField } from "./Field";
+import { SearchField, TextArea, TextField } from "./Field";
 import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -24,7 +25,9 @@ import { TipoDfdPicker } from "./TipoDfdPicker";
 
 type Vista = "catalogo" | "lista";
 /** Decisão de um conflito divergente (mesmo código, dados diferentes). */
-type Resolucao = "manter" | "substituir";
+type Resolucao = "manter" | "substituir" | "compartilhar";
+/** Edição, no preview, dos dados de um conflito divergente (para igualar e liberar "Compartilhar"). */
+type EdicaoConflito = { novoDesc: string; novoUnid: string; exDesc: string; exUnid: string };
 
 type PreviewItem = {
   _k: number;
@@ -63,12 +66,16 @@ export function CatalogoView({
   podeEditar: boolean;
 }) {
   const router = useRouter();
+  // Agrupa por PERTENCIMENTO: um item compartilhado aparece no bucket de cada catálogo em
+  // que está ([catalogo_id, ...catalogos_extra]).
   const itensPorCatalogo = useMemo(() => {
     const m = new Map<number, CatalogoItemRow[]>();
     for (const it of itens) {
-      const a = m.get(it.catalogoId) ?? [];
-      a.push(it);
-      m.set(it.catalogoId, a);
+      for (const cid of membrosDoItem(it.catalogoId, it.catalogosExtra)) {
+        const a = m.get(cid) ?? [];
+        a.push(it);
+        m.set(cid, a);
+      }
     }
     return m;
   }, [itens]);
@@ -95,8 +102,11 @@ export function CatalogoView({
   const [editTipos, setEditTipos] = useState<string[]>([]);
   const [salvandoCat, setSalvandoCat] = useState(false);
 
-  // Resolução dos conflitos divergentes (mesmo código, dados diferentes) — por id do existente.
+  // Resolução dos conflitos (por id do existente): idêntico [Manter|Compartilhar];
+  // divergente [Manter|Substituir|Compartilhar].
   const [resolucoes, setResolucoes] = useState<Map<number, Resolucao>>(new Map());
+  // Edição dos dados de um divergente (para igualar novo × existente e liberar Compartilhar).
+  const [edicoes, setEdicoes] = useState<Map<number, EdicaoConflito>>(new Map());
 
   // Novo catálogo (card "+"): criar manual OU importar.
   const [novoAberto, setNovoAberto] = useState(false);
@@ -143,6 +153,7 @@ export function CatalogoView({
     setNovoAberto(false);
     setErroImport(null);
     setResolucoes(new Map());
+    setEdicoes(new Map());
     const alvo = pendingAlvo;
     setPendingAlvo(null);
     const ext = (file.name.split(".").pop() ?? "").toLowerCase();
@@ -178,6 +189,7 @@ export function CatalogoView({
   async function mudarAlvo(catalogoId: number | null) {
     if (!preview) return;
     setResolucoes(new Map());
+    setEdicoes(new Map());
     const alvoCat = catalogoId != null ? catalogos.find((c) => c.id === catalogoId) : null;
     if (alvoCat) {
       setNomeCat(alvoCat.nome);
@@ -206,16 +218,43 @@ export function CatalogoView({
     }
     return { identicos: ident, divergentes: div };
   }, [preview?.itens, conflitoPorCodigo]);
-  // Idênticos cujo item existente NÃO cobre o tiposPadrão do preview → mesclar tipos no existente.
+  const resolucaoDe = (id: number): Resolucao => resolucoes.get(id) ?? "manter";
+  // Valores ATUAIS de um conflito divergente (edições do preview aplicadas) — p/ igualar.
+  const valoresConflito = (d: { item: PreviewItem; existente: ConflitoCatalogo }): EdicaoConflito => {
+    const e = edicoes.get(d.existente.id);
+    return {
+      novoDesc: e?.novoDesc ?? d.item.descricao,
+      novoUnid: e?.novoUnid ?? d.item.unidade ?? "",
+      exDesc: e?.exDesc ?? d.existente.descricao,
+      exUnid: e?.exUnid ?? d.existente.unidade ?? "",
+    };
+  };
+  const conflitoIgual = (d: { item: PreviewItem; existente: ConflitoCatalogo }): boolean => {
+    const v = valoresConflito(d);
+    return itensIguais({ descricao: v.novoDesc, unidade: v.novoUnid }, { descricao: v.exDesc, unidade: v.exUnid });
+  };
+
+  // Idênticos "Manter" cujo existente NÃO cobre o tiposPadrão → só mesclar tipos (como hoje).
   const mesclarIds = useMemo(
-    () => identicos.filter((i) => tiposPadrao.some((t) => !i.existente.tipos.includes(t))).map((i) => i.existente.id),
-    [identicos, tiposPadrao],
+    () =>
+      identicos
+        .filter((i) => (resolucoes.get(i.existente.id) ?? "manter") === "manter" && tiposPadrao.some((t) => !i.existente.tipos.includes(t)))
+        .map((i) => i.existente.id),
+    [identicos, tiposPadrao, resolucoes],
   );
   const substituirCount = useMemo(
-    () => divergentes.filter((d) => (resolucoes.get(d.existente.id) ?? "manter") === "substituir").length,
+    () => divergentes.filter((d) => resolucoes.get(d.existente.id) === "substituir").length,
     [divergentes, resolucoes],
   );
-  // Itens que de fato vão para o payload (não-conflito + divergentes marcados "substituir").
+  const compartilharCount = useMemo(
+    () =>
+      identicos.filter((i) => resolucoes.get(i.existente.id) === "compartilhar").length +
+      divergentes.filter((d) => resolucoes.get(d.existente.id) === "compartilhar").length,
+    [identicos, divergentes, resolucoes],
+  );
+  // Divergente marcado "Compartilhar" mas ainda com dados diferentes → trava o envio.
+  const compartilharInvalido = divergentes.some((d) => resolucoes.get(d.existente.id) === "compartilhar" && !conflitoIgual(d));
+  // Itens que de fato vão para o payload (não-conflito + divergentes "substituir").
   const importaveis = preview ? preview.itens.length - identicos.length - (divergentes.length - substituirCount) : 0;
 
   async function importar() {
@@ -223,29 +262,45 @@ export function CatalogoView({
     setEnviando(true);
     setProgresso(0);
     setErroImport(null);
+    const jsonH = { "Content-Type": "application/json" };
     try {
+      // Divergentes-compartilhar: grava a descrição/unidade ACORDADA no item EXISTENTE.
+      for (const d of divergentes) {
+        if (resolucaoDe(d.existente.id) !== "compartilhar") continue;
+        const v = valoresConflito(d);
+        if (v.exDesc !== d.existente.descricao || (v.exUnid.trim() || null) !== (d.existente.unidade ?? null))
+          await fetch(`/api/catalogo/item/${d.existente.id}`, { method: "PATCH", headers: jsonH, body: JSON.stringify({ descricao: v.exDesc.trim(), unidade: v.exUnid.trim() || null }) });
+      }
+      const compartilharItens = [
+        ...identicos.filter((i) => resolucaoDe(i.existente.id) === "compartilhar").map((i) => i.existente.id),
+        ...divergentes.filter((d) => resolucaoDe(d.existente.id) === "compartilhar").map((d) => d.existente.id),
+      ];
+      const excluirItens = divergentes.filter((d) => resolucaoDe(d.existente.id) === "substituir").map((d) => d.existente.id);
+      // Fora do payload: TODOS os idênticos + divergentes que não são "substituir".
       const identKs = new Set(identicos.map((i) => i.item._k));
-      const manterKs = new Set(
-        divergentes.filter((d) => (resolucoes.get(d.existente.id) ?? "manter") !== "substituir").map((d) => d.item._k),
-      );
-      const excluirItens = divergentes.filter((d) => resolucoes.get(d.existente.id) === "substituir").map((d) => d.existente.id);
-      const payload = preview.itens.filter((i) => !identKs.has(i._k) && !manterKs.has(i._k));
+      const naoSubst = new Set(divergentes.filter((d) => resolucaoDe(d.existente.id) !== "substituir").map((d) => d.item._k));
+      const substEdit = new Map(divergentes.filter((d) => resolucaoDe(d.existente.id) === "substituir").map((d) => [d.item._k, valoresConflito(d)] as const));
+      const payload = preview.itens
+        .filter((i) => !identKs.has(i._k) && !naoSubst.has(i._k))
+        .map((i) => {
+          const e = substEdit.get(i._k);
+          return e ? { ...i, descricao: e.novoDesc.trim(), unidade: e.novoUnid.trim() || null } : i;
+        });
 
       if (payload.length > 0) {
         await enviarCatalogoEmLotes(
-          { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens },
+          { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens, compartilharItens },
           payload.map((i) => ({ sequencial: i.sequencial, codigo: i.codigo, codigoRaw: i.codigoRaw, descricao: i.descricao, unidade: i.unidade })),
           (env, tot) => setProgresso(Math.round((env / tot) * 100)),
         );
+      } else if (compartilharItens.length > 0) {
+        // Sem itens novos — cria/usa o catálogo alvo e compartilha os existentes nele.
+        const alvo = preview.catalogoId ?? (await criarCatalogoVazio(nomeCat.trim() || "Catálogo", tiposPadrao));
+        await fetch("/api/catalogo/compartilhar", { method: "POST", headers: jsonH, body: JSON.stringify({ catalogoId: alvo, itemIds: compartilharItens }) });
       }
-      // Item idêntico importado com tipo novo → o EXISTENTE ganha os tipos (união).
-      if (mesclarIds.length > 0) {
-        await fetch("/api/catalogo/itens", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids: mesclarIds, tipos: tiposPadrao, modo: "mesclar" }),
-        });
-      }
+      // Idênticos "Manter" com tipo novo → o existente ganha os tipos (união).
+      if (mesclarIds.length > 0)
+        await fetch("/api/catalogo/itens", { method: "PATCH", headers: jsonH, body: JSON.stringify({ ids: mesclarIds, tipos: tiposPadrao, modo: "mesclar" }) });
       setEnviando(false);
       setPreview(null);
       router.refresh();
@@ -256,7 +311,8 @@ export function CatalogoView({
   }
 
   async function excluir(c: CatalogoResumo) {
-    if (!confirm(`Excluir o catálogo "${c.nome}" e seus ${c.totalItens} itens? Esta ação não pode ser desfeita.`)) return;
+    const n = itensPorCatalogo.get(c.id)?.length ?? c.totalItens;
+    if (!confirm(`Excluir o catálogo "${c.nome}" e seus ${n} ${n === 1 ? "item" : "itens"}? Itens compartilhados com outros catálogos são preservados. Esta ação não pode ser desfeita.`)) return;
     await fetch(`/api/catalogo/${c.id}`, { method: "DELETE" });
     if (abertoId === c.id) setAbertoId(null);
     router.refresh();
@@ -348,6 +404,25 @@ export function CatalogoView({
     if (!confirm(`Excluir o item ${item.codigoRaw ?? item.codigo}? Esta ação não pode ser desfeita.`)) return;
     setSalvandoItem(true);
     await fetch(`/api/catalogo/item/${item.id}`, { method: "DELETE" });
+    setSalvandoItem(false);
+    setPainelItem(null);
+    router.refresh();
+  }
+
+  // Catálogos em que um item está (origem + compartilhados), com nome — para o detalhe.
+  const catalogosDoItem = (item: CatalogoItemRow) =>
+    membrosDoItem(item.catalogoId, item.catalogosExtra).map((id) => ({ id, nome: nomePorCatalogo.get(id) ?? `#${id}`, origem: id === item.catalogoId }));
+
+  // Remove o item de UM catálogo (desfaz o compartilhamento); permanece nos demais.
+  async function removerDoCatalogo(item: CatalogoItemRow, catalogoId: number) {
+    const nome = nomePorCatalogo.get(catalogoId) ?? `#${catalogoId}`;
+    if (!confirm(`Remover o item ${item.codigoRaw ?? item.codigo} do catálogo "${nome}"? Ele permanece nos demais catálogos em que está.`)) return;
+    setSalvandoItem(true);
+    await fetch(`/api/catalogo/item/${item.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ catalogoId }),
+    });
     setSalvandoItem(false);
     setPainelItem(null);
     router.refresh();
@@ -463,7 +538,11 @@ export function CatalogoView({
   ];
 
   const podeImportar =
-    preview != null && !preview.verificando && nomeCat.trim().length > 0 && (importaveis > 0 || mesclarIds.length > 0);
+    preview != null &&
+    !preview.verificando &&
+    nomeCat.trim().length > 0 &&
+    !compartilharInvalido &&
+    (importaveis > 0 || mesclarIds.length > 0 || compartilharCount > 0);
 
   // Detalhe/edição de um item existente (lateral). O editor também exclui.
   const detalheItem = (item: CatalogoItemRow) => (
@@ -473,8 +552,10 @@ export function CatalogoView({
       podeEditar={podeEditar}
       salvando={salvandoItem}
       erro={erroItem}
+      catalogos={catalogosDoItem(item)}
       onSalvar={(campos) => salvarItem(item, campos)}
       onExcluir={podeEditar ? () => excluirItem(item) : undefined}
+      onRemoverCatalogo={podeEditar ? (cid) => removerDoCatalogo(item, cid) : undefined}
     />
   );
 
@@ -577,7 +658,10 @@ export function CatalogoView({
                         {c.nome}
                       </h3>
                       <p className="mt-0.5 text-xs text-muted">
-                        {c.totalItens === 1 ? "1 item" : `${c.totalItens} itens`}
+                        {(() => {
+                          const n = itensPorCatalogo.get(c.id)?.length ?? c.totalItens;
+                          return n === 1 ? "1 item" : `${n} itens`;
+                        })()}
                         {c.atualizadoEm ? ` · ${dataBR(c.atualizadoEm)}` : ""}
                       </p>
                     </div>
@@ -729,9 +813,11 @@ export function CatalogoView({
                 <Button onClick={importar} disabled={!podeImportar}>
                   {importaveis > 0
                     ? `Importar ${importaveis} ${importaveis === 1 ? "item" : "itens"}`
-                    : mesclarIds.length > 0
-                      ? "Aplicar tipos"
-                      : "Importar"}
+                    : compartilharCount > 0
+                      ? `Compartilhar ${compartilharCount} ${compartilharCount === 1 ? "item" : "itens"}`
+                      : mesclarIds.length > 0
+                        ? "Aplicar tipos"
+                        : "Importar"}
                 </Button>
               </div>
             )
@@ -768,50 +854,109 @@ export function CatalogoView({
               </Callout>
             )}
             {identicos.length > 0 && (
-              <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
-                {identicos.length} {identicos.length === 1 ? "item idêntico já cadastrado" : "itens idênticos já cadastrados"} em outro catálogo — não {identicos.length === 1 ? "será importado" : "serão importados"}
-                {mesclarIds.length > 0
-                  ? `; os tipos foram somados ao item existente em ${mesclarIds.length} ${mesclarIds.length === 1 ? "dele" : "deles"}`
-                  : ""}
-                .
-              </Callout>
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[13.5px] font-bold text-text">Itens idênticos ({identicos.length})</p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      Já cadastrados (mesmo código, descrição e unidade) em outro catálogo. <strong>Manter</strong> = não importa (só
+                      soma os tipos ao existente); <strong>Compartilhar</strong> = o MESMO item nos dois catálogos.
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      className="rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent-soft"
+                      onClick={() => setResolucoes((m) => { const n = new Map(m); for (const i of identicos) n.set(i.existente.id, "compartilhar"); return n; })}
+                    >
+                      Compartilhar todos
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface"
+                      onClick={() => setResolucoes((m) => { const n = new Map(m); for (const i of identicos) n.set(i.existente.id, "manter"); return n; })}
+                    >
+                      Manter todos
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {identicos.map(({ item, existente }) => (
+                    <div key={existente.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-surface p-2.5">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</span>
+                        <span className="ml-2 text-xs text-muted">· {existente.catalogoNome}</span>
+                        <p className="truncate text-[12.5px] text-text-2" title={item.descricao}>{item.descricao}</p>
+                      </div>
+                      <Segmented<Resolucao>
+                        value={resolucaoDe(existente.id) === "compartilhar" ? "compartilhar" : "manter"}
+                        onChange={(v) => setResolucoes((m) => new Map(m).set(existente.id, v))}
+                        options={[
+                          { value: "manter", label: "Manter" },
+                          { value: "compartilhar", label: "Compartilhar" },
+                        ]}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             {divergentes.length > 0 && (
               <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
                 <div>
                   <p className="text-[13.5px] font-bold text-text">Conflitos a resolver ({divergentes.length})</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    Mesmo código, dados diferentes. Escolha <strong>manter</strong> o item já cadastrado (não importa este) ou{" "}
-                    <strong>substituir</strong> (exclui o existente e importa este).
+                    Mesmo código, dados diferentes. <strong>Manter</strong> (não importa este) · <strong>Substituir</strong> (exclui o
+                    existente e importa este) · <strong>Compartilhar</strong> (o mesmo item nos dois — <em>edite os dois lados para
+                    ficarem iguais</em>).
                   </p>
                 </div>
-                {divergentes.map(({ item, existente }) => (
-                  <div key={existente.id} className="rounded-card border border-border bg-surface p-3">
-                    <div className="mb-2 font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-control border border-border-2 p-2.5">
-                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Novo (do arquivo)</p>
-                        <p className="text-[13px] leading-snug text-text">{item.descricao}</p>
-                        <p className="mt-1 text-xs text-muted">Unidade: {item.unidade ?? "—"}</p>
+                {divergentes.map((d) => {
+                  const { item, existente } = d;
+                  const v = valoresConflito(d);
+                  const igual = conflitoIgual(d);
+                  const r = resolucaoDe(existente.id);
+                  const setE = (patch: Partial<EdicaoConflito>) => setEdicoes((m) => new Map(m).set(existente.id, { ...v, ...patch }));
+                  return (
+                    <div key={existente.id} className="rounded-card border border-border bg-surface p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</span>
+                        <Badge tone={igual ? "emerald" : "amber"}>{igual ? "iguais" : "diferentes"}</Badge>
                       </div>
-                      <div className="rounded-control border border-border-2 p-2.5">
-                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Existente · {existente.catalogoNome}</p>
-                        <p className="text-[13px] leading-snug text-text">{existente.descricao}</p>
-                        <p className="mt-1 text-xs text-muted">Unidade: {existente.unidade ?? "—"}</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2 rounded-control border border-border-2 p-2.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Novo (do arquivo)</p>
+                          <TextArea label="Descrição" value={v.novoDesc} rows={2} onChange={(e) => setE({ novoDesc: e.target.value })} />
+                          <TextField label="Unidade" value={v.novoUnid} onChange={(e) => setE({ novoUnid: e.target.value })} />
+                        </div>
+                        <div className="space-y-2 rounded-control border border-border-2 p-2.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Existente · {existente.catalogoNome}</p>
+                          <TextArea label="Descrição" value={v.exDesc} rows={2} onChange={(e) => setE({ exDesc: e.target.value })} />
+                          <TextField label="Unidade" value={v.exUnid} onChange={(e) => setE({ exUnid: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Segmented<Resolucao>
+                          value={r}
+                          onChange={(val) => setResolucoes((m) => new Map(m).set(existente.id, val))}
+                          options={[
+                            { value: "manter", label: "Manter existente" },
+                            { value: "substituir", label: "Substituir" },
+                            { value: "compartilhar", label: "Compartilhar" },
+                          ]}
+                        />
+                        {r === "compartilhar" && !igual && (
+                          <span className="text-xs font-medium" style={{ color: "var(--warn)" }}>
+                            Edite os dois lados para ficarem iguais.
+                          </span>
+                        )}
+                        {r === "compartilhar" && igual && (
+                          <span className="text-xs text-muted">Será o mesmo item nos dois catálogos.</span>
+                        )}
                       </div>
                     </div>
-                    <div className="mt-3">
-                      <Segmented<Resolucao>
-                        value={resolucoes.get(existente.id) ?? "manter"}
-                        onChange={(v) => setResolucoes((m) => new Map(m).set(existente.id, v))}
-                        options={[
-                          { value: "manter", label: "Manter existente" },
-                          { value: "substituir", label: "Substituir" },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

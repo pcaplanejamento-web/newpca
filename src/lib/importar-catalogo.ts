@@ -58,6 +58,7 @@ export type CatalogoMeta = {
   nome: string;
   tiposPadrao: string[];
   excluirItens?: number[]; // ids de itens de OUTROS catálogos a remover (conflitos "substituir")
+  compartilharItens?: number[]; // ids de itens EXISTENTES (idênticos) a compartilhar neste catálogo
 };
 
 /** Cria um catálogo VAZIO (manual) — só nome + tipos. Devolve o id. */
@@ -80,6 +81,7 @@ export async function enviarCatalogoEmLotes(
     totalItens: total,
     rows: itens.slice(0, LOTE),
     excluirItens: meta.excluirItens ?? [], // resolvidos só no 1º lote (libera os códigos)
+    compartilharItens: meta.compartilharItens ?? [], // idênticos compartilhados no destino
   });
   const catalogoId = Number(j.catalogoId);
   onLote?.(Math.min(LOTE, total), total);

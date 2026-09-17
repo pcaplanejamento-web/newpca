@@ -38,6 +38,8 @@ const startCatalogoSchema = z.object({
   totalItens: z.number().int().min(0),
   rows: z.array(catalogoItemImportSchema).min(1).max(MAX_ROWS),
   excluirItens: z.array(z.number().int().positive()).max(20000).default([]),
+  // Itens EXISTENTES (idênticos) a COMPARTILHAR neste catálogo — o mesmo item nos dois.
+  compartilharItens: z.array(z.number().int().positive()).max(20000).default([]),
 });
 
 // Lotes seguintes de um envio já iniciado.
@@ -127,3 +129,14 @@ export const patchItemSchema = z
     message: "Nada para atualizar.",
   });
 export type PatchItemPayload = z.infer<typeof patchItemSchema>;
+
+// Remover um item de UM catálogo (desfaz o compartilhamento) — corpo do DELETE do item.
+export const removerDoCatalogoSchema = z.object({ catalogoId: z.number().int().positive() });
+export type RemoverDoCatalogoPayload = z.infer<typeof removerDoCatalogoSchema>;
+
+// Compartilhar itens EXISTENTES (idênticos) num catálogo — o mesmo item nos dois, sem duplicar.
+export const compartilharItensSchema = z.object({
+  catalogoId: z.number().int().positive(),
+  itemIds: z.array(z.number().int().positive()).min(1).max(20000),
+});
+export type CompartilharItensPayload = z.infer<typeof compartilharItensSchema>;
