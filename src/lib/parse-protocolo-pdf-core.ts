@@ -1,6 +1,6 @@
 import { parseNumberBR } from "./normalize.ts";
-import { anoPcaDoTexto, type Assinatura, buscar, extrairAssinaturas, extrairCabecalho } from "./parse-dfd-comum.ts";
-import { linhasDeTexto, type PdfItem } from "./parse-dfd-pdf-core.ts";
+import { anoPcaDoTexto, type Assinatura, buscar, extrairAssinaturas, extrairCabecalho, norm } from "./parse-dfd-comum.ts";
+import { agruparLinhas, linhasDeTexto, normalizar, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 /**
  * Núcleo PURO do parser de PROTOCOLO em PDF (o "processo" que empacota vários
@@ -46,13 +46,15 @@ export type ProtocoloIndex = {
   dfds: DfdIndexado[];
 };
 
-/** Texto (linhas reconstruídas) de UMA página — a entrada barata do índice. */
-export type PaginaTexto = { page: number; lines: string[] };
+/** Texto (linhas reconstruídas) de UMA página — a entrada barata do índice. Os `items`
+ * (geometria) só são preenchidos na página da CAPA (1 pág) → extração coluna-aware dos
+ * campos multi-linha, sem guardar a geometria das demais páginas (memória O(nº DFDs)). */
+export type PaginaTexto = { page: number; lines: string[]; items?: PdfItem[] };
 
 const RE_NUM_DFD = /N[úu]mero\s+DFD\s*:?\s*(\d+)/i;
 
 /** A página é a CAPA DO PROCESSO? (tem "CAPA DO PROCESSO" ou "Número Processo"). */
-function ehCapa(lines: string[]): boolean {
+export function ehCapa(lines: string[]): boolean {
   return lines.some((s) => /CAPA DO PROCESSO/i.test(s) || /N[úu]mero\s+Processo/i.test(s));
 }
 
@@ -72,7 +74,11 @@ export function paginasDeItens(items: PdfItem[]): PaginaTexto[] {
   }
   return [...porPagina.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([page, its]) => ({ page, lines: linhasDeTexto(its) }));
+    .map(([page, its]) => {
+      const lines = linhasDeTexto(its);
+      // Guarda a geometria SÓ da capa (extração coluna-aware dos campos multi-linha).
+      return ehCapa(lines) ? { page, lines, items: its } : { page, lines };
+    });
 }
 
 /**
@@ -93,17 +99,79 @@ export function classificarPdf(paginas: PaginaTexto[]): "protocolo" | "dfd" | "d
   return "desconhecido";
 }
 
-/** Metadados da capa a partir das linhas de texto da página inicial. */
-function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
+/** Campos da coluna esquerda da capa (rótulo → valor, multi-linha). */
+type CamposCapa = Partial<
+  Record<
+    "numero" | "interessado" | "endereco" | "email" | "cidade" | "solicitante" | "assunto" | "dataDocumento" | "observacao" | "usuario",
+    string
+  >
+>;
+// Rótulos da capa na COLUNA ESQUERDA (comparados via `norm` — sem acento, UPPER). Cada um
+// abre um campo cujo valor segue até o PRÓXIMO rótulo (podendo quebrar em várias linhas).
+const ROTULOS_CAPA: { re: RegExp; chave: keyof CamposCapa }[] = [
+  { re: /^NUMERO\s+PROCESSO\b/, chave: "numero" },
+  { re: /^INTERESSADO\b/, chave: "interessado" },
+  { re: /^ENDERECO\b/, chave: "endereco" },
+  { re: /^E-?MAIL\b/, chave: "email" },
+  { re: /^CIDADE\b/, chave: "cidade" },
+  { re: /^SOLICITANTE\b/, chave: "solicitante" },
+  { re: /^ASSUNTO\b/, chave: "assunto" },
+  { re: /^DATA\s+DOCUMENTO\b/, chave: "dataDocumento" },
+  { re: /^OBSERVACAO\b/, chave: "observacao" },
+  { re: /^USUARIO\b/, chave: "usuario" },
+];
+// Rótulo da coluna DIREITA embutido na mesma linha → corta o valor a partir dele.
+const CORTE_DIREITA_CAPA = /\s+(?:CPF\/CNPJ|TELEFONE|BAIRRO|DATA\s*\/?\s*HORA|\bId\b|VALOR|N[úu]mero do documento)\s*:.*/i;
+const RUIDO_CAPA = /(?:e-?assinatura|emitido em|p[áa]gina\s+\d+\s+de\s+\d+|centi\s*®)/i;
+
+/**
+ * Campos da capa POR GEOMETRIA (coluna-aware) — resolve valores MULTI-LINHA que quebram
+ * sem serem cortados por um rótulo da coluna direita numa linha própria no MEIO (ex.:
+ * `CPF/CNPJ:` entre `Interessado:` e sua continuação `E GESTÃO DE CUSTOS`). Uma linha da
+ * coluna ESQUERDA que começa com um rótulo conhecido abre um campo; uma linha esquerda SEM
+ * rótulo é continuação (wrap) do campo corrente; uma linha só da coluna DIREITA é pulada
+ * (não muda o campo). Rodapé/assinatura são descartados. Puro/testável.
+ */
+export function camposCapa(items: PdfItem[]): CamposCapa {
+  const linhas = agruparLinhas(normalizar(items));
+  if (linhas.length === 0) return {};
+  const minX = (l: (typeof linhas)[number]) => Math.min(...l.items.map((i) => i.x));
+  const baseLeft = Math.min(...linhas.map(minX));
+  const LIMIAR = baseLeft + 90; // coluna esquerda (rótulos + wraps indentados) vs direita
+  const campos: CamposCapa = {};
+  let cur: keyof CamposCapa | null = null;
+  for (const l of linhas) {
+    const texto = l.items.map((i) => i.str).join(" ").replace(/\s+/g, " ").trim();
+    if (!texto || RUIDO_CAPA.test(texto)) continue;
+    if (minX(l) > LIMIAR) continue; // linha só da coluna direita → não muda o campo
+    const rot = ROTULOS_CAPA.find((r) => r.re.test(norm(texto)));
+    if (rot) {
+      campos[rot.chave] = texto.replace(/^[^:]*:\s*/, "").split(CORTE_DIREITA_CAPA)[0].trim();
+      cur = rot.chave;
+    } else if (cur) {
+      campos[cur] = `${campos[cur] ? `${campos[cur]} ` : ""}${texto}`.trim();
+    }
+  }
+  return campos;
+}
+
+/**
+ * Metadados da capa. Com a GEOMETRIA da capa (`capaItems`), os campos que podem QUEBRAR em
+ * várias linhas (interessado/assunto/observacao) vêm do `camposCapa` coluna-aware (não
+ * truncam); sem geometria (caminho Node/testes) cai no regex de 1 linha. Os demais campos
+ * (numero/id/data/valor/documento/local) são de 1 linha → seguem no regex.
+ */
+function extrairCapa(lines: string[], capaItems: PdfItem[] | undefined, nomeArquivo: string): ProtocoloMeta {
+  const campos = capaItems ? camposCapa(capaItems) : null;
   const numero = buscar(lines, /N[úu]mero\s+Processo\s*:?\s*([\d/]+)/i);
   // "Id:" da capa (ex.: "...Data /Hora: Id: 2273524 22/06/2026..."); ≥3 dígitos p/
   // não casar rótulos soltos.
   const idExterno = buscar(lines, /\bId\s*:\s*(\d{3,})/i);
   const data = buscar(lines, /(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)/);
-  const interessado = buscar(lines, /Interessado\s*:?\s*(.+?)\s+CPF\/CNPJ\s*:/i);
+  const interessado = campos?.interessado || buscar(lines, /Interessado\s*:?\s*(.+?)\s+CPF\/CNPJ\s*:/i);
   const documento = buscar(lines, /CPF\/CNPJ\s*:?\s*([\d./-]{11,})/i);
-  const assunto = buscar(lines, /Assunto\s*:?\s*(.+)$/i);
-  const observacao = buscar(lines, /Observa[çc][ãa]o\s*:?\s*(.+)$/i);
+  const assunto = campos?.assunto || buscar(lines, /Assunto\s*:?\s*(.+)$/i);
+  const observacao = campos?.observacao || buscar(lines, /Observa[çc][ãa]o\s*:?\s*(.+)$/i);
   // "Local repartição:" vem colado ao usuário (ex.: "luis.eduardo COMPRAS FMAS")
   // → remove o token de usuário ("nome.sobrenome") do início.
   const localBruto = buscar(lines, /Local\s+reparti[çc][ãa]o\s*:?\s*(.+)$/i);
@@ -113,7 +181,7 @@ function extrairCapa(lines: string[], nomeArquivo: string): ProtocoloMeta {
   const valorCapa = linhaValor ? parseNumberBR(linhaValor.match(/(\d[\d.]*,\d{2})/)?.[1] ?? null) : null;
   // Ano do PCA da capa (ex.: observação "...PCA DE 2027") — adivinha, o usuário confirma.
   const anoPca = anoPcaDoTexto(lines.join(" \n "));
-  return { numero, idExterno, anoPca, data, interessado, documento, assunto, valorCapa, observacao, localReparticao, nomeArquivo };
+  return { numero, idExterno, anoPca, data, interessado: interessado || null, documento, assunto: assunto || null, valorCapa, observacao: observacao || null, localReparticao, nomeArquivo };
 }
 
 /**
@@ -126,9 +194,11 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
   const comNum = paginas.map((p) => ({ ...p, numero: buscar(p.lines, RE_NUM_DFD) }));
 
   let capaLines: string[] = [];
+  let capaItems: PdfItem[] | undefined;
   for (const p of comNum) {
     if (p.numero == null && ehCapa(p.lines)) {
       capaLines = p.lines;
+      capaItems = p.items; // geometria da capa (para os campos multi-linha)
       break;
     }
   }
@@ -175,5 +245,5 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
     };
   });
 
-  return { protocolo: extrairCapa(capaLines, nomeArquivo), dfds };
+  return { protocolo: extrairCapa(capaLines, capaItems, nomeArquivo), dfds };
 }

@@ -20,6 +20,15 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Capa do protocolo: campos multi-linha (Interessado etc.) nunca truncados — corrigido
+✅ Ao importar um protocolo, o campo **Interessado** da capa vinha **VAZIO** quando o valor **quebrava em 2
+linhas** (a capa é um formulário de 2 colunas e o rótulo `CPF/CNPJ:` da direita caía numa linha própria ENTRE o
+rótulo e a continuação — o parser de 1 linha não casava). Observação/Assunto também truncavam no fim da 1ª linha.
+Agora `extrairCapa` usa o helper puro **`camposCapa`** (geometria só da CAPA, sem OOM): coluna-aware — linha
+esquerda com rótulo abre um campo, linha esquerda sem rótulo é continuação (wrap), linha só da direita é pulada —
+capturando o valor INTEIRO. Validado no `Protocolo 4.pdf` real (Interessado `…E GESTÃO DE CUSTOS`, Observação
+`…2027.` completos). Teste de regressão (capa com Interessado quebrado) em `tests/parse-protocolo-pdf.test.ts`.
+
 ### Integrações externas (tela do ADM) — Cloudflare captcha + monitoramento — entregue
 ✅ Nova tela **Integrações** (`/painel/integracoes`, admin; nav + atalho em Configurações → Mais) para conectar APIs externas. **Captcha Turnstile** (Cloudflare): liga/desliga pelo ADM, protege login e cadastro (widget só carrega quando ativo+configurado; servidor confere com **fail-open** para nunca travar o login por falha de infra). **Monitoramento** (Cloudflare): painel de métricas do Worker (requisições/erros/CPU, `recharts`) reusando os secrets `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` já existentes (mesmos do Armazenamento). **Segredos write-only cifrados** (AES-GCM, `cripto.ts`) com chave mestra `INTEGRACOES_CHAVE` (Worker Secret); nunca reexibidos. Config no blob `configuracoes` (chave `integracoes`, **sem migração**). **Google login** e **e-mail (Resend)** ficam como **"em breve"** (sem código morto). Tudo começa desligado (login inalterado). Setup em `docs/INTEGRACOES.md`.
 

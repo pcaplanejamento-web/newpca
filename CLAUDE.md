@@ -341,7 +341,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `dfds.protocoloId` nullable (FK `set null`).
   O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
   streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
-  com o cabeçalho; a geometria é descartada por página); (2) ao **Protocolar**, DFD a DFD: `parseDfdDoProtocolo`
+  com o cabeçalho; a geometria é descartada por página, **EXCETO a da CAPA** — guardada p/ a extração coluna-aware).
+  **Capa multi-linha (crítico):** os campos da capa (Interessado, Observação, Assunto) podem **quebrar em várias
+  linhas**, e a capa é um formulário de **2 COLUNAS** (o rótulo `CPF/CNPJ:` da direita pode cair numa linha própria
+  ENTRE o rótulo `Interessado:` e sua continuação). O `buscar` de 1 linha deixava o Interessado **VAZIO**. Agora
+  `extrairCapa` usa o helper puro **`camposCapa(items)`** (geometria da capa): agrupa por linha, uma linha da coluna
+  ESQUERDA que começa com rótulo conhecido (`norm`, sem acento) abre um campo, uma linha esquerda sem rótulo é
+  **continuação (wrap)**, e uma linha só da coluna DIREITA é **pulada** — capturando o valor INTEIRO. Sem geometria
+  (Node/testes) cai no regex de 1 linha. Validado no `Protocolo 4.pdf` real (Interessado/Observação completos). (2) ao **Protocolar**, DFD a DFD: `parseDfdDoProtocolo`
   (parse completo — matcher **O(n log n)**) → `faltasObrigatorias` → `enviarDfdEmLotes` (start-dfd/append) → descarta.
   Barra de **progresso** + **relatório final** (importados / bloqueados com motivo); **defeituoso nunca é
   protocolado**. `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em

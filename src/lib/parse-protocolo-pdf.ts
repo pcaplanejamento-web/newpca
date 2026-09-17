@@ -2,6 +2,7 @@ import { abrirPdf, type PdfDoc } from "./parse-dfd-pdf.ts";
 import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
 import {
   type DfdIndexado,
+  ehCapa,
   indexarProtocolo,
   type PaginaTexto,
   type ProtocoloIndex,
@@ -26,8 +27,10 @@ export async function indexarProtocoloPdf(file: File): Promise<{ index: Protocol
   const paginas: PaginaTexto[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const items = await doc.pageItems(p);
-    paginas.push({ page: p, lines: linhasDeTexto(items) });
-    // `items` (geometria) é descartado aqui — só o texto (leve) fica no índice.
+    const lines = linhasDeTexto(items);
+    // Geometria descartada por página (índice leve, memória O(nº DFDs)) — EXCETO a da CAPA,
+    // guardada p/ a extração coluna-aware dos campos multi-linha (Interessado etc.).
+    paginas.push(ehCapa(lines) ? { page: p, lines, items } : { page: p, lines });
   }
   return { index: indexarProtocolo(paginas, file.name), doc };
 }

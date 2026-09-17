@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
-import { classificarPdf, indexarProtocolo, type PaginaTexto } from "../src/lib/parse-protocolo-pdf-core.ts";
+import { classificarPdf, indexarProtocolo, type PaginaTexto, paginasDeItens } from "../src/lib/parse-protocolo-pdf-core.ts";
 
 // Índice LEVE do protocolo: recebe o texto por página (barato) e detecta a capa +
 // os DFDs (nº, páginas, cabeçalho) sem remontar tabelas. O parse completo por DFD
@@ -59,6 +59,26 @@ function protocoloItems(): PdfItem[] {
   ];
 }
 
+// Capa com valores que QUEBRAM em várias linhas (Interessado, Observação) e o rótulo da
+// COLUNA DIREITA (CPF/CNPJ:) numa linha PRÓPRIA no MEIO — o caso do Protocolo 4.pdf real,
+// onde o parser de 1 linha deixava o Interessado VAZIO. Exige geometria (via paginasDeItens).
+function protocoloWrapItems(): PdfItem[] {
+  return [
+    f(1, 190, 800, "CAPA DO PROCESSO 136836/2026"),
+    f(1, 38, 780, "Número Processo: 136836/2026 Data /Hora: Id: 2312764 27/08/2026 10:59:38"),
+    f(1, 38, 766, "Interessado: 1770434 - COORDENAÇÃO DE PLANEJAMENTO DAS CONTRATAÇÕES"),
+    f(1, 440, 760, "CPF/CNPJ:"), // coluna direita, linha própria ENTRE o rótulo e a continuação
+    f(1, 38, 754, "E GESTÃO DE CUSTOS"), // continuação (wrap) do Interessado
+    f(1, 38, 740, "Endereço: AVENIDA FLAMBOYANT, 2160"),
+    f(1, 38, 712, "Assunto: INCLUSÃO - PCA"),
+    f(1, 38, 698, "Data documento: Valor: 50,00 Número do documento:"),
+    f(1, 38, 684, "Observação: INCLUSÃO DAS DEMANDAS DE TIC ORIUNDAS DE DIVERSOS ÓRGÃOS DA ADMINISTRAÇÃO, NO PCA DO"),
+    f(1, 87, 674, "ANO DE 2027."), // continuação (wrap) da Observação
+    f(1, 38, 654, "Usuário: Local repartição: esdras.bueno TI - TECNOLOGIA DA INFORMAÇÃO"),
+    ...dfdNaPagina(2, "500"),
+  ];
+}
+
 /** Converte os trechos em texto por página (o que o navegador passa ao índice). */
 function paginasDe(items: PdfItem[]): PaginaTexto[] {
   const byPage = new Map<number, PdfItem[]>();
@@ -85,6 +105,23 @@ describe("indexarProtocolo (índice leve)", () => {
     assert.equal(idx.protocolo.observacao, "PCA 2027");
     assert.equal(idx.protocolo.localReparticao, "SME EDUCACAO");
     assert.equal(idx.protocolo.nomeArquivo, "proto.pdf");
+  });
+
+  it("capa: valores MULTI-LINHA (Interessado/Observação) vêm COMPLETOS (coluna-aware)", () => {
+    const idx = indexarProtocolo(paginasDeItens(protocoloWrapItems()), "proto-wrap.pdf");
+    const c = idx.protocolo;
+    // Interessado quebrava em 2 linhas com CPF/CNPJ: no meio → antes vinha VAZIO.
+    assert.equal(c.interessado, "1770434 - COORDENAÇÃO DE PLANEJAMENTO DAS CONTRATAÇÕES E GESTÃO DE CUSTOS");
+    assert.ok(c.interessado?.includes("E GESTÃO DE CUSTOS")); // a continuação que sumia
+    // Observação também quebra → completa até "2027.".
+    assert.equal(
+      c.observacao,
+      "INCLUSÃO DAS DEMANDAS DE TIC ORIUNDAS DE DIVERSOS ÓRGÃOS DA ADMINISTRAÇÃO, NO PCA DO ANO DE 2027.",
+    );
+    assert.equal(c.numero, "136836/2026");
+    assert.equal(c.idExterno, "2312764");
+    assert.equal(c.assunto, "INCLUSÃO - PCA");
+    assert.equal(c.valorCapa, 50);
   });
 
   it("detecta os DFDs por 'Número DFD' (páginas consecutivas = 1 DFD) + cabeçalho", () => {
