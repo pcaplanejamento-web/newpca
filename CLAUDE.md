@@ -50,6 +50,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
   sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
+- **Auditoria / histórico de alterações (de ponta a ponta, migração `0026`):** tabela **`auditoria`** APPEND-ONLY —
+  **quem** (`usuario_id` + snapshot `usuario_nome`/`usuario_email`, sobrevive à exclusão via FK `set null`), **o quê**
+  (`acao` criar/editar/excluir/importar/protocolar/login/…; `entidade` + `entidade_id`; diff `antes`/`depois` JSON +
+  `resumo` legível) e **quando** (`criado_em`). Núcleo puro/testável **`auditoria-core.ts`** (`diffCampos`, rótulos
+  `ROTULO_ACAO`/`ROTULO_ENTIDADE`); acesso ao D1 em **`auditoria.ts`** (`registrarAuditoria` **BEST-EFFORT — nunca lança**;
+  `historicoDe`/`listarAuditoria`). **Instrumentado em TODOS os pontos de escrita**, no nível da ROTA (onde o ator
+  `exigirX().u` é conhecido): DFD (import/edição de campos/**itens**/exclusão/vínculo), protocolo, catálogo (+itens/tipos),
+  PCA, planilha (`/api/upload`), protocolos legado, admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
+  **usuários** (papel/status = alto valor), config (aparência/avaliação/integrações — só o FATO, **nunca** segredos/senha)
+  e auth (login/logout/cadastro/perfil/senha). Nas edições, o "antes" vem dos `get*` já usados na rota (diff por campo).
+  **Consulta:** componente **`Historico`** (timeline por ação/ator/data + diff expandível) usado por entidade (botão
+  **"Histórico"** no banner do DFD → `GET /api/dfd/[id]/historico`, escopo por unidade) e na tela ADM global
+  **`/painel/auditoria`** (`AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros entidade/ação + paginação). Nav
+  "Auditoria" (`IconClock`, admin). A tabela aparece no `/painel/armazenamento`.
 
 ## Autenticação e autorização
 - Criptografia pura em **`src/lib/password.ts`** (Web Crypto; sem deps de request/DB —
@@ -368,17 +382,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ativa`): no protocolo, o **DFD aberto** fica marcado na tabela de DFDs; no DFD, o **item aberto** fica marcado na
   tabela da Seção 4 — os dados da direita SEMPRE representam a seleção marcada à esquerda. Trocar de DFD/fechar zera o
   painel. `DfdView`/`DfdConferir` propagam `onItemClick(idx)` + `itemAtivo`.
-- **Item EDITÁVEL (importação) + cadeado (gravado):** o `ItemDetalhe` ganhou `editavel`+`onChange(patch)` — quando
-  editável, os campos **Código/Descrição/Unidade/Quantidade/Valor unitário/Valor total** viram inputs do DS
-  (`TextField`/`cellCls`; numéricos com rascunho local + `parseNumberBR`); a edição escreve o item de volta e recomputa
-  o **valorTotal do DFD** (Σ) via **`editarItemDfd`** (puro, `dfd-tratamento`). Na **importação** (avulso `DfdUploadForm`
-  e protocolo `ProtocoloUploadForm`) o painel é sempre editável e as edições fluem no envio (`enviarDfdEmLotes`). No
-  **gravado** (`DfdsView`), o painel do item tem um **cadeado PRÓPRIO** (`itemTrancado`, `Modal.lateral.acoesCabecalho`,
-  ícones `IconLock`/`IconLockOpen`) começando TRAVADO — mesma lógica de DFD/protocolo; destravar (confirmação) → editar
-  → **"Salvar alterações"** (rodapé do painel) faz `PATCH /api/dfd/[id]` com `{itens}` → **`reescreverDfdItens`** (`dfd.ts`,
-  apaga+reinsere em `db.batch` + recomputa `valorTotal`/`totalItens`). Só **editor** vê o cadeado; escopo por unidade e
-  regra `valorUnitario>0` no servidor (`editarDfdSchema` ganhou `itens`). `ItemDetalhe` é **keyado por índice** para o
-  rascunho numérico reiniciar ao trocar de item.
+- **Item EDITÁVEL com cadeado POR CAMPO + bloqueio "igual ao catálogo":** o `ItemDetalhe` (`editavel`+`onChange(patch)`)
+  tem **um cadeado por campo** (`IconLock`/`IconLockOpen`, estado `abertos: Set<CampoK>` interno; reinicia por `key`).
+  Cada campo começa só-leitura; destravar vira input do DS (`cellCls`; numéricos com rascunho local + `parseNumberBR`; a
+  **Descrição** usa `AutoTextarea` — altura = `scrollHeight`, mostra o texto INTEIRO, sem cortar). **Um campo IGUAL ao
+  catálogo NÃO pode ser alterado** (`toast.error`): Código (chave do match), Descrição (`!conf.divergDescricao`), Unidade
+  (`!conf.divergUnidade`); Quantidade/Valores não têm equivalente → sempre livres; item não catalogado → tudo livre.
+  Vale na **importação E no gravado** (os hosts passam `editavel`+`conformidade`). A edição recomputa o **valorTotal do
+  DFD** (Σ) via `editarItemDfd`. No **gravado** (`DfdsView`), o `ItemDetalhe` avisa quando **algum campo está aberto**
+  (`onEditandoChange`) e mostra **"Salvar alterações"** no rodapé → `PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`
+  (apaga+reinsere + recomputa total); ao salvar, o painel remonta (nonce) e re-trava. Só **editor**; escopo por unidade e
+  `valorUnitario>0` no servidor.
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os

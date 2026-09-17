@@ -333,6 +333,23 @@ página **sem número** (descrição ocupa a página inteira) = continuação in
 real: **18 DFDs, 329 itens, 0 truncadas, 0 vazamentos**. Testes de regressão (same-page + **cross-page**) em
 `tests/parse-dfd-pdf.test.ts`.
 
+### Auditoria / histórico de alterações (de ponta a ponta) — entregue
+✅ Log APPEND-ONLY de **todas** as mutações do sistema (migração `0026`, tabela `auditoria`): **quem** (com snapshot do
+nome/e-mail, sobrevive à exclusão), **o quê** (ação + entidade + diff antes→depois) e **quando**. Núcleo puro
+`auditoria-core.ts` (`diffCampos`/rótulos) + acesso ao D1 `auditoria.ts` (`registrarAuditoria` best-effort, nunca
+quebra a operação). **Instrumentado em TODAS as rotas de escrita**: DFD (import/edição/itens/exclusão/vínculo),
+protocolo, catálogo, PCA, planilha, protocolos legado, RBAC (grupos/permissões/órgãos/unidades), **usuários**
+(papel/status), config (aparência/avaliação/integrações — só o fato, nunca segredos/senha) e auth
+(login/logout/cadastro/perfil/senha). **Consulta:** componente `Historico` (timeline com diff) — botão "Histórico" no
+banner do DFD (`/api/dfd/[id]/historico`) e tela ADM global **`/painel/auditoria`** (`AuditoriaAdmin`, filtros +
+paginação). Testes de `diffCampos` + da migração (FK set null preserva o snapshot).
+
+### Painel do item: cadeado POR CAMPO + bloqueio "igual ao catálogo" + descrição inteira — entregue
+✅ Cada campo do item tem **cadeado próprio** (destravar para editar); um campo **igual ao catálogo** (Código/Descrição/
+Unidade não divergentes) **não pode ser alterado** (aviso), protegendo o que já está conforme — só o divergente é
+editável (Quantidade/Valores sempre livres). Vale na importação e no gravado. A **Descrição** editável agora **cresce
+com o conteúdo** (`AutoTextarea`, altura = scrollHeight) e mostra o texto **inteiro, sem cortar**.
+
 ### Item do DFD editável na importação + cadeado no gravado — entregue
 ✅ Os campos do item (**Código, Descrição, Unidade, Quantidade, Valor unitário, Valor total**) agora são editáveis no
 painel do item (`ItemDetalhe` ganhou `editavel`+`onChange`; inputs do DS, numéricos com `parseNumberBR`). Na

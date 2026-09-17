@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { LinhaAuditoria } from "@/lib/auditoria";
 import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
@@ -27,7 +28,8 @@ import { DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconClipboard, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
+import { Historico } from "./Historico";
+import { IconAlert, IconClipboard, IconClock, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
@@ -124,8 +126,9 @@ export function DfdsView({
   const [itemEditando, setItemEditando] = useState(false);
   const [itemNonce, setItemNonce] = useState(0);
   const [salvandoDfd, setSalvandoDfd] = useState(false);
-  // Painel da DIREITA do DFD gravado: mensagens OU detalhe de um item + rolagem/destaque.
+  // Painel da DIREITA do DFD gravado: mensagens OU detalhe de um item OU histórico.
   const [painel, setPainel] = useState<PainelDfd | null>(null);
+  const [historicoDfd, setHistoricoDfd] = useState<LinhaAuditoria[] | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   // Conformidade dos itens do DFD aberto com o catálogo (conferida no servidor ao abrir).
   const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
@@ -146,6 +149,22 @@ export function DfdsView({
     });
     return () => ac.abort();
   }, [itensEdit, tipoEdit]);
+
+  // Busca o histórico do DFD ao abrir o painel "histórico".
+  useEffect(() => {
+    if (painel?.tipo !== "historico" || !dfdView) return;
+    let vivo = true;
+    setHistoricoDfd(null);
+    fetch(`/api/dfd/${dfdView.id}/historico`)
+      .then((r) => r.json() as Promise<{ ok?: boolean; historico?: LinhaAuditoria[] }>)
+      .then((j) => {
+        if (vivo) setHistoricoDfd(j.ok ? (j.historico ?? []) : []);
+      })
+      .catch(() => vivo && setHistoricoDfd([]));
+    return () => {
+      vivo = false;
+    };
+  }, [painel, dfdView]);
 
   async function verDfd(id: number) {
     setErro(null);
@@ -560,11 +579,19 @@ export function DfdsView({
   // Rodapé FIXO do banner do DFD: "Ver mensagens" + numeração à esquerda; ações de edição à direita.
   const dfdRodape = dfdView ? (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <BotaoVerMensagens
-        mensagens={mensagens}
-        aberto={painel?.tipo === "mensagens"}
-        onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <BotaoVerMensagens
+          mensagens={mensagens}
+          aberto={painel?.tipo === "mensagens"}
+          onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
+        />
+        <Button
+          variant="secondary"
+          onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
+        >
+          <IconClock className="h-4 w-4" /> Histórico
+        </Button>
+      </div>
       {podeEditar && !dfdTrancado && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-accent">Edição destravada — salva no banco.</span>
@@ -601,23 +628,29 @@ export function DfdsView({
   // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).
   const painelIdx = painel?.tipo === "item" ? painel.idx : -1;
   const painelItem = painelIdx >= 0 ? (dfdEdit?.itens[painelIdx] ?? null) : null;
-  const painelDireito = painelItem ? (
-    <ItemDetalhe
-      key={`${painelIdx}:${itemNonce}`}
-      item={painelItem}
-      conformidade={conformidade}
-      regras={regras}
-      tipo={dfdView?.tipo}
-      editavel={podeEditar}
-      onChange={(patch) => setDfdEdit((d) => (d ? editarItemDfd(d, painelIdx, patch) : d))}
-      onEditandoChange={setItemEditando}
-    />
-  ) : (
-    <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
-  );
-  const painelTitulo = painelItem
-    ? `Item ${painelItem.item ?? painelIdx + 1} — DFD ${dfdView?.numero ?? ""}`
-    : `Mensagens — DFD ${dfdView?.numero ?? ""}`;
+  const painelDireito =
+    painel?.tipo === "historico" ? (
+      <Historico entradas={historicoDfd ?? []} vazio={historicoDfd === null ? "Carregando…" : "Sem histórico deste DFD."} />
+    ) : painelItem ? (
+      <ItemDetalhe
+        key={`${painelIdx}:${itemNonce}`}
+        item={painelItem}
+        conformidade={conformidade}
+        regras={regras}
+        tipo={dfdView?.tipo}
+        editavel={podeEditar}
+        onChange={(patch) => setDfdEdit((d) => (d ? editarItemDfd(d, painelIdx, patch) : d))}
+        onEditandoChange={setItemEditando}
+      />
+    ) : (
+      <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
+    );
+  const painelTitulo =
+    painel?.tipo === "historico"
+      ? `Histórico — DFD ${dfdView?.numero ?? ""}`
+      : painelItem
+        ? `Item ${painelItem.item ?? painelIdx + 1} — DFD ${dfdView?.numero ?? ""}`
+        : `Mensagens — DFD ${dfdView?.numero ?? ""}`;
   // Rodapé do painel do item: salvar (aparece quando ALGUM campo está destravado; só editor).
   const painelRodape =
     painelItem && podeEditar && itemEditando ? (
