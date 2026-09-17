@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
-import { type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
+import { assinaturasDropsigner, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
 // coordenadas reais de DFD PDF.pdf: rótulo e valor em trechos separados, número
@@ -401,5 +401,52 @@ describe("parse-dfd-pdf-core", () => {
     assert.equal(d.itens[N - 1].item, N);
     assert.ok(d.itens.every((x) => x.valorUnitario === 2)); // cada fragmento no bucket certo
     assert.ok(Date.now() - t0 < 4000, "parse de DFD grande deve ser rápido");
+  });
+});
+
+// Formato C — assinatura Dropsigner (bloco inline na Seção 10, layout de 2 COLUNAS).
+// Coordenadas modeladas no Protocolo 4.pdf real (coluna direita x≈374; a marca d'água
+// da URL na margem x=586; linhas da coluna esquerda na MESMA y devem ser ignoradas).
+function blocoDropsigner(page: number): PdfItem[] {
+  return [
+    f(page, 38, 80, "10 - AUTORIZAÇÃO DEMANDA"),
+    f(page, 374, 73, "Assinado digitalmente por:"),
+    f(page, 38, 66, "Autorizo o início da formalização da demanda."), // esquerda, MESMA y do nome — ignorar
+    f(page, 374, 66, "ANDERSON FERREIRA DE MORAIS"), // NOME (coluna direita)
+    f(page, 374, 59, "CPF: ***.997.391-**"),
+    f(page, 239, 52, "ANDERSON FERREIRA DE MORAIS"), // Seção 9 (Gestor), coluna do meio — ignorar
+    f(page, 374, 52, "Data: 02/09/2026 09:58:56 -03:00"),
+    f(page, 586, 43, "Documento assinado no Dropsigner. Para validar acesse https://www.dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H."),
+    f(page, 38, 21, "Centi ® e-Assinatura: eefHdg58teX Emitido em 01/09/2026 por lidia.soares"),
+  ];
+}
+
+describe("assinaturasDropsigner (Formato C — ciente das 2 colunas)", () => {
+  it("extrai nome/CPF/data/código da coluna direita, ignorando a coluna esquerda", () => {
+    const ass = assinaturasDropsigner(blocoDropsigner(1));
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "ANDERSON FERREIRA DE MORAIS");
+    assert.equal(ass[0].eCpf, "***.997.391-**");
+    assert.equal(ass[0].data, "02/09/2026 09:58:56 -03:00");
+    assert.equal(ass[0].codigo, "T3B43-D54KH-QU7SZ-DYF7H");
+    assert.ok(ass[0].url.includes("dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H"));
+    assert.equal(ass[0].fonte, "dropsigner");
+  });
+
+  it("marca d'água repetida em VÁRIAS páginas → 1 assinatura (dedupe por nome+data)", () => {
+    // pág 2 só tem a marca d'água (continuação do DFD), sem novo bloco de assinatura.
+    const p2watermark = [f(2, 586, 43, "Documento assinado no Dropsigner. https://www.dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H.")];
+    const ass = assinaturasDropsigner([...blocoDropsigner(1), ...p2watermark]);
+    assert.equal(ass.length, 1);
+  });
+
+  it("sem marca d'água Dropsigner → [] (não confunde com o Formato B)", () => {
+    const semDrop = [
+      f(1, 38, 80, "10 - AUTORIZAÇÃO DEMANDA"),
+      f(1, 374, 73, "Assinado digitalmente por:"),
+      f(1, 374, 66, "ALGUEM SEM DROPSIGNER"),
+      f(1, 374, 59, "CPF: ***.111.222-**"),
+    ];
+    assert.deepEqual(assinaturasDropsigner(semDrop), []);
   });
 });

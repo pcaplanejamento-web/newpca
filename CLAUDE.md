@@ -199,8 +199,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
-  **DOIS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
-  `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`). O código pode ter caractere
+  **TRÊS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
+  `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
+  (Dropsigner/Lacuna Software): bloco **INLINE na Seção 10 (AUTORIZAÇÃO DEMANDA)** do próprio DFD, em layout de
+  **2 COLUNAS** (`Assinado digitalmente por:` → NOME → `CPF: <mascarado>` → `Data: … -03:00` na COLUNA DIREITA; a URL
+  `dropsigner.com/validate/<código>` vem na marca d'água da margem, repetida por página). Como o `agruparLinhas` junta
+  as 2 colunas de mesma `y`, o Dropsigner é extraído por **`assinaturasDropsigner(items)`** (`parse-dfd-pdf-core.ts`,
+  CIENTE DA COLUNA `x` — só páginas com a marca d'água; dedupe por nome+data), somado a `extrairAssinaturas` em
+  `parseDfdFromPdfItems` (cobre avulso E protocolo). Validado no Protocolo 4.pdf real (nome/CPF/data/código corretos).
+  O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas de um DFD podem vir em **VÁRIAS páginas** (formatos e páginas diferentes), sempre depois do DFD. No
   **protocolo** as páginas de assinatura são vistas só no ÍNDICE (o parse completo só lê `dfd.pages`) →
@@ -212,9 +219,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
   cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
-  autorizado → bloqueia. O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
+  autorizado → bloqueia. **Dropsigner é RECONHECIDA como válida** (decisão do produto): o match por nome vale só p/
+  A/B; se NÃO houver match A/B mas houver ≥1 `fonte:"dropsigner"`, o resultado é o status **`"dropsigner"`** — NÃO
+  bloqueia e não exige responsável (o assinante é o secretário/ordenador, CPF mascarado). Docs A/B seguem IDÊNTICOS
+  (só entra quando não casou A/B). O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
   a repartição), carregando os responsáveis por `carregarResponsaveis` (`src/lib/reparticoes.ts`). O `DfdView`
-  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) + o **solicitante** — o
+  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) — o card da **Dropsigner** vem em
+  **TONS DE AZUL** (`--info`) + `Badge` "Dropsigner" e o "Verificar autenticidade" aponta para o **link Dropsigner**
+  (`a.url = dropsigner.com/validate/<código>`), não a URL fixa — + o **solicitante** — o
   responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).

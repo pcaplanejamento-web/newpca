@@ -77,11 +77,15 @@ export function referenciasRenovacao(texto: string | null | undefined): {
 }
 
 /**
- * Uma assinatura lida das páginas que seguem cada DFD no PDF. Dois formatos:
+ * Uma assinatura lida do PDF do DFD. Três formatos:
  * - **certificado**: "Assinaturas Digitais (Certificado Digital)" → "Assinatura
  *   digital - Nome: … e-Assinatura: <código>";
  * - **sistema**: "Assinaturas Eletrônicas (Sistema)" → "Assinado digitalmente por
- *   NOME, portador do CPF: … utilizando o código: <código>".
+ *   NOME, portador do CPF: … utilizando o código: <código>";
+ * - **dropsigner**: Dropsigner (Lacuna Software) — bloco INLINE na Seção 10 (2 colunas):
+ *   "Assinado digitalmente por:" → NOME → "CPF: <mascarado>" → "Data: …"; o código vem
+ *   na URL `dropsigner.com/validate/<código>` (extraído em `assinaturasDropsigner`,
+ *   `parse-dfd-pdf-core.ts`, pois exige geometria). `url` guarda o link de validação.
  * O `codigo` é o verificador usado no site oficial; `data` é crua; `ip`/`usuario`/
  * `local` podem vir vazios (o formato "sistema" não os traz). Pode haver mais de
  * uma assinatura por página e em páginas diferentes, sempre após o DFD.
@@ -95,7 +99,7 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
-  fonte: "certificado" | "sistema";
+  fonte: "certificado" | "sistema" | "dropsigner";
 };
 
 export type DfdParseado = {
@@ -192,7 +196,10 @@ export function ehRuido(s: string): boolean {
     n.startsWith("ASSINADO DIGITALMENTE") ||
     n.includes("E-ASSINATURA") ||
     n.includes("UTILIZANDO O CODIGO") ||
-    n.includes("AUTENTICACAORELATORIOS")
+    n.includes("AUTENTICACAORELATORIOS") ||
+    // Marca d'água do Dropsigner (repetida por página) — capturada por `assinaturasDropsigner`.
+    n.includes("DOCUMENTO ASSINADO NO DROPSIGNER") ||
+    n.includes("DROPSIGNER.COM/VALIDATE")
   );
 }
 

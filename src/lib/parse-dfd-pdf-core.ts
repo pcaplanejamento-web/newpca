@@ -1,5 +1,6 @@
 import { parseNumberBR } from "./normalize.ts";
 import {
+  type Assinatura,
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
@@ -68,6 +69,64 @@ export function agruparLinhas(items: PdfItem[]): PdfLine[] {
  */
 export function linhasDeTexto(bruto: PdfItem[]): string[] {
   return agruparLinhas(normalizar(bruto)).map((l) => l.items.map((i) => i.str).join(" "));
+}
+
+// URL de validação do Dropsigner (Lacuna Software) — contém o CÓDIGO do documento.
+const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Za-z0-9-]+)/i;
+// Âncora do bloco de assinatura Dropsigner: "Assinado digitalmente por:" ISOLADO (com dois-pontos).
+// Difere do Formato B ("Assinado digitalmente por NOME, portador do CPF:…"), onde o nome vem na mesma linha.
+const RE_DROPSIGNER_ANCORA = /^assinado\s+digitalmente\s+por:?$/i;
+
+/**
+ * Formato C — assinatura **Dropsigner** (Lacuna Software), CIENTE DAS 2 COLUNAS. O bloco fica
+ * INLINE na Seção 10 (AUTORIZAÇÃO DEMANDA) do DFD, na COLUNA DIREITA: "Assinado digitalmente por:"
+ * → NOME → "CPF: ***.xxx.xxx-**" → "Data: dd/mm/aaaa hh:mm:ss -03:00"; a URL de validação (com o
+ * código) vem na marca d'água da margem, repetida por página. Como `agruparLinhas` junta as 2
+ * colunas de mesma `y`, a extração usa a GEOMETRIA (`x`): lê só a coluna do âncora. Só páginas
+ * COM a marca d'água Dropsigner são consideradas (não confunde com o Formato B). Puro/testável.
+ */
+export function assinaturasDropsigner(bruto: PdfItem[]): Assinatura[] {
+  const items = normalizar(bruto);
+  // Marca d'água por página → { url, código do documento }. Ausente ⇒ página não é Dropsigner.
+  const urlPorPagina = new Map<number, { url: string; codigo: string }>();
+  for (const it of items) {
+    const m = it.str.match(RE_DROPSIGNER_URL);
+    if (m && !urlPorPagina.has(it.page)) urlPorPagina.set(it.page, { url: m[0], codigo: m[1] });
+  }
+  if (urlPorPagina.size === 0) return [];
+
+  const out: Assinatura[] = [];
+  const vistos = new Set<string>();
+  for (const anc of items) {
+    if (!RE_DROPSIGNER_ANCORA.test(anc.str)) continue;
+    const u = urlPorPagina.get(anc.page);
+    if (!u) continue; // só páginas com a marca d'água Dropsigner (evita casar o Formato B)
+    // Coluna do âncora (x ≈ igual), linhas ABAIXO dentro da altura do bloco (~34pt).
+    const col = items.filter(
+      (i) => i.page === anc.page && i.x >= anc.x - 6 && i.x <= anc.x + 200 && i.y < anc.y && i.y >= anc.y - 34,
+    );
+    let nome = "";
+    let eCpf = "";
+    let data = "";
+    for (const l of agruparLinhas(col)) {
+      const t = l.items.map((i) => i.str).join(" ").trim();
+      const mCpf = t.match(/^CPF:\s*(.+)$/i);
+      const mData = t.match(/^Data:\s*(.+)$/i);
+      if (mCpf) {
+        if (!eCpf) eCpf = mCpf[1].trim();
+      } else if (mData) {
+        if (!data) data = mData[1].trim();
+      } else if (!nome && !/dropsigner|documento assinado/i.test(t)) {
+        nome = t;
+      }
+    }
+    if (!nome && !eCpf) continue; // bloco vazio → ignora
+    const chave = `${norm(nome)}|${data}`;
+    if (vistos.has(chave)) continue; // a marca d'água repete por página; o bloco em si, não
+    vistos.add(chave);
+    out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: u.codigo, url: u.url, fonte: "dropsigner" });
+  }
+  return out;
 }
 
 /**
@@ -468,6 +527,7 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     nomeArquivo,
     secoes,
     itens,
-    assinaturas: extrairAssinaturas(lineTexts),
+    // Formatos A/B (páginas de assinatura) + Formato C Dropsigner (inline, ciente das 2 colunas).
+    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsigner(bruto)],
   };
 }

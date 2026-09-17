@@ -406,7 +406,7 @@ export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
   valorEstimado?: number | null;
   valorTotal?: number | null;
   /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
-  assinatura?: { status: "ok" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
+  assinatura?: { status: "ok" | "dropsigner" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
 };
 
 /**
@@ -507,6 +507,7 @@ export function mensagensDfd(
   // Assinatura digital
   if (d.assinatura && nivelDe(regras, "dfd.assinatura", c) !== "ignorar") {
     if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
+    else if (d.assinatura.status === "dropsigner") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida via Dropsigner (Lacuna).", ancora: "assinatura" });
     else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
     else out.push({
       chave: "dfd.assinatura",

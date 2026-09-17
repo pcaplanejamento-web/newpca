@@ -249,15 +249,19 @@ export type Solicitante = {
  */
 export type ResultadoAssinatura =
   | { status: "ok"; tipo: "padrao" | "temporario"; assinatura: Assinatura; responsavel: Responsavel }
+  | { status: "dropsigner"; assinatura: Assinatura }
   | { status: "sem-assinatura" }
   | { status: "erro"; motivo: string };
 
 /**
  * Confere as assinaturas do DFD contra os responsáveis da repartição:
  * - sem assinatura → `erro` se PDF (exigeAssinatura), senão `sem-assinatura` (.xlsx);
- * - com assinatura mas sem responsável cadastrado → `erro` (bloqueia até cadastrar);
- * - vale se AO MENOS UMA assinatura casar (nome) com um **padrão**, ou com um
- *   **temporário** cujo período cobre a data da assinatura; senão → `erro`.
+ * - **A/B** (certificado/sistema): vale se AO MENOS UMA casar (nome) com um **padrão**, ou com
+ *   um **temporário** cujo período cobre a data; senão, com assinatura mas sem responsável
+ *   cadastrado → `erro`, e assinante não autorizado → `erro` (comportamento inalterado);
+ * - **Dropsigner** (Lacuna): RECONHECIDA como válida SEM match por nome (o assinante é o
+ *   secretário/ordenador, CPF mascarado) → `dropsigner` (não bloqueia). Só entra quando não
+ *   houve match A/B, então docs A/B seguem idênticos.
  */
 export function validarAssinatura(
   assinaturas: Assinatura[],
@@ -269,22 +273,31 @@ export function validarAssinatura(
       ? { status: "erro", motivo: "DFD sem assinatura digital — o PDF precisa vir assinado." }
       : { status: "sem-assinatura" };
   }
-  if (responsaveis.padroes.length === 0 && responsaveis.temporarios.length === 0) {
+  // Match por responsável — SÓ para os formatos A/B (Dropsigner não casa por nome).
+  const ab = assinaturas.filter((a) => a.fonte !== "dropsigner");
+  const temResponsavel = responsaveis.padroes.length > 0 || responsaveis.temporarios.length > 0;
+  if (temResponsavel) {
+    for (const a of ab) {
+      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
+      if (padrao) return { status: "ok", tipo: "padrao", assinatura: a, responsavel: padrao };
+    }
+    for (const a of ab) {
+      const iso = dataAssinaturaISO(a.data);
+      const temp = responsaveis.temporarios.find(
+        (t) => mesmoNome(t.nome, a.nome) && t.inicio && t.fim && t.inicio <= iso && iso <= t.fim,
+      );
+      if (temp) return { status: "ok", tipo: "temporario", assinatura: a, responsavel: temp };
+    }
+  }
+  // Dropsigner reconhecida (não exige responsável cadastrado nem match) — decisão do produto.
+  const drop = assinaturas.find((a) => a.fonte === "dropsigner");
+  if (drop) return { status: "dropsigner", assinatura: drop };
+  // Sem Dropsigner: mantém exatamente o fluxo A/B de hoje.
+  if (!temResponsavel) {
     return {
       status: "erro",
       motivo: "Repartição sem responsável por DFDs cadastrado — cadastre o responsável para conferir a assinatura.",
     };
-  }
-  for (const a of assinaturas) {
-    const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
-    if (padrao) return { status: "ok", tipo: "padrao", assinatura: a, responsavel: padrao };
-  }
-  for (const a of assinaturas) {
-    const iso = dataAssinaturaISO(a.data);
-    const temp = responsaveis.temporarios.find(
-      (t) => mesmoNome(t.nome, a.nome) && t.inicio && t.fim && t.inicio <= iso && iso <= t.fim,
-    );
-    if (temp) return { status: "ok", tipo: "temporario", assinatura: a, responsavel: temp };
   }
   return {
     status: "erro",

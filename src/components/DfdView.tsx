@@ -16,6 +16,7 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { valoresBatem } from "@/lib/normalize";
 import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
+import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 import { IconFile, IconShield } from "./icons";
 import { LinkExterno } from "./LinkExterno";
@@ -427,30 +428,57 @@ export function DfdView({
           )}
 
           <div className="space-y-3">
-            {dfd.assinaturas.lista.map((a, i) => (
-              <div key={`${a.codigo}-${i}`} className="rounded-card border border-border-2 p-4">
-                <div className="mb-2 text-xs font-semibold text-muted">
-                  {a.fonte === "sistema"
-                    ? "Assinatura Eletrônica (Sistema)"
-                    : "Assinatura Digital (Certificado Digital)"}
+            {dfd.assinaturas.lista.map((a, i) => {
+              // Dropsigner (Lacuna) — apresentado em TONS DE AZUL (--info) e rotulado.
+              const drop = a.fonte === "dropsigner";
+              return (
+                <div
+                  key={`${a.codigo}-${i}`}
+                  className={`rounded-card border p-4 ${drop ? "border-[color:var(--info)]" : "border-border-2"}`}
+                  style={drop ? { background: "color-mix(in srgb, var(--info) 7%, var(--surface))" } : undefined}
+                >
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
+                    {drop ? (
+                      <>
+                        <span style={{ color: "var(--info)" }}>Assinatura Dropsigner</span>
+                        <Badge tone="blue">Dropsigner</Badge>
+                      </>
+                    ) : (
+                      <span className="text-muted">
+                        {a.fonte === "sistema" ? "Assinatura Eletrônica (Sistema)" : "Assinatura Digital (Certificado Digital)"}
+                      </span>
+                    )}
+                  </div>
+                  <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+                    <Campo label="Assinante" valor={a.nome || "—"} span />
+                    <Campo label="CPF" valor={a.eCpf || "—"} />
+                    {!drop && <Campo label="Usuário" valor={a.usuario || "—"} />}
+                    <Campo label="Data/hora da assinatura" valor={a.data || "—"} />
+                    <Campo label="Código verificador" valor={a.codigo || "—"} mono />
+                  </dl>
+                  <div className="mt-3">
+                    <LinkExterno
+                      href={drop && a.url ? a.url : URL_VERIFICACAO}
+                      icon={<IconShield className="h-4 w-4" style={drop ? { color: "var(--info)" } : undefined} />}
+                    >
+                      Verificar autenticidade{drop ? " (Dropsigner)" : ""}
+                    </LinkExterno>
+                    <p className="mt-1.5 text-xs text-muted">
+                      {drop ? (
+                        <>
+                          Validação oficial no Dropsigner (Lacuna) pelo código{" "}
+                          <span className="font-mono">{a.codigo || "—"}</span>.
+                        </>
+                      ) : (
+                        <>
+                          Confira pelo código <span className="font-mono">{a.codigo || "—"}</span> no endereço acima.
+                        </>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-                  <Campo label="Assinante" valor={a.nome || "—"} span />
-                  <Campo label="CPF" valor={a.eCpf || "—"} />
-                  <Campo label="Usuário" valor={a.usuario || "—"} />
-                  <Campo label="Data/hora da assinatura" valor={a.data || "—"} />
-                  <Campo label="Código verificador" valor={a.codigo || "—"} mono />
-                </dl>
-                <div className="mt-3">
-                  <LinkExterno href={URL_VERIFICACAO} icon={<IconShield className="h-4 w-4" />}>
-                    Verificar autenticidade
-                  </LinkExterno>
-                  <p className="mt-1.5 text-xs text-muted">
-                    Confira pelo código <span className="font-mono">{a.codigo || "—"}</span> no endereço acima.
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

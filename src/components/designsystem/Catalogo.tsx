@@ -425,6 +425,18 @@ const DFD_DEMO = {
         url: "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios",
         fonte: "certificado" as const,
       },
+      {
+        // Formato C — Dropsigner (Lacuna): card em TONS DE AZUL + rótulo + link de validação.
+        nome: "ANDERSON FERREIRA DE MORAIS",
+        eCpf: "***.997.391-**",
+        usuario: "",
+        local: "",
+        data: "02/09/2026 09:58:56 -03:00",
+        ip: "",
+        codigo: "T3B43-D54KH-QU7SZ-DYF7H",
+        url: "https://www.dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H",
+        fonte: "dropsigner" as const,
+      },
     ],
     solicitante: {
       tipo: "padrao" as const,
