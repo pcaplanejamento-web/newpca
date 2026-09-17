@@ -14,7 +14,7 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
-import { DfdCabecalho, DfdView } from "@/components/DfdView";
+import { DfdCabecalho, DfdView, type DfdVisualItem } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
@@ -46,6 +46,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
+import { Historico } from "@/components/Historico";
+import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
@@ -106,14 +108,14 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 /** Demo do painel de item EDITÁVEL (importação/gravado destravado). */
 function ItemDetalheEditDemo() {
-  const [item, setItem] = useState({
+  const [item, setItem] = useState<DfdVisualItem>({
     item: 2,
     codigo: "5241937264",
     descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M",
     unidade: "DIAS",
-    quantidade: 20 as number | null,
-    valorUnitario: 8000 as number | null,
-    valorTotal: 160000 as number | null,
+    quantidade: 20,
+    valorUnitario: 8000,
+    valorTotal: 160000,
   });
   // Com conferência de catálogo: Código fica BLOQUEADO (igual ao catálogo); Descrição/Unidade
   // divergentes ficam destraváveis; Quantidade/Valores sempre livres.
@@ -127,6 +129,49 @@ function ItemDetalheEditDemo() {
     />
   );
 }
+
+// Trilha de auditoria de exemplo p/ o Historico (edição com diff, importação, login).
+const DEMO_HISTORICO: LinhaAuditoria[] = [
+  {
+    id: 3,
+    usuarioId: 1,
+    usuarioNome: "Ana Souza",
+    usuarioEmail: "ana@rioverde.go.gov.br",
+    acao: "editar",
+    entidade: "dfd_item",
+    entidadeId: 87,
+    resumo: "Item 2: descrição e unidade alteradas",
+    antes: JSON.stringify({ Descrição: "GUINDASTE HIDRAULICO", Unidade: "UN" }),
+    depois: JSON.stringify({ Descrição: "GUINDASTE HIDRÁULICO AUTOPROPELIDO", Unidade: "DIAS" }),
+    criadoEm: "2026-09-17 11:24:03",
+  },
+  {
+    id: 2,
+    usuarioId: 1,
+    usuarioNome: "Ana Souza",
+    usuarioEmail: "ana@rioverde.go.gov.br",
+    acao: "importar",
+    entidade: "dfd",
+    entidadeId: 87,
+    resumo: "DFD 000123/2026 importado (12 itens)",
+    antes: null,
+    depois: null,
+    criadoEm: "2026-09-17 11:20:41",
+  },
+  {
+    id: 1,
+    usuarioId: 4,
+    usuarioNome: "Carlos Lima",
+    usuarioEmail: "carlos@rioverde.go.gov.br",
+    acao: "login",
+    entidade: "sessao",
+    entidadeId: null,
+    resumo: "Entrou na plataforma",
+    antes: null,
+    depois: null,
+    criadoEm: "2026-09-17 08:03:12",
+  },
+];
 
 /** Demo do seletor de tipos de DFD (conjunto, controlado). */
 function TipoDfdPickerDemo() {
@@ -1079,6 +1124,12 @@ export function Catalogo() {
             }}
             podeEditar
           />
+        </div>
+      </Secao>
+
+      <Secao titulo="Histórico (trilha de auditoria — quem alterou, o que mudou de→para, quando; diff expansível)">
+        <div className="max-w-md">
+          <Historico entradas={DEMO_HISTORICO} />
         </div>
       </Secao>
 
