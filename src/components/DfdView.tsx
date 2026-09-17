@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { type ConferenciaItem, ROTULO_FALTA_CATALOGO } from "@/lib/catalogo-conferencia";
+import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
   corVeredictoCatalogo,
   ESTADO_ITEM_ROTULO,
@@ -206,11 +206,18 @@ export function DfdView({
         return v ? (v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme") : "";
       },
       render: (r) => {
-        const v = veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo);
+        const conf = conformidade.get(normalizarCodigo(r.codigo));
+        const v = veredictoLinhaCatalogo(conf, regras, dfdTipo);
         if (!v) return <span className="text-muted">—</span>;
         const cor = corVeredictoCatalogo(v.nivel);
+        // Detalhe ESPECÍFICO (descrição/unidade/tipo diferentes) no tooltip; o painel do item mostra por extenso.
+        const espec = conf ? rotulosDivergencia(conf).join(" · ") : "";
         return (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: cor }}>
+          <span
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+            style={{ color: cor }}
+            title={espec || undefined}
+          >
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />
             {v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme"}
           </span>

@@ -472,8 +472,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`src/lib/catalogo-conferencia.ts`** (sem `getDb`/JSX, como `reparticao-match`): `conferirItem(item, entry|null, dfdTipoCurto,
   candidatos)` → `ConferenciaItem { faltas, divergDescricao, divergUnidade, sugestao }`, com 3 faltas — **`naoCatalogado`**
   (código ausente → tenta **sugestão por semelhança**, `similaridade` = Jaccard de tokens, limiar `LIMIAR_SEMELHANCA`),
-  **`divergenteCatalogo`** (código existe, mas `norm(descrição)` e/ou `normUnidadeMedida(unidade)` diferem → sugere o canônico)
-  e **`tipoIncompativel`** (o `item.tipos` do catálogo RESTRINGE e não inclui o tipo do DFD; `tipos` vazio = sem restrição).
+  **`divergenteCatalogo`** (código existe, mas descrição e/ou unidade diferem — comparadas com **`normComparacao`**
+  (`parse-dfd-comum.ts`) que IGNORA **pontuação, espaços e tabs** dos dois lados (item do DFD e do catálogo); a unidade
+  envolve a saída de `normUnidadeMedida`; `norm` global NÃO muda) e **`tipoIncompativel`** (o `item.tipos` do catálogo
+  RESTRINGE e não inclui o tipo do DFD; `tipos` vazio = sem restrição). `rotulosDivergencia(c)` dá os rótulos ESPECÍFICOS
+  ("Descrição diferente do catálogo"/"Unidade de medida diferente do catálogo"/"Tipo…"/"Fora do catálogo") — usados no
+  painel do item e no tooltip da coluna.
   Reusa `normalizarCodigo`/`norm`/`normUnidadeMedida`/`tipoCurtoDfd`. **3 pontos CONFIGURÁVEIS** em `avaliacao-core`
   (`item.naoCatalogado`/`item.divergenteCatalogo`/`item.tipoIncompativel`, **`nivelPadrao: intermediario`** = ATENÇÃO, não
   bloqueia; o ADM eleva a `fundamental` ou baixa a `ignorar` — aparecem sozinhos na aba **Item** de `AvaliacaoAdmin`). **Config
@@ -486,8 +490,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ctx.conformidade` (pré-computada pelo chamador) — `veredictoLinhaCatalogo`/`bloqueantesCatalogo`/`algumCatalogoFundamental`
   resolvem pelos níveis do ADM. **Onde renderiza (ponto único = `DfdConferir`, cobre import avulso/protocolo/gravado):** o
   `DfdView` ganha a coluna **"Catálogo"** por item (Conforme/Fora do catálogo/Divergente/Tipo incompatível, cor pelo nível
-  efetivo) e o `ItemDetalhe` um bloco **"Conformidade com o catálogo"** com a **sugestão** canônica (código/descrição/unidade +
-  nome do catálogo) — **display-only** (os itens do DFD são só-leitura; NÃO altera o DFD oficial). As mensagens de catálogo entram
+  efetivo; **tooltip** com os rótulos específicos) e o `ItemDetalhe` um bloco **"Conformidade com o catálogo"**: os rótulos
+  ESPECÍFICOS do que diverge + a **referência do catálogo SEMPRE que o código casa** (mesmo conforme/tipo-incompatível) com
+  **todos os dados** do item do catálogo — código, unidade, **descrição (mesmo tamanho de fonte do item importado**, p/
+  comparar lado a lado) e os **tipos de DFD** (chips `Badge`) — **display-only** (os itens do DFD são só-leitura; NÃO altera o
+  DFD oficial). `sugestao` passou a ser construída sempre que há entrada casada (score 1); só é `null` sem código/sem semelhante. As mensagens de catálogo entram
   no painel `MensagensDfd` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
   conferem TODO o DFD (useEffect por `itens`); o protocolo confere **por DFD ao abrir** (lazy — a LISTA fica leve/escalável).
   **Portão do servidor (defesa em profundidade, só bloqueia se o ADM elevou a `fundamental`):** `POST /api/dfd` (`start-dfd` **e**

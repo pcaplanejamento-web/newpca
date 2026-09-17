@@ -1,7 +1,7 @@
 "use client";
 
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { type ConferenciaItem, ROTULO_FALTA_CATALOGO } from "@/lib/catalogo-conferencia";
+import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
   corVeredictoCatalogo,
   ESTADO_ITEM_ROTULO,
@@ -13,21 +13,10 @@ import {
 import { brl, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
 import { IconAlert } from "./icons";
-
-/** Descrição textual do problema de conformidade (o que diverge). */
-function textoProblemaCatalogo(c: ConferenciaItem, falta: string): string {
-  if (falta === "naoCatalogado") return "Código não encontrado no catálogo de referência.";
-  if (falta === "tipoIncompativel") return "O código existe no catálogo, mas não permite este tipo de DFD.";
-  const partes: string[] = [];
-  if (c.divergDescricao) partes.push("a descrição");
-  if (c.divergUnidade) partes.push("a unidade de medida");
-  return partes.length > 0
-    ? `Diverge do catálogo em ${partes.join(" e ")}.`
-    : "Diverge do catálogo de referência.";
-}
 
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
@@ -57,6 +46,8 @@ export function ItemDetalhe({
   const conf = conformidade?.get(normalizarCodigo(item.codigo));
   const veredicto = veredictoLinhaCatalogo(conf, regras, tipoCurtoDfd(tipo));
   const corCat = veredicto ? corVeredictoCatalogo(veredicto.nivel) : "";
+  // Rótulos ESPECÍFICOS (descrição/unidade/tipo diferentes) — aponta ONDE está o erro.
+  const divergencias = conf ? rotulosDivergencia(conf) : [];
 
   return (
     <div className="space-y-4">
@@ -95,25 +86,50 @@ export function ItemDetalhe({
               {veredicto.falta ? ROTULO_FALTA_CATALOGO[veredicto.falta] : "Conforme"}
             </span>
           </div>
-          {veredicto.falta && conf && (
-            <p className="text-xs text-muted">{textoProblemaCatalogo(conf, veredicto.falta)}</p>
+          {/* Aponta ONDE está o erro (descrição/unidade/tipo diferentes), não só "divergente". */}
+          {divergencias.length > 0 && (
+            <ul className="mb-1 space-y-1">
+              {divergencias.map((r) => (
+                <li key={r} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: corCat }}>
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: corCat }} />
+                  {r}
+                </li>
+              ))}
+            </ul>
           )}
           {conf?.sugestao && (
             <div className="mt-2 rounded-card border border-border-2 bg-surface-2 p-3">
               <div className="mb-2 text-xs font-semibold text-muted">
                 {conf.sugestao.score >= 1
-                  ? "Padrão do catálogo"
+                  ? "Item do catálogo (referência)"
                   : `Item semelhante no catálogo (${Math.round(conf.sugestao.score * 100)}%)`}
                 {` · ${conf.sugestao.catalogoNome}`}
               </div>
-              <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              {/* Mesma grade e MESMO tamanho de fonte do item importado (comparação lado a lado). */}
+              <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                 <Campo label="Código" valor={conf.sugestao.codigoRaw ?? conf.sugestao.codigo} mono />
                 <Campo label="Unidade" valor={conf.sugestao.unidade ?? "—"} />
                 <Campo label="Descrição" valor={conf.sugestao.descricao} span />
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted">Tipos de DFD</dt>
+                  <dd className="mt-1 flex flex-wrap gap-1.5">
+                    {conf.sugestao.tipos.length > 0 ? (
+                      conf.sugestao.tipos.map((t) => (
+                        <Badge key={t} tone="blue">
+                          {t}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-faint">Nenhum tipo definido (sem restrição).</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
-              <p className="mt-2 text-xs text-muted">
-                Sugestão de padronização (referência). O DFD oficial não é alterado — corrija na origem ou no catálogo.
-              </p>
+              {divergencias.length > 0 && (
+                <p className="mt-2 text-xs text-muted">
+                  Referência para padronização. O DFD oficial não é alterado — corrija na origem ou no catálogo.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -139,8 +155,8 @@ function Campo({
     <div className={span ? "sm:col-span-2" : ""}>
       <dt className="text-xs text-muted">{label}</dt>
       <dd
-        className={`mt-0.5 break-words leading-snug text-text ${mono ? "font-mono text-[13px]" : ""} ${
-          forte ? "text-base font-bold" : "font-semibold"
+        className={`mt-0.5 break-words leading-snug text-text ${
+          mono ? "font-mono text-[13px] font-semibold" : forte ? "text-base font-bold" : "text-sm font-semibold"
         }`}
       >
         {valor}

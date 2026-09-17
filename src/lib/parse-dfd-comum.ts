@@ -143,6 +143,18 @@ export function norm(v: unknown): string {
   );
 }
 
+/**
+ * `norm` + **remove pontuação** (só letras/números/espaço) — para COMPARAR textos
+ * ignorando pontuação, espaços e tabs (ex.: item do DFD × item do catálogo). Mantém
+ * `²`/`³` (via `\p{N}`). NÃO usar para detecção de rótulos/cabeçalhos (use `norm`).
+ */
+export function normComparacao(v: unknown): string {
+  return norm(v)
+    .replace(/[^\p{L}\p{N} ]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function txt(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }

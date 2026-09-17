@@ -46,6 +46,7 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
@@ -69,6 +70,28 @@ import { TokenEditor } from "./TokenEditor";
 // `/design-system`. Mostra TODO componente do sistema (botões, ícones, status,
 // KPIs, tabelas, filtros, cor, abas, toasts…), por token, claro/escuro, touch e
 // responsivo. `?view=frame` renderiza só a vitrine (usado no preview mobile).
+
+// Conferência de catálogo de exemplo p/ o ItemDetalhe (divergente: descrição + unidade
+// diferentes; referência com tipos). Chave = código normalizado do item.
+const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
+  [
+    "5241937264",
+    {
+      faltas: ["divergenteCatalogo"],
+      divergDescricao: true,
+      divergUnidade: true,
+      sugestao: {
+        codigo: "5241937264",
+        codigoRaw: "5241937264",
+        descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO — GRANDE PORTE, LANÇA DE 50 METROS",
+        unidade: "DIÁRIA",
+        tipos: ["DFD-S", "DFD-R"],
+        catalogoNome: "Serviços de Locação",
+        score: 1,
+      },
+    },
+  ],
+]);
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -987,7 +1010,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="ItemDetalhe (painel lateral do item — abre ao clicar numa linha da Seção 4)">
+      <Secao titulo="ItemDetalhe (painel lateral do item — abre ao clicar numa linha da Seção 4; com conferência de catálogo)">
         <div className="max-w-md">
           <ItemDetalhe
             item={{
@@ -999,6 +1022,8 @@ export function Catalogo() {
               valorUnitario: 8000,
               valorTotal: 160000,
             }}
+            tipo="DFD-S"
+            conformidade={DEMO_ITEM_CONFORMIDADE}
           />
         </div>
       </Secao>

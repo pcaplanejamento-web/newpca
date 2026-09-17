@@ -1,5 +1,5 @@
 import { normUnidadeMedida } from "./normalize.ts";
-import { norm } from "./parse-dfd-comum.ts";
+import { norm, normComparacao } from "./parse-dfd-comum.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 
 /**
@@ -33,6 +33,20 @@ export const ROTULO_FALTA_CATALOGO: Record<FaltaCatalogoItem, string> = {
   tipoIncompativel: "Tipo incompatível",
 };
 
+/**
+ * Rótulos ESPECÍFICOS de uma conferência — em vez de só "Divergente", aponta ONDE está o
+ * erro: descrição e/ou unidade diferentes, tipo incompatível, fora do catálogo. Fonte única
+ * usada na coluna "Catálogo", no painel do item e nas mensagens. Vazio = conforme.
+ */
+export function rotulosDivergencia(c: ConferenciaItem): string[] {
+  const r: string[] = [];
+  if (c.faltas.includes("naoCatalogado")) r.push("Fora do catálogo");
+  if (c.divergDescricao) r.push("Descrição diferente do catálogo");
+  if (c.divergUnidade) r.push("Unidade de medida diferente do catálogo");
+  if (c.faltas.includes("tipoIncompativel")) r.push("Tipo de DFD incompatível com o catálogo");
+  return r;
+}
+
 /** Precedência de exibição (a mais grave primeiro) — para escolher UMA falta a mostrar. */
 const ORDEM_FALTA: FaltaCatalogoItem[] = ["naoCatalogado", "tipoIncompativel", "divergenteCatalogo"];
 
@@ -47,8 +61,9 @@ export type SugestaoCatalogo = {
   codigoRaw: string | null;
   descricao: string;
   unidade: string | null;
+  tipos: string[]; // tipos de DFD do item do catálogo (VAZIO = sem restrição)
   catalogoNome: string;
-  score: number; // 1 = mesmo código (divergência de campos); <1 = por semelhança de descrição
+  score: number; // 1 = mesmo código; <1 = por semelhança de descrição
 };
 
 export type ConferenciaItem = {
@@ -102,7 +117,7 @@ export function melhorSemelhante(descricao: string | null, candidatos: CatalogoR
   for (const c of candidatos) {
     const s = similaridade(descricao, c.descricao);
     if (s >= LIMIAR_SEMELHANCA && (!melhor || s > melhor.score)) {
-      melhor = { codigo: c.codigo, codigoRaw: c.codigoRaw, descricao: c.descricao, unidade: c.unidade, catalogoNome: c.catalogoNome, score: s };
+      melhor = { codigo: c.codigo, codigoRaw: c.codigoRaw, descricao: c.descricao, unidade: c.unidade, tipos: c.tipos, catalogoNome: c.catalogoNome, score: s };
     }
   }
   return melhor;
@@ -123,16 +138,25 @@ export function conferirItem(
   if (!codigo) return CONFORME;
 
   if (entry) {
-    const divergDescricao = norm(it.descricao ?? "") !== norm(entry.descricao ?? "");
-    const divergUnidade = normUnidadeMedida(it.unidade) !== normUnidadeMedida(entry.unidade);
+    // Compara IGNORANDO pontuação/espaços/tabs dos DOIS lados (`normComparacao`). Na unidade,
+    // envolve a saída de `normUnidadeMedida` (preserva sinônimos/superscript + só some com pontuação).
+    const divergDescricao = normComparacao(it.descricao) !== normComparacao(entry.descricao);
+    const divergUnidade = normComparacao(normUnidadeMedida(it.unidade)) !== normComparacao(normUnidadeMedida(entry.unidade));
     const faltas: FaltaCatalogoItem[] = [];
     if (divergDescricao || divergUnidade) faltas.push("divergenteCatalogo");
     // Tipo: só quando o item RESTRINGE tipos (tipos.length > 0) e o DFD tem um tipo conhecido.
     if (entry.tipos.length > 0 && dfdTipo && !entry.tipos.includes(dfdTipo)) faltas.push("tipoIncompativel");
-    const sugestao: SugestaoCatalogo | null =
-      divergDescricao || divergUnidade
-        ? { codigo: entry.codigo, codigoRaw: entry.codigoRaw, descricao: entry.descricao, unidade: entry.unidade, catalogoNome: entry.catalogoNome, score: 1 }
-        : null;
+    // Referência do catálogo SEMPRE que o código casa (score 1) — para mostrar os dados
+    // completos do item comparado (incl. tipos), mesmo conforme ou só com tipo incompatível.
+    const sugestao: SugestaoCatalogo = {
+      codigo: entry.codigo,
+      codigoRaw: entry.codigoRaw,
+      descricao: entry.descricao,
+      unidade: entry.unidade,
+      tipos: entry.tipos,
+      catalogoNome: entry.catalogoNome,
+      score: 1,
+    };
     return { faltas, divergDescricao, divergUnidade, sugestao };
   }
 

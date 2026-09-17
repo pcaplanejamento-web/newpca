@@ -333,6 +333,17 @@ página **sem número** (descrição ocupa a página inteira) = continuação in
 real: **18 DFDs, 329 itens, 0 truncadas, 0 vazamentos**. Testes de regressão (same-page + **cross-page**) em
 `tests/parse-dfd-pdf.test.ts`.
 
+### Conferência de catálogo: comparação tolerante + rótulos específicos + item completo com tipos — entregue
+✅ **(comparação)** ao conferir item×catálogo, a divergência de descrição/unidade agora IGNORA **pontuação, espaços e
+tabs** dos dois lados (`normComparacao`, sem mexer no `norm` global) — diferenças triviais não contam como erro.
+✅ **(rótulos específicos)** em vez de só "Divergente"/"Fora do catálogo", aponta ONDE está o erro — **"Descrição
+diferente do catálogo"** e/ou **"Unidade de medida diferente do catálogo"** (e tipo/fora do catálogo) via
+`rotulosDivergencia`, no painel do item (`ItemDetalhe`) e no tooltip da coluna "Catálogo" do `DfdView`. ✅ **(item do
+catálogo completo)** o painel do item mostra **sempre** os dados completos do item do catálogo comparado — código,
+unidade, descrição e os **tipos de DFD** (chips) — mesmo quando conforme ou só com tipo incompatível; a descrição do
+catálogo usa o **mesmo tamanho de fonte** da descrição do item importado (comparação lado a lado). Demo no
+`/design-system`. Testes de conferência (comparação tolerante, rótulos, referência sempre presente).
+
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
 (binding cru → `.meta.size_after`), **tabela por tabela** (linhas · tamanho · % do total, ordenável + somatório no

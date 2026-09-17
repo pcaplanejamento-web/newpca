@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { type CatalogoRef, conferirItem, itensIguais, piorFalta, ROTULO_FALTA_CATALOGO, similaridade } from "../src/lib/catalogo-conferencia.ts";
+import { type CatalogoRef, conferirItem, itensIguais, piorFalta, ROTULO_FALTA_CATALOGO, rotulosDivergencia, similaridade } from "../src/lib/catalogo-conferencia.ts";
 
 const ref = (over: Partial<CatalogoRef> = {}): CatalogoRef => ({
   codigo: "5241948381",
@@ -24,10 +24,21 @@ describe("catalogo-conferencia", () => {
     assert.deepEqual(conferirItem(item({ codigo: "" }), ref(), "DFD-S").faltas, []);
   });
 
-  it("conforme (descrição/unidade batem, tipo permitido) → sem faltas", () => {
+  it("conforme (descrição/unidade batem, tipo permitido) → sem faltas + referência SEMPRE presente (com tipos)", () => {
     const r = conferirItem(item(), ref({ tipos: ["DFD-S"] }), "DFD-S");
     assert.deepEqual(r.faltas, []);
-    assert.equal(r.sugestao, null);
+    // Req 2: a referência do catálogo aparece MESMO conforme (para mostrar os dados + tipos).
+    assert.equal(r.sugestao?.codigo, "5241948381");
+    assert.equal(r.sugestao?.score, 1);
+    assert.deepEqual(r.sugestao?.tipos, ["DFD-S"]);
+    assert.deepEqual(rotulosDivergencia(r), []); // conforme = sem rótulos de erro
+  });
+
+  it("tipo incompatível conforme nos campos → referência (com tipos) presente para o painel", () => {
+    const r = conferirItem(item(), ref({ tipos: ["DFD-S", "DFD-R"] }), "DFD-O");
+    assert.deepEqual(r.faltas, ["tipoIncompativel"]);
+    assert.equal(r.sugestao?.codigo, "5241948381"); // referência sempre visível
+    assert.deepEqual(r.sugestao?.tipos, ["DFD-S", "DFD-R"]);
   });
 
   it("código com pontos normaliza e casa com a entrada", () => {
@@ -73,6 +84,35 @@ describe("catalogo-conferencia", () => {
     const r = conferirItem(item({ codigo: "123456", descricao: "ÁGUA MINERAL NATURAL SEM GÁS" }), null, "DFD-S", [cand]);
     assert.deepEqual(r.faltas, ["naoCatalogado"]);
     assert.equal(r.sugestao, null);
+  });
+
+  it("Req 5: comparação IGNORA pontuação/espaços/tabs dos dois lados → NÃO diverge", () => {
+    // Mesmo texto do ref, só variando pontuação, caixa, acentos e espaços/tabs.
+    const r = conferirItem(
+      item({ descricao: "Água   mineral,  natural;\tsem gás - garrafa (500 ml)!", unidade: "unidade." }),
+      ref(),
+      "DFD-S",
+    );
+    assert.deepEqual(r.faltas, []);
+    assert.equal(r.divergDescricao, false);
+    assert.equal(r.divergUnidade, false);
+  });
+
+  it("Req 5: divergência REAL (palavra diferente) continua sendo apontada", () => {
+    const r = conferirItem(item({ descricao: "ÁGUA MINERAL NATURAL, COM GÁS, GARRAFA 500 ML" }), ref(), "DFD-S");
+    assert.deepEqual(r.faltas, ["divergenteCatalogo"]);
+    assert.equal(r.divergDescricao, true); // SEM GÁS ≠ COM GÁS
+  });
+
+  it("Req 3: rotulosDivergencia aponta descrição e/ou unidade e/ou tipo", () => {
+    const soDesc = conferirItem(item({ descricao: "OUTRA COISA" }), ref({ tipos: ["DFD-S"] }), "DFD-S");
+    assert.deepEqual(rotulosDivergencia(soDesc), ["Descrição diferente do catálogo"]);
+    const soUnid = conferirItem(item({ unidade: "KG" }), ref(), "DFD-S");
+    assert.deepEqual(rotulosDivergencia(soUnid), ["Unidade de medida diferente do catálogo"]);
+    const tipo = conferirItem(item(), ref({ tipos: ["DFD-S"] }), "DFD-O");
+    assert.deepEqual(rotulosDivergencia(tipo), ["Tipo de DFD incompatível com o catálogo"]);
+    const nc = conferirItem(item({ codigo: "999999" }), null, "DFD-S");
+    assert.deepEqual(rotulosDivergencia(nc), ["Fora do catálogo"]);
   });
 
   it("similaridade: iguais (acento à parte) = 1, disjuntas = 0, vazia = 0", () => {
