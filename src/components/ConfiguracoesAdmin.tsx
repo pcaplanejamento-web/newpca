@@ -15,6 +15,7 @@ import { TextField } from "./Field";
 import {
   IconLandmark,
   IconCheck,
+  IconDatabase,
   IconImage,
   IconPalette,
   IconPencil,
@@ -370,6 +371,12 @@ export function ConfiguracoesAdmin({
         titulo="Usuários"
         descricao="Contas, papéis e status de acesso."
         icon={<IconUser className="h-5 w-5" />}
+      />
+      <LinkCard
+        href="/painel/armazenamento"
+        titulo="Armazenamento"
+        descricao="Uso do banco: tamanho por tabela e manutenção."
+        icon={<IconDatabase className="h-5 w-5" />}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brl, brlCompact, dataBR, dec, mesLabel, num, pct } from "../src/lib/format.ts";
+import { brl, brlCompact, dataBR, dec, formatBytes, mesLabel, num, pct } from "../src/lib/format.ts";
 
 // Intl insere espaços não-quebráveis (NBSP/narrow) no pt-BR; normalizamos.
 const sp = (s: string) => s.replace(/\s/g, " ");
@@ -45,5 +45,18 @@ describe("format (pt-BR)", () => {
     assert.equal(pct(1, 4), "25%");
     assert.equal(pct(1, 3), "33,3%");
     assert.equal(pct(5, 0), "0%");
+  });
+
+  it("formatBytes (base 1024, pt-BR)", () => {
+    assert.equal(formatBytes(0), "0 B");
+    assert.equal(formatBytes(null), "0 B");
+    assert.equal(formatBytes(undefined), "0 B");
+    assert.equal(formatBytes(512), "512 B");
+    assert.equal(formatBytes(1023), "1023 B");
+    assert.equal(formatBytes(1024), "1 KB");
+    assert.equal(sp(formatBytes(1536)), "1,5 KB");
+    assert.equal(formatBytes(1024 ** 2), "1 MB");
+    assert.equal(formatBytes(1024 ** 3), "1 GB");
+    assert.equal(sp(formatBytes(-2048)), "-2 KB");
   });
 });

@@ -43,6 +43,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `INSERT ... VALUES`.
 - Schema em `src/db/schema.ts`. Teste da cadeia de migrações: `tests/migrations.test.ts`
   (aplica `drizzle/*.sql` em `node:sqlite`).
+- **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
+  Mais) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
+  (`getCloudflareContext().env.DB` → `.meta.size_after` — o Drizzle não expõe `.meta`), enumeração por
+  `sqlite_master` (inclui as tabelas **legadas órfãs** de `0005` e as de sistema) e, por tabela, `COUNT(*)` +
+  `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
+  /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
+  sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
 
 ## Autenticação e autorização
 - Criptografia pura em **`src/lib/password.ts`** (Web Crypto; sem deps de request/DB —

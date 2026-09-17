@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Database,
   Download,
   Eye,
   EyeOff,
@@ -89,6 +90,7 @@ export const IconUser = User;
 export const IconTool = Wrench;
 export const IconClipboard = ClipboardList;
 export const IconDownload = Download;
+export const IconDatabase = Database;
 export const IconLayers = Layers;
 export const IconPlus = Plus;
 export const IconFilter = Filter;

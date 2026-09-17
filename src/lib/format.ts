@@ -48,3 +48,14 @@ export function pct(part: number, whole: number): string {
     maximumFractionDigits: 1,
   })}%`;
 }
+
+/** Tamanho em bytes → texto curto pt-BR (base 1024): 1,5 MB, 820 KB, 512 B. */
+export function formatBytes(n?: number | null): string {
+  const v = Number(n ?? 0);
+  const abs = Math.abs(v);
+  const f = (x: number) => x.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  if (abs >= 1024 ** 3) return `${f(v / 1024 ** 3)} GB`;
+  if (abs >= 1024 ** 2) return `${f(v / 1024 ** 2)} MB`;
+  if (abs >= 1024) return `${f(v / 1024)} KB`;
+  return `${Math.round(v)} B`;
+}

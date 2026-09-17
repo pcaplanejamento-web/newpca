@@ -309,6 +309,15 @@ itens ao catálogo passa a valer na hora. Núcleo puro `catalogo-conferencia.ts`
 servidor em `/api/dfd` (só bloqueia se o ADM elevou a fundamental). Testes: veredito por linha, portão e **invariante**
 (config vazia ⇒ igual a hoje).
 
+### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
+✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
+(binding cru → `.meta.size_after`), **tabela por tabela** (linhas · tamanho · % do total, ordenável + somatório no
+rodapé), agrupada por **domínio** e sinalizando as **tabelas legadas órfãs** e de **sistema**; **colunas pesadas**
+(fotos base64, JSON de seções/assinaturas/config/responsáveis) e **fotos de perfil grandes** (só-leitura).
+**Manutenção:** expurgar **sessões expiradas** (`POST /api/admin/armazenamento`). Introspecção em runtime
+(`src/lib/armazenamento.ts` — `sqlite_master` + `COUNT`/`SUM(LENGTH)`), **sem migração**; `formatBytes` em
+`format.ts`.
+
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em
 **`/design-system`** (Button, StatusTag, KpiStat, Segmented, FilterChip, Dropdown, ColorField
