@@ -163,8 +163,10 @@ export const vincularDfdSchema = z.object({
 
 /**
  * Edição de um DFD JÁ GRAVADO (banner destravado): `protocoloId` (vincular),
- * `reparticaoId` e/ou `secoes` (tratamento). Cada campo é opcional; `undefined` = não
- * mexe. Exige ao menos um campo presente.
+ * `reparticaoId`, `secoes` (tratamento), itens, refs de renovação e os campos de
+ * **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/matrícula/e-mail/telefone).
+ * Os **IDENTIFICADORES** (número/planejamento/tipo) NÃO estão aqui → imutáveis. Cada
+ * campo é opcional; `undefined` = não mexe. Exige ao menos um campo presente.
  */
 export const editarDfdSchema = z
   .object({
@@ -177,6 +179,14 @@ export const editarDfdSchema = z
     numeroContrato: textoCurtoOpc,
     numeroAta: textoCurtoOpc,
     numeroLicitacao: textoCurtoOpc,
+    // Conteúdo do cabeçalho (cadeado por campo). Identificadores ficam de fora (imutáveis).
+    objeto: textoOpc,
+    orgaoEntidade: textoOpc,
+    setorRequisitante: textoOpc,
+    responsavel: textoOpc,
+    matricula: textoCurtoOpc,
+    email: textoCurtoOpc,
+    telefone: textoCurtoOpc,
   })
   .refine(
     (d) =>
@@ -186,7 +196,14 @@ export const editarDfdSchema = z
       d.itens !== undefined ||
       d.numeroContrato !== undefined ||
       d.numeroAta !== undefined ||
-      d.numeroLicitacao !== undefined,
+      d.numeroLicitacao !== undefined ||
+      d.objeto !== undefined ||
+      d.orgaoEntidade !== undefined ||
+      d.setorRequisitante !== undefined ||
+      d.responsavel !== undefined ||
+      d.matricula !== undefined ||
+      d.email !== undefined ||
+      d.telefone !== undefined,
     { message: "Nada para editar." },
   );
 

@@ -330,7 +330,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/dfd/[id]`, `PATCH`/`DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)`
   com a `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro**
   por `numero` (não sobrescreve DFD de repartição inacessível). O `PATCH /api/dfd/[id]` (`editarDfdSchema`) vincula a
-  protocolo E/OU edita **repartição/seções** (não move p/ repartição inacessível); o `PATCH /api/protocolo/[id]`
+  protocolo E/OU edita **repartição/seções/itens/refs + o CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/
+  matrícula/e-mail/telefone — identificadores número/planejamento/tipo imutáveis; não move p/ repartição inacessível);
+  o `PATCH /api/protocolo/[id]`
   (`editarProtocoloSchema`) edita a **repartição + os campos de CONTEÚDO da capa** (interessado/assunto/observação/
   CPF-CNPJ/valor/local) — os **IDENTIFICADORES** (número/Id/data/ano do PCA) são IMUTÁVEIS (o schema **não** os aceita).
   Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
@@ -449,9 +451,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
-  campos ficam editáveis e um **"Salvar alterações"** grava **direto no D1** (`PATCH /api/dfd/[id]` edita repartição/
-  seções via `atualizarDfdCampos`; `PATCH /api/protocolo/[id]` edita **repartição + conteúdo da capa** via
-  `atualizarProtocolo` — os identificadores da capa seguem imutáveis) e o
+  campos ficam editáveis (incl. o **cabeçalho do DFD com cadeado por campo** — bloco "Cabeçalho — conteúdo" no
+  `DfdConferir`, primitivos `CampoCadeado`, `onCamposChange`) e um **"Salvar alterações"** grava **direto no D1**
+  (`PATCH /api/dfd/[id]` edita repartição/seções/itens/refs + conteúdo do cabeçalho via `atualizarDfdCampos`;
+  `PATCH /api/protocolo/[id]` edita **repartição + conteúdo da capa** via
+  `atualizarProtocolo` — os identificadores de DFD/capa seguem imutáveis) e o
   `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
   toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
 - **DFD ao lado do protocolo gravado (mesma animação da importação):** o banner do protocolo gravado é

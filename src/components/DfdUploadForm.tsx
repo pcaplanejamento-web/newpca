@@ -416,6 +416,7 @@ export function DfdUploadForm({
               }}
               onSecoesChange={(secoes) => setPreview((p) => (p ? { ...p, secoes } : p))}
               onRefsChange={(refs) => setPreview((p) => (p ? { ...p, ...refs } : p))}
+              onCamposChange={(campos) => setPreview((p) => (p ? { ...p, ...campos } : p))}
             />
           </div>
         )}

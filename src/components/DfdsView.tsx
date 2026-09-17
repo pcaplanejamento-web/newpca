@@ -247,6 +247,14 @@ export function DfdsView({
           numeroContrato: dfdEdit.numeroContrato,
           numeroAta: dfdEdit.numeroAta,
           numeroLicitacao: dfdEdit.numeroLicitacao,
+          // Campos de CONTEÚDO do cabeçalho (identificadores seguem imutáveis no servidor).
+          objeto: dfdEdit.objeto,
+          orgaoEntidade: dfdEdit.orgaoEntidade,
+          setorRequisitante: dfdEdit.setorRequisitante,
+          responsavel: dfdEdit.responsavel,
+          matricula: dfdEdit.matricula,
+          email: dfdEdit.email,
+          telefone: dfdEdit.telefone,
         }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
@@ -641,6 +649,7 @@ export function DfdsView({
       onRepChange={setDfdRepEdit}
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
+      onCamposChange={(campos) => setDfdEdit((d) => (d ? { ...d, ...campos } : d))}
     />
   ) : null;
   // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).

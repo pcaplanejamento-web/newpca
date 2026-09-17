@@ -21,6 +21,7 @@ import {
   solicitanteDeResultado,
   validarAssinatura,
 } from "@/lib/reparticao-responsaveis";
+import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { Checkbox, TextField } from "./Field";
@@ -39,6 +40,15 @@ type Rep = {
   responsaveis: Responsaveis;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
+
+/** Campos de CONTEÚDO do cabeçalho do DFD editáveis com cadeado (os IDENTIFICADORES —
+ * número/planejamento/tipo/ano do PCA — nunca entram aqui). */
+export type CamposCabecalhoDfd = Pick<
+  DfdParseado,
+  "objeto" | "orgaoEntidade" | "setorRequisitante" | "responsavel" | "matricula" | "email" | "telefone"
+>;
+/** Chave de cadeado por campo do cabeçalho editável. */
+type CampoCabK = keyof CamposCabecalhoDfd;
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
 export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" };
@@ -153,6 +163,7 @@ export function DfdConferir({
   onRepChange,
   onSecoesChange,
   onRefsChange,
+  onCamposChange,
   onItemClick,
 }: {
   dfd: DfdParseado;
@@ -180,6 +191,9 @@ export function DfdConferir({
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
   onRefsChange?: (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => void;
+  /** Edição dos campos de CONTEÚDO do cabeçalho (objeto/órgão/setor/responsável/matrícula/e-mail/
+   * telefone) com cadeado por campo. Ausente = cabeçalho não editável (identificadores nunca mudam). */
+  onCamposChange?: (patch: Partial<CamposCabecalhoDfd>) => void;
   /** Clique numa linha de item (Seção 4) → abre o detalhe do item ao lado (renderizado pelo pai). */
   onItemClick?: (idx: number) => void;
 }) {
@@ -240,6 +254,16 @@ export function DfdConferir({
   const roPrev = readOnly || !editavelDe(regras, "dfd.previsao");
   const roFund = readOnly || !editavelDe(regras, "dfd.fundamentacao");
   const roRefs = readOnly || !editavelDe(regras, "dfd.referenciaRenovacao");
+
+  // Cadeado POR CAMPO do cabeçalho (conteúdo editável); os identificadores nunca mudam.
+  const { abertos: abCab, alternar: altCab } = useCadeados<CampoCabK>();
+  const cabEditavel = !!onCamposChange && !readOnly;
+  const propsCab = (k: CampoCabK) => ({
+    editavel: cabEditavel,
+    aberto: abCab.has(k),
+    bloqueado: false,
+    onLock: () => altCab(k),
+  });
 
   // Valores atuais das seções tratáveis.
   const [pCfg, vCfg, fCfg] = TRATAVEIS;
@@ -311,6 +335,27 @@ export function DfdConferir({
           </Callout>
         )}
       </div>
+
+      {/* Cabeçalho — conteúdo EDITÁVEL (cadeado por campo, como os itens). Só aparece ao editar
+          (import / gravado destravado); os IDENTIFICADORES (número/planejamento/tipo) são imutáveis.
+          O DfdView abaixo reflete tudo em só-leitura. */}
+      {cabEditavel && (
+        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="cabecalho">
+          <h3 className="mb-1 text-sm font-bold text-text">Cabeçalho — conteúdo</h3>
+          <p className="mb-3 text-[12px] text-muted">
+            Destrave um campo para corrigir. Número, planejamento e tipo do DFD são imutáveis.
+          </p>
+          <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <CampoTexto label="Objeto" valor={dfd.objeto ?? ""} span multi {...propsCab("objeto")} onChange={(v) => onCamposChange?.({ objeto: v || null })} />
+            <CampoTexto label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? ""} span {...propsCab("orgaoEntidade")} onChange={(v) => onCamposChange?.({ orgaoEntidade: v || null })} />
+            <CampoTexto label="Setor Requisitante" valor={dfd.setorRequisitante ?? ""} span {...propsCab("setorRequisitante")} onChange={(v) => onCamposChange?.({ setorRequisitante: v || null })} />
+            <CampoTexto label="Responsável" valor={dfd.responsavel ?? ""} {...propsCab("responsavel")} onChange={(v) => onCamposChange?.({ responsavel: v || null })} />
+            <CampoTexto label="Matrícula" valor={dfd.matricula ?? ""} {...propsCab("matricula")} onChange={(v) => onCamposChange?.({ matricula: v || null })} />
+            <CampoTexto label="E-mail" valor={dfd.email ?? ""} span {...propsCab("email")} onChange={(v) => onCamposChange?.({ email: v || null })} />
+            <CampoTexto label="Telefone" valor={dfd.telefone ?? ""} {...propsCab("telefone")} onChange={(v) => onCamposChange?.({ telefone: v || null })} />
+          </div>
+        </section>
+      )}
 
       {/* Tratamento das seções tratáveis */}
       <section className="rounded-card border border-border bg-surface p-4 shadow-ring">

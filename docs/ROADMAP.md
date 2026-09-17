@@ -20,14 +20,17 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
-### Capa do protocolo: campos de CONTEÚDO editáveis (cadeado por campo) — entregue
-✅ Os campos de **conteúdo** da capa (interessado, assunto, observação, CPF/CNPJ, valor, local) passaram a ser
-**editáveis com cadeado POR CAMPO** — a mesma lógica dos itens, agora nos primitivos compartilhados
+### Capa e DFD: campos de CONTEÚDO editáveis (cadeado por campo) — entregue
+✅ Os campos de **conteúdo** da **capa** (interessado, assunto, observação, CPF/CNPJ, valor, local) e do
+**cabeçalho do DFD** (objeto, órgão/entidade, setor requisitante, responsável, matrícula, e-mail, telefone)
+passaram a ser **editáveis com cadeado POR CAMPO** — a mesma lógica dos itens, agora nos primitivos compartilhados
 **`CampoCadeado`** (`LinhaCampo`/`CampoTexto`/`CampoNumero`/`NumInput`/`AutoTextarea` + hook `useCadeados`),
-extraídos do `ItemDetalhe` e reusados. Vale na **importação de PDF** (`CapaCampos` `modo="cadeado"`) e no
-**gravado destravado**; a criação manual segue com inputs simples (`modo="criar"`). Os **IDENTIFICADORES**
-(número/Id/data/ano do PCA) permanecem **imutáveis**. Servidor: `editarProtocoloSchema` + `atualizarProtocolo` +
-`PATCH /api/protocolo/[id]` aceitam os campos de conteúdo (com auditoria por diff) e recusam os identificadores.
+extraídos do `ItemDetalhe` e reusados. Capa: `CapaCampos` `modo="cadeado"` na **importação de PDF** e no **gravado
+destravado**; criação manual segue com inputs simples (`modo="criar"`). DFD: bloco "Cabeçalho — conteúdo" no
+`DfdConferir` (`onCamposChange`), threadado em `DfdUploadForm`/`ProtocoloUploadForm` (cache do parse)/`DfdsView`. Os
+**IDENTIFICADORES** (protocolo número/Id/data/ano do PCA; DFD número/planejamento/tipo) permanecem **imutáveis**.
+Servidor: `editarProtocoloSchema`/`atualizarProtocolo` e `editarDfdSchema`/`atualizarDfdCampos` (+ os PATCH das rotas)
+aceitam os campos de conteúdo (com auditoria por diff) e recusam os identificadores.
 
 ### Protocolo/DFD: dedup/sobrescrita por identificador — corrigido
 ✅ Não coexistem dois protocolos com o mesmo **Id** (`idExterno` da capa): protocolar **sobrescreve** o de mesmo Id

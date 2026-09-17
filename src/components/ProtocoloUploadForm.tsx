@@ -386,6 +386,16 @@ export function ProtocoloUploadForm({
     setEditados((s) => new Set(s).add(abertoIdx));
   };
 
+  // Edição dos campos de CONTEÚDO do cabeçalho do DFD aberto no lateral (cadeado por campo).
+  const onCamposAberto = (campos: Partial<DfdParseado>) => {
+    setParsed((m) => {
+      const d = m.get(abertoIdx);
+      if (!d) return m;
+      return new Map(m).set(abertoIdx, { ...d, ...campos });
+    });
+    setEditados((s) => new Set(s).add(abertoIdx));
+  };
+
   // Edição de UM item (índice `painelIdx`) do DFD aberto no lateral (recomputa o total do DFD).
   const onItemAberto = (painelIdx: number, patch: Partial<DfdParseado["itens"][number]>) => {
     setParsed((m) => {
@@ -884,6 +894,7 @@ export function ProtocoloUploadForm({
                         onRepChange={(id) => setRepDfd(abertoIdx, id)}
                         onSecoesChange={onSecoesAberto}
                         onRefsChange={onRefsAberto}
+                        onCamposChange={onCamposAberto}
                       />
                     )}
                   </div>

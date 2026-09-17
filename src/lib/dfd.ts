@@ -282,8 +282,10 @@ export async function appendDfdItens(
 }
 
 /**
- * Edita campos de um DFD JÁ GRAVADO (banner destravado): repartição e/ou seções
- * (tratamento). Não toca nos itens. Grava direto no D1 (`atualizadoEm` renovado).
+ * Edita campos de um DFD JÁ GRAVADO (banner destravado): repartição, seções (tratamento),
+ * refs de renovação e o **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/matrícula/
+ * e-mail/telefone). Os **IDENTIFICADORES** (número/planejamento/tipo) NÃO estão aqui →
+ * imutáveis. Não toca nos itens. Grava direto no D1 (`atualizadoEm` renovado).
  */
 export async function atualizarDfdCampos(
   id: number,
@@ -293,6 +295,13 @@ export async function atualizarDfdCampos(
     numeroContrato?: string | null;
     numeroAta?: string | null;
     numeroLicitacao?: string | null;
+    objeto?: string | null;
+    orgaoEntidade?: string | null;
+    setorRequisitante?: string | null;
+    responsavel?: string | null;
+    matricula?: string | null;
+    email?: string | null;
+    telefone?: string | null;
   },
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
@@ -301,6 +310,13 @@ export async function atualizarDfdCampos(
   if (campos.numeroContrato !== undefined) set.numeroContrato = campos.numeroContrato || null;
   if (campos.numeroAta !== undefined) set.numeroAta = campos.numeroAta || null;
   if (campos.numeroLicitacao !== undefined) set.numeroLicitacao = campos.numeroLicitacao || null;
+  if (campos.objeto !== undefined) set.objeto = campos.objeto || null;
+  if (campos.orgaoEntidade !== undefined) set.orgaoEntidade = campos.orgaoEntidade || null;
+  if (campos.setorRequisitante !== undefined) set.setorRequisitante = campos.setorRequisitante || null;
+  if (campos.responsavel !== undefined) set.responsavel = campos.responsavel || null;
+  if (campos.matricula !== undefined) set.matricula = campos.matricula || null;
+  if (campos.email !== undefined) set.email = campos.email || null;
+  if (campos.telefone !== undefined) set.telefone = campos.telefone || null;
   await getDb().update(dfds).set(set).where(eq(dfds.id, id));
 }
 

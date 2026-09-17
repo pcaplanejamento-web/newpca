@@ -93,7 +93,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     p.data.secoes !== undefined ||
     p.data.numeroContrato !== undefined ||
     p.data.numeroAta !== undefined ||
-    p.data.numeroLicitacao !== undefined;
+    p.data.numeroLicitacao !== undefined ||
+    p.data.objeto !== undefined ||
+    p.data.orgaoEntidade !== undefined ||
+    p.data.setorRequisitante !== undefined ||
+    p.data.responsavel !== undefined ||
+    p.data.matricula !== undefined ||
+    p.data.email !== undefined ||
+    p.data.telefone !== undefined;
   // Snapshot "antes" (para o diff do log) — buscado 1× quando há edição de campos ou itens.
   const antes = editaCampos || p.data.itens !== undefined ? await getDfd(id) : null;
   if (editaCampos) {
@@ -118,16 +125,42 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       numeroContrato: p.data.numeroContrato,
       numeroAta: p.data.numeroAta,
       numeroLicitacao: p.data.numeroLicitacao,
+      objeto: p.data.objeto,
+      orgaoEntidade: p.data.orgaoEntidade,
+      setorRequisitante: p.data.setorRequisitante,
+      responsavel: p.data.responsavel,
+      matricula: p.data.matricula,
+      email: p.data.email,
+      telefone: p.data.telefone,
     });
     // Log: diff só dos campos ENVIADOS (undefined = não editado, não entra no diff).
-    const cs = (["reparticaoId", "numeroContrato", "numeroAta", "numeroLicitacao"] as const).filter(
-      (c) => p.data[c] !== undefined,
-    );
+    const cs = (
+      [
+        "reparticaoId",
+        "numeroContrato",
+        "numeroAta",
+        "numeroLicitacao",
+        "objeto",
+        "orgaoEntidade",
+        "setorRequisitante",
+        "responsavel",
+        "matricula",
+        "email",
+        "telefone",
+      ] as const
+    ).filter((c) => p.data[c] !== undefined);
     const dd = diffCampos(antes as Record<string, unknown>, p.data as Record<string, unknown>, cs, {
       reparticaoId: "unidade",
       numeroContrato: "contrato",
       numeroAta: "ata",
       numeroLicitacao: "licitação",
+      objeto: "objeto",
+      orgaoEntidade: "órgão/entidade",
+      setorRequisitante: "setor requisitante",
+      responsavel: "responsável",
+      matricula: "matrícula",
+      email: "e-mail",
+      telefone: "telefone",
     });
     const partes = [dd.resumo, p.data.secoes !== undefined ? "tratamento/seções atualizados" : ""].filter(Boolean);
     await registrarAuditoria({
