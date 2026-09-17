@@ -175,13 +175,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**. Número/código/unidade/
   valores ficam na **âncora** (1 faixa) → casados pelo `y` mais próximo (`nearestByY`) e **rejuntando o código quebrado
   em 2 linhas**. Ambos → mesmo `DfdParseado`.
-- **Descrição ILIMITADA por item (crítico) — casada pela BORDA da célula, nunca truncada:** a descrição de um item
-  pode ter **dezenas de linhas**; com a âncora no MEIO da célula, as últimas linhas de um item ficavam mais perto da
-  âncora do PRÓXIMO e **vazavam para ele** (descrição truncada). A descrição é casada pela **borda REAL da célula** =
-  o **maior vão** entre as linhas de descrição na faixa entre duas âncoras (`itemPorCuts` + `cutsPorPagina`, puros);
-  o vão só vira borda se **destoa** dos demais (respiro nítido), senão cai no ponto médio das âncoras — **idêntico** ao
-  `nearestByY` de antes (zero regressão em descrições curtas). Assim uma descrição alta vem **inteira** e não polui o
-  item seguinte. Teste: fixture de 9 linhas cuja última sumia.
+- **Descrição ILIMITADA por item (crítico) — casada pela BORDA da célula, nunca truncada (inclui QUEBRA DE
+  PÁGINA):** a âncora (nº/código/valores) fica no **MEIO da célula**, então a descrição tem linhas ACIMA e ABAIXO do
+  número. Casar por `nearestByY` truncava (as últimas linhas vazavam para o próximo item). Agora a descrição é casada
+  pela **borda REAL da célula** = o **maior vão** entre linhas de descrição que **excede um limiar ADAPTATIVO** `LIM`.
+  `LIM = max(mediana*1.3, mediana+2)`, onde a mediana dos vãos de descrição do DFD ≈ entrelinha (nos PDFs reais ~8–9;
+  bordas ~11+, separação limpa — nunca ocorre vão 10). **Same-page:** `cutsPorPagina`+`itemPorCuts` (o corte fica no
+  vão-borda entre duas âncoras, senão ponto médio). **QUEBRA DE PÁGINA (`topCutPorPagina`):** acima do 1º número de uma
+  página de continuação há DUAS coisas — a **cauda** (continuação) do último item da página anterior E a **cabeça** do
+  1º item desta página (número no meio → cabeça acima). Andando do 1º número para cima, a cabeça é a parte contígua
+  (vão ≤ LIM); o 1º vão > LIM é a borda: acima dela = item anterior, abaixo = cabeça do 1º item. Sem borda ⇒ o item
+  anterior terminou antes ⇒ tudo é cabeça do 1º item (não rouba). Uma **página SEM número** (descrição ocupa a página
+  inteira) é continuação integral do último item anterior. Só código/unidade/valores seguem em `nearestByY` (na
+  âncora). Validado contra o **Protocolo FMC.pdf real (79 págs, 18 DFDs, 329 itens): 0 truncadas, 0 vazamentos**.
+  Testes: fixture de descrição alta same-page e fixture CROSS-PAGE (cabeça do 1º item da página não vaza).
 - **Tabelas MULTIPÁGINA (crítico) + reconhecimento CIRÚRGICO dos componentes:** uma tabela de itens pode ocupar
   **dezenas de páginas** e um único item pode ter uma **descrição enorme que atravessa páginas**. O `parse-dfd-pdf-core`
   é **100% ciente de página**: (a) em cada página, tudo ACIMA do cabeçalho de coluna repetido é o **cabeçalho do

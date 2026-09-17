@@ -373,7 +373,9 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     // Último item (bucket) de cada página COM itens → alvo p/ uma página SÓ de continuação
     // (descrição que ocupa a página inteira, sem número): continua o último item anterior.
     const ultimoBucketDaPagina = new Map<number, number>();
-    buckets.forEach((b, i) => ultimoBucketDaPagina.set(b.page, i)); // ordem (page, y desc) ⇒ fica o último
+    buckets.forEach((b, i) => {
+      ultimoBucketDaPagina.set(b.page, i); // ordem (page, y desc) ⇒ fica o último
+    });
     const paginasComItem = [...ultimoBucketDaPagina.keys()].sort((x, y) => x - y);
     const itemAntesDaPagina = (page: number): number | undefined => {
       let alvo: number | undefined;
@@ -388,10 +390,16 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       const g = idxPorPagina.get(f.page);
       const c = colOf(f.x, f.str);
       let b: Bucket | undefined;
-      if (c === "descricao" && g && f.y > g.topo && g.first > 0) {
-        // Descrição ACIMA de todos os itens da página = continuação do ÚLTIMO item da
-        // página anterior (texto do item que "virou a página").
-        b = buckets[g.first - 1];
+      if (c === "descricao" && !g) {
+        // Página SEM número de item = continuação integral do último item anterior
+        // (descrição que ocupa a página inteira).
+        const prev = itemAntesDaPagina(f.page);
+        if (prev != null) b = buckets[prev];
+      } else if (c === "descricao" && g && f.y > g.topo && g.first > 0) {
+        // ACIMA do 1º número da página: a CAUDA do item anterior (y ≥ topCut) OU a CABEÇA
+        // do 1º item desta página (número no meio) — separadas pela borda de célula.
+        const tc = topCutPorPagina.get(f.page) ?? Number.POSITIVE_INFINITY;
+        b = f.y >= tc ? buckets[g.first - 1] : buckets[g.first];
       } else if (c === "descricao" && g && g.bi.length > 0) {
         // Descrição → pela BORDA da célula (não pela âncora do meio): não trunca
         // descrições altas nem vaza para o próximo item.

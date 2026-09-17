@@ -192,6 +192,64 @@ function dfdDescricaoAlta(): PdfItem[] {
   ];
 }
 
+// ── Fixture CROSS-PAGE (o bug do Protocolo FMC.pdf, itens 20/21 do DFD 1395): a âncora
+// (nº/código/valores) fica no MEIO da célula. O item B (SAL) é o último da página 1 e sua
+// CAUDA vira a página (continua no topo da p2); o item C (SUCO) é o 1º da p2 e sua CABEÇA
+// fica ACIMA do seu número. A regra antiga jogava TUDO acima do 1º número da p2 no item B →
+// roubava a cabeça de C. Espaçamento 8 (entrelinha) e borda de célula 13 (p2: 524→511). ──
+function dfdCrossPage(): PdfItem[] {
+  return [
+    // Página 1: cabeçalho + item B (SAL), cuja cauda alcança o fim da página.
+    f(1, 150, 760, "AQUISIÇÃO DE MATERIAL Número DFD:1500 / Planejamento: 1"),
+    f(1, 48, 560, "ITEM"),
+    f(1, 85, 560, "CÓDIGO"),
+    f(1, 206, 560, "DESCRIÇÃO"),
+    f(1, 346, 560, "UNIDADE"),
+    f(1, 395, 560, "QUANTIDADE"),
+    f(1, 507, 560, "VALOR TOTAL"),
+    f(1, 458, 556, "UNITÁRIO"),
+    f(1, 123, 470, "SAL REFINADO IODADO COM GRANULACAO"),
+    f(1, 123, 462, "UNIFORME COM CRISTAIS BRANCOS COM NO"),
+    f(1, 82, 454, "524170578"),
+    f(1, 55, 454, "1"),
+    f(1, 123, 454, "MINIMO DE CLORETO DE SODIO E DOSAGEM"),
+    f(1, 353, 454, "UNIDADE"),
+    f(1, 419, 454, "5,0000"),
+    f(1, 466, 454, "1,1800"),
+    f(1, 515, 454, "5,9000"),
+    f(1, 123, 446, "DE SAIS DE IODO DE NO MINIMO 10MG E"),
+    f(1, 123, 438, "MAXIMO DE 15MG DE IODO POR QUILO DE"),
+    // Página 2: cabeçalho REPETIDO + continuação da cauda de B + item C (SUCO).
+    f(2, 150, 760, "AQUISIÇÃO DE MATERIAL Número DFD:1500 / Planejamento: 1"),
+    f(2, 48, 560, "ITEM"),
+    f(2, 85, 560, "CÓDIGO"),
+    f(2, 206, 560, "DESCRIÇÃO"),
+    f(2, 346, 560, "UNIDADE"),
+    f(2, 395, 560, "QUANTIDADE"),
+    f(2, 507, 560, "VALOR TOTAL"),
+    f(2, 458, 556, "UNITÁRIO"),
+    f(2, 123, 540, "ACORDO COM A LEGISLACAO FEDERAL"),
+    f(2, 123, 532, "ESPECIFICA EMB 1KG VALIDADE MINIMA"),
+    f(2, 123, 524, "DE 12 MESES APOS FABRICACAO"),
+    // borda de célula (524 → 511 = vão 13) separa a cauda de B da cabeça de C
+    f(2, 123, 511, "SUCO EM PO EMBALAGEM DE 1 KG SABORES"),
+    f(2, 123, 503, "SORTIDOS TIPO ARTIFICIAL COLORIDO"),
+    f(2, 82, 495, "524173208"),
+    f(2, 55, 495, "2"),
+    f(2, 123, 495, "ARTIFICIALMENTE ADOCADO COM RENDIMENTO"),
+    f(2, 353, 495, "UNIDADE"),
+    f(2, 419, 495, "30,0000"),
+    f(2, 466, 495, "7,5500"),
+    f(2, 515, 495, "226,5000"),
+    f(2, 123, 487, "DE 10 LITROS EMBALAGEM ATOXICA COM"),
+    f(2, 123, 479, "PRAZO MINIMO DE VALIDADE 06 MESES"),
+    f(2, 451, 455, "VALOR TOTAL"),
+    f(2, 515, 455, "232.400,0000"),
+    f(2, 38, 430, "5 - PREVISÃO DE ENTREGA/EXECUÇÃO"),
+    f(2, 38, 420, "ANUAL."),
+  ];
+}
+
 describe("parse-dfd-pdf-core", () => {
   it("extrai o cabeçalho (rótulos e valores em trechos separados)", () => {
     const d = parseDfdFromPdfItems(dfdPdf(), "DFD PDF.pdf");
@@ -271,6 +329,22 @@ describe("parse-dfd-pdf-core", () => {
     assert.ok(desc2.startsWith("ACUCAR EM SACHE"), desc2);
     assert.ok(!desc2.includes("TODDY"), desc2);
     assert.ok(!desc2.includes("QUALIDADE"), desc2);
+  });
+
+  it("QUEBRA DE PÁGINA: a cabeça do 1º item da página não vaza para o item anterior", () => {
+    const d = parseDfdFromPdfItems(dfdCrossPage(), "cross.pdf");
+    assert.equal(d.itens.length, 2);
+    assert.equal(d.itens[0].codigo, "524170578");
+    assert.equal(d.itens[1].codigo, "524173208");
+    const b = d.itens[0].descricao ?? ""; // SAL — completo, incl. a continuação da p2
+    assert.ok(b.startsWith("SAL REFINADO"), b);
+    assert.ok(b.includes("MAXIMO DE 15MG"), b); // cauda da p1
+    assert.ok(b.includes("DE 12 MESES APOS FABRICACAO"), b); // continuação (virou a página)
+    assert.ok(!b.includes("SUCO"), b); // NÃO rouba a cabeça do item C
+    const c = d.itens[1].descricao ?? ""; // SUCO — com a CABEÇA (não truncado)
+    assert.ok(c.startsWith("SUCO EM PO"), c);
+    assert.ok(c.includes("TIPO ARTIFICIAL"), c);
+    assert.ok(c.trimEnd().endsWith("06 MESES"), c);
   });
 
   it("numeração com BURACO no sequencial (item removido) importa normal e só APONTA o buraco", () => {

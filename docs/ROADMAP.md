@@ -320,15 +320,18 @@ ou **substituir** (exclui o existente e importa o novo). Código continua único
 Núcleo `itensIguais` (puro), rotas `POST /api/catalogo/item` + `DELETE /api/catalogo/item/[id]` + `PATCH /api/catalogo/itens`
 (modo mesclar) + `criar-catalogo`. Sem migração.
 
-### Import de DFD (PDF): descrição ILIMITADA por item, nunca truncada — corrigido
-✅ Um item pode ter uma **descrição enorme** (várias linhas). O parser casava cada trecho pela âncora (nº/código no
-MEIO da célula), então as **últimas linhas de um item vazavam para o próximo** → descrição **truncada** (ex.: item
-terminava em "…EMBALAGEM PLÁSTICA ATÓXICA DE" e perdia "400G. SIMILAR A MARCA TODDY… QUALIDADE"). Agora a **descrição**
-é casada pela **borda REAL da célula** — o **maior vão** entre as linhas na faixa entre duas âncoras (`itemPorCuts` +
-`cutsPorPagina` em `parse-dfd-pdf-core.ts`, puros/testáveis); número/código/valores seguem na âncora (`nearestByY`).
-O corte só ocorre num respiro **nítido**; vãos uniformes mantêm o ponto médio das âncoras → **zero regressão** em
-descrições curtas. A descrição alta vem **inteira** e não polui o item seguinte. Teste de regressão (fixture de 9
-linhas cuja última sumia) em `tests/parse-dfd-pdf.test.ts`.
+### Import de DFD (PDF): descrição ILIMITADA por item, nunca truncada (inclui QUEBRA DE PÁGINA) — corrigido
+✅ A âncora (nº/código/valores) fica no **MEIO da célula** → a descrição tem linhas ACIMA e ABAIXO do número. Casar
+por `nearestByY` truncava. **1ª correção** (same-page): casar pela **borda da célula** (`itemPorCuts`/`cutsPorPagina`).
+**Correção definitiva** (validada no **Protocolo FMC.pdf real**): (a) o limiar de borda virou **adaptativo** —
+`LIM = max(mediana*1.3, mediana+2)` sobre os vãos de descrição do DFD (entrelinha ~8–9, bordas ~11+, separação limpa),
+substituindo o limiar fixo antigo que não batia com o PDF real; (b) **quebra de página** (`topCutPorPagina`): acima do
+1º número de uma página de continuação estão a **cauda** do último item da página anterior E a **cabeça** do 1º item
+desta página — a regra antiga jogava TUDO no item anterior, **roubando a cabeça** do 1º item de toda página de
+continuação (ex.: item 20 "SAL" levava "SUCO EM PÓ…" do item 21). Agora a borda de célula separa cauda↔cabeça; (c)
+página **sem número** (descrição ocupa a página inteira) = continuação integral do item anterior. Resultado no PDF
+real: **18 DFDs, 329 itens, 0 truncadas, 0 vazamentos**. Testes de regressão (same-page + **cross-page**) em
+`tests/parse-dfd-pdf.test.ts`.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
