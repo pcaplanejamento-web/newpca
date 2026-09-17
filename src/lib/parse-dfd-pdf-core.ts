@@ -78,12 +78,15 @@ const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Z
 const RE_DROPSIGNER_ANCORA = /^assinado\s+digitalmente\s+por:?$/i;
 
 /**
- * Formato C — assinatura **Dropsigner** (Lacuna Software), CIENTE DAS 2 COLUNAS. O bloco fica
- * INLINE na Seção 10 (AUTORIZAÇÃO DEMANDA) do DFD, na COLUNA DIREITA: "Assinado digitalmente por:"
- * → NOME → "CPF: ***.xxx.xxx-**" → "Data: dd/mm/aaaa hh:mm:ss -03:00"; a URL de validação (com o
- * código) vem na marca d'água da margem, repetida por página. Como `agruparLinhas` junta as 2
- * colunas de mesma `y`, a extração usa a GEOMETRIA (`x`): lê só a coluna do âncora. Só páginas
- * COM a marca d'água Dropsigner são consideradas (não confunde com o Formato B). Puro/testável.
+ * Formato C — assinatura **Dropsigner** (Lacuna Software), CIENTE DAS 2 COLUNAS. O documento
+ * assinado traz, em TODA página, a marca d'água "Documento assinado no Dropsigner … `dropsigner.com/
+ * validate/<código>`" — é a PROVA universal de que o documento foi assinado (com o código de
+ * validação). Em ALGUMAS páginas há também o **bloco visível** na Seção 10, na COLUNA DIREITA:
+ * "Assinado digitalmente por:" → NOME → "CPF: ***.xxx.xxx-**" → "Data: …" (o `agruparLinhas` junta
+ * as 2 colunas de mesma `y`, então lê-se só a coluna do âncora, por GEOMETRIA `x`). Regra:
+ * - todo **código de validação** presente vira uma assinatura Dropsigner (reconhece o documento
+ *   como assinado, mesmo sem bloco visível — nome/CPF/data ficam vazios, verificáveis pela URL);
+ * - quando há o bloco, a assinatura sai COMPLETA (nome/CPF/data). Puro/testável.
  */
 export function assinaturasDropsigner(bruto: PdfItem[]): Assinatura[] {
   const items = normalizar(bruto);
@@ -97,6 +100,8 @@ export function assinaturasDropsigner(bruto: PdfItem[]): Assinatura[] {
 
   const out: Assinatura[] = [];
   const vistos = new Set<string>();
+  const codigosComBloco = new Set<string>(); // códigos que já têm um bloco visível (com nome)
+  // 1) Blocos VISÍVEIS ("Assinado digitalmente por:") → assinatura COMPLETA (nome/CPF/data).
   for (const anc of items) {
     if (!RE_DROPSIGNER_ANCORA.test(anc.str)) continue;
     const u = urlPorPagina.get(anc.page);
@@ -120,11 +125,20 @@ export function assinaturasDropsigner(bruto: PdfItem[]): Assinatura[] {
         nome = t;
       }
     }
-    if (!nome && !eCpf) continue; // bloco vazio → ignora
-    const chave = `${norm(nome)}|${data}`;
+    if (!nome && !eCpf) continue; // bloco vazio → cai no carimbo (passo 2)
+    const chave = `${u.codigo}|${norm(nome)}|${data}`;
     if (vistos.has(chave)) continue; // a marca d'água repete por página; o bloco em si, não
     vistos.add(chave);
+    codigosComBloco.add(u.codigo);
     out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: u.codigo, url: u.url, fonte: "dropsigner" });
+  }
+  // 2) Códigos SÓ com carimbo (sem bloco visível) → assinatura reconhecida pela marca d'água
+  //    (documento assinado no Dropsigner; assinante/data verificáveis pela URL de validação).
+  const porCodigo = new Map<string, string>();
+  for (const { url, codigo } of urlPorPagina.values()) if (!porCodigo.has(codigo)) porCodigo.set(codigo, url);
+  for (const [codigo, url] of porCodigo) {
+    if (codigosComBloco.has(codigo)) continue;
+    out.push({ nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo, url, fonte: "dropsigner" });
   }
   return out;
 }

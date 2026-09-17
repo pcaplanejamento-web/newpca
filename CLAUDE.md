@@ -203,10 +203,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
   (Dropsigner/Lacuna Software): bloco **INLINE na Seção 10 (AUTORIZAÇÃO DEMANDA)** do próprio DFD, em layout de
   **2 COLUNAS** (`Assinado digitalmente por:` → NOME → `CPF: <mascarado>` → `Data: … -03:00` na COLUNA DIREITA; a URL
-  `dropsigner.com/validate/<código>` vem na marca d'água da margem, repetida por página). Como o `agruparLinhas` junta
-  as 2 colunas de mesma `y`, o Dropsigner é extraído por **`assinaturasDropsigner(items)`** (`parse-dfd-pdf-core.ts`,
-  CIENTE DA COLUNA `x` — só páginas com a marca d'água; dedupe por nome+data), somado a `extrairAssinaturas` em
-  `parseDfdFromPdfItems` (cobre avulso E protocolo). Validado no Protocolo 4.pdf real (nome/CPF/data/código corretos).
+  `dropsigner.com/validate/<código>` vem na marca d'água da margem "Documento assinado no Dropsigner", repetida em
+  TODA página — é a **prova UNIVERSAL** de que o documento foi assinado. Como o `agruparLinhas` junta as 2 colunas de
+  mesma `y`, o Dropsigner é extraído por **`assinaturasDropsigner(items)`** (`parse-dfd-pdf-core.ts`, CIENTE DA COLUNA
+  `x`): **todo código de validação presente vira uma assinatura** (reconhece o documento como assinado mesmo SEM bloco
+  visível — nome/CPF/data ficam vazios, verificáveis pela URL); quando há o bloco na Seção 10, sai COMPLETA. Somado a
+  `extrairAssinaturas` em `parseDfdFromPdfItems` (cobre DFD avulso). **No PROTOCOLO** as assinaturas A/B ficam em páginas
+  separadas (índice `dfd.assinaturas`) e a Dropsigner é inline nas páginas do DFD → **`parseDfdDoProtocolo` COMBINA os
+  dois** (`[...dfd.assinaturas, ...dropsigner do parse]`) — **não sobrescreve** (o bug que impedia o reconhecimento).
+  Validado no Protocolo 4.pdf real: **79/86 DFDs reconhecidos** (14 com nome; 65 pelo carimbo; 1 usa outro formato
+  "Assinado de forma digital", fora do escopo).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas de um DFD podem vir em **VÁRIAS páginas** (formatos e páginas diferentes), sempre depois do DFD. No

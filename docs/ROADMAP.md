@@ -21,15 +21,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
-✅ 3º formato de assinatura, o **Dropsigner**: bloco **inline na Seção 10 (AUTORIZAÇÃO DEMANDA)** do DFD, em layout
-de **2 colunas**, com a URL `dropsigner.com/validate/<código>` na marca d'água. Extração **ciente da coluna `x`**
-(`assinaturasDropsigner`, `parse-dfd-pdf-core.ts`) — lê nome/CPF-mascarado/data/código, só em páginas com a marca
-d'água (não confunde com o Formato B), dedupe por nome+data. Validado no **Protocolo 4.pdf** real (nomes/códigos
-corretos; 136 marcas Dropsigner). **Reconhecida como válida** na conferência (`validarAssinatura` ganhou o status
-`"dropsigner"`, não bloqueia, sem exigir match por nome — o assinante é o secretário/ordenador com CPF mascarado);
-os formatos A/B seguem **idênticos**. No `DfdView`, o card da Dropsigner vem em **tons de AZUL** (`--info`) + `Badge`
-"Dropsigner" e o "Verificar autenticidade" aponta para o link Dropsigner. Testes: extração geométrica (2 colunas,
-ignora coluna esquerda, dedupe) + conferência (só-Dropsigner não bloqueia; A/B inalterado; "sem assinatura" intacto).
+✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …
+`dropsigner.com/validate/<código>`" (em TODA página) é a **prova universal** — todo código presente vira uma
+assinatura reconhecida, mesmo sem bloco visível (nome verificável pela URL); onde há o bloco na Seção 10 (layout de
+**2 colunas**), sai completa (nome/CPF-mascarado/data), via extração **ciente da coluna `x`** (`assinaturasDropsigner`).
+**No protocolo** o `parseDfdDoProtocolo` **COMBINA** as A/B do índice com as Dropsigner do parse completo (antes
+sobrescrevia → nenhuma Dropsigner era reconhecida). **Reconhecida como válida** na conferência (`validarAssinatura`
+ganhou o status `"dropsigner"`, não bloqueia, sem exigir match por nome); A/B **idênticos**. No `DfdView`, card em
+**tons de AZUL** (`--info`) + `Badge` "Dropsigner" + "Verificar autenticidade" → link Dropsigner. Validado no
+**Protocolo 4.pdf** real: **79/86 DFDs reconhecidos** (14 com nome, 65 pelo carimbo; 1 usa outro formato). Testes:
+extração geométrica (2 colunas + carimbo sem bloco) + conferência (só-Dropsigner não bloqueia; A/B e "sem assinatura" intactos).
 
 ### Capa e DFD: campos de CONTEÚDO editáveis (cadeado por campo) — entregue
 ✅ Os campos de **conteúdo** da **capa** (interessado, assunto, observação, CPF/CNPJ, valor, local) e do

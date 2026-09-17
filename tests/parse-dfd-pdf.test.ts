@@ -449,4 +449,21 @@ describe("assinaturasDropsigner (Formato C — ciente das 2 colunas)", () => {
     ];
     assert.deepEqual(assinaturasDropsigner(semDrop), []);
   });
+
+  it("marca d'água SEM bloco visível → 1 assinatura reconhecida (só código, sem nome)", () => {
+    // Caso comum no Protocolo 4: a Seção 10 mostra só o cargo; o documento tem o carimbo
+    // "Documento assinado no Dropsigner …/validate/<código>" → reconhece como assinado.
+    const soWatermark = [
+      f(1, 38, 99, "10 - AUTORIZAÇÃO DEMANDA"),
+      f(1, 38, 85, "Autorizo o início da formalização da demanda."),
+      f(1, 236, 57, "SECRETÁRIO MUNICIPAL DE SAÚDE"),
+      f(1, 586, 43, "Documento assinado no Dropsigner. https://www.dropsigner.com/validate/PMZ4G-FP9KD-MKT69-NZQW2."),
+    ];
+    const ass = assinaturasDropsigner(soWatermark);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].fonte, "dropsigner");
+    assert.equal(ass[0].codigo, "PMZ4G-FP9KD-MKT69-NZQW2");
+    assert.ok(ass[0].url.includes("dropsigner.com/validate/PMZ4G-FP9KD-MKT69-NZQW2"));
+    assert.equal(ass[0].nome, ""); // sem bloco visível → nome vazio (verificável pela URL)
+  });
 });

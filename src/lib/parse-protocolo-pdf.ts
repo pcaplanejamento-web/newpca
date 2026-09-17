@@ -38,7 +38,11 @@ export async function indexarProtocoloPdf(file: File): Promise<{ index: Protocol
 export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArquivo: string) {
   const items: PdfItem[] = [];
   for (const p of dfd.pages) items.push(...(await doc.pageItems(p)));
-  // As páginas do DFD não incluem a página de assinatura (fica fora de `pages`);
-  // as assinaturas vêm do índice (`dfd.assinaturas`).
-  return { ...parseDfdFromPdfItems(items, nomeArquivo), assinaturas: dfd.assinaturas };
+  const parsed = parseDfdFromPdfItems(items, nomeArquivo);
+  // Assinaturas A/B (certificado/sistema) ficam em páginas SEPARADAS após o DFD (fora de
+  // `dfd.pages`) → vêm do ÍNDICE (`dfd.assinaturas`). A **Dropsigner** é INLINE nas páginas do
+  // próprio DFD (Seção 10) → é capturada pelo parse completo (`parsed.assinaturas`, via
+  // `assinaturasDropsigner`, que exige geometria). Combina os dois (fontes/páginas distintas).
+  const dropsigner = parsed.assinaturas.filter((a) => a.fonte === "dropsigner");
+  return { ...parsed, assinaturas: [...dfd.assinaturas, ...dropsigner] };
 }
