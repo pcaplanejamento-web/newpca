@@ -4,11 +4,14 @@ export const cadastroSchema = z.object({
   nome: z.string().trim().min(2, "Informe seu nome.").max(120),
   email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
   senha: z.string().min(8, "A senha deve ter ao menos 8 caracteres.").max(200),
+  // Token do Turnstile (captcha). Opcional no schema; a rota exige quando o captcha está ativo.
+  token: z.string().max(4000).optional(),
 });
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
   senha: z.string().min(1, "Informe a senha.").max(200),
+  token: z.string().max(4000).optional(),
 });
 
 // Foto = data-URL base64 (avatar redimensionado no cliente). "" limpa a foto.

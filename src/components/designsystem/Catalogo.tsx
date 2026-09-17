@@ -9,6 +9,7 @@ import { Callout } from "@/components/Callout";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
+import { MetricasChart } from "@/components/charts/MetricasChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { ColorField } from "@/components/ColorField";
@@ -732,6 +733,39 @@ export function Catalogo() {
         <p className="mt-3 text-[12px] text-muted">
           Fundamental bloqueia; intermediário só avisa (atenção); automático corrige sozinho; ignorar não avalia.
         </p>
+      </Secao>
+
+      <Secao titulo="Integrações do ADM (Cloudflare)">
+        <p className="mb-3 text-sm text-muted">
+          A aba <code>/painel/integracoes</code> conecta serviços externos. Status por card (Badge) e o gráfico de
+          monitoramento (MetricasChart). Segredos são write-only (cifrados no servidor).
+        </p>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Badge tone="emerald" dot>
+            Configurado
+          </Badge>
+          <Badge tone="emerald" dot>
+            Ativado
+          </Badge>
+          <Badge tone="amber" dot>
+            Incompleto
+          </Badge>
+          <Badge tone="slate" dot>
+            Desativado
+          </Badge>
+          <Badge tone="slate">Em breve</Badge>
+        </div>
+        <ChartCard title="Requisições por dia" subtitle="Monitoramento do Worker (exemplo)">
+          <MetricasChart
+            data={[
+              { data: "2026-09-11", requests: 1200, errors: 3 },
+              { data: "2026-09-12", requests: 1580, errors: 0 },
+              { data: "2026-09-13", requests: 990, errors: 12 },
+              { data: "2026-09-14", requests: 1740, errors: 1 },
+              { data: "2026-09-15", requests: 2010, errors: 4 },
+            ]}
+          />
+        </ChartCard>
       </Secao>
 
       <Secao titulo="Referência do sistema (aba read-only)">

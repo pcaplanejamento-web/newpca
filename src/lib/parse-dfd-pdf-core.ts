@@ -287,14 +287,12 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         if (b.y > g.topo) g.topo = b.y;
       }
     });
-    // ── Fronteiras (cuts) de célula entre itens consecutivos, POR PÁGINA ──
-    // A descrição é ALTA (pode ter dezenas de linhas) e a âncora fica no MEIO da célula:
-    // por `nearestByY` as últimas linhas de um item vazavam para o próximo (descrição
-    // TRUNCADA). A borda REAL da célula é o "respiro" entre a última linha de um item e a
-    // primeira do seguinte = o MAIOR vão entre as linhas de descrição na faixa entre duas
-    // âncoras. Sem esse respiro nítido (descrição curta, ou vãos uniformes = uma única
-    // descrição comprida sem borda no meio) cai no ponto médio das âncoras — IDÊNTICO ao
-    // `nearestByY` de antes → zero regressão fora do caso de descrição alta.
+    // ── Espaçamento típico (entrelinha) e limiar de BORDA de célula, por DFD ──
+    // A âncora (nº/código/valores) fica no MEIO da célula → a descrição tem linhas ACIMA e
+    // ABAIXO do número. A borda REAL entre um item e o seguinte é um "respiro" (padding da
+    // célula) MAIOR que a entrelinha. Nos PDFs reais a entrelinha é ~8–9 e as bordas ~11+
+    // (separação limpa, nunca ocorre vão 10). Calibramos um limiar ADAPTATIVO pela MEDIANA
+    // dos vãos de descrição (dominada pela entrelinha) para funcionar em qualquer fonte.
     const descYsPorPagina = new Map<number, number[]>();
     for (const f of bodyFrags) {
       if (colOf(f.x, f.str) !== "descricao") continue;
@@ -302,6 +300,26 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
       if (arr) arr.push(f.y);
       else descYsPorPagina.set(f.page, [f.y]);
     }
+    const vaosTodos: number[] = [];
+    for (const ys of descYsPorPagina.values()) {
+      const s = [...ys].sort((x, y) => y - x); // DESC
+      for (let i = 0; i < s.length - 1; i++) {
+        const vao = s[i] - s[i + 1];
+        if (vao > 0 && vao <= 40) vaosTodos.push(vao); // ignora saltos de seção/página
+      }
+    }
+    const mediana = (arr: number[]): number => {
+      if (arr.length === 0) return 0;
+      const s = [...arr].sort((x, y) => x - y);
+      const m = s.length >> 1;
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+    const espacoTipico = mediana(vaosTodos);
+    // Vão > LIM ⇒ BORDA de célula; ≤ LIM ⇒ entrelinha (mesma descrição).
+    const LIM = espacoTipico > 0 ? Math.max(espacoTipico * 1.3, espacoTipico + 2) : 12;
+
+    // ── Fronteiras (cuts) entre itens da MESMA página: no MAIOR vão que excede LIM na faixa
+    // entre as âncoras; sem vão-borda, ponto médio das âncoras (fallback = nearestByY). ──
     const cutsPorPagina = new Map<number, number[]>();
     for (const [page, g] of idxPorPagina) {
       const a = g.ys; // âncoras em `y` DESC
@@ -314,27 +332,57 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
         while (p < dys.length && dys[p] >= hiA) p++;
         const band: number[] = [];
         while (p < dys.length && dys[p] > loA) band.push(dys[p++]);
-        let cut = (hiA + loA) / 2; // ponto médio das âncoras (= nearestByY)
-        if (band.length >= 3) {
-          // O maior vão só é uma BORDA de célula se DESTOA dos demais (respiro nítido);
-          // vãos uniformes ⇒ mantém o ponto médio (não fatia uma descrição comprida).
-          let maxVao = -1;
-          let segVao = -1;
-          let idxMax = 0;
-          for (let i = 0; i < band.length - 1; i++) {
-            const vao = band[i] - band[i + 1];
-            if (vao > maxVao) {
-              segVao = maxVao;
-              maxVao = vao;
-              idxMax = i;
-            } else if (vao > segVao) segVao = vao;
+        let cut = (hiA + loA) / 2; // ponto médio (= nearestByY)
+        let maxVao = -1;
+        let idxMax = -1;
+        for (let i = 0; i < band.length - 1; i++) {
+          const vao = band[i] - band[i + 1];
+          if (vao > maxVao) {
+            maxVao = vao;
+            idxMax = i;
           }
-          if (maxVao >= segVao * 1.4) cut = (band[idxMax] + band[idxMax + 1]) / 2;
         }
+        if (idxMax >= 0 && maxVao > LIM) cut = (band[idxMax] + band[idxMax + 1]) / 2;
         cuts.push(cut);
       }
       cutsPorPagina.set(page, cuts);
     }
+
+    // ── Fronteira do TOPO de cada página de continuação (`g.first>0`): separa a CAUDA do
+    // último item da página anterior (continuação, em cima) da CABEÇA do 1º item desta
+    // página (número no meio → cabeça ACIMA dele). Andando do 1º número para cima, a cabeça
+    // é contígua (vão ≤ LIM); o 1º vão > LIM é a borda (`topCut`). Sem borda ⇒ o item
+    // anterior TERMINOU na página anterior → nada sobe (tudo é cabeça do 1º item). Conserta
+    // o roubo da cabeça do 1º item de toda página de continuação (bug cross-page). ──
+    const topCutPorPagina = new Map<number, number>();
+    for (const [page, g] of idxPorPagina) {
+      if (g.first === 0) continue;
+      const acima = (descYsPorPagina.get(page) ?? []).filter((y) => y > g.topo).sort((x, y) => x - y); // ASC
+      let prev = g.topo;
+      let topCut = Number.POSITIVE_INFINITY;
+      for (const y of acima) {
+        if (y - prev <= LIM) prev = y;
+        else {
+          topCut = y;
+          break;
+        }
+      }
+      topCutPorPagina.set(page, topCut);
+    }
+
+    // Último item (bucket) de cada página COM itens → alvo p/ uma página SÓ de continuação
+    // (descrição que ocupa a página inteira, sem número): continua o último item anterior.
+    const ultimoBucketDaPagina = new Map<number, number>();
+    buckets.forEach((b, i) => ultimoBucketDaPagina.set(b.page, i)); // ordem (page, y desc) ⇒ fica o último
+    const paginasComItem = [...ultimoBucketDaPagina.keys()].sort((x, y) => x - y);
+    const itemAntesDaPagina = (page: number): number | undefined => {
+      let alvo: number | undefined;
+      for (const pg of paginasComItem) {
+        if (pg < page) alvo = ultimoBucketDaPagina.get(pg);
+        else break;
+      }
+      return alvo;
+    };
 
     for (const f of bodyFrags) {
       const g = idxPorPagina.get(f.page);

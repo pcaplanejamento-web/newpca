@@ -6,11 +6,19 @@ import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconAlert, IconArrowRight, IconCheck, IconMail, IconUser } from "./icons";
+import { Turnstile } from "./Turnstile";
 
 // Tela de acesso (login/cadastro) — referência dos componentes de entrada do
 // design system (prints do usuário): TextField/PasswordField com ícone e anel
 // de foco, Checkbox e Button "accent" com glow. 100% por token.
-export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
+export function AuthForm({
+  mode,
+  turnstile,
+}: {
+  mode: "login" | "cadastro";
+  /** Captcha do ADM — só renderiza/exige quando ativo E configurado. */
+  turnstile?: { enabled: boolean; siteKey: string };
+}) {
   const router = useRouter();
   const isCad = mode === "cadastro";
   const [nome, setNome] = useState("");
@@ -20,16 +28,24 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, setPendente] = useState(false);
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsNonce, setTsNonce] = useState(0); // remonta o widget após erro (re-solve)
+  const usaCaptcha = !!turnstile?.enabled && !!turnstile?.siteKey;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (usaCaptcha && !tsToken) {
+      setErro("Confirme que você não é um robô.");
+      return;
+    }
     setLoading(true);
     setErro(null);
     try {
+      const captcha = usaCaptcha && tsToken ? { token: tsToken } : {};
       const res = await fetch(isCad ? "/api/auth/cadastro" : "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isCad ? { nome, email, senha } : { email, senha }),
+        body: JSON.stringify(isCad ? { nome, email, senha, ...captcha } : { email, senha, ...captcha }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string; pendente?: boolean };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Ocorreu um erro.");
@@ -41,6 +57,10 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
       router.refresh();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Ocorreu um erro.");
+      if (usaCaptcha) {
+        setTsToken(null);
+        setTsNonce((n) => n + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -108,6 +128,9 @@ export function AuthForm({ mode }: { mode: "login" | "cadastro" }) {
         />
         {!isCad && (
           <Checkbox label="Manter-me conectado" checked={lembrar} onChange={(e) => setLembrar(e.target.checked)} />
+        )}
+        {usaCaptcha && turnstile && (
+          <Turnstile key={tsNonce} siteKey={turnstile.siteKey} onToken={setTsToken} />
         )}
       </div>
 

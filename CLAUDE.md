@@ -549,6 +549,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   renderiza** de fato: `generateMetadata` (título/descrição/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o
   cabeçalho público (`/`), todos com `getAparencia()` (cache 60s) e **fallback** aos textos padrão. Nav item
   "Configurações" (`IconSettings`) no topo de Administração. Sem migração nova (o slot `identidade` já existia).
+- **Integrações externas (ADM):** tela `/painel/integracoes` (`IntegracoesAdmin`, admin; nav "Integrações" `IconPlug`
+  + atalho em Configurações → Mais). Config no blob `configuracoes` id=1, chave `integracoes` (**sem migração**;
+  loader `integracoes.ts` cache 60s; core puro `integracoes-core.ts`; schema `integracoes-validation.ts`; rota
+  `/api/admin/integracoes` GET/PATCH/DELETE preservando as chaves irmãs). **Escopo: Cloudflare.** Tudo começa
+  **desligado** (defaults off → login/cadastro idênticos a hoje). **Segredos write-only** (nunca voltam no GET): o
+  segredo do **Turnstile** é **cifrado** (AES-GCM, `cripto.ts` puro/testável + wrapper `integracoes-segredos.ts`)
+  com a chave mestra **Worker Secret `INTEGRACOES_CHAVE`** (definida 1x fora do repo; sem ela degrada — não quebra).
+  **Captcha Turnstile:** componente DS `Turnstile` carrega o script **só quando ativo+configurado** (`turnstileConfigurado`);
+  `AuthForm` recebe `{enabled,siteKey}` das páginas login/cadastro; o servidor confere em `verificarTurnstile`
+  (`turnstile.ts`, **fail-open** em erro de infra — não trava login) nas rotas `/api/auth/login|cadastro` (token
+  opcional no schema, exigido só quando ativo). **Monitoramento:** **reusa** os Worker Secrets já existentes
+  `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
+  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login e Resend
+  = cards **"em breve"** (sem lógica). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **botão↔FAB**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav; sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

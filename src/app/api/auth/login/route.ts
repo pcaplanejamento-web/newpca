@@ -4,6 +4,9 @@ import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { criarSessao, definirCookieSessao, verificarSenha } from "@/lib/auth";
 import { loginSchema } from "@/lib/auth-validation";
+import { getIntegracoes } from "@/lib/integracoes";
+import { turnstileConfigurado } from "@/lib/integracoes-core";
+import { verificarTurnstile } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +31,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const { email, senha } = parsed.data;
+  const { email, senha, token: captchaToken } = parsed.data;
+
+  // Captcha (Turnstile) — só quando o ADM ativou E configurou. Fail-open em erro de infra.
+  const integ = await getIntegracoes();
+  if (turnstileConfigurado(integ)) {
+    const cap = await verificarTurnstile(integ, captchaToken, req.headers.get("cf-connecting-ip"));
+    if (!cap.ok) {
+      return NextResponse.json({ ok: false, error: cap.motivo ?? "Falha na verificação anti-robô." }, { status: 400 });
+    }
+  }
 
   try {
     const [u] = await getDb()

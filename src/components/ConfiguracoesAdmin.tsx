@@ -19,6 +19,7 @@ import {
   IconImage,
   IconPalette,
   IconPencil,
+  IconPlug,
   IconPlus,
   IconShield,
   IconTrash,
@@ -371,6 +372,12 @@ export function ConfiguracoesAdmin({
         titulo="Usuários"
         descricao="Contas, papéis e status de acesso."
         icon={<IconUser className="h-5 w-5" />}
+      />
+      <LinkCard
+        href="/painel/integracoes"
+        titulo="Integrações"
+        descricao="APIs externas: captcha e monitoramento (Cloudflare); Google e e-mail em breve."
+        icon={<IconPlug className="h-5 w-5" />}
       />
       <LinkCard
         href="/painel/armazenamento"

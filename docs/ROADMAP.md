@@ -20,6 +20,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Integrações externas (tela do ADM) — Cloudflare captcha + monitoramento — entregue
+✅ Nova tela **Integrações** (`/painel/integracoes`, admin; nav + atalho em Configurações → Mais) para conectar APIs externas. **Captcha Turnstile** (Cloudflare): liga/desliga pelo ADM, protege login e cadastro (widget só carrega quando ativo+configurado; servidor confere com **fail-open** para nunca travar o login por falha de infra). **Monitoramento** (Cloudflare): painel de métricas do Worker (requisições/erros/CPU, `recharts`) reusando os secrets `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` já existentes (mesmos do Armazenamento). **Segredos write-only cifrados** (AES-GCM, `cripto.ts`) com chave mestra `INTEGRACOES_CHAVE` (Worker Secret); nunca reexibidos. Config no blob `configuracoes` (chave `integracoes`, **sem migração**). **Google login** e **e-mail (Resend)** ficam como **"em breve"** (sem código morto). Tudo começa desligado (login inalterado). Setup em `docs/INTEGRACOES.md`.
+
 ### DFD: tela dedicada + banner com header/footer fixos — entregue
 ✅ DFD virou **tela própria** (`/painel/dfds`, aba **DFD** na nav — migração `0015` mantém o acesso de quem tinha
 `pca`); o PCA ficou só com Planilha + PCA. A tabela de DFDs tem **filtro em todas as colunas** + **somatório de

@@ -40,6 +40,7 @@ import {
   Package,
   Palette,
   Pencil,
+  Plug,
   Plus,
   RefreshCw,
   Save,
@@ -113,6 +114,7 @@ export const IconArrowDown = ArrowDown;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
 export const IconRefresh = RefreshCw;
+export const IconPlug = Plug;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

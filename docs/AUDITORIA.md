@@ -42,7 +42,7 @@ Arquitetura: **Next.js 16 + Cloudflare Workers (OpenNext) + D1 (Drizzle)**. 100%
 | **Login** | ❌ 0% | Auth.js (NextAuth v5) + adaptador D1, sessão em cookie, middleware de proteção de rotas |
 | **Cadastro de usuário** | ❌ 0% | Registro/convite, perfis, primeiro-acesso, definição de senha |
 | **Integração/gestão de usuário** | ❌ 0% | Tabelas `users`, `roles`, `permissions`, `teams`; RBAC; associação usuário↔time↔ferramenta |
-| **Integrações externas** | ❌ 0% | O plano cita e-mail/Google como evolução futura (não é prioridade da Fase 1) |
+| **Integrações externas** | 🔨 parcial | Tela **Integrações** (`/painel/integracoes`) com **Cloudflare** (captcha Turnstile + monitoramento) entregue; **Google login** e **e-mail (Resend)** em breve. Ver `docs/INTEGRACOES.md`. |
 
 Ou seja: o app atual é **aberto, sem contas de usuário** (decisão inicial do MVP). O plano muda isso radicalmente para uma plataforma interna **autenticada e com papéis**.
 
