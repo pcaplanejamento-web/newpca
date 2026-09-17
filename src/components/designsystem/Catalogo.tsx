@@ -104,6 +104,20 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   );
 }
 
+/** Demo do painel de item EDITÁVEL (importação/gravado destravado). */
+function ItemDetalheEditDemo() {
+  const [item, setItem] = useState({
+    item: 2,
+    codigo: "5241937264",
+    descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M",
+    unidade: "DIAS",
+    quantidade: 20 as number | null,
+    valorUnitario: 8000 as number | null,
+    valorTotal: 160000 as number | null,
+  });
+  return <ItemDetalhe item={item} editavel onChange={(patch) => setItem((it) => ({ ...it, ...patch }))} />;
+}
+
 /** Demo do seletor de tipos de DFD (conjunto, controlado). */
 function TipoDfdPickerDemo() {
   const [tipos, setTipos] = useState<string[]>(["DFD-R"]);
@@ -1025,6 +1039,12 @@ export function Catalogo() {
             tipo="DFD-S"
             conformidade={DEMO_ITEM_CONFORMIDADE}
           />
+        </div>
+      </Secao>
+
+      <Secao titulo="ItemDetalhe EDITÁVEL (importação, ou gravado com o cadeado aberto) — campos do item viram inputs">
+        <div className="max-w-md">
+          <ItemDetalheEditDemo />
         </div>
       </Secao>
 

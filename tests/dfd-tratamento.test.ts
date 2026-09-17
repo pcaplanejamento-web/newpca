@@ -8,6 +8,7 @@ import {
   bloqueantesCatalogo,
   contarMensagens,
   dfdRSemReferencia,
+  editarItemDfd,
   estadoDfd,
   estadoItem,
   estadoProtocolo,
@@ -77,6 +78,31 @@ describe("estado/situação do protocolo", () => {
     assert.equal(estadoProtocolo({ valorCapa: null, valorTotal: 0, totalDfds: 0 }), "regular");
     assert.equal(situacaoProtocolo({ totalDfds: 0 }), "vazio");
     assert.equal(situacaoProtocolo({ totalDfds: 2 }), "preenchido");
+  });
+});
+
+describe("editarItemDfd (edição de item + recomputo do total)", () => {
+  const dfd = {
+    itens: [
+      { item: 1, valorTotal: 100 },
+      { item: 2, valorTotal: 50 },
+    ],
+    valorTotal: 150,
+  };
+  it("edita o item pelo índice e mantém os demais", () => {
+    const d = editarItemDfd(dfd, 0, { valorTotal: 300, descricao: "NOVA" } as Partial<(typeof dfd.itens)[number]>);
+    assert.equal(d.itens[0].valorTotal, 300);
+    assert.equal(d.itens[1].valorTotal, 50);
+  });
+  it("recomputa o valorTotal do DFD = Σ itens", () => {
+    assert.equal(editarItemDfd(dfd, 1, { valorTotal: 200 }).valorTotal, 300); // 100 + 200
+    assert.equal(editarItemDfd(dfd, 0, { valorTotal: null }).valorTotal, 50); // null + 50
+    assert.equal(editarItemDfd(dfd, 0, { valorTotal: 0 }).itens[0].valorTotal, 0);
+  });
+  it("não muda o objeto original (puro)", () => {
+    editarItemDfd(dfd, 0, { valorTotal: 999 });
+    assert.equal(dfd.itens[0].valorTotal, 100);
+    assert.equal(dfd.valorTotal, 150);
   });
 });
 

@@ -368,6 +368,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ativa`): no protocolo, o **DFD aberto** fica marcado na tabela de DFDs; no DFD, o **item aberto** fica marcado na
   tabela da Seção 4 — os dados da direita SEMPRE representam a seleção marcada à esquerda. Trocar de DFD/fechar zera o
   painel. `DfdView`/`DfdConferir` propagam `onItemClick(idx)` + `itemAtivo`.
+- **Item EDITÁVEL (importação) + cadeado (gravado):** o `ItemDetalhe` ganhou `editavel`+`onChange(patch)` — quando
+  editável, os campos **Código/Descrição/Unidade/Quantidade/Valor unitário/Valor total** viram inputs do DS
+  (`TextField`/`cellCls`; numéricos com rascunho local + `parseNumberBR`); a edição escreve o item de volta e recomputa
+  o **valorTotal do DFD** (Σ) via **`editarItemDfd`** (puro, `dfd-tratamento`). Na **importação** (avulso `DfdUploadForm`
+  e protocolo `ProtocoloUploadForm`) o painel é sempre editável e as edições fluem no envio (`enviarDfdEmLotes`). No
+  **gravado** (`DfdsView`), o painel do item tem um **cadeado PRÓPRIO** (`itemTrancado`, `Modal.lateral.acoesCabecalho`,
+  ícones `IconLock`/`IconLockOpen`) começando TRAVADO — mesma lógica de DFD/protocolo; destravar (confirmação) → editar
+  → **"Salvar alterações"** (rodapé do painel) faz `PATCH /api/dfd/[id]` com `{itens}` → **`reescreverDfdItens`** (`dfd.ts`,
+  apaga+reinsere em `db.batch` + recomputa `valorTotal`/`totalItens`). Só **editor** vê o cadeado; escopo por unidade e
+  regra `valorUnitario>0` no servidor (`editarDfdSchema` ganhou `itens`). `ItemDetalhe` é **keyado por índice** para o
+  rascunho numérico reiniciar ao trocar de item.
 - **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
   abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
   **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os

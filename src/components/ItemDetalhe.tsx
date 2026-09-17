@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
@@ -13,10 +14,17 @@ import {
 import { brl, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { parseNumberBR } from "@/lib/normalize";
 import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
+import { cellCls } from "./formStyles";
 import { IconAlert } from "./icons";
+
+/** Número → string editável em pt-BR (vírgula decimal, sem separador de milhar). */
+function fmtNumEdit(v: number | null | undefined): string {
+  return v == null ? "" : String(v).replace(".", ",");
+}
 
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
@@ -30,6 +38,8 @@ export function ItemDetalhe({
   conformidade,
   regras = regrasPadrao(),
   tipo = null,
+  editavel = false,
+  onChange,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -37,10 +47,15 @@ export function ItemDetalhe({
   regras?: RegrasAvaliacao;
   /** Tipo do DFD (texto) — para resolver a compatibilidade de tipo do item. */
   tipo?: string | null;
+  /** Campos do item editáveis (importação, ou gravado com o cadeado aberto). */
+  editavel?: boolean;
+  /** Grava um patch parcial do item no host (que é dono do estado dos itens). */
+  onChange?: (patch: Partial<DfdVisualItem>) => void;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
   const cor = estadoItemCor(est);
+  const ed = editavel && onChange; // edição habilitada (só com handler)
 
   // Conformidade com o catálogo (só quando o veredito foi carregado e o item tem código).
   const conf = conformidade?.get(normalizarCodigo(item.codigo));
@@ -62,19 +77,40 @@ export function ItemDetalhe({
 
       {faltas.length > 0 && (
         <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
-          Falta {faltas.join(" e ")} — corrija na tabela da Seção 4.
+          Falta {faltas.join(" e ")} — {ed ? "preencha abaixo." : "corrija na tabela da Seção 4."}
         </Callout>
       )}
 
-      {/* Todos os campos do item */}
-      <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-        <Campo label="Código" valor={item.codigo ?? "—"} mono />
-        <Campo label="Unidade" valor={item.unidade ?? "—"} />
-        <Campo label="Descrição" valor={item.descricao ?? "—"} span />
-        <Campo label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : "—"} />
-        <Campo label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : "—"} />
-        <Campo label="Valor total" valor={item.valorTotal != null ? brl(item.valorTotal) : "—"} span forte />
-      </dl>
+      {/* Todos os campos do item — editáveis quando `ed`, senão só-leitura */}
+      {ed ? (
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <CampoTextoEdit label="Código" valor={item.codigo ?? ""} mono onChange={(v) => onChange?.({ codigo: v || null })} />
+          <CampoTextoEdit label="Unidade" valor={item.unidade ?? ""} onChange={(v) => onChange?.({ unidade: v || null })} />
+          <CampoTextoEdit
+            label="Descrição"
+            valor={item.descricao ?? ""}
+            span
+            multi
+            onChange={(v) => onChange?.({ descricao: v || null })}
+          />
+          <CampoNumEdit label="Quantidade" valor={item.quantidade} onChange={(v) => onChange?.({ quantidade: v })} />
+          <CampoNumEdit
+            label="Valor unitário"
+            valor={item.valorUnitario}
+            onChange={(v) => onChange?.({ valorUnitario: v })}
+          />
+          <CampoNumEdit label="Valor total" valor={item.valorTotal} span onChange={(v) => onChange?.({ valorTotal: v })} />
+        </dl>
+      ) : (
+        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+          <Campo label="Código" valor={item.codigo ?? "—"} mono />
+          <Campo label="Unidade" valor={item.unidade ?? "—"} />
+          <Campo label="Descrição" valor={item.descricao ?? "—"} span />
+          <Campo label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : "—"} />
+          <Campo label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : "—"} />
+          <Campo label="Valor total" valor={item.valorTotal != null ? brl(item.valorTotal) : "—"} span forte />
+        </dl>
+      )}
 
       {/* Conformidade com o catálogo (referência) — status + sugestão (display-only) */}
       {veredicto && (
@@ -161,6 +197,75 @@ function Campo({
       >
         {valor}
       </dd>
+    </div>
+  );
+}
+
+/** Campo de texto editável (código/descrição/unidade) — controlado pelo item do host. */
+function CampoTextoEdit({
+  label,
+  valor,
+  onChange,
+  span,
+  mono,
+  multi,
+}: {
+  label: string;
+  valor: string;
+  onChange: (v: string) => void;
+  span?: boolean;
+  mono?: boolean;
+  multi?: boolean;
+}) {
+  return (
+    <div className={span ? "sm:col-span-2" : ""}>
+      <label className="mb-0.5 block text-xs text-muted">{label}</label>
+      {multi ? (
+        <textarea
+          className={`${cellCls} min-h-[76px] resize-y leading-snug`}
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <input
+          className={`${cellCls} ${mono ? "font-mono" : ""}`}
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Campo numérico editável (quantidade/valores) — mantém um RASCUNHO local do texto
+ * digitado (aceita "8.000,50" enquanto se digita) e envia o número parseado ao host.
+ * Reinicia quando o host remonta o painel (key por item) ao trocar de item.
+ */
+function CampoNumEdit({
+  label,
+  valor,
+  onChange,
+  span,
+}: {
+  label: string;
+  valor: number | null | undefined;
+  onChange: (v: number | null) => void;
+  span?: boolean;
+}) {
+  const [raw, setRaw] = useState(() => fmtNumEdit(valor));
+  return (
+    <div className={span ? "sm:col-span-2" : ""}>
+      <label className="mb-0.5 block text-xs text-muted">{label}</label>
+      <input
+        className={cellCls}
+        inputMode="decimal"
+        value={raw}
+        onChange={(e) => {
+          setRaw(e.target.value);
+          onChange(parseNumberBR(e.target.value));
+        }}
+      />
     </div>
   );
 }

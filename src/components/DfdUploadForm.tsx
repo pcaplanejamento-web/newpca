@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
-import { type CampoTratavel, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
+import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -333,10 +333,15 @@ export function DfdUploadForm({
                 children:
                   painel?.tipo === "item" && preview.itens[painel.idx] ? (
                     <ItemDetalhe
+                      key={painel.idx}
                       item={preview.itens[painel.idx]}
                       conformidade={conformidade}
                       regras={regras}
                       tipo={preview.tipo}
+                      editavel
+                      onChange={(patch) =>
+                        setPreview((p) => (p ? editarItemDfd(p, (painel as { idx: number }).idx, patch) : p))
+                      }
                     />
                   ) : (
                     <MensagensDfd

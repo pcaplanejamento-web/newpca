@@ -11,6 +11,7 @@ import {
   ESTADO_ROTULO,
   type EstadoDfd,
   estadoCor,
+  editarItemDfd,
   estadoDfd,
   FALTA_REFERENCIA_RENOVACAO,
   faltasCirurgicasDfd,
@@ -374,6 +375,16 @@ export function ProtocoloUploadForm({
       const d = m.get(abertoIdx);
       if (!d) return m;
       return new Map(m).set(abertoIdx, { ...d, ...refs });
+    });
+    setEditados((s) => new Set(s).add(abertoIdx));
+  };
+
+  // Edição de UM item (índice `painelIdx`) do DFD aberto no lateral (recomputa o total do DFD).
+  const onItemAberto = (painelIdx: number, patch: Partial<DfdParseado["itens"][number]>) => {
+    setParsed((m) => {
+      const d = m.get(abertoIdx);
+      if (!d) return m;
+      return new Map(m).set(abertoIdx, editarItemDfd(d, painelIdx, patch));
     });
     setEditados((s) => new Set(s).add(abertoIdx));
   };
@@ -884,10 +895,13 @@ export function ProtocoloUploadForm({
                 children:
                   painel?.tipo === "item" && dfdAberto?.itens[painel.idx] ? (
                     <ItemDetalhe
+                      key={painel.idx}
                       item={dfdAberto.itens[painel.idx]}
                       conformidade={conformidade}
                       regras={regras}
                       tipo={dfdAberto.tipo}
+                      editavel
+                      onChange={(patch) => onItemAberto((painel as { idx: number }).idx, patch)}
                     />
                   ) : (
                     <MensagensDfd

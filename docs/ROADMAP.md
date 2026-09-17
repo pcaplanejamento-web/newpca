@@ -333,6 +333,15 @@ página **sem número** (descrição ocupa a página inteira) = continuação in
 real: **18 DFDs, 329 itens, 0 truncadas, 0 vazamentos**. Testes de regressão (same-page + **cross-page**) em
 `tests/parse-dfd-pdf.test.ts`.
 
+### Item do DFD editável na importação + cadeado no gravado — entregue
+✅ Os campos do item (**Código, Descrição, Unidade, Quantidade, Valor unitário, Valor total**) agora são editáveis no
+painel do item (`ItemDetalhe` ganhou `editavel`+`onChange`; inputs do DS, numéricos com `parseNumberBR`). Na
+**importação** (DFD avulso e protocolo) o painel é sempre editável e as edições fluem no envio; o **valorTotal do DFD**
+recomputa (Σ dos itens, `editarItemDfd` puro). No **gravado**, o painel do item ganhou um **cadeado próprio** (mesma
+lógica de DFDs/protocolos): começa travado; destravar (confirmação) → editar → **"Salvar alterações"** grava direto no
+D1 (`PATCH /api/dfd/[id]` com `itens` → `reescreverDfdItens` reescreve `dfd_itens` + recomputa total). Só editor,
+escopo por unidade, `valorUnitario>0` no servidor. Testes de `editarItemDfd`.
+
 ### Conferência de catálogo: comparação tolerante + rótulos específicos + item completo com tipos — entregue
 ✅ **(comparação)** ao conferir item×catálogo, a divergência de descrição/unidade agora IGNORA **pontuação, espaços e
 tabs** dos dois lados (`normComparacao`, sem mexer no `norm` global) — diferenças triviais não contam como erro.

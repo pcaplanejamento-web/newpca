@@ -1,7 +1,7 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { nivelDe } from "@/lib/avaliacao-core";
-import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao } from "@/lib/dfd";
+import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
 import { editarDfdSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -99,6 +99,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       numeroAta: p.data.numeroAta,
       numeroLicitacao: p.data.numeroLicitacao,
     });
+  }
+
+  // Editar ITENS (banner do item destravado): reescreve `dfd_itens` + recomputa o
+  // `valorTotal` do cabeçalho. Escopo por unidade já garantido acima. Mesma regra do
+  // import: todo item precisa de valor unitário (> 0).
+  if (p.data.itens !== undefined) {
+    if (p.data.itens.length === 0) return erro("O DFD precisa ter ao menos um item.", 422);
+    if (!p.data.itens.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
+      return erro("Todos os itens precisam de valor unitário.", 422);
+    }
+    await reescreverDfdItens(id, p.data.itens);
   }
 
   return ok();

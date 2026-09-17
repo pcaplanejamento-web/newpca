@@ -8,6 +8,7 @@ import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
 import {
   dfdRSemReferencia,
+  editarItemDfd,
   ESTADO_PROTOCOLO_ROTULO,
   estadoProtocolo,
   estadoProtocoloCor,
@@ -118,6 +119,8 @@ export function DfdsView({
   const [dfdEdit, setDfdEdit] = useState<DfdParseado | null>(null);
   const [dfdRepEdit, setDfdRepEdit] = useState<number | null>(null);
   const [dfdTrancado, setDfdTrancado] = useState(true);
+  // Cadeado PRÓPRIO do painel do item (edição dos campos do item) — mesma lógica do DFD.
+  const [itemTrancado, setItemTrancado] = useState(true);
   const [salvandoDfd, setSalvandoDfd] = useState(false);
   // Painel da DIREITA do DFD gravado: mensagens OU detalhe de um item + rolagem/destaque.
   const [painel, setPainel] = useState<PainelDfd | null>(null);
@@ -152,6 +155,7 @@ export function DfdsView({
       setDfdEdit(detalheParaParseado(j.dfd));
       setDfdRepEdit(j.dfd.reparticaoId);
       setDfdTrancado(true);
+      setItemTrancado(true);
       setPainel(null); // abre só o DFD (sem mensagens/detalhe do anterior)
       setAncoraAlvo(null);
     } catch (e) {
@@ -165,6 +169,7 @@ export function DfdsView({
     setDfdEdit(null);
     setDfdRepEdit(null);
     setDfdTrancado(true);
+    setItemTrancado(true);
     setPainel(null);
     setAncoraAlvo(null);
   }
@@ -172,6 +177,41 @@ export function DfdsView({
   function destrancarDfd() {
     if (confirm("Destravar este DFD para edição? As alterações são gravadas diretamente no banco de dados.")) {
       setDfdTrancado(false);
+    }
+  }
+
+  function destrancarItem() {
+    if (confirm("Destravar os campos deste item para edição? As alterações são gravadas no banco de dados ao salvar.")) {
+      setItemTrancado(false);
+    }
+  }
+
+  // Salva SÓ os itens editados (painel do item destravado): reescreve `dfd_itens` e recomputa
+  // o total do DFD; re-trava o item e mantém o painel aberto.
+  async function salvarItensDfd() {
+    if (!dfdView || !dfdEdit) return;
+    const pid = protoView?.id ?? null;
+    setSalvandoDfd(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/dfd/${dfdView.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itens: dfdEdit.itens }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar os itens.");
+      setSalvandoDfd(false);
+      setItemTrancado(true);
+      router.refresh();
+      if (pid != null) {
+        const r2 = await fetch(`/api/protocolo/${pid}`);
+        const j2 = (await r2.json()) as { ok?: boolean; protocolo?: ProtocoloDetalhe };
+        if (r2.ok && j2.ok && j2.protocolo) setProtoView(j2.protocolo);
+      }
+    } catch (e) {
+      setSalvandoDfd(false);
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar os itens.");
     }
   }
 
@@ -562,15 +602,46 @@ export function DfdsView({
     />
   ) : null;
   // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).
-  const painelItem = painel?.tipo === "item" ? (dfdEdit?.itens[painel.idx] ?? null) : null;
+  const painelIdx = painel?.tipo === "item" ? painel.idx : -1;
+  const painelItem = painelIdx >= 0 ? (dfdEdit?.itens[painelIdx] ?? null) : null;
+  const itemEditavel = podeEditar && !itemTrancado;
   const painelDireito = painelItem ? (
-    <ItemDetalhe item={painelItem} conformidade={conformidade} regras={regras} tipo={dfdView?.tipo} />
+    <ItemDetalhe
+      key={painelIdx}
+      item={painelItem}
+      conformidade={conformidade}
+      regras={regras}
+      tipo={dfdView?.tipo}
+      editavel={itemEditavel}
+      onChange={(patch) => setDfdEdit((d) => (d ? editarItemDfd(d, painelIdx, patch) : d))}
+    />
   ) : (
     <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
   );
   const painelTitulo = painelItem
-    ? `Item ${painelItem.item ?? (painel?.tipo === "item" ? painel.idx + 1 : "")} — DFD ${dfdView?.numero ?? ""}`
+    ? `Item ${painelItem.item ?? painelIdx + 1} — DFD ${dfdView?.numero ?? ""}`
     : `Mensagens — DFD ${dfdView?.numero ?? ""}`;
+  // Cadeado PRÓPRIO do painel do item + salvar (só no item, e só p/ editor).
+  const painelCadeado =
+    painelItem && podeEditar ? (
+      <Button
+        variant="icon"
+        aria-label={itemTrancado ? "Destravar edição do item" : "Travar edição do item"}
+        title={itemTrancado ? "Destravar para editar o item" : "Edição destravada — clique para travar"}
+        onClick={() => (itemTrancado ? destrancarItem() : setItemTrancado(true))}
+      >
+        {itemTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+      </Button>
+    ) : undefined;
+  const painelRodape =
+    painelItem && itemEditavel ? (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <span className="text-[12px] text-accent">Edição destravada — salva no banco.</span>
+        <Button onClick={salvarItensDfd} loading={salvandoDfd}>
+          Salvar alterações
+        </Button>
+      </div>
+    ) : undefined;
 
   return (
     <div className="space-y-4">
@@ -607,6 +678,8 @@ export function DfdsView({
             ? {
                 aberto: painel != null,
                 titulo: painelTitulo,
+                acoesCabecalho: painelCadeado,
+                rodape: painelRodape,
                 onClose: () => setPainel(null),
                 children: painelDireito,
               }
@@ -653,6 +726,8 @@ export function DfdsView({
             ? {
                 aberto: !!dfdView && painel != null,
                 titulo: painelTitulo,
+                acoesCabecalho: painelCadeado,
+                rodape: painelRodape,
                 onClose: () => setPainel(null),
                 children: painelDireito,
               }

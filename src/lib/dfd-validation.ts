@@ -163,6 +163,8 @@ export const editarDfdSchema = z
     protocoloId: z.number().int().positive().nullable().optional(),
     reparticaoId: z.number().int().positive().nullable().optional(),
     secoes: z.array(dfdSecaoSchema).max(50).optional(),
+    // Itens editados (código/descrição/unidade/quantidade/valores) — reescreve `dfd_itens`.
+    itens: z.array(dfdItemSchema).max(100_000).optional(),
     // Referências de renovação (DFD-R): preenchíveis à mão quando o parser não achou.
     numeroContrato: textoCurtoOpc,
     numeroAta: textoCurtoOpc,
@@ -173,6 +175,7 @@ export const editarDfdSchema = z
       d.protocoloId !== undefined ||
       d.reparticaoId !== undefined ||
       d.secoes !== undefined ||
+      d.itens !== undefined ||
       d.numeroContrato !== undefined ||
       d.numeroAta !== undefined ||
       d.numeroLicitacao !== undefined,

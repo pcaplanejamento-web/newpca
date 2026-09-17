@@ -215,6 +215,19 @@ export function estadoItemCor(e: EstadoItem): string {
   return e === "erro" ? "var(--danger)" : "var(--ok)";
 }
 
+/**
+ * Edita UM item (índice `idx`) de um DFD e recomputa o `valorTotal` do DFD (Σ dos itens).
+ * Puro/genérico — reusado na edição do item na importação (avulso/protocolo) e no gravado.
+ */
+export function editarItemDfd<
+  I extends { valorTotal: number | null },
+  T extends { itens: I[]; valorTotal: number | null },
+>(d: T, idx: number, patch: Partial<I>): T {
+  const itens = d.itens.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+}
+
 // ---- Faltas CIRÚRGICAS + relatório em formato de DESPACHO (copiável) ----
 
 /** Seções obrigatórias do DFD (fonte única — `faltasObrigatorias` no `dfd-validation`

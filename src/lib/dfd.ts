@@ -302,6 +302,27 @@ export async function atualizarDfdCampos(
   await getDb().update(dfds).set(set).where(eq(dfds.id, id));
 }
 
+/**
+ * Reescreve TODOS os itens (`dfd_itens`) de um DFD já gravado (edição de item no banner
+ * destravado) — apaga + reinsere num único `db.batch` (atômico) e recomputa o `valorTotal`
+ * (Σ dos itens) e `totalItens` do cabeçalho. Só código/descrição/unidade/quantidade/valores
+ * do item mudam; a capa e as seções seguem por `atualizarDfdCampos`.
+ */
+export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[]): Promise<void> {
+  const db = getDb();
+  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+  const valorTotal = soma > 0 ? Math.round(soma * 100) / 100 : null;
+  const stmts = insertsItens(db, dfdId, itens, 0);
+  await db.batch([
+    db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)),
+    ...stmts,
+  ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  await db
+    .update(dfds)
+    .set({ valorTotal, totalItens: itens.length, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(dfds.id, dfdId));
+}
+
 /** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
 export async function getDfdReparticao(
   id: number,
