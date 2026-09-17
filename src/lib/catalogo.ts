@@ -12,8 +12,10 @@ import { normalizarCodigo } from "./parse-catalogo-comum";
  * o import barra conflitos antes de gravar (ver `codigosEmConflito`).
  */
 
-// catalogo_itens = 7 colunas vinculadas por linha → 14×7 = 98 (< limite de 100 do D1).
-const ROWS_PER_STMT = 14;
+// O INSERT do Drizzle vincula 8 parâmetros por linha em catalogo_itens (as 7 colunas do
+// `values` + `catalogos_extra`, que tem default literal e o Drizzle bind como parâmetro) →
+// 12×8 = 96 (< limite de 100 parâmetros por statement do D1). NÃO aumentar sem recontar.
+const ROWS_PER_STMT = 12;
 // Máximo de valores num `inArray` (fica < 100 do D1).
 const IN_CHUNK = 90;
 
