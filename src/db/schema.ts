@@ -439,8 +439,9 @@ export const catalogos = sqliteTable("catalogos", {
 
 /**
  * Item de um catálogo. `codigo` é normalizado (só dígitos) e ÚNICO GLOBAL (índice
- * único) — o mesmo produto tem um código canônico. `codigo_raw` guarda a forma
- * original do PDF (ex.: "524.175.984"). Excluir o catálogo apaga os itens (cascade).
+ * único) — o mesmo produto tem um código canônico. `codigo_raw` (exibição) também é
+ * salvo SÓ com dígitos (= `codigo`; sem pontos/separadores). Excluir o catálogo apaga
+ * os itens (cascade).
  */
 export const catalogoItens = sqliteTable(
   "catalogo_itens",
@@ -450,7 +451,7 @@ export const catalogoItens = sqliteTable(
       .notNull()
       .references(() => catalogos.id, { onDelete: "cascade" }),
     codigo: text("codigo").notNull(), // normalizado só-dígitos (único global)
-    codigoRaw: text("codigo_raw"), // forma original do PDF (exibição)
+    codigoRaw: text("codigo_raw"), // exibição — só dígitos (= codigo, sem pontos)
     descricao: text("descricao").notNull(),
     unidade: text("unidade"), // unidade de medida (UNIDADE/CAIXA/KG/PAR/PACOTE...)
     sequencial: integer("sequencial"), // "Item/Nº Seq" do arquivo (exibição)

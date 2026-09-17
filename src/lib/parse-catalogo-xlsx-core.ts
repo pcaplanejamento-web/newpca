@@ -53,14 +53,15 @@ export function parseCatalogoFromMatriz(aoa: unknown[][], _nomeArquivo: string):
   const itens: CatalogoItemParseado[] = [];
   for (let r = hi + 1; r < linhas.length; r++) {
     const row = linhas[r];
-    const codigoRaw = (row[cCod] ?? "").trim() || null;
-    const codigo = normalizarCodigo(codigoRaw);
+    const codFonte = (row[cCod] ?? "").trim() || null;
+    const codigo = normalizarCodigo(codFonte);
     if (!codigo) continue; // sem código → linha vazia/apoio, ignora
     const descricao = (cDesc >= 0 ? (row[cDesc] ?? "") : "").trim();
     const unidade = cUni >= 0 ? row[cUni] || null : null;
     const seqStr = cItem >= 0 ? (row[cItem] ?? "") : "";
     const sequencial = /^\d+$/.test(seqStr) ? Number(seqStr) : null;
-    itens.push({ sequencial, codigo, codigoRaw, descricao, unidade });
+    // Código salvo SÓ com dígitos (sem pontos) — `codigo` já é normalizado.
+    itens.push({ sequencial, codigo, codigoRaw: codigo, descricao, unidade });
   }
 
   return { nome, itens, duplicadosNoArquivo: duplicadosDe(itens) };

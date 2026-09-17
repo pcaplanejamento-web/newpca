@@ -8,7 +8,7 @@ import { norm } from "./parse-dfd-comum.ts";
 export type CatalogoItemParseado = {
   sequencial: number | null;
   codigo: string; // normalizado (só dígitos)
-  codigoRaw: string | null; // forma original do arquivo (ex.: "524.175.984")
+  codigoRaw: string | null; // exibição — só dígitos (= codigo; sem pontos/separadores)
   descricao: string;
   unidade: string | null;
 };

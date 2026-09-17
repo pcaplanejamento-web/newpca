@@ -182,8 +182,8 @@ export function parseCatalogoFromPdfItems(bruto: PdfItem[], _nomeArquivo: string
 
   const itens: CatalogoItemParseado[] = [];
   for (const b of buckets) {
-    const codigoRaw = b.cod.sort(porPos).map((f) => f.str).join("").trim() || null;
-    const codigo = normalizarCodigo(codigoRaw);
+    const codFonte = b.cod.sort(porPos).map((f) => f.str).join("").trim() || null;
+    const codigo = normalizarCodigo(codFonte);
     if (!codigo) continue; // sem código numérico → não é um item
     const descricao = b.desc
       .sort(porPos)
@@ -193,7 +193,8 @@ export function parseCatalogoFromPdfItems(bruto: PdfItem[], _nomeArquivo: string
       .trim();
     const seqStr = b.seq.sort(porPos).map((f) => f.str).join("");
     const sequencial = /^\d+$/.test(seqStr) ? Number(seqStr) : null;
-    itens.push({ sequencial, codigo, codigoRaw, descricao, unidade: montarUnidade(b.uni) });
+    // Código salvo SÓ com dígitos (sem pontos/separadores) — `codigo` já é normalizado.
+    itens.push({ sequencial, codigo, codigoRaw: codigo, descricao, unidade: montarUnidade(b.uni) });
   }
 
   return { nome, itens, duplicadosNoArquivo: duplicadosDe(itens) };

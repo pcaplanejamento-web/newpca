@@ -17,7 +17,7 @@ describe("parse-catalogo-xlsx-core", () => {
     assert.deepEqual(r.itens[0], {
       sequencial: 1,
       codigo: "524173296",
-      codigoRaw: "524.173.296",
+      codigoRaw: "524173296", // salvo só com dígitos (sem pontos), = codigo
       descricao: "ALMOFADA COM TINTA Nº 3, AZUL",
       unidade: "UNIDADE",
     });

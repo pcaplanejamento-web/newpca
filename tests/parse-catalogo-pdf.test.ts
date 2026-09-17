@@ -36,7 +36,7 @@ describe("parse-catalogo-pdf-core", () => {
     assert.equal(r.itens.length, 2);
     const [a, b] = r.itens;
     assert.equal(a.codigo, "524175984");
-    assert.equal(a.codigoRaw, "524.175.984");
+    assert.equal(a.codigoRaw, "524175984"); // salvo só com dígitos (sem pontos), = codigo
     assert.equal(a.sequencial, 1);
     assert.equal(a.unidade, "UNIDADE");
     assert.match(a.descricao, /Açafrão em pó de coloração alaranjada, isenta de matérias/);
