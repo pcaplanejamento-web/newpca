@@ -33,6 +33,12 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const d = p.data;
 
+  // Criar catálogo VAZIO (manual) — só nome + tipos, sem itens.
+  if (d.mode === "criar-catalogo") {
+    const id = await criarCatalogo(d.nome, d.tiposPadrao);
+    return ok({ catalogoId: id, inserted: 0 });
+  }
+
   if (d.mode === "append-catalogo-itens") {
     const cat = await getCatalogo(d.catalogoId);
     if (!cat) return erro("Catálogo não encontrado para acrescentar itens.", 404);
@@ -45,13 +51,15 @@ export async function POST(req: Request) {
   // start-catalogo — novo (catalogoId nulo) ou atualização de um existente.
   const alvo = d.catalogoId;
   if (alvo != null && !(await getCatalogo(alvo))) return erro("Catálogo a atualizar não encontrado.", 404);
-  const conf = await codigosEmConflito(d.rows.map((r) => r.codigo), alvo);
+  // Guarda da unicidade global: ignora os conflitos que o usuário RESOLVEU com "substituir"
+  // (o existente será excluído no mesmo lote atômico); se sobrar algum → 422.
+  const conf = (await codigosEmConflito(d.rows.map((r) => r.codigo), alvo)).filter((c) => !d.excluirItens.includes(c.id));
   if (conf.length > 0) return erro(mensagemConflito(conf), 422);
 
   if (alvo == null) {
     const id = await criarCatalogo(d.nome, d.tiposPadrao);
     try {
-      const r = await upsertCatalogoItens(id, d.rows);
+      const r = await upsertCatalogoItens(id, d.rows, { excluirItens: d.excluirItens });
       return ok({ catalogoId: id, inserted: r.inserted });
     } catch (e) {
       await excluirCatalogo(id).catch(() => {}); // não deixa catálogo órfão vazio
@@ -59,6 +67,6 @@ export async function POST(req: Request) {
     }
   }
   await atualizarCatalogo(alvo, { nome: d.nome, tiposPadrao: d.tiposPadrao });
-  const r = await upsertCatalogoItens(alvo, d.rows);
+  const r = await upsertCatalogoItens(alvo, d.rows, { excluirItens: d.excluirItens });
   return ok({ catalogoId: alvo, inserted: r.inserted });
 }

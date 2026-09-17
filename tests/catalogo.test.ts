@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   catalogoItemImportSchema,
   catalogoOpSchema,
+  criarItemSchema,
   normalizarTipos,
   patchCatalogoSchema,
   patchItensTiposSchema,
@@ -65,10 +66,47 @@ describe("catalogo-validation", () => {
     assert.throws(() => patchCatalogoSchema.parse({}));
   });
 
-  it("patchItensTiposSchema exige ids e valida tipos", () => {
+  it("patchItensTiposSchema exige ids, valida tipos e tem modo (default definir)", () => {
     assert.throws(() => patchItensTiposSchema.parse({ ids: [], tipos: [] }));
     const p = patchItensTiposSchema.parse({ ids: [1, 2], tipos: ["DFD-O"] });
     assert.deepEqual(p.tipos, ["DFD-O"]);
+    assert.equal(p.modo, "definir"); // default
+    assert.equal(patchItensTiposSchema.parse({ ids: [1], tipos: [], modo: "mesclar" }).modo, "mesclar");
     assert.throws(() => patchItensTiposSchema.parse({ ids: [1], tipos: ["ZZZ"] }));
+    assert.throws(() => patchItensTiposSchema.parse({ ids: [1], tipos: [], modo: "outro" }));
+  });
+
+  it("catalogoOpSchema (start) tem excluirItens com default []", () => {
+    const ok = catalogoOpSchema.parse({
+      mode: "start-catalogo",
+      nome: "Cat",
+      tiposPadrao: [],
+      totalItens: 1,
+      rows: [{ codigo: "1", descricao: "x" }],
+    });
+    assert.deepEqual(ok.mode === "start-catalogo" ? ok.excluirItens : "?", []);
+    const comExcluir = catalogoOpSchema.parse({
+      mode: "start-catalogo",
+      nome: "Cat",
+      tiposPadrao: [],
+      totalItens: 1,
+      rows: [{ codigo: "1", descricao: "x" }],
+      excluirItens: [3, 7],
+    });
+    assert.deepEqual(comExcluir.mode === "start-catalogo" ? comExcluir.excluirItens : "?", [3, 7]);
+  });
+
+  it("catalogoOpSchema (criar-catalogo) cria vazio: só nome + tipos", () => {
+    const c = catalogoOpSchema.parse({ mode: "criar-catalogo", nome: "Novo", tiposPadrao: ["DFD-S"] });
+    assert.equal(c.mode, "criar-catalogo");
+    assert.throws(() => catalogoOpSchema.parse({ mode: "criar-catalogo", nome: "" }));
+  });
+
+  it("criarItemSchema exige código+descrição e aceita tipos/unidade opcionais", () => {
+    const r = criarItemSchema.parse({ catalogoId: 1, codigo: "524.1", descricao: "Caneta", tipos: ["DFD-O", "DFD-S"] });
+    assert.equal(r.unidade, null); // default
+    assert.deepEqual(r.tipos, ["DFD-O", "DFD-S"]);
+    assert.throws(() => criarItemSchema.parse({ catalogoId: 1, codigo: "", descricao: "x" }));
+    assert.throws(() => criarItemSchema.parse({ catalogoId: 1, codigo: "1", descricao: "" }));
   });
 });

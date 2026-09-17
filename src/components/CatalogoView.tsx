@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { CatalogoItemRow, CatalogoResumo } from "@/lib/catalogo";
+import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
+import { itensIguais } from "@/lib/catalogo-conferencia";
 import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import { dataBR } from "@/lib/format";
-import { enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
+import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
 import { Badge } from "./Badge";
@@ -15,13 +16,15 @@ import { CatalogoItemDetalhe } from "./CatalogoItemDetalhe";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
 import { SearchField, TextField } from "./Field";
-import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconTrash, IconUpload } from "./icons";
+import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 
 type Vista = "catalogo" | "lista";
+/** Decisão de um conflito divergente (mesmo código, dados diferentes). */
+type Resolucao = "manter" | "substituir";
 
 type PreviewItem = {
   _k: number;
@@ -34,7 +37,7 @@ type PreviewItem = {
 type Preview = {
   itens: PreviewItem[];
   duplicadosNoArquivo: string[];
-  conflitos: { codigo: string; catalogoNome: string }[];
+  conflitos: ConflitoCatalogo[]; // item EXISTENTE de cada código conflitante (outro catálogo)
   verificando: boolean;
   catalogoId: number | null;
   fonte: string; // extensão (pdf/xlsx) — informativo
@@ -92,13 +95,25 @@ export function CatalogoView({
   const [editTipos, setEditTipos] = useState<string[]>([]);
   const [salvandoCat, setSalvandoCat] = useState(false);
 
+  // Resolução dos conflitos divergentes (mesmo código, dados diferentes) — por id do existente.
+  const [resolucoes, setResolucoes] = useState<Map<number, Resolucao>>(new Map());
+
+  // Novo catálogo (card "+"): criar manual OU importar.
+  const [novoAberto, setNovoAberto] = useState(false);
+  const [novoModo, setNovoModo] = useState<"manual" | "importar">("manual");
+  const [novoNome, setNovoNome] = useState("");
+  const [novoTipos, setNovoTipos] = useState<string[]>([]);
+  const [criandoCat, setCriandoCat] = useState(false);
+
   // Consulta / edição dos itens
   const [busca, setBusca] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<string[]>([]);
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [bulkTipos, setBulkTipos] = useState<string[]>([]);
   const [painelItem, setPainelItem] = useState<CatalogoItemRow | null>(null);
+  const [criandoItem, setCriandoItem] = useState(false); // lateral em modo "criar item"
   const [salvandoItem, setSalvandoItem] = useState(false);
+  const [erroItem, setErroItem] = useState<string | null>(null);
 
   function trocarVista(v: Vista) {
     setVista(v);
@@ -125,7 +140,9 @@ export function CatalogoView({
 
   async function handleFile(file: File) {
     setLauncher(false);
+    setNovoAberto(false);
     setErroImport(null);
+    setResolucoes(new Map());
     const alvo = pendingAlvo;
     setPendingAlvo(null);
     const ext = (file.name.split(".").pop() ?? "").toLowerCase();
@@ -160,6 +177,7 @@ export function CatalogoView({
 
   async function mudarAlvo(catalogoId: number | null) {
     if (!preview) return;
+    setResolucoes(new Map());
     const alvoCat = catalogoId != null ? catalogos.find((c) => c.id === catalogoId) : null;
     if (alvoCat) {
       setNomeCat(alvoCat.nome);
@@ -173,23 +191,61 @@ export function CatalogoView({
     setPreview((p) => (p ? { ...p, catalogoId, conflitos, verificando: false } : p));
   }
 
+  // Classificação dos conflitos do preview: idêntico (código+descrição+unidade) × divergente.
+  const conflitoPorCodigo = useMemo(
+    () => new Map((preview?.conflitos ?? []).map((c) => [c.codigo, c] as const)),
+    [preview?.conflitos],
+  );
+  const { identicos, divergentes } = useMemo(() => {
+    const ident: { item: PreviewItem; existente: ConflitoCatalogo }[] = [];
+    const div: { item: PreviewItem; existente: ConflitoCatalogo }[] = [];
+    for (const it of preview?.itens ?? []) {
+      const ex = conflitoPorCodigo.get(it.codigo);
+      if (!ex) continue;
+      (itensIguais(it, ex) ? ident : div).push({ item: it, existente: ex });
+    }
+    return { identicos: ident, divergentes: div };
+  }, [preview?.itens, conflitoPorCodigo]);
+  // Idênticos cujo item existente NÃO cobre o tiposPadrão do preview → mesclar tipos no existente.
+  const mesclarIds = useMemo(
+    () => identicos.filter((i) => tiposPadrao.some((t) => !i.existente.tipos.includes(t))).map((i) => i.existente.id),
+    [identicos, tiposPadrao],
+  );
+  const substituirCount = useMemo(
+    () => divergentes.filter((d) => (resolucoes.get(d.existente.id) ?? "manter") === "substituir").length,
+    [divergentes, resolucoes],
+  );
+  // Itens que de fato vão para o payload (não-conflito + divergentes marcados "substituir").
+  const importaveis = preview ? preview.itens.length - identicos.length - (divergentes.length - substituirCount) : 0;
+
   async function importar() {
     if (!preview) return;
     setEnviando(true);
     setProgresso(0);
     setErroImport(null);
     try {
-      await enviarCatalogoEmLotes(
-        { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao },
-        preview.itens.map((i) => ({
-          sequencial: i.sequencial,
-          codigo: i.codigo,
-          codigoRaw: i.codigoRaw,
-          descricao: i.descricao,
-          unidade: i.unidade,
-        })),
-        (env, tot) => setProgresso(Math.round((env / tot) * 100)),
+      const identKs = new Set(identicos.map((i) => i.item._k));
+      const manterKs = new Set(
+        divergentes.filter((d) => (resolucoes.get(d.existente.id) ?? "manter") !== "substituir").map((d) => d.item._k),
       );
+      const excluirItens = divergentes.filter((d) => resolucoes.get(d.existente.id) === "substituir").map((d) => d.existente.id);
+      const payload = preview.itens.filter((i) => !identKs.has(i._k) && !manterKs.has(i._k));
+
+      if (payload.length > 0) {
+        await enviarCatalogoEmLotes(
+          { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens },
+          payload.map((i) => ({ sequencial: i.sequencial, codigo: i.codigo, codigoRaw: i.codigoRaw, descricao: i.descricao, unidade: i.unidade })),
+          (env, tot) => setProgresso(Math.round((env / tot) * 100)),
+        );
+      }
+      // Item idêntico importado com tipo novo → o EXISTENTE ganha os tipos (união).
+      if (mesclarIds.length > 0) {
+        await fetch("/api/catalogo/itens", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: mesclarIds, tipos: tiposPadrao, modo: "mesclar" }),
+        });
+      }
       setEnviando(false);
       setPreview(null);
       router.refresh();
@@ -243,6 +299,55 @@ export function CatalogoView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(campos),
     });
+    setSalvandoItem(false);
+    setPainelItem(null);
+    router.refresh();
+  }
+
+  // Cria um catálogo VAZIO (manual) e o abre para adicionar itens.
+  async function criarManual() {
+    if (!novoNome.trim()) return;
+    setCriandoCat(true);
+    setErroImport(null);
+    try {
+      const id = await criarCatalogoVazio(novoNome.trim(), novoTipos);
+      setCriandoCat(false);
+      setNovoAberto(false);
+      setNovoNome("");
+      setNovoTipos([]);
+      router.refresh();
+      setAbertoId(id); // abre o catálogo novo p/ adicionar itens
+    } catch (e) {
+      setCriandoCat(false);
+      setErroImport(e instanceof Error ? e.message : "Falha ao criar o catálogo.");
+    }
+  }
+
+  async function criarItem(campos: { codigo: string; descricao: string; unidade: string | null; tipos: string[] }) {
+    if (abertoId == null) return;
+    setSalvandoItem(true);
+    setErroItem(null);
+    try {
+      const res = await fetch("/api/catalogo/item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ catalogoId: abertoId, ...campos }),
+      });
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !j?.ok) throw new Error(j?.error ?? "Falha ao adicionar o item.");
+      setSalvandoItem(false);
+      setCriandoItem(false);
+      router.refresh();
+    } catch (e) {
+      setSalvandoItem(false);
+      setErroItem(e instanceof Error ? e.message : "Falha ao adicionar o item.");
+    }
+  }
+
+  async function excluirItem(item: CatalogoItemRow) {
+    if (!confirm(`Excluir o item ${item.codigoRaw ?? item.codigo}? Esta ação não pode ser desfeita.`)) return;
+    setSalvandoItem(true);
+    await fetch(`/api/catalogo/item/${item.id}`, { method: "DELETE" });
     setSalvandoItem(false);
     setPainelItem(null);
     router.refresh();
@@ -323,7 +428,8 @@ export function CatalogoView({
     ...colBase,
   ];
 
-  const conflitoSet = new Set(preview?.conflitos.map((c) => c.codigo) ?? []);
+  const identSet = new Set(identicos.map((i) => i.item.codigo));
+  const divSet = new Set(divergentes.map((d) => d.item.codigo));
   const dupSet = new Set(preview?.duplicadosNoArquivo ?? []);
   const colunasPreview: Column<PreviewItem>[] = [
     {
@@ -335,8 +441,9 @@ export function CatalogoView({
       render: (r) => (
         <span className="flex items-center gap-1.5">
           <span className="font-mono text-[13px] text-text-2">{r.codigoRaw ?? r.codigo}</span>
-          {conflitoSet.has(r.codigo) && <Badge tone="red">conflito</Badge>}
-          {!conflitoSet.has(r.codigo) && dupSet.has(r.codigo) && <Badge tone="amber">repetido</Badge>}
+          {identSet.has(r.codigo) && <Badge tone="blue">idêntico</Badge>}
+          {divSet.has(r.codigo) && <Badge tone="amber">divergente</Badge>}
+          {!identSet.has(r.codigo) && !divSet.has(r.codigo) && dupSet.has(r.codigo) && <Badge tone="amber">repetido</Badge>}
         </span>
       ),
     },
@@ -355,10 +462,20 @@ export function CatalogoView({
     { key: "unidade", header: "Unidade", minWidth: 100, filter: "none", value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
   ];
 
-  const podeImportar = preview != null && !preview.verificando && preview.conflitos.length === 0 && nomeCat.trim().length > 0;
+  const podeImportar =
+    preview != null && !preview.verificando && nomeCat.trim().length > 0 && (importaveis > 0 || mesclarIds.length > 0);
 
+  // Detalhe/edição de um item existente (lateral). O editor também exclui.
   const detalheItem = (item: CatalogoItemRow) => (
-    <CatalogoItemDetalhe key={item.id} item={item} podeEditar={podeEditar} salvando={salvandoItem} onSalvar={(campos) => salvarItem(item, campos)} />
+    <CatalogoItemDetalhe
+      key={item.id}
+      item={item}
+      podeEditar={podeEditar}
+      salvando={salvandoItem}
+      erro={erroItem}
+      onSalvar={(campos) => salvarItem(item, campos)}
+      onExcluir={podeEditar ? () => excluirItem(item) : undefined}
+    />
   );
 
   const barraTipoBusca = (
@@ -371,6 +488,29 @@ export function CatalogoView({
         <TipoDfdPicker value={tipoFiltro} onChange={setTipoFiltro} />
       </div>
     </div>
+  );
+
+  function abrirNovo() {
+    setPendingAlvo(null); // catálogo NOVO (não é atualização)
+    setNovoModo("manual");
+    setNovoNome("");
+    setNovoTipos([]);
+    setErroImport(null);
+    setNovoAberto(true);
+  }
+
+  // Card "+" (mesmo tamanho dos cards de catálogo) — cria manual OU importa. Só editor.
+  const addCard = (
+    <button
+      type="button"
+      onClick={abrirNovo}
+      className="group flex min-h-[132px] flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 bg-surface p-4 text-muted transition-colors hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
+    >
+      <span className="grid h-11 w-11 place-items-center rounded-xl bg-surface-2 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
+        <IconPlus className="h-6 w-6" />
+      </span>
+      <span className="text-sm font-semibold">Novo catálogo</span>
+    </button>
   );
 
   return (
@@ -392,25 +532,14 @@ export function CatalogoView({
             ]}
           />
           {podeEditar && (
-            <>
-              <Button
-                variant="secondary"
-                icon={<IconDownload className="h-[18px] w-[18px]" />}
-                onClick={exportarModeloCatalogoXlsx}
-                title="Baixar um modelo .xlsx para preencher e importar"
-              >
-                Exportar modelo
-              </Button>
-              <Button
-                icon={<IconUpload className="h-[18px] w-[18px]" />}
-                onClick={() => {
-                  setPendingAlvo(null);
-                  setLauncher(true);
-                }}
-              >
-                Importar
-              </Button>
-            </>
+            <Button
+              variant="secondary"
+              icon={<IconDownload className="h-[18px] w-[18px]" />}
+              onClick={exportarModeloCatalogoXlsx}
+              title="Baixar um modelo .xlsx para preencher e importar"
+            >
+              Exportar modelo
+            </Button>
           )}
         </div>
       </div>
@@ -422,10 +551,14 @@ export function CatalogoView({
       )}
 
       {catalogos.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
-          <IconInbox className="h-10 w-10 text-faint" />
-          <p className="text-sm text-muted">Nenhum catálogo ainda.{podeEditar ? " Clique em “Importar” para subir um PDF ou planilha." : ""}</p>
-        </div>
+        podeEditar ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{addCard}</div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+            <IconInbox className="h-10 w-10 text-faint" />
+            <p className="text-sm text-muted">Nenhum catálogo ainda.</p>
+          </div>
+        )
       ) : (
         <div key={vista} className="animate-cat-morph">
           {vista === "catalogo" ? (
@@ -491,6 +624,7 @@ export function CatalogoView({
                   </div>
                 </div>
               ))}
+              {podeEditar && addCard}
             </div>
           ) : (
             <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
@@ -510,15 +644,67 @@ export function CatalogoView({
         </div>
       )}
 
-      {/* Lançador de importação (PDF ou XLSX) */}
-      <Modal open={launcher} onClose={() => setLauncher(false)} titulo={pendingAlvo != null ? "Atualizar catálogo" : "Importar catálogo"} size="lg">
+      {/* Lançador de ATUALIZAÇÃO (re-subir um catálogo pelo botão do card) */}
+      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Atualizar catálogo" size="lg">
         <Dropzone
           accept=".pdf,.xlsx,.xls"
           onFile={handleFile}
-          titulo={pendingAlvo != null ? "Solte o PDF ou a planilha para atualizar" : "Solte o catálogo (PDF ou planilha .xlsx)"}
+          titulo="Solte o PDF ou a planilha para atualizar"
           icon={<IconUpload className="h-7 w-7" />}
           dica="Extraímos código, descrição e unidade de medida de cada item."
         />
+      </Modal>
+
+      {/* Novo catálogo (card "+"): criar manual OU importar */}
+      <Modal
+        open={novoAberto}
+        onClose={() => {
+          if (!criandoCat) setNovoAberto(false);
+        }}
+        bloqueado={criandoCat}
+        titulo="Novo catálogo"
+        size="md"
+        rodape={
+          novoModo === "manual" ? (
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="ghost" onClick={() => setNovoAberto(false)} disabled={criandoCat}>
+                Cancelar
+              </Button>
+              <Button onClick={criarManual} loading={criandoCat} disabled={!novoNome.trim()}>
+                Criar catálogo
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        <div className="space-y-4">
+          <Segmented<"manual" | "importar">
+            value={novoModo}
+            onChange={(v) => setNovoModo(v)}
+            options={[
+              { value: "manual", label: "Criar manualmente" },
+              { value: "importar", label: "Importar arquivo" },
+            ]}
+          />
+          {novoModo === "manual" ? (
+            <>
+              <TextField label="Nome do catálogo" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} disabled={criandoCat} placeholder="Ex.: Material de expediente" />
+              <div>
+                <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
+                <TipoDfdPicker value={novoTipos} onChange={setNovoTipos} disabled={criandoCat} />
+                <p className="mt-1.5 text-[12px] text-muted">Aplicado aos itens que você adicionar depois. O catálogo começa vazio — adicione itens à mão ou importe.</p>
+              </div>
+            </>
+          ) : (
+            <Dropzone
+              accept=".pdf,.xlsx,.xls"
+              onFile={handleFile}
+              titulo="Solte o catálogo (PDF ou planilha .xlsx)"
+              icon={<IconUpload className="h-7 w-7" />}
+              dica="Extraímos código, descrição e unidade de cada item; você confere antes de gravar."
+            />
+          )}
+        </div>
       </Modal>
 
       {/* Preview do envio */}
@@ -541,7 +727,11 @@ export function CatalogoView({
                   Cancelar
                 </Button>
                 <Button onClick={importar} disabled={!podeImportar}>
-                  Importar {preview.itens.length === 1 ? "1 item" : `${preview.itens.length} itens`}
+                  {importaveis > 0
+                    ? `Importar ${importaveis} ${importaveis === 1 ? "item" : "itens"}`
+                    : mesclarIds.length > 0
+                      ? "Aplicar tipos"
+                      : "Importar"}
                 </Button>
               </div>
             )
@@ -577,12 +767,52 @@ export function CatalogoView({
                 {preview.duplicadosNoArquivo.length > 8 ? "…" : ""}. Cada código será mantido uma vez.
               </Callout>
             )}
-            {preview.conflitos.length > 0 && (
-              <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
-                {preview.conflitos.length} código(s) já cadastrado(s) em OUTRO catálogo (o código é único global):{" "}
-                {preview.conflitos.slice(0, 6).map((c) => `${c.codigo} (${c.catalogoNome})`).join(", ")}
-                {preview.conflitos.length > 6 ? "…" : ""}. Ajuste/atualize o catálogo de origem para importar.
+            {identicos.length > 0 && (
+              <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
+                {identicos.length} {identicos.length === 1 ? "item idêntico já cadastrado" : "itens idênticos já cadastrados"} em outro catálogo — não {identicos.length === 1 ? "será importado" : "serão importados"}
+                {mesclarIds.length > 0
+                  ? `; os tipos foram somados ao item existente em ${mesclarIds.length} ${mesclarIds.length === 1 ? "dele" : "deles"}`
+                  : ""}
+                .
               </Callout>
+            )}
+            {divergentes.length > 0 && (
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+                <div>
+                  <p className="text-[13.5px] font-bold text-text">Conflitos a resolver ({divergentes.length})</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    Mesmo código, dados diferentes. Escolha <strong>manter</strong> o item já cadastrado (não importa este) ou{" "}
+                    <strong>substituir</strong> (exclui o existente e importa este).
+                  </p>
+                </div>
+                {divergentes.map(({ item, existente }) => (
+                  <div key={existente.id} className="rounded-card border border-border bg-surface p-3">
+                    <div className="mb-2 font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-control border border-border-2 p-2.5">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Novo (do arquivo)</p>
+                        <p className="text-[13px] leading-snug text-text">{item.descricao}</p>
+                        <p className="mt-1 text-xs text-muted">Unidade: {item.unidade ?? "—"}</p>
+                      </div>
+                      <div className="rounded-control border border-border-2 p-2.5">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Existente · {existente.catalogoNome}</p>
+                        <p className="text-[13px] leading-snug text-text">{existente.descricao}</p>
+                        <p className="mt-1 text-xs text-muted">Unidade: {existente.unidade ?? "—"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <Segmented<Resolucao>
+                        value={resolucoes.get(existente.id) ?? "manter"}
+                        onChange={(v) => setResolucoes((m) => new Map(m).set(existente.id, v))}
+                        options={[
+                          { value: "manter", label: "Manter existente" },
+                          { value: "substituir", label: "Substituir" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
             <div className="rounded-card border border-border px-4 pt-3">
@@ -628,6 +858,8 @@ export function CatalogoView({
         onClose={() => {
           setAbertoId(null);
           setPainelItem(null);
+          setCriandoItem(false);
+          setErroItem(null);
           setSel(new Set());
           setBusca("");
           setTipoFiltro([]);
@@ -635,10 +867,21 @@ export function CatalogoView({
         titulo={catalogoAberto?.nome ?? "Catálogo"}
         size="full"
         lateral={{
-          aberto: abertoId != null && painelItem != null,
-          titulo: "Detalhe do item",
-          onClose: () => setPainelItem(null),
-          children: abertoId != null && painelItem ? detalheItem(painelItem) : <div />,
+          aberto: abertoId != null && (painelItem != null || criandoItem),
+          titulo: criandoItem ? "Adicionar item" : "Detalhe do item",
+          onClose: () => {
+            setPainelItem(null);
+            setCriandoItem(false);
+            setErroItem(null);
+          },
+          children:
+            abertoId != null && criandoItem ? (
+              <CatalogoItemDetalhe key="novo" modo="criar" podeEditar={podeEditar} salvando={salvandoItem} erro={erroItem} onCriar={criarItem} />
+            ) : abertoId != null && painelItem ? (
+              detalheItem(painelItem)
+            ) : (
+              <div />
+            ),
         }}
         rodape={
           podeEditar && sel.size > 0 ? (
@@ -660,6 +903,19 @@ export function CatalogoView({
       >
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {podeEditar && (
+              <Button
+                className="mr-auto"
+                icon={<IconPlus className="h-4 w-4" />}
+                onClick={() => {
+                  setPainelItem(null);
+                  setErroItem(null);
+                  setCriandoItem(true);
+                }}
+              >
+                Adicionar item
+              </Button>
+            )}
             {podeEditar && catalogoAberto && (
               <Button variant="ghost" icon={<IconPencil className="h-4 w-4" />} onClick={() => abrirEdicao(catalogoAberto)}>
                 Editar catálogo
@@ -692,7 +948,11 @@ export function CatalogoView({
             selectable={podeEditar}
             selected={sel}
             onSelected={setSel}
-            onRowClick={(r) => setPainelItem(r)}
+            onRowClick={(r) => {
+              setCriandoItem(false);
+              setErroItem(null);
+              setPainelItem(r);
+            }}
             activeKey={abertoId != null ? (painelItem?.id ?? null) : null}
             resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"}`}
           />

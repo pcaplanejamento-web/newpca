@@ -61,6 +61,19 @@ export type ConferenciaItem = {
 /** Item do DFD — só o que é comparado. */
 export type ItemConferivel = { codigo: string | null; descricao: string | null; unidade: string | null };
 
+/**
+ * Dois itens de catálogo são IGUAIS quando **descrição** e **unidade** batem (comparadas
+ * normalizadas — mesma regra de `conferirItem`). O código já é o mesmo por definição (é um
+ * conflito de código); os **tipos NÃO entram** (podem ser mesclados no existente). Usado na
+ * importação: item idêntico já cadastrado é pulado (não duplica). Puro/testável.
+ */
+export function itensIguais(
+  a: { descricao: string | null; unidade: string | null },
+  b: { descricao: string | null; unidade: string | null },
+): boolean {
+  return norm(a.descricao ?? "") === norm(b.descricao ?? "") && normUnidadeMedida(a.unidade) === normUnidadeMedida(b.unidade);
+}
+
 const CONFORME: ConferenciaItem = { faltas: [], divergDescricao: false, divergUnidade: false, sugestao: null };
 /** Limiar de semelhança (Jaccard de tokens) para sugerir um item de catálogo a um não catalogado. */
 export const LIMIAR_SEMELHANCA = 0.5;

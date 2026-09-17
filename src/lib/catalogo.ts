@@ -96,29 +96,50 @@ export async function getCatalogo(id: number): Promise<{ id: number; nome: strin
   return c ?? null;
 }
 
+/** Um conflito de código (item já cadastrado em OUTRO catálogo) — com os dados do item
+ * EXISTENTE, p/ o cliente comparar (idêntico × divergente) e mesclar tipos. */
+export type ConflitoCatalogo = {
+  codigo: string;
+  id: number;
+  catalogoId: number;
+  catalogoNome: string;
+  descricao: string;
+  unidade: string | null;
+  tipos: string[];
+};
+
 /**
  * Códigos que JÁ existem em OUTRO catálogo (conflito da unicidade global). Recebe os
- * códigos do arquivo e o catálogo-alvo (excluído da checagem numa atualização).
- * Devolve só os conflitantes: `[{codigo, catalogoNome}]`.
+ * códigos do arquivo e o catálogo-alvo (excluído da checagem numa atualização). Devolve o
+ * item EXISTENTE de cada conflito (id/catálogo/descrição/unidade/tipos) — o gate do import
+ * usa só código+nome; o preview compara os dados e calcula a união de tipos.
  */
 export async function codigosEmConflito(
   codigos: string[],
   excetoCatalogoId: number | null,
-): Promise<{ codigo: string; catalogoNome: string }[]> {
+): Promise<ConflitoCatalogo[]> {
   const uniq = [...new Set(codigos.map((c) => c.trim()).filter(Boolean))];
   if (uniq.length === 0) return [];
-  const out: { codigo: string; catalogoNome: string }[] = [];
+  const out: ConflitoCatalogo[] = [];
   for (let i = 0; i < uniq.length; i += IN_CHUNK) {
     const lote = uniq.slice(i, i + IN_CHUNK);
     const cond = excetoCatalogoId
       ? and(inArray(catalogoItens.codigo, lote), ne(catalogoItens.catalogoId, excetoCatalogoId))
       : inArray(catalogoItens.codigo, lote);
     const linhas = await getDb()
-      .select({ codigo: catalogoItens.codigo, catalogoNome: catalogos.nome })
+      .select({
+        codigo: catalogoItens.codigo,
+        id: catalogoItens.id,
+        catalogoId: catalogoItens.catalogoId,
+        catalogoNome: catalogos.nome,
+        descricao: catalogoItens.descricao,
+        unidade: catalogoItens.unidade,
+        tipos: catalogoItens.tipos,
+      })
       .from(catalogoItens)
       .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
       .where(cond);
-    out.push(...linhas);
+    out.push(...linhas.map((l) => ({ ...l, tipos: parseTipos(l.tipos) })));
   }
   return out;
 }
@@ -187,22 +208,51 @@ function upsertStmts(db: ReturnType<typeof getDb>, catalogoId: number, itens: Ca
  * configurados): item novo entra com o `tipos_padrao` do catálogo; item que já existe
  * tem só descrição/unidade/sequencial atualizados. NUNCA apaga ausentes. Recalcula o
  * total. Pré-condição: os códigos não conflitam com OUTRO catálogo (checado antes).
+ *
+ * `opts.excluirItens`: ids de itens de OUTROS catálogos a remover ANTES do upsert — resolve
+ * os conflitos "substituir" (o usuário optou por excluir o existente e importar o novo).
+ * Tudo num único `db.batch` (atômico, sem janela de perda); recalcula o total do alvo E dos
+ * catálogos de origem dos excluídos.
  */
-export async function upsertCatalogoItens(catalogoId: number, itens: CatalogoItemImport[]): Promise<{ inserted: number }> {
-  if (itens.length === 0) return { inserted: 0 };
+export async function upsertCatalogoItens(
+  catalogoId: number,
+  itens: CatalogoItemImport[],
+  opts?: { excluirItens?: number[] },
+): Promise<{ inserted: number }> {
+  const excluir = [...new Set(opts?.excluirItens ?? [])].filter((n) => Number.isInteger(n));
+  if (itens.length === 0 && excluir.length === 0) return { inserted: 0 };
   const db = getDb();
+
+  // Catálogos de origem dos itens que serão excluídos (p/ recalcular os totais deles também).
+  let origem: number[] = [];
+  if (excluir.length > 0) {
+    const linhas = await db.select({ catalogoId: catalogoItens.catalogoId }).from(catalogoItens).where(inArray(catalogoItens.id, excluir));
+    origem = [...new Set(linhas.map((l) => l.catalogoId))];
+  }
+
   const [cat] = await db.select({ tiposPadrao: catalogos.tiposPadrao }).from(catalogos).where(eq(catalogos.id, catalogoId)).limit(1);
   const tiposJson = JSON.stringify(parseTipos(cat?.tiposPadrao));
-  const stmts = upsertStmts(db, catalogoId, itens, tiposJson);
-  stmts.push(
-    db
-      .update(catalogos)
-      .set({
-        totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${catalogoId})`,
-        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-      })
-      .where(eq(catalogos.id, catalogoId)),
-  );
+
+  // biome-ignore lint/suspicious/noExplicitAny: a tupla exigida por db.batch() do Drizzle é inviável de anotar.
+  const stmts: any[] = [];
+  // 1) Remove os "substituídos" (libera o código global para o catálogo alvo).
+  for (let i = 0; i < excluir.length; i += IN_CHUNK) {
+    stmts.push(db.delete(catalogoItens).where(inArray(catalogoItens.id, excluir.slice(i, i + IN_CHUNK))));
+  }
+  // 2) Grava os novos (merge por código, preservando tipos).
+  stmts.push(...upsertStmts(db, catalogoId, itens, tiposJson));
+  // 3) Recalcula os totais: alvo + catálogos de origem dos excluídos.
+  for (const cid of [...new Set([catalogoId, ...origem])]) {
+    stmts.push(
+      db
+        .update(catalogos)
+        .set({
+          totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${cid})`,
+          atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+        })
+        .where(eq(catalogos.id, cid)),
+    );
+  }
   // biome-ignore lint/suspicious/noExplicitAny: a tupla exigida por db.batch() do Drizzle é inviável de anotar.
   await db.batch(stmts as [any, ...any[]]);
   return { inserted: itens.length };
@@ -231,6 +281,69 @@ export async function atualizarCatalogoItem(
   if (campos.unidade !== undefined) set.unidade = campos.unidade || null;
   if (campos.tipos !== undefined) set.tipos = JSON.stringify(normalizarTipos(campos.tipos));
   await getDb().update(catalogoItens).set(set).where(eq(catalogoItens.id, id));
+}
+
+/**
+ * Cria UM item manualmente num catálogo. O código é salvo SÓ com dígitos (`codigo_raw =
+ * codigo`) e é a chave ÚNICA GLOBAL — a rota confere o conflito ANTES (422 se já existir em
+ * qualquer catálogo). Recalcula o total do catálogo. Devolve o id do item.
+ */
+export async function criarCatalogoItem(
+  catalogoId: number,
+  campos: { codigo: string; descricao: string; unidade: string | null; tipos: string[] },
+): Promise<{ id: number }> {
+  const db = getDb();
+  const codigo = normalizarCodigo(campos.codigo);
+  const [item] = await db
+    .insert(catalogoItens)
+    .values({
+      catalogoId,
+      codigo,
+      codigoRaw: codigo,
+      descricao: campos.descricao,
+      unidade: campos.unidade,
+      sequencial: null,
+      tipos: JSON.stringify(normalizarTipos(campos.tipos)),
+    })
+    .returning({ id: catalogoItens.id });
+  await db
+    .update(catalogos)
+    .set({ totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${catalogoId})`, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(catalogos.id, catalogoId));
+  return { id: item.id };
+}
+
+/** Exclui UM item e recalcula o total do seu catálogo. `null`-safe se o item não existir. */
+export async function excluirCatalogoItem(id: number): Promise<void> {
+  const db = getDb();
+  const [item] = await db.select({ catalogoId: catalogoItens.catalogoId }).from(catalogoItens).where(eq(catalogoItens.id, id)).limit(1);
+  if (!item) return;
+  await db.delete(catalogoItens).where(eq(catalogoItens.id, id));
+  await db
+    .update(catalogos)
+    .set({ totalItens: sql`(SELECT COUNT(*) FROM catalogo_itens WHERE catalogo_id = ${item.catalogoId})`, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(catalogos.id, item.catalogoId));
+}
+
+/**
+ * Une (UNIÃO) os `tiposNovos` aos tipos já existentes de cada item — o caso "item idêntico
+ * importado com tipo novo": o item EXISTENTE ganha os tipos, sem duplicar (`normalizarTipos`
+ * garante ordem canônica + sem repetido). Só grava quem realmente muda.
+ */
+export async function mesclarTiposEmItens(ids: number[], tiposNovos: string[]): Promise<void> {
+  const novos = normalizarTipos(tiposNovos);
+  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
+  if (uniq.length === 0 || novos.length === 0) return;
+  const db = getDb();
+  for (let i = 0; i < uniq.length; i += IN_CHUNK) {
+    const linhas = await db.select({ id: catalogoItens.id, tipos: catalogoItens.tipos }).from(catalogoItens).where(inArray(catalogoItens.id, uniq.slice(i, i + IN_CHUNK)));
+    for (const l of linhas) {
+      const atuais = parseTipos(l.tipos);
+      const uniao = normalizarTipos([...atuais, ...novos]);
+      if (uniao.length !== atuais.length)
+        await db.update(catalogoItens).set({ tipos: JSON.stringify(uniao), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(catalogoItens.id, l.id));
+    }
+  }
 }
 
 // ---- Conferência dos itens do DFD contra o catálogo (referência de padronização) ----

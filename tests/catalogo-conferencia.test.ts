@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { type CatalogoRef, conferirItem, piorFalta, ROTULO_FALTA_CATALOGO, similaridade } from "../src/lib/catalogo-conferencia.ts";
+import { type CatalogoRef, conferirItem, itensIguais, piorFalta, ROTULO_FALTA_CATALOGO, similaridade } from "../src/lib/catalogo-conferencia.ts";
 
 const ref = (over: Partial<CatalogoRef> = {}): CatalogoRef => ({
   codigo: "5241948381",
@@ -88,5 +88,15 @@ describe("catalogo-conferencia", () => {
     assert.equal(piorFalta(["divergenteCatalogo"]), "divergenteCatalogo");
     assert.equal(ROTULO_FALTA_CATALOGO.naoCatalogado, "Fora do catálogo");
     assert.equal(ROTULO_FALTA_CATALOGO.tipoIncompativel, "Tipo incompatível");
+  });
+
+  it("itensIguais: descrição+unidade normalizadas (UND ≡ UNIDADE) → true; KG vs UNIDADE → false", () => {
+    assert.equal(
+      itensIguais({ descricao: "ÁGUA MINERAL 500ML", unidade: "UND" }, { descricao: "agua mineral 500ml", unidade: "UNIDADE" }),
+      true,
+    );
+    assert.equal(itensIguais({ descricao: "AÇÚCAR", unidade: "KG" }, { descricao: "AÇÚCAR", unidade: "UNIDADE" }), false);
+    assert.equal(itensIguais({ descricao: "CANETA AZUL", unidade: "UNIDADE" }, { descricao: "CANETA PRETA", unidade: "UNIDADE" }), false);
+    assert.equal(itensIguais({ descricao: "X", unidade: null }, { descricao: "x", unidade: null }), true);
   });
 });

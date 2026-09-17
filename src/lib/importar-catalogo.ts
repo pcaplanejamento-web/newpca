@@ -57,7 +57,14 @@ export type CatalogoMeta = {
   catalogoId: number | null; // null = criar novo; id = atualizar um existente (merge)
   nome: string;
   tiposPadrao: string[];
+  excluirItens?: number[]; // ids de itens de OUTROS catálogos a remover (conflitos "substituir")
 };
+
+/** Cria um catálogo VAZIO (manual) — só nome + tipos. Devolve o id. */
+export async function criarCatalogoVazio(nome: string, tiposPadrao: string[]): Promise<number> {
+  const j = await postCatalogo({ mode: "criar-catalogo", nome, tiposPadrao });
+  return Number(j.catalogoId);
+}
 
 export async function enviarCatalogoEmLotes(
   meta: CatalogoMeta,
@@ -72,6 +79,7 @@ export async function enviarCatalogoEmLotes(
     tiposPadrao: meta.tiposPadrao,
     totalItens: total,
     rows: itens.slice(0, LOTE),
+    excluirItens: meta.excluirItens ?? [], // resolvidos só no 1º lote (libera os códigos)
   });
   const catalogoId = Number(j.catalogoId);
   onLote?.(Math.min(LOTE, total), total);

@@ -424,27 +424,42 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `tests/parse-catalogo-xlsx.test.ts`.
 - **Import em LOTES (`importar-catalogo.ts` → `POST /api/catalogo`):** discriminada `start-catalogo`|`append-catalogo-itens`
   (espelha `importar-dfd`: retry de transitório, all-or-nothing; só apaga o catálogo no rollback quando foi CRIADO agora).
-  **Código é ÚNICO GLOBAL:** todo lote confere `codigosEmConflito` — um código já presente em OUTRO catálogo → 422 (sem
-  isso o upsert por código sobrescreveria, em silêncio, item de outro catálogo). O preview pré-checa em
-  `POST /api/catalogo/verificar` e **bloqueia** "Importar" enquanto houver conflito; mostra também duplicados do arquivo.
+  **Código é ÚNICO GLOBAL:** todo lote confere `codigosEmConflito` — um código já presente em OUTRO catálogo → 422 (guarda;
+  o gate **ignora** os conflitos que o usuário resolveu por "substituir", via `start-catalogo.excluirItens`). O preview
+  pré-checa em `POST /api/catalogo/verificar` (que devolve o item EXISTENTE de cada conflito) e **RESOLVE** os conflitos em
+  vez de travar (ver "Novo catálogo + CRUD + conflitos"); mostra também duplicados do arquivo.
 - **Atualizar (re-subir) = MESCLAR preservando (`upsertCatalogoItens`, `INSERT … ON CONFLICT(codigo) DO UPDATE`):** item
   novo entra com o `tipos_padrao`; item que já existe tem só descrição/unidade/sequencial atualizados — os **`tipos`
   configurados são PRESERVADOS**; ausentes NÃO são apagados. Recalcula `total_itens`.
 - **Exportar / editar (`exportar-catalogo.ts`, cliente):** baixa o catálogo em **`.xlsx`** (SheetJS) ou abre uma
-  **impressão em PDF** (janela formatada → salvar como PDF), sem dependência nova. Um botão **"Exportar modelo"** (à
-  esquerda de "Importar", no cabeçalho) baixa um **modelo `.xlsx`** (`exportarModeloCatalogoXlsx` — cabeçalho
-  Item/Código/Descrição/Unidade + linha de exemplo) para o usuário preencher e importar. **Editar** o catálogo (nome/tipos
-  padrão) via `PATCH /api/catalogo/[id]`; **editar um item** (descrição/unidade/tipos — o CÓDIGO é imutável) via
-  `PATCH /api/catalogo/item/[id]` (`atualizarCatalogoItem`, schema `patchItemSchema`).
+  **impressão em PDF** (janela formatada → salvar como PDF), sem dependência nova. Um botão **"Exportar modelo"** (no
+  cabeçalho) baixa um **modelo `.xlsx`** (`exportarModeloCatalogoXlsx` — cabeçalho Item/Código/Descrição/Unidade + linha de
+  exemplo) para o usuário preencher e importar. **Editar** o catálogo (nome/tipos padrão) via `PATCH /api/catalogo/[id]`;
+  **adicionar/editar/excluir um item à mão** (descrição/unidade/tipos — o CÓDIGO é imutável na edição; definido na criação e
+  revalidado como único global) via `POST /api/catalogo/item`, `PATCH`/`DELETE /api/catalogo/item/[id]`
+  (`criarCatalogoItem`/`atualizarCatalogoItem`/`excluirCatalogoItem`).
 - **Tipos de DFD por item (`TIPOS_DFD` de `avaliacao-core`):** definíveis no **envio** (padrão do catálogo), em **massa**
   (seleção na tabela → barra no rodapé) e por **item** (`Modal.lateral` = `CatalogoItemDetalhe`, mestre-detalhe com
-  `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos}`. Seletor **`TipoDfdPicker`** (chips de alternância).
+  `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos,modo}` — `modo` **`definir`** (SET, padrão) ou **`mesclar`**
+  (UNIÃO, p/ o item existente ganhar um tipo novo sem perder os que tinha). Seletor **`TipoDfdPicker`** (chips de alternância).
 - **UI (`CatalogoView`):** um **`Segmented`** alterna **Catálogo** (cards por catálogo; abrir → `Modal` full com a tabela
   de itens — busca + filtro por tipo, seleção/edição em massa, exportar XLSX/PDF, editar, detalhe no `lateral`) e **Lista
   de Itens** (todos os itens numa tabela única, com coluna Catálogo; clique abre o detalhe num banner). A troca de visão
   anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
-  `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`), `PATCH`/`DELETE /api/catalogo/[id]`,
-  `PATCH /api/catalogo/itens`, `PATCH /api/catalogo/item/[id]` — todas `exigirEditor`.
+  `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`, `/item`), `PATCH`/`DELETE /api/catalogo/[id]`,
+  `PATCH /api/catalogo/itens`, `PATCH`/`DELETE /api/catalogo/item/[id]` — todas `exigirEditor`.
+- **Novo catálogo por card "+" + CRUD manual de item + resolução de conflitos (sem migração):** no lugar do botão
+  "Importar", um **card "+"** (tracejado, no formato do card de catálogo) fecha a grade; clicá-lo abre **"Novo catálogo"**
+  (`Segmented` **Criar manualmente** [nome+tipos → catálogo VAZIO via modo `criar-catalogo` do `catalogoOpSchema`, que abre p/
+  adicionar itens] | **Importar arquivo** [`Dropzone` → preview]). Dentro do catálogo aberto, **"+ Adicionar item"** e o
+  `CatalogoItemDetalhe` (**reusado em 3 modos**: consultar/editar/**criar**) fazem o CRUD manual (excluir com `confirm`).
+  **Conflitos (código já em OUTRO catálogo) NÃO travam mais** — o preview classifica cada um com **`itensIguais`**
+  (`catalogo-conferencia`, puro; descrição+unidade normalizadas, reusa `norm`/`normUnidadeMedida`): **idêntico** ⇒ **não
+  importa** o novo e, se o tiposPadrão acrescenta algo, **mescla os tipos no item EXISTENTE** (união — um item tem vários
+  tipos O/S/R/E); **divergente** (descrição/unidade diferem) ⇒ o usuário **compara** (novo × existente) e escolhe **manter**
+  (não importa) OU **substituir** (exclui o existente e importa este). Os "substituir" vão em `start-catalogo.excluirItens` e
+  são removidos ATOMICAMENTE no MESMO `db.batch` do upsert (recalcula os totais do alvo E dos catálogos de origem); o gate de
+  unicidade global os ignora. `podeImportar` não trava por conflito (só exige nome + algo a fazer).
 - **Conformidade dos ITENS do DFD com o catálogo (o catálogo VALIDA os itens; configurável pelo ADM):** cada item do DFD é
   conferido contra o catálogo (a **referência**) casando pelo **código** (único global). Núcleo PURO/testável em
   **`src/lib/catalogo-conferencia.ts`** (sem `getDb`/JSX, como `reparticao-match`): `conferirItem(item, entry|null, dfdTipoCurto,

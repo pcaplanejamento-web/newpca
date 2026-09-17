@@ -308,6 +308,14 @@ muda) + mensagens no painel. **Escalável:** o servidor consulta só os **códig
 itens ao catálogo passa a valer na hora. Núcleo puro `catalogo-conferencia.ts`, rota `POST /api/catalogo/conferir`, portão do
 servidor em `/api/dfd` (só bloqueia se o ADM elevou a fundamental). Testes: veredito por linha, portão e **invariante**
 (config vazia ⇒ igual a hoje).
+✅ **Criar por card "+", CRUD manual de item e resolução de conflitos:** no lugar do botão "Importar", um **card "+"** (no
+formato do card) cria um catálogo **manualmente** (vazio → adiciona itens à mão) ou **importando**. Dá para **adicionar,
+editar e excluir** itens à mão dentro do catálogo. Ao importar, o **conflito de código** (mesmo item já em outro catálogo)
+**não trava mais**: se for **idêntico** (código+descrição+unidade), o novo é **ignorado** e o item existente **ganha o tipo**
+que faltava (um item pode ter O/S/R/E); se **divergir** (descrição/unidade), o usuário **compara** os dois e escolhe **manter**
+ou **substituir** (exclui o existente e importa o novo). Código continua único global; substituições excluídas atomicamente.
+Núcleo `itensIguais` (puro), rotas `POST /api/catalogo/item` + `DELETE /api/catalogo/item/[id]` + `PATCH /api/catalogo/itens`
+(modo mesclar) + `criar-catalogo`. Sem migração.
 
 ### Import de DFD (PDF): descrição ILIMITADA por item, nunca truncada — corrigido
 ✅ Um item pode ter uma **descrição enorme** (várias linhas). O parser casava cada trecho pela âncora (nº/código no
