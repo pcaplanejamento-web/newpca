@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { expurgarSessoesExpiradas, getArmazenamento } from "@/lib/armazenamento";
 import { getUsoOficial } from "@/lib/cf-analytics";
 import { ok, parseCorpo } from "@/lib/http";
@@ -22,5 +23,7 @@ export async function POST(req: Request) {
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(acaoSchema, req);
   if ("resp" in p) return p.resp;
-  return ok(await expurgarSessoesExpiradas());
+  const r = await expurgarSessoesExpiradas();
+  await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "sessao", resumo: `Higiene: ${r.removidas} sessões expiradas expurgadas`, depois: r });
+  return ok(r);
 }

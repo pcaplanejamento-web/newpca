@@ -1,4 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { nivelDe } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
@@ -111,5 +112,13 @@ export async function POST(req: Request) {
     return erro(res.motivo, 422);
 
   const r = await upsertDfdCabecalho(d, a.u.id, d.rows);
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "importar",
+    entidade: "dfd",
+    entidadeId: r.id,
+    resumo: `DFD ${r.numero} importado — ${d.rows.length} ${d.rows.length === 1 ? "item" : "itens"}`,
+    depois: { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
+  });
   return ok({ dfdId: r.id, numero: r.numero });
 }

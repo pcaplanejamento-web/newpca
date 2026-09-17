@@ -199,6 +199,28 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(restantes.n, 0, "excluir o catálogo deveria apagar os itens (cascade)");
   });
 
+  it("0026 cria auditoria (append-only; FK usuario ON DELETE set null preserva o snapshot)", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    assert.ok(tabelas.includes("auditoria"), "tabela auditoria ausente");
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('auditoria')");
+    for (const c of ["usuario_id", "usuario_nome", "usuario_email", "acao", "entidade", "entidade_id", "resumo", "antes", "depois", "criado_em"]) {
+      assert.ok(cols.includes(c), `coluna ausente em auditoria: ${c}`);
+    }
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    assert.ok(idx.includes("auditoria_entidade_idx"), "índice de entidade ausente");
+    // FK usuario_id ON DELETE set null: excluir o usuário mantém a linha (snapshot preservado).
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (955, 'Fulano', 'f955@x.com', 'h')");
+    db.exec("INSERT INTO auditoria (usuario_id, usuario_nome, acao, entidade) VALUES (955, 'Fulano', 'editar', 'dfd')");
+    db.exec("DELETE FROM usuarios WHERE id = 955");
+    const row = db.prepare("SELECT usuario_id, usuario_nome FROM auditoria WHERE usuario_nome = 'Fulano'").get() as {
+      usuario_id: number | null;
+      usuario_nome: string;
+    };
+    assert.equal(row.usuario_id, null, "usuario_id deveria virar null ao excluir o usuário");
+    assert.equal(row.usuario_nome, "Fulano", "o snapshot do nome deve permanecer");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

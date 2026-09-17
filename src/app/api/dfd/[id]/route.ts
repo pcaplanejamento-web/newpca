@@ -1,4 +1,6 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { diffCampos } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { nivelDe } from "@/lib/avaliacao-core";
 import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
@@ -34,8 +36,17 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
     return erro("Sem acesso a este DFD.", 403);
   }
+  const alvo = await getDfd(id); // snapshot p/ o log antes de apagar
   const r = await excluirDfd(id);
   if (!r.ok) return erro(r.erro, 409);
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "excluir",
+    entidade: "dfd",
+    entidadeId: id,
+    resumo: `DFD ${alvo?.numero ?? id} excluído`,
+    antes: alvo ? { numero: alvo.numero, tipo: alvo.tipo, valorTotal: alvo.valorTotal, totalItens: alvo.itens.length } : null,
+  });
   return ok();
 }
 
@@ -66,6 +77,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
     }
     await vincularDfd(id, p.data.protocoloId);
+    await registrarAuditoria({
+      usuario: a.u,
+      acao: "editar",
+      entidade: "dfd",
+      entidadeId: id,
+      resumo: p.data.protocoloId != null ? `DFD vinculado ao protocolo #${p.data.protocoloId}` : "DFD desvinculado do protocolo",
+    });
   }
 
   // Editar unidade, seções (tratamento) e/ou referências de renovação (DFD-R). Não
@@ -76,6 +94,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     p.data.numeroContrato !== undefined ||
     p.data.numeroAta !== undefined ||
     p.data.numeroLicitacao !== undefined;
+  // Snapshot "antes" (para o diff do log) — buscado 1× quando há edição de campos ou itens.
+  const antes = editaCampos || p.data.itens !== undefined ? await getDfd(id) : null;
   if (editaCampos) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à unidade de destino.", 403);
@@ -99,6 +119,26 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       numeroAta: p.data.numeroAta,
       numeroLicitacao: p.data.numeroLicitacao,
     });
+    // Log: diff só dos campos ENVIADOS (undefined = não editado, não entra no diff).
+    const cs = (["reparticaoId", "numeroContrato", "numeroAta", "numeroLicitacao"] as const).filter(
+      (c) => p.data[c] !== undefined,
+    );
+    const dd = diffCampos(antes as Record<string, unknown>, p.data as Record<string, unknown>, cs, {
+      reparticaoId: "unidade",
+      numeroContrato: "contrato",
+      numeroAta: "ata",
+      numeroLicitacao: "licitação",
+    });
+    const partes = [dd.resumo, p.data.secoes !== undefined ? "tratamento/seções atualizados" : ""].filter(Boolean);
+    await registrarAuditoria({
+      usuario: a.u,
+      acao: "editar",
+      entidade: "dfd",
+      entidadeId: id,
+      resumo: `DFD ${antes?.numero ?? id}: ${partes.join("; ") || "editado"}`,
+      antes: dd.antes,
+      depois: dd.depois,
+    });
   }
 
   // Editar ITENS (banner do item destravado): reescreve `dfd_itens` + recomputa o
@@ -110,6 +150,29 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return erro("Todos os itens precisam de valor unitário.", 422);
     }
     await reescreverDfdItens(id, p.data.itens);
+    // Log: por item, o que mudou (descrição só sinaliza "alterada" p/ manter o resumo curto).
+    const antesItens = antes?.itens ?? [];
+    const linhas: string[] = [];
+    p.data.itens.forEach((d2, i) => {
+      const a2 = antesItens[i];
+      if (!a2) return;
+      const dd = diffCampos(
+        a2 as Record<string, unknown>,
+        d2 as Record<string, unknown>,
+        ["codigo", "unidade", "quantidade", "valorUnitario", "valorTotal"],
+        { codigo: "código", unidade: "unidade", quantidade: "quantidade", valorUnitario: "valor unit.", valorTotal: "valor total" },
+      );
+      const partes = [dd.resumo, (a2.descricao ?? null) !== (d2.descricao ?? null) ? "descrição alterada" : ""].filter(Boolean);
+      if (partes.length) linhas.push(`Item ${d2.item ?? i + 1}: ${partes.join("; ")}`);
+    });
+    await registrarAuditoria({
+      usuario: a.u,
+      acao: "editar",
+      entidade: "dfd",
+      entidadeId: id,
+      resumo: `DFD ${antes?.numero ?? id}: ${(linhas.length ? linhas.join(" · ") : "itens salvos").slice(0, 1500)}`,
+      depois: { itensAlterados: linhas.length },
+    });
   }
 
   return ok();

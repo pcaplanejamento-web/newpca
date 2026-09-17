@@ -1,4 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { codigosEmConflito, criarCatalogoItem, getCatalogo } from "@/lib/catalogo";
 import { criarItemSchema } from "@/lib/catalogo-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -24,5 +25,6 @@ export async function POST(req: Request) {
   if (conf.length > 0) return erro(`Código ${codigo} já existe no catálogo "${conf[0].catalogoNome}".`, 422);
 
   const r = await criarCatalogoItem(d.catalogoId, { codigo, descricao: d.descricao, unidade: d.unidade, tipos: d.tipos });
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "catalogo_item", entidadeId: r.id, resumo: `Item ${codigo} criado no catálogo #${d.catalogoId}`, depois: { codigo, descricao: d.descricao, unidade: d.unidade, tipos: d.tipos } });
   return ok({ id: r.id });
 }

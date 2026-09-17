@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
@@ -12,26 +12,31 @@ import {
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import { parseNumberBR } from "@/lib/normalize";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { parseNumberBR } from "@/lib/normalize";
 import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
 import { cellCls } from "./formStyles";
-import { IconAlert } from "./icons";
+import { IconAlert, IconLock, IconLockOpen } from "./icons";
+import { toast } from "./Toast";
 
 /** Número → string editável em pt-BR (vírgula decimal, sem separador de milhar). */
 function fmtNumEdit(v: number | null | undefined): string {
   return v == null ? "" : String(v).replace(".", ",");
 }
 
+/** Campos do item que têm cadeado próprio. */
+type CampoK = "codigo" | "unidade" | "descricao" | "quantidade" | "valorUnitario" | "valorTotal";
+
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
  * numa linha da tabela de itens (mestre-detalhe), no MESMO lugar do painel de mensagens.
- * Mostra TODAS as informações do item + o estado (com erro/regular) + a CONFORMIDADE com
- * o catálogo (status e sugestão de padronização, display-only — o DFD não é alterado).
- * Corpo de um `Modal` (não abre modal próprio). Só tokens/componentes do design-system.
+ * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo. Quando `editavel`,
+ * cada campo tem um **cadeado próprio**: destravar para editar; um campo **igual ao catálogo**
+ * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). Só
+ * tokens/componentes do design-system.
  */
 export function ItemDetalhe({
   item,
@@ -40,6 +45,7 @@ export function ItemDetalhe({
   tipo = null,
   editavel = false,
   onChange,
+  onEditandoChange,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -47,15 +53,17 @@ export function ItemDetalhe({
   regras?: RegrasAvaliacao;
   /** Tipo do DFD (texto) — para resolver a compatibilidade de tipo do item. */
   tipo?: string | null;
-  /** Campos do item editáveis (importação, ou gravado com o cadeado aberto). */
+  /** Habilita os cadeados por campo (importação, ou gravado com permissão de editor). */
   editavel?: boolean;
   /** Grava um patch parcial do item no host (que é dono do estado dos itens). */
   onChange?: (patch: Partial<DfdVisualItem>) => void;
+  /** Avisa o host quando ALGUM campo está destravado (para mostrar "Salvar alterações"). */
+  onEditandoChange?: (editando: boolean) => void;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
   const cor = estadoItemCor(est);
-  const ed = editavel && onChange; // edição habilitada (só com handler)
+  const editavelUI = editavel && !!onChange; // cadeados por campo só com handler
 
   // Conformidade com o catálogo (só quando o veredito foi carregado e o item tem código).
   const conf = conformidade?.get(normalizarCodigo(item.codigo));
@@ -63,6 +71,38 @@ export function ItemDetalhe({
   const corCat = veredicto ? corVeredictoCatalogo(veredicto.nivel) : "";
   // Rótulos ESPECÍFICOS (descrição/unidade/tipo diferentes) — aponta ONDE está o erro.
   const divergencias = conf ? rotulosDivergencia(conf) : [];
+
+  // Cadeado por campo. Um campo IGUAL ao catálogo não pode ser alterado (bloqueado).
+  const [abertos, setAbertos] = useState<Set<CampoK>>(new Set());
+  useEffect(() => {
+    onEditandoChange?.(abertos.size > 0);
+  }, [abertos, onEditandoChange]);
+  const catalogado = !!conf?.sugestao && conf.sugestao.score >= 1;
+  const bloqueado = (campo: CampoK): boolean => {
+    if (!catalogado) return false; // sem item casado no catálogo → nada bloqueado
+    if (campo === "codigo") return true; // código é a chave do match
+    if (campo === "descricao") return !conf?.divergDescricao; // igual ao catálogo
+    if (campo === "unidade") return !conf?.divergUnidade;
+    return false; // quantidade/valores não têm equivalente no catálogo
+  };
+  const alternarCadeado = (campo: CampoK) => {
+    if (bloqueado(campo)) {
+      toast.error("Campo igual ao catálogo — não pode ser alterado.");
+      return;
+    }
+    setAbertos((s) => {
+      const n = new Set(s);
+      if (n.has(campo)) n.delete(campo);
+      else n.add(campo);
+      return n;
+    });
+  };
+  const props = (campo: CampoK) => ({
+    editavel: editavelUI,
+    aberto: abertos.has(campo),
+    bloqueado: bloqueado(campo),
+    onLock: () => alternarCadeado(campo),
+  });
 
   return (
     <div className="space-y-4">
@@ -77,40 +117,26 @@ export function ItemDetalhe({
 
       {faltas.length > 0 && (
         <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
-          Falta {faltas.join(" e ")} — {ed ? "preencha abaixo." : "corrija na tabela da Seção 4."}
+          Falta {faltas.join(" e ")} — {editavelUI ? "destrave o campo para corrigir." : "corrija na tabela da Seção 4."}
         </Callout>
       )}
 
-      {/* Todos os campos do item — editáveis quando `ed`, senão só-leitura */}
-      {ed ? (
-        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          <CampoTextoEdit label="Código" valor={item.codigo ?? ""} mono onChange={(v) => onChange?.({ codigo: v || null })} />
-          <CampoTextoEdit label="Unidade" valor={item.unidade ?? ""} onChange={(v) => onChange?.({ unidade: v || null })} />
-          <CampoTextoEdit
-            label="Descrição"
-            valor={item.descricao ?? ""}
-            span
-            multi
-            onChange={(v) => onChange?.({ descricao: v || null })}
-          />
-          <CampoNumEdit label="Quantidade" valor={item.quantidade} onChange={(v) => onChange?.({ quantidade: v })} />
-          <CampoNumEdit
-            label="Valor unitário"
-            valor={item.valorUnitario}
-            onChange={(v) => onChange?.({ valorUnitario: v })}
-          />
-          <CampoNumEdit label="Valor total" valor={item.valorTotal} span onChange={(v) => onChange?.({ valorTotal: v })} />
-        </dl>
-      ) : (
-        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-          <Campo label="Código" valor={item.codigo ?? "—"} mono />
-          <Campo label="Unidade" valor={item.unidade ?? "—"} />
-          <Campo label="Descrição" valor={item.descricao ?? "—"} span />
-          <Campo label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : "—"} />
-          <Campo label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : "—"} />
-          <Campo label="Valor total" valor={item.valorTotal != null ? brl(item.valorTotal) : "—"} span forte />
-        </dl>
-      )}
+      {/* Campos do item — cada um com cadeado próprio quando editável */}
+      <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        <CampoTexto label="Código" valor={item.codigo ?? ""} mono {...props("codigo")} onChange={(v) => onChange?.({ codigo: v || null })} />
+        <CampoTexto label="Unidade" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
+        <CampoTexto
+          label="Descrição"
+          valor={item.descricao ?? ""}
+          span
+          multi
+          {...props("descricao")}
+          onChange={(v) => onChange?.({ descricao: v || null })}
+        />
+        <CampoNumero label="Quantidade" valor={item.quantidade} {...props("quantidade")} onChange={(v) => onChange?.({ quantidade: v })} />
+        <CampoNumero label="Valor unitário" valor={item.valorUnitario} moeda {...props("valorUnitario")} onChange={(v) => onChange?.({ valorUnitario: v })} />
+        <CampoNumero label="Valor total" valor={item.valorTotal} moeda span forte {...props("valorTotal")} onChange={(v) => onChange?.({ valorTotal: v })} />
+      </dl>
 
       {/* Conformidade com o catálogo (referência) — status + sugestão (display-only) */}
       {veredicto && (
@@ -174,38 +200,70 @@ export function ItemDetalhe({
   );
 }
 
-function Campo({
-  label,
-  valor,
-  span,
-  mono,
-  forte,
-}: {
-  label: string;
-  valor: string;
-  span?: boolean;
-  mono?: boolean;
-  forte?: boolean;
-}) {
+/** Célula só-leitura da referência do catálogo (sem cadeado). */
+function Campo({ label, valor, span, mono }: { label: string; valor: string; span?: boolean; mono?: boolean }) {
   return (
     <div className={span ? "sm:col-span-2" : ""}>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd
-        className={`mt-0.5 break-words leading-snug text-text ${
-          mono ? "font-mono text-[13px] font-semibold" : forte ? "text-base font-bold" : "text-sm font-semibold"
-        }`}
-      >
+      <dd className={`mt-0.5 break-words leading-snug font-semibold text-text ${mono ? "font-mono text-[13px]" : "text-sm"}`}>
         {valor}
       </dd>
     </div>
   );
 }
 
-/** Campo de texto editável (código/descrição/unidade) — controlado pelo item do host. */
-function CampoTextoEdit({
+/** Rótulo + cadeado por campo (quando editável) + conteúdo (só-leitura ou input). */
+function LinhaCampo({
+  label,
+  span,
+  editavel,
+  aberto,
+  bloqueado,
+  onLock,
+  children,
+}: {
+  label: string;
+  span?: boolean;
+  editavel: boolean;
+  aberto: boolean;
+  bloqueado: boolean;
+  onLock: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className={span ? "sm:col-span-2" : ""}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted">{label}</span>
+        {editavel && (
+          <button
+            type="button"
+            onClick={onLock}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            aria-label={aberto ? `Travar ${label}` : `Destravar ${label}`}
+            title={bloqueado ? "Igual ao catálogo — não pode alterar" : aberto ? "Travar campo" : "Destravar para editar"}
+          >
+            {aberto && !bloqueado ? (
+              <IconLockOpen className="h-3.5 w-3.5 text-accent" />
+            ) : (
+              <IconLock className="h-3.5 w-3.5" />
+            )}
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Campo de texto (código/unidade/descrição): só-leitura, ou input/textarea quando destravado. */
+function CampoTexto({
   label,
   valor,
   onChange,
+  editavel,
+  aberto,
+  bloqueado,
+  onLock,
   span,
   mono,
   multi,
@@ -213,59 +271,121 @@ function CampoTextoEdit({
   label: string;
   valor: string;
   onChange: (v: string) => void;
+  editavel: boolean;
+  aberto: boolean;
+  bloqueado: boolean;
+  onLock: () => void;
   span?: boolean;
   mono?: boolean;
   multi?: boolean;
 }) {
+  const editando = editavel && aberto && !bloqueado;
   return (
-    <div className={span ? "sm:col-span-2" : ""}>
-      <label className="mb-0.5 block text-xs text-muted">{label}</label>
-      {multi ? (
-        <textarea
-          className={`${cellCls} min-h-[76px] resize-y leading-snug`}
-          value={valor}
-          onChange={(e) => onChange(e.target.value)}
-        />
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+      {editando ? (
+        multi ? (
+          <AutoTextarea value={valor} onChange={onChange} mono={mono} />
+        ) : (
+          <input
+            className={`${cellCls} ${mono ? "font-mono" : ""}`}
+            value={valor}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        )
       ) : (
-        <input
-          className={`${cellCls} ${mono ? "font-mono" : ""}`}
-          value={valor}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <div
+          className={`mt-0.5 break-words leading-snug font-semibold text-text ${mono ? "font-mono text-[13px]" : "text-sm"}`}
+        >
+          {valor || "—"}
+        </div>
       )}
-    </div>
+    </LinhaCampo>
   );
 }
 
-/**
- * Campo numérico editável (quantidade/valores) — mantém um RASCUNHO local do texto
- * digitado (aceita "8.000,50" enquanto se digita) e envia o número parseado ao host.
- * Reinicia quando o host remonta o painel (key por item) ao trocar de item.
- */
-function CampoNumEdit({
+/** Campo numérico (quantidade/valores): só-leitura formatado, ou input quando destravado. */
+function CampoNumero({
   label,
   valor,
   onChange,
+  editavel,
+  aberto,
+  bloqueado,
+  onLock,
   span,
+  moeda,
+  forte,
 }: {
   label: string;
   valor: number | null | undefined;
   onChange: (v: number | null) => void;
+  editavel: boolean;
+  aberto: boolean;
+  bloqueado: boolean;
+  onLock: () => void;
   span?: boolean;
+  moeda?: boolean;
+  forte?: boolean;
 }) {
+  const editando = editavel && aberto && !bloqueado;
+  const texto = valor == null ? "—" : moeda ? brl(valor) : num(valor);
+  return (
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+      {editando ? (
+        <NumInput valor={valor} onChange={onChange} />
+      ) : (
+        <div className={`mt-0.5 break-words leading-snug text-text ${forte ? "text-base font-bold" : "text-sm font-semibold"}`}>
+          {texto}
+        </div>
+      )}
+    </LinhaCampo>
+  );
+}
+
+/** Input numérico com RASCUNHO local (aceita "8.000,50" enquanto digita) → número parseado. */
+function NumInput({ valor, onChange }: { valor: number | null | undefined; onChange: (v: number | null) => void }) {
   const [raw, setRaw] = useState(() => fmtNumEdit(valor));
   return (
-    <div className={span ? "sm:col-span-2" : ""}>
-      <label className="mb-0.5 block text-xs text-muted">{label}</label>
-      <input
-        className={cellCls}
-        inputMode="decimal"
-        value={raw}
-        onChange={(e) => {
-          setRaw(e.target.value);
-          onChange(parseNumberBR(e.target.value));
-        }}
-      />
-    </div>
+    <input
+      // biome-ignore lint/a11y/noAutofocus: foca ao destravar o campo (ação deliberada do usuário).
+      autoFocus
+      className={cellCls}
+      inputMode="decimal"
+      value={raw}
+      onChange={(e) => {
+        setRaw(e.target.value);
+        onChange(parseNumberBR(e.target.value));
+      }}
+    />
+  );
+}
+
+/** Textarea que CRESCE com o conteúdo (altura = scrollHeight) — mostra o texto INTEIRO, sem cortar. */
+function AutoTextarea({
+  value,
+  onChange,
+  mono,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  mono?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: precisa RE-executar a cada mudança de `value` para reajustar a altura ao conteúdo.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      // biome-ignore lint/a11y/noAutofocus: foca ao destravar o campo (ação deliberada do usuário).
+      autoFocus
+      className={`${cellCls} resize-none overflow-hidden leading-snug ${mono ? "font-mono" : ""}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }

@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { configuracoes } from "@/db/schema";
 import { ok, parseCorpo } from "@/lib/http";
@@ -48,6 +49,7 @@ export async function PATCH(req: Request) {
     .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarAparencia();
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Identidade/aparência atualizada" });
   return ok({ aparencia: novo });
 }
 
@@ -59,5 +61,6 @@ export async function DELETE() {
     .set({ dados: "{}", atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarAparencia();
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Aparência restaurada ao padrão" });
   return ok({ aparencia: {} });
 }

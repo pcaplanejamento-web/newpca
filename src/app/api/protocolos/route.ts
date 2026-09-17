@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import {
   criarProtocolo,
   getResumoProtocolos,
@@ -51,5 +52,6 @@ export async function POST(req: Request) {
       { status: 422 },
     );
   const id = await criarProtocolo(parsed.data, a.u.id);
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "protocolo_legado", entidadeId: id, resumo: `Protocolo (legado) #${id} criado` });
   return NextResponse.json({ ok: true, id });
 }

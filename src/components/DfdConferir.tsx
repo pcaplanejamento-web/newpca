@@ -40,7 +40,7 @@ type Rep = {
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
-export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number };
+export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição

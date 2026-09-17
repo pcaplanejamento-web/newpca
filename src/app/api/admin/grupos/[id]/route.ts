@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { grupoReparticoes, grupos, usuarioGrupos } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { grupoPatchSchema } from "@/lib/rbac-validation";
@@ -42,6 +43,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   await getDb().update(grupos).set(set).where(eq(grupos.id, id));
   if (membros !== undefined) await trocarMembros(id, membros);
   if (reps !== undefined) await trocarReparticoes(id, reps);
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "grupo", entidadeId: id, resumo: `Grupo #${id} editado`, depois: corpo.data });
   return ok();
 }
 
@@ -52,5 +54,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!id) return erro("ID inválido.");
   // Vínculos e grupo_id de protocolos/opções caem por FK (cascade / set null).
   await getDb().delete(grupos).where(eq(grupos.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "grupo", entidadeId: id, resumo: `Grupo #${id} excluído` });
   return ok();
 }

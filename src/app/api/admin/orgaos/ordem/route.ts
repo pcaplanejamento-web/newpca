@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 import { reordenarSchema } from "@/lib/rbac-validation";
@@ -21,5 +22,6 @@ export async function PATCH(req: Request) {
       .set({ ordem: i, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
       .where(eq(orgaos.id, ids[i]));
   }
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", resumo: `Órgãos reordenados (${ids.length})`, depois: { ordem: ids } });
   return ok();
 }

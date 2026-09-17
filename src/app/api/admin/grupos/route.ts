@@ -1,6 +1,7 @@
 import { asc } from "drizzle-orm";
 import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 import { grupoCreateSchema } from "@/lib/rbac-validation";
@@ -58,5 +59,6 @@ export async function POST(req: Request) {
     for (let i = 0; i < reps.length; i += 40)
       await db.insert(grupoReparticoes).values(reps.slice(i, i + 40).map((reparticaoId) => ({ grupoId, reparticaoId })));
   }
+  await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "grupo", entidadeId: grupoId ?? null, resumo: `Grupo "${nome}" criado`, depois: { nome, permissaoId, membros: membros.length, reparticoes: reps.length } });
   return ok({ id: grupoId });
 }

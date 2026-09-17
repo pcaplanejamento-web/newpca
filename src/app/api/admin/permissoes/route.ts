@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { grupos, permissoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 import { permissaoSchema } from "@/lib/rbac-validation";
@@ -42,5 +43,6 @@ export async function POST(req: Request) {
     .insert(permissoes)
     .values({ nome: corpo.data.nome, abas: JSON.stringify(corpo.data.abas) })
     .returning({ id: permissoes.id });
+  await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "permissao", entidadeId: row?.id ?? null, resumo: `Permissão "${corpo.data.nome}" criada`, depois: { nome: corpo.data.nome, abas: corpo.data.abas } });
   return ok({ id: row?.id });
 }

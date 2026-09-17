@@ -115,7 +115,17 @@ function ItemDetalheEditDemo() {
     valorUnitario: 8000 as number | null,
     valorTotal: 160000 as number | null,
   });
-  return <ItemDetalhe item={item} editavel onChange={(patch) => setItem((it) => ({ ...it, ...patch }))} />;
+  // Com conferência de catálogo: Código fica BLOQUEADO (igual ao catálogo); Descrição/Unidade
+  // divergentes ficam destraváveis; Quantidade/Valores sempre livres.
+  return (
+    <ItemDetalhe
+      item={item}
+      editavel
+      tipo="DFD-S"
+      conformidade={DEMO_ITEM_CONFORMIDADE}
+      onChange={(patch) => setItem((it) => ({ ...it, ...patch }))}
+    />
+  );
 }
 
 /** Demo do seletor de tipos de DFD (conjunto, controlado). */

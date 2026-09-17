@@ -1,4 +1,5 @@
 import { exigirUsuario } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { atualizarSenha } from "@/lib/auth";
 import { trocarSenhaSchema } from "@/lib/auth-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -18,5 +19,7 @@ export async function POST(req: Request) {
     corpo.data.novaSenha,
   );
   if (!sucesso) return erro("Senha atual incorreta.");
+  // Registra só o FATO (nunca a senha).
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "usuario", entidadeId: a.u.id, resumo: "Senha alterada" });
   return ok();
 }

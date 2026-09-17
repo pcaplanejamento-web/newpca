@@ -1,4 +1,5 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -40,6 +41,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   await atualizarProtocolo(id, p.data);
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "editar",
+    entidade: "protocolo",
+    entidadeId: id,
+    resumo:
+      p.data.reparticaoId !== undefined && p.data.reparticaoId !== proto.reparticaoId
+        ? `Protocolo #${id}: unidade #${proto.reparticaoId ?? "—"} → #${p.data.reparticaoId ?? "—"}`
+        : `Protocolo #${id} editado`,
+    antes: { reparticaoId: proto.reparticaoId },
+    depois: { reparticaoId: p.data.reparticaoId },
+  });
   return ok();
 }
 
@@ -56,5 +69,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     return erro("Sem acesso a este protocolo.", 403);
   }
   await excluirProtocolo(id);
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído` });
   return ok();
 }

@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { reparticaoSchema } from "@/lib/rbac-validation";
@@ -36,6 +37,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
   return ok();
 }
 
@@ -47,5 +49,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (await ehGeral(id)) return erro("A unidade 'Geral' é virtual e não pode ser excluída.", 400);
   // Vínculos grupo↔unidade caem por FK cascade.
   await getDb().delete(reparticoes).where(eq(reparticoes.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "reparticao", entidadeId: id, resumo: `Unidade #${id} excluída` });
   return ok();
 }

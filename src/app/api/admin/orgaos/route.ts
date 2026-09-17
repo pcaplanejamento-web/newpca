@@ -1,6 +1,7 @@
 import { asc, sql } from "drizzle-orm";
 import { orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
@@ -46,5 +47,6 @@ export async function POST(req: Request) {
       ordem: Number(max) + 1,
     })
     .returning({ id: orgaos.id });
+  await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "orgao", entidadeId: row?.id ?? null, resumo: `Órgão "${corpo.data.nome}" (${corpo.data.sigla}) criado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla } });
   return ok({ id: row?.id });
 }

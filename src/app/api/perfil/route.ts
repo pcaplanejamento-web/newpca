@@ -1,5 +1,6 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { exigirUsuario } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { perfilSchema } from "@/lib/auth-validation";
@@ -33,5 +34,6 @@ export async function PATCH(req: Request) {
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
   await db.update(usuarios).set(set).where(eq(usuarios.id, a.u.id));
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "usuario", entidadeId: a.u.id, resumo: "Perfil atualizado (dados próprios)" });
   return ok();
 }

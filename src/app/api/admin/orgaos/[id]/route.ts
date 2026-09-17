@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { orgaos } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
@@ -26,6 +27,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(orgaos.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${corpo.data.nome}" editado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, assinaturaUnica: corpo.data.assinaturaUnica } });
   return ok();
 }
 
@@ -36,5 +38,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!id) return erro("ID inválido.");
   // As unidades do órgão ficam sem vínculo (FK ON DELETE SET NULL) — nada é apagado.
   await getDb().delete(orgaos).where(eq(orgaos.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "orgao", entidadeId: id, resumo: `Órgão #${id} excluído` });
   return ok();
 }

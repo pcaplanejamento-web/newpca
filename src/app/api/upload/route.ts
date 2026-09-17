@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
 import { getReparticaoFiltro } from "@/lib/grupos";
@@ -86,6 +87,14 @@ export async function POST(req: Request) {
         ...stmts,
       ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
 
+      await registrarAuditoria({
+        usuario: auth.u,
+        acao: "importar",
+        entidade: "planilha",
+        entidadeId: unidadeId,
+        resumo: `Planilha (PCA) importada — unidade ${codigo}${municipio ? ` (${municipio})` : ""}, ${rows.length} ${rows.length === 1 ? "item" : "itens"}`,
+        depois: { codigo, municipio, reparticaoId: rep?.id ?? null },
+      });
       return NextResponse.json({
         ok: true,
         unidadeId,

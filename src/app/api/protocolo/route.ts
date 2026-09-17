@@ -1,4 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto, nivelDe } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
@@ -36,5 +37,13 @@ export async function POST(req: Request) {
   }
 
   const r = await iniciarProtocolo(protocolo, a.u.id);
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "protocolar",
+    entidade: "protocolo",
+    entidadeId: r.id,
+    resumo: `Protocolo ${r.numero} protocolado`,
+    depois: { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
+  });
   return ok({ protocoloId: r.id, numero: r.numero });
 }

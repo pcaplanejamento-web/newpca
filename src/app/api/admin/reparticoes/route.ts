@@ -1,6 +1,7 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { reparticaoSchema } from "@/lib/rbac-validation";
@@ -58,5 +59,6 @@ export async function POST(req: Request) {
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
     })
     .returning({ id: reparticoes.id });
+  await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "reparticao", entidadeId: row?.id ?? null, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) criada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
   return ok({ id: row?.id });
 }

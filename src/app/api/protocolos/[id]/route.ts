@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirEditor, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import {
   atualizarProtocolo,
   excluirProtocolo,
@@ -20,6 +21,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       { status: 422 },
     );
   await atualizarProtocolo(id, parsed.data);
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "protocolo_legado", entidadeId: id, resumo: `Protocolo (legado) #${id} editado`, depois: parsed.data });
   return NextResponse.json({ ok: true });
 }
 
@@ -29,5 +31,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = intId((await ctx.params).id);
   if (!id) return NextResponse.json({ ok: false, error: "ID inválido." }, { status: 400 });
   await excluirProtocolo(id);
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo_legado", entidadeId: id, resumo: `Protocolo (legado) #${id} excluído` });
   return NextResponse.json({ ok: true });
 }

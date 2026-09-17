@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { criarSessao, definirCookieSessao, verificarSenha } from "@/lib/auth";
 import { loginSchema } from "@/lib/auth-validation";
 import { getIntegracoes } from "@/lib/integracoes";
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
 
     const token = await criarSessao(u.id);
     await definirCookieSessao(token);
+    await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema` });
     return NextResponse.json({
       ok: true,
       usuario: { nome: u.nome, email: u.email, role: u.role },

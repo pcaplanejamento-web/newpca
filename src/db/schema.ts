@@ -465,6 +465,30 @@ export const catalogoItens = sqliteTable(
   ],
 );
 
+// Auditoria / histórico de alterações (APPEND-ONLY): quem (usuario_id + snapshot
+// nome/email), o quê (acao/entidade/entidade_id + diff antes/depois JSON), quando.
+export const auditoria = sqliteTable(
+  "auditoria",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNome: text("usuario_nome"), // snapshot — sobrevive à exclusão do usuário
+    usuarioEmail: text("usuario_email"),
+    acao: text("acao").notNull(), // criar|editar|excluir|importar|protocolar|login|...
+    entidade: text("entidade").notNull(), // dfd|dfd_item|protocolo|catalogo|usuario|...
+    entidadeId: integer("entidade_id"),
+    resumo: text("resumo"), // texto legível ("Item 2: quantidade 20 → 35")
+    antes: text("antes"), // JSON dos campos antes (edição/exclusão)
+    depois: text("depois"), // JSON dos campos depois (criação/edição)
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("auditoria_entidade_idx").on(t.entidade, t.entidadeId),
+    index("auditoria_usuario_idx").on(t.usuarioId),
+    index("auditoria_criado_idx").on(t.criadoEm),
+  ],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -498,3 +522,5 @@ export type Catalogo = typeof catalogos.$inferSelect;
 export type NovoCatalogo = typeof catalogos.$inferInsert;
 export type CatalogoItem = typeof catalogoItens.$inferSelect;
 export type NovoCatalogoItem = typeof catalogoItens.$inferInsert;
+export type Auditoria = typeof auditoria.$inferSelect;
+export type NovaAuditoria = typeof auditoria.$inferInsert;

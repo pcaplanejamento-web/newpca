@@ -1,4 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { definirTiposItens, mesclarTiposEmItens } from "@/lib/catalogo";
 import { patchItensTiposSchema } from "@/lib/catalogo-validation";
 import { ok, parseCorpo } from "@/lib/http";
@@ -18,5 +19,12 @@ export async function PATCH(req: Request) {
   const { ids, tipos, modo } = p.data;
   if (modo === "mesclar") await mesclarTiposEmItens(ids, tipos);
   else await definirTiposItens(ids, tipos);
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "editar",
+    entidade: "catalogo_item",
+    resumo: `Tipos de DFD ${modo === "mesclar" ? "mesclados" : "definidos"} em ${ids.length} ${ids.length === 1 ? "item" : "itens"}: ${tipos.join(", ") || "—"}`,
+    depois: { ids, tipos, modo },
+  });
   return ok();
 }

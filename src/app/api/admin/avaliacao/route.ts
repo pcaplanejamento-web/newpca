@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { invalidarAvaliacao, parseRegrasAvaliacao } from "@/lib/avaliacao";
 import { avaliacaoSchema } from "@/lib/avaliacao-validation";
 import { getDb } from "@/lib/db";
@@ -50,6 +51,7 @@ export async function PATCH(req: Request) {
     .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarAvaliacao();
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Regras de avaliação (ADM) atualizadas" });
   return ok({ avaliacao: parseRegrasAvaliacao(JSON.stringify(novo)) });
 }
 
@@ -63,5 +65,6 @@ export async function DELETE() {
     .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarAvaliacao();
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Regras de avaliação (ADM) restauradas ao padrão" });
   return ok({ avaliacao: parseRegrasAvaliacao(JSON.stringify(novo)) });
 }

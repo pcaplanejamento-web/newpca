@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { adminUsuarioSchema } from "@/lib/auth-validation";
 import { exigirAdmin, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +42,12 @@ export async function PATCH(
     if (dono) return erro("Este e-mail já está em uso.", 409);
   }
 
+  const [antes] = await db
+    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, role: usuarios.role, status: usuarios.status })
+    .from(usuarios)
+    .where(eq(usuarios.id, id))
+    .limit(1);
+
   const set = {
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
@@ -49,6 +57,24 @@ export async function PATCH(
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
   await db.update(usuarios).set(set).where(eq(usuarios.id, id));
+  // Log com destaque para PAPEL/STATUS (mudança de privilégio = alto valor).
+  const cs = (["nome", "email", "matricula", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
+  const dd = diffCampos(antes as Record<string, unknown>, corpo.data as Record<string, unknown>, cs, {
+    nome: "nome",
+    email: "e-mail",
+    matricula: "matrícula",
+    role: "papel",
+    status: "status",
+  });
+  await registrarAuditoria({
+    usuario: guard.u,
+    acao: "editar",
+    entidade: "usuario",
+    entidadeId: id,
+    resumo: `Usuário ${antes?.nome ?? id}: ${dd.resumo || "editado"}`,
+    antes: dd.antes,
+    depois: dd.depois,
+  });
   return ok();
 }
 
@@ -61,6 +87,9 @@ export async function DELETE(
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
   if (id === guard.u.id) return erro("Você não pode excluir a si mesmo.");
-  await getDb().delete(usuarios).where(eq(usuarios.id, id));
+  const db = getDb();
+  const [alvo] = await db.select({ nome: usuarios.nome, email: usuarios.email }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
+  await db.delete(usuarios).where(eq(usuarios.id, id));
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo: `Usuário ${alvo?.nome ?? id} excluído`, antes: alvo ?? null });
   return ok();
 }

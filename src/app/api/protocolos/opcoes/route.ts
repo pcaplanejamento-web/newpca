@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { adicionarOpcao, opcaoProtocoloSchema, removerOpcao } from "@/lib/protocolos";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export async function POST(req: Request) {
       { status: 422 },
     );
   const valor = await adicionarOpcao(parsed.data.campo, parsed.data.valor);
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "protocolo_legado", resumo: `Opção de "${parsed.data.campo}" adicionada: ${valor}` });
   return NextResponse.json({ ok: true, valor });
 }
 
@@ -27,5 +29,6 @@ export async function DELETE(req: Request) {
       { status: 422 },
     );
   await removerOpcao(parsed.data.campo, parsed.data.valor);
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo_legado", resumo: `Opção de "${parsed.data.campo}" removida: ${parsed.data.valor}` });
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
+import { registrarAuditoria } from "@/lib/auditoria";
 import {
   contarUsuarios,
   criarSessao,
@@ -70,6 +71,15 @@ export async function POST(req: Request) {
         status: primeiro ? "ativo" : "pendente",
       })
       .returning({ id: usuarios.id, role: usuarios.role, status: usuarios.status });
+
+    await registrarAuditoria({
+      usuario: { id: u.id, nome, email },
+      acao: "cadastro",
+      entidade: "usuario",
+      entidadeId: u.id,
+      resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})`,
+      depois: { nome, email, role: u.role, status: u.status },
+    });
 
     if (u.status === "ativo") {
       const token = await criarSessao(u.id);

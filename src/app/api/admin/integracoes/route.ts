@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { exigirAdmin } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { configuracoes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -62,6 +63,8 @@ export async function PATCH(req: Request) {
     .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarIntegracoes(); // loader tem cache de 60s
+  // Só o FATO da alteração — NUNCA os valores/segredos das integrações.
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Integrações atualizadas" });
   return ok({ integracoes: toView(novoInteg, temChaveMestra()) });
 }
 
@@ -75,5 +78,6 @@ export async function DELETE() {
     .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarIntegracoes();
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Integrações removidas" });
   return ok({ integracoes: toView(coerceIntegracoes(undefined), temChaveMestra()) });
 }

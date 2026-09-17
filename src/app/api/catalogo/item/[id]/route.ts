@@ -1,4 +1,5 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { atualizarCatalogoItem, excluirCatalogoItem } from "@/lib/catalogo";
 import { patchItemSchema } from "@/lib/catalogo-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -17,6 +18,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = await parseCorpo(patchItemSchema, req);
   if ("resp" in p) return p.resp;
   await atualizarCatalogoItem(id, p.data);
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "catalogo_item", entidadeId: id, resumo: `Item de catálogo #${id} editado`, depois: p.data });
   return ok();
 }
 
@@ -27,5 +29,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
   await excluirCatalogoItem(id);
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "catalogo_item", entidadeId: id, resumo: `Item de catálogo #${id} excluído` });
   return ok();
 }

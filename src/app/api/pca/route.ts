@@ -1,4 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { gerarPca } from "@/lib/dfd";
 import { gerarPcaSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -15,5 +16,6 @@ export async function POST(req: Request) {
 
   const r = await gerarPca(p.data, a.u.id);
   if ("erro" in r) return erro(r.erro, 422);
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "pca", entidadeId: r.id, resumo: `Edição de PCA "${p.data.nome}" gerada`, depois: { nome: p.data.nome, ano: p.data.ano } });
   return ok({ id: r.id });
 }
