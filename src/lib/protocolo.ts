@@ -160,16 +160,31 @@ export async function getProtocoloPorIdExterno(
 }
 
 /**
- * Edita um protocolo JÁ GRAVADO (banner destravado). Os DADOS DA CAPA são IMUTÁVEIS
- * — só a **repartição** (roteamento/escopo) muda. Grava direto no D1 (`atualizadoEm`
- * renovado).
+ * Edita um protocolo JÁ GRAVADO (banner destravado). Muda a **repartição** (roteamento)
+ * e os campos de **CONTEÚDO** da capa (interessado/assunto/observação/CPF-CNPJ/valor/
+ * local). Os **IDENTIFICADORES** (número/Id/data/ano do PCA) NÃO estão aqui → imutáveis.
+ * Cada campo é opcional; `undefined` = não mexe. Grava direto no D1 (`atualizadoEm` renovado).
  */
 export async function atualizarProtocolo(
   id: number,
-  campos: { reparticaoId?: number | null },
+  campos: {
+    reparticaoId?: number | null;
+    interessado?: string | null;
+    documento?: string | null;
+    assunto?: string | null;
+    observacao?: string | null;
+    valorCapa?: number | null;
+    localReparticao?: string | null;
+  },
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
+  if (campos.interessado !== undefined) set.interessado = campos.interessado;
+  if (campos.documento !== undefined) set.documento = campos.documento;
+  if (campos.assunto !== undefined) set.assunto = campos.assunto;
+  if (campos.observacao !== undefined) set.observacao = campos.observacao;
+  if (campos.valorCapa !== undefined) set.valorCapa = campos.valorCapa;
+  if (campos.localReparticao !== undefined) set.localReparticao = campos.localReparticao;
   await getDb().update(dfdProtocolos).set(set).where(eq(dfdProtocolos.id, id));
 }
 

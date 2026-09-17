@@ -1011,8 +1011,9 @@ export function ProtocoloUploadForm({
             </Callout>
           )}
 
-          {/* Dados da capa — MESMA grade (`CapaCampos`) do protocolo gravado. Editável só
-              na criação manual (sem PDF); do PDF é imutável. */}
+          {/* Dados da capa — MESMA grade (`CapaCampos`) do protocolo gravado. Criação manual
+              = inputs simples; importação de PDF = cadeado por campo nos de CONTEÚDO
+              (identificadores número/Id/data ficam travados). */}
           <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
             <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
             <CapaCampos
@@ -1025,15 +1026,17 @@ export function ProtocoloUploadForm({
               observacao={observacao}
               valorCapa={extra.valorCapa}
               localReparticao={extra.localReparticao}
-              editavel={!origemPdf}
+              modo={origemPdf ? "cadeado" : "criar"}
               onChange={(c, v) => {
                 if (c === "numero") setNumero(v);
                 else if (c === "data") setData(v);
                 else if (c === "interessado") setInteressado(v);
                 else if (c === "assunto") setAssunto(v);
                 else if (c === "observacao") setObservacao(v);
+                else if (c === "localReparticao") setExtra((x) => ({ ...x, localReparticao: v || null }));
                 else setExtra((x) => ({ ...x, documento: v || null }));
               }}
+              onChangeValorCapa={(v) => setExtra((x) => ({ ...x, valorCapa: v }))}
             >
               <div className="sm:col-span-2">
                 <label className={labelCls} htmlFor="proto-rep">

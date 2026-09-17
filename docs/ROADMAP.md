@@ -20,6 +20,15 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Capa do protocolo: campos de CONTEÚDO editáveis (cadeado por campo) — entregue
+✅ Os campos de **conteúdo** da capa (interessado, assunto, observação, CPF/CNPJ, valor, local) passaram a ser
+**editáveis com cadeado POR CAMPO** — a mesma lógica dos itens, agora nos primitivos compartilhados
+**`CampoCadeado`** (`LinhaCampo`/`CampoTexto`/`CampoNumero`/`NumInput`/`AutoTextarea` + hook `useCadeados`),
+extraídos do `ItemDetalhe` e reusados. Vale na **importação de PDF** (`CapaCampos` `modo="cadeado"`) e no
+**gravado destravado**; a criação manual segue com inputs simples (`modo="criar"`). Os **IDENTIFICADORES**
+(número/Id/data/ano do PCA) permanecem **imutáveis**. Servidor: `editarProtocoloSchema` + `atualizarProtocolo` +
+`PATCH /api/protocolo/[id]` aceitam os campos de conteúdo (com auditoria por diff) e recusam os identificadores.
+
 ### Protocolo/DFD: dedup/sobrescrita por identificador — corrigido
 ✅ Não coexistem dois protocolos com o mesmo **Id** (`idExterno` da capa): protocolar **sobrescreve** o de mesmo Id
 (`iniciarProtocolo` apaga o de mesmo Id + número diferente antes do upsert por número; `POST /api/protocolo` faz o

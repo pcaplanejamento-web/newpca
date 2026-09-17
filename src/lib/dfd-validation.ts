@@ -142,11 +142,18 @@ export const startProtocoloSchema = z.object({
   protocolo: protocoloMetaSchema,
 });
 
-/** Edição de um protocolo já gravado (banner destravado): **SÓ a repartição**
- * (roteamento/escopo). Os DADOS DA CAPA são IMUTÁVEIS — nunca editáveis (regra do
- * produto), então o servidor não aceita alterá-los. */
+/** Edição de um protocolo já gravado (banner destravado): a **repartição**
+ * (roteamento/escopo) + os campos de **CONTEÚDO** da capa (interessado/assunto/
+ * observação/CPF-CNPJ/valor/local). Os **IDENTIFICADORES** (número/Id/data/ano do PCA)
+ * são IMUTÁVEIS — o schema NÃO os aceita, então nunca mudam. */
 export const editarProtocoloSchema = z.object({
   reparticaoId: z.number().int().positive().optional().nullable(),
+  interessado: textoOpc,
+  documento: textoCurtoOpc,
+  assunto: textoOpc,
+  observacao: z.string().trim().max(2000).optional().nullable(),
+  valorCapa: z.number().nonnegative().optional().nullable(),
+  localReparticao: textoOpc,
 });
 
 /** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */

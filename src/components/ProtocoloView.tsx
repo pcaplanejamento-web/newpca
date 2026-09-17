@@ -6,6 +6,7 @@ import { dfdRSemReferencia } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { CampoNumero, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
@@ -13,10 +14,18 @@ import { IconAlert } from "./icons";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
 
-/** Campos da CAPA do protocolo (a MESMA grade na importação e no gravado). Id/Valor/Local
- * são sempre só-leitura; os demais ficam só-leitura salvo `editavel` (criação manual). O
- * controle de repartição entra por `children` (varia: obrigatório no import, cadeado no gravado). */
-export type CampoCapa = "numero" | "data" | "documento" | "interessado" | "assunto" | "observacao";
+/** Campos da CAPA do protocolo (a MESMA grade na importação e no gravado).
+ * - **modo `"criar"`** (protocolo manual): campos de texto viram inputs simples.
+ * - **modo `"cadeado"`** (importação de PDF / gravado destravado): os campos de **CONTEÚDO**
+ *   (interessado/assunto/observação/CPF-CNPJ/valor/local) têm **cadeado por campo** (mesma
+ *   lógica dos itens); os **IDENTIFICADORES** (número/Id/data) ficam SEMPRE só-leitura.
+ * - **modo `"leitura"`** (gravado travado / catálogo): tudo só-leitura.
+ * O controle de repartição/PCA entra por `children`. */
+export type CampoCapa = "numero" | "data" | "documento" | "interessado" | "assunto" | "observacao" | "localReparticao";
+/** Campos de CONTEÚDO (editáveis com cadeado); os identificadores nunca entram aqui. */
+export type CampoCapaEditavel = "documento" | "interessado" | "assunto" | "observacao" | "valorCapa" | "localReparticao";
+export type ModoCapa = "leitura" | "criar" | "cadeado";
+const naoOp = () => {};
 export function CapaCampos({
   numero,
   idExterno,
@@ -27,8 +36,10 @@ export function CapaCampos({
   observacao,
   valorCapa,
   localReparticao,
-  editavel = false,
+  modo = "leitura",
   onChange,
+  onChangeValorCapa,
+  onEditandoChange,
   children,
 }: {
   numero: string;
@@ -40,37 +51,74 @@ export function CapaCampos({
   observacao: string;
   valorCapa: number | null;
   localReparticao: string | null;
-  editavel?: boolean;
+  modo?: ModoCapa;
   onChange?: (campo: CampoCapa, valor: string) => void;
+  onChangeValorCapa?: (valor: number | null) => void;
+  onEditandoChange?: (editando: boolean) => void;
   children?: ReactNode;
 }) {
-  const ro = !editavel;
-  const set = (c: CampoCapa) => (e: { target: { value: string } }) => onChange?.(c, e.target.value);
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <TextField label="Número do processo" value={numero} onChange={set("numero")} disabled={ro} readOnly={ro} placeholder="Ex.: 144756/2026" />
-      <TextField label="Id do processo" value={idExterno ?? ""} disabled readOnly placeholder="—" />
-      <TextField label="Data/Hora" value={data} onChange={set("data")} disabled={ro} readOnly={ro} placeholder="—" />
-      <TextField label="CPF/CNPJ" value={documento} onChange={set("documento")} disabled={ro} readOnly={ro} placeholder="—" />
-      <div className="sm:col-span-2">
-        <TextField label="Interessado" value={interessado} onChange={set("interessado")} disabled={ro} readOnly={ro} />
+  const { abertos, alternar } = useCadeados<CampoCapaEditavel>(onEditandoChange);
+  const podeEditar = modo === "cadeado";
+  const props = (campo: CampoCapaEditavel) => ({
+    editavel: podeEditar,
+    aberto: abertos.has(campo),
+    bloqueado: false,
+    onLock: () => alternar(campo),
+  });
+
+  // Modo CRIAR (protocolo manual): campos de texto viram inputs simples (como antes).
+  if (modo === "criar") {
+    const set = (c: CampoCapa) => (e: { target: { value: string } }) => onChange?.(c, e.target.value);
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Número do processo" value={numero} onChange={set("numero")} placeholder="Ex.: 144756/2026" />
+        <TextField label="Id do processo" value={idExterno ?? ""} disabled readOnly placeholder="—" />
+        <TextField label="Data/Hora" value={data} onChange={set("data")} placeholder="—" />
+        <TextField label="CPF/CNPJ" value={documento} onChange={set("documento")} placeholder="—" />
+        <div className="sm:col-span-2">
+          <TextField label="Interessado" value={interessado} onChange={set("interessado")} />
+        </div>
+        <TextField label="Assunto" value={assunto} onChange={set("assunto")} />
+        <TextField label="Observação" value={observacao} onChange={set("observacao")} />
+        <TextField label="Valor (capa)" value={valorCapa != null ? brl(valorCapa) : "—"} disabled readOnly />
+        <TextField label="Local (capa)" value={localReparticao ?? ""} disabled readOnly placeholder="—" />
+        {children}
       </div>
-      <TextField label="Assunto" value={assunto} onChange={set("assunto")} disabled={ro} readOnly={ro} />
-      <TextField label="Observação" value={observacao} onChange={set("observacao")} disabled={ro} readOnly={ro} />
-      <TextField label="Valor (capa)" value={valorCapa != null ? brl(valorCapa) : "—"} disabled readOnly />
-      <TextField label="Local (capa)" value={localReparticao ?? ""} disabled readOnly placeholder="—" />
+    );
+  }
+
+  // Modo LEITURA / CADEADO: só-leitura com cadeado por campo nos de CONTEÚDO. Os
+  // IDENTIFICADORES (número/Id/data) ficam sempre travados (só-leitura, sem cadeado).
+  return (
+    <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      <CampoTexto label="Número do processo" valor={numero} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+      <CampoTexto label="Id do processo" valor={idExterno ?? ""} mono editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+      <CampoTexto label="Data/Hora" valor={data} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+      <CampoTexto label="CPF/CNPJ" valor={documento} {...props("documento")} onChange={(v) => onChange?.("documento", v)} />
+      <CampoTexto label="Interessado" valor={interessado} span multi {...props("interessado")} onChange={(v) => onChange?.("interessado", v)} />
+      <CampoTexto label="Assunto" valor={assunto} {...props("assunto")} onChange={(v) => onChange?.("assunto", v)} />
+      <CampoTexto label="Observação" valor={observacao} multi {...props("observacao")} onChange={(v) => onChange?.("observacao", v)} />
+      <CampoNumero label="Valor (capa)" valor={valorCapa} moeda {...props("valorCapa")} onChange={(v) => onChangeValorCapa?.(v)} />
+      <CampoTexto label="Local (capa)" valor={localReparticao ?? ""} {...props("localReparticao")} onChange={(v) => onChange?.("localReparticao", v)} />
       {children}
     </div>
   );
 }
 
 /**
- * Campo editável do protocolo (banner destravado). Os DADOS DA CAPA são IMUTÁVEIS
- * (nunca editáveis) — só a **repartição** (roteamento/escopo, não é dado da capa)
- * pode ser ajustada.
+ * Campos editáveis do protocolo (banner destravado). Os **IDENTIFICADORES** da capa
+ * (número/Id/data) são IMUTÁVEIS; os campos de **CONTEÚDO** (interessado/assunto/
+ * observação/CPF-CNPJ/valor/local) e a **repartição** (roteamento) são editáveis
+ * com cadeado por campo.
  */
 export type ProtocoloEdicaoValores = {
   reparticaoId: number | null;
+  interessado?: string | null;
+  assunto?: string | null;
+  observacao?: string | null;
+  documento?: string | null;
+  valorCapa?: number | null;
+  localReparticao?: string | null;
 };
 export type ProtocoloEdicao = {
   trancado: boolean;
@@ -164,6 +212,8 @@ export function ProtocoloView({
   regras?: RegrasAvaliacao;
 }) {
   const editando = !!edicao && !edicao.trancado;
+  // Destravado → a capa mostra o RASCUNHO (`edicao.valores`); senão, o gravado.
+  const capaVals = editando && edicao ? edicao.valores : null;
   const rep =
     protocolo.reparticaoCodigo || protocolo.reparticaoNome
       ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
@@ -222,21 +272,28 @@ export function ProtocoloView({
         </Callout>
       )}
 
-      {/* Dados da capa — MESMA grade (`CapaCampos`) da importação, SEMPRE só-leitura
-          (imutáveis). Só a repartição (roteamento) vira um seletor quando destravado. */}
+      {/* Dados da capa — MESMA grade (`CapaCampos`) da importação. Os IDENTIFICADORES
+          (número/Id/data) ficam sempre travados; os campos de CONTEÚDO ganham cadeado por
+          campo quando destravado. Quando editando, mostra o RASCUNHO (`edicao.valores`). */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
         <CapaCampos
           numero={protocolo.numero}
           idExterno={protocolo.idExterno}
           data={protocolo.data ?? ""}
-          documento={protocolo.documento ?? ""}
-          interessado={protocolo.interessado ?? ""}
-          assunto={protocolo.assunto ?? ""}
-          observacao={protocolo.observacao ?? ""}
-          valorCapa={protocolo.valorCapa}
-          localReparticao={protocolo.localReparticao}
-          editavel={false}
+          documento={(capaVals ? capaVals.documento : protocolo.documento) ?? ""}
+          interessado={(capaVals ? capaVals.interessado : protocolo.interessado) ?? ""}
+          assunto={(capaVals ? capaVals.assunto : protocolo.assunto) ?? ""}
+          observacao={(capaVals ? capaVals.observacao : protocolo.observacao) ?? ""}
+          valorCapa={capaVals ? (capaVals.valorCapa ?? null) : protocolo.valorCapa}
+          localReparticao={capaVals ? (capaVals.localReparticao ?? null) : protocolo.localReparticao}
+          modo={editando ? "cadeado" : "leitura"}
+          onChange={
+            editando && edicao
+              ? (campo, v) => edicao.onChange({ [campo]: v || null } as Partial<ProtocoloEdicaoValores>)
+              : undefined
+          }
+          onChangeValorCapa={editando && edicao ? (v) => edicao.onChange({ valorCapa: v }) : undefined}
         >
           <div>
             <TextField label="PCA (ano)" value={protocolo.anoPca != null ? String(protocolo.anoPca) : "—"} disabled readOnly />

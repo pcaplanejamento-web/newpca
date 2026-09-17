@@ -31,7 +31,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = await parseCorpo(editarProtocoloSchema, req);
   if ("resp" in p) return p.resp;
 
-  const proto = await getProtocoloReparticao(id);
+  const proto = await getProtocolo(id);
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const { lista } = await getReparticaoContexto(a.u);
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
@@ -41,6 +41,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   await atualizarProtocolo(id, p.data);
+  // Diff só dos campos presentes no corpo (antes = gravado; depois = novo).
+  const CAMPOS = ["reparticaoId", "interessado", "assunto", "observacao", "documento", "valorCapa", "localReparticao"] as const;
+  const antes: Record<string, unknown> = {};
+  const depois: Record<string, unknown> = {};
+  for (const c of CAMPOS) {
+    if (p.data[c] !== undefined) {
+      antes[c] = proto[c] ?? null;
+      depois[c] = p.data[c] ?? null;
+    }
+  }
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",
@@ -50,8 +60,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       p.data.reparticaoId !== undefined && p.data.reparticaoId !== proto.reparticaoId
         ? `Protocolo #${id}: unidade #${proto.reparticaoId ?? "—"} → #${p.data.reparticaoId ?? "—"}`
         : `Protocolo #${id} editado`,
-    antes: { reparticaoId: proto.reparticaoId },
-    depois: { reparticaoId: p.data.reparticaoId },
+    antes,
+    depois,
   });
   return ok();
 }

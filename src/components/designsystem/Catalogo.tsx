@@ -41,6 +41,7 @@ import {
   IconUpload,
   IconWallet,
 } from "@/components/icons";
+import { CampoNumero, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
@@ -128,6 +129,36 @@ function ItemDetalheEditDemo() {
       conformidade={DEMO_ITEM_CONFORMIDADE}
       onChange={(patch) => setItem((it) => ({ ...it, ...patch }))}
     />
+  );
+}
+
+/** Demo dos primitivos de CAMPO COM CADEADO (por campo) — reusados na capa e no DFD. */
+function CampoCadeadoDemo() {
+  const [interessado, setInteressado] = useState("COORDENAÇÃO DE PLANEJAMENTO DAS CONTRATAÇÕES");
+  const [valor, setValor] = useState<number | null>(50);
+  const { abertos, alternar } = useCadeados<"interessado" | "valor">();
+  const props = (k: "interessado" | "valor") => ({
+    editavel: true,
+    aberto: abertos.has(k),
+    bloqueado: false,
+    onLock: () => alternar(k),
+  });
+  return (
+    <dl className="grid max-w-md gap-x-6 gap-y-3 sm:grid-cols-2">
+      {/* Identificador: sem cadeado (só-leitura permanente) */}
+      <CampoTexto
+        label="Id (identificador — travado)"
+        valor="2312764"
+        mono
+        editavel={false}
+        aberto={false}
+        bloqueado
+        onLock={() => {}}
+        onChange={() => {}}
+      />
+      <CampoNumero label="Valor (capa)" valor={valor} moeda {...props("valor")} onChange={setValor} />
+      <CampoTexto label="Interessado (destravável)" valor={interessado} span {...props("interessado")} onChange={setInteressado} />
+    </dl>
   );
 }
 
@@ -1102,6 +1133,10 @@ export function Catalogo() {
         <div className="max-w-md">
           <ItemDetalheEditDemo />
         </div>
+      </Secao>
+
+      <Secao titulo="CampoCadeado (campo com cadeado POR CAMPO — reusado na capa e no cabeçalho do DFD)">
+        <CampoCadeadoDemo />
       </Secao>
 
       <Secao titulo="TipoDfdPicker (conjunto de tipos de DFD — usado no catálogo: envio, massa e item)">

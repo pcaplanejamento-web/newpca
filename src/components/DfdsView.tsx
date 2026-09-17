@@ -290,8 +290,17 @@ export function DfdsView({
       if (!res.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
       const p = j.protocolo;
       setProtoView(p);
-      // Só a repartição é editável — os dados da capa são imutáveis.
-      setProtoEdit({ reparticaoId: p.reparticaoId });
+      // Repartição + campos de CONTEÚDO da capa são editáveis (cadeado por campo);
+      // os identificadores (número/Id/data) permanecem imutáveis.
+      setProtoEdit({
+        reparticaoId: p.reparticaoId,
+        interessado: p.interessado,
+        assunto: p.assunto,
+        observacao: p.observacao,
+        documento: p.documento,
+        valorCapa: p.valorCapa,
+        localReparticao: p.localReparticao,
+      });
       setProtoTrancado(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
@@ -326,8 +335,16 @@ export function DfdsView({
       const res = await fetch(`/api/protocolo/${protoView.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        // Só a repartição — os dados da capa são imutáveis (o servidor também recusa).
-        body: JSON.stringify({ reparticaoId: protoEdit.reparticaoId }),
+        // Repartição + campos de CONTEÚDO da capa (identificadores seguem imutáveis no servidor).
+        body: JSON.stringify({
+          reparticaoId: protoEdit.reparticaoId,
+          interessado: protoEdit.interessado,
+          assunto: protoEdit.assunto,
+          observacao: protoEdit.observacao,
+          documento: protoEdit.documento,
+          valorCapa: protoEdit.valorCapa,
+          localReparticao: protoEdit.localReparticao,
+        }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");
