@@ -201,18 +201,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
   **TRÊS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
-  (Dropsigner/Lacuna Software): bloco **INLINE na Seção 10 (AUTORIZAÇÃO DEMANDA)** do próprio DFD, em layout de
-  **2 COLUNAS** (`Assinado digitalmente por:` → NOME → `CPF: <mascarado>` → `Data: … -03:00` na COLUNA DIREITA; a URL
-  `dropsigner.com/validate/<código>` vem na marca d'água da margem "Documento assinado no Dropsigner", repetida em
-  TODA página — é a **prova UNIVERSAL** de que o documento foi assinado. Como o `agruparLinhas` junta as 2 colunas de
-  mesma `y`, o Dropsigner é extraído por **`assinaturasDropsigner(items)`** (`parse-dfd-pdf-core.ts`, CIENTE DA COLUNA
-  `x`): **todo código de validação presente vira uma assinatura** (reconhece o documento como assinado mesmo SEM bloco
-  visível — nome/CPF/data ficam vazios, verificáveis pela URL); quando há o bloco na Seção 10, sai COMPLETA. Somado a
-  `extrairAssinaturas` em `parseDfdFromPdfItems` (cobre DFD avulso). **No PROTOCOLO** as assinaturas A/B ficam em páginas
-  separadas (índice `dfd.assinaturas`) e a Dropsigner é inline nas páginas do DFD → **`parseDfdDoProtocolo` COMBINA os
-  dois** (`[...dfd.assinaturas, ...dropsigner do parse]`) — **não sobrescreve** (o bug que impedia o reconhecimento).
-  Validado no Protocolo 4.pdf real: **79/86 DFDs reconhecidos** (14 com nome; 65 pelo carimbo; 1 usa outro formato
-  "Assinado de forma digital", fora do escopo).
+  (Dropsigner/Lacuna Software): o bloco visível ("Assinado digitalmente por: NOME · CPF: <mascarado> · Data: …") é,
+  na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura** (widget `Sig`) — que o **`getTextContent` NÃO
+  extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do **TEXTO RENDERIZADO** (`getOperatorList`, via
+  `PdfDoc.pageRenderText`) por **`assinaturasDropsignerDeTexto(texto)`** (`parse-dfd-pdf-core.ts`, puro): pega o NOME/
+  CPF/Data do bloco (regex; o dois-pontos após "por" distingue do Formato B) e o **código** da marca d'água
+  `dropsigner.com/validate/<código>` (prova UNIVERSAL, repetida em toda página). **Todo código presente vira uma
+  assinatura** (reconhece mesmo sem bloco visível — nome/CPF/data vazios, verificáveis pela URL); com bloco, sai
+  COMPLETA. `parseDfdFromPdfItems(items, nome, textoRender)` soma `extrairAssinaturas` (A/B) + Dropsigner do render.
+  **No PROTOCOLO** as A/B ficam em páginas separadas (índice `dfd.assinaturas`) e a Dropsigner nas páginas do DFD →
+  **`parseDfdDoProtocolo` COMBINA os dois** (não sobrescreve — era o bug que impedia o reconhecimento). Validado no
+  Protocolo 4.pdf real: **77/86 com NOME + 2 só carimbo** (1 usa outro formato "Assinado de forma digital", fora do escopo).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas de um DFD podem vir em **VÁRIAS páginas** (formatos e páginas diferentes), sempre depois do DFD. No

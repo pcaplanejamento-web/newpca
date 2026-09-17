@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
-import { assinaturasDropsigner, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
+import { assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
 // coordenadas reais de DFD PDF.pdf: rótulo e valor em trechos separados, número
@@ -404,66 +404,57 @@ describe("parse-dfd-pdf-core", () => {
   });
 });
 
-// Formato C — assinatura Dropsigner (bloco inline na Seção 10, layout de 2 COLUNAS).
-// Coordenadas modeladas no Protocolo 4.pdf real (coluna direita x≈374; a marca d'água
-// da URL na margem x=586; linhas da coluna esquerda na MESMA y devem ser ignoradas).
-function blocoDropsigner(page: number): PdfItem[] {
-  return [
-    f(page, 38, 80, "10 - AUTORIZAÇÃO DEMANDA"),
-    f(page, 374, 73, "Assinado digitalmente por:"),
-    f(page, 38, 66, "Autorizo o início da formalização da demanda."), // esquerda, MESMA y do nome — ignorar
-    f(page, 374, 66, "ANDERSON FERREIRA DE MORAIS"), // NOME (coluna direita)
-    f(page, 374, 59, "CPF: ***.997.391-**"),
-    f(page, 239, 52, "ANDERSON FERREIRA DE MORAIS"), // Seção 9 (Gestor), coluna do meio — ignorar
-    f(page, 374, 52, "Data: 02/09/2026 09:58:56 -03:00"),
-    f(page, 586, 43, "Documento assinado no Dropsigner. Para validar acesse https://www.dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H."),
-    f(page, 38, 21, "Centi ® e-Assinatura: eefHdg58teX Emitido em 01/09/2026 por lidia.soares"),
-  ];
-}
-
-describe("assinaturasDropsigner (Formato C — ciente das 2 colunas)", () => {
-  it("extrai nome/CPF/data/código da coluna direita, ignorando a coluna esquerda", () => {
-    const ass = assinaturasDropsigner(blocoDropsigner(1));
+// Formato C — assinatura Dropsigner do TEXTO RENDERIZADO (getOperatorList), que inclui a
+// APARÊNCIA das anotações de assinatura. Fixtures modeladas no texto render real do Protocolo 4
+// (o bloco sai CONTÍGUO: "Assinado digitalmente por: NOME CPF: … Data: …", com a marca d'água).
+describe("assinaturasDropsignerDeTexto (Formato C — texto renderizado)", () => {
+  it("extrai nome/CPF/data/código do bloco (aparência da anotação de assinatura)", () => {
+    const texto =
+      "10 - AUTORIZAÇÃO DEMANDA Autorizo o início da formalização da demanda. " +
+      "Assinado digitalmente por: EDUARDO STEFANI CPF: ***.719.478-** Data: 01/09/2026 14:36:17 -03:00 " +
+      "Documento assinado no Dropsigner. Para validar acesse https://www.dropsigner.com/validate/JEMJJ-BV2QC-RSDRW-DC523.";
+    const ass = assinaturasDropsignerDeTexto(texto);
     assert.equal(ass.length, 1);
-    assert.equal(ass[0].nome, "ANDERSON FERREIRA DE MORAIS");
-    assert.equal(ass[0].eCpf, "***.997.391-**");
-    assert.equal(ass[0].data, "02/09/2026 09:58:56 -03:00");
-    assert.equal(ass[0].codigo, "T3B43-D54KH-QU7SZ-DYF7H");
-    assert.ok(ass[0].url.includes("dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H"));
+    assert.equal(ass[0].nome, "EDUARDO STEFANI");
+    assert.equal(ass[0].eCpf, "***.719.478-**");
+    assert.equal(ass[0].data, "01/09/2026 14:36:17 -03:00");
+    assert.equal(ass[0].codigo, "JEMJJ-BV2QC-RSDRW-DC523");
+    assert.ok(ass[0].url.includes("dropsigner.com/validate/JEMJJ-BV2QC-RSDRW-DC523"));
     assert.equal(ass[0].fonte, "dropsigner");
   });
 
-  it("marca d'água repetida em VÁRIAS páginas → 1 assinatura (dedupe por nome+data)", () => {
-    // pág 2 só tem a marca d'água (continuação do DFD), sem novo bloco de assinatura.
-    const p2watermark = [f(2, 586, 43, "Documento assinado no Dropsigner. https://www.dropsigner.com/validate/T3B43-D54KH-QU7SZ-DYF7H.")];
-    const ass = assinaturasDropsigner([...blocoDropsigner(1), ...p2watermark]);
+  it("marca d'água repetida (várias páginas) → 1 assinatura (dedupe por código+nome+data)", () => {
+    const texto =
+      "Assinado digitalmente por: EDUARDO STEFANI CPF: ***.719.478-** Data: 01/09/2026 14:36:17 -03:00 " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/JEMJJ-BV2QC-RSDRW-DC523. " +
+      "…continuação… Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/JEMJJ-BV2QC-RSDRW-DC523.";
+    const ass = assinaturasDropsignerDeTexto(texto);
     assert.equal(ass.length, 1);
-  });
-
-  it("sem marca d'água Dropsigner → [] (não confunde com o Formato B)", () => {
-    const semDrop = [
-      f(1, 38, 80, "10 - AUTORIZAÇÃO DEMANDA"),
-      f(1, 374, 73, "Assinado digitalmente por:"),
-      f(1, 374, 66, "ALGUEM SEM DROPSIGNER"),
-      f(1, 374, 59, "CPF: ***.111.222-**"),
-    ];
-    assert.deepEqual(assinaturasDropsigner(semDrop), []);
   });
 
   it("marca d'água SEM bloco visível → 1 assinatura reconhecida (só código, sem nome)", () => {
-    // Caso comum no Protocolo 4: a Seção 10 mostra só o cargo; o documento tem o carimbo
-    // "Documento assinado no Dropsigner …/validate/<código>" → reconhece como assinado.
-    const soWatermark = [
-      f(1, 38, 99, "10 - AUTORIZAÇÃO DEMANDA"),
-      f(1, 38, 85, "Autorizo o início da formalização da demanda."),
-      f(1, 236, 57, "SECRETÁRIO MUNICIPAL DE SAÚDE"),
-      f(1, 586, 43, "Documento assinado no Dropsigner. https://www.dropsigner.com/validate/PMZ4G-FP9KD-MKT69-NZQW2."),
-    ];
-    const ass = assinaturasDropsigner(soWatermark);
+    // Caso comum: a Seção 10 mostra só o cargo; o documento tem o carimbo Dropsigner.
+    const texto =
+      "10 - AUTORIZAÇÃO DEMANDA Autorizo o início da formalização da demanda. SECRETÁRIO MUNICIPAL DE SAÚDE " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/PMZ4G-FP9KD-MKT69-NZQW2.";
+    const ass = assinaturasDropsignerDeTexto(texto);
     assert.equal(ass.length, 1);
     assert.equal(ass[0].fonte, "dropsigner");
     assert.equal(ass[0].codigo, "PMZ4G-FP9KD-MKT69-NZQW2");
-    assert.ok(ass[0].url.includes("dropsigner.com/validate/PMZ4G-FP9KD-MKT69-NZQW2"));
-    assert.equal(ass[0].nome, ""); // sem bloco visível → nome vazio (verificável pela URL)
+    assert.equal(ass[0].nome, ""); // sem bloco → nome vazio (verificável pela URL)
+  });
+
+  it("sem marca d'água Dropsigner → [] (não inventa assinatura)", () => {
+    assert.deepEqual(assinaturasDropsignerDeTexto("Assinado digitalmente por: FULANO CPF: ***.1-** Data: 01/01/2026"), []);
+  });
+
+  it("NÃO casa o Formato B (sem dois-pontos após 'por') mesmo com carimbo → só o bare", () => {
+    const texto =
+      "Assinado digitalmente por MAYANA BARBOSA, portador do CPF: ***.877.935-**, em 27/08/2026 15:05:00. " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/ABCDE-11111-22222-33333.";
+    const ass = assinaturasDropsignerDeTexto(texto);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, ""); // Formato B não vira bloco Dropsigner; fica o bare do carimbo
+    assert.equal(ass[0].codigo, "ABCDE-11111-22222-33333");
   });
 });

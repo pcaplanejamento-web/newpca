@@ -72,73 +72,63 @@ export function linhasDeTexto(bruto: PdfItem[]): string[] {
 }
 
 // URL de validação do Dropsigner (Lacuna Software) — contém o CÓDIGO do documento.
-const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Za-z0-9-]+)/i;
-// Âncora do bloco de assinatura Dropsigner: "Assinado digitalmente por:" ISOLADO (com dois-pontos).
-// Difere do Formato B ("Assinado digitalmente por NOME, portador do CPF:…"), onde o nome vem na mesma linha.
-const RE_DROPSIGNER_ANCORA = /^assinado\s+digitalmente\s+por:?$/i;
+const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Za-z0-9-]+)/gi;
+// Bloco de assinatura Dropsigner no TEXTO RENDERIZADO: "Assinado digitalmente por: NOME
+// CPF: <mascarado> Data: dd/mm/aaaa hh:mm:ss -03:00". O dois-pontos após "por" distingue do
+// Formato B ("Assinado digitalmente por NOME, portador do CPF:…").
+const RE_DROPSIGNER_BLOCO =
+  /Assinado\s+digitalmente\s+por:\s*(.+?)\s+CPF:\s*([\d.*-]+)\s+Data:\s*(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?(?:\s*[-+]\d{2}:\d{2})?)/gi;
 
 /**
- * Formato C — assinatura **Dropsigner** (Lacuna Software), CIENTE DAS 2 COLUNAS. O documento
- * assinado traz, em TODA página, a marca d'água "Documento assinado no Dropsigner … `dropsigner.com/
- * validate/<código>`" — é a PROVA universal de que o documento foi assinado (com o código de
- * validação). Em ALGUMAS páginas há também o **bloco visível** na Seção 10, na COLUNA DIREITA:
- * "Assinado digitalmente por:" → NOME → "CPF: ***.xxx.xxx-**" → "Data: …" (o `agruparLinhas` junta
- * as 2 colunas de mesma `y`, então lê-se só a coluna do âncora, por GEOMETRIA `x`). Regra:
- * - todo **código de validação** presente vira uma assinatura Dropsigner (reconhece o documento
- *   como assinado, mesmo sem bloco visível — nome/CPF/data ficam vazios, verificáveis pela URL);
- * - quando há o bloco, a assinatura sai COMPLETA (nome/CPF/data). Puro/testável.
+ * Formato C — assinatura **Dropsigner** (Lacuna Software), a partir do TEXTO RENDERIZADO da
+ * página (`getOperatorList`, ver `pageRenderText` em `parse-dfd-pdf.ts`). É preciso o texto
+ * RENDERIZADO — e não o `getTextContent` — porque o bloco visível costuma ser a **aparência de
+ * uma ANOTAÇÃO de assinatura** (widget de campo `Sig`), que o `getTextContent` NÃO extrai (só o
+ * render/aparência traz). O documento assinado traz, em toda página, a marca d'água "Documento
+ * assinado no Dropsigner … `dropsigner.com/validate/<código>`" — prova universal do documento
+ * assinado. Regra: todo **código** presente vira uma assinatura (reconhece o documento mesmo sem
+ * bloco visível — nome/CPF/data vazios, verificáveis pela URL); quando há o bloco, sai COMPLETA.
+ * Puro/testável (recebe o texto pronto).
  */
-export function assinaturasDropsigner(bruto: PdfItem[]): Assinatura[] {
-  const items = normalizar(bruto);
-  // Marca d'água por página → { url, código do documento }. Ausente ⇒ página não é Dropsigner.
-  const urlPorPagina = new Map<number, { url: string; codigo: string }>();
-  for (const it of items) {
-    const m = it.str.match(RE_DROPSIGNER_URL);
-    if (m && !urlPorPagina.has(it.page)) urlPorPagina.set(it.page, { url: m[0], codigo: m[1] });
+export function assinaturasDropsignerDeTexto(texto: string): Assinatura[] {
+  // Códigos (marca d'água). Sem código ⇒ não é Dropsigner.
+  const codigos: { codigo: string; url: string }[] = [];
+  const vistosCod = new Set<string>();
+  RE_DROPSIGNER_URL.lastIndex = 0;
+  let u: RegExpExecArray | null = RE_DROPSIGNER_URL.exec(texto);
+  while (u !== null) {
+    if (!vistosCod.has(u[1])) {
+      vistosCod.add(u[1]);
+      codigos.push({ codigo: u[1], url: u[0] });
+    }
+    u = RE_DROPSIGNER_URL.exec(texto);
   }
-  if (urlPorPagina.size === 0) return [];
+  if (codigos.length === 0) return [];
+  const doc = codigos[0]; // código do documento (o mesmo em toda página do DFD)
 
   const out: Assinatura[] = [];
   const vistos = new Set<string>();
-  const codigosComBloco = new Set<string>(); // códigos que já têm um bloco visível (com nome)
-  // 1) Blocos VISÍVEIS ("Assinado digitalmente por:") → assinatura COMPLETA (nome/CPF/data).
-  for (const anc of items) {
-    if (!RE_DROPSIGNER_ANCORA.test(anc.str)) continue;
-    const u = urlPorPagina.get(anc.page);
-    if (!u) continue; // só páginas com a marca d'água Dropsigner (evita casar o Formato B)
-    // Coluna do âncora (x ≈ igual), linhas ABAIXO dentro da altura do bloco (~34pt).
-    const col = items.filter(
-      (i) => i.page === anc.page && i.x >= anc.x - 6 && i.x <= anc.x + 200 && i.y < anc.y && i.y >= anc.y - 34,
-    );
-    let nome = "";
-    let eCpf = "";
-    let data = "";
-    for (const l of agruparLinhas(col)) {
-      const t = l.items.map((i) => i.str).join(" ").trim();
-      const mCpf = t.match(/^CPF:\s*(.+)$/i);
-      const mData = t.match(/^Data:\s*(.+)$/i);
-      if (mCpf) {
-        if (!eCpf) eCpf = mCpf[1].trim();
-      } else if (mData) {
-        if (!data) data = mData[1].trim();
-      } else if (!nome && !/dropsigner|documento assinado/i.test(t)) {
-        nome = t;
-      }
+  const comBloco = new Set<string>();
+  // Blocos VISÍVEIS → assinatura COMPLETA (nome/CPF/data).
+  RE_DROPSIGNER_BLOCO.lastIndex = 0;
+  let m: RegExpExecArray | null = RE_DROPSIGNER_BLOCO.exec(texto);
+  while (m !== null) {
+    const nome = m[1].trim();
+    const eCpf = m[2].trim();
+    const data = m[3].trim();
+    const chave = `${doc.codigo}|${norm(nome)}|${data}`;
+    if (!vistos.has(chave)) {
+      vistos.add(chave);
+      comBloco.add(doc.codigo);
+      out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: doc.codigo, url: doc.url, fonte: "dropsigner" });
     }
-    if (!nome && !eCpf) continue; // bloco vazio → cai no carimbo (passo 2)
-    const chave = `${u.codigo}|${norm(nome)}|${data}`;
-    if (vistos.has(chave)) continue; // a marca d'água repete por página; o bloco em si, não
-    vistos.add(chave);
-    codigosComBloco.add(u.codigo);
-    out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: u.codigo, url: u.url, fonte: "dropsigner" });
+    m = RE_DROPSIGNER_BLOCO.exec(texto);
   }
-  // 2) Códigos SÓ com carimbo (sem bloco visível) → assinatura reconhecida pela marca d'água
-  //    (documento assinado no Dropsigner; assinante/data verificáveis pela URL de validação).
-  const porCodigo = new Map<string, string>();
-  for (const { url, codigo } of urlPorPagina.values()) if (!porCodigo.has(codigo)) porCodigo.set(codigo, url);
-  for (const [codigo, url] of porCodigo) {
-    if (codigosComBloco.has(codigo)) continue;
-    out.push({ nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo, url, fonte: "dropsigner" });
+  // Códigos SÓ com carimbo (sem bloco visível) → reconhecido pela marca d'água (assinante/data
+  // verificáveis pela URL). Um por código de documento sem bloco.
+  for (const c of codigos) {
+    if (comBloco.has(c.codigo)) continue;
+    out.push({ nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: c.codigo, url: c.url, fonte: "dropsigner" });
   }
   return out;
 }
@@ -189,7 +179,7 @@ export function itemPorCuts(cuts: number[], y: number): number {
   return lo;
 }
 
-export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): DfdParseado {
+export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string, textoRender = ""): DfdParseado {
   const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
@@ -541,7 +531,8 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string): Dfd
     nomeArquivo,
     secoes,
     itens,
-    // Formatos A/B (páginas de assinatura) + Formato C Dropsigner (inline, ciente das 2 colunas).
-    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsigner(bruto)],
+    // Formatos A/B (páginas de assinatura, texto normal) + Formato C Dropsigner (do texto
+    // RENDERIZADO, que inclui a aparência das anotações de assinatura — vazio ⇒ sem Dropsigner).
+    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsignerDeTexto(textoRender)],
   };
 }

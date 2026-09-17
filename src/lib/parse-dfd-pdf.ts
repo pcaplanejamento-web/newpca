@@ -19,6 +19,10 @@ export type { PdfItem } from "./parse-dfd-pdf-core.ts";
 export type PdfDoc = {
   numPages: number;
   pageItems: (page: number) => Promise<PdfItem[]>;
+  /** Texto RENDERIZADO da página (via `getOperatorList`) — inclui a APARÊNCIA das anotações de
+   * assinatura (widgets `Sig`), que o `getTextContent` (pageItems) NÃO traz. Usado só para
+   * capturar a assinatura Dropsigner; mais caro, então chame só quando precisar (por DFD). */
+  pageRenderText: (page: number) => Promise<string>;
   destroy: () => Promise<void>;
 };
 
@@ -46,6 +50,7 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
     throw new Error("Não consegui ler o PDF. Confirme que é um PDF com texto (não digitalizado).");
   }
 
+  const OPS = pdfjs.OPS;
   return {
     numPages: doc.numPages,
     async pageItems(p: number) {
@@ -59,6 +64,25 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       }
       page.cleanup(); // libera os recursos da página (streaming)
       return items;
+    },
+    async pageRenderText(p: number) {
+      // getOperatorList RENDERIZA a página (inclui a aparência das anotações de assinatura,
+      // que o getTextContent ignora). Concatena o texto das operações `showText`.
+      const page = await doc.getPage(p);
+      const opList = await page.getOperatorList();
+      let texto = "";
+      for (let i = 0; i < opList.fnArray.length; i++) {
+        if (opList.fnArray[i] !== OPS.showText) continue;
+        const glyphs = opList.argsArray[i][0];
+        if (!Array.isArray(glyphs)) continue;
+        for (const g of glyphs) {
+          if (g && typeof g === "object" && "unicode" in g) texto += (g as { unicode: string }).unicode;
+          else if (typeof g === "number" && g < -100) texto += " "; // espaçamento largo → espaço
+        }
+        texto += " ";
+      }
+      page.cleanup();
+      return texto.replace(/\s+/g, " ");
     },
     destroy: () => task.destroy(),
   };
@@ -80,14 +104,23 @@ export async function extractPdfItems(file: File): Promise<PdfItem[]> {
 }
 
 export async function parseDfdPdf(file: File): Promise<DfdParseado> {
-  const items = await extractPdfItems(file);
-  // Separa as vias: um PDF de protocolo (capa/vários DFDs) NÃO entra pela via do DFD.
-  const tipo = classificarPdf(paginasDeItens(items));
-  if (tipo === "protocolo") {
-    throw new Error("Isto é um PROTOCOLO (vários DFDs) — importe pela aba Protocolos.");
+  const doc = await abrirPdf(file);
+  try {
+    const items: PdfItem[] = [];
+    for (let p = 1; p <= doc.numPages; p++) items.push(...(await doc.pageItems(p)));
+    // Separa as vias: um PDF de protocolo (capa/vários DFDs) NÃO entra pela via do DFD.
+    const tipo = classificarPdf(paginasDeItens(items));
+    if (tipo === "protocolo") {
+      throw new Error("Isto é um PROTOCOLO (vários DFDs) — importe pela aba Protocolos.");
+    }
+    if (tipo === "desconhecido") {
+      throw new Error('Não reconheci um DFD neste PDF. Envie o DFD emitido (com "Número DFD").');
+    }
+    // Texto renderizado (inclui a aparência das anotações de assinatura) — para o Dropsigner.
+    let render = "";
+    for (let p = 1; p <= doc.numPages; p++) render += ` ${await doc.pageRenderText(p)}`;
+    return parseDfdFromPdfItems(items, file.name, render);
+  } finally {
+    await doc.destroy();
   }
-  if (tipo === "desconhecido") {
-    throw new Error('Não reconheci um DFD neste PDF. Envie o DFD emitido (com "Número DFD").');
-  }
-  return parseDfdFromPdfItems(items, file.name);
 }
