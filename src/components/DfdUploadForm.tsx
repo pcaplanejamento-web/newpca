@@ -37,6 +37,7 @@ type Rep = {
   codigo: string;
   nome: string;
   orgaoId?: number | null;
+  orgaoProprio?: boolean | null;
   setorRequisitante?: string | null;
   numeroInteressado?: string | null;
   oculto?: boolean | null;

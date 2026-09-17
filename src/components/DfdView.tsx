@@ -429,25 +429,24 @@ export function DfdView({
 
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => {
-              // Dropsigner (Lacuna) — apresentado em TONS DE AZUL (--info) e rotulado.
+              // Assinatura PADRÃO (certificado/sistema) em VERDE (--ok); Dropsigner em AZUL (--info).
               const drop = a.fonte === "dropsigner";
+              const cor = drop ? "var(--info)" : "var(--ok)";
               return (
                 <div
                   key={`${a.codigo}-${i}`}
-                  className={`rounded-card border p-4 ${drop ? "border-[color:var(--info)]" : "border-border-2"}`}
-                  style={drop ? { background: "color-mix(in srgb, var(--info) 7%, var(--surface))" } : undefined}
+                  className="rounded-card border p-4"
+                  style={{ borderColor: cor, background: `color-mix(in srgb, ${cor} 7%, var(--surface))` }}
                 >
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
-                    {drop ? (
-                      <>
-                        <span style={{ color: "var(--info)" }}>Assinatura Dropsigner</span>
-                        <Badge tone="blue">Dropsigner</Badge>
-                      </>
-                    ) : (
-                      <span className="text-muted">
-                        {a.fonte === "sistema" ? "Assinatura Eletrônica (Sistema)" : "Assinatura Digital (Certificado Digital)"}
-                      </span>
-                    )}
+                    <span style={{ color: cor }}>
+                      {drop
+                        ? "Assinatura Dropsigner"
+                        : a.fonte === "sistema"
+                          ? "Assinatura Eletrônica (Sistema)"
+                          : "Assinatura Digital (Certificado Digital)"}
+                    </span>
+                    <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
                   </div>
                   <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     <Campo label="Assinante" valor={a.nome || "—"} span />
@@ -459,7 +458,7 @@ export function DfdView({
                   <div className="mt-3">
                     <LinkExterno
                       href={drop && a.url ? a.url : URL_VERIFICACAO}
-                      icon={<IconShield className="h-4 w-4" style={drop ? { color: "var(--info)" } : undefined} />}
+                      icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
                     >
                       Verificar autenticidade{drop ? " (Dropsigner)" : ""}
                     </LinkExterno>

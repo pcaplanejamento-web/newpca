@@ -141,9 +141,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`numeroInteressadoEmUso`, checado nas rotas admin POST/PATCH → 409). O protocolo guarda `dfd_protocolos.orgao_id`
     quando vem em nome do órgão (`protocoloMetaSchema`/`iniciarProtocolo`).
   - **DFD identifica ÓRGÃO e escopa a UNIDADE (ponto 4/5):** o `DfdConferir` identifica o órgão pelo "Órgão/Entidade"
-    (`casarOrgao`), **escopa o seletor de unidade** às unidades daquele órgão, e o usuário escolhe a unidade; o auto-match
-    dos forms usa **`preverUnidadeDoDfd`** (assinatura→setor). Sem previsão, a **unidade fica obrigatória** (`dfd.reparticao`
-    fundamental — erro até definir). O DFD **registra órgão + unidade** — o servidor deriva `dfds.orgao_id` da unidade em
+    (`casarOrgao`) e **escopa o seletor de unidade** às unidades daquele órgão (PREFERÊNCIA), mas SEMPRE inclui a unidade
+    já selecionada e **cai para a lista inteira quando o escopo fica vazio** — senão o seletor ficava vazio (nenhuma
+    unidade acessível no órgão, ou a atual em outro órgão) e travava a escolha manual. O auto-match dos forms usa
+    **`preverUnidadeDoDfd`** (assinatura→setor); **ÓRGÃO-QUE-É-UNIDADE** (dual, `orgao_proprio`): quando o órgão
+    identificado tem a unidade própria, ela é resolvida como a requisitante (senão o DFD do órgão dual ficava sem
+    unidade → erro). `orgao_proprio` é threadado ao cliente (`dadosMatchPorReparticao` → `page.tsx` → forms →
+    `preverUnidadeDoDfd`/`ReparticaoMatch`). Sem previsão, a **unidade fica obrigatória** (`dfd.reparticao` fundamental —
+    erro até definir). O DFD **registra órgão + unidade** — o servidor deriva `dfds.orgao_id` da unidade em
     `upsertDfdCabecalho`. Ponto de avaliação CONFIGURÁVEL **`dfd.orgao`** ("Órgão identificado", padrão `intermediario`)
     avisa quando o Órgão/Entidade não casa nenhum órgão cadastrado (flag via `ctx`, avaliadores puros).
   - **Ocultar em vez de excluir (ponto 8):** `orgaos.oculto`/`reparticoes.oculto` — órgão/unidade **com DFD/protocolo
@@ -224,14 +229,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
   cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
-  autorizado → bloqueia. **Dropsigner é RECONHECIDA como válida** (decisão do produto): o match por nome vale só p/
-  A/B; se NÃO houver match A/B mas houver ≥1 `fonte:"dropsigner"`, o resultado é o status **`"dropsigner"`** — NÃO
-  bloqueia e não exige responsável (o assinante é o secretário/ordenador, CPF mascarado). Docs A/B seguem IDÊNTICOS
-  (só entra quando não casou A/B). O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
-  a repartição), carregando os responsáveis por `carregarResponsaveis` (`src/lib/reparticoes.ts`). O `DfdView`
-  exibe uma seção "Assinaturas Digitais" (assinante, CPF, usuário, data, código) — o card da **Dropsigner** vem em
-  **TONS DE AZUL** (`--info`) + `Badge` "Dropsigner" e o "Verificar autenticidade" aponta para o **link Dropsigner**
-  (`a.url = dropsigner.com/validate/<código>`), não a URL fixa — + o **solicitante** — o
+  autorizado → bloqueia. **A Dropsigner segue a MESMA lógica dos demais formatos** — muda só a cor/rótulo (visual):
+  o match por nome vale para TODOS (certificado/sistema/dropsigner); uma Dropsigner cujo assinante casa um responsável
+  → `ok` (com `solicitante`); não casa → `erro` (bloqueia como A/B). **Exceção estreita:** a Dropsigner "só carimbo"
+  (marca d'água sem bloco visível → `nome` vazio) é reconhecida SEM match → status **`"dropsigner"`** (não bloqueia;
+  verificável pela URL). O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
+  a repartição, com a exceção por tipo `dfd.assinatura`), carregando os responsáveis por `carregarResponsaveis`
+  (`src/lib/reparticoes.ts`; assinatura única → responsáveis do ÓRGÃO). O `DfdView` exibe a seção "Assinaturas Digitais"
+  (assinante, CPF, usuário, data, código): o card da assinatura **PADRÃO** (certificado/sistema) vem em **VERDE**
+  (`--ok`, `Badge` "Certificado") e o da **Dropsigner** em **AZUL** (`--info`, `Badge` "Dropsigner", "Verificar
+  autenticidade" → `a.url = dropsigner.com/validate/<código>`) — + o **solicitante** — o
   responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).

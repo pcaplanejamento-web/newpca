@@ -34,6 +34,7 @@ export default async function DfdsPage() {
     numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
     setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
     orgaoId: matchMap[r.id]?.orgaoId ?? null,
+    orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,
   }));
 

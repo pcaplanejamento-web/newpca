@@ -7,6 +7,7 @@ import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdRepart
 import { editarDfdSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis } from "@/lib/reparticoes";
@@ -114,9 +115,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const res = validarAssinatura(ass?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {
         exigeAssinatura: pdfExigeAssinatura(ass?.nomeArquivo),
       });
-      // Respeita o nível `dfd.assinatura` do ADM (global aqui — o tipo do DFD não está em escopo).
+      // Respeita o nível `dfd.assinatura` do ADM COM a exceção por tipo de DFD (igual ao cliente
+      // e ao POST) — `antes` (getDfd) traz o tipo.
       const regras = await getRegrasAvaliacao();
-      if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura")))
+      if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(antes?.tipo) })))
         return erro(res.motivo, 422);
     }
     await atualizarDfdCampos(id, {

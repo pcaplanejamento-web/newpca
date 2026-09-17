@@ -20,6 +20,8 @@ export type ReparticaoMatch = {
   numeroInteressado?: string | null;
   /** Órgão dono da unidade (derivado para o órgão do documento). */
   orgaoId?: number | null;
+  /** 1 = é a UNIDADE PRÓPRIA do órgão (órgão-que-é-unidade, `orgao_proprio`). */
+  orgaoProprio?: boolean | null;
   /** Ocultada (tem DFD/protocolo): não pode ser usada em documentos novos. */
   oculto?: boolean | null;
 };
@@ -183,7 +185,16 @@ export function preverUnidadeDoDfd(
   const orgaoId = casarOrgao(dfd.orgaoEntidade, orgaos);
   const escopo = orgaoId != null ? unidades.filter((u) => u.orgaoId === orgaoId) : unidades;
   const orgao = orgaoId != null ? orgaos.find((o) => o.id === orgaoId) : undefined;
-  return preverUnidade(dfd, escopo, { assinaturaPorUnidade: !orgao?.assinaturaUnica });
+  const previsto = preverUnidade(dfd, escopo, { assinaturaPorUnidade: !orgao?.assinaturaUnica });
+  if (previsto != null) return previsto;
+  // ÓRGÃO-QUE-É-UNIDADE (dual, `orgao_proprio`): a unidade própria do órgão identificado É a
+  // requisitante (por regra o órgão dual não tem unidades-filhas). Resolve para ela — senão o
+  // DFD ficaria sem unidade e travava (`dfd.reparticao` fundamental).
+  if (orgaoId != null) {
+    const propria = escopo.find((u) => u.orgaoProprio && !u.oculto);
+    if (propria) return propria.id;
+  }
+  return null;
 }
 
 /**

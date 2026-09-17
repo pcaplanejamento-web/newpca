@@ -142,6 +142,22 @@ describe("preverUnidadeDoDfd (ponto 4 — identifica órgão, ESCOPA as unidades
     const r = preverUnidadeDoDfd({ orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE", setorRequisitante: "DAE - ÁGUA" }, orgaos, unidades);
     assert.equal(r, null);
   });
+
+  it("ÓRGÃO-QUE-É-UNIDADE (orgaoProprio): resolve a unidade própria mesmo sem casar o setor", () => {
+    const orgaosDual = [{ id: 3, sigla: "FME", nome: "Fundo Municipal de Educação", orgaoEntidade: "FUNDO MUNICIPAL DE EDUCACAO", assinaturaUnica: true }];
+    const unidadesDual = [
+      { id: 30, codigo: "FME", nome: "Fundo Municipal de Educação", orgaoId: 3, orgaoProprio: true, setorRequisitante: null, responsaveis: { padroes: [], temporarios: [] } },
+    ];
+    // Setor não casa a unidade própria, mas o órgão dual resolve para ela (senão o DFD travaria).
+    const r = preverUnidadeDoDfd({ orgaoEntidade: "FUNDO MUNICIPAL DE EDUCACAO", setorRequisitante: "QUALQUER SETOR" }, orgaosDual, unidadesDual);
+    assert.equal(r, 30);
+  });
+
+  it("órgão comum com uma unidade (SEM orgaoProprio) + setor divergente → null (não força)", () => {
+    // Garante que o auto-resolve é ESTREITO ao orgao_proprio (não a qualquer órgão de 1 unidade).
+    const r = preverUnidadeDoDfd({ orgaoEntidade: "AGENCIA MUNICIPAL DE AGUA", setorRequisitante: "OUTRO" }, orgaos, unidades);
+    assert.equal(r, null);
+  });
 });
 
 describe("casarOrgao (Órgão/Entidade do DFD → órgão)", () => {

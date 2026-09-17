@@ -84,6 +84,7 @@ export type DfdDetalhe = DfdResumo & {
   email: string | null;
   telefone: string | null;
   anoPca: number | null;
+  nomeArquivo: string | null;
   secoes: DfdSecaoRow[];
   assinaturas: Assinatura[];
   itens: DfdItemRow[];
@@ -188,6 +189,7 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
       email: dfds.email,
       telefone: dfds.telefone,
       anoPca: dfds.anoPca,
+      nomeArquivo: dfds.nomeArquivo,
       secoes: dfds.secoes,
       assinaturas: dfds.assinaturas,
     })

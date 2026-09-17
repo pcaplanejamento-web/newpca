@@ -20,6 +20,20 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Assinatura + Órgão/Unidade: correções (auditoria) — entregue
+✅ Auditoria dos dois subsistemas + correções cirúrgicas:
+- **Dropsigner como assinatura NORMAL:** `validarAssinatura` passou a casar a Dropsigner por nome como os demais
+  formatos (assinante = responsável → `ok`, com solicitante; não casa → `erro`, bloqueia). Só o "carimbo" (marca
+  d'água sem bloco visível, nome vazio) segue reconhecido sem match (status `dropsigner`, não bloqueia).
+- **Card da assinatura:** padrão (certificado/sistema) em **VERDE** (`--ok`), Dropsigner em **AZUL** (`--info`),
+  cada um com `Badge` e a validação apontando o endereço certo.
+- **Seletor de Unidade destravado (`DfdConferir`):** o escopo por órgão virou PREFERÊNCIA — sempre inclui a unidade
+  atual e cai para a lista inteira quando o escopo fica vazio (antes o seletor ficava vazio e travava a escolha).
+- **ÓRGÃO-QUE-É-UNIDADE (dual, `orgao_proprio`):** `preverUnidadeDoDfd` resolve a unidade própria do órgão
+  identificado (senão o DFD do órgão dual ficava sem unidade → erro). `orgao_proprio` threadado ao cliente.
+- **"1 · Área requisitante da demanda" editável** com cadeado por campo (bloco do `DfdConferir`, rótulo alinhado à
+  Seção 1). Pequenas divergências cliente×servidor fechadas (`nomeArquivo` no `getDfd`; `dfdTipo` no PATCH da assinatura).
+
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
 ✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …
 `dropsigner.com/validate/<código>`" (em TODA página) é a **prova universal** — todo código presente vira uma

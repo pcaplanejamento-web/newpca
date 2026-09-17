@@ -34,6 +34,7 @@ type Rep = {
   codigo: string;
   nome: string;
   orgaoId?: number | null;
+  orgaoProprio?: boolean | null;
   setorRequisitante?: string | null;
   numeroInteressado?: string | null;
   oculto?: boolean | null;
@@ -205,9 +206,13 @@ export function DfdConferir({
   // escolhe a unidade dentro do órgão. Sem órgãos cadastrados → mantém a lista inteira.
   const orgaoIdent = orgaos.length > 0 ? casarOrgao(dfd.orgaoEntidade, orgaos) : null;
   const orgaoIdentNome = orgaoIdent != null ? (orgaos.find((o) => o.id === orgaoIdent)?.nome ?? null) : null;
-  const unidadesDoDfd = reparticoes.filter(
-    (r) => (orgaoIdent == null || r.orgaoId === orgaoIdent) && (!r.oculto || r.id === repId),
-  );
+  // Escopa as unidades ao órgão identificado (PREFERÊNCIA), mas SEMPRE inclui a unidade já
+  // selecionada e cai para a lista inteira quando o escopo fica vazio — senão o seletor ficava
+  // vazio (nenhuma unidade acessível no órgão, ou a atual em outro órgão) e travava a escolha
+  // manual. Cobre o órgão-que-é-unidade (a unidade própria entra no escopo do próprio órgão).
+  const visivel = (r: Rep) => !r.oculto || r.id === repId;
+  const escopo = reparticoes.filter((r) => visivel(r) && (orgaoIdent == null || r.orgaoId === orgaoIdent || r.id === repId));
+  const unidadesDoDfd = escopo.length > 0 ? escopo : reparticoes.filter(visivel);
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
   const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
@@ -341,7 +346,7 @@ export function DfdConferir({
           O DfdView abaixo reflete tudo em só-leitura. */}
       {cabEditavel && (
         <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="cabecalho">
-          <h3 className="mb-1 text-sm font-bold text-text">Cabeçalho — conteúdo</h3>
+          <h3 className="mb-1 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <p className="mb-3 text-[12px] text-muted">
             Destrave um campo para corrigir. Número, planejamento e tipo do DFD são imutáveis.
           </p>

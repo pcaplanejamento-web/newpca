@@ -63,6 +63,7 @@ export type DadosMatchReparticao = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
   orgaoId: number | null;
+  orgaoProprio: boolean;
   oculto: boolean;
 };
 
@@ -75,13 +76,20 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
       orgaoId: reparticoes.orgaoId,
+      orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
     })
     .from(reparticoes)
     .where(inArray(reparticoes.id, uniq));
   const out: Record<number, DadosMatchReparticao> = {};
   for (const l of linhas)
-    out[l.id] = { numeroInteressado: l.numeroInteressado, setorRequisitante: l.setorRequisitante, orgaoId: l.orgaoId, oculto: l.oculto };
+    out[l.id] = {
+      numeroInteressado: l.numeroInteressado,
+      setorRequisitante: l.setorRequisitante,
+      orgaoId: l.orgaoId,
+      orgaoProprio: l.orgaoProprio,
+      oculto: l.oculto,
+    };
   return out;
 }
 

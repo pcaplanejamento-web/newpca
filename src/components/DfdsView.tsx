@@ -45,6 +45,7 @@ type Rep = {
   numeroInteressado?: string | null;
   setorRequisitante?: string | null;
   orgaoId?: number | null;
+  orgaoProprio?: boolean | null;
   oculto?: boolean | null;
   responsaveis: Responsaveis;
 };
@@ -72,7 +73,8 @@ function detalheParaParseado(d: DfdDetalhe): DfdParseado {
     numeroLicitacao: d.numeroLicitacao,
     valorEstimado: d.valorEstimado,
     valorTotal: d.valorTotal,
-    nomeArquivo: "",
+    // Nome do arquivo real (não ""): `pdfExigeAssinatura` do cliente precisa casar o servidor.
+    nomeArquivo: d.nomeArquivo ?? "",
     secoes: d.secoes,
     assinaturas: d.assinaturas,
     itens: d.itens.map((it) => ({

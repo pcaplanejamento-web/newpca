@@ -106,28 +106,44 @@ describe("validarAssinatura", () => {
   });
 });
 
-describe("validarAssinatura — Formato C Dropsigner (reconhecer como válida)", () => {
-  it("SÓ Dropsigner (sem A/B) → dropsigner (não bloqueia), mesmo sem match por nome", () => {
-    const r = validarAssinatura([mkDrop("ANDERSON FERREIRA DE MORAIS")], padrao("OUTRO TITULAR"), { exigeAssinatura: true });
+describe("validarAssinatura — Formato C Dropsigner (mesma lógica da assinatura normal)", () => {
+  it("Dropsigner que CASA o responsável (por nome) → ok, com solicitante (igual A/B)", () => {
+    const r = validarAssinatura([mkDrop("RICARDO DE SOUZA OLIVEIRA")], padrao("RICARDO DE SOUZA OLIVEIRA"), { exigeAssinatura: true });
+    assert.equal(r.status, "ok");
+    if (r.status === "ok") assert.equal(r.tipo, "padrao");
+    assert.ok(solicitanteDeResultado(r)); // aparece o responsável pela solicitação
+    assert.equal(bloqueiaAssinatura(r), false);
+  });
+
+  it("Dropsigner que NÃO casa nenhum responsável → erro (não autorizado, como A/B)", () => {
+    const r = validarAssinatura([mkDrop("FULANO QUALQUER")], padrao("RICARDO DE SOUZA OLIVEIRA"), { exigeAssinatura: true });
+    assert.equal(r.status, "erro");
+    assert.equal(bloqueiaAssinatura(r), true);
+  });
+
+  it("Dropsigner SÓ CARIMBO (nome vazio, sem bloco visível) → dropsigner (reconhecida, não bloqueia)", () => {
+    const r = validarAssinatura([mkDrop("")], padrao("RICARDO DE SOUZA OLIVEIRA"), { exigeAssinatura: true });
     assert.equal(r.status, "dropsigner");
     assert.equal(bloqueiaAssinatura(r), false);
     assert.equal(solicitanteDeResultado(r), null);
   });
 
-  it("SÓ Dropsigner + repartição SEM responsável cadastrado → dropsigner (não exige responsável)", () => {
-    const r = validarAssinatura([mkDrop("ANDERSON FERREIRA DE MORAIS")], RESPONSAVEIS_VAZIO, { exigeAssinatura: true });
-    assert.equal(r.status, "dropsigner");
-    assert.equal(bloqueiaAssinatura(r), false);
+  it("Dropsigner casa por TEMPORÁRio no período → ok", () => {
+    const r = validarAssinatura([mkDrop("MARIA SOUSA", "15/08/2026 10:00:00 -03:00")], comTemporario("MARIA SOUSA", "2026-08-01", "2026-08-31"), {
+      exigeAssinatura: true,
+    });
+    assert.equal(r.status, "ok");
+    if (r.status === "ok") assert.equal(r.tipo, "temporario");
   });
 
-  it("A/B que CASA + Dropsigner → ok (A/B tem prioridade; comportamento A/B inalterado)", () => {
-    const r = validarAssinatura([mkAss("Isaac Pires Cabral"), mkDrop("ANDERSON FERREIRA DE MORAIS")], padrao("ISAAC PIRES CABRAL"), {
+  it("A/B que CASA + Dropsigner que não casa → ok (basta uma casar)", () => {
+    const r = validarAssinatura([mkAss("Isaac Pires Cabral"), mkDrop("FULANO")], padrao("ISAAC PIRES CABRAL"), {
       exigeAssinatura: true,
     });
     assert.equal(r.status, "ok");
   });
 
-  it("sem NENHUMA assinatura + PDF → erro (invariante: Dropsigner não afrouxa o 'sem assinatura')", () => {
+  it("sem NENHUMA assinatura + PDF → erro (invariante)", () => {
     const r = validarAssinatura([], padrao("ISAAC PIRES CABRAL"), { exigeAssinatura: true });
     assert.equal(r.status, "erro");
   });
