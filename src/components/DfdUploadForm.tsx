@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
+import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import { type CampoTratavel, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
@@ -59,6 +61,8 @@ export function DfdUploadForm({
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<DfdParseado | null>(null);
+  // Conformidade dos itens com o catálogo (veredito por código) — conferida no servidor.
+  const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
   const [repId, setRepId] = useState<number | null>(null);
   // PCA do DFD (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Obrigatório.
   const [anoPca, setAnoPca] = useState<number | null>(null);
@@ -87,6 +91,23 @@ export function DfdUploadForm({
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, [status]);
+
+  // Confere os itens contra o catálogo quando o DFD é lido (os itens não mudam na edição,
+  // então a referência de `preview.itens` é estável — só reconfere ao trocar de arquivo).
+  const itensPreview = preview?.itens;
+  const tipoPreview = preview?.tipo ?? null;
+  useEffect(() => {
+    if (!itensPreview || itensPreview.length === 0) {
+      setConformidade(undefined);
+      return;
+    }
+    const ac = new AbortController();
+    setConformidade(undefined);
+    conferirItensCliente(itensPreview, tipoPreview, ac.signal).then((m) => {
+      if (!ac.signal.aborted) setConformidade(m);
+    });
+    return () => ac.abort();
+  }, [itensPreview, tipoPreview]);
 
   async function handleFile(file: File) {
     setErro(null);
@@ -191,12 +212,13 @@ export function DfdUploadForm({
           numeroLicitacao: preview.numeroLicitacao,
         },
         regras,
+        { conformidade },
       )
     : [];
   // Conferência da assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
   // Mensagens (erro/atenção/acerto) do DFD — para o botão e o painel lateral. Avulso: sem categoria.
-  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos) : [];
+  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos, conformidade) : [];
   const assinaturaBloqueia = preview
     ? bloqueiaAssinatura(
         validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
@@ -310,7 +332,12 @@ export function DfdUploadForm({
                 onClose: () => setPainel(null),
                 children:
                   painel?.tipo === "item" && preview.itens[painel.idx] ? (
-                    <ItemDetalhe item={preview.itens[painel.idx]} />
+                    <ItemDetalhe
+                      item={preview.itens[painel.idx]}
+                      conformidade={conformidade}
+                      regras={regras}
+                      tipo={preview.tipo}
+                    />
                   ) : (
                     <MensagensDfd
                       mensagens={mensagens}
@@ -373,6 +400,7 @@ export function DfdUploadForm({
               autoCampos={autoCampos}
               regras={regras}
               orgaos={orgaos}
+              conformidade={conformidade}
               ancoraAlvo={ancoraAlvo}
               itemAtivo={painel?.tipo === "item" ? painel.idx : null}
               onItemClick={(idx) => setPainel({ tipo: "item", idx })}

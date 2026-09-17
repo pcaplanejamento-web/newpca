@@ -298,6 +298,16 @@ catálogo em **XLSX** (SheetJS) ou **PDF** (impressão formatada); **edita** o c
 (descrição/unidade/tipos — código imutável); duas visões por **`Segmented`** — Catálogo (cards) ↔ **Lista de Itens**
 (tabela única) — com transição suave (`animate-cat-morph`); redesign dos cards/detalhe. Núcleo puro compartilhado em
 `parse-catalogo-comum`; novo `TextArea` no DS. Rota `/api/catalogo/item/[id]`. Testes: + fixtures de XLSX.
+✅ **O catálogo VALIDA os itens do DFD (conformidade configurável):** cada item do DFD é conferido contra o catálogo (a
+**referência**) pelo **código** — aponta **não catalogado** (com **sugestão por semelhança**), **divergente** (descrição/
+unidade ≠ catálogo, sugere o canônico) ou **tipo de DFD incompatível** (o item restringe tipos). **3 pontos configuráveis**
+pelo ADM (Configurações → Avaliação → Item; **padrão ATENÇÃO** — avisa, não bloqueia; eleva a **fundamental** p/ bloquear ou
+**ignorar** p/ desligar). Aparece na **importação avulsa**, na **protocolação** (lazy por DFD) e nos **DFDs gravados**: coluna
+**"Catálogo"** por item + bloco **"Conformidade"** no detalhe com a **sugestão** canônica (**display-only** — o DFD oficial não
+muda) + mensagens no painel. **Escalável:** o servidor consulta só os **códigos daquele DFD** (não baixa o catálogo) → adicionar
+itens ao catálogo passa a valer na hora. Núcleo puro `catalogo-conferencia.ts`, rota `POST /api/catalogo/conferir`, portão do
+servidor em `/api/dfd` (só bloqueia se o ADM elevou a fundamental). Testes: veredito por linha, portão e **invariante**
+(config vazia ⇒ igual a hoje).
 
 ### Fase 4 (Design System + Personalização do ADM) — entregue / em propagação
 ✅ **Design System por tokens** — tema por `data-theme`, fonte **Geist**, biblioteca única em

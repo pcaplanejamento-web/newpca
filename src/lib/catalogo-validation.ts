@@ -56,6 +56,25 @@ export const verificarCatalogoSchema = z.object({
 });
 export type VerificarCatalogoPayload = z.infer<typeof verificarCatalogoSchema>;
 
+// Conferência dos itens de UM DFD contra o catálogo (referência). Usada no preview de
+// import/protocolação; o servidor consulta só os códigos do DFD (escalável). `codigo`
+// pode vir vazio (item sem código → sem veredito). O `tipo` é o texto do DFD (o núcleo
+// deriva o curto DFD-S/R/O/E) e habilita a checagem de tipo incompatível.
+const MAX_ITENS_CONFERIR = 20000;
+export const conferirCatalogoSchema = z.object({
+  tipo: z.string().trim().max(120).nullable().default(null),
+  itens: z
+    .array(
+      z.object({
+        codigo: z.string().trim().max(60).nullable().default(null),
+        descricao: z.string().trim().max(8000).nullable().default(null),
+        unidade: z.string().trim().max(60).nullable().default(null),
+      }),
+    )
+    .max(MAX_ITENS_CONFERIR),
+});
+export type ConferirCatalogoPayload = z.infer<typeof conferirCatalogoSchema>;
+
 // Editar um catálogo já gravado (nome e/ou tipos padrão).
 export const patchCatalogoSchema = z
   .object({

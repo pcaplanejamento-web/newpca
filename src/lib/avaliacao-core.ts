@@ -41,7 +41,10 @@ export type ChaveAvaliacao =
   | "dfd.referenciaRenovacao"
   | "dfd.valorEstimadoVsTotal"
   | "item.valorUnitario"
-  | "item.quantidade";
+  | "item.quantidade"
+  | "item.naoCatalogado"
+  | "item.divergenteCatalogo"
+  | "item.tipoIncompativel";
 
 export type PontoAvaliacao = {
   chave: ChaveAvaliacao;
@@ -80,6 +83,11 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   // ---- ITEM ----
   { chave: "item.valorUnitario", sujeito: "item", rotulo: "Valor unitário", descricao: "Todo item com valor unitário maior que zero.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade informada. (O item sempre marca em vermelho quando falta; o nível decide se bloqueia.)", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
+  // Conformidade com o CATÁLOGO (referência de padronização). Só vale quando há catálogo
+  // cadastrado; padrão "intermediario" = avisa, não bloqueia (o ADM eleva a "fundamental").
+  { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
+  { chave: "item.divergenteCatalogo", sujeito: "item", rotulo: "Divergente do catálogo", descricao: "Código existe no catálogo, mas a descrição e/ou a unidade de medida diferem do valor canônico.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
+  { chave: "item.tipoIncompativel", sujeito: "item", rotulo: "Tipo de DFD incompatível", descricao: "O tipo do DFD (DFD-S/R/O/E) não está entre os tipos permitidos do item no catálogo. (Item sem tipos definidos vale para qualquer tipo.)", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
 ];
 
 const POR_CHAVE = new Map<ChaveAvaliacao, PontoAvaliacao>(CATALOGO_AVALIACAO.map((p) => [p.chave, p]));

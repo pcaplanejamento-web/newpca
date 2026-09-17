@@ -303,9 +303,11 @@ export async function atualizarDfdCampos(
 }
 
 /** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
-export async function getDfdReparticao(id: number): Promise<{ reparticaoId: number | null } | null> {
+export async function getDfdReparticao(
+  id: number,
+): Promise<{ reparticaoId: number | null; tipo: string | null } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfds.reparticaoId })
+    .select({ reparticaoId: dfds.reparticaoId, tipo: dfds.tipo })
     .from(dfds)
     .where(eq(dfds.id, id))
     .limit(1);

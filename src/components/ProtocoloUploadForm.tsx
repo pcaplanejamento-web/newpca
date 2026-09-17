@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
+import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import {
   avaliarDfd,
   type CampoTratavel,
@@ -135,6 +137,8 @@ export function ProtocoloUploadForm({
   const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [carregandoIdx, setCarregandoIdx] = useState<number | null>(null);
+  // Conformidade do DFD ABERTO com o catálogo (lazy — só o DFD aberto; a lista fica leve/escalável).
+  const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
   const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
   const [bulkCampo, setBulkCampo] = useState<CampoBulk>("reparticao");
   const [bulkRep, setBulkRep] = useState<number | null>(null);
@@ -575,7 +579,24 @@ export function ProtocoloUploadForm({
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const repAberto = abertoIdx >= 0 ? (reparticoes.find((r) => r.id === dfdRepIds[abertoIdx]) ?? null) : null;
   // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
-  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos) : [];
+  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade) : [];
+
+  // Confere o DFD ABERTO contra o catálogo (lazy — só ao abrir/trocar de DFD; itens estáveis
+  // na edição de seções/refs). Fechar o lateral (dfdAberto = null) limpa o veredito.
+  const itensAberto = dfdAberto?.itens;
+  const tipoAberto = dfdAberto?.tipo ?? null;
+  useEffect(() => {
+    if (!itensAberto || itensAberto.length === 0) {
+      setConformidade(undefined);
+      return;
+    }
+    const ac = new AbortController();
+    setConformidade(undefined);
+    conferirItensCliente(itensAberto, tipoAberto, ac.signal).then((m) => {
+      if (!ac.signal.aborted) setConformidade(m);
+    });
+    return () => ac.abort();
+  }, [itensAberto, tipoAberto]);
 
   // Relatório de erros do protocolo em DESPACHO (copiável) — pendências CIRÚRGICAS por
   // DFD com erro + capa (aponta o que corrigir e onde).
@@ -837,6 +858,7 @@ export function ProtocoloUploadForm({
                         autoCampos={autoMap.get(abertoIdx) ?? []}
                         regras={regras}
                         orgaos={orgaos}
+                        conformidade={conformidade}
                         ancoraAlvo={ancoraAlvo}
                         itemAtivo={painel?.tipo === "item" ? painel.idx : null}
                         onItemClick={(idx) => setPainel({ tipo: "item", idx })}
@@ -861,7 +883,12 @@ export function ProtocoloUploadForm({
                 onClose: () => setPainel(null),
                 children:
                   painel?.tipo === "item" && dfdAberto?.itens[painel.idx] ? (
-                    <ItemDetalhe item={dfdAberto.itens[painel.idx]} />
+                    <ItemDetalhe
+                      item={dfdAberto.itens[painel.idx]}
+                      conformidade={conformidade}
+                      regras={regras}
+                      tipo={dfdAberto.tipo}
+                    />
                   ) : (
                     <MensagensDfd
                       mensagens={mensagensAberto}

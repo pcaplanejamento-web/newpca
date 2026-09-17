@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { editavelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import {
   type CampoTratavel,
   type MensagemDfd,
@@ -88,6 +89,7 @@ export function mensagensDoDfd(
   regras: RegrasAvaliacao = regrasPadrao(),
   categoria: string | null = null,
   orgaos: Orgao[] = [],
+  conformidade?: Map<string, ConferenciaItem>,
 ): MensagemDfd[] {
   const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
@@ -111,7 +113,7 @@ export function mensagensDoDfd(
       assinatura: { status: res.status, motivo: res.status === "erro" ? res.motivo : null },
     },
     regras,
-    { categoria, orgaoUnidadeDivergente },
+    { categoria, orgaoUnidadeDivergente, conformidade },
   );
 }
 
@@ -142,6 +144,7 @@ export function DfdConferir({
   readOnly = false,
   regras = regrasPadrao(),
   orgaos = [],
+  conformidade,
   ancoraAlvo = null,
   itemAtivo = null,
   onRepChange,
@@ -155,6 +158,9 @@ export function DfdConferir({
   repId: number | null;
   /** Órgãos cadastrados — p/ apontar a divergência Órgão/Entidade × órgão da unidade. */
   orgaos?: Orgao[];
+  /** Conformidade dos itens com o catálogo (veredito por código) — habilita a coluna
+   * "Catálogo" no `DfdView` e as mensagens de catálogo. Ausente = sem conferência. */
+  conformidade?: Map<string, ConferenciaItem>;
   /** Ano do PCA efetivo do DFD (herdado do protocolo / definido no avulso) — só exibição. */
   anoPca?: number | null;
   autoMatch: boolean;
@@ -422,7 +428,7 @@ export function DfdConferir({
       {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} onItemClick={onItemClick} itemAtivo={itemAtivo} />
+        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} conformidade={conformidade} onItemClick={onItemClick} itemAtivo={itemAtivo} />
       </div>
     </div>
   );

@@ -1,13 +1,18 @@
 "use client";
 
+import { useMemo } from "react";
 import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { type ConferenciaItem, ROTULO_FALTA_CATALOGO } from "@/lib/catalogo-conferencia";
 import {
+  corVeredictoCatalogo,
   ESTADO_ITEM_ROTULO,
   estadoItem,
   estadoItemCor,
   itemComErro,
+  veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
+import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { valoresBatem } from "@/lib/normalize";
 import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
@@ -164,11 +169,16 @@ export function DfdCabecalho({
 export function DfdView({
   dfd,
   regras = regrasPadrao(),
+  conformidade,
   onItemClick,
   itemAtivo = null,
 }: {
   dfd: DfdVisual;
   regras?: RegrasAvaliacao;
+  /** Conformidade dos itens com o CATÁLOGO (veredito por código normalizado). Quando
+   * presente, a tabela de itens ganha a coluna "Catálogo". Ausente = sem a coluna
+   * (listas leves / catálogo vazio). */
+  conformidade?: Map<string, ConferenciaItem>;
   /** Clique numa linha de item da Seção 4 → abre o detalhe do item ao lado (índice do item). */
   onItemClick?: (idx: number) => void;
   /** Índice do item ATIVO (cujo detalhe está aberto ao lado) — destacado na tabela. */
@@ -182,6 +192,34 @@ export function DfdView({
   const mostrarNotaEstimado =
     nivelDe(regras, "dfd.valorEstimadoVsTotal", { dfdTipo: tipoCurtoDfd(dfd.tipo) }) !== "ignorar";
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
+  // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A
+  // coluna é INFORMATIVA (o bloqueio, quando o ADM eleva a fundamental, é do nível do DFD);
+  // por isso não altera a divisão erro/regular por item (que segue valor/quantidade).
+  const dfdTipo = tipoCurtoDfd(dfd.tipo);
+  const columns = useMemo<Column<ItemK>[]>(() => {
+    if (!conformidade) return COLS;
+    const cat: Column<ItemK> = {
+      key: "catalogo",
+      header: "Catálogo",
+      value: (r) => {
+        const v = veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo);
+        return v ? (v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme") : "";
+      },
+      render: (r) => {
+        const v = veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo);
+        if (!v) return <span className="text-muted">—</span>;
+        const cor = corVeredictoCatalogo(v.nivel);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: cor }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />
+            {v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme"}
+          </span>
+        );
+      },
+    };
+    const i = COLS.findIndex((c) => c.key === "codigo");
+    return [...COLS.slice(0, i + 1), cat, ...COLS.slice(i + 1)];
+  }, [conformidade, regras, dfdTipo]);
   // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA (como a de DFDs
   // no protocolo); os regulares na tabela principal.
   const rowsErro = rows.filter((r) => itemComErro(r));
@@ -264,10 +302,10 @@ export function DfdView({
               Itens com pendência ({num(rowsErro.length)})
             </h4>
             <DataTable
-              columns={COLS}
+              columns={columns}
               rows={rowsErro}
               getKey={(r) => r._k}
-              minWidth={860}
+              minWidth={conformidade ? 980 : 860}
               pageSize={10}
               onRowClick={onItemClick ? (r) => onItemClick(r._k) : undefined}
               activeKey={itemAtivo}
@@ -284,10 +322,10 @@ export function DfdView({
               <h4 className="mb-1.5 text-[13px] font-bold text-text">Itens regulares ({num(rowsOk.length)})</h4>
             )}
             <DataTable
-              columns={COLS}
+              columns={columns}
               rows={rowsOk}
               getKey={(r) => r._k}
-              minWidth={860}
+              minWidth={conformidade ? 980 : 860}
               pageSize={20}
               onRowClick={onItemClick ? (r) => onItemClick(r._k) : undefined}
               activeKey={itemAtivo}

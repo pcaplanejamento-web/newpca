@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { RegrasAvaliacao } from "./avaliacao-core.ts";
-import { avaliarDfd } from "./dfd-tratamento.ts";
+import { avaliarDfd, type CtxConformidade } from "./dfd-tratamento.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
@@ -16,7 +16,7 @@ const MAX_ITENS_DFD = 100_000;
 // habilitam as exceções por tipo de DFD.
 export type DfdConferencia = {
   reparticaoId?: number | null;
-  itens: { valorUnitario?: number | null; quantidade?: number | null }[];
+  itens: { valorUnitario?: number | null; quantidade?: number | null; codigo?: string | null; item?: number | null }[];
   secoes: { titulo: string; texto: string }[];
   tipo?: string | null;
   numeroContrato?: string | null;
@@ -34,7 +34,7 @@ export type DfdConferencia = {
 export function faltasObrigatorias(
   d: DfdConferencia,
   regras?: RegrasAvaliacao,
-  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
 ): string[] {
   return avaliarDfd(d, regras, ctx).bloqueantes;
 }

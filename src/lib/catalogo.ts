@@ -1,7 +1,9 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import { catalogoItens, catalogos } from "@/db/schema";
+import { type CatalogoRef, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
 import { type CatalogoItemImport, normalizarTipos } from "./catalogo-validation";
 import { getDb } from "./db";
+import { normalizarCodigo } from "./parse-catalogo-comum";
 
 /**
  * Acesso a dados do CATÁLOGO de produtos. Base GLOBAL isolada (sem repartição/grupo,
@@ -229,4 +231,95 @@ export async function atualizarCatalogoItem(
   if (campos.unidade !== undefined) set.unidade = campos.unidade || null;
   if (campos.tipos !== undefined) set.tipos = JSON.stringify(normalizarTipos(campos.tipos));
   await getDb().update(catalogoItens).set(set).where(eq(catalogoItens.id, id));
+}
+
+// ---- Conferência dos itens do DFD contra o catálogo (referência de padronização) ----
+
+const LIMITE_SUGESTOES = 25; // nº de itens não catalogados que ganham sugestão por semelhança (limita custo)
+const CAND_LIMIT = 25; // candidatos por item não catalogado
+
+const COLS_REF = {
+  codigo: catalogoItens.codigo,
+  codigoRaw: catalogoItens.codigoRaw,
+  descricao: catalogoItens.descricao,
+  unidade: catalogoItens.unidade,
+  tipos: catalogoItens.tipos,
+  catalogoNome: catalogos.nome,
+};
+function toRef(l: {
+  codigo: string;
+  codigoRaw: string | null;
+  descricao: string;
+  unidade: string | null;
+  tipos: string;
+  catalogoNome: string;
+}): CatalogoRef {
+  return { codigo: l.codigo, codigoRaw: l.codigoRaw, descricao: l.descricao, unidade: l.unidade, tipos: parseTipos(l.tipos), catalogoNome: l.catalogoNome };
+}
+/** Token mais distintivo (mais longo, ≥4 chars) da descrição — p/ o LIKE de candidatos. */
+function tokenBusca(descricao: string | null): string | null {
+  const toks = (descricao ?? "").split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 4);
+  toks.sort((a, b) => b.length - a.length);
+  return toks[0] ?? null;
+}
+
+/**
+ * Confere os itens de UM DFD contra o catálogo. Busca só as entradas dos CÓDIGOS do DFD
+ * (chunked `inArray`, escalável — NÃO carrega o catálogo inteiro) e, para os não
+ * catalogados, propõe o item mais semelhante por descrição (best-effort, limitado).
+ * Devolve o veredito por CÓDIGO normalizado. `dfdTipo` = curto (DFD-S/R/O/E) ou null.
+ * Guard: sem catálogo cadastrado ⇒ nenhum veredito (não é falta).
+ */
+export async function conferirItensNoCatalogo(
+  itens: { codigo: string | null; descricao: string | null; unidade: string | null }[],
+  dfdTipo: string | null,
+): Promise<Map<string, ConferenciaItem>> {
+  const out = new Map<string, ConferenciaItem>();
+  const codigos = [...new Set(itens.map((i) => normalizarCodigo(i.codigo)).filter(Boolean))];
+  if (codigos.length === 0) return out;
+  const db = getDb();
+
+  // Sem catálogo cadastrado ⇒ sem checagem (evita marcar tudo como "fora do catálogo").
+  const [tot] = await db.select({ n: sql<number>`count(*)` }).from(catalogoItens);
+  if (Number(tot?.n ?? 0) === 0) return out;
+
+  // Entradas do catálogo apenas dos códigos do DFD.
+  const index = new Map<string, CatalogoRef>();
+  for (let i = 0; i < codigos.length; i += IN_CHUNK) {
+    const linhas = await db
+      .select(COLS_REF)
+      .from(catalogoItens)
+      .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
+      .where(inArray(catalogoItens.codigo, codigos.slice(i, i + IN_CHUNK)));
+    for (const l of linhas) index.set(l.codigo, toRef(l));
+  }
+
+  // Candidatos por semelhança — só p/ não catalogados, limitados por custo.
+  const candPorCodigo = new Map<string, CatalogoRef[]>();
+  let feitas = 0;
+  for (const it of itens) {
+    const c = normalizarCodigo(it.codigo);
+    if (!c || index.has(c) || candPorCodigo.has(c)) continue;
+    const tok = feitas < LIMITE_SUGESTOES ? tokenBusca(it.descricao) : null;
+    if (!tok) {
+      candPorCodigo.set(c, []);
+      continue;
+    }
+    feitas++;
+    const linhas = await db
+      .select(COLS_REF)
+      .from(catalogoItens)
+      .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
+      .where(like(catalogoItens.descricao, `%${tok}%`))
+      .limit(CAND_LIMIT);
+    candPorCodigo.set(c, linhas.map(toRef));
+  }
+
+  for (const it of itens) {
+    const c = normalizarCodigo(it.codigo);
+    if (!c || out.has(c)) continue;
+    const entry = index.get(c) ?? null;
+    out.set(c, conferirItem(it, entry, dfdTipo, entry ? [] : (candPorCodigo.get(c) ?? [])));
+  }
+  return out;
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
+import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
 import {
   dfdRSemReferencia,
@@ -120,6 +122,25 @@ export function DfdsView({
   // Painel da DIREITA do DFD gravado: mensagens OU detalhe de um item + rolagem/destaque.
   const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
+  // Conformidade dos itens do DFD aberto com o catálogo (conferida no servidor ao abrir).
+  const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
+
+  // Confere os itens do DFD aberto contra o catálogo (a referência de `dfdEdit.itens` é
+  // estável na edição de seções/refs → só reconfere ao abrir/trocar de DFD).
+  const itensEdit = dfdEdit?.itens;
+  const tipoEdit = dfdEdit?.tipo ?? null;
+  useEffect(() => {
+    if (!itensEdit || itensEdit.length === 0) {
+      setConformidade(undefined);
+      return;
+    }
+    const ac = new AbortController();
+    setConformidade(undefined);
+    conferirItensCliente(itensEdit, tipoEdit, ac.signal).then((m) => {
+      if (!ac.signal.aborted) setConformidade(m);
+    });
+    return () => ac.abort();
+  }, [itensEdit, tipoEdit]);
 
   async function verDfd(id: number) {
     setErro(null);
@@ -494,7 +515,7 @@ export function DfdsView({
   // categoria (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
   const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
   const categoriaDfd = protoView ? classificarAssunto(protoView.assunto) : null;
-  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd, orgaos) : [];
+  const mensagens = dfdEdit ? mensagensDoDfd(dfdEdit, repEditSel, dfdEdit.anoPca, regras, categoriaDfd, orgaos, conformidade) : [];
   const irParaMensagem = (m: { ancora: string; status: "erro" | "atencao" | "acerto" }) => {
     // O painel de mensagens fica AO LADO do DFD (não substitui) → só rola/destaca a âncora.
     setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
@@ -531,6 +552,7 @@ export function DfdsView({
       readOnly={!podeEditar || dfdTrancado}
       regras={regras}
       orgaos={orgaos}
+      conformidade={conformidade}
       ancoraAlvo={ancoraAlvo}
       itemAtivo={painel?.tipo === "item" ? painel.idx : null}
       onItemClick={(idx) => setPainel({ tipo: "item", idx })}
@@ -542,7 +564,7 @@ export function DfdsView({
   // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).
   const painelItem = painel?.tipo === "item" ? (dfdEdit?.itens[painel.idx] ?? null) : null;
   const painelDireito = painelItem ? (
-    <ItemDetalhe item={painelItem} />
+    <ItemDetalhe item={painelItem} conformidade={conformidade} regras={regras} tipo={dfdView?.tipo} />
   ) : (
     <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />
   );

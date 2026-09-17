@@ -7,6 +7,8 @@ import {
   sinonimosDe,
 } from "./avaliacao-core.ts";
 import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
+import { type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
+import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
   type DfdItemParseado,
   type DfdParseado,
@@ -237,7 +239,7 @@ function listaItens(nums: number[]): string {
 /** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
 export type EntradaAvaliacaoDfd = {
   reparticaoId?: number | null;
-  itens: { valorUnitario?: number | null; quantidade?: number | null }[];
+  itens: { valorUnitario?: number | null; quantidade?: number | null; codigo?: string | null; item?: number | null }[];
   secoes: { titulo: string; texto: string }[];
   tipo?: string | null;
   numeroContrato?: string | null;
@@ -246,6 +248,77 @@ export type EntradaAvaliacaoDfd = {
 };
 
 export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
+
+/** Conformidade dos itens com o catálogo (referência) — o veredito por CÓDIGO é
+ * PRÉ-COMPUTADO pelo chamador (que consultou o catálogo, via `conferirItensNoCatalogo`)
+ * e passado no `ctx`, mantendo os avaliadores PUROS (mesmo padrão de `orgaoUnidadeDivergente`). */
+export type CtxConformidade = { conformidade?: Map<string, ConferenciaItem> };
+export const CHAVE_FALTA_CATALOGO: Record<FaltaCatalogoItem, ChaveAvaliacao> = {
+  naoCatalogado: "item.naoCatalogado",
+  divergenteCatalogo: "item.divergenteCatalogo",
+  tipoIncompativel: "item.tipoIncompativel",
+};
+
+/** Veredito de conformidade de UMA linha (coluna "Catálogo" / detalhe do item), já
+ * resolvido pelos níveis do ADM: descarta as faltas em "ignorar" e escolhe a mais grave.
+ * `null` = item sem código / sem veredito (nada a mostrar na coluna). Puro. */
+export type VeredictoLinhaCatalogo = { nivel: "conforme" | "atencao" | "erro"; falta: FaltaCatalogoItem | null };
+export function veredictoLinhaCatalogo(
+  c: ConferenciaItem | undefined,
+  regras: RegrasAvaliacao,
+  dfdTipo: string | null,
+): VeredictoLinhaCatalogo | null {
+  if (!c) return null;
+  const ativas = c.faltas.filter((f) => nivelDe(regras, CHAVE_FALTA_CATALOGO[f], { dfdTipo }) !== "ignorar");
+  if (ativas.length === 0) return { nivel: "conforme", falta: null };
+  const falta = piorFalta(ativas) as FaltaCatalogoItem;
+  const nivel = nivelDe(regras, CHAVE_FALTA_CATALOGO[falta], { dfdTipo }) === "fundamental" ? "erro" : "atencao";
+  return { nivel, falta };
+}
+
+/** Cor (token) do nível de um veredito de linha do catálogo. */
+export function corVeredictoCatalogo(nivel: VeredictoLinhaCatalogo["nivel"]): string {
+  return nivel === "erro" ? "var(--danger)" : nivel === "atencao" ? "var(--warn)" : "var(--ok)";
+}
+
+/** Itens com uma dada falta de conformidade, segundo o veredito pré-computado. */
+function itensComFaltaCatalogo<T extends { codigo?: string | null }>(
+  itens: T[],
+  conformidade: Map<string, ConferenciaItem> | undefined,
+  falta: FaltaCatalogoItem,
+): T[] {
+  if (!conformidade) return [];
+  return itens.filter((it) => conformidade.get(normalizarCodigo(it.codigo ?? null))?.faltas.includes(falta));
+}
+
+/** Algum ponto de conformidade com o catálogo está em "fundamental" (bloqueia)? Decide se
+ * vale a pena o servidor consultar o catálogo (portão preguiçoso, como órgão×unidade). Puro. */
+export function algumCatalogoFundamental(
+  regras: RegrasAvaliacao,
+  ctx?: { categoria?: string | null; dfdTipo?: string | null },
+): boolean {
+  const c = { dfdTipo: ctx?.dfdTipo ?? null, categoria: ctx?.categoria ?? null };
+  return (Object.keys(CHAVE_FALTA_CATALOGO) as FaltaCatalogoItem[]).some(
+    (f) => nivelDe(regras, CHAVE_FALTA_CATALOGO[f], c) === "fundamental",
+  );
+}
+
+/** Bloqueantes SÓ do catálogo (rótulos) — para o portão do servidor nos LOTES, que não
+ * reavalia as demais regras. Só entram as faltas cujo ponto o ADM elevou a "fundamental". Puro. */
+export function bloqueantesCatalogo(
+  itens: { codigo?: string | null }[],
+  conformidade: Map<string, ConferenciaItem> | undefined,
+  regras: RegrasAvaliacao,
+  ctx?: { categoria?: string | null; dfdTipo?: string | null },
+): string[] {
+  const c = { dfdTipo: ctx?.dfdTipo ?? null, categoria: ctx?.categoria ?? null };
+  const out: string[] = [];
+  for (const falta of Object.keys(CHAVE_FALTA_CATALOGO) as FaltaCatalogoItem[]) {
+    if (nivelDe(regras, CHAVE_FALTA_CATALOGO[falta], c) !== "fundamental") continue;
+    if (itensComFaltaCatalogo(itens, conformidade, falta).length > 0) out.push(ROTULO_FALTA_CATALOGO[falta]);
+  }
+  return out;
+}
 
 /**
  * Avaliação CONFIGURÁVEL de um DFD: para cada ponto (itens/seções/repartição/renovação)
@@ -258,7 +331,7 @@ export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
 export function avaliarDfd(
   d: EntradaAvaliacaoDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
 ): AvaliacaoDfd {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const bloqueantes: string[] = [];
@@ -283,6 +356,10 @@ export function avaliarDfd(
   add("dfd.orgaoUnidadeDivergente", ctx?.orgaoUnidadeDivergente === true, "órgão × unidade divergentes");
   for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
   add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ata ou licitação)");
+  // Conformidade com o catálogo (veredito pré-computado no ctx; sem catálogo/verdicto ⇒ sem efeito).
+  add("item.naoCatalogado", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "naoCatalogado").length > 0, "itens não catalogados");
+  add("item.divergenteCatalogo", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "divergenteCatalogo").length > 0, "itens divergentes do catálogo");
+  add("item.tipoIncompativel", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "tipoIncompativel").length > 0, "itens com tipo incompatível com o catálogo");
   return { bloqueantes, atencoes };
 }
 
@@ -328,7 +405,7 @@ export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
 export function mensagensDfd(
   d: EntradaMensagensDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean },
+  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
 ): MensagemDfd[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const out: MensagemDfd[] = [];
@@ -378,6 +455,29 @@ export function mensagensDfd(
   add("item.quantidade", "itens", semQtd === 0,
     `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
 
+  // Conformidade com o catálogo (itens) — só APONTA problemas (como órgão×unidade); um acerto
+  // único quando tudo confere. Veredito pré-computado no ctx (sem catálogo ⇒ nada).
+  if (ctx?.conformidade) {
+    let algumAtivo = false;
+    let algumProblema = false;
+    const catMsgs: { falta: FaltaCatalogoItem; texto: (q: number) => string }[] = [
+      { falta: "naoCatalogado", texto: (q) => `${q} de ${total} ${plural(total)} fora do catálogo (Seção 4).` },
+      { falta: "divergenteCatalogo", texto: (q) => `${q} ${plural(q)} ${q === 1 ? "diverge" : "divergem"} do catálogo (descrição/unidade) — ver detalhe do item.` },
+      { falta: "tipoIncompativel", texto: (q) => `${q} ${plural(q)} com tipo de DFD incompatível com o catálogo.` },
+    ];
+    for (const cm of catMsgs) {
+      const n = nivelDe(regras, CHAVE_FALTA_CATALOGO[cm.falta], c);
+      if (n === "ignorar") continue;
+      algumAtivo = true;
+      const qtd = itensComFaltaCatalogo(d.itens, ctx.conformidade, cm.falta).length;
+      if (qtd === 0) continue;
+      algumProblema = true;
+      out.push({ chave: CHAVE_FALTA_CATALOGO[cm.falta], status: n === "fundamental" ? "erro" : "atencao", texto: cm.texto(qtd), ancora: "itens" });
+    }
+    if (algumAtivo && !algumProblema && total > 0)
+      out.push({ chave: "item.naoCatalogado", status: "acerto", texto: "Itens conferem com o catálogo de referência.", ancora: "itens" });
+  }
+
   // Valor estimado (nota) × somatória
   if (d.valorEstimado != null && d.valorTotal != null) {
     add("dfd.valorEstimadoVsTotal", "valor", valoresBatem(d.valorEstimado, d.valorTotal),
@@ -423,7 +523,7 @@ export function faltasCirurgicasDfd(
     tipo?: string | null;
   },
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null },
+  ctx?: { categoria?: string | null } & CtxConformidade,
 ): string[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const ativo = (chave: ChaveAvaliacao) => nivelDe(regras, chave, c) !== "ignorar";
@@ -442,6 +542,16 @@ export function faltasCirurgicasDfd(
     if (ativo(s.chave) && !temSecaoPreenchida(d.secoes, s.kw)) linhas.push(`Preencher a ${s.rotulo}.`);
   if (d.assinaturaMotivo && ativo("dfd.assinatura"))
     linhas.push(`Regularizar a assinatura digital: ${d.assinaturaMotivo}.`);
+  // Conformidade com o catálogo (itens) — veredito pré-computado no ctx (sem catálogo ⇒ nada).
+  const foraCat = ativo("item.naoCatalogado") ? itensComFaltaCatalogo(d.itens, ctx?.conformidade, "naoCatalogado") : [];
+  if (foraCat.length > 0)
+    linhas.push(`Cadastrar no catálogo (ou corrigir o código) ${foraCat.length === 1 ? "o item" : "os itens"} ${listaItens(nums(foraCat))} (Seção 4).`);
+  const divCat = ativo("item.divergenteCatalogo") ? itensComFaltaCatalogo(d.itens, ctx?.conformidade, "divergenteCatalogo") : [];
+  if (divCat.length > 0)
+    linhas.push(`Padronizar pelo catálogo (descrição/unidade) ${divCat.length === 1 ? "o item" : "os itens"} ${listaItens(nums(divCat))} (Seção 4).`);
+  const tipoCat = ativo("item.tipoIncompativel") ? itensComFaltaCatalogo(d.itens, ctx?.conformidade, "tipoIncompativel") : [];
+  if (tipoCat.length > 0)
+    linhas.push(`Rever o tipo do DFD ou o catálogo — ${tipoCat.length === 1 ? "o item não permite" : "os itens não permitem"} este tipo (${listaItens(nums(tipoCat))}, Seção 4).`);
   return linhas;
 }
 

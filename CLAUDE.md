@@ -430,6 +430,33 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
   `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`), `PATCH`/`DELETE /api/catalogo/[id]`,
   `PATCH /api/catalogo/itens`, `PATCH /api/catalogo/item/[id]` — todas `exigirEditor`.
+- **Conformidade dos ITENS do DFD com o catálogo (o catálogo VALIDA os itens; configurável pelo ADM):** cada item do DFD é
+  conferido contra o catálogo (a **referência**) casando pelo **código** (único global). Núcleo PURO/testável em
+  **`src/lib/catalogo-conferencia.ts`** (sem `getDb`/JSX, como `reparticao-match`): `conferirItem(item, entry|null, dfdTipoCurto,
+  candidatos)` → `ConferenciaItem { faltas, divergDescricao, divergUnidade, sugestao }`, com 3 faltas — **`naoCatalogado`**
+  (código ausente → tenta **sugestão por semelhança**, `similaridade` = Jaccard de tokens, limiar `LIMIAR_SEMELHANCA`),
+  **`divergenteCatalogo`** (código existe, mas `norm(descrição)` e/ou `normUnidadeMedida(unidade)` diferem → sugere o canônico)
+  e **`tipoIncompativel`** (o `item.tipos` do catálogo RESTRINGE e não inclui o tipo do DFD; `tipos` vazio = sem restrição).
+  Reusa `normalizarCodigo`/`norm`/`normUnidadeMedida`/`tipoCurtoDfd`. **3 pontos CONFIGURÁVEIS** em `avaliacao-core`
+  (`item.naoCatalogado`/`item.divergenteCatalogo`/`item.tipoIncompativel`, **`nivelPadrao: intermediario`** = ATENÇÃO, não
+  bloqueia; o ADM eleva a `fundamental` ou baixa a `ignorar` — aparecem sozinhos na aba **Item** de `AvaliacaoAdmin`). **Config
+  vazia ⇒ igual a hoje** (invariante por teste). **Escalável (consulta o catálogo VIVO por DFD):** `conferirItensNoCatalogo(itens,
+  dfdTipo)` (`catalogo.ts`) busca só as entradas dos **códigos daquele DFD** (chunked `inArray`, guard "catálogo vazio ⇒ nada") e,
+  p/ não catalogados, propõe semelhante via `LIKE` por token distintivo — NÃO baixa o catálogo. Rota **`POST /api/catalogo/conferir`**
+  (`exigirUsuario`) devolve o veredito por código (Map serializado em entries); cliente único **`catalogo-conferir-cliente.ts`**
+  (`conferirItensCliente`, silencioso em erro — conferência é auxiliar). **Threading via `ctx`** (mesmo padrão de
+  `orgaoUnidadeDivergente`, avaliadores seguem PUROS): `avaliarDfd`/`mensagensDfd`/`faltasObrigatorias` recebem
+  `ctx.conformidade` (pré-computada pelo chamador) — `veredictoLinhaCatalogo`/`bloqueantesCatalogo`/`algumCatalogoFundamental`
+  resolvem pelos níveis do ADM. **Onde renderiza (ponto único = `DfdConferir`, cobre import avulso/protocolo/gravado):** o
+  `DfdView` ganha a coluna **"Catálogo"** por item (Conforme/Fora do catálogo/Divergente/Tipo incompatível, cor pelo nível
+  efetivo) e o `ItemDetalhe` um bloco **"Conformidade com o catálogo"** com a **sugestão** canônica (código/descrição/unidade +
+  nome do catálogo) — **display-only** (os itens do DFD são só-leitura; NÃO altera o DFD oficial). As mensagens de catálogo entram
+  no painel `MensagensDfd` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
+  conferem TODO o DFD (useEffect por `itens`); o protocolo confere **por DFD ao abrir** (lazy — a LISTA fica leve/escalável).
+  **Portão do servidor (defesa em profundidade, só bloqueia se o ADM elevou a `fundamental`):** `POST /api/dfd` (`start-dfd` **e**
+  `append-dfd-itens`, por causa dos lotes) roda `algumCatalogoFundamental` → se sim, `conferirItensNoCatalogo` + `bloqueantesCatalogo`
+  → 422. Os DFDs do protocolo passam por `/api/dfd` (o `POST /api/protocolo` só cria a capa) → cobertos. Testes:
+  `catalogo-conferencia.test.ts` + os pontos de catálogo em `dfd-tratamento.test.ts` (veredito por linha, portão, invariante).
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

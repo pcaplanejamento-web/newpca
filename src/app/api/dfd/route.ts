@@ -1,7 +1,9 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { nivelDe } from "@/lib/avaliacao-core";
+import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
+import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -39,6 +41,18 @@ export async function POST(req: Request) {
     if (!d.rows.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
       return erro("Todos os itens precisam de valor unitário.", 422);
     }
+    // Portão do catálogo nos LOTES seguintes (o `start-dfd` só viu os primeiros itens): só
+    // consulta/bloqueia quando o ADM elevou algum ponto item.* a "fundamental".
+    const regrasLote = await getRegrasAvaliacao();
+    const ctxLote = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
+    if (algumCatalogoFundamental(regrasLote, ctxLote)) {
+      const conf = await conferirItensNoCatalogo(
+        d.rows.map((r) => ({ codigo: r.codigo ?? null, descricao: r.descricao ?? null, unidade: r.unidade ?? null })),
+        ctxLote.dfdTipo,
+      );
+      const catBloq = bloqueantesCatalogo(d.rows, conf, regrasLote, ctxLote);
+      if (catBloq.length > 0) return erro(`Itens fora de conformidade com o catálogo: ${catBloq.join(", ")}.`, 422);
+    }
     const r = await appendDfdItens(d.dfdId, d.rows, d.desde);
     return ok({ inserted: r.inserted });
   }
@@ -71,6 +85,16 @@ export async function POST(req: Request) {
     const [orgaos, orgaoUnidade] = await Promise.all([listarOrgaos(), orgaoIdDaReparticao(d.reparticaoId)]);
     if (orgaoDivergeDaUnidade(d.orgaoEntidade, orgaoUnidade, orgaos))
       return erro("O Órgão/Entidade do DFD diverge do órgão da unidade cadastrada.", 422);
+  }
+  // Conformidade com o catálogo — portão à parte (lazy): só consulta e bloqueia quando o ADM
+  // elevou algum ponto item.* a "fundamental" (padrão intermediário = atenção, não bloqueia).
+  if (algumCatalogoFundamental(regras, ctxAv)) {
+    const conf = await conferirItensNoCatalogo(
+      d.rows.map((r) => ({ codigo: r.codigo ?? null, descricao: r.descricao ?? null, unidade: r.unidade ?? null })),
+      ctxAv.dfdTipo,
+    );
+    const catBloq = bloqueantesCatalogo(d.rows, conf, regras, ctxAv);
+    if (catBloq.length > 0) return erro(`Não é possível importar: ${catBloq.join(", ")}.`, 422);
   }
   if (!acessivel(d.reparticaoId)) return erro("Unidade inválida ou sem acesso.", 403);
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
