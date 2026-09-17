@@ -82,7 +82,7 @@ describe("estado/situação do protocolo", () => {
 });
 
 describe("editarItemDfd (edição de item + recomputo do total)", () => {
-  const dfd = {
+  const dfd: { itens: { item: number; valorTotal: number | null }[]; valorTotal: number | null } = {
     itens: [
       { item: 1, valorTotal: 100 },
       { item: 2, valorTotal: 50 },

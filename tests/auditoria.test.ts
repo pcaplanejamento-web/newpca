@@ -4,7 +4,7 @@ import { diffCampos, ROTULO_ACAO, ROTULO_ENTIDADE } from "../src/lib/auditoria-c
 
 describe("auditoria-core", () => {
   it("diffCampos: só os campos que mudaram + resumo legível", () => {
-    const r = diffCampos(
+    const r = diffCampos<{ quantidade: number; valorUnitario: number; descricao: string }>(
       { quantidade: 20, valorUnitario: 5.11, descricao: "A" },
       { quantidade: 35, valorUnitario: 5.11, descricao: "B" },
       ["quantidade", "valorUnitario", "descricao"],
@@ -26,7 +26,7 @@ describe("auditoria-core", () => {
   });
 
   it("diffCampos: null/vazio vira — no resumo", () => {
-    const r = diffCampos({ x: null }, { x: "novo" }, ["x"]);
+    const r = diffCampos<{ x: string | null }>({ x: null }, { x: "novo" }, ["x"]);
     assert.equal(r.mudou, true);
     assert.ok(r.resumo.includes("— → novo"), r.resumo);
   });
