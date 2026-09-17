@@ -30,6 +30,7 @@ export type Armazenamento = {
   geradoEm: string;
   totalBytes: number;
   limiteBytes: number;
+  limiteContaBytes: number;
   tabelas: TabelaArmazenamento[];
   colunasPesadas: ColunaPesada[];
   sessoes: { total: number; expiradas: number };
@@ -39,7 +40,9 @@ export type Armazenamento = {
 // Só nomes do catálogo do SQLite entram nas queries; ainda assim validamos e
 // usamos aspas duplas (defesa em profundidade — nunca há input de usuário aqui).
 const ID_VALIDO = /^[A-Za-z0-9_]+$/;
-const LIMITE_D1_BYTES = 10 * 1024 ** 3; // D1: 10 GB por banco (informativo)
+// Limites informativos do D1 no plano gratuito (Workers Free).
+const LIMITE_D1_BYTES = 500 * 1024 ** 2; // 500 MB por banco
+const LIMITE_CONTA_BYTES = 5 * 1024 ** 3; // 5 GB por conta
 const LIMIAR_FOTO_BYTES = 150_000; // fotos de perfil acima disso são sinalizadas
 
 // Domínio por tabela (rótulo de agrupamento na tela). `reparticoes` = "Unidades"
@@ -255,6 +258,7 @@ export async function getArmazenamento(): Promise<Armazenamento> {
     geradoEm: agora,
     totalBytes,
     limiteBytes: LIMITE_D1_BYTES,
+    limiteContaBytes: LIMITE_CONTA_BYTES,
     tabelas,
     colunasPesadas,
     sessoes,

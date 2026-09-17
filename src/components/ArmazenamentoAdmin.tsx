@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
+import type { UsoOficial } from "@/lib/cf-analytics";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -13,10 +14,17 @@ import { SkeletonLinhas } from "./Skeleton";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
 
+// Tetos diários do D1 no plano gratuito (Workers Free), para os medidores de uso.
+const CAP_LEITURA = 5_000_000; // linhas lidas/dia
+const CAP_ESCRITA = 100_000; // linhas escritas/dia
+const corUso = (razao: number) => (razao >= 0.9 ? "var(--danger)" : razao >= 0.7 ? "var(--warn)" : "var(--ok)");
+
+type Dados = Armazenamento & { oficial: UsoOficial };
+
 // Tela de armazenamento do ADM: raio-x do banco (D1). Busca o snapshot no mount
 // (introspecção só roda ao abrir a tela); só componentes do design-system.
 export function ArmazenamentoAdmin() {
-  const [dados, setDados] = useState<Armazenamento | null>(null);
+  const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregando, setRecarregando] = useState(false);
   const [expurgando, setExpurgando] = useState(false);
@@ -25,16 +33,18 @@ export function ArmazenamentoAdmin() {
     setErro(null);
     try {
       const r = await fetch("/api/admin/armazenamento");
-      const j = (await r.json()) as { ok?: boolean; error?: string } & Partial<Armazenamento>;
+      const j = (await r.json()) as { ok?: boolean; error?: string } & Partial<Dados>;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setDados({
         geradoEm: j.geradoEm ?? "",
         totalBytes: j.totalBytes ?? 0,
         limiteBytes: j.limiteBytes ?? 0,
+        limiteContaBytes: j.limiteContaBytes ?? 0,
         tabelas: j.tabelas ?? [],
         colunasPesadas: j.colunasPesadas ?? [],
         sessoes: j.sessoes ?? { total: 0, expiradas: 0 },
         fotos: j.fotos ?? { qtd: 0, limiar: 0, maiores: [] },
+        oficial: j.oficial ?? { disponivel: false, motivo: "Uso oficial não carregado." },
       });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
@@ -197,6 +207,33 @@ export function ArmazenamentoAdmin() {
           cor={dados.sessoes.expiradas > 0 ? "var(--warn)" : "var(--ok)"}
         />
       </div>
+
+      {/* Uso diário oficial (Cloudflare) — leituras/escritas vs. tetos do plano free */}
+      <section className="space-y-2">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">
+          Uso diário — Cloudflare (oficial)
+        </h2>
+        {dados.oficial.disponivel ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <KpiStat
+              label="Linhas lidas hoje"
+              value={num(dados.oficial.hoje.rowsRead)}
+              hint={`${pct(dados.oficial.hoje.rowsRead, CAP_LEITURA)} de 5 mi/dia · reseta 00:00 UTC`}
+              cor={corUso(dados.oficial.hoje.rowsRead / CAP_LEITURA)}
+            />
+            <KpiStat
+              label="Linhas escritas hoje"
+              value={num(dados.oficial.hoje.rowsWritten)}
+              hint={`${pct(dados.oficial.hoje.rowsWritten, CAP_ESCRITA)} de 100 mil/dia · reseta 00:00 UTC`}
+              cor={corUso(dados.oficial.hoje.rowsWritten / CAP_ESCRITA)}
+            />
+          </div>
+        ) : (
+          <Callout kind="info">
+            Uso oficial (leituras/escritas por dia) indisponível — {dados.oficial.motivo}
+          </Callout>
+        )}
+      </section>
 
       {/* Tabelas */}
       <section className="space-y-2">

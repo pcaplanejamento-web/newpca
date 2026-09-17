@@ -1,15 +1,17 @@
 import { z } from "zod";
 import { exigirAdmin } from "@/lib/api-auth";
 import { expurgarSessoesExpiradas, getArmazenamento } from "@/lib/armazenamento";
+import { getUsoOficial } from "@/lib/cf-analytics";
 import { ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Snapshot de armazenamento do banco (só ADM). */
+/** Snapshot de armazenamento do banco + uso oficial da Cloudflare (só ADM). */
 export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  return ok(await getArmazenamento());
+  const [dados, oficial] = await Promise.all([getArmazenamento(), getUsoOficial()]);
+  return ok({ ...dados, oficial });
 }
 
 const acaoSchema = z.object({ acao: z.enum(["expurgar_sessoes"]) });
