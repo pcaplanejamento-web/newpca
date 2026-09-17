@@ -31,6 +31,7 @@ export type ChaveAvaliacao =
   | "protocolo.valorCapa"
   | "protocolo.semDfdEmErro"
   | "dfd.reparticao"
+  | "dfd.orgao"
   | "dfd.orgaoUnidadeDivergente"
   | "dfd.justificativa"
   | "dfd.previsao"
@@ -71,6 +72,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "protocolo.semDfdEmErro", sujeito: "protocolo", rotulo: "Sem DFD com erro", descricao: "Nenhum DFD do processo pode estar com erro.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   // ---- DFD ----
   { chave: "dfd.reparticao", sujeito: "dfd", rotulo: "Unidade / Setor", descricao: "DFD vinculado a uma unidade.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental", suportaEdicao: true, editavelPadrao: true },
+  { chave: "dfd.orgao", sujeito: "dfd", rotulo: "Órgão identificado", descricao: "Aviso quando o 'Órgão/Entidade' do DFD não corresponde a nenhum órgão cadastrado (sem órgão não dá para escopar/prever a unidade). Não bloqueia por padrão.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
   { chave: "dfd.orgaoUnidadeDivergente", sujeito: "dfd", rotulo: "Órgão × Unidade (divergência)", descricao: "Aviso quando o Órgão/Entidade do DFD aponta um órgão diferente do órgão dono da unidade casada pelo Setor Requisitante. Não bloqueia por padrão.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },
   { chave: "dfd.justificativa", sujeito: "dfd", rotulo: "§3 Justificativa", descricao: "Justificativa da necessidade preenchida.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   { chave: "dfd.previsao", sujeito: "dfd", rotulo: "§5 Previsão de entrega", descricao: "Previsão de entrega/execução preenchida (normalizada automaticamente).", niveisPermitidos: ["fundamental", "intermediario", "automatico", "ignorar"], nivelPadrao: "fundamental", suportaEdicao: true, editavelPadrao: true, suportaAuto: true },

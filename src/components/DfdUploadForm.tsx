@@ -12,7 +12,7 @@ import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
-import { casarReparticao } from "@/lib/reparticao-match";
+import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import {
   bloqueiaAssinatura,
   pdfExigeAssinatura,
@@ -39,9 +39,10 @@ type Rep = {
   orgaoId?: number | null;
   setorRequisitante?: string | null;
   numeroInteressado?: string | null;
+  oculto?: boolean | null;
   responsaveis: Responsaveis;
 };
-type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
 
 export function DfdUploadForm({
@@ -122,7 +123,7 @@ export function DfdUploadForm({
     try {
       const parsed = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
       const { dfd: d, auto } = normalizarSecoesDfd(parsed, regras); // padroniza (níveis/palavras-chave do ADM)
-      const matched = casarReparticao(d, reparticoes);
+      const matched = preverUnidadeDoDfd(d, orgaos, reparticoes);
       setPreview(d);
       setAutoCampos(auto);
       setRepId(matched);

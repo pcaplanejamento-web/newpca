@@ -130,6 +130,7 @@ export const protocoloMetaSchema = z.object({
   observacao: z.string().trim().max(2000).optional().nullable(),
   valorCapa: z.number().nonnegative().optional().nullable(),
   reparticaoId: z.number().int().positive().optional().nullable(),
+  orgaoId: z.number().int().positive().optional().nullable(), // protocolo em nome do órgão (ponto 2)
   localReparticao: textoOpc,
   nomeArquivo: textoCurtoOpc,
 });

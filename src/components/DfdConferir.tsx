@@ -13,7 +13,7 @@ import {
 } from "@/lib/dfd-tratamento";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
+import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
   pdfExigeAssinatura,
   type Responsaveis,
@@ -35,9 +35,10 @@ type Rep = {
   orgaoId?: number | null;
   setorRequisitante?: string | null;
   numeroInteressado?: string | null;
+  oculto?: boolean | null;
   responsaveis: Responsaveis;
 };
-type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
 export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" };
@@ -98,6 +99,8 @@ export function mensagensDoDfd(
   // unidade SELECIONADA. Só quando há órgãos cadastrados e a unidade tem órgão.
   const orgaoUnidadeDivergente =
     orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(d.orgaoEntidade, rep.orgaoId, orgaos);
+  // Ponto 6: órgão não identificado (Órgão/Entidade não casa nenhum órgão cadastrado).
+  const orgaoNaoIdentificado = orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null;
   return mensagensDfd(
     {
       itens: d.itens,
@@ -113,7 +116,7 @@ export function mensagensDoDfd(
       assinatura: { status: res.status, motivo: res.status === "erro" ? res.motivo : null },
     },
     regras,
-    { categoria, orgaoUnidadeDivergente, conformidade },
+    { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
   );
 }
 
@@ -184,6 +187,13 @@ export function DfdConferir({
   // Divergência órgão × unidade (item 6.3): o "Órgão/Entidade" do DFD aponta um órgão diferente
   // do órgão da unidade selecionada. Não bloqueia — só avisa (âmbar).
   const orgaoDivergente = orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(dfd.orgaoEntidade, rep.orgaoId, orgaos);
+  // Ponto 4: identifica o ÓRGÃO pelo "Órgão/Entidade" e ESCOPA as unidades a ele; o usuário
+  // escolhe a unidade dentro do órgão. Sem órgãos cadastrados → mantém a lista inteira.
+  const orgaoIdent = orgaos.length > 0 ? casarOrgao(dfd.orgaoEntidade, orgaos) : null;
+  const orgaoIdentNome = orgaoIdent != null ? (orgaos.find((o) => o.id === orgaoIdent)?.nome ?? null) : null;
+  const unidadesDoDfd = reparticoes.filter(
+    (r) => (orgaoIdent == null || r.orgaoId === orgaoIdent) && (!r.oculto || r.id === repId),
+  );
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
   const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
@@ -258,10 +268,22 @@ export function DfdConferir({
 
   return (
     <div className="space-y-4" ref={bodyRef}>
-      {/* Setor / Repartição (setor = repartição) */}
+      {/* Ponto 4: Órgão identificado (Órgão/Entidade) + Unidade escolhida DENTRO do órgão */}
       <div data-ancora="reparticao">
+        {orgaos.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+            <span className="text-muted">Órgão (Órgão/Entidade):</span>
+            {orgaoIdentNome ? (
+              <span className="inline-flex items-center gap-1.5 font-medium text-text">
+                <IconBuilding className="h-4 w-4 text-accent" /> {orgaoIdentNome}
+              </span>
+            ) : (
+              <span style={{ color: "var(--warn)" }}>não identificado — escolha a unidade manualmente</span>
+            )}
+          </div>
+        )}
         <label className={labelCls} htmlFor="dfd-rep">
-          Setor / Unidade <span style={{ color: "var(--danger)" }}>*</span>
+          {orgaoIdentNome ? "Unidade (dentro do órgão)" : "Setor / Unidade"} <span style={{ color: "var(--danger)" }}>*</span>
         </label>
         <select
           id="dfd-rep"
@@ -271,7 +293,7 @@ export function DfdConferir({
           onChange={(e) => onRepChange(e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">— Selecione a unidade —</option>
-          {reparticoes.map((r) => (
+          {unidadesDoDfd.map((r) => (
             <option key={r.id} value={r.id}>
               {r.codigo} · {r.nome}
             </option>

@@ -344,7 +344,7 @@ export function bloqueantesCatalogo(
 export function avaliarDfd(
   d: EntradaAvaliacaoDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
+  ctx?: { categoria?: string | null; orgaoNaoIdentificado?: boolean; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
 ): AvaliacaoDfd {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const bloqueantes: string[] = [];
@@ -363,9 +363,10 @@ export function avaliarDfd(
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
   add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
   add("dfd.reparticao", d.reparticaoId == null, "unidade vinculada");
-  // Divergência órgão × unidade: a flag é PRÉ-COMPUTADA pelo chamador (que tem o cadastro
-  // de órgãos/unidades) e passada no ctx — mantém `avaliarDfd` puro. Só bloqueia se o ADM
-  // elevar o ponto a "fundamental" (padrão = intermediário ⇒ atenção, não bloqueia).
+  // Órgão identificado + divergência órgão×unidade: flags PRÉ-COMPUTADAS pelo chamador (que tem o
+  // cadastro) e passadas no ctx — mantêm `avaliarDfd` puro. Só bloqueiam se o ADM elevar a
+  // "fundamental" (padrão = intermediário ⇒ atenção, não bloqueia; ctx ausente ⇒ sem efeito).
+  add("dfd.orgao", ctx?.orgaoNaoIdentificado === true, "órgão identificado (Órgão/Entidade)");
   add("dfd.orgaoUnidadeDivergente", ctx?.orgaoUnidadeDivergente === true, "órgão × unidade divergentes");
   for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
   add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ata ou licitação)");
@@ -418,7 +419,7 @@ export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
 export function mensagensDfd(
   d: EntradaMensagensDfd,
   regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
+  ctx?: { categoria?: string | null; orgaoNaoIdentificado?: boolean; orgaoUnidadeDivergente?: boolean } & CtxConformidade,
 ): MensagemDfd[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const out: MensagemDfd[] = [];
@@ -433,6 +434,12 @@ export function mensagensDfd(
   // Unidade / Setor (topo do banner)
   add("dfd.reparticao", "reparticao", d.reparticaoId != null,
     "Unidade/Setor requisitante não vinculado.", "Unidade/Setor requisitante vinculado.");
+
+  // Órgão identificado (Órgão/Entidade) — só APONTA quando não foi identificado (flag do ctx).
+  if (ctx?.orgaoNaoIdentificado === true) {
+    add("dfd.orgao", "reparticao", false,
+      "Órgão/Entidade do DFD não corresponde a nenhum órgão cadastrado.", "");
+  }
 
   // Divergência órgão × unidade (item 6.3) — só APONTA quando há divergência real (a flag é
   // pré-computada pelo chamador, que tem o cadastro). Ancorada no bloco da unidade; não

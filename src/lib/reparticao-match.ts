@@ -34,6 +34,8 @@ export type OrgaoMatch = {
   numeroInteressado?: string | null;
   /** Ocultado: não pode ser usado em documentos novos. */
   oculto?: boolean | null;
+  /** 1 = assinatura única (todas as unidades compartilham o gestor) — desabilita a previsão por assinante. */
+  assinaturaUnica?: boolean | null;
 };
 
 /** UPPER + sem acento (p/ casar sigla/código). */
@@ -165,6 +167,23 @@ export function preverUnidade(
   }
   // 2) pelo SETOR REQUISITANTE (casarUnidade — já ignora ocultas).
   return casarUnidade(dfd, unidades);
+}
+
+/**
+ * Ponto 4 + 5 — fluxo do DFD: IDENTIFICA o órgão pelo "Órgão/Entidade", ESCOPA as unidades a
+ * esse órgão e PREVÊ a unidade (assinatura → setor). `null` = o usuário escolhe. Ponto ÚNICO
+ * usado pelos forms (import avulso e protocolo). Se o órgão não é identificado, cai para todas
+ * as unidades (o usuário escolhe manualmente).
+ */
+export function preverUnidadeDoDfd(
+  dfd: { orgaoEntidade?: string | null; siglaSetor?: string | null; setorRequisitante?: string | null; assinaturas?: Assinatura[] | null },
+  orgaos: OrgaoMatch[],
+  unidades: (ReparticaoMatch & { responsaveis?: Responsaveis | null })[],
+): number | null {
+  const orgaoId = casarOrgao(dfd.orgaoEntidade, orgaos);
+  const escopo = orgaoId != null ? unidades.filter((u) => u.orgaoId === orgaoId) : unidades;
+  const orgao = orgaoId != null ? orgaos.find((o) => o.id === orgaoId) : undefined;
+  return preverUnidade(dfd, escopo, { assinaturaPorUnidade: !orgao?.assinaturaUnica });
 }
 
 /**

@@ -32,7 +32,7 @@ import {
   type PdfDoc,
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
-import { casarReparticao, casarUnidadePorInteressado } from "@/lib/reparticao-match";
+import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import {
   bloqueiaAssinatura,
   pdfExigeAssinatura,
@@ -66,9 +66,10 @@ type Rep = {
   orgaoId?: number | null;
   setorRequisitante?: string | null;
   numeroInteressado?: string | null;
+  oculto?: boolean | null;
   responsaveis: Responsaveis;
 };
-type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
@@ -112,6 +113,7 @@ export function ProtocoloUploadForm({
   const [assunto, setAssunto] = useState("");
   const [observacao, setObservacao] = useState("");
   const [protoRepId, setProtoRepId] = useState<number | null>(null);
+  const [protoOrgaoId, setProtoOrgaoId] = useState<number | null>(null); // protocolo em nome do ÓRGÃO (ponto 2)
   const [extra, setExtra] = useState<Extra>(EXTRA_VAZIO);
   // PCA do protocolo (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Os
   // DFDs herdam este ano ao protocolar. Obrigatório para protocolar.
@@ -192,6 +194,7 @@ export function ProtocoloUploadForm({
     setAnoPca(null);
     setAnoPcaDetectado(null);
     setProtoRepId(reparticaoAtivaId);
+    setProtoOrgaoId(null);
     setIndex({ protocolo: { numero: null, idExterno: null, anoPca: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
     setDfdRepIds([]);
     setAutoRepIds([]);
@@ -224,10 +227,13 @@ export function ProtocoloUploadForm({
         return;
       }
       docRef.current = doc;
-      const autos = idx.dfds.map((d) => casarReparticao(d, reparticoes));
-      // Unidade do protocolo: pelo Interessado (número cadastrado → senão nome) → senão 1º DFD
-      // casado → senão a ativa. O número do Interessado identifica a unidade (item 5).
-      const repInteressado = casarUnidadePorInteressado(p.interessado, reparticoes);
+      const autos = idx.dfds.map((d) => preverUnidadeDoDfd(d, orgaos, reparticoes));
+      // Ponto 2: o protocolo pode vir em nome do ÓRGÃO ou da UNIDADE (pelo Interessado — número
+      // cadastrado, senão nome). Unidade → vira a unidade do protocolo; Órgão → guarda o órgão
+      // (a unidade cai no 1º DFD casado / a ativa).
+      const alvoInteressado = casarPorInteressado(p.interessado, orgaos, reparticoes);
+      const repInteressado = alvoInteressado?.tipo === "unidade" ? alvoInteressado.id : null;
+      const orgaoInteressado = alvoInteressado?.tipo === "orgao" ? alvoInteressado.id : null;
       setNumero(p.numero ?? "");
       setData(p.data ?? "");
       setInteressado(p.interessado ?? "");
@@ -242,6 +248,7 @@ export function ProtocoloUploadForm({
       setDfdRepIds(autos);
       setAutoRepIds(autos);
       setProtoRepId(repInteressado ?? autos.find((x) => x != null) ?? reparticaoAtivaId);
+      setProtoOrgaoId(orgaoInteressado);
       setStatus("idle");
       setAberto(true);
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
@@ -435,6 +442,7 @@ export function ProtocoloUploadForm({
             observacao: observacao || null,
             valorCapa: extra.valorCapa,
             reparticaoId: protoRepId,
+            orgaoId: protoOrgaoId,
             localReparticao: extra.localReparticao,
             nomeArquivo: extra.nomeArquivo,
           },

@@ -45,9 +45,10 @@ type Rep = {
   numeroInteressado?: string | null;
   setorRequisitante?: string | null;
   orgaoId?: number | null;
+  oculto?: boolean | null;
   responsaveis: Responsaveis;
 };
-type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null };
+type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 
 const valorDe = (r: DfdResumo) => r.valorTotal ?? r.valorEstimado ?? 0;
 

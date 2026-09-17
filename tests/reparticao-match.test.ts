@@ -7,6 +7,7 @@ import {
   casarUnidade,
   divergenciaOrgaoUnidade,
   preverUnidade,
+  preverUnidadeDoDfd,
 } from "../src/lib/reparticao-match.ts";
 
 // Auto-match do Setor Requisitante do DFD com a repartição: 1) pela sigla
@@ -120,6 +121,26 @@ describe("preverUnidade (ponto 5 — assinatura → setor requisitante → null)
   });
   it("nem assinatura nem setor ⇒ null (erro até o usuário definir)", () => {
     assert.equal(preverUnidade({ setorRequisitante: "DESCONHECIDO" }, unidades, { assinaturaPorUnidade: true }), null);
+  });
+});
+
+describe("preverUnidadeDoDfd (ponto 4 — identifica órgão, ESCOPA as unidades, prevê)", () => {
+  const orgaos = [
+    { id: 1, sigla: "PMRV", nome: "Prefeitura", orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE", assinaturaUnica: false },
+    { id: 2, sigla: "AMAE", nome: "Água", orgaoEntidade: "AGENCIA MUNICIPAL DE AGUA", assinaturaUnica: false },
+  ];
+  const unidades = [
+    { id: 10, codigo: "SME", nome: "EDUCAÇÃO", orgaoId: 1, setorRequisitante: "SME - EDUCAÇÃO", responsaveis: { padroes: [], temporarios: [] } },
+    { id: 20, codigo: "DAE", nome: "ÁGUA", orgaoId: 2, setorRequisitante: "DAE - ÁGUA", responsaveis: { padroes: [], temporarios: [] } },
+  ];
+
+  it("escopa ao órgão identificado e prevê pelo setor", () => {
+    const r = preverUnidadeDoDfd({ orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE", setorRequisitante: "SME - EDUCAÇÃO" }, orgaos, unidades);
+    assert.equal(r, 10);
+  });
+  it("setor de OUTRO órgão não casa (respeita o escopo do órgão identificado)", () => {
+    const r = preverUnidadeDoDfd({ orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE", setorRequisitante: "DAE - ÁGUA" }, orgaos, unidades);
+    assert.equal(r, null);
   });
 });
 

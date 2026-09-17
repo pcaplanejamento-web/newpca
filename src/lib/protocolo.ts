@@ -126,6 +126,7 @@ export async function iniciarProtocolo(
     observacao: p.observacao ?? null,
     valorCapa: p.valorCapa ?? null,
     reparticaoId: p.reparticaoId ?? null,
+    orgaoId: p.orgaoId ?? null,
     localReparticao: p.localReparticao ?? null,
     nomeArquivo: p.nomeArquivo ?? null,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,

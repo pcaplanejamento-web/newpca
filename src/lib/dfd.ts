@@ -229,6 +229,8 @@ export async function upsertDfdCabecalho(
     setorRequisitante: dados.setorRequisitante ?? null,
     siglaSetor: dados.siglaSetor ?? null,
     reparticaoId: dados.reparticaoId ?? null,
+    // Ponto 4: o DFD registra o ÓRGÃO — derivado da unidade escolhida (unidade ∈ órgão).
+    orgaoId: dados.reparticaoId != null ? sql`(SELECT orgao_id FROM reparticoes WHERE id = ${dados.reparticaoId})` : null,
     protocoloId: dados.protocoloId ?? null,
     responsavel: dados.responsavel ?? null,
     matricula: dados.matricula ?? null,
