@@ -543,6 +543,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   → 422. Os DFDs do protocolo passam por `/api/dfd` (o `POST /api/protocolo` só cria a capa) → cobertos. Testes:
   `catalogo-conferencia.test.ts` + os pontos de catálogo em `dfd-tratamento.test.ts` (veredito por linha, portão, invariante).
 
+## Orçamento municipal (relatório CUBO) — migração `0028`
+- **O que é:** módulo para subir e consultar o **orçamento** da Prefeitura (dotação por Órgão/Unidade/**Elemento de
+  despesa**), a partir do relatório oficial **CUBO.XLSX**. **SOMENTE LEITURA**: importar `.xlsx` (informando o **ano**),
+  visualizar e excluir/reenviar — os lançamentos vêm do sistema oficial e NÃO são editados na tela. Aba de módulo
+  **`orcamento`** (`/painel/orcamento` = `OrcamentoView`); **admin vê tudo**, **editores** (admin/gestor) importam/
+  excluem, demais com a aba só consultam. A migração `0028` concede a aba a quem já vê o `catalogo`.
+- **Modelo (`orcamentos` + `orcamento_itens`, ISOLADO — sem FK p/ PCA/DFD):** `orcamentos` (nome, **ano** integer
+  obrigatório, `total_itens`, `valor_inicial` = Σ dotação p/ o card sem varrer itens); `orcamento_itens` (orgao/unidade/
+  nome_elemento/codigo_elemento + **6 valores `real`** [emenda impositiva/inicial/suplementação/empenho/saldo/anulação] +
+  sequencial; **SEM chave única** — muitas linhas compartilham o mesmo `codigo_elemento`; excluir o orçamento apaga os
+  lançamentos, cascade). Acesso em `src/lib/orcamento.ts` (`listarOrcamentos`/`getOrcamentoItens`/`criarOrcamento`/
+  `atualizarOrcamento`/`excluirOrcamento`/`inserirOrcamentoItens`); schemas Zod em `orcamento-validation.ts` (puro).
+- **Parser DEDICADO (`.xlsx`):** `parse-orcamento-xlsx(-core/-comum).ts` — detecção de colunas **pelo CABEÇALHO, por
+  posição** (Órgão/Unidade/Nome Elemento/Código + valores, em qualquer ordem; `rotuloColunaOrcamento`), com a leitura
+  SheetJS no navegador (`raw:false`, fora do bundle do Worker). Pula o título e o **rodapé** ("Qtd. total N"), convertendo
+  os valores com **`parseValorPlanilha`** (tolerante a en-US `"5,000,000.00"` E pt-BR `"5.000.000,00"`, inteiros com
+  milhar e negativos). Validado contra o CUBO real: **1.345 lançamentos, 18 órgãos, 39 unidades** (bate com o "Qtd. total"
+  do arquivo). Fixtures em `tests/parse-orcamento-xlsx.test.ts`.
+- **Import em LOTES (`importar-orcamento.ts` → `POST /api/orcamento`):** discriminada `start-orcamento`|`append-orcamento-itens`
+  (espelha `importar-catalogo`: retry de transitório, all-or-nothing — cada import cria um orçamento NOVO; falha apaga o
+  parcial). Insert PURO em lotes de **8×12=96** params (< 100 do D1); recomputa `total_itens` + `valor_inicial`. `append`
+  é IDEMPOTENTE (apaga `sequencial >= desde` antes de reinserir). Rotas `POST /api/orcamento` + `PATCH`/`DELETE
+  /api/orcamento/[id]` (renomear/ano, excluir) — `exigirEditor`, envelope `http.ts`, **auditoria** (`registrarAuditoria`,
+  entidade `orcamento`).
+- **UI (`OrcamentoView`):** um **`Segmented`** alterna **Orçamentos** (cards retangulares por arquivo importado — nome +
+  **ano** (`Badge`) + Σ dotação (`brl`) + nº lançamentos; abrir → `Modal` full com a planilha daquele orçamento) e
+  **Lançamentos** (todos numa **tabela única filtrável** — filtro por Órgão/Unidade/Elemento/Código e **somatório no
+  rodapé** reativo aos filtros). A troca anima por `animate-cat-morph`. Clicar numa linha abre o **`OrcamentoItemDetalhe`**
+  (`Modal.lateral`, SÓ-leitura). Importa via `Dropzone` (`.xlsx`) → prévia com **Nome + Ano** (obrigatório) → grava.
+  Exporta XLSX/PDF (`exportar-orcamento.ts`). Só componentes do DS; ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) +
+  nav em `AppShell`.
+
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`

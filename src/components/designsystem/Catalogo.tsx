@@ -47,6 +47,7 @@ import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { Historico } from "@/components/Historico";
+import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
@@ -1123,6 +1124,28 @@ export function Catalogo() {
               tipos: ["DFD-R", "DFD-E"],
             }}
             podeEditar
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="OrcamentoItemDetalhe (painel lateral do lançamento do orçamento — só leitura)">
+        <div className="max-w-md">
+          <OrcamentoItemDetalhe
+            item={{
+              id: 1,
+              orcamentoId: 1,
+              orgao: "FUNDO MUNICIPAL DE EDUCAÇÃO DE RIO VERDE",
+              unidade: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO",
+              nomeElemento: "OUTROS SERVIÇOS DE TERCEIROS - PESSOA JURÍDICA",
+              codigoElemento: "3.3.90.39.00",
+              valorEmendaImpositiva: 0,
+              valorInicial: 5000000,
+              valorSuplementacao: 0,
+              valorEmpenho: 0,
+              saldo: 5000000,
+              valorAnulacao: 0,
+              sequencial: 1,
+            }}
           />
         </div>
       </Secao>

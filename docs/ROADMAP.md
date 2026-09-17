@@ -382,6 +382,18 @@ unidade, descrição e os **tipos de DFD** (chips) — mesmo quando conforme ou 
 catálogo usa o **mesmo tamanho de fonte** da descrição do item importado (comparação lado a lado). Demo no
 `/design-system`. Testes de conferência (comparação tolerante, rótulos, referência sempre presente).
 
+### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
+✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
+Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar
+`.xlsx` **informando o ano** (obrigatório), visualizar e excluir. `Segmented` com **Orçamentos** (cards retangulares —
+nome + ano + Σ dotação + nº lançamentos) e **Lançamentos** (tabela única filtrável por Órgão/Unidade/Elemento/Código,
+com **somatório no rodapé**); abrir um card mostra a planilha daquele orçamento + o detalhe lateral SÓ-leitura por
+lançamento. Parser dedicado (`parse-orcamento-xlsx`) com detecção de colunas por posição + `parseValorPlanilha`
+(en-US/pt-BR) + descarte do rodapé "Qtd. total"; import em lotes (`8×12=96` params), migração `0028` (aditiva, tabelas
+`orcamentos`/`orcamento_itens` + concede a aba a quem já vê o catálogo), **auditoria** e export XLSX/PDF. Validado contra
+o CUBO real (**1.345 lançamentos, 18 órgãos, 39 unidades**). Só componentes do DS; ícone `IconWallet`. Testes de parser
++ validação + migração.
+
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
 (binding cru → `.meta.size_after`), **tabela por tabela** (linhas · tamanho · % do total, ordenável + somatório no

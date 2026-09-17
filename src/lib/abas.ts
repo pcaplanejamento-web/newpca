@@ -1,6 +1,6 @@
 // Abas de módulo que uma PERMISSÃO pode liberar (gate de navegação). Módulo puro
 // (sem deps de servidor) — usado no cliente (telas de RBAC) e no servidor.
-export const ABA_KEYS = ["dashboard", "protocolos", "pca", "dfd", "catalogo"] as const;
+export const ABA_KEYS = ["dashboard", "protocolos", "pca", "dfd", "catalogo", "orcamento"] as const;
 export type AbaKey = (typeof ABA_KEYS)[number];
 
 export const ABAS: { key: AbaKey; label: string }[] = [
@@ -9,4 +9,5 @@ export const ABAS: { key: AbaKey; label: string }[] = [
   { key: "pca", label: "PCA" },
   { key: "dfd", label: "DFD" },
   { key: "catalogo", label: "Catálogo" },
+  { key: "orcamento", label: "Orçamento" },
 ];

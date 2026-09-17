@@ -30,6 +30,7 @@ export type EntidadeAuditoria =
   | "configuracao"
   | "planilha"
   | "protocolo_legado"
+  | "orcamento"
   | "sessao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
@@ -61,6 +62,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   configuracao: "Configuração",
   planilha: "Planilha (PCA)",
   protocolo_legado: "Protocolo (legado)",
+  orcamento: "Orçamento",
   sessao: "Sessão",
 };
 

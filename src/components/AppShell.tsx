@@ -31,6 +31,7 @@ import {
   IconSpinner,
   IconUser,
   IconUsers,
+  IconWallet,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
 
@@ -62,6 +63,7 @@ const SECOES: NavSecao[] = [
       { href: "/painel/dfds", label: "DFD", Icon: IconClipboard, aba: "dfd" },
       { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
       { href: "/painel/catalogo", label: "Catálogo", Icon: IconLayers, aba: "catalogo" },
+      { href: "/painel/orcamento", label: "Orçamento", Icon: IconWallet, aba: "orcamento" },
     ],
   },
   {

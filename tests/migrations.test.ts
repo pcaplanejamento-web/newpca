@@ -235,6 +235,29 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(u?.oculto, 0, "unidade deve começar visível");
   });
 
+  it("0028 cria orcamento/orcamento_itens (aba orcamento + cascade)", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["orcamentos", "orcamento_itens"]) {
+      assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
+    }
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('orcamento_itens')");
+    for (const c of ["orcamento_id", "orgao", "unidade", "nome_elemento", "codigo_elemento", "valor_inicial", "saldo", "sequencial"]) {
+      assert.ok(cols.includes(c), `coluna ausente em orcamento_itens: ${c}`);
+    }
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    assert.ok(idx.includes("orcamento_itens_orcamento_idx"), "índice de orcamento_id ausente");
+    // A aba 'orcamento' foi concedida a quem já via 'catalogo'.
+    const perm = db.prepare("SELECT abas FROM permissoes WHERE id = 1").get() as { abas: string };
+    assert.ok(String(perm.abas).includes("orcamento"), `abas sem orcamento: ${perm.abas}`);
+    // FK cascade: excluir o orçamento apaga os lançamentos.
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO orcamentos (id, nome, ano) VALUES (971, 'Orç 2026', 2026)");
+    db.exec("INSERT INTO orcamento_itens (orcamento_id, orgao, nome_elemento, valor_inicial) VALUES (971, 'FUNDO A', 'OBRAS', 5000000)");
+    db.exec("DELETE FROM orcamentos WHERE id = 971");
+    const restantes = db.prepare("SELECT COUNT(*) AS n FROM orcamento_itens WHERE orcamento_id = 971").get() as { n: number };
+    assert.equal(restantes.n, 0, "excluir o orçamento deveria apagar os lançamentos (cascade)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

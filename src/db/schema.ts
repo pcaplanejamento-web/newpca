@@ -496,6 +496,49 @@ export const auditoria = sqliteTable(
   ],
 );
 
+/**
+ * ORÇAMENTO municipal (relatório CUBO). Cada `orcamentos` = um arquivo importado (nome +
+ * ANO). É ISOLADO (não referencia PCA/DFD/itens): serve para consulta. Somente leitura —
+ * importar/visualizar/excluir (reenviar). `valor_inicial` = Σ dotação (p/ o card).
+ */
+export const orcamentos = sqliteTable("orcamentos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  ano: integer("ano").notNull(),
+  totalItens: integer("total_itens").notNull().default(0),
+  valorInicial: real("valor_inicial").notNull().default(0), // Σ Valor Inicial (dotação)
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * Lançamento (linha) de um orçamento — dotação por Órgão/Unidade/Elemento de despesa.
+ * SEM chave única (muitas linhas compartilham o mesmo `codigo_elemento`). Excluir o
+ * orçamento apaga os lançamentos (cascade).
+ */
+export const orcamentoItens = sqliteTable(
+  "orcamento_itens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orcamentoId: integer("orcamento_id")
+      .notNull()
+      .references(() => orcamentos.id, { onDelete: "cascade" }),
+    orgao: text("orgao"),
+    unidade: text("unidade"),
+    nomeElemento: text("nome_elemento"),
+    codigoElemento: text("codigo_elemento"),
+    valorEmendaImpositiva: real("valor_emenda_impositiva").notNull().default(0),
+    valorInicial: real("valor_inicial").notNull().default(0),
+    valorSuplementacao: real("valor_suplementacao").notNull().default(0),
+    valorEmpenho: real("valor_empenho").notNull().default(0),
+    saldo: real("saldo").notNull().default(0),
+    valorAnulacao: real("valor_anulacao").notNull().default(0),
+    sequencial: integer("sequencial"), // ordem no arquivo
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("orcamento_itens_orcamento_idx").on(t.orcamentoId)],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;
@@ -531,3 +574,7 @@ export type CatalogoItem = typeof catalogoItens.$inferSelect;
 export type NovoCatalogoItem = typeof catalogoItens.$inferInsert;
 export type Auditoria = typeof auditoria.$inferSelect;
 export type NovaAuditoria = typeof auditoria.$inferInsert;
+export type Orcamento = typeof orcamentos.$inferSelect;
+export type NovoOrcamento = typeof orcamentos.$inferInsert;
+export type OrcamentoItem = typeof orcamentoItens.$inferSelect;
+export type NovoOrcamentoItem = typeof orcamentoItens.$inferInsert;
