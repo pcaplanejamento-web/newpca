@@ -80,7 +80,9 @@ function EntradaHistorico({ e }: { e: LinhaAuditoria }) {
           {e.resumo && <p className="mt-0.5 break-words text-sm text-text-2">{e.resumo}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
             <IconClock className="h-3.5 w-3.5 shrink-0" />
-            <span>{fmtData(e.criadoEm)}</span>
+            {/* Data/hora local (fuso do navegador) — servidor renderiza em UTC; suprime o aviso
+                de hidratação (mismatch esperado p/ timestamp, padrão do React p/ data/hora). */}
+            <span suppressHydrationWarning>{fmtData(e.criadoEm)}</span>
             <span>· {e.usuarioNome ?? "sistema"}</span>
             {temDetalhe && (
               <button type="button" className="font-medium text-accent hover:underline" onClick={() => setAberto((v) => !v)}>
