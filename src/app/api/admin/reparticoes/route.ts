@@ -4,6 +4,7 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
       orgaoId: reparticoes.orgaoId,
+      oculto: reparticoes.oculto,
       responsavelDfd: reparticoes.responsavelDfd,
     })
     .from(reparticoes)
@@ -45,6 +47,10 @@ export async function POST(req: Request) {
   if ("resp" in corpo) return corpo.resp;
   if (corpo.data.codigo.trim().toUpperCase() === CODIGO_GERAL)
     return erro("O código 'GERAL' é reservado à unidade virtual.", 400);
+  const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
+  // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
+  if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
+    return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
   const [row] = await db
@@ -53,9 +59,10 @@ export async function POST(req: Request) {
       codigo: corpo.data.codigo,
       nome: corpo.data.nome,
       ordem: Number(max) + 1,
-      numeroInteressado: corpo.data.numeroInteressado ?? null,
+      numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId ?? null,
+      oculto: corpo.data.oculto,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
     })
     .returning({ id: reparticoes.id });

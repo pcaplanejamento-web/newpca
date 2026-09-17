@@ -159,6 +159,24 @@ export function responsaveisEfetivos(fonte: {
   return parseResponsaveis(fonte.assinaturaUnica ? fonte.orgaoRaw : fonte.unidadeRaw);
 }
 
+/**
+ * Prevê a UNIDADE de um DFD pela ASSINATURA (ponto 5): quando o órgão é "por unidade", cada
+ * unidade tem o seu gestor — então o ASSINANTE do DFD identifica a unidade. Devolve o id da 1ª
+ * unidade (não oculta) cujo responsável assinou, ou `null`. `exigeAssinatura:false` — só testa
+ * o casamento do assinante (não exige o PDF assinado aqui). Puro/testável.
+ */
+export function preverUnidadePorAssinatura(
+  assinaturas: Assinatura[],
+  unidades: { id: number; responsaveis: Responsaveis; oculto?: boolean | null }[],
+): number | null {
+  if (assinaturas.length === 0) return null;
+  for (const u of unidades) {
+    if (u.oculto) continue;
+    if (validarAssinatura(assinaturas, u.responsaveis, { exigeAssinatura: false }).status === "ok") return u.id;
+  }
+  return null;
+}
+
 export type EstadoTemporario = "agendado" | "vigente" | "encerrado";
 
 /** Estado de um temporário em relação a `hoje` (datas incompletas → agendado). */

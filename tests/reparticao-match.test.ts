@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   casarOrgao,
+  casarPorInteressado,
   casarReparticao,
   casarUnidade,
-  casarUnidadePorInteressado,
   divergenciaOrgaoUnidade,
+  preverUnidade,
 } from "../src/lib/reparticao-match.ts";
 
 // Auto-match do Setor Requisitante do DFD com a repartição: 1) pela sigla
@@ -72,22 +73,53 @@ describe("casarUnidade — padrão de Setor Requisitante configurado (escape hat
   });
 });
 
-describe("casarUnidadePorInteressado (Interessado do protocolo → unidade)", () => {
+describe("casarPorInteressado (ponto 2 — protocolo em nome do ÓRGÃO ou da UNIDADE)", () => {
   const unidades = [
     { id: 1, codigo: "FMS", nome: "FUNDO MUNICIPAL DE SAÚDE", numeroInteressado: "1008171" },
     { id: 2, codigo: "SME", nome: "SECRETARIA MUNICIPAL DE EDUCAÇÃO" },
   ];
+  const orgaos = [{ id: 10, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde", numeroInteressado: "42" }];
 
-  it("casa pelo NÚMERO do interessado (cadastrado)", () => {
-    assert.equal(casarUnidadePorInteressado("1008171 - FUNDO MUNICIPAL DE SAUDE", unidades), 1);
+  it("número casa a UNIDADE", () => {
+    assert.deepEqual(casarPorInteressado("1008171 - FUNDO MUNICIPAL DE SAUDE", orgaos, unidades), { tipo: "unidade", id: 1 });
   });
-
-  it("número não cadastrado ⇒ fallback pelo NOME (comportamento atual)", () => {
-    assert.equal(casarUnidadePorInteressado("42 - SECRETARIA MUNICIPAL DE EDUCACAO", unidades), 2);
+  it("número casa o ÓRGÃO", () => {
+    assert.deepEqual(casarPorInteressado("42 - PREFEITURA", orgaos, unidades), { tipo: "orgao", id: 10 });
   });
-
+  it("número não cadastrado ⇒ fallback pelo NOME (unidade)", () => {
+    assert.deepEqual(casarPorInteressado("99 - SECRETARIA MUNICIPAL DE EDUCACAO", orgaos, unidades), { tipo: "unidade", id: 2 });
+  });
+  it("OCULTO nunca casa (ponto 8)", () => {
+    const ocultas = unidades.map((u) => (u.id === 1 ? { ...u, oculto: true } : u));
+    assert.equal(casarPorInteressado("1008171 - FUNDO", orgaos, ocultas), null);
+  });
   it("sem interessado → null", () => {
-    assert.equal(casarUnidadePorInteressado(null, unidades), null);
+    assert.equal(casarPorInteressado(null, orgaos, unidades), null);
+  });
+});
+
+describe("preverUnidade (ponto 5 — assinatura → setor requisitante → null)", () => {
+  const assinaturas = [
+    { nome: "Ana Gestora", eCpf: "", usuario: "", local: "", data: "2026-01-01", ip: "", codigo: "", url: "", fonte: "sistema" as const },
+  ];
+  const unidades = [
+    {
+      id: 1,
+      codigo: "SME",
+      nome: "SECRETARIA MUNICIPAL DE EDUCAÇÃO",
+      responsaveis: { padroes: [{ nome: "ANA GESTORA", matricula: "", funcao: "", nomeacao: { tipo: null, numero: "", link: "" } }], temporarios: [] },
+    },
+    { id: 2, codigo: "SMS", nome: "SECRETARIA MUNICIPAL DE SAÚDE", setorRequisitante: "SMS - SAÚDE", responsaveis: { padroes: [], temporarios: [] } },
+  ];
+
+  it("prevê pela ASSINATURA quando o órgão é POR UNIDADE (o assinante identifica a unidade)", () => {
+    assert.equal(preverUnidade({ setorRequisitante: "GENÉRICO", assinaturas }, unidades, { assinaturaPorUnidade: true }), 1);
+  });
+  it("assinatura ÚNICA ⇒ ignora o assinante; cai no SETOR REQUISITANTE", () => {
+    assert.equal(preverUnidade({ setorRequisitante: "SMS - SAÚDE", assinaturas }, unidades, { assinaturaPorUnidade: false }), 2);
+  });
+  it("nem assinatura nem setor ⇒ null (erro até o usuário definir)", () => {
+    assert.equal(preverUnidade({ setorRequisitante: "DESCONHECIDO" }, unidades, { assinaturaPorUnidade: true }), null);
   });
 });
 

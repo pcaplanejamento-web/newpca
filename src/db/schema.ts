@@ -236,6 +236,8 @@ export const orgaos = sqliteTable(
     // 0 = cada unidade tem os seus (`reparticoes.responsavel_dfd`). Ver `responsaveisEfetivos`.
     assinaturaUnica: integer("assinatura_unica", { mode: "boolean" }).notNull().default(false),
     responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs do órgão (JSON), quando assinatura única
+    numeroInteressado: text("numero_interessado"), // Interessado do protocolo → órgão (único GLOBAL com unidades)
+    oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
@@ -253,6 +255,7 @@ export const reparticoes = sqliteTable(
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs: JSON array de nomes (parseResponsaveis)
+    oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
@@ -291,6 +294,7 @@ export const dfdProtocolos = sqliteTable(
     observacao: text("observacao"),
     valorCapa: real("valor_capa"), // "Valor" da capa do processo
     anoPca: integer("ano_pca"), // ano do PCA do processo (adivinhado da capa OU definido pelo usuário)
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão do protocolo (quando em nome do órgão)
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
       onDelete: "set null",
     }),
@@ -307,6 +311,7 @@ export const dfdProtocolos = sqliteTable(
   (t) => [
     uniqueIndex("protocolos_dfd_numero_uq").on(t.numero),
     index("protocolos_dfd_reparticao_idx").on(t.reparticaoId),
+    index("protocolos_dfd_orgao_idx").on(t.orgaoId),
   ],
 );
 
@@ -329,6 +334,7 @@ export const dfds = sqliteTable(
     orgaoEntidade: text("orgao_entidade"),
     setorRequisitante: text("setor_requisitante"), // texto cru do DFD
     siglaSetor: text("sigla_setor"), // sigla extraída (ex.: "SMIR") p/ auto-match
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão identificado (Órgão/Entidade)
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, {
       onDelete: "set null",
     }),
@@ -360,6 +366,7 @@ export const dfds = sqliteTable(
     uniqueIndex("dfds_numero_uq").on(t.numero),
     index("dfds_reparticao_idx").on(t.reparticaoId),
     index("dfds_protocolo_idx").on(t.protocoloId),
+    index("dfds_orgao_idx").on(t.orgaoId),
   ],
 );
 

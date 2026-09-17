@@ -221,6 +221,20 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(row.usuario_nome, "Fulano", "o snapshot do nome deve permanecer");
   });
 
+  it("0027 adiciona numero_interessado/oculto (orgaos), oculto (reparticoes), orgao_id (dfds/dfd_protocolos)", () => {
+    const org = nomes(db, "SELECT name FROM pragma_table_info('orgaos')");
+    for (const c of ["numero_interessado", "oculto"]) assert.ok(org.includes(c), `coluna ausente em orgaos: ${c}`);
+    const rep = nomes(db, "SELECT name FROM pragma_table_info('reparticoes')");
+    assert.ok(rep.includes("oculto"), "coluna oculto ausente em reparticoes");
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('dfds')").includes("orgao_id"), "orgao_id ausente em dfds");
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('dfd_protocolos')").includes("orgao_id"), "orgao_id ausente em dfd_protocolos");
+    // Default preserva o legado: órgão/unidade começam VISÍVEIS (oculto=0).
+    const o = db.prepare("SELECT oculto FROM orgaos WHERE id = 1").get() as { oculto: number } | undefined;
+    assert.equal(o?.oculto, 0, "órgão deve começar visível");
+    const u = db.prepare("SELECT oculto FROM reparticoes WHERE codigo = 'AMAE'").get() as { oculto: number } | undefined;
+    assert.equal(u?.oculto, 0, "unidade deve começar visível");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

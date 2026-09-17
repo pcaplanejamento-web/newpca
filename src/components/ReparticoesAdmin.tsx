@@ -13,7 +13,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconChevronLeft, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { SkeletonLinhas } from "./Skeleton";
@@ -26,6 +26,7 @@ type Rep = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
   orgaoId: number | null;
+  oculto: boolean;
   responsaveis: Responsaveis;
 };
 
@@ -52,6 +53,7 @@ export function ReparticoesAdmin({
   const [nome, setNome] = useState("");
   const [numeroInteressado, setNumeroInteressado] = useState("");
   const [setorRequisitante, setSetorRequisitante] = useState("");
+  const [formOculto, setFormOculto] = useState(false); // preservado no PATCH (togglado pela ação da linha)
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
@@ -86,6 +88,7 @@ export function ReparticoesAdmin({
     setNome("");
     setNumeroInteressado("");
     setSetorRequisitante("");
+    setFormOculto(false);
     setResponsaveis(RESPONSAVEIS_VAZIO);
   }
   function abrirEdicao(r: Rep) {
@@ -94,7 +97,32 @@ export function ReparticoesAdmin({
     setNome(r.nome);
     setNumeroInteressado(r.numeroInteressado ?? "");
     setSetorRequisitante(r.setorRequisitante ?? "");
+    setFormOculto(r.oculto);
     setResponsaveis(r.responsaveis);
+  }
+
+  /** Ponto 8: ocultar/reexibir uma unidade (não apaga; some do uso em documentos novos). */
+  async function toggleOculto(r: Rep) {
+    setErro(null);
+    const resp = await fetch(`/api/admin/reparticoes/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        codigo: r.codigo,
+        nome: r.nome,
+        numeroInteressado: r.numeroInteressado,
+        setorRequisitante: r.setorRequisitante,
+        orgaoId: r.orgaoId,
+        oculto: !r.oculto,
+        responsaveis: r.responsaveis,
+      }),
+    });
+    if (!resp.ok) {
+      const j = (await resp.json().catch(() => ({}))) as { error?: string };
+      setErro(j.error ?? "Não foi possível atualizar.");
+      return;
+    }
+    await carregar();
   }
 
   async function salvar(e: FormEvent) {
@@ -112,6 +140,7 @@ export function ReparticoesAdmin({
           numeroInteressado: numeroInteressado.trim() || null,
           setorRequisitante: setorRequisitante.trim() || null,
           orgaoId, // a unidade pertence ao órgão desta tela
+          oculto: formOculto,
           responsaveis,
         }),
       });
@@ -177,7 +206,18 @@ export function ReparticoesAdmin({
   const colunas: Column<Rep>[] = [
     { key: "pos", header: "#", filter: "none", minWidth: 40, render: (r) => <span className="tabular-nums text-faint">{(posDe.get(r.id) ?? 0) + 1}</span> },
     { key: "codigo", header: "Sigla", filter: "none", minWidth: 90, render: (r) => <Badge tone="violet">{r.codigo}</Badge> },
-    { key: "nome", header: "Nome da unidade", filter: "none", minWidth: 220, render: (r) => <span className="font-medium text-text">{r.nome}</span> },
+    {
+      key: "nome",
+      header: "Nome da unidade",
+      filter: "none",
+      minWidth: 220,
+      render: (r) => (
+        <span className="inline-flex items-center gap-2">
+          <span className={`font-medium ${r.oculto ? "text-faint" : "text-text"}`}>{r.nome}</span>
+          {r.oculto && <Badge tone="slate">Oculta</Badge>}
+        </span>
+      ),
+    },
     {
       key: "numeroInteressado",
       header: "Nº interessado",
@@ -236,6 +276,7 @@ export function ReparticoesAdmin({
           <div className="flex justify-end gap-1">
             <Button variant="ghost" onClick={() => mover(r.id, -1)} disabled={idx === 0} aria-label="Mover para cima" icon={<IconArrowUp className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => mover(r.id, 1)} disabled={idx === lista.length - 1} aria-label="Mover para baixo" icon={<IconArrowDown className="h-4 w-4" />} />
+            <Button variant="ghost" onClick={() => toggleOculto(r)} aria-label={r.oculto ? "Reexibir" : "Ocultar"} icon={r.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => abrirEdicao(r)} aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => excluir(r)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
           </div>

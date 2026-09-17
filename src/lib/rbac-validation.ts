@@ -52,6 +52,7 @@ export const reparticaoSchema = z.object({
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
   orgaoId: z.number().int().positive().optional().nullable(),
+  oculto: z.boolean().default(false),
   responsaveis: responsaveisSchema,
 });
 
@@ -66,7 +67,9 @@ export const orgaoSchema = z.object({
   sigla: z.string().trim().min(1, "Informe a sigla.").max(30),
   nome: z.string().trim().min(1, "Informe o nome do órgão.").max(160),
   orgaoEntidade: z.string().trim().max(200).optional().nullable(),
+  numeroInteressado: z.string().trim().max(60).optional().nullable(),
   assinaturaUnica: z.boolean().default(false),
+  oculto: z.boolean().default(false),
   responsaveis: responsaveisSchema,
 });
 

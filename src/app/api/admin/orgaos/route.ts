@@ -3,7 +3,8 @@ import { orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { ok, parseCorpo } from "@/lib/http";
+import { erro, ok, parseCorpo } from "@/lib/http";
+import { numeroInteressadoEmUso } from "@/lib/orgaos";
 import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
@@ -20,6 +21,8 @@ export async function GET() {
       orgaoEntidade: orgaos.orgaoEntidade,
       ordem: orgaos.ordem,
       assinaturaUnica: orgaos.assinaturaUnica,
+      numeroInteressado: orgaos.numeroInteressado,
+      oculto: orgaos.oculto,
       responsavelDfd: orgaos.responsavelDfd,
     })
     .from(orgaos)
@@ -34,6 +37,10 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(orgaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
+  const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
+  // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
+  if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
+    return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${orgaos.ordem}), -1)` }).from(orgaos);
   const [row] = await db
@@ -42,7 +49,9 @@ export async function POST(req: Request) {
       sigla: corpo.data.sigla,
       nome: corpo.data.nome,
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
+      numeroInteressado,
       assinaturaUnica: corpo.data.assinaturaUnica,
+      oculto: corpo.data.oculto,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       ordem: Number(max) + 1,
     })

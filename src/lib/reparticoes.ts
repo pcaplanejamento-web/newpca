@@ -1,5 +1,5 @@
-import { eq, inArray } from "drizzle-orm";
-import { orgaos, reparticoes } from "@/db/schema";
+import { eq, inArray, sql } from "drizzle-orm";
+import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { RESPONSAVEIS_VAZIO, type Responsaveis, responsaveisEfetivos } from "./reparticao-responsaveis";
 
@@ -63,6 +63,7 @@ export type DadosMatchReparticao = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
   orgaoId: number | null;
+  oculto: boolean;
 };
 
 export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<number, DadosMatchReparticao>> {
@@ -74,10 +75,24 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
       orgaoId: reparticoes.orgaoId,
+      oculto: reparticoes.oculto,
     })
     .from(reparticoes)
     .where(inArray(reparticoes.id, uniq));
   const out: Record<number, DadosMatchReparticao> = {};
-  for (const l of linhas) out[l.id] = { numeroInteressado: l.numeroInteressado, setorRequisitante: l.setorRequisitante, orgaoId: l.orgaoId };
+  for (const l of linhas)
+    out[l.id] = { numeroInteressado: l.numeroInteressado, setorRequisitante: l.setorRequisitante, orgaoId: l.orgaoId, oculto: l.oculto };
   return out;
+}
+
+/**
+ * Ponto 8 — a unidade tem DFD/protocolo vinculado? (`reparticao_id` em `dfds` ou `dfd_protocolos`).
+ * Se sim, não pode ser excluída — só OCULTADA (preserva o histórico, some do uso futuro).
+ */
+export async function unidadeTemVinculo(reparticaoId: number): Promise<boolean> {
+  const db = getDb();
+  const [d] = await db.select({ n: sql<number>`1` }).from(dfds).where(eq(dfds.reparticaoId, reparticaoId)).limit(1);
+  if (d) return true;
+  const [p] = await db.select({ n: sql<number>`1` }).from(dfdProtocolos).where(eq(dfdProtocolos.reparticaoId, reparticaoId)).limit(1);
+  return !!p;
 }

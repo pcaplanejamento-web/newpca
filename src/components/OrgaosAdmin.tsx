@@ -8,7 +8,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { Segmented } from "./Segmented";
@@ -21,6 +21,8 @@ type Orgao = {
   orgaoEntidade: string | null;
   ordem: number;
   assinaturaUnica: boolean;
+  numeroInteressado: string | null;
+  oculto: boolean;
   responsaveis: Responsaveis;
 };
 
@@ -32,7 +34,9 @@ export function OrgaosAdmin() {
   const [sigla, setSigla] = useState("");
   const [nome, setNome] = useState("");
   const [orgaoEntidade, setOrgaoEntidade] = useState("");
+  const [numeroInteressado, setNumeroInteressado] = useState("");
   const [assinaturaUnica, setAssinaturaUnica] = useState(false);
+  const [formOculto, setFormOculto] = useState(false); // preservado no PATCH (togglado pela ação da linha)
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [recarregando, setRecarregando] = useState(false);
@@ -65,7 +69,9 @@ export function OrgaosAdmin() {
     setSigla("");
     setNome("");
     setOrgaoEntidade("");
+    setNumeroInteressado("");
     setAssinaturaUnica(false);
+    setFormOculto(false);
     setResponsaveis(RESPONSAVEIS_VAZIO);
   }
   function abrirEdicao(o: Orgao) {
@@ -73,8 +79,39 @@ export function OrgaosAdmin() {
     setSigla(o.sigla);
     setNome(o.nome);
     setOrgaoEntidade(o.orgaoEntidade ?? "");
+    setNumeroInteressado(o.numeroInteressado ?? "");
     setAssinaturaUnica(o.assinaturaUnica);
+    setFormOculto(o.oculto);
     setResponsaveis(o.responsaveis);
+  }
+
+  /** Corpo do PATCH/POST a partir do estado do form (+ overrides). */
+  function corpoOrgao(o: Orgao, over: Partial<{ oculto: boolean }> = {}) {
+    return {
+      sigla: o.sigla,
+      nome: o.nome,
+      orgaoEntidade: o.orgaoEntidade,
+      numeroInteressado: o.numeroInteressado,
+      assinaturaUnica: o.assinaturaUnica,
+      oculto: over.oculto ?? o.oculto,
+      responsaveis: o.responsaveis,
+    };
+  }
+
+  /** Ponto 8: ocultar/reexibir um órgão (não apaga; some do uso em documentos novos). */
+  async function toggleOculto(o: Orgao) {
+    setErro(null);
+    const resp = await fetch(`/api/admin/orgaos/${o.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpoOrgao(o, { oculto: !o.oculto })),
+    });
+    if (!resp.ok) {
+      const j = (await resp.json().catch(() => ({}))) as { error?: string };
+      setErro(j.error ?? "Não foi possível atualizar.");
+      return;
+    }
+    await carregar();
   }
 
   async function salvar(e: FormEvent) {
@@ -86,7 +123,7 @@ export function OrgaosAdmin() {
       const r = await fetch(novo ? "/api/admin/orgaos" : `/api/admin/orgaos/${(editando as Orgao).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sigla, nome, orgaoEntidade: orgaoEntidade.trim() || null, assinaturaUnica, responsaveis }),
+        body: JSON.stringify({ sigla, nome, orgaoEntidade: orgaoEntidade.trim() || null, numeroInteressado: numeroInteressado.trim() || null, assinaturaUnica, oculto: formOculto, responsaveis }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -149,15 +186,38 @@ export function OrgaosAdmin() {
   const colunas: Column<Orgao>[] = [
     { key: "pos", header: "#", filter: "none", minWidth: 40, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
     { key: "sigla", header: "Sigla", filter: "none", minWidth: 100, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
-    { key: "nome", header: "Nome do órgão", filter: "none", minWidth: 220, render: (o) => <span className="font-medium text-text">{o.nome}</span> },
+    {
+      key: "nome",
+      header: "Nome do órgão",
+      filter: "none",
+      minWidth: 220,
+      render: (o) => (
+        <span className="inline-flex items-center gap-2">
+          <span className={`font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
+          {o.oculto && <Badge tone="slate">Oculto</Badge>}
+        </span>
+      ),
+    },
     {
       key: "orgaoEntidade",
       header: "Órgão/Entidade (identificação do DFD)",
       filter: "none",
-      minWidth: 220,
+      minWidth: 200,
       render: (o) =>
         o.orgaoEntidade ? (
           <span className="line-clamp-1 text-[12px] text-text-2" title={o.orgaoEntidade}>{o.orgaoEntidade}</span>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
+    },
+    {
+      key: "numeroInteressado",
+      header: "Nº interessado",
+      filter: "none",
+      minWidth: 110,
+      render: (o) =>
+        o.numeroInteressado ? (
+          <span className="font-mono text-[12px] text-text-2">{o.numeroInteressado}</span>
         ) : (
           <span className="text-faint">—</span>
         ),
@@ -181,6 +241,7 @@ export function OrgaosAdmin() {
           <div className="flex justify-end gap-1">
             <Button variant="ghost" onClick={() => mover(o.id, -1)} disabled={idx === 0} aria-label="Mover para cima" icon={<IconArrowUp className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => mover(o.id, 1)} disabled={idx === lista.length - 1} aria-label="Mover para baixo" icon={<IconArrowDown className="h-4 w-4" />} />
+            <Button variant="ghost" onClick={() => toggleOculto(o)} aria-label={o.oculto ? "Reexibir" : "Ocultar"} icon={o.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => abrirEdicao(o)} aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />
             <Button variant="ghost" onClick={() => excluir(o)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
           </div>
@@ -216,6 +277,12 @@ export function OrgaosAdmin() {
             value={orgaoEntidade}
             onChange={(e) => setOrgaoEntidade(e.target.value)}
             placeholder="Ex.: PREFEITURA MUNICIPAL DE RIO VERDE"
+          />
+          <TextField
+            label="Número do interessado (protocolo em nome do órgão) — único no sistema"
+            value={numeroInteressado}
+            onChange={(e) => setNumeroInteressado(e.target.value)}
+            placeholder="Ex.: 1008171"
           />
           <div>
             <span className="mb-2 block text-[13px] font-semibold text-text">Assinatura (responsáveis por DFDs)</span>
