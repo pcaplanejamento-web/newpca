@@ -80,6 +80,22 @@ export type DfdItemRow = {
 
 export type DfdSecaoRow = { numero: number; titulo: string; texto: string };
 
+/** Linha PLANA de item (para a visão "Itens" da tela DFD): o item + de qual DFD/protocolo/unidade veio. */
+export type ItemDfdRow = {
+  id: number; // dfd_itens.id
+  dfdId: number;
+  dfdNumero: string;
+  sigla: string | null; // código da unidade do DFD
+  protocoloNumero: string | null;
+  item: number | null;
+  codigo: string | null;
+  descricao: string | null;
+  unidade: string | null;
+  quantidade: number | null;
+  valorUnitario: number | null;
+  valorTotal: number | null;
+};
+
 export type DfdDetalhe = DfdResumo & {
   orgaoEntidade: string | null;
   matricula: string | null;
@@ -189,6 +205,35 @@ export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdRes
     .where(eq(dfds.protocoloId, protocoloId))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
   return rows.map(comGrupos);
+}
+
+/**
+ * Lista PLANA de TODOS os itens dos DFDs em escopo (visão "Itens" da tela DFD) — cada item
+ * enriquecido com o DFD/unidade/protocolo de origem. Escopado por unidade como `listarDfds`
+ * (Geral ⇒ `undefined` = todos). Carregado sob demanda (lazy) só ao abrir a visão Itens.
+ */
+export async function listarItensDfds(reparticaoId?: number): Promise<ItemDfdRow[]> {
+  return getDb()
+    .select({
+      id: dfdItens.id,
+      dfdId: dfds.id,
+      dfdNumero: dfds.numero,
+      sigla: reparticoes.codigo,
+      protocoloNumero: dfdProtocolos.numero,
+      item: dfdItens.item,
+      codigo: dfdItens.codigo,
+      descricao: dfdItens.descricao,
+      unidade: dfdItens.unidade,
+      quantidade: dfdItens.quantidade,
+      valorUnitario: dfdItens.valorUnitario,
+      valorTotal: dfdItens.valorTotal,
+    })
+    .from(dfdItens)
+    .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
+    .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
+    .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+    .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
 
 export async function getDfd(id: number): Promise<DfdDetalhe | null> {

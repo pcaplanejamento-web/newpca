@@ -277,6 +277,17 @@
 .animate-cat-morph {
   animation: cat-morph 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+/* Respeita "reduzir movimento" (acessibilidade / preferência do ADM): sem o morph — a nova
+   visão aparece direto (cobre Catálogo, Orçamento e a tela DFD). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-cat-morph {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-cat-morph,
+[data-motion="reduced"] .animate-cat-morph {
+  animation: none;
+}
 
 /* Shimmer para skeletons de carregamento */
 @keyframes shimmer {

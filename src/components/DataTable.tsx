@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DateFilterHeader, type IntervaloData } from "./DateFilterHeader";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -42,6 +42,7 @@ export function DataTable<R>({
   onRowClick,
   activeKey = null,
   fillHeight = false,
+  density,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -64,6 +65,12 @@ export function DataTable<R>({
    * da tabela ao fim da viewport; recalcula no resize. Fallback = `pageSize` ?? 20.
    */
   fillHeight?: boolean;
+  /**
+   * Densidade da linha (altura via `--cell-py` LOCAL, sem afetar as outras tabelas):
+   * `comfortable` = mais alta, `compact` = mais fina, `default`/omitido = respeita o token global.
+   * Usado para diferenciar visualmente visões que compartilham o mesmo espaço.
+   */
+  density?: "compact" | "default" | "comfortable";
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
@@ -203,9 +210,15 @@ export function DataTable<R>({
   const cell = "px-[var(--cell-px)] py-[var(--cell-py)] align-middle";
   const head = "px-[var(--cell-px)] py-3 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint";
   const sortDe = (k: string) => (sort.key === k ? sort.dir : null);
+  // Densidade LOCAL (só desta tabela): sobrepõe o `--cell-py` no container, sem afetar as demais.
+  const densPy = density === "comfortable" ? "18px" : density === "compact" ? "7px" : undefined;
 
   return (
-    <div ref={wrapRef} className="overflow-hidden rounded-card border border-border bg-surface shadow-ring">
+    <div
+      ref={wrapRef}
+      className="overflow-hidden rounded-card border border-border bg-surface shadow-ring"
+      style={densPy ? ({ "--cell-py": densPy } as CSSProperties) : undefined}
+    >
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm" style={{ minWidth }}>
           <thead className="border-b border-border bg-surface-2">
