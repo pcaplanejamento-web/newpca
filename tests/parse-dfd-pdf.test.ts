@@ -558,4 +558,39 @@ describe("removerAparenciaAssinatura (aparência Adobe não vaza p/ as seções)
     const secao = [P(38, 499, "3 - JUSTIFICATIVA"), P(38, 485, "MARIA DA SILVA responsável pela demanda.")];
     assert.equal(removerAparenciaAssinatura(secao), secao);
   });
+  it("PROSA com marcador na MARGEM (sem coluna de aparência à direita) → mantém tudo (guarda ≥60pt)", () => {
+    // Uma seção cita "assinado de forma digital" e uma data ISO, mas na margem esquerda (x≈38): não
+    // há coluna de aparência separada → o corte não se aplica e NADA é removido (anti-corrupção).
+    const secao = [
+      P(38, 499, "8 - JUSTIFICATIVA"),
+      P(38, 485, "O contrato foi assinado de forma digital pelas partes."),
+      P(38, 471, "Prazo conforme dados: 2026.05.10 do cronograma."),
+    ];
+    const textos = removerAparenciaAssinatura(secao).map((i) => i.str);
+    assert.ok(textos.includes("O contrato foi assinado de forma digital pelas partes."));
+    assert.ok(textos.includes("Prazo conforme dados: 2026.05.10 do cronograma."));
+  });
+  it("MÚLTIPLAS assinaturas na página → remove os dois blocos; o texto das seções entre elas é preservado", () => {
+    const items = [
+      // Bloco 1 (§9)
+      P(38, 695, "9 - SECRETÁRIO DEMANDANTE"),
+      P(300, 700, "Assinado de forma digital"),
+      P(240, 693, "FULANO:11111111111"),
+      P(300, 690, "Dados: 2026.01.02"),
+      P(300, 683, "10:00:00 -03'00'"),
+      // Bloco 2 (§10), bem abaixo
+      P(38, 495, "10 - AUTORIZAÇÃO DEMANDA"),
+      P(38, 485, "Autorizo o início."),
+      P(300, 500, "Assinado de forma digital"),
+      P(240, 493, "BELTRANO:22222222222"),
+      P(300, 490, "Dados: 2026.01.03"),
+      P(300, 483, "11:00:00 -03'00'"),
+    ];
+    const textos = removerAparenciaAssinatura(items).map((i) => i.str);
+    for (const t of ["9 - SECRETÁRIO DEMANDANTE", "10 - AUTORIZAÇÃO DEMANDA", "Autorizo o início."])
+      assert.ok(textos.includes(t), `manter: ${t}`);
+    for (const t of ["FULANO:11111111111", "BELTRANO:22222222222", "Dados: 2026.01.02", "Dados: 2026.01.03"])
+      assert.ok(!textos.includes(t), `remover: ${t}`);
+    assert.ok(!textos.includes("Assinado de forma digital"), "ambos os blocos removidos");
+  });
 });

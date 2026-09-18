@@ -243,9 +243,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
   - **A aparência Adobe FLATTEN vaza para o texto das seções** (fica no `getTextContent`, ao contrário do Dropsigner) →
     **`removerAparenciaAssinatura(items)`** a retira ANTES de reconstruir as linhas, **por GEOMETRIA** (acha as âncoras da
-    aparência e, na faixa `y` delas, remove os trechos à DIREITA do vão que separa a coluna do TEXTO DA SEÇÃO, à esquerda,
-    da coluna da APARÊNCIA, à direita). **Não usa o NOME** (para nunca apagar um nome DIGITADO legítimo numa seção) e só
-    age quando há âncora (zero efeito nos demais DFDs). Independe de ONDE a assinatura esteja. Validado no DFD 1483 real:
+    aparência, computa o CORTE `x` entre a coluna do TEXTO DA SEÇÃO — à esquerda, na margem — e a da APARÊNCIA — à direita —
+    e, na coluna direita, remove só o **CLUSTER CONTÍGUO em `y`** que contém as âncoras (vãos ≤ 11pt); assim uma **legenda
+    logo abaixo** — ex.: "ORDENADOR", separada por um respiro — é PRESERVADA). **Não usa o NOME** (para nunca apagar um nome
+    DIGITADO legítimo numa seção); só age com separação clara margem×âncora (`≥60pt`, erra para PRESERVAR) e quando há âncora
+    (zero efeito nos demais DFDs). Independe de ONDE a assinatura esteja. Validado no DFD 1483 real:
     §9 = "Autorizo o início da formalização da demanda. ORDENADOR" (sem o bloco da assinatura).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As

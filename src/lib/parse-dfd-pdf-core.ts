@@ -234,19 +234,24 @@ export function assinaturasAdobeDeTexto(textos: string | string[]): Assinatura[]
 // contrário do Dropsigner, que fica só no render). Usados só para LOCALIZAR a região e removê-la.
 const RE_APARENCIA_SIG = [
   /assinado\s+de\s+forma\s+digital/i,
-  /\bdados\s*:\s*\d{4}\.\d{2}\.\d{2}/i,
+  /\b(?:dados|data)\s*:\s*\d{4}\.\d{2}\.\d{2}/i,
   /\d{1,2}:\d{2}:\d{2}\s*[-+]\d{2}'\d{2}'/,
 ];
+// Vão máximo (pt) entre trechos CONTÍGUOS da mesma aparência. Maior que a entrelinha do bloco
+// (~7pt), menor que o respiro até a legenda de cargo/nome que fica ABAIXO da linha de assinatura.
+const GAP_APARENCIA = 11;
 
 /**
  * Remove a APARÊNCIA de assinatura (bloco Adobe FLATTEN) dos trechos, para NÃO vazar no texto das
  * seções do DFD (a Seção 9/10 vinha poluída com "Assinado de forma digital por NOME:CPF Dados: …").
  * A assinatura em si é extraída à parte (texto renderizado), então removê-la daqui não perde nada.
  * **CIRÚRGICO por GEOMETRIA, não por nome** — para nunca apagar um nome DIGITADO legítimo numa seção:
- * acha as âncoras da aparência (marcadores inequívocos) e, na FAIXA Y de cada âncora, remove os
- * trechos à DIREITA do corte que separa a coluna do TEXTO DA SEÇÃO (à esquerda, na margem) da coluna
- * da APARÊNCIA (à direita). Sem âncora ⇒ trechos inalterados (nenhum DFD sem Adobe-flatten é afetado).
- * Independe de ONDE a assinatura esteja (usa a própria posição das âncoras). Puro/testável.
+ *  1) acha as âncoras da aparência (marcadores inequívocos) e o CORTE `x` que separa a coluna do
+ *     TEXTO DA SEÇÃO (à esquerda, na margem) da coluna da APARÊNCIA (à direita);
+ *  2) na coluna direita, remove só o CLUSTER CONTÍGUO em `y` que contém as âncoras (vãos ≤ `GAP`) —
+ *     assim uma legenda (ex.: "ORDENADOR") logo ABAIXO da aparência, separada por um respiro, é
+ *     PRESERVADA. Sem âncora ⇒ trechos inalterados (nenhum DFD sem Adobe-flatten é afetado). Só age
+ *     quando há separação clara margem×âncora (`≥ 60pt`). Independe de ONDE a assinatura esteja. Puro.
  */
 export function removerAparenciaAssinatura(items: PdfItem[]): PdfItem[] {
   const anchors = items.filter((i) => RE_APARENCIA_SIG.some((re) => re.test(i.str)));
@@ -261,24 +266,25 @@ export function removerAparenciaAssinatura(items: PdfItem[]): PdfItem[] {
   for (const [page, ancs] of porPagina) {
     const doPage = items.filter((i) => i.page === page);
     const margemEsq = Math.min(...doPage.map((i) => i.x)); // margem esquerda do texto da página
-    // Agrupa âncoras por proximidade em `y` (uma aparência é um bloco contíguo; pode haver várias).
-    const ys = [...new Set(ancs.map((a) => a.y))].sort((p, q) => q - p);
-    const clusters: number[][] = [];
-    for (const y of ys) {
-      const c = clusters[clusters.length - 1];
-      if (c && Math.abs(c[c.length - 1] - y) <= 40) c.push(y);
-      else clusters.push([y]);
+    const ancoraMinX = Math.min(...ancs.map((a) => a.x));
+    // Só remove se houver separação clara entre a margem (seção) e a âncora (aparência) — senão
+    // deixa como está (erra para PRESERVAR o texto, nunca corromper).
+    if (ancoraMinX - margemEsq < 60) continue;
+    const corte = (margemEsq + ancoraMinX) / 2;
+    const anchorYs = new Set(ancs.map((a) => a.y));
+    // Coluna DIREITA (aparência), do topo para a base. Fatia em clusters contíguos (vão ≤ GAP);
+    // remove só os clusters que contêm uma âncora (o bloco da assinatura), preservando o resto.
+    const direita = doPage.filter((i) => i.x >= corte).sort((p, q) => q.y - p.y);
+    let run: PdfItem[] = [];
+    const fechar = () => {
+      if (run.some((i) => anchorYs.has(i.y))) for (const i of run) remover.add(i);
+      run = [];
+    };
+    for (const i of direita) {
+      if (run.length > 0 && run[run.length - 1].y - i.y > GAP_APARENCIA) fechar();
+      run.push(i);
     }
-    for (const c of clusters) {
-      const yLo = Math.min(...c) - 14;
-      const yHi = Math.max(...c) + 14;
-      const banda = doPage.filter((i) => i.y >= yLo && i.y <= yHi);
-      const ancoraMinX = Math.min(...ancs.filter((a) => a.y >= yLo && a.y <= yHi).map((a) => a.x));
-      // Só remove se houver separação clara entre a margem (seção) e a âncora (aparência).
-      if (ancoraMinX - margemEsq < 60) continue;
-      const corte = (margemEsq + ancoraMinX) / 2;
-      for (const i of banda) if (i.x >= corte) remover.add(i);
-    }
+    fechar();
   }
   return remover.size === 0 ? items : items.filter((i) => !remover.has(i));
 }

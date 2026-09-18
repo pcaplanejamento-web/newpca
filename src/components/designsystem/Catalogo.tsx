@@ -438,8 +438,9 @@ const DFD_DEMO = {
         fonte: "dropsigner" as const,
       },
       {
-        // Formato D — Adobe/ICP-Brasil (PAdES): card VERMELHO-E-BRANCO + chip "Adobe" sólido, sem
-        // código público (validação no ITI). O CPF vem mascarado do CN do certificado.
+        // Formato D — Adobe (PAdES): card VERMELHO-E-BRANCO + chip "Adobe" sólido, sem código público
+        // e sem link a validador gov (só lemos a aparência; valida-se o PDF assinado original). CPF
+        // mascarado do CN.
         nome: "RHAFAEL PEREIRA BARROS",
         eCpf: "***.516.261-**",
         usuario: "",
