@@ -213,7 +213,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
-  **TRÊS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
+  **QUATRO formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
   (Dropsigner/Lacuna Software): o bloco visível é, na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura**
   (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
@@ -229,6 +229,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **No PROTOCOLO** as A/B ficam em páginas separadas (índice `dfd.assinaturas`) e a Dropsigner nas páginas do DFD →
   **`parseDfdDoProtocolo` COMBINA os dois** (não sobrescreve). Validado no Protocolo 4.pdf real (86 DFDs; ex.: DFD 1243 →
   PEDRO … pelo bloco EN; DFD 1206 → EVERALDO Dropsigner, e a assinatura de sistema ESDRAS do anexo NÃO é atribuída).
+  **Formato D — `adobe` (Adobe/ICP-Brasil, PAdES):** aparência INLINE do widget de assinatura no TEXTO RENDERIZADO
+  ("Assinado de forma digital por NOME:CPF  Dados: AAAA.MM.DD HH:MM:SS -03'00'"), lida por
+  **`assinaturasAdobeDeTexto(textos)`**. **Identificação CIRÚRGICA por DOIS selos ao mesmo tempo** (evita falso positivo e
+  falso negativo): o marcador EXCLUSIVO "Assinado de forma digital por" (o Dropsigner usa "digitalmente por:"; A/B usam
+  "Assinatura digital - Nome:") **e** a data no formato ISO do Adobe **`AAAA.MM.DD`** (o Dropsigner/A/B usam `dd/mm/aaaa`)
+  — prosa nunca casa os dois juntos. Extrai o NOME separando o **CPF (11 díg.) colado no CN** e o **mascara**
+  (`***.XXX.XXX-**`), e normaliza a data para `dd/mm/aaaa … -03:00`. NÃO tem código/URL público (o pdf.js **não** expõe o
+  certificado nos metadados — `getFieldObjects`=null; a aparência Adobe às vezes vem "flatten", sem widget `/Sig`); a prova
+  é o certificado ICP-Brasil, validado no **ITI** (`validar.iti.gov.br`). Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do
@@ -242,16 +251,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
   cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
-  autorizado → bloqueia. **A Dropsigner segue a MESMA lógica dos demais formatos** — muda só a cor/rótulo (visual):
-  o match por nome vale para TODOS (certificado/sistema/dropsigner); uma Dropsigner cujo assinante casa um responsável
+  autorizado → bloqueia. **Dropsigner e Adobe seguem a MESMA lógica dos demais formatos** — muda só a cor/rótulo (visual):
+  o match por nome vale para TODOS (certificado/sistema/dropsigner/adobe); uma assinatura cujo assinante casa um responsável
   → `ok` (com `solicitante`); não casa → `erro` (bloqueia como A/B). **Exceção estreita:** a Dropsigner "só carimbo"
   (marca d'água sem bloco visível → `nome` vazio) é reconhecida SEM match → status **`"dropsigner"`** (não bloqueia;
   verificável pela URL). O servidor reconfere no `POST /api/dfd` (`start-dfd`) e no `PATCH /api/dfd/[id]` (ao trocar
   a repartição, com a exceção por tipo `dfd.assinatura`), carregando os responsáveis por `carregarResponsaveis`
   (`src/lib/reparticoes.ts`; assinatura única → responsáveis do ÓRGÃO). O `DfdView` exibe a seção "Assinaturas Digitais"
   (assinante, CPF, usuário, data, código): o card da assinatura **PADRÃO** (certificado/sistema) vem em **VERDE**
-  (`--ok`, `Badge` "Certificado") e o da **Dropsigner** em **AZUL** (`--info`, `Badge` "Dropsigner", "Verificar
-  autenticidade" → `a.url = dropsigner.com/validate/<código>`) — + o **solicitante** — o
+  (`--ok`, `Badge` "Certificado"), o da **Dropsigner** em **AZUL** (`--info`, `Badge` "Dropsigner", "Verificar
+  autenticidade" → `a.url = dropsigner.com/validate/<código>`) e o da **Adobe/ICP-Brasil** em **VERMELHO-E-BRANCO**
+  (marca Adobe: `--danger` no contorno + fundo quase branco, `Badge tone="red" solid` com "Adobe" em branco; "Verificar
+  autenticidade (ICP-Brasil)" → `validar.iti.gov.br`; sem código) — + o **solicitante** — o
   responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).

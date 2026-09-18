@@ -75,24 +75,31 @@ export function Badge({
   children,
   tone = "slate",
   dot = false,
+  solid = false,
   className = "",
 }: {
   children: ReactNode;
   tone?: Tone;
   dot?: boolean;
+  /** `solid` = pílula PREENCHIDA (fundo no tom, texto branco) — p/ chips de MARCA (ex.: Adobe). */
+  solid?: boolean;
   className?: string;
 }) {
   const c = TONE_VAR[tone];
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
-      style={{
+  // `#fff` aqui é o texto de CONTRASTE sobre um chip colorido sólido (não uma cor neutra de layout).
+  const style = solid
+    ? { color: "#fff", background: c, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 55%, #000)` }
+    : {
         color: c,
         background: `color-mix(in srgb, ${c} 14%, var(--surface))`,
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 28%, transparent)`,
-      }}
+      };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
+      style={style}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />}
+      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: solid ? "#fff" : c }} />}
       {children}
     </span>
   );

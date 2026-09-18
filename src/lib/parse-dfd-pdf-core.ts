@@ -166,6 +166,69 @@ export function assinaturasDropsignerDeTexto(textos: string | string[]): Assinat
   return out;
 }
 
+// Bloco de assinatura ADOBE / ICP-Brasil (PAdES) no TEXTO RENDERIZADO: "Assinado de forma digital
+// por NOME:CPF  Dados: AAAA.MM.DD HH:MM:SS -03'00'". NÃO tem marca d'água/URL nem código público — a
+// prova é o certificado ICP-Brasil embutido (validação oficial no ITI).
+// **IDENTIFICAÇÃO CIRÚRGICA (dois selos ao mesmo tempo, para casar SÓ o carimbo Adobe e nunca prosa):**
+//  1) o marcador EXCLUSIVO "Assinado de forma digital por" (o Dropsigner usa "digitalmente por:"; os
+//     formatos A/B usam "Assinatura digital - Nome:"/"portador do CPF:"), e
+//  2) a data no formato ISO do Adobe **AAAA.MM.DD** logo após `Dados:`/`Data:` (o Dropsigner/A/B usam
+//     `dd/mm/aaaa`) — nenhum texto de seção casa os dois juntos.
+// O nome é limitado a 160 chars (evita casar até um `Dados:` distante). Grupos: 1 nome (CPF colado no
+// CN), 2 data crua (AAAA.MM.DD [hh:mm:ss] [-03'00']).
+const RE_ADOBE_BLOCO =
+  /Assinado\s+de\s+forma\s+digital\s+por\s+(.{1,160}?)\s+(?:Dados|Data):\s*(\d{4}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2}:\d{2})?(?:\s*[-+]\d{2}'\d{2}')?)/gi;
+
+/** Normaliza a data Adobe "AAAA.MM.DD HH:MM:SS -03'00'" → "DD/MM/AAAA HH:MM:SS -03:00" (consistente
+ * com os demais formatos e com `dataAssinaturaISO`). */
+function normalizarDataAdobe(data: string): string {
+  const m = data.match(/^(\d{4})\.(\d{2})\.(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?\s*(?:([-+]\d{2})'(\d{2})')?/);
+  if (!m) return data;
+  let out = `${m[3]}/${m[2]}/${m[1]}`;
+  if (m[4]) out += ` ${m[4]}`;
+  if (m[5] && m[6]) out += ` ${m[5]}:${m[6]}`;
+  return out;
+}
+
+/** Máscara de CPF (11 dígitos) → `***.XXX.XXX-**` (mantém só os 6 do meio, como os demais formatos). */
+function mascararCpf(digitos: string): string {
+  const d = digitos.replace(/\D/g, "");
+  return d.length === 11 ? `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**` : digitos;
+}
+
+/**
+ * Formato D — assinatura **Adobe / ICP-Brasil** (PAdES), do TEXTO RENDERIZADO por página. A aparência
+ * (widget de assinatura) traz "Assinado de forma digital por NOME:CPF  Dados: AAAA.MM.DD …". Não há
+ * marca d'água nem código verificador público (o pdf.js também não expõe o certificado nos metadados);
+ * a prova é o certificado ICP-Brasil no PDF (validação oficial no ITI). Extrai o NOME (separando o CPF
+ * colado no CN, e mascarando-o) + a DATA (normalizada). Dedup por nome+data. Puro/testável.
+ */
+export function assinaturasAdobeDeTexto(textos: string | string[]): Assinatura[] {
+  const paginas = Array.isArray(textos) ? textos : [textos];
+  const out: Assinatura[] = [];
+  const vistos = new Set<string>();
+  for (const texto of paginas) {
+    RE_ADOBE_BLOCO.lastIndex = 0;
+    let m: RegExpExecArray | null = RE_ADOBE_BLOCO.exec(texto);
+    while (m !== null) {
+      const bruto = m[1].trim();
+      const data = normalizarDataAdobe(m[2].trim());
+      // O CN do ICP-Brasil vem "NOME:CPF" — separa o CPF (11 dígitos) do nome. Sem end-anchor: se
+      // vier um DN depois ("NOME:CPF DN: cn=…, o=ICP-Brasil"), fica só o nome (descarta o DN).
+      const cpfM = bruto.match(/^(.+?):(\d{11})(?:\D|$)/);
+      const nome = (cpfM ? cpfM[1] : bruto).trim();
+      const eCpf = cpfM ? mascararCpf(cpfM[2]) : "";
+      const chave = `${norm(nome)}|${data}`;
+      if (!vistos.has(chave)) {
+        vistos.add(chave);
+        out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "adobe" });
+      }
+      m = RE_ADOBE_BLOCO.exec(texto);
+    }
+  }
+  return out;
+}
+
 /**
  * Índice do valor mais próximo de `target` num array **ordenado por `y` DESC**
  * (`ys`), via busca binária — O(log n). Empate = menor índice (maior `y`), igual
@@ -571,8 +634,12 @@ export function parseDfdFromPdfItems(
     nomeArquivo,
     secoes,
     itens,
-    // Formatos A/B (páginas de assinatura, texto normal) + Formato C Dropsigner (do texto
-    // RENDERIZADO por página, que inclui a aparência das anotações — vazio ⇒ sem Dropsigner).
-    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsignerDeTexto(textosRender)],
+    // Formatos A/B (páginas de assinatura, texto normal) + C Dropsigner + D Adobe/ICP-Brasil (ambos
+    // do texto RENDERIZADO por página, que inclui a aparência das anotações de assinatura).
+    assinaturas: [
+      ...extrairAssinaturas(lineTexts),
+      ...assinaturasDropsignerDeTexto(textosRender),
+      ...assinaturasAdobeDeTexto(textosRender),
+    ],
   };
 }

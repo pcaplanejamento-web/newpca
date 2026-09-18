@@ -63,6 +63,17 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
   só o MÊS ("FEVEREIRO") tem o ano completado com o do PCA (o usuário ainda pode editar; um ano explícito no texto
   prevalece).
 
+### Assinatura digital: Formato D — Adobe / ICP-Brasil (PAdES) — entregue
+✅ 4º formato de assinatura, o **Adobe/ICP-Brasil**: a aparência inline "Assinado de forma digital por NOME:CPF  Dados:
+AAAA.MM.DD … -03'00'" é lida do texto renderizado por `assinaturasAdobeDeTexto`. **Identificação cirúrgica e segura** por
+DOIS selos juntos — o marcador exclusivo "Assinado de forma digital por" **e** a data ISO do Adobe `AAAA.MM.DD` (distinta
+do `dd/mm/aaaa` dos outros) — então prosa/decoy nunca casa. Extrai o nome separando o **CPF (11 díg.) do CN** (mascarado)
+e normaliza a data. Segue a **MESMA lógica de conferência** (match por nome → responsável) e usa o **mesmo card**, em
+**vermelho-e-branco com o selo "Adobe"** (`Badge tone="red" solid`); validação oficial no ITI (`validar.iti.gov.br`).
+Testou-se que o **pdf.js NÃO expõe** a assinatura nos metadados (`getFieldObjects`=null; a aparência Adobe vem "flatten",
+sem widget `/Sig`) → o texto renderizado é a via confiável. Corrige o DFD 1483 real (RHAFAEL PEREIRA BARROS), que ficava
+"Com erro" por falta de assinatura reconhecida.
+
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
 ✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …
 `dropsigner.com/validate/<código>`" (em TODA página) é a **prova universal** — todo código presente vira uma

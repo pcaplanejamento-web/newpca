@@ -21,6 +21,11 @@ function mkDrop(nome: string, data = "02/09/2026 09:58:56 -03:00", codigo = "T3B
   return { nome, eCpf: "***.997.391-**", usuario: "", local: "", data, ip: "", codigo, url: `https://www.dropsigner.com/validate/${codigo}`, fonte: "dropsigner" };
 }
 
+// Formato D — Adobe/ICP-Brasil (sem código/URL público; a prova é o certificado ICP-Brasil).
+function mkAdobe(nome: string, data = "01/09/2026 14:58:52 -03:00"): Assinatura {
+  return { nome, eCpf: "***.516.261-**", usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "adobe" };
+}
+
 const padrao = (nome: string): Responsaveis => ({ padroes: [novoResponsavel(nome)], temporarios: [] });
 
 function comTemporario(nome: string, inicio: string, fim: string): Responsaveis {
@@ -151,5 +156,19 @@ describe("validarAssinatura — Formato C Dropsigner (mesma lógica da assinatur
   it("A/B que NÃO casa e SEM Dropsigner → erro (não autorizado — inalterado)", () => {
     const r = validarAssinatura([mkAss("FULANO QUALQUER")], padrao("ISAAC PIRES CABRAL"), { exigeAssinatura: true });
     assert.equal(r.status, "erro");
+  });
+});
+
+describe("validarAssinatura — Formato D Adobe/ICP-Brasil (mesma lógica da assinatura normal)", () => {
+  it("Adobe que CASA o responsável (por nome) → ok, com solicitante (igual aos demais)", () => {
+    const r = validarAssinatura([mkAdobe("RHAFAEL PEREIRA BARROS")], padrao("RHAFAEL PEREIRA BARROS"), { exigeAssinatura: true });
+    assert.equal(r.status, "ok");
+    assert.ok(solicitanteDeResultado(r));
+    assert.equal(bloqueiaAssinatura(r), false);
+  });
+  it("Adobe que NÃO casa nenhum responsável → erro (não autorizado)", () => {
+    const r = validarAssinatura([mkAdobe("FULANO QUALQUER")], padrao("RHAFAEL PEREIRA BARROS"), { exigeAssinatura: true });
+    assert.equal(r.status, "erro");
+    assert.equal(bloqueiaAssinatura(r), true);
   });
 });

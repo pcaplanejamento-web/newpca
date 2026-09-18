@@ -80,7 +80,7 @@ export function referenciasRenovacao(texto: string | null | undefined): {
 }
 
 /**
- * Uma assinatura lida do PDF do DFD. Três formatos:
+ * Uma assinatura lida do PDF do DFD. QUATRO formatos:
  * - **certificado**: "Assinaturas Digitais (Certificado Digital)" → "Assinatura
  *   digital - Nome: … e-Assinatura: <código>";
  * - **sistema**: "Assinaturas Eletrônicas (Sistema)" → "Assinado digitalmente por
@@ -89,6 +89,9 @@ export function referenciasRenovacao(texto: string | null | undefined): {
  *   uma ANOTAÇÃO de assinatura (widget `Sig`), extraída do TEXTO RENDERIZADO (`getOperatorList`)
  *   por `assinaturasDropsignerDeTexto` (`parse-dfd-pdf-core.ts`); o `getTextContent` NÃO a traz.
  *   O código vem na URL `dropsigner.com/validate/<código>` (marca d'água). `url` = link de validação.
+ * - **adobe**: Adobe/ICP-Brasil (PAdES) — aparência INLINE "Assinado de forma digital por NOME:CPF
+ *   Dados: AAAA.MM.DD …", lida do texto renderizado por `assinaturasAdobeDeTexto`. Sem `codigo`/`url`
+ *   público (a prova é o certificado ICP-Brasil; validação no ITI).
  * O `codigo` é o verificador usado no site oficial; `data` é crua; `ip`/`usuario`/
  * `local` podem vir vazios (o formato "sistema" não os traz). Pode haver mais de
  * uma assinatura por página e em páginas diferentes, sempre após o DFD.
@@ -102,7 +105,7 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
-  fonte: "certificado" | "sistema" | "dropsigner";
+  fonte: "certificado" | "sistema" | "dropsigner" | "adobe";
 };
 
 export type DfdParseado = {
@@ -197,6 +200,9 @@ export function ehRuido(s: string): boolean {
     n.startsWith("ASSINATURAS DIGITAIS") ||
     n.startsWith("ASSINATURAS ELETRONICAS") ||
     n.startsWith("ASSINADO DIGITALMENTE") ||
+    // Aparência da assinatura Adobe/ICP-Brasil ("Assinado de forma digital por …") — capturada por
+    // `assinaturasAdobeDeTexto`; não deve vazar para o texto das seções.
+    n.includes("ASSINADO DE FORMA DIGITAL") ||
     n.includes("E-ASSINATURA") ||
     n.includes("UTILIZANDO O CODIGO") ||
     n.includes("AUTENTICACAORELATORIOS") ||

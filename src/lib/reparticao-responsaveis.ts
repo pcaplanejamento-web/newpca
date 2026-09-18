@@ -254,11 +254,12 @@ export type ResultadoAssinatura =
   | { status: "erro"; motivo: string };
 
 /**
- * Confere as assinaturas do DFD contra os responsáveis da repartição. A **Dropsigner** entra na
- * MESMA lógica dos demais formatos (match por nome) — muda só a cor/rótulo (visual, por `fonte`):
+ * Confere as assinaturas do DFD contra os responsáveis da repartição. **Dropsigner** e **Adobe/
+ * ICP-Brasil** entram na MESMA lógica dos demais formatos (match por nome) — muda só a cor/rótulo
+ * (visual, por `fonte`):
  * - sem assinatura → `erro` se PDF (exigeAssinatura), senão `sem-assinatura` (.xlsx);
- * - vale (→ `ok`) se AO MENOS UMA assinatura (certificado/sistema/dropsigner) casar (nome) com um
- *   **padrão**, ou com um **temporário** cujo período cobre a data;
+ * - vale (→ `ok`) se AO MENOS UMA assinatura (certificado/sistema/dropsigner/adobe) casar (nome) com
+ *   um **padrão**, ou com um **temporário** cujo período cobre a data;
  * - com assinatura mas sem responsável cadastrado → `erro`; assinante não autorizado → `erro`;
  * - **exceção estreita:** a Dropsigner "só carimbo" (marca d'água sem bloco visível → nome vazio)
  *   é reconhecida SEM match (verificável pela URL) → `dropsigner` (não bloqueia).

@@ -24,6 +24,8 @@ import { StatMini } from "./StatMini";
 
 /** URL oficial de verificação da assinatura digital (site da Prefeitura). */
 const URL_VERIFICACAO = "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios";
+/** Validador oficial de assinaturas ICP-Brasil (Adobe/PAdES) — ITI. */
+const URL_VALIDAR_ICP = "https://validar.iti.gov.br/";
 
 /** Rótulo do tipo de ato (Portaria/Decreto/Lei). */
 function rotuloAto(n: Nomeacao): string {
@@ -436,41 +438,55 @@ export function DfdView({
 
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => {
-              // Assinatura PADRÃO (certificado/sistema) em VERDE (--ok); Dropsigner em AZUL (--info).
+              // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe/ICP-Brasil →
+              // VERMELHO (marca Adobe: card vermelho-e-branco + chip "Adobe" sólido).
               const drop = a.fonte === "dropsigner";
-              const cor = drop ? "var(--info)" : "var(--ok)";
+              const adobe = a.fonte === "adobe";
+              const cor = adobe ? "var(--danger)" : drop ? "var(--info)" : "var(--ok)";
+              const rotulo = adobe
+                ? "Assinatura Digital (Adobe / ICP-Brasil)"
+                : drop
+                  ? "Assinatura Dropsigner"
+                  : a.fonte === "sistema"
+                    ? "Assinatura Eletrônica (Sistema)"
+                    : "Assinatura Digital (Certificado Digital)";
               return (
                 <div
                   key={`${a.codigo}-${i}`}
                   className="rounded-card border p-4"
-                  style={{ borderColor: cor, background: `color-mix(in srgb, ${cor} 7%, var(--surface))` }}
+                  style={{ borderColor: cor, background: `color-mix(in srgb, ${cor} ${adobe ? 4 : 7}%, var(--surface))` }}
                 >
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
-                    <span style={{ color: cor }}>
-                      {drop
-                        ? "Assinatura Dropsigner"
-                        : a.fonte === "sistema"
-                          ? "Assinatura Eletrônica (Sistema)"
-                          : "Assinatura Digital (Certificado Digital)"}
-                    </span>
-                    <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
+                    <span style={{ color: cor }}>{rotulo}</span>
+                    {adobe ? (
+                      <Badge tone="red" solid>
+                        Adobe
+                      </Badge>
+                    ) : (
+                      <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
+                    )}
                   </div>
                   <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     <Campo label="Assinante" valor={a.nome || "—"} span />
                     <Campo label="CPF" valor={a.eCpf || "—"} />
-                    {!drop && <Campo label="Usuário" valor={a.usuario || "—"} />}
+                    {!drop && !adobe && <Campo label="Usuário" valor={a.usuario || "—"} />}
                     <Campo label="Data/hora da assinatura" valor={a.data || "—"} />
-                    <Campo label="Código verificador" valor={a.codigo || "—"} mono />
+                    {!adobe && <Campo label="Código verificador" valor={a.codigo || "—"} mono />}
                   </dl>
                   <div className="mt-3">
                     <LinkExterno
-                      href={drop && a.url ? a.url : URL_VERIFICACAO}
+                      href={adobe ? URL_VALIDAR_ICP : drop && a.url ? a.url : URL_VERIFICACAO}
                       icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
                     >
-                      Verificar autenticidade{drop ? " (Dropsigner)" : ""}
+                      Verificar autenticidade{adobe ? " (ICP-Brasil)" : drop ? " (Dropsigner)" : ""}
                     </LinkExterno>
                     <p className="mt-1.5 text-xs text-muted">
-                      {drop ? (
+                      {adobe ? (
+                        <>
+                          Assinatura ICP-Brasil (Adobe) — valide o PDF assinado em{" "}
+                          <span className="font-mono">validar.iti.gov.br</span>.
+                        </>
+                      ) : drop ? (
                         <>
                           Validação oficial no Dropsigner (Lacuna) pelo código{" "}
                           <span className="font-mono">{a.codigo || "—"}</span>.

@@ -128,7 +128,9 @@ export function parseAssinaturas(json: string | null): Assinatura[] {
             ? ("sistema" as const)
             : a.fonte === "dropsigner"
               ? ("dropsigner" as const)
-              : ("certificado" as const),
+              : a.fonte === "adobe"
+                ? ("adobe" as const)
+                : ("certificado" as const),
       }));
   } catch {
     return [];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
-import { assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
+import { assinaturasAdobeDeTexto, assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
 // coordenadas reais de DFD PDF.pdf: rótulo e valor em trechos separados, número
@@ -483,5 +483,45 @@ describe("assinaturasDropsignerDeTexto (Formato C — texto renderizado)", () =>
     assert.equal(ass.length, 1);
     assert.equal(ass[0].nome, "EVERALDO LEITE RIBEIRO");
     assert.equal(ass[0].codigo, "AAAAA-11111-22222-33333"); // 1ª página (o DFD); o anexo é descartado
+  });
+});
+
+// Formato D — assinatura Adobe / ICP-Brasil (PAdES) do TEXTO RENDERIZADO. Fixture modelada no render
+// real do Protocolo 4 (DFD 1483): "Assinado de forma digital por NOME:CPF Dados: AAAA.MM.DD ... -03'00'".
+describe("assinaturasAdobeDeTexto (Formato D — Adobe/ICP-Brasil)", () => {
+  it("extrai nome (separando o CPF do CN, mascarado) e a data normalizada", () => {
+    const texto =
+      "RHAFAEL PEREIRA BARROS:0185162 6140 " +
+      "Assinado de forma digital por RHAFAEL PEREIRA BARROS:01851626140 Dados: 2026.09.01 14:58:52 -03'00'";
+    const ass = assinaturasAdobeDeTexto(texto);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "RHAFAEL PEREIRA BARROS");
+    assert.equal(ass[0].eCpf, "***.516.261-**"); // CPF do CN, mascarado como os demais formatos
+    assert.equal(ass[0].data, "01/09/2026 14:58:52 -03:00"); // AAAA.MM.DD -03'00' → dd/mm/aaaa -03:00
+    assert.equal(ass[0].fonte, "adobe");
+    assert.equal(ass[0].codigo, ""); // Adobe não tem código público
+    assert.equal(ass[0].url, "");
+  });
+  it("dedup por nome+data (aparência repetida)", () => {
+    const t =
+      "Assinado de forma digital por FULANO:12345678901 Dados: 2026.01.02 08:00:00 -03'00' " +
+      "Assinado de forma digital por FULANO:12345678901 Dados: 2026.01.02 08:00:00 -03'00'";
+    assert.equal(assinaturasAdobeDeTexto(t).length, 1);
+  });
+  it("CN sem CPF → nome inteiro, CPF vazio; data sem hora", () => {
+    const ass = assinaturasAdobeDeTexto("Assinado de forma digital por MARIA DA SILVA Dados: 2026.03.04");
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "MARIA DA SILVA");
+    assert.equal(ass[0].eCpf, "");
+    assert.equal(ass[0].data, "04/03/2026");
+  });
+  it("NÃO casa Dropsigner nem A/B (marcadores distintos) → []", () => {
+    assert.deepEqual(assinaturasAdobeDeTexto("Assinado digitalmente por: FULANO CPF: ***.1-** Data: 01/01/2026"), []);
+    assert.deepEqual(assinaturasAdobeDeTexto("Assinatura digital - Nome: FULANO e-CPF: 1"), []);
+  });
+  it("PRECISÃO: prosa com 'assinado de forma digital' SEM a data ISO do Adobe → [] (não confunde)", () => {
+    // Só casa com os DOIS selos juntos (marcador + data AAAA.MM.DD). Prosa e datas dd/mm/aaaa não casam.
+    assert.deepEqual(assinaturasAdobeDeTexto("O documento foi assinado de forma digital por todos os responsáveis em 2026."), []);
+    assert.deepEqual(assinaturasAdobeDeTexto("Assinado de forma digital por FULANO Data: 01/09/2026 14:00:00"), []); // dd/mm/aaaa ≠ Adobe
   });
 });
