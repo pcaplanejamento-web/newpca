@@ -272,6 +272,15 @@ export function ProtocoloUploadForm({
         const { dfd, auto } = normalizarSecoesDfd(raw, regras);
         setParsed((m) => new Map(m).set(i, dfd));
         if (auto.length) setAutoMap((m) => new Map(m).set(i, auto));
+        // Refina a UNIDADE com as assinaturas do PARSE COMPLETO — que inclui a **Dropsigner**
+        // (o índice só tem A/B, então DFD só-Dropsigner ficava sem previsão). A lógica é a MESMA
+        // p/ todas as assinaturas (`preverUnidadeDoDfd`). Só PREENCHE quando ainda está sem unidade
+        // (não sobrescreve previsão do índice nem escolha manual do usuário).
+        const refino = preverUnidadeDoDfd(dfd, orgaos, reparticoes);
+        if (refino != null) {
+          setDfdRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
+          setAutoRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
+        }
       } catch (e) {
         // Leitura falhou (ex.: item sem número no PDF → tabela incompleta). Guarda o
         // motivo → estado "erro" com a mensagem (não fica "pendente" sem explicação).

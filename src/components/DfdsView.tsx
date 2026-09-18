@@ -29,7 +29,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { Historico } from "./Historico";
-import { IconAlert, IconClipboard, IconClock, IconFile, IconLayers, IconLock, IconLockOpen, IconTrash } from "./icons";
+import { IconAlert, IconClipboard, IconClock, IconFile, IconLayers, IconLock, IconLockOpen, IconRefresh, IconTrash } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
@@ -584,17 +584,29 @@ export function DfdsView({
 
   // Partes do banner do DFD gravado — reusadas no modal avulso E como LATERAL do
   // protocolo (mesmo componente/animação da importação; só muda onde é montado).
-  const dfdCadeado =
-    podeEditar && dfdView ? (
+  const dfdCadeado = dfdView ? (
+    <>
+      {/* Atualizar: recarrega o DFD (e seus itens) com os dados atuais do banco. */}
       <Button
         variant="icon"
-        aria-label={dfdTrancado ? "Destravar edição" : "Travar edição"}
-        title={dfdTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
-        onClick={() => (dfdTrancado ? destrancarDfd() : setDfdTrancado(true))}
+        aria-label="Atualizar"
+        title="Atualizar com os dados do banco"
+        onClick={() => dfdView && verDfd(dfdView.id)}
       >
-        {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+        <IconRefresh className="h-5 w-5" />
       </Button>
-    ) : undefined;
+      {podeEditar && (
+        <Button
+          variant="icon"
+          aria-label={dfdTrancado ? "Destravar edição" : "Travar edição"}
+          title={dfdTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
+          onClick={() => (dfdTrancado ? destrancarDfd() : setDfdTrancado(true))}
+        >
+          {dfdTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+        </Button>
+      )}
+    </>
+  ) : undefined;
   // Mensagens (erro/atenção/acerto) do DFD gravado — botão (rodapé) + painel lateral. A
   // categoria (para as exceções do ADM) vem do assunto do protocolo, quando aberto dentro de um.
   const repEditSel = reparticoes.find((r) => r.id === dfdRepEdit) ?? null;
@@ -780,15 +792,28 @@ export function DfdsView({
             : undefined
         }
         acoesCabecalho={
-          podeEditar && protoView ? (
-            <Button
-              variant="icon"
-              aria-label={protoTrancado ? "Destravar edição" : "Travar edição"}
-              title={protoTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
-              onClick={() => (protoTrancado ? destrancarProto() : setProtoTrancado(true))}
-            >
-              {protoTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
-            </Button>
+          protoView ? (
+            <>
+              {/* Atualizar: recarrega o protocolo (capa + lista de DFDs) com os dados do banco. */}
+              <Button
+                variant="icon"
+                aria-label="Atualizar"
+                title="Atualizar com os dados do banco"
+                onClick={() => protoView && verProtocolo(protoView.id)}
+              >
+                <IconRefresh className="h-5 w-5" />
+              </Button>
+              {podeEditar && (
+                <Button
+                  variant="icon"
+                  aria-label={protoTrancado ? "Destravar edição" : "Travar edição"}
+                  title={protoTrancado ? "Destravar para editar" : "Edição destravada — clique para travar"}
+                  onClick={() => (protoTrancado ? destrancarProto() : setProtoTrancado(true))}
+                >
+                  {protoTrancado ? <IconLock className="h-5 w-5" /> : <IconLockOpen className="h-5 w-5 text-accent" />}
+                </Button>
+              )}
+            </>
           ) : undefined
         }
         rodape={

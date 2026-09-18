@@ -173,6 +173,7 @@ export function DfdView({
   conformidade,
   onItemClick,
   itemAtivo = null,
+  ocultarSecao1 = false,
 }: {
   dfd: DfdVisual;
   regras?: RegrasAvaliacao;
@@ -184,6 +185,9 @@ export function DfdView({
   onItemClick?: (idx: number) => void;
   /** Índice do item ATIVO (cujo detalhe está aberto ao lado) — destacado na tabela. */
   itemAtivo?: number | null;
+  /** Oculta a Seção 1 (só-leitura) quando o `DfdConferir` mostra a versão EDITÁVEL acima
+   * (evita duplicar a "Área requisitante da demanda"). */
+  ocultarSecao1?: boolean;
 }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
@@ -260,22 +264,25 @@ export function DfdView({
         />
       </div>
 
-      {/* Seção 1 — Área requisitante */}
-      <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="anoPca">
-        <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
-        <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-          <Campo label="Nº DFD" valor={dfd.numero} />
-          <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
-          <Campo label="Ano do PCA" valor={dfd.anoPca != null ? String(dfd.anoPca) : "—"} />
-          <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
-          <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
-          <Campo label="Unidade" valor={rep} span />
-          <Campo label="Responsável" valor={dfd.responsavel ?? "—"} />
-          <Campo label="Matrícula" valor={dfd.matricula ?? "—"} />
-          <Campo label="E-mail" valor={dfd.email ?? "—"} span />
-          <Campo label="Telefone" valor={dfd.telefone ?? "—"} />
-        </dl>
-      </section>
+      {/* Seção 1 — Área requisitante (só-leitura). Oculta quando o `DfdConferir` mostra a versão
+          EDITÁVEL acima (evita duplicar a seção). */}
+      {!ocultarSecao1 && (
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="anoPca">
+          <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
+          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+            <Campo label="Nº DFD" valor={dfd.numero} />
+            <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
+            <Campo label="Ano do PCA" valor={dfd.anoPca != null ? String(dfd.anoPca) : "—"} />
+            <Campo label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? "—"} span />
+            <Campo label="Setor Requisitante" valor={dfd.setorRequisitante ?? "—"} span />
+            <Campo label="Unidade" valor={rep} span />
+            <Campo label="Responsável" valor={dfd.responsavel ?? "—"} />
+            <Campo label="Matrícula" valor={dfd.matricula ?? "—"} />
+            <Campo label="E-mail" valor={dfd.email ?? "—"} span />
+            <Campo label="Telefone" valor={dfd.telefone ?? "—"} />
+          </dl>
+        </section>
+      )}
 
       {/* Referências da renovação (DFD-R): contrato/ata/licitação */}
       {ehRenovacao && (

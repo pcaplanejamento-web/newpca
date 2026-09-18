@@ -33,6 +33,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
   identificado (senão o DFD do órgão dual ficava sem unidade → erro). `orgao_proprio` threadado ao cliente.
 - **"1 · Área requisitante da demanda" editável** com cadeado por campo (bloco do `DfdConferir`, rótulo alinhado à
   Seção 1). Pequenas divergências cliente×servidor fechadas (`nomeArquivo` no `getDfd`; `dfdTipo` no PATCH da assinatura).
+- **Seção 1 TOTALMENTE editável (cadeado por campo):** o `DfdView` ganhou `ocultarSecao1?` e o `DfdConferir` passa
+  `ocultarSecao1={cabEditavel}` — com o cadeado aberto, a Seção 1 read-only some e entra o bloco editável (conteúdo
+  Órgão/Setor/Responsável/matrícula/e-mail/telefone via `onCamposChange`; identificadores Nº DFD/Planejamento/Ano do
+  PCA **travados**). Grava por `PATCH /api/dfd/[id]` → `atualizarDfdCampos`.
+- **Botão de ATUALIZAR ao lado do X** no banner gravado (protocolo/DFD): `IconRefresh` em `Modal.acoesCabecalho`
+  (antes do cadeado) rebusca os dados atuais do banco (`verProtocolo`/`verDfd`), descartando edições não salvas.
+- **Assinatura NORMAL e Dropsigner acham a unidade com a MESMA lógica:** o índice leve do protocolo só traz A/B (o
+  Dropsigner exige o texto renderizado por DFD), então o `ProtocoloUploadForm` **RE-PREVÊ a unidade** após o parse
+  completo de cada DFD (`preverUnidadeDoDfd` com as assinaturas Dropsigner incluídas), preenchendo só as unidades
+  ainda não definidas — sem sobrescrever escolha manual.
 
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
 ✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …

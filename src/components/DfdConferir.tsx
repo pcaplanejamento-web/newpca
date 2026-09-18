@@ -50,6 +50,8 @@ export type CamposCabecalhoDfd = Pick<
 >;
 /** Chave de cadeado por campo do cabeçalho editável. */
 type CampoCabK = keyof CamposCabecalhoDfd;
+/** No-op para campos só-leitura (identificadores) do bloco editável. */
+const naoOp = () => {};
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
 export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" };
@@ -351,6 +353,10 @@ export function DfdConferir({
             Destrave um campo para corrigir. Número, planejamento e tipo do DFD são imutáveis.
           </p>
           <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {/* Identificadores (só-leitura): mostrados aqui porque a Seção 1 só-leitura fica oculta ao editar. */}
+            <CampoTexto label="Nº DFD" valor={dfd.numero ?? ""} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+            <CampoTexto label="Planejamento" valor={dfd.planejamento ?? ""} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+            <CampoTexto label="Ano do PCA" valor={anoPca != null ? String(anoPca) : ""} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
             <CampoTexto label="Objeto" valor={dfd.objeto ?? ""} span multi {...propsCab("objeto")} onChange={(v) => onCamposChange?.({ objeto: v || null })} />
             <CampoTexto label="Órgão/Entidade" valor={dfd.orgaoEntidade ?? ""} span {...propsCab("orgaoEntidade")} onChange={(v) => onCamposChange?.({ orgaoEntidade: v || null })} />
             <CampoTexto label="Setor Requisitante" valor={dfd.setorRequisitante ?? ""} span {...propsCab("setorRequisitante")} onChange={(v) => onCamposChange?.({ setorRequisitante: v || null })} />
@@ -500,7 +506,7 @@ export function DfdConferir({
       {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} conformidade={conformidade} onItemClick={onItemClick} itemAtivo={itemAtivo} />
+        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} conformidade={conformidade} onItemClick={onItemClick} itemAtivo={itemAtivo} ocultarSecao1={cabEditavel} />
       </div>
     </div>
   );

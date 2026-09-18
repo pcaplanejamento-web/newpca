@@ -147,7 +147,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`preverUnidadeDoDfd`** (assinatura→setor); **ÓRGÃO-QUE-É-UNIDADE** (dual, `orgao_proprio`): quando o órgão
     identificado tem a unidade própria, ela é resolvida como a requisitante (senão o DFD do órgão dual ficava sem
     unidade → erro). `orgao_proprio` é threadado ao cliente (`dadosMatchPorReparticao` → `page.tsx` → forms →
-    `preverUnidadeDoDfd`/`ReparticaoMatch`). Sem previsão, a **unidade fica obrigatória** (`dfd.reparticao` fundamental —
+    `preverUnidadeDoDfd`/`ReparticaoMatch`). **A previsão por ASSINATURA usa TODAS as formas (certificado/sistema/
+    dropsigner) — mesma lógica** (`preverUnidadePorAssinatura` → `validarAssinatura`); como o ÍNDICE do protocolo só
+    traz A/B (o Dropsigner exige o texto renderizado), o `ProtocoloUploadForm` **RE-PREVÊ a unidade após o parse
+    completo** de cada DFD (que inclui a Dropsigner), preenchendo só as unidades ainda não definidas (não sobrescreve
+    escolha manual). Sem previsão, a **unidade fica obrigatória** (`dfd.reparticao` fundamental —
     erro até definir). O DFD **registra órgão + unidade** — o servidor deriva `dfds.orgao_id` da unidade em
     `upsertDfdCabecalho`. Ponto de avaliação CONFIGURÁVEL **`dfd.orgao`** ("Órgão identificado", padrão `intermediario`)
     avisa quando o Órgão/Entidade não casa nenhum órgão cadastrado (flag via `ctx`, avaliadores puros).
@@ -482,6 +486,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `atualizarProtocolo` — os identificadores de DFD/capa seguem imutáveis) e o
   `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
   toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
+  - **Botão de ATUALIZAR ao lado do X (banner de protocolo/DFD/itens):** o `Modal.acoesCabecalho` do banner gravado
+    (em `DfdsView`) traz, **antes do cadeado**, um botão **`IconRefresh`** que **rebusca os dados atuais do banco**
+    (re-chama `verProtocolo`/`verDfd` → `GET /api/protocolo|dfd/[id]`) — recarrega o banner com o que está gravado no
+    D1 (descartando edições não salvas), sem fechar. Aparece sempre que o banner está aberto (não depende do cadeado).
+  - **"1 · Área requisitante da demanda" TOTALMENTE editável (cadeado por campo):** quando o cadeado do DFD está
+    aberto, o bloco da Seção 1 vira editável com a **mesma lógica de cadeado por campo** dos itens/capa
+    (`CampoCadeado`). O `DfdView` ganhou `ocultarSecao1?` (guarda a Seção 1 read-only) e o `DfdConferir` passa
+    `ocultarSecao1={cabEditavel}` — quando editável, a Seção 1 read-only some e no lugar entra o bloco editável (os
+    **identificadores** Nº DFD/Planejamento/Ano do PCA seguem **travados**, `editavel={false}`; o conteúdo
+    Órgão/Setor/Responsável/matrícula/e-mail/telefone é editável e flui pelo `onCamposChange` → `atualizarDfdCampos`).
 - **DFD ao lado do protocolo gravado (mesma animação da importação):** o banner do protocolo gravado é
   **mestre-detalhe** igual ao da importação — clicar num DFD abre `DfdConferir` como **LATERAL à direita** (mesmo
   componente, animação e comportamento; a única diferença é o **cadeado**). O `Modal.lateral` ganhou
