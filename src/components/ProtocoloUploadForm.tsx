@@ -15,12 +15,8 @@ import {
   estadoDfd,
   FALTA_REFERENCIA_RENOVACAO,
   faltasCirurgicasDfd,
-  type GrupoAssinatura,
-  gruposAssinatura,
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
-  type ResumoEstado,
-  resumoEstado,
   setTextoSecao,
   STATUS_MENSAGEM_COR,
   TRATAVEIS,
@@ -338,19 +334,6 @@ export function ProtocoloUploadForm({
     return estadoDfd(0, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx), atencao);
   };
 
-  // Resumo da célula "Estado" (erro/atenção ESPECÍFICO + contadores + tooltip) — reusa
-  // `mensagensDoDfd` (mesma fonte do painel), SEM conformidade de catálogo (lazy; a tabela fica
-  // leve). Sem parse ainda ⇒ undefined (a célula usa o rótulo do estado).
-  const resumoDfd = (idx: number): ResumoEstado | undefined => {
-    const d = parsed.get(idx);
-    if (!d) return undefined;
-    const rep = reparticoes.find((r) => r.id === dfdRepIds[idx]) ?? null;
-    return resumoEstado(mensagensDoDfd(d, rep, anoPca, regras, categoria, orgaos));
-  };
-  // Tipos de assinatura do DFD (Centi/Dropsigner/Adobe). Antes do parse completo, cai nas A/B do índice.
-  const assinaturasDfd = (idx: number): GrupoAssinatura[] =>
-    gruposAssinatura(parsed.get(idx)?.assinaturas ?? index?.dfds[idx]?.assinaturas ?? []);
-
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
     setEditados((s) => new Set(s).add(idx));
@@ -605,8 +588,6 @@ export function ProtocoloUploadForm({
     itens: qtdItens(idx),
     valor: valorItens(idx),
     estado: estado(idx),
-    resumo: resumoDfd(idx),
-    assinaturas: assinaturasDfd(idx),
     estadoMotivo: errosParse.get(idx) ?? null,
     situacao: SITUACAO[classificar(di.numero)],
   }));

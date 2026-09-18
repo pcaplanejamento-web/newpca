@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { dfdRSemReferencia, FALTA_REFERENCIA_RENOVACAO, type GrupoAssinatura, resumoEstado } from "@/lib/dfd-tratamento";
+import { dfdRSemReferencia } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -147,8 +147,6 @@ export type ProtocoloVisualDfd = {
   numeroContrato?: string | null;
   numeroAta?: string | null;
   numeroLicitacao?: string | null;
-  // Tipos de assinatura (Centi/Dropsigner/Adobe) — coluna "Assinatura" (vem do DfdResumo).
-  assinaturaGrupos?: GrupoAssinatura[];
 };
 
 export type ProtocoloVisual = {
@@ -245,13 +243,6 @@ export function ProtocoloView({
       nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignorar"
         ? "atencao"
         : "regular",
-    // Gravados já validados → único apontamento na lista é o DFD-R sem referência (atenção).
-    resumo: resumoEstado(
-      dfdRSemReferencia(d) && nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignorar"
-        ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
-        : [],
-    ),
-    assinaturas: d.assinaturaGrupos ?? [],
   }));
 
   return (
