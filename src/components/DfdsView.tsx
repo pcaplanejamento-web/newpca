@@ -6,7 +6,7 @@ import type { LinhaAuditoria } from "@/lib/auditoria";
 import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
-import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
+import type { DfdDetalhe, DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import {
   dfdRSemReferencia,
   editarItemDfd,
@@ -19,7 +19,7 @@ import {
   situacaoProtocolo,
   STATUS_MENSAGEM_COR,
 } from "@/lib/dfd-tratamento";
-import { brl, num } from "@/lib/format";
+import { brl, dataBR, num } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -31,14 +31,14 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { inputCls, labelCls } from "./formStyles";
 import { Historico } from "./Historico";
-import { IconAlert, IconClipboard, IconClock, IconFile, IconLayers, IconLock, IconLockOpen, IconRefresh, IconTrash } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconLock, IconLockOpen, IconRefresh, IconTrash } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { ProtocoloCabecalho, ProtocoloView, type ProtocoloEdicaoValores } from "./ProtocoloView";
-import { Tabs } from "./Tabs";
+import { Segmented } from "./Segmented";
 
 type Rep = {
   id: number;
@@ -54,6 +54,9 @@ type Rep = {
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 
 const valorDe = (r: DfdResumo) => r.valorTotal ?? 0;
+
+/** Visão da tela DFD: o MESMO espaço mostra Protocolos, DFDs ou a lista plana de Itens. */
+type Vista = "protocolos" | "dfds" | "itens";
 
 /** DFD gravado (`DfdDetalhe`) → forma editável (`DfdParseado`) do `DfdConferir`. */
 function detalheParaParseado(d: DfdDetalhe): DfdParseado {
@@ -136,6 +139,33 @@ export function DfdsView({
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   // Conformidade dos itens do DFD aberto com o catálogo (conferida no servidor ao abrir).
   const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
+
+  // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
+  const [vista, setVista] = useState<Vista>("protocolos");
+  // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
+  // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
+  const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
+  const [carregandoItens, setCarregandoItens] = useState(false);
+  // Invalida o cache de itens quando a lista de DFDs recarrega (router.refresh após import/edição).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
+  useEffect(() => setItens(null), [dfds]);
+  useEffect(() => {
+    if (vista !== "itens" || itens !== null) return;
+    const ac = new AbortController();
+    setCarregandoItens(true);
+    fetch("/api/dfd/itens", { signal: ac.signal })
+      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[] }>)
+      .then((j) => {
+        if (!ac.signal.aborted) setItens(j.ok ? (j.itens ?? []) : []);
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) setItens([]);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setCarregandoItens(false);
+      });
+    return () => ac.abort();
+  }, [vista, itens]);
 
   // Confere os itens do DFD aberto contra o catálogo (a referência de `dfdEdit.itens` é
   // estável na edição de seções/refs → só reconfere ao abrir/trocar de DFD).
@@ -487,6 +517,14 @@ export function DfdsView({
       value: (r) => SITUACAO_PROTOCOLO_ROTULO[situacaoProtocolo(r)],
       render: (r) => <span className="text-[12px] text-muted">{SITUACAO_PROTOCOLO_ROTULO[situacaoProtocolo(r)]}</span>,
     },
+    {
+      key: "data",
+      header: "Data",
+      align: "center",
+      minWidth: 100,
+      value: (r) => r.data ?? "",
+      render: (r) => <span className="text-[12px] text-muted">{r.data ? dataBR(r.data) : "—"}</span>,
+    },
     { key: "numero", header: "Nº processo", value: (r) => r.numero, render: (r) => <span className="font-mono text-[12px]">{r.numero}</span> },
     {
       key: "idExterno",
@@ -534,61 +572,91 @@ export function DfdsView({
     },
   ];
 
-  const protocolosTab = (
-    <div className="space-y-6">
-      {podeEditar && (
-        <ProtocoloUploadForm
-          reparticoes={reparticoes}
-          reparticaoAtivaId={reparticaoAtivaId}
-          dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
-          pcas={pcas}
-          regras={regras}
-          orgaos={orgaos}
-        />
-      )}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold text-text-2">Protocolos ({protocolos.length})</h3>
-        {protocolos.length === 0 ? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum protocolo nesta visão. {podeEditar ? "Envie o PDF de um protocolo acima." : ""}
-          </p>
-        ) : (
-          <DataTable
-            columns={colsProto}
-            rows={protocolos}
-            getKey={(r) => r.id}
-            onRowClick={(r) => verProtocolo(r.id)}
-            fillHeight
-            pageSize={12}
-            minWidth={900}
-            resumo={(linhas) =>
-              `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(
-                linhas.reduce((s, p) => s + p.totalDfds, 0),
-              )} DFDs · ${brl(linhas.reduce((s, p) => s + p.valorTotal, 0))}`
-            }
-          />
-        )}
-      </section>
-    </div>
-  );
+  // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo). Alinhamento pela
+  // regra do sistema (R$ à direita; números/contagens centralizados). Clicar abre o DFD de origem.
+  const colsItens: Column<ItemDfdRow>[] = [
+    {
+      key: "protocolo",
+      header: "Protocolo",
+      value: (r) => r.protocoloNumero ?? "—",
+      render: (r) => (r.protocoloNumero ? <span className="font-mono text-[12px]">{r.protocoloNumero}</span> : <span className="text-faint">—</span>),
+    },
+    { key: "dfd", header: "Nº DFD", value: (r) => r.dfdNumero, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
+    {
+      key: "sigla",
+      header: "Sigla",
+      value: (r) => r.sigla ?? "—",
+      render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
+    },
+    { key: "item", header: "Item", align: "center", value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
+    { key: "codigo", header: "Código", value: (r) => r.codigo ?? "", render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span> },
+    {
+      key: "descricao",
+      header: "Descrição",
+      minWidth: 260,
+      value: (r) => r.descricao ?? "",
+      render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
+    },
+    { key: "unidade", header: "Unidade", value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
+    { key: "qtd", header: "Qtd.", align: "center", value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
+    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "none", value: (r) => String(r.valorUnitario ?? ""), render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    { key: "vtotal", header: "Vlr. total", align: "right", filter: "none", value: (r) => String(r.valorTotal ?? ""), render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+  ];
 
-  const dfdsTab = (
-    <div className="space-y-6">
-      {podeEditar && (
-        <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
-      )}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold text-text-2">DFDs importados ({dfds.length})</h3>
-        {dfds.length === 0 ? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum DFD importado nesta visão. {podeEditar ? "Importe um DFD acima." : ""}
-          </p>
-        ) : (
-          <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} regras={regras} />
-        )}
-      </section>
-    </div>
+  // Corpo de cada visão. SEM cabeçalho "Protocolos (N)"/"DFDs importados (N)" (redundante — a
+  // contagem vive no rodapé de cada tabela e o Segmented já rotula a visão). Alturas de linha
+  // DIFERENTES por visão: protocolo alta (comfortable) · DFD média (default) · item fina (compact).
+  const vazio = (texto: string) => (
+    <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">{texto}</p>
   );
+  const tabelaProtocolos =
+    protocolos.length === 0 ? (
+      vazio(`Nenhum protocolo nesta visão. ${podeEditar ? "Importe um protocolo pelo botão acima." : ""}`)
+    ) : (
+      <DataTable
+        columns={colsProto}
+        rows={protocolos}
+        getKey={(r) => r.id}
+        onRowClick={(r) => verProtocolo(r.id)}
+        fillHeight
+        pageSize={12}
+        minWidth={980}
+        density="comfortable"
+        resumo={(linhas) =>
+          `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(
+            linhas.reduce((s, p) => s + p.totalDfds, 0),
+          )} DFDs · ${brl(linhas.reduce((s, p) => s + p.valorTotal, 0))}`
+        }
+      />
+    );
+  const tabelaDfds =
+    dfds.length === 0 ? (
+      vazio(`Nenhum DFD nesta visão. ${podeEditar ? "Importe um DFD pelo botão acima." : ""}`)
+    ) : (
+      <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} regras={regras} />
+    );
+  const tabelaItens =
+    carregandoItens || itens === null ? (
+      vazio("Carregando itens…")
+    ) : itens.length === 0 ? (
+      vazio("Nenhum item nesta visão.")
+    ) : (
+      <DataTable
+        columns={colsItens}
+        rows={itens}
+        getKey={(r) => r.id}
+        onRowClick={(r) => verDfd(r.dfdId)}
+        fillHeight
+        pageSize={20}
+        minWidth={1040}
+        density="compact"
+        resumo={(linhas) =>
+          `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(
+            linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0),
+          )}`
+        }
+      />
+    );
 
   // Partes do banner do DFD gravado — reusadas no modal avulso E como LATERAL do
   // protocolo (mesmo componente/animação da importação; só muda onde é montado).
@@ -719,12 +787,40 @@ export function DfdsView({
         </Callout>
       )}
 
-      <Tabs
-        tabs={[
-          { key: "protocolos", label: "Protocolos", icon: <IconClipboard className="h-4 w-4" />, content: protocolosTab },
-          { key: "dfds", label: "DFDs", icon: <IconFile className="h-4 w-4" />, content: dfdsTab },
-        ]}
-      />
+      {/* Segmento de VISÃO (Protocolos/DFDs/Itens) na MESMA linha do "Importar" (lançador
+          contextual por visão). O mesmo espaço mostra as três, com transição morph. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented<Vista>
+          value={vista}
+          onChange={setVista}
+          options={[
+            { value: "protocolos", label: "Protocolos" },
+            { value: "dfds", label: "DFDs" },
+            { value: "itens", label: "Itens" },
+          ]}
+        />
+        {podeEditar && (vista === "protocolos" || vista === "dfds") && (
+          <div className="flex-1">
+            {vista === "protocolos" ? (
+              <ProtocoloUploadForm
+                reparticoes={reparticoes}
+                reparticaoAtivaId={reparticaoAtivaId}
+                dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
+                pcas={pcas}
+                regras={regras}
+                orgaos={orgaos}
+              />
+            ) : (
+              <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* MESMO espaço para as 3 visões — `key={vista}` remonta e replaya o morph (fade+escala). */}
+      <div key={vista} className="animate-cat-morph">
+        {vista === "protocolos" ? tabelaProtocolos : vista === "dfds" ? tabelaDfds : tabelaItens}
+      </div>
 
       {/* Banner do DFD gravado (aba DFDs) = MESMO componente da importação (`DfdConferir`).
           Dentro de um protocolo, ele aparece como LATERAL do banner do protocolo (abaixo). */}

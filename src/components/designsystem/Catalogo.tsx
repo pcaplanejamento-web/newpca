@@ -1095,6 +1095,27 @@ export function Catalogo() {
         />
       </Secao>
 
+      <Secao titulo="Tabela — densidade por visão (comfortable · default · compact)">
+        <p className="mb-3 text-[13px] text-muted">
+          A prop <span className="font-mono text-text-2">density</span> ajusta a altura da linha SÓ daquela tabela
+          (via <span className="font-mono text-text-2">--cell-py</span> local), para diferenciar visões que dividem o
+          mesmo espaço — ex.: na tela DFD, Protocolos (alta) · DFDs (média) · Itens (fina).
+        </p>
+        <div className="space-y-4">
+          {(["comfortable", "default", "compact"] as const).map((d) => (
+            <div key={d}>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{d}</div>
+              <DataTable
+                columns={COLUNAS}
+                rows={PROTOS.slice(0, 2)}
+                getKey={(r) => r.id}
+                density={d === "default" ? undefined : d}
+              />
+            </div>
+          ))}
+        </div>
+      </Secao>
+
       <Secao titulo="PlanilhaDfds (tabela ÚNICA de DFDs — banners + aba DFDs)">
         <PlanilhaDfds
           linhas={[

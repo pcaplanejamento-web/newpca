@@ -20,6 +20,18 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Tela DFD: visão única Protocolos/DFDs/Itens (morph) + coluna Data — entregue
+✅ Redesign da tela DFD numa superfície de tabela única:
+- **`Segmented` (Protocolos · DFDs · Itens)** na mesma linha do "Importar" alterna as três visões no MESMO
+  espaço, com **transição morph** (`animate-cat-morph`) — o lançador de importação é contextual por visão.
+- **Alturas de linha distintas por visão** (nova prop `density` do `DataTable`): Protocolo alta, DFD média, Item fina.
+- **Visão "Itens"** nova: lista plana de todos os itens dos DFDs em escopo, carregada **lazy** (`GET /api/dfd/itens`
+  → `listarItensDfds`); clicar abre o DFD de origem.
+- **Coluna "Data"** na tabela de Protocolos (a Situação derivada permanece).
+- Removidas as legendas redundantes "Protocolos (N)"/"DFDs importados (N)" (a contagem já fica no rodapé).
+- `.animate-cat-morph` passou a **respeitar reduzir-movimento** (acessibilidade) — cobre também Catálogo/Orçamento.
+- Responsável/Distribuição/Situação-enum ficaram fora (adiados pelo usuário — exigiriam migração + vocabulário novo).
+
 ### Valor SÓ pela soma dos itens + tabelas centralizadas + relatório agrupado — entregue
 ✅ Ajustes de fidelidade dos valores e de leitura das tabelas:
 - **Fim do "Estimado (nota)" do DFD:** eliminada de ponta a ponta a estimativa da nota (`valorEstimado` — parser,
