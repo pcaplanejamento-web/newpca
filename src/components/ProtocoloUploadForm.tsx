@@ -339,13 +339,16 @@ export function ProtocoloUploadForm({
   };
 
   // Resumo da célula "Estado" (erro/atenção ESPECÍFICO + contadores + tooltip) — reusa
-  // `mensagensDoDfd` (mesma fonte do painel), SEM conformidade de catálogo (lazy; a tabela fica
-  // leve). Sem parse ainda ⇒ undefined (a célula usa o rótulo do estado).
+  // `mensagensDoDfd`. ALINHADO ao AGRUPAMENTO (`estado`/`avaliarDfd`): sem catálogo (lazy), SEM as
+  // flags de órgão (não entram no agrupamento → `orgaos: []`) e EXCLUINDO o ano do PCA (portão do
+  // PROTOCOLO, resolvido uma vez no PcaPicker — não é falta por-DFD). Assim a célula nunca contradiz
+  // a seção (erro/atenção/regular) em que a linha foi colocada. Sem parse ainda ⇒ undefined.
   const resumoDfd = (idx: number): ResumoEstado | undefined => {
     const d = parsed.get(idx);
     if (!d) return undefined;
     const rep = reparticoes.find((r) => r.id === dfdRepIds[idx]) ?? null;
-    return resumoEstado(mensagensDoDfd(d, rep, anoPca, regras, categoria, orgaos));
+    const msgs = mensagensDoDfd(d, rep, anoPca, regras, categoria, []).filter((m) => m.chave !== "dfd.anoPca");
+    return resumoEstado(msgs);
   };
   // Tipos de assinatura do DFD (Centi/Dropsigner/Adobe). Antes do parse completo, cai nas A/B do índice.
   const assinaturasDfd = (idx: number): GrupoAssinatura[] =>
@@ -553,7 +556,6 @@ export function ProtocoloUploadForm({
               numeroLicitacao: full.numeroLicitacao,
               reparticaoId: dfdRepIds[i],
               protocoloId,
-              valorEstimado: full.valorEstimado,
               valorTotal: full.valorTotal,
               nomeArquivo: full.nomeArquivo,
               secoes: full.secoes,
@@ -591,7 +593,7 @@ export function ProtocoloUploadForm({
   const qtdItens = (idx: number): number | null => parsed.get(idx)?.itens.length ?? null;
   const valorItens = (idx: number): number | null => {
     const d = parsed.get(idx);
-    return d ? (d.valorTotal ?? d.valorEstimado ?? null) : null;
+    return d ? (d.valorTotal ?? null) : null;
   };
   // Uma linha NORMALIZADA por DFD para a planilha única (`PlanilhaDfds`). O `key` é o
   // idx (chave da seleção/edição em massa). Estado/Situação/valores vêm do parse+validação.
@@ -618,7 +620,7 @@ export function ProtocoloUploadForm({
   const temDfds = (index?.dfds.length ?? 0) > 0;
   // Somatória dos valores dos DFDs (valor do DFD = soma dos seus itens). Só é completa
   // quando todos foram analisados e nenhum está com erro.
-  const somatorioDfds = [...parsed.values()].reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0);
+  const somatorioDfds = [...parsed.values()].reduce((s, d) => s + (d.valorTotal ?? 0), 0);
   const itensDfds = [...parsed.values()].reduce((s, d) => s + d.itens.length, 0);
   const conciliavel = temDfds && !analisando && dfdsComErro === 0;
   // Regra 2 (configurável por `protocolo.valorCapa` + categoria): capa **zerada/nula** OU
@@ -691,12 +693,14 @@ export function ProtocoloUploadForm({
   const dfdsRelatorio = [
     ...linhasErro.map((l) => ({
       numero: index?.dfds[l.key].numero ?? "?",
+      planejamento: l.planejamento,
       tipo: parsed.get(l.key)?.tipo ?? null,
       faltas: faltasDoDfd(l.key),
     })),
     ...(incluirAtencao
       ? linhasAtencao.map((l) => ({
           numero: index?.dfds[l.key].numero ?? "?",
+          planejamento: l.planejamento,
           tipo: parsed.get(l.key)?.tipo ?? null,
           faltas: [FALTA_REFERENCIA_RENOVACAO],
         }))
@@ -986,7 +990,7 @@ export function ProtocoloUploadForm({
                       : analisando
                         ? `Analisando ${index?.dfds.length} DFD(s)...`
                         : semErroBloqueia
-                          ? `${dfdsComErro} DFD(s) com erro — trate antes de protocolar`
+                          ? `${dfdsComErro} DFD(s) com erro`
                           : capaBloqueia
                             ? "Valor da capa diverge da somatória — substitua para liberar"
                             : `${index?.dfds.length} DFD(s) · ${semRep} sem unidade · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}

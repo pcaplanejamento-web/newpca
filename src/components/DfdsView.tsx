@@ -53,7 +53,7 @@ type Rep = {
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 
-const valorDe = (r: DfdResumo) => r.valorTotal ?? r.valorEstimado ?? 0;
+const valorDe = (r: DfdResumo) => r.valorTotal ?? 0;
 
 /** DFD gravado (`DfdDetalhe`) → forma editável (`DfdParseado`) do `DfdConferir`. */
 function detalheParaParseado(d: DfdDetalhe): DfdParseado {
@@ -73,7 +73,6 @@ function detalheParaParseado(d: DfdDetalhe): DfdParseado {
     numeroContrato: d.numeroContrato,
     numeroAta: d.numeroAta,
     numeroLicitacao: d.numeroLicitacao,
-    valorEstimado: d.valorEstimado,
     valorTotal: d.valorTotal,
     // Nome do arquivo real (não ""): `pdfExigeAssinatura` do cliente precisa casar o servidor.
     nomeArquivo: d.nomeArquivo ?? "",
@@ -513,8 +512,8 @@ export function DfdsView({
           <span className="text-faint">—</span>
         ),
     },
-    { key: "dfds", header: "DFDs", align: "right", filter: "none", render: (r) => num(r.totalDfds) },
-    { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens) },
+    { key: "dfds", header: "DFDs", align: "center", filter: "none", render: (r) => num(r.totalDfds) },
+    { key: "itens", header: "Itens", align: "center", filter: "none", render: (r) => num(r.totalItens) },
     { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(r.valorTotal) },
     {
       key: "acoes",

@@ -74,7 +74,6 @@ describe("parse-dfd-core", () => {
     assert.equal(d.setorRequisitante, "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL");
     assert.equal(d.siglaSetor, "SMIR");
     assert.equal(d.responsavel, "CLAUDIO LUIZ DE SOUSA");
-    assert.equal(d.valorEstimado, 342342.72);
     assert.equal(d.itens.length, 2);
   });
 

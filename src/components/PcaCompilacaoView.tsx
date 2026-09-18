@@ -19,7 +19,7 @@ type LinhaComp = {
 
 const COLS: Column<LinhaComp>[] = [
   { key: "dfd", header: "DFD", render: (r) => <span className="font-mono text-[12px] text-accent">{r.dfdNumero}</span> },
-  { key: "item", header: "Item", align: "right", render: (r) => r.item ?? "—" },
+  { key: "item", header: "Item", align: "center", render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
@@ -35,7 +35,7 @@ const COLS: Column<LinhaComp>[] = [
   {
     key: "quantidade",
     header: "Qtd.",
-    align: "right",
+    align: "center",
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
   },
   {
@@ -95,7 +95,7 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
               valorTotal: it.valorTotal,
             })),
           );
-          const subtotal = g.dfds.reduce((s, d) => s + (d.valorEstimado ?? 0), 0);
+          const subtotal = g.dfds.reduce((s, d) => s + (d.valorTotal ?? 0), 0);
           const titulo =
             g.reparticaoCodigo || g.reparticaoNome
               ? `${g.reparticaoCodigo ?? ""}${g.reparticaoNome ? ` · ${g.reparticaoNome}` : ""}`

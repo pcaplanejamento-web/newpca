@@ -95,12 +95,13 @@ describe("editarItemDfd (edição de item + recomputo do total)", () => {
     assert.equal(d.itens[1].valorTotal, 50);
   });
   it("recomputa o valorTotal do DFD = Σ itens", () => {
-    assert.equal(editarItemDfd(dfd, 1, { valorTotal: 200 }).valorTotal, 300); // 100 + 200
-    assert.equal(editarItemDfd(dfd, 0, { valorTotal: null }).valorTotal, 50); // null + 50
-    assert.equal(editarItemDfd(dfd, 0, { valorTotal: 0 }).itens[0].valorTotal, 0);
+    const p = (v: number | null): Partial<(typeof dfd.itens)[number]> => ({ valorTotal: v });
+    assert.equal(editarItemDfd(dfd, 1, p(200)).valorTotal, 300); // 100 + 200
+    assert.equal(editarItemDfd(dfd, 0, p(null)).valorTotal, 50); // null + 50
+    assert.equal(editarItemDfd(dfd, 0, p(0)).itens[0].valorTotal, 0);
   });
   it("não muda o objeto original (puro)", () => {
-    editarItemDfd(dfd, 0, { valorTotal: 999 });
+    editarItemDfd(dfd, 0, { valorTotal: 999 } as Partial<(typeof dfd.itens)[number]>);
     assert.equal(dfd.itens[0].valorTotal, 100);
     assert.equal(dfd.valorTotal, 150);
   });
@@ -186,22 +187,30 @@ describe("relatório de erros (copiável)", () => {
     const linhas = linhasRelatorioDfd({ numero: "1", faltas: [] });
     assert.equal(linhas[linhas.length - 1], "Sem pendências.");
   });
-  it("Protocolo: DESPACHO com capa + DFDs cirúrgicos", () => {
+  it("Protocolo: DESPACHO com capa; agrupa DFDs de erro igual, referência = número + planejamento", () => {
     const linhas = linhasRelatorioProtocolo({
       numero: "97608/2026",
       idExterno: "2273524",
       interessado: "FUNDO MUNICIPAL DE SAÚDE",
       assunto: "INCLUSÃO - PCA",
       capaMotivo: "Valor da capa ausente/zerado — informar o valor da capa.",
-      dfds: [{ numero: "531", tipo: "DFD-R", faltas: ["Informar o VALOR UNITÁRIO dos itens 3, 5 (Seção 4)."] }],
+      dfds: [
+        { numero: "531", planejamento: "640", tipo: "DFD-R", faltas: ["Informar o VALOR UNITÁRIO dos itens 3, 5 (Seção 4)."] },
+        { numero: "702", planejamento: "811", tipo: "DFD-S", faltas: ["Informar o VALOR UNITÁRIO dos itens 3, 5 (Seção 4)."] },
+        { numero: "900", planejamento: "915", tipo: "DFD-S", faltas: ["Preencher a Justificativa (Seção 3)."] },
+      ],
     });
     const txt = linhas.join("\n");
     assert.match(txt, /DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO/);
     assert.match(txt, /Processo nº 97608\/2026 \(Id 2273524\)/);
     assert.match(txt, /Interessado: FUNDO MUNICIPAL DE SAÚDE/);
     assert.match(txt, /1\. CAPA DO PROCESSO: Valor da capa ausente\/zerado/);
-    assert.match(txt, /2\. DFD 531 \(DFD-R\):/);
+    // 531 e 702 têm a MESMA pendência → uma ÚNICA mensagem (número + nº de planejamento de cada).
+    assert.match(txt, /2\. DFDs 531 \(Planej\. 640\), 702 \(Planej\. 811\):/);
     assert.match(txt, /- Informar o VALOR UNITÁRIO dos itens 3, 5/);
+    // 900 tem pendência diferente → mensagem própria (singular "DFD").
+    assert.match(txt, /3\. DFD 900 \(Planej\. 915\):/);
+    assert.match(txt, /- Preencher a Justificativa/);
     assert.match(txt, /reencaminhe-se o processo/);
   });
 });
@@ -219,8 +228,6 @@ describe("mensagensDfd (painel de mensagens: erro/atenção/acerto)", () => {
     reparticaoId: 3,
     tipo: "DFD-S",
     anoPca: 2026,
-    valorEstimado: 20,
-    valorTotal: 20,
     assinatura: { status: "ok" as const },
   };
 

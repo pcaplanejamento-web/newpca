@@ -213,8 +213,8 @@ export function ConfiguracoesAdmin({
         </span>
       ),
     },
-    { key: "ano", header: "Ano", align: "right", filter: "none", render: (p) => p.ano ?? "—" },
-    { key: "dfds", header: "DFDs", align: "right", filter: "none", render: (p) => num(p.totalDfds ?? 0) },
+    { key: "ano", header: "Ano", align: "center", filter: "none", render: (p) => p.ano ?? "—" },
+    { key: "dfds", header: "DFDs", align: "center", filter: "none", render: (p) => num(p.totalDfds ?? 0) },
     { key: "criadoEm", header: "Criado", filter: "none", render: (p) => (p.criadoEm ? dataBR(p.criadoEm) : "—") },
     {
       key: "acoes",

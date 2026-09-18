@@ -20,6 +20,19 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Valor SÓ pela soma dos itens + tabelas centralizadas + relatório agrupado — entregue
+✅ Ajustes de fidelidade dos valores e de leitura das tabelas:
+- **Fim do "Estimado (nota)" do DFD:** eliminada de ponta a ponta a estimativa da nota (`valorEstimado` — parser,
+  tipos, schema, servidor, UI e o ponto `dfd.valorEstimadoVsTotal`). O valor do DFD é **só a soma dos itens**
+  (`valorTotal`); **sem valores nos itens, fica ZERADO** (nunca estima). O total do PCA passou a somar os `valorTotal`.
+- **Todas as tabelas centralizadas** (horizontal + vertical) por padrão no `DataTable`; **exceção: valores R$**
+  (alinhados à direita). Colunas de contagem/número/ano/quantidade passaram a **center**; monetárias seguem **right**.
+- **Coluna Sigla (tabela de DFDs do protocolo):** removido o rótulo "auto" — a **cor azul** já denota a detecção
+  automática (sigla azul quando auto, cor normal quando manual).
+- **Relatório de erro do protocolo:** DFDs com a **mesma pendência** são **agrupados numa única mensagem**, e cada
+  DFD é referenciado por **número + nº de planejamento**.
+- **Rodapé do banner de protocolo:** mensagem simplificada — "N DFD(s) com erro" (sem "— trate antes de protocolar").
+
 ### Tabelas de DFD/Item: estado APONTADO + coluna Assinatura + Nº da ARP — entregue
 ✅ Refino das tabelas de DFDs (dentro do protocolo) e de Itens (dentro do DFD):
 - **A célula "Estado" aponta o erro** (≤ 3 palavras) em vez de "Com erro"/"Atenção": mostra o problema

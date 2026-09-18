@@ -99,9 +99,9 @@ export function PcaModuleView({
         </span>
       ),
     },
-    { key: "ano", header: "Ano", align: "right", filter: "none", render: (r) => r.ano ?? "—" },
-    { key: "dfds", header: "DFDs", align: "right", filter: "none", render: (r) => num(r.totalDfds ?? 0) },
-    { key: "itens", header: "Itens", align: "right", filter: "none", render: (r) => num(r.totalItens ?? 0) },
+    { key: "ano", header: "Ano", align: "center", filter: "none", render: (r) => r.ano ?? "—" },
+    { key: "dfds", header: "DFDs", align: "center", filter: "none", render: (r) => num(r.totalDfds ?? 0) },
+    { key: "itens", header: "Itens", align: "center", filter: "none", render: (r) => num(r.totalItens ?? 0) },
     { key: "valor", header: "Estimado", align: "right", filter: "none", render: (r) => brl(r.valorEstimado ?? 0) },
     { key: "criadoEm", header: "Gerado", filter: "none", render: (r) => (r.criadoEm ? dataBR(r.criadoEm) : "—") },
     {
@@ -132,7 +132,7 @@ export function PcaModuleView({
     { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
     { key: "reparticao", header: "Repartição", value: (r) => r.reparticaoCodigo ?? "—", render: (r) => r.reparticaoCodigo ?? <span className="text-faint">—</span> },
     { key: "objeto", header: "Objeto", filter: "none", minWidth: 200, render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span> },
-    { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(r.valorTotal ?? r.valorEstimado ?? 0) },
+    { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(r.valorTotal ?? 0) },
   ];
 
   // ---- Painel: Planilha (PCA) achatada — fluxo atual, intacto ----
@@ -290,7 +290,7 @@ export function PcaModuleView({
                 resumo={(l) =>
                   `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(
                     l.reduce((s, d) => s + (d.totalItens ?? 0), 0),
-                  )} itens · ${brl(l.reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0))}`
+                  )} itens · ${brl(l.reduce((s, d) => s + (d.valorTotal ?? 0), 0))}`
                 }
               />
             )}
