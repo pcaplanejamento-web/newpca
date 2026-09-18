@@ -200,22 +200,48 @@ export function DfdsView({
     };
   }, [painel, dfdView]);
 
-  async function verDfd(id: number) {
+  async function verDfd(id: number): Promise<DfdParseado | null> {
     setErro(null);
     try {
       const res = await fetch(`/api/dfd/${id}`);
       const j = (await res.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
       if (!res.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
+      const parsed = detalheParaParseado(j.dfd);
       setDfdView(j.dfd);
-      setDfdEdit(detalheParaParseado(j.dfd));
+      setDfdEdit(parsed);
       setDfdRepEdit(j.dfd.reparticaoId);
       setDfdTrancado(true);
       setItemEditando(false);
       setPainel(null); // abre só o DFD (sem mensagens/detalhe do anterior)
       setAncoraAlvo(null);
+      return parsed;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
+      return null;
     }
+  }
+
+  /** Índice do item (na lista do DFD parseado) que corresponde à linha da visão "Itens":
+   * casa pelo NÚMERO do item (único no DFD), depois pelo código; senão o 1º. */
+  function indiceDoItem(itens: DfdParseado["itens"], r: ItemDfdRow): number {
+    if (r.item != null) {
+      const i = itens.findIndex((it) => it.item === r.item);
+      if (i >= 0) return i;
+    }
+    if (r.codigo) {
+      const i = itens.findIndex((it) => it.codigo === r.codigo);
+      if (i >= 0) return i;
+    }
+    return itens.length > 0 ? 0 : -1;
+  }
+
+  /** Clique numa linha da visão "Itens": abre o DFD de origem E o banner do ITEM ao lado
+   * (painel padrão `ItemDetalhe`), já na linha clicada. */
+  async function verItem(r: ItemDfdRow) {
+    const d = await verDfd(r.dfdId);
+    if (!d) return;
+    const idx = indiceDoItem(d.itens, r);
+    if (idx >= 0) setPainel({ tipo: "item", idx });
   }
 
   function fecharDfd() {
@@ -645,7 +671,7 @@ export function DfdsView({
         columns={colsItens}
         rows={itens}
         getKey={(r) => r.id}
-        onRowClick={(r) => verDfd(r.dfdId)}
+        onRowClick={(r) => verItem(r)}
         fillHeight
         pageSize={20}
         minWidth={1040}
