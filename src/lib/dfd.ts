@@ -51,7 +51,6 @@ export type DfdResumo = {
   objeto: string | null;
   setorRequisitante: string | null;
   responsavel: string | null;
-  valorEstimado: number | null;
   valorTotal: number | null;
   totalItens: number | null;
   atualizadoEm: string | null;
@@ -148,7 +147,6 @@ const colunasDfd = {
   objeto: dfds.objeto,
   setorRequisitante: dfds.setorRequisitante,
   responsavel: dfds.responsavel,
-  valorEstimado: dfds.valorEstimado,
   valorTotal: dfds.valorTotal,
   totalItens: dfds.totalItens,
   atualizadoEm: dfds.atualizadoEm,
@@ -262,7 +260,6 @@ export async function upsertDfdCabecalho(
     numeroContrato: dados.numeroContrato ?? null,
     numeroAta: dados.numeroAta ?? null,
     numeroLicitacao: dados.numeroLicitacao ?? null,
-    valorEstimado: dados.valorEstimado ?? null,
     valorTotal: dados.valorTotal ?? null,
     secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
     assinaturas: dados.assinaturas && dados.assinaturas.length > 0 ? JSON.stringify(dados.assinaturas) : null,
@@ -436,7 +433,7 @@ export type PcaDfdBloco = {
   numero: string;
   objeto: string | null;
   setorRequisitante: string | null;
-  valorEstimado: number | null;
+  valorTotal: number | null;
   totalItens: number | null;
   itens: DfdItemRow[];
 };
@@ -481,7 +478,7 @@ export async function getPca(id: number): Promise<PcaDetalhe | null> {
       numero: dfds.numero,
       objeto: dfds.objeto,
       setorRequisitante: dfds.setorRequisitante,
-      valorEstimado: dfds.valorEstimado,
+      valorTotal: dfds.valorTotal,
       totalItens: dfds.totalItens,
       reparticaoId: dfds.reparticaoId,
       reparticaoCodigo: reparticoes.codigo,
@@ -548,7 +545,7 @@ export async function getPca(id: number): Promise<PcaDetalhe | null> {
       numero: l.numero,
       objeto: l.objeto,
       setorRequisitante: l.setorRequisitante,
-      valorEstimado: l.valorEstimado,
+      valorTotal: l.valorTotal,
       totalItens: l.totalItens,
       itens: itensPorDfd.get(l.id) ?? [],
     });
@@ -565,14 +562,15 @@ export async function gerarPca(
   const db = getDb();
   const uniq = [...new Set(dados.dfdIds)];
   const encontrados = await db
-    .select({ id: dfds.id, valorEstimado: dfds.valorEstimado, totalItens: dfds.totalItens })
+    .select({ id: dfds.id, valorTotal: dfds.valorTotal, totalItens: dfds.totalItens })
     .from(dfds)
     .where(inArray(dfds.id, uniq));
   if (encontrados.length !== uniq.length) {
     return { erro: "Alguns DFDs selecionados não existem mais. Recarregue e tente de novo." };
   }
   const totalItens = encontrados.reduce((s, d) => s + (d.totalItens ?? 0), 0);
-  const valorEstimado = encontrados.reduce((s, d) => s + (d.valorEstimado ?? 0), 0);
+  // Valor do PCA = soma dos valores REAIS dos DFDs (Σ itens); sem estimativa.
+  const valorEstimado = encontrados.reduce((s, d) => s + (d.valorTotal ?? 0), 0);
 
   const [p] = await db
     .insert(pcas)

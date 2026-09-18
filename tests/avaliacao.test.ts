@@ -102,9 +102,9 @@ describe("nivelDe (precedência exceção > global > padrão do catálogo)", () 
   it("nível fora dos permitidos é ignorado (cai no padrão)", () => {
     const r: RegrasAvaliacao = {
       ...regrasPadrao(),
-      pontos: { "dfd.valorEstimadoVsTotal": "fundamental" }, // não permitido p/ esse ponto
+      pontos: { "protocolo.numero": "ignorar" }, // não permitido p/ esse ponto (só "fundamental")
     };
-    assert.equal(nivelDe(r, "dfd.valorEstimadoVsTotal"), "intermediario");
+    assert.equal(nivelDe(r, "protocolo.numero"), "fundamental");
   });
 });
 

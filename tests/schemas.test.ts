@@ -208,8 +208,8 @@ describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
   });
   it("recusa ponto desconhecido e nível não permitido", () => {
     assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.inexistente": "ignorar" } }).success, false);
-    // valorEstimadoVsTotal não permite "fundamental"
-    assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.valorEstimadoVsTotal": "fundamental" } }).success, false);
+    // protocolo.numero só permite "fundamental" (identificador imutável) — "ignorar" é recusado.
+    assert.equal(avaliacaoSchema.safeParse({ pontos: { "protocolo.numero": "ignorar" } }).success, false);
   });
   it("recusa tipo de DFD desconhecido nas exceções", () => {
     assert.equal(avaliacaoSchema.safeParse({ exDfd: { "DFD-X": { "dfd.previsao": "ignorar" } } }).success, false);

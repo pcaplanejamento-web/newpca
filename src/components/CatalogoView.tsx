@@ -485,7 +485,7 @@ export function CatalogoView({
     {
       key: "seq",
       header: "Seq.",
-      align: "right",
+      align: "center",
       minWidth: 70,
       filter: "none",
       value: (r) => String(r.sequencial ?? ""),

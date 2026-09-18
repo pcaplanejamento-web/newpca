@@ -1,4 +1,4 @@
-import { parseNumberBR, stripAccents } from "./normalize.ts";
+import { stripAccents } from "./normalize.ts";
 
 /**
  * Lógica PURA compartilhada entre os parsers de DFD (planilha `.xlsx` e `.pdf`).
@@ -124,7 +124,6 @@ export type DfdParseado = {
   numeroContrato: string | null; // referência de renovação (DFD-R)
   numeroAta: string | null;
   numeroLicitacao: string | null;
-  valorEstimado: number | null;
   valorTotal: number | null;
   nomeArquivo: string;
   secoes: DfdSecao[];
@@ -168,8 +167,6 @@ export function normComparacao(v: unknown): string {
 export function txt(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }
-
-export const RE_VALOR = /R\$\s*([\d.]+,\d{2})/;
 
 /** Primeiro grupo capturado não-vazio ao aplicar `re` a alguma das linhas. */
 export function buscar(linhas: string[], re: RegExp): string | null {
@@ -310,7 +307,6 @@ export type Cabecalho = {
   matricula: string | null;
   email: string | null;
   telefone: string | null;
-  valorEstimado: number | null;
 };
 
 /**
@@ -354,13 +350,6 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
     if (partes.length > 1) siglaSetor = norm(partes[0]) || null;
   }
 
-  // valor estimado: prefere a linha que contém "ESTIMATIVA"; senão o 1º "R$".
-  const comEstimativa = linhas.find(
-    (s) => /ESTIMATIVA/i.test(stripAccents(s)) && RE_VALOR.test(s),
-  );
-  const alvo = comEstimativa ?? linhas.find((s) => RE_VALOR.test(s));
-  const valorEstimado = alvo ? parseNumberBR(alvo.match(RE_VALOR)?.[1] ?? null) : null;
-
   return {
     numero,
     planejamento,
@@ -373,7 +362,6 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
     matricula,
     email,
     telefone,
-    valorEstimado,
   };
 }
 

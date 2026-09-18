@@ -13,7 +13,9 @@ export type Column<R> = {
   key: string;
   header: string;
   render?: (row: R) => ReactNode;
-  align?: "left" | "right";
+  /** Alinhamento horizontal da coluna. Padrão = **center** (dados centralizados); use "right"
+   * para valores monetários (R$) e "left" só em exceções. */
+  align?: "left" | "center" | "right";
   /** "values" (padrão), "date" (intervalo DE/ATÉ) ou "none" (sem filtro). */
   filter?: "values" | "date" | "none";
   /** Opções fixas do multi-select; se omitido, derivadas de `value`. */
@@ -221,11 +223,14 @@ export function DataTable<R>({
               )}
               {columns.map((c) => {
                 const tipo = c.filter ?? "values";
+                // Texto do cabeçalho: right→direita, left→esquerda, padrão→CENTRO (como as células).
+                const alinhaTexto = c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center";
+                // Popover do filtro (MultiSelectHeader) abre alinhado ao início, exceto colunas à direita.
                 const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
                 return (
                   <th
                     key={c.key}
-                    className={`${head} ${c.align === "right" ? "text-right" : "text-left"}`}
+                    className={`${head} ${alinhaTexto}`}
                     style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                   >
                     {tipo === "date" ? (
@@ -299,7 +304,7 @@ export function DataTable<R>({
                   {columns.map((c) => (
                     <td
                       key={c.key}
-                      className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : ""}`}
+                      className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center"}`}
                     >
                       {c.render?.(r)}
                     </td>

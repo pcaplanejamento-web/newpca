@@ -399,7 +399,6 @@ const DFD_DEMO = {
   numeroContrato: null,
   numeroAta: null,
   numeroLicitacao: null,
-  valorEstimado: 342342.72,
   valorTotal: 342342.72,
   totalItens: 2,
   atualizadoEm: null,
@@ -484,7 +483,7 @@ const PCA_DEMO = {
       reparticaoCodigo: "SMIR",
       reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
       dfds: [
-        { id: 1, numero: "1586", objeto: "AQUISIÇÃO DE SERVIÇO", setorRequisitante: "SMIR", valorEstimado: 342342.72, totalItens: 2, itens: DFD_ITENS_DEMO },
+        { id: 1, numero: "1586", objeto: "AQUISIÇÃO DE SERVIÇO", setorRequisitante: "SMIR", valorTotal: 342342.72, totalItens: 2, itens: DFD_ITENS_DEMO },
       ],
     },
     {
@@ -497,7 +496,7 @@ const PCA_DEMO = {
           numero: "1720",
           objeto: "AQUISIÇÃO DE MATERIAL",
           setorRequisitante: "SMS",
-          valorEstimado: 170000,
+          valorTotal: 170000,
           totalItens: 1,
           itens: [{ id: 3, item: 1, codigo: "9910011", descricao: "SERINGA DESCARTÁVEL 5ML", unidade: "CENTO", quantidade: 300, valorUnitario: 566.67, valorTotal: 170000 }],
         },
@@ -526,8 +525,8 @@ const PROTO_DEMO = {
   totalItens: 3,
   valorTotal: 512342.72,
   dfds: [
-    { id: 1, numero: "1586", planejamento: "1639", tipo: "DFD-S — Solução / com ETP", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72, valorEstimado: 342342.72 },
-    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, valorEstimado: 170000, numeroAta: "045/2025" },
+    { id: 1, numero: "1586", planejamento: "1639", tipo: "DFD-S — Solução / com ETP", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72 },
+    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, numeroAta: "045/2025" },
   ],
 };
 
@@ -685,7 +684,7 @@ export function Catalogo() {
       <Secao titulo="StatMini (mini banner de cabeçalho — DFD/Protocolo)">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatMini label="Total de itens" value="692" />
-          <StatMini label="Valor total" value="R$ 1.284.902,10" hint="Estimado (nota): R$ 1.280.000,00" />
+          <StatMini label="Valor total" value="R$ 1.284.902,10" />
           <StatMini label="Total de DFDs" value="104" tone="accent" />
           <StatMini label="Somatória dos DFDs" value="R$ 32.705,00" tone="warn" hint="capa diverge" />
         </div>
@@ -1128,7 +1127,7 @@ export function Catalogo() {
             mensagens={[
               { chave: "dfd.reparticao", status: "erro", texto: "Repartição/Setor requisitante não vinculado.", ancora: "reparticao" },
               { chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 3 de 12 itens (Seção 4).", ancora: "itens" },
-              { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ata ou licitação.", ancora: "referenciaRenovacao" },
+              { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação.", ancora: "referenciaRenovacao" },
               { chave: "dfd.previsao", status: "acerto", texto: "Previsão de entrega/execução (Seção 5) preenchida.", ancora: "previsao" },
               { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" },
             ]}

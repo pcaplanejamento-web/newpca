@@ -137,14 +137,13 @@ export function PlanilhaDfds({
       key: "sigla",
       header: "Sigla",
       value: (r) => r.sigla,
+      // A cor AZUL (accent) já denota unidade detectada automaticamente — sem o rótulo "auto".
       render: (r) => (
-        <span className="inline-flex items-center gap-1">
-          <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span>
-          {r.auto && (
-            <span className="text-[9px] font-semibold uppercase text-accent" title="Detectada automaticamente">
-              auto
-            </span>
-          )}
+        <span
+          className={`font-mono text-[12px] font-semibold ${r.auto ? "text-accent" : "text-text"}`}
+          title={r.auto ? "Unidade detectada automaticamente" : undefined}
+        >
+          {r.sigla}
         </span>
       ),
     },
@@ -186,7 +185,7 @@ export function PlanilhaDfds({
     {
       key: "itens",
       header: "Itens",
-      align: "right",
+      align: "center",
       value: (r) => String(r.itens ?? ""),
       render: (r) => (r.itens == null ? <span className="text-faint">…</span> : num(r.itens)),
     },
