@@ -61,7 +61,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **usuários** (papel/status = alto valor), config (aparência/avaliação/integrações — só o FATO, **nunca** segredos/senha)
   e auth (login/logout/cadastro/perfil/senha). Nas edições, o "antes" vem dos `get*` já usados na rota (diff por campo).
   **Consulta:** componente **`Historico`** (timeline por ação/ator/data + diff expandível) usado por entidade (botão
-  **"Histórico"** no banner do DFD → `GET /api/dfd/[id]/historico`, escopo por unidade) e na tela ADM global
+  **"Histórico"** no banner do DFD → `GET /api/dfd/[id]/historico` = **histórico CONECTADO** (`historicoConectadoDfd`
+  = alterações do DFD **mescladas** com as do seu protocolo atual, via `mesclarHistorico` puro; a `entidade` de cada
+  linha identifica a origem), escopo por unidade) e na tela ADM global
   **`/painel/auditoria`** (`AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros entidade/ação + paginação). Nav
   "Auditoria" (`IconClock`, admin). A tabela aparece no `/painel/armazenamento`.
 
@@ -322,7 +324,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   descrição (ex.: nº de peça "40300050630"), **não código** — senão poluiria o código. Validado contra um protocolo
   real de **581 páginas / 104 DFDs** (harness pdf.js): **104/104 importam** todos os itens. Testes: fixture
   multipágina real, buraco no sequencial (importa + aponta), sequência completa (sem nota).
-- **Tela própria de DFD** (`/painel/dfds` = `DfdsView`, aba **`dfd`**) — separada do PCA. `PcaModuleView` ficou só com
+- **Tela "Mesa"** (ex-"DFD"; `/painel/mesa` = `MesaPage` → `DfdsView`, aba **`dfd`** intacta — `/painel/dfds` **redireciona** p/ bookmarks; nav/label "Mesa" em `AppShell`/`BottomNav`/`abas.ts`) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,
   reativo aos filtros (`DataTable` `resumo={(linhas)=>…}`). Migração `0015` concede a aba `dfd` a quem já tinha `pca`.
@@ -337,7 +339,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
     Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
-    invalidado quando os DFDs recarregam (após import/edição). Clicar numa linha abre o **DFD de origem** (`verDfd`).
+    invalidado quando os DFDs recarregam (após import/edição). **Clicar numa linha abre o banner padrão do ITEM**
+    (`ItemDetalhe`) já na linha clicada: `verItem` abre o DFD de origem (`verDfd` devolve o `DfdParseado`) e o painel
+    do item pelo **nº do item** (`indiceDoItem`; fallback código). **Navegação entre banners (subir na hierarquia):** o
+    banner do DFD tem **"Ver protocolo"** (→ `verProtocolo(protocoloId)`, o DFD vira o lateral do protocolo — só p/ DFD
+    avulso com protocolo) e o banner do item tem **"Ver DFD"** (fecha o painel, foca o DFD — útil no mobile) e **"Ver
+    protocolo"**. Tudo reusando a estrutura mestre-detalhe existente (`Modal.lateral`/`lateral2`), sem componentes novos.
 - **Conferência/edição única (`DfdConferir`) + banner (`Modal`):** o CORPO de conferência/edição do DFD é UM
   componente **controlado** — `DfdConferir` (select "Setor / Repartição" + bloco **Tratamento** + lista de faltas
   ao vivo + `DfdView` read-only refletindo as edições). É o MESMO no **import avulso** (`DfdUploadForm`) e **por DFD
@@ -446,6 +453,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   diferente antes do upsert por `numero`; o `POST /api/protocolo` faz o **anti-sequestro por Id** — 403 se o Id já
   existe em unidade inacessível). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
   `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
+  **Excluir em CASCATA (regra do usuário):** `excluirProtocolo` (`protocolo.ts`) apaga os **DFDs vinculados**
+  (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
+  cascade e o vínculo de edição por `pca_dfds.dfdId` cascade; não deixa DFD órfão (antes o `set null` orfanava).
+  **Conflito de DFD na importação — escolher qual PREVALECE (regra do usuário):** quando um DFD do protocolo já existe
+  no banco, o banner mostra **Substitui/Move** (`classificar` sobre `dfdsExistentes`, threado de `DfdsView`) e o botão
+  **"Manter o existente"** (no banner do DFD) descarta o incoming (`descartarDfd` → `descartados`; `protocolar` já pula
+  descartados) → o **já cadastrado prevalece** (não é sobrescrito); sem descartar, o **novo prevalece** (sobrescreve por
+  `numero` + reatribui `protocoloId`). Antes só havia a escolha p/ duplicatas do próprio arquivo (`manterDfd`).
   O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
   streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
   com o cabeçalho; a geometria é descartada por página, **EXCETO a da CAPA** — guardada p/ a extração coluna-aware).

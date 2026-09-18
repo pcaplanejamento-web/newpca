@@ -20,6 +20,23 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Mesa (ex-DFD): banners conectados + navegação + conflito/cascata + histórico conectado — entregue
+✅ Round K — a tela DFD virou uma **mesa de trabalho** com banners padrão conectados:
+- **Rename DFD → "Mesa"** (`/painel/mesa` = `MesaPage` → `DfdsView`; `/painel/dfds` redireciona; nav/label "Mesa" em
+  `AppShell`/`BottomNav`/`abas.ts`). A **chave de aba `dfd`** fica intacta (gravada em `permissoes.abas`).
+- **Clique no ITEM (visão Itens) abre o banner padrão do item** (`ItemDetalhe`) já na linha clicada — antes abria só o
+  DFD (`verItem`/`indiceDoItem`; `verDfd` devolve o `DfdParseado`).
+- **Navegação entre banners (subir):** DFD → **"Ver protocolo"** (o DFD vira o lateral do protocolo); item → **"Ver
+  DFD"** / **"Ver protocolo"**. Reusa o mestre-detalhe existente (`Modal.lateral`/`lateral2`), sem componentes novos.
+- **Excluir protocolo em CASCATA** (`excluirProtocolo`): apaga DFDs vinculados → itens (`dfd_itens` cascade) e vínculos
+  de PCA (`pca_dfds` cascade), num `db.batch`; não deixa órfãos.
+- **Conflito de DFD na importação — escolher qual prevalece:** DFD já cadastrado aparece como **Substitui/Move**; o
+  botão **"Manter o existente"** descarta o incoming (o cadastrado prevalece); sem descartar, o novo prevalece.
+- **Histórico CONECTADO do DFD:** o banner "Histórico" agora mescla as alterações do DFD **e do seu protocolo**
+  (`historicoConectadoDfd` + `mesclarHistorico` puro/testável; a `entidade` de cada linha marca a origem).
+- **Fora do escopo desta sessão:** cadastro de assuntos/tipos + trava "permitido protocolar" (sessão Configurações);
+  scroll interno das tabelas (A4) e nº de linhas padrão pelo ADM (A5) — adiados (ver CLAUDE.md/plano).
+
 ### Tela DFD: visão única Protocolos/DFDs/Itens (morph) + coluna Data — entregue
 ✅ Redesign da tela DFD numa superfície de tabela única:
 - **`Segmented` (Protocolos · DFDs · Itens)** na mesma linha do "Importar" alterna as três visões no MESMO
