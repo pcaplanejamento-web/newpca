@@ -213,7 +213,9 @@ export function PlanilhaDfds({
 
   const erro = linhas.filter((l) => l.estado === "erro");
   const atencao = linhas.filter((l) => l.estado === "atencao");
-  const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao");
+  // DFDs duplicados descartados pelo usuário — fora da somatória e da protocolação (tabela cinza à parte).
+  const descartado = linhas.filter((l) => l.estado === "descartado");
+  const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && l.estado !== "descartado");
   const mw = temProtocolo ? 1060 : 840;
   const comum = {
     columns: cols,
@@ -229,7 +231,7 @@ export function PlanilhaDfds({
 
   // Só há tabelas "extras" (erro/atenção) quando há linhas nesse estado → o título
   // "DFDs regulares" só aparece para separá-las de fato.
-  const temExtras = erro.length > 0 || atencao.length > 0;
+  const temExtras = erro.length > 0 || atencao.length > 0 || descartado.length > 0;
   return (
     <div className="space-y-4">
       {erro.length > 0 && (
@@ -258,6 +260,15 @@ export function PlanilhaDfds({
           <DataTable rows={ok} pageSize={compacta ? 12 : 20} {...comum} />
         )}
       </div>
+      {descartado.length > 0 && (
+        <div className="opacity-60">
+          <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--faint)" }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: "var(--faint)" }} />
+            DFDs excluídos ({num(descartado.length)}) — duplicados descartados, fora da somatória e da protocolação
+          </h4>
+          <DataTable rows={descartado} pageSize={compacta ? 8 : 12} {...comum} selectable={false} />
+        </div>
+      )}
     </div>
   );
 }

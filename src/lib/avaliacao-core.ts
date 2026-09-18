@@ -70,6 +70,7 @@ export type ChaveAvaliacao =
   | "protocolo.anoPca"
   | "protocolo.valorCapa"
   | "protocolo.semDfdEmErro"
+  | "protocolo.dfdDuplicado"
   | "dfd.reparticao"
   | "dfd.orgao"
   | "dfd.orgaoUnidadeDivergente"
@@ -84,7 +85,8 @@ export type ChaveAvaliacao =
   | "item.quantidade"
   | "item.naoCatalogado"
   | "item.divergenteCatalogo"
-  | "item.tipoIncompativel";
+  | "item.tipoIncompativel"
+  | "item.duplicado";
 
 export type PontoAvaliacao = {
   chave: ChaveAvaliacao;
@@ -114,6 +116,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "protocolo.anoPca", sujeito: "protocolo", rotulo: "Ano do PCA", descricao: "PCA (ano) definido para o processo.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "protocolo.valorCapa", sujeito: "protocolo", rotulo: "Valor da capa × somatória", descricao: "Valor da capa diferente de zero e igual à soma dos DFDs (a substituição pela somatória continua manual).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "protocolo.semDfdEmErro", sujeito: "protocolo", rotulo: "Sem DFD com erro", descricao: "Nenhum DFD do processo pode estar com erro.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
+  { chave: "protocolo.dfdDuplicado", sujeito: "protocolo", rotulo: "DFD duplicado", descricao: "Dois ou mais DFDs do processo com o MESMO nº de DFD ou de planejamento. O usuário escolhe um para prosseguir; os demais ficam descartados (fora da somatória e da protocolação).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   // ---- DFD ----
   { chave: "dfd.reparticao", sujeito: "dfd", rotulo: "Unidade / Setor", descricao: "DFD vinculado a uma unidade.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true },
   { chave: "dfd.orgao", sujeito: "dfd", rotulo: "Órgão identificado", descricao: "Aviso quando o 'Órgão/Entidade' do DFD não corresponde a nenhum órgão cadastrado (sem órgão não dá para escopar/prever a unidade). Não bloqueia por padrão.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
@@ -133,6 +136,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.divergenteCatalogo", sujeito: "item", rotulo: "Divergente do catálogo", descricao: "Código existe no catálogo, mas a descrição e/ou a unidade de medida diferem do valor canônico.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.tipoIncompativel", sujeito: "item", rotulo: "Tipo de DFD incompatível", descricao: "O tipo do DFD (DFD-S/R/O/E) não está entre os tipos permitidos do item no catálogo. (Item sem tipos definidos vale para qualquer tipo.)", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
+  { chave: "item.duplicado", sujeito: "item", rotulo: "Item duplicado", descricao: "Dois ou mais itens do MESMO DFD com o mesmo código (ou, sem código, a mesma descrição). O usuário escolhe um; os demais ficam descartados (fora do valor total e da protocolação).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
 ];
 
 const POR_CHAVE = new Map<ChaveAvaliacao, PontoAvaliacao>(CATALOGO_AVALIACAO.map((p) => [p.chave, p]));

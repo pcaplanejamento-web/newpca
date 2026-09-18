@@ -109,7 +109,9 @@ export function normalizarSecoesDfd(
 }
 
 // ---- Estado por DFD (para a tabela do protocolo) ----
-export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "atencao" | "erro";
+// `descartado` = DFD duplicado que o usuário optou por NÃO manter — cinza, fora de tudo
+// (somatória, protocolação). É definido pelo host (não passa por `estadoDfd`).
+export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "atencao" | "erro" | "descartado";
 
 /**
  * Precedência: erro (faltas) > atenção (DFD-R sem referência) > editado > regularizado
@@ -131,6 +133,7 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
   editado: "Editado",
   atencao: "Atenção",
   erro: "Com erro",
+  descartado: "Descartado",
 };
 
 /**
@@ -139,6 +142,7 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
  * base do comportamento; ciclo (editado/regularizado/regular/pendente) puxa de `estadosCiclo`.
  */
 export function estadoCor(e: EstadoDfd, regras?: RegrasAvaliacao): string {
+  if (e === "descartado") return "var(--faint)"; // cinza — DFD duplicado descartado
   if (!regras) {
     if (e === "erro") return "var(--danger)";
     if (e === "atencao") return "var(--warn)";
@@ -159,6 +163,7 @@ export function estadoCor(e: EstadoDfd, regras?: RegrasAvaliacao): string {
  * estados de CICLO seguem os nomes editáveis do ADM (`estadosCiclo`); severidade fica fixa.
  */
 export function estadoRotulo(e: EstadoDfd, regras?: RegrasAvaliacao): string {
+  if (e === "descartado") return ESTADO_ROTULO.descartado;
   if (!regras) return ESTADO_ROTULO[e];
   if (e === "editado") return estadoCicloCfg(regras, "editado").nome;
   if (e === "regularizado") return estadoCicloCfg(regras, "regularizado").nome;
@@ -259,6 +264,79 @@ export function editarItemDfd<
   const itens = d.itens.map((it, i) => (i === idx ? { ...it, ...patch } : it));
   const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
   return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+}
+
+// ---- Detecção de DUPLICATAS (DFDs num protocolo / itens num DFD) ----
+
+/**
+ * Grupos de DFDs DUPLICADOS num protocolo: DFDs que compartilham o MESMO nº de DFD **ou** o
+ * MESMO nº de planejamento (relação TRANSITIVA por união — cada DFD entra em UM único grupo,
+ * evitando decisões conflitantes). Cada grupo devolve os ÍNDICES (2+), em ordem crescente;
+ * lista vazia = sem duplicatas. `numero`/`planejamento` vazios NÃO ligam DFDs. Puro/testável.
+ */
+export function dfdsDuplicados(lista: { numero: string; planejamento: string | null }[]): number[][] {
+  const n = lista.length;
+  const pai = Array.from({ length: n }, (_, i) => i);
+  const raiz = (x: number): number => {
+    let r = x;
+    while (pai[r] !== r) {
+      pai[r] = pai[pai[r]];
+      r = pai[r];
+    }
+    return r;
+  };
+  const unir = (a: number, b: number) => {
+    const ra = raiz(a);
+    const rb = raiz(b);
+    if (ra !== rb) pai[ra] = rb;
+  };
+  const ligarPor = (mapa: Map<string, number>, chave: string, i: number) => {
+    const j = mapa.get(chave);
+    if (j !== undefined) unir(i, j);
+    else mapa.set(chave, i);
+  };
+  const porNumero = new Map<string, number>();
+  const porPlan = new Map<string, number>();
+  lista.forEach((d, i) => {
+    const num = (d.numero ?? "").trim();
+    if (num) ligarPor(porNumero, num, i);
+    const plan = (d.planejamento ?? "").trim();
+    if (plan) ligarPor(porPlan, plan, i);
+  });
+  const grupos = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    const r = raiz(i);
+    const g = grupos.get(r);
+    if (g) g.push(i);
+    else grupos.set(r, [i]);
+  }
+  return [...grupos.values()].filter((g) => g.length > 1);
+}
+
+/** Chave de deduplicação de um item: código (só dígitos, via `normalizarCodigo`) ou, sem
+ * código, a descrição normalizada (`norm`). `null` quando não há código nem descrição. */
+function chaveDupItem(it: { codigo: string | null; descricao: string | null }): string | null {
+  const cod = normalizarCodigo(it.codigo ?? "");
+  if (cod) return `c:${cod}`;
+  const desc = norm(it.descricao ?? "");
+  return desc ? `d:${desc}` : null;
+}
+
+/**
+ * Grupos de ITENS DUPLICADOS num DFD: itens com a MESMA chave (código; sem código, a
+ * descrição). Cada grupo devolve os ÍNDICES (2+), em ordem; lista vazia = sem duplicatas.
+ * Puro/testável.
+ */
+export function itensDuplicados(itens: { codigo: string | null; descricao: string | null }[]): number[][] {
+  const grupos = new Map<string, number[]>();
+  itens.forEach((it, i) => {
+    const k = chaveDupItem(it);
+    if (!k) return;
+    const g = grupos.get(k);
+    if (g) g.push(i);
+    else grupos.set(k, [i]);
+  });
+  return [...grupos.values()].filter((g) => g.length > 1);
 }
 
 // ---- Faltas CIRÚRGICAS + relatório em formato de DESPACHO (copiável) ----
@@ -577,9 +655,11 @@ export const ROTULO_CURTO: Record<string, string> = {
   "dfd.fundamentacao": "Sem fundamentação",
   "dfd.referenciaRenovacao": "DFD-R sem referência",
   "dfd.assinatura": "Sem assinatura",
+  "protocolo.dfdDuplicado": "DFD duplicado",
   "item.naoCatalogado": "Fora de catálogo",
   "item.divergenteCatalogo": "Divergente do catálogo",
   "item.tipoIncompativel": "Tipo incompatível",
+  "item.duplicado": "Item duplicado",
 };
 
 /** Resumo compacto para a célula "Estado": o problema PRINCIPAL (rótulo curto + cor), os contadores
