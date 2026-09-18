@@ -63,16 +63,22 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
   só o MÊS ("FEVEREIRO") tem o ano completado com o do PCA (o usuário ainda pode editar; um ano explícito no texto
   prevalece).
 
-### Assinatura digital: Formato D — Adobe / ICP-Brasil (PAdES) — entregue
-✅ 4º formato de assinatura, o **Adobe/ICP-Brasil**: a aparência inline "Assinado de forma digital por NOME:CPF  Dados:
+### Assinatura digital: Formato D — Adobe (PAdES) — entregue
+✅ 4º formato de assinatura, o **Adobe**: a aparência inline "Assinado de forma digital por NOME:CPF  Dados:
 AAAA.MM.DD … -03'00'" é lida do texto renderizado por `assinaturasAdobeDeTexto`. **Identificação cirúrgica e segura** por
 DOIS selos juntos — o marcador exclusivo "Assinado de forma digital por" **e** a data ISO do Adobe `AAAA.MM.DD` (distinta
 do `dd/mm/aaaa` dos outros) — então prosa/decoy nunca casa. Extrai o nome separando o **CPF (11 díg.) do CN** (mascarado)
 e normaliza a data. Segue a **MESMA lógica de conferência** (match por nome → responsável) e usa o **mesmo card**, em
-**vermelho-e-branco com o selo "Adobe"** (`Badge tone="red" solid`); validação oficial no ITI (`validar.iti.gov.br`).
+**vermelho-e-branco com o selo "Adobe"** (`Badge tone="red" solid`).
 Testou-se que o **pdf.js NÃO expõe** a assinatura nos metadados (`getFieldObjects`=null; a aparência Adobe vem "flatten",
-sem widget `/Sig`) → o texto renderizado é a via confiável. Corrige o DFD 1483 real (RHAFAEL PEREIRA BARROS), que ficava
-"Com erro" por falta de assinatura reconhecida.
+sem widget `/Sig`) → o texto renderizado é a via confiável. Como só lemos a APARÊNCIA (não o certificado), a UI **não afirma
+ICP-Brasil/gov nem manda a um validador oficial** — a nota diz para validar o PDF assinado original. Corrige o DFD 1483 real
+(RHAFAEL PEREIRA BARROS), que ficava "Com erro" por falta de assinatura reconhecida.
+- **Correção crítica (achado da auditoria):** no import por PROTOCOLO o merge só mantinha `dropsigner` → a Adobe era
+  descartada; agora mantém TODA assinatura inline (não-A/B).
+- **Aparência não vaza para as seções:** `removerAparenciaAssinatura` retira o bloco Adobe FLATTEN (que fica no
+  `getTextContent`) por GEOMETRIA — a Seção 9/10 fica limpa (ex.: DFD 1483 §9 = "Autorizo o início da formalização da
+  demanda. ORDENADOR") sem apagar nomes DIGITADOS legítimos de outras seções.
 
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
 ✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …

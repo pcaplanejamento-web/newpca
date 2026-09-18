@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
-import { assinaturasAdobeDeTexto, assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
+import { assinaturasAdobeDeTexto, assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems, removerAparenciaAssinatura } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
 // coordenadas reais de DFD PDF.pdf: rótulo e valor em trechos separados, número
@@ -523,5 +523,39 @@ describe("assinaturasAdobeDeTexto (Formato D — Adobe/ICP-Brasil)", () => {
     // Só casa com os DOIS selos juntos (marcador + data AAAA.MM.DD). Prosa e datas dd/mm/aaaa não casam.
     assert.deepEqual(assinaturasAdobeDeTexto("O documento foi assinado de forma digital por todos os responsáveis em 2026."), []);
     assert.deepEqual(assinaturasAdobeDeTexto("Assinado de forma digital por FULANO Data: 01/09/2026 14:00:00"), []); // dd/mm/aaaa ≠ Adobe
+  });
+});
+
+// A APARÊNCIA da assinatura Adobe (flatten) fica no getTextContent e VAZAVA para o texto das seções
+// (Seção 9/10). `removerAparenciaAssinatura` a retira por GEOMETRIA (coluna direita), sem tocar no
+// texto da seção (coluna esquerda). Geometria REAL do DFD 1483 (página 595 de largura).
+describe("removerAparenciaAssinatura (aparência Adobe não vaza p/ as seções)", () => {
+  const P = (x: number, y: number, str: string): PdfItem => ({ page: 1, x, y, str });
+  it("mantém o texto da SEÇÃO (col. esquerda, incl. nome DIGITADO) e remove a APARÊNCIA (col. direita)", () => {
+    const items = [
+      P(300, 503, "Assinado de forma digital"),
+      P(38, 499, "9 - AUTORIZAÇÃO DEMANDA"),
+      P(240, 499, "RHAFAEL PEREIRA"),
+      P(300, 497, "por RHAFAEL PEREIRA"),
+      P(300, 490, "BARROS:01851626140"),
+      P(240, 489, "BARROS:0185162"),
+      P(38, 485, "Autorizo o início da formalização da demanda."),
+      P(38, 478, "PEDRO HENRIQUE ARAUJO CUNHA"), // nome DIGITADO legítimo na coluna da seção
+      P(300, 484, "Dados: 2026.09.01"),
+      P(240, 480, "6140"),
+      P(300, 477, "14:58:52 -03'00'"),
+      P(275, 456, "ORDENADOR"),
+    ];
+    const textos = removerAparenciaAssinatura(items).map((i) => i.str);
+    // Seção preservada (incl. o nome digitado na coluna esquerda):
+    for (const t of ["9 - AUTORIZAÇÃO DEMANDA", "Autorizo o início da formalização da demanda.", "PEDRO HENRIQUE ARAUJO CUNHA", "ORDENADOR"])
+      assert.ok(textos.includes(t), `deveria manter: ${t}`);
+    // Aparência removida:
+    for (const t of ["Assinado de forma digital", "por RHAFAEL PEREIRA", "BARROS:01851626140", "RHAFAEL PEREIRA", "BARROS:0185162", "Dados: 2026.09.01", "6140", "14:58:52 -03'00'"])
+      assert.ok(!textos.includes(t), `deveria remover: ${t}`);
+  });
+  it("sem âncora de aparência → devolve os itens INALTERADOS (mesma referência; não afeta outros DFDs)", () => {
+    const secao = [P(38, 499, "3 - JUSTIFICATIVA"), P(38, 485, "MARIA DA SILVA responsável pela demanda.")];
+    assert.equal(removerAparenciaAssinatura(secao), secao);
   });
 });

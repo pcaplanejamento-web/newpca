@@ -236,9 +236,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   falso negativo): o marcador EXCLUSIVO "Assinado de forma digital por" (o Dropsigner usa "digitalmente por:"; A/B usam
   "Assinatura digital - Nome:") **e** a data no formato ISO do Adobe **`AAAA.MM.DD`** (o Dropsigner/A/B usam `dd/mm/aaaa`)
   — prosa nunca casa os dois juntos. Extrai o NOME separando o **CPF (11 díg.) colado no CN** e o **mascara**
-  (`***.XXX.XXX-**`), e normaliza a data para `dd/mm/aaaa … -03:00`. NÃO tem código/URL público (o pdf.js **não** expõe o
-  certificado nos metadados — `getFieldObjects`=null; a aparência Adobe às vezes vem "flatten", sem widget `/Sig`); a prova
-  é o certificado ICP-Brasil, validado no **ITI** (`validar.iti.gov.br`). Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
+  (`***.XXX.XXX-**`), e normaliza a data para `dd/mm/aaaa … -03:00`. NÃO tem código/URL público e **o sistema só lê a
+  APARÊNCIA (não o certificado)** — o pdf.js **não** expõe o certificado nos metadados (`getFieldObjects`=null; a aparência
+  Adobe às vezes vem "flatten", sem widget `/Sig`). Por isso a UI **NÃO afirma ICP-Brasil/gov nem redireciona a validador
+  oficial**: o card diz que a assinatura está embutida no PDF e a autenticidade se confere no **PDF assinado original**.
+  Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
+  - **A aparência Adobe FLATTEN vaza para o texto das seções** (fica no `getTextContent`, ao contrário do Dropsigner) →
+    **`removerAparenciaAssinatura(items)`** a retira ANTES de reconstruir as linhas, **por GEOMETRIA** (acha as âncoras da
+    aparência e, na faixa `y` delas, remove os trechos à DIREITA do vão que separa a coluna do TEXTO DA SEÇÃO, à esquerda,
+    da coluna da APARÊNCIA, à direita). **Não usa o NOME** (para nunca apagar um nome DIGITADO legítimo numa seção) e só
+    age quando há âncora (zero efeito nos demais DFDs). Independe de ONDE a assinatura esteja. Validado no DFD 1483 real:
+    §9 = "Autorizo o início da formalização da demanda. ORDENADOR" (sem o bloco da assinatura).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do
@@ -261,9 +269,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`src/lib/reparticoes.ts`; assinatura única → responsáveis do ÓRGÃO). O `DfdView` exibe a seção "Assinaturas Digitais"
   (assinante, CPF, usuário, data, código): o card da assinatura **PADRÃO** (certificado/sistema) vem em **VERDE**
   (`--ok`, `Badge` "Certificado"), o da **Dropsigner** em **AZUL** (`--info`, `Badge` "Dropsigner", "Verificar
-  autenticidade" → `a.url = dropsigner.com/validate/<código>`) e o da **Adobe/ICP-Brasil** em **VERMELHO-E-BRANCO**
-  (marca Adobe: `--danger` no contorno + fundo quase branco, `Badge tone="red" solid` com "Adobe" em branco; "Verificar
-  autenticidade (ICP-Brasil)" → `validar.iti.gov.br`; sem código) — + o **solicitante** — o
+  autenticidade" → `a.url = dropsigner.com/validate/<código>`) e o da **Adobe** em **VERMELHO-E-BRANCO** (marca Adobe:
+  `--danger` no contorno + fundo quase branco, `Badge tone="red" solid` com "Adobe" em branco; **sem link a validador gov
+  e sem afirmar ICP-Brasil** — só lemos a aparência, não o certificado; a nota diz para validar o **PDF assinado original**;
+  sem código) — + o **solicitante** — o
   responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).

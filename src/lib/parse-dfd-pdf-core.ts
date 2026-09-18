@@ -229,6 +229,60 @@ export function assinaturasAdobeDeTexto(textos: string | string[]): Assinatura[]
   return out;
 }
 
+// Marcadores INEQUÍVOCOS da APARÊNCIA de uma assinatura Adobe/ICP-Brasil FLATTEN (achatada no
+// conteúdo da página — por isso aparece no `getTextContent` e VAZA para o texto das seções, ao
+// contrário do Dropsigner, que fica só no render). Usados só para LOCALIZAR a região e removê-la.
+const RE_APARENCIA_SIG = [
+  /assinado\s+de\s+forma\s+digital/i,
+  /\bdados\s*:\s*\d{4}\.\d{2}\.\d{2}/i,
+  /\d{1,2}:\d{2}:\d{2}\s*[-+]\d{2}'\d{2}'/,
+];
+
+/**
+ * Remove a APARÊNCIA de assinatura (bloco Adobe FLATTEN) dos trechos, para NÃO vazar no texto das
+ * seções do DFD (a Seção 9/10 vinha poluída com "Assinado de forma digital por NOME:CPF Dados: …").
+ * A assinatura em si é extraída à parte (texto renderizado), então removê-la daqui não perde nada.
+ * **CIRÚRGICO por GEOMETRIA, não por nome** — para nunca apagar um nome DIGITADO legítimo numa seção:
+ * acha as âncoras da aparência (marcadores inequívocos) e, na FAIXA Y de cada âncora, remove os
+ * trechos à DIREITA do corte que separa a coluna do TEXTO DA SEÇÃO (à esquerda, na margem) da coluna
+ * da APARÊNCIA (à direita). Sem âncora ⇒ trechos inalterados (nenhum DFD sem Adobe-flatten é afetado).
+ * Independe de ONDE a assinatura esteja (usa a própria posição das âncoras). Puro/testável.
+ */
+export function removerAparenciaAssinatura(items: PdfItem[]): PdfItem[] {
+  const anchors = items.filter((i) => RE_APARENCIA_SIG.some((re) => re.test(i.str)));
+  if (anchors.length === 0) return items;
+  const remover = new Set<PdfItem>();
+  const porPagina = new Map<number, PdfItem[]>();
+  for (const a of anchors) {
+    const arr = porPagina.get(a.page) ?? [];
+    arr.push(a);
+    porPagina.set(a.page, arr);
+  }
+  for (const [page, ancs] of porPagina) {
+    const doPage = items.filter((i) => i.page === page);
+    const margemEsq = Math.min(...doPage.map((i) => i.x)); // margem esquerda do texto da página
+    // Agrupa âncoras por proximidade em `y` (uma aparência é um bloco contíguo; pode haver várias).
+    const ys = [...new Set(ancs.map((a) => a.y))].sort((p, q) => q - p);
+    const clusters: number[][] = [];
+    for (const y of ys) {
+      const c = clusters[clusters.length - 1];
+      if (c && Math.abs(c[c.length - 1] - y) <= 40) c.push(y);
+      else clusters.push([y]);
+    }
+    for (const c of clusters) {
+      const yLo = Math.min(...c) - 14;
+      const yHi = Math.max(...c) + 14;
+      const banda = doPage.filter((i) => i.y >= yLo && i.y <= yHi);
+      const ancoraMinX = Math.min(...ancs.filter((a) => a.y >= yLo && a.y <= yHi).map((a) => a.x));
+      // Só remove se houver separação clara entre a margem (seção) e a âncora (aparência).
+      if (ancoraMinX - margemEsq < 60) continue;
+      const corte = (margemEsq + ancoraMinX) / 2;
+      for (const i of banda) if (i.x >= corte) remover.add(i);
+    }
+  }
+  return remover.size === 0 ? items : items.filter((i) => !remover.has(i));
+}
+
 /**
  * Índice do valor mais próximo de `target` num array **ordenado por `y` DESC**
  * (`ys`), via busca binária — O(log n). Empate = menor índice (maior `y`), igual
@@ -283,7 +337,10 @@ export function parseDfdFromPdfItems(
   // também é aceito (1 página). Vazio ⇒ sem Dropsigner.
   textosRender: string | string[] = [],
 ): DfdParseado {
-  const items = normalizar(bruto);
+  // Remove a APARÊNCIA da assinatura (Adobe flatten) ANTES de reconstruir as linhas — senão o bloco
+  // "Assinado de forma digital por NOME:CPF Dados: …" vaza para o texto das seções (Seção 9/10). A
+  // assinatura já é extraída à parte (texto renderizado), então nada se perde.
+  const items = removerAparenciaAssinatura(normalizar(bruto));
   const linhas = agruparLinhas(items);
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
 

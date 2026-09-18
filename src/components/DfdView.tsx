@@ -24,8 +24,6 @@ import { StatMini } from "./StatMini";
 
 /** URL oficial de verificação da assinatura digital (site da Prefeitura). */
 const URL_VERIFICACAO = "https://servicos.rioverde.go.gov.br/servicos/autenticacaorelatorios";
-/** Validador oficial de assinaturas ICP-Brasil (Adobe/PAdES) — ITI. */
-const URL_VALIDAR_ICP = "https://validar.iti.gov.br/";
 
 /** Rótulo do tipo de ato (Portaria/Decreto/Lei). */
 function rotuloAto(n: Nomeacao): string {
@@ -444,7 +442,7 @@ export function DfdView({
               const adobe = a.fonte === "adobe";
               const cor = adobe ? "var(--danger)" : drop ? "var(--info)" : "var(--ok)";
               const rotulo = adobe
-                ? "Assinatura Digital (Adobe / ICP-Brasil)"
+                ? "Assinatura Digital (Adobe)"
                 : drop
                   ? "Assinatura Dropsigner"
                   : a.fonte === "sistema"
@@ -474,17 +472,22 @@ export function DfdView({
                     {!adobe && <Campo label="Código verificador" valor={a.codigo || "—"} mono />}
                   </dl>
                   <div className="mt-3">
-                    <LinkExterno
-                      href={adobe ? URL_VALIDAR_ICP : drop && a.url ? a.url : URL_VERIFICACAO}
-                      icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
-                    >
-                      Verificar autenticidade{adobe ? " (ICP-Brasil)" : drop ? " (Dropsigner)" : ""}
-                    </LinkExterno>
-                    <p className="mt-1.5 text-xs text-muted">
+                    {/* Adobe não tem código/URL público e o certificado não é lido aqui (só a
+                        aparência) → NÃO afirmamos ICP-Brasil nem redirecionamos a validador gov;
+                        a validação é no PDF assinado original. */}
+                    {!adobe && (
+                      <LinkExterno
+                        href={drop && a.url ? a.url : URL_VERIFICACAO}
+                        icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
+                      >
+                        Verificar autenticidade{drop ? " (Dropsigner)" : ""}
+                      </LinkExterno>
+                    )}
+                    <p className={`text-xs text-muted ${adobe ? "" : "mt-1.5"}`}>
                       {adobe ? (
                         <>
-                          Assinatura ICP-Brasil (Adobe) — valide o PDF assinado em{" "}
-                          <span className="font-mono">validar.iti.gov.br</span>.
+                          Assinatura digital embutida no PDF (Adobe). A autenticidade deve ser conferida no{" "}
+                          <strong>PDF assinado original</strong>, em um leitor/validador de sua confiança.
                         </>
                       ) : drop ? (
                         <>
