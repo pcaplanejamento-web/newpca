@@ -60,6 +60,7 @@ export function PlanilhaDfds({
   acoes,
   compacta = false,
   fillHeight = false,
+  scrollInterno = false,
   regras,
 }: {
   linhas: LinhaDfd[];
@@ -72,6 +73,9 @@ export function PlanilhaDfds({
   acoes?: (l: LinhaDfd) => ReactNode;
   compacta?: boolean;
   fillHeight?: boolean;
+  /** Scroll interno + seletor de linhas (30/50/100/200) na tabela REGULAR quando não há
+   * sub-tabelas de erro/atenção (repassado ao `DataTable`). */
+  scrollInterno?: boolean;
   /** Regras do ADM — cor/rótulo dos estados de ciclo seguem a configuração (fallback = tokens). */
   regras?: RegrasAvaliacao;
 }) {
@@ -254,7 +258,9 @@ export function PlanilhaDfds({
       )}
       <div>
         {temExtras && <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(ok.length)})</h4>}
-        {fillHeight && !temExtras ? (
+        {scrollInterno && !temExtras ? (
+          <DataTable rows={ok} scrollInterno {...comum} />
+        ) : fillHeight && !temExtras ? (
           <DataTable rows={ok} fillHeight pageSize={12} {...comum} />
         ) : (
           <DataTable rows={ok} pageSize={compacta ? 12 : 20} {...comum} />

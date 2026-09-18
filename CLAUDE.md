@@ -797,6 +797,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
+  **`scrollInterno`** = a tabela preenche a altura até o rodapé e o CORPO rola por dentro (`thead` fixo `sticky`),
+  sem scroll do navegador, com um **seletor de linhas por página (30/50/100/200)** no rodapé (`linhasPadrao` = default do
+  ADM; limita as linhas em DOM — performático com milhares); só desktop, opt-in, exclui `fillHeight` — usado na **Mesa**;
   **alinhamento das células = CENTRO por padrão** (horizontal + vertical `align-middle`), `align:"right"` **só p/ valores monetários (R$)** e `align:"left"` em exceções — o `Column.align` é `"left"|"center"|"right"`;
   **`density`** (`compact`/`default`/`comfortable`) ajusta a altura da linha SÓ daquela tabela (via `--cell-py` LOCAL) — usada p/ diferenciar visões que dividem o mesmo espaço),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com

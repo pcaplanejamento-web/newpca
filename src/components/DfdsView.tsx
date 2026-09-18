@@ -644,8 +644,7 @@ export function DfdsView({
         rows={protocolos}
         getKey={(r) => r.id}
         onRowClick={(r) => verProtocolo(r.id)}
-        fillHeight
-        pageSize={12}
+        scrollInterno
         minWidth={980}
         density="comfortable"
         resumo={(linhas) =>
@@ -659,7 +658,7 @@ export function DfdsView({
     dfds.length === 0 ? (
       vazio(`Nenhum DFD nesta visão. ${podeEditar ? "Importe um DFD pelo botão acima." : ""}`)
     ) : (
-      <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} regras={regras} />
+      <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} scrollInterno acoes={acoesDfd} regras={regras} />
     );
   const tabelaItens =
     carregandoItens || itens === null ? (
@@ -672,8 +671,7 @@ export function DfdsView({
         rows={itens}
         getKey={(r) => r.id}
         onRowClick={(r) => verItem(r)}
-        fillHeight
-        pageSize={20}
+        scrollInterno
         minWidth={1040}
         density="compact"
         resumo={(linhas) =>

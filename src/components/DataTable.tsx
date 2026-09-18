@@ -42,6 +42,8 @@ export function DataTable<R>({
   onRowClick,
   activeKey = null,
   fillHeight = false,
+  scrollInterno = false,
+  linhasPadrao,
   density,
 }: {
   columns: Column<R>[];
@@ -66,6 +68,16 @@ export function DataTable<R>({
    */
   fillHeight?: boolean;
   /**
+   * Scroll INTERNO: a tabela preenche a altura até o rodapé do display e o CORPO rola por
+   * dentro (thead fixo, `sticky`), sem scroll vertical do navegador. Um seletor de "linhas
+   * por página" (30/50/100/200) fica no rodapé — limita as linhas em DOM (performático mesmo
+   * com milhares). Só no desktop; no mobile rola normal (paginado). Opt-in (não afeta as
+   * demais tabelas). Exclui o `fillHeight` (têm o mesmo objetivo por caminhos diferentes).
+   */
+  scrollInterno?: boolean;
+  /** Linhas por página INICIAL do seletor de `scrollInterno` (o padrão do ADM); default 30. */
+  linhasPadrao?: number;
+  /**
    * Densidade da linha (altura via `--cell-py` LOCAL, sem afetar as outras tabelas):
    * `comfortable` = mais alta, `compact` = mais fina, `default`/omitido = respeita o token global.
    * Usado para diferenciar visualmente visões que compartilham o mesmo espaço.
@@ -75,10 +87,14 @@ export function DataTable<R>({
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
   const [page, setPage] = useState(1);
+  // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM).
+  const OPCOES_LINHAS = [30, 50, 100, 200] as const;
+  const [limite, setLimite] = useState<number>(linhasPadrao ?? 30);
 
   // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
   const wrapRef = useRef<HTMLDivElement>(null);
   const [autoRows, setAutoRows] = useState<number | null>(null);
+  const [maxH, setMaxH] = useState<number | null>(null); // altura do corpo rolável (scrollInterno)
   useEffect(() => {
     if (!fillHeight) return;
     const RESERVA = 32; // respiro até a borda inferior (padding do main + folga)
@@ -111,8 +127,34 @@ export function DataTable<R>({
     };
   }, [fillHeight]);
 
-  // Linhas por página efetivas: fillHeight (medido) ou o pageSize informado.
-  const tamPagina = fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
+  // scrollInterno: mede a altura disponível até o fim da viewport p/ o corpo rolável (desktop).
+  useEffect(() => {
+    if (!scrollInterno) return;
+    const RESERVA = 32;
+    const calc = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      if (window.innerWidth < 1024) {
+        setMaxH(null); // mobile: rola normal (paginado)
+        return;
+      }
+      const top = el.getBoundingClientRect().top;
+      if (top <= 0) return;
+      const altRodape = 48; // barra do rodapé/seletor/pager
+      setMaxH(Math.max(200, window.innerHeight - top - RESERVA - altRodape));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    const ro = new ResizeObserver(calc);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [scrollInterno]);
+
+  // Linhas por página efetivas: scrollInterno (seletor) › fillHeight (medido) › pageSize.
+  const tamPagina = scrollInterno ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   const opcoes = useMemo(() => {
     const o: Record<string, string[]> = {};
@@ -219,9 +261,12 @@ export function DataTable<R>({
       className="overflow-hidden rounded-card border border-border bg-surface shadow-ring"
       style={densPy ? ({ "--cell-py": densPy } as CSSProperties) : undefined}
     >
-      <div className="overflow-x-auto">
+      <div
+        className={`overflow-x-auto ${scrollInterno ? "overflow-y-auto" : ""}`}
+        style={scrollInterno && maxH != null ? { maxHeight: maxH } : undefined}
+      >
         <table className="w-full border-collapse text-sm" style={{ minWidth }}>
-          <thead className="border-b border-border bg-surface-2">
+          <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
             <tr>
               {selectable && (
                 <th className="w-10 px-3 py-3">
@@ -343,7 +388,29 @@ export function DataTable<R>({
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
-        {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}
+        <div className="flex items-center gap-3">
+          {scrollInterno && (
+            <label className="flex items-center gap-1.5 text-[12px] text-muted">
+              <span>Linhas</span>
+              <select
+                aria-label="Linhas por página"
+                value={limite}
+                onChange={(e) => {
+                  setLimite(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none"
+              >
+                {OPCOES_LINHAS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}
+        </div>
       </div>
     </div>
   );
