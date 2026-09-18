@@ -1,55 +1,8 @@
-import { DfdsView } from "@/components/DfdsView";
-import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { getUsuarioAtual } from "@/lib/auth";
-import { listarDfds, listarPcas } from "@/lib/dfd";
-import { getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
-import { listarOrgaos } from "@/lib/orgaos";
-import { listarProtocolos } from "@/lib/protocolo";
-import { RESPONSAVEIS_VAZIO } from "@/lib/reparticao-responsaveis";
-import { dadosMatchPorReparticao, responsaveisPorReparticao } from "@/lib/reparticoes";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function DfdsPage() {
-  const u = await getUsuarioAtual();
-  // Head em "Geral" (rep=null) mostra tudo; senão só o da repartição ativa.
-  const rep = await getReparticaoFiltro(u);
-  const [dfds, protocolos, repCtx, pcas, regras, orgaos] = await Promise.all([
-    listarDfds(rep?.id),
-    listarProtocolos(rep?.id),
-    getReparticaoContexto(u),
-    listarPcas(),
-    getRegrasAvaliacao(),
-    listarOrgaos(),
-  ]);
-  const podeEditar = u?.role === "admin" || u?.role === "gestor";
-
-  // Enriquece as unidades com os RESPONSÁVEIS por DFDs (conferência da assinatura) e os
-  // campos de MATCH (interessado/setor/órgão) — a lista base traz só {id,codigo,nome}.
-  const ids = repCtx.lista.map((r) => r.id);
-  const [respMap, matchMap] = await Promise.all([responsaveisPorReparticao(ids), dadosMatchPorReparticao(ids)]);
-  const reparticoes = repCtx.lista.map((r) => ({
-    ...r,
-    responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
-    numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
-    setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
-    orgaoId: matchMap[r.id]?.orgaoId ?? null,
-    orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
-    oculto: matchMap[r.id]?.oculto ?? false,
-  }));
-
-  return (
-    <DfdsView
-      podeEditar={podeEditar}
-      dfds={dfds}
-      protocolos={protocolos}
-      reparticoes={reparticoes}
-      /* Em "Geral" (rep=null) não há unidade ativa específica — Geral comporta qualquer unidade,
-         então nunca é "diferente da ativa" (a dica de fluxo não aparece). */
-      reparticaoAtivaId={rep?.id ?? null}
-      pcas={pcas}
-      regras={regras}
-      orgaos={orgaos}
-    />
-  );
+// A tela "DFD" virou "Mesa" (/painel/mesa). Mantém a rota antiga redirecionando p/ não quebrar links.
+export default function DfdsRedirect() {
+  redirect("/painel/mesa");
 }

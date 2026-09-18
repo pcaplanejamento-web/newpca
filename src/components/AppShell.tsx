@@ -60,7 +60,7 @@ const SECOES: NavSecao[] = [
     itens: [
       { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true, aba: "dashboard" },
       { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile, aba: "protocolos" },
-      { href: "/painel/dfds", label: "DFD", Icon: IconClipboard, aba: "dfd" },
+      { href: "/painel/mesa", label: "Mesa", Icon: IconClipboard, aba: "dfd" },
       { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
       { href: "/painel/catalogo", label: "Catálogo", Icon: IconLayers, aba: "catalogo" },
       { href: "/painel/orcamento", label: "Orçamento", Icon: IconWallet, aba: "orcamento" },

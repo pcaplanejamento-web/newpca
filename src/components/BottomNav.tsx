@@ -7,7 +7,7 @@ import { IconBox, IconClipboard, IconDashboard, IconFile, IconUser } from "./ico
 const ITENS = [
   { href: "/painel", label: "Painel", Icon: IconDashboard, exact: true },
   { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile },
-  { href: "/painel/dfds", label: "DFD", Icon: IconClipboard },
+  { href: "/painel/mesa", label: "Mesa", Icon: IconClipboard },
   { href: "/painel/pca", label: "PCA", Icon: IconBox },
   { href: "/painel/perfil", label: "Perfil", Icon: IconUser },
 ] as const;

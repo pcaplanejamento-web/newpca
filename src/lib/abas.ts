@@ -7,7 +7,7 @@ export const ABAS: { key: AbaKey; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "protocolos", label: "Protocolos" },
   { key: "pca", label: "PCA" },
-  { key: "dfd", label: "DFD" },
+  { key: "dfd", label: "Mesa" },
   { key: "catalogo", label: "Catálogo" },
   { key: "orcamento", label: "Orçamento" },
 ];
