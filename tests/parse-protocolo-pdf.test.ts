@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "../src/lib/parse-dfd-pdf-core.ts";
-import { classificarPdf, indexarProtocolo, type PaginaTexto, paginasDeItens } from "../src/lib/parse-protocolo-pdf-core.ts";
+import { parseDfdDoProtocolo, type PdfDoc } from "../src/lib/parse-protocolo-pdf.ts";
+import { classificarPdf, type DfdIndexado, indexarProtocolo, type PaginaTexto, paginasDeItens } from "../src/lib/parse-protocolo-pdf-core.ts";
 
 // Índice LEVE do protocolo: recebe o texto por página (barato) e detecta a capa +
 // os DFDs (nº, páginas, cabeçalho) sem remontar tabelas. O parse completo por DFD
@@ -189,5 +190,48 @@ describe("classificarPdf (separa as vias / recusa documento errado)", () => {
   it("sem Número DFD e sem capa → desconhecido", () => {
     const items = [f(1, 100, 700, "DOCUMENTO QUALQUER SEM DFD")];
     assert.equal(classificarPdf(paginasDe(items)), "desconhecido");
+  });
+});
+
+describe("parseDfdDoProtocolo (combina A/B do índice + INLINE do render)", () => {
+  // doc mock: 1 página do DFD (itens p/ o parse) + render com o bloco INLINE (Dropsigner/Adobe).
+  const mkDoc = (itens: PdfItem[], render: string): PdfDoc => ({
+    numPages: 1,
+    pageItems: async () => itens,
+    pageRenderText: async () => render,
+    destroy: async () => {},
+  });
+  const abIndice = (fonte: "certificado" | "sistema") => [
+    { nome: "ISAAC PIRES", eCpf: "", usuario: "", local: "", data: "01/09/2026", ip: "", codigo: "X1", url: "", fonte },
+  ];
+
+  it("NÃO descarta a Adobe inline (regressão do filtro que só mantinha dropsigner)", async () => {
+    const di: DfdIndexado = {
+      numero: "1483", pages: [1], setorRequisitante: null, siglaSetor: null, orgaoEntidade: null, objeto: null,
+      assinaturas: abIndice("certificado"),
+    };
+    const doc = mkDoc(
+      dfdNaPagina(1, "1483"),
+      "Assinado de forma digital por RHAFAEL PEREIRA BARROS:01851626140 Dados: 2026.09.01 14:58:52 -03'00'",
+    );
+    const dfd = await parseDfdDoProtocolo(doc, di, "proto.pdf");
+    const fontes = dfd.assinaturas.map((a) => a.fonte);
+    assert.ok(fontes.includes("adobe"), "a Adobe inline tem de ser combinada (não descartada)");
+    assert.ok(fontes.includes("certificado"), "as A/B do índice seguem preservadas");
+    assert.equal(dfd.assinaturas.find((a) => a.fonte === "adobe")?.nome, "RHAFAEL PEREIRA BARROS");
+  });
+
+  it("também combina a Dropsigner inline", async () => {
+    const di: DfdIndexado = {
+      numero: "1243", pages: [1], setorRequisitante: null, siglaSetor: null, orgaoEntidade: null, objeto: null,
+      assinaturas: [],
+    };
+    const doc = mkDoc(
+      dfdNaPagina(1, "1243"),
+      "Assinado digitalmente por: PEDRO CUNHA CPF: ***.324.501-** Data: 01/09/2026 14:00:52 -03:00 " +
+        "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/AAA-BBB-CCC-DDD.",
+    );
+    const dfd = await parseDfdDoProtocolo(doc, di, "proto.pdf");
+    assert.ok(dfd.assinaturas.some((a) => a.fonte === "dropsigner" && a.nome === "PEDRO CUNHA"));
   });
 });

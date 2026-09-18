@@ -226,8 +226,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   da PRÓPRIA página e mantém-se só o **documento PRIMÁRIO** (o 1º código, da 1ª página do DFD); um ANEXO (decreto etc.) é
   outro documento Dropsigner, com outro código → **descartado**. Sem bloco no primário → 1 carimbo (nome vazio, verificável
   pela URL). `parseDfdFromPdfItems(items, nome, textosRender)` soma `extrairAssinaturas` (A/B) + Dropsigner por página.
-  **No PROTOCOLO** as A/B ficam em páginas separadas (índice `dfd.assinaturas`) e a Dropsigner nas páginas do DFD →
-  **`parseDfdDoProtocolo` COMBINA os dois** (não sobrescreve). Validado no Protocolo 4.pdf real (86 DFDs; ex.: DFD 1243 →
+  **No PROTOCOLO** as A/B ficam em páginas separadas (índice `dfd.assinaturas`) e as INLINE (Dropsigner **e Adobe**) nas
+  páginas do DFD → **`parseDfdDoProtocolo` COMBINA os dois** = índice (A/B) + **tudo que NÃO é A/B** de `parsed` (pega
+  Dropsigner, Adobe e formatos inline futuros; não descarta nenhum). Validado no Protocolo 4.pdf real (86 DFDs; ex.: DFD 1243 →
   PEDRO … pelo bloco EN; DFD 1206 → EVERALDO Dropsigner, e a assinatura de sistema ESDRAS do anexo NÃO é atribuída).
   **Formato D — `adobe` (Adobe/ICP-Brasil, PAdES):** aparência INLINE do widget de assinatura no TEXTO RENDERIZADO
   ("Assinado de forma digital por NOME:CPF  Dados: AAAA.MM.DD HH:MM:SS -03'00'"), lida por

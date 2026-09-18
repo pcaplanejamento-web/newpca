@@ -393,7 +393,7 @@ export function DfdView({
       {/* Assinaturas Digitais (Certificado Digital) */}
       {dfd.assinaturas.lista.length > 0 && (
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="assinatura">
-          <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais (Certificado Digital)</h3>
+          <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais</h3>
           <p className="mb-4 text-xs text-muted">
             Quem assina é o responsável que solicitou a consolidação do DFD no PCA. A autenticidade pode ser
             conferida pelo código verificador no site oficial da Prefeitura.

@@ -46,8 +46,10 @@ export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArq
   }
   const parsed = parseDfdFromPdfItems(items, nomeArquivo, render);
   // Assinaturas A/B (certificado/sistema) ficam em páginas SEPARADAS após o DFD (fora de
-  // `dfd.pages`) → vêm do ÍNDICE (`dfd.assinaturas`). A **Dropsigner** é INLINE nas páginas do
-  // próprio DFD (na aparência da anotação, capturada pelo texto render). Combina os dois.
-  const dropsigner = parsed.assinaturas.filter((a) => a.fonte === "dropsigner");
-  return { ...parsed, assinaturas: [...dfd.assinaturas, ...dropsigner] };
+  // `dfd.pages`) → vêm do ÍNDICE (`dfd.assinaturas`). As assinaturas INLINE — **Dropsigner** (C) e
+  // **Adobe/ICP-Brasil** (D) — estão na APARÊNCIA da anotação nas páginas do próprio DFD (texto
+  // render) → vêm de `parsed`. Combina os dois: índice (A/B) + inline (tudo que NÃO é A/B, para
+  // pegar Dropsigner, Adobe e formatos inline futuros, sem duplicar as A/B do índice).
+  const inline = parsed.assinaturas.filter((a) => a.fonte !== "certificado" && a.fonte !== "sistema");
+  return { ...parsed, assinaturas: [...dfd.assinaturas, ...inline] };
 }
