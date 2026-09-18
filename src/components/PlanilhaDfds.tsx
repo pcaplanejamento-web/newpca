@@ -1,9 +1,20 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ESTADO_ROTULO, type EstadoDfd, estadoCor } from "@/lib/dfd-tratamento";
+import {
+  ASSINATURA_ROTULO,
+  ESTADO_ROTULO,
+  type EstadoDfd,
+  estadoCor,
+  type GrupoAssinatura,
+  type ResumoEstado,
+} from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
+
+/** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho. */
+const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red" };
 
 /**
  * Linha normalizada de um DFD para a **planilha única** (`PlanilhaDfds`) — o MESMO
@@ -22,6 +33,11 @@ export type LinhaDfd = {
   valor: number | null;
   estado: EstadoDfd;
   estadoMotivo?: string | null; // ex.: "Leitura incompleta" (tooltip)
+  /** Resumo do estado: erro/atenção ESPECÍFICO (rótulo curto) + contadores "+N" + tooltip. Ausente
+   * ⇒ a célula usa o rótulo genérico do estado (Regular/Editado/…). */
+  resumo?: ResumoEstado;
+  /** Tipos de assinatura presentes no DFD (Centi/Dropsigner/Adobe) — coluna "Assinatura". */
+  assinaturas?: GrupoAssinatura[];
   situacao?: string | null; // Novo/Substitui/Move (só na importação)
   protocolo?: string | null; // nº do processo (só na aba DFDs)
 };
@@ -62,18 +78,37 @@ export function PlanilhaDfds({
     {
       key: "estado",
       header: "Estado",
-      minWidth: 118,
-      value: (r) => (r.estadoMotivo ? "Leitura incompleta" : ESTADO_ROTULO[r.estado]),
-      render: (r) => (
-        <span
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium"
-          style={{ color: estadoCor(r.estado) }}
-          title={r.estadoMotivo ?? undefined}
-        >
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(r.estado) }} />
-          {r.estadoMotivo ? "Leitura incompleta" : ESTADO_ROTULO[r.estado]}
-        </span>
-      ),
+      minWidth: 150,
+      value: (r) => (r.estadoMotivo ? "Leitura incompleta" : r.resumo?.rotulo || ESTADO_ROTULO[r.estado]),
+      render: (r) => {
+        // Leitura incompleta (parse falhou) — mantém a mensagem própria.
+        if (r.estadoMotivo)
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: "var(--danger)" }} title={r.estadoMotivo}>
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--danger)" }} />
+              Leitura incompleta
+            </span>
+          );
+        // Com erro/atenção: aponta o problema PRINCIPAL (rótulo curto) + "+N" por severidade; o
+        // `title` traz a lista completa (tooltip nativo, sem precisar abrir o DFD).
+        const res = r.resumo;
+        if (res?.rotulo)
+          return (
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium" title={res.titulo || undefined}>
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.cor }} />
+              <span style={{ color: res.cor }}>{res.rotulo}</span>
+              {res.extraErros > 0 && <span className="font-bold" style={{ color: "var(--danger)" }}>+{res.extraErros}</span>}
+              {res.extraAtencoes > 0 && <span className="font-bold" style={{ color: "var(--warn)" }}>+{res.extraAtencoes}</span>}
+            </span>
+          );
+        // Regular / Regularizado / Editado / Pendente — inalterado.
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoCor(r.estado) }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(r.estado) }} />
+            {ESTADO_ROTULO[r.estado]}
+          </span>
+        );
+      },
     },
     ...(temSituacao
       ? [
@@ -114,6 +149,25 @@ export function PlanilhaDfds({
       ),
     },
     { key: "tipo", header: "Tipo", value: (r) => r.tipo ?? "—", render: (r) => <span className="text-[12px]">{r.tipo ?? "—"}</span> },
+    {
+      key: "assinatura",
+      header: "Assinatura",
+      minWidth: 104,
+      value: (r) => (r.assinaturas ?? []).map((g) => ASSINATURA_ROTULO[g]).join(" ") || "—",
+      render: (r) => {
+        const gs = r.assinaturas ?? [];
+        if (gs.length === 0) return <span className="text-faint">—</span>;
+        return (
+          <span className="inline-flex flex-wrap gap-1">
+            {gs.map((g) => (
+              <Badge key={g} tone={ASSINATURA_TONE[g]}>
+                {ASSINATURA_ROTULO[g]}
+              </Badge>
+            ))}
+          </span>
+        );
+      },
+    },
     ...(temProtocolo
       ? [
           {
@@ -157,7 +211,7 @@ export function PlanilhaDfds({
   const erro = linhas.filter((l) => l.estado === "erro");
   const atencao = linhas.filter((l) => l.estado === "atencao");
   const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao");
-  const mw = temProtocolo ? 940 : 720;
+  const mw = temProtocolo ? 1060 : 840;
   const comum = {
     columns: cols,
     getKey: (r: LinhaDfd) => r.key,

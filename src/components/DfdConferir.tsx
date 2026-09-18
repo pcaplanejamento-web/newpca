@@ -469,7 +469,7 @@ export function DfdConferir({
         <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="referenciaRenovacao">
           <h3 className="mb-1 text-sm font-bold text-text">Referências da renovação</h3>
           <p className="mb-3 text-xs text-muted">
-            Todo DFD-R deve mencionar um nº de contrato, ata (registro de preços) ou licitação. Preenchidos
+            Todo DFD-R deve mencionar um nº de contrato, ARP ou licitação. Preenchidos
             automaticamente pela descrição; ajuste ou complete se necessário. As pendências ficam em "Ver mensagens".
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -481,7 +481,7 @@ export function DfdConferir({
               placeholder="Ex.: 860/2025"
             />
             <TextField
-              label="Nº da ata (registro de preços)"
+              label="Nº da ARP"
               value={dfd.numeroAta ?? ""}
               disabled={roRefs}
               onChange={(e) => setRef("numeroAta", e.target.value)}

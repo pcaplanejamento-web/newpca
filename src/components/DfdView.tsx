@@ -9,6 +9,8 @@ import {
   estadoItem,
   estadoItemCor,
   itemComErro,
+  mensagensItem,
+  resumoEstado,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
@@ -85,8 +87,19 @@ const COLS: Column<ItemK>[] = [
   {
     key: "estado",
     header: "Estado",
-    value: (r) => ESTADO_ITEM_ROTULO[estadoItem(r)],
+    value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
     render: (r) => {
+      // Com erro: aponta a falta ESPECÍFICA (valor/quantidade) + "+N" + tooltip; senão "Regular".
+      const res = resumoEstado(mensagensItem(r));
+      if (res.rotulo)
+        return (
+          <span className="inline-flex items-center gap-1 text-[12px] font-medium" title={res.titulo || undefined}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.cor }} />
+            <span style={{ color: res.cor }}>{res.rotulo}</span>
+            {res.extraErros > 0 && <span className="font-bold" style={{ color: "var(--danger)" }}>+{res.extraErros}</span>}
+            {res.extraAtencoes > 0 && <span className="font-bold" style={{ color: "var(--warn)" }}>+{res.extraAtencoes}</span>}
+          </span>
+        );
       const e = estadoItem(r);
       return (
         <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoItemCor(e) }}>
@@ -290,7 +303,7 @@ export function DfdView({
           <h3 className="mb-4 text-sm font-bold text-text">Referências da renovação</h3>
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
             <Campo label="Nº do contrato" valor={dfd.numeroContrato ?? "—"} />
-            <Campo label="Nº da ata (registro de preços)" valor={dfd.numeroAta ?? "—"} />
+            <Campo label="Nº da ARP" valor={dfd.numeroAta ?? "—"} />
             <Campo label="Nº da licitação" valor={dfd.numeroLicitacao ?? "—"} />
           </dl>
           {!dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
@@ -436,7 +449,7 @@ export function DfdView({
 
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => {
-              // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe/ICP-Brasil →
+              // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe →
               // VERMELHO (marca Adobe: card vermelho-e-branco + chip "Adobe" sólido).
               const drop = a.fonte === "dropsigner";
               const adobe = a.fonte === "adobe";
@@ -472,9 +485,8 @@ export function DfdView({
                     {!adobe && <Campo label="Código verificador" valor={a.codigo || "—"} mono />}
                   </dl>
                   <div className="mt-3">
-                    {/* Adobe não tem código/URL público e o certificado não é lido aqui (só a
-                        aparência) → NÃO afirmamos ICP-Brasil nem redirecionamos a validador gov;
-                        a validação é no PDF assinado original. */}
+                    {/* Adobe não tem código/URL público de verificação (só a aparência é lida) →
+                        sem botão de verificação; a validação é feita no PDF assinado original. */}
                     {!adobe && (
                       <LinkExterno
                         href={drop && a.url ? a.url : URL_VERIFICACAO}
