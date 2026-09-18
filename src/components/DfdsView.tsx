@@ -733,6 +733,18 @@ export function DfdsView({
         >
           <IconClock className="h-4 w-4" /> Histórico
         </Button>
+        {/* Subir p/ o protocolo de origem (só DFD avulso com protocolo; dentro do protocolo é redundante). */}
+        {!protoView && dfdView?.protocoloId != null && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const pid = dfdView?.protocoloId;
+              if (pid != null) verProtocolo(pid);
+            }}
+          >
+            <IconLayers className="h-4 w-4" /> Ver protocolo
+          </Button>
+        )}
       </div>
       {podeEditar && !dfdTrancado && (
         <div className="flex flex-wrap items-center gap-2">
@@ -794,14 +806,36 @@ export function DfdsView({
       : painelItem
         ? `Item ${painelItem.item ?? painelIdx + 1} — DFD ${dfdView?.numero ?? ""}`
         : `Mensagens — DFD ${dfdView?.numero ?? ""}`;
-  // Rodapé do painel do item: salvar (aparece quando ALGUM campo está destravado; só editor).
+  // Rodapé do painel do item: navegação p/ subir (Ver DFD / Ver protocolo) + salvar (quando
+  // ALGUM campo está destravado; só editor). "Ver DFD" fecha o painel do item (foca o DFD ao lado,
+  // útil no mobile onde só 1 painel aparece); "Ver protocolo" sobe ao protocolo de origem.
   const painelRodape =
-    painelItem && podeEditar && itemEditando ? (
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <span className="text-[12px] text-accent">Campo destravado — salva no banco.</span>
-        <Button onClick={salvarItensDfd} loading={salvandoDfd}>
-          Salvar alterações
-        </Button>
+    painel?.tipo === "item" && painelItem ? (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" onClick={() => setPainel(null)}>
+            Ver DFD
+          </Button>
+          {!protoView && dfdView?.protocoloId != null && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const pid = dfdView?.protocoloId;
+                if (pid != null) verProtocolo(pid);
+              }}
+            >
+              Ver protocolo
+            </Button>
+          )}
+        </div>
+        {podeEditar && itemEditando && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] text-accent">Campo destravado — salva no banco.</span>
+            <Button onClick={salvarItensDfd} loading={salvandoDfd}>
+              Salvar alterações
+            </Button>
+          </div>
+        )}
       </div>
     ) : undefined;
 
