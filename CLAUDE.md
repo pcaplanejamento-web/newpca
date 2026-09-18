@@ -458,10 +458,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Tabela ÚNICA de DFDs — `PlanilhaDfds` (`src/components/PlanilhaDfds.tsx`):** o MESMO componente lista DFDs em
   TODO lugar — banner de importação, banner do protocolo GRAVADO (`ProtocoloView`) e a **aba DFDs** (`DfdsView`). Cada
   tela mapeia seus dados (parse do PDF / D1) para o modelo `LinhaDfd`. Colunas: **[seleção] · Estado · [Situação] · Nº
-  DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · [Protocolo] · Itens · Valor total · [ações]** (as opcionais só
-  aparecem quando há dado), **todas filtráveis/ordenáveis**; os **DFDs com erro numa tabela SEPARADA** acima da de
-  regulares; **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição pela
-  edição em massa ou abrindo o DFD ao lado). **Capa em `CapaCampos`** (exportado de `ProtocoloView`) — a MESMA grade de
+  DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · Assinatura · [Protocolo] · Itens · Valor total · [ações]** (as
+  opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis**; os **DFDs com erro numa tabela SEPARADA** acima
+  da de regulares; **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição
+  pela edição em massa ou abrindo o DFD ao lado).
+  - **Célula "Estado" APONTA o erro (≤ 3 palavras) em vez de "Com erro"/"Atenção"** (`resumoEstado`/`ROTULO_CURTO`, puros):
+    mostra o problema PRINCIPAL (1º erro; sem erros, 1ª atenção) na cor da severidade + contadores **`+N`** dos demais
+    (`+N` **vermelho** = erros além do principal; `+N` **âmbar** = atenções — ex.: "Sem assinatura +2 +1"). O atributo
+    `title` traz a **lista completa** (erros + atenções) no tooltip nativo, sem abrir o DFD. **Regular não muda.** A
+    tabela de itens do `DfdView` usa o mesmo resumo por `mensagensItem` (valor unitário/quantidade).
+  - **Coluna "Assinatura"** identifica o tipo por `Badge`: **Centi** (verde) = certificado/sistema, **Dropsigner** (azul),
+    **Adobe** (vermelho) — `grupoAssinatura`/`gruposAssinatura` (puros); o servidor deriva `assinaturaGrupos` (`dfd.ts`
+    `comGrupos`) **sem** trazer o JSON pesado das assinaturas para as listas. **Capa em `CapaCampos`** (exportado de `ProtocoloView`) — a MESMA grade de
   campos da capa na importação e no gravado; **identificadores** (número/Id/data) sempre só-leitura, **conteúdo** com
   cadeado por campo (`modo` `leitura`/`criar`/`cadeado`).
   O **head** mostra **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o
@@ -469,8 +477,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   campo + Aplicar + Limpar embaixo). **Banner do protocolo gravado = mesmos blocos do de importação** (CapaCampos +
   StatMini + conciliação + PlanilhaDfds), + o **cadeado**.
 - **Item/DFD com ESTADO + relatório de erro (DfdView/DfdConferir):** a **tabela de itens** (Seção 4) tem uma coluna
-  **Estado** por item (`estadoItem`: `Com erro` quando falta valor unitário/quantidade — `faltasDoItem`), **filtro em
-  todas as colunas** e os **itens com pendência numa tabela SEPARADA** (acima da de regulares). O nº/tipo/planejamento
+  **Estado** por item que **aponta a falta ESPECÍFICA** (`resumoEstado(mensagensItem(it))`: "Item sem valor"/"Item sem
+  quantidade" + `+N` + tooltip `title`; `estadoItem`/`faltasDoItem` seguem como base), **filtro em todas as colunas** e os
+  **itens com pendência numa tabela SEPARADA** (acima da de regulares). O nº/tipo/planejamento
   do DFD (e nº/Id/Assunto do protocolo) ficam no **cabeçalho FIXO do banner** (`Modal.cabecalho` = `DfdCabecalho`/
   `ProtocoloCabecalho`) — NÃO se repetem no corpo. **Rodapé de TODA tabela = só os agregados das linhas** (`resumo`):
   nº de itens/DFDs + somatória dos valores (nunca texto de ajuda). **Mensagens/relatórios CIRÚRGICOS:** `faltasCirurgicasDfd`
@@ -550,7 +559,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do protocolo herdam o ano do PCA do protocolo** no envio (`ProtocoloUploadForm.protocolar` põe `anoPca` em cada
   `enviarDfdEmLotes`) — inclusive o **ano da PREVISÃO de entrega** segue o PCA (ponto 7: `normalizarSecoesDfd`/`normPrevisao`
   recebem o `anoPca`). Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam nº de **contrato**,
-  **ata** (registro de preços) e **licitação** da descrição para campos próprios; o `DfdConferir` mostra um bloco
+  **ARP** (ata de registro de preços; a coluna segue `numero_ata`, o rótulo na UI é **"Nº da ARP"**) e **licitação** da
+  descrição para campos próprios; o `DfdConferir` mostra um bloco
   **Referências da renovação** (editável) e, se o DFD-R não tiver **nenhuma**, um **aviso não-bloqueante** (aponta,
   não trava) — o usuário pode preencher à mão. O `DfdView` exibe **Ano do PCA** (Seção 1) e as referências (só DFD-R);
   o `ProtocoloView` mostra o **PCA (ano)** na capa. Editar refs num DFD gravado vai pelo `PATCH /api/dfd/[id]`

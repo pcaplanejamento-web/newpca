@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
+import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
 import type {
   CadastrarPcaPayload,
   DfdItemPayload,
@@ -63,6 +64,8 @@ export type DfdResumo = {
   numeroContrato: string | null;
   numeroAta: string | null;
   numeroLicitacao: string | null;
+  // Tipos de assinatura presentes (Centi/Dropsigner/Adobe) — coluna "Assinatura" das listas.
+  assinaturaGrupos: GrupoAssinatura[];
 };
 
 export type DfdItemRow = {
@@ -159,26 +162,35 @@ const colunasDfd = {
   numeroLicitacao: dfds.numeroLicitacao,
 };
 
+/** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe) derivados do JSON. `colunasDfd` NÃO traz
+ * as assinaturas (peso) → seleciona só aqui e mapeia para os grupos (leve). */
+function comGrupos(r: Omit<DfdResumo, "assinaturaGrupos"> & { assinaturas: string | null }): DfdResumo {
+  const { assinaturas, ...resto } = r;
+  return { ...resto, assinaturaGrupos: gruposAssinatura(parseAssinaturas(assinaturas)) };
+}
+
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
 export async function listarDfds(reparticaoId?: number): Promise<DfdResumo[]> {
-  return getDb()
-    .select(colunasDfd)
+  const rows = await getDb()
+    .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
+  return rows.map(comGrupos);
 }
 
 /** DFDs vinculados a um protocolo (detalhe do protocolo). Reusa `colunasDfd`. */
 export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdResumo[]> {
-  return getDb()
-    .select(colunasDfd)
+  const rows = await getDb()
+    .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(eq(dfds.protocoloId, protocoloId))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
+  return rows.map(comGrupos);
 }
 
 export async function getDfd(id: number): Promise<DfdDetalhe | null> {
@@ -215,7 +227,8 @@ export async function getDfd(id: number): Promise<DfdDetalhe | null> {
     .from(dfdItens)
     .where(eq(dfdItens.dfdId, id))
     .orderBy(asc(dfdItens.sequencial));
-  return { ...d, secoes: parseSecoes(d.secoes), assinaturas: parseAssinaturas(d.assinaturas), itens };
+  const assinaturas = parseAssinaturas(d.assinaturas);
+  return { ...d, secoes: parseSecoes(d.secoes), assinaturas, assinaturaGrupos: gruposAssinatura(assinaturas), itens };
 }
 
 /**

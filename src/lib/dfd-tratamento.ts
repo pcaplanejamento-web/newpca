@@ -154,7 +154,7 @@ export function dfdRSemReferencia(d: {
 
 /** Pendência (atenção) de um DFD-R sem referência — texto para o relatório opcional. */
 export const FALTA_REFERENCIA_RENOVACAO =
-  "DFD de renovação (DFD-R) sem referência de contrato, ata (registro de preços) ou licitação — informar ao menos uma.";
+  "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação — informar ao menos uma.";
 
 // ---- Estado/Situação de um PROTOCOLO já gravado (para a tabela de protocolos) ----
 // ESTADO = integridade do valor da capa × somatória dos DFDs; SITUAÇÃO = conteúdo.
@@ -530,6 +530,96 @@ export function contarMensagens(msgs: MensagemDfd[]): Record<StatusMensagem, num
     atencao: msgs.filter((m) => m.status === "atencao").length,
     acerto: msgs.filter((m) => m.status === "acerto").length,
   };
+}
+
+// ---- Resumo COMPACTO do estado (célula "Estado" das tabelas de DFDs e de itens) ----
+
+/**
+ * Rótulo CURTO (≤3 palavras) por ponto de conferência (`chave`) — para a célula "Estado" APONTAR o
+ * erro diretamente, em vez de "Com erro"/"Atenção". Sem entrada ⇒ cai no texto completo da mensagem.
+ */
+export const ROTULO_CURTO: Record<string, string> = {
+  "item.valorUnitario": "Item sem valor",
+  "item.quantidade": "Item sem quantidade",
+  "dfd.reparticao": "Sem unidade",
+  "dfd.orgao": "Órgão não identificado",
+  "dfd.orgaoUnidadeDivergente": "Órgão × unidade",
+  "dfd.anoPca": "Sem ano PCA",
+  "dfd.justificativa": "Sem justificativa",
+  "dfd.previsao": "Sem previsão",
+  "dfd.prioridade": "Sem prioridade",
+  "dfd.fundamentacao": "Sem fundamentação",
+  "dfd.referenciaRenovacao": "DFD-R sem referência",
+  "dfd.valorEstimadoVsTotal": "Valor diverge",
+  "dfd.assinatura": "Sem assinatura",
+  "item.naoCatalogado": "Fora de catálogo",
+  "item.divergenteCatalogo": "Divergente do catálogo",
+  "item.tipoIncompativel": "Tipo incompatível",
+};
+
+/** Resumo compacto para a célula "Estado": o problema PRINCIPAL (rótulo curto + cor), os contadores
+ * "+N" por severidade (erros em vermelho, atenções em âmbar) e o `titulo` (lista completa) p/ o
+ * tooltip (atributo `title`, sem precisar abrir o DFD/item). */
+export type ResumoEstado = {
+  rotulo: string; // rótulo curto do PRINCIPAL ("" ⇒ regular; a UI mantém "Regular")
+  cor: string; // cor do principal (danger/warn) ou --ok
+  extraErros: number; // erros ALÉM do principal (contador "+N" vermelho)
+  extraAtencoes: number; // atenções a mostrar como "+N" âmbar
+  titulo: string; // lista completa (erros + atenções) p/ o tooltip nativo (`title`)
+};
+
+/**
+ * Monta o resumo da célula "Estado" a partir das mensagens (só erros/atenções contam). PRINCIPAL =
+ * 1º erro; sem erros, 1ª atenção. Sem problema ⇒ `rotulo:""` (regular, nada muda). Puro/testável.
+ */
+export function resumoEstado(msgs: { status: StatusMensagem; chave: string; texto: string }[]): ResumoEstado {
+  const erros = msgs.filter((m) => m.status === "erro");
+  const atencoes = msgs.filter((m) => m.status === "atencao");
+  const principal = erros[0] ?? atencoes[0];
+  if (!principal) return { rotulo: "", cor: "var(--ok)", extraErros: 0, extraAtencoes: 0, titulo: "" };
+  const ehErro = principal.status === "erro";
+  const titulo = [...erros, ...atencoes].map((m) => `${m.status === "erro" ? "Erro" : "Atenção"}: ${m.texto}`).join("\n");
+  return {
+    rotulo: ROTULO_CURTO[principal.chave] ?? principal.texto,
+    cor: ehErro ? "var(--danger)" : "var(--warn)",
+    extraErros: ehErro ? erros.length - 1 : 0,
+    extraAtencoes: ehErro ? atencoes.length : atencoes.length - 1,
+    titulo,
+  };
+}
+
+/** Mensagens (erro) das faltas PRÓPRIAS de um item da Seção 4 (valor unitário/quantidade) — para o
+ * resumo da célula "Estado" da tabela de itens. A conformidade com o catálogo é coluna à parte. */
+export function mensagensItem(it: DfdItemParseado): { status: StatusMensagem; chave: string; texto: string }[] {
+  const out: { status: StatusMensagem; chave: string; texto: string }[] = [];
+  if (it.valorUnitario == null || it.valorUnitario <= 0)
+    out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
+  if (it.quantidade == null) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." });
+  return out;
+}
+
+// ---- Tipo da assinatura (coluna "Assinatura") ----
+export type GrupoAssinatura = "centi" | "dropsigner" | "adobe";
+
+/** Grupo do tipo de assinatura pela `fonte`. Certificado/sistema = **Centi** (sistema oficial da
+ * Prefeitura); dropsigner = **Dropsigner**; adobe = **Adobe**. */
+export function grupoAssinatura(fonte: string): GrupoAssinatura {
+  if (fonte === "dropsigner") return "dropsigner";
+  if (fonte === "adobe") return "adobe";
+  return "centi";
+}
+
+export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
+  centi: "Centi",
+  dropsigner: "Dropsigner",
+  adobe: "Adobe",
+};
+
+/** Grupos DISTINTOS de assinatura presentes (ordem fixa centi→dropsigner→adobe). Vazio ⇒ sem
+ * assinatura reconhecida. */
+export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinatura[] {
+  const set = new Set(assinaturas.map((a) => grupoAssinatura(a.fonte)));
+  return (["centi", "dropsigner", "adobe"] as GrupoAssinatura[]).filter((g) => set.has(g));
 }
 
 /**

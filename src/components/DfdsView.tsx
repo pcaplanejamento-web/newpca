@@ -13,6 +13,8 @@ import {
   ESTADO_PROTOCOLO_ROTULO,
   estadoProtocolo,
   estadoProtocoloCor,
+  FALTA_REFERENCIA_RENOVACAO,
+  resumoEstado,
   SITUACAO_PROTOCOLO_ROTULO,
   situacaoProtocolo,
   STATUS_MENSAGEM_COR,
@@ -426,6 +428,13 @@ export function DfdsView({
       nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignorar"
         ? "atencao"
         : "regular",
+    // Gravados já validados → o único apontamento na lista é o DFD-R sem referência (atenção).
+    resumo: resumoEstado(
+      dfdRSemReferencia(d) && nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignorar"
+        ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
+        : [],
+    ),
+    assinaturas: d.assinaturaGrupos,
     protocolo: d.protocoloNumero,
   }));
   const acoesDfd = (l: LinhaDfd) => {

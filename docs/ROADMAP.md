@@ -20,6 +20,24 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Tabelas de DFD/Item: estado APONTADO + coluna Assinatura + Nº da ARP — entregue
+✅ Refino das tabelas de DFDs (dentro do protocolo) e de Itens (dentro do DFD):
+- **A célula "Estado" aponta o erro** (≤ 3 palavras) em vez de "Com erro"/"Atenção": mostra o problema
+  PRINCIPAL (1º erro; sem erros, 1ª atenção) com o rótulo curto do ponto (ex.: "Item sem valor", "Sem
+  assinatura", "DFD-R sem referência", "Fora de catálogo") na cor da severidade.
+- **Contadores "+N" por severidade** para os demais apontamentos: `+N` **vermelho** = erros além do
+  principal, `+N` **âmbar** = atenções (ex.: "Sem assinatura +2 +1").
+- **Tooltip nativo** (atributo `title`) com a **lista completa** de erros + atenções ao passar o mouse,
+  sem abrir o DFD/Item (mesmo padrão dos demais tooltips do app).
+- **Nova coluna "Assinatura"** nas tabelas de DFD identificando o tipo: **Centi** (verde), **Dropsigner**
+  (azul), **Adobe** (vermelho) — `Badge` por grupo presente; derivada no servidor (`assinaturaGrupos`) sem
+  carregar o JSON pesado das assinaturas nas listas.
+- Núcleo PURO/testável em `dfd-tratamento.ts` (`resumoEstado`/`ROTULO_CURTO`/`mensagensItem`/`grupoAssinatura`/
+  `gruposAssinatura`), reutilizado por `PlanilhaDfds` e pela tabela de itens do `DfdView`. Regular não muda.
+- **Rótulo do DFD "Nº da ata (registro de preços)" → "Nº da ARP"** (campo + textos de ajuda) e **limpeza do
+  botão de verificação (ICP-Brasil) da assinatura Adobe** (Adobe não tem verificador público — a validação é
+  no PDF assinado original).
+
 ### Assinatura + Órgão/Unidade: correções (auditoria) — entregue
 ✅ Auditoria dos dois subsistemas + correções cirúrgicas:
 - **Dropsigner como assinatura NORMAL:** `validarAssinatura` passou a casar a Dropsigner por nome como os demais

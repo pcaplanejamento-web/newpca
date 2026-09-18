@@ -724,7 +724,7 @@ export function Catalogo() {
             ...(incluirAtencaoDemo
               ? [
                   "3. DFD 712 (DFD-R):",
-                  "   - DFD de renovação (DFD-R) sem referência de contrato, ata (registro de preços) ou licitação — informar ao menos uma.",
+                  "   - DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação — informar ao menos uma.",
                 ]
               : []),
             "",
