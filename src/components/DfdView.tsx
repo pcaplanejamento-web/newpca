@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
   corVeredictoCatalogo,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
+import { valoresBatem } from "@/lib/normalize";
 import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
@@ -68,6 +69,7 @@ export type DfdVisual = {
   numeroContrato: string | null;
   numeroAta: string | null;
   numeroLicitacao: string | null;
+  valorEstimado: number | null;
   valorTotal: number | null;
   reparticaoCodigo: string | null;
   reparticaoNome: string | null;
@@ -107,7 +109,7 @@ const COLS: Column<ItemK>[] = [
       );
     },
   },
-  { key: "item", header: "Item", align: "center", value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
+  { key: "item", header: "Item", align: "right", value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
@@ -125,7 +127,7 @@ const COLS: Column<ItemK>[] = [
   {
     key: "quantidade",
     header: "Qtd.",
-    align: "center",
+    align: "right",
     value: (r) => String(r.quantidade ?? ""),
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
   },
@@ -204,6 +206,9 @@ export function DfdView({
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem unidade";
+  // Nota "Estimado (nota)" quando o estimado difere da somatória — o ADM pode ocultar ("ignorar").
+  const mostrarNotaEstimado =
+    nivelDe(regras, "dfd.valorEstimadoVsTotal", { dfdTipo: tipoCurtoDfd(dfd.tipo) }) !== "ignorar";
   const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
   // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A
   // coluna é INFORMATIVA (o bloqueio, quando o ADM eleva a fundamental, é do nível do DFD);
@@ -258,11 +263,18 @@ export function DfdView({
           não aqui. Nas telas soltas (catálogo) o `DfdCabecalho` é renderizado acima. */}
 
       {/* Head — mini banners (um por informação): total de itens + valor total.
-          O valor total do DFD é a somatória dos valores dos itens (Seção 4); sem valores nos
-          itens, fica ZERADO (o sistema não estima nada). */}
-      <div className="grid grid-cols-2 gap-3">
+          O valor total do DFD é a somatória dos valores dos itens (Seção 4). */}
+      <div className="grid grid-cols-2 gap-3" data-ancora="valor">
         <StatMini label="Total de itens" value={num(dfd.totalItens ?? dfd.itens.length)} />
-        <StatMini label="Valor total" value={brl(dfd.valorTotal ?? 0)} />
+        <StatMini
+          label="Valor total"
+          value={dfd.valorTotal != null ? brl(dfd.valorTotal) : "—"}
+          hint={
+            mostrarNotaEstimado && dfd.valorEstimado != null && !valoresBatem(dfd.valorEstimado, dfd.valorTotal)
+              ? `Estimado (nota): ${brl(dfd.valorEstimado)}`
+              : undefined
+          }
+        />
       </div>
 
       {/* Seção 1 — Área requisitante (só-leitura). Oculta quando o `DfdConferir` mostra a versão
@@ -297,7 +309,7 @@ export function DfdView({
           {!dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
             <p className="mt-3 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--warn)" }}>
               <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
-              Atenção: DFD-R sem referência de contrato, ARP ou licitação.
+              Atenção: DFD-R sem referência de contrato, ata ou licitação.
             </p>
           )}
         </section>

@@ -142,6 +142,7 @@ export type ProtocoloVisualDfd = {
   reparticaoCodigo: string | null;
   totalItens: number | null;
   valorTotal: number | null;
+  valorEstimado: number | null;
   // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO na lista.
   numeroContrato?: string | null;
   numeroAta?: string | null;
@@ -170,7 +171,7 @@ export type ProtocoloVisual = {
   dfds: ProtocoloVisualDfd[];
 };
 
-const valorDfd = (d: ProtocoloVisualDfd) => d.valorTotal ?? 0;
+const valorDfd = (d: ProtocoloVisualDfd) => d.valorTotal ?? d.valorEstimado ?? 0;
 
 /**
  * Cabeçalho FIXO do banner do protocolo (topo do `Modal`, não o corpo): nº do processo +

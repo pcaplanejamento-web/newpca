@@ -261,6 +261,7 @@ describe("parse-dfd-pdf-core", () => {
     assert.equal(d.matricula, "1043055");
     assert.equal(d.email, "claudioluiz99685320@gmail.com");
     assert.equal(d.telefone, "(64) 99968-5320");
+    assert.equal(d.valorEstimado, 342342.72);
     assert.equal(d.valorTotal, 342342.72);
   });
 

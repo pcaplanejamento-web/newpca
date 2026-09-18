@@ -40,8 +40,8 @@ export type ProtocoloDetalhe = ProtocoloResumo & {
   dfds: DfdResumo[];
 };
 
-// Valor de um DFD p/ somatório: soma dos itens (zero se sem valores; sem estimativa).
-const VALOR_DFD = sql<number>`COALESCE(${dfds.valorTotal}, 0)`;
+// Valor de um DFD p/ somatório: total da tabela, senão o estimado.
+const VALOR_DFD = sql<number>`COALESCE(${dfds.valorTotal}, ${dfds.valorEstimado}, 0)`;
 
 /** Protocolos (opcionalmente filtrados por repartição — Geral passa `undefined`),
  * com totais agregados ao vivo dos DFDs vinculados. */
@@ -102,7 +102,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
 
   const dfdsList = await listarDfdsDoProtocolo(id);
   const totalItens = dfdsList.reduce((s, d) => s + (d.totalItens ?? 0), 0);
-  const valorTotal = dfdsList.reduce((s, d) => s + (d.valorTotal ?? 0), 0);
+  const valorTotal = dfdsList.reduce((s, d) => s + (d.valorTotal ?? d.valorEstimado ?? 0), 0);
   return { ...p, totalDfds: dfdsList.length, totalItens, valorTotal, dfds: dfdsList };
 }
 

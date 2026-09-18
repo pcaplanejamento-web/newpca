@@ -72,7 +72,7 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
       {
         key: "qtd",
         header: "Qtd.",
-        align: "center",
+        align: "right",
         minWidth: 90,
         filter: "none",
         value: (r) => String(r.quantidade ?? ""),

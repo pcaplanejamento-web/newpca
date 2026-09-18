@@ -206,15 +206,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   da secretaria, p/ siglas divergentes; confirmável no import).
 - **Captura completa (migração `0013`):** o parser extrai TODO o formulário — cabeçalho (nº/planejamento/
   tipo/objeto/órgão/setor/responsável/**matrícula/e-mail/telefone**), a tabela da Seção 4 com **valor unitário
-  e total por item** + **total geral**, e o **texto das demais seções
+  e total por item** + **total geral**, o **valor estimado** (nota "R$"), e o **texto das demais seções
   numeradas** (2,3,5,6,7,8,9…) num coletor genérico salvo em `dfds.secoes` (JSON). O detalhe (`/painel/pca/dfd/[id]`)
   mostra tudo ao clicar em "Ver".
-  - **Valor do DFD = SÓ a soma dos itens (`valorTotal`); nunca estimado.** A antiga "estimativa da nota" (o "R$"
-    solto do cabeçalho, `valorEstimado`) foi **eliminada** de ponta a ponta (parser, tipos, schema, servidor, UI e o
-    ponto de avaliação `dfd.valorEstimadoVsTotal`): o valor é o `valorTotal` (Σ itens); **sem valores nos itens, fica
-    ZERADO** (`valorTotal ?? 0`) — o sistema não estima nada. O total do **PCA** (`pcas.valorEstimado`, coluna mantida)
-    passou a somar os `valorTotal` dos DFDs. A coluna `dfds.valor_estimado` fica **dormante** (sem código; sem migração
-    de DROP).
 - **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
@@ -467,8 +461,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · Assinatura · [Protocolo] · Itens · Valor total · [ações]** (as
   opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis**; os **DFDs com erro numa tabela SEPARADA** acima
   da de regulares; **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição
-  pela edição em massa ou abrindo o DFD ao lado) — a sigla vem em **AZUL (accent) quando detectada automaticamente**
-  (a própria cor denota o auto; **sem** o antigo rótulo "auto"), e na cor normal quando definida à mão.
+  pela edição em massa ou abrindo o DFD ao lado).
   - **Célula "Estado" APONTA o erro (≤ 3 palavras) em vez de "Com erro"/"Atenção"** (`resumoEstado`/`ROTULO_CURTO`, puros):
     mostra o problema PRINCIPAL (1º erro; sem erros, 1ª atenção) na cor da severidade + contadores **`+N`** dos demais
     (`+N` **vermelho** = erros além do principal; `+N` **âmbar** = atenções — ex.: "Sem assinatura +2 +1"). O atributo
@@ -491,9 +484,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ProtocoloCabecalho`) — NÃO se repetem no corpo. **Rodapé de TODA tabela = só os agregados das linhas** (`resumo`):
   nº de itens/DFDs + somatória dos valores (nunca texto de ajuda). **Mensagens/relatórios CIRÚRGICOS:** `faltasCirurgicasDfd`
   aponta EXATAMENTE o erro (quais itens, qual seção) e O QUE fazer; o relatório do protocolo sai em **formato de
-  DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto p/ devolver o processo — os **DFDs com a MESMA pendência
-  são agrupados numa única mensagem** e cada DFD é referenciado por **número + nº de planejamento** (ex.: "DFDs 531
-  (Planej. 640), 702 (Planej. 811):"). Quando há erro, o botão
+  DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto p/ devolver o processo. Quando há erro, o botão
   **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
   (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
   [fonte única, reusada por `faltasObrigatorias`] + `estadoProtocolo`/`situacaoProtocolo`).
@@ -751,8 +742,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
-  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
-  **alinhamento das células = CENTRO por padrão** (horizontal + vertical `align-middle`), `align:"right"` **só p/ valores monetários (R$)** e `align:"left"` em exceções — o `Column.align` é `"left"|"center"|"right"`),
+  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
   matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`

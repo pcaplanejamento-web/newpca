@@ -164,6 +164,7 @@ export function DfdUploadForm({
           numeroAta: preview.numeroAta,
           numeroLicitacao: preview.numeroLicitacao,
           reparticaoId: repId,
+          valorEstimado: preview.valorEstimado,
           valorTotal: preview.valorTotal,
           nomeArquivo: preview.nomeArquivo,
           secoes: preview.secoes,

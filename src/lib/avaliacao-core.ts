@@ -40,6 +40,7 @@ export type ChaveAvaliacao =
   | "dfd.anoPca"
   | "dfd.assinatura"
   | "dfd.referenciaRenovacao"
+  | "dfd.valorEstimadoVsTotal"
   | "item.valorUnitario"
   | "item.quantidade"
   | "item.naoCatalogado"
@@ -80,6 +81,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "dfd.anoPca", sujeito: "dfd", rotulo: "Ano do PCA", descricao: "PCA (ano) definido no DFD.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   { chave: "dfd.assinatura", sujeito: "dfd", rotulo: "Assinatura digital", descricao: "Assinatura digital válida (PDF exige assinatura; .xlsx é opcional).", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   { chave: "dfd.referenciaRenovacao", sujeito: "dfd", rotulo: "Referência de renovação (DFD-R)", descricao: "DFD-R com contrato, ARP ou licitação.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario", suportaEdicao: true, editavelPadrao: true },
+  { chave: "dfd.valorEstimadoVsTotal", sujeito: "dfd", rotulo: "Valor estimado × somatória", descricao: "Nota quando o valor estimado do cabeçalho difere da soma dos itens.", niveisPermitidos: ["intermediario", "ignorar"], nivelPadrao: "intermediario" },
   // ---- ITEM ----
   { chave: "item.valorUnitario", sujeito: "item", rotulo: "Valor unitário", descricao: "Todo item com valor unitário maior que zero.", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "fundamental" },
   { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade informada. (O item sempre marca em vermelho quando falta; o nível decide se bloqueia.)", niveisPermitidos: ["fundamental", "intermediario", "ignorar"], nivelPadrao: "intermediario" },

@@ -93,6 +93,7 @@ export const dfdMetaSchema = z.object({
   numeroLicitacao: textoCurtoOpc,
   reparticaoId: z.number().int().positive().optional().nullable(),
   protocoloId: z.number().int().positive().optional().nullable(),
+  valorEstimado: z.number().nonnegative().optional().nullable(),
   valorTotal: z.number().nonnegative().optional().nullable(),
   nomeArquivo: textoCurtoOpc,
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),

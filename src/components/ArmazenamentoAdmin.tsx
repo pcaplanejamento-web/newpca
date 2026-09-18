@@ -149,7 +149,7 @@ export function ArmazenamentoAdmin() {
     {
       key: "linhas",
       header: "Linhas",
-      align: "center",
+      align: "right",
       filter: "none",
       value: (t) => String(t.linhas),
       render: (t) => <span className="tabular-nums">{num(t.linhas)}</span>,
@@ -157,7 +157,7 @@ export function ArmazenamentoAdmin() {
     {
       key: "bytes",
       header: "Tamanho",
-      align: "center",
+      align: "right",
       filter: "none",
       value: (t) => String(t.bytes),
       render: (t) => <span className="tabular-nums">{formatBytes(t.bytes)}</span>,

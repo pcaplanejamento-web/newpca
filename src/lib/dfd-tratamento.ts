@@ -372,7 +372,7 @@ export function avaliarDfd(
   add("dfd.orgao", ctx?.orgaoNaoIdentificado === true, "órgão identificado (Órgão/Entidade)");
   add("dfd.orgaoUnidadeDivergente", ctx?.orgaoUnidadeDivergente === true, "órgão × unidade divergentes");
   for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
-  add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ARP ou licitação)");
+  add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ata ou licitação)");
   // Conformidade com o catálogo (veredito pré-computado no ctx; sem catálogo/verdicto ⇒ sem efeito).
   add("item.naoCatalogado", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "naoCatalogado").length > 0, "itens não catalogados");
   add("item.divergenteCatalogo", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "divergenteCatalogo").length > 0, "itens divergentes do catálogo");
@@ -406,6 +406,8 @@ export const STATUS_MENSAGEM_ROTULO: Record<StatusMensagem, string> = {
 /** Entrada de avaliação para as mensagens (superset de `EntradaAvaliacaoDfd`). */
 export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
   anoPca?: number | null;
+  valorEstimado?: number | null;
+  valorTotal?: number | null;
   /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
   assinatura?: { status: "ok" | "dropsigner" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
 };
@@ -463,7 +465,7 @@ export function mensagensDfd(
   // Referência de renovação — só para DFD-R
   if (c.dfdTipo === "DFD-R") {
     add("dfd.referenciaRenovacao", "referenciaRenovacao", !dfdRSemReferencia(d),
-      FALTA_REFERENCIA_RENOVACAO, "Referência de renovação informada (contrato, ARP ou licitação).");
+      FALTA_REFERENCIA_RENOVACAO, "Referência de renovação informada (contrato, ata ou licitação).");
   }
 
   // Itens (Seção 4)
@@ -497,6 +499,12 @@ export function mensagensDfd(
     }
     if (algumAtivo && !algumProblema && total > 0)
       out.push({ chave: "item.naoCatalogado", status: "acerto", texto: "Itens conferem com o catálogo de referência.", ancora: "itens" });
+  }
+
+  // Valor estimado (nota) × somatória
+  if (d.valorEstimado != null && d.valorTotal != null) {
+    add("dfd.valorEstimadoVsTotal", "valor", valoresBatem(d.valorEstimado, d.valorTotal),
+      "Valor estimado (nota) difere da somatória dos itens.", "Valor estimado confere com a somatória dos itens.");
   }
 
   // Assinatura digital
@@ -542,6 +550,7 @@ export const ROTULO_CURTO: Record<string, string> = {
   "dfd.prioridade": "Sem prioridade",
   "dfd.fundamentacao": "Sem fundamentação",
   "dfd.referenciaRenovacao": "DFD-R sem referência",
+  "dfd.valorEstimadoVsTotal": "Valor diverge",
   "dfd.assinatura": "Sem assinatura",
   "item.naoCatalogado": "Fora de catálogo",
   "item.divergenteCatalogo": "Divergente do catálogo",
@@ -693,7 +702,7 @@ export function linhasRelatorioProtocolo(info: {
   interessado?: string | null;
   assunto?: string | null;
   capaMotivo?: string | null;
-  dfds: { numero: string; planejamento?: string | null; tipo?: string | null; faltas: string[] }[]; // só os com pendência
+  dfds: { numero: string; tipo?: string | null; faltas: string[] }[]; // só os com pendência
 }): string[] {
   const L: string[] = ["DESPACHO DE DEVOLUÇÃO PARA CORREÇÃO", ""];
   L.push(`Processo nº ${info.numero}${info.idExterno ? ` (Id ${info.idExterno})` : ""}`);
@@ -709,21 +718,10 @@ export function linhasRelatorioProtocolo(info: {
     L.push(`${n}. CAPA DO PROCESSO: ${info.capaMotivo}`);
     n++;
   }
-  // Agrupa numa ÚNICA mensagem os DFDs com EXATAMENTE as mesmas pendências (evita repetir o
-  // mesmo texto de erro várias vezes). Cada DFD é referenciado por número + nº de planejamento.
-  const grupos = new Map<string, { dfds: { numero: string; planejamento?: string | null }[]; faltas: string[] }>();
   for (const d of info.dfds) {
-    const chave = d.faltas.join("");
-    const g = grupos.get(chave);
-    if (g) g.dfds.push({ numero: d.numero, planejamento: d.planejamento });
-    else grupos.set(chave, { dfds: [{ numero: d.numero, planejamento: d.planejamento }], faltas: d.faltas });
-  }
-  for (const g of grupos.values()) {
-    const refs = g.dfds
-      .map((d) => `${d.numero}${d.planejamento ? ` (Planej. ${d.planejamento})` : ""}`)
-      .join(", ");
-    L.push(`${n}. ${g.dfds.length === 1 ? "DFD" : "DFDs"} ${refs}:`);
-    for (const f of g.faltas) L.push(`   - ${f}`);
+    const tipo = tipoCurtoDfd(d.tipo);
+    L.push(`${n}. DFD ${d.numero}${tipo ? ` (${tipo})` : ""}:`);
+    for (const f of d.faltas) L.push(`   - ${f}`);
     n++;
   }
   if (n === 1) L.push("Nenhuma pendência encontrada.");

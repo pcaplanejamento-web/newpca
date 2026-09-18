@@ -353,10 +353,8 @@ export const dfds = sqliteTable(
     numeroContrato: text("numero_contrato"),
     numeroAta: text("numero_ata"),
     numeroLicitacao: text("numero_licitacao"),
-    // DEPRECADO: a "estimativa da nota" foi removida — o valor do DFD é SÓ a soma dos itens
-    // (`valorTotal`). Coluna mantida dormante (nenhum código lê/grava) p/ evitar migração de DROP.
-    valorEstimado: real("valor_estimado"),
-    valorTotal: real("valor_total"), // total do DFD = soma dos itens (zero se sem valores)
+    valorEstimado: real("valor_estimado"), // estimativa da nota (Seção 4)
+    valorTotal: real("valor_total"), // total da tabela (soma dos itens)
     secoes: text("secoes"), // JSON: {numero,titulo,texto}[] das demais seções
     assinaturas: text("assinaturas"), // JSON: Assinatura[] (assinaturas digitais do DFD)
     nomeArquivo: text("nome_arquivo"),
@@ -410,7 +408,7 @@ export const pcas = sqliteTable("pcas", {
   ativo: integer("ativo", { mode: "boolean" }).default(false), // 1 = PCA vigente (só um)
   totalDfds: integer("total_dfds").default(0),
   totalItens: integer("total_itens").default(0),
-  valorEstimado: real("valor_estimado").default(0), // total do PCA = soma dos valores (Σ itens) dos DFDs
+  valorEstimado: real("valor_estimado").default(0), // soma dos estimados dos DFDs
   criadoPor: integer("criado_por").references(() => usuarios.id, {
     onDelete: "set null",
   }),
