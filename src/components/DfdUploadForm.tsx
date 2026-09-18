@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
@@ -225,11 +225,11 @@ export function DfdUploadForm({
         validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
           exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
         }),
-        nivelDe(regras, "dfd.assinatura", ctxAv),
+        comportamentoNo(regras, "dfd.assinatura", ctxAv),
       )
     : false;
-  // O PCA é obrigatório no envio do DFD avulso quando `dfd.anoPca` for fundamental.
-  const anoPcaBloqueia = anoPca == null && nivelDe(regras, "dfd.anoPca", ctxAv) === "fundamental";
+  // O PCA é obrigatório no envio do DFD avulso quando `dfd.anoPca` bloqueia.
+  const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "dfd.anoPca", ctxAv) === "bloqueia";
   const bloqueado = faltas.length > 0 || assinaturaBloqueia || anoPcaBloqueia;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 

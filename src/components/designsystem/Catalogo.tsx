@@ -63,6 +63,7 @@ import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { PlanilhaDfds } from "@/components/PlanilhaDfds";
 import { RelatorioErros } from "@/components/RelatorioErros";
 import { Segmented } from "@/components/Segmented";
+import { Switch } from "@/components/Switch";
 import { StatCard } from "@/components/StatCard";
 import { StatMini } from "@/components/StatMini";
 import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
@@ -541,6 +542,7 @@ export function Catalogo() {
   const [tclick, setTclick] = useState<string | number | null>(null);
   const [busca, setBusca] = useState("");
   const [check, setCheck] = useState(true);
+  const [sw, setSw] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [incluirAtencaoDemo, setIncluirAtencaoDemo] = useState(true);
@@ -647,6 +649,10 @@ export function Catalogo() {
         </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-6">
+          <Switch label="Bloqueia importação/protocolação" checked={sw} onChange={setSw} />
+          <Switch label="Desligada (desabilitada)" checked={false} onChange={() => {}} disabled />
         </div>
       </Secao>
 

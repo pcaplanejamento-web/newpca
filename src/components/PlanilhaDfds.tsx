@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import {
   ASSINATURA_ROTULO,
-  ESTADO_ROTULO,
   type EstadoDfd,
   estadoCor,
+  estadoRotulo,
   type GrupoAssinatura,
   type ResumoEstado,
 } from "@/lib/dfd-tratamento";
@@ -59,6 +60,7 @@ export function PlanilhaDfds({
   acoes,
   compacta = false,
   fillHeight = false,
+  regras,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -70,6 +72,8 @@ export function PlanilhaDfds({
   acoes?: (l: LinhaDfd) => ReactNode;
   compacta?: boolean;
   fillHeight?: boolean;
+  /** Regras do ADM — cor/rótulo dos estados de ciclo seguem a configuração (fallback = tokens). */
+  regras?: RegrasAvaliacao;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -79,7 +83,7 @@ export function PlanilhaDfds({
       key: "estado",
       header: "Estado",
       minWidth: 150,
-      value: (r) => (r.estadoMotivo ? "Leitura incompleta" : r.resumo?.rotulo || ESTADO_ROTULO[r.estado]),
+      value: (r) => (r.estadoMotivo ? "Leitura incompleta" : r.resumo?.rotulo || estadoRotulo(r.estado, regras)),
       render: (r) => {
         // Leitura incompleta (parse falhou) — mantém a mensagem própria.
         if (r.estadoMotivo)
@@ -101,11 +105,11 @@ export function PlanilhaDfds({
               {res.extraAtencoes > 0 && <span className="font-bold" style={{ color: "var(--warn)" }}>+{res.extraAtencoes}</span>}
             </span>
           );
-        // Regular / Regularizado / Editado / Pendente — inalterado.
+        // Regular / Regularizado / Editado / Pendente — cor/rótulo seguem o ADM (fallback = tokens).
         return (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoCor(r.estado) }}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(r.estado) }} />
-            {ESTADO_ROTULO[r.estado]}
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoCor(r.estado, regras) }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoCor(r.estado, regras) }} />
+            {estadoRotulo(r.estado, regras)}
           </span>
         );
       },

@@ -342,20 +342,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`dfd-tratamento`), que resolve o **nível** de cada ponto; com `regras` no padrão do catálogo devolve exatamente a
   lista de hoje (**invariante coberto por teste**). O **ano do PCA** e a **assinatura** seguem como portões à parte,
   também com nível próprio.
-- **Avaliação CONFIGURÁVEL pelo ADM (`avaliacao-core.ts` puro + `avaliacao.ts` loader):** cada dado de
-  **Protocolo/DFD/Item** tem um **nível** — `fundamental` (bloqueia), `intermediario` (só avisa/ATENÇÃO âmbar),
-  `automatico` (corrige sozinho onde há corretor), `ignorar`. O **catálogo** `CATALOGO_AVALIACAO` (fonte única: UI +
-  defaults + validação) traz `niveisPermitidos`/`nivelPadrao` (os defaults reproduzem o comportamento atual — config
-  vazia ⇒ igual a hoje) + as flags `suportaEdicao`/`suportaAuto`. `nivelDe(regras, chave, ctx)` resolve com **exceções
-  por tipo de DFD** (`DFD-S/R/O/E`, **fixos**) e por **categoria de Protocolo** (`INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO
-  ONEROSA`, **fixas** em `CATEGORIAS`; `classificarAssunto(assunto)` casa a palavra da capa). Além do nível, o ADM
-  controla, **por campo**: **`editaveis`** (`editavelDe` — se o usuário pode editar o campo na análise; travado ⇒
-  `disabled` no `DfdConferir`) e **`sinonimos`** (`aplicarSinonimos` — palavras-chave que, no nível `automatico`,
+- **Avaliação CONFIGURÁVEL pelo ADM — IMPORTÂNCIAS gerenciáveis (`avaliacao-core.ts` puro + `avaliacao.ts` loader):**
+  o rigor de cada dado de **Protocolo/DFD/Item** é uma **importância** — uma LISTA que o ADM cria/edita/exclui, cada
+  uma com **nome**, **cor** (hex livre) e um **comportamento** (o enum REAL da engine): `bloqueia` (trava import/
+  protocolação), `avisa` (só ATENÇÃO âmbar), `automatico` (corrige sozinho onde há corretor, nunca bloqueia) ou
+  `ignora` (não avalia). As **4 base** (`IMPORTANCIAS_PADRAO`: Fundamental/Intermediário/Automático/Ignorar — **ids ==
+  as strings de nível históricas**, p/ a config já gravada seguir valendo sem migração) têm **nome/cor editáveis,
+  comportamento FIXO e não são excluíveis**; as customizadas têm CRUD total. O **catálogo** `CATALOGO_AVALIACAO` (fonte
+  única: UI + defaults + validação) traz, por ponto, `comportamentosPermitidos`/`comportamentoPadrao` (os defaults
+  reproduzem o comportamento atual — config vazia ⇒ igual a hoje) + as flags `suportaEdicao`/`suportaAuto`.
+  `nivelDe(regras, chave, ctx)` devolve o **id da importância** efetiva (guard valida o comportamento ∈
+  `comportamentosPermitidos`; id órfão/desconhecido cai no padrão — deletar/renomear NUNCA corrompe) e
+  `comportamentoNo(regras, chave, ctx)` = `comportamentoDe(regras, nivelDe(...))` é o atalho que a engine usa em TODO
+  ramo (`=== "bloqueia"`/`!== "ignora"`/…). Resolve com **exceções por tipo de DFD** (`DFD-S/R/O/E`, **fixos**) e por
+  **categoria de Protocolo** (`INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA`, **fixas** em `CATEGORIAS`;
+  `classificarAssunto(assunto)` casa a palavra da capa). **Cores/estados que SEGUEM a importância:** `mensagensDfd`/
+  `mensagensItem` marcam cada mensagem com a `cor` da importância do ponto (`corImportancia`) → `resumoEstado` usa
+  `message.cor` → a célula "Estado" e o painel `MensagensDfd` mostram a cor EXATA da importância; `estadoCor`/
+  `estadoItemCor`/`estadoProtocoloCor`/`estadoRotulo` recebem `regras` (opcional; sem elas = tokens de hoje) e puxam a
+  cor da importância base do comportamento (severidade) ou dos **estados de ciclo** editáveis (`estadosCiclo`:
+  Editado/Regularizado/Regular/Pendente — só rótulo/cor, quantidade fixa). Além da importância, o ADM controla, **por
+  campo**: **`editaveis`** (`editavelDe` — se o usuário pode editar o campo na análise; travado ⇒ `disabled` no
+  `DfdConferir`) e **`sinonimos`** (`aplicarSinonimos` — palavras-chave que, quando a importância é `automatico`,
   trocam o texto TODO da seção pelo valor canônico, dentro de `normalizarSecoesDfd`). Armazenado na linha
-  `configuracoes` id=1 (chave `avaliacao`, **sem migração**), lido por `getRegrasAvaliacao()` (cache 60s, fail-safe) e
+  `configuracoes` id=1 (chave `avaliacao`, **sem migração** — `importancias`/`estadosCiclo` são chaves novas do blob,
+  declaradas em `avaliacaoSchema` senão o Zod as descarta), lido por `getRegrasAvaliacao()` (cache 60s, fail-safe) e
   gravado em `/api/admin/avaliacao` (`exigirAdmin`, preserva as chaves irmãs da aparência). UI = aba **"Avaliação"** de
-  `/painel/configuracoes` (`AvaliacaoAdmin`: sub-abas Protocolo/DFD/Item, seletor de contexto p/ as exceções de nível,
-  Checkbox de editável e editor de palavras-chave; `<select>` usa `selectCls`). As `regras` são threadadas
+  `/painel/configuracoes` (`AvaliacaoAdmin`: sub-aba **"Importâncias"** [CRUD — lista com ↑/↓ ordem + `Modal` editor =
+  `TextField` nome + `ColorField` cor + **`Switch`** "Bloqueia importação/protocolação" + `Segmented` Avisa/Automático/
+  Ignora; + bloco "Estados de ciclo" nome/cor] + sub-abas Protocolo/DFD/Item [seletor de contexto p/ as exceções, o
+  `<select>` de cada ponto lista as importâncias cujo comportamento ∈ `comportamentosPermitidos`, **`Switch`** de
+  editável e editor de palavras-chave]; `<select>` usa `selectCls`). O **`Switch`** (`src/components/Switch.tsx`,
+  catalogado) é a chave por token (`role="switch"`, alvo ≥44px). As `regras` são threadadas
   server→cliente igual a `pcas` (`painel/dfds/page.tsx` → `DfdsView` → `DfdUploadForm`/`ProtocoloUploadForm`/
   `DfdConferir`/`ProtocoloView`/`DfdView`); o servidor reconfere em `/api/dfd`, `/api/protocolo`, `/api/dfd/[id]`
   (global + por-tipo; a categoria é aplicada no cliente e no `POST /api/protocolo`). **Não configurável**
@@ -672,8 +690,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ("Descrição diferente do catálogo"/"Unidade de medida diferente do catálogo"/"Tipo…"/"Fora do catálogo") — usados no
   painel do item e no tooltip da coluna.
   Reusa `normalizarCodigo`/`norm`/`normUnidadeMedida`/`tipoCurtoDfd`. **3 pontos CONFIGURÁVEIS** em `avaliacao-core`
-  (`item.naoCatalogado`/`item.divergenteCatalogo`/`item.tipoIncompativel`, **`nivelPadrao: intermediario`** = ATENÇÃO, não
-  bloqueia; o ADM eleva a `fundamental` ou baixa a `ignorar` — aparecem sozinhos na aba **Item** de `AvaliacaoAdmin`). **Config
+  (`item.naoCatalogado`/`item.divergenteCatalogo`/`item.tipoIncompativel`, **`comportamentoPadrao: avisa`** = ATENÇÃO, não
+  bloqueia; o ADM põe numa importância que `bloqueia` ou baixa a `ignora` — aparecem sozinhos na aba **Item** de `AvaliacaoAdmin`). **Config
   vazia ⇒ igual a hoje** (invariante por teste). **Escalável (consulta o catálogo VIVO por DFD):** `conferirItensNoCatalogo(itens,
   dfdTipo)` (`catalogo.ts`) busca só as entradas dos **códigos daquele DFD** (chunked `inArray`, guard "catálogo vazio ⇒ nada") e,
   p/ não catalogados, propõe semelhante via `LIKE` por token distintivo — NÃO baixa o catálogo. Rota **`POST /api/catalogo/conferir`**
@@ -759,7 +777,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   textual — ex.: `DfdCabecalho`/`ProtocoloCabecalho` com nº + badges (tipo/Id) + planejamento/assunto; + painel `lateral`
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita
   do `lateral` (ex.: mensagens ao lado do DFD no protocolo; grid de colunas proporcionais animadas, 1 por vez no mobile)),
-  `Segmented` (com `disabled`), `formStyles`,
+  `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
+  ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do

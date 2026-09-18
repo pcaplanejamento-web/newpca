@@ -5,9 +5,9 @@ import { ABAS } from "@/lib/abas";
 import {
   CATALOGO_AVALIACAO,
   CATEGORIAS,
-  type Nivel,
-  NIVEL_ROTULO,
+  corImportancia,
   nivelDe,
+  nomeImportancia,
   type RegrasAvaliacao,
   regrasPadrao,
   TIPO_DFD_ROTULO,
@@ -20,10 +20,10 @@ import {
   type EstadoProtocolo,
   ESTADO_ITEM_ROTULO,
   ESTADO_PROTOCOLO_ROTULO,
-  ESTADO_ROTULO,
   estadoCor,
   estadoItemCor,
   estadoProtocoloCor,
+  estadoRotulo,
   SECOES_OBRIGATORIAS,
   type SituacaoProtocolo,
   SITUACAO_PROTOCOLO_ROTULO,
@@ -34,7 +34,7 @@ import { norm } from "@/lib/parse-dfd-comum";
 import { TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import type { Aparencia } from "@/lib/theme";
 import { TOKENS_COR } from "@/lib/theme";
-import { Badge, type Tone } from "./Badge";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { SearchField } from "./Field";
@@ -44,13 +44,6 @@ import { FilterChip } from "./FilterChip";
 // equipe que não lê o CLAUDE.md. Os fluxos vêm do catálogo narrativo (`logicas.ts`); os
 // blocos "estruturados" são DERIVADOS dos `export const` reais (valor sempre vigente).
 // Só componentes do design-system; nenhuma escrita.
-
-const TONE_NIVEL: Record<Nivel, Tone> = {
-  fundamental: "red",
-  intermediario: "amber",
-  automatico: "blue",
-  ignorar: "slate",
-};
 
 function matches(l: LogicaRef, q: string): boolean {
   if (!q) return true;
@@ -99,14 +92,14 @@ export function ReferenciaSistema({
   function derivado(d: DominioLogica): ReactNode {
     if (d === "avaliacao") {
       return (
-        <Derivado titulo="Níveis vigentes por ponto" nota="Ajuste na aba Avaliação. Mostra o nível global efetivo (as exceções por tipo/categoria valem no contexto).">
+        <Derivado titulo="Importâncias vigentes por ponto" nota="Ajuste na aba Avaliação. Mostra a importância global efetiva (as exceções por tipo/categoria valem no contexto).">
           <div className="space-y-1.5">
             {CATALOGO_AVALIACAO.map((p) => {
               const n = nivelDe(regras, p.chave);
               return (
                 <div key={p.chave} className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-[13px] text-text-2">{p.rotulo}</span>
-                  <Badge tone={TONE_NIVEL[n]}>{NIVEL_ROTULO[n]}</Badge>
+                  <ChipCor label={nomeImportancia(regras, n)} cor={corImportancia(regras, n)} />
                 </div>
               );
             })}
@@ -136,19 +129,19 @@ export function ReferenciaSistema({
           <p className="mb-1 text-[12px] font-semibold text-muted">DFD</p>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {estadosDfd.map((e) => (
-              <ChipCor key={e} label={ESTADO_ROTULO[e]} cor={estadoCor(e)} />
+              <ChipCor key={e} label={estadoRotulo(e, regras)} cor={estadoCor(e, regras)} />
             ))}
           </div>
           <p className="mb-1 text-[12px] font-semibold text-muted">Item</p>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {estadosItem.map((e) => (
-              <ChipCor key={e} label={ESTADO_ITEM_ROTULO[e]} cor={estadoItemCor(e)} />
+              <ChipCor key={e} label={ESTADO_ITEM_ROTULO[e]} cor={estadoItemCor(e, regras)} />
             ))}
           </div>
           <p className="mb-1 text-[12px] font-semibold text-muted">Protocolo (estado · situação)</p>
           <div className="flex flex-wrap gap-1.5">
             {estadosProto.map((e) => (
-              <ChipCor key={e} label={ESTADO_PROTOCOLO_ROTULO[e]} cor={estadoProtocoloCor(e)} />
+              <ChipCor key={e} label={ESTADO_PROTOCOLO_ROTULO[e]} cor={estadoProtocoloCor(e, regras)} />
             ))}
             {situacoes.map((s) => (
               <span key={s} className="rounded-pill border border-border px-2.5 py-0.5 text-[12px] text-muted">
@@ -165,14 +158,14 @@ export function ReferenciaSistema({
     if (d === "importacao" || d === "normalizacao") {
       const secoes = d === "importacao";
       return secoes ? (
-        <Derivado titulo="Seções obrigatórias do DFD" nota="Ajuste os níveis na aba Avaliação.">
+        <Derivado titulo="Seções obrigatórias do DFD" nota="Ajuste as importâncias na aba Avaliação.">
           <div className="space-y-1.5">
             {SECOES_OBRIGATORIAS.map((s) => {
               const n = nivelDe(regras, s.chave);
               return (
                 <div key={s.chave} className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-[13px] text-text-2">{s.rotulo}</span>
-                  <Badge tone={TONE_NIVEL[n]}>{NIVEL_ROTULO[n]}</Badge>
+                  <ChipCor label={nomeImportancia(regras, n)} cor={corImportancia(regras, n)} />
                 </div>
               );
             })}

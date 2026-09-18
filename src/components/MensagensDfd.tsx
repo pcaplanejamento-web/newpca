@@ -135,7 +135,7 @@ export function MensagensDfd({
                     >
                       <span
                         className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: STATUS_MENSAGEM_COR[m.status] }}
+                        style={{ background: m.cor ?? STATUS_MENSAGEM_COR[m.status] }}
                       />
                       <span className="min-w-0 break-words leading-snug">{m.texto}</span>
                     </button>

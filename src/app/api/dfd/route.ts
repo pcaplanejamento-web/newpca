@@ -1,7 +1,7 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { nivelDe } from "@/lib/avaliacao-core";
+import { comportamentoNo } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
@@ -78,11 +78,11 @@ export async function POST(req: Request) {
   if (faltas.length > 0) return erro(`Não é possível importar: falta ${faltas.join(", ")}.`, 422);
   // Portão do PCA (configurável): se `dfd.anoPca` for fundamental, todo DFD grava com o
   // ano do PCA (herdado do protocolo ou definido no avulso). Sem ele, não grava.
-  if (d.anoPca == null && nivelDe(regras, "dfd.anoPca", ctxAv) === "fundamental")
+  if (d.anoPca == null && comportamentoNo(regras, "dfd.anoPca", ctxAv) === "bloqueia")
     return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
   // Divergência órgão × unidade — portão à parte, só EXECUTA (e só bloqueia) quando o ADM
-  // elevou o ponto a "fundamental" (padrão intermediário = atenção, não bloqueia → sem custo).
-  if (nivelDe(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "fundamental" && d.reparticaoId != null) {
+  // pôs o ponto numa importância que "bloqueia" (padrão avisa = atenção, não bloqueia → sem custo).
+  if (comportamentoNo(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "bloqueia" && d.reparticaoId != null) {
     const [orgaos, orgaoUnidade] = await Promise.all([listarOrgaos(), orgaoIdDaReparticao(d.reparticaoId)]);
     if (orgaoDivergeDaUnidade(d.orgaoEntidade, orgaoUnidade, orgaos))
       return erro("O Órgão/Entidade do DFD diverge do órgão da unidade cadastrada.", 422);
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
   const res = validarAssinatura(d.assinaturas, await carregarResponsaveis(d.reparticaoId), {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
   });
-  if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura", ctxAv)))
+  if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", ctxAv)))
     return erro(res.motivo, 422);
 
   const r = await upsertDfdCabecalho(d, a.u.id, d.rows);

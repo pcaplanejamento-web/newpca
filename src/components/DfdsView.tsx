@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { LinhaAuditoria } from "@/lib/auditoria";
-import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import type { DfdDetalhe, DfdResumo, PcaResumo } from "@/lib/dfd";
@@ -424,12 +424,12 @@ export function DfdsView({
     // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
     estado:
       dfdRSemReferencia(d) &&
-      nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignorar"
+      comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignora"
         ? "atencao"
         : "regular",
     // Gravados já validados → o único apontamento na lista é o DFD-R sem referência (atenção).
     resumo: resumoEstado(
-      dfdRSemReferencia(d) && nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignorar"
+      dfdRSemReferencia(d) && comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignora"
         ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
         : [],
     ),
@@ -473,8 +473,8 @@ export function DfdsView({
       render: (r) => {
         const e = estProto(r);
         return (
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoProtocoloCor(e) }}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoProtocoloCor(e) }} />
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoProtocoloCor(e, regras) }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoProtocoloCor(e, regras) }} />
             {ESTADO_PROTOCOLO_ROTULO[e]}
           </span>
         );
@@ -584,7 +584,7 @@ export function DfdsView({
             Nenhum DFD importado nesta visão. {podeEditar ? "Importe um DFD acima." : ""}
           </p>
         ) : (
-          <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} />
+          <PlanilhaDfds linhas={linhasDfdTab} onRowClick={verDfd} fillHeight acoes={acoesDfd} regras={regras} />
         )}
       </section>
     </div>

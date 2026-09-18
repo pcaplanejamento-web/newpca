@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import {
   avaliarDfd,
   type CampoTratavel,
-  ESTADO_ROTULO,
+  estadoRotulo,
   type EstadoDfd,
   estadoCor,
   editarItemDfd,
@@ -325,15 +325,15 @@ export function ProtocoloUploadForm({
     if (errosParse.has(idx)) return "erro"; // falha de leitura (ex.: tabela incompleta)
     const d = parsed.get(idx);
     if (!d) return "pendente";
-    const nivelAss = nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria });
-    // Assinatura não conferida — bloqueia só se `dfd.assinatura` for fundamental (regra 6).
+    const compAss = comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria });
+    // Assinatura não conferida — bloqueia só se `dfd.assinatura` estiver numa importância que bloqueia (regra 6).
     const assRes = confereAssinatura(idx, d);
-    if (bloqueiaAssinatura(assRes, nivelAss)) return "erro";
-    // Avaliação configurável: bloqueantes (fundamental) → erro; atenções (intermediário/
-    // automático, incl. DFD-R sem referência e quantidade) → âmbar.
+    if (bloqueiaAssinatura(assRes, compAss)) return "erro";
+    // Avaliação configurável: bloqueantes (bloqueia) → erro; atenções (avisa/automático,
+    // incl. DFD-R sem referência e quantidade) → âmbar.
     const av = avaliarDfd({ ...d, reparticaoId: dfdRepIds[idx] }, regras, { categoria });
     if (av.bloqueantes.length > 0) return "erro";
-    const assAtencao = assRes.status === "erro" && nivelAss === "intermediario";
+    const assAtencao = assRes.status === "erro" && compAss === "avisa";
     const atencao = av.atencoes.length > 0 || assAtencao;
     return estadoDfd(0, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx), atencao);
   };
@@ -531,7 +531,7 @@ export function ProtocoloUploadForm({
         }
         // Confere a assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
         const resAss = confereAssinatura(i, full);
-        if (bloqueiaAssinatura(resAss, nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(full.tipo), categoria }))) {
+        if (bloqueiaAssinatura(resAss, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(full.tipo), categoria }))) {
           bloqueados.push({ numero: di.numero, motivo: resAss.status === "erro" ? resAss.motivo : "assinatura" });
           continue;
         }
@@ -624,16 +624,16 @@ export function ProtocoloUploadForm({
   const itensDfds = [...parsed.values()].reduce((s, d) => s + d.itens.length, 0);
   const conciliavel = temDfds && !analisando && dfdsComErro === 0;
   // Regra 2 (configurável por `protocolo.valorCapa` + categoria): capa **zerada/nula** OU
-  // **diferente** da somatória dos DFDs. "ignorar" desliga; "fundamental" trava; senão avisa.
-  const nivelCapa = nivelDe(regras, "protocolo.valorCapa", { categoria });
+  // **diferente** da somatória dos DFDs. "ignora" desliga; "bloqueia" trava; senão avisa.
+  const compCapa = comportamentoNo(regras, "protocolo.valorCapa", { categoria });
   const capaZeradaOuNula = extra.valorCapa == null || extra.valorCapa <= 0;
   const capaMismatch =
-    conciliavel && nivelCapa !== "ignorar" && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
-  const capaBloqueia = capaMismatch && nivelCapa === "fundamental";
+    conciliavel && compCapa !== "ignora" && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
+  const capaBloqueia = capaMismatch && compCapa === "bloqueia";
   // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
-  const repBloqueia = protoRepId == null && nivelDe(regras, "protocolo.reparticao", { categoria }) === "fundamental";
-  const anoPcaBloqueia = anoPca == null && nivelDe(regras, "protocolo.anoPca", { categoria }) === "fundamental";
-  const semErroBloqueia = dfdsComErro > 0 && nivelDe(regras, "protocolo.semDfdEmErro", { categoria }) === "fundamental";
+  const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
+  const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia";
+  const semErroBloqueia = dfdsComErro > 0 && comportamentoNo(regras, "protocolo.semDfdEmErro", { categoria }) === "bloqueia";
   const bloqueadoPorRegra = repBloqueia || anoPcaBloqueia || semErroBloqueia || capaBloqueia;
   const podeProtocolar =
     numero.trim().length > 0 && !importando && !analisando && !bloqueadoPorRegra;
@@ -883,10 +883,10 @@ export function ProtocoloUploadForm({
                       {dfdAberto ? (
                         <span
                           className="inline-flex items-center gap-1.5 text-[12px] font-medium"
-                          style={{ color: estadoCor(estado(abertoIdx)) }}
+                          style={{ color: estadoCor(estado(abertoIdx), regras) }}
                         >
-                          <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(estado(abertoIdx)) }} />
-                          {ESTADO_ROTULO[estado(abertoIdx)]}
+                          <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(estado(abertoIdx), regras) }} />
+                          {estadoRotulo(estado(abertoIdx), regras)}
                         </span>
                       ) : (
                         <span />
@@ -1121,6 +1121,7 @@ export function ProtocoloUploadForm({
                 onRowClick={abrir}
                 ativa={abertoIdx >= 0 ? abertoIdx : null}
                 compacta={compacta}
+                regras={regras}
               />
             </section>
           )}

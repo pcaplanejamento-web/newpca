@@ -3,13 +3,20 @@ import { describe, it } from "node:test";
 import {
   aplicarSinonimos,
   classificarAssunto,
+  comportamentoDe,
+  comportamentoNo,
+  corImportancia,
   editavelDe,
+  IMPORTANCIAS_PADRAO,
+  type Importancia,
+  importanciaDe,
+  importanciasDe,
   nivelDe,
   type RegrasAvaliacao,
   regrasPadrao,
   sinonimosDe,
 } from "../src/lib/avaliacao-core.ts";
-import { avaliarDfd, normalizarSecoesDfd } from "../src/lib/dfd-tratamento.ts";
+import { avaliarDfd, estadoCor, normalizarSecoesDfd } from "../src/lib/dfd-tratamento.ts";
 import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 
 // Monta uma conferência de DFD completa (nada falta); os testes removem 1 coisa.
@@ -69,6 +76,52 @@ describe("editável e ajuste automático por palavras-chave", () => {
     const sec = out.secoes.find((s) => s.numero === 6);
     assert.equal(sec?.texto, "ALTA");
     assert.ok(auto.includes("prioridade"));
+  });
+});
+
+const CRITICO: Importancia = { id: "critico", nome: "Crítico", cor: "#e11d48", comportamento: "bloqueia", ordem: 5 };
+
+describe("importâncias configuráveis (modelo unificado)", () => {
+  it("importanciasDe garante SEMPRE as 4 base + customizadas ordenadas", () => {
+    assert.deepEqual(
+      importanciasDe(regrasPadrao()).map((i) => i.id),
+      ["fundamental", "intermediario", "automatico", "ignorar"],
+    );
+    const r: RegrasAvaliacao = { ...regrasPadrao(), importancias: [...IMPORTANCIAS_PADRAO, CRITICO] };
+    assert.ok(importanciasDe(r).some((i) => i.id === "critico"));
+  });
+  it("importanciaDe: id inexistente cai em 'ignora' (fallback seguro, nunca bloqueia)", () => {
+    assert.equal(importanciaDe(regrasPadrao(), "xyz").comportamento, "ignora");
+    assert.equal(comportamentoDe(regrasPadrao(), "xyz"), "ignora");
+  });
+  it("built-in mantém o comportamento fixo mesmo se o gravado tentar mudar (nome/cor valem)", () => {
+    const r: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      importancias: [{ id: "fundamental", nome: "Bloqueante", cor: "#000000", comportamento: "ignora", ordem: 1 }],
+    };
+    const f = importanciasDe(r).find((i) => i.id === "fundamental");
+    assert.equal(f?.comportamento, "bloqueia"); // comportamento base preservado
+    assert.equal(f?.nome, "Bloqueante"); // nome do gravado
+    assert.equal(f?.cor, "#000000"); // cor do gravado
+  });
+  it("importância custom que bloqueia eleva um ponto a erro (bloqueante)", () => {
+    const r: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      importancias: [...IMPORTANCIAS_PADRAO, CRITICO],
+      pontos: { "dfd.reparticao": "critico" },
+    };
+    assert.equal(comportamentoNo(r, "dfd.reparticao"), "bloqueia");
+    const d = { ...dfdCompleto(), reparticaoId: null };
+    assert.ok(avaliarDfd(d, r).bloqueantes.includes("unidade vinculada"));
+  });
+  it("cor da importância segue o gravado; o estado de severidade puxa dela", () => {
+    const r: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      importancias: [{ id: "fundamental", nome: "Fundamental", cor: "#123456", comportamento: "bloqueia", ordem: 1 }],
+    };
+    assert.equal(corImportancia(r, "fundamental"), "#123456");
+    assert.equal(estadoCor("erro", r), "#123456"); // erro puxa a cor da importância base "bloqueia"
+    assert.equal(estadoCor("erro"), "var(--danger)"); // sem regras = token de hoje
   });
 });
 

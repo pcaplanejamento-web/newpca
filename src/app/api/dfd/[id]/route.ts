@@ -2,7 +2,7 @@ import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { nivelDe } from "@/lib/avaliacao-core";
+import { comportamentoNo } from "@/lib/avaliacao-core";
 import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
 import { editarDfdSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
@@ -118,7 +118,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       // Respeita o nível `dfd.assinatura` do ADM COM a exceção por tipo de DFD (igual ao cliente
       // e ao POST) — `antes` (getDfd) traz o tipo.
       const regras = await getRegrasAvaliacao();
-      if (res.status === "erro" && bloqueiaAssinatura(res, nivelDe(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(antes?.tipo) })))
+      if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(antes?.tipo) })))
         return erro(res.motivo, 422);
     }
     await atualizarDfdCampos(id, {

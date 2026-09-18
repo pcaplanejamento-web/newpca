@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { classificarAssunto, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { dfdRSemReferencia, FALTA_REFERENCIA_RENOVACAO, type GrupoAssinatura, resumoEstado } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
@@ -224,7 +224,7 @@ export function ProtocoloView({
   // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
   // acontece uma única vez, na importação, antes de gravar). "ignorar" desliga a nota.
   const capaDivergente =
-    nivelDe(regras, "protocolo.valorCapa", { categoria }) !== "ignorar" &&
+    comportamentoNo(regras, "protocolo.valorCapa", { categoria }) !== "ignora" &&
     protocolo.valorCapa != null &&
     !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
 
@@ -241,12 +241,12 @@ export function ProtocoloView({
     // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
     estado:
       dfdRSemReferencia(d) &&
-      nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignorar"
+      comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignora"
         ? "atencao"
         : "regular",
     // Gravados já validados → único apontamento na lista é o DFD-R sem referência (atenção).
     resumo: resumoEstado(
-      dfdRSemReferencia(d) && nivelDe(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignorar"
+      dfdRSemReferencia(d) && comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignora"
         ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
         : [],
     ),
@@ -340,7 +340,7 @@ export function ProtocoloView({
             Nenhum DFD vinculado a este protocolo ainda.
           </p>
         ) : (
-          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} ativa={dfdAtivo} />
+          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} ativa={dfdAtivo} regras={regras} />
         )}
       </section>
 

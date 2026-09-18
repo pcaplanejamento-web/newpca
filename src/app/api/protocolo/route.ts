@@ -1,7 +1,7 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { classificarAssunto, nivelDe } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   // fundamental, não protocola sem o PCA definido (o ano é herdado pelos DFDs).
   const regras = await getRegrasAvaliacao();
   const categoria = classificarAssunto(protocolo.assunto);
-  if (protocolo.anoPca == null && nivelDe(regras, "protocolo.anoPca", { categoria }) === "fundamental")
+  if (protocolo.anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia")
     return erro("Defina o PCA do protocolo antes de protocolar.", 422);
 
   const { lista } = await getReparticaoContexto(a.u);

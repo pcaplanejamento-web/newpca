@@ -1,6 +1,11 @@
 import {
   aplicarSinonimos,
   type ChaveAvaliacao,
+  comportamentoDe,
+  comportamentoNo,
+  corComportamentoPadrao,
+  corImportancia,
+  estadoCicloCfg,
   nivelDe,
   type RegrasAvaliacao,
   regrasPadrao,
@@ -77,7 +82,7 @@ export function normalizarSecoesDfd(
   for (const cfg of TRATAVEIS) {
     const raw = textoSecao(secoes, cfg.kw);
     // (1) Palavras-chave do ADM (só quando o ponto está em "automático" — respeita a exceção por tipo).
-    if (nivelDe(regras, cfg.chave, ctxTipo) === "automatico") {
+    if (comportamentoNo(regras, cfg.chave, ctxTipo) === "automatico") {
       const custom = aplicarSinonimos(raw, sinonimosDe(regras, cfg.chave));
       if (custom) {
         secoes = setTextoSecao(secoes, cfg, custom);
@@ -128,15 +133,38 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
   erro: "Com erro",
 };
 
-/** Cor semântica por estado (token). Regularizado automaticamente = verde (é um sucesso);
- * atenção = âmbar (`--warn`, não é erro). */
-export function estadoCor(e: EstadoDfd): string {
-  if (e === "erro") return "var(--danger)";
-  if (e === "atencao") return "var(--warn)";
-  if (e === "editado") return "var(--info)";
-  if (e === "regularizado") return "var(--ok)";
-  if (e === "regular") return "var(--ok)";
-  return "var(--muted)";
+/**
+ * Cor semântica por estado. Sem `regras` ⇒ tokens (comportamento/tema atual). Com `regras`,
+ * as cores SEGUEM a configuração do ADM: severidade (erro/atenção) puxa a cor da importância
+ * base do comportamento; ciclo (editado/regularizado/regular/pendente) puxa de `estadosCiclo`.
+ */
+export function estadoCor(e: EstadoDfd, regras?: RegrasAvaliacao): string {
+  if (!regras) {
+    if (e === "erro") return "var(--danger)";
+    if (e === "atencao") return "var(--warn)";
+    if (e === "editado") return "var(--info)";
+    if (e === "regularizado" || e === "regular") return "var(--ok)";
+    return "var(--muted)";
+  }
+  if (e === "erro") return corComportamentoPadrao(regras, "bloqueia");
+  if (e === "atencao") return corComportamentoPadrao(regras, "avisa");
+  if (e === "editado") return estadoCicloCfg(regras, "editado").cor;
+  if (e === "regularizado") return estadoCicloCfg(regras, "regularizado").cor;
+  if (e === "regular") return estadoCicloCfg(regras, "regular").cor;
+  return estadoCicloCfg(regras, "pendente").cor;
+}
+
+/**
+ * Rótulo do estado. Sem `regras` ⇒ os rótulos fixos (`ESTADO_ROTULO`). Com `regras`, os
+ * estados de CICLO seguem os nomes editáveis do ADM (`estadosCiclo`); severidade fica fixa.
+ */
+export function estadoRotulo(e: EstadoDfd, regras?: RegrasAvaliacao): string {
+  if (!regras) return ESTADO_ROTULO[e];
+  if (e === "editado") return estadoCicloCfg(regras, "editado").nome;
+  if (e === "regularizado") return estadoCicloCfg(regras, "regularizado").nome;
+  if (e === "regular") return estadoCicloCfg(regras, "regular").nome;
+  if (e === "pendente") return estadoCicloCfg(regras, "pendente").nome;
+  return ESTADO_ROTULO[e]; // erro/atencao: rótulo genérico fixo
 }
 
 /**
@@ -166,8 +194,8 @@ export function estadoProtocolo(
   ctx?: { categoria?: string | null },
 ): EstadoProtocolo {
   if (p.totalDfds === 0) return "regular"; // sem DFDs: nada a conferir
-  // O ADM pode desligar a conferência do valor da capa ("ignorar").
-  if (nivelDe(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null }) === "ignorar") return "regular";
+  // O ADM pode desligar a conferência do valor da capa ("ignora").
+  if (comportamentoNo(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null }) === "ignora") return "regular";
   if (p.valorCapa == null || p.valorCapa <= 0 || !valoresBatem(p.valorCapa, p.valorTotal)) return "atencao";
   return "regular";
 }
@@ -177,8 +205,9 @@ export const ESTADO_PROTOCOLO_ROTULO: Record<EstadoProtocolo, string> = {
   atencao: "Atenção",
 };
 
-export function estadoProtocoloCor(e: EstadoProtocolo): string {
-  return e === "atencao" ? "var(--warn)" : "var(--ok)";
+export function estadoProtocoloCor(e: EstadoProtocolo, regras?: RegrasAvaliacao): string {
+  if (!regras) return e === "atencao" ? "var(--warn)" : "var(--ok)";
+  return e === "atencao" ? corComportamentoPadrao(regras, "avisa") : estadoCicloCfg(regras, "regular").cor;
 }
 
 export type SituacaoProtocolo = "vazio" | "preenchido";
@@ -214,8 +243,9 @@ export function estadoItem(it: DfdItemParseado): EstadoItem {
 
 export const ESTADO_ITEM_ROTULO: Record<EstadoItem, string> = { erro: "Com erro", regular: "Regular" };
 
-export function estadoItemCor(e: EstadoItem): string {
-  return e === "erro" ? "var(--danger)" : "var(--ok)";
+export function estadoItemCor(e: EstadoItem, regras?: RegrasAvaliacao): string {
+  if (!regras) return e === "erro" ? "var(--danger)" : "var(--ok)";
+  return e === "erro" ? corComportamentoPadrao(regras, "bloqueia") : estadoCicloCfg(regras, "regular").cor;
 }
 
 /**
@@ -285,10 +315,10 @@ export function veredictoLinhaCatalogo(
   dfdTipo: string | null,
 ): VeredictoLinhaCatalogo | null {
   if (!c) return null;
-  const ativas = c.faltas.filter((f) => nivelDe(regras, CHAVE_FALTA_CATALOGO[f], { dfdTipo }) !== "ignorar");
+  const ativas = c.faltas.filter((f) => comportamentoNo(regras, CHAVE_FALTA_CATALOGO[f], { dfdTipo }) !== "ignora");
   if (ativas.length === 0) return { nivel: "conforme", falta: null };
   const falta = piorFalta(ativas) as FaltaCatalogoItem;
-  const nivel = nivelDe(regras, CHAVE_FALTA_CATALOGO[falta], { dfdTipo }) === "fundamental" ? "erro" : "atencao";
+  const nivel = comportamentoNo(regras, CHAVE_FALTA_CATALOGO[falta], { dfdTipo }) === "bloqueia" ? "erro" : "atencao";
   return { nivel, falta };
 }
 
@@ -315,7 +345,7 @@ export function algumCatalogoFundamental(
 ): boolean {
   const c = { dfdTipo: ctx?.dfdTipo ?? null, categoria: ctx?.categoria ?? null };
   return (Object.keys(CHAVE_FALTA_CATALOGO) as FaltaCatalogoItem[]).some(
-    (f) => nivelDe(regras, CHAVE_FALTA_CATALOGO[f], c) === "fundamental",
+    (f) => comportamentoNo(regras, CHAVE_FALTA_CATALOGO[f], c) === "bloqueia",
   );
 }
 
@@ -330,7 +360,7 @@ export function bloqueantesCatalogo(
   const c = { dfdTipo: ctx?.dfdTipo ?? null, categoria: ctx?.categoria ?? null };
   const out: string[] = [];
   for (const falta of Object.keys(CHAVE_FALTA_CATALOGO) as FaltaCatalogoItem[]) {
-    if (nivelDe(regras, CHAVE_FALTA_CATALOGO[falta], c) !== "fundamental") continue;
+    if (comportamentoNo(regras, CHAVE_FALTA_CATALOGO[falta], c) !== "bloqueia") continue;
     if (itensComFaltaCatalogo(itens, conformidade, falta).length > 0) out.push(ROTULO_FALTA_CATALOGO[falta]);
   }
   return out;
@@ -354,10 +384,10 @@ export function avaliarDfd(
   const atencoes: string[] = [];
   const add = (chave: ChaveAvaliacao, falta: boolean, rotulo: string) => {
     if (!falta) return;
-    const n = nivelDe(regras, chave, c);
-    if (n === "fundamental") bloqueantes.push(rotulo);
-    else if (n === "intermediario" || n === "automatico") atencoes.push(rotulo);
-    // "ignorar": não entra em lugar nenhum.
+    const comp = comportamentoNo(regras, chave, c);
+    if (comp === "bloqueia") bloqueantes.push(rotulo);
+    else if (comp === "avisa" || comp === "automatico") atencoes.push(rotulo);
+    // "ignora": não entra em lugar nenhum.
   };
   // Ordem preserva a de `faltasObrigatorias` (valor unitário → repartição → seções).
   const semVU = d.itens.length === 0 || !d.itens.every((i) => i.valorUnitario != null && i.valorUnitario > 0);
@@ -389,7 +419,7 @@ export type StatusMensagem = "erro" | "atencao" | "acerto";
  * o `status` (erro bloqueia · atenção avisa · acerto ok), o `texto` e a `ancora` — o id
  * do componente correspondente no banner do DFD (para rolar/destacar ao clicar).
  */
-export type MensagemDfd = { chave: string; status: StatusMensagem; texto: string; ancora: string };
+export type MensagemDfd = { chave: string; status: StatusMensagem; texto: string; ancora: string; cor?: string };
 
 export const STATUS_MENSAGEM_COR: Record<StatusMensagem, string> = {
   erro: "var(--danger)",
@@ -425,10 +455,11 @@ export function mensagensDfd(
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const out: MensagemDfd[] = [];
   const add = (chave: ChaveAvaliacao, ancora: string, ok: boolean, faltaTexto: string, okTexto: string) => {
-    const n = nivelDe(regras, chave, c);
-    if (n === "ignorar") return;
+    const id = nivelDe(regras, chave, c);
+    const comp = comportamentoDe(regras, id);
+    if (comp === "ignora") return;
     if (ok) out.push({ chave, status: "acerto", texto: okTexto, ancora });
-    else out.push({ chave, status: n === "fundamental" ? "erro" : "atencao", texto: faltaTexto, ancora });
+    else out.push({ chave, status: comp === "bloqueia" ? "erro" : "atencao", texto: faltaTexto, ancora, cor: corImportancia(regras, id) });
   };
   const plural = (n: number) => (n === 1 ? "item" : "itens");
 
@@ -487,28 +518,31 @@ export function mensagensDfd(
       { falta: "tipoIncompativel", texto: (q) => `${q} ${plural(q)} com tipo de DFD incompatível com o catálogo.` },
     ];
     for (const cm of catMsgs) {
-      const n = nivelDe(regras, CHAVE_FALTA_CATALOGO[cm.falta], c);
-      if (n === "ignorar") continue;
+      const id = nivelDe(regras, CHAVE_FALTA_CATALOGO[cm.falta], c);
+      const comp = comportamentoDe(regras, id);
+      if (comp === "ignora") continue;
       algumAtivo = true;
       const qtd = itensComFaltaCatalogo(d.itens, ctx.conformidade, cm.falta).length;
       if (qtd === 0) continue;
       algumProblema = true;
-      out.push({ chave: CHAVE_FALTA_CATALOGO[cm.falta], status: n === "fundamental" ? "erro" : "atencao", texto: cm.texto(qtd), ancora: "itens" });
+      out.push({ chave: CHAVE_FALTA_CATALOGO[cm.falta], status: comp === "bloqueia" ? "erro" : "atencao", texto: cm.texto(qtd), ancora: "itens", cor: corImportancia(regras, id) });
     }
     if (algumAtivo && !algumProblema && total > 0)
       out.push({ chave: "item.naoCatalogado", status: "acerto", texto: "Itens conferem com o catálogo de referência.", ancora: "itens" });
   }
 
   // Assinatura digital
-  if (d.assinatura && nivelDe(regras, "dfd.assinatura", c) !== "ignorar") {
+  const idAssin = nivelDe(regras, "dfd.assinatura", c);
+  if (d.assinatura && comportamentoDe(regras, idAssin) !== "ignora") {
     if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
     else if (d.assinatura.status === "dropsigner") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida via Dropsigner (Lacuna).", ancora: "assinatura" });
     else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
     else out.push({
       chave: "dfd.assinatura",
-      status: nivelDe(regras, "dfd.assinatura", c) === "fundamental" ? "erro" : "atencao",
+      status: comportamentoDe(regras, idAssin) === "bloqueia" ? "erro" : "atencao",
       texto: `Assinatura digital não conferida${d.assinatura.motivo ? `: ${d.assinatura.motivo}` : "."}`,
       ancora: "assinatura",
+      cor: corImportancia(regras, idAssin),
     });
   }
 
@@ -563,7 +597,7 @@ export type ResumoEstado = {
  * Monta o resumo da célula "Estado" a partir das mensagens (só erros/atenções contam). PRINCIPAL =
  * 1º erro; sem erros, 1ª atenção. Sem problema ⇒ `rotulo:""` (regular, nada muda). Puro/testável.
  */
-export function resumoEstado(msgs: { status: StatusMensagem; chave: string; texto: string }[]): ResumoEstado {
+export function resumoEstado(msgs: { status: StatusMensagem; chave: string; texto: string; cor?: string }[]): ResumoEstado {
   const erros = msgs.filter((m) => m.status === "erro");
   const atencoes = msgs.filter((m) => m.status === "atencao");
   const principal = erros[0] ?? atencoes[0];
@@ -572,7 +606,9 @@ export function resumoEstado(msgs: { status: StatusMensagem; chave: string; text
   const titulo = [...erros, ...atencoes].map((m) => `${m.status === "erro" ? "Erro" : "Atenção"}: ${m.texto}`).join("\n");
   return {
     rotulo: ROTULO_CURTO[principal.chave] ?? principal.texto,
-    cor: ehErro ? "var(--danger)" : "var(--warn)",
+    // A cor SEGUE a importância do ponto (definida pelo ADM em `mensagensDfd`); sem `cor`
+    // explícita, cai na severidade (erro=vermelho / atenção=âmbar).
+    cor: principal.cor ?? (ehErro ? "var(--danger)" : "var(--warn)"),
     extraErros: ehErro ? erros.length - 1 : 0,
     extraAtencoes: ehErro ? atencoes.length : atencoes.length - 1,
     titulo,
@@ -631,7 +667,7 @@ export function faltasCirurgicasDfd(
   ctx?: { categoria?: string | null } & CtxConformidade,
 ): string[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
-  const ativo = (chave: ChaveAvaliacao) => nivelDe(regras, chave, c) !== "ignorar";
+  const ativo = (chave: ChaveAvaliacao) => comportamentoNo(regras, chave, c) !== "ignora";
   const linhas: string[] = [];
   const nums = (its: DfdItemParseado[]) =>
     its.map((i) => i.item).filter((n): n is number => n != null);

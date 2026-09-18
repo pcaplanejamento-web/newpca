@@ -232,6 +232,41 @@ describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
       false,
     ); // valor vazio
   });
+  it("importâncias: aceita id kebab + cor hex + comportamento; recusa id/cor inválidos", () => {
+    const ok = { importancias: [{ id: "critico", nome: "Crítico", cor: "#e11d48", comportamento: "bloqueia", ordem: 5 }] };
+    assert.equal(avaliacaoSchema.safeParse(ok).success, true);
+    // id com maiúsculas
+    assert.equal(
+      avaliacaoSchema.safeParse({ importancias: [{ id: "Critico", nome: "X", cor: "#e11d48", comportamento: "bloqueia", ordem: 5 }] }).success,
+      false,
+    );
+    // cor não-hex
+    assert.equal(
+      avaliacaoSchema.safeParse({ importancias: [{ id: "critico", nome: "X", cor: "vermelho", comportamento: "bloqueia", ordem: 5 }] }).success,
+      false,
+    );
+  });
+  it("importâncias: built-in não pode trocar de comportamento", () => {
+    assert.equal(
+      avaliacaoSchema.safeParse({ importancias: [{ id: "fundamental", nome: "F", cor: "#dc2626", comportamento: "ignora", ordem: 1 }] }).success,
+      false,
+    );
+  });
+  it("ponto usa importância custom do MESMO payload; recusa comportamento não permitido", () => {
+    const critico = { id: "critico", nome: "Crítico", cor: "#e11d48", comportamento: "bloqueia", ordem: 5 };
+    // custom "bloqueia" é permitido em dfd.reparticao (aceita bloqueia/avisa/ignora)
+    assert.equal(avaliacaoSchema.safeParse({ importancias: [critico], pontos: { "dfd.reparticao": "critico" } }).success, true);
+    // um ponto que só aceita "bloqueia" (protocolo.numero) recusa uma importância que avisa
+    const brando = { id: "brando", nome: "Brando", cor: "#ca8a04", comportamento: "avisa", ordem: 6 };
+    assert.equal(avaliacaoSchema.safeParse({ importancias: [brando], pontos: { "protocolo.numero": "brando" } }).success, false);
+    // importância não declarada em lugar nenhum → recusa
+    assert.equal(avaliacaoSchema.safeParse({ pontos: { "dfd.reparticao": "fantasma" } }).success, false);
+  });
+  it("estadosCiclo: aceita nome+cor dos 4 estados; recusa estado desconhecido", () => {
+    assert.equal(avaliacaoSchema.safeParse({ estadosCiclo: { editado: { nome: "Alterado", cor: "#2563eb" } } }).success, true);
+    assert.equal(avaliacaoSchema.safeParse({ estadosCiclo: { inexistente: { nome: "X", cor: "#2563eb" } } }).success, false);
+    assert.equal(avaliacaoSchema.safeParse({ estadosCiclo: { editado: { nome: "X", cor: "azul" } } }).success, false);
+  });
 });
 
 describe("faltasObrigatorias (regras de import de DFD)", () => {
