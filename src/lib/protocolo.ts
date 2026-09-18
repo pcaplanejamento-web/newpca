@@ -206,7 +206,16 @@ export async function getProtocoloReparticao(id: number): Promise<{ reparticaoId
   return r ?? null;
 }
 
-/** Exclui o protocolo. Os DFDs permanecem (FK `set null` desvincula). */
+/**
+ * Exclui o protocolo EM CASCATA: apaga os DFDs vinculados (→ itens via `dfd_itens.dfdId`
+ * cascade; e os remove de qualquer edição de PCA via `pca_dfds.dfdId` cascade) e então o
+ * protocolo. Ordem importa: apagar os DFDs ANTES (senão a FK `set null` os deixaria órfãos).
+ */
 export async function excluirProtocolo(id: number): Promise<void> {
-  await getDb().delete(dfdProtocolos).where(eq(dfdProtocolos.id, id));
+  const db = getDb();
+  const stmts = [
+    db.delete(dfds).where(eq(dfds.protocoloId, id)),
+    db.delete(dfdProtocolos).where(eq(dfdProtocolos.id, id)),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
 }
