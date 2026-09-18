@@ -138,6 +138,25 @@ describe("indexarProtocolo (índice leve)", () => {
     assert.equal(idx.dfds[2].setorRequisitante, null); // DFD 300 sem setor
   });
 
+  it("ponto 3 — assinatura PADRÃO só conta na página logo após o DFD (anexo no meio quebra)", () => {
+    const items = [
+      ...dfdNaPagina(1, "100"),
+      // p2 = página de assinatura LOGO após o DFD 100 → atribuída a ele.
+      f(2, 38, 700, "Assinado digitalmente por FULANO DE TAL, portador do CPF: ***.111.222-**, em 01/09/2026 utilizando o código: AAA111"),
+      ...dfdNaPagina(3, "200"),
+      // p4 = ANEXO (decreto) — sem Número DFD e sem assinatura → ENCERRA a janela do DFD 200.
+      f(4, 38, 700, "DECRETO Nº 1.592 DESIGNA FULANO PARA SUBSTITUIR O PRESIDENTE"),
+      // p5 = assinatura, mas veio DEPOIS do anexo → NÃO é do DFD 200.
+      f(5, 38, 700, "Assinado digitalmente por BELTRANO SUBSTITUTO, portador do CPF: ***.333.444-**, em 02/09/2026 utilizando o código: BBB222"),
+    ];
+    const idx = indexarProtocolo(paginasDe(items), "proto.pdf");
+    const d100 = idx.dfds.find((d) => d.numero === "100");
+    const d200 = idx.dfds.find((d) => d.numero === "200");
+    assert.equal(d100?.assinaturas.length, 1);
+    assert.equal(d100?.assinaturas[0].nome, "FULANO DE TAL");
+    assert.equal(d200?.assinaturas.length, 0); // a assinatura da p5 veio após o decreto (p4)
+  });
+
   it("as páginas de um DFD detectado fazem o parse completo (integração)", () => {
     const items = protocoloItems();
     const idx = indexarProtocolo(paginasDe(items), "proto.pdf");

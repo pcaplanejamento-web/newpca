@@ -66,6 +66,9 @@ export function setTextoSecao(
 export function normalizarSecoesDfd(
   dfd: DfdParseado,
   regras: RegrasAvaliacao = regrasPadrao(),
+  // Ano do PCA do processo (previsão de entrega segue o PCA — ponto 7): quando a §5 traz só o
+  // MÊS, o ano é completado com o do PCA. `undefined` ⇒ usa o `anoPca` do próprio DFD.
+  anoPca?: number | null,
 ): { dfd: DfdParseado; auto: CampoTratavel[] } {
   let secoes = dfd.secoes;
   const auto: CampoTratavel[] = [];
@@ -90,7 +93,7 @@ export function normalizarSecoesDfd(
         auto.push("prioridade");
       }
     } else if (cfg.campo === "previsao") {
-      const v = normPrevisao(raw);
+      const v = normPrevisao(raw, anoPca ?? dfd.anoPca);
       if (v.valor && v.auto) {
         secoes = setTextoSecao(secoes, cfg, v.valor);
         auto.push("previsao");

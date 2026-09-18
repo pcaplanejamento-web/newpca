@@ -321,25 +321,35 @@ const MESES_SEM = MESES.map(stripAccents); // sem acento p/ casar
  * PREVISÃO DE ENTREGA/EXECUÇÃO — é **um OU outro**: uma DATA (`MÊS/AAAA`, ex.:
  * `FEVEREIRO/2027`) OU recorrente `ANUAL` (opcionalmente `ANUAL/AAAA`). Reconhece as
  * várias escritas de cada forma:
- *  - DATA: `dd/mm/aaaa`, `mm/aaaa`, `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA`.
+ *  - DATA: `dd/mm/aaaa`, `mm/aaaa`, `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA` e **só o MÊS
+ *    por extenso** (ex.: `FEVEREIRO`, sem ano) — nesse caso o ANO vem do `anoPca` (o ano
+ *    do PCA do processo; o usuário ainda pode editar). Sem `anoPca` e sem ano no texto, o
+ *    mês fica reconhecido mas sem ano → `null` (a definir).
  *  - ANUAL: `ANUAL`, `ANUALMENTE`, `MENSAL(MENTE)`, `AO LONGO/DECORRER/DURANTE do ano`,
  *    `TODO O ANO`, `POR N MESES` — com ou sem ano. Bare "ANUAL" (sem ano) é VÁLIDO.
- * O que não casar nenhuma das duas → null (tratar à mão). Recorrente vence a data
- * (não é possível os dois). `auto=true` = reconheceu mas a escrita não era canônica.
+ * O ano do texto tem precedência; sem ele, usa-se o `anoPca` (regra: a previsão do DFD
+ * segue o ano do PCA do processo). O que não casar nenhuma das duas → null (tratar à mão).
+ * Recorrente vence a data. `auto=true` = reconheceu mas a escrita não era canônica.
  */
-export function normPrevisao(texto: string | null | undefined): { valor: string | null; anual: boolean; auto: boolean } {
+export function normPrevisao(
+  texto: string | null | undefined,
+  anoPca?: number | null,
+): { valor: string | null; anual: boolean; auto: boolean } {
   const raw = String(texto ?? "").trim();
   if (!raw) return { valor: null, anual: false, auto: false };
   const s = stripAccents(cleanUpper(raw));
-  const ano = s.match(/\b(20\d{2})\b/)?.[1] ?? null;
+  const anoTexto = s.match(/\b(20\d{2})\b/)?.[1] ?? null;
+  // Ano efetivo: o do texto tem precedência; sem ele, o do PCA (previsão segue o PCA).
+  const anoPcaStr = anoPca != null && anoPca >= 2000 && anoPca <= 2100 ? String(anoPca) : null;
+  const ano = anoTexto ?? anoPcaStr;
   const recorrente =
     /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES/.test(s);
   if (recorrente) {
-    // "Anual" é válido mesmo sem ano; com ano vira `ANUAL/AAAA` (contexto do PCA).
+    // "Anual" é válido mesmo sem ano; com ano (do texto ou do PCA) vira `ANUAL/AAAA`.
     const valor = ano ? `ANUAL/${ano}` : "ANUAL";
     return { valor, anual: true, auto: cleanUpper(raw) !== valor };
   }
-  if (!ano) return { valor: null, anual: false, auto: false };
+  // Mês — reconhecido MESMO sem ano no texto (o ano pode vir do PCA / edição do usuário).
   let mes: number | null = null;
   const dmy = s.match(/\b(\d{1,2})\/(\d{1,2})\/20\d{2}\b/);
   const my = s.match(/\b(\d{1,2})\/20\d{2}\b/);
@@ -350,6 +360,7 @@ export function normPrevisao(texto: string | null | undefined): { valor: string 
     if (idx >= 0) mes = idx + 1;
   }
   if (mes == null || mes < 1 || mes > 12) return { valor: null, anual: false, auto: false };
+  if (!ano) return { valor: null, anual: false, auto: false }; // mês reconhecido, mas ano a definir
   const valor = `${MESES[mes - 1]}/${ano}`;
   return { valor, anual: false, auto: cleanUpper(raw) !== valor };
 }

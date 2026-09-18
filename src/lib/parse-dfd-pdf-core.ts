@@ -73,63 +73,96 @@ export function linhasDeTexto(bruto: PdfItem[]): string[] {
 
 // URL de validação do Dropsigner (Lacuna Software) — contém o CÓDIGO do documento.
 const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Za-z0-9-]+)/gi;
-// Bloco de assinatura Dropsigner no TEXTO RENDERIZADO: "Assinado digitalmente por: NOME
-// CPF: <mascarado> Data: dd/mm/aaaa hh:mm:ss -03:00". O dois-pontos após "por" distingue do
-// Formato B ("Assinado digitalmente por NOME, portador do CPF:…").
+// Bloco de assinatura Dropsigner no TEXTO RENDERIZADO, em QUALQUER idioma da aparência da anotação:
+//  - PT: "Assinado digitalmente por: NOME  CPF: <mascarado>  Data: dd/mm/aaaa hh:mm:ss -03:00"
+//  - EN: "Digitally signed by: NAME  CPF: <mascarado>  Date: M/D/AAAA h:mm:ss PM -03:00"
+// O dois-pontos após "por"/"by" distingue do Formato B ("Assinado digitalmente por NOME, portador…").
+// Grupos: 1 nome, 2 CPF, 3 data (crua — normalizada por `normalizarDataDropsigner`).
 const RE_DROPSIGNER_BLOCO =
-  /Assinado\s+digitalmente\s+por:\s*(.+?)\s+CPF:\s*([\d.*-]+)\s+Data:\s*(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?(?:\s*[-+]\d{2}:\d{2})?)/gi;
+  /(?:Assinado\s+digitalmente\s+por|Digitally\s+signed\s+by)\s*:\s*(.+?)\s+CPF\s*:\s*([\d.*-]+)\s+(?:Data|Date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?(?:\s*[-+]\d{2}:\d{2})?)/gi;
 
 /**
- * Formato C — assinatura **Dropsigner** (Lacuna Software), a partir do TEXTO RENDERIZADO da
- * página (`getOperatorList`, ver `pageRenderText` em `parse-dfd-pdf.ts`). É preciso o texto
- * RENDERIZADO — e não o `getTextContent` — porque o bloco visível costuma ser a **aparência de
- * uma ANOTAÇÃO de assinatura** (widget de campo `Sig`), que o `getTextContent` NÃO extrai (só o
- * render/aparência traz). O documento assinado traz, em toda página, a marca d'água "Documento
- * assinado no Dropsigner … `dropsigner.com/validate/<código>`" — prova universal do documento
- * assinado. Regra: todo **código** presente vira uma assinatura (reconhece o documento mesmo sem
- * bloco visível — nome/CPF/data vazios, verificáveis pela URL); quando há o bloco, sai COMPLETA.
- * Puro/testável (recebe o texto pronto).
+ * Normaliza a data CRUA do bloco Dropsigner para `DD/MM/AAAA HH:MM:SS [-03:00]`. O formato EN vem
+ * em `M/D/AAAA` com `AM/PM` (locale do assinante) → converte para dd/mm/aaaa em 24h; o PT já vem
+ * nesse formato (sem troca). Assim a exibição e o `dataAssinaturaISO` (conferência de temporário)
+ * ficam consistentes entre idiomas.
  */
-export function assinaturasDropsignerDeTexto(texto: string): Assinatura[] {
-  // Códigos (marca d'água). Sem código ⇒ não é Dropsigner.
-  const codigos: { codigo: string; url: string }[] = [];
-  const vistosCod = new Set<string>();
-  RE_DROPSIGNER_URL.lastIndex = 0;
-  let u: RegExpExecArray | null = RE_DROPSIGNER_URL.exec(texto);
-  while (u !== null) {
-    if (!vistosCod.has(u[1])) {
-      vistosCod.add(u[1]);
-      codigos.push({ codigo: u[1], url: u[0] });
-    }
-    u = RE_DROPSIGNER_URL.exec(texto);
+function normalizarDataDropsigner(data: string, ingles: boolean): string {
+  const m = data.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?)?\s*([-+]\d{2}:\d{2})?/i,
+  );
+  if (!m) return data;
+  let dia = Number(m[1]);
+  let mes = Number(m[2]);
+  if (ingles) [dia, mes] = [mes, dia]; // EN = M/D → troca para D/M
+  const ano = m[3];
+  let hora = m[4] != null ? Number(m[4]) : null;
+  const min = m[5] ?? null;
+  const seg = m[6] ?? "00";
+  const ampm = (m[7] ?? "").toUpperCase();
+  const tz = m[8] ?? "";
+  if (hora != null && ampm) {
+    if (ampm === "PM" && hora < 12) hora += 12;
+    else if (ampm === "AM" && hora === 12) hora = 0;
   }
-  if (codigos.length === 0) return [];
-  const doc = codigos[0]; // código do documento (o mesmo em toda página do DFD)
+  let out = `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
+  if (hora != null && min != null) out += ` ${String(hora).padStart(2, "0")}:${min}:${seg}`;
+  if (tz) out += ` ${tz}`;
+  return out;
+}
+
+/**
+ * Formato C — assinatura **Dropsigner** (Lacuna Software), a partir do TEXTO RENDERIZADO **por
+ * página** (`getOperatorList`, ver `pageRenderText`). É preciso o texto RENDERIZADO — e não o
+ * `getTextContent` — porque o bloco visível costuma ser a **aparência de uma ANOTAÇÃO de assinatura**
+ * (widget `Sig`), que o `getTextContent` NÃO extrai. Cada página traz, na marca d'água, o CÓDIGO do
+ * documento (`dropsigner.com/validate/<código>`); o bloco visível é pareado com o código DA PRÓPRIA
+ * página.
+ * **Ponto 2 — só a assinatura DIRETAMENTE no DFD:** mantém apenas o documento PRIMÁRIO (o 1º código,
+ * que aparece já na 1ª página do DFD). Um ANEXO ao DFD (decreto etc.) é OUTRO documento Dropsigner,
+ * com OUTRO código → suas assinaturas são DESCARTADAS. Recebe as páginas em ordem (`string[]`); um
+ * único texto também é aceito (tratado como 1 página). Puro/testável.
+ */
+export function assinaturasDropsignerDeTexto(textos: string | string[]): Assinatura[] {
+  const paginas = Array.isArray(textos) ? textos : [textos];
+  const codigoUrl = new Map<string, string>(); // código → url, na ORDEM de aparição (1º = primário)
+  const blocos: { nome: string; eCpf: string; data: string; codigo: string }[] = [];
+  for (const texto of paginas) {
+    // Código(s) da marca d'água DESTA página (o documento primário repete o mesmo em toda página).
+    RE_DROPSIGNER_URL.lastIndex = 0;
+    let codPagina: string | null = null;
+    let u: RegExpExecArray | null = RE_DROPSIGNER_URL.exec(texto);
+    while (u !== null) {
+      if (!codigoUrl.has(u[1])) codigoUrl.set(u[1], u[0]);
+      if (codPagina == null) codPagina = u[1];
+      u = RE_DROPSIGNER_URL.exec(texto);
+    }
+    if (codPagina == null) continue; // página sem marca d'água → sem Dropsigner
+    // Blocos VISÍVEIS desta página → atribuídos ao código DESTA página (nunca ao de outra).
+    RE_DROPSIGNER_BLOCO.lastIndex = 0;
+    let m: RegExpExecArray | null = RE_DROPSIGNER_BLOCO.exec(texto);
+    while (m !== null) {
+      const ingles = /Digitally\s+signed\s+by/i.test(m[0]) || /\b[AP]M\b/i.test(m[3]);
+      blocos.push({ nome: m[1].trim(), eCpf: m[2].trim(), data: normalizarDataDropsigner(m[3].trim(), ingles), codigo: codPagina });
+      m = RE_DROPSIGNER_BLOCO.exec(texto);
+    }
+  }
+  if (codigoUrl.size === 0) return [];
+  // Documento PRIMÁRIO = o 1º código (1ª página do DFD). Anexos (outros códigos) são descartados.
+  const primario = [...codigoUrl.keys()][0];
+  const url = codigoUrl.get(primario) as string;
 
   const out: Assinatura[] = [];
   const vistos = new Set<string>();
-  const comBloco = new Set<string>();
-  // Blocos VISÍVEIS → assinatura COMPLETA (nome/CPF/data).
-  RE_DROPSIGNER_BLOCO.lastIndex = 0;
-  let m: RegExpExecArray | null = RE_DROPSIGNER_BLOCO.exec(texto);
-  while (m !== null) {
-    const nome = m[1].trim();
-    const eCpf = m[2].trim();
-    const data = m[3].trim();
-    const chave = `${doc.codigo}|${norm(nome)}|${data}`;
-    if (!vistos.has(chave)) {
-      vistos.add(chave);
-      comBloco.add(doc.codigo);
-      out.push({ nome, eCpf, usuario: "", local: "", data, ip: "", codigo: doc.codigo, url: doc.url, fonte: "dropsigner" });
-    }
-    m = RE_DROPSIGNER_BLOCO.exec(texto);
+  for (const b of blocos) {
+    if (b.codigo !== primario) continue; // bloco de anexo → não é assinatura do DFD
+    const chave = `${norm(b.nome)}|${b.data}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    out.push({ nome: b.nome, eCpf: b.eCpf, usuario: "", local: "", data: b.data, ip: "", codigo: primario, url, fonte: "dropsigner" });
   }
-  // Códigos SÓ com carimbo (sem bloco visível) → reconhecido pela marca d'água (assinante/data
-  // verificáveis pela URL). Um por código de documento sem bloco.
-  for (const c of codigos) {
-    if (comBloco.has(c.codigo)) continue;
-    out.push({ nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: c.codigo, url: c.url, fonte: "dropsigner" });
-  }
+  // Sem bloco visível no documento primário → carimbo (reconhecido pela marca d'água do próprio DFD).
+  if (out.length === 0) out.push({ nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: primario, url, fonte: "dropsigner" });
   return out;
 }
 
@@ -179,7 +212,14 @@ export function itemPorCuts(cuts: number[], y: number): number {
   return lo;
 }
 
-export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string, textoRender = ""): DfdParseado {
+export function parseDfdFromPdfItems(
+  bruto: PdfItem[],
+  nomeArquivo: string,
+  // Texto RENDERIZADO POR PÁGINA (Dropsigner) — `string[]` (uma entrada por página, na ordem)
+  // permite parear o bloco ao código da própria página e descartar anexos; um único texto
+  // também é aceito (1 página). Vazio ⇒ sem Dropsigner.
+  textosRender: string | string[] = [],
+): DfdParseado {
   const items = normalizar(bruto);
   const linhas = agruparLinhas(items);
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
@@ -532,7 +572,7 @@ export function parseDfdFromPdfItems(bruto: PdfItem[], nomeArquivo: string, text
     secoes,
     itens,
     // Formatos A/B (páginas de assinatura, texto normal) + Formato C Dropsigner (do texto
-    // RENDERIZADO, que inclui a aparência das anotações de assinatura — vazio ⇒ sem Dropsigner).
-    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsignerDeTexto(textoRender)],
+    // RENDERIZADO por página, que inclui a aparência das anotações — vazio ⇒ sem Dropsigner).
+    assinaturas: [...extrairAssinaturas(lineTexts), ...assinaturasDropsignerDeTexto(textosRender)],
   };
 }

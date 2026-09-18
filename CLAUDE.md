@@ -127,14 +127,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com `reparticaoSchema`). Migração aditiva; default preserva o comportamento atual.
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
-  autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada.
-- **Matchers (ponto ÚNICO puro `src/lib/reparticao-match.ts`) — IGNORAM entidades OCULTAS:** `casarUnidade` (Setor
-  Requisitante → unidade: `setor_requisitante` → sigla → nome → órgão-texto; `casarReparticao` é alias),
+  autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada. Em **"Geral"**,
+  `painel/dfds/page.tsx` passa `reparticaoAtivaId={rep?.id ?? null}` = **null** (Geral comporta qualquer unidade) → a
+  dica "a unidade escolhida é diferente da ativa" (DfdConferir/DfdUploadForm) **não aparece** — nunca é erro (ponto 5).
+- **Matchers (ponto ÚNICO puro `src/lib/reparticao-match.ts`) — IGNORAM entidades OCULTAS:**
   **`casarPorInteressado`** (Interessado do protocolo → **órgão OU unidade** pelo número cadastrado → nome; devolve
-  `{tipo,id}`), **`preverUnidade`** (assinatura → setor) e **`preverUnidadeDoDfd`** (identifica o órgão, ESCOPA as
-  unidades a ele e prevê — usado pelos forms), `casarOrgao` (Órgão/Entidade → órgão), `orgaoDivergeDaUnidade`/
-  `divergenciaOrgaoUnidade`. Campos novos vazios ⇒ resultado **idêntico ao de hoje** (invariante testado). Threadados ao
-  cliente (`painel/dfds/page.tsx` enriquece as unidades + `listarOrgaos()` → `DfdsView` → forms).
+  `{tipo,id}`), **`preverUnidade`** (**SÓ pela ASSINATURA** — o assinante que bate com um responsável da unidade a
+  identifica) e **`preverUnidadeDoDfd`** (identifica o órgão pelo "Órgão/Entidade", ESCOPA as unidades a ele e prevê pela
+  assinatura; sem previsão, cai na **unidade própria** do órgão dual — usado pelos forms), `casarOrgao` (Órgão/Entidade →
+  órgão), `orgaoDivergeDaUnidade` (órgão do campo × órgão da unidade selecionada). **O "Setor Requisitante" do DFD NÃO é
+  mais usado para prever a unidade** (ponto 1 — era ruído): removidos `casarUnidade`/`casarReparticao`/
+  `divergenciaOrgaoUnidade`. Campos novos vazios ⇒ resultado consistente. Threadados ao cliente
+  (`painel/dfds/page.tsx` enriquece as unidades + `listarOrgaos()` → `DfdsView` → forms).
 - **Nº interessado no ÓRGÃO + identificação/registro do DFD + ocultar (migração `0027`):**
   - **Nº interessado (ponto 1/2/3):** `orgaos.numero_interessado` (além do da unidade) — o protocolo pode vir em nome do
     **órgão OU da unidade** (`casarPorInteressado`); o número é **ÚNICO GLOBAL** entre órgãos e unidades
@@ -144,7 +148,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`casarOrgao`) e **escopa o seletor de unidade** às unidades daquele órgão (PREFERÊNCIA), mas SEMPRE inclui a unidade
     já selecionada e **cai para a lista inteira quando o escopo fica vazio** — senão o seletor ficava vazio (nenhuma
     unidade acessível no órgão, ou a atual em outro órgão) e travava a escolha manual. O auto-match dos forms usa
-    **`preverUnidadeDoDfd`** (assinatura→setor); **ÓRGÃO-QUE-É-UNIDADE** (dual, `orgao_proprio`): quando o órgão
+    **`preverUnidadeDoDfd`** (**só pela ASSINATURA** — ponto 1; o "Setor Requisitante" não prevê mais);
+    **ÓRGÃO-QUE-É-UNIDADE** (dual, `orgao_proprio`): quando o órgão
     identificado tem a unidade própria, ela é resolvida como a requisitante (senão o DFD do órgão dual ficava sem
     unidade → erro). `orgao_proprio` é threadado ao cliente (`dadosMatchPorReparticao` → `page.tsx` → forms →
     `preverUnidadeDoDfd`/`ReparticaoMatch`). **A previsão por ASSINATURA usa TODAS as formas (certificado/sistema/
@@ -210,23 +215,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
   **TRÊS formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
-  (Dropsigner/Lacuna Software): o bloco visível ("Assinado digitalmente por: NOME · CPF: <mascarado> · Data: …") é,
-  na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura** (widget `Sig`) — que o **`getTextContent` NÃO
-  extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do **TEXTO RENDERIZADO** (`getOperatorList`, via
-  `PdfDoc.pageRenderText`) por **`assinaturasDropsignerDeTexto(texto)`** (`parse-dfd-pdf-core.ts`, puro): pega o NOME/
-  CPF/Data do bloco (regex; o dois-pontos após "por" distingue do Formato B) e o **código** da marca d'água
-  `dropsigner.com/validate/<código>` (prova UNIVERSAL, repetida em toda página). **Todo código presente vira uma
-  assinatura** (reconhece mesmo sem bloco visível — nome/CPF/data vazios, verificáveis pela URL); com bloco, sai
-  COMPLETA. `parseDfdFromPdfItems(items, nome, textoRender)` soma `extrairAssinaturas` (A/B) + Dropsigner do render.
+  (Dropsigner/Lacuna Software): o bloco visível é, na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura**
+  (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
+  **TEXTO RENDERIZADO POR PÁGINA** (`getOperatorList`, via `PdfDoc.pageRenderText`) por
+  **`assinaturasDropsignerDeTexto(textos: string|string[])`** (`parse-dfd-pdf-core.ts`, puro). Reconhece o bloco em
+  **QUALQUER IDIOMA** da aparência (ponto 4): PT "Assinado digitalmente por: NOME  CPF: …  Data: dd/mm/aaaa …" **e** EN
+  "Digitally signed by: NAME  CPF: …  Date: M/D/AAAA h:mm:ss PM …" (o `:` após "por"/"by" distingue do Formato B); a data
+  EN (M/D + AM/PM) é **normalizada** para `DD/MM/AAAA` 24h (`normalizarDataDropsigner`). O **código** vem da marca d'água
+  `dropsigner.com/validate/<código>`. **Ponto 2 — só a assinatura DIRETAMENTE no DFD:** cada bloco é pareado com o código
+  da PRÓPRIA página e mantém-se só o **documento PRIMÁRIO** (o 1º código, da 1ª página do DFD); um ANEXO (decreto etc.) é
+  outro documento Dropsigner, com outro código → **descartado**. Sem bloco no primário → 1 carimbo (nome vazio, verificável
+  pela URL). `parseDfdFromPdfItems(items, nome, textosRender)` soma `extrairAssinaturas` (A/B) + Dropsigner por página.
   **No PROTOCOLO** as A/B ficam em páginas separadas (índice `dfd.assinaturas`) e a Dropsigner nas páginas do DFD →
-  **`parseDfdDoProtocolo` COMBINA os dois** (não sobrescreve — era o bug que impedia o reconhecimento). Validado no
-  Protocolo 4.pdf real: **77/86 com NOME + 2 só carimbo** (1 usa outro formato "Assinado de forma digital", fora do escopo).
+  **`parseDfdDoProtocolo` COMBINA os dois** (não sobrescreve). Validado no Protocolo 4.pdf real (86 DFDs; ex.: DFD 1243 →
+  PEDRO … pelo bloco EN; DFD 1206 → EVERALDO Dropsigner, e a assinatura de sistema ESDRAS do anexo NÃO é atribuída).
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
-  assinaturas de um DFD podem vir em **VÁRIAS páginas** (formatos e páginas diferentes), sempre depois do DFD. No
-  **protocolo** as páginas de assinatura são vistas só no ÍNDICE (o parse completo só lê `dfd.pages`) →
-  `indexarProtocolo` mantém um ponteiro `ultimoDfd` e **acumula (APPEND)** todas as assinaturas que seguem o DFD até
-  o próximo DFD; uma **CAPA/DESPACHO** é fronteira (assinatura de despacho não gruda no último DFD). No avulso PDF
+  assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do
+  DFD. No **protocolo** as páginas de assinatura são vistas só no ÍNDICE (o parse completo só lê `dfd.pages`) →
+  `indexarProtocolo` mantém um ponteiro `ultimoDfd` e **acumula (APPEND)** as assinaturas das páginas de assinatura
+  **imediatamente após** o DFD; **ponto 3 — qualquer página separadora SEM assinatura (capa, despacho, DECRETO, anexo, em
+  branco) ENCERRA a janela** (`ultimoDfd=null`): uma assinatura que venha depois de um anexo já **não** gruda no DFD. No avulso PDF
   vêm de `parseDfdFromPdfItems`; `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
   `reparticao-responsaveis.ts`, puro/testável):** o assinante tem de bater (nome normalizado por `norm`) com um
   **responsável padrão** OU um **temporário** cujo período cobre a **data da assinatura** (reusa `Responsaveis` de
@@ -328,9 +337,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
   `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
   — `ANUAL` vale **sem ano**, com ano vira `ANUAL/AAAA`; reconhece `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`…
-  — `normPrevisao`); o que não dá
+  — `normPrevisao(texto, anoPca?)`). **O ANO da previsão segue o PCA do processo** (pontos 7/8): `normPrevisao`
+  reconhece **só o MÊS por extenso** ("FEVEREIRO") e completa o ano com o `anoPca`; um ano explícito no texto tem
+  precedência (permite a edição do usuário). `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
+  protocolo, ou do próprio DFD no avulso). O que não dá
   para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
-  PREVISÃO (mês + ano + toggle ANUAL) e FUNDAMENTAÇÃO LEGAL (`TextField`, padrão "Lei 14.133/2021") — só componentes
+  PREVISÃO (mês + ano [padrão = ano do PCA] + toggle ANUAL) e FUNDAMENTAÇÃO LEGAL (`TextField`, padrão "Lei 14.133/2021") — só componentes
   do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio normal (sem migração). Cada DFD ganha um
   **estado** (`estadoDfd`: com erro › editado › regularizado › regular › pendente; cor por token `--danger/--info/
   --warn/--ok/--muted`). Setor **é** repartição (rótulo unificado; a "regularização" é gravar `reparticaoId`).
@@ -504,13 +516,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   protocolo; `fecharProto` fecha também o DFD do lateral.
 - **Ano do PCA + referências de renovação (migração `0021`) — `ano_pca` no protocolo e no DFD; `numero_contrato`/
   `numero_ata`/`numero_licitacao` no DFD (tudo nullable):** ao ler o PDF, `anoPcaDoTexto` (`parse-dfd-comum.ts`, puro)
-  **adivinha o ano do PCA** da descrição ("PCA 2027", "PLANO DE CONTRATAÇÕES ANUAL … 2027"). O usuário **confirma ou
+  **identifica o ano do PCA pela descrição** — ponto 6: "PCA 2027", "PCA/2027", "PCA DE 2027", **"PCA DO ANO DE 2027"**
+  (o ano pode até **quebrar de linha** na observação da capa — o vão entre "PCA" e o ano tolera "DO ANO DE" + a quebra,
+  sem casar dígitos no meio). É a **única** lógica de identificação do PCA do protocolo (o `anoPca` próprio de cada DFD
+  não concorre — no protocolo, todos seguem o do protocolo). O usuário **confirma ou
   escolhe** o PCA no **`PcaPicker`** (componente do DS, `select` dos PCAs **cadastrados em Configurações** — guarda o
   **ano** integer, não o id; pré-selecionado só se o ano adivinhado existir cadastrado). **Obrigatório:** não se
   protocola nem se importa DFD avulso sem PCA definido (portão à parte de `faltasObrigatorias` — no cliente
   desabilita o botão, e o servidor rejeita 422: `POST /api/protocolo` e `POST /api/dfd` `start-dfd`). **Todos os DFDs
   do protocolo herdam o ano do PCA do protocolo** no envio (`ProtocoloUploadForm.protocolar` põe `anoPca` em cada
-  `enviarDfdEmLotes`). Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam nº de **contrato**,
+  `enviarDfdEmLotes`) — inclusive o **ano da PREVISÃO de entrega** segue o PCA (ponto 7: `normalizarSecoesDfd`/`normPrevisao`
+  recebem o `anoPca`). Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam nº de **contrato**,
   **ata** (registro de preços) e **licitação** da descrição para campos próprios; o `DfdConferir` mostra um bloco
   **Referências da renovação** (editável) e, se o DFD-R não tiver **nenhuma**, um **aviso não-bloqueante** (aponta,
   não trava) — o usuário pode preencher à mão. O `DfdView` exibe **Ano do PCA** (Seção 1) e as referências (só DFD-R);

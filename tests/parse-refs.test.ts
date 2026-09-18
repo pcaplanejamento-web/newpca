@@ -9,6 +9,9 @@ describe("anoPcaDoTexto (ano do PCA)", () => {
     assert.equal(anoPcaDoTexto("PCA/2028"), 2028);
     assert.equal(anoPcaDoTexto("Plano de Contratações Anual de 2025"), 2025);
     assert.equal(anoPcaDoTexto("INCLUSÃO - PCA - 2030"), 2030);
+    // "PCA DO ANO DE 2027" (observação da capa) — o ano pode até quebrar de linha.
+    assert.equal(anoPcaDoTexto("INCLUSÃO DAS DEMANDAS NO PCA DO ANO DE 2027."), 2027);
+    assert.equal(anoPcaDoTexto("...NO PCA DO ANO DE \n 2027."), 2027);
   });
   it("null quando não há ano/PCA", () => {
     assert.equal(anoPcaDoTexto("INCLUSÃO - PCA"), null);

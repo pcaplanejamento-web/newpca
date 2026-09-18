@@ -116,9 +116,10 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
     if (tipo === "desconhecido") {
       throw new Error('Não reconheci um DFD neste PDF. Envie o DFD emitido (com "Número DFD").');
     }
-    // Texto renderizado (inclui a aparência das anotações de assinatura) — para o Dropsigner.
-    let render = "";
-    for (let p = 1; p <= doc.numPages; p++) render += ` ${await doc.pageRenderText(p)}`;
+    // Texto renderizado POR PÁGINA (aparência das anotações de assinatura) — para o Dropsigner
+    // parear cada bloco ao código da própria página e manter só o documento primário (o DFD).
+    const render: string[] = [];
+    for (let p = 1; p <= doc.numPages; p++) render.push(await doc.pageRenderText(p));
     return parseDfdFromPdfItems(items, file.name, render);
   } finally {
     await doc.destroy();

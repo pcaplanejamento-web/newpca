@@ -14,7 +14,8 @@ export type ReparticaoMatch = {
   id: number;
   codigo: string;
   nome: string;
-  /** Padrão do "Setor Requisitante" do DFD (cadastro do ADM) — match preferencial. */
+  /** Padrão do "Setor Requisitante" (cadastro do ADM). **Não** é mais usado na previsão da
+   * unidade (ponto 1 — só a assinatura prevê); mantido como dado do cadastro. */
   setorRequisitante?: string | null;
   /** Número do Interessado do protocolo (cadastro do ADM) — identifica a unidade. */
   numeroInteressado?: string | null;
@@ -69,56 +70,6 @@ function semPrefixo(s: string): string {
 }
 
 /**
- * Devolve o `id` da UNIDADE que casa com o setor do DFD (ou `null`), IGNORANDO ocultas:
- * 0) pelo PADRÃO configurado do Setor Requisitante (`setor_requisitante`);
- * 1) pela SIGLA (código do setor = código da unidade);
- * 2) fallback pelo NOME da secretaria (`chaveNome`, cobre sigla divergente);
- * 3) fallback pelo Órgão/Entidade (setor genérico + órgão = a própria secretaria).
- */
-export function casarUnidade(
-  dfd: { siglaSetor?: string | null; setorRequisitante?: string | null; orgaoEntidade?: string | null },
-  unidades: ReparticaoMatch[],
-): number | null {
-  const uv = unidades.filter((u) => !u.oculto);
-  // 0) padrão configurado do Setor Requisitante — compara o texto do DFD (cru, sem prefixo
-  // "SIGLA -", e a própria sigla) com o padrão cadastrado (idem).
-  if (dfd.setorRequisitante || dfd.siglaSetor) {
-    const cand = [
-      dfd.setorRequisitante ? chaveNome(dfd.setorRequisitante) : null,
-      dfd.setorRequisitante ? chaveNome(semPrefixo(dfd.setorRequisitante)) : null,
-      dfd.siglaSetor ? norm(dfd.siglaSetor) : null,
-    ].filter((x): x is string => !!x);
-    const r = uv.find((x) => {
-      if (!x.setorRequisitante) return false;
-      const alvos = [chaveNome(x.setorRequisitante), chaveNome(semPrefixo(x.setorRequisitante)), norm(x.setorRequisitante)];
-      return cand.some((c) => alvos.includes(c));
-    });
-    if (r) return r.id;
-  }
-  // 1) casa a sigla do Setor Requisitante com o código da unidade.
-  if (dfd.siglaSetor) {
-    const r = uv.find((x) => norm(x.codigo) === dfd.siglaSetor);
-    if (r) return r.id;
-  }
-  // 2) fallback pelo NOME da secretaria (cobre sigla divergente, ex.: SMIR × SIR).
-  if (dfd.setorRequisitante) {
-    const alvo = chaveNome(semPrefixo(dfd.setorRequisitante));
-    const r = alvo ? uv.find((x) => chaveNome(x.nome) === alvo) : undefined;
-    if (r) return r.id;
-  }
-  // 3) fallback pelo Órgão/Entidade (setor genérico + órgão "SECRETARIA ...").
-  if (dfd.orgaoEntidade) {
-    const alvo = chaveNome(dfd.orgaoEntidade);
-    const r = alvo ? uv.find((x) => chaveNome(x.nome) === alvo) : undefined;
-    if (r) return r.id;
-  }
-  return null;
-}
-
-/** Alias histórico de `casarUnidade` — mantido p/ os call sites do import de DFD/protocolo. */
-export const casarReparticao = casarUnidade;
-
-/**
  * Ponto 2 — Interessado do PROTOCOLO → ÓRGÃO ou UNIDADE (o protocolo pode vir em nome de qualquer
  * um). Casa pelo NÚMERO do interessado cadastrado (único GLOBAL) e, no fallback, pelo NOME. Prefere
  * a UNIDADE (mais específica) e ignora ocultos. `null` se nada casar.
@@ -149,36 +100,32 @@ export function casarPorInteressado(
 }
 
 /**
- * Ponto 5 — PREVÊ a unidade de um DFD (dentro do órgão já identificado): 1) pela ASSINATURA
- * (quando o órgão é "por unidade", o assinante identifica a unidade); 2) pelo SETOR REQUISITANTE
- * (`casarUnidade`). `null` = não deu para prever → o usuário escolhe (erro até definir). As
+ * Ponto 1 + 5 — PREVÊ a unidade de um DFD (dentro do órgão já identificado) **SÓ pela ASSINATURA**:
+ * quando o órgão é "por unidade", o ASSINANTE (que bate com um responsável da unidade) identifica a
+ * unidade. O "Setor Requisitante" do DFD **não** é mais usado para prever (removido — era ruído). Sem
+ * assinante que case (ou órgão de assinatura ÚNICA), devolve `null` → o usuário escolhe a unidade. As
  * `unidades` já devem vir ESCOPADAS ao órgão identificado.
  */
 export function preverUnidade(
-  dfd: { siglaSetor?: string | null; setorRequisitante?: string | null; orgaoEntidade?: string | null; assinaturas?: Assinatura[] | null },
+  dfd: { assinaturas?: Assinatura[] | null },
   unidades: (ReparticaoMatch & { responsaveis?: Responsaveis | null })[],
   opts: { assinaturaPorUnidade: boolean },
 ): number | null {
-  // 1) pela ASSINATURA — só quando cada unidade tem o seu gestor (órgão "por unidade").
-  if (opts.assinaturaPorUnidade && dfd.assinaturas && dfd.assinaturas.length > 0) {
-    const comResp = unidades
-      .filter((u) => u.responsaveis)
-      .map((u) => ({ id: u.id, responsaveis: u.responsaveis as Responsaveis, oculto: u.oculto }));
-    const porAssin = preverUnidadePorAssinatura(dfd.assinaturas, comResp);
-    if (porAssin != null) return porAssin;
-  }
-  // 2) pelo SETOR REQUISITANTE (casarUnidade — já ignora ocultas).
-  return casarUnidade(dfd, unidades);
+  if (!opts.assinaturaPorUnidade || !dfd.assinaturas || dfd.assinaturas.length === 0) return null;
+  const comResp = unidades
+    .filter((u) => u.responsaveis)
+    .map((u) => ({ id: u.id, responsaveis: u.responsaveis as Responsaveis, oculto: u.oculto }));
+  return preverUnidadePorAssinatura(dfd.assinaturas, comResp);
 }
 
 /**
  * Ponto 4 + 5 — fluxo do DFD: IDENTIFICA o órgão pelo "Órgão/Entidade", ESCOPA as unidades a
- * esse órgão e PREVÊ a unidade (assinatura → setor). `null` = o usuário escolhe. Ponto ÚNICO
+ * esse órgão e PREVÊ a unidade **pela ASSINATURA**. `null` = o usuário escolhe. Ponto ÚNICO
  * usado pelos forms (import avulso e protocolo). Se o órgão não é identificado, cai para todas
  * as unidades (o usuário escolhe manualmente).
  */
 export function preverUnidadeDoDfd(
-  dfd: { orgaoEntidade?: string | null; siglaSetor?: string | null; setorRequisitante?: string | null; assinaturas?: Assinatura[] | null },
+  dfd: { orgaoEntidade?: string | null; assinaturas?: Assinatura[] | null },
   orgaos: OrgaoMatch[],
   unidades: (ReparticaoMatch & { responsaveis?: Responsaveis | null })[],
 ): number | null {
@@ -231,18 +178,4 @@ export function orgaoDivergeDaUnidade(
   const orgaoDoCampo = casarOrgao(orgaoEntidade, orgaos);
   if (orgaoDoCampo == null) return false;
   return orgaoDoCampo !== orgaoIdDaUnidade;
-}
-
-/**
- * Divergência a partir só do DFD: casa a unidade pelo "Setor Requisitante" e compara o órgão
- * dela com o do "Órgão/Entidade". (Na conferência, prefira `orgaoDivergeDaUnidade`.)
- */
-export function divergenciaOrgaoUnidade(
-  dfd: { siglaSetor?: string | null; setorRequisitante?: string | null; orgaoEntidade?: string | null },
-  unidades: ReparticaoMatch[],
-  orgaos: OrgaoMatch[],
-): boolean {
-  const uId = casarUnidade(dfd, unidades);
-  if (uId == null) return false;
-  return orgaoDivergeDaUnidade(dfd.orgaoEntidade, unidades.find((u) => u.id === uId)?.orgaoId ?? null, orgaos);
 }

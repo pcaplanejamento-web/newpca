@@ -44,7 +44,9 @@ export default async function DfdsPage() {
       dfds={dfds}
       protocolos={protocolos}
       reparticoes={reparticoes}
-      reparticaoAtivaId={repCtx.ativa?.id ?? null}
+      /* Em "Geral" (rep=null) não há unidade ativa específica — Geral comporta qualquer unidade,
+         então nunca é "diferente da ativa" (a dica de fluxo não aparece). */
+      reparticaoAtivaId={rep?.id ?? null}
       pcas={pcas}
       regras={regras}
       orgaos={orgaos}

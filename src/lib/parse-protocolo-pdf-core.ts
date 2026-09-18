@@ -58,12 +58,6 @@ export function ehCapa(lines: string[]): boolean {
   return lines.some((s) => /CAPA DO PROCESSO/i.test(s) || /N[úu]mero\s+Processo/i.test(s));
 }
 
-/** A página é um DESPACHO (encaminhamento do processo)? Fronteira: assinaturas
- * depois de um despacho pertencem ao despacho, não ao último DFD. */
-function ehDespacho(lines: string[]): boolean {
-  return lines.some((s) => /\bDESPACHO\b/i.test(s));
-}
-
 /** Texto por página a partir dos trechos crus (agrupa por página + reconstrói linhas). */
 export function paginasDeItens(items: PdfItem[]): PaginaTexto[] {
   const porPagina = new Map<number, PdfItem[]>();
@@ -209,15 +203,16 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
   let ultimoDfd: Grupo | null = null; // último DFD (recebe as assinaturas que o seguem)
   for (const p of comNum) {
     if (p.numero == null) {
-      // Página separadora. As assinaturas de um DFD podem vir em VÁRIAS páginas
-      // (formatos "certificado" e "sistema"), sempre DEPOIS do DFD → acumula no
-      // último DFD (APPEND), sem empurrar as linhas para `cur.lines`. Uma CAPA ou
-      // DESPACHO é fronteira (impede que assinaturas de despacho grudem no DFD).
+      // Página separadora. A assinatura PADRÃO (certificado/sistema) do DFD só conta se estiver
+      // na(s) página(s) IMEDIATAMENTE após o DFD — podem ser VÁRIAS páginas contíguas (um formato
+      // por página), todas de assinatura, que acumulam (APPEND) no último DFD. Qualquer página
+      // separadora SEM assinatura (capa, despacho, DECRETO, anexo, em branco) ENCERRA a janela: o
+      // que vier depois já NÃO é do último DFD (senão a assinatura de um anexo grudava no DFD).
       cur = null;
       const ass = extrairAssinaturas(p.lines);
       if (ass.length > 0) {
         if (ultimoDfd) ultimoDfd.assinaturas.push(...ass);
-      } else if (ehCapa(p.lines) || ehDespacho(p.lines)) {
+      } else {
         ultimoDfd = null;
       }
       continue;

@@ -275,13 +275,16 @@ export function DfdConferir({
   // Valores atuais das seções tratáveis.
   const [pCfg, vCfg, fCfg] = TRATAVEIS;
   const prio = normPrioridade(textoSecao(dfd.secoes, pCfg.kw)).valor;
-  const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw)).valor;
+  // Previsão: o ANO segue o PCA do processo (ponto 7) — passado a `normPrevisao`, que também
+  // reconhece só o MÊS por extenso e completa o ano com o do PCA (ponto 8).
+  const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca).valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
   // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
   // no anual (não deixa o mês grudar como se fosse mês quando é só "ANUAL").
   const anual = !!prev && /^ANUAL(\/|$)/.test(prev);
   const mesSel = prev && !anual ? (prev.split("/")[0] ?? "") : "";
-  const anoSel = prev ? (prev.split("/")[1] ?? "") : "";
+  // Ano do campo: o da previsão; sem ele, o do PCA (o usuário ainda pode editar — ponto 8).
+  const anoSel = (prev ? (prev.split("/")[1] ?? "") : "") || (anoPca != null ? String(anoPca) : "");
 
   const status = (campo: CampoTratavel, ok: boolean): { txt: string; cor: string } => {
     if (!ok) return { txt: "tratar", cor: "var(--danger)" };

@@ -44,6 +44,25 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
   completo de cada DFD (`preverUnidadeDoDfd` com as assinaturas Dropsigner incluídas), preenchendo só as unidades
   ainda não definidas — sem sobrescrever escolha manual.
 
+### Assinatura, unidade e PCA: precisão cirúrgica (auditoria 2) — entregue
+✅ 8 ajustes pedidos, validados contra o Protocolo 4.pdf real:
+- **Unidade prevista SÓ pela ASSINATURA** (ponto 1): o "Setor Requisitante" do DFD saiu da previsão (era ruído);
+  removidos `casarUnidade`/`casarReparticao`/`divergenciaOrgaoUnidade`. O órgão ainda vem do "Órgão/Entidade".
+- **Dropsigner só DIRETAMENTE no DFD** (ponto 2): extração por página pareia o bloco ao código da própria página e
+  mantém só o **documento primário** (o do DFD); um anexo (decreto etc.), com outro código, é descartado.
+- **Assinatura padrão só na página logo após o DFD** (ponto 3): qualquer página separadora sem assinatura (capa,
+  despacho, decreto, anexo) encerra a janela — assinatura depois de um anexo não gruda mais no DFD (corrige DFD 1206,
+  que herdava a assinatura de sistema de um decreto anexo).
+- **Dropsigner em QUALQUER idioma** (ponto 4): reconhece o bloco em PT ("Assinado digitalmente por:") **e** EN
+  ("Digitally signed by: … Date: M/D/AAAA … PM"), normalizando a data para dd/mm/aaaa 24h (corrige DFD 1243, que vinha
+  sem nome).
+- **"Geral" nunca é "unidade diferente da ativa"** (ponto 5): a dica de fluxo some quando o head está em Geral.
+- **PCA identificado pelo ano na descrição** (ponto 6): `anoPcaDoTexto` passa a reconhecer "PCA DO ANO DE 2027" mesmo
+  com o ano quebrando de linha (a capa do Protocolo 4 passou a detectar 2027, antes vinha nulo).
+- **Previsão de entrega segue o PCA** (pontos 7/8): todos os DFDs herdam o ano do PCA do protocolo; a previsão que traz
+  só o MÊS ("FEVEREIRO") tem o ano completado com o do PCA (o usuário ainda pode editar; um ano explícito no texto
+  prevalece).
+
 ### Assinatura digital: Formato C — Dropsigner (Lacuna Software) — entregue
 ✅ 3º formato de assinatura, o **Dropsigner**: a marca d'água "Documento assinado no Dropsigner …
 `dropsigner.com/validate/<código>`" (em TODA página) é a **prova universal** — todo código presente vira uma

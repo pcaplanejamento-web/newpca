@@ -60,6 +60,16 @@ describe("normPrevisao (MÊS/AAAA ou ANUAL/AAAA)", () => {
     assert.equal(normPrevisao("em breve").valor, null);
     assert.equal(normPrevisao("data a definir").valor, null);
   });
+  it("ponto 8 — mês por extenso SEM ano usa o ano do PCA (o usuário ainda edita)", () => {
+    assert.equal(normPrevisao("FEVEREIRO", 2027).valor, "FEVEREIRO/2027");
+    assert.equal(normPrevisao("A PARTIR DE ABRIL", 2027).valor, "ABRIL/2027");
+    assert.equal(normPrevisao("ANUAL", 2027).valor, "ANUAL/2027"); // recorrente ganha o ano do PCA
+    assert.equal(normPrevisao("FEVEREIRO").valor, null); // sem ano do texto e sem PCA → a definir
+  });
+  it("ponto 7 — o ano do TEXTO tem precedência sobre o do PCA (edição preservada)", () => {
+    assert.equal(normPrevisao("MAIO/2028", 2027).valor, "MAIO/2028");
+    assert.equal(normPrevisao("31/05/2027", 2027).valor, "MAIO/2027");
+  });
 });
 
 describe("valoresBatem (capa × somatória dos DFDs)", () => {

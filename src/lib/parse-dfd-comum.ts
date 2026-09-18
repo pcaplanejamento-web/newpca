@@ -39,9 +39,12 @@ export function tipoCurtoDfd(tipo: string | null | undefined): string | null {
  */
 export function anoPcaDoTexto(texto: string | null | undefined): number | null {
   const s = String(texto ?? "");
+  // "PCA 2027", "PCA/2027", "PCA DE 2027", "PCA DO ANO DE 2027" (o ano pode quebrar de
+  // linha — ex.: "...NO PCA DO ANO DE\n2027") → tolerância maior no vão entre "PCA" e o
+  // ano (só conectores/espaços/quebra: "DO ANO DE"), sem casar dígitos no meio.
   const m =
-    s.match(/\bPCA\b[^0-9]{0,12}((?:19|20)\d{2})/i) ??
-    s.match(/PLANO\s+DE\s+CONTRATA[ÇC][ÕO]ES\s+ANUAL[^0-9]{0,20}((?:19|20)\d{2})/i);
+    s.match(/\bPCA\b[^0-9]{0,16}((?:19|20)\d{2})/i) ??
+    s.match(/PLANO\s+DE\s+CONTRATA[ÇC][ÕO]ES\s+ANUAL[^0-9]{0,24}((?:19|20)\d{2})/i);
   const ano = m ? Number(m[1]) : null;
   return ano != null && ano >= 2000 && ano <= 2100 ? ano : null;
 }

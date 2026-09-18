@@ -269,7 +269,9 @@ export function ProtocoloUploadForm({
     for (let i = 0; i < total; i++) {
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
-        const { dfd, auto } = normalizarSecoesDfd(raw, regras);
+        // Previsão segue o PCA do PROTOCOLO (ponto 7) — usa o ano detectado na capa (o estado
+        // `anoPca` ainda não reflete o setState recém-disparado; `idx0.protocolo.anoPca` é fresco).
+        const { dfd, auto } = normalizarSecoesDfd(raw, regras, idx0.protocolo.anoPca);
         setParsed((m) => new Map(m).set(i, dfd));
         if (auto.length) setAutoMap((m) => new Map(m).set(i, auto));
         // Refina a UNIDADE com as assinaturas do PARSE COMPLETO — que inclui a **Dropsigner**
@@ -345,7 +347,7 @@ export function ProtocoloUploadForm({
     const cached = parsed.get(idx);
     if (cached) return cached;
     const raw = await parseDfdDoProtocolo(doc, di, nomeArq);
-    const { dfd, auto } = normalizarSecoesDfd(raw);
+    const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoPca);
     setParsed((m) => new Map(m).set(idx, dfd));
     setAutoMap((m) => new Map(m).set(idx, auto));
     return dfd;
@@ -484,7 +486,7 @@ export function ProtocoloUploadForm({
         if (!full) {
           if (!doc) break;
           try {
-            full = normalizarSecoesDfd(await parseDfdDoProtocolo(doc, di, nomeArq), regras).dfd;
+            full = normalizarSecoesDfd(await parseDfdDoProtocolo(doc, di, nomeArq), regras, anoPca).dfd;
           } catch (e) {
             bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
             continue;

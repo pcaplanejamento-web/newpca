@@ -37,11 +37,12 @@ export async function indexarProtocoloPdf(file: File): Promise<{ index: Protocol
 
 export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArquivo: string) {
   const items: PdfItem[] = [];
-  let render = "";
+  const render: string[] = [];
   for (const p of dfd.pages) {
     items.push(...(await doc.pageItems(p)));
-    // Texto RENDERIZADO (inclui a aparência das anotações de assinatura Dropsigner).
-    render += ` ${await doc.pageRenderText(p)}`;
+    // Texto RENDERIZADO POR PÁGINA (aparência das anotações Dropsigner) — o parser pareia
+    // cada bloco ao código da própria página e mantém só o documento primário (o DFD).
+    render.push(await doc.pageRenderText(p));
   }
   const parsed = parseDfdFromPdfItems(items, nomeArquivo, render);
   // Assinaturas A/B (certificado/sistema) ficam em páginas SEPARADAS após o DFD (fora de

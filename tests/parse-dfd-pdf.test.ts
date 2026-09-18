@@ -457,4 +457,31 @@ describe("assinaturasDropsignerDeTexto (Formato C — texto renderizado)", () =>
     assert.equal(ass[0].nome, ""); // Formato B não vira bloco Dropsigner; fica o bare do carimbo
     assert.equal(ass[0].codigo, "ABCDE-11111-22222-33333");
   });
+
+  it("ponto 4 — bloco em INGLÊS (Digitally signed by / Date M/D/AAAA AM-PM) → normaliza a data", () => {
+    const texto =
+      "10 - AUTORIZAÇÃO DEMANDA Autorizo o início da formalização da demanda. " +
+      "Digitally signed by: PEDRO HENRIQUE ARAUJO CUNHA CPF: ***.324.501-** Date: 9/1/2026 2:00:52 PM -03:00 " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/7X4UJ-VXUC6-TXQL9-8SRAY.";
+    const ass = assinaturasDropsignerDeTexto(texto);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "PEDRO HENRIQUE ARAUJO CUNHA");
+    assert.equal(ass[0].eCpf, "***.324.501-**");
+    assert.equal(ass[0].data, "01/09/2026 14:00:52 -03:00"); // M/D→D/M + 12h→24h (AM/PM)
+    assert.equal(ass[0].codigo, "7X4UJ-VXUC6-TXQL9-8SRAY");
+    assert.equal(ass[0].fonte, "dropsigner");
+  });
+
+  it("ponto 2 — só o documento PRIMÁRIO: anexo (OUTRO código, outra página) é descartado", () => {
+    const paginaDfd =
+      "Assinado digitalmente por: EVERALDO LEITE RIBEIRO CPF: ***.684.691-** Data: 02/09/2026 15:34:01 -03:00 " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/AAAAA-11111-22222-33333.";
+    const paginaAnexo =
+      "Assinado digitalmente por: WELLINGTON PREFEITO CPF: ***.000.000-** Data: 27/07/2026 10:00:00 -03:00 " +
+      "Documento assinado no Dropsigner. Acesse https://www.dropsigner.com/validate/BBBBB-99999-88888-77777.";
+    const ass = assinaturasDropsignerDeTexto([paginaDfd, paginaAnexo]);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "EVERALDO LEITE RIBEIRO");
+    assert.equal(ass[0].codigo, "AAAAA-11111-22222-33333"); // 1ª página (o DFD); o anexo é descartado
+  });
 });
