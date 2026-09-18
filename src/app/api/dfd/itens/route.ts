@@ -3,6 +3,8 @@ import { listarItensDfds } from "@/lib/dfd";
 import { getReparticaoFiltro } from "@/lib/grupos";
 import { ok } from "@/lib/http";
 
+export const dynamic = "force-dynamic";
+
 // Lista PLANA dos itens dos DFDs em escopo (visão "Itens" da tela DFD) — escopada pela unidade
 // ativa (Geral ⇒ todos), carregada SOB DEMANDA pelo cliente ao abrir a visão (não pesa o load inicial).
 export async function GET() {
