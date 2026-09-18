@@ -1,5 +1,5 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
-import { historicoDe } from "@/lib/auditoria";
+import { historicoConectadoDfd } from "@/lib/auditoria";
 import { getDfdReparticao } from "@/lib/dfd";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok } from "@/lib/http";
@@ -16,5 +16,5 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!dfd) return erro("DFD não encontrado.", 404);
   const { lista } = await getReparticaoContexto(a.u);
   if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
-  return ok({ historico: await historicoDe("dfd", id) });
+  return ok({ historico: await historicoConectadoDfd(id, dfd.protocoloId) });
 }

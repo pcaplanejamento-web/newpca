@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { auditoria } from "@/db/schema";
-import type { AcaoAuditoria, Ator, EntidadeAuditoria } from "./auditoria-core";
+import { type AcaoAuditoria, type Ator, type EntidadeAuditoria, mesclarHistorico } from "./auditoria-core";
 import { getDb } from "./db";
 
 /**
@@ -80,6 +80,24 @@ export async function historicoDe(
     .where(and(eq(auditoria.entidade, entidade), eq(auditoria.entidadeId, entidadeId)))
     .orderBy(desc(auditoria.id))
     .limit(limite);
+}
+
+/**
+ * Histórico CONECTADO de um DFD: as alterações do PRÓPRIO DFD (que já incluem as edições
+ * de itens — logadas sob `entidade:"dfd"`) MESCLADAS com as do seu protocolo atual, do mais
+ * recente ao mais antigo. Assim o banner do DFD mostra "histórico de protocolo" além do seu
+ * (o protocolo é único → é sempre o vigente; a `entidade` de cada linha identifica a origem).
+ */
+export async function historicoConectadoDfd(
+  dfdId: number,
+  protocoloId: number | null,
+  limite = 200,
+): Promise<LinhaAuditoria[]> {
+  const [doDfd, doProtocolo] = await Promise.all([
+    historicoDe("dfd", dfdId, limite),
+    protocoloId != null ? historicoDe("protocolo", protocoloId, limite) : Promise.resolve([]),
+  ]);
+  return mesclarHistorico([doDfd, doProtocolo], limite);
 }
 
 export type FiltroAuditoria = { entidade?: string; acao?: string; usuarioId?: number; de?: string; ate?: string };

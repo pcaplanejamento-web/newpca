@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { diffCampos, ROTULO_ACAO, ROTULO_ENTIDADE } from "../src/lib/auditoria-core.ts";
+import { diffCampos, mesclarHistorico, ROTULO_ACAO, ROTULO_ENTIDADE } from "../src/lib/auditoria-core.ts";
 
 describe("auditoria-core", () => {
   it("diffCampos: só os campos que mudaram + resumo legível", () => {
@@ -36,5 +36,20 @@ describe("auditoria-core", () => {
     assert.equal(ROTULO_ACAO.importar, "Importou");
     assert.equal(ROTULO_ENTIDADE.dfd, "DFD");
     assert.equal(ROTULO_ENTIDADE.reparticao, "Unidade");
+  });
+
+  it("mesclarHistorico: intercala fluxos por id decrescente (mais recente primeiro)", () => {
+    const dfd = [{ id: 10 }, { id: 4 }, { id: 2 }];
+    const proto = [{ id: 9 }, { id: 5 }, { id: 1 }];
+    const r = mesclarHistorico([dfd, proto]);
+    assert.deepEqual(
+      r.map((e) => e.id),
+      [10, 9, 5, 4, 2, 1],
+    );
+  });
+
+  it("mesclarHistorico: respeita o teto e tolera fluxo vazio", () => {
+    const r = mesclarHistorico([[{ id: 3 }, { id: 1 }], []], 1);
+    assert.deepEqual(r, [{ id: 3 }]);
   });
 });

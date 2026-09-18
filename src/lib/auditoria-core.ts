@@ -100,3 +100,16 @@ export function diffCampos<T extends Record<string, unknown>>(
   }
   return { antes: a, depois: d, resumo: partes.join("; "), mudou: partes.length > 0 };
 }
+
+/**
+ * Mescla vários fluxos de histórico (ex.: do DFD + do seu protocolo) num só, do mais
+ * recente para o mais antigo (por `id`, que é autoincrement), aplicando um teto. Puro
+ * — a origem de cada entrada continua legível pela própria `entidade` da linha. Usado
+ * pelo histórico CONECTADO (item ↔ DFD ↔ protocolo).
+ */
+export function mesclarHistorico<T extends { id: number }>(streams: T[][], limite = 200): T[] {
+  return streams
+    .flat()
+    .sort((a, b) => b.id - a.id)
+    .slice(0, limite);
+}
