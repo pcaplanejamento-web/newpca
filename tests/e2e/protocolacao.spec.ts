@@ -22,7 +22,7 @@ test("cadastra um assunto e salva (persiste após recarregar)", async ({ page })
   await abrirProtocolacao(page);
   await page.getByRole("button", { name: /Adicionar assunto/i }).click();
   await page.getByPlaceholder(/Aquisição/i).last().fill("Aquisição");
-  await page.getByRole("button", { name: /^Salvar/i }).click();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
   // Confirma pela PERSISTÊNCIA (recarrega e reabre a aba): o assunto continua lá.
   await page.reload();
   await page.getByText("Avaliação", { exact: true }).first().click();
