@@ -1,7 +1,7 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { comportamentoNo } from "@/lib/avaliacao-core";
+import { comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
@@ -80,6 +80,13 @@ export async function POST(req: Request) {
   // ano do PCA (herdado do protocolo ou definido no avulso). Sem ele, não grava.
   if (d.anoPca == null && comportamentoNo(regras, "dfd.anoPca", ctxAv) === "bloqueia")
     return erro("Defina o PCA (ano) do DFD antes de importar.", 422);
+  // Trava de protocolação do ADM: TIPO permitido (se exigido) vale p/ TODO DFD; e no AVULSO
+  // (sem protocoloId) o botão Importar precisa estar habilitado. (No protocolo, o gate do botão é
+  // o "Protocolar", conferido no POST /api/protocolo; a trava de assunto também é de lá.)
+  if (regras.gate?.exigirTipo && !tipoPermitido(ctxAv.dfdTipo, regras))
+    return erro(`Tipo de DFD não permitido para protocolar: ${ctxAv.dfdTipo ?? "sem tipo"} (Configurações → Protocolação).`, 422);
+  if (d.protocoloId == null && !importarDfdHabilitado(regras))
+    return erro("A importação de DFD avulso está desabilitada nas Configurações.", 422);
   // Divergência órgão × unidade — portão à parte, só EXECUTA (e só bloqueia) quando o ADM
   // pôs o ponto numa importância que "bloqueia" (padrão avisa = atenção, não bloqueia → sem custo).
   if (comportamentoNo(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "bloqueia" && d.reparticaoId != null) {

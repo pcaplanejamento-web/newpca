@@ -1,7 +1,7 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { classificarAssunto, comportamentoNo } from "@/lib/avaliacao-core";
+import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -28,6 +28,11 @@ export async function POST(req: Request) {
   const categoria = classificarAssunto(protocolo.assunto);
   if (protocolo.anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia")
     return erro("Defina o PCA do protocolo antes de protocolar.", 422);
+  // Trava de protocolação do ADM (Configurações → Protocolação): botão desligado OU assunto não
+  // cadastrado barra o protocolo INTEIRO. (A trava por TIPO é conferida em cada DFD no POST /api/dfd.)
+  if (!protocolarHabilitado(regras)) return erro("A protocolação está desabilitada nas Configurações.", 422);
+  if (regras.gate?.exigirAssunto && !assuntoCadastrado(protocolo.assunto, regras))
+    return erro("Assunto do protocolo não cadastrado nas Configurações (Protocolação).", 422);
 
   const { lista } = await getReparticaoContexto(a.u);
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);

@@ -97,6 +97,27 @@ const sinonimosSchema = z.record(z.string(), z.array(sinonimoSchema).max(50)).su
   }
 });
 
+// ---- Trava de protocolação (assuntos + tipos permitidos + botões) ----
+const TIPOS_SET = new Set<string>(TIPOS_DFD as readonly string[]);
+const assuntoSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  termo: z.string().trim().min(1, "Informe o assunto.").max(120),
+});
+const gateSchema = z.object({
+  exigirAssunto: z.boolean().optional(),
+  exigirTipo: z.boolean().optional(),
+  protocolarHabilitado: z.boolean().optional(),
+  importarDfdHabilitado: z.boolean().optional(),
+});
+const tiposProtocoloSchema = z
+  .array(z.string().trim().min(1))
+  .max(10)
+  .superRefine((arr, ctx) => {
+    arr.forEach((t, i) => {
+      if (!TIPOS_SET.has(t)) ctx.addIssue({ code: "custom", message: `Tipo de DFD desconhecido: ${t}`, path: [i] });
+    });
+  });
+
 /** Config completa de avaliação (corpo do PATCH). Todos os blocos são opcionais. */
 export const avaliacaoSchema = z
   .object({
@@ -107,6 +128,9 @@ export const avaliacaoSchema = z
     sinonimos: sinonimosSchema.optional().default({}),
     importancias: importanciasSchema.optional(),
     estadosCiclo: estadosCicloSchema.optional(),
+    assuntos: z.array(assuntoSchema).max(200).optional(),
+    tiposProtocolo: tiposProtocoloSchema.optional(),
+    gate: gateSchema.optional(),
   })
   .superRefine((cfg, ctx) => {
     // Comportamento efetivo por id (bases + customizadas do próprio payload).

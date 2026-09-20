@@ -2,20 +2,27 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   aplicarSinonimos,
+  assuntoCadastrado,
   classificarAssunto,
+  coerceRegras,
   comportamentoDe,
   comportamentoNo,
   corImportancia,
   editavelDe,
+  gateProtocolo,
   IMPORTANCIAS_PADRAO,
   type Importancia,
   importanciaDe,
   importanciasDe,
+  importarDfdHabilitado,
   nivelDe,
+  protocolarHabilitado,
   type RegrasAvaliacao,
   regrasPadrao,
   sinonimosDe,
+  tipoPermitido,
 } from "../src/lib/avaliacao-core.ts";
+import { avaliacaoSchema } from "../src/lib/avaliacao-validation.ts";
 import { avaliarDfd, estadoCor, normalizarSecoesDfd } from "../src/lib/dfd-tratamento.ts";
 import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 
@@ -221,5 +228,79 @@ describe("avaliarDfd — níveis e exceções", () => {
     };
     assert.deepEqual(avaliarDfd(d, regras, { categoria: "exclusao" }).bloqueantes, []);
     assert.ok(avaliarDfd(d, regras, { categoria: "inclusao" }).bloqueantes.includes("unidade vinculada"));
+  });
+});
+
+describe("trava de protocolação (assuntos + tipos + botões)", () => {
+  it("config vazia ⇒ nada barra e botões ligados (comportamento de hoje)", () => {
+    const r = regrasPadrao();
+    assert.deepEqual(gateProtocolo("Qualquer assunto", ["DFD-S", "DFD-R"], r), { ok: true, motivos: [] });
+    assert.equal(protocolarHabilitado(r), true);
+    assert.equal(importarDfdHabilitado(r), true);
+    assert.equal(tipoPermitido("DFD-S", r), true); // lista vazia = todos
+    assert.equal(assuntoCadastrado("Aquisição de bens", r), false); // nenhum cadastrado
+  });
+
+  it("assuntoCadastrado: casa por norm-contains (acento/caixa)", () => {
+    const r: RegrasAvaliacao = { ...regrasPadrao(), assuntos: [{ id: "a1", termo: "Aquisição" }] };
+    assert.equal(assuntoCadastrado("AQUISICAO DE MATERIAL", r), true);
+    assert.equal(assuntoCadastrado("Contratação de serviço", r), false);
+  });
+
+  it("tipoPermitido: respeita a lista quando há tipos configurados", () => {
+    const r: RegrasAvaliacao = { ...regrasPadrao(), tiposProtocolo: ["DFD-S", "DFD-O"] };
+    assert.equal(tipoPermitido("DFD-S", r), true);
+    assert.equal(tipoPermitido("DFD-R", r), false);
+    assert.equal(tipoPermitido(null, r), false);
+  });
+
+  it("gateProtocolo: exige assunto cadastrado (bloqueia o protocolo inteiro)", () => {
+    const r: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      assuntos: [{ id: "a1", termo: "Aquisição" }],
+      gate: { exigirAssunto: true },
+    };
+    assert.equal(gateProtocolo("Aquisição de X", ["DFD-S"], r).ok, true);
+    const bad = gateProtocolo("Contratação de Y", ["DFD-S"], r);
+    assert.equal(bad.ok, false);
+    assert.ok(bad.motivos[0].includes("Assunto"));
+  });
+
+  it("gateProtocolo: exige tipo permitido em TODOS os DFDs + aponta os fora", () => {
+    const r: RegrasAvaliacao = {
+      ...regrasPadrao(),
+      tiposProtocolo: ["DFD-S"],
+      gate: { exigirTipo: true },
+    };
+    assert.equal(gateProtocolo("x", ["DFD-S", "DFD-S"], r).ok, true);
+    const bad = gateProtocolo("x", ["DFD-S", "DFD-R", null], r);
+    assert.equal(bad.ok, false);
+    assert.ok(bad.motivos[0].includes("DFD-R"));
+    assert.ok(bad.motivos[0].includes("sem tipo"));
+  });
+
+  it("botões: gate.protocolarHabilitado/importarDfdHabilitado=false desligam", () => {
+    const r: RegrasAvaliacao = { ...regrasPadrao(), gate: { protocolarHabilitado: false, importarDfdHabilitado: false } };
+    assert.equal(protocolarHabilitado(r), false);
+    assert.equal(importarDfdHabilitado(r), false);
+  });
+
+  it("coerceRegras + avaliacaoSchema: round-trip das novas chaves", () => {
+    const bruto = {
+      assuntos: [{ id: "a1", termo: "Aquisição" }],
+      tiposProtocolo: ["DFD-S"],
+      gate: { exigirAssunto: true, exigirTipo: true, protocolarHabilitado: false },
+    };
+    const r = coerceRegras(bruto);
+    assert.deepEqual(r.assuntos, bruto.assuntos);
+    assert.deepEqual(r.tiposProtocolo, ["DFD-S"]);
+    assert.equal(r.gate?.exigirAssunto, true);
+    // O schema (corpo do PATCH) aceita e preserva as chaves.
+    const parsed = avaliacaoSchema.parse(bruto);
+    assert.deepEqual(parsed.assuntos, bruto.assuntos);
+    assert.deepEqual(parsed.tiposProtocolo, ["DFD-S"]);
+    assert.equal(parsed.gate?.protocolarHabilitado, false);
+    // Tipo inválido é rejeitado pelo schema.
+    assert.throws(() => avaliacaoSchema.parse({ tiposProtocolo: ["DFD-X"] }));
   });
 });

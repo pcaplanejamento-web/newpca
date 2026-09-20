@@ -165,6 +165,19 @@ export const CATEGORIAS: CategoriaProtocolo[] = [
 /** Uma regra de ajuste automático: se o texto casar com qualquer `termo`, vira `valor`. */
 export type SinonimoRegra = { termos: string[]; valor: string };
 
+/** Assunto CADASTRADO pelo ADM (allow-list): protocolo cujo assunto CONTÉM o `termo` é permitido. */
+export type AssuntoPermitido = { id: string; termo: string };
+/**
+ * Trava de protocolação + liga/desliga dos botões. TUDO opcional → ausência = comportamento de
+ * hoje (nada barra, botões ligados). As travas só valem quando o ADM as ATIVA (após cadastrar).
+ */
+export type GateProtocolacao = {
+  exigirAssunto?: boolean; // trava: o assunto do protocolo tem de estar cadastrado
+  exigirTipo?: boolean; // trava: TODO DFD tem de ter um tipo permitido
+  protocolarHabilitado?: boolean; // botão Protocolar (default: ligado)
+  importarDfdHabilitado?: boolean; // botão Importar DFD avulso (default: ligado)
+};
+
 export type RegrasAvaliacao = {
   pontos: Partial<Record<ChaveAvaliacao, Nivel>>; // id de importância global por ponto
   exProtocolo: Record<string, Partial<Record<ChaveAvaliacao, Nivel>>>; // por categoria (key)
@@ -177,6 +190,12 @@ export type RegrasAvaliacao = {
   importancias?: Importancia[];
   /** Rótulo/cor dos estados de ciclo (undefined = padrão). */
   estadosCiclo?: Partial<Record<EstadoCicloId, EstadoCicloCfg>>;
+  /** Assuntos permitidos a protocolar (allow-list; vazio/ausente = nenhum cadastrado). */
+  assuntos?: AssuntoPermitido[];
+  /** Tipos de DFD permitidos a protocolar (subset de `TIPOS_DFD`; vazio/ausente = todos). */
+  tiposProtocolo?: string[];
+  /** Trava de protocolação + botões (ausente = sem trava, botões ligados). */
+  gate?: GateProtocolacao;
 };
 
 /** Regras "vazias" = tudo no padrão do catálogo (comportamento atual). */
@@ -330,5 +349,63 @@ export function coerceRegras(bruto: unknown): RegrasAvaliacao {
   if (Array.isArray(obj.importancias)) out.importancias = obj.importancias as Importancia[];
   if (obj.estadosCiclo && typeof obj.estadosCiclo === "object")
     out.estadosCiclo = obj.estadosCiclo as RegrasAvaliacao["estadosCiclo"];
+  if (Array.isArray(obj.assuntos)) out.assuntos = obj.assuntos as AssuntoPermitido[];
+  if (Array.isArray(obj.tiposProtocolo)) out.tiposProtocolo = obj.tiposProtocolo as string[];
+  if (obj.gate && typeof obj.gate === "object") out.gate = obj.gate as GateProtocolacao;
   return out;
+}
+
+// ---- Trava de protocolação (assuntos + tipos permitidos) — puro/testável ----
+
+/** O `assunto` do protocolo casa algum assunto cadastrado? (norm-contains, como as categorias). */
+export function assuntoCadastrado(assunto: string | null | undefined, regras: RegrasAvaliacao): boolean {
+  const s = norm(assunto);
+  if (!s) return false;
+  return (regras.assuntos ?? []).some((a) => {
+    const t = norm(a?.termo);
+    return t.length > 0 && s.includes(t);
+  });
+}
+
+/** O tipo (curto, ex.: "DFD-S") está permitido a protocolar? Lista vazia/ausente = TODOS permitidos. */
+export function tipoPermitido(tipoCurto: string | null | undefined, regras: RegrasAvaliacao): boolean {
+  const permitidos = regras.tiposProtocolo;
+  if (!permitidos || permitidos.length === 0) return true;
+  return tipoCurto != null && permitidos.includes(tipoCurto);
+}
+
+/** Botão Protocolar habilitado? (default: sim). */
+export function protocolarHabilitado(regras: RegrasAvaliacao): boolean {
+  return regras.gate?.protocolarHabilitado ?? true;
+}
+/** Botão Importar DFD avulso habilitado? (default: sim). */
+export function importarDfdHabilitado(regras: RegrasAvaliacao): boolean {
+  return regras.gate?.importarDfdHabilitado ?? true;
+}
+
+export type ResultadoGate = { ok: boolean; motivos: string[] };
+
+/**
+ * Trava do protocolo INTEIRO: assunto cadastrado (se `exigirAssunto`) + TODO DFD com tipo
+ * permitido (se `exigirTipo`). `tiposCurtos` = tipo curto de cada DFD do protocolo. Puro.
+ * SEM configuração (gate ausente ou travas desligadas) ⇒ `ok:true` (comportamento de hoje).
+ */
+export function gateProtocolo(
+  assunto: string | null | undefined,
+  tiposCurtos: (string | null | undefined)[],
+  regras: RegrasAvaliacao,
+): ResultadoGate {
+  const g = regras.gate ?? {};
+  const motivos: string[] = [];
+  if (g.exigirAssunto && !assuntoCadastrado(assunto, regras)) {
+    motivos.push("Assunto do protocolo não cadastrado nas Configurações.");
+  }
+  if (g.exigirTipo) {
+    const fora = tiposCurtos.filter((t) => !tipoPermitido(t, regras));
+    if (fora.length > 0) {
+      const nomes = [...new Set(fora.map((t) => t || "sem tipo"))].join(", ");
+      motivos.push(`DFD(s) com tipo não permitido: ${nomes}.`);
+    }
+  }
+  return { ok: motivos.length === 0, motivos };
 }
