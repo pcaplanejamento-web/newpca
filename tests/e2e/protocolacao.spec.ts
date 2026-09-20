@@ -27,5 +27,5 @@ test("cadastra um assunto e salva (persiste após recarregar)", async ({ page })
   await page.reload();
   await page.getByText("Avaliação", { exact: true }).first().click();
   await page.getByText("Protocolação", { exact: true }).first().click();
-  await expect(page.getByDisplayValue("Aquisição")).toBeVisible();
+  await expect(page.getByPlaceholder(/Aquisição/i).first()).toHaveValue("Aquisição");
 });
