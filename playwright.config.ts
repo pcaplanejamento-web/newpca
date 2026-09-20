@@ -30,8 +30,10 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [{ name: "desktop", use: { ...devices["Desktop Chrome"] } }],
+  // Next 16 usa Turbopack por padrão no `next dev`; este projeto tem config WEBPACK
+  // (alias canvas p/ o pdfjs), então força webpack — igual ao `next build --webpack`.
   webServer: {
-    command: "npm run dev",
+    command: "npx next dev --webpack",
     url: baseURL,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
