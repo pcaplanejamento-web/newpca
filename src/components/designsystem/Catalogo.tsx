@@ -451,6 +451,19 @@ const DFD_DEMO = {
         url: "",
         fonte: "adobe" as const,
       },
+      {
+        // Formato E — Foxit/ICP-Brasil ACHATADO, lido por OCR do carimbo: card ÂMBAR + chip "Foxit",
+        // sem código/link público (confere-se no PDF assinado original). CPF mascarado do CN.
+        nome: "BRUNO BOTELHO SALEH",
+        eCpf: "***.832.056-**",
+        usuario: "",
+        local: "",
+        data: "06/07/2026 14:08:20 -03:00",
+        ip: "",
+        codigo: "",
+        url: "",
+        fonte: "foxit" as const,
+      },
     ],
     solicitante: {
       tipo: "padrao" as const,

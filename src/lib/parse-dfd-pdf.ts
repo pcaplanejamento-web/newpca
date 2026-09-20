@@ -1,5 +1,5 @@
-import type { DfdParseado } from "./parse-dfd-comum.ts";
-import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
+import type { Assinatura, DfdParseado } from "./parse-dfd-comum.ts";
+import { ehCandidatoOcr, type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
 import { classificarPdf, paginasDeItens } from "./parse-protocolo-pdf-core.ts";
 
 /**
@@ -23,6 +23,11 @@ export type PdfDoc = {
    * assinatura (widgets `Sig`), que o `getTextContent` (pageItems) NÃO traz. Usado só para
    * capturar a assinatura Dropsigner; mais caro, então chame só quando precisar (por DFD). */
   pageRenderText: (page: number) => Promise<string>;
+  /** `true` se a página desenha alguma IMAGEM (`paintImageXObject`) — sinal (com o carimbo achatado)
+   * de que vale rodar OCR (ver `ehCandidatoOcr`). Só navegador; usado para o Formato E (Foxit). */
+  temImagem: (page: number) => Promise<boolean>;
+  /** Rasteriza a página num `<canvas>` na escala dada (p/ o OCR do carimbo Foxit). Só navegador. */
+  renderPagina: (page: number, scale: number) => Promise<HTMLCanvasElement>;
   destroy: () => Promise<void>;
 };
 
@@ -84,8 +89,60 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       page.cleanup();
       return texto.replace(/\s+/g, " ");
     },
+    async temImagem(p: number) {
+      const page = await doc.getPage(p);
+      const opList = await page.getOperatorList();
+      let tem = false;
+      for (const fn of opList.fnArray) {
+        if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
+          tem = true;
+          break;
+        }
+      }
+      page.cleanup();
+      return tem;
+    },
+    async renderPagina(p: number, scale: number) {
+      const page = await doc.getPage(p);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas 2d indisponível");
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      page.cleanup();
+      return canvas;
+    },
     destroy: () => task.destroy(),
   };
+}
+
+/**
+ * OCR do carimbo **Foxit/ICP-Brasil** (Formato E) nas páginas dadas — só quando o parse de texto NÃO
+ * achou assinatura (o chamador garante isso). Percorre as páginas de trás p/ frente (a assinatura fica
+ * na seção final do DFD), pula as que não são candidatas (`ehCandidatoOcr`) e devolve a 1ª leitura.
+ * Best-effort: qualquer erro é engolido pelo `ocrAssinaturasDoCanvas` (o OCR é auxiliar). Só navegador.
+ */
+export async function ocrFoxitEmPaginas(
+  doc: PdfDoc,
+  pages: number[],
+  scale = 4,
+  maxPaginas = 2,
+): Promise<Assinatura[]> {
+  const { ocrAssinaturasDoCanvas } = await import("./ocr-assinatura.ts");
+  const ordem = [...pages].reverse().slice(0, maxPaginas); // últimas páginas primeiro
+  for (const p of ordem) {
+    try {
+      if (!ehCandidatoOcr(false, { temImagem: await doc.temImagem(p) })) continue;
+      const canvas = await doc.renderPagina(p, scale);
+      const ass = await ocrAssinaturasDoCanvas(canvas, scale);
+      if (ass.length > 0) return ass;
+    } catch {
+      /* best-effort — o OCR nunca quebra o import */
+    }
+  }
+  return [];
 }
 
 /**
@@ -120,7 +177,14 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
     // parear cada bloco ao código da própria página e manter só o documento primário (o DFD).
     const render: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) render.push(await doc.pageRenderText(p));
-    return parseDfdFromPdfItems(items, file.name, render);
+    const parsed = parseDfdFromPdfItems(items, file.name, render);
+    // Formato E — Foxit/ICP-Brasil ACHATADO: sem assinatura de texto → tenta OCR do carimbo (lazy).
+    if (parsed.assinaturas.length === 0) {
+      const paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+      const ocr = await ocrFoxitEmPaginas(doc, paginas);
+      if (ocr.length > 0) return { ...parsed, assinaturas: ocr };
+    }
+    return parsed;
   } finally {
     await doc.destroy();
   }

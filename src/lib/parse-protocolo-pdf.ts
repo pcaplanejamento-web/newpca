@@ -21,6 +21,9 @@ import {
 export type { ProtocoloMeta, DfdIndexado, ProtocoloIndex } from "./parse-protocolo-pdf-core.ts";
 export type { DfdParseado } from "./parse-dfd-comum.ts";
 export type { PdfDoc } from "./parse-dfd-pdf.ts";
+// OCR do carimbo Foxit (Formato E) — orquestrado pelo cliente (lazy: só ao abrir/protocolar um DFD sem
+// assinatura de texto), NÃO na análise em background (escala: a lista permanece leve). Ver `ProtocoloUploadForm`.
+export { ocrFoxitEmPaginas } from "./parse-dfd-pdf.ts";
 
 export async function indexarProtocoloPdf(file: File): Promise<{ index: ProtocoloIndex; doc: PdfDoc }> {
   const doc = await abrirPdf(file);
@@ -51,5 +54,8 @@ export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArq
   // render) → vêm de `parsed`. Combina os dois: índice (A/B) + inline (tudo que NÃO é A/B, para
   // pegar Dropsigner, Adobe e formatos inline futuros, sem duplicar as A/B do índice).
   const inline = parsed.assinaturas.filter((a) => a.fonte !== "certificado" && a.fonte !== "sistema");
+  // NÃO roda OCR aqui (esta função é usada na análise em BACKGROUND de até 300 DFDs — OCR ali travaria a
+  // UI). O OCR do carimbo Foxit (Formato E) é lazy, orquestrado pelo cliente via `ocrFoxitEmPaginas` só
+  // ao abrir/protocolar um DFD que ficou sem assinatura de texto (ver `ProtocoloUploadForm`).
   return { ...parsed, assinaturas: [...dfd.assinaturas, ...inline] };
 }

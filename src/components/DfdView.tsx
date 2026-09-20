@@ -437,18 +437,23 @@ export function DfdView({
 
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => {
-              // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe →
-              // VERMELHO (marca Adobe: card vermelho-e-branco + chip "Adobe" sólido).
+              // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe → VERMELHO;
+              // Foxit (ICP-Brasil lido por OCR) → ÂMBAR (--warn: reconhecida, mas conferir no original).
               const drop = a.fonte === "dropsigner";
               const adobe = a.fonte === "adobe";
-              const cor = adobe ? "var(--danger)" : drop ? "var(--info)" : "var(--ok)";
+              const foxit = a.fonte === "foxit";
+              const cor = adobe ? "var(--danger)" : foxit ? "var(--warn)" : drop ? "var(--info)" : "var(--ok)";
+              // Foxit/Adobe não têm código nem link de verificação público (só a aparência é lida).
+              const semCodigo = adobe || foxit;
               const rotulo = adobe
                 ? "Assinatura Digital (Adobe)"
-                : drop
-                  ? "Assinatura Dropsigner"
-                  : a.fonte === "sistema"
-                    ? "Assinatura Eletrônica (Sistema)"
-                    : "Assinatura Digital (Certificado Digital)";
+                : foxit
+                  ? "Assinatura Digital (Foxit / OCR)"
+                  : drop
+                    ? "Assinatura Dropsigner"
+                    : a.fonte === "sistema"
+                      ? "Assinatura Eletrônica (Sistema)"
+                      : "Assinatura Digital (Certificado Digital)";
               return (
                 <div
                   key={`${a.codigo}-${i}`}
@@ -461,6 +466,10 @@ export function DfdView({
                       <Badge tone="red" solid>
                         Adobe
                       </Badge>
+                    ) : foxit ? (
+                      <Badge tone="amber" solid>
+                        Foxit
+                      </Badge>
                     ) : (
                       <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
                     )}
@@ -468,14 +477,14 @@ export function DfdView({
                   <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     <Campo label="Assinante" valor={a.nome || "—"} span />
                     <Campo label="CPF" valor={a.eCpf || "—"} />
-                    {!drop && !adobe && <Campo label="Usuário" valor={a.usuario || "—"} />}
+                    {!drop && !semCodigo && <Campo label="Usuário" valor={a.usuario || "—"} />}
                     <Campo label="Data/hora da assinatura" valor={a.data || "—"} />
-                    {!adobe && <Campo label="Código verificador" valor={a.codigo || "—"} mono />}
+                    {!semCodigo && <Campo label="Código verificador" valor={a.codigo || "—"} mono />}
                   </dl>
                   <div className="mt-3">
-                    {/* Adobe não tem código/URL público de verificação (só a aparência é lida) →
+                    {/* Adobe/Foxit não têm código/URL público de verificação (só a aparência é lida) →
                         sem botão de verificação; a validação é feita no PDF assinado original. */}
-                    {!adobe && (
+                    {!semCodigo && (
                       <LinkExterno
                         href={drop && a.url ? a.url : URL_VERIFICACAO}
                         icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
@@ -483,11 +492,16 @@ export function DfdView({
                         Verificar autenticidade{drop ? " (Dropsigner)" : ""}
                       </LinkExterno>
                     )}
-                    <p className={`text-xs text-muted ${adobe ? "" : "mt-1.5"}`}>
+                    <p className={`text-xs text-muted ${semCodigo ? "" : "mt-1.5"}`}>
                       {adobe ? (
                         <>
                           Assinatura digital embutida no PDF (Adobe). A autenticidade deve ser conferida no{" "}
                           <strong>PDF assinado original</strong>, em um leitor/validador de sua confiança.
+                        </>
+                      ) : foxit ? (
+                        <>
+                          Assinatura ICP-Brasil (Foxit) lida por <strong>OCR</strong> do carimbo do PDF. Confirme o
+                          assinante e confira a autenticidade no <strong>PDF assinado original</strong>.
                         </>
                       ) : drop ? (
                         <>

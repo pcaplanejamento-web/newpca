@@ -6,14 +6,15 @@ const nextConfig: NextConfig = {
   // divergências de tipos de ambiente (globais do workerd vs DOM), que não
   // afetam o runtime.
   typescript: { ignoreBuildErrors: true },
-  // pdf.js (`pdfjs-dist`) é usado SÓ no cliente (importação dinâmica em
-  // `parse-dfd-pdf.ts`) para ler o DFD em PDF. Transpila o pacote e ignora a
-  // dependência OPCIONAL `canvas` (módulo nativo do Node, só p/ rasterizar) —
-  // aqui só extraímos TEXTO, então o bundler não deve tentar resolvê-la.
+  // pdf.js (`pdfjs-dist`) e o tesseract.js (OCR do carimbo Foxit — Formato E) são usados SÓ no cliente
+  // (importação DINÂMICA em `parse-dfd-pdf.ts` / `ocr-assinatura.ts`) — ficam fora do bundle do Worker.
+  // Transpila os pacotes e ignora a dependência OPCIONAL `canvas` (módulo nativo do Node): no navegador
+  // rasterizamos num `<canvas>` do DOM, então o bundler não deve tentar resolvê-la. O tesseract.js carrega
+  // worker/core/idioma dos assets self-hosted em `/public/tesseract` (não da CDN — ver docs/OCR-ASSINATURA.md).
   // Obs.: o build roda com **webpack** (`next build --webpack` no package.json),
   // pois o Turbopack (padrão no Next 16) rejeita um `webpack` config e não
   // aplicaria este alias.
-  transpilePackages: ["pdfjs-dist"],
+  transpilePackages: ["pdfjs-dist", "tesseract.js"],
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = { ...(config.resolve.alias as object), canvas: false };

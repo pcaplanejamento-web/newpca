@@ -92,6 +92,10 @@ export function referenciasRenovacao(texto: string | null | undefined): {
  * - **adobe**: Adobe/ICP-Brasil (PAdES) — aparência INLINE "Assinado de forma digital por NOME:CPF
  *   Dados: AAAA.MM.DD …", lida do texto renderizado por `assinaturasAdobeDeTexto`. Sem `codigo`/`url`
  *   público (a prova é o certificado ICP-Brasil; validação no ITI).
+ * - **foxit**: Foxit/ICP-Brasil (e-CPF) ACHATADA como IMAGEM (Formato E) — sem camada de texto e sem
+ *   `/Sig` cripto, então NENHUM parser de texto a lê; é obtida por **OCR** da região do carimbo (só no
+ *   navegador, `ocr-assinatura.ts`) → `assinaturasFoxitDeTexto`. Como o OCR é imperfeito, uma `foxit`
+ *   que não casa um responsável é reconhecida SEM bloquear (ver `validarAssinatura`). Sem `codigo`/`url`.
  * O `codigo` é o verificador usado no site oficial; `data` é crua; `ip`/`usuario`/
  * `local` podem vir vazios (o formato "sistema" não os traz). Pode haver mais de
  * uma assinatura por página e em páginas diferentes, sempre após o DFD.
@@ -105,7 +109,7 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
-  fonte: "certificado" | "sistema" | "dropsigner" | "adobe";
+  fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit";
 };
 
 export type DfdParseado = {

@@ -12,6 +12,7 @@ import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
+import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import {
   bloqueiaAssinatura,
@@ -136,6 +137,8 @@ export function DfdUploadForm({
     } catch (e) {
       setStatus("error");
       setErro(e instanceof Error ? e.message : "Falha ao ler o DFD.");
+    } finally {
+      void encerrarOcr(); // Formato E: libera o worker do OCR usado no parse do PDF (se houve)
     }
   }
 

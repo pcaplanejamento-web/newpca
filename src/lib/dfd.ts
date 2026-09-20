@@ -63,7 +63,7 @@ export type DfdResumo = {
   numeroContrato: string | null;
   numeroAta: string | null;
   numeroLicitacao: string | null;
-  // Tipos de assinatura presentes (Centi/Dropsigner/Adobe) — coluna "Assinatura" das listas.
+  // Tipos de assinatura presentes (Centi/Dropsigner/Adobe/Foxit) — coluna "Assinatura" das listas.
   assinaturaGrupos: GrupoAssinatura[];
 };
 
@@ -176,7 +176,7 @@ const colunasDfd = {
   numeroLicitacao: dfds.numeroLicitacao,
 };
 
-/** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe) derivados do JSON. `colunasDfd` NÃO traz
+/** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe/Foxit) derivados do JSON. `colunasDfd` NÃO traz
  * as assinaturas (peso) → seleciona só aqui e mapeia para os grupos (leve). */
 function comGrupos(r: Omit<DfdResumo, "assinaturaGrupos"> & { assinaturas: string | null }): DfdResumo {
   const { assinaturas, ...resto } = r;

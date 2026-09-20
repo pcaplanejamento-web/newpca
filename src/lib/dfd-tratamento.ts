@@ -515,7 +515,7 @@ export const STATUS_MENSAGEM_ROTULO: Record<StatusMensagem, string> = {
 export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
   anoPca?: number | null;
   /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
-  assinatura?: { status: "ok" | "dropsigner" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
+  assinatura?: { status: "ok" | "dropsigner" | "ocr" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
 };
 
 /**
@@ -614,6 +614,7 @@ export function mensagensDfd(
   if (d.assinatura && comportamentoDe(regras, idAssin) !== "ignora") {
     if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
     else if (d.assinatura.status === "dropsigner") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida via Dropsigner (Lacuna).", ancora: "assinatura" });
+    else if (d.assinatura.status === "ocr") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura ICP-Brasil reconhecida por OCR (Foxit) — confira no PDF assinado original.", ancora: "assinatura" });
     else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
     else out.push({
       chave: "dfd.assinatura",
@@ -706,13 +707,15 @@ export function mensagensItem(it: DfdItemParseado): { status: StatusMensagem; ch
 }
 
 // ---- Tipo da assinatura (coluna "Assinatura") ----
-export type GrupoAssinatura = "centi" | "dropsigner" | "adobe";
+export type GrupoAssinatura = "centi" | "dropsigner" | "adobe" | "foxit";
 
 /** Grupo do tipo de assinatura pela `fonte`. Certificado/sistema = **Centi** (sistema oficial da
- * Prefeitura); dropsigner = **Dropsigner**; adobe = **Adobe**. */
+ * Prefeitura); dropsigner = **Dropsigner**; adobe = **Adobe**; foxit = **Foxit** (ICP-Brasil lida por
+ * OCR — Formato E). */
 export function grupoAssinatura(fonte: string): GrupoAssinatura {
   if (fonte === "dropsigner") return "dropsigner";
   if (fonte === "adobe") return "adobe";
+  if (fonte === "foxit") return "foxit";
   return "centi";
 }
 
@@ -720,13 +723,14 @@ export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
   centi: "Centi",
   dropsigner: "Dropsigner",
   adobe: "Adobe",
+  foxit: "Foxit",
 };
 
 /** Grupos DISTINTOS de assinatura presentes (ordem fixa centi→dropsigner→adobe). Vazio ⇒ sem
  * assinatura reconhecida. */
 export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinatura[] {
   const set = new Set(assinaturas.map((a) => grupoAssinatura(a.fonte)));
-  return (["centi", "dropsigner", "adobe"] as GrupoAssinatura[]).filter((g) => set.has(g));
+  return (["centi", "dropsigner", "adobe", "foxit"] as GrupoAssinatura[]).filter((g) => set.has(g));
 }
 
 /**

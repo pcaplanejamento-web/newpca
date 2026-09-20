@@ -172,3 +172,45 @@ describe("validarAssinatura — Formato D Adobe/ICP-Brasil (mesma lógica da ass
     assert.equal(bloqueiaAssinatura(r), true);
   });
 });
+
+// Formato E — Foxit/ICP-Brasil ACHATADO lido por OCR (imperfeito). Decisão do usuário: reconhecer SEM
+// travar quando a leitura não casa (mas uma assinatura de leitura LIMPA que falha ainda bloqueia).
+function mkFoxit(nome: string, data = "06/07/2026 14:08:20 -03:00"): Assinatura {
+  return { nome, eCpf: "***.832.056-**", usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "foxit" };
+}
+
+describe("validarAssinatura — Formato E Foxit/OCR (reconhece sem travar)", () => {
+  it("Foxit que CASA o responsável → ok (igual aos demais, não bloqueia)", () => {
+    const r = validarAssinatura([mkFoxit("BRUNO BOTELHO SALEH")], padrao("BRUNO BOTELHO SALEH"), { exigeAssinatura: true });
+    assert.equal(r.status, "ok");
+    assert.equal(bloqueiaAssinatura(r), false);
+  });
+
+  it("Foxit que NÃO casa (só ele) → ocr (reconhecida, NÃO bloqueia)", () => {
+    const r = validarAssinatura([mkFoxit("BRUNO BOTELHO SALEH")], padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true });
+    assert.equal(r.status, "ocr");
+    assert.equal(bloqueiaAssinatura(r), false);
+    assert.equal(solicitanteDeResultado(r), null);
+  });
+
+  it("Foxit + repartição SEM responsável cadastrado → ocr (não bloqueia; OCR é imperfeito)", () => {
+    const r = validarAssinatura([mkFoxit("BRUNO BOTELHO SALEH")], RESPONSAVEIS_VAZIO, { exigeAssinatura: true });
+    assert.equal(r.status, "ocr");
+    assert.equal(bloqueiaAssinatura(r), false);
+  });
+
+  it("Foxit que não casa + assinatura LIMPA (cert) que também não casa → erro (a limpa bloqueia)", () => {
+    const r = validarAssinatura([mkFoxit("BRUNO BOTELHO SALEH"), mkAss("FULANO QUALQUER")], padrao("OUTRO RESPONSAVEL"), {
+      exigeAssinatura: true,
+    });
+    assert.equal(r.status, "erro");
+    assert.equal(bloqueiaAssinatura(r), true);
+  });
+
+  it("Foxit que casa + assinatura limpa que não casa → ok (basta uma casar)", () => {
+    const r = validarAssinatura([mkFoxit("BRUNO BOTELHO SALEH"), mkAss("FULANO")], padrao("BRUNO BOTELHO SALEH"), {
+      exigeAssinatura: true,
+    });
+    assert.equal(r.status, "ok");
+  });
+});

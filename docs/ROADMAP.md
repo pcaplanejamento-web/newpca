@@ -25,8 +25,19 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
-- **Pendente (decidido: OCR):** a assinatura **Foxit/ICP-Brasil achatada como IMAGEM** (sem texto/`/Sig`) — nenhum
-  parser de texto a lê; será tratada por **OCR** num passo à parte (dependência pesada). Ver CLAUDE.md "Formato E".
+### Assinatura Foxit/ICP-Brasil por OCR (Formato E) — entregue
+✅ 5º formato de assinatura, o **Foxit/ICP-Brasil ACHATADO** (`fonte:"foxit"`): o carimbo vem sem texto e sem `/Sig`
+(nenhum parser de texto o lê), então é obtido por **OCR** no navegador (**tesseract.js** WASM, idioma `por`),
+**lazy** — o motor só carrega quando há um DFD sem assinatura de texto (o import comum não pesa). Módulo cliente
+`ocr-assinatura.ts` (2 passes: localiza a caixa de detalhe por bboxes, depois OCR do recorte ampliado, isolando o
+nome grande sobreposto); parse puro `assinaturasFoxitDeTexto` ancorado na **data ISO** + extração do nome pelo **`CN=`**
+(sai limpo) com fallback. **Assets self-hosted** em `/public/tesseract` (~11MB; sem CDN externa — rede gov pode bloquear).
+**Escala:** no protocolo o OCR NÃO roda na análise em background (travaria com centenas de DFDs) — só ao **abrir** e ao
+**protocolar** um DFD sem assinatura (mesclado no cache, sem repetir). **Conferência:** como o OCR erra, uma `foxit`
+que não casa um responsável é reconhecida **sem bloquear** (status `"ocr"`); a que casa vira `ok` normal. Card **âmbar**
+(`Badge` "Foxit"), sem código/link — confere-se no PDF assinado original. **Validado por harness** contra o `pd101820`
+real (DFD 140 → BRUNO BOTELHO SALEH + CPF + data). Testes puros em `parse-assinaturas-foxit.test.ts` +
+`validar-assinatura.test.ts`. Setup em `docs/OCR-ASSINATURA.md`.
 
 ### Mesa (ex-DFD): banners conectados + navegação + conflito/cascata + histórico conectado — entregue
 ✅ Round K — a tela DFD virou uma **mesa de trabalho** com banners padrão conectados:

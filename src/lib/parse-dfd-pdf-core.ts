@@ -233,6 +233,110 @@ export function assinaturasAdobeDeTexto(textos: string | string[]): Assinatura[]
   return out;
 }
 
+// ============================ Formato E — Foxit/ICP-Brasil por OCR ============================
+// O carimbo Foxit/ICP-Brasil (e-CPF) vem ACHATADO como VETOR/IMAGEM (sem camada de texto, sem `/Sig`),
+// então NENHUM parser de texto o lê — ele é obtido por **OCR** da região do carimbo (só no navegador,
+// `ocr-assinatura.ts`). O TEXTO do OCR chega aqui. Layout real do carimbo (validado no PDF `pd101820`):
+//   Assinado digitalmente por NOME:CPF        ← 1ª linha; costuma vir SOBREPOSTA pelo nome grande do
+//   ND: C=BR, O=ICP-Brasil, …                   carimbo → SAI CORROMPIDA no OCR
+//   … CN=NOME:CPF                             ← o subject do e-CPF sai LIMPO (não tem sobreposição)
+//   Data: AAAA.MM.DD HH:MM:SS-03'00'          ← data ISO, sai LIMPA
+//   Foxit PDF Reader Versão: …
+//
+// Por isso o parser é ANCORADO na **DATA ISO** (`AAAA.MM.DD`, sai confiável no OCR) e extrai o nome do
+// **CN=** (limpo) com fallback para "Assinado digitalmente por" (quando não há CN / texto limpo).
+// **Distinção do Formato B (fonte "sistema"):** B usa "em dd/mm/aaaa" (sem data ISO) → não casa aqui.
+// **Distinção do Formato D (Adobe):** Adobe usa "de forma digital" e não tem "Foxit" → a MARCA exige
+// "Foxit" ou "Assinado digitalmente por".
+const RE_FOXIT_DATA_ISO =
+  /(?:Dados|Data)\s*[:.]?\s*(\d{4}\.\d{2}\.\d{2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?(?:\s*[-+]?\d{2}'?\d{2}'?)?)/gi;
+// Marca que CONFIRMA um bloco Foxit (não Adobe, não prosa). "Foxit" (rodapé do carimbo) é o mais
+// confiável no OCR; "Assinado digitalmente por" cobre o texto limpo/`.xlsx`.
+const RE_FOXIT_MARCA = /Foxit|Assinado\s+digitalmente\s+por/i;
+const JANELA_FOXIT = 600; // chars ANTES da data (onde ficam CN=/"por") + um respiro DEPOIS (p/ "Foxit")
+
+/** Corrige confusões comuns de OCR **dentro de um grupo que deveria ser só dígitos** (o CPF): O/o→0,
+ * I/l/|→1, S→5, B→8. Aplicado SÓ ao token do CPF (nunca ao nome). */
+function digitosOcr(s: string): string {
+  return s.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1").replace(/[Ss]/g, "5").replace(/[Bb]/g, "8");
+}
+
+/** Nome + CPF de um bloco Foxit. Prefere o **CN=NOME:CPF** (subject do e-CPF — sai limpo mesmo com o
+ * cabeçalho sobreposto; o "=" pode sumir no OCR → `[=:]?`); cai para "Assinado digitalmente por
+ * NOME:CPF" e, por fim, só NOME. CPF tolera erro de OCR (`digitosOcr`) e é opcional. */
+function nomeCpfFoxit(janela: string): { nome: string; eCpf: string } | null {
+  const cn = janela.match(/\bCN\s*[=:]?\s*([A-Za-zÀ-ÿ][^,:=]{1,78}?)\s*:\s*([\dOoIl|SsBb]{11})\b/i);
+  if (cn) {
+    const d = digitosOcr(cn[2]);
+    if (/^\d{11}$/.test(d)) return { nome: cn[1].replace(/\s+/g, " ").trim(), eCpf: mascararCpf(d) };
+  }
+  const pc = janela.match(/Assinado\s+digitalmente\s+por\s+([A-Za-zÀ-ÿ][^,:]{1,78}?)\s*:\s*([\dOoIl|SsBb]{11})\b/i);
+  if (pc) {
+    const d = digitosOcr(pc[2]);
+    if (/^\d{11}$/.test(d)) return { nome: pc[1].replace(/\s+/g, " ").trim(), eCpf: mascararCpf(d) };
+  }
+  const pn = janela.match(/Assinado\s+digitalmente\s+por\s+([A-Za-zÀ-ÿ][^,:]{1,78}?)(?:\s+ND\b|,|\s+Dados?\b|\s+Data\b|$)/i);
+  const nome = pn ? pn[1].replace(/\s+/g, " ").trim() : "";
+  return nome ? { nome, eCpf: "" } : null;
+}
+
+/**
+ * Formato E — assinatura **Foxit / ICP-Brasil** (e-CPF), a partir do TEXTO extraído por **OCR** da
+ * região do carimbo (que vem achatado — ver `ocr-assinatura.ts`). Ancorado na DATA ISO (`AAAA.MM.DD`,
+ * confiável no OCR) + MARCA "Foxit"/"digitalmente por"; extrai o nome do **CN=** (limpo) com fallback.
+ * Emite `fonte:"foxit"`. Tolerante a OCR (colapsa espaços; corrige dígitos só no CPF). Dedup por
+ * nome+data. Puro/testável — a etapa imagem→texto fica em `ocr-assinatura.ts`.
+ */
+export function assinaturasFoxitDeTexto(textos: string | string[]): Assinatura[] {
+  const paginas = Array.isArray(textos) ? textos : [textos];
+  const out: Assinatura[] = [];
+  const vistos = new Set<string>();
+  for (const bruto of paginas) {
+    const texto = String(bruto ?? "").replace(/\s+/g, " ");
+    RE_FOXIT_DATA_ISO.lastIndex = 0;
+    let anterior = 0; // início da janela da PRÓXIMA data (evita cruzar blocos numa multi-assinatura)
+    let m: RegExpExecArray | null = RE_FOXIT_DATA_ISO.exec(texto);
+    while (m !== null) {
+      const fim = m.index + m[0].length;
+      // Janela = do bloco anterior/600 chars antes da data ATÉ um respiro depois (p/ pegar "Foxit").
+      const janela = texto.slice(Math.max(anterior, m.index - JANELA_FOXIT), fim + 60);
+      anterior = fim;
+      if (RE_FOXIT_MARCA.test(janela)) {
+        const nc = nomeCpfFoxit(janela);
+        if (nc) {
+          const data = normalizarDataAdobe(m[1].trim());
+          const chave = `${norm(nc.nome)}|${data}`;
+          if (!vistos.has(chave)) {
+            vistos.add(chave);
+            out.push({ nome: nc.nome, eCpf: nc.eCpf, usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "foxit" });
+          }
+        }
+      }
+      m = RE_FOXIT_DATA_ISO.exec(texto);
+    }
+  }
+  return out;
+}
+
+/** Metadados de uma página usados para decidir se vale rodar OCR (calculados no navegador, a partir do
+ * `getOperatorList`). Mantidos fora do parse de texto (o núcleo não faz I/O de imagem). */
+export type MetaPaginaOcr = {
+  /** A página tem uma IMAGEM (`paintImageXObject`) — o carimbo Foxit vem achatado como imagem. */
+  temImagem: boolean;
+  /** Fallback: cluster denso de vetores (`constructPath`) quando o carimbo é vetorizado, sem imagem. */
+  temVetorDenso?: boolean;
+};
+
+/**
+ * Decide se vale rodar OCR num DFD: SÓ quando o parse de texto NÃO achou assinatura E a página tem uma
+ * IMAGEM (ou vetores densos) — sinal do carimbo Foxit/ICP-Brasil achatado. **Conservador**: um
+ * falso-candidato só gasta OCR à toa (nunca trava nada), então erramos para TENTAR. Puro/testável.
+ */
+export function ehCandidatoOcr(temAssinatura: boolean, meta: MetaPaginaOcr): boolean {
+  if (temAssinatura) return false;
+  return Boolean(meta.temImagem || meta.temVetorDenso);
+}
+
 // Marcadores INEQUÍVOCOS da APARÊNCIA de uma assinatura Adobe/ICP-Brasil FLATTEN (achatada no
 // conteúdo da página — por isso aparece no `getTextContent` e VAZA para o texto das seções, ao
 // contrário do Dropsigner, que fica só no render). Usados só para LOCALIZAR a região e removê-la.

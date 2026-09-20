@@ -250,6 +250,8 @@ export type Solicitante = {
 export type ResultadoAssinatura =
   | { status: "ok"; tipo: "padrao" | "temporario"; assinatura: Assinatura; responsavel: Responsavel }
   | { status: "dropsigner"; assinatura: Assinatura }
+  // Formato E — Foxit/ICP-Brasil lida por OCR, reconhecida SEM match (não bloqueia; ver abaixo).
+  | { status: "ocr"; assinatura: Assinatura }
   | { status: "sem-assinatura" }
   | { status: "erro"; motivo: string };
 
@@ -263,6 +265,10 @@ export type ResultadoAssinatura =
  * - com assinatura mas sem responsável cadastrado → `erro`; assinante não autorizado → `erro`;
  * - **exceção estreita:** a Dropsigner "só carimbo" (marca d'água sem bloco visível → nome vazio)
  *   é reconhecida SEM match (verificável pela URL) → `dropsigner` (não bloqueia).
+ * - **fallback OCR (Formato E — Foxit/ICP-Brasil achatado como imagem, lido por OCR):** o OCR é
+ *   imperfeito, então uma assinatura `foxit` que não casou um responsável **não bloqueia** → `ocr`
+ *   (reconhecida; confira no PDF original). Exceto se houver uma assinatura de leitura LIMPA
+ *   (certificado/sistema/dropsigner/adobe) com nome que também falhou — essa bloqueia como sempre.
  */
 export function validarAssinatura(
   assinaturas: Assinatura[],
@@ -293,6 +299,12 @@ export function validarAssinatura(
   // Exceção estreita: Dropsigner "só carimbo" (sem bloco visível, nome vazio) → reconhecida.
   const carimbo = assinaturas.find((a) => a.fonte === "dropsigner" && !a.nome.trim());
   if (carimbo) return { status: "dropsigner", assinatura: carimbo };
+  // Fallback OCR (Formato E): uma assinatura `foxit` (lida por OCR, imperfeita) que não casou NÃO
+  // bloqueia → `ocr`. Exceção: se há uma assinatura de leitura LIMPA (não-foxit) COM nome, que
+  // também falhou, o fluxo cai no erro normal (a leitura limpa é confiável e deve bloquear).
+  const foxitOcr = assinaturas.find((a) => a.fonte === "foxit");
+  const limpaComNome = assinaturas.some((a) => a.fonte !== "foxit" && a.nome.trim());
+  if (foxitOcr && !limpaComNome) return { status: "ocr", assinatura: foxitOcr };
   // Senão: fluxo idêntico ao de sempre (sem responsável cadastrado, ou assinante não autorizado).
   if (!temResponsavel) {
     return {

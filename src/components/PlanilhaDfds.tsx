@@ -14,8 +14,8 @@ import { brl, num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 
-/** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho. */
-const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red" };
+/** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
+const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber" };
 
 /**
  * Linha normalizada de um DFD para a **planilha única** (`PlanilhaDfds`) — o MESMO

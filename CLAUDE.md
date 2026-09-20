@@ -221,7 +221,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
-  **QUATRO formatos** (campo `fonte`): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
+  **CINCO formatos** (campo `fonte`; **A** certificado, **B** sistema, **C** dropsigner, **D** adobe, **E** foxit —
+  o Formato E é lido por OCR, descrito no fim desta seção): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
   (Dropsigner/Lacuna Software): o bloco visível é, na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura**
   (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
@@ -251,12 +252,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Adobe às vezes vem "flatten", sem widget `/Sig`). Por isso a UI **NÃO afirma ICP-Brasil/gov nem redireciona a validador
   oficial**: o card diz que a assinatura está embutida no PDF e a autenticidade se confere no **PDF assinado original**.
   Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
-  - **Formato E — Foxit/ICP-Brasil ACHATADO como IMAGEM (pendente OCR):** alguns protocolos vêm com a assinatura
-    Foxit e-CPF/ICP-Brasil ("Assinado digitalmente por NOME:CPF ND: C=BR, O=ICP-Brasil … Data: AAAA.MM.DD -03'00' Foxit
-    PDF Reader…") **achatada como imagem/vetor** — SEM camada de texto e SEM `/Sig` cripto (comprovado no DFD 140 de
-    `pd101820`: `getTextContent`/`getOperatorList` (ENABLE/FORMS) não trazem o texto; `getAnnotations`=0; só há
-    `paintImageXObject`+`constructPath`). **Nenhum parser de texto lê imagem** → esses DFDs ficam "sem assinatura". O
-    tratamento decidido é **OCR** (ler a imagem) — projeto à parte (dependência pesada; ainda NÃO implementado).
+  - **Formato E — Foxit/ICP-Brasil ACHATADO, lido por OCR (`fonte:"foxit"`):** alguns protocolos vêm com a assinatura
+    Foxit e-CPF/ICP-Brasil ("Assinado digitalmente por NOME:CPF ND: C=BR, O=ICP-Brasil … CN=NOME:CPF … Data: AAAA.MM.DD
+    -03'00' Foxit PDF Reader…") **achatada como imagem/vetor** — SEM camada de texto e SEM `/Sig` cripto (comprovado no
+    DFD 140 de `pd101820`: `getTextContent`/`getOperatorList` não trazem o carimbo; `getAnnotations`=0). **Nenhum parser
+    de texto o lê** → é obtido por **OCR** (só no navegador, **lazy**). **`ocr-assinatura.ts`** (browser-only) importa o
+    **tesseract.js** DINAMICAMENTE (fora do bundle do Worker; `next.config` transpila e o alias `canvas:false` cobre a dep
+    nativa opcional) e roda 2 passes: (1) OCR da página inteira com bboxes p/ **localizar** a caixa de detalhe do carimbo
+    (o nome grande sobreposto corrompe a 1ª linha); (2) OCR do **recorte** ampliado da caixa. O parse é o núcleo PURO
+    **`assinaturasFoxitDeTexto`** (`parse-dfd-pdf-core.ts`): ancorado na **DATA ISO** (`AAAA.MM.DD`, sai confiável no OCR)
+    + MARCA "Foxit"/"digitalmente por", extrai o nome do **`CN=`** (subject do e-CPF — sai limpo mesmo com a sobreposição)
+    com fallback p/ "Assinado digitalmente por"; distinção do Formato B (usa "em dd/mm/aaaa", sem data ISO) e do Adobe (usa
+    "de forma digital"). Tolerante a OCR (colapsa espaços; corrige dígitos só no CPF); emite `fonte:"foxit"`. **Assets
+    self-hosted** em `/public/tesseract` (worker + core WASM **SIMD-LSTM** base64 + `por.traineddata.gz` standard, ~11MB —
+    sem CDN externa; a rede da Prefeitura pode bloqueá-la). **Detector** puro `ehCandidatoOcr` (só roda OCR quando NÃO há
+    assinatura de texto e a página tem imagem). **Escala:** o OCR é LAZY — no protocolo NÃO roda na análise em background
+    (até 300 DFDs travaria); roda só ao **abrir** e ao **protocolar** um DFD sem assinatura de texto (`ocrFoxitEmPaginas`
+    + `ProtocoloUploadForm.mesclarOcrSePreciso`, mesclando no cache sem perder edições; `ocrTentadoRef` evita repetir); no
+    avulso, `parseDfdPdf` roda inline (1 DFD). Worker reutilizado e liberado (`encerrarOcr`) ao fechar/reimportar.
+    **Best-effort:** qualquer erro (sem SIMD, asset ausente, leitura ruim) → sem assinatura (= comportamento anterior).
+    **Conferência (`validarAssinatura`):** como o OCR é imperfeito, uma `foxit` que **não casa** um responsável é
+    reconhecida **SEM bloquear** (status `"ocr"`) — exceto se houver uma assinatura de leitura LIMPA (não-foxit) com nome
+    que também falhou (essa bloqueia normal). Uma `foxit` que **casa** o responsável → `ok` (igual aos demais). Card no
+    `DfdView` em **ÂMBAR** (`--warn`, `Badge` "Foxit"), sem código/link (confere-se no PDF assinado original). Validado por
+    harness contra o `pd101820` real: DFD 140 → BRUNO BOTELHO SALEH + CPF + data. Setup em `docs/OCR-ASSINATURA.md`.
   - **A aparência Adobe FLATTEN vaza para o texto das seções** (fica no `getTextContent`, ao contrário do Dropsigner) →
     **`removerAparenciaAssinatura(items)`** a retira ANTES de reconstruir as linhas, **por GEOMETRIA** (acha as âncoras da
     aparência, computa o CORTE `x` entre a coluna do TEXTO DA SEÇÃO — à esquerda, na margem — e a da APARÊNCIA — à direita —

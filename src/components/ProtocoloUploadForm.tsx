@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { classificarAssunto, comportamentoNo, gateProtocolo, protocolarHabilitado, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
+import { encerrarOcr } from "@/lib/ocr-assinatura";
 import {
   avaliarDfd,
   type CampoTratavel,
@@ -33,6 +34,7 @@ import { MESES, type Prioridade, valoresBatem } from "@/lib/normalize";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
+  ocrFoxitEmPaginas,
   parseDfdDoProtocolo,
   type PdfDoc,
   type ProtocoloIndex,
@@ -102,6 +104,9 @@ export function ProtocoloUploadForm({
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
+  // DFDs em que o OCR do carimbo Foxit (Formato E) já foi tentado — não repete (o OCR é caro; roda só
+  // uma vez por DFD, ao abrir/protocolar um que ficou sem assinatura de texto).
+  const ocrTentadoRef = useRef<Set<number>>(new Set());
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -164,7 +169,10 @@ export function ProtocoloUploadForm({
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
   const [relatorio, setRelatorio] = useState<{ numero: string; importados: number; bloqueados: { numero: string; motivo: string }[] } | null>(null);
 
-  useEffect(() => () => void docRef.current?.destroy(), []);
+  useEffect(() => () => {
+    void docRef.current?.destroy();
+    void encerrarOcr(); // libera o worker do OCR (Formato E) ao desmontar
+  }, []);
   useEffect(() => {
     if (!importando) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -178,6 +186,8 @@ export function ProtocoloUploadForm({
   function limparDoc() {
     docRef.current?.destroy();
     docRef.current = null;
+    ocrTentadoRef.current.clear(); // novo protocolo → o OCR pode ser tentado de novo
+    void encerrarOcr(); // libera o worker do OCR entre protocolos
   }
   function resetCache() {
     setParsed(new Map());
@@ -441,6 +451,23 @@ export function ProtocoloUploadForm({
     return dfd;
   }
 
+  /** Formato E — se o DFD ficou SEM assinatura de texto (A/B/Dropsigner/Adobe), tenta o OCR do carimbo
+   * Foxit UMA vez e MESCLA a assinatura achada no parse cacheado (preserva edições). Lazy/best-effort:
+   * roda só ao abrir/protocolar (nunca no background) e nunca trava o import. */
+  async function mesclarOcrSePreciso(idx: number): Promise<void> {
+    const doc = docRef.current;
+    const di = index?.dfds[idx];
+    const d = parsed.get(idx);
+    if (!doc || !di || !d || d.assinaturas.length > 0 || ocrTentadoRef.current.has(idx)) return;
+    ocrTentadoRef.current.add(idx);
+    const ass = await ocrFoxitEmPaginas(doc, di.pages);
+    if (ass.length > 0)
+      setParsed((m) => {
+        const cur = m.get(idx);
+        return cur ? new Map(m).set(idx, { ...cur, assinaturas: ass }) : m;
+      });
+  }
+
   async function abrir(idx: number) {
     setErro(null);
     setCarregandoIdx(idx);
@@ -448,6 +475,7 @@ export function ProtocoloUploadForm({
     setAncoraAlvo(null);
     try {
       await garantirParse(idx);
+      await mesclarOcrSePreciso(idx); // Formato E: lê o carimbo Foxit por OCR se faltou assinatura de texto
       setAbertoIdx(idx);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível ler este DFD.");
@@ -579,6 +607,18 @@ export function ProtocoloUploadForm({
           } catch (e) {
             bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
             continue;
+          }
+        }
+        // Formato E — DFD sem assinatura de texto: tenta OCR do carimbo Foxit e mescla (uma vez). O
+        // carimbo entra no `full` → é conferido (gate de assinatura) e GRAVADO com o DFD.
+        if (full.assinaturas.length === 0 && !ocrTentadoRef.current.has(i) && doc) {
+          ocrTentadoRef.current.add(i);
+          setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
+          try {
+            const ass = await ocrFoxitEmPaginas(doc, di.pages);
+            if (ass.length > 0) full = { ...full, assinaturas: ass };
+          } catch {
+            /* OCR é auxiliar — segue sem assinatura (o gate decide) */
           }
         }
         const faltas = faltasObrigatorias(
