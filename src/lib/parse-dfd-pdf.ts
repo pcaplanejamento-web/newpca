@@ -130,7 +130,15 @@ export async function ocrFoxitEmPaginas(
   scale = 4,
   maxPaginas = 2,
 ): Promise<Assinatura[]> {
-  const { ocrAssinaturasDoCanvas } = await import("./ocr-assinatura.ts");
+  // O import do chunk do OCR pode FALHAR (ChunkLoadError — rede instável), então fica no try: qualquer
+  // falha (carregar o chunk OU rodar o OCR) devolve [] e NUNCA quebra o import (best-effort, garantido
+  // aqui p/ TODOS os chamadores — parseDfdPdf/abrir não têm catch próprio no caminho do OCR).
+  let ocrAssinaturasDoCanvas: (canvas: HTMLCanvasElement, escala: number) => Promise<Assinatura[]>;
+  try {
+    ({ ocrAssinaturasDoCanvas } = await import("./ocr-assinatura.ts"));
+  } catch {
+    return [];
+  }
   const ordem = [...pages].reverse().slice(0, maxPaginas); // últimas páginas primeiro
   for (const p of ordem) {
     try {

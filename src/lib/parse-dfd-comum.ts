@@ -112,6 +112,16 @@ export type Assinatura = {
   fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit";
 };
 
+/** As `fonte`s de assinatura válidas (fonte única — reusada pela coerção ao LER o JSON do banco). */
+export const FONTES_ASSINATURA = ["certificado", "sistema", "dropsigner", "adobe", "foxit"] as const;
+
+/** Coage um valor CRU (JSON do banco, não confiável) para uma `fonte` válida — whitelist das 5 fontes,
+ * com fallback seguro em "certificado". Fonte ÚNICA da normalização (evita esquecer um caso ao ler do
+ * D1, como aconteceu com "foxit"); testável sem `getDb`. */
+export function coerceFonte(v: unknown): Assinatura["fonte"] {
+  return (FONTES_ASSINATURA as readonly string[]).includes(v as string) ? (v as Assinatura["fonte"]) : "certificado";
+}
+
 export type DfdParseado = {
   numero: string;
   planejamento: string | null;

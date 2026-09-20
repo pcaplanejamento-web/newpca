@@ -321,20 +321,19 @@ export function assinaturasFoxitDeTexto(textos: string | string[]): Assinatura[]
 /** Metadados de uma página usados para decidir se vale rodar OCR (calculados no navegador, a partir do
  * `getOperatorList`). Mantidos fora do parse de texto (o núcleo não faz I/O de imagem). */
 export type MetaPaginaOcr = {
-  /** A página tem uma IMAGEM (`paintImageXObject`) — o carimbo Foxit vem achatado como imagem. */
+  /** A página desenha uma IMAGEM (`paintImageXObject`) — o carimbo Foxit vem achatado; e o cabeçalho do
+   * DFD (logo do órgão) já garante isso por página, então serve de sinal barato de "página de DFD". */
   temImagem: boolean;
-  /** Fallback: cluster denso de vetores (`constructPath`) quando o carimbo é vetorizado, sem imagem. */
-  temVetorDenso?: boolean;
 };
 
 /**
  * Decide se vale rodar OCR num DFD: SÓ quando o parse de texto NÃO achou assinatura E a página tem uma
- * IMAGEM (ou vetores densos) — sinal do carimbo Foxit/ICP-Brasil achatado. **Conservador**: um
+ * IMAGEM — sinal do carimbo Foxit/ICP-Brasil achatado (e do cabeçalho do DFD). **Conservador**: um
  * falso-candidato só gasta OCR à toa (nunca trava nada), então erramos para TENTAR. Puro/testável.
  */
 export function ehCandidatoOcr(temAssinatura: boolean, meta: MetaPaginaOcr): boolean {
   if (temAssinatura) return false;
-  return Boolean(meta.temImagem || meta.temVetorDenso);
+  return meta.temImagem;
 }
 
 // Marcadores INEQUÍVOCOS da APARÊNCIA de uma assinatura Adobe/ICP-Brasil FLATTEN (achatada no

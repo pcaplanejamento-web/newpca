@@ -9,7 +9,7 @@ import type {
   EditarPcaPayload,
   GerarPcaPayload,
 } from "./dfd-validation";
-import type { Assinatura } from "./parse-dfd-comum";
+import { type Assinatura, coerceFonte } from "./parse-dfd-comum";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -141,14 +141,7 @@ export function parseAssinaturas(json: string | null): Assinatura[] {
         ip: S(a.ip),
         codigo: S(a.codigo),
         url: S(a.url),
-        fonte:
-          a.fonte === "sistema"
-            ? ("sistema" as const)
-            : a.fonte === "dropsigner"
-              ? ("dropsigner" as const)
-              : a.fonte === "adobe"
-                ? ("adobe" as const)
-                : ("certificado" as const),
+        fonte: coerceFonte(a.fonte),
       }));
   } catch {
     return [];

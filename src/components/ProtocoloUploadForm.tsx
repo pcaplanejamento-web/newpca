@@ -454,10 +454,11 @@ export function ProtocoloUploadForm({
   /** Formato E — se o DFD ficou SEM assinatura de texto (A/B/Dropsigner/Adobe), tenta o OCR do carimbo
    * Foxit UMA vez e MESCLA a assinatura achada no parse cacheado (preserva edições). Lazy/best-effort:
    * roda só ao abrir/protocolar (nunca no background) e nunca trava o import. */
-  async function mesclarOcrSePreciso(idx: number): Promise<void> {
+  async function mesclarOcrSePreciso(idx: number, d: DfdParseado | null): Promise<void> {
     const doc = docRef.current;
     const di = index?.dfds[idx];
-    const d = parsed.get(idx);
+    // `d` vem do `garantirParse` (o `parsed` do closure ainda não reflete o `setParsed` recém-agendado,
+    // então DFD não-cacheado — idx ≥ CAP_ANALISE ou antes do background — leria `undefined` aqui).
     if (!doc || !di || !d || d.assinaturas.length > 0 || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
     const ass = await ocrFoxitEmPaginas(doc, di.pages);
@@ -474,8 +475,8 @@ export function ProtocoloUploadForm({
     setPainel(null); // abre só o DFD (sem mensagens/detalhe do DFD anterior)
     setAncoraAlvo(null);
     try {
-      await garantirParse(idx);
-      await mesclarOcrSePreciso(idx); // Formato E: lê o carimbo Foxit por OCR se faltou assinatura de texto
+      const d = await garantirParse(idx);
+      await mesclarOcrSePreciso(idx, d); // Formato E: lê o carimbo Foxit por OCR se faltou assinatura de texto
       setAbertoIdx(idx);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível ler este DFD.");

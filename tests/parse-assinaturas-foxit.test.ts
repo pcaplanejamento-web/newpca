@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { coerceFonte } from "../src/lib/parse-dfd-comum.ts";
 import {
   assinaturasAdobeDeTexto,
   assinaturasFoxitDeTexto,
@@ -103,13 +104,24 @@ describe("ehCandidatoOcr (detector de candidato)", () => {
   it("candidato quando NÃO há assinatura e a página tem imagem", () => {
     assert.equal(ehCandidatoOcr(false, { temImagem: true }), true);
   });
-  it("candidato por vetores densos quando não há imagem", () => {
-    assert.equal(ehCandidatoOcr(false, { temImagem: false, temVetorDenso: true }), true);
-  });
   it("NÃO é candidato se já há assinatura (nunca gasta OCR à toa)", () => {
     assert.equal(ehCandidatoOcr(true, { temImagem: true }), false);
   });
-  it("NÃO é candidato sem imagem nem vetores", () => {
+  it("NÃO é candidato sem imagem", () => {
     assert.equal(ehCandidatoOcr(false, { temImagem: false }), false);
+  });
+});
+
+describe("coerceFonte (leitura do banco preserva a fonte — round-trip)", () => {
+  it("preserva TODAS as fontes válidas, inclusive foxit", () => {
+    for (const f of ["certificado", "sistema", "dropsigner", "adobe", "foxit"] as const) {
+      assert.equal(coerceFonte(f), f);
+    }
+  });
+  it("valor desconhecido/nulo cai em certificado (fallback seguro)", () => {
+    assert.equal(coerceFonte("lixo"), "certificado");
+    assert.equal(coerceFonte(undefined), "certificado");
+    assert.equal(coerceFonte(null), "certificado");
+    assert.equal(coerceFonte(""), "certificado");
   });
 });
