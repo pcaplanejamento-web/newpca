@@ -34,8 +34,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
   botão **"Manter o existente"** descarta o incoming (o cadastrado prevalece); sem descartar, o novo prevalece.
 - **Histórico CONECTADO do DFD:** o banner "Histórico" agora mescla as alterações do DFD **e do seu protocolo**
   (`historicoConectadoDfd` + `mesclarHistorico` puro/testável; a `entidade` de cada linha marca a origem).
-- **Fora do escopo desta sessão:** cadastro de assuntos/tipos + trava "permitido protocolar" (sessão Configurações);
-  scroll interno das tabelas (A4) e nº de linhas padrão pelo ADM (A5) — adiados (ver CLAUDE.md/plano).
+- **Tabelas da Mesa com SCROLL INTERNO + seletor de linhas (30/50/100/200)** — `DataTable scrollInterno` (opt-in): a
+  tabela preenche a tela e o corpo rola por dentro (thead fixo), sem scroll do navegador; nº de linhas escolhido na
+  própria tabela (limita as linhas em DOM → performático com milhares).
+- **Trava de PROTOCOLAÇÃO (Configurações → Avaliação → aba "Protocolação"):** cadastro de **assuntos permitidos** +
+  marcação dos **tipos de DFD permitidos**, com **travas** (exigir assunto / exigir tipo → barram o protocolo INTEIRO) e
+  **liga/desliga** dos botões (Protocolar / Importar DFD avulso). Barra no cliente (com o motivo) e no servidor; núcleo
+  puro/testável (`assuntoCadastrado`/`tipoPermitido`/`gateProtocolo`); allow-list no blob `avaliacao` (sem migração);
+  config vazia = igual a hoje.
+- **Adiado:** nº de linhas PADRÃO definido pelo ADM (A5 — o gancho `linhasPadrao` do `DataTable` já existe; falta ligar a
+  uma config do ADM, na área da sessão Configurações).
 
 ### Tela DFD: visão única Protocolos/DFDs/Itens (morph) + coluna Data — entregue
 ✅ Redesign da tela DFD numa superfície de tabela única:

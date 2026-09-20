@@ -399,6 +399,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (estrutural/técnico, permanece travado): integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição,
   **identificadores da capa/DFD imutáveis** (protocolo número/Id/data/ano do PCA; DFD número/planejamento/tipo). **Gates
   só-cliente** (como hoje): conciliação do valor da capa e "sem DFD com erro".
+- **Trava de PROTOCOLAÇÃO — assuntos + tipos permitidos + liga/desliga dos botões (allow-list, sem migração):** aba
+  **"Protocolação"** de `AvaliacaoAdmin` (Configurações → Avaliação). O ADM cadastra **assuntos permitidos**
+  (`RegrasAvaliacao.assuntos` = `{id,termo}`; casa por `norm`-contains, como `classificarAssunto`), marca os **tipos de
+  DFD permitidos** (`tiposProtocolo` ⊆ `TIPOS_DFD`; vazio = todos) e define o `gate`: `exigirAssunto`/`exigirTipo`
+  (travas) + `protocolarHabilitado`/`importarDfdHabilitado` (botões). Núcleo PURO/testável em `avaliacao-core`
+  (`assuntoCadastrado`, `tipoPermitido`, `gateProtocolo` = trava do protocolo INTEIRO com os motivos,
+  `protocolarHabilitado`/`importarDfdHabilitado`; `coerceRegras` estende; `avaliacaoSchema` valida as chaves). **Config
+  vazia ⇒ igual a hoje** (invariante por teste). **Enforcement:** o cliente barra o **Protocolar** (`ProtocoloUploadForm`:
+  assunto não cadastrado / DFD com tipo não permitido / botão desligado → `bloqueadoPorRegra` + motivo no rodapé) e o
+  **Importar DFD** avulso (`DfdUploadForm`); o servidor reconfere — `POST /api/protocolo` (botão + assunto → barra o
+  protocolo inteiro) e `POST /api/dfd` (tipo por DFD + avulso com importação desligada). Gravado no MESMO blob `avaliacao`
+  (o `AvaliacaoAdmin` inclui as chaves novas no PATCH → sem clobber das irmãs).
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
   `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
