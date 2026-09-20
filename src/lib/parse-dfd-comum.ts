@@ -197,6 +197,7 @@ export function ehRuido(s: string): boolean {
     n.startsWith("ASSINATURAS DIGITAIS") ||
     n.startsWith("ASSINATURAS ELETRONICAS") ||
     n.startsWith("ASSINADO DIGITALMENTE") ||
+    n.startsWith("ASSINADO ELETRONICAMENTE") ||
     // Aparência da assinatura Adobe/ICP-Brasil ("Assinado de forma digital por …") — capturada por
     // `assinaturasAdobeDeTexto`; não deve vazar para o texto das seções.
     n.includes("ASSINADO DE FORMA DIGITAL") ||

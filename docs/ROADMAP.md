@@ -20,6 +20,14 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Assinatura Dropsigner "eletronicamente" (± CPF) — entregue
+✅ Reconhecimento da variante Dropsigner cujo bloco usa **"Assinado eletronicamente por:"** (além de
+"digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
+protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
+ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+- **Pendente (decidido: OCR):** a assinatura **Foxit/ICP-Brasil achatada como IMAGEM** (sem texto/`/Sig`) — nenhum
+  parser de texto a lê; será tratada por **OCR** num passo à parte (dependência pesada). Ver CLAUDE.md "Formato E".
+
 ### Mesa (ex-DFD): banners conectados + navegação + conflito/cascata + histórico conectado — entregue
 ✅ Round K — a tela DFD virou uma **mesa de trabalho** com banners padrão conectados:
 - **Rename DFD → "Mesa"** (`/painel/mesa` = `MesaPage` → `DfdsView`; `/painel/dfds` redireciona; nav/label "Mesa" em

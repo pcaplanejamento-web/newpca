@@ -227,8 +227,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
   **TEXTO RENDERIZADO POR PÁGINA** (`getOperatorList`, via `PdfDoc.pageRenderText`) por
   **`assinaturasDropsignerDeTexto(textos: string|string[])`** (`parse-dfd-pdf-core.ts`, puro). Reconhece o bloco em
-  **QUALQUER IDIOMA** da aparência (ponto 4): PT "Assinado digitalmente por: NOME  CPF: …  Data: dd/mm/aaaa …" **e** EN
-  "Digitally signed by: NAME  CPF: …  Date: M/D/AAAA h:mm:ss PM …" (o `:` após "por"/"by" distingue do Formato B); a data
+  **QUALQUER IDIOMA E VARIANTE** da aparência (ponto 4): PT "Assinado **digitalmente|eletronicamente** por: NOME [CPF: …]
+  Data: dd/mm/aaaa …" **e** EN "Digitally signed by: NAME [CPF: …] Date: M/D/AAAA h:mm:ss PM …" — o **`:` após "por"/"by"**
+  distingue do Formato B (que é "por NOME, portador…", SEM dois-pontos), e o **CPF é OPCIONAL** (alguns blocos trazem só
+  NOME + Data, ex.: "Ricardo Rocha Batista Data: …"); a data
   EN (M/D + AM/PM) é **normalizada** para `DD/MM/AAAA` 24h (`normalizarDataDropsigner`). O **código** vem da marca d'água
   `dropsigner.com/validate/<código>`. **Ponto 2 — só a assinatura DIRETAMENTE no DFD:** cada bloco é pareado com o código
   da PRÓPRIA página e mantém-se só o **documento PRIMÁRIO** (o 1º código, da 1ª página do DFD); um ANEXO (decreto etc.) é
@@ -249,6 +251,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Adobe às vezes vem "flatten", sem widget `/Sig`). Por isso a UI **NÃO afirma ICP-Brasil/gov nem redireciona a validador
   oficial**: o card diz que a assinatura está embutida no PDF e a autenticidade se confere no **PDF assinado original**.
   Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
+  - **Formato E — Foxit/ICP-Brasil ACHATADO como IMAGEM (pendente OCR):** alguns protocolos vêm com a assinatura
+    Foxit e-CPF/ICP-Brasil ("Assinado digitalmente por NOME:CPF ND: C=BR, O=ICP-Brasil … Data: AAAA.MM.DD -03'00' Foxit
+    PDF Reader…") **achatada como imagem/vetor** — SEM camada de texto e SEM `/Sig` cripto (comprovado no DFD 140 de
+    `pd101820`: `getTextContent`/`getOperatorList` (ENABLE/FORMS) não trazem o texto; `getAnnotations`=0; só há
+    `paintImageXObject`+`constructPath`). **Nenhum parser de texto lê imagem** → esses DFDs ficam "sem assinatura". O
+    tratamento decidido é **OCR** (ler a imagem) — projeto à parte (dependência pesada; ainda NÃO implementado).
   - **A aparência Adobe FLATTEN vaza para o texto das seções** (fica no `getTextContent`, ao contrário do Dropsigner) →
     **`removerAparenciaAssinatura(items)`** a retira ANTES de reconstruir as linhas, **por GEOMETRIA** (acha as âncoras da
     aparência, computa o CORTE `x` entre a coluna do TEXTO DA SEÇÃO — à esquerda, na margem — e a da APARÊNCIA — à direita —

@@ -73,13 +73,16 @@ export function linhasDeTexto(bruto: PdfItem[]): string[] {
 
 // URL de validação do Dropsigner (Lacuna Software) — contém o CÓDIGO do documento.
 const RE_DROPSIGNER_URL = /https?:\/\/(?:www\.)?dropsigner\.com\/validate\/([A-Za-z0-9-]+)/gi;
-// Bloco de assinatura Dropsigner no TEXTO RENDERIZADO, em QUALQUER idioma da aparência da anotação:
-//  - PT: "Assinado digitalmente por: NOME  CPF: <mascarado>  Data: dd/mm/aaaa hh:mm:ss -03:00"
-//  - EN: "Digitally signed by: NAME  CPF: <mascarado>  Date: M/D/AAAA h:mm:ss PM -03:00"
-// O dois-pontos após "por"/"by" distingue do Formato B ("Assinado digitalmente por NOME, portador…").
-// Grupos: 1 nome, 2 CPF, 3 data (crua — normalizada por `normalizarDataDropsigner`).
+// Bloco de assinatura Dropsigner no TEXTO RENDERIZADO, em QUALQUER idioma/variante da aparência:
+//  - PT: "Assinado digitalmente|eletronicamente por: NOME [CPF: <mascarado>] Data: dd/mm/aaaa hh:mm:ss -03:00"
+//  - EN: "Digitally signed by: NAME [CPF: <mascarado>] Date: M/D/AAAA h:mm:ss PM -03:00"
+// **"digitalmente" E "eletronicamente"** ocorrem no Dropsigner (varia por documento). O **CPF é
+// OPCIONAL** — alguns blocos trazem só NOME + Data (ex.: "Ricardo Rocha Batista Data: …"). O
+// dois-pontos após "por"/"by" distingue do Formato B ("Assinado digitalmente por NOME, portador…",
+// SEM dois-pontos). Grupos: 1 nome, 2 CPF (pode faltar → `undefined`), 3 data (crua — normalizada
+// por `normalizarDataDropsigner`).
 const RE_DROPSIGNER_BLOCO =
-  /(?:Assinado\s+digitalmente\s+por|Digitally\s+signed\s+by)\s*:\s*(.+?)\s+CPF\s*:\s*([\d.*-]+)\s+(?:Data|Date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?(?:\s*[-+]\d{2}:\d{2})?)/gi;
+  /(?:Assinado\s+(?:digital|eletronica)mente\s+por|Digitally\s+signed\s+by)\s*:\s*(.+?)(?:\s+CPF\s*:\s*([\d.*-]+))?\s+(?:Data|Date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?(?:\s*[-+]\d{2}:\d{2})?)/gi;
 
 /**
  * Normaliza a data CRUA do bloco Dropsigner para `DD/MM/AAAA HH:MM:SS [-03:00]`. O formato EN vem
@@ -143,7 +146,8 @@ export function assinaturasDropsignerDeTexto(textos: string | string[]): Assinat
     let m: RegExpExecArray | null = RE_DROPSIGNER_BLOCO.exec(texto);
     while (m !== null) {
       const ingles = /Digitally\s+signed\s+by/i.test(m[0]) || /\b[AP]M\b/i.test(m[3]);
-      blocos.push({ nome: m[1].trim(), eCpf: m[2].trim(), data: normalizarDataDropsigner(m[3].trim(), ingles), codigo: codPagina });
+      // CPF é OPCIONAL no bloco (grupo 2 pode vir `undefined`, ex.: "NOME Data: …").
+      blocos.push({ nome: m[1].trim(), eCpf: (m[2] ?? "").trim(), data: normalizarDataDropsigner(m[3].trim(), ingles), codigo: codPagina });
       m = RE_DROPSIGNER_BLOCO.exec(texto);
     }
   }

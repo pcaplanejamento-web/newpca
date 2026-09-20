@@ -483,6 +483,33 @@ describe("assinaturasDropsignerDeTexto (Formato C — texto renderizado)", () =>
     assert.equal(ass[0].nome, "EVERALDO LEITE RIBEIRO");
     assert.equal(ass[0].codigo, "AAAAA-11111-22222-33333"); // 1ª página (o DFD); o anexo é descartado
   });
+
+  it("variante 'Assinado ELETRONICAMENTE por:' COM CPF (real: WELLINGTON) → extrai tudo", () => {
+    const texto =
+      "9 - AUTORIZAÇÃO DEMANDA Centi ® e-Assinatura: 0pFÇdZ58teX Emitido em 26/06/2026 13:50 por fernanda.mello " +
+      "Documento assinado no Dropsigner. Para validar acesse https://www.dropsigner.com/validate/TL6S2-3YJP7-DXG63-VFGLX. " +
+      "Assinado eletronicamente por: WELLINGTON SOARES CARRIJO FILHO CPF: ***.786.871-** Data: 26/06/2026 15:09:23 -03:00";
+    const ass = assinaturasDropsignerDeTexto(texto);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "WELLINGTON SOARES CARRIJO FILHO");
+    assert.equal(ass[0].eCpf, "***.786.871-**");
+    assert.equal(ass[0].data, "26/06/2026 15:09:23 -03:00");
+    assert.equal(ass[0].codigo, "TL6S2-3YJP7-DXG63-VFGLX");
+    assert.equal(ass[0].fonte, "dropsigner");
+  });
+
+  it("variante 'Assinado ELETRONICAMENTE por:' SEM CPF (real: Ricardo) → nome + data, CPF vazio", () => {
+    const texto =
+      "Documento assinado no Dropsigner. Para validar acesse https://www.dropsigner.com/validate/R7AJA-CFS64-KH2X5-UKGTG. " +
+      "Assinado eletronicamente por: Ricardo Rocha Batista Data: 30/06/2026 16:34:45 -03:00";
+    const ass = assinaturasDropsignerDeTexto(texto);
+    assert.equal(ass.length, 1);
+    assert.equal(ass[0].nome, "Ricardo Rocha Batista");
+    assert.equal(ass[0].eCpf, ""); // bloco sem CPF → e-CPF vazio (sem quebrar)
+    assert.equal(ass[0].data, "30/06/2026 16:34:45 -03:00");
+    assert.equal(ass[0].codigo, "R7AJA-CFS64-KH2X5-UKGTG");
+    assert.equal(ass[0].fonte, "dropsigner");
+  });
 });
 
 // Formato D — assinatura Adobe / ICP-Brasil (PAdES) do TEXTO RENDERIZADO. Fixture modelada no render
