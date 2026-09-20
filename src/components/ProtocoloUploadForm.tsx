@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, gateProtocolo, protocolarHabilitado, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import {
@@ -706,7 +706,17 @@ export function ProtocoloUploadForm({
   const semErroBloqueia = dfdsComErro > 0 && comportamentoNo(regras, "protocolo.semDfdEmErro", { categoria }) === "bloqueia";
   // DFD duplicado não resolvido (mesmo nº/planejamento) — bloqueia até escolher um (regra própria).
   const dupBloqueia = dupComp === "bloqueia" && (index?.dfds ?? []).some((_, i) => dupPendente(i));
-  const bloqueadoPorRegra = repBloqueia || anoPcaBloqueia || semErroBloqueia || capaBloqueia || dupBloqueia;
+  // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): assunto não
+  // cadastrado / tipo de DFD não permitido barram o protocolo INTEIRO; e o botão pode estar
+  // desligado. Os tipos vêm dos DFDs JÁ analisados (o servidor reconfere cada um, por garantia).
+  const tiposCurtosGate = (index?.dfds ?? [])
+    .map((_, i) => parsed.get(i))
+    .filter((d): d is DfdParseado => !!d)
+    .map((d) => tipoCurtoDfd(d.tipo));
+  const gateTrava = gateProtocolo(assunto, tiposCurtosGate, regras);
+  const protocolarDesligado = !protocolarHabilitado(regras);
+  const bloqueadoPorRegra =
+    repBloqueia || anoPcaBloqueia || semErroBloqueia || capaBloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
   const podeProtocolar =
     numero.trim().length > 0 && !importando && !analisando && !bloqueadoPorRegra;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
@@ -1074,7 +1084,11 @@ export function ProtocoloUploadForm({
                 className="text-[12px]"
                 style={{ color: bloqueadoPorRegra ? "var(--danger)" : "var(--muted)" }}
               >
-                {anoPcaBloqueia
+                {protocolarDesligado
+                  ? "Protocolação desabilitada nas Configurações"
+                  : !gateTrava.ok
+                    ? gateTrava.motivos.join(" ")
+                    : anoPcaBloqueia
                   ? "Defina o PCA do processo para protocolar"
                   : repBloqueia
                     ? "Defina a unidade do processo para protocolar"

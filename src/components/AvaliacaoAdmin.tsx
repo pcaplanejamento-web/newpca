@@ -3,10 +3,12 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import {
+  type AssuntoPermitido,
   CATALOGO_AVALIACAO,
   CATEGORIAS,
   type ChaveAvaliacao,
   type Comportamento,
+  type GateProtocolacao,
   type EstadoCicloCfg,
   type EstadoCicloId,
   ESTADOS_CICLO_ORDEM,
@@ -34,6 +36,7 @@ import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { Tabs } from "./Tabs";
+import { TipoDfdPicker } from "./TipoDfdPicker";
 import { toast } from "./Toast";
 
 // Tela do ADM para controlar TODA avaliação de Protocolos/DFDs/Itens (spec). Só
@@ -67,6 +70,10 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         EstadoCicloCfg
       >,
   );
+  // Trava de protocolação (allow-list de assuntos + tipos permitidos + liga/desliga botões).
+  const [assuntos, setAssuntos] = useState<AssuntoPermitido[]>(regras.assuntos ?? []);
+  const [tiposProtocolo, setTiposProtocolo] = useState<string[]>(regras.tiposProtocolo ?? []);
+  const [gate, setGate] = useState<GateProtocolacao>(regras.gate ?? {});
   const [editImp, setEditImp] = useState<Importancia | null>(null);
   const [salvando, setSalvando] = useState(false);
   // Contexto ativo por painel (Todos = ""). Estado no topo (evita componente aninhado).
@@ -155,7 +162,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   async function salvar() {
     setSalvando(true);
     try {
-      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo };
+      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo, assuntos, tiposProtocolo, gate };
       const res = await fetch("/api/admin/avaliacao", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -409,6 +416,94 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     );
   }
 
+  // Painel "Protocolação": allow-list de assuntos + tipos permitidos + travas/botões.
+  function painelProtocolacao(): ReactNode {
+    const setG = (patch: Partial<GateProtocolacao>) => setGate((v) => ({ ...v, ...patch }));
+    return (
+      <div className="space-y-6">
+        <p className="text-[13px] text-muted">
+          Controle o que pode ser protocolado. Só é permitido protocolar quando o Assunto do protocolo
+          está cadastrado e todos os DFDs têm um tipo permitido — quando as travas abaixo estão ligadas.
+          Sem travas ligadas, nada muda (comportamento de hoje).
+        </p>
+
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-text">Assuntos permitidos</h2>
+            <Button
+              variant="secondary"
+              onClick={() => setAssuntos((l) => [...l, { id: `as-${Date.now().toString(36)}`, termo: "" }])}
+            >
+              <IconPlus className="h-4 w-4" /> Adicionar assunto
+            </Button>
+          </div>
+          <p className="text-[12px] text-muted">
+            O protocolo é permitido quando o Assunto da capa CONTÉM um destes termos (ignora acento/caixa).
+          </p>
+          {assuntos.length === 0 ? (
+            <p className="text-[13px] text-faint">Nenhum assunto cadastrado.</p>
+          ) : (
+            <ul className="space-y-2">
+              {assuntos.map((a) => (
+                <li key={a.id} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <TextField
+                      aria-label="Termo do assunto"
+                      value={a.termo}
+                      onChange={(e) => setAssuntos((l) => l.map((x) => (x.id === a.id ? { ...x, termo: e.target.value } : x)))}
+                      placeholder="Ex.: Aquisição, Contratação, Renovação…"
+                    />
+                  </div>
+                  <Button
+                    variant="icon"
+                    aria-label="Remover assunto"
+                    onClick={() => setAssuntos((l) => l.filter((x) => x.id !== a.id))}
+                  >
+                    <IconTrash className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-bold text-text">Tipos de DFD permitidos a protocolar</h2>
+          <p className="text-[12px] text-muted">Se nenhum tipo for marcado, TODOS são permitidos.</p>
+          <TipoDfdPicker value={tiposProtocolo} onChange={setTiposProtocolo} />
+        </section>
+
+        <section className="space-y-1">
+          <h2 className="text-sm font-bold text-text">Travas (barram o protocolo inteiro)</h2>
+          <Switch
+            checked={!!gate.exigirAssunto}
+            onChange={(v) => setG({ exigirAssunto: v })}
+            label="Exigir assunto cadastrado para protocolar"
+          />
+          <Switch
+            checked={!!gate.exigirTipo}
+            onChange={(v) => setG({ exigirTipo: v })}
+            label="Exigir tipo permitido em TODOS os DFDs"
+          />
+        </section>
+
+        <section className="space-y-1">
+          <h2 className="text-sm font-bold text-text">Botões</h2>
+          <Switch
+            checked={gate.protocolarHabilitado ?? true}
+            onChange={(v) => setG({ protocolarHabilitado: v })}
+            label="Protocolação habilitada"
+          />
+          <Switch
+            checked={gate.importarDfdHabilitado ?? true}
+            onChange={(v) => setG({ importarDfdHabilitado: v })}
+            label="Importação de DFD avulso habilitada"
+          />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -443,6 +538,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
             { key: "protocolo", label: "Protocolo", content: painelSujeito("protocolo", "protocolo", ctxProto, setCtxProto) },
             { key: "dfd", label: "DFD", content: painelSujeito("dfd", "dfd", ctxDfd, setCtxDfd) },
             { key: "item", label: "Item", content: painelSujeito("item", "dfd", ctxItem, setCtxItem) },
+            { key: "protocolacao", label: "Protocolação", content: painelProtocolacao() },
           ]}
         />
       </div>

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { comportamentoNo, importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
@@ -230,7 +230,12 @@ export function DfdUploadForm({
     : false;
   // O PCA é obrigatório no envio do DFD avulso quando `dfd.anoPca` bloqueia.
   const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "dfd.anoPca", ctxAv) === "bloqueia";
-  const bloqueado = faltas.length > 0 || assinaturaBloqueia || anoPcaBloqueia;
+  // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): importação de DFD
+  // avulso desligada, ou tipo não permitido (quando a trava de tipo está ligada). Servidor reconfere.
+  const importDesligado = !importarDfdHabilitado(regras);
+  const tipoNaoPermitido = !!regras.gate?.exigirTipo && !tipoPermitido(ctxAv.dfdTipo, regras);
+  const bloqueado =
+    faltas.length > 0 || assinaturaBloqueia || anoPcaBloqueia || importDesligado || tipoNaoPermitido;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -370,6 +375,13 @@ export function DfdUploadForm({
                   aberto={painel?.tipo === "mensagens"}
                   onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
                 />
+              )}
+              {(importDesligado || tipoNaoPermitido) && (
+                <span className="self-center text-[12px]" style={{ color: "var(--danger)" }}>
+                  {importDesligado
+                    ? "Importação de DFD avulso desabilitada nas Configurações"
+                    : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
+                </span>
               )}
               <div className="flex gap-2">
                 {status !== "sending" && (
