@@ -14,6 +14,7 @@
     "lint:fix": "biome check --write .",
     "test": "node --experimental-strip-types --experimental-sqlite --test 'tests/**/*.test.ts'",
     "test:watch": "node --experimental-strip-types --experimental-sqlite --test --watch 'tests/**/*.test.ts'",
+    "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply newpca-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply newpca-db --remote"
