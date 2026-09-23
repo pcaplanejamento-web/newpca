@@ -71,7 +71,10 @@ export function ConfiguracoesAdmin({
   identidade,
   pcas,
   regras,
+  abaInicial,
 }: {
+  /** Aba aberta de início (`?aba=` — ex.: "situacoes", atalho da Configuração do PCA). */
+  abaInicial?: string;
   identidade?: Aparencia["identidade"];
   pcas: PcaResumo[];
   regras: RegrasAvaliacao;
@@ -400,6 +403,7 @@ export function ConfiguracoesAdmin({
 
       <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
         <Tabs
+          inicial={abaInicial}
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
             { key: "pcas", label: "PCAs", content: abaPcas },

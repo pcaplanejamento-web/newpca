@@ -7,8 +7,8 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "re
 // Respeita --motion-duration (acessibilidade).
 export type Tab = { key: string; label: string; icon?: ReactNode; content: ReactNode };
 
-export function Tabs({ tabs, className = "" }: { tabs: Tab[]; className?: string }) {
-  const [idx, setIdx] = useState(0);
+export function Tabs({ tabs, className = "", inicial }: { tabs: Tab[]; className?: string; /** Aba aberta de início (key). */ inicial?: string }) {
+  const [idx, setIdx] = useState(() => Math.max(0, inicial ? tabs.findIndex((t) => t.key === inicial) : 0));
   const [ind, setInd] = useState({ left: 0, width: 0 });
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);

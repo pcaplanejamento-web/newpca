@@ -19,10 +19,11 @@ import { IconAlert, IconDownload, IconInbox, IconPlus, IconTrash, IconUpload, Ic
 import { Modal } from "./Modal";
 import { OrcamentoItemDetalhe } from "./OrcamentoItemDetalhe";
 import { type VinculoAlterado, OrcamentoVinculos } from "./OrcamentoVinculos";
+import { OrcamentoVisoes } from "./OrcamentoVisoes";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 
-type Vista = "orcamentos" | "lancamentos" | "vinculos";
+type Vista = "orcamentos" | "lancamentos" | "vinculos" | "visoes";
 type Preview = { itens: OrcamentoItemParseado[]; total: number };
 
 const ANO_ATUAL = new Date().getFullYear();
@@ -367,6 +368,7 @@ export function OrcamentoView({
             { value: "orcamentos", label: "Orçamentos" },
             { value: "lancamentos", label: "Lançamentos" },
             { value: "vinculos", label: "Vínculos" },
+            { value: "visoes", label: "Visões" },
           ]}
         />
       </div>
@@ -429,6 +431,8 @@ export function OrcamentoView({
               ))}
               {podeEditar && addCard}
             </div>
+          ) : vista === "visoes" ? (
+            <OrcamentoVisoes itens={itens} podeEditar={podeEditar} />
           ) : vista === "vinculos" ? (
             <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
               {erroVinc && (

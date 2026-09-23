@@ -186,10 +186,13 @@ export const editarProtocoloSchema = z.object({
 });
 
 const HEX_COR = /^#[0-9a-fA-F]{6}$/;
-/** Situação do protocolo (Configurações → Situações): nome + cor (#RRGGBB). */
+/** Situação do protocolo (Configurações → Situações): nome + cor (#RRGGBB) + a regra do PCA (se o
+ * protocolo nesta situação pode ser movido para o PCA e em qual camada os DFDs dele contam). */
 export const situacaoProtocoloSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome da situação.").max(60),
   cor: z.string().trim().regex(HEX_COR, "Cor inválida (use #RRGGBB)."),
+  permiteMoverPca: z.boolean().optional(),
+  camadaPca: z.enum(["preview", "publicado"]).optional(),
 });
 
 /** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */

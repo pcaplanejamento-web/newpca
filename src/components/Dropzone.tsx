@@ -11,16 +11,27 @@ import { IconFile } from "./icons";
 export function Dropzone({
   accept,
   onFile,
+  onFiles,
   titulo,
   dica,
   icon,
+  className = "",
 }: {
   accept: string;
-  onFile: (file: File) => void;
+  onFile?: (file: File) => void;
+  /** VÁRIOS arquivos de uma vez (soltar/escolher) — liga o `multiple` do seletor. */
+  onFiles?: (files: File[]) => void;
   titulo: string;
   dica?: ReactNode;
   icon?: ReactNode;
+  className?: string;
 }) {
+  const entregar = (lista: FileList | null | undefined) => {
+    const fs = lista ? Array.from(lista) : [];
+    if (fs.length === 0) return;
+    if (onFiles) onFiles(fs);
+    else onFile?.(fs[0]);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const escolher = () => inputRef.current?.click();
@@ -37,21 +48,20 @@ export function Dropzone({
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
+        entregar(e.dataTransfer.files);
       }}
       className={`flex h-full w-full flex-col items-center justify-center rounded-card border-2 border-dashed p-8 text-center transition ${
         dragging ? "border-accent bg-accent-soft" : "border-border-2 bg-surface hover:border-accent hover:bg-accent-soft/40"
-      }`}
+      } ${className}`}
     >
       <input
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={!!onFiles}
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onFile(f);
+          entregar(e.target.files);
           e.target.value = "";
         }}
       />

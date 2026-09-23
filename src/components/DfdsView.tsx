@@ -77,6 +77,18 @@ const FATIA_ITENS_DFDS = 5;
 /** Espaço (px) entre a tabela e a barra de seleção fixa (o `space-y-4` da tela). */
 const GAP_BARRA = 16;
 type Sel = Set<string | number>;
+
+/**
+ * A Mesa DENTRO do PCA (aba Mesa do espaço do PCA): sem os lançadores de importação, com uma
+ * ferramenta à direita das visões (ex.: Todos | Neste PCA), colunas extras na tabela de protocolos e
+ * as ações da seleção de protocolos (Mover para o PCA / Retirar). As listas já chegam filtradas.
+ */
+export type ModoPcaMesa = {
+  ferramenta?: ReactNode;
+  colunasProtocolo?: Column<ProtocoloResumo>[];
+  acoesProtocolos?: (selecionados: ProtocoloResumo[], limpar: () => void) => ReactNode;
+  rodapeProtocolos?: (linhas: ProtocoloResumo[]) => string;
+};
 /** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
 const podar = (sel: Sel, validas: Set<number>): Sel => {
   const n = new Set([...sel].filter((k) => validas.has(Number(k))));
@@ -110,6 +122,7 @@ export function DfdsView({
   orgaos = [],
   pessoas = [],
   situacoes = [],
+  modoPca,
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -123,6 +136,8 @@ export function DfdsView({
   pessoas?: Pessoa[];
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
+  /** Mesa dentro do PCA (sem importação; ações de mover/retirar). */
+  modoPca?: ModoPcaMesa;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
@@ -211,11 +226,13 @@ export function DfdsView({
     return () => ac.abort();
   }, [vista, itens]);
   // Itens seguem o filtro de hierarquia pelo DFD de origem (que segue o do protocolo).
+  // No PCA a lista de DFDs já chega restrita (o endpoint traz todos) → os itens seguem os DFDs visíveis.
+  const emPca = !!modoPca;
   const itensF = useMemo(() => {
-    if (!itens || !filtroMesaAtivo(filtro)) return itens;
+    if (!itens || (!filtroMesaAtivo(filtro) && !emPca)) return itens;
     const vis = new Set(dfdsF.map((d) => d.id));
     return itens.filter((it) => vis.has(it.dfdId));
-  }, [itens, dfdsF, filtro]);
+  }, [itens, dfdsF, filtro, emPca]);
   useEffect(() => {
     if (itensF) setSelItens((s) => podar(s, new Set(itensF.map((it) => it.id))));
   }, [itensF]);
@@ -815,7 +832,7 @@ export function DfdsView({
       vazio(filtrado && protocolos.length > 0 ? semResultado : `Nenhum protocolo nesta visão. ${podeEditar ? "Importe um protocolo pelo botão acima." : ""}`)
     ) : (
       <DataTable
-        columns={colsProto}
+        columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
         rows={protocolosF}
         getKey={(r) => r.id}
         selectable={podeEditar}
@@ -828,9 +845,11 @@ export function DfdsView({
         minWidth={1380}
         density="comfortable"
         resumo={(linhas) =>
-          `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
-            linhas.reduce((s, p) => s + p.valorTotal, 0),
-          )}`
+          modoPca?.rodapeProtocolos
+            ? modoPca.rodapeProtocolos(linhas)
+            : `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
+                linhas.reduce((s, p) => s + p.valorTotal, 0),
+              )}`
         }
       />
     );
@@ -912,6 +931,7 @@ export function DfdsView({
         registros={sel.map((p) => ({ key: p.id, rotulo: `Protocolo ${p.numero}` }))}
         onRemover={tirar(setSelProtos)}
         onLimpar={() => setSelProtos(new Set())}
+        acoes={modoPca?.acoesProtocolos?.(sel, () => setSelProtos(new Set()))}
         resumo={
           <ResumoSelecao
             qtd={sel.length}
@@ -1005,7 +1025,8 @@ export function DfdsView({
             { value: "itens", label: "Itens" },
           ]}
         />
-        {podeEditar && (vista === "protocolos" || vista === "dfds") && (
+        {modoPca?.ferramenta && <div className="ml-auto">{modoPca.ferramenta}</div>}
+        {podeEditar && !modoPca && (vista === "protocolos" || vista === "dfds") && (
           // Largura do PRÓPRIO botão (não `flex-1`): sem espaço na linha, ele quebra para baixo — nunca
           // transborda por cima das abas.
           <div className="ml-auto">

@@ -22,6 +22,8 @@ const MAX_ROWS_POR_LOTE = 1000;
 /** Primeiro lote: cria/atualiza a unidade e substitui os itens. */
 export const uploadStartSchema = z.object({
   mode: z.literal("start"),
+  /** PCA (fonte "lista pronta") que recebe a planilha — o código da unidade é único POR PCA. */
+  pcaId: z.number().int().positive("Escolha o PCA que recebe a planilha."),
   codigo: z.coerce.string().trim().min(1, "Código da unidade ausente na planilha."),
   municipio: z.coerce
     .string()

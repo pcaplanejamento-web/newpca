@@ -33,6 +33,7 @@ export type EntidadeAuditoria =
   | "planilha"
   | "protocolo_legado"
   | "orcamento"
+  | "orcamento_visao"
   | "situacao_protocolo"
   | "sessao";
 
@@ -66,6 +67,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   planilha: "Planilha (PCA)",
   protocolo_legado: "Protocolo (legado)",
   orcamento: "Orçamento",
+  orcamento_visao: "Visão do orçamento",
   situacao_protocolo: "Situação de protocolo",
   sessao: "Sessão",
 };

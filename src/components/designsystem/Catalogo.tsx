@@ -2,6 +2,10 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
+import { OrcamentoPca } from "@/components/OrcamentoPca";
+import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
+import { RecorteImagem } from "@/components/RecorteImagem";
+import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -128,6 +132,76 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /** Demo do painel de item EDITÁVEL (importação/gravado destravado). */
+// PCA como ESPAÇO — card 4:5 (capa padrão com o ano / com imagem), seletor múltiplo (visões do
+// orçamento) e o comparativo Orçamento × Contratações.
+function PcaEspacoDemo() {
+  const [sel, setSel] = useState<string[]>(["MATERIAL DE CONSUMO"]);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [capa, setCapa] = useState<string | null>(null);
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <PcaCard pca={{ id: 1, nome: "PCA 2026", ano: 2026, fonte: "lista", status: "publicado", capa: null, total: 1_390_000_000, itens: 1116, partes: 5 }} onClick={() => {}} />
+        <PcaCard pca={{ id: 2, nome: "PCA 2027", ano: 2027, fonte: "protocolo", status: "preview", capa, total: 412_800_000, itens: 1632, partes: 5 }} onClick={() => {}} />
+        <PcaNovoCard onClick={() => {}} />
+        <div>
+          <PcaCapa capa={capa} ano={2027} />
+          <label className="mt-2 block text-center text-xs font-semibold text-accent">
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
+            Testar o recorte 4:5
+          </label>
+        </div>
+      </div>
+      <RecorteImagem
+        arquivo={arquivo}
+        onCancelar={() => setArquivo(null)}
+        onConfirmar={(u) => {
+          setCapa(u);
+          setArquivo(null);
+        }}
+      />
+      <div className="max-w-xl">
+        <SeletorMultiplo
+          rotulo="Elemento de despesa"
+          opcoes={[
+            { valor: "MATERIAL DE CONSUMO", contagem: 312 },
+            { valor: "OUTROS SERVIÇOS DE TERCEIROS - PJ", contagem: 188 },
+            { valor: "OBRAS E INSTALAÇÕES", contagem: 41 },
+            { valor: "VENCIMENTOS E VANTAGENS FIXAS", contagem: 96 },
+          ]}
+          selecionados={sel}
+          onChange={setSel}
+        />
+      </div>
+      <OrcamentoPca
+        dados={{
+          ano: 2027,
+          orcamento: { id: 1, nome: "CUBO 2027", ano: 2027 },
+          visaoNome: "PCA",
+          bruto: 1_610_000_000,
+          filtrado: 1_160_000_000,
+          camadaRotulo: "Preview",
+          unidades: [
+            { id: 1, sigla: "AMAE", nome: "Agência de Água" },
+            { id: 2, sigla: "FMAS", nome: "Fundo de Assistência" },
+            { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros" },
+          ],
+          planejado: [
+            { unidadeId: 1, itens: 390, valor: 906_738.7 },
+            { unidadeId: 2, itens: 2354, valor: 18_978_323.74 },
+            { unidadeId: 3, itens: 569, valor: 3_701_579.8 },
+          ],
+          linhas: [
+            { unidadeId: 1, valor: 1_390_566.98 },
+            { unidadeId: 2, valor: 14_441_470.23 },
+            { unidadeId: 3, valor: 4_021_478.05 },
+          ],
+        }}
+      />
+    </div>
+  );
+}
+
 function ItemDetalheEditDemo() {
   const [item, setItem] = useState<DfdVisualItem>({
     item: 2,
@@ -1987,6 +2061,10 @@ export function Catalogo() {
           <ProtocoloCabecalho numero={PROTO_CAPA_DEMO.numero} idExterno={PROTO_CAPA_DEMO.idExterno} assunto={PROTO_CAPA_DEMO.assunto} reenvio />
         </div>
         <ProtocoloViewDemo />
+      </Secao>
+
+      <Secao titulo="PCA — espaço: card 4:5 (capa/recorte), seletor múltiplo (visões do orçamento) e comparativo Orçamento × Contratações">
+        <PcaEspacoDemo />
       </Secao>
 
       <Secao titulo="PCA — compilação dos DFDs por unidade">

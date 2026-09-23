@@ -5,12 +5,15 @@ import type { SituacaoComUso } from "@/lib/situacoes";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
+import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
 import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
+import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
 const COR_PADRAO = "#2563eb";
@@ -18,7 +21,9 @@ const COR_PADRAO = "#2563eb";
 /**
  * SITUAÇÕES do protocolo (Configurações → Situações) — as ÚNICAS que a coluna "Situação" da Mesa usa:
  * cadastrar (nome + cor), editar, ordenar (↑/↓ = a ordem do dropdown) e excluir (os protocolos que a
- * usavam ficam sem situação — o aviso diz quantos). Só componentes do design-system.
+ * usavam ficam sem situação — o aviso diz quantos). Cada situação também define a regra do PCA: se o
+ * protocolo nela PODE ser movido para o PCA e em qual CAMADA (Preview/Publicado) os DFDs dele contam.
+ * Só componentes do design-system.
  */
 export function SituacoesAdmin() {
   const [lista, setLista] = useState<SituacaoComUso[] | null>(null);
@@ -26,6 +31,8 @@ export function SituacoesAdmin() {
   const [editando, setEditando] = useState<SituacaoComUso | "nova" | null>(null);
   const [nome, setNome] = useState("");
   const [cor, setCor] = useState(COR_PADRAO);
+  const [moverPca, setMoverPca] = useState(false);
+  const [camada, setCamada] = useState<"preview" | "publicado">("preview");
   const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -47,6 +54,8 @@ export function SituacoesAdmin() {
     setEditando(s);
     setNome(s === "nova" ? "" : s.nome);
     setCor(s === "nova" ? COR_PADRAO : s.cor);
+    setMoverPca(s === "nova" ? false : s.permiteMoverPca);
+    setCamada(s === "nova" ? "preview" : s.camadaPca);
   }
 
   async function salvar() {
@@ -61,7 +70,7 @@ export function SituacoesAdmin() {
       const r = await fetch(nova ? "/api/admin/situacoes" : `/api/admin/situacoes/${editando.id}`, {
         method: nova ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim(), cor }),
+        body: JSON.stringify({ nome: nome.trim(), cor, permiteMoverPca: moverPca, camadaPca: camada }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar a situação.");
@@ -124,6 +133,21 @@ export function SituacoesAdmin() {
   const cols: Column<SituacaoComUso>[] = [
     { key: "pos", header: "#", filter: "none", nowrap: true, render: (s) => <span className="tabular-nums text-faint">{(pos.get(s.id) ?? 0) + 1}</span> },
     { key: "nome", header: "Situação", filter: "none", align: "left", minWidth: 200, render: (s) => <EstadoPonto rotulo={s.nome} cor={s.cor} /> },
+    {
+      key: "pca",
+      header: "PCA",
+      filter: "none",
+      nowrap: true,
+      render: (s) =>
+        s.permiteMoverPca ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Badge tone="emerald">Move p/ PCA</Badge>
+            <Badge tone={s.camadaPca === "publicado" ? "blue" : "amber"}>{s.camadaPca === "publicado" ? "Publicado" : "Preview"}</Badge>
+          </span>
+        ) : (
+          <span className="text-xs text-faint">Não move</span>
+        ),
+    },
     { key: "uso", header: "Protocolos", filter: "none", nowrap: true, render: (s) => <span className="tabular-nums">{s.emUso}</span> },
     {
       key: "acoes",
@@ -166,7 +190,7 @@ export function SituacoesAdmin() {
           Nenhuma situação cadastrada — a coluna Situação da Mesa fica vazia até você cadastrar a primeira.
         </p>
       ) : (
-        <DataTable columns={cols} rows={lista} getKey={(s) => s.id} pageSize={20} minWidth={520} resumo={(l) => `${l.length} situaç${l.length === 1 ? "ão" : "ões"}`} />
+        <DataTable columns={cols} rows={lista} getKey={(s) => s.id} pageSize={20} minWidth={640} resumo={(l) => `${l.length} situaç${l.length === 1 ? "ão" : "ões"}`} />
       )}
 
       <Modal
@@ -188,6 +212,24 @@ export function SituacoesAdmin() {
         <div className="space-y-4">
           <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Em análise" maxLength={60} />
           <ColorField label="Cor" value={cor} onChange={setCor} />
+          <div className="space-y-2 rounded-card border border-border p-3">
+            <p className="text-[13.5px] font-bold text-text">PCA</p>
+            <Switch checked={moverPca} onChange={setMoverPca} label="Protocolo nesta situação pode ser movido para o PCA" />
+            <div>
+              <p className="mb-1.5 text-xs text-muted">Camada em que os DFDs do protocolo contam no PCA</p>
+              <Segmented<"preview" | "publicado">
+                value={camada}
+                onChange={setCamada}
+                options={[
+                  { value: "preview", label: "Preview" },
+                  { value: "publicado", label: "Publicado" },
+                ]}
+              />
+              <p className="mt-1.5 text-xs text-faint">
+                Publicado = aparece na tela inicial (se o PCA estiver publicado). Preview = só no painel.
+              </p>
+            </div>
+          </div>
           <div className="rounded-card border border-border bg-surface-2 p-3">
             <p className="mb-1.5 text-[12px] font-semibold text-muted">Prévia</p>
             <EstadoPonto rotulo={nome.trim() || "Situação"} cor={cor} />

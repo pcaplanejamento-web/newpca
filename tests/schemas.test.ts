@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  capaSchema,
+  criarPcaEspacoSchema,
+  editarPcaEspacoSchema,
+  moverParaPcaSchema,
+  retirarDoPcaSchema,
+  visaoOrcamentoSchema,
+} from "../src/lib/pca-espaco-validation.ts";
+import {
   adminUsuarioSchema,
   cadastroSchema,
   perfilSchema,
@@ -56,8 +64,12 @@ describe("auth-validation", () => {
 });
 
 describe("validation (upload em lotes)", () => {
+  it("start exige o PCA (lista pronta) que recebe a planilha", () => {
+    assert.equal(uploadSchema.safeParse({ mode: "start", codigo: "123", rows: [{ nomeProduto: "X" }] }).success, false);
+  });
+
   it("start exige código e preenche município padrão", () => {
-    const r = uploadSchema.parse({ mode: "start", codigo: "123", rows: [{ nomeProduto: "X" }] });
+    const r = uploadSchema.parse({ mode: "start", pcaId: 1, codigo: "123", rows: [{ nomeProduto: "X" }] });
     assert.equal(r.mode, "start");
     if (r.mode === "start") assert.equal(r.municipio, "MUNICÍPIO NÃO INFORMADO");
   });
@@ -68,7 +80,7 @@ describe("validation (upload em lotes)", () => {
   });
 
   it("rejeita lote vazio e modo desconhecido", () => {
-    assert.equal(uploadSchema.safeParse({ mode: "start", codigo: "1", rows: [] }).success, false);
+    assert.equal(uploadSchema.safeParse({ mode: "start", pcaId: 1, codigo: "1", rows: [] }).success, false);
     assert.equal(uploadSchema.safeParse({ mode: "outro", rows: [{}] }).success, false);
   });
 });
@@ -314,5 +326,34 @@ describe("faltasObrigatorias (regras de import de DFD)", () => {
   it("'12 MESES - PCA 2027' é previsão ANUAL válida", () => {
     const secoes = completo.secoes.map((s) => (s.titulo.startsWith("PREVIS") ? { ...s, texto: "12 MESES - PCA 2027." } : s));
     assert.deepEqual(faltasObrigatorias({ ...completo, secoes }), []);
+  });
+});
+
+
+describe("pca-espaco-validation", () => {
+  it("criar exige nome, ano válido e fonte", () => {
+    assert.equal(criarPcaEspacoSchema.safeParse({ nome: "PCA 2027", ano: 2027, fonte: "protocolo" }).success, true);
+    assert.equal(criarPcaEspacoSchema.safeParse({ nome: "PCA", ano: 1999, fonte: "lista" }).success, false);
+    assert.equal(criarPcaEspacoSchema.safeParse({ nome: "PCA", ano: 2027, fonte: "x" }).success, false);
+  });
+  it("editar exige algo e aceita capa só como data-URL de imagem", () => {
+    assert.equal(editarPcaEspacoSchema.safeParse({}).success, false);
+    assert.equal(editarPcaEspacoSchema.safeParse({ status: "publicado" }).success, true);
+    assert.equal(editarPcaEspacoSchema.safeParse({ capa: null }).success, true);
+    assert.equal(capaSchema.safeParse("data:image/webp;base64,AAAA").success, true);
+    assert.equal(capaSchema.safeParse("javascript:alert(1)").success, false);
+    assert.equal(capaSchema.safeParse("data:image/svg+xml;base64,AAAA").success, false);
+  });
+  it("mover/retirar", () => {
+    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [1], acoes: { "10": "substituir" } }).success, true);
+    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [] }).success, false);
+    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [1], acoes: { "10": "apagar" } }).success, false);
+    assert.equal(retirarDoPcaSchema.safeParse({}).success, false);
+    assert.equal(retirarDoPcaSchema.safeParse({ dfdIds: [3] }).success, true);
+  });
+  it("visão: nome + filtros só das dimensões conhecidas", () => {
+    const r = visaoOrcamentoSchema.parse({ nome: "PCA", filtros: { nomeElemento: ["MATERIAL"], lixo: ["x"] } });
+    assert.deepEqual(r.filtros, { nomeElemento: ["MATERIAL"] });
+    assert.equal(visaoOrcamentoSchema.safeParse({ nome: "", filtros: {} }).success, false);
   });
 });

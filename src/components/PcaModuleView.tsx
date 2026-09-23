@@ -1,302 +1,136 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
-import type { DfdResumo, PcaResumo } from "@/lib/dfd";
-import { brl, dataBR, num } from "@/lib/format";
+import { useState } from "react";
+import { type FontePca, ROTULO_FONTE } from "@/lib/pca-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
-import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
-import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import {
-  IconBuilding,
-  IconChevronRight,
-  IconDashboard,
-  IconLayers,
-  IconPlus,
-  IconTrash,
-} from "./icons";
+import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { Tabs } from "./Tabs";
-import { UploadForm } from "./UploadForm";
+import { PcaCard, type PcaCardDados, PcaNovoCard } from "./PcaCard";
+import { Segmented } from "./Segmented";
 
-type Unidade = {
-  id: number;
-  codigo: string;
-  municipio: string;
-  totalItens: number | null;
-  valorTotal: number | null;
-  atualizadoEm: string | null;
-};
-
-export function PcaModuleView({
-  podeEditar,
-  unidades,
-  todosDfds,
-  pcas,
-}: {
-  podeEditar: boolean;
-  unidades: Unidade[];
-  todosDfds: DfdResumo[];
-  pcas: PcaResumo[];
-}) {
+/**
+ * Tela `/painel/pca`: os PCAs em CARDS 4:5 (capa, status Preview/Publicado, fonte, Σ) + o card "+"
+ * "Novo PCA". Clicar num card entra no ESPAÇO do PCA (`/painel/pca/[id]`: Dashboard · Orçamento ·
+ * Mesa/Importação · Configuração).
+ */
+export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas: PcaCardDados[] }) {
   const router = useRouter();
-  const [erro, setErro] = useState<string | null>(null);
-  const [modalGerar, setModalGerar] = useState(false);
+  const [novo, setNovo] = useState(false);
   const [nome, setNome] = useState("");
-  const [ano, setAno] = useState(String(new Date().getFullYear()));
-  const [sel, setSel] = useState<Set<string | number>>(new Set());
+  const [ano, setAno] = useState(String(new Date().getFullYear() + 1));
+  const [fonte, setFonte] = useState<FontePca>("protocolo");
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const publicados = pcas.filter((p) => p.status === "publicado").length;
 
-  async function excluirPca(id: number, nomePca: string) {
-    if (!confirm(`Excluir a edição de PCA "${nomePca}"?`)) return;
-    setErro(null);
-    await fetch(`/api/pca/${id}`, { method: "DELETE" });
-    router.refresh();
-  }
-
-  async function gerar() {
+  async function criar() {
     setSalvando(true);
     setErro(null);
     try {
-      const dfdIds = [...sel].map((k) => Number(k));
-      const res = await fetch("/api/pca", {
+      const n = Number(ano);
+      const r = await fetch("/api/pca", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ano: ano ? Number(ano) : null, dfdIds }),
+        body: JSON.stringify({ nome: nome.trim() || `PCA ${n}`, ano: n, fonte }),
       });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao gerar a edição.");
-      setModalGerar(false);
-      setNome("");
-      setSel(new Set());
-      router.refresh();
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; id?: number; error?: string };
+      if (!r.ok || !j.ok || !j.id) throw new Error(j.error ?? "Não foi possível criar o PCA.");
+      router.push(`/painel/pca/${j.id}?aba=configuracao`);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao gerar a edição.");
-    } finally {
+      setErro(e instanceof Error ? e.message : "Não foi possível criar o PCA.");
       setSalvando(false);
     }
   }
 
-  const acao = (children: ReactNode) => <div className="flex justify-end gap-1">{children}</div>;
-
-  const colsPca: Column<PcaResumo>[] = [
-    {
-      key: "nome",
-      header: "Edição",
-      filter: "none",
-      render: (r) => (
-        <span className="flex items-center gap-2">
-          <span className="font-semibold text-text">{r.nome}</span>
-          {r.ativo && (
-            <Badge tone="emerald" dot>
-              Ativo
-            </Badge>
-          )}
-        </span>
-      ),
-    },
-    { key: "ano", header: "Ano", align: "center", filter: "none", nowrap: true, render: (r) => r.ano ?? "—" },
-    { key: "dfds", header: "DFDs", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalDfds ?? 0) },
-    { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens ?? 0) },
-    { key: "valor", header: "Estimado", align: "right", filter: "range", numero: (r) => r.valorEstimado ?? 0, nowrap: true, render: (r) => brl(r.valorEstimado ?? 0) },
-    { key: "criadoEm", header: "Gerado", filter: "none", nowrap: true, render: (r) => (r.criadoEm ? dataBR(r.criadoEm) : "—") },
-    {
-      key: "acoes",
-      header: "",
-      filter: "none",
-      render: (r) =>
-        acao(
-          <>
-            <Button href={`/painel/pca/edicao/${r.id}`} variant="ghost">
-              Ver
-            </Button>
-            {podeEditar && (
-              <Button
-                variant="ghost"
-                aria-label="Excluir edição"
-                onClick={() => excluirPca(r.id, r.nome)}
-                icon={<IconTrash className="h-4 w-4" />}
-                style={{ color: "var(--danger)" }}
-              />
-            )}
-          </>,
-        ),
-    },
-  ];
-
-  const colsPicker: Column<DfdResumo>[] = [
-    { key: "numero", header: "Nº DFD", filter: "none", nowrap: true, render: (r) => <span className="font-mono">{r.numero}</span> },
-    { key: "reparticao", header: "Unidade", nowrap: true, value: (r) => r.reparticaoCodigo ?? "—", render: (r) => r.reparticaoCodigo ?? <span className="text-faint">—</span> },
-    { key: "objeto", header: "Objeto", filter: "none", minWidth: 200, render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span> },
-    { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal ?? 0, nowrap: true, render: (r) => brl(r.valorTotal ?? 0) },
-  ];
-
-  // ---- Painel: Planilha (PCA) achatada — fluxo atual, intacto ----
-  const planilhaTab = (
-    <div className="space-y-6">
-      <Link
-        href="/"
-        className="group flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-ring transition hover:border-border-2 hover:shadow-soft"
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-white">
-          <IconDashboard className="h-6 w-6" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-text">Dashboard do PCA</h3>
-          <p className="mt-0.5 text-sm text-muted">
-            Indicadores, gráficos e consulta de itens — página pública (todos veem).
-          </p>
-        </div>
-        <IconChevronRight className="h-5 w-5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-muted" />
-      </Link>
-
-      {podeEditar ? (
-        <UploadForm />
-      ) : (
-        <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-          A importação de planilhas é feita por administradores e gestores.
-        </p>
-      )}
-
-      {unidades.length > 0 && (
-        <section>
-          <h3 className="mb-3 text-sm font-semibold text-text-2">Unidades importadas ({unidades.length})</h3>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {unidades.map((un) => (
-              <div key={un.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  <IconBuilding className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-text" title={un.municipio}>
-                    {un.municipio}
-                  </div>
-                  <div className="mt-0.5 text-xs text-muted">
-                    Código {un.codigo} · {num(un.totalItens ?? 0)} itens · {brl(un.valorTotal ?? 0)}
-                  </div>
-                  {un.atualizadoEm && (
-                    <div className="mt-0.5 text-[11px] text-faint">atualizado em {dataBR(un.atualizadoEm)}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-
-  // ---- Edições de PCA (une DFDs, importados na tela de DFD) ----
-  const pcaTab = (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Una DFDs numa edição de PCA (o plano consolidado).</p>
-        {podeEditar && (
-          <Button
-            onClick={() => {
-              setSel(new Set());
-              setNome("");
-              setModalGerar(true);
-            }}
-            icon={<IconPlus className="h-[18px] w-[18px]" />}
-            disabled={todosDfds.length === 0}
-          >
-            Gerar PCA
-          </Button>
-        )}
-      </div>
-
-      {pcas.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-          Nenhuma edição de PCA gerada ainda.
-        </p>
-      ) : (
-        <DataTable
-          columns={colsPca}
-          rows={pcas}
-          getKey={(r) => r.id}
-          fillHeight
-          pageSize={12}
-          minWidth={720}
-          resumo={(l) =>
-            `${l.length} ediç${l.length === 1 ? "ão" : "ões"} · ${num(
-              l.reduce((s, p) => s + (p.totalItens ?? 0), 0),
-            )} itens · ${brl(l.reduce((s, p) => s + (p.valorEstimado ?? 0), 0))}`
-          }
-        />
-      )}
-    </div>
-  );
+  const anoValido = /^\d{4}$/.test(ano) && Number(ano) >= 2000 && Number(ano) <= 2100;
 
   return (
-    <div className="space-y-4">
-      {erro && (
-        <AvisoFlutuante kind="danger" titulo="Não foi possível concluir" onClose={() => setErro(null)}>
-          {erro}
-        </AvisoFlutuante>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-text">PCA</h1>
+        <p className="text-sm text-muted">
+          {pcas.length} {pcas.length === 1 ? "plano" : "planos"} · {publicados} publicado(s) na tela inicial
+        </p>
+      </div>
+
+      {pcas.length === 0 && !podeEditar ? (
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+          <IconInbox className="h-10 w-10 text-faint" />
+          <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {pcas.map((p) => (
+            <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
+          ))}
+          {podeEditar && (
+            <PcaNovoCard
+              onClick={() => {
+                setErro(null);
+                setNome("");
+                setNovo(true);
+              }}
+            />
+          )}
+        </div>
       )}
 
-      <Tabs
-        tabs={[
-          { key: "planilha", label: "Planilha (PCA)", icon: <IconDashboard className="h-4 w-4" />, content: planilhaTab },
-          { key: "pca", label: "PCA", icon: <IconLayers className="h-4 w-4" />, content: pcaTab },
-        ]}
-      />
-
       <Modal
-        open={modalGerar}
-        onClose={() => setModalGerar(false)}
-        titulo="Gerar edição de PCA"
-        size="lg"
+        open={novo}
+        onClose={() => setNovo(false)}
+        titulo="Novo PCA"
+        size="md"
+        bloqueado={salvando}
         rodape={
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModalGerar(false)}>
+            <Button variant="secondary" onClick={() => setNovo(false)} disabled={salvando}>
               Cancelar
             </Button>
-            <Button onClick={gerar} loading={salvando} disabled={!nome.trim() || sel.size === 0}>
-              Gerar edição
+            <Button onClick={criar} loading={salvando} disabled={!anoValido}>
+              Criar PCA
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <TextField label="Nome da edição" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA 2026" />
-            </div>
-            <TextField label="Ano" value={ano} onChange={(e) => setAno(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px]">
+            <TextField label="Nome" placeholder={`PCA ${ano || ""}`} value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} />
+            <TextField
+              label="Ano"
+              inputMode="numeric"
+              value={ano}
+              onChange={(e) => setAno(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              error={anoValido ? undefined : "Ano inválido"}
+            />
           </div>
-
           <div>
-            <div className="mb-2 text-[13.5px] font-bold text-text">
-              DFDs a unir ({sel.size} selecionado{sel.size === 1 ? "" : "s"})
-            </div>
-            {todosDfds.length === 0 ? (
-              <Callout kind="info">Importe DFDs (aba/menu "DFD") antes de gerar uma edição.</Callout>
-            ) : (
-              <DataTable
-                columns={colsPicker}
-                rows={todosDfds}
-                getKey={(r) => r.id}
-                selectable
-                selected={sel}
-                onSelected={setSel}
-                pageSize={8}
-                minWidth={560}
-                resumo={(l) =>
-                  `${l.length} DFD${l.length === 1 ? "" : "s"} · ${num(
-                    l.reduce((s, d) => s + (d.totalItens ?? 0), 0),
-                  )} itens · ${brl(l.reduce((s, d) => s + (d.valorTotal ?? 0), 0))}`
-                }
-              />
-            )}
+            <p className="mb-2 text-[13.5px] font-bold text-text">Fonte dos dados</p>
+            <Segmented<FontePca>
+              value={fonte}
+              onChange={setFonte}
+              options={[
+                { value: "protocolo", label: ROTULO_FONTE.protocolo },
+                { value: "lista", label: ROTULO_FONTE.lista },
+              ]}
+            />
+            <p className="mt-2 text-xs text-muted">
+              {fonte === "protocolo"
+                ? "Os DFDs entram movendo protocolos da Mesa (conforme a situação e o ano do PCA)."
+                : "Os itens entram por planilhas importadas (modelo atual), na aba Importação."}{" "}
+              A fonte só pode ser trocada enquanto o PCA não tem dados.
+            </p>
           </div>
         </div>
       </Modal>
+
+      {erro && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível concluir" onClose={() => setErro(null)}>
+          {erro}
+        </AvisoFlutuante>
+      )}
     </div>
   );
 }

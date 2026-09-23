@@ -1,25 +1,12 @@
 import { Button } from "@/components/Button";
-import { ChartCard } from "@/components/ChartCard";
-import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
-import { MensalChart } from "@/components/charts/MensalChart";
-import { TopItensChart } from "@/components/charts/TopItensChart";
-import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { IconInbox } from "@/components/icons";
-import { ItemTable } from "@/components/ItemTable";
-import { KpiStat } from "@/components/KpiStat";
+import { PainelPca } from "@/components/PainelPca";
+import { PcaSeletor } from "@/components/PcaSeletor";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getAparencia } from "@/lib/aparencia";
-import { brl, brlCompact, num } from "@/lib/format";
-import {
-  getItensTodos,
-  getPorClassificacao,
-  getPorMes,
-  getPorUnidadeMedida,
-  getResumo,
-  getTopItens,
-  getUnidades,
-} from "@/lib/queries";
+import { num } from "@/lib/format";
+import { dashboardDoPca, getPcaEspaco, listarPcasPublicados } from "@/lib/pca-espaco";
 import type { Aparencia } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -58,24 +45,39 @@ function Topo({ identidade }: { identidade?: Aparencia["identidade"] }) {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ unidade?: string }>;
+  searchParams: Promise<{ unidade?: string; pca?: string }>;
 }) {
   const sp = await searchParams;
-  const [unidades, aparencia] = await Promise.all([getUnidades(), getAparencia()]);
+  const [publicados, aparencia] = await Promise.all([listarPcasPublicados(), getAparencia()]);
   const identidade = aparencia.identidade;
 
-  if (unidades.length === 0) {
+  // PCA escolhido no dropdown (só os PUBLICADOS); padrão = o ativo, senão o mais recente.
+  const pedido = sp.pca ? Number.parseInt(sp.pca, 10) : Number.NaN;
+  const escolhido = publicados.find((p) => p.id === pedido) ?? publicados[0];
+  const pca = escolhido ? await getPcaEspaco(escolhido.id) : null;
+  const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
+  // O público vê SÓ a camada publicada (protocolos em situação de camada "Publicado").
+  const dados = pca ? await dashboardDoPca(pca, "publicado", Number.isFinite(unidadePedida) ? unidadePedida : undefined) : null;
+
+  if (!pca || !dados || dados.resumo.count === 0) {
     return (
       <div className="min-h-dvh bg-bg text-text">
         <Topo identidade={identidade} />
         <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+          {publicados.length > 1 && pca && (
+            <div className="mb-6 flex justify-end">
+              <div className="w-full sm:w-72">
+                <PcaSeletor pcas={publicados} current={pca.id} />
+              </div>
+            </div>
+          )}
           <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
             <div className="grid h-16 w-16 place-items-center rounded-card bg-surface-2 text-faint">
               <IconInbox className="h-8 w-8" />
             </div>
             <p className="mt-5 text-base font-bold text-text">Dados do PCA em breve</p>
             <p className="mt-2 text-sm text-muted">
-              A equipe ainda não publicou a planilha do Plano de Contratações Anual.
+              A equipe ainda não publicou {pca ? `os dados do ${pca.nome}` : "o Plano de Contratações Anual"}.
             </p>
           </div>
         </main>
@@ -83,64 +85,30 @@ export default async function HomePage({
     );
   }
 
-  const parsedId = sp.unidade ? parseInt(sp.unidade, 10) : NaN;
-  const unidadeId =
-    Number.isFinite(parsedId) && unidades.some((u) => u.id === parsedId) ? parsedId : undefined;
-
-  const [resumo, porClass, porMes, porUnidade, top, itensTodos] = await Promise.all([
-    getResumo(unidadeId),
-    getPorClassificacao(unidadeId),
-    getPorMes(unidadeId),
-    getPorUnidadeMedida(unidadeId),
-    getTopItens(unidadeId, 10),
-    getItensTodos(unidadeId),
-  ]);
-
   return (
     <div className="min-h-dvh bg-bg text-text">
       <Topo identidade={identidade} />
       <main className="mx-auto max-w-7xl space-y-[var(--gap-col)] px-4 py-6 sm:px-6">
-        <div className="flex justify-end">
-          <div className="w-full sm:w-80">
-            <UnitFilter unidades={unidades} current={unidadeId} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-bold text-text">{pca.nome}</h1>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {publicados.length > 1 && (
+              <div className="w-full sm:w-64">
+                <PcaSeletor pcas={publicados} current={pca.id} />
+              </div>
+            )}
+            {dados.unidades.length > 1 && (
+              <div className="w-full sm:w-80">
+                <UnitFilter unidades={dados.unidades} current={dados.unidadeId} />
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
-          <KpiStat label="Total Planejado" value={brlCompact(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
-          <KpiStat
-            label="Qtd. de Itens"
-            value={num(resumo.count)}
-            cor="var(--sit-finalizado)"
-            hint={unidadeId ? "itens na unidade" : `${num(resumo.numUnidades)} unidade(s)`}
-          />
-          <KpiStat label="Ticket Médio" value={brl(resumo.ticket)} cor="var(--sit-em-analise)" hint="por item" />
-          <KpiStat
-            label="Maior Item"
-            value={brlCompact(resumo.maiorValor)}
-            cor="var(--sit-devolvido)"
-            hint={resumo.maiorNome ?? "—"}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
-          <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
-            <ClassificacaoChart data={porClass} />
-          </ChartCard>
-          <ChartCard title="Cronograma Mensal" subtitle="Valor planejado por mês desejado">
-            <MensalChart data={porMes} />
-          </ChartCard>
-          <ChartCard title="Top 10 Itens por Valor" subtitle="Maiores contratações planejadas">
-            <TopItensChart data={top} />
-          </ChartCard>
-          <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
-            <UnidadeChart data={porUnidade} />
-          </ChartCard>
-        </div>
-
-        <ChartCard title="Consulta de Itens" subtitle="Busque, filtre e ordene os itens do PCA">
-          <ItemTable rows={itensTodos} showUnidade={!unidadeId} />
-        </ChartCard>
+        <PainelPca
+          dados={dados}
+          unidadeFiltrada={dados.unidadeId != null}
+          hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos.publicados)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
+        />
       </main>
     </div>
   );

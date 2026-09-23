@@ -6,9 +6,9 @@ import { itens, unidades } from "@/db/schema";
 // Unidades (para o filtro e cabeçalho)
 // ---------------------------------------------------------------------------
 
-/** Unidades importadas. Com `reparticaoId`, restringe às daquela repartição
- * (visão do head); sem ele (Geral), lista todas. */
-export async function getUnidades(reparticaoId?: number) {
+/** Unidades importadas (planilhas). Com `reparticaoId`, restringe às daquela repartição (visão do
+ * head); com `pcaId`, às planilhas daquele PCA (fonte "lista pronta"). */
+export async function getUnidades(reparticaoId?: number, pcaId?: number) {
   const db = getDb();
   return db
     .select({
@@ -18,14 +18,26 @@ export async function getUnidades(reparticaoId?: number) {
       totalItens: unidades.totalItens,
       valorTotal: unidades.valorTotal,
       atualizadoEm: unidades.atualizadoEm,
+      nomeArquivo: unidades.nomeArquivo,
+      reparticaoId: unidades.reparticaoId,
+      pcaId: unidades.pcaId,
     })
     .from(unidades)
-    .where(reparticaoId ? eq(unidades.reparticaoId, reparticaoId) : undefined)
+    .where(
+      and(
+        reparticaoId ? eq(unidades.reparticaoId, reparticaoId) : undefined,
+        pcaId ? eq(unidades.pcaId, pcaId) : undefined,
+      ),
+    )
     .orderBy(asc(unidades.municipio), asc(unidades.codigo));
 }
 
-const filtroUnidade = (unidadeId?: number) =>
-  unidadeId ? eq(itens.unidadeId, unidadeId) : undefined;
+/** Escopo dos itens: uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`). */
+const filtroUnidade = (unidadeId?: number, pcaId?: number) =>
+  and(
+    unidadeId ? eq(itens.unidadeId, unidadeId) : undefined,
+    pcaId ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.pcaId} = ${pcaId})` : undefined,
+  );
 
 // ---------------------------------------------------------------------------
 // KPIs
@@ -40,9 +52,9 @@ export type Resumo = {
   numUnidades: number;
 };
 
-export async function getResumo(unidadeId?: number): Promise<Resumo> {
+export async function getResumo(unidadeId?: number, pcaId?: number): Promise<Resumo> {
   const db = getDb();
-  const w = filtroUnidade(unidadeId);
+  const w = filtroUnidade(unidadeId, pcaId);
 
   const [agg] = await db
     .select({
@@ -61,7 +73,8 @@ export async function getResumo(unidadeId?: number): Promise<Resumo> {
 
   const [u] = await db
     .select({ n: sql<number>`COUNT(*)` })
-    .from(unidades);
+    .from(unidades)
+    .where(pcaId ? eq(unidades.pcaId, pcaId) : undefined);
 
   const total = Number(agg?.total ?? 0);
   const count = Number(agg?.count ?? 0);
@@ -82,7 +95,7 @@ export async function getResumo(unidadeId?: number): Promise<Resumo> {
 
 export type Fatia = { label: string; total: number; count: number };
 
-export async function getPorClassificacao(unidadeId?: number): Promise<Fatia[]> {
+export async function getPorClassificacao(unidadeId?: number, pcaId?: number): Promise<Fatia[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -91,7 +104,7 @@ export async function getPorClassificacao(unidadeId?: number): Promise<Fatia[]> 
       count: sql<number>`COUNT(*)`,
     })
     .from(itens)
-    .where(filtroUnidade(unidadeId))
+    .where(filtroUnidade(unidadeId, pcaId))
     .groupBy(itens.classificacaoNorm)
     .orderBy(desc(sql`SUM(${itens.valorTotal})`));
   return rows.map((r) => ({
@@ -101,7 +114,7 @@ export async function getPorClassificacao(unidadeId?: number): Promise<Fatia[]> 
   }));
 }
 
-export async function getPorUnidadeMedida(unidadeId?: number): Promise<Fatia[]> {
+export async function getPorUnidadeMedida(unidadeId?: number, pcaId?: number): Promise<Fatia[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -110,7 +123,7 @@ export async function getPorUnidadeMedida(unidadeId?: number): Promise<Fatia[]> 
       count: sql<number>`COUNT(*)`,
     })
     .from(itens)
-    .where(filtroUnidade(unidadeId))
+    .where(filtroUnidade(unidadeId, pcaId))
     .groupBy(itens.unidadeMedidaNorm)
     .orderBy(desc(sql`COUNT(*)`));
   return rows.map((r) => ({
@@ -127,7 +140,7 @@ export type PontoMensal = {
   count: number;
 };
 
-export async function getPorMes(unidadeId?: number): Promise<PontoMensal[]> {
+export async function getPorMes(unidadeId?: number, pcaId?: number): Promise<PontoMensal[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -137,7 +150,7 @@ export async function getPorMes(unidadeId?: number): Promise<PontoMensal[]> {
       count: sql<number>`COUNT(*)`,
     })
     .from(itens)
-    .where(and(filtroUnidade(unidadeId), isNotNull(itens.anoDesejado)))
+    .where(and(filtroUnidade(unidadeId, pcaId), isNotNull(itens.anoDesejado)))
     .groupBy(itens.anoDesejado, itens.mesDesejado)
     .orderBy(asc(itens.anoDesejado), asc(itens.mesDesejado));
   return rows.map((r) => ({
@@ -159,6 +172,7 @@ export type TopItem = {
 export async function getTopItens(
   unidadeId?: number,
   limit = 10,
+  pcaId?: number,
 ): Promise<TopItem[]> {
   const db = getDb();
   const rows = await db
@@ -171,7 +185,7 @@ export async function getTopItens(
     })
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
-    .where(filtroUnidade(unidadeId))
+    .where(filtroUnidade(unidadeId, pcaId))
     .orderBy(desc(itens.valorTotal))
     .limit(limit);
   return rows.map((r) => ({
@@ -200,7 +214,7 @@ export type ItemRow = {
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
  * e pagina no CLIENTE (DataTable). Ordenado por valor desc por padrão. */
-export async function getItensTodos(unidadeId?: number, limite = 5000): Promise<ItemRow[]> {
+export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: number): Promise<ItemRow[]> {
   const db = getDb();
   return db
     .select({
@@ -219,7 +233,7 @@ export async function getItensTodos(unidadeId?: number, limite = 5000): Promise<
     })
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
-    .where(filtroUnidade(unidadeId))
+    .where(filtroUnidade(unidadeId, pcaId))
     .orderBy(desc(itens.valorTotal))
     .limit(limite);
 }

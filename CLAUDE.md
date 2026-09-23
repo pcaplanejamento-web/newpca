@@ -606,8 +606,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CPF-CNPJ/valor/local) — os **IDENTIFICADORES** (número/Id/data/ano do PCA) são IMUTÁVEIS (o schema **não** os aceita).
   Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
   Drizzle parametriza (sem SQL injection).
-- Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `DELETE /api/pca/[id]`
-  (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (3 abas); detalhes em `/painel/pca/dfd|edicao/[id]`.
+- Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `PATCH`/`DELETE /api/pca/[id]`
+  (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (cards 4:5 → espaço do PCA, ver "PCA como ESPAÇO");
+  a edição legada segue em `/painel/pca/edicao/[id]`.
 - **Protocolo → DFDs (migração `0016`) — importação em STREAMING:** um **protocolo** (o "processo") empacota
   **vários DFDs** (escala a **milhares**); todo DFD vem de um protocolo. Entidade `dfd_protocolos` (escopo por
   **repartição**, `numero`=Número Processo único; **`idExterno`** = "Id:" da capa, migração `0019`; sem `grupo_id`) +
@@ -985,6 +986,49 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `append-dfd-itens`, por causa dos lotes) roda `algumCatalogoFundamental` → se sim, `conferirItensNoCatalogo` + `bloqueantesCatalogo`
   → 422. Os DFDs do protocolo passam por `/api/dfd` (o `POST /api/protocolo` só cria a capa) → cobertos. Testes:
   `catalogo-conferencia.test.ts` + os pontos de catálogo em `dfd-tratamento.test.ts` (veredito por linha, portão, invariante).
+
+## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0032`
+- **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
+  `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
+  contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
+  **`/painel/pca/[id]`** (`PcaEspacoView`: cabeçalho + `Segmented` de abas com `animate-cat-morph`; `?aba=`/`?camada=`).
+- **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
+  (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
+  **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
+  (`unidades_pca_codigo_uq`; `/api/upload` `start` exige `pcaId`, só PCA de lista). **O que se vincula ao PCA é o DFD**
+  (`pca_dfds` + `acao` incorporar/substituir/excluir, `substitui_dfd_id`, `vinculado_por/em`); o protocolo é o veículo.
+  `protocolo_situacoes` ganhou **`permite_mover_pca`** + **`camada_pca`** (preview/publicado). **Legado:** as planilhas atuais
+  viraram um PCA "lista pronta" **publicado** (a tela inicial não muda) e as edições que já uniam DFDs viraram fonte `protocolo`.
+- **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoMover` (travas: fonte protocolo · situação que permite · `ano_pca` do
+  protocolo = ano do PCA · ter DFD · um DFD em UM PCA), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
+  incorporar), **`consolidarPca(linhas, camada)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
+  ⇒ aviso), `previsaoDoDfd` (seção PREVISÃO → mês/ano; ANUAL espalha nos 12 meses) e **`agregarDashboard`** (as MESMAS formas de
+  `queries.ts`). **Camada:** Preview = todos os DFDs vinculados; Publicado (e o público) = só os de protocolos em situação de
+  camada Publicado — mudar a situação move a camada AO VIVO. Acesso em **`pca-espaco.ts`** (`listarPcasCards`,
+  `listarPcasPublicados`, `dashboardDoPca` [lista = SQL de `queries.ts` com `pcaId`; protocolo = itens consolidados em JS],
+  `orcamentoDoPca`, `vincularDfds`/`desvincularDfds`/`definirAcaoDfds`, visões). Schemas em `pca-espaco-validation.ts`.
+- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público; `Callout` âmbar no Preview com quantos
+  protocolos ainda estão em camada Preview). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
+  Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
+  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
+  unidade pelos **Vínculos** (`orcamento_vinculos`). **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
+  **`modoPca`** (sem importação; `Segmented` **Todos | Neste PCA**; coluna "PCA" Neste PCA/Elegível/Bloqueado com os motivos;
+  ações da seleção **Mover para o PCA** [ação por protocolo] e **Retirar do PCA**) — dados pelo MESMO `carregarMesa`
+  (`mesa-dados.ts`, também da `/painel/mesa`). **Importação** (fonte lista) = `PlanilhasPca` (`Dropzone` com `onFiles` — várias
+  planilhas em fila — + cards "Planilhas deste PCA" com excluir). **Configuração** = `PcaConfiguracao` (identificação; fonte em
+  cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
+  do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
+- **Situações (Configurações → Situações):** `Switch` "pode ser movido para o PCA" + `Segmented` da camada; coluna "PCA".
+- **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por
+  dimensão (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Elemento, Código) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
+  selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts` puro). Uma coluna
+  nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `GET/POST /api/orcamento/visoes` + `PATCH/DELETE
+  /api/orcamento/visoes/[id]` (auditoria `orcamento_visao`).
+- **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
+  `UnitFilter` (planilha na lista; unidade requisitante no protocolo); só a camada Publicada.
+- **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
+  capa/visão), `POST`/`DELETE`/`PATCH /api/pca/[id]/dfds` (mover protocolos · retirar · trocar ação), `DELETE
+  /api/pca/[id]/planilhas/[unidadeId]` — todas `exigirEditor` + auditoria `pca`.
 
 ## Orçamento municipal (relatório CUBO) — migração `0028`
 - **O que é:** módulo para subir e consultar o **orçamento** da Prefeitura (dotação por Órgão/Unidade/**Elemento de

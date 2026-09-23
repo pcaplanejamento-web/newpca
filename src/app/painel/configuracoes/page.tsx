@@ -7,12 +7,13 @@ import { listarPcas } from "@/lib/dfd";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConfiguracoesPage() {
+export default async function ConfiguracoesPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
+  const { aba } = await searchParams;
   const u = await getUsuarioAtual();
   if (u?.role !== "admin") {
     return <AcessoRestrito mensagem="Somente administradores podem acessar as configurações." />;
   }
 
   const [aparencia, pcas, regras] = await Promise.all([getAparencia(), listarPcas(), getRegrasAvaliacao()]);
-  return <ConfiguracoesAdmin identidade={aparencia.identidade} pcas={pcas} regras={regras} />;
+  return <ConfiguracoesAdmin identidade={aparencia.identidade} pcas={pcas} regras={regras} abaInicial={aba} />;
 }

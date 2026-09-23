@@ -302,6 +302,41 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(p?.situacao_id, null, "excluir a situação deveria limpar a do protocolo");
   });
 
+  it("0032 PCA como espaço: fonte/status/capa, planilha por PCA, ação do DFD, camada da situação e visões", () => {
+    const pcas = nomes(db, "SELECT name FROM pragma_table_info('pcas')");
+    for (const c of ["fonte", "status", "capa", "publicado_em", "orcamento_visao_id"]) assert.ok(pcas.includes(c), `coluna ausente em pcas: ${c}`);
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('unidades')").includes("pca_id"));
+    const pd = nomes(db, "SELECT name FROM pragma_table_info('pca_dfds')");
+    for (const c of ["acao", "substitui_dfd_id", "vinculado_por", "vinculado_em"]) assert.ok(pd.includes(c), `coluna ausente em pca_dfds: ${c}`);
+    const sit = nomes(db, "SELECT name FROM pragma_table_info('protocolo_situacoes')");
+    for (const c of ["permite_mover_pca", "camada_pca"]) assert.ok(sit.includes(c), `coluna ausente em protocolo_situacoes: ${c}`);
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='table'").includes("orcamento_visoes"));
+    // O mesmo código de unidade pode existir em PCAs diferentes, mas não duas vezes no mesmo.
+    db.exec("INSERT INTO pcas (id, nome, ano) VALUES (991, 'PCA A', 2026), (992, 'PCA B', 2027)");
+    db.exec("INSERT INTO unidades (codigo, municipio, pca_id) VALUES ('SEMED', 'RV', 991), ('SEMED', 'RV', 992)");
+    assert.throws(() => db.exec("INSERT INTO unidades (codigo, municipio, pca_id) VALUES ('SEMED', 'RV', 991)"));
+  });
+
+  it("0032 legado: planilhas viram um PCA 'lista' PUBLICADO e edições com DFDs viram fonte 'protocolo'", () => {
+    const d = new DatabaseSync(":memory:");
+    const i32 = arquivos.findIndex((f) => f.startsWith("0032"));
+    for (const arq of arquivos.slice(0, i32)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec("INSERT INTO unidades (id, codigo, municipio) VALUES (1, 'SEMED', 'RV'), (2, 'SEMUS', 'RV')");
+    d.exec("INSERT INTO itens (unidade_id, nome_produto, ano_desejado) VALUES (1, 'X', 2026)");
+    d.exec("INSERT INTO pcas (id, nome, ano) VALUES (10, 'Edição', 2026)");
+    d.exec("INSERT INTO dfds (id, numero) VALUES (50, 'DFD-50')");
+    d.exec("INSERT INTO pca_dfds (pca_id, dfd_id) VALUES (10, 50)");
+    for (const arq of arquivos.slice(i32)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const ed = d.prepare("SELECT fonte FROM pcas WHERE id = 10").get() as { fonte: string };
+    assert.equal(ed.fonte, "protocolo");
+    const pub = d.prepare("SELECT id, nome, ano, fonte, status FROM pcas WHERE fonte = 'lista' AND status = 'publicado'").all() as Array<{ id: number; nome: string; ano: number }>;
+    assert.equal(pub.length, 1);
+    assert.equal(pub[0].ano, 2026);
+    assert.equal(pub[0].nome, "PCA 2026");
+    const us = d.prepare("SELECT pca_id FROM unidades ORDER BY id").all() as Array<{ pca_id: number }>;
+    assert.deepEqual(us.map((u) => u.pca_id), [pub[0].id, pub[0].id]);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

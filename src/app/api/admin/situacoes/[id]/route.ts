@@ -17,7 +17,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const antes = await getSituacao(id);
   if (!antes) return erro("Situação não encontrada.", 404);
   await atualizarSituacao(id, p.data);
-  const dd = diffCampos(antes, p.data, ["nome", "cor"], { nome: "nome", cor: "cor" });
+  const dd = diffCampos(antes, { ...antes, ...p.data }, ["nome", "cor", "permiteMoverPca", "camadaPca"], {
+    nome: "nome",
+    cor: "cor",
+    permiteMoverPca: "move para o PCA",
+    camadaPca: "camada do PCA",
+  });
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",

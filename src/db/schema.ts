@@ -31,10 +31,13 @@ export const unidades = sqliteTable(
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
     totalItens: integer("total_itens").default(0),
     valorTotal: real("valor_total").default(0),
+    // PCA (fonte "lista pronta") a que a planilha pertence — migração `0032`. O código é único POR PCA.
+    pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "cascade" }),
   },
   (t) => [
-    uniqueIndex("unidades_codigo_uq").on(t.codigo),
+    uniqueIndex("unidades_pca_codigo_uq").on(t.pcaId, t.codigo),
     index("unidades_reparticao_idx").on(t.reparticaoId),
+    index("unidades_pca_idx").on(t.pcaId),
   ],
 );
 
@@ -294,6 +297,10 @@ export const protocoloSituacoes = sqliteTable(
     nome: text("nome").notNull(),
     cor: text("cor").notNull().default("#64748b"),
     ordem: integer("ordem").notNull().default(0),
+    // Migração `0032`: se o protocolo nesta situação PODE ser movido para o PCA e em qual CAMADA
+    // (preview/publicado) os DFDs dele contam.
+    permiteMoverPca: integer("permite_mover_pca", { mode: "boolean" }).notNull().default(false),
+    camadaPca: text("camada_pca", { enum: ["preview", "publicado"] }).notNull().default("preview"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
@@ -439,6 +446,15 @@ export const pcas = sqliteTable("pcas", {
   totalDfds: integer("total_dfds").default(0),
   totalItens: integer("total_itens").default(0),
   valorEstimado: real("valor_estimado").default(0), // total do PCA = soma dos valores (Σ itens) dos DFDs
+  // PCA como ESPAÇO (migração `0032`): fonte dos dados, status de publicação, capa do card 4:5 e a
+  // visão do orçamento usada no comparativo.
+  fonte: text("fonte", { enum: ["lista", "protocolo"] }).notNull().default("lista"),
+  status: text("status", { enum: ["preview", "publicado"] }).notNull().default("preview"),
+  capa: text("capa"), // data-URL WebP 800×1000 (recorte 4:5)
+  publicadoEm: text("publicado_em"),
+  orcamentoVisaoId: integer("orcamento_visao_id").references((): AnySQLiteColumn => orcamentoVisoes.id, {
+    onDelete: "set null",
+  }),
   criadoPor: integer("criado_por").references(() => usuarios.id, {
     onDelete: "set null",
   }),
@@ -456,8 +472,14 @@ export const pcaDfds = sqliteTable(
     dfdId: integer("dfd_id")
       .notNull()
       .references(() => dfds.id, { onDelete: "cascade" }),
+    // Migração `0032`: a AÇÃO do DFD no PCA (incorporar/substituir/excluir), o DFD que ele substitui
+    // e quem/quando vinculou.
+    acao: text("acao", { enum: ["incorporar", "substituir", "excluir"] }).notNull().default("incorporar"),
+    substituiDfdId: integer("substitui_dfd_id"),
+    vinculadoPor: integer("vinculado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    vinculadoEm: text("vinculado_em"),
   },
-  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] })],
+  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId)],
 );
 
 /**
@@ -639,3 +661,17 @@ export type Orcamento = typeof orcamentos.$inferSelect;
 export type NovoOrcamento = typeof orcamentos.$inferInsert;
 export type OrcamentoItem = typeof orcamentoItens.$inferSelect;
 export type NovoOrcamentoItem = typeof orcamentoItens.$inferInsert;
+
+/**
+ * VISÕES SALVAS do orçamento (migração `0032`): nome + `filtros` (JSON `{dimensão: valores[]}` —
+ * vazio = "Todos"). Dentro da dimensão = OU; entre dimensões = E. Usadas pelo PCA (orçamento para o
+ * PCA) e pela tela do Orçamento. Núcleo puro em `src/lib/orcamento-visao.ts`.
+ */
+export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  filtros: text("filtros").notNull().default("{}"),
+  ordem: integer("ordem").notNull().default(0),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});

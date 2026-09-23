@@ -8,11 +8,28 @@ import { getDb } from "./db";
  * usavam (explícito aqui, além da FK `set null`).
  */
 
-export type SituacaoCadastrada = { id: number; nome: string; cor: string; ordem: number };
+export type SituacaoCadastrada = {
+  id: number;
+  nome: string;
+  cor: string;
+  ordem: number;
+  /** O protocolo nesta situação pode ser movido para o PCA (migração `0032`). */
+  permiteMoverPca: boolean;
+  /** Camada do PCA em que os DFDs do protocolo contam (`publicado` = aparecem na tela inicial). */
+  camadaPca: "preview" | "publicado";
+};
+type DadosSituacao = { nome: string; cor: string; permiteMoverPca?: boolean; camadaPca?: "preview" | "publicado" };
 /** Para a tela do ADM: quantos protocolos estão em cada situação (aviso ao excluir). */
 export type SituacaoComUso = SituacaoCadastrada & { emUso: number };
 
-const COLS = { id: protocoloSituacoes.id, nome: protocoloSituacoes.nome, cor: protocoloSituacoes.cor, ordem: protocoloSituacoes.ordem };
+const COLS = {
+  id: protocoloSituacoes.id,
+  nome: protocoloSituacoes.nome,
+  cor: protocoloSituacoes.cor,
+  ordem: protocoloSituacoes.ordem,
+  permiteMoverPca: protocoloSituacoes.permiteMoverPca,
+  camadaPca: protocoloSituacoes.camadaPca,
+};
 
 export async function listarSituacoes(): Promise<SituacaoCadastrada[]> {
   return getDb().select(COLS).from(protocoloSituacoes).orderBy(asc(protocoloSituacoes.ordem), asc(protocoloSituacoes.id));
@@ -38,20 +55,26 @@ export async function getSituacao(id: number): Promise<SituacaoCadastrada | null
 }
 
 /** Cria no FIM da ordem. */
-export async function criarSituacao(d: { nome: string; cor: string }): Promise<{ id: number }> {
+export async function criarSituacao(d: DadosSituacao): Promise<{ id: number }> {
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${protocoloSituacoes.ordem}), -1)` }).from(protocoloSituacoes);
   const [row] = await db
     .insert(protocoloSituacoes)
-    .values({ nome: d.nome, cor: d.cor, ordem: Number(max) + 1 })
+    .values({ nome: d.nome, cor: d.cor, ordem: Number(max) + 1, permiteMoverPca: d.permiteMoverPca ?? false, camadaPca: d.camadaPca ?? "preview" })
     .returning({ id: protocoloSituacoes.id });
   return { id: row.id };
 }
 
-export async function atualizarSituacao(id: number, d: { nome: string; cor: string }): Promise<void> {
+export async function atualizarSituacao(id: number, d: DadosSituacao): Promise<void> {
   await getDb()
     .update(protocoloSituacoes)
-    .set({ nome: d.nome, cor: d.cor, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .set({
+      nome: d.nome,
+      cor: d.cor,
+      ...(d.permiteMoverPca !== undefined ? { permiteMoverPca: d.permiteMoverPca } : {}),
+      ...(d.camadaPca !== undefined ? { camadaPca: d.camadaPca } : {}),
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+    })
     .where(eq(protocoloSituacoes.id, id));
 }
 

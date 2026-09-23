@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
 import { getReparticaoFiltro } from "@/lib/grupos";
 import { normalizarLinha, type LinhaCrua } from "@/lib/normalize";
+import { getPcaEspaco } from "@/lib/pca-espaco";
 import { uploadSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -55,8 +56,11 @@ export async function POST(req: Request) {
 
   try {
     if (parsed.data.mode === "start") {
-      const { codigo, municipio, nomeArquivo, totalItens, valorTotal, rows } =
+      const { pcaId, codigo, municipio, nomeArquivo, totalItens, valorTotal, rows } =
         parsed.data;
+      const pca = await getPcaEspaco(pcaId);
+      if (!pca) return bad("PCA não encontrado.", 404);
+      if (pca.fonte !== "lista") return bad("Este PCA é de protocolos — a planilha só entra num PCA de lista pronta.", 409);
 
       // Unidade ativa no head vira dona da planilha importada. Em "Geral" (rep=null)
       // a planilha fica sem unidade dona; ao RE-importar em Geral, preserva a atual.
@@ -70,11 +74,11 @@ export async function POST(req: Request) {
         ...(rep ? { reparticaoId: rep.id } : {}),
       };
 
-      // Cria/atualiza a unidade (por código) e recupera o id.
+      // Cria/atualiza a planilha (por PCA + código) e recupera o id.
       const [u] = await db
         .insert(unidades)
-        .values({ codigo, reparticaoId: rep?.id ?? null, ...set })
-        .onConflictDoUpdate({ target: unidades.codigo, set })
+        .values({ codigo, pcaId, reparticaoId: rep?.id ?? null, ...set })
+        .onConflictDoUpdate({ target: [unidades.pcaId, unidades.codigo], set })
         .returning({ id: unidades.id });
 
       const unidadeId = u.id;
@@ -92,8 +96,8 @@ export async function POST(req: Request) {
         acao: "importar",
         entidade: "planilha",
         entidadeId: unidadeId,
-        resumo: `Planilha (PCA) importada — unidade ${codigo}${municipio ? ` (${municipio})` : ""}, ${rows.length} ${rows.length === 1 ? "item" : "itens"}`,
-        depois: { codigo, municipio, reparticaoId: rep?.id ?? null },
+        resumo: `Planilha (PCA "${pca.nome}") importada — unidade ${codigo}${municipio ? ` (${municipio})` : ""}, ${totalItens ?? rows.length} ${(totalItens ?? rows.length) === 1 ? "item" : "itens"}`,
+        depois: { pcaId, codigo, municipio, reparticaoId: rep?.id ?? null },
       });
       return NextResponse.json({
         ok: true,

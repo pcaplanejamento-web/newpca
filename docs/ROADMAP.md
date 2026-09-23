@@ -694,6 +694,17 @@ unidade, descrição e os **tipos de DFD** (chips) — mesmo quando conforme ou 
 catálogo usa o **mesmo tamanho de fonte** da descrição do item importado (comparação lado a lado). Demo no
 `/design-system`. Testes de conferência (comparação tolerante, rótulos, referência sempre presente).
 
+### PCA como espaço (cards 4:5, Dashboard · Orçamento · Mesa/Importação · Configuração, publicação) — entregue
+✅ `/painel/pca` em **cards 4:5** (capa própria recortada no navegador ou capa padrão com o ano) + card "+" Novo PCA. Cada PCA
+tem **fonte** (lista pronta = planilhas | protocolos = DFDs dos protocolos movidos da Mesa), **status** Preview/Publicado
+(publicado aparece no **seletor de PCA da tela inicial**) e o espaço `/painel/pca/[id]`: **Dashboard** (mesmos gráficos do
+público), **Orçamento** (dotação do ano filtrada pela **visão salva** × planejado; comparativo por unidade com faixas de
+comprometimento e exportação), **Mesa** (Todos | Neste PCA; mover/retirar protocolos com ação Incorporar/Substituir/Excluir)
+ou **Importação** (várias planilhas + cards) e **Configuração**. A **situação** do protocolo define se ele pode ser movido e
+em qual camada conta. Orçamento ganhou **Visões salvas** (filtro por vários valores de cada dimensão). Migração `0032`
+(aditiva; legado vira PCA publicado). Testes: núcleo do PCA, visões/comparativo, recorte e a cadeia de migrações.
+🔜 Dimensões extras do CUBO (subelemento, ação, programa, fonte, licitação, credor, contrato) quando o arquivo as trouxer.
+
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar
@@ -766,8 +777,8 @@ Digitalizar a planilha de controle (aba *Distribuição de Protocolos*). Ver [PR
 ## 4. Orçamento PCA 🔜
 | | Item |
 |---|---|
-| 🔜 | Orçamento por secretaria/unidade: **planejado × contratado**, % de execução |
-| 🔜 | Tabela comparativa (como no sistema de referência) e diferença/saldo |
+| ✅ | Orçamento por unidade: **planejado (PCA) × orçamento para o PCA**, % comprometido (aba Orçamento do PCA) |
+| ✅ | Tabela comparativa com diferença/saldo, faixas e exportação `.xlsx` |
 | 💡 | Importar a aba de orçamento · Alertas de estouro |
 
 ## 5. Comunicações Internas 🔜

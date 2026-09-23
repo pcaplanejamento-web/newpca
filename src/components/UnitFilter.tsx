@@ -38,7 +38,7 @@ export function UnitFilter({
         <option value="">Todas as unidades</option>
         {unidades.map((u) => (
           <option key={u.id} value={u.id}>
-            {u.municipio} — {u.codigo}
+            {u.municipio ? `${u.municipio} — ${u.codigo}` : u.codigo}
           </option>
         ))}
       </select>
