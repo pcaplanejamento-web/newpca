@@ -219,22 +219,30 @@ export function BarraEdicaoMassa({
 type CampoProto = AcaoMassaProtocolo["campo"];
 
 /**
- * Edição EM MASSA dos PROTOCOLOS selecionados (Mesa): UNIDADE, ASSUNTO (as mesmas opções do seletor da
- * capa: categorias fixas + assuntos cadastrados) ou VALOR DA CAPA = somatória dos DFDs (conciliação em
- * lote). A unidade respeita o "editável" do ADM (`protocolo.reparticao`).
+ * Edição EM MASSA dos PROTOCOLOS selecionados (Mesa): RESPONSÁVEL, SITUAÇÃO (só as cadastradas pelo ADM),
+ * UNIDADE, ASSUNTO (as mesmas opções do seletor da capa: categorias fixas + assuntos cadastrados) ou VALOR
+ * DA CAPA = somatória dos DFDs (conciliação em lote). A unidade respeita o "editável" do ADM.
  */
 export function BarraEdicaoMassaProtocolos({
   reparticoes,
+  pessoas = [],
+  situacoes = [],
   regras = regrasPadrao(),
   aplicando = false,
   onAplicar,
 }: {
   reparticoes: Rep[];
+  /** Usuários ativos (responsável). */
+  pessoas?: { id: number; nome: string }[];
+  /** Situações cadastradas pelo ADM. */
+  situacoes?: { id: number; nome: string }[];
   regras?: RegrasAvaliacao;
   aplicando?: boolean;
   onAplicar: (acao: AcaoMassaProtocolo) => void;
 }) {
   const campos: { value: CampoProto; label: string }[] = [
+    { value: "responsavel", label: "Responsável" },
+    ...(situacoes.length > 0 ? [{ value: "situacao" as const, label: "Situação" }] : []),
     ...(editavelDe(regras, "protocolo.reparticao") ? [{ value: "reparticao" as const, label: "Unidade" }] : []),
     { value: "assunto", label: "Assunto" },
     { value: "valorCapa", label: "Valor da capa" },
@@ -242,8 +250,28 @@ export function BarraEdicaoMassaProtocolos({
   const [campo, setCampo] = useState<CampoProto>(campos[0].value);
   const [rep, setRep] = useState<number | null>(null);
   const [assunto, setAssunto] = useState("");
+  // Responsável/situação: "" = ainda não escolhido; "0" = LIMPAR (sem responsável/situação).
+  const [pessoa, setPessoa] = useState("");
+  const [situacao, setSituacao] = useState("");
+  const idOuNulo = (v: string) => (v === "0" ? null : Number(v));
   const acao: AcaoMassaProtocolo | null =
-    campo === "reparticao" ? (rep != null ? { campo, reparticaoId: rep } : null) : campo === "assunto" ? (assunto ? { campo, valor: assunto } : null) : { campo };
+    campo === "reparticao"
+      ? rep != null
+        ? { campo, reparticaoId: rep }
+        : null
+      : campo === "assunto"
+        ? assunto
+          ? { campo, valor: assunto }
+          : null
+        : campo === "responsavel"
+          ? pessoa
+            ? { campo, responsavelId: idOuNulo(pessoa) }
+            : null
+          : campo === "situacao"
+            ? situacao
+              ? { campo, situacaoId: idOuNulo(situacao) }
+              : null
+            : { campo };
 
   return (
     <Moldura
@@ -254,7 +282,39 @@ export function BarraEdicaoMassaProtocolos({
       aplicando={aplicando}
       onAplicar={() => acao && onAplicar(acao)}
       controle={
-        campo === "reparticao" ? (
+        campo === "responsavel" ? (
+          <select
+            aria-label="Responsável"
+            className={inputCls}
+            style={{ width: "auto", minWidth: 220, flex: "1 1 220px" }}
+            value={pessoa}
+            onChange={(e) => setPessoa(e.target.value)}
+          >
+            <option value="">— Responsável —</option>
+            <option value="0">Sem responsável (limpar)</option>
+            {pessoas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+        ) : campo === "situacao" ? (
+          <select
+            aria-label="Situação"
+            className={inputCls}
+            style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
+            value={situacao}
+            onChange={(e) => setSituacao(e.target.value)}
+          >
+            <option value="">— Situação —</option>
+            <option value="0">Sem situação (limpar)</option>
+            {situacoes.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nome}
+              </option>
+            ))}
+          </select>
+        ) : campo === "reparticao" ? (
           <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />
         ) : campo === "assunto" ? (
           <select

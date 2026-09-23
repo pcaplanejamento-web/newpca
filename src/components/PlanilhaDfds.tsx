@@ -13,8 +13,7 @@ import {
 import { brl, num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
-import { EstadoPonto, EstadoResumo } from "./EstadoCelula";
-import { IconSpinner } from "./icons";
+import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
 const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
@@ -60,7 +59,7 @@ export type LinhaDfd = {
 
 /**
  * Planilha de DFDs REUTILIZÁVEL — colunas (nessa ordem): [seleção] · Estado ·
- * [Situação] · Nº DFD · Nº Plan. · Sigla · Tipo · Assinatura · [Protocolo] · Itens · Valor total ·
+ * [Situação] · Nº Plan. · Nº DFD · Sigla · Tipo · Assinatura · [Protocolo] · Itens · Valor total ·
  * [ações]. Todas filtráveis/ordenáveis e SEM quebra de linha (a coluna ganha a largura do
  * conteúdo; a tabela rola no eixo x do próprio container). Na ANÁLISE (importação) os **DFDs com
  * erro/atenção** ficam em **tabelas separadas** acima das regulares; depois de protocolado
@@ -127,13 +126,7 @@ export function PlanilhaDfds({
               : [r.resumo?.rotulo || estadoRotulo(r.estado, regras)],
       render: (r) => {
         // Em processamento: spinner + O QUE está acontecendo (feedback real da análise/conferência).
-        if (r.processando)
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted" aria-live="polite">
-              <IconSpinner className="h-3.5 w-3.5 shrink-0" style={{ color: r.processando === "fila" ? "var(--faint)" : "var(--accent)" }} />
-              {PROCESSANDO_ROTULO[r.processando]}
-            </span>
-          );
+        if (r.processando) return <EstadoProcessando rotulo={PROCESSANDO_ROTULO[r.processando]} fila={r.processando === "fila"} />;
         // Leitura incompleta (parse falhou) — mantém a mensagem própria.
         if (r.estadoMotivo) return <EstadoPonto cor="var(--danger)" rotulo="Leitura incompleta" title={r.estadoMotivo} />;
         // Com erro/atenção: aponta o problema PRINCIPAL + "+N" por severidade (tooltip = lista completa).
@@ -154,19 +147,20 @@ export function PlanilhaDfds({
           },
         ]
       : []),
-    {
-      key: "numero",
-      header: "Nº DFD",
-      nowrap: true,
-      value: (r) => r.numero,
-      render: (r) => <span className="font-mono text-[12px]">{r.numero}</span>,
-    },
+    // Nº de PLANEJAMENTO primeiro, depois o Nº do DFD.
     {
       key: "planejamento",
       header: "Nº Plan.",
       nowrap: true,
       value: (r) => r.planejamento ?? "",
       render: (r) => <span className="font-mono text-[12px]">{r.planejamento || "—"}</span>,
+    },
+    {
+      key: "numero",
+      header: "Nº DFD",
+      nowrap: true,
+      value: (r) => r.numero,
+      render: (r) => <span className="font-mono text-[12px]">{r.numero}</span>,
     },
     {
       key: "sigla",

@@ -28,15 +28,17 @@ export type AberturaMesa = { tipo: "protocolo"; id: number } | { tipo: "dfd"; id
 const LARGURA = { item: 34, dfd: 52, protocolo: 50 } as const;
 
 /**
- * PILHA DE BANNERS da Mesa — um único `Modal` em que cada "Ver …" ENTRA PELA DIREITA (a animação
- * padrão dos painéis laterais), mantendo o anterior à esquerda:
- * - linha de PROTOCOLO → [Protocolo] (+ DFD ao lado + mensagens/item/histórico, como sempre);
- * - linha de DFD → [DFD]; "Ver protocolo" → [DFD | Protocolo];
- * - linha de ITEM → só o banner do ITEM; "Ver DFD" → [Item | DFD]; "Ver protocolo" → o DFD entra e, em
- *   seguida, o protocolo ([Item | DFD | Protocolo]).
- * No protocolo empilhado, clicar numa linha TROCA o DFD da pilha. X fecha o banner (e os que vieram
- * depois dele); Esc fecha da direita para a esquerda. Os banners são os MESMOS da análise (hooks
- * `useDfdGravado`/`useProtocoloGravado`); gravar num avisa o outro para recarregar (sem perder rascunho).
+ * PILHA DE BANNERS da Mesa — um único `Modal` em ORDEM FIXA: **Protocolo (esquerda) | DFD (centro) | Item
+ * (direita)**, qualquer que seja o banner de entrada. Cada "Ver …" faz o banner surgir NO SEU LUGAR com a
+ * animação padrão (a trilha do grid cresce e os vizinhos deslizam):
+ * - linha de PROTOCOLO → [Protocolo] (+ DFD ao lado + mensagens/item/histórico à direita, como sempre);
+ * - linha de DFD → [DFD]; "Ver protocolo" → o protocolo surge à ESQUERDA ([Protocolo | DFD]); o item/
+ *   mensagens/histórico seguem à direita ([Protocolo | DFD | Item]);
+ * - linha de ITEM → só o banner do ITEM; "Ver DFD" → o DFD surge à esquerda ([DFD | Item]); "Ver
+ *   protocolo" → o DFD entra e, EM SEGUIDA, o protocolo à esquerda dele ([Protocolo | DFD | Item]).
+ * No protocolo empilhado, clicar numa linha TROCA o DFD da pilha. X fecha aquele banner; Esc fecha o
+ * último aberto. No celular aparece um por vez (o último aberto). Os banners são os MESMOS da análise
+ * (hooks `useDfdGravado`/`useProtocoloGravado`); gravar num avisa o outro para recarregar.
  */
 export function BannersMesa({
   abrir,
@@ -100,7 +102,7 @@ export function BannersMesa({
   /** Algum banner da pilha está GRAVANDO — nada troca/fecha/empilha até terminar (a recarga pós-gravação
    * é do banner que gravou). */
   const gravando = () => dfd.bloqueado || proto.bloqueado;
-  /** "Ver protocolo": o protocolo entra pela direita (a partir do ITEM, o DFD entra antes). */
+  /** "Ver protocolo": o protocolo surge à ESQUERDA (a partir do ITEM, o DFD entra antes, e só então ele). */
   function verProtocolo(pid: number) {
     if (gravando()) return;
     limparTimer();
@@ -137,7 +139,9 @@ export function BannersMesa({
             setProtoId(null);
           }
         : () => fecharTudo("dfd"),
-    onVerProtocolo: verProtocolo,
+    // Com o protocolo JÁ na pilha, "Ver protocolo" some (no celular seria um clique sem efeito — ele já
+    // está aberto, atrás do banner visível; o X volta até ele).
+    onVerProtocolo: protoId == null ? verProtocolo : undefined,
     podeEditar,
     reparticoes,
     reparticaoAtivaId,
@@ -176,18 +180,22 @@ export function BannersMesa({
       <Modal open onClose={proto.fechar} fecharNoBackdrop={false} bloqueado={bloqueado} paineis={proto.paineis} {...proto.principal} />
     );
   } else if (raiz === "dfd") {
+    // [Protocolo | DFD* | item/mensagens/histórico]
     modal = (
       <Modal
         open
         onClose={dfd.fechar}
         fecharNoBackdrop={false}
         bloqueado={bloqueado}
-        paineis={[dfd.direito, painelProto]}
+        larguraPrincipal={LARGURA.dfd}
+        esquerda={[painelProto]}
+        paineis={[dfd.direito]}
         {...dfd.dfdPainel}
       />
     );
   } else if (raiz === "item") {
-    const item = dfd.itemPainel({
+    // [Protocolo | DFD | Item*] — o item é a raiz (direita); DFD e protocolo surgem à esquerda dele.
+    const { onClose: fecharItem, ...item } = dfd.itemPainel({
       onVerDfd: verDfd ? undefined : () => setVerDfd(true),
       onVerProtocolo: () => dfd.orig?.protocoloId != null && verProtocolo(dfd.orig.protocoloId),
       onFechar: () => fecharTudo(),
@@ -195,24 +203,11 @@ export function BannersMesa({
     modal = (
       <Modal
         open
-        onClose={() => fecharTudo()}
+        onClose={fecharItem}
         fecharNoBackdrop={false}
         bloqueado={bloqueado}
         larguraPrincipal={LARGURA.item}
-        paineis={[
-          {
-            id: "dfd",
-            aberto: verDfd,
-            largura: LARGURA.dfd,
-            onClose: () => {
-              dfd.fecharDireito();
-              dfd.fechar();
-            },
-            ...dfd.dfdPainel,
-          },
-          { ...dfd.direito, aberto: verDfd && dfd.direito.aberto },
-          painelProto,
-        ]}
+        esquerda={[painelProto, { id: "dfd", aberto: verDfd, largura: LARGURA.dfd, onClose: dfd.fechar, ...dfd.dfdPainel }]}
         {...item}
       />
     );

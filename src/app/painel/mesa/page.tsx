@@ -7,6 +7,8 @@ import { listarOrgaos } from "@/lib/orgaos";
 import { listarProtocolos } from "@/lib/protocolo";
 import { RESPONSAVEIS_VAZIO } from "@/lib/reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "@/lib/reparticoes";
+import { listarSituacoes } from "@/lib/situacoes";
+import { listarPessoas } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +18,16 @@ export default async function MesaPage() {
   const u = await getUsuarioAtual();
   // Head em "Geral" (rep=null) mostra tudo; senão só o da repartição ativa.
   const rep = await getReparticaoFiltro(u);
-  const [dfds, protocolos, repCtx, pcas, regras, orgaos] = await Promise.all([
+  const [dfds, protocolos, repCtx, pcas, regras, orgaos, pessoas, situacoes] = await Promise.all([
     listarDfds(rep?.id),
     listarProtocolos(rep?.id),
     getReparticaoContexto(u),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
+    // Gestão do protocolo: pessoas (Responsável) e as situações cadastradas pelo ADM.
+    listarPessoas(),
+    listarSituacoes(),
   ]);
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 
@@ -52,6 +57,8 @@ export default async function MesaPage() {
       pcas={pcas}
       regras={regras}
       orgaos={orgaos}
+      pessoas={pessoas}
+      situacoes={situacoes}
     />
   );
 }

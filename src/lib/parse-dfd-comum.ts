@@ -49,22 +49,56 @@ export function anoPcaDoTexto(texto: string | null | undefined): number | null {
   return ano != null && ano >= 2000 && ano <= 2100 ? ano : null;
 }
 
-const RE_CONTRATO = /\bCONTRATO\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
-const RE_ATA = /\b(?:ATA(?:\s+DE\s+REGISTRO\s+DE\s+PRE[ÇC]OS)?|ARP)\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
-const RE_LICITACAO =
-  /\b(?:LICITA[ÇC][ÃA]O|PREG[ÃA]O(?:\s+ELETR[ÔO]NICO)?|CONCORR[ÊE]NCIA|TOMADA\s+DE\s+PRE[ÇC]OS|PROCESSO\s+LICITAT[ÓO]RIO)\b[^0-9]{0,6}([0-9][0-9./-]*)/i;
+// Um nº de referência ("860/2025", "123.456/2024") e a CONTINUAÇÃO de uma lista ("…Nº 860/2025, 861/2025 e
+// Nº 3/2026") — o plural da palavra-chave ("CONTRATOS", "ATAS", "PREGÕES"…) também casa.
+const NUM_REF = "[0-9][0-9./-]*";
+const LISTA_REF = String.raw`${NUM_REF}(?:\s*(?:,|;|\bE\b)\s*(?:N[º°O.]*\s*)?${NUM_REF})*`;
+const RE_CONTRATO = new RegExp(String.raw`\bCONTRATOS?\b[^0-9]{0,6}(${LISTA_REF})`, "gi");
+const RE_ATA = new RegExp(String.raw`\b(?:ATAS?(?:\s+DE\s+REGISTRO\s+DE\s+PRE[ÇC]OS)?|ARPS?)\b[^0-9]{0,6}(${LISTA_REF})`, "gi");
+const RE_LICITACAO = new RegExp(
+  String.raw`\b(?:LICITA[ÇC](?:[ÃA]O|[ÕO]ES)|PREG(?:[ÃA]O|[ÕO]ES)(?:\s+ELETR[ÔO]NICOS?)?|CONCORR[ÊE]NCIAS?|TOMADAS?\s+DE\s+PRE[ÇC]OS|PROCESSOS?\s+LICITAT[ÓO]RIOS?)\b[^0-9]{0,6}(${LISTA_REF})`,
+  "gi",
+);
 
-function extrairRef(s: string, re: RegExp): string | null {
-  const m = s.match(re);
-  if (!m) return null;
-  const n = m[1].replace(/[.\-/]+$/, "").trim(); // tira separador solto no fim
-  return n.length > 0 ? n : null;
+/** Separador canônico de VÁRIAS referências no mesmo campo (um DFD-R pode ter vários contratos/ARPs/
+ * licitações): "860/2025; 861/2025". O campo continua texto (sem migração); um valor único segue igual. */
+export const SEPARADOR_REFS = "; ";
+
+/** As referências de um campo (texto com "; " ou ",") → lista limpa, sem vazios nem repetidas. Puro. */
+export function listaRefs(v: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const parte of String(v ?? "").split(/\s*[;,]\s*/)) {
+    const r = parte.replace(/\s+/g, " ").trim();
+    if (r && !out.some((x) => x.toUpperCase() === r.toUpperCase())) out.push(r);
+  }
+  return out;
+}
+
+/** Lista de referências → o texto do campo ("a; b"), ou `null` sem nenhuma. Puro. */
+export function juntarRefs(l: (string | null | undefined)[]): string | null {
+  return listaRefs(l.filter(Boolean).join(SEPARADOR_REFS)).join(SEPARADOR_REFS) || null;
+}
+
+/** TODAS as referências de um tipo no texto (cada menção e cada item de uma lista). Numa lista, só entram
+ * os itens com o MESMO formato do 1º (com "/" = nº/ano) — "Nº 860/2025, 12 MESES" não vira o contrato "12". */
+function extrairRefs(s: string, re: RegExp): string[] {
+  const out: string[] = [];
+  for (const m of s.matchAll(re)) {
+    const itens = m[1].split(/\s*(?:,|;|\bE\b)\s*(?:N[º°O.]*\s*)?/i).map((x) => x.replace(/[.\-/]+$/, "").trim());
+    const comBarra = itens[0]?.includes("/");
+    itens.forEach((n, k) => {
+      if (!n || (k > 0 && (!comBarra || !n.includes("/")))) return; // separador solto / fora do formato
+      if (!out.includes(n)) out.push(n);
+    });
+  }
+  return out;
 }
 
 /**
- * Referências de RENOVAÇÃO (DFD-R) num texto: nº de **contrato**, **ata** (de registro de
- * preços) e **licitação** (pregão/concorrência/processo licitatório). Cada uma `null` se
- * não achar. Todo DFD-R deveria mencionar ao menos uma (senão vira AVISO, não bloqueia).
+ * Referências de RENOVAÇÃO (DFD-R) num texto: nº(s) de **contrato**, **ata** (de registro de
+ * preços) e **licitação** (pregão/concorrência/processo licitatório) — TODAS as mencionadas, juntas por
+ * "; " (`SEPARADOR_REFS`). Cada uma `null` se não achar. Todo DFD-R deveria mencionar ao menos uma
+ * (senão vira AVISO, não bloqueia).
  */
 export function referenciasRenovacao(texto: string | null | undefined): {
   contrato: string | null;
@@ -73,9 +107,9 @@ export function referenciasRenovacao(texto: string | null | undefined): {
 } {
   const s = String(texto ?? "");
   return {
-    contrato: extrairRef(s, RE_CONTRATO),
-    ata: extrairRef(s, RE_ATA),
-    licitacao: extrairRef(s, RE_LICITACAO),
+    contrato: juntarRefs(extrairRefs(s, RE_CONTRATO)),
+    ata: juntarRefs(extrairRefs(s, RE_ATA)),
+    licitacao: juntarRefs(extrairRefs(s, RE_LICITACAO)),
   };
 }
 

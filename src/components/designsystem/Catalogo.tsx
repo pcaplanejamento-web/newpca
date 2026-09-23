@@ -19,18 +19,21 @@ import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
-import { BarraSelecao, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
+import { BarraSelecao, BarraSelecaoDfds, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
+import { AvisoFlutuante } from "@/components/AvisoFlutuante";
+import { SeletorCelula } from "@/components/SeletorCelula";
+import { SeletorFiltro } from "@/components/SeletorFiltro";
 import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
-import { EstadoPonto, EstadoResumo } from "@/components/EstadoCelula";
+import { EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
 import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl } from "@/lib/format";
 import { EmConstrucao } from "@/components/EmConstrucao";
-import { Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
+import { CampoLista, Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
@@ -44,12 +47,14 @@ import {
   IconClipboard,
   IconClock,
   IconFile,
+  IconFilter,
   IconLayers,
   IconLock,
   IconMail,
   IconPlus,
   IconTrash,
   IconUpload,
+  IconUser,
   IconWallet,
 } from "@/components/icons";
 import { CadeadoBotao, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
@@ -58,7 +63,7 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
-import { Historico } from "@/components/Historico";
+import { type EscopoHistorico, Historico } from "@/components/Historico";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -67,7 +72,7 @@ import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
-import { Modal } from "@/components/Modal";
+import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -189,48 +194,323 @@ function CampoCadeadoDemo() {
   );
 }
 
-// Trilha de auditoria de exemplo p/ o Historico (edição com diff, importação, login).
+// Trilha de auditoria de exemplo p/ o Historico — o protocolo 144756/2026 (id 10) e o DFD 531 (id 87):
+// protocolação, reenvio, "Salvar alterações" no banner (capa + 2 DFDs = UM evento), situação pela tabela.
+const linhaDemo = (l: Partial<LinhaAuditoria> & Pick<LinhaAuditoria, "id" | "acao" | "entidade" | "criadoEm">): LinhaAuditoria => ({
+  usuarioId: 1,
+  usuarioNome: "Ana Souza",
+  usuarioEmail: "ana@rioverde.go.gov.br",
+  entidadeId: 10,
+  resumo: null,
+  antes: null,
+  depois: null,
+  origem: null,
+  detalhe: null,
+  protocoloId: 10,
+  protocoloNumero: "144756/2026",
+  ...l,
+});
+const ALVO_531 = { numero: "531", planejamento: "640" };
 const DEMO_HISTORICO: LinhaAuditoria[] = [
-  {
-    id: 3,
-    usuarioId: 1,
-    usuarioNome: "Ana Souza",
-    usuarioEmail: "ana@rioverde.go.gov.br",
+  linhaDemo({
+    id: 9,
+    usuarioId: 4,
+    usuarioNome: "Carlos Lima",
     acao: "editar",
-    entidade: "dfd_item",
+    entidade: "protocolo",
+    origem: "celula",
+    resumo: "Protocolo 144756/2026: Situação",
+    detalhe: JSON.stringify({ campos: [{ campo: "situacaoId", rotulo: "Situação", antes: "—", depois: "Em análise" }] }),
+    criadoEm: "2026-09-22 19:40:10",
+  }),
+  linhaDemo({
+    id: 8,
+    acao: "editar",
+    entidade: "protocolo",
+    origem: "banner",
+    resumo: "Protocolo 144756/2026: Assunto, Valor da capa",
+    detalhe: JSON.stringify({
+      campos: [
+        { campo: "assunto", rotulo: "Assunto", antes: "INCLUSÃO - PCA", depois: "INCLUSÃO - PCA 2027" },
+        { campo: "valorCapa", rotulo: "Valor da capa", antes: "R$ 0,00", depois: "R$ 1.237.037,01" },
+      ],
+    }),
+    criadoEm: "2026-09-22 18:02:31",
+  }),
+  linhaDemo({
+    id: 7,
+    acao: "editar",
+    entidade: "dfd",
     entidadeId: 87,
-    resumo: "Item 2: descrição e unidade alteradas",
-    antes: JSON.stringify({ Descrição: "GUINDASTE HIDRAULICO", Unidade: "UN" }),
-    depois: JSON.stringify({ Descrição: "GUINDASTE HIDRÁULICO AUTOPROPELIDO", Unidade: "DIAS" }),
-    criadoEm: "2026-09-17 11:24:03",
-  },
-  {
-    id: 2,
-    usuarioId: 1,
-    usuarioNome: "Ana Souza",
-    usuarioEmail: "ana@rioverde.go.gov.br",
+    origem: "banner",
+    resumo: "DFD 531: prioridade, 1 item",
+    detalhe: JSON.stringify({
+      alvo: ALVO_531,
+      secoes: [{ campo: "sec:prioridade", rotulo: "6 - GRAU DE PRIORIDADE", antes: "MEDIA", depois: "ALTA" }],
+      itens: [
+        {
+          tipo: "alterado",
+          item: 2,
+          codigo: "5241937264",
+          descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO (MODELO 2 – GRANDE PORTE), LANÇA 50 M",
+          campos: [
+            { campo: "quantidade", rotulo: "Quantidade", antes: "20", depois: "35" },
+            { campo: "valorTotal", rotulo: "Valor total", antes: "R$ 160.000,00", depois: "R$ 280.000,00" },
+          ],
+        },
+      ],
+    }),
+    criadoEm: "2026-09-22 18:02:29",
+  }),
+  linhaDemo({
+    id: 6,
+    acao: "editar",
+    entidade: "dfd",
+    entidadeId: 88,
+    origem: "banner",
+    resumo: "DFD 389: unidade",
+    detalhe: JSON.stringify({ alvo: { numero: "389", planejamento: "498" }, campos: [{ campo: "reparticao", rotulo: "Unidade", antes: "SMS", depois: "SMIR" }] }),
+    criadoEm: "2026-09-22 18:02:28",
+  }),
+  linhaDemo({
+    id: 5,
     acao: "importar",
     entidade: "dfd",
     entidadeId: 87,
-    resumo: "DFD 000123/2026 importado (12 itens)",
-    antes: null,
-    depois: null,
-    criadoEm: "2026-09-17 11:20:41",
-  },
-  {
+    origem: "reenvio",
+    resumo: "DFD 531 sobrescrito (reenvio do protocolo) — 2 diferença(s)",
+    detalhe: JSON.stringify({
+      alvo: ALVO_531,
+      secoes: [
+        {
+          campo: "sec:justificativa",
+          rotulo: "3 - JUSTIFICATIVA DA NECESSIDADE",
+          antes: "Locação de guindaste para as obras de drenagem da região norte do município, conforme cronograma da SMIR.",
+          depois:
+            "Locação de guindaste para as obras de drenagem da região norte do município, conforme cronograma da SMIR, incluídas as frentes de trabalho do distrito de Ouroana e a manutenção das galerias pluviais existentes.",
+        },
+      ],
+      itens: [{ tipo: "novo", item: 4, codigo: "5241937266", descricao: "CAMINHÃO MUNCK 12 T COM OPERADOR", campos: [] }],
+    }),
+    criadoEm: "2026-09-20 13:15:00",
+  }),
+  linhaDemo({
+    id: 4,
+    acao: "importar",
+    entidade: "protocolo",
+    origem: "reenvio",
+    resumo: "Protocolo 144756/2026 REENVIADO (sobrescrito): 1 alterado",
+    detalhe: JSON.stringify({ campos: [{ campo: "observacao", rotulo: "Observação", antes: "PCA 2027", depois: "PCA DO ANO DE 2027 — inclusão de itens" }] }),
+    criadoEm: "2026-09-20 13:14:58",
+  }),
+  linhaDemo({
+    id: 3,
+    acao: "importar",
+    entidade: "dfd",
+    entidadeId: 87,
+    origem: "protocolacao",
+    resumo: "DFD 531 importado — 3 itens",
+    depois: JSON.stringify({ numero: "531" }),
+    detalhe: JSON.stringify({ alvo: ALVO_531 }),
+    criadoEm: "2026-09-17 14:20:41",
+  }),
+  linhaDemo({
+    id: 2,
+    acao: "protocolar",
+    entidade: "protocolo",
+    origem: "protocolacao",
+    resumo: "Protocolo 144756/2026 protocolado",
+    criadoEm: "2026-09-17 14:20:39",
+  }),
+  linhaDemo({
     id: 1,
     usuarioId: 4,
     usuarioNome: "Carlos Lima",
-    usuarioEmail: "carlos@rioverde.go.gov.br",
     acao: "login",
     entidade: "sessao",
     entidadeId: null,
+    protocoloId: null,
+    protocoloNumero: null,
     resumo: "Entrou na plataforma",
-    antes: null,
-    depois: null,
-    criadoEm: "2026-09-17 08:03:12",
-  },
+    criadoEm: "2026-09-17 11:03:12",
+  }),
 ];
+
+/** Demo do Histórico nos 4 escopos (o MESMO componente no protocolo, no DFD, no item e na tela ADM). */
+function HistoricoDemo() {
+  const [escopo, setEscopo] = useState<EscopoHistorico>("protocolo");
+  const entradas =
+    escopo === "global"
+      ? DEMO_HISTORICO
+      : escopo === "protocolo"
+        ? DEMO_HISTORICO.filter((l) => l.protocoloId === 10)
+        : DEMO_HISTORICO.filter((l) => l.entidade === "dfd" && l.entidadeId === 87);
+  return (
+    <div className="space-y-3">
+      <Segmented<EscopoHistorico>
+        value={escopo}
+        onChange={setEscopo}
+        options={[
+          { value: "protocolo", label: "Protocolo" },
+          { value: "dfd", label: "DFD" },
+          { value: "item", label: "Item" },
+          { value: "global", label: "ADM (global)" },
+        ]}
+      />
+      <div className="max-w-2xl">
+        <Historico key={escopo} entradas={entradas} escopo={escopo} protocoloId={10} item={{ item: 2, codigo: "5241937264" }} />
+      </div>
+    </div>
+  );
+}
+
+/** Demo do aviso flutuante — PEQUENO, no canto inferior do display (não desloca nada ao redor). */
+function AvisoFlutuanteDemo() {
+  const [aviso, setAviso] = useState<"danger" | "warn" | "ok" | "carregando" | null>(null);
+  const fechar = () => setAviso(null);
+  return (
+    <>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="secondary" onClick={() => setAviso("danger")}>
+          Erro de importação
+        </Button>
+        <Button variant="secondary" onClick={() => setAviso("warn")}>
+          Atenção
+        </Button>
+        <Button variant="secondary" onClick={() => setAviso("ok")}>
+          Resultado
+        </Button>
+        <Button variant="secondary" onClick={() => setAviso("carregando")}>
+          Em andamento
+        </Button>
+      </div>
+      {aviso === "danger" && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível importar" onClose={fechar}>
+          Isto é um PROTOCOLO (vários DFDs) — importe pela aba Protocolos.
+        </AvisoFlutuante>
+      )}
+      {aviso === "warn" && (
+        <AvisoFlutuante kind="warn" titulo="DFD importado com atenção" onClose={fechar} duracao={8000}>
+          A unidade escolhida é diferente da unidade ativa.
+        </AvisoFlutuante>
+      )}
+      {aviso === "ok" && (
+        <AvisoFlutuante kind="ok" titulo="DFD 531 importado" onClose={fechar} duracao={8000}>
+          3 itens · R$ 412.345,67
+        </AvisoFlutuante>
+      )}
+      {aviso === "carregando" && (
+        <AvisoFlutuante kind="info" titulo="Lendo o PDF…" carregando onClose={fechar}>
+          Página 3 de 18
+        </AvisoFlutuante>
+      )}
+    </>
+  );
+}
+
+const PESSOAS_DEMO = [
+  { id: 1, nome: "Ana Souza" },
+  { id: 4, nome: "Carlos Lima" },
+  { id: 7, nome: "Thamires Rocha" },
+];
+const SITUACOES_DEMO = [
+  { id: 1, nome: "Recebido", cor: "#64748b" },
+  { id: 2, nome: "Em análise", cor: "#2563eb" },
+  { id: 3, nome: "Devolvido", cor: "#dc2626" },
+  { id: 4, nome: "Concluído", cor: "#16a34a" },
+];
+
+/** Demo dos filtros de HIERARQUIA (acima das tabelas da Mesa) e do dropdown DENTRO da célula. */
+function SeletoresDemo() {
+  const [resp, setResp] = useState("todos");
+  const [assunto, setAssunto] = useState("todos");
+  const [situacao, setSituacao] = useState<number | null>(2);
+  const [pessoa, setPessoa] = useState<number | null>(null);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <SeletorFiltro
+          icone={<IconUser className="h-4 w-4" />}
+          rotulo="Responsável"
+          valor={resp}
+          onChange={setResp}
+          ativo={resp !== "todos"}
+          opcoes={[{ valor: "todos", rotulo: "Todos" }, { valor: "sem", rotulo: "Sem responsável" }, ...PESSOAS_DEMO.map((p) => ({ valor: String(p.id), rotulo: p.nome }))]}
+        />
+        <SeletorFiltro
+          icone={<IconFilter className="h-4 w-4" />}
+          rotulo="Assunto"
+          valor={assunto}
+          onChange={setAssunto}
+          ativo={assunto !== "todos"}
+          opcoes={[
+            { valor: "todos", rotulo: "Todos" },
+            { valor: "INCLUSÃO - PCA 2027", rotulo: "INCLUSÃO - PCA 2027" },
+            { valor: "EXCLUSÃO - PCA 2027", rotulo: "EXCLUSÃO - PCA 2027" },
+            { valor: "", rotulo: "Sem assunto" },
+          ]}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-card border border-border p-2">
+        <SeletorCelula ariaLabel="Situação do protocolo" valor={situacao} opcoes={SITUACOES_DEMO} onChange={setSituacao} vazio="Sem situação" />
+        <SeletorCelula ariaLabel="Responsável pelo protocolo" valor={pessoa} opcoes={PESSOAS_DEMO} onChange={setPessoa} vazio="Sem responsável" />
+        <SeletorCelula ariaLabel="Responsável (salvando)" valor={4} opcoes={PESSOAS_DEMO} onChange={() => undefined} salvando />
+        <SeletorCelula ariaLabel="Situação (sem permissão)" valor={4} opcoes={SITUACOES_DEMO} />
+      </div>
+      <p className="text-[12px] text-faint">
+        As situações são cadastradas pelo ADM em Configurações → Situações (nome + cor + ordem); o responsável padrão
+        de quem protocola é escolhido no Perfil.
+      </p>
+    </div>
+  );
+}
+
+/** Demo do campo de LISTA (chips) — várias referências da renovação (contratos/ARPs/licitações). */
+function CampoListaDemo() {
+  const [refs, setRefs] = useState<string[]>(["045/2025", "112/2025"]);
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <CampoLista label="Nº do contrato" valores={refs} onChange={setRefs} placeholder="Digite e tecle Enter" />
+      <CampoLista label="Nº da ARP (só leitura)" valores={["007/2025"]} onChange={() => undefined} disabled />
+    </div>
+  );
+}
+
+/** Demo: "selecionar todos" marca TODAS as linhas filtradas (não só a página) + coluna TRAVADA pelo
+ * filtro de hierarquia (o seletor acima manda na coluna). */
+function TabelaHierarquiaDemo() {
+  const [natureza, setNatureza] = useState("todos");
+  const [sel, setSel] = useState<Set<string | number>>(new Set());
+  const linhas = natureza === "todos" ? PROTOS : PROTOS.filter((p) => p.natureza === natureza);
+  const colunas = COLUNAS.map((c) =>
+    c.key === "natureza" && natureza !== "todos" ? { ...c, travado: `Travada pelo filtro "Natureza: ${natureza}" (acima da tabela)` } : c,
+  );
+  return (
+    <div className="space-y-3">
+      <SeletorFiltro
+        icone={<IconFilter className="h-4 w-4" />}
+        rotulo="Natureza"
+        valor={natureza}
+        onChange={(v) => {
+          setNatureza(v);
+          setSel(new Set());
+        }}
+        ativo={natureza !== "todos"}
+        opcoes={[{ valor: "todos", rotulo: "Todas" }, ...[...new Set(PROTOS.map((p) => p.natureza))].map((n) => ({ valor: n, rotulo: n }))]}
+      />
+      <DataTable
+        columns={colunas}
+        rows={linhas}
+        getKey={(r) => r.id}
+        selectable
+        selected={sel}
+        onSelected={setSel}
+        pageSize={3}
+        footer={`${sel.size} de ${linhas.length} selecionada(s) — o "selecionar todos" marca todas as filtradas, não só a página`}
+      />
+    </div>
+  );
+}
 
 /** Demo do seletor de tipos de DFD (conjunto, controlado). */
 function TipoDfdPickerDemo() {
@@ -696,7 +976,7 @@ export function Catalogo() {
   const [incluirAtencaoDemo, setIncluirAtencaoDemo] = useState(true);
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
-  const [pilhaDemo, setPilhaDemo] = useState<number>(0); // banners empilhados à direita (0, 1 ou 2)
+  const [pilhaDemo, setPilhaDemo] = useState<number>(0); // 0 fechado · 1 item · 2 DFD | item · 3 protocolo | DFD | item
   const [faixaDemo, setFaixaDemo] = useState<{ min?: number; max?: number } | null>(null);
   const [selDemo, setSelDemo] = useState<RegistroSelecao[]>([
     { key: 1, rotulo: "DFD 531" },
@@ -996,7 +1276,12 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Banners flutuantes (Toast)">
+      <Secao titulo="Avisos flutuantes (AvisoFlutuante + Toast) — pequenos, no canto inferior, sem deformar a tela">
+        <AvisoFlutuanteDemo />
+        <p className="my-3 text-[12px] text-faint">
+          O MESMO componente é usado pelo toast (abaixo), pelos erros/resultados de importação e pelas falhas das ações
+          — sobe acima da navegação inferior do celular e da barra de seleção fixa.
+        </p>
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={() => toast.success("Configuração salva com sucesso.")}>Sucesso</Button>
           <Button variant="secondary" onClick={() => toast.info("Isto é um aviso informativo.")}>Info</Button>
@@ -1181,7 +1466,7 @@ export function Catalogo() {
             Abrir modal com painel lateral
           </Button>
           <Button variant="secondary" onClick={() => setPilhaDemo(1)}>
-            Abrir pilha de banners (item → DFD → protocolo)
+            Abrir pilha de banners (Protocolo | DFD | Item)
           </Button>
           <Pager page={pag} pages={8} onChange={setPag} />
         </div>
@@ -1237,7 +1522,8 @@ export function Catalogo() {
           </div>
         </Modal>
 
-        {/* Pilha de banners (`paineis`): cada "Ver …" ENTRA PELA DIREITA — ex.: Item → DFD → Protocolo. */}
+        {/* Pilha de banners em ORDEM FIXA — Protocolo | DFD | Item —, qualquer que seja o banner de entrada: a
+            partir do ITEM, "Ver DFD"/"Ver protocolo" surgem à ESQUERDA dele (`esquerda`), cada um no seu lugar. */}
         <Modal
           open={pilhaDemo > 0}
           onClose={() => setPilhaDemo(0)}
@@ -1251,8 +1537,9 @@ export function Catalogo() {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  setPilhaDemo(2);
-                  window.setTimeout(() => setPilhaDemo(3), 250);
+                  if (pilhaDemo >= 2) return setPilhaDemo(3);
+                  setPilhaDemo(2); // o DFD entra primeiro; o protocolo, em seguida (à esquerda dele)
+                  window.setTimeout(() => setPilhaDemo((n) => (n === 2 ? 3 : n)), duracaoMotionMs());
                 }}
                 disabled={pilhaDemo >= 3}
               >
@@ -1260,26 +1547,29 @@ export function Catalogo() {
               </Button>
             </div>
           }
-          paineis={[
-            {
-              id: "dfd",
-              aberto: pilhaDemo >= 2,
-              largura: 52,
-              titulo: "DFD 531",
-              onClose: () => setPilhaDemo(1),
-              children: <p className="text-[13px] text-text-2">O DFD entrou pela direita; o item seguiu à esquerda.</p>,
-            },
+          esquerda={[
             {
               id: "protocolo",
               aberto: pilhaDemo >= 3,
               largura: 50,
               titulo: "Protocolo 144756/2026",
               onClose: () => setPilhaDemo(2),
-              children: <p className="text-[13px] text-text-2">E o protocolo em seguida — X fecha da direita para a esquerda.</p>,
+              children: <p className="text-[13px] text-text-2">O protocolo surge à ESQUERDA do DFD — sempre Protocolo | DFD | Item.</p>,
+            },
+            {
+              id: "dfd",
+              aberto: pilhaDemo >= 2,
+              largura: 52,
+              titulo: "DFD 531",
+              onClose: () => setPilhaDemo(1),
+              children: <p className="text-[13px] text-text-2">O DFD surgiu à esquerda do item (a coluna dele) — a ordem não muda.</p>,
             },
           ]}
         >
-          <p className="text-[13px] text-text-2">Banner SÓ do item (linha da visão Itens). "Ver DFD" / "Ver protocolo" empilham à direita.</p>
+          <p className="text-[13px] text-text-2">
+            Banner do ITEM (linha da visão Itens) — a coluna da direita. "Ver DFD" / "Ver protocolo" surgem à esquerda; no
+            celular, um banner por vez (o último aberto); X/Esc fecham o último aberto.
+          </p>
         </Modal>
       </Secao>
 
@@ -1381,7 +1671,21 @@ export function Catalogo() {
           />
           <EstadoPonto cor="var(--ok)" rotulo="Regular" />
           <EstadoPonto cor="var(--danger)" rotulo="Leitura incompleta" title="Item sem número no PDF" />
+          <EstadoProcessando rotulo="Conferindo…" />
+          <EstadoProcessando rotulo="Na fila" fila />
         </div>
+      </Secao>
+
+      <Secao titulo="Seletores — filtro de HIERARQUIA (acima das tabelas) e dropdown DENTRO da célula (Situação · Responsável)">
+        <SeletoresDemo />
+      </Secao>
+
+      <Secao titulo="Tabela — selecionar TODAS as linhas filtradas + coluna travada pelo filtro de hierarquia">
+        <TabelaHierarquiaDemo />
+      </Secao>
+
+      <Secao titulo="CampoLista (lista em chips — várias referências da renovação por DFD)">
+        <CampoListaDemo />
       </Secao>
 
       <Secao titulo="BarraSelecao + editores de massa (registro das seleções, somatório R$ e edição — DFDs · Protocolos · Itens)">
@@ -1410,13 +1714,19 @@ export function Catalogo() {
             Refazer a seleção (demo)
           </Button>
         ) : (
-          <BarraSelecao
-            registros={selDemo}
-            onRemover={(k) => setSelDemo((l) => l.filter((r) => r.key !== k))}
-            onLimpar={() => setSelDemo([])}
-            resumo={<ResumoSelecao qtd={selDemo.length} singular="DFD" plural="DFDs" soma={selDemo.length * 412_345.67} extra={`${selDemo.length * 37} itens`} />}
-          >
-            {editorDemo === "dfds" ? (
+          editorDemo === "dfds" ? (
+            // Planilha de DFDs: chips + Σ + "Copiar planejamentos" ("1525:1549:1554").
+            <BarraSelecaoDfds
+              dfds={selDemo.map((r, i) => ({
+                key: r.key,
+                numero: r.rotulo.replace(/^DFD /, ""),
+                planejamento: ["1525", "1549", "1554"][i % 3],
+                valor: 412_345.67,
+                itens: 37,
+              }))}
+              onRemover={(k) => setSelDemo((l) => l.filter((r) => r.key !== k))}
+              onLimpar={() => setSelDemo([])}
+            >
               <BarraEdicaoMassa
                 reparticoes={[
                   { id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" },
@@ -1425,15 +1735,26 @@ export function Catalogo() {
                 anoPadrao={2027}
                 onAplicar={(a) => toast(`Aplicar: ${a.campo}`)}
               />
-            ) : editorDemo === "protocolos" ? (
-              <BarraEdicaoMassaProtocolos
-                reparticoes={[{ id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" }]}
-                onAplicar={(a) => toast(`Aplicar nos protocolos: ${a.campo}`)}
-              />
-            ) : (
-              <BarraEdicaoMassaItens onAplicar={(a) => toast(`Aplicar nos itens: ${a.campo}`)} />
-            )}
-          </BarraSelecao>
+            </BarraSelecaoDfds>
+          ) : (
+            <BarraSelecao
+              registros={selDemo}
+              onRemover={(k) => setSelDemo((l) => l.filter((r) => r.key !== k))}
+              onLimpar={() => setSelDemo([])}
+              resumo={<ResumoSelecao qtd={selDemo.length} singular="DFD" plural="DFDs" soma={selDemo.length * 412_345.67} extra={`${selDemo.length * 37} itens`} />}
+            >
+              {editorDemo === "protocolos" ? (
+                <BarraEdicaoMassaProtocolos
+                  reparticoes={[{ id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" }]}
+                  pessoas={PESSOAS_DEMO}
+                  situacoes={SITUACOES_DEMO}
+                  onAplicar={(a) => toast(`Aplicar nos protocolos: ${a.campo}`)}
+                />
+              ) : (
+                <BarraEdicaoMassaItens onAplicar={(a) => toast(`Aplicar nos itens: ${a.campo}`)} />
+              )}
+            </BarraSelecao>
+          )
         )}
         <p className="mt-2 text-[12px] text-faint">
           Na Mesa a barra é <span className="font-mono">fixa</span> no rodapé do display (acima da navegação inferior no
@@ -1608,10 +1929,8 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Histórico (trilha de auditoria — quem alterou, o que mudou de→para, quando; diff expansível)">
-        <div className="max-w-md">
-          <Historico entradas={DEMO_HISTORICO} />
-        </div>
+      <Secao titulo="Histórico (quem, quando, por qual canal e protocolo, o que mudou antes → depois — protocolo · DFD · item · ADM)">
+        <HistoricoDemo />
       </Secao>
 
       <Secao titulo="DFD — visualização do documento importado">

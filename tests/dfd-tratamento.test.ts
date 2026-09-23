@@ -10,8 +10,9 @@ import {
   dfdRSemReferencia,
   editarItemDfd,
   estadoDfd,
+  ESTADO_PROTOCOLO_ROTULO,
   estadoItem,
-  estadoProtocolo,
+  estadoProtocoloCor,
   faltasCirurgicasDfd,
   faltasDoItem,
   itemComErro,
@@ -20,7 +21,7 @@ import {
   mensagensDfd,
   normalizarSecoesDfd,
   situacaoSecao,
-  situacaoProtocolo,
+  textoPlanejamentos,
   veredictoLinhaCatalogo,
 } from "../src/lib/dfd-tratamento.ts";
 import { tipoCurtoDfd } from "../src/lib/parse-dfd-comum.ts";
@@ -67,19 +68,12 @@ describe("estado por item", () => {
   });
 });
 
-describe("estado/situação do protocolo", () => {
-  it("regular quando a capa bate com a somatória", () => {
-    assert.equal(estadoProtocolo({ valorCapa: 1000, valorTotal: 1000, totalDfds: 3 }), "regular");
-  });
-  it("atenção quando a capa está zerada ou diverge", () => {
-    assert.equal(estadoProtocolo({ valorCapa: 0, valorTotal: 1000, totalDfds: 3 }), "atencao");
-    assert.equal(estadoProtocolo({ valorCapa: null, valorTotal: 1000, totalDfds: 3 }), "atencao");
-    assert.equal(estadoProtocolo({ valorCapa: 900, valorTotal: 1000, totalDfds: 3 }), "atencao");
-  });
-  it("sem DFDs → regular (nada a conferir) e situação Vazio", () => {
-    assert.equal(estadoProtocolo({ valorCapa: null, valorTotal: 0, totalDfds: 0 }), "regular");
-    assert.equal(situacaoProtocolo({ totalDfds: 0 }), "vazio");
-    assert.equal(situacaoProtocolo({ totalDfds: 2 }), "preenchido");
+describe("estado do protocolo — rótulo e cor", () => {
+  it("três estados (a situação é de gestão, cadastrada pelo ADM)", () => {
+    assert.deepEqual(ESTADO_PROTOCOLO_ROTULO, { erro: "Com erro", atencao: "Atenção", regular: "Regular" });
+    assert.equal(estadoProtocoloCor("erro"), "var(--danger)");
+    assert.equal(estadoProtocoloCor("atencao"), "var(--warn)");
+    assert.equal(estadoProtocoloCor("regular"), "var(--ok)");
   });
 });
 
@@ -396,5 +390,17 @@ describe("normalizarSecoesDfd — seção trocada (fundamentação = prioridade)
     ];
     const { dfd } = normalizarSecoesDfd({ ...base, secoes });
     assert.equal(situacaoSecao(dfd.secoes, "FUNDAMENTACAO LEGAL"), "invalida");
+  });
+});
+
+describe("textoPlanejamentos (copiar os planejamentos selecionados)", () => {
+  it("separa por ':' sem espaço nenhum, na ordem recebida", () => {
+    assert.equal(textoPlanejamentos(["1525", "1549", "1554"]), "1525:1549:1554");
+  });
+  it("ignora vazios/traço, tira espaços internos e não repete", () => {
+    assert.equal(textoPlanejamentos([" 1525 ", null, "", "—", "15 49", "1525", undefined, "1554"]), "1525:1549:1554");
+  });
+  it("sem planejamento ⇒ vazio (nada a copiar)", () => {
+    assert.equal(textoPlanejamentos([null, "", "  "]), "");
   });
 });

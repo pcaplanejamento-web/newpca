@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconClose } from "./icons";
+import type { Feedback } from "@/lib/semantic";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 
-// Banner flutuante (toast) — componente do design system. API imperativa:
-// `toast.success("Salvo")`. Monte <Toaster/> uma vez (no RootLayout). Por token,
-// com sombra suave; respeita --motion via .animate-fade-in-up.
+// Toast — API imperativa (`toast.success("Salvo")`) sobre o AVISO FLUTUANTE padrão (canto inferior,
+// pequeno, sem deformar o layout). Monte <Toaster/> uma vez (no RootLayout).
 type Variant = "info" | "success" | "warning" | "danger";
 type ToastItem = { id: number; msg: string; variant: Variant; duration: number };
 
@@ -27,63 +27,30 @@ export const toast = Object.assign(
   },
 );
 
-const COR: Record<Variant, string> = {
-  info: "var(--accent)",
-  success: "var(--sit-finalizado)",
-  warning: "var(--sit-em-analise)",
-  danger: "var(--sit-cancelado)",
-};
+/** Variante do toast → feedback do `AvisoFlutuante` (o MESMO componente dos avisos flutuantes). */
+const KIND: Record<Variant, Feedback> = { info: "info", success: "ok", warning: "warn", danger: "danger" };
 
 export function Toaster() {
-  // Um único banner por vez: um toast novo SUBSTITUI o anterior (nunca empilha).
+  // Um único toast por vez: um toast novo SUBSTITUI o anterior (nunca empilha).
   const [item, setItem] = useState<ToastItem | null>(null);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const l = (t: ToastItem) => {
-      setItem(t);
-      if (timer) clearTimeout(timer);
-      if (t.duration > 0) {
-        timer = setTimeout(() => setItem((cur) => (cur?.id === t.id ? null : cur)), t.duration);
-      }
-    };
+    const l = (t: ToastItem) => setItem(t);
     listeners.push(l);
     return () => {
       listeners = listeners.filter((x) => x !== l);
-      if (timer) clearTimeout(timer);
     };
   }, []);
 
   if (!item) return null;
-
   return (
-    <div
-      aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center p-4 sm:justify-end"
+    <AvisoFlutuante
+      key={item.id}
+      kind={KIND[item.variant]}
+      duracao={item.duration > 0 ? item.duration : undefined}
+      onClose={() => setItem((cur) => (cur?.id === item.id ? null : cur))}
     >
-      <div
-        key={item.id}
-        role="status"
-        className="animate-fade-in-up pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-card border border-border bg-surface p-3 shadow-soft"
-      >
-        <span
-          aria-hidden
-          className="mt-1 h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: COR[item.variant],
-            boxShadow: `0 0 0 3px color-mix(in srgb, ${COR[item.variant]} 16%, var(--glow-target))`,
-          }}
-        />
-        <p className="min-w-0 flex-1 text-[13px] text-text">{item.msg}</p>
-        <button
-          type="button"
-          aria-label="Fechar"
-          onClick={() => setItem(null)}
-          className="shrink-0 rounded-md p-0.5 text-faint transition-colors hover:bg-surface-2 hover:text-text-2"
-        >
-          <IconClose className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
+      <span className="text-text">{item.msg}</span>
+    </AvisoFlutuante>
   );
 }

@@ -15,8 +15,11 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
 - **Mesa (Protocolos · DFDs · Itens)**: importa protocolos/DFDs em PDF (lidos no navegador, com OCR das
   assinaturas achatadas), confere cada DFD pelas regras do ADM e permite **filtros conectados** em todas as
   colunas (inclusive faixa de valores R$), **seleção com somatório e edição em massa** (barra fixa no rodapé),
-  banners empilhados (item → DFD → protocolo) e o **reenvio do mesmo protocolo** com comparação campo a campo
-  (capa, DFDs e itens) antes de sobrescrever — só o que mudou é regravado.
+  banners em ordem fixa (Protocolo | DFD | Item) e o **reenvio do mesmo protocolo** com comparação campo a campo
+  (capa, DFDs e itens) antes de sobrescrever — só o que mudou é regravado. Cada protocolo tem **Responsável**,
+  **Distribuição** e **Situação** (cadastradas pelo ADM), **estado agregado** (capa + todos os DFDs e itens) e
+  **histórico conectado** (quem, quando, por qual canal e protocolo, o que mudou — no protocolo, no DFD e no item);
+  filtros de hierarquia (Responsável e Assunto) valem para as três visões.
 
 ## Stack
 

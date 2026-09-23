@@ -1,15 +1,17 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
+import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
-import { appendDfdItens, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
+import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
+import { appendDfdItens, type DfdDetalhe, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
-import { dfdOpSchema, faltasObrigatorias } from "@/lib/dfd-validation";
+import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
-import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
@@ -128,14 +130,84 @@ export async function POST(req: Request) {
   // (sobrescrita/reenvio do DFD) mantém o carimbo original.
   const assinaturas = carimbarValidacao(d.assinaturas, existente?.assinaturas ?? [], a.u.nome, new Date().toISOString());
   const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
+  // Histórico: o DFD que JÁ existia (sobrescrita por protocolação/reenvio) é comparado com o novo — a
+  // MESMA régua da comparação do reenvio (cabeçalho, seções, assinaturas e itens).
+  const antigo = existente ? await getDfd(existente.id) : null;
   const r = await upsertDfdCabecalho({ ...d, assinaturas }, a.u.id, d.rows);
+  const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
+  const alvo = { numero: r.numero, planejamento: d.planejamento ?? null };
+  const qtd = `${d.totalItens ?? d.rows.length} ${(d.totalItens ?? d.rows.length) === 1 ? "item" : "itens"}`;
+  let detalhe: DetalheAuditoria = { alvo };
+  let resumo = `DFD ${r.numero} importado — ${qtd}`;
+  if (antigo) {
+    const c = compararDfd(antigo, comparavelDoPayload(d, assinaturas, antigo), await rotulosUnidades([antigo.reparticaoId, d.reparticaoId]));
+    const obs: string[] = [];
+    // Itens em VÁRIOS lotes: só o 1º lote chega aqui — o detalhe por item não é registrado.
+    if (d.rows.length < (d.totalItens ?? d.rows.length)) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
+    const movido = antigo.protocoloId != null && antigo.protocoloId !== (d.protocoloId ?? null);
+    if (movido) obs.push(`Movido do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`}.`);
+    detalhe = { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs };
+    resumo = `DFD ${r.numero} sobrescrito (${ROTULO_ORIGEM[origem].toLowerCase()}) — ${c.total === 0 ? "sem diferenças" : `${c.total} diferença(s)`}`;
+    // O protocolo de ONDE o DFD saiu também registra a saída (histórico conectado de cada protocolo).
+    if (movido)
+      await registrarAuditoria({
+        usuario: a.u,
+        acao: "editar",
+        entidade: "dfd",
+        entidadeId: r.id,
+        resumo: `DFD ${r.numero} saiu deste protocolo (movido pela ${ROTULO_ORIGEM[origem].toLowerCase()} de outro protocolo)`,
+        protocoloId: antigo.protocoloId,
+        origem,
+        detalhe: { alvo, obs: ["Movido para outro protocolo."] },
+      });
+  }
   await registrarAuditoria({
     usuario: a.u,
     acao: "importar",
     entidade: "dfd",
     entidadeId: r.id,
-    resumo: `DFD ${r.numero} importado — ${d.rows.length} ${d.rows.length === 1 ? "item" : "itens"}${validadaEquipe ? " · assinatura validada pela equipe" : ""}`,
-    depois: { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
+    resumo: `${resumo}${validadaEquipe ? " · assinatura validada pela equipe" : ""}`,
+    depois: antigo ? null : { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
+    protocoloId: d.protocoloId ?? null,
+    origem,
+    detalhe,
   });
   return ok({ dfdId: r.id, numero: r.numero });
+}
+
+/** O DFD recebido no `start-dfd` na forma comparável. Os itens só entram quando vieram TODOS no 1º lote
+ * (senão ficam os gravados — sem diferença de item inventada). */
+function comparavelDoPayload(d: StartDfdPayload, assinaturas: Assinatura[], antigo: DfdDetalhe): DfdComparavel {
+  const completo = d.rows.length >= (d.totalItens ?? d.rows.length);
+  return {
+    numero: d.numero,
+    planejamento: d.planejamento ?? null,
+    tipo: d.tipo ?? null,
+    objeto: d.objeto ?? null,
+    orgaoEntidade: d.orgaoEntidade ?? null,
+    setorRequisitante: d.setorRequisitante ?? null,
+    responsavel: d.responsavel ?? null,
+    matricula: d.matricula ?? null,
+    email: d.email ?? null,
+    telefone: d.telefone ?? null,
+    numeroContrato: d.numeroContrato ?? null,
+    numeroAta: d.numeroAta ?? null,
+    numeroLicitacao: d.numeroLicitacao ?? null,
+    anoPca: d.anoPca ?? null,
+    reparticaoId: d.reparticaoId ?? null,
+    valorTotal: d.valorTotal ?? null,
+    secoes: d.secoes,
+    assinaturas,
+    itens: completo
+      ? d.rows.map((it) => ({
+          item: it.item ?? null,
+          codigo: it.codigo ?? null,
+          descricao: it.descricao ?? null,
+          unidade: it.unidade ?? null,
+          quantidade: it.quantidade ?? null,
+          valorUnitario: it.valorUnitario ?? null,
+          valorTotal: it.valorTotal ?? null,
+        }))
+      : antigo.itens,
+  };
 }

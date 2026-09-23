@@ -5,6 +5,7 @@ import { aplicarPlanoItens, dfdsParaMassa, itensParaMassa } from "@/lib/dfd";
 import { MASSA_ITENS_MAX_DFDS, massaItensSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { type DiffItemDfd, diffItem } from "@/lib/comparar-protocolo";
 import { descreverAcaoItem, type ItemMassa, type PlanoMassaItens, planejarMassaItens } from "@/lib/massa-itens";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
@@ -57,15 +58,16 @@ export async function POST(req: Request) {
     try {
       await aplicarPlanoItens(d.id, plano);
       alterados += n;
-      const { antes, depois } = diffAuditoria(sel, plano);
+      const itensAlterados = diffItensMassa(sel, plano);
       await registrarAuditoria({
         usuario: a.u,
         acao: acao.campo === "remover" ? "excluir" : "editar",
         entidade: "dfd",
         entidadeId: d.id,
-        resumo: `DFD ${d.numero}: ${n} item(ns) ${descreverAcaoItem(acao)} em massa (itens ${antes.itens.map((x) => x.item ?? "?").join(", ")})`.slice(0, 500),
-        antes,
-        depois,
+        resumo: `DFD ${d.numero}: ${n} item(ns) ${descreverAcaoItem(acao)} em massa (itens ${itensAlterados.map((x) => x.item ?? "?").join(", ")})`.slice(0, 500),
+        protocoloId: d.protocoloId,
+        origem: "massa",
+        detalhe: { alvo: { numero: d.numero, planejamento: d.planejamento }, itens: itensAlterados },
       });
     } catch (e) {
       falhas.push({ dfd: d.numero, item: null, motivo: e instanceof Error ? e.message : "falha ao gravar" });
@@ -74,21 +76,18 @@ export async function POST(req: Request) {
   return ok({ alterados, falhas });
 }
 
-/** Auditoria da massa: o ANTES (campos alterados / o item removido inteiro) e o DEPOIS de cada item. */
-function diffAuditoria(sel: ItemMassa[], plano: PlanoMassaItens) {
+/** Histórico da massa: cada item alterado (campo a campo, a MESMA régua do reenvio) ou removido. */
+function diffItensMassa(sel: ItemMassa[], plano: PlanoMassaItens): DiffItemDfd[] {
   const porId = new Map(sel.map((it) => [it.id, it]));
-  const antes: { itens: Record<string, unknown>[] } = { itens: [] };
-  const depois: { itens: Record<string, unknown>[] } = { itens: [] };
+  const out: DiffItemDfd[] = [];
   for (const { id, patch } of plano.atualizar) {
     const it = porId.get(id);
-    const campos = Object.keys(patch) as (keyof typeof patch)[];
-    antes.itens.push({ item: it?.item ?? null, codigo: it?.codigo ?? null, ...Object.fromEntries(campos.map((c) => [c, it?.[c] ?? null])) });
-    depois.itens.push({ item: it?.item ?? null, codigo: it?.codigo ?? null, ...patch });
+    if (!it) continue;
+    out.push({ tipo: "alterado", item: it.item, codigo: it.codigo, descricao: it.descricao, campos: diffItem(it, { ...it, ...patch }) });
   }
   for (const id of plano.remover) {
-    const { id: _id, ...it } = porId.get(id) ?? { id, item: null };
-    antes.itens.push(it);
-    depois.itens.push({ item: it.item ?? null, removido: true });
+    const it = porId.get(id);
+    if (it) out.push({ tipo: "removido", item: it.item, codigo: it.codigo, descricao: it.descricao, campos: [] });
   }
-  return { antes, depois };
+  return out;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { anoPcaDoTexto, extrairRefsDfd, referenciasRenovacao } from "../src/lib/parse-dfd-comum.ts";
+import { anoPcaDoTexto, extrairRefsDfd, juntarRefs, listaRefs, referenciasRenovacao } from "../src/lib/parse-dfd-comum.ts";
 
 describe("anoPcaDoTexto (ano do PCA)", () => {
   it("acha o ano em várias escritas", () => {
@@ -48,5 +48,29 @@ describe("referenciasRenovacao (DFD-R: contrato/ata/licitação)", () => {
     assert.equal(r.numeroContrato, "860/2025");
     assert.equal(r.anoPca, 2027);
     assert.equal(r.numeroAta, null);
+  });
+});
+
+describe("VÁRIAS referências por DFD-R (contratos/ARPs/licitações)", () => {
+  it("todas as menções e os itens de uma lista, juntos por '; '", () => {
+    assert.equal(referenciasRenovacao("RENOVAÇÃO DOS CONTRATOS Nº 860/2025, 861/2025 E Nº 3/2026 (LOTES 1 A 3)").contrato, "860/2025; 861/2025; 3/2026");
+    const r = referenciasRenovacao("CONTRATO Nº 10/2024 e também o CONTRATO Nº 11/2024 e a ATA DE REGISTRO DE PREÇOS Nº 12/2025; ARP nº 99/2024");
+    assert.equal(r.contrato, "10/2024; 11/2024");
+    assert.equal(r.ata, "12/2025; 99/2024");
+    assert.equal(referenciasRenovacao("PREGÕES ELETRÔNICOS Nº 55/2024 E 56/2024 e CONCORRÊNCIA 7/2023").licitacao, "55/2024; 56/2024; 7/2023");
+  });
+  it("não confunde números de outro formato na lista (ex.: prazo) com referência", () => {
+    assert.equal(referenciasRenovacao("CONTRATO Nº 860/2025, 12 MESES DE VIGÊNCIA").contrato, "860/2025");
+    assert.equal(referenciasRenovacao("CONTRATO 45 VIGENTE, 30 DIAS").contrato, "45");
+  });
+  it("mesma referência citada duas vezes entra uma vez", () => {
+    assert.equal(referenciasRenovacao("CONTRATO Nº 860/2025 ... conforme o CONTRATO 860/2025").contrato, "860/2025");
+  });
+  it("listaRefs/juntarRefs: lista ⇄ texto do campo, sem vazios nem repetidos", () => {
+    assert.deepEqual(listaRefs("860/2025; 861/2025, 860/2025 ;  ; 3/2026"), ["860/2025", "861/2025", "3/2026"]);
+    assert.deepEqual(listaRefs(null), []);
+    assert.equal(juntarRefs(["860/2025", null, " 861/2025 ", "860/2025"]), "860/2025; 861/2025");
+    assert.equal(juntarRefs([]), null);
+    assert.equal(juntarRefs(["", "  "]), null);
   });
 });

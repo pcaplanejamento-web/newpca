@@ -19,14 +19,14 @@ import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
+import { IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
@@ -154,6 +154,7 @@ export function DfdUploadForm({
           nomeArquivo: preview.nomeArquivo,
           secoes: preview.secoes,
           assinaturas: preview.assinaturas,
+          origem: "avulso",
         },
         preview.itens,
         (enviados, total) => setProgresso(Math.round((enviados / total) * 100)),
@@ -202,7 +203,7 @@ export function DfdUploadForm({
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
-    <div className="space-y-4">
+    <div>
       {/* Botão único de importação (à direita) — abre o lançador */}
       <div className="flex justify-end">
         <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
@@ -224,56 +225,29 @@ export function DfdUploadForm({
         />
       </Modal>
 
+      {/* Feedback da importação — AVISO FLUTUANTE (canto inferior): não deforma a linha do "Importar". */}
       {erro && status === "error" && (
-        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Não foi possível importar</p>
-          <p className="opacity-90">{erro}</p>
-        </Callout>
+        <AvisoFlutuante kind="danger" titulo="Não foi possível importar" onClose={reset}>
+          {erro}
+        </AvisoFlutuante>
       )}
-
-      {status === "parsing" && (
-        <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />} className="mt-4">
-          Lendo o DFD...
-        </Callout>
-      )}
-
-      {/* Sucesso */}
+      {status === "parsing" && <AvisoFlutuante kind="info" carregando titulo="Lendo o DFD…" />}
       {status === "done" && resultado && (
-        <div
-          className="animate-fade-in-up mt-4 rounded-card border p-6"
-          style={{
-            borderColor: "color-mix(in srgb, var(--ok) 30%, transparent)",
-            background: "color-mix(in srgb, var(--ok) 8%, var(--surface))",
-          }}
+        <AvisoFlutuante
+          kind={resultado.foraDoHead ? "warn" : "ok"}
+          titulo={`DFD ${resultado.numero} importado!`}
+          onClose={reset}
+          duracao={resultado.foraDoHead ? undefined : 8000}
         >
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white"
-              style={{ background: "var(--ok)" }}
-            >
-              <IconCheck className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="font-bold" style={{ color: "var(--ok)" }}>
-                DFD {resultado.numero} importado!
-              </h3>
-              <p className="text-sm text-muted">
-                {num(resultado.itens)} itens{resultado.repNome ? ` · Unidade ${resultado.repNome}` : ""}
-              </p>
-            </div>
-          </div>
+          {num(resultado.itens)} itens{resultado.repNome ? ` · Unidade ${resultado.repNome}` : ""}.
           {resultado.foraDoHead && (
-            <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-              Este DFD foi salvo na unidade <strong>{resultado.repNome}</strong>, diferente da ativa
-              no cabeçalho. Selecione essa unidade (ou "Geral") no topo para vê-lo na lista.
-            </Callout>
+            <>
+              {" "}
+              Salvo numa unidade diferente da ativa no cabeçalho — selecione {resultado.repNome} (ou "Geral") no topo para vê-lo na
+              lista.
+            </>
           )}
-          <div className="mt-5">
-            <Button variant="secondary" onClick={reset}>
-              Importar outro DFD
-            </Button>
-          </div>
-        </div>
+        </AvisoFlutuante>
       )}
 
       {/* Banner flutuante: conferir o DFD completo e importar (só grava ao confirmar).

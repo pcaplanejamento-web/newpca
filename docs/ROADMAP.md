@@ -25,6 +25,32 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Mesa: gestão do protocolo (Responsável/Distribuição/Situação), estado agregado, histórico conectado e ordem fixa dos banners — entregue
+✅ **Seleção total**: o "selecionar todos" das tabelas marca TODAS as linhas filtradas (não só a página).
+✅ **Estado do protocolo AGREGADO** (`avaliarProtocolo` + `POST /api/protocolo/conferencia`): a célula acumula a conciliação
+da capa, "Sem DFDs" e os erros/atenções de CADA DFD e dos seus itens, agrupados por problema com a quantidade de DFDs
+("Sem prioridade (3)"), com a lista no tooltip e o filtro da coluna achando qualquer um deles.
+✅ **Ordem FIXA dos banners — Protocolo (esquerda) | DFD (centro) | Item (direita)** qualquer que seja o banner de entrada
+(`Modal.esquerda` + ordem de abertura): do item, "Ver DFD"/"Ver protocolo" surgem à esquerda, no lugar certo e com a
+animação padrão; no celular, um por vez (o último aberto); "Ver protocolo" some quando o protocolo já está na pilha.
+✅ **Protocolo — novas colunas**: **Responsável** (dropdown na célula; o **responsável padrão** de quem protocola é escolhido
+no Perfil → Protocolação), **Distribuição** (quem protocolou), **Situação** (só as cadastradas pelo ADM em Configurações →
+Situações — nome, cor, ordem; a lógica antiga Vazio/Com DFDs foi excluída) e **Data** = data da protocolação. Migração
+`0030` (aditiva). Também pela edição em massa de protocolos.
+✅ **Histórico conectado** (migração `0030`: `auditoria.protocolo_id`/`origem`/`detalhe`): cada alteração guarda o CANAL
+(protocolação, reenvio, banner, massa, tabela, vínculo, exclusão), o PROTOCOLO por onde passou e o antes → depois de cada
+campo, seção, assinatura e ITEM. Protocolo = modal com eventos agrupados + filtro Capa/DFDs/Itens; DFD = painel da direita;
+**Item** = seção "Histórico do item"; ADM = tela Auditoria. Lê também o formato legado.
+✅ **Planilha de DFDs**: "Copiar planejamentos" na seleção (`1525:1549:1554`, separados por ":" sem espaço) e a coluna
+**Planejamento antes do DFD**.
+✅ **DFD-R com VÁRIAS referências de renovação** (contratos/ARPs/licitações) — lidas todas do documento e editadas em chips
+(`CampoLista`); sem migração (mesmas colunas, unidas por "; ").
+✅ **Aviso flutuante padrão** (`AvisoFlutuante`): erros/resultados/leituras aparecem pequenos no canto inferior, sem
+deformar a tela (o `toast` usa o mesmo componente).
+✅ **Filtros de hierarquia da Mesa** (Responsável e Assunto do protocolo) acima de Protocolos · DFDs · Itens — valem nas três
+visões e travam as colunas correspondentes da tabela de protocolos.
+✅ No celular, o botão "Importar" desce para a linha de baixo (a aba "Itens" não fica mais cortada).
+
 ### Mesa: filtros conectados, faixa R$, seleção fixa com somatório, massa em Protocolos/Itens, pilha de banners e REENVIO do protocolo — entregue
 ✅ **Filtros conectados em TODAS as tabelas** (`DataTable` + `tabela-filtros.ts`, puro e testado): as opções de cada coluna
 refletem os demais filtros (facetas), a coluna filtrada fica **marcada** (chip accent + sublinhado) e o rodapé ganha

@@ -1,6 +1,6 @@
 import { SECOES_OBRIGATORIAS, setTextoSecao, situacaoSecao, textoSecao } from "./dfd-tratamento.ts";
 import { brl, num } from "./format.ts";
-import { type Assinatura, type DfdSecao, norm, tipoCurtoDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, type DfdSecao, listaRefs, norm, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
 /**
  * REENVIO de um protocolo (sobrescrever com o MESMO PDF, corrigido) — núcleo PURO/testável da
@@ -133,6 +133,7 @@ export type ComparacaoDfd = {
   total: number;
 };
 
+const REFS = new Set<keyof DfdComparavel>(["numeroContrato", "numeroAta", "numeroLicitacao"]);
 const CAMPOS_DFD: [keyof DfdComparavel, string][] = [
   ["planejamento", "Nº de planejamento"],
   ["objeto", "Objeto"],
@@ -178,7 +179,8 @@ function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
   return { pares, novos: pendentes, removidos: [...livresG].map((i) => g[i]) };
 }
 
-function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
+/** Diferenças campo a campo entre dois estados do MESMO item (comparação do reenvio e histórico). */
+export function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
   const out: DiffCampo[] = [];
   if (a.item !== b.item) out.push({ campo: "item", rotulo: "Nº do item", antes: ver(a.item), depois: ver(b.item) });
   if (txt(a.codigo) !== txt(b.codigo)) out.push({ campo: "codigo", rotulo: "Código", antes: ver(a.codigo), depois: ver(b.codigo) });
@@ -224,7 +226,9 @@ export function compararDfd(
   if (!g) return { situacao: "novo", campos: [], secoes: [], assinaturas: null, itens: [], total: 0 };
   const campos: DiffCampo[] = [];
   for (const [c, rotulo] of CAMPOS_DFD) {
-    if (txt(g[c]) !== txt(p[c])) campos.push({ campo: c, rotulo, antes: ver(g[c]), depois: ver(p[c]) });
+    // Referências de renovação são LISTAS ("a; b"): a ordem não é diferença.
+    const canon = (v: unknown) => (REFS.has(c) ? [...listaRefs(v as string | null)].sort().join(SEPARADOR_REFS) : txt(v));
+    if (canon(g[c]) !== canon(p[c])) campos.push({ campo: c, rotulo, antes: ver(g[c]), depois: ver(p[c]) });
   }
   if (tipoCurtoDfd(g.tipo) !== tipoCurtoDfd(p.tipo)) campos.push({ campo: "tipo", rotulo: "Tipo", antes: ver(tipoCurtoDfd(g.tipo)), depois: ver(tipoCurtoDfd(p.tipo)) });
   if (g.anoPca !== p.anoPca) campos.push({ campo: "anoPca", rotulo: "PCA (ano)", antes: ver(g.anoPca), depois: ver(p.anoPca) });

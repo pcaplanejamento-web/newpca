@@ -1,43 +1,85 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { ComparacaoDfd, DiffCampo, DiffItemDfd } from "@/lib/comparar-protocolo";
 import { brl, num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { IconAlert, IconCheck, IconClipboard, IconSpinner } from "./icons";
+import { IconAlert, IconArrowRight, IconCheck, IconClipboard, IconSpinner } from "./icons";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 
 /**
  * COMPARAÇÃO do REENVIO de um protocolo (PDF corrigido × protocolo gravado) — componentes do
- * design-system: `DiffLinha` (um campo: gravado → novo), `ComparacaoDfdView` (as diferenças de UM DFD:
- * cabeçalho, seções, assinaturas e itens novo/removido/alterado) e `ComparacaoProtocolo` (o bloco do
- * topo: contagens, diferenças da capa, gravados que não vieram no PDF com Excluir/Manter e o relatório).
+ * design-system: `DiffLinha` (um campo: gravado → novo), `DiffItem` (um item novo/removido/alterado),
+ * `BlocoDiff` (bloco com título e contagem) — os três reusados pelo `Historico` —, `ComparacaoDfdView` (as
+ * diferenças de UM DFD: cabeçalho, seções, assinaturas e itens) e `ComparacaoProtocolo` (o bloco do topo:
+ * contagens, diferenças da capa, gravados que não vieram no PDF com Excluir/Manter e o relatório).
  */
 
 const tinta = (cor: string) => ({ background: `color-mix(in srgb, ${cor} 9%, var(--surface))`, borderColor: `color-mix(in srgb, ${cor} 28%, var(--border))` });
 
-/** Uma diferença de campo: o valor GRAVADO e o NOVO lado a lado (empilhados no celular). */
-export function DiffLinha({ d }: { d: DiffCampo }) {
+/** Texto curto (cabe numa linha "antes → depois"). */
+const curto = (t: string) => t.length <= 90 && !t.includes("\n");
+/** Texto longo (seção) — recolhido a 4 linhas no modo compacto. */
+const longo = (t: string) => t.length > 280 || (t.match(/\n/g)?.length ?? 0) > 3;
+
+/**
+ * Uma diferença de campo: o valor ANTERIOR e o NOVO lado a lado (empilhados no celular). `rotulos` nomeia
+ * os dois lados (reenvio: Gravado × Novo; histórico: Antes × Depois). `compacto` (histórico): valores
+ * curtos numa linha só ("MÉDIA → ALTA") e textos longos recolhidos com "Ver texto inteiro".
+ */
+export function DiffLinha({
+  d,
+  rotulos = ["Gravado", "Novo"],
+  compacto = false,
+}: {
+  d: DiffCampo;
+  rotulos?: readonly [string, string];
+  compacto?: boolean;
+}) {
+  const [inteiro, setInteiro] = useState(false);
+  if (compacto && curto(d.antes) && curto(d.depois)) {
+    return (
+      <div className="grid gap-x-3 gap-y-0.5 text-[12.5px] sm:grid-cols-[minmax(6rem,10rem)_1fr]">
+        <span className="font-semibold text-muted">{d.rotulo}</span>
+        <span className="min-w-0 break-words">
+          <span className={d.antes === "—" ? "text-faint" : "text-faint line-through"}>{d.antes}</span>
+          <IconArrowRight className="mx-1 inline h-3.5 w-3.5 align-[-2px] text-muted" aria-label="para" />
+          <span className="font-medium text-text">{d.depois}</span>
+        </span>
+      </div>
+    );
+  }
+  const recolhe = compacto && (longo(d.antes) || longo(d.depois));
+  const clamp = recolhe && !inteiro ? " line-clamp-4" : "";
   return (
     <div className="rounded-control border border-border p-2.5">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{d.rotulo}</p>
       <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
         <div className="rounded-[8px] border px-2 py-1.5" style={tinta("var(--danger)")}>
           <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--danger)" }}>
-            Gravado
+            {rotulos[0]}
           </p>
-          <p className="whitespace-pre-wrap break-words text-[12.5px] text-text-2">{d.antes}</p>
+          <p className={`whitespace-pre-wrap break-words text-[12.5px] text-text-2${clamp}`}>{d.antes}</p>
         </div>
         <div className="rounded-[8px] border px-2 py-1.5" style={tinta("var(--ok)")}>
           <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--ok)" }}>
-            Novo
+            {rotulos[1]}
           </p>
-          <p className="whitespace-pre-wrap break-words text-[12.5px] text-text">{d.depois}</p>
+          <p className={`whitespace-pre-wrap break-words text-[12.5px] text-text${clamp}`}>{d.depois}</p>
         </div>
       </div>
+      {recolhe && (
+        <button
+          type="button"
+          className="mt-1.5 min-h-[32px] text-[12px] font-medium text-accent hover:underline"
+          onClick={() => setInteiro((v) => !v)}
+        >
+          {inteiro ? "Recolher" : "Ver texto inteiro"}
+        </button>
+      )}
     </div>
   );
 }
@@ -45,7 +87,8 @@ export function DiffLinha({ d }: { d: DiffCampo }) {
 const TOM_ITEM: Record<DiffItemDfd["tipo"], Tone> = { novo: "emerald", removido: "red", alterado: "amber" };
 const ROTULO_ITEM: Record<DiffItemDfd["tipo"], string> = { novo: "Novo", removido: "Removido", alterado: "Alterado" };
 
-function Bloco({ titulo, qtd, children }: { titulo: string; qtd: number; children: ReactNode }) {
+/** Bloco de diferenças com título e contagem (Cabeçalho/Seções/Assinaturas/Itens) — reenvio e histórico. */
+export function BlocoDiff({ titulo, qtd, children }: { titulo: string; qtd: number; children: ReactNode }) {
   return (
     <section>
       <h4 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">
@@ -53,6 +96,27 @@ function Bloco({ titulo, qtd, children }: { titulo: string; qtd: number; childre
       </h4>
       <div className="space-y-2">{children}</div>
     </section>
+  );
+}
+
+/** A diferença de UM item do DFD (novo / removido / alterado campo a campo) — reenvio e histórico. */
+export function DiffItem({ it, rotulos, compacto = false }: { it: DiffItemDfd; rotulos?: readonly [string, string]; compacto?: boolean }) {
+  return (
+    <div className="rounded-control border border-border p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={TOM_ITEM[it.tipo]}>{ROTULO_ITEM[it.tipo]}</Badge>
+        <span className="text-[12.5px] font-semibold text-text">Item {it.item ?? "—"}</span>
+        {it.codigo && <span className="font-mono text-[12px] text-muted">{it.codigo}</span>}
+      </div>
+      {it.descricao && <p className="mt-1 line-clamp-2 text-[12px] text-text-2">{it.descricao}</p>}
+      {it.campos.length > 0 && (
+        <div className={`mt-2 ${compacto ? "space-y-1" : "space-y-1.5"}`}>
+          {it.campos.map((d) => (
+            <DiffLinha key={d.campo} d={d} rotulos={rotulos} compacto={compacto} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -100,44 +164,30 @@ function Diferencas({ comparacao }: { comparacao: ComparacaoDfd | null }) {
         (com as suas edições).
       </p>
       {c.campos.length > 0 && (
-        <Bloco titulo="Cabeçalho" qtd={c.campos.length}>
+        <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length}>
           {c.campos.map((d) => (
             <DiffLinha key={d.campo} d={d} />
           ))}
-        </Bloco>
+        </BlocoDiff>
       )}
       {c.secoes.length > 0 && (
-        <Bloco titulo="Seções" qtd={c.secoes.length}>
+        <BlocoDiff titulo="Seções" qtd={c.secoes.length}>
           {c.secoes.map((d) => (
             <DiffLinha key={d.campo} d={d} />
           ))}
-        </Bloco>
+        </BlocoDiff>
       )}
       {c.assinaturas && (
-        <Bloco titulo="Assinaturas" qtd={1}>
+        <BlocoDiff titulo="Assinaturas" qtd={1}>
           <DiffLinha d={c.assinaturas} />
-        </Bloco>
+        </BlocoDiff>
       )}
       {c.itens.length > 0 && (
-        <Bloco titulo="Itens" qtd={c.itens.length}>
+        <BlocoDiff titulo="Itens" qtd={c.itens.length}>
           {c.itens.map((it, k) => (
-            <div key={`${it.tipo}:${it.item}:${it.codigo}:${k}`} className="rounded-control border border-border p-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={TOM_ITEM[it.tipo]}>{ROTULO_ITEM[it.tipo]}</Badge>
-                <span className="text-[12.5px] font-semibold text-text">Item {it.item ?? "—"}</span>
-                {it.codigo && <span className="font-mono text-[12px] text-muted">{it.codigo}</span>}
-              </div>
-              {it.descricao && <p className="mt-1 line-clamp-2 text-[12px] text-text-2">{it.descricao}</p>}
-              {it.campos.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  {it.campos.map((d) => (
-                    <DiffLinha key={d.campo} d={d} />
-                  ))}
-                </div>
-              )}
-            </div>
+            <DiffItem key={`${it.tipo}:${it.item}:${it.codigo}:${k}`} it={it} />
           ))}
-        </Bloco>
+        </BlocoDiff>
       )}
     </div>
   );

@@ -50,22 +50,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
   sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
-- **Auditoria / histórico de alterações (de ponta a ponta, migração `0026`):** tabela **`auditoria`** APPEND-ONLY —
+- **Auditoria / histórico de alterações (de ponta a ponta, migrações `0026` + `0030`):** tabela **`auditoria`** APPEND-ONLY —
   **quem** (`usuario_id` + snapshot `usuario_nome`/`usuario_email`, sobrevive à exclusão via FK `set null`), **o quê**
   (`acao` criar/editar/excluir/importar/protocolar/login/…; `entidade` + `entidade_id`; diff `antes`/`depois` JSON +
   `resumo` legível) e **quando** (`criado_em`). Núcleo puro/testável **`auditoria-core.ts`** (`diffCampos`, rótulos
-  `ROTULO_ACAO`/`ROTULO_ENTIDADE`); acesso ao D1 em **`auditoria.ts`** (`registrarAuditoria` **BEST-EFFORT — nunca lança**;
-  `historicoDe`/`listarAuditoria`). **Instrumentado em TODOS os pontos de escrita**, no nível da ROTA (onde o ator
+  `ROTULO_ACAO`/`ROTULO_ENTIDADE`/`ROTULO_ORIGEM`); acesso ao D1 em **`auditoria.ts`** (`registrarAuditoria` **BEST-EFFORT — nunca
+  lança**; `historicoDfd`/`historicoProtocolo`/`listarAuditoria`). **Instrumentado em TODOS os pontos de escrita**, no nível da ROTA (onde o ator
   `exigirX().u` é conhecido): DFD (import/edição de campos/**itens**/exclusão/vínculo), protocolo, catálogo (+itens/tipos),
   PCA, planilha (`/api/upload`), protocolos legado, admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
   **usuários** (papel/status = alto valor), config (aparência/avaliação/integrações — só o FATO, **nunca** segredos/senha)
   e auth (login/logout/cadastro/perfil/senha). Nas edições, o "antes" vem dos `get*` já usados na rota (diff por campo).
-  **Consulta:** componente **`Historico`** (timeline por ação/ator/data + diff expandível) usado por entidade (botão
-  **"Histórico"** no banner do DFD → `GET /api/dfd/[id]/historico` = **histórico CONECTADO** (`historicoConectadoDfd`
-  = alterações do DFD **mescladas** com as do seu protocolo atual, via `mesclarHistorico` puro; a `entidade` de cada
-  linha identifica a origem), escopo por unidade) e na tela ADM global
-  **`/painel/auditoria`** (`AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros entidade/ação + paginação). Nav
-  "Auditoria" (`IconClock`, admin). A tabela aparece no `/painel/armazenamento`.
+  - **Histórico CONECTADO protocolo › DFD › item (migração `0030`, aditiva):** cada linha ganhou **`protocolo_id`** (o
+    protocolo por onde a alteração PASSOU — liga DFD/itens ao histórico do protocolo, mesmo de DFD já excluído),
+    **`origem`** (o CANAL: `protocolacao`/`reenvio`/`avulso`/`banner`/`massa`/`celula`/`vinculo`/`exclusao`) e **`detalhe`**
+    (JSON `DetalheAuditoria`: `alvo` {nº, planejamento} + `campos`/`secoes`/`assinaturas`/`itens` antes → depois JÁ
+    FORMATADOS — a MESMA régua da comparação do reenvio: `compararDfd`/`compararCapa`/`diffItem`; `detalheDe` corta textos a
+    1500 e itens a 400). A sobrescrita de um DFD (protocolação/reenvio, `start-dfd`) registra as diferenças contra o
+    gravado; mover um DFD de protocolo registra nos DOIS; a massa de itens registra item a item. **Leitura (pura):**
+    `interpretarAlteracao` lê o formato novo E o LEGADO (`antes`/`depois` por chave; itens da massa em `antes.itens`; itens
+    do "Salvar" só no `resumo`); `agruparHistorico` junta num EVENTO as linhas do mesmo usuário + canal + protocolo feitas em
+    sequência (≤ 120 s); `historicoDoItem` filtra o que tocou UM item (+ a importação por onde ele entrou);
+    `resumoCurtoAlteracao`/`rotuloAlvo`/`passaFiltroHistorico`. **Consultas:** `historicoDfd` (as do DFD) e
+    `historicoProtocolo` (capa/gestão + TODAS as linhas com `protocolo_id` = P + as legadas dos DFDs que estão nele) — ambas
+    SEM o e-mail do ator (`COLS_HIST`); rotas `GET /api/dfd/[id]/historico` e `GET /api/protocolo/[id]/historico` (escopo por
+    unidade).
+  - **UI — componente único `Historico`** com escopos: **`protocolo`** (botão "Histórico" no rodapé do protocolo gravado →
+    modal; eventos agrupados + filtro `Segmented` Tudo/Capa/DFDs/Itens com contagens), **`dfd`** (painel da direita do DFD),
+    **`item`** (seção recolhível **"Histórico do item"** no `ItemDetalhe` de DFD gravado — `HistoricoDoItem`, carrega só ao
+    abrir) e **`global`** (tela ADM **`/painel/auditoria`** — `AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros
+    entidade/ação + paginação; nav "Auditoria" `IconClock`, admin). Cada cartão: selo do CANAL (`Badge`), "Protocolo X" por
+    onde passou, autor, data/hora de Brasília (`dataHoraBR`) e O QUE mudou (resumo curto; abre o antes → depois com
+    `DiffLinha`/`DiffItem` compactos — textos longos recolhidos). Hook `useHistorico(url)` (carga sob demanda). A tabela
+    aparece no `/painel/armazenamento`.
 
 ## Autenticação e autorização
 - Criptografia pura em **`src/lib/password.ts`** (Web Crypto; sem deps de request/DB —
@@ -403,21 +419,49 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `animate-cat-morph` (`<div key={vista}>` remonta e replaya). Cada visão tem **altura de linha própria** (prop
     `density` do `DataTable`): Protocolos **comfortable** (alta) · DFDs **default** (média, `PlanilhaDfds`) · Itens
     **compact** (fina). Sem os cabeçalhos redundantes "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé
-    `resumo`). A tabela de **Protocolos** ganhou a coluna **Data** (`ProtocoloResumo.data`, `dataBR`); a **Situação**
-    derivada ("Vazio"/"Com DFDs") permanece.
+    `resumo`). Tabela de **Protocolos**: **Estado** (AGREGADO — abaixo) · **Situação** (dropdown na célula) · **Responsável**
+    (dropdown na célula) · **Distribuição** (quem protocolou) · **Data** (data/hora da PROTOCOLAÇÃO — `criado_em` em Brasília,
+    `dataHoraBR`/`dataIsoBrasilia`) · Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor. No celular, o
+    lançador de importação desce para a linha de baixo (o `Segmented` não encolhe — a aba "Itens" nunca fica cortada).
+  - **Gestão do protocolo (migração `0030`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
+    Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
+    tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
+    `situacao_protocolo`) — a antiga situação derivada (Vazio/Com DFDs) foi EXCLUÍDA. **Responsável** = a pessoa designada
+    (`dfd_protocolos.responsavel_id`; usuários ativos — `src/lib/usuarios.ts`); ao protocolar, entra o **responsável
+    PADRÃO** que quem protocola escolheu no **Perfil → Protocolação** (`usuarios.responsavel_padrao_id`, `PATCH
+    /api/perfil/preferencias`) — só num protocolo ainda sem responsável (`COALESCE` no upsert; o reenvio mantém).
+    **Distribuição** = `criado_por` (quem protocolou). As duas células são o **`SeletorCelula`** (`<select>` nativo
+    transparente — leve com milhares de linhas, seletor do próprio celular, o clique não abre a linha), gravam na hora
+    (`PATCH /api/protocolo/[id]` com `origem:"celula"`, otimista com reversão) e também vão pela edição em massa
+    (`BarraEdicaoMassaProtocolos` → ações `responsavel`/`situacao` do `POST /api/protocolo/massa`). Não-editores veem só o texto.
+  - **Estado AGREGADO do protocolo:** a célula ACUMULA todos os problemas do processo — a conciliação da capa
+    (`conciliacaoCapa`), "Sem DFDs" e os erros/atenções de CADA DFD e dos seus itens (a MESMA conferência por linha,
+    `avaliarLinhaDfd`), agrupados por problema com a quantidade de DFDs (`avaliarProtocolo`, `conferencia-dfd.ts`, puro):
+    erro › atenção › regular, rótulo do principal com a contagem ("Sem prioridade (3)"), `+N` e tooltip com a lista (DFDs
+    por nº + planejamento). Calculado no servidor (`POST /api/protocolo/conferencia`, fatias de ≤ 50 protocolos / ~150
+    DFDs, com os DFDs COMPLETOS e as unidades reais), lazy com "Conferindo…" e CACHE pela chave `chaveProto` (gravar a capa
+    ou qualquer DFD muda a chave). A coluna é multi-valor (o filtro acha QUALQUER problema do protocolo).
+  - **Filtros de HIERARQUIA da Mesa (acima de Protocolos · DFDs · Itens):** dois **`SeletorFiltro`** — **Responsável**
+    (todos / sem responsável / uma pessoa) e **Assunto** (assuntos distintos dos protocolos) — filtram as TRÊS visões (o
+    DFD e o item herdam os do protocolo de origem; `DfdResumo.protocoloResponsavelId`), núcleo puro **`mesa-filtros.ts`**
+    (`passaFiltroMesa`/`opcoesAssuntoMesa`). Enquanto ativos, **travam** as colunas Responsável/Assunto da tabela de
+    protocolos (`Column.travado` do `DataTable`: cadeado + o motivo; o filtro da coluna sai de uso) — a hierarquia manda.
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
     Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
     invalidado quando os DFDs recarregam (após import/edição).
-  - **PILHA DE BANNERS da Mesa (`BannersMesa`) — cada "Ver …" entra da DIREITA p/ a esquerda:** clicar numa linha da
-    visão **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD, com "Salvar alterações"); **"Ver
-    DFD"** traz o DFD suavemente da direita; **"Ver protocolo"** traz o DFD e, EM SEGUIDA (após `duracaoMotionMs()`), o
-    protocolo — sequencial. No banner do DFD (lista DFDs), **"Ver protocolo"** empilha o protocolo à direita com a mesma
-    animação padrão. Esc/Fechar desempilham da direita p/ a esquerda. Arquitetura: os banners gravados viraram **hooks que
-    devolvem painéis** — `useDfdGravado` (`DfdGravado.tsx`; `modoItem` = item sem o DFD) e `useProtocoloGravado`
-    (`ProtocoloGravado.tsx`; `empilhado` = sem o DFD/mensagens ao lado) → `ConteudoBanner`/`ModalPainel` — e o
-    `BannersMesa` compõe UM `Modal` com `larguraPrincipal` + **`paineis`** (pilha genérica; larguras proporcionais: item 34 ·
-    DFD 52 · protocolo 50). Raiz = protocolo | DFD | item (`AberturaMesa`).
+  - **PILHA DE BANNERS da Mesa (`BannersMesa`) — ORDEM FIXA Protocolo (esquerda) | DFD (centro) | Item (direita), qualquer
+    que seja o banner de entrada:** linha de **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD,
+    com "Salvar alterações") — a coluna da direita; **"Ver DFD"** faz o DFD surgir À ESQUERDA dele; **"Ver protocolo"** traz
+    o DFD e, EM SEGUIDA (após `duracaoMotionMs()`), o protocolo à esquerda do DFD. Linha de **DFDs**: [DFD]; "Ver protocolo"
+    surge à esquerda; item/mensagens/histórico à direita. Com o protocolo JÁ na pilha, "Ver protocolo" some (no celular seria
+    um clique sem efeito). Cada banner surge NO SEU LUGAR com a animação padrão (a trilha do grid cresce e os vizinhos
+    deslizam); no celular aparece só o ABERTO POR ÚLTIMO; X fecha aquele banner e Esc fecha o último aberto. Arquitetura: os
+    banners gravados são **hooks que devolvem painéis** — `useDfdGravado` (`DfdGravado.tsx`; `modoItem` = o item é a raiz e as
+    mensagens/histórico do DFD ocupam o lugar dele) e `useProtocoloGravado` (`ProtocoloGravado.tsx`; `empilhado` = sem o
+    DFD/mensagens ao lado) → `ConteudoBanner`/`ModalPainel` — e o `BannersMesa` compõe UM `Modal` com `larguraPrincipal` +
+    **`esquerda`** (painéis à esquerda do principal) + **`paineis`** (à direita); larguras proporcionais: item 34 · DFD 52 ·
+    protocolo 50. Raiz = protocolo | DFD | item (`AberturaMesa`).
 - **Conferência/edição única (`DfdConferir`) + banner (`Modal`):** o CORPO de conferência/edição do DFD é UM
   componente **controlado** — `DfdConferir` (select "Setor / Repartição" + bloco **Tratamento** + lista de faltas
   ao vivo + `DfdView` read-only refletindo as edições). É o MESMO no **import avulso** (`DfdUploadForm`) e **por DFD
@@ -636,7 +680,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Tabela ÚNICA de DFDs — `PlanilhaDfds` (`src/components/PlanilhaDfds.tsx`):** o MESMO componente lista DFDs em
   TODO lugar — banner de importação, banner do protocolo GRAVADO (`ProtocoloView`) e a **aba DFDs** (`DfdsView`). Cada
   tela mapeia seus dados (parse do PDF / D1) para o modelo `LinhaDfd`. Colunas: **[seleção] · Estado · [Situação] · Nº
-  DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · Assinatura · [Protocolo] · Itens · Valor total · [ações]** (as
+  Plan. · Nº DFD · Sigla · Tipo (`tipoCurtoDfd`) · Assinatura · [Protocolo] · Itens · Valor total · [ações]** (o
+  planejamento vem ANTES do DFD; a seleção usa a **`BarraSelecaoDfds`** — chips + Σ + **"Copiar planejamentos"**, que copia
+  os nºs de planejamento dos selecionados separados por ":" SEM espaço, ex.: `1525:1549:1554` — `textoPlanejamentos`) (as
   opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis** e **sem quebra de linha** (`Column.nowrap` do
   `DataTable`: a coluna ganha a largura do CONTEÚDO — ex.: os badges da Assinatura + "(auto)" numa linha só; a tabela
   rola no eixo x do próprio container). Na **ANÁLISE** os **DFDs com erro/atenção ficam em tabelas SEPARADAS** acima das
@@ -680,7 +726,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Planej. 640), 702 (Planej. 811):"). Quando há erro, o botão
   **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
   (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
-  [fonte única, reusada por `faltasObrigatorias`] + `estadoProtocolo`/`situacaoProtocolo`).
+  [fonte única, reusada por `faltasObrigatorias`] + `ESTADO_PROTOCOLO_ROTULO`/`estadoProtocoloCor`; o estado agregado do
+  protocolo vem de `avaliarProtocolo`).
 - **Painel LATERAL de MENSAGENS do DFD (`MensagensDfd`) — todas as conferências, navegáveis:** as mensagens NÃO
   aparecem mais soltas no corpo do banner do DFD. `mensagensDfd` (puro, `dfd-tratamento`) monta a lista COMPLETA
   (erro/atenção/**acerto**, sem exceção — só omite pontos "ignorar" do ADM), cada uma com uma **âncora** (id do
@@ -744,8 +791,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     FATIAS de 20 (≤ 50 por requisição no `massaDfdsSchema` — cabe no limite de consultas por invocação do D1), com
     barra de progresso; por DFD: escopo por unidade, campo travado pelo ADM recusado, troca de unidade reconfere a
     assinatura contra o destino, falha de um DFD vira `falhas` (não derruba o lote); auditoria por DFD.
-    **Mesa → Itens:** coluna **Estado** do item (mesma célula `EstadoCelula`). **Mesa → Protocolos:** Estado =
-    `conciliacaoCapa`. Excluir protocolo avisa que os DFDs vinculados (e itens) são excluídos junto (cascata).
+    **Mesa → Itens:** coluna **Estado** do item (mesma célula `EstadoCelula`). **Mesa → Protocolos:** Estado AGREGADO
+    (`avaliarProtocolo` — capa + DFDs + itens, ver acima). Excluir protocolo avisa que os DFDs vinculados (e itens) são
+    excluídos junto (cascata).
   - **Seleção + edição em massa nas TRÊS visões da Mesa — `BarraSelecao` FIXA no rodapé do DISPLAY:** DFDs, Protocolos e
     Itens têm seleção (só editores). A barra fica **`position: fixed`** rente ao rodapé do display (acima da navegação
     inferior no celular) **mesmo com a tabela curta**, alinhada à coluna de conteúdo (medida pelo LUGAR que reserva no
@@ -808,8 +856,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `enviarDfdEmLotes`) — inclusive o **ano da PREVISÃO de entrega** segue o PCA (ponto 7: `normalizarSecoesDfd`/`normPrevisao`
   recebem o `anoPca`). Nos **DFD-R** (renovação), `referenciasRenovacao`/`extrairRefsDfd` separam nº de **contrato**,
   **ARP** (ata de registro de preços; a coluna segue `numero_ata`, o rótulo na UI é **"Nº da ARP"**) e **licitação** da
-  descrição para campos próprios; o `DfdConferir` mostra um bloco
-  **Referências da renovação** (editável) e, se o DFD-R não tiver **nenhuma**, um **aviso não-bloqueante** (aponta,
+  descrição para campos próprios — **VÁRIAS por DFD** (um DFD-R pode citar vários contratos/ARPs/licitações):
+  `extrairRefs` coleta TODAS as menções (plural e listas "Contratos nº 045/2025, 112/2025 e 7/2024" — itens da lista só com
+  a mesma forma "/"), guardadas nas MESMAS colunas unidas por "; " (`SEPARADOR_REFS`, `juntarRefs`/`listaRefs` — sem
+  migração; `refsOpc` até 1000 caracteres) e comparadas por CONJUNTO no reenvio (a ordem não importa); o `DfdConferir`
+  mostra um bloco **Referências da renovação** (editável, um **`CampoLista`** por tipo — um valor por chip; Enter/","/";"
+  acrescenta, Backspace remove) e, se o DFD-R não tiver **nenhuma**, um **aviso não-bloqueante** (aponta,
   não trava) — o usuário pode preencher à mão. O `DfdView` exibe **Ano do PCA** (Seção 1) e as referências (só DFD-R);
   o `ProtocoloView` mostra o **PCA (ano)** na capa. Editar refs num DFD gravado vai pelo `PATCH /api/dfd/[id]`
   (`editarDfdSchema` + `atualizarDfdCampos`). `anoPca` é threadado da página (`listarPcas`) → `DfdsView` → forms.
@@ -980,6 +1032,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de ≤ 5 DFDs, acao catalogo|unidade|quantidade|valorUnitario|remover}`, lote atômico por DFD) e `POST /api/protocolo`
   `start-protocolo` com **`reenvio {protocoloId, resumo}`** (sobrescrita do MESMO protocolo — 422 se nº/Id não conferem).
   IN (...) sempre em lotes de ≤ 90 ids (`LOTE_IDS`/`lotesDeIds`) — limite de 100 parâmetros do D1.
+- Gestão/histórico (migração `0030`): `POST /api/protocolo/conferencia` (`{ids ≤ 50}` → estado AGREGADO por protocolo,
+  `exigirUsuario`), `PATCH /api/protocolo/[id]` também com `responsavelId`/`situacaoId` (+ `origem` banner|celula),
+  `POST /api/protocolo/massa` com as ações `responsavel`/`situacao`, `GET /api/protocolo/[id]/historico` e
+  `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +
+  `PATCH`/`DELETE /api/admin/situacoes/[id]` + `PATCH /api/admin/situacoes/ordem` (`exigirAdmin`) e `PATCH
+  /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA ou `null`).
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
 - **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
@@ -997,7 +1055,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `StatusTag`
   (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
-  `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
+  `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
+  resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
+  `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular e da `BarraSelecao`
+  fixa via `--reserva-rodape`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
+  sozinho) + `Toast`/`Toaster` (renderiza o MESMO `AvisoFlutuante`), `DataTable` (seleção+filtro no cabeçalho+clique na
+  linha; **"selecionar todos" marca TODAS as linhas FILTRADAS, não só a página** (estado indeterminado quando parcial);
+  **`Column.travado`** = filtro da coluna TRAVADO por um filtro de hierarquia acima da tabela (cadeado + o motivo no
+  `title`); `pageSize` **máx 20**;
   **filtros CONECTADOS (facetas)** — núcleo puro **`tabela-filtros.ts`** (`aplicarFiltros`: as opções/domínio de cada coluna
   vêm das linhas que passam nos DEMAIS filtros; seleção vazia ou com todas as opções = sem filtro; `normalizarFaixa`: o lado
   da faixa no extremo da faceta NÃO vira limite; `contarNaFaixa` = a contagem do painel; `ordenarIndices` numérico × texto
@@ -1020,19 +1085,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita
   do `lateral` (ex.: mensagens ao lado do DFD no protocolo; grid de colunas proporcionais animadas, 1 por vez no mobile);
   **`paineis`** = PILHA GENÉRICA de banners à direita (`ModalPainel` = lateral + `id` + `largura`; `lateral`/`lateral2`
-  viram entradas dela) com **`larguraPrincipal`** — trilhas `minmax(0,Nfr)` animadas, **máx. 3 visíveis no desktop / 1
-  no celular**, painel fechado fica montado até o `transitionend` (fechar animado), colunas ocultas `inert`, e só o
-  Modal do TOPO responde ao Esc (pilha `modaisAbertos`); `duracaoMotionMs()` = duração do motion p/ sequenciar entradas),
+  viram entradas dela) + **`esquerda`** = painéis À ESQUERDA do principal (ORDEM FIXA das colunas — ex.: Protocolo | DFD |
+  Item, qualquer que seja o banner de entrada) com **`larguraPrincipal`** — trilhas `minmax(0,Nfr)` animadas, **máx. 3
+  visíveis no desktop / 1 no celular** (os ABERTOS POR ÚLTIMO — `ordemRef`), painel fechado fica montado até o
+  `transitionend` (fechar animado), colunas ocultas `inert`, Esc fecha o último aberto e só o Modal do TOPO responde ao Esc
+  (pilha `modaisAbertos`); `duracaoMotionMs()` = duração do motion p/ sequenciar entradas),
   **`GatilhoFiltro`** (o gatilho de TODO filtro de cabeçalho: rótulo + seta de ordenação, ou chip accent + funil quando
   filtrado), **`RangeFilterHeader`** (filtro de FAIXA p/ colunas R$: Crescente/Decrescente, **"Valor cheio"** [marcar limpa a
   barra; arrastar desmarca], **barra de arrasto DUPLA** mín.–máx. sobre os valores VISÍVEIS (`.faixa-dupla` em `globals.css`,
   alças de 24px p/ toque, teclado ←/→) + campos Mín./Máx.), **`BarraSelecao`** (+ `ResumoSelecao`; registro das seleções em
-  chips removíveis + somatório R$ + editor; `fixa` = rodapé do display) com os editores **`BarraEdicaoMassa`** (DFDs) /
+  chips removíveis + somatório R$ + editor + `acoes` na linha do resumo; `fixa` = rodapé do display, publica
+  `--reserva-rodape`) + **`BarraSelecaoDfds`** (a da PLANILHA DE DFDs — chips "DFD nº" + Σ + itens + **`BotaoCopiar`**
+  "Copiar planejamentos") com os editores **`BarraEdicaoMassa`** (DFDs) /
   **`BarraEdicaoMassaProtocolos`** / **`BarraEdicaoMassaItens`** (`BarraEdicaoMassa.tsx`), **`ComparacaoReenvio`**
-  (`DiffLinha` gravado × novo, `ComparacaoDfdView`, `ComparacaoProtocolo` — o reenvio do protocolo),
+  (`DiffLinha` antes × depois — `rotulos` Gravado/Novo ou Antes/Depois, `compacto` = valor curto numa linha e texto longo
+  recolhido —, `DiffItem`, `BlocoDiff`, `ComparacaoDfdView`, `ComparacaoProtocolo` — o reenvio do protocolo; `DiffLinha`/
+  `DiffItem`/`BlocoDiff` também servem o `Historico`), **`Historico`** (timeline por evento — escopos global/protocolo/dfd/
+  item; `HistoricoDoItem` recolhível; hook `useHistorico`), **`SeletorCelula`** (dropdown DENTRO da célula — `<select>`
+  nativo transparente, ponto de cor, spinner ao salvar, só texto sem permissão), **`SeletorFiltro`** (filtro de
+  HIERARQUIA acima das tabelas — chip com ícone/rótulo/valor, accent quando ativo, largura total no celular),
+  **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
-  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox — ícone + foco accent), `Callout` (feedback
+  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox/**`CampoLista`** [lista em chips — várias referências da
+  renovação] — ícone + foco accent), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
@@ -1045,13 +1121,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   linha; mesmo lugar do painel de mensagens), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
-  acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto` — a célula "Estado" de TODA tabela),
+  acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do
   DFD: estado + ações + mensagens + Fechar + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
   item / histórico), **`ProtocoloView`** (CORPO ÚNICO do banner do protocolo — análise e gravado), `CampoCadeado`
   (+ **`CadeadoBotao`**, o cadeado reusado por campos, itens e SEÇÕES do DFD). Hook `useConformidade` (conformidade do
   DFD aberto com o catálogo, lazy). Contêineres com dados (fora do catálogo, como o `DfdsView`): `ProtocoloUploadForm`,
-  `DfdUploadForm`, **`BannersMesa`** (pilha de banners gravados da Mesa, com os hooks `useProtocoloGravado`/`useDfdGravado`).
+  `DfdUploadForm`, **`BannersMesa`** (pilha de banners gravados da Mesa, com os hooks `useProtocoloGravado`/`useDfdGravado`),
+  `SituacoesAdmin` (Configurações → Situações).
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
@@ -1064,7 +1141,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
   `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar/editar/ativar/excluir
   via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
-  de DFD e categoria de protocolo; ver "Avaliação configurável") e **Mais** (`LinkCard` →
+  de DFD e categoria de protocolo; ver "Avaliação configurável"), **Situações** (`SituacoesAdmin` — as situações do
+  protocolo: nome + cor + ordem; ver "Gestão do protocolo") e **Mais** (`LinkCard` →
   aparência/repartições/grupos/permissões/usuários). A **identidade
   renderiza** de fato: `generateMetadata` (título/descrição/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o
   cabeçalho público (`/`), todos com `getAparencia()` (cache 60s) e **fallback** aos textos padrão. Nav item

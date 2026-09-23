@@ -25,8 +25,6 @@ import {
   estadoProtocoloCor,
   estadoRotulo,
   SECOES_OBRIGATORIAS,
-  type SituacaoProtocolo,
-  SITUACAO_PROTOCOLO_ROTULO,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { DOMINIOS, type DominioLogica, LOGICAS, type LogicaRef } from "@/lib/logicas";
@@ -122,8 +120,7 @@ export function ReferenciaSistema({
     if (d === "estados") {
       const estadosDfd: EstadoDfd[] = ["erro", "atencao", "editado", "regularizado", "regular", "pendente"];
       const estadosItem: EstadoItem[] = ["erro", "regular"];
-      const estadosProto: EstadoProtocolo[] = ["regular", "atencao"];
-      const situacoes: SituacaoProtocolo[] = ["vazio", "preenchido"];
+      const estadosProto: EstadoProtocolo[] = ["erro", "atencao", "regular"];
       return (
         <Derivado titulo="Estados e cores">
           <p className="mb-1 text-[12px] font-semibold text-muted">DFD</p>
@@ -138,17 +135,15 @@ export function ReferenciaSistema({
               <ChipCor key={e} label={ESTADO_ITEM_ROTULO[e]} cor={estadoItemCor(e, regras)} />
             ))}
           </div>
-          <p className="mb-1 text-[12px] font-semibold text-muted">Protocolo (estado · situação)</p>
+          <p className="mb-1 text-[12px] font-semibold text-muted">Protocolo (estado = capa + problemas dos DFDs e itens)</p>
           <div className="flex flex-wrap gap-1.5">
             {estadosProto.map((e) => (
               <ChipCor key={e} label={ESTADO_PROTOCOLO_ROTULO[e]} cor={estadoProtocoloCor(e, regras)} />
             ))}
-            {situacoes.map((s) => (
-              <span key={s} className="rounded-pill border border-border px-2.5 py-0.5 text-[12px] text-muted">
-                {SITUACAO_PROTOCOLO_ROTULO[s]}
-              </span>
-            ))}
           </div>
+          <p className="mt-2 text-[12px] text-muted">
+            A <strong className="text-text-2">Situação</strong> do protocolo é de gestão — só as cadastradas na aba Situações.
+          </p>
           <p className="mt-3 text-[12px] text-muted">
             Responsável temporário: <strong className="text-text-2">Agendado · Vigente · Encerrado</strong>.
           </p>

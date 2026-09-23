@@ -1,7 +1,9 @@
 "use client";
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { IconChevronDown, IconClose } from "./icons";
 
@@ -31,6 +33,7 @@ export function BarraSelecao({
   fixa = false,
   onAltura,
   bloqueada = false,
+  acoes,
   children,
 }: {
   registros: RegistroSelecao[];
@@ -38,6 +41,8 @@ export function BarraSelecao({
   onLimpar: () => void;
   /** Contagem + somatório (R$) dos selecionados. */
   resumo: ReactNode;
+  /** Ações sobre a seleção na linha do resumo (ex.: "Copiar planejamentos"). */
+  acoes?: ReactNode;
   /** Fixa no rodapé do display — a Mesa. Sem ela, fica no fluxo (rodapé de um banner). */
   fixa?: boolean;
   /** Lugar (px) que a barra fixa ocupa no FLUXO — a tabela desconta do espaço disponível (nada fica por baixo). */
@@ -78,10 +83,14 @@ export function BarraSelecao({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!fixa || !el) return;
+    const raiz = document.documentElement.style;
     const medir = () => {
-      const px = Math.max(0, Math.ceil(el.getBoundingClientRect().height) - RESPIRO_MAIN);
+      const alt = Math.ceil(el.getBoundingClientRect().height);
+      const px = Math.max(0, alt - RESPIRO_MAIN);
       setLugar(px);
       onAltura?.(px);
+      // Os avisos flutuantes (canto inferior) sobem acima da barra enquanto ela existe.
+      raiz.setProperty("--reserva-rodape", `${alt}px`);
     };
     medir();
     const ro = new ResizeObserver(medir);
@@ -89,6 +98,7 @@ export function BarraSelecao({
     return () => {
       ro.disconnect();
       onAltura?.(0);
+      raiz.removeProperty("--reserva-rodape");
     };
   }, [fixa, onAltura]);
 
@@ -144,7 +154,10 @@ export function BarraSelecao({
             </Button>
           )}
         </div>
-        <div className="mt-1 text-[12.5px] text-muted">{resumo}</div>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="min-w-0 text-[12.5px] text-muted">{resumo}</div>
+          {acoes}
+        </div>
         {children && <div className={`mt-2 border-t border-border pt-2 ${recolhida ? "hidden lg:block" : ""}`}>{children}</div>}
       </div>
     </section>
@@ -156,6 +169,43 @@ export function BarraSelecao({
       <div ref={lugarRef} aria-hidden style={{ height: `calc(${lugar}px + env(safe-area-inset-bottom))` }} />
       {barra}
     </>
+  );
+}
+
+/** Um DFD selecionado (as três planilhas de DFDs mapeiam para isto). */
+export type DfdSelecionado = { key: string | number; numero: string; planejamento: string | null; valor: number | null; itens: number | null };
+
+/**
+ * Barra de seleção da PLANILHA DE DFDs — a MESMA na Mesa, no protocolo gravado e na análise: chips "DFD
+ * nº", contagem + Σ R$ + itens e o botão "Copiar planejamentos" ("1525:1549:1554" — separados por ":"
+ * sem espaço). O editor de massa de cada tela vem em `children`.
+ */
+export function BarraSelecaoDfds({
+  dfds,
+  ...props
+}: { dfds: DfdSelecionado[] } & Omit<Parameters<typeof BarraSelecao>[0], "registros" | "resumo" | "acoes">) {
+  const planejamentos = textoPlanejamentos(dfds.map((d) => d.planejamento));
+  return (
+    <BarraSelecao
+      {...props}
+      registros={dfds.map((d) => ({ key: d.key, rotulo: `DFD ${d.numero}` }))}
+      resumo={
+        <ResumoSelecao
+          qtd={dfds.length}
+          singular="DFD"
+          plural="DFDs"
+          soma={dfds.reduce((t, d) => t + (d.valor ?? 0), 0)}
+          extra={`${num(dfds.reduce((t, d) => t + (d.itens ?? 0), 0))} itens`}
+        />
+      }
+      acoes={
+        <BotaoCopiar
+          texto={planejamentos}
+          rotulo="Copiar planejamentos"
+          titulo={planejamentos ? `Copia: ${planejamentos}` : "Os DFDs selecionados não têm nº de planejamento"}
+        />
+      }
+    />
   );
 }
 

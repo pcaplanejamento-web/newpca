@@ -266,6 +266,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(u?.orgao_proprio, 0, "unidade legada deve começar como filha comum (0)");
   });
 
+  it("0030 cria situações do protocolo, responsável/situação, responsável padrão e o histórico conectado", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    assert.ok(tabelas.includes("protocolo_situacoes"), "tabela protocolo_situacoes ausente");
+    const prot = nomes(db, "SELECT name FROM pragma_table_info('dfd_protocolos')");
+    for (const c of ["responsavel_id", "situacao_id", "criado_por"]) assert.ok(prot.includes(c), `coluna ausente em dfd_protocolos: ${c}`);
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('usuarios')").includes("responsavel_padrao_id"), "responsavel_padrao_id ausente");
+    const aud = nomes(db, "SELECT name FROM pragma_table_info('auditoria')");
+    for (const c of ["protocolo_id", "origem", "detalhe"]) assert.ok(aud.includes(c), `coluna ausente em auditoria: ${c}`);
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["auditoria_protocolo_idx", "protocolos_dfd_responsavel_idx", "protocolos_dfd_situacao_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+    // Excluir a situação LIMPA a do protocolo (FK set null) — o protocolo continua.
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO protocolo_situacoes (id, nome, cor, ordem) VALUES (981, 'Em análise', '#2563eb', 0)");
+    db.exec("INSERT INTO dfd_protocolos (id, numero, situacao_id) VALUES (982, 'P-982/2026', 981)");
+    db.exec("DELETE FROM protocolo_situacoes WHERE id = 981");
+    const p = db.prepare("SELECT situacao_id FROM dfd_protocolos WHERE id = 982").get() as { situacao_id: number | null } | undefined;
+    assert.equal(p?.situacao_id, null, "excluir a situação deveria limpar a do protocolo");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

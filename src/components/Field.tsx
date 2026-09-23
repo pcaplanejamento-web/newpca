@@ -160,3 +160,98 @@ export function TextArea({
     </div>
   );
 }
+
+/**
+ * Campo com VÁRIOS valores (ex.: os nºs de contrato/ARP/licitação de um DFD-R): cada valor vira um chip
+ * removível e a entrada acrescenta outro (Enter, "," ou ";" — colar "1/2024; 2/2024" acrescenta todos;
+ * sair do campo também confirma o que foi digitado). Sem repetidos. `disabled` = só os chips. Mesma
+ * linguagem do `TextField` (superfície + foco accent); alvos de toque ≥44px.
+ */
+export function CampoLista({
+  label,
+  valores,
+  onChange,
+  placeholder,
+  disabled = false,
+  maxItem = 60,
+  id,
+}: {
+  label?: string;
+  valores: string[];
+  onChange: (valores: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  /** Tamanho máximo de CADA valor. */
+  maxItem?: number;
+  id?: string;
+}) {
+  const auto = useId();
+  const fid = id ?? auto;
+  const [texto, setTexto] = useState("");
+  const acrescentar = (bruto: string) => {
+    const novos = bruto
+      .split(/[;,]/)
+      .map((t) => t.replace(/\s+/g, " ").trim().slice(0, maxItem))
+      .filter(Boolean);
+    if (novos.length === 0) return;
+    const lista = [...valores];
+    for (const n of novos) if (!lista.some((x) => x.toUpperCase() === n.toUpperCase())) lista.push(n);
+    if (lista.length !== valores.length) onChange(lista);
+    setTexto("");
+  };
+  return (
+    <div>
+      {label && (
+        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+          {label}
+        </label>
+      )}
+      <div className={`${WRAP} min-h-[54px] flex-wrap border-border-2 py-2 ${disabled ? "opacity-80" : ""}`}>
+        {valores.map((v) => (
+          <span
+            key={v}
+            className="inline-flex h-8 max-w-full items-center gap-0.5 rounded-chip border border-border-2 bg-surface pl-2.5 pr-0.5 font-mono text-[12.5px] text-text"
+          >
+            <span className="truncate">{v}</span>
+            {!disabled && (
+              <button
+                type="button"
+                aria-label={`Remover ${v}`}
+                onClick={() => onChange(valores.filter((x) => x !== v))}
+                className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-text after:absolute after:-inset-2 after:content-['']"
+              >
+                <IconClose className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </span>
+        ))}
+        {disabled ? (
+          valores.length === 0 && <span className="text-[15px] text-faint">—</span>
+        ) : (
+          <input
+            id={fid}
+            className={`${INPUT} min-w-[7rem]`}
+            value={texto}
+            maxLength={maxItem * 4}
+            placeholder={valores.length > 0 ? "Adicionar outro" : placeholder}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/[;,]/.test(v)) acrescentar(v);
+              else setTexto(v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                acrescentar(texto);
+              } else if (e.key === "Backspace" && !texto && valores.length > 0) {
+                onChange(valores.slice(0, -1)); // apaga o último chip (como num campo de tags)
+              }
+            }}
+            onBlur={() => acrescentar(texto)}
+            enterKeyHint="done"
+          />
+        )}
+      </div>
+    </div>
+  );
+}

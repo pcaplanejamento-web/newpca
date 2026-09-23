@@ -6,7 +6,8 @@ import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
-import { getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
+import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
+import { responsavelPadraoDe } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,9 @@ export async function POST(req: Request) {
     return erro("Unidade do protocolo inválida ou sem acesso.", 403);
   }
   // REENVIO: só sobrescreve o MESMO protocolo (nº e Id) e com acesso à unidade dele.
+  let gravado: Awaited<ReturnType<typeof getProtocolo>> = null;
   if (reenvio) {
-    const gravado = await getProtocolo(reenvio.protocoloId);
+    gravado = await getProtocolo(reenvio.protocoloId);
     if (!gravado) return erro("Protocolo a sobrescrever não encontrado.", 404);
     if (!acessivel(gravado.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
     const motivo = identidadeReenvio(gravado, { numero: protocolo.numero, idExterno: protocolo.idExterno ?? null });
@@ -67,14 +69,21 @@ export async function POST(req: Request) {
     }
   }
 
-  const r = await iniciarProtocolo(protocolo, a.u.id);
+  // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação) — só preenche um protocolo ainda sem
+  // responsável (a sobrescrita/reenvio mantém o já designado).
+  const r = await iniciarProtocolo(protocolo, a.u.id, reenvio ? null : await responsavelPadraoDe(a.u.id));
+  // Histórico: no reenvio, as diferenças da CAPA (a mesma régua da comparação); os DFDs registram as suas.
+  const detalhe = gravado ? await detalheEdicaoProtocolo(gravado, protocolo) : null;
   await registrarAuditoria({
     usuario: a.u,
     acao: reenvio ? "importar" : "protocolar",
     entidade: "protocolo",
     entidadeId: r.id,
     resumo: reenvio ? `Protocolo ${r.numero} REENVIADO (sobrescrito): ${reenvio.resumo}`.slice(0, 500) : `Protocolo ${r.numero} protocolado`,
-    depois: { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
+    depois: reenvio ? null : { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
+    protocoloId: r.id,
+    origem: reenvio ? "reenvio" : "protocolacao",
+    detalhe,
   });
   return ok({ protocoloId: r.id, numero: r.numero });
 }

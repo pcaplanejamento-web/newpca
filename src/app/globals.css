@@ -262,6 +262,34 @@
   animation: fade-in-up 0.35s ease-out both;
 }
 
+/* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
+   Fica ACIMA da navegação inferior do celular e da barra de seleção fixa da Mesa (a BarraSelecao publica a
+   própria altura em --reserva-rodape enquanto está montada). */
+.avisos-flutuantes {
+  position: fixed;
+  z-index: 90;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + 0.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .avisos-flutuantes {
+    left: auto;
+    width: 22rem;
+  }
+}
+@media (min-width: 1024px) {
+  .avisos-flutuantes {
+    right: 1rem;
+    bottom: calc(var(--reserva-rodape, 0px) + 1rem);
+  }
+}
+
 /* Transição suave entre visões (lista de itens ↔ catálogo): as linhas parecem
    se transformar nos cards e vice-versa (fade + leve escala). Respeita o motion. */
 @keyframes cat-morph {

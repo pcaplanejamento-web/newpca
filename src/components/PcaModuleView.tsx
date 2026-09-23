@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import type { DfdResumo, PcaResumo } from "@/lib/dfd";
 import { brl, dataBR, num } from "@/lib/format";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
-  IconAlert,
   IconBuilding,
   IconChevronRight,
   IconDashboard,
@@ -235,9 +235,9 @@ export function PcaModuleView({
   return (
     <div className="space-y-4">
       {erro && (
-        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>
+        <AvisoFlutuante kind="danger" titulo="Não foi possível concluir" onClose={() => setErro(null)}>
           {erro}
-        </Callout>
+        </AvisoFlutuante>
       )}
 
       <Tabs

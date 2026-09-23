@@ -1,7 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
-import type { LinhaAuditoria } from "@/lib/auditoria";
+import type { ReactNode } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
@@ -10,7 +9,7 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { Button } from "./Button";
 import { ComparacaoDfdView } from "./ComparacaoReenvio";
 import type { PainelDfd } from "./DfdConferir";
-import { Historico } from "./Historico";
+import { Historico, useHistorico } from "./Historico";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { MensagensDfd } from "./MensagensDfd";
 import { IconFile, IconLayers } from "./icons";
@@ -26,8 +25,8 @@ export function tituloPainelDfd(painel: PainelDfd | null, dfd: DfdParseado | nul
 /**
  * Rodapé de um banner de ITEM — o do painel da direita do DFD e o do banner SÓ do item (lista "Itens" da
  * Mesa): "Ver DFD" (no painel da direita fecha o item e volta ao DFD — no celular só um painel aparece
- * por vez; no banner do item, o DFD entra pela direita), "Ver protocolo" (sobe ao processo de origem) e,
- * no banner do item, Fechar + a ação principal (Salvar alterações).
+ * por vez; no banner do item, o DFD surge à ESQUERDA dele), "Ver protocolo" (sobe ao processo de origem,
+ * à esquerda do DFD — Protocolo | DFD | Item) e, no banner do item, Fechar + a ação principal.
  */
 export function RodapePainelItem({
   onVerDfd,
@@ -98,33 +97,27 @@ export function DfdPainelDireito({
   editavel?: boolean;
   onEditarItem?: (idx: number, patch: Partial<DfdParseado["itens"][number]>) => void;
   onRemoverItem?: (idx: number) => void;
-  /** DFD gravado (id) — habilita o histórico. */
+  /** DFD gravado (id) — habilita o histórico (do DFD e o do item). */
   dfdId?: number | null;
   /** (reenvio) diferenças deste DFD em relação ao gravado — painel "Diferenças". */
   comparacao?: ComparacaoDfd | null;
   /** (reenvio) tratamentos herdados do gravado (o PDF não trazia). */
   herdados?: string[];
 }) {
-  const [historico, setHistorico] = useState<LinhaAuditoria[] | null>(null);
   const verHistorico = painel?.tipo === "historico" && dfdId != null;
-  useEffect(() => {
-    if (!verHistorico) return;
-    const ac = new AbortController();
-    setHistorico(null);
-    fetch(`/api/dfd/${dfdId}/historico`, { signal: ac.signal })
-      .then((r) => r.json() as Promise<{ ok?: boolean; historico?: LinhaAuditoria[] }>)
-      .then((j) => {
-        if (!ac.signal.aborted) setHistorico(j.ok ? (j.historico ?? []) : []);
-      })
-      .catch(() => {
-        if (!ac.signal.aborted) setHistorico([]);
-      });
-    return () => ac.abort();
-  }, [verHistorico, dfdId]);
+  const historico = useHistorico(verHistorico ? `/api/dfd/${dfdId}/historico` : null);
 
   if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} />;
   if (verHistorico) {
-    return <Historico entradas={historico ?? []} vazio={historico === null ? "Carregando…" : "Sem histórico deste DFD."} />;
+    return (
+      <Historico
+        entradas={historico.linhas ?? []}
+        carregando={historico.linhas === null && !historico.erro}
+        erro={historico.erro}
+        escopo="dfd"
+        vazio="Nenhuma alteração registrada neste DFD."
+      />
+    );
   }
   const item = painel?.tipo === "item" ? dfd?.itens[painel.idx] : undefined;
   if (painel?.tipo === "item" && item) {
@@ -139,6 +132,7 @@ export function DfdPainelDireito({
         editavel={editavel}
         onChange={editavel && onEditarItem ? (patch) => onEditarItem(idx, patch) : undefined}
         onRemover={editavel && onRemoverItem ? () => onRemoverItem(idx) : undefined}
+        historicoDfdId={dfdId}
       />
     );
   }

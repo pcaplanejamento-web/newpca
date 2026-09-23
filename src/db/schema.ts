@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   index,
   integer,
   primaryKey,
@@ -85,6 +86,10 @@ export const usuarios = sqliteTable(
     status: text("status", { enum: ["ativo", "pendente", "inativo"] })
       .notNull()
       .default("pendente"),
+    // Responsável PADRÃO ao protocolar (perfil): escolhido automaticamente como responsável do protocolo.
+    responsavelPadraoId: integer("responsavel_padrao_id").references((): AnySQLiteColumn => usuarios.id, {
+      onDelete: "set null",
+    }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
@@ -279,6 +284,23 @@ export const grupoReparticoes = sqliteTable(
 );
 
 /**
+ * SITUAÇÕES do protocolo — SÓ as cadastradas pelo ADM (Configurações → Situações): nome, cor e ordem
+ * (a do dropdown). Excluir uma situação limpa a dos protocolos que a usavam (FK `set null`).
+ */
+export const protocoloSituacoes = sqliteTable(
+  "protocolo_situacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull().default("#64748b"),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("protocolo_situacoes_ordem_idx").on(t.ordem)],
+);
+
+/**
  * Protocolo (o "processo" administrativo) que empacota VÁRIOS DFDs. Entidade do
  * domínio DFD, escopo por REPARTIÇÃO (como `dfds`/`unidades`; sem `grupo_id`).
  * `numero` = "Número Processo" da capa, único. Excluir o protocolo NÃO apaga os
@@ -303,6 +325,10 @@ export const dfdProtocolos = sqliteTable(
     }),
     localReparticao: text("local_reparticao"), // texto cru da capa (informativo)
     nomeArquivo: text("nome_arquivo"),
+    // GESTÃO na Mesa (migração 0030): pessoa designada para cuidar do protocolo e a situação
+    // (só as cadastradas pelo ADM). A DISTRIBUIÇÃO (quem protocolou) é o `criadoPor`.
+    responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
+    situacaoId: integer("situacao_id").references(() => protocoloSituacoes.id, { onDelete: "set null" }),
     // Totais (nº de DFDs, itens, valor somado) são recompostos AO VIVO em
     // `protocolo.ts` — o vínculo é dinâmico (link/unlink/re-import), como em `pcas`.
     criadoPor: integer("criado_por").references(() => usuarios.id, {
@@ -315,6 +341,8 @@ export const dfdProtocolos = sqliteTable(
     uniqueIndex("protocolos_dfd_numero_uq").on(t.numero),
     index("protocolos_dfd_reparticao_idx").on(t.reparticaoId),
     index("protocolos_dfd_orgao_idx").on(t.orgaoId),
+    index("protocolos_dfd_responsavel_idx").on(t.responsavelId),
+    index("protocolos_dfd_situacao_idx").on(t.situacaoId),
   ],
 );
 
@@ -495,12 +523,18 @@ export const auditoria = sqliteTable(
     resumo: text("resumo"), // texto legível ("Item 2: quantidade 20 → 35")
     antes: text("antes"), // JSON dos campos antes (edição/exclusão)
     depois: text("depois"), // JSON dos campos depois (criação/edição)
+    // Histórico CONECTADO (migração 0030): o protocolo por onde a alteração passou (liga DFD/itens ao
+    // histórico do protocolo), o canal (`origem`) e o DETALHE estruturado (campos/seções/itens).
+    protocoloId: integer("protocolo_id"),
+    origem: text("origem"),
+    detalhe: text("detalhe"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [
     index("auditoria_entidade_idx").on(t.entidade, t.entidadeId),
     index("auditoria_usuario_idx").on(t.usuarioId),
     index("auditoria_criado_idx").on(t.criadoEm),
+    index("auditoria_protocolo_idx").on(t.protocoloId),
   ],
 );
 

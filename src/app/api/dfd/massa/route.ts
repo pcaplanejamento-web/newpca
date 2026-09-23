@@ -1,7 +1,8 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { type ChaveAvaliacao, comportamentoNo, editavelDe } from "@/lib/avaliacao-core";
+import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, listarCamposMassa } from "@/lib/dfd";
 import { aplicarMassaDfd, type CampoMassa } from "@/lib/dfd-tratamento";
 import { massaDfdsSchema } from "@/lib/dfd-validation";
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 
   const dfds = await listarCamposMassa(ids);
+  // Siglas das unidades (histórico) — UMA consulta para o lote inteiro (≤ 50 DFDs + o destino).
+  const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   for (const d of dfds) {
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
         continue;
       }
       if (acao.campo === "reparticao") {
-        if (d.reparticaoId === acao.reparticaoId || !respDestino) continue; // já está nessa unidade
+        if (d.reparticaoId === acao.reparticaoId || !respDestino || !rotulo) continue; // já está nessa unidade
         const res = validarAssinatura(d.assinaturas, respDestino, { exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo) });
         if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo) }))) {
           falhas.push({ id: d.id, numero: d.numero, motivo: res.motivo });
@@ -71,9 +74,13 @@ export async function POST(req: Request) {
           acao: "editar",
           entidade: "dfd",
           entidadeId: d.id,
-          resumo: `DFD ${d.numero}: unidade alterada em massa (#${d.reparticaoId ?? "—"} → #${acao.reparticaoId})`,
-          antes: { reparticaoId: d.reparticaoId },
-          depois: { reparticaoId: acao.reparticaoId },
+          resumo: `DFD ${d.numero}: unidade ${rotulo(d.reparticaoId)} → ${rotulo(acao.reparticaoId)} (edição em massa)`,
+          protocoloId: d.protocoloId,
+          origem: "massa",
+          detalhe: {
+            alvo: { numero: d.numero, planejamento: d.planejamento },
+            campos: [{ campo: "reparticaoId", rotulo: "Unidade", antes: rotulo(d.reparticaoId), depois: rotulo(acao.reparticaoId) }],
+          },
         });
         alterados++;
         continue;
@@ -81,13 +88,17 @@ export async function POST(req: Request) {
       const novo = aplicarMassaDfd({ tipo: d.tipo, secoes: d.secoes }, acao);
       if (novo.tipo === d.tipo && novo.secoes === d.secoes) continue; // nada muda
       await atualizarDfdCampos(d.id, acao.campo === "tipo" ? { tipo: novo.tipo } : { secoes: novo.secoes });
+      // Detalhe = a MESMA comparação do reenvio sobre o que a massa mexe (tipo ou a seção).
+      const c = compararDfd(comparavelMassa(d, d.tipo, d.secoes), comparavelMassa(d, novo.tipo, novo.secoes));
       await registrarAuditoria({
         usuario: a.u,
         acao: "editar",
         entidade: "dfd",
         entidadeId: d.id,
         resumo: `DFD ${d.numero}: ${ROTULO_CAMPO[acao.campo]} (edição em massa) — ${acao.valor}`.slice(0, 500),
-        ...(acao.campo === "tipo" ? { antes: { tipo: d.tipo }, depois: { tipo: novo.tipo } } : {}),
+        protocoloId: d.protocoloId,
+        origem: "massa",
+        detalhe: { alvo: { numero: d.numero, planejamento: d.planejamento }, campos: c.campos, secoes: c.secoes },
       });
       alterados++;
     } catch (e) {
@@ -96,4 +107,28 @@ export async function POST(req: Request) {
     }
   }
   return ok({ alterados, falhas });
+}
+
+/** Forma comparável MÍNIMA do DFD da massa (só tipo e seções variam — o resto fica igual dos dois lados). */
+function comparavelMassa(
+  d: { numero: string; planejamento: string | null; reparticaoId: number | null },
+  tipo: string | null,
+  secoes: { titulo: string; texto: string }[],
+): DfdComparavel {
+  const nada = { objeto: null, orgaoEntidade: null, setorRequisitante: null, responsavel: null, matricula: null, email: null, telefone: null };
+  return {
+    ...nada,
+    numero: d.numero,
+    planejamento: d.planejamento,
+    tipo,
+    numeroContrato: null,
+    numeroAta: null,
+    numeroLicitacao: null,
+    anoPca: null,
+    reparticaoId: d.reparticaoId,
+    valorTotal: null,
+    secoes,
+    assinaturas: [],
+    itens: [],
+  };
 }

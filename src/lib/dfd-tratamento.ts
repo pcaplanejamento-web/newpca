@@ -22,6 +22,7 @@ import {
   type DfdItemParseado,
   type DfdParseado,
   type DfdSecao,
+  listaRefs,
   norm,
   tipoCurtoDfd,
 } from "./parse-dfd-comum.ts";
@@ -237,7 +238,7 @@ export function dfdRSemReferencia(d: {
   numeroAta?: string | null;
   numeroLicitacao?: string | null;
 }): boolean {
-  return tipoCurtoDfd(d.tipo) === "DFD-R" && !d.numeroContrato && !d.numeroAta && !d.numeroLicitacao;
+  return tipoCurtoDfd(d.tipo) === "DFD-R" && listaRefs([d.numeroContrato, d.numeroAta, d.numeroLicitacao].filter(Boolean).join(";")).length === 0;
 }
 
 /** Pendência (atenção) de um DFD-R sem referência — texto para o relatório opcional. */
@@ -287,41 +288,22 @@ export function conciliacaoCapa(
   return { ativa: true, divergente, zerada, bloqueia: divergente && comp === "bloqueia", somatorio, motivo };
 }
 
-// ---- Estado/Situação de um PROTOCOLO já gravado (para a tabela de protocolos) ----
-// ESTADO = integridade do valor da capa × somatória dos DFDs; SITUAÇÃO = conteúdo.
-export type EstadoProtocolo = "regular" | "atencao";
-
-export function estadoProtocolo(
-  p: { valorCapa: number | null; valorTotal: number; totalDfds: number },
-  regras: RegrasAvaliacao = regrasPadrao(),
-  ctx?: { categoria?: string | null },
-): EstadoProtocolo {
-  // MESMA régua da análise/banner (`conciliacaoCapa`): capa nula/zerada ou diferente da somatória.
-  return conciliacaoCapa({ valorCapa: p.valorCapa, somatorio: p.valorTotal, totalDfds: p.totalDfds }, regras, ctx).divergente
-    ? "atencao"
-    : "regular";
-}
+// ---- Estado de um PROTOCOLO (tabela de protocolos da Mesa) ----
+// ESTADO = a capa + TODOS os problemas dos DFDs/itens do protocolo (`avaliarProtocolo`, conferencia-dfd).
+// A SITUAÇÃO é de gestão — só as cadastradas pelo ADM (Configurações → Situações).
+export type EstadoProtocolo = "erro" | "atencao" | "regular";
 
 export const ESTADO_PROTOCOLO_ROTULO: Record<EstadoProtocolo, string> = {
-  regular: "Regular",
+  erro: "Com erro",
   atencao: "Atenção",
+  regular: "Regular",
 };
 
 export function estadoProtocoloCor(e: EstadoProtocolo, regras?: RegrasAvaliacao): string {
-  if (!regras) return e === "atencao" ? "var(--warn)" : "var(--ok)";
+  if (!regras) return e === "erro" ? "var(--danger)" : e === "atencao" ? "var(--warn)" : "var(--ok)";
+  if (e === "erro") return corComportamentoPadrao(regras, "bloqueia");
   return e === "atencao" ? corComportamentoPadrao(regras, "avisa") : estadoCicloCfg(regras, "regular").cor;
 }
-
-export type SituacaoProtocolo = "vazio" | "preenchido";
-
-export function situacaoProtocolo(p: { totalDfds: number }): SituacaoProtocolo {
-  return p.totalDfds > 0 ? "preenchido" : "vazio";
-}
-
-export const SITUACAO_PROTOCOLO_ROTULO: Record<SituacaoProtocolo, string> = {
-  vazio: "Vazio",
-  preenchido: "Com DFDs",
-};
 
 // ---- Estado por ITEM da tabela (mesma ideia do estado por DFD) ----
 export type EstadoItem = "erro" | "regular";
@@ -953,6 +935,19 @@ export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
 export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinatura[] {
   const set = new Set(assinaturas.map((a) => grupoAssinatura(a.fonte)));
   return (["centi", "dropsigner", "adobe", "foxit", "manual"] as GrupoAssinatura[]).filter((g) => set.has(g));
+}
+
+/**
+ * Nºs de PLANEJAMENTO dos DFDs selecionados, prontos para colar em outro sistema: separados por ":"
+ * SEM espaço nenhum (ex.: "1525:1549:1554"), na ordem recebida, sem vazios nem repetidos. Puro.
+ */
+export function textoPlanejamentos(planejamentos: (string | null | undefined)[]): string {
+  const vistos = new Set<string>();
+  for (const p of planejamentos) {
+    const v = String(p ?? "").replace(/\s+/g, "");
+    if (v && v !== "—") vistos.add(v);
+  }
+  return [...vistos].join(":");
 }
 
 /**

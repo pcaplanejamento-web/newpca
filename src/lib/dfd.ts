@@ -10,7 +10,7 @@ import type {
   EditarPcaPayload,
   GerarPcaPayload,
 } from "./dfd-validation";
-import { type Assinatura, coerceFonte, coerceValidacao } from "./parse-dfd-comum";
+import { type Assinatura, coerceFonte, coerceValidacao, juntarRefs } from "./parse-dfd-comum";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -64,6 +64,8 @@ export type DfdResumo = {
   protocoloAssunto: string | null;
   /** Ano do PCA do protocolo de origem (o DFD herda; referência p/ DFDs antigos sem o próprio ano). */
   protocoloAnoPca: number | null;
+  /** Responsável do protocolo de origem — o filtro de responsável da Mesa vale também para DFDs/itens. */
+  protocoloResponsavelId: number | null;
   // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO nas listas sem abrir o DFD.
   numeroContrato: string | null;
   numeroAta: string | null;
@@ -173,6 +175,7 @@ const colunasDfd = {
   protocoloNumero: dfdProtocolos.numero,
   protocoloAssunto: dfdProtocolos.assunto,
   protocoloAnoPca: dfdProtocolos.anoPca,
+  protocoloResponsavelId: dfdProtocolos.responsavelId,
   numeroContrato: dfds.numeroContrato,
   numeroAta: dfds.numeroAta,
   numeroLicitacao: dfds.numeroLicitacao,
@@ -327,6 +330,12 @@ export async function listarDfdsCompletosDoProtocolo(protocoloId: number): Promi
 
 /** Tamanho do lote de ids por `IN (...)` — folga sob o limite de 100 parâmetros do D1. */
 const LOTE_IDS = 90;
+/** Ids em lotes de `LOTE_IDS` (cada lote cabe num `IN (...)`). */
+export function lotesDeIds(ids: number[]): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < ids.length; i += LOTE_IDS) out.push(ids.slice(i, i + LOTE_IDS));
+  return out;
+}
 
 /**
  * DFDs (por id) COMPLETOS para a CONFERÊNCIA da lista da Mesa (`/api/dfd/conferencia`) — mesmo
@@ -359,9 +368,53 @@ export async function listarDfdsCompletosPorIds(ids: number[]): Promise<DfdDetal
   return out;
 }
 
+/**
+ * TODOS os DFDs COMPLETOS de VÁRIOS protocolos (conferência agregada da lista de protocolos da Mesa —
+ * `/api/protocolo/conferencia`), em lotes de ids de protocolo (≤ 90 por `IN`). Itens por JOIN no protocolo.
+ */
+export async function listarDfdsCompletosDosProtocolos(protocoloIds: number[]): Promise<DfdDetalhe[]> {
+  const uniq = [...new Set(protocoloIds)].filter((n) => Number.isInteger(n) && n > 0);
+  const db = getDb();
+  const out: DfdDetalhe[] = [];
+  for (const lote of lotesDeIds(uniq)) {
+    const [linhas, itens] = await Promise.all([
+      db
+        .select(colunasDetalhe)
+        .from(dfds)
+        .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+        .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
+        .where(inArray(dfds.protocoloId, lote)),
+      db
+        .select(colunasItem)
+        .from(dfdItens)
+        .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
+        .where(inArray(dfds.protocoloId, lote))
+        .orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial)),
+    ]);
+    const porDfd = new Map<number, DfdItemRow[]>();
+    for (const { dfdId, ...it } of itens) {
+      const arr = porDfd.get(dfdId);
+      if (arr) arr.push(it);
+      else porDfd.set(dfdId, [it]);
+    }
+    for (const d of linhas) out.push(paraDetalhe(d, porDfd.get(d.id) ?? []));
+  }
+  return out;
+}
+
 /** Campos que a EDIÇÃO EM MASSA lê/altera (sem itens — leve), por lotes de ids. */
 export async function listarCamposMassa(ids: number[]): Promise<
-  { id: number; numero: string; reparticaoId: number | null; tipo: string | null; nomeArquivo: string | null; secoes: DfdSecaoRow[]; assinaturas: Assinatura[] }[]
+  {
+    id: number;
+    numero: string;
+    planejamento: string | null;
+    protocoloId: number | null;
+    reparticaoId: number | null;
+    tipo: string | null;
+    nomeArquivo: string | null;
+    secoes: DfdSecaoRow[];
+    assinaturas: Assinatura[];
+  }[]
 > {
   const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n) && n > 0);
   const out = [];
@@ -370,6 +423,8 @@ export async function listarCamposMassa(ids: number[]): Promise<
       .select({
         id: dfds.id,
         numero: dfds.numero,
+        planejamento: dfds.planejamento,
+        protocoloId: dfds.protocoloId,
         reparticaoId: dfds.reparticaoId,
         tipo: dfds.tipo,
         nomeArquivo: dfds.nomeArquivo,
@@ -410,13 +465,19 @@ export async function itensParaMassa(ids: number[]): Promise<(ItemMassa & { dfdI
   return out;
 }
 
-/** Cabeçalho dos DFDs da massa (nº, unidade) + QUANTOS itens cada um tem (trava "nunca sem itens"). */
-export async function dfdsParaMassa(dfdIds: number[]): Promise<{ id: number; numero: string; reparticaoId: number | null; totalItens: number }[]> {
+/** Cabeçalho dos DFDs da massa (nº, planejamento, protocolo, unidade) + QUANTOS itens cada um tem (trava
+ * "nunca sem itens"). */
+export async function dfdsParaMassa(
+  dfdIds: number[],
+): Promise<{ id: number; numero: string; planejamento: string | null; protocoloId: number | null; reparticaoId: number | null; totalItens: number }[]> {
   const uniq = [...new Set(dfdIds)].filter((n) => Number.isInteger(n) && n > 0);
   if (uniq.length === 0) return [];
   const db = getDb();
   const [cab, contagens] = await Promise.all([
-    db.select({ id: dfds.id, numero: dfds.numero, reparticaoId: dfds.reparticaoId }).from(dfds).where(inArray(dfds.id, uniq)),
+    db
+      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, protocoloId: dfds.protocoloId, reparticaoId: dfds.reparticaoId })
+      .from(dfds)
+      .where(inArray(dfds.id, uniq)),
     db
       .select({ dfdId: dfdItens.dfdId, n: sql<number>`COUNT(*)` })
       .from(dfdItens)
@@ -524,9 +585,10 @@ export async function upsertDfdCabecalho(
     email: dados.email ?? null,
     telefone: dados.telefone ?? null,
     anoPca: dados.anoPca ?? null,
-    numeroContrato: dados.numeroContrato ?? null,
-    numeroAta: dados.numeroAta ?? null,
-    numeroLicitacao: dados.numeroLicitacao ?? null,
+    // Referências (DFD-R): várias por campo — gravadas no formato canônico "a; b" (`juntarRefs`).
+    numeroContrato: juntarRefs([dados.numeroContrato]),
+    numeroAta: juntarRefs([dados.numeroAta]),
+    numeroLicitacao: juntarRefs([dados.numeroLicitacao]),
     valorTotal: dados.valorTotal ?? null,
     secoes: dados.secoes && dados.secoes.length > 0 ? JSON.stringify(dados.secoes) : null,
     assinaturas: dados.assinaturas && dados.assinaturas.length > 0 ? JSON.stringify(dados.assinaturas) : null,
@@ -601,9 +663,9 @@ export async function atualizarDfdCampos(
   if (campos.tipo !== undefined) set.tipo = campos.tipo || null;
   if (campos.assinaturas !== undefined) set.assinaturas = campos.assinaturas.length > 0 ? JSON.stringify(campos.assinaturas) : null;
   if (campos.secoes !== undefined) set.secoes = campos.secoes.length > 0 ? JSON.stringify(campos.secoes) : null;
-  if (campos.numeroContrato !== undefined) set.numeroContrato = campos.numeroContrato || null;
-  if (campos.numeroAta !== undefined) set.numeroAta = campos.numeroAta || null;
-  if (campos.numeroLicitacao !== undefined) set.numeroLicitacao = campos.numeroLicitacao || null;
+  if (campos.numeroContrato !== undefined) set.numeroContrato = juntarRefs([campos.numeroContrato]);
+  if (campos.numeroAta !== undefined) set.numeroAta = juntarRefs([campos.numeroAta]);
+  if (campos.numeroLicitacao !== undefined) set.numeroLicitacao = juntarRefs([campos.numeroLicitacao]);
   if (campos.objeto !== undefined) set.objeto = campos.objeto || null;
   if (campos.orgaoEntidade !== undefined) set.orgaoEntidade = campos.orgaoEntidade || null;
   if (campos.setorRequisitante !== undefined) set.setorRequisitante = campos.setorRequisitante || null;
@@ -661,14 +723,16 @@ export async function getDfdAssinaturas(
   return { nomeArquivo: r.nomeArquivo, assinaturas: parseAssinaturas(r.assinaturas) };
 }
 
-/** Repartição do DFD com esse `numero` (anti-sequestro no `start-dfd`); `null` se não existe. */
-export async function getReparticaoDfdNumero(numero: string): Promise<{ reparticaoId: number | null; assinaturas: Assinatura[] } | null> {
+/** O DFD com esse `numero` (anti-sequestro e histórico no `start-dfd`); `null` se não existe. */
+export async function getReparticaoDfdNumero(
+  numero: string,
+): Promise<{ id: number; reparticaoId: number | null; assinaturas: Assinatura[] } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfds.reparticaoId, assinaturas: dfds.assinaturas })
+    .select({ id: dfds.id, reparticaoId: dfds.reparticaoId, assinaturas: dfds.assinaturas })
     .from(dfds)
     .where(eq(dfds.numero, numero))
     .limit(1);
-  return r ? { reparticaoId: r.reparticaoId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
+  return r ? { id: r.id, reparticaoId: r.reparticaoId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */
@@ -836,10 +900,14 @@ export async function gerarPca(
 ): Promise<{ id: number } | { erro: string }> {
   const db = getDb();
   const uniq = [...new Set(dados.dfdIds)];
-  const encontrados = await db
-    .select({ id: dfds.id, valorTotal: dfds.valorTotal, totalItens: dfds.totalItens })
-    .from(dfds)
-    .where(inArray(dfds.id, uniq));
+  // Em lotes de ids (≤ 90 por `IN`) — o "selecionar todos" pode trazer centenas de DFDs (limite de 100
+  // parâmetros do D1).
+  const encontrados: { id: number; valorTotal: number | null; totalItens: number | null }[] = [];
+  for (const lote of lotesDeIds(uniq)) {
+    encontrados.push(
+      ...(await db.select({ id: dfds.id, valorTotal: dfds.valorTotal, totalItens: dfds.totalItens }).from(dfds).where(inArray(dfds.id, lote))),
+    );
+  }
   if (encontrados.length !== uniq.length) {
     return { erro: "Alguns DFDs selecionados não existem mais. Recarregue e tente de novo." };
   }

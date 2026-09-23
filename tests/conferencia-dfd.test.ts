@@ -3,12 +3,13 @@ import { describe, it } from "node:test";
 import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import {
   avaliarLinhaDfd,
+  avaliarProtocolo,
   type DfdConferivel,
   estadoDeMensagens,
   mensagensDoDfd,
   type RepConferencia,
 } from "../src/lib/conferencia-dfd.ts";
-import { aplicarMassaDfd, buildPrevisao, conciliacaoCapa, estadoProtocolo, textoSecao } from "../src/lib/dfd-tratamento.ts";
+import { aplicarMassaDfd, buildPrevisao, conciliacaoCapa, textoSecao } from "../src/lib/dfd-tratamento.ts";
 import type { Assinatura } from "../src/lib/parse-dfd-comum.ts";
 
 const assinatura = (over: Partial<Assinatura> = {}): Assinatura => ({
@@ -160,13 +161,55 @@ describe("conciliacaoCapa — valor da capa × somatória dos DFDs", () => {
     assert.equal(c.somatorio, 0.3);
   });
 
-  it("'avisa' aponta sem bloquear; estadoProtocolo usa a MESMA régua", () => {
+  it("'avisa' aponta sem bloquear; o estado do protocolo usa a MESMA régua", () => {
     const regras = { ...regrasPadrao(), pontos: { "protocolo.valorCapa": "intermediario" as const } };
     const c = conciliacaoCapa({ valorCapa: 1, somatorio: 2, totalDfds: 1 }, regras);
     assert.equal(c.divergente, true);
     assert.equal(c.bloqueia, false);
-    assert.equal(estadoProtocolo({ valorCapa: 1, valorTotal: 2, totalDfds: 1 }), "atencao");
-    assert.equal(estadoProtocolo({ valorCapa: 2, valorTotal: 2, totalDfds: 1 }), "regular");
+    assert.equal(avaliarProtocolo({ valorCapa: 1, valorTotal: 2, totalDfds: 1 }, [], regras).estado, "atencao");
+    assert.equal(avaliarProtocolo({ valorCapa: 2, valorTotal: 2, totalDfds: 1 }, [], regras).estado, "regular");
+  });
+});
+
+describe("avaliarProtocolo — o protocolo ACUMULA os problemas dos DFDs e itens", () => {
+  const msg = (status: "erro" | "atencao" | "acerto", chave: string, texto = chave) => ({ status, chave, texto });
+  const dfd = (numero: string, mensagens: ReturnType<typeof msg>[]) => ({ numero, planejamento: `P${numero}`, mensagens });
+  it("capa conferida e DFDs sem problema ⇒ regular (sem resumo)", () => {
+    const r = avaliarProtocolo({ valorCapa: 100, valorTotal: 100, totalDfds: 1 }, [dfd("1", [msg("acerto", "dfd.tipo")])]);
+    assert.equal(r.estado, "regular");
+    assert.equal(r.resumo, undefined);
+  });
+  it("capa divergente (padrão: bloqueia) ⇒ erro; zerada tem rótulo próprio", () => {
+    assert.equal(avaliarProtocolo({ valorCapa: 90, valorTotal: 100, totalDfds: 1 }, []).resumo?.rotulo, "Capa ≠ somatória");
+    const z = avaliarProtocolo({ valorCapa: null, valorTotal: 100, totalDfds: 1 }, []);
+    assert.equal(z.estado, "erro");
+    assert.equal(z.resumo?.rotulo, "Capa sem valor");
+  });
+  it("sem DFDs ⇒ atenção 'Sem DFDs'", () => {
+    const r = avaliarProtocolo({ valorCapa: null, valorTotal: 0, totalDfds: 0 }, []);
+    assert.equal(r.estado, "atencao");
+    assert.deepEqual(r.resumo?.rotulos, ["Sem DFDs"]);
+  });
+  it("agrupa o MESMO problema de vários DFDs (principal com a contagem) e junta todos no filtro", () => {
+    const r = avaliarProtocolo({ valorCapa: 300, valorTotal: 300, totalDfds: 3 }, [
+      dfd("531", [msg("erro", "dfd.prioridade"), msg("erro", "item.valorUnitario")]),
+      dfd("532", [msg("erro", "dfd.prioridade")]),
+      dfd("540", [msg("atencao", "dfd.assinaturaValidar")]),
+    ]);
+    assert.equal(r.estado, "erro");
+    assert.equal(r.resumo?.rotulo, "Sem prioridade (2)");
+    assert.deepEqual(r.resumo?.rotulos, ["Sem prioridade", "Item sem valor", "Validar assinatura"]);
+    assert.equal(r.resumo?.extraErros, 1);
+    assert.equal(r.resumo?.extraAtencoes, 1);
+    assert.equal(r.dfdsComErro, 2);
+    assert.equal(r.dfdsEmAtencao, 1);
+    assert.match(r.resumo?.titulo ?? "", /2 de 3 DFD\(s\) com erro/);
+    assert.match(r.resumo?.titulo ?? "", /Sem prioridade — 2 DFDs: 531 \(Planej\. P531\), 532/);
+  });
+  it("conferência dos DFDs ainda não chegou (null) ⇒ só a capa conta", () => {
+    const r = avaliarProtocolo({ valorCapa: 100, valorTotal: 100, totalDfds: 5 }, null);
+    assert.equal(r.estado, "regular");
+    assert.equal(r.dfdsComErro, 0);
   });
 });
 

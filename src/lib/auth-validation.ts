@@ -31,6 +31,12 @@ export const perfilSchema = z.object({
   foto: fotoSchema.optional(),
 });
 
+/** Preferências do próprio usuário (Perfil → Protocolação): o RESPONSÁVEL PADRÃO escolhido
+ * automaticamente ao protocolar (`null` = nenhum). */
+export const preferenciasPerfilSchema = z.object({
+  responsavelPadraoId: z.number().int().positive().nullable(),
+});
+
 /** Troca de senha do próprio usuário. */
 export const trocarSenhaSchema = z.object({
   senhaAtual: z.string().min(1, "Informe a senha atual."),

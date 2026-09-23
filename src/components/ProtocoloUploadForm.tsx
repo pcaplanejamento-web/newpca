@@ -53,7 +53,8 @@ import type { ProtocoloDetalhe } from "@/lib/protocolo";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
-import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
+import { AvisoFlutuante } from "./AvisoFlutuante";
+import { BarraSelecaoDfds } from "./BarraSelecao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ComparacaoProtocolo } from "./ComparacaoReenvio";
@@ -990,6 +991,7 @@ export function ProtocoloUploadForm({
               nomeArquivo: full.nomeArquivo,
               secoes: full.secoes,
               assinaturas: full.assinaturas,
+              origem: reenvio ? "reenvio" : "protocolacao", // histórico: por onde o DFD foi gravado
             },
             full.itens,
             undefined,
@@ -1006,7 +1008,7 @@ export function ProtocoloUploadForm({
         const r = aExcluir[k];
         setProgresso({ feito: k, total: aExcluir.length, label: `excluindo DFD ${r.numero} (${k + 1}/${aExcluir.length})` });
         try {
-          const del = await fetch(`/api/dfd/${r.id}`, { method: "DELETE" });
+          const del = await fetch(`/api/dfd/${r.id}?origem=reenvio`, { method: "DELETE" });
           const dj = (await del.json().catch(() => ({}))) as { ok?: boolean; error?: string };
           if (!del.ok || !dj.ok) throw new Error(dj.error ?? `HTTP ${del.status}`);
           excluidos++;
@@ -1101,37 +1103,57 @@ export function ProtocoloUploadForm({
             { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) },
           );
 
-  // Leitura do PDF (índice) e falha — na página (importação) ou dentro do lançador (reenvio).
-  const avisoLeitura = (
+  // Leitura do PDF (índice), falha e resultado: na IMPORTAÇÃO viram AVISOS FLUTUANTES (canto inferior — não
+  // deformam a linha do "Importar"); no REENVIO ficam dentro do próprio lançador/modal.
+  const progressoLeitura = leitura && (
+    <div className="mt-2">
+      <Progress value={(leitura.pagina / Math.max(1, leitura.total)) * 100} label={`Página ${num(leitura.pagina)} de ${num(leitura.total)}`} />
+    </div>
+  );
+  const tituloFalha = reenvio ? "Não foi possível reenviar este PDF" : "Não foi possível ler o protocolo";
+  const tituloLendo = "Lendo o protocolo e identificando os DFDs…";
+  const avisoLeitura = reenvio ? (
     <>
       {erro && status === "error" && (
         <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">{reenvio ? "Não foi possível reenviar este PDF" : "Não foi possível ler o protocolo"}</p>
+          <p className="font-semibold">{tituloFalha}</p>
           <p className="opacity-90">{erro}</p>
         </Callout>
       )}
       {status === "parsing" && (
         <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Lendo o protocolo e identificando os DFDs…</p>
-          {leitura && (
-            <div className="mt-2">
-              <Progress
-                value={(leitura.pagina / Math.max(1, leitura.total)) * 100}
-                label={`Página ${num(leitura.pagina)} de ${num(leitura.total)}`}
-              />
-            </div>
-          )}
+          <p className="font-semibold">{tituloLendo}</p>
+          {progressoLeitura}
         </Callout>
+      )}
+    </>
+  ) : (
+    <>
+      {erro && status === "error" && (
+        <AvisoFlutuante
+          kind="danger"
+          titulo={tituloFalha}
+          onClose={() => {
+            setErro(null);
+            setStatus("idle");
+          }}
+        >
+          {erro}
+        </AvisoFlutuante>
+      )}
+      {status === "parsing" && (
+        <AvisoFlutuante kind="info" carregando titulo={tituloLendo}>
+          {progressoLeitura}
+        </AvisoFlutuante>
       )}
     </>
   );
   // Resultado da protocolação/sobrescrita (importados, bloqueados; no reenvio: sem diferença e excluídos).
-  const resultado = relatorio && (
-    <Callout kind={relatorio.bloqueados.length > 0 ? "warn" : "ok"} icon={<IconCheck className="h-5 w-5" />} className={reenvio ? "" : "mt-4"}>
-      <p className="font-semibold">
-        Protocolo {relatorio.numero} {reenvio ? "sobrescrito" : "salvo"}!
-      </p>
-      <p className="opacity-90">
+  const kindResultado = relatorio && relatorio.bloqueados.length > 0 ? "warn" : "ok";
+  const tituloResultado = relatorio ? `Protocolo ${relatorio.numero} ${reenvio ? "sobrescrito" : "salvo"}!` : "";
+  const corpoResultado = relatorio && (
+    <>
+      <p>
         {num(relatorio.importados)} DFD{relatorio.importados === 1 ? "" : "s"} {reenvio ? "regravado" : "protocolado"}
         {relatorio.importados === 1 ? "" : "s"}
         {relatorio.iguais != null ? ` · ${num(relatorio.iguais)} sem diferença (mantido${relatorio.iguais === 1 ? "" : "s"})` : ""}
@@ -1147,11 +1169,28 @@ export function ProtocoloUploadForm({
           ))}
         </ul>
       )}
-    </Callout>
+    </>
   );
+  const resultado =
+    relatorio &&
+    (reenvio ? (
+      <Callout kind={kindResultado} icon={<IconCheck className="h-5 w-5" />}>
+        <p className="font-semibold">{tituloResultado}</p>
+        <div className="opacity-90">{corpoResultado}</div>
+      </Callout>
+    ) : (
+      <AvisoFlutuante
+        kind={kindResultado}
+        titulo={tituloResultado}
+        onClose={() => setRelatorio(null)}
+        duracao={relatorio.bloqueados.length > 0 ? undefined : 10000}
+      >
+        {corpoResultado}
+      </AvisoFlutuante>
+    ));
 
   return (
-    <div className={reenvio ? "contents" : "space-y-4"}>
+    <div className={reenvio ? "contents" : undefined}>
       {/* Botão único de importação (à direita) — abre o lançador. No REENVIO o botão fica no banner do
           protocolo gravado (e a leitura/erro aparecem no próprio lançador). */}
       {!reenvio && (
@@ -1359,23 +1398,14 @@ export function ProtocoloUploadForm({
               </Callout>
             )}
             {sel.size > 0 && !importando && (
-              <BarraSelecao
-                registros={linhasSel.map((l) => ({ key: l.key, rotulo: `DFD ${l.numero}` }))}
+              <BarraSelecaoDfds
+                dfds={linhasSel.map((l) => ({ key: l.key, numero: l.numero, planejamento: l.planejamento, valor: l.valor, itens: l.itens }))}
                 onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
                 onLimpar={() => setSel(new Set())}
                 bloqueada={aplicandoMassa}
-                resumo={
-                  <ResumoSelecao
-                    qtd={linhasSel.length}
-                    singular="DFD"
-                    plural="DFDs"
-                    soma={linhasSel.reduce((t, l) => t + (l.valor ?? 0), 0)}
-                    extra={`${num(linhasSel.reduce((t, l) => t + (l.itens ?? 0), 0))} itens`}
-                  />
-                }
               >
                 <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={anoPca} regras={regras} aplicando={aplicandoMassa} onAplicar={aplicarMassa} />
-              </BarraSelecao>
+              </BarraSelecaoDfds>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
               {importando && progresso ? (

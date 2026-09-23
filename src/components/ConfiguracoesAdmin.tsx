@@ -29,6 +29,7 @@ import {
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
 import { ReferenciaSistema } from "./ReferenciaSistema";
+import { SituacoesAdmin } from "./SituacoesAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -393,7 +394,7 @@ export function ConfiguracoesAdmin({
       <div>
         <h1 className="text-xl font-bold text-text">Configurações</h1>
         <p className="mt-1 text-sm text-muted">
-          Identidade do site, PCAs e atalhos de administração.
+          Identidade do site, PCAs, situações do protocolo, avaliação e atalhos de administração.
         </p>
       </div>
 
@@ -402,6 +403,7 @@ export function ConfiguracoesAdmin({
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
             { key: "pcas", label: "PCAs", content: abaPcas },
+            { key: "situacoes", label: "Situações", content: <SituacoesAdmin /> },
             { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },
             {
               key: "referencia",

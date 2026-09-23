@@ -107,12 +107,13 @@ type Conteudo = Pick<ModalLateral, "titulo" | "cabecalho" | "rodape" | "acoesCab
  * **trava o scroll da página** (nada interage por trás). `acoesCabecalho` = slot de
  * botões à esquerda do X (ex.: cadeado de edição).
  *
- * **Pilha de banners** (`lateral`, `lateral2` ou a lista `paineis`): cada painel ABERTO entra AO
- * LADO DIREITO do anterior — a coluna do grid cresce de 0 (entra da direita para a esquerda) e os
- * anteriores deslizam para a esquerda (`grid-template-columns` + `max-width` animados pelo token de
- * motion). No desktop ficam até 3 lado a lado (os mais antigos recolhem); no celular, só o mais à
- * direita. O fechar é ANIMADO (simétrico ao abrir) — o conteúdo fica montado até a transição
- * terminar. Esc fecha do mais à direita para a esquerda; por último, o modal.
+ * **Pilha de banners** (`lateral`, `lateral2`, a lista `paineis` à DIREITA do principal e a lista
+ * `esquerda` à ESQUERDA dele): as colunas seguem uma ORDEM FIXA (ex.: Protocolo | DFD | Item, qualquer
+ * que seja o banner de entrada) e cada painel que abre surge NO SEU LUGAR — a trilha do grid cresce de 0
+ * e os vizinhos deslizam (`grid-template-columns` + `max-width` animados pelo token de motion). No
+ * desktop ficam até 3 lado a lado; no celular, só o ABERTO POR ÚLTIMO. O fechar é ANIMADO (simétrico
+ * ao abrir) — o conteúdo fica montado até a transição terminar. Esc fecha o último aberto (pilha) e, por
+ * último, o modal.
  */
 export function Modal({
   open,
@@ -127,6 +128,7 @@ export function Modal({
   lateral,
   lateral2,
   paineis,
+  esquerda,
   larguraPrincipal,
   children,
 }: {
@@ -145,6 +147,9 @@ export function Modal({
   lateral2?: ModalLateral;
   /** Pilha GENÉRICA de painéis à direita do principal (substitui `lateral`/`lateral2`). */
   paineis?: ModalPainel[];
+  /** Painéis à ESQUERDA do principal, na ordem das colunas (ex.: o principal é o Item e o DFD/protocolo
+   * entram à esquerda dele — a ordem Protocolo | DFD | Item não muda com o banner de entrada). */
+  esquerda?: ModalPainel[];
   /** Largura preferida (rem) do principal na pilha. Padrão: 64 sozinho, 44 com painéis ao lado. */
   larguraPrincipal?: number;
   children: ReactNode;
@@ -182,16 +187,27 @@ export function Modal({
     };
   }, [open]);
 
-  // Pilha efetiva: `paineis` ou os legados `lateral`/`lateral2` (mesmo comportamento de antes).
-  const pilha: ModalPainel[] =
+  // Painéis efetivos: à direita (`paineis` ou os legados `lateral`/`lateral2`) + os da `esquerda`.
+  const direita: ModalPainel[] =
     paineis ??
     [lateral ? { ...lateral, id: "lateral" } : null, lateral2 ? { ...lateral2, id: "lateral2" } : null].filter(
       (p): p is ModalPainel => p != null,
     );
+  const aEsquerda = esquerda ?? [];
+  const pilha = [...aEsquerda, ...direita];
   const abertosIds = pilha.filter((p) => p.aberto).map((p) => p.id);
   const chaveAbertos = abertosIds.join("|");
   const abertosRef = useRef<string[]>(abertosIds);
   abertosRef.current = abertosIds;
+  // ORDEM DE ABERTURA (o último aberto é o "do topo"): decide o visível no celular e o Esc. Contabilidade
+  // idempotente — tira quem fechou e acrescenta quem abriu (na ordem das colunas, se vários de uma vez).
+  const ordemRef = useRef<string[]>([]);
+  {
+    const abertos = new Set(abertosIds);
+    const ordem = ordemRef.current.filter((id) => abertos.has(id));
+    for (const id of abertosIds) if (!ordem.includes(id)) ordem.push(id);
+    ordemRef.current = ordem;
+  }
 
   // Mantém montado o painel que está FECHANDO (fecha animado): guarda o último conteúdo de cada painel
   // aberto e só desmonta os fechados quando a transição do grid termina (ou, sem transição — motion
@@ -222,19 +238,23 @@ export function Modal({
     return () => window.clearTimeout(t);
   }, [chaveAbertos, open]);
 
-  // Esc fecha do mais à direita para a esquerda (painéis abertos) e, por último, o modal.
+  // Esc fecha o ÚLTIMO painel aberto (pilha) e, por último, o modal — lê a pilha/onClose ATUAIS (ref):
+  // o ouvinte é registrado uma vez por abertura, não a cada render.
+  const escRef = useRef({ pilha, onClose });
+  escRef.current = { pilha, onClose };
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || bloqueado) return;
       if (modaisAbertos[modaisAbertos.length - 1] !== idModal.current) return; // há outro modal por cima
-      const ultimo = [...pilha].reverse().find((p) => p.aberto);
+      const idUltimo = ordemRef.current[ordemRef.current.length - 1];
+      const ultimo = escRef.current.pilha.find((p) => p.id === idUltimo && p.aberto);
       if (ultimo) ultimo.onClose();
-      else onClose();
+      else escRef.current.onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose, bloqueado, pilha]);
+  }, [open, bloqueado]);
 
   if (!open || !montado) return null;
 
@@ -266,11 +286,12 @@ export function Modal({
     );
   }
 
-  // Pilha: o principal + os painéis abertos; VISÍVEIS = os últimos (até 3 no desktop, 1 no celular).
+  // Colunas na ORDEM FIXA: esquerda | principal | direita. VISÍVEIS = os ABERTOS POR ÚLTIMO (até 3 no
+  // desktop, 1 no celular) — sempre desenhados na ordem das colunas.
   const PRINCIPAL = "__principal";
-  const colunas = [{ id: PRINCIPAL, aberto: true, largura: larguraPrincipal }, ...pilha];
-  const abertos = colunas.filter((c) => c.aberto).map((c) => c.id);
-  const visiveis = new Set(abertos.slice(-(isDesktop ? MAX_VISIVEIS : 1)));
+  const colunas = [...aEsquerda, { id: PRINCIPAL, aberto: true, largura: larguraPrincipal }, ...direita];
+  const porAbertura = [PRINCIPAL, ...ordemRef.current];
+  const visiveis = new Set(porAbertura.slice(-(isDesktop ? MAX_VISIVEIS : 1)));
   const largura = (c: { id: string; largura?: number }) =>
     c.largura ?? (c.id === PRINCIPAL ? (visiveis.size > 1 ? 44 : 64) : 40);
   // Mesma ESTRUTURA de trilha aberta/fechada (minmax(0, Nfr)) — o navegador interpola a largura.
@@ -278,6 +299,27 @@ export function Modal({
   const maxW = !isDesktop
     ? "100%"
     : `${colunas.filter((c) => visiveis.has(c.id)).reduce((t, c) => t + largura(c), 0) + (visiveis.size - 1)}rem`;
+  /** A coluna de UM painel da pilha (montada enquanto aberta ou fechando — fecha animado). */
+  const colunaPainel = (p: ModalPainel) => {
+    const conteudo = p.aberto ? p : cache.current.get(p.id);
+    const mostrar = (p.aberto || montados.has(p.id)) && conteudo;
+    return (
+      <div key={p.id} className="min-w-0 overflow-hidden" inert={!visiveis.has(p.id)}>
+        {mostrar && (
+          <Painel
+            titulo={conteudo.titulo}
+            cabecalho={conteudo.cabecalho}
+            onClose={p.onClose}
+            rodape={conteudo.rodape}
+            acoesCabecalho={conteudo.acoesCabecalho}
+            bloqueado={bloqueado}
+          >
+            {conteudo.children}
+          </Painel>
+        )}
+      </div>
+    );
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -295,6 +337,7 @@ export function Modal({
           if (e.target === e.currentTarget && e.propertyName === "grid-template-columns") desmontarFechados();
         }}
       >
+        {aEsquerda.map(colunaPainel)}
         <div className="min-w-0 overflow-hidden" inert={!visiveis.has(PRINCIPAL)}>
           <Painel
             titulo={titulo}
@@ -307,26 +350,7 @@ export function Modal({
             {children}
           </Painel>
         </div>
-        {pilha.map((p) => {
-          const conteudo = p.aberto ? p : cache.current.get(p.id);
-          const mostrar = (p.aberto || montados.has(p.id)) && conteudo;
-          return (
-            <div key={p.id} className="min-w-0 overflow-hidden" inert={!visiveis.has(p.id)}>
-              {mostrar && (
-                <Painel
-                  titulo={conteudo.titulo}
-                  cabecalho={conteudo.cabecalho}
-                  onClose={p.onClose}
-                  rodape={conteudo.rodape}
-                  acoesCabecalho={conteudo.acoesCabecalho}
-                  bloqueado={bloqueado}
-                >
-                  {conteudo.children}
-                </Painel>
-              )}
-            </div>
-          );
-        })}
+        {direita.map(colunaPainel)}
       </div>
     </div>,
     document.body,

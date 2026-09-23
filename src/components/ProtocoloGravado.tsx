@@ -16,13 +16,13 @@ import {
   removerItemDfd,
   STATUS_MENSAGEM_COR,
 } from "@/lib/dfd-tratamento";
-import { dataBR, num } from "@/lib/format";
+import { dataBR } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { ProtocoloDetalhe } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
-import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
+import { BarraSelecaoDfds } from "./BarraSelecao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
@@ -30,9 +30,10 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainel
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
+import { Historico, useHistorico } from "./Historico";
 import { IconAlert, IconClock, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import type { ConteudoBanner } from "./DfdGravado";
-import type { ModalPainel } from "./Modal";
+import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
 import type { LinhaDfd } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
@@ -72,7 +73,7 @@ const ERRO_EXTRA = new Set(["dfd.orgao", "dfd.orgaoUnidadeDivergente"]);
  * (protocolação): corpo `ProtocoloView` (mini banners, conciliação da capa com "Substituir pela
  * somatória", capa com cadeado por campo, planilha de DFDs com seleção), barra de SELEÇÃO + edição em
  * massa, DFD ao lado (`DfdConferir` + `DfdRodape`) e o painel da direita (mensagens/item/histórico),
- * relatório de erros. A ÚNICA diferença: a planilha é UMA tabela só (`unica`). As edições ficam num
+ * relatório de erros e o HISTÓRICO do protocolo (modal: capa + DFDs + itens, agrupado por evento). A ÚNICA diferença: a planilha é UMA tabela só (`unica`). As edições ficam num
  * RASCUNHO até "Salvar alterações" (só o que mudou vai ao banco — `diffCapaGravada`/`diffDfdGravado`).
  * Devolve os PAINÉIS para a pilha de banners da Mesa (`BannersMesa`). `empilhado`: o protocolo entrou
  * à DIREITA de um DFD ("Ver protocolo") — clicar numa linha troca o DFD da pilha (sem DFD ao lado).
@@ -136,6 +137,9 @@ export function useProtocoloGravado({
   const [versao, setVersao] = useState(0);
   // REENVIO do PDF (sobrescrever): contador que abre o lançador do `ProtocoloUploadForm` em modo reenvio.
   const [reenviar, setReenviar] = useState(0);
+  // HISTÓRICO conectado do protocolo (capa + DFDs + itens) — modal próprio, carregado só ao abrir.
+  const [historicoAberto, setHistoricoAberto] = useState(false);
+  const historico = useHistorico(historicoAberto && proto ? `/api/protocolo/${proto.id}/historico` : null);
 
   // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (abrir A, fechar e abrir B: uma
   // resposta atrasada de A nunca aparece no banner de B).
@@ -206,6 +210,7 @@ export function useProtocoloGravado({
     setAbertoId(null);
     setPainel(null);
     setErro(null);
+    setHistoricoAberto(false);
     if (protocoloId != null) void carregar(protocoloId, dfdInicial);
   }, [protocoloId, dfdInicial]);
 
@@ -488,22 +493,13 @@ export function useProtocoloGravado({
           </Callout>
         )}
         {sel.size > 0 && podeEditar && !salvando && (
-          <BarraSelecao
-            registros={linhasSel.map((l) => ({ key: l.key, rotulo: `DFD ${l.numero}` }))}
+          <BarraSelecaoDfds
+            dfds={linhasSel.map((l) => ({ key: l.key, numero: l.numero, planejamento: l.planejamento, valor: l.valor, itens: l.itens }))}
             onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
             onLimpar={() => setSel(new Set())}
-            resumo={
-              <ResumoSelecao
-                qtd={linhasSel.length}
-                singular="DFD"
-                plural="DFDs"
-                soma={linhasSel.reduce((t, l) => t + (l.valor ?? 0), 0)}
-                extra={`${num(linhasSel.reduce((t, l) => t + (l.itens ?? 0), 0))} itens`}
-              />
-            }
           >
             <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={proto?.anoPca ?? null} regras={regras} onAplicar={aplicarMassa} />
-          </BarraSelecao>
+          </BarraSelecaoDfds>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           {salvando && progresso ? (
@@ -518,6 +514,11 @@ export function useProtocoloGravado({
             </span>
           )}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {proto && !salvando && (
+              <Button variant="secondary" onClick={() => setHistoricoAberto(true)} icon={<IconClock className="h-4 w-4" />}>
+                Histórico
+              </Button>
+            )}
             {!salvando && temRelatorio && (
               <Button
                 variant="secondary"
@@ -703,6 +704,28 @@ export function useProtocoloGravado({
           orgaos={orgaos}
         />
       )}
+      <Modal
+        open={historicoAberto && !!proto}
+        onClose={() => setHistoricoAberto(false)}
+        titulo={`Histórico — Protocolo ${proto?.numero ?? ""}`.trim()}
+        size="lg"
+        rodape={
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setHistoricoAberto(false)}>
+              Fechar
+            </Button>
+          </div>
+        }
+      >
+        <Historico
+          entradas={historico.linhas ?? []}
+          carregando={historico.linhas === null && !historico.erro}
+          erro={historico.erro}
+          escopo="protocolo"
+          protocoloId={proto?.id ?? null}
+          vazio="Nenhuma alteração registrada neste protocolo."
+        />
+      </Modal>
       <RelatorioErros
       open={relatorioAberto}
       onClose={() => setRelatorioAberto(false)}

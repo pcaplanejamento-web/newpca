@@ -81,10 +81,10 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "imp-automatch",
     dominio: "importacao",
-    titulo: "Auto-match da repartição pela sigla do Setor",
+    titulo: "Previsão da unidade pela assinatura",
     descricao:
-      "Ao importar, o DFD é vinculado a uma repartição automaticamente pela sigla do Setor Requisitante (com fallback pelo nome da secretaria, para siglas divergentes). O usuário confirma ou corrige no banner.",
-    fonte: "reparticao-match",
+      "Ao importar, o DFD identifica o ÓRGÃO pelo campo 'Órgão/Entidade' e prevê a UNIDADE pelo assinante — o responsável cadastrado que assinou o DFD (qualquer formato de assinatura). Sem previsão, a unidade fica obrigatória e o usuário escolhe no banner.",
+    fonte: "preverUnidadeDoDfd (reparticao-match)",
     configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
   },
   {
@@ -94,6 +94,14 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Ao importar (ou clicar em 'Ver'), o DFD aparece completo num banner. O usuário confere a repartição e trata as seções; nada é gravado até confirmar. O mesmo componente é usado no import avulso e por DFD dentro do protocolo.",
     fonte: "DfdConferir",
+  },
+  {
+    id: "imp-refs-renovacao",
+    dominio: "importacao",
+    titulo: "DFD-R: várias referências de renovação",
+    descricao:
+      "Um DFD de renovação pode citar VÁRIOS contratos, ARPs e licitações: o sistema lê todas as menções do documento e o usuário edita a lista (um valor por chip) no bloco 'Referências da renovação'. DFD-R sem nenhuma referência fica em ATENÇÃO (não bloqueia).",
+    fonte: "referenciasRenovacao / listaRefs (parse-dfd-comum)",
   },
 
   // ---- Protocolo ----
@@ -108,18 +116,18 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "proto-capa-imutavel",
     dominio: "protocolo",
-    titulo: "Os dados da capa são IMUTÁVEIS",
+    titulo: "Identificadores da capa são IMUTÁVEIS",
     descricao:
-      "Os dados da capa do protocolo (Id, número, interessado, documento, valor da capa, assunto, local) não podem ser editados em nenhum momento. No preview e no gravado ficam só-leitura. Só a repartição (roteamento, não é dado da capa) permanece editável.",
-    fonte: "editarProtocoloSchema",
+      "Número, Id, data e ano do PCA do protocolo não podem ser editados em nenhum momento. Os campos de conteúdo da capa (interessado, assunto, observação, CPF/CNPJ, valor da capa e local) têm cadeado POR CAMPO — na análise e no protocolo gravado. A unidade (roteamento) segue editável.",
+    fonte: "editarProtocoloSchema / CapaCampos",
   },
   {
     id: "proto-capa-valor",
     dominio: "protocolo",
     titulo: "Conciliação do valor da capa × somatória dos DFDs",
     descricao:
-      "O valor da capa é conciliado uma única vez, na importação. Não protocola com o valor da capa zerado/nulo OU diferente da somatória dos valores dos DFDs (tolerância de 1 centavo) — o usuário substitui a capa pela somatória (um clique) para liberar. No protocolo já gravado a divergência é só apontada (capa imutável).",
-    fonte: "valoresBatem / ProtocoloUploadForm",
+      "O valor da capa é conciliado com a somatória dos valores dos DFDs (tolerância de 1 centavo) na análise E no protocolo gravado: capa zerada/nula OU diferente da somatória é apontada, e 'Substituir pela somatória' corrige num clique. Por padrão, não se protocola com a capa divergente.",
+    fonte: "conciliacaoCapa (dfd-tratamento)",
     configuravelEm: { rotulo: "Avaliação (protocolo.valorCapa)" },
   },
   {
@@ -138,6 +146,31 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "O sistema classifica o PDF: um protocolo (com capa OU 2+ 'Número DFD') não entra pela aba DFDs, e um DFD avulso não entra pela aba Protocolos. Documento estranho é recusado.",
     fonte: "classificarPdf (parse-protocolo-pdf-core)",
+  },
+  {
+    id: "proto-gestao",
+    dominio: "protocolo",
+    titulo: "Responsável, Distribuição e Data da protocolação",
+    descricao:
+      "RESPONSÁVEL = a pessoa designada para cuidar do protocolo, marcada no dropdown da própria célula da Mesa (ou na edição em massa). Ao protocolar, entra o responsável PADRÃO que quem protocola escolheu no Perfil — só num protocolo ainda sem responsável (a sobrescrita/reenvio mantém o designado). DISTRIBUIÇÃO = quem protocolou (o usuário logado). DATA = a data da protocolação.",
+    fonte: "iniciarProtocolo (protocolo) / preferências do Perfil",
+    configuravelEm: { rotulo: "Perfil → Protocolação", href: "/painel/perfil" },
+  },
+  {
+    id: "proto-filtros-mesa",
+    dominio: "protocolo",
+    titulo: "Filtros de hierarquia da Mesa: Responsável e Assunto",
+    descricao:
+      "Acima de Protocolos · DFDs · Itens, dois seletores filtram as TRÊS visões pelo responsável e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda.",
+    fonte: "passaFiltroMesa (mesa-filtros)",
+  },
+  {
+    id: "proto-historico",
+    dominio: "protocolo",
+    titulo: "Histórico conectado: protocolo › DFD › item",
+    descricao:
+      "Toda alteração é registrada com quem, quando, o CANAL (protocolação, reenvio, edição no banner, em massa, na tabela, vínculo, exclusão) e o PROTOCOLO por onde passou, com o antes → depois de cada campo, seção, assinatura e item. O protocolo mostra o seu histórico e o dos DFDs e itens que passaram por ele (agrupado por evento, com filtro Capa/DFDs/Itens); o DFD mostra o dele; o item, só o que o tocou.",
+    fonte: "auditoria (origem/detalhe/protocolo_id) + Historico",
   },
 
   // ---- Avaliação (narrativo; os pontos vêm DERIVADOS do catálogo) ----
@@ -190,8 +223,9 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "estados",
     titulo: "Estado × Situação do protocolo",
     descricao:
-      "ESTADO do protocolo = conciliação do valor da capa × somatória dos DFDs (capa ausente/zerada ou diferente = atenção), com a MESMA régua da análise e do banner — que também oferece 'Substituir pela somatória'. A conciliação não depende de os DFDs estarem sem erro. SITUAÇÃO = tem DFDs ou não (vazio/com DFDs).",
-    fonte: "conciliacaoCapa / estadoProtocolo / situacaoProtocolo",
+      "ESTADO do protocolo ACUMULA todos os problemas dele: a conciliação da capa (valor ausente/zerado ou diferente da somatória), 'Sem DFDs' e os erros/atenções de CADA DFD e dos seus itens (a mesma conferência por linha dos DFDs), agrupados por problema com a quantidade de DFDs — erro › atenção › regular; o filtro da coluna encontra qualquer um deles. SITUAÇÃO = a etapa do processo, escolhida no dropdown da própria célula entre as situações que o ADM cadastra (nome, cor e ordem).",
+    fonte: "avaliarProtocolo (conferencia-dfd) / situações (protocolo_situacoes)",
+    configuravelEm: { rotulo: "Configurações → Situações" },
   },
 
   // ---- Normalização ----

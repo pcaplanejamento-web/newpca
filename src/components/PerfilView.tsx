@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
+import type { Pessoa } from "@/lib/usuarios";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconKey, IconLogout, IconSave, IconTrash } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
@@ -57,7 +58,14 @@ function Aviso({ msg }: { msg: Msg }) {
 
 const cardCls = "rounded-card border border-border bg-surface p-5 shadow-ring";
 
-export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
+export function PerfilView({
+  usuario,
+  protocolacao = null,
+}: {
+  usuario: UsuarioSessao;
+  /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente. */
+  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null } | null;
+}) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +85,31 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
   const [msgSenha, setMsgSenha] = useState<Msg>(null);
 
   const [saindo, setSaindo] = useState(false);
+
+  // Protocolação: responsável padrão ao protocolar
+  const [respPadrao, setRespPadrao] = useState<number | null>(protocolacao?.responsavelPadraoId ?? null);
+  const [salvandoPref, setSalvandoPref] = useState(false);
+  const [msgPref, setMsgPref] = useState<Msg>(null);
+
+  async function salvarPreferencia(e: FormEvent) {
+    e.preventDefault();
+    setSalvandoPref(true);
+    setMsgPref(null);
+    try {
+      const res = await fetch("/api/perfil/preferencias", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responsavelPadraoId: respPadrao }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+      setMsgPref({ tipo: "ok", texto: "Preferência salva — vale para os próximos protocolos." });
+    } catch (err) {
+      setMsgPref({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
+    } finally {
+      setSalvandoPref(false);
+    }
+  }
 
   async function escolherFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -228,6 +261,44 @@ export function PerfilView({ usuario }: { usuario: UsuarioSessao }) {
           </Button>
         </div>
       </form>
+
+      {/* Protocolação (editores): responsável padrão escolhido automaticamente ao protocolar */}
+      {protocolacao && (
+        <form onSubmit={salvarPreferencia} className={`lg:col-span-2 ${cardCls}`}>
+          <h3 className="flex items-center gap-2 text-sm font-bold text-text">
+            <IconUser className="h-4 w-4" /> Protocolação
+          </h3>
+          <div className="mt-4 max-w-xl">
+            <label className={labelCls} htmlFor="p-resp-padrao">
+              Responsável padrão ao protocolar
+            </label>
+            <select
+              id="p-resp-padrao"
+              className={inputCls}
+              value={respPadrao ?? ""}
+              onChange={(e) => setRespPadrao(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— Nenhum (definir na Mesa) —</option>
+              {protocolacao.pessoas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                  {p.id === usuario.id ? " (eu)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[12px] text-muted">
+              Todo protocolo novo que você protocolar já sai com este responsável — dá para trocar depois na coluna Responsável
+              da Mesa.
+            </p>
+          </div>
+          <Aviso msg={msgPref} />
+          <div className="mt-4 flex justify-end">
+            <Button type="submit" loading={salvandoPref} icon={<IconSave className="h-[18px] w-[18px]" />}>
+              Salvar preferência
+            </Button>
+          </div>
+        </form>
+      )}
 
       {/* Aparência */}
       <div className={`flex items-center justify-between lg:col-span-2 ${cardCls}`}>

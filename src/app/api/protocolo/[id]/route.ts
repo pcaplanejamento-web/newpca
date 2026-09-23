@@ -4,8 +4,10 @@ import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
+import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
+import { getSituacao } from "@/lib/situacoes";
+import { pessoaAtiva } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   return ok({ protocolo, dfds, unidades });
 }
 
-/** Edita um protocolo já gravado (banner destravado) — escopo por unidade. */
+/** Edita um protocolo já gravado — o banner (capa/unidade) ou a célula da Mesa (responsável/situação).
+ * Escopo por unidade; o responsável tem de ser um usuário ATIVO e a situação, uma cadastrada pelo ADM. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
@@ -37,38 +40,31 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!id) return erro("ID inválido.");
   const p = await parseCorpo(editarProtocoloSchema, req);
   if ("resp" in p) return p.resp;
+  const { origem, ...campos } = p.data;
 
   const proto = await getProtocolo(id);
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const { lista } = await getReparticaoContexto(a.u);
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
   if (!acessivel(proto.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
-  if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
+  if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
     return erro("Sem acesso à unidade de destino.", 403);
   }
+  if (campos.responsavelId != null && !(await pessoaAtiva(campos.responsavelId))) return erro("Escolha um usuário ativo como responsável.", 422);
+  if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
-  await atualizarProtocolo(id, p.data);
-  // Diff só dos campos presentes no corpo (antes = gravado; depois = novo).
-  const CAMPOS = ["reparticaoId", "interessado", "assunto", "observacao", "documento", "valorCapa", "localReparticao"] as const;
-  const antes: Record<string, unknown> = {};
-  const depois: Record<string, unknown> = {};
-  for (const c of CAMPOS) {
-    if (p.data[c] !== undefined) {
-      antes[c] = proto[c] ?? null;
-      depois[c] = p.data[c] ?? null;
-    }
-  }
+  await atualizarProtocolo(id, campos);
+  // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
+  const detalhe = await detalheEdicaoProtocolo(proto, campos);
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",
     entidade: "protocolo",
     entidadeId: id,
-    resumo:
-      p.data.reparticaoId !== undefined && p.data.reparticaoId !== proto.reparticaoId
-        ? `Protocolo #${id}: unidade #${proto.reparticaoId ?? "—"} → #${p.data.reparticaoId ?? "—"}`
-        : `Protocolo #${id} editado`,
-    antes,
-    depois,
+    resumo: `Protocolo ${proto.numero}: ${detalhe.campos?.map((c) => c.rotulo).join(", ") || "editado"}`,
+    protocoloId: id,
+    origem: origem ?? "banner",
+    detalhe,
   });
   return ok();
 }
@@ -86,6 +82,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     return erro("Sem acesso a este protocolo.", 403);
   }
   await excluirProtocolo(id);
-  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído` });
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído (com os DFDs vinculados)`, protocoloId: id, origem: "exclusao" });
   return ok();
 }

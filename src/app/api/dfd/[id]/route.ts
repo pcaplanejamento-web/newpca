@@ -1,13 +1,13 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
-import { diffCampos } from "@/lib/auditoria-core";
+import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { comportamentoNo } from "@/lib/avaliacao-core";
-import { atualizarDfdCampos, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
-import { editarDfdSchema } from "@/lib/dfd-validation";
+import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
+import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
+import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
@@ -28,7 +28,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return ok({ dfd, unidade: unidade ?? null });
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** Exclui o DFD. `?origem=reenvio` = excluído pelo reenvio do protocolo (não veio no PDF) — só o histórico muda. */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
@@ -42,13 +43,17 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const alvo = await getDfd(id); // snapshot p/ o log antes de apagar
   const r = await excluirDfd(id);
   if (!r.ok) return erro(r.erro, 409);
+  const reenvio = new URL(req.url).searchParams.get("origem") === "reenvio";
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",
     entidade: "dfd",
     entidadeId: id,
-    resumo: `DFD ${alvo?.numero ?? id} excluído`,
+    resumo: `DFD ${alvo?.numero ?? id} excluído${reenvio ? " (não veio no PDF reenviado)" : ""}`,
     antes: alvo ? { numero: alvo.numero, tipo: alvo.tipo, valorTotal: alvo.valorTotal, totalItens: alvo.itens.length } : null,
+    protocoloId: dfd.protocoloId,
+    origem: reenvio ? "reenvio" : "exclusao",
+    detalhe: alvo ? { alvo: { numero: alvo.numero, planejamento: alvo.planejamento } } : null,
   });
   return ok();
 }
@@ -88,13 +93,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
     }
     await vincularDfd(id, p.data.protocoloId);
-    await registrarAuditoria({
-      usuario: a.u,
-      acao: "editar",
-      entidade: "dfd",
-      entidadeId: id,
-      resumo: p.data.protocoloId != null ? `DFD vinculado ao protocolo #${p.data.protocoloId}` : "DFD desvinculado do protocolo",
-    });
+    // Histórico nos DOIS protocolos (o de onde saiu e o para onde foi) — cada um mostra o seu lado.
+    if (p.data.protocoloId !== dfd.protocoloId) {
+      const snap = await getDfd(id);
+      const alvo = { numero: snap?.numero ?? String(id), planejamento: snap?.planejamento ?? null };
+      const numDe = dfd.protocoloId != null ? ((await getProtocoloReparticao(dfd.protocoloId))?.numero ?? `#${dfd.protocoloId}`) : "—";
+      const numPara = p.data.protocoloId != null ? ((await getProtocoloReparticao(p.data.protocoloId))?.numero ?? `#${p.data.protocoloId}`) : "—";
+      const detalhe = { alvo, campos: [{ campo: "protocolo", rotulo: "Protocolo", antes: numDe, depois: numPara }] };
+      for (const pid of [dfd.protocoloId, p.data.protocoloId]) {
+        if (pid == null) continue;
+        await registrarAuditoria({
+          usuario: a.u,
+          acao: "editar",
+          entidade: "dfd",
+          entidadeId: id,
+          resumo: `DFD ${alvo.numero}: protocolo ${numDe} → ${numPara}`,
+          protocoloId: pid,
+          origem: "vinculo",
+          detalhe,
+        });
+      }
+    }
   }
 
   // Editar unidade, seções (tratamento) e/ou referências de renovação (DFD-R). Não
@@ -116,6 +135,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     p.data.telefone !== undefined;
   // Snapshot "antes" (para o diff do log) — buscado 1× quando há edição de campos ou itens.
   const antes = editaCampos || p.data.itens !== undefined ? await getDfd(id) : null;
+  let assinaturasGravadas: Assinatura[] | undefined;
   if (editaCampos) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à unidade de destino.", 403);
@@ -163,87 +183,67 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       email: p.data.email,
       telefone: p.data.telefone,
     });
-    // Log: diff só dos campos ENVIADOS (undefined = não editado, não entra no diff).
-    const cs = (
-      [
-        "reparticaoId",
-        "tipo",
-        "numeroContrato",
-        "numeroAta",
-        "numeroLicitacao",
-        "objeto",
-        "orgaoEntidade",
-        "setorRequisitante",
-        "responsavel",
-        "matricula",
-        "email",
-        "telefone",
-      ] as const
-    ).filter((c) => p.data[c] !== undefined);
-    const dd = diffCampos(antes as Record<string, unknown>, p.data as Record<string, unknown>, cs, {
-      reparticaoId: "unidade",
-      tipo: "tipo",
-      numeroContrato: "contrato",
-      numeroAta: "ata",
-      numeroLicitacao: "licitação",
-      objeto: "objeto",
-      orgaoEntidade: "órgão/entidade",
-      setorRequisitante: "setor requisitante",
-      responsavel: "responsável",
-      matricula: "matrícula",
-      email: "e-mail",
-      telefone: "telefone",
-    });
-    const validacaoMudou =
-      assinaturas !== undefined &&
-      JSON.stringify(assinaturas.find((x) => x.validacao)?.validacao?.responsavel ?? null) !==
-        JSON.stringify(gravadas?.assinaturas.find((x) => x.validacao)?.validacao?.responsavel ?? null);
-    const validacaoTxt = !validacaoMudou
-      ? ""
-      : assinaturas?.some((x) => x.validacao)
-        ? `assinatura validada pela equipe (${assinaturas.find((x) => x.validacao)?.validacao?.responsavel})`
-        : "validação da assinatura desfeita";
-    const partes = [dd.resumo, p.data.secoes !== undefined ? "tratamento/seções atualizados" : "", validacaoTxt].filter(Boolean);
-    await registrarAuditoria({
-      usuario: a.u,
-      acao: "editar",
-      entidade: "dfd",
-      entidadeId: id,
-      resumo: `DFD ${antes?.numero ?? id}: ${partes.join("; ") || "editado"}`,
-      antes: dd.antes,
-      depois: dd.depois,
-    });
+    assinaturasGravadas = assinaturas;
   }
 
   // Editar ITENS (banner do item destravado): reescreve `dfd_itens` + recomputa o
   // `valorTotal` do cabeçalho. Escopo por unidade já garantido acima. Mesma regra do
   // import: todo item precisa de valor unitário (> 0).
-  if (p.data.itens !== undefined) {
-    await reescreverDfdItens(id, p.data.itens);
-    // Log: por item, o que mudou (descrição só sinaliza "alterada" p/ manter o resumo curto).
-    const antesItens = antes?.itens ?? [];
-    const linhas: string[] = [];
-    p.data.itens.forEach((d2, i) => {
-      const a2 = antesItens[i];
-      if (!a2) return;
-      const dd = diffCampos(
-        a2 as Record<string, unknown>,
-        d2 as Record<string, unknown>,
-        ["codigo", "unidade", "quantidade", "valorUnitario", "valorTotal"],
-        { codigo: "código", unidade: "unidade", quantidade: "quantidade", valorUnitario: "valor unit.", valorTotal: "valor total" },
-      );
-      const partes = [dd.resumo, (a2.descricao ?? null) !== (d2.descricao ?? null) ? "descrição alterada" : ""].filter(Boolean);
-      if (partes.length) linhas.push(`Item ${d2.item ?? i + 1}: ${partes.join("; ")}`);
-    });
+  if (p.data.itens !== undefined) await reescreverDfdItens(id, p.data.itens);
+
+  // HISTÓRICO: UMA linha com TUDO o que mudou (cabeçalho, seções, assinaturas e itens — a MESMA régua da
+  // comparação do reenvio), com o protocolo do DFD como origem.
+  if (antes && (editaCampos || p.data.itens !== undefined)) {
+    const depois = comparavelDepois(antes, p.data, assinaturasGravadas);
+    const c = compararDfd(antes, depois, await rotulosUnidades([antes.reparticaoId, depois.reparticaoId]));
+    const partes = [...c.campos.map((x) => x.rotulo), ...c.secoes.map((x) => x.rotulo), ...(c.assinaturas ? ["assinaturas"] : [])];
+    if (c.itens.length > 0) partes.push(`${c.itens.length} item(ns)`);
     await registrarAuditoria({
       usuario: a.u,
       acao: "editar",
       entidade: "dfd",
       entidadeId: id,
-      resumo: `DFD ${antes?.numero ?? id}: ${(linhas.length ? linhas.join(" · ") : "itens salvos").slice(0, 1500)}`,
-      depois: { itensAlterados: linhas.length },
+      resumo: `DFD ${antes.numero}: ${partes.join(", ") || "salvo sem diferenças"}`.slice(0, 500),
+      protocoloId: antes.protocoloId,
+      origem: "banner",
+      detalhe: { alvo: { numero: antes.numero, planejamento: antes.planejamento }, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens },
     });
   }
 
   return ok();
+}
+
+/** O DFD DEPOIS do PATCH (para o histórico): o gravado com os campos enviados, as seções/assinaturas
+ * novas e os itens reescritos (o total volta a ser a Σ dos itens, como em `reescreverDfdItens`). */
+function comparavelDepois(antes: DfdDetalhe, d: EditarDfdPayload, assinaturas: Assinatura[] | undefined): DfdComparavel {
+  const t = (v: string | null | undefined, atual: string | null) => (v === undefined ? atual : v || null);
+  const itens = d.itens?.map((it) => ({
+    item: it.item ?? null,
+    codigo: it.codigo ?? null,
+    descricao: it.descricao ?? null,
+    unidade: it.unidade ?? null,
+    quantidade: it.quantidade ?? null,
+    valorUnitario: it.valorUnitario ?? null,
+    valorTotal: it.valorTotal ?? null,
+  }));
+  const soma = itens?.reduce((s, it) => s + (it.valorTotal ?? 0), 0) ?? 0;
+  return {
+    ...antes,
+    reparticaoId: d.reparticaoId !== undefined ? d.reparticaoId : antes.reparticaoId,
+    tipo: t(d.tipo, antes.tipo),
+    numeroContrato: d.numeroContrato !== undefined ? juntarRefs([d.numeroContrato]) : antes.numeroContrato,
+    numeroAta: d.numeroAta !== undefined ? juntarRefs([d.numeroAta]) : antes.numeroAta,
+    numeroLicitacao: d.numeroLicitacao !== undefined ? juntarRefs([d.numeroLicitacao]) : antes.numeroLicitacao,
+    objeto: t(d.objeto, antes.objeto),
+    orgaoEntidade: t(d.orgaoEntidade, antes.orgaoEntidade),
+    setorRequisitante: t(d.setorRequisitante, antes.setorRequisitante),
+    responsavel: t(d.responsavel, antes.responsavel),
+    matricula: t(d.matricula, antes.matricula),
+    email: t(d.email, antes.email),
+    telefone: t(d.telefone, antes.telefone),
+    secoes: d.secoes ?? antes.secoes,
+    assinaturas: assinaturas ?? antes.assinaturas,
+    itens: itens ?? antes.itens,
+    valorTotal: itens ? (soma > 0 ? Math.round(soma * 100) / 100 : null) : antes.valorTotal,
+  };
 }

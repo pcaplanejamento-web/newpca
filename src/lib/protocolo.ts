@@ -1,5 +1,9 @@
 import { and, desc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
-import { dfdProtocolos, dfds, reparticoes } from "@/db/schema";
+import { alias } from "drizzle-orm/sqlite-core";
+import { dfdProtocolos, dfds, reparticoes, usuarios } from "@/db/schema";
+import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
+import type { DetalheAuditoria } from "./auditoria-core";
+import { compararCapa } from "./comparar-protocolo";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
@@ -29,7 +33,17 @@ export type ProtocoloResumo = {
   totalDfds: number;
   totalItens: number;
   valorTotal: number;
+  /** Data da PROTOCOLAÇÃO (quando entrou no sistema — UTC do SQLite). */
   criadoEm: string | null;
+  atualizadoEm: string | null;
+  /** Última gravação de um DFD do protocolo — invalida o cache da conferência agregada (Estado). */
+  dfdsAtualizadoEm: string | null;
+  // GESTÃO na Mesa: pessoa designada (Responsável), situação (cadastrada pelo ADM) e quem protocolou
+  // (Distribuição = `criado_por`).
+  responsavelId: number | null;
+  responsavelNome: string | null;
+  situacaoId: number | null;
+  distribuidorNome: string | null;
 };
 
 export type ProtocoloDetalhe = ProtocoloResumo & {
@@ -55,6 +69,18 @@ export async function listarProtocolosPorIds(ids: number[]): Promise<ProtocoloRe
   return uniq.length === 0 ? [] : consultaProtocolos(inArray(dfdProtocolos.id, uniq));
 }
 
+// Pessoas ligadas ao protocolo (aliases de `usuarios`): o responsável designado e quem protocolou.
+const responsavel = alias(usuarios, "responsavel");
+const distribuidor = alias(usuarios, "distribuidor");
+/** Colunas de GESTÃO (responsável/situação/distribuição) — as mesmas na lista e no detalhe. */
+const colunasGestao = {
+  atualizadoEm: dfdProtocolos.atualizadoEm,
+  responsavelId: dfdProtocolos.responsavelId,
+  responsavelNome: responsavel.nome,
+  situacaoId: dfdProtocolos.situacaoId,
+  distribuidorNome: distribuidor.nome,
+};
+
 function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
   return getDb()
     .select({
@@ -70,12 +96,16 @@ function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
       reparticaoCodigo: reparticoes.codigo,
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
+      ...colunasGestao,
       totalDfds: sql<number>`COUNT(DISTINCT ${dfds.id})`,
       totalItens: sql<number>`COALESCE(SUM(${dfds.totalItens}), 0)`,
       valorTotal: sql<number>`COALESCE(SUM(${VALOR_DFD}), 0)`,
+      dfdsAtualizadoEm: sql<string | null>`MAX(${dfds.atualizadoEm})`,
     })
     .from(dfdProtocolos)
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
+    .leftJoin(responsavel, eq(dfdProtocolos.responsavelId, responsavel.id))
+    .leftJoin(distribuidor, eq(dfdProtocolos.criadoPor, distribuidor.id))
     .leftJoin(dfds, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(onde)
     .groupBy(dfdProtocolos.id)
@@ -103,9 +133,12 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
       reparticaoCodigo: reparticoes.codigo,
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
+      ...colunasGestao,
     })
     .from(dfdProtocolos)
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
+    .leftJoin(responsavel, eq(dfdProtocolos.responsavelId, responsavel.id))
+    .leftJoin(distribuidor, eq(dfdProtocolos.criadoPor, distribuidor.id))
     .where(eq(dfdProtocolos.id, id))
     .limit(1);
   if (!p) return null;
@@ -113,7 +146,8 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
   const dfdsList = await listarDfdsDoProtocolo(id);
   const totalItens = dfdsList.reduce((s, d) => s + (d.totalItens ?? 0), 0);
   const valorTotal = dfdsList.reduce((s, d) => s + (d.valorTotal ?? 0), 0);
-  return { ...p, totalDfds: dfdsList.length, totalItens, valorTotal, dfds: dfdsList };
+  const dfdsAtualizadoEm = dfdsList.reduce<string | null>((m, d) => (d.atualizadoEm && (!m || d.atualizadoEm > m) ? d.atualizadoEm : m), null);
+  return { ...p, totalDfds: dfdsList.length, totalItens, valorTotal, dfdsAtualizadoEm, dfds: dfdsList };
 }
 
 /**
@@ -124,6 +158,8 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
 export async function iniciarProtocolo(
   p: ProtocoloMeta,
   criadoPor: number | null,
+  /** Responsável padrão de quem protocola (perfil) — só preenche um protocolo AINDA sem responsável. */
+  responsavelPadrao: number | null = null,
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
   const set = {
@@ -151,8 +187,10 @@ export async function iniciarProtocolo(
   }
   const [row] = await db
     .insert(dfdProtocolos)
-    .values({ numero: p.numero, criadoPor: criadoPor ?? null, ...set })
-    .onConflictDoUpdate({ target: dfdProtocolos.numero, set })
+    .values({ numero: p.numero, criadoPor: criadoPor ?? null, responsavelId: responsavelPadrao, ...set })
+    // Sobrescrita (mesmo nº / reenvio): o responsável já designado PERMANECE (a situação e a
+    // distribuição também — não estão no `set`).
+    .onConflictDoUpdate({ target: dfdProtocolos.numero, set: { ...set, responsavelId: sql`COALESCE(${dfdProtocolos.responsavelId}, ${responsavelPadrao})` } })
     .returning({ id: dfdProtocolos.id });
   return { id: row.id, numero: p.numero };
 }
@@ -180,10 +218,10 @@ export async function getProtocoloPorIdExterno(
 }
 
 /**
- * Edita um protocolo JÁ GRAVADO (banner destravado). Muda a **repartição** (roteamento)
- * e os campos de **CONTEÚDO** da capa (interessado/assunto/observação/CPF-CNPJ/valor/
- * local). Os **IDENTIFICADORES** (número/Id/data/ano do PCA) NÃO estão aqui → imutáveis.
- * Cada campo é opcional; `undefined` = não mexe. Grava direto no D1 (`atualizadoEm` renovado).
+ * Edita um protocolo JÁ GRAVADO (banner destravado / célula da Mesa). Muda a **repartição**
+ * (roteamento), os campos de **CONTEÚDO** da capa (interessado/assunto/observação/CPF-CNPJ/valor/
+ * local) e a **GESTÃO** (responsável/situação). Os **IDENTIFICADORES** (número/Id/data/ano do PCA) NÃO
+ * estão aqui → imutáveis. Cada campo é opcional; `undefined` = não mexe. Grava direto no D1.
  */
 export async function atualizarProtocolo(
   id: number,
@@ -195,9 +233,13 @@ export async function atualizarProtocolo(
     observacao?: string | null;
     valorCapa?: number | null;
     localReparticao?: string | null;
+    responsavelId?: number | null;
+    situacaoId?: number | null;
   },
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
+  if (campos.responsavelId !== undefined) set.responsavelId = campos.responsavelId;
+  if (campos.situacaoId !== undefined) set.situacaoId = campos.situacaoId;
   if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
   if (campos.interessado !== undefined) set.interessado = campos.interessado;
   if (campos.documento !== undefined) set.documento = campos.documento;
@@ -208,6 +250,42 @@ export async function atualizarProtocolo(
   await getDb().update(dfdProtocolos).set(set).where(eq(dfdProtocolos.id, id));
 }
 
+/** O que muda numa edição do protocolo (`atualizarProtocolo`) — o mesmo corpo do PATCH/massa. */
+export type CamposProtocolo = Parameters<typeof atualizarProtocolo>[1];
+
+/**
+ * DETALHE da edição de um protocolo para o HISTÓRICO: a capa (a MESMA régua do reenvio, `compararCapa`)
+ * + responsável e situação — antes → depois, com rótulos legíveis gravados (sigla da unidade, nome da
+ * pessoa/situação), que sobrevivem a renomear/excluir depois.
+ */
+export async function detalheEdicaoProtocolo(antes: ProtocoloDetalhe | ProtocoloResumo, campos: CamposProtocolo): Promise<DetalheAuditoria> {
+  const def = <T,>(v: T | undefined, atual: T) => (v === undefined ? atual : v);
+  const capa = (p: Partial<CamposProtocolo> & { data?: string | null; anoPca?: number | null }, base: ProtocoloDetalhe | ProtocoloResumo) => ({
+    data: base.data,
+    anoPca: base.anoPca,
+    interessado: def(p.interessado, base.interessado),
+    documento: def(p.documento, "documento" in base ? base.documento : null),
+    assunto: def(p.assunto, base.assunto),
+    observacao: def(p.observacao, "observacao" in base ? base.observacao : null),
+    valorCapa: def(p.valorCapa, base.valorCapa),
+    localReparticao: def(p.localReparticao, "localReparticao" in base ? base.localReparticao : null),
+    reparticaoId: def(p.reparticaoId, base.reparticaoId),
+  });
+  // Só consulta as siglas quando a unidade muda de fato (a massa roda isto por protocolo).
+  const mudaUnidade = campos.reparticaoId !== undefined && campos.reparticaoId !== antes.reparticaoId;
+  const rotuloUnidade = mudaUnidade ? await rotulosUnidades([antes.reparticaoId, campos.reparticaoId]) : undefined;
+  const out = compararCapa(capa({}, antes), capa(campos, antes), rotuloUnidade);
+  if (campos.responsavelId !== undefined && campos.responsavelId !== antes.responsavelId) {
+    const nome = await nomesPessoas([antes.responsavelId, campos.responsavelId]);
+    out.push({ campo: "responsavelId", rotulo: "Responsável", antes: nome(antes.responsavelId), depois: nome(campos.responsavelId) });
+  }
+  if (campos.situacaoId !== undefined && campos.situacaoId !== antes.situacaoId) {
+    const nome = await nomesSituacoes([antes.situacaoId, campos.situacaoId]);
+    out.push({ campo: "situacaoId", rotulo: "Situação", antes: nome(antes.situacaoId), depois: nome(campos.situacaoId) });
+  }
+  return { campos: out };
+}
+
 /** Vincula (ou desvincula, com `null`) um DFD a um protocolo — rule 4. */
 export async function vincularDfd(dfdId: number, protocoloId: number | null): Promise<void> {
   await getDb()
@@ -216,10 +294,10 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null): Pr
     .where(eq(dfds.id, dfdId));
 }
 
-/** Repartição de um protocolo (para o guard de acesso nas escritas); `null` se não existe. */
-export async function getProtocoloReparticao(id: number): Promise<{ reparticaoId: number | null } | null> {
+/** Repartição (+ nº, p/ o histórico) de um protocolo — o guard de acesso nas escritas; `null` se não existe. */
+export async function getProtocoloReparticao(id: number): Promise<{ reparticaoId: number | null; numero: string } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfdProtocolos.reparticaoId })
+    .select({ reparticaoId: dfdProtocolos.reparticaoId, numero: dfdProtocolos.numero })
     .from(dfdProtocolos)
     .where(eq(dfdProtocolos.id, id))
     .limit(1);

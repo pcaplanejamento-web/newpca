@@ -5,10 +5,10 @@ import { useState } from "react";
 import { brl, num } from "@/lib/format";
 import { normalizarLinha } from "@/lib/normalize";
 import { type PlanilhaParseada, parsePlanilha } from "@/lib/parse-xlsx";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
+import { IconCheck, IconFile, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
@@ -184,20 +184,13 @@ export function UploadForm() {
         />
       </Modal>
 
-      {/* Erro */}
+      {/* Erro / leitura — AVISO FLUTUANTE (canto inferior): não deforma a tela. */}
       {erro && status === "error" && (
-        <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Não foi possível importar</p>
-          <p className="opacity-90">{erro}</p>
-        </Callout>
+        <AvisoFlutuante kind="danger" titulo="Não foi possível importar" onClose={reset}>
+          {erro}
+        </AvisoFlutuante>
       )}
-
-      {/* Parsing */}
-      {status === "parsing" && (
-        <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />} className="mt-4">
-          Lendo a planilha...
-        </Callout>
-      )}
+      {status === "parsing" && <AvisoFlutuante kind="info" carregando titulo="Lendo a planilha…" />}
 
       {/* Preview + confirmar */}
       {preview && (status === "ready" || status === "sending") && (

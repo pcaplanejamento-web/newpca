@@ -100,6 +100,12 @@ describe("compararDfd — situação e diferenças campo a campo", () => {
     assert.equal(c.total, 4);
     assert.equal(rotuloSituacaoReenvio(c), "Alterado (4)");
   });
+  it("referências de renovação são LISTAS: a ordem não é diferença; um nº a mais é", () => {
+    const g = dfd({ numeroContrato: "860/2025; 861/2025" });
+    assert.equal(compararDfd(g, dfd({ numeroContrato: "861/2025; 860/2025" })).situacao, "igual");
+    const c = compararDfd(g, dfd({ numeroContrato: "860/2025; 861/2025; 3/2026" }));
+    assert.deepEqual(c.campos.map((x) => x.campo), ["numeroContrato"]);
+  });
   it("itens: pareados pelo nº; alterado campo a campo, novo e removido", () => {
     const c = compararDfd(
       dfd(),

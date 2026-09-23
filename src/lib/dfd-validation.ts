@@ -42,6 +42,8 @@ export function faltasObrigatorias(
 
 const textoOpc = z.string().trim().max(4000).optional().nullable();
 const textoCurtoOpc = z.string().trim().max(255).optional().nullable();
+/** Referências de renovação (DFD-R): VÁRIAS por campo, separadas por "; " (`SEPARADOR_REFS`). */
+const refsOpc = z.string().trim().max(1000).optional().nullable();
 
 const dfdItemSchema = z.object({
   item: z.number().int().optional().nullable(),
@@ -100,9 +102,9 @@ export const dfdMetaSchema = z.object({
   email: textoCurtoOpc,
   telefone: textoCurtoOpc,
   anoPca: z.number().int().gte(2000).lte(2100).optional().nullable(),
-  numeroContrato: textoCurtoOpc,
-  numeroAta: textoCurtoOpc,
-  numeroLicitacao: textoCurtoOpc,
+  numeroContrato: refsOpc,
+  numeroAta: refsOpc,
+  numeroLicitacao: refsOpc,
   reparticaoId: z.number().int().positive().optional().nullable(),
   protocoloId: z.number().int().positive().optional().nullable(),
   valorTotal: z.number().nonnegative().optional().nullable(),
@@ -110,6 +112,9 @@ export const dfdMetaSchema = z.object({
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
   assinaturas: z.array(assinaturaSchema).max(50).optional().default([]),
   totalItens: z.number().int().nonnegative().max(MAX_ITENS_DFD).optional().nullable(),
+  /** Canal da gravação (histórico): protocolação, reenvio do protocolo ou DFD avulso. Ausente ⇒ o
+   * servidor deduz (com protocolo = protocolação; sem = avulso). */
+  origem: z.enum(["protocolacao", "reenvio", "avulso"]).optional(),
 });
 
 /** `start-dfd`: cabeçalho + 1º lote de itens → cria/zera o DFD e devolve `dfdId`. */
@@ -173,6 +178,18 @@ export const editarProtocoloSchema = z.object({
   observacao: z.string().trim().max(2000).optional().nullable(),
   valorCapa: z.number().nonnegative().optional().nullable(),
   localReparticao: textoOpc,
+  // Gestão na Mesa: pessoa designada (usuário ATIVO) e situação (cadastrada pelo ADM); `null` = limpar.
+  responsavelId: z.number().int().positive().optional().nullable(),
+  situacaoId: z.number().int().positive().optional().nullable(),
+  /** Canal da edição (histórico): o banner do protocolo ou a célula da tabela da Mesa. */
+  origem: z.enum(["banner", "celula"]).optional(),
+});
+
+const HEX_COR = /^#[0-9a-fA-F]{6}$/;
+/** Situação do protocolo (Configurações → Situações): nome + cor (#RRGGBB). */
+export const situacaoProtocoloSchema = z.object({
+  nome: z.string().trim().min(1, "Informe o nome da situação.").max(60),
+  cor: z.string().trim().regex(HEX_COR, "Cor inválida (use #RRGGBB)."),
 });
 
 /** Vincula (ou desvincula com `null`) um DFD a um protocolo — rule 4. */
@@ -198,10 +215,10 @@ export const editarDfdSchema = z
     secoes: z.array(dfdSecaoSchema).max(50).optional(),
     // Itens editados (código/descrição/unidade/quantidade/valores) — reescreve `dfd_itens`.
     itens: z.array(dfdItemSchema).max(100_000).optional(),
-    // Referências de renovação (DFD-R): preenchíveis à mão quando o parser não achou.
-    numeroContrato: textoCurtoOpc,
-    numeroAta: textoCurtoOpc,
-    numeroLicitacao: textoCurtoOpc,
+    // Referências de renovação (DFD-R): várias por campo ("; "), preenchíveis à mão.
+    numeroContrato: refsOpc,
+    numeroAta: refsOpc,
+    numeroLicitacao: refsOpc,
     // Conteúdo do cabeçalho (cadeado por campo). Identificadores ficam de fora (imutáveis).
     objeto: textoOpc,
     orgaoEntidade: textoOpc,
@@ -231,6 +248,12 @@ export const editarDfdSchema = z
       d.telefone !== undefined,
     { message: "Nada para editar." },
   );
+
+/** Conferência AGREGADA da lista de PROTOCOLOS da Mesa (`POST /api/protocolo/conferencia`) — em fatias
+ * (o cliente limita também pelo nº de DFDs por fatia). */
+export const conferenciaProtocolosSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(50),
+});
 
 /** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */
 export const conferenciaDfdsSchema = z.object({
@@ -262,6 +285,9 @@ export const massaProtocolosSchema = z.object({
     z.object({ campo: z.literal("reparticao"), reparticaoId: z.number().int().positive() }),
     z.object({ campo: z.literal("assunto"), valor: z.string().trim().min(1).max(300) }),
     z.object({ campo: z.literal("valorCapa") }),
+    // Gestão: designar o responsável / marcar a situação (null = limpar).
+    z.object({ campo: z.literal("responsavel"), responsavelId: z.number().int().positive().nullable() }),
+    z.object({ campo: z.literal("situacao"), situacaoId: z.number().int().positive().nullable() }),
   ]),
 });
 export type MassaProtocolosPayload = z.infer<typeof massaProtocolosSchema>;
@@ -292,7 +318,7 @@ export const gerarPcaSchema = z.object({
   dfdIds: z
     .array(z.number().int().positive())
     .min(1, "Selecione ao menos um DFD.")
-    .max(1000),
+    .max(10_000, "No máximo 10.000 DFDs por edição."),
 });
 
 /** Registro leve de PCA (Configurações do ADM): só nome + ano, sem unir DFDs. */
@@ -313,6 +339,7 @@ export const editarPcaSchema = z
 export const patchPcaSchema = z.union([z.object({ ativo: z.literal(true) }), editarPcaSchema]);
 
 export type DfdMetaPayload = z.infer<typeof dfdMetaSchema>;
+export type EditarDfdPayload = z.infer<typeof editarDfdSchema>;
 export type DfdItemPayload = z.infer<typeof dfdItemSchema>;
 export type ProtocoloMetaPayload = z.infer<typeof protocoloMetaSchema>;
 export type StartDfdPayload = z.infer<typeof startDfdSchema>;

@@ -42,6 +42,37 @@ export function dataBR(iso?: string | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
+// Timestamps do SQLite (`CURRENT_TIMESTAMP` = UTC "AAAA-MM-DD HH:MM:SS") no fuso de BRASÍLIA — o MESMO
+// texto no servidor e no navegador (sem divergência de hidratação).
+const _brasilia = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const instanteUtc = (ts: string) => new Date(`${ts.trim().replace(" ", "T")}${/Z|[+-]\d\d:?\d\d$/.test(ts) ? "" : "Z"}`);
+const partes = (d: Date) => Object.fromEntries(_brasilia.formatToParts(d).map((p) => [p.type, p.value]));
+
+/** Timestamp UTC do banco → "dd/mm/aaaa hh:mm" (Brasília). */
+export function dataHoraBR(ts?: string | null): string {
+  if (!ts) return "—";
+  const d = instanteUtc(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  const p = partes(d);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
+/** Timestamp UTC do banco → data ISO "AAAA-MM-DD" em Brasília (filtro de data das tabelas). */
+export function dataIsoBrasilia(ts?: string | null): string {
+  if (!ts) return "";
+  const d = instanteUtc(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = partes(d);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
 export function pct(part: number, whole: number): string {
   if (!whole) return "0%";
   return `${((part / whole) * 100).toLocaleString("pt-BR", {

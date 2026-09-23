@@ -26,6 +26,7 @@ import {
   GripVertical,
   Image as ImageIcon,
   Inbox,
+  Info,
   KeyRound,
   Landmark,
   Layers,
@@ -115,6 +116,7 @@ export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
 export const IconRefresh = RefreshCw;
 export const IconPlug = Plug;
+export const IconInfo = Info;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

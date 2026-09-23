@@ -13,7 +13,7 @@ import {
   ordenarIndices,
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
-import { IconFilter } from "./icons";
+import { IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
@@ -46,6 +46,9 @@ export type Column<R> = {
   /** Sem quebra de linha: a coluna ganha a largura do CONTEÚDO (dados curtos — nº, sigla, badges,
    * valores). A tabela cresce e rola no eixo x do próprio container (nunca estoura a página). */
   nowrap?: boolean;
+  /** Filtro TRAVADO por um filtro de hierarquia acima da tabela (ex.: o seletor de assunto da Mesa): o
+   * cabeçalho mostra o cadeado com o motivo (tooltip) e o filtro da coluna fica desligado. */
+  travado?: string;
 };
 
 type Key = string | number;
@@ -198,8 +201,12 @@ export function DataTable<R>({
     [columns, rows],
   );
 
-  // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada.
-  const facetas = useMemo(() => aplicarFiltros(rows.length, dados, columns.map((c) => filters[c.key])), [rows.length, dados, columns, filters]);
+  // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada. Coluna
+  // TRAVADA (hierarquia acima da tabela) não filtra.
+  const facetas = useMemo(
+    () => aplicarFiltros(rows.length, dados, columns.map((c) => (c.travado ? undefined : filters[c.key]))),
+    [rows.length, dados, columns, filters],
+  );
 
   // Ordenação pela chave extraída uma vez (numérica p/ `numero`; texto natural senão; vazios no fim).
   const ordenadas = useMemo(() => {
@@ -215,9 +222,12 @@ export function DataTable<R>({
   const visiveis = tamPagina ? ordenadas.slice((pg - 1) * tamPagina, pg * tamPagina) : ordenadas;
 
   const sel = selected ?? new Set<Key>();
-  const todos = visiveis.length > 0 && visiveis.every((r) => sel.has(getKey(r)));
+  // "Selecionar todos" = TODAS as linhas que passam nos filtros (todas as páginas), não só a página.
+  const marcadas = selectable ? ordenadas.reduce((n, r) => (sel.has(getKey(r)) ? n + 1 : n), 0) : 0;
+  const todos = total > 0 && marcadas === total;
+  const parcial = marcadas > 0 && !todos;
   // Colunas com filtro ATIVO (tópico marcado) — e o "Limpar filtros" do rodapé.
-  const ativos = columns.filter((c) => filtroAtivo(c.filter ?? "values", filters[c.key]));
+  const ativos = columns.filter((c) => !c.travado && filtroAtivo(c.filter ?? "values", filters[c.key]));
 
   /** Grava (ou remove, com `null`) o filtro de uma coluna e volta à 1ª página. */
   function aplicarFiltro(key: string, v: FiltroValor | null) {
@@ -231,8 +241,8 @@ export function DataTable<R>({
   }
   function alternarTodos() {
     const n = new Set(sel);
-    if (todos) for (const r of visiveis) n.delete(getKey(r));
-    else for (const r of visiveis) n.add(getKey(r));
+    if (todos) for (const r of ordenadas) n.delete(getKey(r));
+    else for (const r of ordenadas) n.add(getKey(r));
     onSelected?.(n);
   }
   function alternar(k: Key) {
@@ -265,8 +275,12 @@ export function DataTable<R>({
                 <th className="w-10 px-3 py-3">
                   <input
                     type="checkbox"
-                    aria-label="Selecionar todos"
+                    aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
+                    title={todos ? `Desmarcar os ${total} registros filtrados` : `Selecionar os ${total} registros filtrados (todas as páginas)`}
                     checked={todos}
+                    ref={(el) => {
+                      if (el) el.indeterminate = parcial;
+                    }}
                     onChange={alternarTodos}
                     className="h-4 w-4 accent-[var(--accent)]"
                   />
@@ -274,7 +288,7 @@ export function DataTable<R>({
               )}
               {columns.map((c, j) => {
                 const tipo = c.filter ?? "values";
-                const marcado = filtroAtivo(tipo, filters[c.key]);
+                const marcado = !c.travado && filtroAtivo(tipo, filters[c.key]);
                 // Texto do cabeçalho: right→direita, left→esquerda, padrão→CENTRO (como as células).
                 const alinhaTexto = c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center";
                 // Popover do filtro abre alinhado ao início, exceto colunas à direita.
@@ -288,7 +302,12 @@ export function DataTable<R>({
                     style={{ ...(c.minWidth ? { minWidth: c.minWidth } : {}), ...(marcado ? { boxShadow: "inset 0 -2px 0 var(--accent)" } : {}) }}
                     aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                   >
-                    {tipo === "date" ? (
+                    {c.travado ? (
+                      <span className="inline-flex items-center gap-1" title={c.travado}>
+                        <IconLock className="h-3 w-3 shrink-0" aria-hidden />
+                        {c.header}
+                      </span>
+                    ) : tipo === "date" ? (
                       <DateFilterHeader
                         label={c.header}
                         value={filters[c.key] as IntervaloData | undefined}

@@ -1,10 +1,12 @@
 import type { ResumoEstado } from "@/lib/dfd-tratamento";
+import { IconSpinner } from "./icons";
 
 /**
  * Célula "Estado" das tabelas (DFDs, itens, protocolos) — UM componente para todas:
  * - `EstadoResumo`: aponta o problema PRINCIPAL (rótulo curto, na cor da importância) + contadores
  *   "+N" (erros em vermelho, atenções em âmbar); o `title` traz a lista completa (tooltip nativo).
  * - `EstadoPonto`: ponto + rótulo simples (Regular/Editado/Leitura incompleta/Atenção…).
+ * - `EstadoProcessando`: spinner + o que está acontecendo ("Conferindo…", "Lendo o DFD…", "Na fila").
  * Sem quebra de linha (a coluna ganha a largura do conteúdo).
  */
 export function EstadoResumo({ res }: { res: ResumoEstado }) {
@@ -30,6 +32,16 @@ export function EstadoPonto({ cor, rotulo, title }: { cor: string; rotulo: strin
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] font-medium" style={{ color: cor }} title={title}>
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />
+      {rotulo}
+    </span>
+  );
+}
+
+/** Linha em processamento (conferência/leitura em andamento): spinner + o que está acontecendo. */
+export function EstadoProcessando({ rotulo, fila = false }: { rotulo: string; fila?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] font-medium text-muted" aria-live="polite">
+      <IconSpinner className="h-3.5 w-3.5 shrink-0" style={{ color: fila ? "var(--faint)" : "var(--accent)" }} />
       {rotulo}
     </span>
   );

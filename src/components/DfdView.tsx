@@ -19,7 +19,7 @@ import {
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
-import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
 import { AutoTextarea, CadeadoBotao } from "./CampoCadeado";
@@ -356,10 +356,11 @@ export function DfdView({
       {ehRenovacao && (
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
           <h3 className="mb-4 text-sm font-bold text-text">Referências da renovação</h3>
+          {/* Cada referência pode ter VÁRIOS nºs ("a; b") — exibidos lado a lado. */}
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
-            <Campo label="Nº do contrato" valor={dfd.numeroContrato ?? "—"} />
-            <Campo label="Nº da ARP" valor={dfd.numeroAta ?? "—"} />
-            <Campo label="Nº da licitação" valor={dfd.numeroLicitacao ?? "—"} />
+            <Campo label="Nº do contrato" valor={listaRefs(dfd.numeroContrato).join(" · ") || "—"} />
+            <Campo label="Nº da ARP" valor={listaRefs(dfd.numeroAta).join(" · ") || "—"} />
+            <Campo label="Nº da licitação" valor={listaRefs(dfd.numeroLicitacao).join(" · ") || "—"} />
           </dl>
           {!dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
             <p className="mt-3 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--warn)" }}>

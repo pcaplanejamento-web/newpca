@@ -18,6 +18,7 @@ import { Button } from "./Button";
 import { CampoNumero, CampoTexto } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
+import { HistoricoDoItem } from "./Historico";
 import { IconAlert, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
@@ -29,7 +30,8 @@ type CampoK = "codigo" | "unidade" | "descricao" | "quantidade" | "valorUnitario
  * numa linha da tabela de itens (mestre-detalhe), no MESMO lugar do painel de mensagens.
  * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo. Quando `editavel`,
  * cada campo tem um **cadeado próprio**: destravar para editar; um campo **igual ao catálogo**
- * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). Só
+ * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). No DFD GRAVADO
+ * (`historicoDfdId`), a seção recolhível "Histórico do item" mostra o que mudou nele. Só
  * tokens/componentes do design-system.
  */
 export function ItemDetalhe({
@@ -40,6 +42,7 @@ export function ItemDetalhe({
   editavel = false,
   onChange,
   onRemover,
+  historicoDfdId = null,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -53,6 +56,8 @@ export function ItemDetalhe({
   onChange?: (patch: Partial<DfdVisualItem>) => void;
   /** Remove este item do DFD (tratamento do ITEM DUPLICADO). Ausente = sem o botão. */
   onRemover?: () => void;
+  /** DFD GRAVADO (id) — habilita a seção "Histórico do item" (carregada só ao abrir). */
+  historicoDfdId?: number | null;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
@@ -187,6 +192,9 @@ export function ItemDetalhe({
           )}
         </section>
       )}
+
+      {/* Histórico do item (DFD gravado): o que mudou nele, por qual canal e por qual protocolo. */}
+      {historicoDfdId != null && <HistoricoDoItem dfdId={historicoDfdId} item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}
 
       {/* Tratamento do item DUPLICADO (ou lançado por engano): remove do DFD e do valor total. */}
       {editavelUI && onRemover && (

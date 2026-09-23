@@ -59,8 +59,8 @@ function indiceDoItem(itens: DfdParseado["itens"], alvo: ItemRef): number {
  * DFD de unidade sem acesso fica só-leitura. Devolve os PAINÉIS (DFD, direita e o banner SÓ do item)
  * para a pilha de banners da Mesa (`BannersMesa`) empilhar.
  *
- * `modoItem` (aberto pela visão "Itens"): o item é um banner PRÓPRIO à esquerda do DFD — clicar numa
- * linha da tabela de itens troca o item desse banner (em vez de abrir o item à direita do DFD).
+ * `modoItem` (aberto pela visão "Itens"): o item é um banner PRÓPRIO — a coluna da DIREITA (Protocolo |
+ * DFD | Item), raiz da pilha — e clicar numa linha da tabela de itens troca o item desse banner.
  */
 export function useDfdGravado({
   dfdId,
@@ -222,8 +222,7 @@ export function useDfdGravado({
   }
   function verProtocolo() {
     if (!orig?.protocoloId || !onVerProtocolo) return;
-    setPainel(null); // o protocolo entra no lugar do painel da direita
-    onVerProtocolo(orig.protocoloId);
+    onVerProtocolo(orig.protocoloId); // entra à ESQUERDA do DFD (Protocolo | DFD | Item)
   }
 
   async function salvar() {
@@ -333,9 +332,13 @@ export function useDfdGravado({
         orgaos={orgaos}
         conformidade={conformidade}
         ancoraAlvo={ancoraAlvo}
-        // No modo item a linha marcada é a do banner do item (à esquerda); senão, a do painel da direita.
+        // No modo item a linha marcada é a do banner do item (à direita, raiz); senão, a do painel da direita.
         itemAtivo={modoItem ? itemIdx : painel?.tipo === "item" ? painel.idx : null}
-        onItemClick={(idx) => (modoItem ? setItemIdx(idx) : setPainel({ tipo: "item", idx }))}
+        onItemClick={(idx) => {
+          if (!modoItem) return setPainel({ tipo: "item", idx });
+          setItemIdx(idx);
+          setPainel(null); // o item volta a ocupar a coluna da direita
+        }}
         onRepChange={(id) => {
           setRepId(id);
           setEditado(true);
@@ -349,10 +352,11 @@ export function useDfdGravado({
     ),
   };
 
-  /** Painel da DIREITA do DFD (mensagens / item / histórico). */
+  /** Painel da DIREITA do DFD (mensagens / item / histórico). No modo item a coluna da direita é a do
+   * ITEM — mensagens/histórico ocupam o lugar dele (ver `itemPainel`). */
   const direito: ModalPainel = {
     id: "dfd-direito",
-    aberto: !!dfd && painel != null,
+    aberto: !!dfd && painel != null && !modoItem,
     titulo: tituloPainelDfd(painel, dfd, numero),
     onClose: () => setPainel(null),
     rodape: painel?.tipo === "item" ? <RodapePainelItem onVerDfd={() => setPainel(null)} onVerProtocolo={temProtocolo ? verProtocolo : undefined} /> : undefined,
@@ -376,10 +380,16 @@ export function useDfdGravado({
     ),
   };
 
-  /** Banner SÓ do ITEM (visão "Itens"): o mesmo `ItemDetalhe` (cadeado por campo) sobre o RASCUNHO do DFD. */
-  function itemPainel(acoes: { onVerDfd?: () => void; onVerProtocolo?: () => void; onFechar: () => void }): ConteudoBanner {
+  /**
+   * Banner SÓ do ITEM (visão "Itens" — a coluna da DIREITA, raiz da pilha): o mesmo `ItemDetalhe` (cadeado
+   * por campo) sobre o RASCUNHO do DFD. As mensagens/histórico do DFD pedidos com o item na tela ocupam o
+   * LUGAR dele (Protocolo | DFD | Item — a coluna da direita é uma só); o X delas volta ao item.
+   */
+  function itemPainel(acoes: { onVerDfd?: () => void; onVerProtocolo?: () => void; onFechar: () => void }): ConteudoBanner & { onClose: () => void } {
+    if (painel && painel.tipo !== "item") return { titulo: direito.titulo, children: direito.children, onClose: () => setPainel(null) };
     const it = dfd && itemIdx != null ? dfd.itens[itemIdx] : undefined;
     return {
+      onClose: acoes.onFechar,
       titulo: it ? `Item ${it.item ?? (itemIdx ?? 0) + 1} — DFD ${numero}` : `Item — DFD ${numero}`,
       acoesCabecalho: botaoAtualizar,
       rodape: dfd ? (
@@ -413,6 +423,7 @@ export function useDfdGravado({
                 }
               : undefined
           }
+          historicoDfdId={orig?.id ?? null}
         />
       ) : (
         <Callout kind="info" icon={<IconAlert className="h-5 w-5" />}>
@@ -433,8 +444,6 @@ export function useDfdGravado({
     direito,
     itemPainel,
     fechar,
-    /** Fecha o painel da direita (mensagens/item/histórico) — ex.: o protocolo entra no lugar dele. */
-    fecharDireito: () => setPainel(null),
     podeDescartar,
   };
 }

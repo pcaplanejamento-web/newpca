@@ -13,7 +13,7 @@ import {
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
-import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type DfdParseado, juntarRefs, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
   desfazerValidacaoEquipe,
@@ -25,7 +25,7 @@ import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
-import { Checkbox, TextField } from "./Field";
+import { CampoLista, Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
@@ -180,8 +180,9 @@ export function DfdConferir({
   const unidadesDoDfd = escopo.length > 0 ? escopo : reparticoes.filter(visivel);
   // DFD de RENOVAÇÃO (DFD-R): precisa referenciar contrato/ata/licitação (não trava).
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
-  const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valor: string) => {
-    const v = valor.trim() || null;
+  // Cada referência aceita VÁRIOS valores (o campo guarda "a; b" — `juntarRefs`).
+  const setRef = (campo: "numeroContrato" | "numeroAta" | "numeroLicitacao", valores: string[]) => {
+    const v = juntarRefs(valores);
     onRefsChange?.({
       numeroContrato: campo === "numeroContrato" ? v : dfd.numeroContrato,
       numeroAta: campo === "numeroAta" ? v : dfd.numeroAta,
@@ -540,29 +541,30 @@ export function DfdConferir({
         <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="referenciaRenovacao">
           <h3 className="mb-1 text-sm font-bold text-text">Referências da renovação</h3>
           <p className="mb-3 text-xs text-muted">
-            Todo DFD-R deve mencionar um nº de contrato, ARP ou licitação. Preenchidos
-            automaticamente pela descrição; ajuste ou complete se necessário. As pendências ficam em "Ver mensagens".
+            Todo DFD-R deve mencionar ao menos um nº de contrato, ARP ou licitação — pode haver VÁRIOS de cada.
+            Preenchidos automaticamente pela descrição; acrescente (Enter) ou remova (×) se necessário. As pendências
+            ficam em "Ver mensagens".
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextField
+            <CampoLista
               label="Nº do contrato"
-              value={dfd.numeroContrato ?? ""}
+              valores={listaRefs(dfd.numeroContrato)}
               disabled={roRefs}
-              onChange={(e) => setRef("numeroContrato", e.target.value)}
+              onChange={(v) => setRef("numeroContrato", v)}
               placeholder="Ex.: 860/2025"
             />
-            <TextField
+            <CampoLista
               label="Nº da ARP"
-              value={dfd.numeroAta ?? ""}
+              valores={listaRefs(dfd.numeroAta)}
               disabled={roRefs}
-              onChange={(e) => setRef("numeroAta", e.target.value)}
+              onChange={(v) => setRef("numeroAta", v)}
               placeholder="Ex.: 045/2025"
             />
-            <TextField
+            <CampoLista
               label="Nº da licitação"
-              value={dfd.numeroLicitacao ?? ""}
+              valores={listaRefs(dfd.numeroLicitacao)}
               disabled={roRefs}
-              onChange={(e) => setRef("numeroLicitacao", e.target.value)}
+              onChange={(v) => setRef("numeroLicitacao", v)}
               placeholder="Ex.: 123/2025"
             />
           </div>

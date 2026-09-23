@@ -1,10 +1,13 @@
 import { type RegrasAvaliacao, regrasPadrao } from "./avaliacao-core.ts";
 import type { ConferenciaItem } from "./catalogo-conferencia.ts";
 import {
+  conciliacaoCapa,
   type EstadoDfd,
+  type EstadoProtocolo,
   estadoDfd,
   type MensagemDfd,
   mensagensDfd,
+  ROTULO_CURTO,
   type ResumoEstado,
   resumoEstado,
 } from "./dfd-tratamento.ts";
@@ -166,5 +169,86 @@ export function avaliarLinhaDfd(
     resumo: problemas.length > 0 ? resumoEstado(problemas) : undefined,
     validacao: res.status === "ok" ? res.origem : null,
     mensagens: problemas,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// ESTADO do PROTOCOLO = a capa + TODOS os problemas dos seus DFDs (e dos itens deles)
+// ---------------------------------------------------------------------------------------------------
+
+export type ConferenciaProtocolo = {
+  estado: EstadoProtocolo;
+  /** Principal + "+N" + tooltip + TODOS os rótulos (filtro multi-valor) — a MESMA célula dos DFDs. */
+  resumo?: ResumoEstado;
+  totalDfds: number;
+  dfdsComErro: number;
+  dfdsEmAtencao: number;
+};
+
+/** Um problema de uma linha de DFD já conferida (o mínimo p/ agregar no protocolo). */
+type ProblemaDfd = { status: "erro" | "atencao" | "acerto"; chave: string; texto: string; cor?: string; rotulo?: string };
+
+/**
+ * ESTADO do PROTOCOLO — ele ACUMULA os problemas de dentro: (1) a conciliação da CAPA (valor ausente/
+ * diferente da somatória — a MESMA régua do banner), (2) protocolo SEM DFDs (atenção) e (3) TODOS os
+ * problemas de TODOS os DFDs (inclusive os dos itens — sem valor/quantidade, duplicados — que vêm nas
+ * mensagens do DFD), cada problema agrupado UMA vez com os DFDs que o têm ("Sem prioridade — 3 DFDs:
+ * 531, 532, 540"). Ordem: erros antes das atenções; em cada grupo, a capa e depois o problema que atinge
+ * MAIS DFDs. A célula aponta o principal com a contagem de DFDs; o filtro recebe TODOS os rótulos.
+ * `dfds: null` = a conferência dos DFDs ainda não chegou (só a capa conta). Puro.
+ */
+export function avaliarProtocolo(
+  capa: { valorCapa: number | null; valorTotal: number; totalDfds: number; categoria?: string | null },
+  dfds: { numero: string; planejamento: string | null; mensagens: ProblemaDfd[] }[] | null,
+  regras: RegrasAvaliacao = regrasPadrao(),
+): ConferenciaProtocolo {
+  type Msg = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string; cor?: string; n: number; capa?: boolean };
+  const msgs: Msg[] = [];
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: capa.valorTotal, totalDfds: capa.totalDfds }, regras, { categoria: capa.categoria ?? null });
+  if (conc.divergente && conc.motivo)
+    msgs.push({ status: conc.bloqueia ? "erro" : "atencao", chave: "protocolo.valorCapa", texto: conc.motivo, rotulo: conc.zerada ? "Capa sem valor" : "Capa ≠ somatória", n: 0, capa: true });
+  if (capa.totalDfds === 0)
+    msgs.push({ status: "atencao", chave: "protocolo.semDfds", texto: "Protocolo sem DFDs vinculados.", rotulo: "Sem DFDs", n: 0, capa: true });
+
+  let dfdsComErro = 0;
+  let dfdsEmAtencao = 0;
+  const grupos = new Map<string, Msg & { dfds: string[] }>();
+  for (const d of dfds ?? []) {
+    const probs = d.mensagens.filter((m): m is ProblemaDfd & { status: "erro" | "atencao" } => m.status !== "acerto");
+    if (probs.some((m) => m.status === "erro")) dfdsComErro++;
+    else if (probs.length > 0) dfdsEmAtencao++;
+    const ref = d.planejamento ? `${d.numero} (Planej. ${d.planejamento})` : d.numero;
+    const vistos = new Set<string>();
+    for (const m of probs) {
+      const rotulo = m.rotulo ?? ROTULO_CURTO[m.chave] ?? m.texto;
+      const k = `${m.status}|${rotulo}`;
+      if (vistos.has(k)) continue; // o mesmo problema 2× no DFD conta 1 DFD
+      vistos.add(k);
+      const g = grupos.get(k) ?? { status: m.status, chave: m.chave, texto: "", rotulo, cor: m.cor, n: 0, dfds: [] };
+      g.n++;
+      g.dfds.push(ref);
+      grupos.set(k, g);
+    }
+  }
+  for (const g of grupos.values()) {
+    const lista = g.dfds.length > 8 ? `${g.dfds.slice(0, 8).join(", ")} e mais ${g.dfds.length - 8}` : g.dfds.join(", ");
+    msgs.push({ ...g, texto: `${g.rotulo} — ${g.n} DFD${g.n === 1 ? "" : "s"}: ${lista}.` });
+  }
+  // Erros primeiro; em cada severidade, a capa e depois o problema que atinge MAIS DFDs.
+  const peso = (m: Msg) => (m.status === "erro" ? 0 : 2) + (m.capa ? 0 : 1);
+  msgs.sort((a, b) => peso(a) - peso(b) || b.n - a.n);
+  const estado: EstadoProtocolo = msgs.some((m) => m.status === "erro") ? "erro" : msgs.length > 0 ? "atencao" : "regular";
+  const base = { estado, totalDfds: capa.totalDfds, dfdsComErro, dfdsEmAtencao };
+  if (msgs.length === 0) return base;
+  const r = resumoEstado(msgs);
+  const principal = msgs[0];
+  const contagem =
+    dfds && capa.totalDfds > 0 && (dfdsComErro > 0 || dfdsEmAtencao > 0)
+      ? `${dfdsComErro} de ${capa.totalDfds} DFD(s) com erro · ${dfdsEmAtencao} em atenção\n`
+      : "";
+  return {
+    ...base,
+    // A célula mostra quantos DFDs têm o problema principal; o filtro segue com os rótulos puros.
+    resumo: { ...r, rotulo: principal.n > 1 ? `${principal.rotulo} (${principal.n})` : principal.rotulo, titulo: `${contagem}${r.titulo}` },
   };
 }
