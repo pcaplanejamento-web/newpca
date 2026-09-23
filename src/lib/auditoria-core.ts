@@ -145,25 +145,46 @@ export type DetalheAuditoria = {
   obs?: string[];
 };
 
-/** Teto de cada texto (seções longas) e de itens por linha de auditoria — o log fica leve. */
+/** Tetos do detalhe de UMA linha de auditoria — o log fica leve e cabe folgado no limite de ~2 MB por
+ * linha do D1: cada texto (seções), a descrição de cada item, cada observação, os itens e o JSON inteiro. */
 const MAX_TEXTO = 1500;
+const MAX_DESCRICAO = 500;
+const MAX_OBS = 500;
 const MAX_ITENS = 400;
-const corta = (t: string) => (t.length > MAX_TEXTO ? `${t.slice(0, MAX_TEXTO - 1)}…` : t);
+const MAX_JSON = 400_000;
+const corta = (t: string, max = MAX_TEXTO) => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
 const cortaCampo = (d: DiffCampo): DiffCampo => ({ ...d, antes: corta(d.antes), depois: corta(d.depois) });
+const cortaItem = (it: DiffItemDfd): DiffItemDfd => ({
+  ...it,
+  descricao: it.descricao == null ? null : corta(it.descricao, MAX_DESCRICAO),
+  campos: it.campos.map(cortaCampo),
+});
 
-/** Detalhe a partir de uma comparação (`compararDfd`/`compararCapa`) — limita tamanhos. `null` = nada. */
+/**
+ * Detalhe a partir de uma comparação (`compararDfd`/`compararCapa`) — limita tamanhos (textos, itens e o
+ * JSON inteiro: acima do teto, os itens caem pela metade até caber). Os itens que ficam de fora são
+ * anotados "sem o detalhe por item" (o histórico do item ainda mostra a linha). `null` = nada.
+ */
 export function detalheDe(d: DetalheAuditoria): DetalheAuditoria | null {
-  const itens = d.itens ?? [];
-  const obs = [...(d.obs ?? [])];
-  if (itens.length > MAX_ITENS) obs.push(`… e mais ${itens.length - MAX_ITENS} item(ns) alterado(s).`);
-  const out: DetalheAuditoria = {
-    ...(d.alvo ? { alvo: d.alvo } : {}),
-    ...(d.campos?.length ? { campos: d.campos.map(cortaCampo) } : {}),
-    ...(d.secoes?.length ? { secoes: d.secoes.map(cortaCampo) } : {}),
-    ...(d.assinaturas ? { assinaturas: cortaCampo(d.assinaturas) } : {}),
-    ...(itens.length ? { itens: itens.slice(0, MAX_ITENS).map((it) => ({ ...it, campos: it.campos.map(cortaCampo) })) } : {}),
-    ...(obs.length ? { obs } : {}),
+  const todos = (d.itens ?? []).map(cortaItem);
+  const montar = (qtd: number): DetalheAuditoria => {
+    const obs = (d.obs ?? []).map((o) => corta(o, MAX_OBS));
+    if (todos.length > qtd) obs.push(`… e mais ${todos.length - qtd} item(ns) alterado(s) — sem o detalhe por item.`);
+    return {
+      ...(d.alvo ? { alvo: d.alvo } : {}),
+      ...(d.campos?.length ? { campos: d.campos.map(cortaCampo) } : {}),
+      ...(d.secoes?.length ? { secoes: d.secoes.map(cortaCampo) } : {}),
+      ...(d.assinaturas ? { assinaturas: cortaCampo(d.assinaturas) } : {}),
+      ...(qtd > 0 ? { itens: todos.slice(0, qtd) } : {}),
+      ...(obs.length ? { obs } : {}),
+    };
   };
+  let qtd = Math.min(todos.length, MAX_ITENS);
+  let out = montar(qtd);
+  while (qtd > 0 && JSON.stringify(out).length > MAX_JSON) {
+    qtd = Math.floor(qtd / 2);
+    out = montar(qtd);
+  }
   return Object.keys(out).length > 0 ? out : null;
 }
 
@@ -287,9 +308,10 @@ function itensLegadoResumo(resumo: string): DiffItemDfd[] {
   return out;
 }
 
-/** O nº do DFD citado no resumo legado ("DFD 1234: …"). */
+/** O nº do DFD citado no resumo legado ("DFD 1234: …") — só um NÚMERO (o legado "DFD vinculado ao protocolo #3"
+ * não tem nº → o rótulo cai no "DFD #id"). */
 const alvoDoResumo = (resumo: string | null) => {
-  const m = String(resumo ?? "").match(/^DFD ([^:\s]+)/);
+  const m = String(resumo ?? "").match(/^DFD (\d[^:\s]*)/);
   return m ? { numero: m[1], planejamento: null } : null;
 };
 
@@ -408,8 +430,9 @@ export type EntradaHistoricoItem<T> = { linha: T; alteracao: AlteracaoHistorico;
 /**
  * Histórico de UM ITEM a partir do histórico do DFD (mais recente primeiro): as alterações que o citam
  * (novo/removido/alterado, campo a campo) + a IMPORTAÇÃO do DFD por onde o item entrou — e, quando a
- * importação não registrou o detalhe por item (legado ou itens em vários lotes), a regravação. Uma
- * sobrescrita que não mexeu no item não aparece. Puro.
+ * importação não registrou o detalhe por item (legado, itens em vários lotes ou além do teto do detalhe), a
+ * regravação. Uma sobrescrita que não mexeu no item não aparece; onde o item foi NOVO, o histórico para (o
+ * que vem antes é de outro item com o mesmo nº). Puro.
  */
 export function historicoDoItem<T extends LinhaHistorico>(linhas: T[], alvo: { item: number | null; codigo: string | null }): EntradaHistoricoItem<T>[] {
   const out: EntradaHistoricoItem<T>[] = [];
@@ -417,8 +440,11 @@ export function historicoDoItem<T extends LinhaHistorico>(linhas: T[], alvo: { i
     if (linha.entidade !== "dfd") continue;
     const alteracao = interpretarAlteracao(linha);
     const item = alteracaoDoItem(alteracao, alvo);
-    if (item) out.push({ linha, alteracao, item });
-    else if (
+    if (item) {
+      out.push({ linha, alteracao, item });
+      // O item ENTROU aqui (novo num reenvio/edição): o que vem antes é de OUTRO item que tinha o mesmo nº.
+      if (item.tipo === "novo") break;
+    } else if (
       linha.acao === "importar" &&
       (linha.detalhe == null || linha.depois != null || alteracao.obs.some((o) => /sem o detalhe por item/i.test(o)))
     )
@@ -429,6 +455,22 @@ export function historicoDoItem<T extends LinhaHistorico>(linhas: T[], alvo: { i
 
 /** Instante (ms) de uma linha — `CURRENT_TIMESTAMP` do SQLite é UTC sem fuso. */
 export const instanteDe = (iso: string | null) => (iso ? Date.parse(`${iso.replace(" ", "T")}Z`) : Number.NaN);
+
+/**
+ * Tira as linhas REPETIDAS em sequência — o MESMO evento registrado para mais de um protocolo (ex.: o DFD
+ * movido de A para B loga nos dois, cada protocolo vê o seu lado) vira UMA linha no histórico do DFD. Mesmo
+ * conteúdo (entidade, ação, canal, autor, resumo e detalhe) com até 5 s de diferença. Puro.
+ */
+export function semDuplicatas<T extends LinhaHistorico>(linhas: T[]): T[] {
+  const chave = (l: T) => [l.entidade, l.entidadeId, l.acao, l.origem, l.usuarioId, l.resumo, l.detalhe].join("\u0001");
+  const out: T[] = [];
+  for (const l of linhas) {
+    const ult = out[out.length - 1];
+    if (ult && chave(ult) === chave(l) && Math.abs(instanteDe(ult.criadoEm) - instanteDe(l.criadoEm)) <= 5000) continue;
+    out.push(l);
+  }
+  return out;
+}
 
 /**
  * Agrupa linhas CONSECUTIVAS (mais recente primeiro) do mesmo usuário + origem + protocolo feitas em até

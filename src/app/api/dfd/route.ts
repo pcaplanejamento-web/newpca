@@ -1,17 +1,18 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
+import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
-import { appendDfdItens, type DfdDetalhe, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
+import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { getProtocoloReparticao } from "@/lib/protocolo";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
@@ -113,6 +114,13 @@ export async function POST(req: Request) {
     if (catBloq.length > 0) return erro(`Não é possível importar: ${catBloq.join(", ")}.`, 422);
   }
   if (!acessivel(d.reparticaoId)) return erro("Unidade inválida ou sem acesso.", 403);
+  // O PROTOCOLO de destino também tem de ser acessível — não se anexa DFD (nem histórico) ao processo de
+  // outra unidade (mesma regra do vínculo no PATCH).
+  if (d.protocoloId != null) {
+    const proto = await getProtocoloReparticao(d.protocoloId);
+    if (!proto) return erro("Protocolo não encontrado.", 404);
+    if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
+  }
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
   const existente = await getReparticaoDfdNumero(d.numero);
   if (existente && !acessivel(existente.reparticaoId)) {
@@ -140,14 +148,25 @@ export async function POST(req: Request) {
   let detalhe: DetalheAuditoria = { alvo };
   let resumo = `DFD ${r.numero} importado — ${qtd}`;
   if (antigo) {
-    const c = compararDfd(antigo, comparavelDoPayload(d, assinaturas, antigo), await rotulosUnidades([antigo.reparticaoId, d.reparticaoId]));
+    // Itens em VÁRIOS lotes: só o 1º lote chega aqui — os itens ficam FORA da comparação (dos dois lados) e
+    // o detalhe por item não é registrado. A comparação é montada com segurança (a gravação já foi feita).
+    const completo = d.rows.length >= (d.totalItens ?? d.rows.length);
+    const c = await detalheSeguro(
+      async () =>
+        compararDfd(
+          completo ? antigo : { ...antigo, itens: [] },
+          comparavelDoPayload(d, assinaturas, completo),
+          await rotulosUnidades([antigo.reparticaoId, d.reparticaoId]),
+        ),
+      null,
+    );
     const obs: string[] = [];
-    // Itens em VÁRIOS lotes: só o 1º lote chega aqui — o detalhe por item não é registrado.
-    if (d.rows.length < (d.totalItens ?? d.rows.length)) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
+    if (!completo) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
     const movido = antigo.protocoloId != null && antigo.protocoloId !== (d.protocoloId ?? null);
     if (movido) obs.push(`Movido do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`}.`);
-    detalhe = { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs };
-    resumo = `DFD ${r.numero} sobrescrito (${ROTULO_ORIGEM[origem].toLowerCase()}) — ${c.total === 0 ? "sem diferenças" : `${c.total} diferença(s)`}`;
+    detalhe = c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs } : { alvo, obs };
+    const diferencas = !c ? "" : c.total === 0 ? " — sem diferenças" : ` — ${c.total} diferença(s)`;
+    resumo = `DFD ${r.numero} sobrescrito (${ROTULO_ORIGEM[origem].toLowerCase()})${diferencas}`;
     // O protocolo de ONDE o DFD saiu também registra a saída (histórico conectado de cada protocolo).
     if (movido)
       await registrarAuditoria({
@@ -176,9 +195,8 @@ export async function POST(req: Request) {
 }
 
 /** O DFD recebido no `start-dfd` na forma comparável. Os itens só entram quando vieram TODOS no 1º lote
- * (senão ficam os gravados — sem diferença de item inventada). */
-function comparavelDoPayload(d: StartDfdPayload, assinaturas: Assinatura[], antigo: DfdDetalhe): DfdComparavel {
-  const completo = d.rows.length >= (d.totalItens ?? d.rows.length);
+ * (`completo`); senão ficam de fora (o chamador tira os do gravado também — sem diferença inventada). */
+function comparavelDoPayload(d: StartDfdPayload, assinaturas: Assinatura[], completo: boolean): DfdComparavel {
   return {
     numero: d.numero,
     planejamento: d.planejamento ?? null,
@@ -208,6 +226,6 @@ function comparavelDoPayload(d: StartDfdPayload, assinaturas: Assinatura[], anti
           valorUnitario: it.valorUnitario ?? null,
           valorTotal: it.valorTotal ?? null,
         }))
-      : antigo.itens,
+      : [],
   };
 }

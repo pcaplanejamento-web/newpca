@@ -6,6 +6,7 @@ import {
   fatiarItensPorDfd,
   type ItemMassa,
   planejarMassaItens,
+  resumirFalhas,
   resumirFalhasItens,
 } from "../src/lib/massa-itens.ts";
 
@@ -96,5 +97,14 @@ describe("fatiarItensPorDfd / resumirFalhasItens", () => {
       1,
     );
     assert.deepEqual(r, ["2 itens: fora do catálogo (DFD 12 item 4 … (+1))", "1 item: sem acesso (DFD 13)"]);
+  });
+  it("resumirFalhas: centenas de falhas iguais (DFDs/protocolos) viram UMA linha por motivo", () => {
+    const falhas = Array.from({ length: 300 }, (_, i) => ({ ref: `Protocolo ${i}/2026`, motivo: "Sem acesso à unidade deste protocolo." }));
+    const r = resumirFalhas([...falhas, { ref: "Protocolo 9/2025", motivo: "Protocolo sem DFDs — não há somatória." }], ["protocolo", "protocolos"], 2);
+    assert.deepEqual(r, [
+      "300 protocolos: Sem acesso à unidade deste protocolo (Protocolo 0/2026, Protocolo 1/2026 … (+298))",
+      "1 protocolo: Protocolo sem DFDs — não há somatória (Protocolo 9/2025)",
+    ]);
+    assert.deepEqual(resumirFalhas([], ["DFD", "DFDs"]), []);
   });
 });

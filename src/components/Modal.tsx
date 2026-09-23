@@ -130,6 +130,7 @@ export function Modal({
   paineis,
   esquerda,
   larguraPrincipal,
+  principalNoTopo = false,
   children,
 }: {
   open: boolean;
@@ -152,6 +153,9 @@ export function Modal({
   esquerda?: ModalPainel[];
   /** Largura preferida (rem) do principal na pilha. Padrão: 64 sozinho, 44 com painéis ao lado. */
   larguraPrincipal?: number;
+  /** O principal acabou de mostrar um painel FILHO (ex.: as mensagens do DFD no lugar do item): conta como
+   * o ÚLTIMO aberto — é o visível no celular e o 1º que o Esc fecha (o `onClose` dele volta um passo). */
+  principalNoTopo?: boolean;
   children: ReactNode;
 }) {
   const [montado, setMontado] = useState(false);
@@ -240,13 +244,14 @@ export function Modal({
 
   // Esc fecha o ÚLTIMO painel aberto (pilha) e, por último, o modal — lê a pilha/onClose ATUAIS (ref):
   // o ouvinte é registrado uma vez por abertura, não a cada render.
-  const escRef = useRef({ pilha, onClose });
-  escRef.current = { pilha, onClose };
+  const escRef = useRef({ pilha, onClose, principalNoTopo });
+  escRef.current = { pilha, onClose, principalNoTopo };
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || bloqueado) return;
       if (modaisAbertos[modaisAbertos.length - 1] !== idModal.current) return; // há outro modal por cima
+      if (escRef.current.principalNoTopo) return escRef.current.onClose(); // o principal está por cima
       const idUltimo = ordemRef.current[ordemRef.current.length - 1];
       const ultimo = escRef.current.pilha.find((p) => p.id === idUltimo && p.aberto);
       if (ultimo) ultimo.onClose();
@@ -290,7 +295,7 @@ export function Modal({
   // desktop, 1 no celular) — sempre desenhados na ordem das colunas.
   const PRINCIPAL = "__principal";
   const colunas = [...aEsquerda, { id: PRINCIPAL, aberto: true, largura: larguraPrincipal }, ...direita];
-  const porAbertura = [PRINCIPAL, ...ordemRef.current];
+  const porAbertura = principalNoTopo ? [...ordemRef.current, PRINCIPAL] : [PRINCIPAL, ...ordemRef.current];
   const visiveis = new Set(porAbertura.slice(-(isDesktop ? MAX_VISIVEIS : 1)));
   const largura = (c: { id: string; largura?: number }) =>
     c.largura ?? (c.id === PRINCIPAL ? (visiveis.size > 1 ? 44 : 64) : 40);

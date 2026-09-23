@@ -195,7 +195,7 @@ export function BannersMesa({
     );
   } else if (raiz === "item") {
     // [Protocolo | DFD | Item*] — o item é a raiz (direita); DFD e protocolo surgem à esquerda dele.
-    const { onClose: fecharItem, ...item } = dfd.itemPainel({
+    const { onClose: fecharItem, topo, ...item } = dfd.itemPainel({
       onVerDfd: verDfd ? undefined : () => setVerDfd(true),
       onVerProtocolo: () => dfd.orig?.protocoloId != null && verProtocolo(dfd.orig.protocoloId),
       onFechar: () => fecharTudo(),
@@ -208,6 +208,7 @@ export function BannersMesa({
         bloqueado={bloqueado}
         larguraPrincipal={LARGURA.item}
         esquerda={[painelProto, { id: "dfd", aberto: verDfd, largura: LARGURA.dfd, onClose: dfd.fechar, ...dfd.dfdPainel }]}
+        principalNoTopo={topo}
         {...item}
       />
     );

@@ -385,11 +385,17 @@ export function useDfdGravado({
    * por campo) sobre o RASCUNHO do DFD. As mensagens/histórico do DFD pedidos com o item na tela ocupam o
    * LUGAR dele (Protocolo | DFD | Item — a coluna da direita é uma só); o X delas volta ao item.
    */
-  function itemPainel(acoes: { onVerDfd?: () => void; onVerProtocolo?: () => void; onFechar: () => void }): ConteudoBanner & { onClose: () => void } {
-    if (painel && painel.tipo !== "item") return { titulo: direito.titulo, children: direito.children, onClose: () => setPainel(null) };
+  function itemPainel(acoes: {
+    onVerDfd?: () => void;
+    onVerProtocolo?: () => void;
+    onFechar: () => void;
+  }): ConteudoBanner & { onClose: () => void; topo: boolean } {
+    // Mensagens/histórico do DFD no lugar do item: o banner fica POR CIMA (visível no celular; o Esc/X volta ao item).
+    if (painel && painel.tipo !== "item") return { titulo: direito.titulo, children: direito.children, onClose: () => setPainel(null), topo: true };
     const it = dfd && itemIdx != null ? dfd.itens[itemIdx] : undefined;
     return {
       onClose: acoes.onFechar,
+      topo: false,
       titulo: it ? `Item ${it.item ?? (itemIdx ?? 0) + 1} — DFD ${numero}` : `Item — DFD ${numero}`,
       acoesCabecalho: botaoAtualizar,
       rodape: dfd ? (

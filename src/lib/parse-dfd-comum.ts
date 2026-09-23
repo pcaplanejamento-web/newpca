@@ -79,19 +79,24 @@ export function juntarRefs(l: (string | null | undefined)[]): string | null {
   return listaRefs(l.filter(Boolean).join(SEPARADOR_REFS)).join(SEPARADOR_REFS) || null;
 }
 
-/** TODAS as referências de um tipo no texto (cada menção e cada item de uma lista). Numa lista, só entram
- * os itens com o MESMO formato do 1º (com "/" = nº/ano) — "Nº 860/2025, 12 MESES" não vira o contrato "12". */
+/** Uma DATA (dd/mm/aaaa) — nunca é nº de referência. */
+const RE_DATA_REF = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+
+/** TODAS as referências de um tipo no texto (cada menção e cada item de uma lista). Numa lista, os itens
+ * seguintes só entram no formato nº/ano ("/") do 1º — "Nº 860/2025, 12 MESES" não vira o contrato "12"; data
+ * nunca entra. Entre menções, vale o nº/ano: um nº solto de OUTRA frase ("PRORROGAÇÃO DO CONTRATO POR 12
+ * MESES", "ATA DE 2024") é descartado quando há algum nº/ano; sem nenhum nº/ano, fica só a 1ª menção. */
 function extrairRefs(s: string, re: RegExp): string[] {
   const out: string[] = [];
   for (const m of s.matchAll(re)) {
     const itens = m[1].split(/\s*(?:,|;|\bE\b)\s*(?:N[º°O.]*\s*)?/i).map((x) => x.replace(/[.\-/]+$/, "").trim());
     const comBarra = itens[0]?.includes("/");
     itens.forEach((n, k) => {
-      if (!n || (k > 0 && (!comBarra || !n.includes("/")))) return; // separador solto / fora do formato
+      if (!n || RE_DATA_REF.test(n) || (k > 0 && (!comBarra || !n.includes("/")))) return; // solto / data / fora do formato
       if (!out.includes(n)) out.push(n);
     });
   }
-  return out;
+  return out.some((n) => n.includes("/")) ? out.filter((n) => n.includes("/")) : out.slice(0, 1);
 }
 
 /**

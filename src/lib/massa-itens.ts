@@ -154,15 +154,28 @@ export function fatiarItensPorDfd(ids: number[], dfdDe: Map<number, number>, max
 
 /** Agrupa recusas/falhas pelo MOTIVO para o relatório curto ("3 itens: fora do catálogo (DFD 12: 4, 7…)"). */
 export function resumirFalhasItens(falhas: { dfd: string; item: number | null; motivo: string }[], max = 6): string[] {
+  return resumirFalhas(
+    falhas.map((f) => ({ ref: f.item != null ? `DFD ${f.dfd} item ${f.item}` : `DFD ${f.dfd}`, motivo: f.motivo })),
+    ["item", "itens"],
+    max,
+  );
+}
+
+/**
+ * Falhas de uma edição em massa (itens, DFDs ou protocolos) AGRUPADAS POR MOTIVO — uma linha por motivo com a
+ * contagem e as referências (truncadas): "3 protocolos: Sem acesso à unidade deste protocolo (Protocolo 90/2026,
+ * …)". Centenas de falhas iguais viram UMA linha legível. Puro.
+ */
+export function resumirFalhas(falhas: { ref: string; motivo: string }[], nomes: readonly [string, string], max = 6): string[] {
   const porMotivo = new Map<string, string[]>();
   for (const f of falhas) {
-    const ref = f.item != null ? `DFD ${f.dfd} item ${f.item}` : `DFD ${f.dfd}`;
-    const l = porMotivo.get(f.motivo);
-    if (l) l.push(ref);
-    else porMotivo.set(f.motivo, [ref]);
+    const motivo = f.motivo.trim().replace(/\.$/, "");
+    const l = porMotivo.get(motivo);
+    if (l) l.push(f.ref);
+    else porMotivo.set(motivo, [f.ref]);
   }
   return [...porMotivo.entries()].map(([motivo, refs]) => {
     const lista = refs.slice(0, max).join(", ") + (refs.length > max ? ` … (+${refs.length - max})` : "");
-    return `${refs.length} ${refs.length === 1 ? "item" : "itens"}: ${motivo} (${lista})`;
+    return `${refs.length} ${refs.length === 1 ? nomes[0] : nomes[1]}: ${motivo} (${lista})`;
   });
 }

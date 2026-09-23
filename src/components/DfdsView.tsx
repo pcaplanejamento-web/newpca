@@ -22,7 +22,7 @@ import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
-import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhasItens } from "@/lib/massa-itens";
+import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { ProtocoloResumo } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
@@ -85,11 +85,14 @@ const podar = (sel: Sel, validas: Set<number>): Sel => {
 /** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
  * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
 const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
-/** Chave da conferência AGREGADA de um protocolo: muda quando a capa ou QUALQUER DFD dele é gravado. */
+/** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto) e
+ * QUALQUER DFD dele gravado. Trocar responsável/situação não reconfere nada. */
 const chaveProto = (p: ProtocoloResumo) =>
-  `${p.id}|${p.atualizadoEm ?? ""}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
+  `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
 const FATIA_PROTOCOLOS = 50;
+/** Estado do protocolo cuja conferência dos DFDs falhou (neutro — nunca um "Regular" falso). */
+const NAO_CONFERIDO = "Não conferido";
 /** O valor de GESTÃO do protocolo `id` (o editado na célula, se houver; senão o do servidor). */
 function valorGestao<K extends keyof Gestao>(g: Map<number, Gestao>, id: number | null, k: K, base: number | null): number | null {
   const v = id != null ? g.get(id)?.[k] : undefined;
@@ -143,8 +146,23 @@ export function DfdsView({
   // GESTÃO na célula (responsável/situação): vale na hora; a lista recarregada do servidor a substitui.
   const [gestao, setGestao] = useState<Map<number, Gestao>>(new Map());
   const [salvandoGestao, setSalvandoGestao] = useState<Set<string>>(new Set());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: zera o otimista quando a lista recarrega do servidor.
-  useEffect(() => setGestao(new Map()), [protocolos]);
+  const salvandoRef = useRef(salvandoGestao);
+  salvandoRef.current = salvandoGestao;
+  // A lista recarregada do servidor substitui o otimista — EXCETO o que ainda está gravando (outra célula
+  // salva em paralelo): esse vale até a resposta dele.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só à lista recarregada do servidor.
+  useEffect(() => {
+    setGestao((m) => {
+      if (m.size === 0) return m;
+      const n = new Map<number, Gestao>();
+      for (const [id, g] of m) {
+        const pendente: Gestao = {};
+        for (const campo of Object.keys(g) as (keyof Gestao)[]) if (salvandoRef.current.has(`${id}:${campo}`)) pendente[campo] = g[campo];
+        if (Object.keys(pendente).length > 0) n.set(id, pendente);
+      }
+      return n;
+    });
+  }, [protocolos]);
   const situacaoDe = (p: ProtocoloResumo) => valorGestao(gestao, p.id, "situacaoId", p.situacaoId);
   const protocolosF = useMemo(
     () => protocolos.filter((p) => passaFiltroMesa({ responsavelId: valorGestao(gestao, p.id, "responsavelId", p.responsavelId), assunto: p.assunto }, filtro)),
@@ -257,15 +275,16 @@ export function DfdsView({
   // ESTADO AGREGADO dos PROTOCOLOS (capa + TODOS os problemas dos DFDs/itens de cada um) — calculado no
   // servidor com a MESMA conferência por linha; lazy (só com a visão Protocolos), em fatias limitadas
   // também pelo nº de DFDs, com cache pela chave do protocolo (`chaveProto`: capa ou qualquer DFD
-  // gravado ⇒ reconfere só ele). Até chegar, a célula gira ("Conferindo…").
-  const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto> }>({ ctx: "", m: new Map() });
+  // gravado ⇒ reconfere só ele). Até chegar, a célula gira ("Conferindo…"); a fatia que FALHA marca os seus
+  // protocolos como "Não conferido" (nunca um "Regular" falso) e as demais seguem — nova tentativa quando a
+  // lista recarrega ou a visão reabre.
+  const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
   const [, setConfProtoVersao] = useState(0);
-  const [confProtoFalhou, setConfProtoFalhou] = useState(false);
   useEffect(() => {
     if (vista !== "protocolos") return;
-    setConfProtoFalhou(false);
-    if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map() };
+    if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
     const alvo = confProtoRef.current;
+    alvo.falhos.clear();
     const faltam = protocolos.filter((p) => !alvo.m.has(chaveProto(p)));
     if (faltam.length === 0) return;
     const fatias: ProtocoloResumo[][] = [];
@@ -295,33 +314,37 @@ export function DfdsView({
           });
           const j = (await r.json().catch(() => ({}))) as { ok?: boolean; linhas?: ConfProto[] };
           if (ac.signal.aborted) break;
-          if (!r.ok || !j.ok) {
-            setConfProtoFalhou(true);
-            break;
-          }
+          if (!r.ok || !j.ok) throw new Error("conferência indisponível");
           for (const l of j.linhas ?? []) {
             const k = chavePorId.get(l.id);
             if (k) alvo.m.set(k, l);
           }
-          setConfProtoVersao((v) => v + 1);
         } catch {
-          if (!ac.signal.aborted) setConfProtoFalhou(true);
-          break;
+          if (ac.signal.aborted) break;
         }
+        // O que ficou SEM resultado nesta fatia (falha, ou protocolo que sumiu) não gira para sempre.
+        for (const p of fatia) if (!alvo.m.has(chaveProto(p))) alvo.falhos.add(chaveProto(p));
+        setConfProtoVersao((v) => v + 1);
       }
     })();
     return () => ac.abort();
   }, [vista, protocolos, ctxConf]);
-  /** Estado do protocolo: o agregado do servidor; até chegar (ou se falhou), só a capa conta. */
-  const estadoDoProtocolo = (p: ProtocoloResumo): { conf: ConfProto; pendente: boolean } => {
-    const c = confProtoRef.current.ctx === ctxConf ? confProtoRef.current.m.get(chaveProto(p)) : undefined;
-    if (c) return { conf: c, pendente: false };
+  /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
+   * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
+  const estadoDoProtocolo = (p: ProtocoloResumo): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
+    const atual = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
+    const k = chaveProto(p);
+    const c = atual?.m.get(k);
+    if (c) return { conf: c, pendente: false, naoConferido: false };
     const base = avaliarProtocolo(
       { valorCapa: p.valorCapa, valorTotal: p.valorTotal, totalDfds: p.totalDfds, categoria: classificarAssunto(p.assunto) },
       null,
       regras,
     );
-    return { conf: { id: p.id, estado: base.estado, resumo: base.resumo ?? null }, pendente: !confProtoFalhou && p.totalDfds > 0 };
+    const conf = { id: p.id, estado: base.estado, resumo: base.resumo ?? null };
+    if (p.totalDfds === 0) return { conf, pendente: false, naoConferido: false }; // sem DFDs: a capa diz tudo
+    const falhou = !!atual?.falhos.has(k);
+    return { conf, pendente: !falhou, naoConferido: falhou && base.estado === "regular" };
   };
 
   /** GESTÃO na célula: responsável/situação gravados na hora (PATCH, origem "celula" no histórico). */
@@ -462,7 +485,10 @@ export function DfdsView({
     const r = await emFatias("/api/dfd/massa", fatiar(ids, FATIA_MASSA), acao, "DFD(s)");
     setSelDfds(new Set());
     if (r.alterados > 0) toast.success(`${num(r.alterados)} DFD(s) alterado(s).`);
-    const falhas = [...r.erros, ...(r.falhas as { numero: string; motivo: string }[]).map((f) => `DFD ${f.numero} (${f.motivo})`)];
+    const falhas = [
+      ...r.erros,
+      ...resumirFalhas((r.falhas as { numero: string; motivo: string }[]).map((f) => ({ ref: `DFD ${f.numero}`, motivo: f.motivo })), ["DFD", "DFDs"]),
+    ];
     if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }
 
@@ -494,7 +520,10 @@ export function DfdsView({
     setSelProtos(new Set());
     if (r.alterados > 0) toast.success(`${num(r.alterados)} protocolo(s) alterado(s).`);
     else if (r.erros.length === 0 && r.falhas.length === 0) toast.success("Nada a alterar — os selecionados já estavam assim.");
-    const falhas = [...r.erros, ...(r.falhas as { numero: string; motivo: string }[]).map((f) => `Protocolo ${f.numero} (${f.motivo})`)];
+    const falhas = [
+      ...r.erros,
+      ...resumirFalhas((r.falhas as { numero: string; motivo: string }[]).map((f) => ({ ref: `Protocolo ${f.numero}`, motivo: f.motivo })), ["protocolo", "protocolos"]),
+    ];
     if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }
 
@@ -570,6 +599,15 @@ export function DfdsView({
       .map((p) => ({ id: p.responsavelId as number, nome: p.responsavelNome ?? `#${p.responsavelId}` }))
       .filter((x, i, arr) => arr.findIndex((y) => y.id === x.id) === i),
   ];
+  // O valor ATIVO de um filtro de hierarquia sempre aparece nas opções — mesmo que nenhum protocolo o tenha
+  // mais (ex.: a massa trocou o assunto de todos): o seletor nunca mostra "Todos" com um filtro aplicado.
+  const nomesVistos = useRef(new Map<number, string>());
+  for (const x of opcoesResponsavel) nomesVistos.current.set(x.id, x.nome);
+  const respFiltrado = typeof filtro.responsavel === "number" ? filtro.responsavel : null;
+  if (respFiltrado != null && !opcoesResponsavel.some((x) => x.id === respFiltrado))
+    opcoesResponsavel.push({ id: respFiltrado, nome: nomesVistos.current.get(respFiltrado) ?? `#${respFiltrado}` });
+  const opcoesAssunto = opcoesAssuntoMesa(protocolos);
+  if (filtro.assunto != null && !opcoesAssunto.includes(filtro.assunto)) opcoesAssunto.push(filtro.assunto);
 
   // ---- Colunas da tabela de Protocolos ----
   // ESTADO = o protocolo ACUMULA a capa + TODOS os problemas dos DFDs/itens (filtro: todos os problemas).
@@ -588,17 +626,27 @@ export function DfdsView({
       header: "Estado",
       nowrap: true,
       value: (r) => {
-        const { conf, pendente } = estadoDoProtocolo(r);
-        return pendente ? "Conferindo…" : conf.resumo?.rotulo || ESTADO_PROTOCOLO_ROTULO[conf.estado];
+        const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
+        if (pendente || naoConferido) return pendente ? "Conferindo…" : NAO_CONFERIDO;
+        return conf.resumo?.rotulo || ESTADO_PROTOCOLO_ROTULO[conf.estado];
       },
       // Filtro: TODOS os problemas do protocolo (capa + os de todos os DFDs/itens).
       valores: (r) => {
-        const { conf, pendente } = estadoDoProtocolo(r);
-        return pendente ? ["Conferindo…"] : conf.resumo?.rotulos.length ? conf.resumo.rotulos : [ESTADO_PROTOCOLO_ROTULO[conf.estado]];
+        const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
+        if (pendente || naoConferido) return [pendente ? "Conferindo…" : NAO_CONFERIDO];
+        return conf.resumo?.rotulos.length ? conf.resumo.rotulos : [ESTADO_PROTOCOLO_ROTULO[conf.estado]];
       },
       render: (r) => {
-        const { conf, pendente } = estadoDoProtocolo(r);
+        const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
         if (pendente) return <EstadoProcessando rotulo="Conferindo…" />;
+        if (naoConferido)
+          return (
+            <EstadoPonto
+              cor="var(--muted)"
+              rotulo={NAO_CONFERIDO}
+              title="Não foi possível conferir os DFDs deste protocolo agora — recarregue a página para tentar de novo."
+            />
+          );
         if (conf.resumo?.rotulo) return <EstadoResumo res={conf.resumo} />;
         return <EstadoPonto cor={estadoProtocoloCor(conf.estado, regras)} rotulo={ESTADO_PROTOCOLO_ROTULO[conf.estado]} />;
       },
@@ -935,7 +983,7 @@ export function DfdsView({
           onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
           opcoes={[
             { valor: "__todos", rotulo: "Todos" },
-            ...opcoesAssuntoMesa(protocolos).map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
+            ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
           ]}
         />
         {filtrado && (

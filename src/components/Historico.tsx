@@ -353,9 +353,20 @@ function DetalheAlteracao({ a }: { a: AlteracaoHistorico }) {
  * Seção RECOLHÍVEL "Histórico do item" (no `ItemDetalhe` de um DFD gravado): carrega o histórico do DFD
  * só ao abrir e mostra o que tocou este item — com o canal e o protocolo de cada alteração.
  */
-export function HistoricoDoItem({ dfdId, item }: { dfdId: number; item: { item: number | null; codigo: string | null } }) {
+export function HistoricoDoItem({
+  dfdId,
+  item,
+  entradas,
+}: {
+  dfdId: number;
+  item: { item: number | null; codigo: string | null };
+  /** Histórico do DFD já carregado pelo host (sem ele, carrega ao abrir). */
+  entradas?: LinhaHistorico[];
+}) {
   const [aberto, setAberto] = useState(false);
-  const { linhas, erro } = useHistorico(aberto ? `/api/dfd/${dfdId}/historico` : null);
+  const remoto = useHistorico(aberto && !entradas ? `/api/dfd/${dfdId}/historico` : null);
+  const linhas = entradas ?? remoto.linhas;
+  const erro = entradas ? null : remoto.erro;
   return (
     <section className="rounded-card border border-border bg-surface shadow-ring">
       <button

@@ -63,6 +63,15 @@ describe("VÁRIAS referências por DFD-R (contratos/ARPs/licitações)", () => {
     assert.equal(referenciasRenovacao("CONTRATO Nº 860/2025, 12 MESES DE VIGÊNCIA").contrato, "860/2025");
     assert.equal(referenciasRenovacao("CONTRATO 45 VIGENTE, 30 DIAS").contrato, "45");
   });
+  it("nº solto de OUTRA menção (prazo, ano) e DATAS nunca viram referência", () => {
+    assert.equal(referenciasRenovacao("RENOVAÇÃO DO CONTRATO Nº 860/2025. PRORROGAÇÃO DO CONTRATO POR 12 MESES.").contrato, "860/2025");
+    assert.equal(referenciasRenovacao("RENOVAÇÃO DO CONTRATO Nº 860/2025 — VIGÊNCIA DO CONTRATO DE 12 MESES").contrato, "860/2025");
+    assert.equal(referenciasRenovacao("ARP Nº 12/2025. A ATA DE 2024 FOI ASSINADA.").ata, "12/2025");
+    assert.equal(referenciasRenovacao("PREGÃO ELETRÔNICO Nº 55/2024. NOVA LICITAÇÃO EM 2026.").licitacao, "55/2024");
+    assert.equal(referenciasRenovacao("CONTRATO Nº 860/2025, 01/03/2025").contrato, "860/2025");
+    // Sem nenhum nº/ano, vale só a 1ª menção (como antes).
+    assert.equal(referenciasRenovacao("CONTRATO 45 VIGENTE. PRORROGAÇÃO DO CONTRATO POR 12 MESES.").contrato, "45");
+  });
   it("mesma referência citada duas vezes entra uma vez", () => {
     assert.equal(referenciasRenovacao("CONTRATO Nº 860/2025 ... conforme o CONTRATO 860/2025").contrato, "860/2025");
   });

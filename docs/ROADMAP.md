@@ -151,7 +151,8 @@ real (DFD 140 → BRUNO BOTELHO SALEH + CPF + data). Testes puros em `parse-assi
 - **Conflito de DFD na importação — escolher qual prevalece:** DFD já cadastrado aparece como **Substitui/Move**; o
   botão **"Manter o existente"** descarta o incoming (o cadastrado prevalece); sem descartar, o novo prevalece.
 - **Histórico CONECTADO do DFD:** o banner "Histórico" agora mescla as alterações do DFD **e do seu protocolo**
-  (`historicoConectadoDfd` + `mesclarHistorico` puro/testável; a `entidade` de cada linha marca a origem).
+  (`historicoConectadoDfd` + `mesclarHistorico` puro/testável; a `entidade` de cada linha marca a origem). *Substituído
+  depois pelo histórico conectado protocolo › DFD › item (migração `0030`, `historicoDfd`/`historicoProtocolo`).*
 - **Tabelas da Mesa com SCROLL INTERNO + seletor de linhas (30/50/100/200)** — `DataTable scrollInterno` (opt-in): a
   tabela preenche a tela e o corpo rola por dentro (thead fixo), sem scroll do navegador; nº de linhas escolhido na
   própria tabela (limita as linhas em DOM → performático com milhares).
@@ -465,7 +466,8 @@ mostra **Id + Assunto** ao lado do nº; o **valor da capa faltando/zerado** é a
 **relatório de erro** no rodapé. **Tela de DFDs → aba Protocolos:** a tabela ganhou **Estado** (integridade capa ×
 somatória), **Situação** (tem DFDs?), **Id protocolo** e **Assunto**, e perdeu **Interessado** (redundante com
 Repartição). Lógica pura/testável (`tipoCurtoDfd`, `itemComErro`/`estadoItem`, `estadoProtocolo`/`situacaoProtocolo`,
-`linhasRelatorioDfd`/`linhasRelatorioProtocolo`); novo componente **`RelatorioErros`** catalogado.
+`linhasRelatorioDfd`/`linhasRelatorioProtocolo`); novo componente **`RelatorioErros`** catalogado. *Depois: o Estado
+virou o AGREGADO (`avaliarProtocolo`) e a Situação, as cadastradas pelo ADM (migração `0030`).*
 
 ### Cabeçalho FIXO dos banners + rodapés só-somatório + relatório em DESPACHO — entregue
 ✅ **Head no lugar certo:** o nº/tipo/planejamento do DFD e o nº/Id/Assunto do protocolo passaram para o **cabeçalho

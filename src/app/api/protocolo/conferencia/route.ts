@@ -4,6 +4,7 @@ import { classificarAssunto } from "@/lib/avaliacao-core";
 import { avaliarLinhaDfd, avaliarProtocolo } from "@/lib/conferencia-dfd";
 import { type DfdDetalhe, listarDfdsCompletosDosProtocolos } from "@/lib/dfd";
 import { conferenciaProtocolosSchema } from "@/lib/dfd-validation";
+import { getReparticaoContexto } from "@/lib/grupos";
 import { ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { listarProtocolosPorIds } from "@/lib/protocolo";
@@ -15,16 +16,21 @@ export const dynamic = "force-dynamic";
  * ESTADO AGREGADO da lista de PROTOCOLOS da Mesa: cada protocolo ACUMULA os problemas de dentro — a
  * conciliação da capa + TODOS os problemas dos seus DFDs e itens (a MESMA conferência por linha da
  * análise, `avaliarLinhaDfd`, sobre os DFDs COMPLETOS e as unidades REAIS). O cliente pede em fatias
- * (lazy); a célula mostra "Conferindo…" até chegar. Leitura: segue o escopo da lista.
+ * (lazy); a célula mostra "Conferindo…" até chegar. Leitura escopada por UNIDADE (como `GET
+ * /api/protocolo/[id]`): protocolo de unidade sem acesso é ignorado.
  */
 export async function POST(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(conferenciaProtocolosSchema, req);
   if ("resp" in p) return p.resp;
-  const [protocolos, dfds, regras, orgaos] = await Promise.all([
-    listarProtocolosPorIds(p.data.ids),
-    listarDfdsCompletosDosProtocolos(p.data.ids),
+  const { lista } = await getReparticaoContexto(a.u);
+  const protocolos = (await listarProtocolosPorIds(p.data.ids)).filter(
+    (pr) => pr.reparticaoId == null || lista.some((r) => r.id === pr.reparticaoId),
+  );
+  const ids = protocolos.map((pr) => pr.id);
+  const [dfds, regras, orgaos] = await Promise.all([
+    ids.length > 0 ? listarDfdsCompletosDosProtocolos(ids) : Promise.resolve([]),
     getRegrasAvaliacao(),
     listarOrgaos(),
   ]);

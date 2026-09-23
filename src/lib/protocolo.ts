@@ -35,7 +35,6 @@ export type ProtocoloResumo = {
   valorTotal: number;
   /** Data da PROTOCOLAÇÃO (quando entrou no sistema — UTC do SQLite). */
   criadoEm: string | null;
-  atualizadoEm: string | null;
   /** Última gravação de um DFD do protocolo — invalida o cache da conferência agregada (Estado). */
   dfdsAtualizadoEm: string | null;
   // GESTÃO na Mesa: pessoa designada (Responsável), situação (cadastrada pelo ADM) e quem protocolou
@@ -74,7 +73,6 @@ const responsavel = alias(usuarios, "responsavel");
 const distribuidor = alias(usuarios, "distribuidor");
 /** Colunas de GESTÃO (responsável/situação/distribuição) — as mesmas na lista e no detalhe. */
 const colunasGestao = {
-  atualizadoEm: dfdProtocolos.atualizadoEm,
   responsavelId: dfdProtocolos.responsavelId,
   responsavelNome: responsavel.nome,
   situacaoId: dfdProtocolos.situacaoId,
@@ -258,11 +256,15 @@ export type CamposProtocolo = Parameters<typeof atualizarProtocolo>[1];
  * + responsável e situação — antes → depois, com rótulos legíveis gravados (sigla da unidade, nome da
  * pessoa/situação), que sobrevivem a renomear/excluir depois.
  */
-export async function detalheEdicaoProtocolo(antes: ProtocoloDetalhe | ProtocoloResumo, campos: CamposProtocolo): Promise<DetalheAuditoria> {
+export async function detalheEdicaoProtocolo(
+  antes: ProtocoloDetalhe | ProtocoloResumo,
+  // O REENVIO também traz a data e o ano do PCA da capa nova (o PATCH não — são identificadores).
+  campos: CamposProtocolo & { data?: string | null; anoPca?: number | null },
+): Promise<DetalheAuditoria> {
   const def = <T,>(v: T | undefined, atual: T) => (v === undefined ? atual : v);
   const capa = (p: Partial<CamposProtocolo> & { data?: string | null; anoPca?: number | null }, base: ProtocoloDetalhe | ProtocoloResumo) => ({
-    data: base.data,
-    anoPca: base.anoPca,
+    data: def(p.data, base.data),
+    anoPca: def(p.anoPca, base.anoPca),
     interessado: def(p.interessado, base.interessado),
     documento: def(p.documento, "documento" in base ? base.documento : null),
     assunto: def(p.assunto, base.assunto),

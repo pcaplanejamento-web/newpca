@@ -1,5 +1,5 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
@@ -55,7 +55,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   await atualizarProtocolo(id, campos);
   // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
-  const detalhe = await detalheEdicaoProtocolo(proto, campos);
+  const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(proto, campos), {});
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

@@ -1,5 +1,5 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
-import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
+import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { comportamentoNo } from "@/lib/avaliacao-core";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
@@ -87,18 +87,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   // Vincular/desvincular a um protocolo (unidade do protocolo tem de ser acessível).
   if (p.data.protocoloId !== undefined) {
+    let destino: { numero: string } | null = null;
     if (p.data.protocoloId != null) {
       const proto = await getProtocoloReparticao(p.data.protocoloId);
       if (!proto) return erro("Protocolo não encontrado.", 404);
       if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
+      destino = proto;
     }
     await vincularDfd(id, p.data.protocoloId);
     // Histórico nos DOIS protocolos (o de onde saiu e o para onde foi) — cada um mostra o seu lado.
     if (p.data.protocoloId !== dfd.protocoloId) {
-      const snap = await getDfd(id);
-      const alvo = { numero: snap?.numero ?? String(id), planejamento: snap?.planejamento ?? null };
-      const numDe = dfd.protocoloId != null ? ((await getProtocoloReparticao(dfd.protocoloId))?.numero ?? `#${dfd.protocoloId}`) : "—";
-      const numPara = p.data.protocoloId != null ? ((await getProtocoloReparticao(p.data.protocoloId))?.numero ?? `#${p.data.protocoloId}`) : "—";
+      const alvo = { numero: dfd.numero, planejamento: dfd.planejamento };
+      const de = dfd.protocoloId;
+      const numDe = de == null ? "—" : await detalheSeguro(async () => (await getProtocoloReparticao(de))?.numero ?? `#${de}`, `#${de}`);
+      const numPara = destino?.numero ?? "—";
       const detalhe = { alvo, campos: [{ campo: "protocolo", rotulo: "Protocolo", antes: numDe, depois: numPara }] };
       for (const pid of [dfd.protocoloId, p.data.protocoloId]) {
         if (pid == null) continue;
@@ -194,10 +196,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // HISTÓRICO: UMA linha com TUDO o que mudou (cabeçalho, seções, assinaturas e itens — a MESMA régua da
   // comparação do reenvio), com o protocolo do DFD como origem.
   if (antes && (editaCampos || p.data.itens !== undefined)) {
-    const depois = comparavelDepois(antes, p.data, assinaturasGravadas);
-    const c = compararDfd(antes, depois, await rotulosUnidades([antes.reparticaoId, depois.reparticaoId]));
-    const partes = [...c.campos.map((x) => x.rotulo), ...c.secoes.map((x) => x.rotulo), ...(c.assinaturas ? ["assinaturas"] : [])];
-    if (c.itens.length > 0) partes.push(`${c.itens.length} item(ns)`);
+    // Montado com segurança: a gravação já foi feita (uma falha aqui nunca vira 500).
+    const c = await detalheSeguro(async () => {
+      const depois = comparavelDepois(antes, p.data, assinaturasGravadas);
+      return compararDfd(antes, depois, await rotulosUnidades([antes.reparticaoId, depois.reparticaoId]));
+    }, null);
+    const alvo = { numero: antes.numero, planejamento: antes.planejamento };
+    const partes = c ? [...c.campos.map((x) => x.rotulo), ...c.secoes.map((x) => x.rotulo), ...(c.assinaturas ? ["assinaturas"] : [])] : ["editado"];
+    if (c && c.itens.length > 0) partes.push(`${c.itens.length} item(ns)`);
     await registrarAuditoria({
       usuario: a.u,
       acao: "editar",
@@ -206,7 +212,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       resumo: `DFD ${antes.numero}: ${partes.join(", ") || "salvo sem diferenças"}`.slice(0, 500),
       protocoloId: antes.protocoloId,
       origem: "banner",
-      detalhe: { alvo: { numero: antes.numero, planejamento: antes.planejamento }, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens },
+      detalhe: c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens } : { alvo },
     });
   }
 

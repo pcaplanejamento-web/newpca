@@ -366,7 +366,9 @@ export function DataTable<R>({
                   onKeyDown={
                     onRowClick
                       ? (e) => {
-                          if (e.key === "Enter") onRowClick(r);
+                          // Enter num controle DENTRO da célula (dropdown, botão…) é dele — não abre a linha.
+                          if (e.key !== "Enter" || (e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
+                          onRowClick(r);
                         }
                       : undefined
                   }

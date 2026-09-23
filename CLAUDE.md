@@ -664,8 +664,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Manter o existente" deste MESMO protocolo continua no processo e entra na somatória/contagem) e **NÃO depende de os
   DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
   DFD com erro — e o relatório perdia a linha da capa). O botão **"Substituir pela somatória"** (um clique) aparece na
-  análise e no gravado; `protocolo.valorCapa` do ADM decide se trava (padrão) ou só avisa. `estadoProtocolo` (lista de
-  protocolos) usa a MESMA régua; o `motivo` vai ao despacho. O preview mostra TODOS os dados da capa igual ao gravado
+  análise e no gravado; `protocolo.valorCapa` do ADM decide se trava (padrão) ou só avisa. O Estado AGREGADO da lista de
+  protocolos (`avaliarProtocolo`) usa a MESMA régua para a capa; o `motivo` vai ao despacho. O preview mostra TODOS os dados da capa igual ao gravado
   (Id, CPF/CNPJ, **Valor da capa**, Local) + **mini banners** (`StatMini`) de total de DFDs + **somatória**. **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
   "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
   Sem nova aba.

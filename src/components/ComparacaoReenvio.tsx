@@ -74,7 +74,7 @@ export function DiffLinha({
       {recolhe && (
         <button
           type="button"
-          className="mt-1.5 min-h-[32px] text-[12px] font-medium text-accent hover:underline"
+          className="mt-1 min-h-[44px] text-[12px] font-medium text-accent hover:underline"
           onClick={() => setInteiro((v) => !v)}
         >
           {inteiro ? "Recolher" : "Ver texto inteiro"}

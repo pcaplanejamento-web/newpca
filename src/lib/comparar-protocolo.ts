@@ -155,27 +155,33 @@ function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
   const livresG = new Set(g.map((_, i) => i));
   const pares: [ItemComparavel, ItemComparavel][] = [];
   let pendentes = p;
-  const rodada = (casa: (a: ItemComparavel, b: ItemComparavel) => boolean) => {
+  /** Uma rodada: cada pendente casa com o 1º item gravado LIVRE de mesma chave (`null` = não casa). Filas por
+   * chave, na ordem dos gravados — LINEAR, mesmo com milhares de itens sem código ou de código repetido. */
+  const rodada = (chave: (x: ItemComparavel) => string | null) => {
+    const filas = new Map<string, { idx: number[]; pos: number }>();
+    for (const i of livresG) {
+      const k = chave(g[i]);
+      if (k == null) continue;
+      const f = filas.get(k);
+      if (f) f.idx.push(i);
+      else filas.set(k, { idx: [i], pos: 0 });
+    }
     const sobra: ItemComparavel[] = [];
     for (const it of pendentes) {
-      let achado: number | undefined;
-      for (const i of livresG) {
-        if (casa(g[i], it)) {
-          achado = i;
-          break;
-        }
-      }
-      if (achado == null) sobra.push(it);
+      const k = chave(it);
+      const f = k == null ? undefined : filas.get(k);
+      const i = f && f.pos < f.idx.length ? f.idx[f.pos++] : undefined;
+      if (i == null) sobra.push(it);
       else {
-        livresG.delete(achado);
-        pares.push([g[achado], it]);
+        livresG.delete(i);
+        pares.push([g[i], it]);
       }
     }
     pendentes = sobra;
   };
-  rodada((a, b) => !!txt(b.codigo) && txt(a.codigo) === txt(b.codigo) && norm(a.descricao) === norm(b.descricao));
-  rodada((a, b) => b.item != null && a.item === b.item);
-  rodada((a, b) => !!txt(b.codigo) && txt(a.codigo) === txt(b.codigo));
+  rodada((x) => (txt(x.codigo) ? `${txt(x.codigo)}\u0001${norm(x.descricao)}` : null));
+  rodada((x) => (x.item != null ? String(x.item) : null));
+  rodada((x) => txt(x.codigo) || null);
   return { pares, novos: pendentes, removidos: [...livresG].map((i) => g[i]) };
 }
 

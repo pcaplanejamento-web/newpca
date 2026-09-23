@@ -53,19 +53,20 @@ export function BotaoCopiar({
     const t = window.setTimeout(() => setCopiado(false), 1800);
     return () => window.clearTimeout(t);
   }, [copiado]);
+  // A dica fica no invólucro: o botão desabilitado não recebe o ponteiro (e ela explica POR QUE está desabilitado).
   return (
-    <Button
-      variant="ghost"
-      disabled={disabled || !texto}
-      title={titulo ?? texto}
-      onClick={async () => {
-        if (await copiarTexto(texto)) setCopiado(true);
-        else toast.warning(`Não foi possível copiar automaticamente. Copie: ${texto}`, 8000);
-      }}
-      icon={copiado ? <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} /> : <IconClipboard className="h-4 w-4" />}
-      className="shrink-0"
-    >
-      {copiado ? "Copiado!" : rotulo}
-    </Button>
+    <span className="inline-flex shrink-0" title={titulo ?? texto}>
+      <Button
+        variant="ghost"
+        disabled={disabled || !texto}
+        onClick={async () => {
+          if (await copiarTexto(texto)) setCopiado(true);
+          else toast.warning(`Não foi possível copiar automaticamente. Copie: ${texto}`, 8000);
+        }}
+        icon={copiado ? <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} /> : <IconClipboard className="h-4 w-4" />}
+      >
+        {copiado ? "Copiado!" : rotulo}
+      </Button>
+    </span>
   );
 }

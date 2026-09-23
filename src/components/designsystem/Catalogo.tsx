@@ -63,7 +63,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
-import { type EscopoHistorico, Historico } from "@/components/Historico";
+import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
+import { BotaoCopiar } from "@/components/BotaoCopiar";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -359,6 +360,12 @@ function HistoricoDemo() {
       />
       <div className="max-w-2xl">
         <Historico key={escopo} entradas={entradas} escopo={escopo} protocoloId={10} item={{ item: 2, codigo: "5241937264" }} />
+      </div>
+      <div className="max-w-md">
+        <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+          HistoricoDoItem — a seção recolhível no detalhe do item (DFD gravado)
+        </span>
+        <HistoricoDoItem dfdId={87} item={{ item: 2, codigo: "5241937264" }} entradas={DEMO_HISTORICO.filter((l) => l.entidade === "dfd")} />
       </div>
     </div>
   );
@@ -1682,6 +1689,13 @@ export function Catalogo() {
 
       <Secao titulo="Tabela — selecionar TODAS as linhas filtradas + coluna travada pelo filtro de hierarquia">
         <TabelaHierarquiaDemo />
+      </Secao>
+
+      <Secao titulo="BotaoCopiar (copia um texto pronto — ex.: os planejamentos selecionados)">
+        <div className="flex flex-wrap items-center gap-3">
+          <BotaoCopiar texto="1525:1549:1554" rotulo="Copiar planejamentos" titulo="Copia: 1525:1549:1554" />
+          <BotaoCopiar texto="" rotulo="Copiar planejamentos" titulo="Os DFDs selecionados não têm nº de planejamento" />
+        </div>
       </Secao>
 
       <Secao titulo="CampoLista (lista em chips — várias referências da renovação por DFD)">

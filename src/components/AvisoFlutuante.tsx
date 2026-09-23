@@ -79,7 +79,9 @@ export function AvisoFlutuante({
             {titulo}
           </p>
         )}
-        {children && <div className="text-text-2">{children}</div>}
+        {/* Texto longo (ex.: muitas falhas de uma edição em massa) ROLA dentro do aviso — o título e o X ficam
+            sempre ao alcance e o aviso nunca cobre a tela. */}
+        {children && <div className="max-h-[35dvh] overflow-y-auto overscroll-contain text-text-2">{children}</div>}
       </div>
       {onClose && (
         <button

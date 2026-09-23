@@ -8,6 +8,7 @@ import {
   type EntidadeAuditoria,
   type LinhaHistorico,
   type OrigemAuditoria,
+  semDuplicatas,
 } from "./auditoria-core";
 import { getDb } from "./db";
 
@@ -32,6 +33,19 @@ export type EntradaAuditoria = {
   /** Detalhe estruturado (campos/seções/assinaturas/itens, antes → depois). */
   detalhe?: DetalheAuditoria | null;
 };
+
+/**
+ * Monta o DETALHE de uma auditoria sem NUNCA derrubar a operação — ele é montado DEPOIS da gravação (já
+ * feita): uma falha de leitura aqui vira a `alternativa` (e um log), nunca um 500 nem uma "falha" falsa.
+ */
+export async function detalheSeguro<T>(montar: () => Promise<T> | T, alternativa: T): Promise<T> {
+  try {
+    return await montar();
+  } catch (err) {
+    console.error("[auditoria] falha ao montar o detalhe:", err);
+    return alternativa;
+  }
+}
 
 /** Registra 1 linha de auditoria. **BEST-EFFORT: NUNCA lança** — o log jamais quebra a operação. */
 export async function registrarAuditoria(e: EntradaAuditoria): Promise<void> {
@@ -88,12 +102,14 @@ const consultaHist = () =>
   getDb().select(COLS_HIST).from(auditoria).leftJoin(dfdProtocolos, eq(auditoria.protocoloId, dfdProtocolos.id));
 
 /** Histórico de UM DFD (mais recente primeiro): toda alteração dele — campos, seções, assinaturas e ITENS
- * (logados sob `entidade:"dfd"`), cada uma com a ORIGEM e o protocolo por onde passou. */
+ * (logados sob `entidade:"dfd"`), cada uma com a ORIGEM e o protocolo por onde passou. O mesmo evento
+ * logado para os dois protocolos (DFD movido) aparece UMA vez (`semDuplicatas`). */
 export async function historicoDfd(dfdId: number, limite = 300): Promise<LinhaHistorico[]> {
-  return consultaHist()
+  const linhas = await consultaHist()
     .where(and(eq(auditoria.entidade, "dfd"), eq(auditoria.entidadeId, dfdId)))
     .orderBy(desc(auditoria.id))
     .limit(limite);
+  return semDuplicatas(linhas);
 }
 
 /**

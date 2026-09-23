@@ -1,5 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
   // responsável (a sobrescrita/reenvio mantém o já designado).
   const r = await iniciarProtocolo(protocolo, a.u.id, reenvio ? null : await responsavelPadraoDe(a.u.id));
   // Histórico: no reenvio, as diferenças da CAPA (a mesma régua da comparação); os DFDs registram as suas.
-  const detalhe = gravado ? await detalheEdicaoProtocolo(gravado, protocolo) : null;
+  const detalhe = gravado ? await detalheSeguro(() => detalheEdicaoProtocolo(gravado, protocolo), null) : null;
   await registrarAuditoria({
     usuario: a.u,
     acao: reenvio ? "importar" : "protocolar",

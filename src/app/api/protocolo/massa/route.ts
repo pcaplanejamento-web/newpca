@@ -1,5 +1,5 @@
 import { exigirEditor } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       }
       if (!campos) continue;
       await atualizarProtocolo(pr.id, campos);
-      const detalhe = await detalheEdicaoProtocolo(pr, campos);
+      const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(pr, campos), {});
       await registrarAuditoria({
         usuario: a.u,
         acao: "editar",

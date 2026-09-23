@@ -9,6 +9,7 @@ import {
   historicoDoItem,
   interpretarAlteracao,
   passaFiltroHistorico,
+  semDuplicatas,
   ROTULO_ACAO,
   ROTULO_ENTIDADE,
   ROTULO_ORIGEM,
@@ -205,5 +206,47 @@ describe("histórico — exibição (resumo, alvo, filtro e histórico do item)"
     assert.equal(h[0].item?.campos[0].depois, "2");
     assert.equal(h[1].item, null);
     assert.deepEqual(historicoDoItem(linhas, { item: 5, codigo: "500" }).map((e) => e.linha.id), [4, 2, 1], "item sem alteração: só as importações");
+  });
+  it("histórico do ITEM para onde ele ENTROU (novo) — o que vem antes é de outro item com o mesmo nº", () => {
+    const linhas = [
+      linha({ id: 9, acao: "importar", origem: "reenvio", detalhe: JSON.stringify({ alvo: { numero: "1" }, itens: [{ tipo: "novo", item: 7, codigo: "700", descricao: null, campos: [] }] }) }),
+      linha({ id: 5, acao: "importar", origem: "reenvio", detalhe: JSON.stringify({ alvo: { numero: "1" }, itens: [{ tipo: "removido", item: 7, codigo: "999", descricao: null, campos: [] }] }) }),
+      linha({ id: 4, detalhe: JSON.stringify({ itens: [{ ...itemAlt("alterado", 7), codigo: "999" }] }) }),
+      linha({ id: 1, acao: "importar", depois: JSON.stringify({ numero: "1" }), detalhe: JSON.stringify({ alvo: { numero: "1" } }) }),
+    ];
+    assert.deepEqual(historicoDoItem(linhas, { item: 7, codigo: "700" }).map((e) => [e.linha.id, e.item?.tipo ?? null]), [[9, "novo"]]);
+  });
+  it("legado de vínculo ('DFD vinculado ao protocolo #3') não vira alvo 'DFD vinculado'", () => {
+    const l = linha({ entidadeId: 42, resumo: "DFD vinculado ao protocolo #3" });
+    assert.equal(rotuloAlvo(l, interpretarAlteracao(l)), "DFD #42");
+  });
+  it("detalheDe corta descrição e observações; itens além do teto ficam 'sem o detalhe por item'", () => {
+    const d = detalheDe({
+      itens: Array.from({ length: 450 }, (_, i) => ({ tipo: "alterado" as const, item: i + 1, codigo: null, descricao: "D".repeat(5000), campos: [] })),
+      obs: ["O".repeat(5000)],
+    });
+    assert.ok((d?.itens?.[0].descricao?.length ?? 0) <= 500);
+    assert.ok((d?.obs?.[0].length ?? 0) <= 500);
+    assert.ok(JSON.stringify(d).length <= 400_000, "JSON dentro do teto");
+    const nota = d?.obs?.find((o) => o.includes("sem o detalhe por item")) ?? "";
+    assert.ok(nota.includes("mais"), nota);
+    // O item além do teto ainda tem a linha no seu histórico (regravação sem o detalhe).
+    const h = historicoDoItem([linha({ id: 3, acao: "importar", detalhe: JSON.stringify(d) })], { item: 450, codigo: null });
+    assert.deepEqual(h.map((e) => e.linha.id), [3]);
+  });
+  it("detalheDe: textos enormes em MUITOS itens — os itens caem pela metade até caber no teto", () => {
+    const campo = { campo: "descricao", rotulo: "Descrição", antes: "A".repeat(1500), depois: "B".repeat(1500) };
+    const d = detalheDe({ itens: Array.from({ length: 400 }, (_, i) => ({ tipo: "alterado" as const, item: i + 1, codigo: null, descricao: null, campos: [campo, campo] })) });
+    assert.ok(JSON.stringify(d).length <= 400_000);
+    assert.ok((d?.itens?.length ?? 0) < 400 && (d?.itens?.length ?? 0) > 0);
+  });
+  it("semDuplicatas: o mesmo evento logado para os DOIS protocolos (DFD movido) vira UMA linha", () => {
+    const det = JSON.stringify({ campos: [{ campo: "protocolo", rotulo: "Protocolo", antes: "A", depois: "B" }] });
+    const r = semDuplicatas([
+      linha({ id: 8, origem: "vinculo", resumo: "DFD 1: protocolo A → B", detalhe: det, protocoloId: 2, criadoEm: "2026-09-20 12:00:01" }),
+      linha({ id: 7, origem: "vinculo", resumo: "DFD 1: protocolo A → B", detalhe: det, protocoloId: 1, criadoEm: "2026-09-20 12:00:00" }),
+      linha({ id: 6, origem: "vinculo", resumo: "DFD 1: protocolo A → B", detalhe: det, protocoloId: 1, criadoEm: "2026-09-20 11:00:00" }),
+    ]);
+    assert.deepEqual(r.map((l) => l.id), [8, 6], "igual e junto = 1; igual mas em outro momento = outro evento");
   });
 });
