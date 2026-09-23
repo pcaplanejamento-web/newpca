@@ -30,7 +30,8 @@ const longo = (t: string) => t.length > 280 || (t.match(/\n/g)?.length ?? 0) > 3
 /**
  * Uma diferença de campo: o valor ANTERIOR e o NOVO lado a lado (empilhados no celular). `rotulos` nomeia
  * os dois lados (reenvio: Gravado × Novo; histórico: Antes × Depois). `compacto` (histórico): valores
- * curtos numa linha só ("MÉDIA → ALTA") e textos longos recolhidos com "Ver texto inteiro".
+ * curtos numa linha só ("MÉDIA → ALTA") e textos longos recolhidos com "Ver texto inteiro" — com `acao`
+ * (a escolha da sobrescrita), sempre o cartão com os dois lados.
  */
 export function DiffLinha({
   d,
@@ -50,7 +51,8 @@ export function DiffLinha({
   const [inteiro, setInteiro] = useState(false);
   const apaga = (lado: Lado) => (escolhido && escolhido !== lado ? " opacity-45" : "");
   const destaque = (lado: Lado) => (escolhido === lado ? " ring-2 ring-accent/50" : "");
-  if (compacto && curto(d.antes) && curto(d.depois)) {
+  // Uma linha só ("antes → depois") quando é só leitura — com a ESCOLHA, o cartão mostra os dois lados + o seletor.
+  if (compacto && !acao && curto(d.antes) && curto(d.depois)) {
     return (
       <div className="grid gap-x-3 gap-y-0.5 text-[12.5px] sm:grid-cols-[minmax(6rem,10rem)_1fr]">
         <span className="font-semibold text-muted">{d.rotulo}</span>
@@ -99,6 +101,11 @@ export function DiffLinha({
 
 const TOM_ITEM: Record<DiffItemDfd["tipo"], Tone> = { novo: "emerald", removido: "red", alterado: "amber" };
 const ROTULO_ITEM: Record<DiffItemDfd["tipo"], string> = { novo: "Novo", removido: "Removido", alterado: "Alterado" };
+/** (sobrescrita) O EFEITO da escolha num item que só um dos lados tem. */
+const EFEITO_ITEM: Record<"novo" | "removido", Record<EstadoEscolha, string>> = {
+  novo: { novo: "Entra ao sobrescrever (só o arquivo novo tem).", gravado: "Fica fora (o gravado não tem).", editado: "Entra, editado." },
+  removido: { novo: "Sai ao sobrescrever (o arquivo novo não traz).", gravado: "Continua (mantido do gravado).", editado: "Continua, editado." },
+};
 
 /** Bloco de diferenças com título e contagem (Cabeçalho/Seções/Assinaturas/Itens) — reenvio e histórico.
  * `acoes` (sobrescrita): "todos novos / todos gravados" do bloco, ao lado do título. */
@@ -140,6 +147,7 @@ export function DiffItem({
         {acao && <span className="ml-auto">{acao}</span>}
       </div>
       {it.descricao && <p className="mt-1 line-clamp-2 text-[12px] text-text-2">{it.descricao}</p>}
+      {escolhido && it.tipo !== "alterado" && <p className="mt-1 text-[12px] font-medium text-muted">{EFEITO_ITEM[it.tipo][escolhido]}</p>}
       {it.campos.length > 0 && (
         <div className={`mt-2 ${compacto ? "space-y-1" : "space-y-1.5"}`}>
           {it.campos.map((d) => (
