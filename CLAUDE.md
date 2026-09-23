@@ -41,6 +41,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (lotes de 7×14=98).
   - **Evite `UNION ALL` longo** em migração (o D1 rejeita "compound SELECT"); use
     `INSERT ... VALUES`.
+  - **Nunca `db.run/all/get/values(sql`…${param}`)` DENTRO de `db.batch`:** no driver D1 do Drizzle o comando CRU com
+    parâmetros quebra no lote ("Cannot read properties of undefined (reading 'bind')" → 500). Em lote, só BUILDERS
+    (`insert`/`update`/`delete`/`select`, inclusive `insert().select()` + `onConflictDoUpdate` — ver `rastro-sql.ts`).
+    O teste roda os builders pelo driver `drizzle-orm/d1` REAL sobre `node:sqlite` (`tests/fixtures/d1-sqlite.ts`).
 - Schema em `src/db/schema.ts`. Teste da cadeia de migrações: `tests/migrations.test.ts`
   (aplica `drizzle/*.sql` em `node:sqlite`).
 - **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
@@ -728,9 +732,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **RASTRO do DFD sobrescrito por OUTRO protocolo (migração `0032`, tabela `dfd_passagens`):** quando um protocolo traz um
   DFD que estava em outro, o de ORIGEM guarda um RETRATO leve (planejamento/tipo/sigla/itens/valor DA ÉPOCA; único por
   protocolo + nº) — o `start-dfd` é TUDO num lote atômico (retrato + cabeçalho + apaga itens + 1º lote; os itens pelo id
-  `(SELECT id FROM dfds WHERE numero = ?)`): o SQL puro **`rastro-sql.ts`** (`retratoRastro` = INSERT…SELECT lido do
-  PRÓPRIO banco, antes do upsert — sem corrida entre protocolações; `limparRastroDestino`), testado em `node:sqlite`
-  (`tests/rastro-sql.test.ts`, cadeia A → B → C → A); o `start-dfd` nunca desvincula (`protocoloId` ausente/nulo = mantém
+  `(SELECT id FROM dfds WHERE numero = ?)`): os BUILDERS de **`rastro-sql.ts`** (`retratoRastro` = `insert().select()` lido do
+  PRÓPRIO banco, antes do upsert — sem corrida entre protocolações; `limparRastroDestino`), testados pelo driver D1 REAL
+  dentro de `db.batch` (`tests/rastro-sql.test.ts` + `tests/fixtures/d1-sqlite.ts`, cadeia A → B → C → A + mover por vínculo;
+  a versão com `db.run(sql…)` quebrava o lote — derrubava a protocolação e o "mover DFD de protocolo"); o `start-dfd` nunca desvincula (`protocoloId` ausente/nulo = mantém
   o protocolo). O DFD que volta a um protocolo (start-dfd/`vincularDfd`) tira o rastro dele ali; excluir o protocolo apaga o
   rastro (cascade); **mover um DFD à mão (vínculo) não deixa rastro** — o rastro é da SOBRESCRITA por outro protocolo. O protocolo ATUAL é DERIVADO do DFD vivo de mesmo nº (`listarSobrescritos`,
   join) ⇒ numa cadeia A → B → C, A e B apontam **sempre C** ("DFD excluído depois"/"Hoje sem protocolo" quando for o caso).

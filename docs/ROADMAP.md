@@ -40,6 +40,12 @@ notação científica, linha de continuação sem nº não encerra a tabela. Val
 grade, 72 itens idênticos ao anterior); o cenário do print falhava no leitor antigo (perdia o "0" do código, vazava a
 descrição para o item 20 e apagava "O VALOR TOTAL…") e agora sai exato nas duas vias; 5.000 itens em ~0,3 s.
 
+### Correção: protocolação e "mover DFD de protocolo" (lote do D1) — entregue
+✅ O rastro entre protocolos rodava `db.run(sql…)` COM parâmetros dentro de `db.batch` — no driver D1 do Drizzle isso quebra
+("reading 'bind'") e derrubava o `start-dfd` com protocolo (a protocolação) e o vínculo manual do DFD a outro protocolo.
+`rastro-sql.ts` passou a BUILDERS (`insert().select()` + `onConflictDoUpdate`, `delete`), testados pelo driver
+`drizzle-orm/d1` REAL dentro de `db.batch` (`tests/fixtures/d1-sqlite.ts`). Regra no CLAUDE.md: nada de comando cru
+parametrizado em lote.
 ### Pessoas (apelido + foto), responsável do grupo, data da assinatura, SOBRESCRITA com escolha e RASTRO entre protocolos — entregue
 ✅ **Apelido** no Perfil (migração `0032`, aditiva): o nome de exibição no sistema — cabeçalho, colunas e seletores (a lista
 mostra "apelido — nome completo"). **Foto + apelido** nas colunas **Responsável** e **Distribuição** da Mesa (`PessoaTag`); a
