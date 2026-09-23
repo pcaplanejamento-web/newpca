@@ -16,6 +16,7 @@ const MAX_ITENS_DFD = 100_000;
 // habilitam as exceções por tipo de DFD.
 export type DfdConferencia = {
   reparticaoId?: number | null;
+  anoPca?: number | null;
   itens: { valorUnitario?: number | null; quantidade?: number | null; codigo?: string | null; item?: number | null }[];
   secoes: { titulo: string; texto: string }[];
   tipo?: string | null;
@@ -68,9 +69,18 @@ const assinaturaSchema = z.object({
   ip: z.string().trim().max(60).default(""),
   codigo: z.string().trim().max(120).default(""),
   url: z.string().trim().max(500).default(""),
-  fonte: z.enum(["certificado", "sistema", "dropsigner", "adobe", "foxit"]).default("certificado"),
+  fonte: z.enum(["certificado", "sistema", "dropsigner", "adobe", "foxit", "manual"]).default("certificado"),
   /** Lida por OCR da aparência ACHATADA (sem camada de texto) — conferência não bloqueante. */
   ocr: z.boolean().optional(),
+  /** Validação manual pela EQUIPE (quem/quando são carimbados pelo servidor). */
+  validacao: z
+    .object({
+      por: z.literal("equipe"),
+      responsavel: z.string().trim().min(1).max(300),
+      usuario: z.string().trim().max(200).optional(),
+      em: z.string().trim().max(40).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -164,15 +174,19 @@ export const vincularDfdSchema = z.object({
 
 /**
  * Edição de um DFD JÁ GRAVADO (banner destravado): `protocoloId` (vincular),
- * `reparticaoId`, `secoes` (tratamento), itens, refs de renovação e os campos de
- * **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/matrícula/e-mail/telefone).
- * Os **IDENTIFICADORES** (número/planejamento/tipo) NÃO estão aqui → imutáveis. Cada
+ * `reparticaoId`, `tipo` (por seleção), `secoes` (tratamento), itens, refs de renovação e os
+ * campos de **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/matrícula/e-mail/telefone).
+ * Os **IDENTIFICADORES** (número/planejamento) NÃO estão aqui → imutáveis. Cada
  * campo é opcional; `undefined` = não mexe. Exige ao menos um campo presente.
  */
 export const editarDfdSchema = z
   .object({
     protocoloId: z.number().int().positive().nullable().optional(),
     reparticaoId: z.number().int().positive().nullable().optional(),
+    // Tipo do DFD (DFD-S/R/O/E) — escolhido por seleção (muitos formulários não o trazem).
+    tipo: textoCurtoOpc,
+    // Assinaturas (validação manual pela EQUIPE / desfazer) — o servidor carimba quem/quando.
+    assinaturas: z.array(assinaturaSchema).max(50).optional(),
     secoes: z.array(dfdSecaoSchema).max(50).optional(),
     // Itens editados (código/descrição/unidade/quantidade/valores) — reescreve `dfd_itens`.
     itens: z.array(dfdItemSchema).max(100_000).optional(),
@@ -193,6 +207,8 @@ export const editarDfdSchema = z
     (d) =>
       d.protocoloId !== undefined ||
       d.reparticaoId !== undefined ||
+      d.tipo !== undefined ||
+      d.assinaturas !== undefined ||
       d.secoes !== undefined ||
       d.itens !== undefined ||
       d.numeroContrato !== undefined ||

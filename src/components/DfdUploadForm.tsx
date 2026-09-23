@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { comportamentoNo, importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
-import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
+import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, removerItemDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
 import { faltasObrigatorias } from "@/lib/dfd-validation";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -208,6 +208,7 @@ export function DfdUploadForm({
     ? faltasObrigatorias(
         {
           reparticaoId: repId,
+          anoPca,
           itens: preview.itens,
           secoes: preview.secoes,
           tipo: preview.tipo,
@@ -351,6 +352,11 @@ export function DfdUploadForm({
                       onChange={(patch) =>
                         setPreview((p) => (p ? editarItemDfd(p, (painel as { idx: number }).idx, patch) : p))
                       }
+                      onRemover={() => {
+                        const idx = (painel as { idx: number }).idx;
+                        setPainel(null);
+                        setPreview((p) => (p ? removerItemDfd(p, idx) : p));
+                      }}
                     />
                   ) : (
                     <MensagensDfd
@@ -432,6 +438,8 @@ export function DfdUploadForm({
               onSecoesChange={(secoes) => setPreview((p) => (p ? { ...p, secoes } : p))}
               onRefsChange={(refs) => setPreview((p) => (p ? { ...p, ...refs } : p))}
               onCamposChange={(campos) => setPreview((p) => (p ? { ...p, ...campos } : p))}
+              onTipoChange={(tipo) => setPreview((p) => (p ? { ...p, tipo } : p))}
+              onAssinaturasChange={(assinaturas) => setPreview((p) => (p ? { ...p, assinaturas } : p))}
             />
           </div>
         )}

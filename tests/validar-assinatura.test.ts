@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Assinatura } from "../src/lib/parse-dfd-comum.ts";
 import {
+  assinaturaPendenteValidacao,
   bloqueiaAssinatura,
+  carimbarValidacao,
   dataAssinaturaISO,
+  desfazerValidacaoEquipe,
   novoResponsavel,
   novoTemporario,
   pdfExigeAssinatura,
@@ -11,6 +14,7 @@ import {
   RESPONSAVEIS_VAZIO,
   solicitanteDeResultado,
   validarAssinatura,
+  validarAssinaturaPelaEquipe,
 } from "../src/lib/reparticao-responsaveis.ts";
 
 function mkAss(nome: string, data = "31/08/2026 16:20:00", codigo = "pVSGdg58teX"): Assinatura {
@@ -245,5 +249,52 @@ describe("validarAssinatura — qualquer assinatura lida por OCR (ocr:true)", ()
     const { ocr: _o, ...limpa } = dropOcr("Hérica Cristina Rodrigues Ribeiro");
     const r = validarAssinatura([limpa], padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true });
     assert.equal(r.status, "erro");
+  });
+});
+
+// Validação AUTO (o sistema conferiu) × EQUIPE (validada à mão) — itens 3 e 4.
+describe("validarAssinatura — origem auto/equipe", () => {
+  const ocrNaoCasa: Assinatura = {
+    nome: "EDILENE ALVES CRUZ",
+    eCpf: "",
+    usuario: "",
+    local: "",
+    data: "30/06/2026 16:53:38 -03:00",
+    ip: "",
+    codigo: "",
+    url: "",
+    fonte: "dropsigner",
+    ocr: true,
+  };
+  it("casou o responsável → ok com origem 'auto'", () => {
+    const r = validarAssinatura([{ ...ocrNaoCasa, nome: "EDILENE ALVES DA CRUZ" }], padrao("EDILENE ALVES DA CRUZ"), { exigeAssinatura: true });
+    assert.equal(r.status, "ok");
+    assert.equal(r.status === "ok" && r.origem, "auto");
+  });
+  it("não casou (OCR) → pendente de validação; a equipe valida → ok com origem 'equipe'", () => {
+    const resp = padrao("EDILENE ALVES DA CRUZ");
+    const antes = validarAssinatura([ocrNaoCasa], resp, { exigeAssinatura: true });
+    assert.equal(assinaturaPendenteValidacao(antes), true);
+    const validadas = validarAssinaturaPelaEquipe([ocrNaoCasa], "EDILENE ALVES DA CRUZ");
+    const depois = validarAssinatura(validadas, resp, { exigeAssinatura: true });
+    assert.equal(depois.status, "ok");
+    assert.equal(depois.status === "ok" && depois.origem, "equipe");
+    // Desfazer volta ao estado anterior.
+    assert.equal(validarAssinatura(desfazerValidacaoEquipe(validadas), resp, { exigeAssinatura: true }).status, "ocr");
+  });
+  it("sem assinatura lida (OCR falhou) → a equipe atesta (fonte manual); em outra unidade não vale", () => {
+    const v = validarAssinaturaPelaEquipe([], "EDILENE ALVES DA CRUZ");
+    assert.equal(v[0].fonte, "manual");
+    assert.equal(validarAssinatura(v, padrao("EDILENE ALVES DA CRUZ"), { exigeAssinatura: true }).status, "ok");
+    assert.equal(validarAssinatura(v, padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true }).status, "erro");
+    assert.deepEqual(desfazerValidacaoEquipe(v), []);
+  });
+  it("carimbo de quem/quando vem do servidor; validação idêntica mantém o carimbo original", () => {
+    const v = validarAssinaturaPelaEquipe([ocrNaoCasa], "EDILENE ALVES DA CRUZ");
+    const c1 = carimbarValidacao(v, [], "Fulano", "2026-09-01T10:00:00Z");
+    assert.equal(c1[0].validacao?.usuario, "Fulano");
+    const c2 = carimbarValidacao(v, c1, "Beltrano", "2026-09-02T10:00:00Z");
+    assert.equal(c2[0].validacao?.usuario, "Fulano");
+    assert.equal(c2[0].validacao?.em, "2026-09-01T10:00:00Z");
   });
 });

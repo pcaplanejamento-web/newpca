@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dfdsDuplicados, itensDuplicados } from "../src/lib/dfd-tratamento.ts";
+import { avaliarDfd, dfdsDuplicados, itensDuplicados, removerItemDfd } from "../src/lib/dfd-tratamento.ts";
 
 const d = (numero: string, planejamento: string | null = null) => ({ numero, planejamento });
 const it_ = (codigo: string | null, descricao: string | null = null) => ({ codigo, descricao });
@@ -46,13 +46,23 @@ describe("dfdsDuplicados (mesmo nº de DFD OU de planejamento, transitivo)", () 
   });
 });
 
-describe("itensDuplicados (mesmo código; sem código, a descrição)", () => {
+describe("itensDuplicados (mesmo código E mesma descrição)", () => {
   it("sem duplicatas ⇒ vazio", () => {
     assert.deepEqual(itensDuplicados([it_("111", "A"), it_("222", "B")]), []);
   });
 
-  it("mesmo código ⇒ um grupo (mesmo com formatação/pontos diferentes)", () => {
-    assert.deepEqual(itensDuplicados([it_("524.193.7263", "X"), it_("5241937263", "Y")]), [[0, 1]]);
+  it("mesmo código + mesma descrição ⇒ um grupo (mesmo com formatação/pontos diferentes)", () => {
+    assert.deepEqual(itensDuplicados([it_("524.193.7263", "X"), it_("5241937263", "x")]), [[0, 1]]);
+  });
+
+  it("mesmo código com descrição DIFERENTE (outro local — DFD 136 real) ⇒ NÃO duplica", () => {
+    assert.deepEqual(
+      itensDuplicados([
+        it_("524194056", "LOCAÇÃO DE EQUIPAMENTOS - SECRETARIA DE AGRICULTURA (ALMOXARIFADO)"),
+        it_("524194056", "LOCAÇÃO DE EQUIPAMENTOS - SECRETARIA DE AGRICULTURA- HORTA"),
+      ]),
+      [],
+    );
   });
 
   it("sem código, mesma descrição (acentos/caixa ignorados) ⇒ duplicado", () => {
@@ -68,6 +78,30 @@ describe("itensDuplicados (mesmo código; sem código, a descrição)", () => {
   });
 
   it("três iguais ⇒ um grupo com os três índices", () => {
-    assert.deepEqual(itensDuplicados([it_("9", "a"), it_("9", "b"), it_("9", "c")]), [[0, 1, 2]]);
+    assert.deepEqual(itensDuplicados([it_("9", "a"), it_("9", "A"), it_("9", "á")]), [[0, 1, 2]]);
+  });
+});
+
+describe("item duplicado — avaliação + tratamento (remover)", () => {
+  const base = {
+    reparticaoId: 1,
+    tipo: "DFD-S",
+    secoes: [
+      { titulo: "JUSTIFICATIVA", texto: "j" },
+      { titulo: "PREVISÃO DE ENTREGA", texto: "ANUAL" },
+      { titulo: "PRIORIDADE", texto: "ALTA" },
+      { titulo: "FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" },
+    ],
+  };
+  const itens = [
+    { item: 1, codigo: "9", descricao: "A", quantidade: 1, valorUnitario: 10, valorTotal: 10, unidade: "UN" },
+    { item: 2, codigo: "9", descricao: "A", quantidade: 1, valorUnitario: 10, valorTotal: 10, unidade: "UN" },
+  ];
+  it("aponta o repetido (bloqueia por padrão) e some após remover", () => {
+    assert.ok(avaliarDfd({ ...base, itens }).bloqueantes.some((b) => b.includes("duplicados")));
+    const d = removerItemDfd({ itens, valorTotal: 20 }, 1);
+    assert.equal(d.itens.length, 1);
+    assert.equal(d.valorTotal, 10);
+    assert.deepEqual(avaliarDfd({ ...base, itens: d.itens }).bloqueantes, []);
   });
 });

@@ -199,6 +199,11 @@ describe("parseDfdDoProtocolo (combina A/B do índice + INLINE do render)", () =
     numPages: 1,
     pageItems: async () => itens,
     pageRenderText: async () => render,
+    // Só navegador (OCR) — não usados por `parseDfdDoProtocolo`.
+    imagensPagina: async () => [],
+    renderPagina: async () => {
+      throw new Error("sem canvas no Node");
+    },
     destroy: async () => {},
   });
   const abIndice = (fonte: "certificado" | "sistema") => [

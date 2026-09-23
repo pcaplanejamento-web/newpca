@@ -683,3 +683,52 @@ describe("limparAssinaturasDoTexto (assinatura não se confunde com o texto)", (
     assert.equal(limparAssinaturasDoTexto(its), its);
   });
 });
+
+// DFD 142 (pd101820 real): a descrição do item começa com "- " ("29 - SEC. DE ASSISTÊNCIA…") e a
+// linha parecia um título de seção "29 - …" → a tabela ENCERRAVA ali (32 itens lidos como 2 e as
+// linhas dos itens viravam "seções"). Só a seção 5+ (≤20) SEM nada nas colunas de valores encerra.
+describe("parseDfdFromPdfItems — item cuja descrição começa com '- ' não encerra a tabela", () => {
+  it("lê todos os itens e as seções seguintes corretamente", () => {
+    const L: PdfItem[] = [
+      f(1, 169, 763, "AQUISIÇÃO DE SERVIÇO Número DFD:142 / Planejamento: 189"),
+      f(1, 38, 507, "4 - QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRATADA"),
+      f(1, 48, 489, "ITEM"),
+      f(1, 85, 489, "CÓDIGO"),
+      f(1, 206, 489, "DESCRIÇÃO"),
+      f(1, 345, 489, "UNIDADE"),
+      f(1, 395, 489, "QUANTIDADE"),
+      f(1, 507, 489, "VALOR TOTAL"),
+      f(1, 458, 485, "UNITÁRIO"),
+      f(1, 123, 433, "VIGILÂNCIA ELETRÔNICA COM MONITORAMENTO REMOTO"),
+      f(1, 82, 429, "524192487"),
+      f(1, 53, 425, "29"),
+      f(1, 123, 425, "- SEC. DE ASSISTÊNCIA SOCIAL - SCFV - SETOR MORADA"),
+      f(1, 354, 425, "MES"),
+      f(1, 419, 425, "12,0000"),
+      f(1, 476, 425, "52,6600"),
+      f(1, 528, 425, "631,9200"),
+      f(1, 97, 421, "5"),
+      f(1, 123, 417, "DO SOL"),
+      f(1, 82, 405, "524190163"),
+      f(1, 123, 405, "VIGILÂNCIA ELETRÔNICA COM MONITORAMENTO REMOTO"),
+      f(1, 53, 401, "28"),
+      f(1, 354, 401, "MES"),
+      f(1, 419, 401, "12,0000"),
+      f(1, 476, 401, "52,6600"),
+      f(1, 528, 401, "631,9200"),
+      f(1, 97, 397, "3"),
+      f(1, 123, 397, "- SECRETARIA DE ASSISTÊNCIA SOCIAL- CREAS."),
+      f(1, 452, 380, "VALOR TOTAL"),
+      f(1, 519, 380, "1.263,8400"),
+      f(1, 38, 283, "5 - PREVISÃO DE ENTREGA/EXECUÇÃO"),
+      f(1, 38, 269, "12 MESES - PCA 2027."),
+      f(1, 38, 247, "6 - PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO"),
+      f(1, 38, 233, "BAIXA"),
+    ];
+    const r = parseDfdFromPdfItems(L, "x.pdf");
+    assert.equal(r.itens.length, 2);
+    assert.deepEqual(r.itens.map((i) => i.codigo), ["5241924875", "5241901633"]);
+    assert.equal(r.itens[0].descricao, "VIGILÂNCIA ELETRÔNICA COM MONITORAMENTO REMOTO - SEC. DE ASSISTÊNCIA SOCIAL - SCFV - SETOR MORADA DO SOL");
+    assert.deepEqual(r.secoes.map((s) => s.numero), [5, 6]);
+  });
+});

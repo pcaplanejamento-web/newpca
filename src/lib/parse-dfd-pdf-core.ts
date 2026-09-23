@@ -10,6 +10,7 @@ import {
   extrairRefsDfd,
   norm,
   TITULO_SECAO_ITENS,
+  tituloSecaoPadrao,
 } from "./parse-dfd-comum.ts";
 
 /**
@@ -638,8 +639,12 @@ export function parseDfdFromPdfItems(
       j === "UNITARIO" ||
       j === "VALOR UNITARIO" ||
       j === "VALOR TOTAL";
-    // Próxima seção numerada ("5 - ...") encerra a Seção 4.
-    const ehSecaoHeading = (j: string) => /^\d{1,2}\s*[-–—]\s/.test(j);
+    // Próxima seção ("5 - PREVISÃO…") encerra a Seção 4 — só um TÍTULO PADRONIZADO (`tituloSecaoPadrao`)
+    // e sem nada nas colunas de unidade/quantidade/valores. Uma LINHA DE ITEM cuja descrição começa com
+    // "- " (ex.: "29 - SEC. DE ASSISTÊNCIA…") NÃO encerra a tabela.
+    const colValoresX = Math.min(anchors.unidade ?? Number.POSITIVE_INFINITY, anchors.quantidade ?? Number.POSITIVE_INFINITY) - 15;
+    const ehSecaoHeading = (l: PdfLine) =>
+      tituloSecaoPadrao(l.items.map((i) => i.str).join(" ")) != null && !l.items.some((i) => i.x >= colValoresX);
 
     const bodyFrags: PdfItem[] = [];
     const itemNums: { page: number; y: number; n: number }[] = [];
@@ -661,7 +666,7 @@ export function parseDfdFromPdfItems(
 
       // Só uma seção "N - …" À MARGEM ESQUERDA encerra a tabela; um "2-52" no MEIO de
       // uma descrição (indentado) NÃO é seção.
-      if (minx < itemBound && ehSecaoHeading(joined)) {
+      if (minx < itemBound && ehSecaoHeading(l)) {
         tableEndIdx = k;
         break;
       }

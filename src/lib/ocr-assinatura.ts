@@ -84,11 +84,23 @@ function recortar(src: HTMLCanvasElement, k: Caixa, up: number, opts?: OpcoesRec
   return c;
 }
 
+// Fila: uma leitura por vez. O worker do tesseract é ÚNICO e cada leitura troca o modo de página
+// (`setParameters`) antes de reconhecer — duas leituras intercaladas (ex.: a análise em background e
+// o "abrir DFD") misturariam os modos. Encadeia as leituras numa promessa.
+let fila: Promise<unknown> = Promise.resolve();
+
 /**
  * Lê por OCR as assinaturas achatadas das páginas de UM DFD (qualquer página, em ordem de prioridade — ver
  * `lerAssinaturasPorOcr`). Devolve `Assinatura[]` com `ocr:true` (normalmente 0 ou 1). Best-effort: `[]`.
+ * Serializado pela `fila` (uma leitura por vez).
  */
-export async function lerAssinaturasOcr(doc: DocOcr, paginas: number[]): Promise<Assinatura[]> {
+export function lerAssinaturasOcr(doc: DocOcr, paginas: number[]): Promise<Assinatura[]> {
+  const r = fila.then(() => lerAgora(doc, paginas));
+  fila = r.catch(() => undefined);
+  return r;
+}
+
+async function lerAgora(doc: DocOcr, paginas: number[]): Promise<Assinatura[]> {
   try {
     const { worker, PSM } = await getWorker();
     const motor: MotorOcr<HTMLCanvasElement> = {

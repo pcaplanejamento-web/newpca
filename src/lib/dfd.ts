@@ -9,7 +9,7 @@ import type {
   EditarPcaPayload,
   GerarPcaPayload,
 } from "./dfd-validation";
-import { type Assinatura, coerceFonte } from "./parse-dfd-comum";
+import { type Assinatura, coerceFonte, coerceValidacao } from "./parse-dfd-comum";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -143,6 +143,7 @@ export function parseAssinaturas(json: string | null): Assinatura[] {
         url: S(a.url),
         fonte: coerceFonte(a.fonte),
         ...(a.ocr === true ? { ocr: true } : {}),
+        ...(coerceValidacao(a.validacao) ? { validacao: coerceValidacao(a.validacao) } : {}),
       }));
   } catch {
     return [];
@@ -340,15 +341,17 @@ export async function appendDfdItens(
 }
 
 /**
- * Edita campos de um DFD JÁ GRAVADO (banner destravado): repartição, seções (tratamento),
- * refs de renovação e o **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/matrícula/
- * e-mail/telefone). Os **IDENTIFICADORES** (número/planejamento/tipo) NÃO estão aqui →
+ * Edita campos de um DFD JÁ GRAVADO (banner destravado): repartição, tipo (por seleção), seções
+ * (tratamento), refs de renovação e o **CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/
+ * matrícula/e-mail/telefone). Os **IDENTIFICADORES** (número/planejamento) NÃO estão aqui →
  * imutáveis. Não toca nos itens. Grava direto no D1 (`atualizadoEm` renovado).
  */
 export async function atualizarDfdCampos(
   id: number,
   campos: {
     reparticaoId?: number | null;
+    tipo?: string | null;
+    assinaturas?: Assinatura[];
     secoes?: DfdSecaoRow[];
     numeroContrato?: string | null;
     numeroAta?: string | null;
@@ -364,6 +367,8 @@ export async function atualizarDfdCampos(
 ): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (campos.reparticaoId !== undefined) set.reparticaoId = campos.reparticaoId;
+  if (campos.tipo !== undefined) set.tipo = campos.tipo || null;
+  if (campos.assinaturas !== undefined) set.assinaturas = campos.assinaturas.length > 0 ? JSON.stringify(campos.assinaturas) : null;
   if (campos.secoes !== undefined) set.secoes = campos.secoes.length > 0 ? JSON.stringify(campos.secoes) : null;
   if (campos.numeroContrato !== undefined) set.numeroContrato = campos.numeroContrato || null;
   if (campos.numeroAta !== undefined) set.numeroAta = campos.numeroAta || null;

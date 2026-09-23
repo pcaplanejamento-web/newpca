@@ -79,7 +79,21 @@ export function normalizarSecoesDfd(
   const auto: CampoTratavel[] = [];
   const ctxTipo = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
 
+  // Seção TROCADA no formulário (ex.: DFD 136 real: "6 - FUNDAMENTAÇÃO LEGAL: BAIXA" e sem a seção de
+  // PRIORIDADE) — o texto da fundamentação É uma prioridade: move para a PRIORIDADE (auto) e deixa a
+  // fundamentação vazia (vira pendência a tratar).
+  const [pCfg, , fCfg] = TRATAVEIS;
+  const fundRaw = textoSecao(secoes, fCfg.kw);
+  if (acharSecao(secoes, pCfg.kw) < 0 && /^(ALTA|MEDIA|BAIXA)$/.test(norm(fundRaw))) {
+    const p = normPrioridade(fundRaw).valor;
+    if (p) {
+      secoes = setTextoSecao(setTextoSecao(secoes, fCfg, ""), pCfg, p);
+      auto.push("prioridade");
+    }
+  }
+
   for (const cfg of TRATAVEIS) {
+    if (cfg.campo === "prioridade" && auto.includes("prioridade")) continue; // já tratada acima
     const raw = textoSecao(secoes, cfg.kw);
     // (1) Palavras-chave do ADM (só quando o ponto está em "automático" — respeita a exceção por tipo).
     if (comportamentoNo(regras, cfg.chave, ctxTipo) === "automatico") {
@@ -188,6 +202,30 @@ export function dfdRSemReferencia(d: {
 /** Pendência (atenção) de um DFD-R sem referência — texto para o relatório opcional. */
 export const FALTA_REFERENCIA_RENOVACAO =
   "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação — informar ao menos uma.";
+
+/**
+ * Apontamentos de um DFD JÁ GRAVADO nas LISTAS (aba DFDs / protocolo gravado), só com o que o resumo
+ * traz (tipo + refs): TIPO ausente (gravado antes da regra) e DFD-R sem referência — cada um no nível do
+ * ADM. O detalhe completo vem ao abrir o DFD (`mensagensDfd`). Devolve o `estado` + as mensagens. Puro.
+ */
+export function apontamentosGravado(
+  d: { tipo?: string | null; numeroContrato?: string | null; numeroAta?: string | null; numeroLicitacao?: string | null },
+  regras: RegrasAvaliacao = regrasPadrao(),
+  categoria: string | null = null,
+): { estado: "erro" | "atencao" | "regular"; msgs: { status: StatusMensagem; chave: string; texto: string }[] } {
+  const dfdTipo = tipoCurtoDfd(d.tipo);
+  const msgs: { status: StatusMensagem; chave: string; texto: string }[] = [];
+  const add = (chave: ChaveAvaliacao, falta: boolean, texto: string) => {
+    if (!falta) return;
+    const comp = comportamentoNo(regras, chave, { dfdTipo, categoria });
+    if (comp === "ignora") return;
+    msgs.push({ status: comp === "bloqueia" ? "erro" : "atencao", chave, texto });
+  };
+  add("dfd.tipo", dfdTipo == null, "Tipo do DFD não definido — abra o DFD e selecione o tipo.");
+  add("dfd.referenciaRenovacao", dfdRSemReferencia(d), FALTA_REFERENCIA_RENOVACAO);
+  const estado = msgs.some((m) => m.status === "erro") ? "erro" : msgs.length > 0 ? "atencao" : "regular";
+  return { estado, msgs };
+}
 
 // ---- Estado/Situação de um PROTOCOLO já gravado (para a tabela de protocolos) ----
 // ESTADO = integridade do valor da capa × somatória dos DFDs; SITUAÇÃO = conteúdo.
@@ -313,21 +351,31 @@ export function dfdsDuplicados(lista: { numero: string; planejamento: string | n
   return [...grupos.values()].filter((g) => g.length > 1);
 }
 
-/** Chave de deduplicação de um item: código (só dígitos, via `normalizarCodigo`) ou, sem
- * código, a descrição normalizada (`norm`). `null` quando não há código nem descrição. */
-function chaveDupItem(it: { codigo: string | null; descricao: string | null }): string | null {
+/** Chave de deduplicação de um item: código (só dígitos) + descrição normalizada. O MESMO código com
+ * descrição DIFERENTE é legítimo (ex.: o mesmo serviço em locais diferentes — DFD 136 real, itens 3 e
+ * 4) e NÃO é duplicata. `null` quando não há código nem descrição. */
+function chaveDupItem(it: { codigo?: string | null; descricao?: string | null }): string | null {
   const cod = normalizarCodigo(it.codigo ?? "");
-  if (cod) return `c:${cod}`;
   const desc = norm(it.descricao ?? "");
-  return desc ? `d:${desc}` : null;
+  if (!cod && !desc) return null;
+  return `${cod}|${desc}`;
+}
+
+/** Remove UM item (tratamento do item duplicado) e recomputa o `valorTotal` do DFD. Puro. */
+export function removerItemDfd<
+  I extends { valorTotal: number | null },
+  T extends { itens: I[]; valorTotal: number | null },
+>(d: T, idx: number): T {
+  const itens = d.itens.filter((_, i) => i !== idx);
+  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
 }
 
 /**
- * Grupos de ITENS DUPLICADOS num DFD: itens com a MESMA chave (código; sem código, a
- * descrição). Cada grupo devolve os ÍNDICES (2+), em ordem; lista vazia = sem duplicatas.
+ * Grupos de ITENS DUPLICADOS num DFD: itens com a MESMA chave (código + descrição). Cada grupo devolve os ÍNDICES (2+), em ordem; lista vazia = sem duplicatas.
  * Puro/testável.
  */
-export function itensDuplicados(itens: { codigo: string | null; descricao: string | null }[]): number[][] {
+export function itensDuplicados(itens: { codigo?: string | null; descricao?: string | null }[]): number[][] {
   const grupos = new Map<string, number[]>();
   itens.forEach((it, i) => {
     const k = chaveDupItem(it);
@@ -343,6 +391,13 @@ export function itensDuplicados(itens: { codigo: string | null; descricao: strin
 
 /** Seções obrigatórias do DFD (fonte única — `faltasObrigatorias` no `dfd-validation`
  * também usa esta lista). O `rotulo` já indica a seção exata a corrigir. */
+/** O que cada seção tratável precisa conter (dica do despacho quando está fora do padrão). */
+const DICA_PADRAO_SECAO: Record<string, string> = {
+  PRIORIDADE: "informar ALTA, MÉDIA ou BAIXA",
+  "PREVISAO DE ENTREGA": "informar o MÊS/ANO ou ANUAL",
+  "FUNDAMENTACAO LEGAL": "citar a norma (ex.: Lei 14.133/2021)",
+};
+
 export const SECOES_OBRIGATORIAS: { chave: ChaveAvaliacao; kw: string; rotulo: string }[] = [
   { chave: "dfd.justificativa", kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)" },
   { chave: "dfd.previsao", kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)" },
@@ -354,6 +409,27 @@ function temSecaoPreenchida(secoes: { titulo: string; texto: string }[], kw: str
   return secoes.some((s) => norm(s.titulo).includes(kw) && s.texto.trim().length > 0);
 }
 
+/** Fundamentação legal PLAUSÍVEL: cita norma (número, lei, decreto, artigo…). "BAIXA" não é. */
+const RE_FUNDAMENTACAO = /\d|\bLEI\b|DECRETO|\bART|PORTARIA|RESOLUC|INSTRUC|CONSTITUIC|ESTATUTO|CODIGO/;
+
+/**
+ * Situação de uma seção obrigatória — a MESMA régua do bloco "Tratamento" (o que lá aparece como
+ * "tratar" aqui é pendência): `vazia`; `invalida` = preenchida mas fora do padrão (prioridade que não
+ * é ALTA/MÉDIA/BAIXA, previsão que não é MÊS/AAAA nem ANUAL, fundamentação sem norma); `ok`. Puro.
+ */
+export function situacaoSecao(
+  secoes: { titulo: string; texto: string }[],
+  kw: string,
+  anoPca?: number | null,
+): "ok" | "vazia" | "invalida" {
+  if (!temSecaoPreenchida(secoes, kw)) return "vazia";
+  const t = textoSecao(secoes as DfdSecao[], kw);
+  if (kw === "PRIORIDADE") return normPrioridade(t).valor ? "ok" : "invalida";
+  if (kw === "PREVISAO DE ENTREGA") return normPrevisao(t, anoPca).valor ? "ok" : "invalida";
+  if (kw === "FUNDAMENTACAO LEGAL") return RE_FUNDAMENTACAO.test(norm(t)) ? "ok" : "invalida";
+  return "ok";
+}
+
 /** Formata uma lista de nº de item ("3, 5, 8" — trunca se for enorme). */
 function listaItens(nums: number[]): string {
   const s = nums.slice(0, 30).join(", ");
@@ -363,13 +439,26 @@ function listaItens(nums: number[]): string {
 /** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
 export type EntradaAvaliacaoDfd = {
   reparticaoId?: number | null;
-  itens: { valorUnitario?: number | null; quantidade?: number | null; codigo?: string | null; item?: number | null }[];
+  /** Ano do PCA (completa a previsão só com o MÊS). */
+  anoPca?: number | null;
+  itens: {
+    valorUnitario?: number | null;
+    quantidade?: number | null;
+    codigo?: string | null;
+    descricao?: string | null;
+    item?: number | null;
+  }[];
   secoes: { titulo: string; texto: string }[];
   tipo?: string | null;
   numeroContrato?: string | null;
   numeroAta?: string | null;
   numeroLicitacao?: string | null;
 };
+
+/** Nºs dos itens REPETIDOS (os que sobram além do 1º de cada grupo de duplicatas). */
+function itensRepetidos(itens: EntradaAvaliacaoDfd["itens"]): number[] {
+  return itensDuplicados(itens).flatMap((g) => g.slice(1).map((i) => itens[i].item ?? i + 1));
+}
 
 export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
 
@@ -473,13 +562,15 @@ export function avaliarDfd(
   // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
   add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
+  add("item.duplicado", itensRepetidos(d.itens).length > 0, "itens duplicados (mesmo código e descrição)");
   add("dfd.reparticao", d.reparticaoId == null, "unidade vinculada");
+  add("dfd.tipo", c.dfdTipo == null, "tipo do DFD (DFD-S/R/O/E)");
   // Órgão identificado + divergência órgão×unidade: flags PRÉ-COMPUTADAS pelo chamador (que tem o
   // cadastro) e passadas no ctx — mantêm `avaliarDfd` puro. Só bloqueiam se o ADM elevar a
   // "fundamental" (padrão = intermediário ⇒ atenção, não bloqueia; ctx ausente ⇒ sem efeito).
   add("dfd.orgao", ctx?.orgaoNaoIdentificado === true, "órgão identificado (Órgão/Entidade)");
   add("dfd.orgaoUnidadeDivergente", ctx?.orgaoUnidadeDivergente === true, "órgão × unidade divergentes");
-  for (const s of SECOES_OBRIGATORIAS) add(s.chave, !temSecaoPreenchida(d.secoes, s.kw), s.rotulo);
+  for (const s of SECOES_OBRIGATORIAS) add(s.chave, situacaoSecao(d.secoes, s.kw, d.anoPca) !== "ok", s.rotulo);
   add("dfd.referenciaRenovacao", dfdRSemReferencia(d), "referência de renovação (contrato, ARP ou licitação)");
   // Conformidade com o catálogo (veredito pré-computado no ctx; sem catálogo/verdicto ⇒ sem efeito).
   add("item.naoCatalogado", itensComFaltaCatalogo(d.itens, ctx?.conformidade, "naoCatalogado").length > 0, "itens não catalogados");
@@ -515,7 +606,13 @@ export const STATUS_MENSAGEM_ROTULO: Record<StatusMensagem, string> = {
 export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
   anoPca?: number | null;
   /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
-  assinatura?: { status: "ok" | "dropsigner" | "ocr" | "erro" | "sem-assinatura"; motivo?: string | null } | null;
+  assinatura?: {
+    status: "ok" | "dropsigner" | "ocr" | "erro" | "sem-assinatura";
+    motivo?: string | null;
+    /** Só em `ok`: "auto" (o sistema conferiu) ou "equipe" (validada à mão) + o responsável. */
+    origem?: "auto" | "equipe";
+    responsavel?: string | null;
+  } | null;
 };
 
 /**
@@ -545,6 +642,10 @@ export function mensagensDfd(
   add("dfd.reparticao", "reparticao", d.reparticaoId != null,
     "Unidade/Setor requisitante não vinculado.", "Unidade/Setor requisitante vinculado.");
 
+  // Tipo do DFD (DFD-S/R/O/E) — obrigatório conforme o nível do ADM; tratável por seleção.
+  add("dfd.tipo", "tipo", c.dfdTipo != null,
+    "Tipo do DFD não identificado — selecione DFD-S, DFD-R, DFD-O ou DFD-E.", `Tipo do DFD definido${c.dfdTipo ? `: ${c.dfdTipo}` : ""}.`);
+
   // Órgão identificado (Órgão/Entidade) — só APONTA quando não foi identificado (flag do ctx).
   if (ctx?.orgaoNaoIdentificado === true) {
     add("dfd.orgao", "reparticao", false,
@@ -566,7 +667,14 @@ export function mensagensDfd(
   // Seções tratáveis + justificativa (Tratamento e Seção 3)
   for (const s of SECOES_OBRIGATORIAS) {
     const ancora = s.chave.replace(/^dfd\./, "");
-    add(s.chave, ancora, temSecaoPreenchida(d.secoes, s.kw), `${s.rotulo} não preenchida.`, `${s.rotulo} preenchida.`);
+    const sit = situacaoSecao(d.secoes, s.kw, d.anoPca);
+    add(
+      s.chave,
+      ancora,
+      sit === "ok",
+      sit === "vazia" ? `${s.rotulo} não preenchida.` : `${s.rotulo} fora do padrão — trate no bloco Tratamento.`,
+      `${s.rotulo} preenchida.`,
+    );
   }
 
   // Referência de renovação — só para DFD-R
@@ -584,6 +692,10 @@ export function mensagensDfd(
   const semQtd = d.itens.filter((i) => i.quantidade === null).length;
   add("item.quantidade", "itens", semQtd === 0,
     `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
+  const repetidos = itensRepetidos(d.itens);
+  add("item.duplicado", "itens", repetidos.length === 0,
+    `Item(ns) duplicado(s) — mesmo código e descrição: ${listaItens(repetidos)}. Abra o item e use "Remover item".`,
+    "Sem itens duplicados (Seção 4).");
 
   // Conformidade com o catálogo (itens) — só APONTA problemas (como órgão×unidade); um acerto
   // único quando tudo confere. Veredito pré-computado no ctx (sem catálogo ⇒ nada).
@@ -612,9 +724,26 @@ export function mensagensDfd(
   // Assinatura digital
   const idAssin = nivelDe(regras, "dfd.assinatura", c);
   if (d.assinatura && comportamentoDe(regras, idAssin) !== "ignora") {
-    if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
-    else if (d.assinatura.status === "dropsigner") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida via Dropsigner (Lacuna).", ancora: "assinatura" });
-    else if (d.assinatura.status === "ocr") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida por OCR (carimbo achatado no PDF) — confira no PDF assinado original.", ancora: "assinatura" });
+    const resp = d.assinatura.responsavel ? ` (${d.assinatura.responsavel})` : "";
+    if (d.assinatura.status === "ok")
+      out.push({
+        chave: "dfd.assinatura",
+        status: "acerto",
+        texto: d.assinatura.origem === "equipe" ? `Assinatura validada pela equipe${resp}.` : `Assinatura validada automaticamente (auto)${resp}.`,
+        ancora: "assinatura",
+      });
+    // Reconhecida (carimbo Dropsigner sem nome / lida por OCR) mas NÃO conferida com o responsável:
+    // atenção (não bloqueia) até a equipe validar no bloco "Validação da assinatura".
+    else if (d.assinatura.status === "dropsigner" || d.assinatura.status === "ocr")
+      out.push({
+        chave: "dfd.assinaturaValidar",
+        status: "atencao",
+        texto:
+          d.assinatura.status === "ocr"
+            ? "Assinatura lida por OCR não confere com o responsável da unidade — confira no PDF e valide pela equipe."
+            : "Assinatura Dropsigner reconhecida só pelo código — confira o assinante e valide pela equipe.",
+        ancora: "assinatura",
+      });
     else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
     else out.push({
       chave: "dfd.assinatura",
@@ -647,6 +776,7 @@ export const ROTULO_CURTO: Record<string, string> = {
   "item.valorUnitario": "Item sem valor",
   "item.quantidade": "Item sem quantidade",
   "dfd.reparticao": "Sem unidade",
+  "dfd.tipo": "Sem tipo",
   "dfd.orgao": "Órgão não identificado",
   "dfd.orgaoUnidadeDivergente": "Órgão × unidade",
   "dfd.anoPca": "Sem ano PCA",
@@ -655,7 +785,8 @@ export const ROTULO_CURTO: Record<string, string> = {
   "dfd.prioridade": "Sem prioridade",
   "dfd.fundamentacao": "Sem fundamentação",
   "dfd.referenciaRenovacao": "DFD-R sem referência",
-  "dfd.assinatura": "Sem assinatura",
+  "dfd.assinatura": "Assinatura não conferida",
+  "dfd.assinaturaValidar": "Validar assinatura",
   "protocolo.dfdDuplicado": "DFD duplicado",
   "item.naoCatalogado": "Fora de catálogo",
   "item.divergenteCatalogo": "Divergente do catálogo",
@@ -707,7 +838,7 @@ export function mensagensItem(it: DfdItemParseado): { status: StatusMensagem; ch
 }
 
 // ---- Tipo da assinatura (coluna "Assinatura") ----
-export type GrupoAssinatura = "centi" | "dropsigner" | "adobe" | "foxit";
+export type GrupoAssinatura = "centi" | "dropsigner" | "adobe" | "foxit" | "manual";
 
 /** Grupo do tipo de assinatura pela `fonte`. Certificado/sistema = **Centi** (sistema oficial da
  * Prefeitura); dropsigner = **Dropsigner**; adobe = **Adobe**; foxit = **Foxit** (ICP-Brasil lida por
@@ -716,6 +847,7 @@ export function grupoAssinatura(fonte: string): GrupoAssinatura {
   if (fonte === "dropsigner") return "dropsigner";
   if (fonte === "adobe") return "adobe";
   if (fonte === "foxit") return "foxit";
+  if (fonte === "manual") return "manual"; // atestada pela equipe (a leitura não achou a assinatura)
   return "centi";
 }
 
@@ -724,13 +856,14 @@ export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
   dropsigner: "Dropsigner",
   adobe: "Adobe",
   foxit: "Foxit",
+  manual: "Equipe",
 };
 
 /** Grupos DISTINTOS de assinatura presentes (ordem fixa centi→dropsigner→adobe). Vazio ⇒ sem
  * assinatura reconhecida. */
 export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinatura[] {
   const set = new Set(assinaturas.map((a) => grupoAssinatura(a.fonte)));
-  return (["centi", "dropsigner", "adobe", "foxit"] as GrupoAssinatura[]).filter((g) => set.has(g));
+  return (["centi", "dropsigner", "adobe", "foxit", "manual"] as GrupoAssinatura[]).filter((g) => set.has(g));
 }
 
 /**
@@ -746,6 +879,7 @@ export function faltasCirurgicasDfd(
     reparticaoId?: number | null;
     assinaturaMotivo?: string | null;
     tipo?: string | null;
+    anoPca?: number | null;
   },
   regras: RegrasAvaliacao = regrasPadrao(),
   ctx?: { categoria?: string | null } & CtxConformidade,
@@ -759,12 +893,20 @@ export function faltasCirurgicasDfd(
   const semQtd = d.itens.filter((i) => i.quantidade == null);
   if (ativo("item.valorUnitario") && semVU.length > 0)
     linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
+  const repetidos = ativo("item.duplicado") ? itensRepetidos(d.itens) : [];
+  if (repetidos.length > 0)
+    linhas.push(`Remover ${repetidos.length === 1 ? "o item duplicado" : "os itens duplicados"} ${listaItens(repetidos)} (mesmo código e descrição de outro item — Seção 4).`);
   if (ativo("item.quantidade") && semQtd.length > 0)
     linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
   if (ativo("dfd.reparticao") && d.reparticaoId == null)
     linhas.push("Vincular o DFD à repartição/Setor requisitante responsável.");
-  for (const s of SECOES_OBRIGATORIAS)
-    if (ativo(s.chave) && !temSecaoPreenchida(d.secoes, s.kw)) linhas.push(`Preencher a ${s.rotulo}.`);
+  if (ativo("dfd.tipo") && c.dfdTipo == null) linhas.push("Definir o TIPO do DFD (DFD-S, DFD-R, DFD-O ou DFD-E).");
+  for (const s of SECOES_OBRIGATORIAS) {
+    if (!ativo(s.chave)) continue;
+    const sit = situacaoSecao(d.secoes, s.kw, d.anoPca);
+    if (sit === "vazia") linhas.push(`Preencher a ${s.rotulo}.`);
+    else if (sit === "invalida") linhas.push(`Corrigir a ${s.rotulo} — ${DICA_PADRAO_SECAO[s.kw] ?? "fora do padrão"}.`);
+  }
   if (d.assinaturaMotivo && ativo("dfd.assinatura"))
     linhas.push(`Regularizar a assinatura digital: ${d.assinaturaMotivo}.`);
   // Conformidade com o catálogo (itens) — veredito pré-computado no ctx (sem catálogo ⇒ nada).

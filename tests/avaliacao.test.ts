@@ -16,6 +16,7 @@ import {
   importanciasDe,
   importarDfdHabilitado,
   nivelDe,
+  opcoesAssunto,
   protocolarHabilitado,
   type RegrasAvaliacao,
   regrasPadrao,
@@ -30,6 +31,7 @@ import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 function dfdCompleto() {
   return {
     reparticaoId: 3,
+    tipo: "DFD-S — Solução / com ETP",
     itens: [
       { valorUnitario: 100, quantidade: 2 },
       { valorUnitario: 50, quantidade: 1 },
@@ -172,11 +174,12 @@ describe("faltasObrigatorias — INVARIANTE: config padrão == comportamento de 
   it("DFD completo → nenhuma falta", () => {
     assert.deepEqual(faltasObrigatorias(dfdCompleto()), []);
   });
-  it("mesma lista/ordem de hoje quando falta tudo", () => {
+  it("mesma lista/ordem de hoje quando falta tudo (+ o tipo do DFD, obrigatório por padrão)", () => {
     const f = faltasObrigatorias({ reparticaoId: null, itens: [], secoes: [] });
     assert.deepEqual(f, [
       "valor unitário em todos os itens",
       "unidade vinculada",
+      "tipo do DFD (DFD-S/R/O/E)",
       "Justificativa da necessidade (Seção 3)",
       "Previsão de entrega/execução (Seção 5)",
       "Prioridade da compra/contratação (Seção 6)",
@@ -186,6 +189,20 @@ describe("faltasObrigatorias — INVARIANTE: config padrão == comportamento de 
   it("quantidade faltando NÃO bloqueia por padrão (igual a hoje)", () => {
     const d = { ...dfdCompleto(), itens: [{ valorUnitario: 100, quantidade: null }] };
     assert.deepEqual(faltasObrigatorias(d), []);
+  });
+});
+
+describe("avaliarDfd — tipo do DFD (configurável)", () => {
+  it("sem tipo bloqueia por padrão; 'intermediario' vira atenção; 'ignorar' some", () => {
+    const d = { ...dfdCompleto(), tipo: null };
+    assert.ok(avaliarDfd(d).bloqueantes.includes("tipo do DFD (DFD-S/R/O/E)"));
+    const avisa: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.tipo": "intermediario" } };
+    assert.ok(avaliarDfd(d, avisa).atencoes.includes("tipo do DFD (DFD-S/R/O/E)"));
+    const ign: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.tipo": "ignorar" } };
+    assert.deepEqual(avaliarDfd(d, ign), { bloqueantes: [], atencoes: [] });
+  });
+  it("tipo selecionado pelo usuário (rótulo do seletor) é reconhecido", () => {
+    assert.deepEqual(avaliarDfd({ ...dfdCompleto(), tipo: "DFD-O · Ordinário" }).bloqueantes, []);
   });
 });
 
@@ -302,5 +319,15 @@ describe("trava de protocolação (assuntos + tipos + botões)", () => {
     assert.equal(parsed.gate?.protocolarHabilitado, false);
     // Tipo inválido é rejeitado pelo schema.
     assert.throws(() => avaliacaoSchema.parse({ tiposProtocolo: ["DFD-X"] }));
+  });
+});
+
+describe("opcoesAssunto (seletor do assunto do protocolo)", () => {
+  it("atual + categorias fixas + cadastrados, sem repetir (norm)", () => {
+    const r: RegrasAvaliacao = { ...regrasPadrao(), assuntos: [{ id: "a", termo: "Inclusão" }, { id: "b", termo: "Revisão do PCA" }] };
+    assert.deepEqual(opcoesAssunto(r, "INCLUSÃO - PCA"), ["INCLUSÃO - PCA", "INCLUSÃO", "EXCLUSÃO", "ALTERAÇÃO NÃO ONEROSA", "Revisão do PCA"]);
+  });
+  it("sem atual → só as opções", () => {
+    assert.deepEqual(opcoesAssunto(regrasPadrao(), ""), ["INCLUSÃO", "EXCLUSÃO", "ALTERAÇÃO NÃO ONEROSA"]);
   });
 });

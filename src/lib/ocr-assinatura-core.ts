@@ -71,8 +71,20 @@ export function limparNomeOcr(s: string): string {
   let j = toks.length;
   while (i < j && !ehNome(toks[i])) i++;
   while (j > i && !ehNome(toks[j - 1])) j--;
-  const meio = toks.slice(i, j).filter((t) => ehNome(t) || PARTICULAS.has(t.toLowerCase()));
+  const meio = colapsarRepeticao(toks.slice(i, j).filter((t) => ehNome(t) || PARTICULAS.has(t.toLowerCase())));
   return meio.length > 10 ? "" : meio.join(" ");
+}
+
+/** "EDILENE ALVES DA CRUZ EDILENE ALVES DA CRUZ" → "EDILENE ALVES DA CRUZ": a linha do OCR junta o nome
+ * IMPRESSO no DFD (ao lado) com o do carimbo — a sequência repetida é o MESMO nome. Puro. */
+function colapsarRepeticao(toks: string[]): string[] {
+  const n = toks.length;
+  if (n >= 4 && n % 2 === 0) {
+    const a = toks.slice(0, n / 2);
+    const b = toks.slice(n / 2);
+    if (norm(a.join(" ")) === norm(b.join(" "))) return a;
+  }
+  return toks;
 }
 
 /** CPF lido por OCR (trecho "CPF: *** 413.331-**"): o Dropsigner mostra o CPF MASCARADO (6 dígitos do
@@ -228,6 +240,13 @@ export function votarCodigoDropsigner(textos: string[]): string | null {
   return out;
 }
 
+/** Nome mais frequente; empate → o mais curto. */
+function modaCurta(vs: string[]): string {
+  const cont = new Map<string, number>();
+  for (const v of vs) if (v) cont.set(v, (cont.get(v) ?? 0) + 1);
+  return [...cont.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0]?.[0] ?? "";
+}
+
 /** Valor mais frequente (não vazio); empate → o 1º visto. */
 function moda(vs: string[]): string {
   const cont = new Map<string, number>();
@@ -256,7 +275,11 @@ export function assinaturasDeOcr(e: { blocos: string[]; pagina: string; marcaDag
     if (!a.nome.trim()) return;
     const c = corrigirNomePelaCamada(a.nome, e.camada ?? "");
     const l = { a: { ...a, nome: c.nome }, ok: c.confirmado };
-    const g = grupos.find((gr) => gr[0].a.fonte === a.fonte && gr.some((o) => perto(o.a.nome, l.a.nome)));
+    // MESMA assinatura = mesma fonte e nome parecido OU mesma data/hora (ao segundo) com CPF compatível —
+    // duas assinaturas distintas no MESMO segundo não existem; evita duplicar por uma leitura ruim do nome.
+    const mesmaData = (o: Assinatura) =>
+      !!o.data && o.data.slice(0, 19) === l.a.data.slice(0, 19) && (!o.eCpf || !l.a.eCpf || o.eCpf === l.a.eCpf);
+    const g = grupos.find((gr) => gr[0].a.fonte === a.fonte && gr.some((o) => perto(o.a.nome, l.a.nome) || mesmaData(o.a)));
     if (g) g.push(l);
     else grupos.push([l]);
   };
@@ -268,7 +291,9 @@ export function assinaturasDeOcr(e: { blocos: string[]; pagina: string; marcaDag
   }
   const out = grupos.map((g) => {
     const conf = g.filter((l) => l.ok);
-    const nome = conf.length ? conf[0].a.nome : moda(g.map((l) => l.a.nome));
+    // Confirmado pela camada de texto vence; senão o MAIS FREQUENTE (empate → o mais curto: o lixo de OCR
+    // acrescenta palavras, não tira).
+    const nome = conf.length ? conf[0].a.nome : modaCurta(g.map((l) => l.a.nome));
     const a = { ...g[0].a, nome, data: moda(g.map((l) => l.a.data)), eCpf: moda(g.map((l) => l.a.eCpf)) };
     return a.fonte === "dropsigner" ? { ...a, codigo: codigo ?? "", url } : a;
   });
@@ -465,7 +490,8 @@ export async function lerAssinaturasPorOcr<C>(motor: MotorOcr<C>, paginas: numbe
     try {
       const caixas = infos.find((i) => i.pagina === pagina)?.caixas ?? [];
       for (const a of await lerAssinaturasDaPagina(motor, pagina, caixas, camada)) {
-        const chave = `${a.fonte}|${norm(a.nome)}|${a.data.slice(0, 16)}`;
+        // Mesma assinatura lida em páginas/leituras diferentes: a data/hora (ao segundo) identifica.
+        const chave = a.data ? `${a.fonte}|${a.data.slice(0, 19)}` : `${a.fonte}|${norm(a.nome)}`;
         if (!vistos.has(chave)) {
           vistos.add(chave);
           achadas.push(a);

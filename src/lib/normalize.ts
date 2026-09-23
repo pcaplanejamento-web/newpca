@@ -326,7 +326,7 @@ const MESES_SEM = MESES.map(stripAccents); // sem acento p/ casar
  *    do PCA do processo; o usuário ainda pode editar). Sem `anoPca` e sem ano no texto, o
  *    mês fica reconhecido mas sem ano → `null` (a definir).
  *  - ANUAL: `ANUAL`, `ANUALMENTE`, `MENSAL(MENTE)`, `AO LONGO/DECORRER/DURANTE do ano`,
- *    `TODO O ANO`, `POR N MESES` — com ou sem ano. Bare "ANUAL" (sem ano) é VÁLIDO.
+ *    `TODO O ANO`, `POR N MESES`, `12 MESES` (o ano inteiro) — com ou sem ano. Bare "ANUAL" (sem ano) é VÁLIDO.
  * O ano do texto tem precedência; sem ele, usa-se o `anoPca` (regra: a previsão do DFD
  * segue o ano do PCA do processo). O que não casar nenhuma das duas → null (tratar à mão).
  * Recorrente vence a data. `auto=true` = reconheceu mas a escrita não era canônica.
@@ -343,7 +343,7 @@ export function normPrevisao(
   const anoPcaStr = anoPca != null && anoPca >= 2000 && anoPca <= 2100 ? String(anoPca) : null;
   const ano = anoTexto ?? anoPcaStr;
   const recorrente =
-    /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES/.test(s);
+    /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES|\b(12|DOZE)\s+MESES\b/.test(s);
   if (recorrente) {
     // "Anual" é válido mesmo sem ano; com ano (do texto ou do PCA) vira `ANUAL/AAAA`.
     const valor = ano ? `ANUAL/${ano}` : "ANUAL";

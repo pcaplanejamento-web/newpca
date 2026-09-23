@@ -11,7 +11,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
-import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
   const faltas = faltasObrigatorias(
     {
       reparticaoId: d.reparticaoId,
+      anoPca: d.anoPca,
       itens: d.rows,
       secoes: d.secoes,
       tipo: d.tipo,
@@ -118,13 +119,16 @@ export async function POST(req: Request) {
   if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", ctxAv)))
     return erro(res.motivo, 422);
 
-  const r = await upsertDfdCabecalho(d, a.u.id, d.rows);
+  // Validação pela EQUIPE: quem/quando vêm da SESSÃO (nunca do cliente).
+  const assinaturas = carimbarValidacao(d.assinaturas, [], a.u.nome, new Date().toISOString());
+  const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
+  const r = await upsertDfdCabecalho({ ...d, assinaturas }, a.u.id, d.rows);
   await registrarAuditoria({
     usuario: a.u,
     acao: "importar",
     entidade: "dfd",
     entidadeId: r.id,
-    resumo: `DFD ${r.numero} importado — ${d.rows.length} ${d.rows.length === 1 ? "item" : "itens"}`,
+    resumo: `DFD ${r.numero} importado — ${d.rows.length} ${d.rows.length === 1 ? "item" : "itens"}${validadaEquipe ? " · assinatura validada pela equipe" : ""}`,
     depois: { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
   });
   return ok({ dfdId: r.id, numero: r.numero });

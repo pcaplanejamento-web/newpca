@@ -269,10 +269,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`votarCodigoDropsigner`, alfabeto sem O/0/I/1 — sem consenso ⇒ sem link, **nunca um link errado**). Gatilho
     `precisaOcr` (nenhuma assinatura NOMEADA de texto — vazio ou só o carimbo); `mesclarAssinaturasOcr` troca o carimbo de
     texto pela nomeada do OCR herdando o **código EXATO** do texto. **Assets self-hosted** em `/public/tesseract` (worker +
-    core WASM **SIMD-LSTM** base64 + `por.traineddata.gz`, ~11MB — sem CDN externa). **Escala:** no protocolo o OCR NÃO
-    roda na análise em background — só ao **abrir** e ao **protocolar** um DFD que precisa (`ocrAssinaturasEmPaginas` +
-    `ProtocoloUploadForm.mesclarOcrSePreciso`, no cache sem perder edições; `ocrTentadoRef` evita repetir); no avulso,
-    `parseDfdPdf` roda inline. Worker liberado por `encerrarOcr`. **Best-effort:** qualquer erro → sem assinatura (= antes).
+    core WASM **SIMD-LSTM** base64 + `por.traineddata.gz`, ~11MB — sem CDN externa). **No protocolo o OCR roda na ANÁLISE, antes de
+    apontar erros:** 2ª passada do `analisarTodos` (após o texto) lê em fila os DFDs com `precisaOcr` — cada um fica
+    **"pendente"** (`ocrPendente`, rodapé "Lendo assinaturas por OCR (n/N)") até a leitura; a assinatura é mesclada no cache
+    (sem perder edições) e a **UNIDADE é prevista pelo assinante** (`refinarUnidade` → `preverUnidadeDoDfd`, só preenche se
+    vazia). A protocolação espera a análise. Abrir um DFD adianta a leitura dele (`mesclarOcrSePreciso`); `ocrTentadoRef`
+    evita repetir; `lerAssinaturasOcr` é **serializado** (fila — o worker do tesseract é único). No avulso, `parseDfdPdf` roda
+    inline. **Sem duplicar:** leituras da MESMA assinatura (mesma data/hora ao segundo + CPF compatível) viram UMA, e o nome
+    repetido na linha do OCR ("NOME NOME" — o nome impresso ao lado + o do carimbo) é colapsado (DFD 142 real). Worker liberado por `encerrarOcr`. **Best-effort:** qualquer erro → sem assinatura (= antes).
     **Conferência (`validarAssinatura`):** uma assinatura lida por OCR (`ocr:true` ou `foxit`) que **não casa** um
     responsável é reconhecida **SEM bloquear** (status `"ocr"`) — exceto se houver uma de leitura LIMPA (texto) com nome
     que também falhou (essa bloqueia). Casou → `ok`. `ocr` é persistido (`assinaturaSchema`/`parseAssinaturas`). UI: Foxit
@@ -294,6 +298,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     de linha só casa "Assinado de forma digital" no **início** (prosa que cita a expressão fica). `pageItems` passa `rot`/
     `w`/`h`. Validado: `pd101820` = 0 diferenças × versão anterior e 0 vazamentos; DFD 1483 real: §9 = "Autorizo o início
     da formalização da demanda. ORDENADOR".
+  - **Validação da assinatura AUTO × EQUIPE:** `validarAssinatura` devolve `ok` com **`origem`**: `"auto"` = o SISTEMA casou
+    o assinante com o responsável; `"equipe"` = validada à mão. A assinatura **reconhecida mas não conferida** (lida por OCR
+    que não casa, ou só o carimbo Dropsigner — `assinaturaPendenteValidacao`) fica em **ATENÇÃO** ("Validar assinatura") até
+    a equipe validar. No `DfdConferir`, o bloco **"Validação da assinatura"** mostra "Validada automaticamente (auto)" /
+    "Validada pela equipe" ou, se não conferida, o seletor do **responsável da unidade** + "Validar assinatura (equipe)"
+    (`validarAssinaturaPelaEquipe`: marca a assinatura com `validacao:{por:"equipe",responsavel}`; sem assinatura lida cria
+    uma `fonte:"manual"`) e "Desfazer validação" (`desfazerValidacaoEquipe`). Vale enquanto o responsável for da unidade
+    (trocar de unidade desfaz o efeito). **Quem/quando** são carimbados pelo SERVIDOR (`carimbarValidacao`, sessão — nunca o
+    cliente) no `POST /api/dfd` e no `PATCH /api/dfd/[id]` (`assinaturas`), com auditoria. Selos "Validada (auto)/(equipe)"
+    nos cards do `DfdView` e "(auto)/(equipe)" na coluna Assinatura da lista do protocolo; grupo "Equipe" p/ a `manual`.
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do
@@ -324,7 +338,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).
 - **Importa `.xlsx` E `.pdf`:** o cabeçalho + seções são **compartilhados** em `src/lib/parse-dfd-comum.ts`
-  (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
+  (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). **Seções = TÍTULOS PADRONIZADOS** (`SECOES_PADRAO` em
+  `parse-dfd-comum`: ÁREA REQUISITANTE · IDENTIFICAÇÃO · JUSTIFICATIVA · QUANTIDADE · PREVISÃO · PRIORIDADE · FUNDAMENTAÇÃO ·
+  INDICAÇÃO DA EQUIPE · SECRETÁRIO DEMANDANTE · AUTORIZAÇÃO), casados pelo INÍCIO do título (o NÚMERO varia entre modelos —
+  ex.: DFD 136 numera "6 - FUNDAMENTAÇÃO"); qualquer outra linha "N - …" é texto da seção corrente — nunca cria seções
+  indeterminadamente. `.xlsx` → `parse-dfd`/`parse-dfd-core` (SheetJS,
   tabela por coluna da matriz). `.pdf` → `parse-dfd-pdf`/`parse-dfd-pdf-core` (**pdf.js `pdfjs-dist`**, importado
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
   build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**. Número/código/unidade/
@@ -348,8 +366,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **dezenas de páginas** e um único item pode ter uma **descrição enorme que atravessa páginas**. O `parse-dfd-pdf-core`
   é **100% ciente de página**: (a) em cada página, tudo ACIMA do cabeçalho de coluna repetido é o **cabeçalho do
   documento** (ESTADO DE GOIÁS / órgão / DOCUMENTO… / Número DFD / Tipo DFD) e é **pulado** (`viuColuna` por página) —
-  senão o nome do órgão grudaria na descrição de um item; (b) só uma seção `N - …` **à margem esquerda** encerra a
-  tabela (um "2-52" no meio de uma descrição NÃO é seção); (c) uma descrição **acima de todos os itens da página** é
+  senão o nome do órgão grudaria na descrição de um item; (b) só um **TÍTULO PADRONIZADO** de seção (`tituloSecaoPadrao`)
+  **à margem esquerda** e **sem nada nas colunas de unidade/quantidade/valores** encerra a tabela (um "2-52" no meio de uma
+  descrição, ou a LINHA DE ITEM cuja descrição começa com "- " — "29 - SEC. DE ASSISTÊNCIA…", DFD 142 real: 32 itens eram
+  lidos como 2 — NÃO é seção); (c) uma descrição **acima de todos os itens da página** é
   continuação do **último item da página anterior** (item que "virou a página"). O **`coletarSecoes` recebe só as
   linhas FORA da tabela** (`[hi, tableEndIdx)` removido) — senão "…IEC 60601-**2-52**, SISTEMA DE GESTÃO…" viraria uma
   falsa "seção 2 - 52". `y` reinicia por página → itens/valores casados **por (página,y)**; ordem `(página, y desc)`. O texto de
@@ -398,6 +418,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`dfd-tratamento`), que resolve o **nível** de cada ponto; com `regras` no padrão do catálogo devolve exatamente a
   lista de hoje (**invariante coberto por teste**). O **ano do PCA** e a **assinatura** seguem como portões à parte,
   também com nível próprio.
+  - **Mesma régua do Tratamento (`situacaoSecao`):** uma seção obrigatória PREENCHIDA mas **fora do padrão** também é
+    pendência — prioridade que não é ALTA/MÉDIA/BAIXA, previsão que não é MÊS/AAAA nem ANUAL (`normPrevisao`; "12 MESES"
+    = ANUAL), fundamentação que não cita norma ("BAIXA" não é fundamentação). Antes o Tratamento mostrava "tratar" e as
+    mensagens "preenchida". **Seção trocada** (DFD 136 real: "6 - FUNDAMENTAÇÃO LEGAL: BAIXA", sem a seção de prioridade)
+    → `normalizarSecoesDfd` move para a PRIORIDADE (auto) e a fundamentação fica a tratar. A **Justificativa (§3)** ganhou
+    editor no bloco Tratamento (antes a falta não tinha onde ser tratada).
+  - **Tipo do DFD obrigatório (`dfd.tipo`, configurável, padrão `bloqueia`, editável):** muitos formulários NÃO trazem o
+    "Tipo DFD" (todos os 15 do `pd101820`). Tratamento por **seleção** (`DfdConferir`, select DFD-S/R/O/E → `TIPO_DFD_ROTULO`)
+    e **em massa** no protocolo (barra de edição em massa → "Tipo"); no gravado vai pelo `PATCH /api/dfd/[id]` (`tipo`).
+  - **Item duplicado (`item.duplicado`, antes só no catálogo — nunca avaliado):** mesmo código **E** mesma descrição
+    (`itensDuplicados`; o mesmo código com descrição diferente — outro local — é legítimo, DFD 136 real). Tratamento:
+    **"Remover item"** no `ItemDetalhe` (`removerItemDfd`, recomputa o total; no gravado grava os itens no D1).
+  - **Listas de DFDs GRAVADOS** apontam o que o resumo permite (`apontamentosGravado`: tipo ausente + DFD-R sem referência),
+    no nível do ADM; o detalhe completo vem ao abrir o DFD.
+  - **Protocolo:** assunto por **seleção** (`opcoesAssunto` = atual + categorias fixas + assuntos cadastrados; primitivo
+    `CampoSelecao` com cadeado) e, se a capa do PDF veio **sem número**, o número pode ser informado (`numeroEditavel`).
 - **Avaliação CONFIGURÁVEL pelo ADM — IMPORTÂNCIAS gerenciáveis (`avaliacao-core.ts` puro + `avaliacao.ts` loader):**
   o rigor de cada dado de **Protocolo/DFD/Item** é uma **importância** — uma LISTA que o ADM cria/edita/exclui, cada
   uma com **nome**, **cor** (hex livre) e um **comportamento** (o enum REAL da engine): `bloqueia` (trava import/
@@ -434,7 +470,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `DfdConferir`/`ProtocoloView`/`DfdView`); o servidor reconfere em `/api/dfd`, `/api/protocolo`, `/api/dfd/[id]`
   (global + por-tipo; a categoria é aplicada no cliente e no `POST /api/protocolo`). **Não configurável**
   (estrutural/técnico, permanece travado): integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição,
-  **identificadores da capa/DFD imutáveis** (protocolo número/Id/data/ano do PCA; DFD número/planejamento/tipo). **Gates
+  **identificadores da capa/DFD imutáveis** (protocolo número/Id/data/ano do PCA; DFD número/planejamento — o TIPO é escolhido por seleção, ver abaixo). **Gates
   só-cliente** (como hoje): conciliação do valor da capa e "sem DFD com erro".
 - **Trava de PROTOCOLAÇÃO — assuntos + tipos permitidos + liga/desliga dos botões (allow-list, sem migração):** aba
   **"Protocolação"** de `AvaliacaoAdmin` (Configurações → Avaliação). O ADM cadastra **assuntos permitidos**
@@ -486,7 +522,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com a `lista` de `getReparticaoContexto` (**admin = todas**) — 403 fora do escopo. `start-dfd` tem **anti-sequestro**
   por `numero` (não sobrescreve DFD de repartição inacessível). O `PATCH /api/dfd/[id]` (`editarDfdSchema`) vincula a
   protocolo E/OU edita **repartição/seções/itens/refs + o CONTEÚDO do cabeçalho** (objeto/órgão/setor/responsável/
-  matrícula/e-mail/telefone — identificadores número/planejamento/tipo imutáveis; não move p/ repartição inacessível);
+  matrícula/e-mail/telefone + **tipo** (seleção) + **assinaturas** (validação pela equipe) — identificadores número/planejamento imutáveis; não move p/ repartição inacessível);
   o `PATCH /api/protocolo/[id]`
   (`editarProtocoloSchema`) edita a **repartição + os campos de CONTEÚDO da capa** (interessado/assunto/observação/
   CPF-CNPJ/valor/local) — os **IDENTIFICADORES** (número/Id/data/ano do PCA) são IMUTÁVEIS (o schema **não** os aceita).
@@ -565,7 +601,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (a própria cor denota o auto; **sem** o antigo rótulo "auto"), e na cor normal quando definida à mão.
   - **Célula "Estado" APONTA o erro (≤ 3 palavras) em vez de "Com erro"/"Atenção"** (`resumoEstado`/`ROTULO_CURTO`, puros):
     mostra o problema PRINCIPAL (1º erro; sem erros, 1ª atenção) na cor da severidade + contadores **`+N`** dos demais
-    (`+N` **vermelho** = erros além do principal; `+N` **âmbar** = atenções — ex.: "Sem assinatura +2 +1"). O atributo
+    (`+N` **vermelho** = erros além do principal; `+N` **âmbar** = atenções — ex.: "Assinatura não conferida +2 +1"). O atributo
     `title` traz a **lista completa** (erros + atenções) no tooltip nativo, sem abrir o DFD. **Regular não muda.** A
     tabela de itens do `DfdView` usa o mesmo resumo por `mensagensItem` (valor unitário/quantidade).
   - **Coluna "Assinatura"** identifica o tipo por `Badge`: **Centi** (verde) = certificado/sistema, **Dropsigner** (azul),

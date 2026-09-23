@@ -1,15 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { dfdRSemReferencia, FALTA_REFERENCIA_RENOVACAO, type GrupoAssinatura, resumoEstado } from "@/lib/dfd-tratamento";
+import { classificarAssunto, comportamentoNo, opcoesAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { apontamentosGravado, type GrupoAssinatura, resumoEstado } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { valoresBatem } from "@/lib/normalize";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { CampoNumero, CampoTexto, useCadeados } from "./CampoCadeado";
+import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
-import { inputCls, labelCls } from "./formStyles";
+import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert } from "./icons";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
@@ -23,7 +23,7 @@ import { StatMini } from "./StatMini";
  * O controle de repartição/PCA entra por `children`. */
 export type CampoCapa = "numero" | "data" | "documento" | "interessado" | "assunto" | "observacao" | "localReparticao";
 /** Campos de CONTEÚDO (editáveis com cadeado); os identificadores nunca entram aqui. */
-export type CampoCapaEditavel = "documento" | "interessado" | "assunto" | "observacao" | "valorCapa" | "localReparticao";
+export type CampoCapaEditavel = "numero" | "documento" | "interessado" | "assunto" | "observacao" | "valorCapa" | "localReparticao";
 export type ModoCapa = "leitura" | "criar" | "cadeado";
 const naoOp = () => {};
 export function CapaCampos({
@@ -36,6 +36,8 @@ export function CapaCampos({
   observacao,
   valorCapa,
   localReparticao,
+  assuntos,
+  numeroEditavel = false,
   modo = "leitura",
   onChange,
   onChangeValorCapa,
@@ -51,6 +53,10 @@ export function CapaCampos({
   observacao: string;
   valorCapa: number | null;
   localReparticao: string | null;
+  /** Opções do ASSUNTO (`opcoesAssunto`) — com elas o assunto é escolhido numa SELEÇÃO. */
+  assuntos?: string[];
+  /** A capa do PDF veio SEM número → o número (identificador) pode ser informado (cadeado). */
+  numeroEditavel?: boolean;
   modo?: ModoCapa;
   onChange?: (campo: CampoCapa, valor: string) => void;
   onChangeValorCapa?: (valor: number | null) => void;
@@ -78,7 +84,23 @@ export function CapaCampos({
         <div className="sm:col-span-2">
           <TextField label="Interessado" value={interessado} onChange={set("interessado")} />
         </div>
-        <TextField label="Assunto" value={assunto} onChange={set("assunto")} />
+        {assuntos && assuntos.length > 0 ? (
+          <div>
+            <label className={labelCls} htmlFor="capa-assunto">
+              Assunto
+            </label>
+            <select id="capa-assunto" className={selectCls} value={assunto} onChange={set("assunto")}>
+              <option value="">— Selecione o assunto —</option>
+              {assuntos.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <TextField label="Assunto" value={assunto} onChange={set("assunto")} />
+        )}
         <TextField label="Observação" value={observacao} onChange={set("observacao")} />
         <TextField label="Valor (capa)" value={valorCapa != null ? brl(valorCapa) : "—"} disabled readOnly />
         <TextField label="Local (capa)" value={localReparticao ?? ""} disabled readOnly placeholder="—" />
@@ -91,12 +113,20 @@ export function CapaCampos({
   // IDENTIFICADORES (número/Id/data) ficam sempre travados (só-leitura, sem cadeado).
   return (
     <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-      <CampoTexto label="Número do processo" valor={numero} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+      {numeroEditavel && podeEditar ? (
+        <CampoTexto label="Número do processo (não lido da capa)" valor={numero} {...props("numero")} onChange={(v) => onChange?.("numero", v)} />
+      ) : (
+        <CampoTexto label="Número do processo" valor={numero} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
+      )}
       <CampoTexto label="Id do processo" valor={idExterno ?? ""} mono editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
       <CampoTexto label="Data/Hora" valor={data} editavel={false} aberto={false} bloqueado onLock={naoOp} onChange={naoOp} />
       <CampoTexto label="CPF/CNPJ" valor={documento} {...props("documento")} onChange={(v) => onChange?.("documento", v)} />
       <CampoTexto label="Interessado" valor={interessado} span multi {...props("interessado")} onChange={(v) => onChange?.("interessado", v)} />
-      <CampoTexto label="Assunto" valor={assunto} {...props("assunto")} onChange={(v) => onChange?.("assunto", v)} />
+      {assuntos && assuntos.length > 0 ? (
+        <CampoSelecao label="Assunto" valor={assunto} opcoes={assuntos} {...props("assunto")} onChange={(v) => onChange?.("assunto", v)} />
+      ) : (
+        <CampoTexto label="Assunto" valor={assunto} {...props("assunto")} onChange={(v) => onChange?.("assunto", v)} />
+      )}
       <CampoTexto label="Observação" valor={observacao} multi {...props("observacao")} onChange={(v) => onChange?.("observacao", v)} />
       <CampoNumero label="Valor (capa)" valor={valorCapa} moeda {...props("valorCapa")} onChange={(v) => onChangeValorCapa?.(v)} />
       <CampoTexto label="Local (capa)" valor={localReparticao ?? ""} {...props("localReparticao")} onChange={(v) => onChange?.("localReparticao", v)} />
@@ -228,8 +258,8 @@ export function ProtocoloView({
     protocolo.valorCapa != null &&
     !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
 
-  // Planilha ÚNICA de DFDs (a mesma da importação e da aba DFDs). Um DFD gravado já
-  // passou pela validação → estado "regular" (sem tabela de erro).
+  // Planilha ÚNICA de DFDs (a mesma da importação e da aba DFDs). Um DFD gravado já passou pela
+  // validação; a lista aponta só o que o resumo permite (`apontamentosGravado`).
   const linhasDfd: LinhaDfd[] = protocolo.dfds.map((d) => ({
     key: d.id,
     numero: d.numero,
@@ -238,18 +268,9 @@ export function ProtocoloView({
     tipo: tipoCurtoDfd(d.tipo),
     itens: d.totalItens,
     valor: valorDfd(d),
-    // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
-    estado:
-      dfdRSemReferencia(d) &&
-      comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignora"
-        ? "atencao"
-        : "regular",
-    // Gravados já validados → único apontamento na lista é o DFD-R sem referência (atenção).
-    resumo: resumoEstado(
-      dfdRSemReferencia(d) && comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo), categoria }) !== "ignora"
-        ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
-        : [],
-    ),
+    // Gravados: aponta o que o resumo permite (tipo ausente / DFD-R sem referência), no nível do ADM.
+    estado: apontamentosGravado(d, regras, categoria).estado,
+    resumo: resumoEstado(apontamentosGravado(d, regras, categoria).msgs),
     assinaturas: d.assinaturaGrupos ?? [],
   }));
 
@@ -295,6 +316,7 @@ export function ProtocoloView({
           observacao={(capaVals ? capaVals.observacao : protocolo.observacao) ?? ""}
           valorCapa={capaVals ? (capaVals.valorCapa ?? null) : protocolo.valorCapa}
           localReparticao={capaVals ? (capaVals.localReparticao ?? null) : protocolo.localReparticao}
+          assuntos={opcoesAssunto(regras, capaVals ? capaVals.assunto : protocolo.assunto)}
           modo={editando ? "cadeado" : "leitura"}
           onChange={
             editando && edicao

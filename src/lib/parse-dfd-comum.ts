@@ -109,14 +109,32 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
-  fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit";
+  fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit" | "manual";
   /** `true` quando a assinatura foi LIDA POR OCR (carimbo achatado, sem camada de texto) — imperfeita,
    * então não bloqueia quando o nome não casa (`validarAssinatura`) e o card avisa. Ausente = texto. */
   ocr?: boolean;
+  /** Validação MANUAL pela EQUIPE: o usuário conferiu o PDF e atestou que o `responsavel` (da unidade)
+   * assinou. `usuario`/`em` são carimbados pelo SERVIDOR (quem validou e quando). A validação
+   * automática (o sistema casou o assinante) não é gravada — é recalculada ("auto"). */
+  validacao?: ValidacaoEquipe;
 };
 
+export type ValidacaoEquipe = { por: "equipe"; responsavel: string; usuario?: string; em?: string };
+
+/** Coage a validação crua (JSON do banco) — só `por:"equipe"` com responsável. */
+export function coerceValidacao(v: unknown): ValidacaoEquipe | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const responsavel = typeof o.responsavel === "string" ? o.responsavel.trim() : "";
+  if (o.por !== "equipe" || !responsavel) return undefined;
+  const out: ValidacaoEquipe = { por: "equipe", responsavel };
+  if (typeof o.usuario === "string" && o.usuario) out.usuario = o.usuario;
+  if (typeof o.em === "string" && o.em) out.em = o.em;
+  return out;
+}
+
 /** As `fonte`s de assinatura válidas (fonte única — reusada pela coerção ao LER o JSON do banco). */
-export const FONTES_ASSINATURA = ["certificado", "sistema", "dropsigner", "adobe", "foxit"] as const;
+export const FONTES_ASSINATURA = ["certificado", "sistema", "dropsigner", "adobe", "foxit", "manual"] as const;
 
 /** Coage um valor CRU (JSON do banco, não confiável) para uma `fonte` válida — whitelist das 5 fontes,
  * com fallback seguro em "certificado". Fonte ÚNICA da normalização (evita esquecer um caso ao ler do
@@ -386,25 +404,54 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
 }
 
 /**
- * Coleta as SEÇÕES numeradas ("N - TÍTULO" + texto). Recebe a lista de "linhas
- * iniciais" (1ª célula da linha no `.xlsx` / texto da linha no `.pdf`). Pula a
- * Seção 1 (vira campos) e a 4 (tabela de itens) e ignora o ruído de página.
+ * Os TÍTULOS PADRONIZADOS das seções do DFD (o formulário é sempre o mesmo). Casados pelo INÍCIO do
+ * título normalizado — o NÚMERO pode variar entre modelos (ex.: um DFD sem a seção de prioridade
+ * numera "6 - FUNDAMENTAÇÃO LEGAL"), mas o título não. Só um destes títulos abre uma seção: uma linha
+ * de ITEM cuja descrição começa com "- " ("29 - SEC. DE ASSISTÊNCIA…") NUNCA vira "seção".
+ */
+export const SECOES_PADRAO: { chave: string; re: RegExp }[] = [
+  { chave: "area", re: /^AREA REQUISITANTE/ },
+  { chave: "identificacao", re: /^IDENTIFICACAO DA DEMANDA/ },
+  { chave: "justificativa", re: /^JUSTIFICATIVA/ },
+  { chave: "quantidade", re: /^QUANTIDADE DE (MATERIA|SERVI)/ },
+  { chave: "previsao", re: /^PREVISAO DE (ENTREGA|EXECU)/ },
+  { chave: "prioridade", re: /^PRIORIDADE/ },
+  { chave: "fundamentacao", re: /^FUNDAMENTACAO/ },
+  { chave: "equipe", re: /^INDICACAO D/ },
+  { chave: "demandante", re: /^(SECRETARI[OA]|GESTOR[A]?|ORDENADOR[A]?)( MUNICIPAL)? DEMANDANTE/ },
+  { chave: "autorizacao", re: /^AUTORIZACAO/ },
+];
+
+/** Linha "N - TÍTULO" com um título PADRONIZADO → {numero, titulo, chave}; senão `null`. Puro. */
+export function tituloSecaoPadrao(linha: string): { numero: number; titulo: string; chave: string } | null {
+  const m = String(linha ?? "").trim().match(/^(\d{1,2})\s*[-–—]\s*(.+)$/);
+  if (!m) return null;
+  const t = norm(m[2]);
+  const p = SECOES_PADRAO.find((x) => x.re.test(t));
+  return p ? { numero: Number(m[1]), titulo: m[2].trim(), chave: p.chave } : null;
+}
+
+/**
+ * Coleta as SEÇÕES ("N - TÍTULO" + texto). Recebe a lista de "linhas iniciais" (1ª célula da linha no
+ * `.xlsx` / texto da linha no `.pdf`). Só um TÍTULO PADRONIZADO (`SECOES_PADRAO`) abre seção — qualquer
+ * outra linha "N - …" é texto da seção corrente (não cria seções indeterminadamente). Pula a área
+ * requisitante (vira campos) e a tabela de itens, e ignora o ruído de página.
  */
 export function coletarSecoes(leadings: string[]): DfdSecao[] {
-  const brutas: { numero: number; titulo: string; linhas: string[] }[] = [];
-  let atual: { numero: number; titulo: string; linhas: string[] } | null = null;
+  const brutas: { numero: number; titulo: string; chave: string; linhas: string[] }[] = [];
+  let atual: { numero: number; titulo: string; chave: string; linhas: string[] } | null = null;
   for (const cell of leadings) {
     if (!cell) continue;
-    const m = cell.match(/^(\d{1,2})\s*[-–—]\s*(.+)$/);
-    if (m) {
-      atual = { numero: Number(m[1]), titulo: m[2].trim(), linhas: [] };
+    const t = tituloSecaoPadrao(cell);
+    if (t) {
+      atual = { ...t, linhas: [] };
       brutas.push(atual);
       continue;
     }
     if (atual && !ehRuido(cell)) atual.linhas.push(cell);
   }
   return brutas
-    .filter((s) => s.numero !== 1 && s.numero !== 4)
+    .filter((s) => s.chave !== "area" && s.chave !== "quantidade")
     .map((s) => ({ numero: s.numero, titulo: s.titulo, texto: s.linhas.join("\n").trim() }))
     .filter((s) => s.texto.length > 0);
 }

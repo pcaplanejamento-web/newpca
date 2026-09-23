@@ -14,10 +14,11 @@ import {
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { Badge } from "./Badge";
+import { Button } from "./Button";
 import { CampoNumero, CampoTexto } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
-import { IconAlert } from "./icons";
+import { IconAlert, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
 /** Campos do item que têm cadeado próprio. */
@@ -39,6 +40,7 @@ export function ItemDetalhe({
   editavel = false,
   onChange,
   onEditandoChange,
+  onRemover,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -52,6 +54,8 @@ export function ItemDetalhe({
   onChange?: (patch: Partial<DfdVisualItem>) => void;
   /** Avisa o host quando ALGUM campo está destravado (para mostrar "Salvar alterações"). */
   onEditandoChange?: (editando: boolean) => void;
+  /** Remove este item do DFD (tratamento do ITEM DUPLICADO). Ausente = sem o botão. */
+  onRemover?: () => void;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
@@ -188,6 +192,22 @@ export function ItemDetalhe({
             </div>
           )}
         </section>
+      )}
+
+      {/* Tratamento do item DUPLICADO (ou lançado por engano): remove do DFD e do valor total. */}
+      {editavelUI && onRemover && (
+        <div className="flex justify-end border-t border-border pt-3">
+          <Button
+            variant="ghost"
+            icon={<IconTrash className="h-4 w-4" />}
+            style={{ color: "var(--danger)" }}
+            onClick={() => {
+              if (confirm(`Remover o item ${item.item ?? ""} deste DFD? Ele sai do valor total.`)) onRemover();
+            }}
+          >
+            Remover item
+          </Button>
+        </div>
       )}
     </div>
   );

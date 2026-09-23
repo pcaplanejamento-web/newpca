@@ -4,6 +4,7 @@ import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import type { ConferenciaItem } from "../src/lib/catalogo-conferencia.ts";
 import {
   algumCatalogoFundamental,
+  apontamentosGravado,
   avaliarDfd,
   bloqueantesCatalogo,
   contarMensagens,
@@ -18,6 +19,8 @@ import {
   linhasRelatorioDfd,
   linhasRelatorioProtocolo,
   mensagensDfd,
+  normalizarSecoesDfd,
+  situacaoSecao,
   situacaoProtocolo,
   veredictoLinhaCatalogo,
 } from "../src/lib/dfd-tratamento.ts";
@@ -166,7 +169,7 @@ describe("faltasCirurgicasDfd (cirúrgico + acionável)", () => {
       sec("PRIORIDADE", "ALTA"),
       sec("FUNDAMENTAÇÃO LEGAL", "Lei 14.133/2021"),
     ];
-    assert.deepEqual(faltasCirurgicasDfd({ itens: [item()], secoes: secs, reparticaoId: 1 }), []);
+    assert.deepEqual(faltasCirurgicasDfd({ itens: [item()], secoes: secs, reparticaoId: 1, tipo: "DFD-S" }), []);
   });
 });
 
@@ -362,5 +365,46 @@ describe("conformidade dos itens com o catálogo (veredito por linha + portão)"
     // Fundamental → entra em bloqueantes.
     const rf = { ...regrasPadrao(), pontos: { "item.naoCatalogado": "fundamental" as const } };
     assert.ok(avaliarDfd(d, rf, { conformidade }).bloqueantes.some((b) => /não catalogado/i.test(b)));
+  });
+});
+
+// DFD 136 (pd101820 real): o formulário veio com "6 - FUNDAMENTAÇÃO LEGAL: BAIXA" e SEM a seção de
+// prioridade — o texto é uma prioridade trocada de seção.
+describe("normalizarSecoesDfd — seção trocada (fundamentação = prioridade)", () => {
+  const base = {
+    numero: "136", planejamento: "182", tipo: null, objeto: null, orgaoEntidade: null, setorRequisitante: null,
+    siglaSetor: null, responsavel: null, matricula: null, email: null, telefone: null, anoPca: 2027,
+    numeroContrato: null, numeroAta: null, numeroLicitacao: null, valorTotal: 10, nomeArquivo: "x.pdf",
+    assinaturas: [], itens: [],
+  };
+  it("move a prioridade para a seção certa (auto) e deixa a fundamentação a tratar", () => {
+    const { dfd, auto } = normalizarSecoesDfd({
+      ...base,
+      secoes: [
+        { numero: 5, titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "12 meses - PCA 2027." },
+        { numero: 6, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "BAIXA" },
+      ],
+    });
+    assert.ok(auto.includes("prioridade"));
+    assert.equal(situacaoSecao(dfd.secoes, "PRIORIDADE"), "ok");
+    assert.equal(situacaoSecao(dfd.secoes, "FUNDAMENTACAO LEGAL"), "vazia");
+    assert.equal(situacaoSecao(dfd.secoes, "PREVISAO DE ENTREGA", 2027), "ok");
+  });
+  it("não mexe quando a prioridade já existe", () => {
+    const secoes = [
+      { numero: 6, titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "ALTA" },
+      { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "BAIXA" },
+    ];
+    const { dfd } = normalizarSecoesDfd({ ...base, secoes });
+    assert.equal(situacaoSecao(dfd.secoes, "FUNDAMENTACAO LEGAL"), "invalida");
+  });
+});
+
+describe("apontamentosGravado (listas de DFDs gravados)", () => {
+  it("sem tipo → erro por padrão; DFD-R sem referência → atenção; ok → regular", () => {
+    assert.equal(apontamentosGravado({ tipo: null }).estado, "erro");
+    assert.equal(apontamentosGravado({ tipo: "DFD-R · Renovação" }).estado, "atencao");
+    assert.equal(apontamentosGravado({ tipo: "DFD-R", numeroContrato: "12/2025" }).estado, "regular");
+    assert.equal(apontamentosGravado({ tipo: null }, { ...regrasPadrao(), pontos: { "dfd.tipo": "ignorar" } }).estado, "regular");
   });
 });

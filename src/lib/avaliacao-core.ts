@@ -72,6 +72,7 @@ export type ChaveAvaliacao =
   | "protocolo.semDfdEmErro"
   | "protocolo.dfdDuplicado"
   | "dfd.reparticao"
+  | "dfd.tipo"
   | "dfd.orgao"
   | "dfd.orgaoUnidadeDivergente"
   | "dfd.justificativa"
@@ -119,6 +120,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "protocolo.dfdDuplicado", sujeito: "protocolo", rotulo: "DFD duplicado", descricao: "Dois ou mais DFDs do processo com o MESMO nº de DFD ou de planejamento. O usuário escolhe um para prosseguir; os demais ficam descartados (fora da somatória e da protocolação).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   // ---- DFD ----
   { chave: "dfd.reparticao", sujeito: "dfd", rotulo: "Unidade / Setor", descricao: "DFD vinculado a uma unidade.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true },
+  { chave: "dfd.tipo", sujeito: "dfd", rotulo: "Tipo do DFD", descricao: "DFD com tipo definido (DFD-S/R/O/E). Muitos formulários não trazem o 'Tipo DFD' — o usuário escolhe na análise (seleção ou edição em massa).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true },
   { chave: "dfd.orgao", sujeito: "dfd", rotulo: "Órgão identificado", descricao: "Aviso quando o 'Órgão/Entidade' do DFD não corresponde a nenhum órgão cadastrado (sem órgão não dá para escopar/prever a unidade). Não bloqueia por padrão.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "dfd.orgaoUnidadeDivergente", sujeito: "dfd", rotulo: "Órgão × Unidade (divergência)", descricao: "Aviso quando o Órgão/Entidade do DFD aponta um órgão diferente do órgão dono da unidade casada pelo Setor Requisitante. Não bloqueia por padrão.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "dfd.justificativa", sujeito: "dfd", rotulo: "§3 Justificativa", descricao: "Justificativa da necessidade preenchida.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
@@ -136,7 +138,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.divergenteCatalogo", sujeito: "item", rotulo: "Divergente do catálogo", descricao: "Código existe no catálogo, mas a descrição e/ou a unidade de medida diferem do valor canônico.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.tipoIncompativel", sujeito: "item", rotulo: "Tipo de DFD incompatível", descricao: "O tipo do DFD (DFD-S/R/O/E) não está entre os tipos permitidos do item no catálogo. (Item sem tipos definidos vale para qualquer tipo.)", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
-  { chave: "item.duplicado", sujeito: "item", rotulo: "Item duplicado", descricao: "Dois ou mais itens do MESMO DFD com o mesmo código (ou, sem código, a mesma descrição). O usuário escolhe um; os demais ficam descartados (fora do valor total e da protocolação).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
+  { chave: "item.duplicado", sujeito: "item", rotulo: "Item duplicado", descricao: "Dois ou mais itens do MESMO DFD com o mesmo código E a mesma descrição (o mesmo código com descrição diferente — ex.: outro local — é legítimo). Tratamento: abrir o item e 'Remover item' (sai do valor total).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
 ];
 
 const POR_CHAVE = new Map<ChaveAvaliacao, PontoAvaliacao>(CATALOGO_AVALIACAO.map((p) => [p.chave, p]));
@@ -322,6 +324,27 @@ export function aplicarSinonimos(texto: string | null | undefined, sinonimos: Si
       return regra.valor;
   }
   return null;
+}
+
+/**
+ * Opções do SELETOR de assunto do protocolo: as categorias FIXAS (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO
+ * ONEROSA) + os assuntos CADASTRADOS pelo ADM, sem repetição (por `norm`), e o assunto ATUAL (lido da
+ * capa) quando não é uma das opções — nunca some o valor existente. Puro.
+ */
+export function opcoesAssunto(regras: RegrasAvaliacao, atual?: string | null): string[] {
+  const out: string[] = [];
+  const vistos = new Set<string>();
+  const add = (v: string | null | undefined) => {
+    const t = String(v ?? "").trim();
+    const k = norm(t);
+    if (!k || vistos.has(k)) return;
+    vistos.add(k);
+    out.push(t);
+  };
+  add(atual);
+  for (const c of CATEGORIAS) add(c.label);
+  for (const a of regras.assuntos ?? []) add(a?.termo);
+  return out;
 }
 
 /** Classifica o `assunto` (texto da capa) numa categoria FIXA — casa pela palavra. `null` se nenhuma. */

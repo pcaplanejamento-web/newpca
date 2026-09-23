@@ -74,7 +74,12 @@ export type DfdVisual = {
   totalItens: number | null;
   itens: DfdVisualItem[];
   secoes: { numero: number; titulo: string; texto: string }[];
-  assinaturas: { lista: Assinatura[]; solicitante: Solicitante | null };
+  assinaturas: {
+    lista: Assinatura[];
+    solicitante: Solicitante | null;
+    /** Assinatura VALIDADA e por quem: "auto" (o sistema conferiu) ou "equipe" (validada à mão). */
+    validada?: { assinatura: Assinatura; origem: "auto" | "equipe" } | null;
+  };
 };
 
 type ItemK = DfdVisualItem & { _k: number };
@@ -442,10 +447,14 @@ export function DfdView({
               const drop = a.fonte === "dropsigner";
               const adobe = a.fonte === "adobe";
               const foxit = a.fonte === "foxit";
-              const cor = adobe ? "var(--danger)" : foxit ? "var(--warn)" : drop ? "var(--info)" : "var(--ok)";
-              // Foxit/Adobe não têm código nem link de verificação público (só a aparência é lida).
-              const semCodigo = adobe || foxit;
-              const rotulo = adobe
+              const manual = a.fonte === "manual"; // atestada pela equipe (a leitura não achou a assinatura)
+              const cor = adobe ? "var(--danger)" : foxit ? "var(--warn)" : drop || manual ? "var(--info)" : "var(--ok)";
+              // Foxit/Adobe/manual não têm código nem link de verificação público (só a aparência é lida).
+              const semCodigo = adobe || foxit || manual;
+              const validada = dfd.assinaturas.validada?.assinatura === a ? dfd.assinaturas.validada.origem : null;
+              const rotulo = manual
+                ? "Assinatura atestada pela equipe"
+                : adobe
                 ? "Assinatura Digital (Adobe)"
                 : foxit
                   ? "Assinatura Digital (Foxit / OCR)"
@@ -470,10 +479,15 @@ export function DfdView({
                       <Badge tone="amber" solid>
                         Foxit
                       </Badge>
-                    ) : (
+                    ) : manual ? null : (
                       <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
                     )}
                     {a.ocr && !foxit && <Badge tone="amber">OCR</Badge>}
+                    {validada && (
+                      <Badge tone={validada === "auto" ? "emerald" : "blue"} solid>
+                        {validada === "auto" ? "Validada (auto)" : "Validada (equipe)"}
+                      </Badge>
+                    )}
                   </div>
                   <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     <Campo label="Assinante" valor={a.nome || "—"} span />
@@ -495,7 +509,12 @@ export function DfdView({
                       </LinkExterno>
                     )}
                     <p className={`text-xs text-muted ${semCodigo || (drop && !a.url) ? "" : "mt-1.5"}`}>
-                      {adobe ? (
+                      {manual ? (
+                        <>
+                          A leitura automática não encontrou a assinatura; a equipe conferiu o PDF e atestou o
+                          responsável.
+                        </>
+                      ) : adobe ? (
                         <>
                           Assinatura digital embutida no PDF (Adobe). A autenticidade deve ser conferida no{" "}
                           <strong>PDF assinado original</strong>, em um leitor/validador de sua confiança.
@@ -522,6 +541,12 @@ export function DfdView({
                         </>
                       )}
                     </p>
+                    {a.validacao?.por === "equipe" && (a.validacao.usuario || a.validacao.em) && (
+                      <p className="mt-1 text-xs text-muted">
+                        Validada pela equipe{a.validacao.usuario ? ` por ${a.validacao.usuario}` : ""}
+                        {a.validacao.em ? ` em ${dataBR(a.validacao.em)}` : ""}.
+                      </p>
+                    )}
                   </div>
                 </div>
               );

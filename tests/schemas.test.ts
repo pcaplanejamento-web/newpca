@@ -272,10 +272,11 @@ describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
 describe("faltasObrigatorias (regras de import de DFD)", () => {
   const completo = {
     reparticaoId: 3,
+    tipo: "DFD-S",
     itens: [{ valorUnitario: 100 }, { valorUnitario: 50 }],
     secoes: [
       { titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "x" },
-      { titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "y" },
+      { titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "JANEIRO/2027" },
       { titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "Alto" },
       { titulo: "FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133" },
     ],
@@ -296,5 +297,22 @@ describe("faltasObrigatorias (regras de import de DFD)", () => {
 
   it("bloqueia sem justificativa/previsão/prioridade/fundamentação", () => {
     assert.equal(faltasObrigatorias({ ...completo, secoes: [] }).length, 4);
+  });
+
+  it("seção PREENCHIDA mas fora do padrão também bloqueia (mesma régua do Tratamento)", () => {
+    const secoes = [
+      { titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", texto: "x" },
+      { titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "IMEDIATO" },
+      { titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "URGENTÍSSIMA" },
+      { titulo: "FUNDAMENTAÇÃO LEGAL", texto: "BAIXA" },
+    ];
+    const f = faltasObrigatorias({ ...completo, secoes });
+    assert.equal(f.length, 3);
+    assert.ok(!f.some((x) => /justificativa/i.test(x)));
+  });
+
+  it("'12 MESES - PCA 2027' é previsão ANUAL válida", () => {
+    const secoes = completo.secoes.map((s) => (s.titulo.startsWith("PREVIS") ? { ...s, texto: "12 MESES - PCA 2027." } : s));
+    assert.deepEqual(faltasObrigatorias({ ...completo, secoes }), []);
   });
 });

@@ -3,17 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { LinhaAuditoria } from "@/lib/auditoria";
-import { classificarAssunto, comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import type { DfdDetalhe, DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import {
-  dfdRSemReferencia,
+  apontamentosGravado,
   editarItemDfd,
   ESTADO_PROTOCOLO_ROTULO,
   estadoProtocolo,
   estadoProtocoloCor,
-  FALTA_REFERENCIA_RENOVACAO,
+  removerItemDfd,
   resumoEstado,
   SITUACAO_PROTOCOLO_ROTULO,
   situacaoProtocolo,
@@ -291,6 +291,30 @@ export function DfdsView({
     }
   }
 
+  // Remove UM item do DFD gravado (tratamento do item duplicado) e grava a lista de itens no D1.
+  async function removerItemGravado(idx: number) {
+    if (!dfdView || !dfdEdit) return;
+    const novo = removerItemDfd(dfdEdit, idx);
+    setSalvandoDfd(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/dfd/${dfdView.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itens: novo.itens }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível remover o item.");
+      setDfdEdit(novo);
+      setPainel(null);
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível remover o item.");
+    } finally {
+      setSalvandoDfd(false);
+    }
+  }
+
   async function salvarDfd() {
     if (!dfdView || !dfdEdit) return;
     const pid = protoView?.id ?? null; // editando dentro de um protocolo aberto?
@@ -302,6 +326,8 @@ export function DfdsView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reparticaoId: dfdRepEdit,
+          tipo: dfdEdit.tipo,
+          assinaturas: dfdEdit.assinaturas,
           secoes: dfdEdit.secoes,
           numeroContrato: dfdEdit.numeroContrato,
           numeroAta: dfdEdit.numeroAta,
@@ -466,8 +492,8 @@ export function DfdsView({
   }
 
   // ---- Planilha ÚNICA de DFDs (a MESMA dos banners) para a aba DFDs ----
-  // DFDs gravados já passaram pela validação → estado "regular" (sem tabela de erro);
-  // aqui aparece a coluna Protocolo e as ações (vincular/excluir).
+  // DFDs gravados já passaram pela validação; a lista aponta só o que o resumo permite
+  // (`apontamentosGravado`). Aqui aparece a coluna Protocolo e as ações (vincular/excluir).
   const dfdPorId = new Map(dfds.map((d) => [d.id, d]));
   const linhasDfdTab: LinhaDfd[] = dfds.map((d) => ({
     key: d.id,
@@ -477,18 +503,9 @@ export function DfdsView({
     tipo: tipoCurtoDfd(d.tipo),
     itens: d.totalItens,
     valor: valorDe(d),
-    // DFD-R sem referência (contrato/ata/licitação) → ATENÇÃO (nível do ADM; "ignorar" oculta).
-    estado:
-      dfdRSemReferencia(d) &&
-      comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignora"
-        ? "atencao"
-        : "regular",
-    // Gravados já validados → o único apontamento na lista é o DFD-R sem referência (atenção).
-    resumo: resumoEstado(
-      dfdRSemReferencia(d) && comportamentoNo(regras, "dfd.referenciaRenovacao", { dfdTipo: tipoCurtoDfd(d.tipo) }) !== "ignora"
-        ? [{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: FALTA_REFERENCIA_RENOVACAO }]
-        : [],
-    ),
+    // Gravados: aponta o que o resumo permite (tipo ausente / DFD-R sem referência), no nível do ADM.
+    estado: apontamentosGravado(d, regras).estado,
+    resumo: resumoEstado(apontamentosGravado(d, regras).msgs),
     assinaturas: d.assinaturaGrupos,
     protocolo: d.protocoloNumero,
   }));
@@ -776,6 +793,8 @@ export function DfdsView({
       onSecoesChange={(secoes) => setDfdEdit((d) => (d ? { ...d, secoes } : d))}
       onRefsChange={(refs) => setDfdEdit((d) => (d ? { ...d, ...refs } : d))}
       onCamposChange={(campos) => setDfdEdit((d) => (d ? { ...d, ...campos } : d))}
+      onTipoChange={(tipo) => setDfdEdit((d) => (d ? { ...d, tipo } : d))}
+      onAssinaturasChange={(assinaturas) => setDfdEdit((d) => (d ? { ...d, assinaturas } : d))}
     />
   ) : null;
   // Conteúdo do painel da DIREITA (mensagens OU detalhe do item selecionado).
@@ -794,6 +813,7 @@ export function DfdsView({
         editavel={podeEditar}
         onChange={(patch) => setDfdEdit((d) => (d ? editarItemDfd(d, painelIdx, patch) : d))}
         onEditandoChange={setItemEditando}
+        onRemover={podeEditar ? () => removerItemGravado(painelIdx) : undefined}
       />
     ) : (
       <MensagensDfd mensagens={mensagens} numero={dfdView?.numero ?? ""} tipo={dfdView?.tipo} onIrPara={irParaMensagem} />

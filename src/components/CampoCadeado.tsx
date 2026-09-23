@@ -136,6 +136,47 @@ export function CampoTexto({
   );
 }
 
+/** Campo de SELEÇÃO (lista fechada, ex.: assunto do protocolo): só-leitura, ou `<select>` quando destravado. */
+export function CampoSelecao({
+  label,
+  valor,
+  opcoes,
+  onChange,
+  editavel,
+  aberto,
+  bloqueado,
+  onLock,
+  span,
+}: {
+  label: string;
+  valor: string;
+  opcoes: string[];
+  onChange: (v: string) => void;
+  editavel: boolean;
+  aberto: boolean;
+  bloqueado: boolean;
+  onLock: () => void;
+  span?: boolean;
+}) {
+  const editando = editavel && aberto && !bloqueado;
+  return (
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+      {editando ? (
+        <select className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)}>
+          <option value="">— Selecione —</option>
+          {opcoes.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="mt-0.5 break-words text-sm font-semibold leading-snug text-text">{valor || "—"}</div>
+      )}
+    </LinhaCampo>
+  );
+}
+
 /** Campo numérico (quantidade/valores): só-leitura formatado, ou input quando destravado. */
 export function CampoNumero({
   label,

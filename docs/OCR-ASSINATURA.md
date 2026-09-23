@@ -35,10 +35,14 @@ pixels do carimbo), em **qualquer página** do DFD.
      O/0/I/1). Sem consenso → sem código e sem link (**nunca um link errado**). Se a camada de texto já tinha
      o carimbo com o código, `mesclarAssinaturasOcr` herda o código **exato** dele.
 - Toda assinatura lida por OCR sai com **`ocr:true`** (persistido no banco).
-- **Onde roda:** avulso em `parseDfdPdf` (inline, 1 DFD); no protocolo é **lazy** —
-  `ocrAssinaturasEmPaginas` só ao **abrir** e ao **protocolar** um DFD que precisa (NUNCA na análise em
-  background de até 300 DFDs, que travaria a UI). Ver `ProtocoloUploadForm.mesclarOcrSePreciso` (mescla no
-  cache sem perder edições; `ocrTentadoRef` evita repetir). O worker é liberado com `encerrarOcr()`.
+- **Onde roda:** avulso em `parseDfdPdf` (inline, 1 DFD); no protocolo, na **análise** — uma 2ª passada
+  (depois do texto) lê em fila os DFDs que precisam, cada um "pendente" até a leitura, e prevê a unidade pelo
+  assinante; abrir um DFD adianta a leitura dele (`mesclarOcrSePreciso`). As leituras são **serializadas**
+  (o worker é único). `ocrTentadoRef` evita repetir; o worker é liberado com `encerrarOcr()`.
+- **Sem duplicar:** leituras da mesma assinatura (mesma data/hora + CPF compatível) viram uma só, e o nome
+  repetido na linha ("NOME NOME") é colapsado.
+- **Validação:** assinatura lida por OCR que não confere com o responsável fica em ATENÇÃO até a equipe validar
+  (bloco "Validação da assinatura" no DFD).
 - **Best-effort:** qualquer erro (navegador sem SIMD, asset ausente, leitura ruim) → `[]` = o DFD segue
   "sem assinatura" (exatamente o comportamento anterior). O OCR **nunca** quebra o import.
 - **Conferência (`validarAssinatura`):** como o OCR é imperfeito, uma assinatura lida por OCR (`ocr:true`

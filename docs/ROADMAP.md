@@ -25,6 +25,17 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Conferência completa do protocolo: assinatura auto/equipe, tipo, assunto, seções padronizadas — entregue
+✅ **Assinaturas achatadas lidas NA ANÁLISE** do protocolo (antes de apontar erro; DFD fica "pendente" até a leitura) e a
+**unidade prevista pelo assinante**. **Validação auto × equipe**: selo "(auto)" quando o sistema confere o assinante;
+bloco "Validação da assinatura" para a equipe validar (escolhendo o responsável) ou desfazer — quem/quando carimbados pelo
+servidor. **Tipo do DFD** obrigatório (configurável) com seleção individual e em massa. **Assunto** do protocolo por
+seleção. **Seções por títulos padronizados** (fim das "seções" falsas; DFD 142 real: 32 itens lidos, antes 2) e **mesma
+régua do Tratamento** para prioridade/previsão/fundamentação; seção trocada corrigida sozinha (DFD 136). **Item duplicado**
+avaliado + "Remover item"; **Justificativa** editável; número do processo informável quando a capa não traz; listas de
+gravados apontam tipo ausente; **assinatura duplicada** no OCR eliminada (DFD 142). Validado no `pd101820`: 15 DFDs com as
+seções corretas, única pendência real = tipo ausente (+ fundamentação do 136).
+
 ### Assinatura ACHATADA em qualquer página (OCR multi-formato) + assinatura não se confunde com o texto — entregue
 ✅ O OCR deixou de ser só do Foxit: **Dropsigner, Foxit e Adobe achatados** (sem camada de texto) são lidos em
 **qualquer página** do DFD (prioridade: imagem fora do cabeçalho → rótulo de assinatura → última). Núcleo puro

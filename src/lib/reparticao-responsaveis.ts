@@ -248,7 +248,8 @@ export type Solicitante = {
  * (informativo, só `.xlsx`) ou `erro` (bloqueia importar/protocolar/salvar).
  */
 export type ResultadoAssinatura =
-  | { status: "ok"; tipo: "padrao" | "temporario"; assinatura: Assinatura; responsavel: Responsavel }
+  // `origem`: "auto" = o SISTEMA casou o assinante com o responsável; "equipe" = validada à mão.
+  | { status: "ok"; origem: "auto" | "equipe"; tipo: "padrao" | "temporario"; assinatura: Assinatura; responsavel: Responsavel }
   | { status: "dropsigner"; assinatura: Assinatura }
   // Formato E — Foxit/ICP-Brasil lida por OCR, reconhecida SEM match (não bloqueia; ver abaixo).
   | { status: "ocr"; assinatura: Assinatura }
@@ -286,14 +287,25 @@ export function validarAssinatura(
   if (temResponsavel) {
     for (const a of assinaturas) {
       const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
-      if (padrao) return { status: "ok", tipo: "padrao", assinatura: a, responsavel: padrao };
+      if (padrao) return { status: "ok", origem: "auto", tipo: "padrao", assinatura: a, responsavel: padrao };
     }
     for (const a of assinaturas) {
       const iso = dataAssinaturaISO(a.data);
       const temp = responsaveis.temporarios.find(
         (t) => mesmoNome(t.nome, a.nome) && t.inicio && t.fim && t.inicio <= iso && iso <= t.fim,
       );
-      if (temp) return { status: "ok", tipo: "temporario", assinatura: a, responsavel: temp };
+      if (temp) return { status: "ok", origem: "auto", tipo: "temporario", assinatura: a, responsavel: temp };
+    }
+    // Validação MANUAL pela EQUIPE: vale enquanto o responsável atestado for da unidade (padrão ou
+    // temporário — o usuário conferiu o PDF, então o período não é reexigido). Trocar a unidade para
+    // uma sem esse responsável desfaz o efeito (cai nas regras abaixo).
+    for (const a of assinaturas) {
+      const nome = a.validacao?.por === "equipe" ? a.validacao.responsavel : "";
+      if (!nome) continue;
+      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, nome));
+      if (padrao) return { status: "ok", origem: "equipe", tipo: "padrao", assinatura: a, responsavel: padrao };
+      const temp = responsaveis.temporarios.find((t) => mesmoNome(t.nome, nome));
+      if (temp) return { status: "ok", origem: "equipe", tipo: "temporario", assinatura: a, responsavel: temp };
     }
   }
   // Exceção estreita: Dropsigner "só carimbo" (sem bloco visível, nome vazio) → reconhecida.
@@ -318,6 +330,58 @@ export function validarAssinatura(
     motivo:
       "Assinante não é responsável autorizado desta repartição (ou fora do período do responsável temporário).",
   };
+}
+
+/** Assinatura RECONHECIDA mas NÃO conferida com o responsável (lida por OCR ou só o carimbo Dropsigner)
+ * — não bloqueia, mas fica em ATENÇÃO até a equipe validar. Puro. */
+export function assinaturaPendenteValidacao(r: ResultadoAssinatura): boolean {
+  return r.status === "ocr" || r.status === "dropsigner";
+}
+
+/**
+ * Validação MANUAL pela EQUIPE: o usuário atesta que `responsavel` (da unidade) assinou. Marca a 1ª
+ * assinatura NOMEADA (senão a 1ª); sem nenhuma assinatura lida (ex.: OCR falhou), cria uma
+ * `fonte:"manual"` com o nome do responsável. Remove validações anteriores (uma só vale). Puro.
+ */
+export function validarAssinaturaPelaEquipe(assinaturas: Assinatura[], responsavel: string): Assinatura[] {
+  const limpas = desfazerValidacaoEquipe(assinaturas);
+  const validacao = { por: "equipe" as const, responsavel: responsavel.trim() };
+  if (limpas.length === 0)
+    return [{ nome: responsavel.trim(), eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: "", url: "", fonte: "manual", validacao }];
+  const i = Math.max(0, limpas.findIndex((a) => a.nome.trim()));
+  return limpas.map((a, j) => (j === i ? { ...a, validacao } : a));
+}
+
+/** Desfaz a validação pela equipe (remove a marca e a assinatura `manual` criada por ela). Puro. */
+export function desfazerValidacaoEquipe(assinaturas: Assinatura[]): Assinatura[] {
+  return assinaturas
+    .filter((a) => a.fonte !== "manual")
+    .map((a) => {
+      if (!a.validacao) return a;
+      const { validacao: _v, ...resto } = a;
+      return resto;
+    });
+}
+
+/**
+ * Carimba QUEM/QUANDO nas validações pela equipe (servidor — o cliente não decide o autor). Mantém o
+ * carimbo de uma validação JÁ gravada idêntica (mesmo responsável); a nova recebe `usuario`/`em`. Puro.
+ */
+export function carimbarValidacao(novas: Assinatura[], gravadas: Assinatura[], usuario: string, em: string): Assinatura[] {
+  const anterior = gravadas.find((a) => a.validacao?.por === "equipe")?.validacao;
+  return novas.map((a) => {
+    if (a.validacao?.por !== "equipe") return a;
+    const mesma = anterior && mesmoNome(anterior.responsavel, a.validacao.responsavel);
+    return {
+      ...a,
+      validacao: {
+        por: "equipe",
+        responsavel: a.validacao.responsavel,
+        usuario: mesma ? anterior.usuario : usuario,
+        em: mesma ? anterior.em : em,
+      },
+    };
+  });
 }
 
 /**

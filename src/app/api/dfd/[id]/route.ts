@@ -9,7 +9,7 @@ import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
-import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +91,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // move p/ unidade inacessível.
   const editaCampos =
     p.data.reparticaoId !== undefined ||
+    p.data.tipo !== undefined ||
+    p.data.assinaturas !== undefined ||
     p.data.secoes !== undefined ||
     p.data.numeroContrato !== undefined ||
     p.data.numeroAta !== undefined ||
@@ -108,21 +110,31 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à unidade de destino.", 403);
     }
-    // Ao mudar a unidade, reconfere a assinatura já gravada contra o responsável
-    // da NOVA unidade (regra 6: não salvar com assinatura não permitida).
-    if (p.data.reparticaoId != null) {
-      const ass = await getDfdAssinaturas(id);
-      const res = validarAssinatura(ass?.assinaturas ?? [], await carregarResponsaveis(p.data.reparticaoId), {
+    // Assinaturas (validação pela EQUIPE / desfazer): quem/quando vêm da SESSÃO — uma validação já
+    // gravada idêntica mantém o carimbo original.
+    const gravadas = await getDfdAssinaturas(id);
+    const assinaturas =
+      p.data.assinaturas !== undefined
+        ? carimbarValidacao(p.data.assinaturas, gravadas?.assinaturas ?? [], a.u.nome, new Date().toISOString())
+        : undefined;
+    // Ao mudar a unidade OU as assinaturas, reconfere a assinatura contra o responsável da unidade
+    // (regra 6: não salvar com assinatura não permitida).
+    const repAlvo = p.data.reparticaoId !== undefined ? p.data.reparticaoId : dfd.reparticaoId;
+    if (repAlvo != null && (p.data.reparticaoId != null || assinaturas !== undefined)) {
+      const ass = gravadas;
+      const res = validarAssinatura(assinaturas ?? ass?.assinaturas ?? [], await carregarResponsaveis(repAlvo), {
         exigeAssinatura: pdfExigeAssinatura(ass?.nomeArquivo),
       });
       // Respeita o nível `dfd.assinatura` do ADM COM a exceção por tipo de DFD (igual ao cliente
-      // e ao POST) — `antes` (getDfd) traz o tipo.
+      // e ao POST) — o tipo novo (se editado) ou o gravado (`antes`).
       const regras = await getRegrasAvaliacao();
-      if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(antes?.tipo) })))
+      if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(p.data.tipo !== undefined ? p.data.tipo : antes?.tipo) })))
         return erro(res.motivo, 422);
     }
     await atualizarDfdCampos(id, {
       reparticaoId: p.data.reparticaoId,
+      tipo: p.data.tipo,
+      assinaturas,
       secoes: p.data.secoes,
       numeroContrato: p.data.numeroContrato,
       numeroAta: p.data.numeroAta,
@@ -139,6 +151,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const cs = (
       [
         "reparticaoId",
+        "tipo",
         "numeroContrato",
         "numeroAta",
         "numeroLicitacao",
@@ -153,6 +166,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     ).filter((c) => p.data[c] !== undefined);
     const dd = diffCampos(antes as Record<string, unknown>, p.data as Record<string, unknown>, cs, {
       reparticaoId: "unidade",
+      tipo: "tipo",
       numeroContrato: "contrato",
       numeroAta: "ata",
       numeroLicitacao: "licitação",
@@ -164,7 +178,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       email: "e-mail",
       telefone: "telefone",
     });
-    const partes = [dd.resumo, p.data.secoes !== undefined ? "tratamento/seções atualizados" : ""].filter(Boolean);
+    const validacaoMudou =
+      assinaturas !== undefined &&
+      JSON.stringify(assinaturas.find((x) => x.validacao)?.validacao?.responsavel ?? null) !==
+        JSON.stringify(gravadas?.assinaturas.find((x) => x.validacao)?.validacao?.responsavel ?? null);
+    const validacaoTxt = !validacaoMudou
+      ? ""
+      : assinaturas?.some((x) => x.validacao)
+        ? `assinatura validada pela equipe (${assinaturas.find((x) => x.validacao)?.validacao?.responsavel})`
+        : "validação da assinatura desfeita";
+    const partes = [dd.resumo, p.data.secoes !== undefined ? "tratamento/seções atualizados" : "", validacaoTxt].filter(Boolean);
     await registrarAuditoria({
       usuario: a.u,
       acao: "editar",

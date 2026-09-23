@@ -41,7 +41,7 @@ import {
   IconUpload,
   IconWallet,
 } from "@/components/icons";
-import { CampoNumero, CampoTexto, useCadeados } from "@/components/CampoCadeado";
+import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
@@ -137,8 +137,9 @@ function ItemDetalheEditDemo() {
 function CampoCadeadoDemo() {
   const [interessado, setInteressado] = useState("COORDENAÇÃO DE PLANEJAMENTO DAS CONTRATAÇÕES");
   const [valor, setValor] = useState<number | null>(50);
-  const { abertos, alternar } = useCadeados<"interessado" | "valor">();
-  const props = (k: "interessado" | "valor") => ({
+  const [assunto, setAssunto] = useState("INCLUSÃO - PCA");
+  const { abertos, alternar } = useCadeados<"interessado" | "valor" | "assunto">();
+  const props = (k: "interessado" | "valor" | "assunto") => ({
     editavel: true,
     aberto: abertos.has(k),
     bloqueado: false,
@@ -159,6 +160,14 @@ function CampoCadeadoDemo() {
       />
       <CampoNumero label="Valor (capa)" valor={valor} moeda {...props("valor")} onChange={setValor} />
       <CampoTexto label="Interessado (destravável)" valor={interessado} span {...props("interessado")} onChange={setInteressado} />
+      <CampoSelecao
+        label="Assunto (seleção)"
+        valor={assunto}
+        opcoes={["INCLUSÃO - PCA", "INCLUSÃO", "EXCLUSÃO", "ALTERAÇÃO NÃO ONEROSA"]}
+        span
+        {...props("assunto")}
+        onChange={setAssunto}
+      />
     </dl>
   );
 }

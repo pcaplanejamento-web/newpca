@@ -41,14 +41,14 @@ describe("resumoEstado (célula compacta 'Estado')", () => {
     assert.equal(r.extraAtencoes, 0);
   });
 
-  it("exemplo 'Sem assinatura +2 +1' (3 erros + 1 atenção)", () => {
+  it("exemplo 'Assinatura não conferida +2 +1' (3 erros + 1 atenção)", () => {
     const r = resumoEstado([
       m("erro", "dfd.assinatura"),
       m("erro", "item.valorUnitario"),
       m("erro", "dfd.reparticao"),
       m("atencao", "dfd.referenciaRenovacao"),
     ]);
-    assert.equal(r.rotulo, "Sem assinatura"); // 1º erro = principal
+    assert.equal(r.rotulo, "Assinatura não conferida"); // 1º erro = principal
     assert.equal(r.cor, "var(--danger)");
     assert.equal(r.extraErros, 2); // +2 vermelho (erros além do principal)
     assert.equal(r.extraAtencoes, 1); // +1 âmbar (a atenção)
@@ -56,7 +56,7 @@ describe("resumoEstado (célula compacta 'Estado')", () => {
 
   it("erro tem precedência sobre atenção para o PRINCIPAL", () => {
     const r = resumoEstado([m("atencao", "item.naoCatalogado"), m("erro", "dfd.assinatura")]);
-    assert.equal(r.rotulo, "Sem assinatura"); // o erro vira principal, mesmo vindo depois
+    assert.equal(r.rotulo, "Assinatura não conferida"); // o erro vira principal, mesmo vindo depois
     assert.equal(r.cor, "var(--danger)");
     assert.equal(r.extraErros, 0);
     assert.equal(r.extraAtencoes, 1); // a atenção conta como extra

@@ -2,7 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { classificarAssunto, comportamentoNo, gateProtocolo, protocolarHabilitado, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import {
+  classificarAssunto,
+  comportamentoNo,
+  gateProtocolo,
+  opcoesAssunto,
+  protocolarHabilitado,
+  type RegrasAvaliacao,
+  regrasPadrao,
+  TIPO_DFD_ROTULO,
+  TIPOS_DFD,
+} from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
@@ -16,12 +26,12 @@ import {
   dfdsDuplicados,
   editarItemDfd,
   estadoDfd,
-  FALTA_REFERENCIA_RENOVACAO,
   faltasCirurgicasDfd,
   type GrupoAssinatura,
   gruposAssinatura,
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
+  removerItemDfd,
   type ResumoEstado,
   resumoEstado,
   setTextoSecao,
@@ -42,6 +52,7 @@ import {
 } from "@/lib/parse-protocolo-pdf";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import {
+  assinaturaPendenteValidacao,
   bloqueiaAssinatura,
   pdfExigeAssinatura,
   type Responsaveis,
@@ -83,7 +94,7 @@ type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move";
-type CampoBulk = "reparticao" | "prioridade" | "previsao" | "fundamentacao";
+type CampoBulk = "reparticao" | "tipo" | "prioridade" | "previsao" | "fundamentacao";
 
 const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
@@ -148,6 +159,10 @@ export function ProtocoloUploadForm({
   // vira estado "erro" com a mensagem, em vez de ficar "pendente" sem explicação.
   const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
   const [analisando, setAnalisando] = useState(false);
+  // DFDs cuja assinatura ACHATADA ainda está sendo lida por OCR na análise — ficam "pendente" (não
+  // apontam "sem assinatura" antes da leitura) e a protocolação espera. `ocrProgresso` = n/total.
+  const [ocrPendente, setOcrPendente] = useState<Set<number>>(new Set());
+  const [ocrProgresso, setOcrProgresso] = useState<{ feito: number; total: number } | null>(null);
 
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
@@ -160,6 +175,7 @@ export function ProtocoloUploadForm({
   const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
   const [bulkCampo, setBulkCampo] = useState<CampoBulk>("reparticao");
   const [bulkRep, setBulkRep] = useState<number | null>(null);
+  const [bulkTipo, setBulkTipo] = useState<string>("");
   const [bulkPrio, setBulkPrio] = useState<Prioridade | "">("");
   const [bulkMes, setBulkMes] = useState("");
   const [bulkAno, setBulkAno] = useState("");
@@ -197,6 +213,8 @@ export function ProtocoloUploadForm({
     setErrosParse(new Map());
     setSel(new Set());
     setAbertoIdx(-1);
+    setOcrPendente(new Set());
+    setOcrProgresso(null);
   }
 
   function abrirVazio() {
@@ -285,6 +303,7 @@ export function ProtocoloUploadForm({
     const total = Math.min(idx0.dfds.length, CAP_ANALISE);
     if (total === 0) return;
     setAnalisando(true);
+    const paraOcr: { i: number; dfd: DfdParseado }[] = []; // DFDs sem assinatura NOMEADA de texto (achatada)
     for (let i = 0; i < total; i++) {
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
@@ -297,10 +316,10 @@ export function ProtocoloUploadForm({
         // (o índice só tem A/B, então DFD só-Dropsigner ficava sem previsão). A lógica é a MESMA
         // p/ todas as assinaturas (`preverUnidadeDoDfd`). Só PREENCHE quando ainda está sem unidade
         // (não sobrescreve previsão do índice nem escolha manual do usuário).
-        const refino = preverUnidadeDoDfd(dfd, orgaos, reparticoes);
-        if (refino != null) {
-          setDfdRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
-          setAutoRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
+        refinarUnidade(i, dfd);
+        if (precisaOcr(dfd.assinaturas)) {
+          paraOcr.push({ i, dfd });
+          setOcrPendente((s) => new Set(s).add(i));
         }
       } catch (e) {
         // Leitura falhou (ex.: item sem número no PDF → tabela incompleta). Guarda o
@@ -309,7 +328,44 @@ export function ProtocoloUploadForm({
       }
       if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0)); // cede o event loop
     }
+    // 2ª passada — assinaturas ACHATADAS (sem camada de texto) lidas por OCR ANTES de apontar
+    // "sem assinatura": cada DFD fica "pendente" até a leitura; ao ler, a assinatura é mesclada no
+    // cache (preserva edições feitas nesse meio-tempo) e a UNIDADE é prevista pelo assinante.
+    if (paraOcr.length > 0) setOcrProgresso({ feito: 0, total: paraOcr.length });
+    for (let k = 0; k < paraOcr.length; k++) {
+      const { i, dfd } = paraOcr[k];
+      if (docRef.current !== doc) return; // outro protocolo foi aberto — aborta
+      if (!ocrTentadoRef.current.has(i)) {
+        ocrTentadoRef.current.add(i);
+        const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
+        if (docRef.current !== doc) return;
+        if (ocr.length > 0) {
+          setParsed((m) => {
+            const cur = m.get(i);
+            return cur ? new Map(m).set(i, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
+          });
+          // As assinaturas não são editáveis → a cópia local basta p/ prever a unidade.
+          refinarUnidade(i, { ...dfd, assinaturas: mesclarAssinaturasOcr(dfd.assinaturas, ocr) });
+        }
+      }
+      setOcrPendente((s) => {
+        const n = new Set(s);
+        n.delete(i);
+        return n;
+      });
+      setOcrProgresso({ feito: k + 1, total: paraOcr.length });
+    }
+    setOcrProgresso(null);
     setAnalisando(false);
+  }
+
+  /** Prevê a UNIDADE do DFD pela ASSINATURA (lógica única `preverUnidadeDoDfd`, todas as formas —
+   * texto e OCR). Só PREENCHE quando ainda está sem unidade (não sobrescreve escolha manual). */
+  function refinarUnidade(i: number, dfd: DfdParseado) {
+    const refino = preverUnidadeDoDfd(dfd, orgaos, reparticoes);
+    if (refino == null) return;
+    setDfdRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
+    setAutoRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
   }
 
   function fechar() {
@@ -384,16 +440,17 @@ export function ProtocoloUploadForm({
   const estadoBase = (idx: number): EstadoDfd => {
     if (errosParse.has(idx)) return "erro"; // falha de leitura (ex.: tabela incompleta)
     const d = parsed.get(idx);
-    if (!d) return "pendente";
+    if (!d || ocrPendente.has(idx)) return "pendente"; // ainda lendo (texto ou assinatura por OCR)
     const compAss = comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria });
     // Assinatura não conferida — bloqueia só se `dfd.assinatura` estiver numa importância que bloqueia (regra 6).
     const assRes = confereAssinatura(idx, d);
     if (bloqueiaAssinatura(assRes, compAss)) return "erro";
     // Avaliação configurável: bloqueantes (bloqueia) → erro; atenções (avisa/automático,
     // incl. DFD-R sem referência e quantidade) → âmbar.
-    const av = avaliarDfd({ ...d, reparticaoId: dfdRepIds[idx] }, regras, { categoria });
+    const av = avaliarDfd({ ...d, reparticaoId: dfdRepIds[idx], anoPca }, regras, { categoria });
     if (av.bloqueantes.length > 0) return "erro";
-    const assAtencao = assRes.status === "erro" && compAss === "avisa";
+    // Atenção: assinatura não conferida em nível "avisa" OU reconhecida mas pendente de validação.
+    const assAtencao = (assRes.status === "erro" && compAss === "avisa") || (assinaturaPendenteValidacao(assRes) && compAss !== "ignora");
     const atencao = av.atencoes.length > 0 || assAtencao;
     return estadoDfd(0, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx), atencao);
   };
@@ -417,7 +474,7 @@ export function ProtocoloUploadForm({
   const resumoDfd = (idx: number): ResumoEstado | undefined => {
     if (descartados.has(idx)) return undefined; // célula mostra "Descartado" (rótulo do estado)
     const dup = dupComp !== "ignora" && dupPendente(idx);
-    const d = parsed.get(idx);
+    const d = ocrPendente.has(idx) ? undefined : parsed.get(idx);
     const rep = reparticoes.find((r) => r.id === dfdRepIds[idx]) ?? null;
     const msgs = d ? mensagensDoDfd(d, rep, anoPca, regras, categoria, []).filter((m) => m.chave !== "dfd.anoPca") : [];
     if (dup)
@@ -432,6 +489,14 @@ export function ProtocoloUploadForm({
   // Tipos de assinatura do DFD (Centi/Dropsigner/Adobe). Antes do parse completo, cai nas A/B do índice.
   const assinaturasDfd = (idx: number): GrupoAssinatura[] =>
     gruposAssinatura(parsed.get(idx)?.assinaturas ?? index?.dfds[idx]?.assinaturas ?? []);
+
+  // Quem validou a assinatura (auto/equipe) — só após o parse e a leitura por OCR.
+  const validacaoDfd = (idx: number): "auto" | "equipe" | null => {
+    const d = parsed.get(idx);
+    if (!d || ocrPendente.has(idx)) return null;
+    const r = confereAssinatura(idx, d);
+    return r.status === "ok" ? r.origem : null;
+  };
 
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
@@ -453,8 +518,9 @@ export function ProtocoloUploadForm({
   }
 
   /** Assinatura ACHATADA (Dropsigner/Foxit/Adobe sem camada de texto) — se o DFD ficou sem assinatura
-   * NOMEADA de texto (`precisaOcr`), tenta o OCR UMA vez e MESCLA no parse cacheado (preserva edições).
-   * Lazy/best-effort: roda só ao abrir/protocolar (nunca no background) e nunca trava o import. */
+   * NOMEADA de texto (`precisaOcr`) e o OCR ainda não foi tentado (a análise em background lê todos em
+   * fila; abrir um DFD antes disso adianta a leitura dele), tenta UMA vez e MESCLA no parse cacheado
+   * (preserva edições). Best-effort: nunca trava o import. */
   async function mesclarOcrSePreciso(idx: number, d: DfdParseado | null): Promise<void> {
     const doc = docRef.current;
     const di = index?.dfds[idx];
@@ -463,11 +529,19 @@ export function ProtocoloUploadForm({
     if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
     const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
-    if (ocr.length > 0)
+    if (ocr.length > 0) {
       setParsed((m) => {
         const cur = m.get(idx);
         return cur ? new Map(m).set(idx, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
       });
+      refinarUnidade(idx, { ...d, assinaturas: mesclarAssinaturasOcr(d.assinaturas, ocr) });
+    }
+    setOcrPendente((s) => {
+      if (!s.has(idx)) return s;
+      const n = new Set(s);
+      n.delete(idx);
+      return n;
+    });
   }
 
   async function abrir(idx: number) {
@@ -541,6 +615,17 @@ export function ProtocoloUploadForm({
     if (idxs.length === 0) return;
     if (bulkCampo === "reparticao") {
       setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? bulkRep : x)));
+    } else if (bulkCampo === "tipo") {
+      if (!bulkTipo) return;
+      const tipo = TIPO_DFD_ROTULO[bulkTipo as (typeof TIPOS_DFD)[number]];
+      for (const i of idxs) {
+        const d = await garantirParse(i);
+        if (!d) continue;
+        setParsed((m) => {
+          const cur = m.get(i) ?? d;
+          return new Map(m).set(i, { ...cur, tipo });
+        });
+      }
     } else {
       const cfg = bulkCampo === "prioridade" ? TRATAVEIS[0] : bulkCampo === "previsao" ? TRATAVEIS[1] : TRATAVEIS[2];
       const texto =
@@ -611,8 +696,8 @@ export function ProtocoloUploadForm({
             continue;
           }
         }
-        // Assinatura achatada — DFD sem assinatura NOMEADA de texto: tenta o OCR e mescla (uma vez). A
-        // assinatura lida entra no `full` → é conferida (gate de assinatura) e GRAVADA com o DFD.
+        // Assinatura achatada — DFD que a análise não chegou a ler (além do teto `CAP_ANALISE`): tenta o
+        // OCR e mescla (uma vez). A assinatura lida entra no `full` → é conferida e GRAVADA com o DFD.
         if (precisaOcr(full.assinaturas) && !ocrTentadoRef.current.has(i) && doc) {
           ocrTentadoRef.current.add(i);
           setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
@@ -626,6 +711,7 @@ export function ProtocoloUploadForm({
         const faltas = faltasObrigatorias(
           {
             reparticaoId: dfdRepIds[i],
+            anoPca,
             itens: full.itens,
             secoes: full.secoes,
             tipo: full.tipo,
@@ -720,11 +806,12 @@ export function ProtocoloUploadForm({
     estado: estado(idx),
     resumo: resumoDfd(idx),
     assinaturas: assinaturasDfd(idx),
+    validacao: validacaoDfd(idx),
     estadoMotivo: errosParse.get(idx) ?? null,
     situacao: SITUACAO[classificar(di.numero)],
   }));
   const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
-  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // DFD-R sem referência
+  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // não bloqueiam (avisos)
   const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
   // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
   const dfdsComErro = linhasErro.length;
@@ -799,6 +886,7 @@ export function ProtocoloUploadForm({
         reparticaoId: dfdRepIds[idx],
         assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null,
         tipo: d.tipo,
+        anoPca,
       },
       regras,
       { categoria },
@@ -826,7 +914,11 @@ export function ProtocoloUploadForm({
           numero: index?.dfds[l.key].numero ?? "?",
           planejamento: l.planejamento,
           tipo: parsed.get(l.key)?.tipo ?? null,
-          faltas: [FALTA_REFERENCIA_RENOVACAO],
+          // Todas as ATENÇÕES do DFD (DFD-R sem referência, assinatura a validar, pontos em "avisa"…).
+          faltas: (resumoDfd(l.key)?.titulo ?? "")
+            .split("\n")
+            .filter((t) => t.startsWith("Atenção: "))
+            .map((t) => t.slice("Atenção: ".length)),
         }))
       : []),
   ];
@@ -850,6 +942,16 @@ export function ProtocoloUploadForm({
             {reparticoes.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.codigo} · {r.nome}
+              </option>
+            ))}
+          </select>
+        )}
+        {bulkCampo === "tipo" && (
+          <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkTipo} onChange={(e) => setBulkTipo(e.target.value)}>
+            <option value="">— Tipo do DFD —</option>
+            {TIPOS_DFD.map((t) => (
+              <option key={t} value={t}>
+                {TIPO_DFD_ROTULO[t]}
               </option>
             ))}
           </select>
@@ -890,6 +992,7 @@ export function ProtocoloUploadForm({
           value={bulkCampo}
           options={[
             { value: "reparticao", label: "Repartição" },
+            { value: "tipo", label: "Tipo" },
             { value: "prioridade", label: "Prioridade" },
             { value: "previsao", label: "Previsão" },
             { value: "fundamentacao", label: "Fund. legal" },
@@ -1075,6 +1178,8 @@ export function ProtocoloUploadForm({
                         onSecoesChange={onSecoesAberto}
                         onRefsChange={onRefsAberto}
                         onCamposChange={onCamposAberto}
+                        onTipoChange={(tipo) => onCamposAberto({ tipo })}
+                        onAssinaturasChange={(assinaturas) => onCamposAberto({ assinaturas })}
                       />
                     )}
                   </div>
@@ -1101,6 +1206,15 @@ export function ProtocoloUploadForm({
                       tipo={dfdAberto.tipo}
                       editavel
                       onChange={(patch) => onItemAberto((painel as { idx: number }).idx, patch)}
+                      onRemover={() => {
+                        const idx = (painel as { idx: number }).idx;
+                        setPainel(null);
+                        setParsed((m) => {
+                          const d = m.get(abertoIdx);
+                          return d ? new Map(m).set(abertoIdx, removerItemDfd(d, idx)) : m;
+                        });
+                        setEditados((s) => new Set(s).add(abertoIdx));
+                      }}
                     />
                   ) : (
                     <MensagensDfd
@@ -1124,10 +1238,12 @@ export function ProtocoloUploadForm({
               ) : (
               <span
                 className="text-[12px]"
-                style={{ color: bloqueadoPorRegra ? "var(--danger)" : "var(--muted)" }}
+                style={{ color: bloqueadoPorRegra || !numero.trim() ? "var(--danger)" : "var(--muted)" }}
               >
                 {protocolarDesligado
                   ? "Protocolação desabilitada nas Configurações"
+                  : !numero.trim()
+                    ? "Informe o número do processo para protocolar"
                   : !gateTrava.ok
                     ? gateTrava.motivos.join(" ")
                     : anoPcaBloqueia
@@ -1136,7 +1252,9 @@ export function ProtocoloUploadForm({
                     ? "Defina a unidade do processo para protocolar"
                     : !temDfds
                       ? "Sem DFDs — cria só o protocolo."
-                      : analisando
+                      : ocrProgresso
+                        ? `Lendo assinaturas por OCR (${ocrProgresso.feito}/${ocrProgresso.total})...`
+                        : analisando
                         ? `Analisando ${index?.dfds.length} DFD(s)...`
                         : semErroBloqueia
                           ? `${dfdsComErro} DFD(s) com erro`
@@ -1221,6 +1339,8 @@ export function ProtocoloUploadForm({
               observacao={observacao}
               valorCapa={extra.valorCapa}
               localReparticao={extra.localReparticao}
+              assuntos={opcoesAssunto(regras, assunto)}
+              numeroEditavel={origemPdf && index?.protocolo.numero == null}
               modo={origemPdf ? "cadeado" : "criar"}
               onChange={(c, v) => {
                 if (c === "numero") setNumero(v);
@@ -1285,7 +1405,7 @@ export function ProtocoloUploadForm({
         toggle={
           temAtencao
             ? {
-                label: `Incluir ${linhasAtencao.length} DFD-R sem referência (atenção) no relatório`,
+                label: `Incluir ${linhasAtencao.length} DFD(s) em atenção no relatório`,
                 checked: incluirAtencao,
                 onChange: setIncluirAtencao,
               }

@@ -233,3 +233,18 @@ describe("lerAssinaturasPorOcr (orquestração com motor falso)", () => {
     assert.deepEqual(await lerAssinaturasPorOcr(motorFalso({}), [1, 2]), []);
   });
 });
+
+// DFD 142 (pd101820): o OCR juntou o nome IMPRESSO ao lado com o do carimbo → a MESMA assinatura
+// aparecia duas vezes (uma com o nome repetido). Deve sair UMA.
+describe("assinaturasDeOcr — sem duplicar a mesma assinatura", () => {
+  it("nome repetido na linha é colapsado", () => {
+    assert.equal(limparNomeOcr("EDILENE ALVES DA CRUZ EDILENE ALVES DA CRUZ"), "EDILENE ALVES DA CRUZ");
+  });
+  it("leituras com a mesma data/hora e CPF viram UMA assinatura", () => {
+    const b1 = "Assinado eletronicamente por:\nEDILENE ALVES DA CRUZ\nCPF: ***.246.411-**\nData: 30/06/2026 16:53:38 -03:00";
+    const b2 = "Assinado eletronicamente por:\nEDILENE ALVES DA CRUZ SECRETARIA INTERINA\nCPF: ***.246.411-**\nData: 30/06/2026 16:53:38 -03:00";
+    const r = assinaturasDeOcr({ blocos: [b1, b2, b1], pagina: "" });
+    assert.equal(r.length, 1);
+    assert.equal(r[0].nome, "EDILENE ALVES DA CRUZ");
+  });
+});

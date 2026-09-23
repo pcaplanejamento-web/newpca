@@ -105,9 +105,8 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("canvas 2d indisponível");
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      // pdf.js 6: passar o `canvas` (o `canvasContext` é legado).
+      await page.render({ canvas, viewport }).promise;
       page.cleanup();
       return canvas;
     },

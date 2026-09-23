@@ -15,7 +15,7 @@ import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
-const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber" };
+const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
 
 /**
  * Linha normalizada de um DFD para a **planilha única** (`PlanilhaDfds`) — o MESMO
@@ -39,6 +39,8 @@ export type LinhaDfd = {
   resumo?: ResumoEstado;
   /** Tipos de assinatura presentes no DFD (Centi/Dropsigner/Adobe) — coluna "Assinatura". */
   assinaturas?: GrupoAssinatura[];
+  /** Quem validou a assinatura: "auto" (o sistema conferiu) / "equipe" (validada à mão). */
+  validacao?: "auto" | "equipe" | null;
   situacao?: string | null; // Novo/Substitui/Move (só na importação)
   protocolo?: string | null; // nº do processo (só na aba DFDs)
 };
@@ -160,17 +162,23 @@ export function PlanilhaDfds({
       key: "assinatura",
       header: "Assinatura",
       minWidth: 104,
-      value: (r) => (r.assinaturas ?? []).map((g) => ASSINATURA_ROTULO[g]).join(" ") || "—",
+      value: (r) =>
+        `${(r.assinaturas ?? []).map((g) => ASSINATURA_ROTULO[g]).join(" ") || "—"}${r.validacao ? ` (${r.validacao})` : ""}`,
       render: (r) => {
         const gs = r.assinaturas ?? [];
         if (gs.length === 0) return <span className="text-faint">—</span>;
         return (
-          <span className="inline-flex flex-wrap gap-1">
+          <span className="inline-flex flex-wrap items-center gap-1">
             {gs.map((g) => (
               <Badge key={g} tone={ASSINATURA_TONE[g]}>
                 {ASSINATURA_ROTULO[g]}
               </Badge>
             ))}
+            {r.validacao && (
+              <span className="text-[11px] font-semibold" style={{ color: r.validacao === "auto" ? "var(--ok)" : "var(--info)" }}>
+                ({r.validacao})
+              </span>
+            )}
           </span>
         );
       },

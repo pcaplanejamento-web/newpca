@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { editavelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { useEffect, useRef, useState } from "react";
+import { editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import {
   type CampoTratavel,
   type MensagemDfd,
   mensagensDfd,
   setTextoSecao,
+  situacaoSecao,
   textoSecao,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
@@ -15,18 +16,21 @@ import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/norm
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
+  desfazerValidacaoEquipe,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
   solicitanteDeResultado,
   validarAssinatura,
+  validarAssinaturaPelaEquipe,
 } from "@/lib/reparticao-responsaveis";
+import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
-import { Checkbox, TextField } from "./Field";
+import { Checkbox, TextArea, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconBuilding } from "./icons";
+import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
 
 type Rep = {
@@ -85,7 +89,11 @@ export function toVisual(d: DfdParseado, rep: Rep | null, anoPca?: number | null
     totalItens: d.itens.length,
     itens: d.itens,
     secoes: d.secoes,
-    assinaturas: { lista: d.assinaturas, solicitante: solicitanteDeResultado(res) },
+    assinaturas: {
+      lista: d.assinaturas,
+      solicitante: solicitanteDeResultado(res),
+      validada: res.status === "ok" ? { assinatura: res.assinatura, origem: res.origem } : null,
+    },
   };
 }
 
@@ -123,7 +131,12 @@ export function mensagensDoDfd(
       numeroAta: d.numeroAta,
       numeroLicitacao: d.numeroLicitacao,
       anoPca: anoPca !== undefined ? anoPca : d.anoPca,
-      assinatura: { status: res.status, motivo: res.status === "erro" ? res.motivo : null },
+      assinatura: {
+        status: res.status,
+        motivo: res.status === "erro" ? res.motivo : null,
+        origem: res.status === "ok" ? res.origem : undefined,
+        responsavel: res.status === "ok" ? res.responsavel.nome : null,
+      },
     },
     regras,
     { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
@@ -164,6 +177,8 @@ export function DfdConferir({
   onSecoesChange,
   onRefsChange,
   onCamposChange,
+  onTipoChange,
+  onAssinaturasChange,
   onItemClick,
 }: {
   dfd: DfdParseado;
@@ -194,6 +209,11 @@ export function DfdConferir({
   /** Edição dos campos de CONTEÚDO do cabeçalho (objeto/órgão/setor/responsável/matrícula/e-mail/
    * telefone) com cadeado por campo. Ausente = cabeçalho não editável (identificadores nunca mudam). */
   onCamposChange?: (patch: Partial<CamposCabecalhoDfd>) => void;
+  /** Define/altera o TIPO do DFD (DFD-S/R/O/E) por seleção — muitos formulários não trazem o
+   * "Tipo DFD". Ausente = só exibe. */
+  onTipoChange?: (tipo: string | null) => void;
+  /** Validação MANUAL da assinatura pela EQUIPE (ou desfazer). Ausente = só exibe. */
+  onAssinaturasChange?: (assinaturas: DfdParseado["assinaturas"]) => void;
   /** Clique numa linha de item (Seção 4) → abre o detalhe do item ao lado (renderizado pelo pai). */
   onItemClick?: (idx: number) => void;
 }) {
@@ -258,6 +278,17 @@ export function DfdConferir({
   const roPrev = readOnly || !editavelDe(regras, "dfd.previsao");
   const roFund = readOnly || !editavelDe(regras, "dfd.fundamentacao");
   const roRefs = readOnly || !editavelDe(regras, "dfd.referenciaRenovacao");
+  const roTipo = readOnly || !onTipoChange || !editavelDe(regras, "dfd.tipo");
+  // Conferência da assinatura contra a unidade escolhida (auto) + validação manual pela equipe.
+  const resAss = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
+    exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
+  });
+  const podeValidar = !readOnly && !!onAssinaturasChange;
+  const nomesResp = rep
+    ? [...new Set([...rep.responsaveis.padroes, ...rep.responsaveis.temporarios].map((r) => r.nome).filter(Boolean))]
+    : [];
+  const [respSel, setRespSel] = useState("");
+  const tipoSel = tipoCurtoDfd(dfd.tipo) ?? "";
 
   // Cadeado POR CAMPO do cabeçalho (conteúdo editável); os identificadores nunca mudam.
   const { abertos: abCab, alternar: altCab } = useCadeados<CampoCabK>();
@@ -276,6 +307,11 @@ export function DfdConferir({
   // reconhece só o MÊS por extenso e completa o ano com o do PCA (ponto 8).
   const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca).valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
+  // Justificativa (§3) — obrigatória; editável aqui (antes não havia onde tratar a falta).
+  const JUST = { kw: "JUSTIFICATIVA", titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", numero: 3 };
+  const just = textoSecao(dfd.secoes, JUST.kw);
+  // Mesma régua dos erros (`situacaoSecao`): fundamentação precisa citar a norma.
+  const fundOk = situacaoSecao(dfd.secoes, fCfg.kw) === "ok";
   // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
   // no anual (não deixa o mês grudar como se fosse mês quando é só "ANUAL").
   const anual = !!prev && /^ANUAL(\/|$)/.test(prev);
@@ -332,7 +368,7 @@ export function DfdConferir({
         </select>
         {autoMatch && (
           <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
-            Unidade detectada automaticamente pelo setor. Confirme ou ajuste.
+            Unidade identificada automaticamente pela assinatura. Confirme ou ajuste.
           </Callout>
         )}
         {orgaoDivergente && (
@@ -343,6 +379,27 @@ export function DfdConferir({
         )}
       </div>
 
+      {/* TIPO do DFD (DFD-S/R/O/E) — obrigatório conforme o nível do ADM (`dfd.tipo`); por seleção. */}
+      <div data-ancora="tipo">
+        <label className={labelCls} htmlFor="dfd-tipo">
+          Tipo do DFD <span style={{ color: "var(--danger)" }}>*</span>
+        </label>
+        <select
+          id="dfd-tipo"
+          className={inputCls}
+          value={tipoSel}
+          disabled={roTipo}
+          onChange={(e) => onTipoChange?.(e.target.value ? TIPO_DFD_ROTULO[e.target.value as (typeof TIPOS_DFD)[number]] : null)}
+        >
+          <option value="">— Selecione o tipo —</option>
+          {TIPOS_DFD.map((t) => (
+            <option key={t} value={t}>
+              {TIPO_DFD_ROTULO[t]}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Cabeçalho — conteúdo EDITÁVEL (cadeado por campo, como os itens). Só aparece ao editar
           (import / gravado destravado); os IDENTIFICADORES (número/planejamento/tipo) são imutáveis.
           O DfdView abaixo reflete tudo em só-leitura. */}
@@ -350,7 +407,7 @@ export function DfdConferir({
         <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="cabecalho">
           <h3 className="mb-1 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <p className="mb-3 text-[12px] text-muted">
-            Destrave um campo para corrigir. Número, planejamento e tipo do DFD são imutáveis.
+            Destrave um campo para corrigir. Número e planejamento do DFD são imutáveis (o tipo é escolhido acima).
           </p>
           <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
             {/* Identificadores (só-leitura): mostrados aqui porque a Seção 1 só-leitura fica oculta ao editar. */}
@@ -431,10 +488,28 @@ export function DfdConferir({
             </div>
           </div>
 
+          {/* JUSTIFICATIVA (§3) */}
+          <div className="sm:col-span-2" data-ancora="justificativa">
+            <span className="mb-1.5 block text-[13px] font-medium text-text-2">
+              Justificativa da necessidade{" "}
+              <span className="ml-2 text-[10px] font-semibold uppercase" style={{ color: just.trim() ? "var(--ok)" : "var(--danger)" }}>
+                {just.trim() ? "ok" : "tratar"}
+              </span>
+            </span>
+            <TextArea
+              aria-label="Justificativa da necessidade"
+              rows={3}
+              value={just}
+              disabled={readOnly}
+              onChange={(e) => onSecoesChange(setTextoSecao(dfd.secoes, JUST, e.target.value))}
+              placeholder="Descreva a necessidade da contratação."
+            />
+          </div>
+
           {/* FUNDAMENTAÇÃO */}
           <div className="sm:col-span-2" data-ancora="fundamentacao">
             <span className="mb-1.5 block text-[13px] font-medium text-text-2">
-              Fundamentação legal <Tag campo="fundamentacao" ok={fund.trim().length > 0} />
+              Fundamentação legal <Tag campo="fundamentacao" ok={fundOk} />
             </span>
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-[200px] flex-1">
@@ -446,7 +521,7 @@ export function DfdConferir({
                   placeholder="Ex.: Lei 14.133/2021"
                 />
               </div>
-              {!roFund && !fund.trim() && (
+              {!roFund && !fundOk && (
                 <button
                   type="button"
                   className="rounded-control border border-border-2 px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-soft"
@@ -459,6 +534,72 @@ export function DfdConferir({
           </div>
         </div>
       </section>
+
+      {/* VALIDAÇÃO DA ASSINATURA — "auto" quando o sistema confere o assinante com o responsável da
+          unidade; senão a EQUIPE confere o PDF e valida (escolhendo o responsável) ou desfaz. */}
+      {resAss.status !== "sem-assinatura" && (
+        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="assinatura">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-text">
+            <IconShield className="h-4 w-4 text-accent" /> Validação da assinatura
+          </h3>
+          {resAss.status === "ok" ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: resAss.origem === "auto" ? "var(--ok)" : "var(--info)" }}>
+                <IconCheck className="h-4 w-4" />
+                {resAss.origem === "auto" ? "Validada automaticamente (auto)" : "Validada pela equipe"} — {resAss.responsavel.nome}
+              </span>
+              {resAss.origem === "equipe" && podeValidar && (
+                <Button variant="ghost" onClick={() => onAssinaturasChange?.(desfazerValidacaoEquipe(dfd.assinaturas))}>
+                  Desfazer validação
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[13px]" style={{ color: resAss.status === "erro" ? "var(--danger)" : "var(--warn)" }}>
+                {resAss.status === "erro"
+                  ? resAss.motivo
+                  : resAss.status === "ocr"
+                    ? "Assinatura lida por OCR não confere com o responsável da unidade."
+                    : "Assinatura Dropsigner reconhecida só pelo código (sem o nome do assinante)."}{" "}
+                Confira o PDF assinado e, se estiver correto, valide pela equipe.
+              </p>
+              {podeValidar &&
+                (!rep ? (
+                  <p className="text-xs text-muted">Selecione a unidade para validar a assinatura.</p>
+                ) : nomesResp.length === 0 ? (
+                  <p className="text-xs text-muted">A unidade não tem responsável por DFDs cadastrado — cadastre-o para validar.</p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      aria-label="Responsável que assinou"
+                      className={inputCls}
+                      style={{ width: "auto", flex: "1 1 220px" }}
+                      value={respSel}
+                      onChange={(e) => setRespSel(e.target.value)}
+                    >
+                      <option value="">— Responsável que assinou —</option>
+                      {nomesResp.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      disabled={!respSel}
+                      onClick={() => {
+                        onAssinaturasChange?.(validarAssinaturaPelaEquipe(dfd.assinaturas, respSel));
+                        setRespSel("");
+                      }}
+                    >
+                      Validar assinatura (equipe)
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Referências da RENOVAÇÃO (DFD-R) — contrato/ata/licitação. Aponta a ausência
           (não trava) e permite preencher à mão. Só aparece para DFD-R. */}
