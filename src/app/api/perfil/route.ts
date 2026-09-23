@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { perfilSchema } from "@/lib/auth-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { normalizarApelido } from "@/lib/pessoa";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function PATCH(req: Request) {
   const corpo = await parseCorpo(perfilSchema, req);
   if ("resp" in corpo) return corpo.resp;
 
-  const { nome, email, matricula, foto } = corpo.data;
+  const { nome, email, apelido, matricula, foto } = corpo.data;
   const db = getDb();
 
   // E-mail é único: rejeita se já pertence a outro usuário.
@@ -29,6 +30,7 @@ export async function PATCH(req: Request) {
   const set = {
     nome,
     email,
+    ...(apelido !== undefined ? { apelido: normalizarApelido(apelido) } : {}),
     matricula: matricula ? matricula : null,
     ...(foto !== undefined ? { foto: foto ? foto : null } : {}),
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,

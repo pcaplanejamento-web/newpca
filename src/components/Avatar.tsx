@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { avatarVar } from "@/lib/semantic";
 
-// Avatar: mostra a foto cadastrada; sem foto (ou se falhar), cai para as
-// iniciais sobre a cor da pessoa (token semântico §3, via avatarVar) — mesma
-// pessoa → mesma cor, e o ADM pode trocar a paleta nos tokens.
+// Avatar: mostra a foto cadastrada (a URL da rota da foto, com cache); sem foto (ou se falhar), cai
+// para as iniciais sobre a cor da pessoa (token semântico §3, via avatarVar) — mesma pessoa → mesma
+// cor, e o ADM pode trocar a paleta nos tokens.
 
 export function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/u).filter(Boolean);
@@ -15,6 +15,7 @@ export function iniciais(nome: string): string {
 }
 
 const DIM = {
+  xs: "h-[22px] w-[22px] text-[9px]",
   sm: "h-[26px] w-[26px] text-[10px]",
   md: "h-8 w-8 text-xs",
   lg: "h-[34px] w-[34px] text-[13px]",
@@ -32,17 +33,19 @@ export function Avatar({
   size?: keyof typeof DIM;
   className?: string;
 }) {
-  const [erro, setErro] = useState(false);
+  // A foto que FALHOU ao carregar (cai nas iniciais); outra foto (nova URL) volta a ser tentada.
+  const [falhou, setFalhou] = useState<string | null>(null);
 
-  if (foto && !erro) {
+  if (foto && foto !== falhou) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      // biome-ignore lint/performance/noImgElement: foto é data-URL base64 redimensionada no cliente; next/image não otimiza data-URL.
+      // biome-ignore lint/performance/noImgElement: a foto é a URL da rota da foto (cache por versão) ou o data-URL recém-escolhido no Perfil; next/image não agrega nada aqui.
       <img
         src={foto}
         alt={nome}
         title={nome}
-        onError={() => setErro(true)}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFalhou(foto)}
         className={`${DIM[size]} shrink-0 rounded-full object-cover ${className}`}
       />
     );

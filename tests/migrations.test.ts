@@ -302,6 +302,24 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(p?.situacao_id, null, "excluir a situação deveria limpar a do protocolo");
   });
 
+  it("0032 cria o apelido do usuário e as passagens (rastro do DFD sobrescrito) por protocolo", () => {
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('usuarios')").includes("apelido"), "coluna apelido ausente");
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('dfd_passagens')");
+    for (const c of ["protocolo_id", "dfd_numero", "planejamento", "tipo", "sigla", "total_itens", "valor_total", "usuario_id", "criado_em"])
+      assert.ok(cols.includes(c), `coluna ausente em dfd_passagens: ${c}`);
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["dfd_passagens_uq", "dfd_passagens_numero_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO dfd_protocolos (id, numero) VALUES (991, 'P-991/2026')");
+    db.exec("INSERT INTO dfd_passagens (protocolo_id, dfd_numero, valor_total) VALUES (991, '1525', 100)");
+    // Uma passagem por (protocolo, nº do DFD): a segunda do MESMO par é rejeitada (o código faz upsert).
+    assert.throws(() => db.exec("INSERT INTO dfd_passagens (protocolo_id, dfd_numero) VALUES (991, '1525')"));
+    // Excluir o protocolo apaga o rastro dele (cascade).
+    db.exec("DELETE FROM dfd_protocolos WHERE id = 991");
+    const n = db.prepare("SELECT COUNT(*) AS n FROM dfd_passagens WHERE protocolo_id = 991").get() as { n: number };
+    assert.equal(n.n, 0, "excluir o protocolo deveria apagar as passagens dele");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -83,6 +83,18 @@ describe("dfd-validation", () => {
     assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", rows: [] }).success, false);
   });
 
+  it("assinatura ADICIONADA pela equipe (manual): só data real dd/mm/aaaa, não futura (ou nenhuma)", () => {
+    const comAss = (data: string, fonte = "manual") =>
+      editarDfdSchema.safeParse({ assinaturas: [{ nome: "FULANO", fonte, data, validacao: { por: "equipe", responsavel: "FULANO" } }] }).success;
+    assert.equal(comAss("12/03/2026"), true);
+    assert.equal(comAss(""), true);
+    assert.equal(comAss("31/02/2026"), false);
+    assert.equal(comAss("12/03/2999"), false);
+    assert.equal(comAss("2026-03-12"), false);
+    // As lidas do PDF mantêm o formato próprio (hora, fuso) — sem essa régua.
+    assert.equal(comAss("31/08/2026 16:20:00 -03:00", "dropsigner"), true);
+  });
+
   it("dfdOpSchema start-dfd: coerce de numero + protocoloId/totalItens opcionais", () => {
     const r = dfdOpSchema.parse({
       mode: "start-dfd",

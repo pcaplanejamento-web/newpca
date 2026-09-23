@@ -338,18 +338,57 @@ export function assinaturaPendenteValidacao(r: ResultadoAssinatura): boolean {
   return r.status === "ocr" || r.status === "dropsigner";
 }
 
+// ---- DATA da assinatura (a equipe informa ao ADICIONAR/validar uma assinatura) ----
+
+/** "dd/mm/aaaa" é uma data REAL (sem 31/02), de 2000 em diante e NÃO futura (`hojeIso` = hoje "aaaa-mm-dd"
+ * em Brasília; +1 dia de folga p/ fuso). Puro. */
+export function dataAssinaturaValida(dataBR: string, hojeIso: string): boolean {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dataBR.trim());
+  if (!m) return false;
+  const [d, mo, a] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(a, mo - 1, d));
+  if (dt.getUTCFullYear() !== a || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d || a < 2000) return false;
+  const [ha, hm, hd] = hojeIso.split("-").map(Number);
+  return dt.getTime() <= Date.UTC(ha, hm - 1, hd) + 86_400_000;
+}
+
+/** "aaaa-mm-dd" (campo de data) → "dd/mm/aaaa" gravado na assinatura; `null` se inválida/futura. Puro. */
+export function dataAssinaturaDeIso(iso: string, hojeIso: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  const br = `${m[3]}/${m[2]}/${m[1]}`;
+  return dataAssinaturaValida(br, hojeIso) ? br : null;
+}
+
+/** Aplica a DATA informada pela equipe numa assinatura: mantém a lida quando é o MESMO dia (não perde a
+ * hora/fuso do certificado); senão grava a nova "dd/mm/aaaa". Puro. */
+const comData = (a: Assinatura, data: string | undefined): Assinatura => (data && !a.data.trim().startsWith(data) ? { ...a, data } : a);
+
 /**
- * Validação MANUAL pela EQUIPE: o usuário atesta que `responsavel` (da unidade) assinou. Marca a 1ª
- * assinatura NOMEADA (senão a 1ª); sem nenhuma assinatura lida (ex.: OCR falhou), cria uma
- * `fonte:"manual"` com o nome do responsável. Remove validações anteriores (uma só vale). Puro.
+ * Validação MANUAL pela EQUIPE: o usuário atesta que `responsavel` (da unidade) assinou — e, opcionalmente,
+ * a DATA da assinatura ("dd/mm/aaaa"). Marca a 1ª assinatura NOMEADA (senão a 1ª); sem nenhuma assinatura
+ * lida (ex.: OCR falhou), ADICIONA uma `fonte:"manual"` com o nome do responsável e a data. Remove
+ * validações anteriores (uma só vale). Puro.
  */
-export function validarAssinaturaPelaEquipe(assinaturas: Assinatura[], responsavel: string): Assinatura[] {
+export function validarAssinaturaPelaEquipe(assinaturas: Assinatura[], responsavel: string, data?: string): Assinatura[] {
   const limpas = desfazerValidacaoEquipe(assinaturas);
   const validacao = { por: "equipe" as const, responsavel: responsavel.trim() };
+  const d = data?.trim() || undefined;
   if (limpas.length === 0)
-    return [{ nome: responsavel.trim(), eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: "", url: "", fonte: "manual", validacao }];
+    return [{ nome: responsavel.trim(), eCpf: "", usuario: "", local: "", data: d ?? "", ip: "", codigo: "", url: "", fonte: "manual", validacao }];
   const i = Math.max(0, limpas.findIndex((a) => a.nome.trim()));
-  return limpas.map((a, j) => (j === i ? { ...a, validacao } : a));
+  return limpas.map((a, j) => (j === i ? { ...comData(a, d), validacao } : a));
+}
+
+/** Altera a DATA da assinatura VALIDADA pela equipe (a que tem a marca). Vazio limpa só a da assinatura
+ * ADICIONADA pela equipe (`manual`) — a data lida do PDF fica. Puro. */
+export function definirDataAssinaturaEquipe(assinaturas: Assinatura[], data: string): Assinatura[] {
+  const d = data.trim();
+  return assinaturas.map((a) => {
+    if (a.validacao?.por !== "equipe") return a;
+    if (!d) return a.fonte === "manual" ? { ...a, data: "" } : a;
+    return comData(a, d);
+  });
 }
 
 /** Desfaz a validação pela equipe (remove a marca e a assinatura `manual` criada por ela). Puro. */

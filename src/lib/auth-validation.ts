@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APELIDO_MAX } from "./pessoa.ts";
 
 export const cadastroSchema = z.object({
   nome: z.string().trim().min(2, "Informe seu nome.").max(120),
@@ -23,10 +24,12 @@ const fotoSchema = z
     "Formato de imagem inválido.",
   );
 
-/** Edição do próprio perfil (o usuário). */
+/** Edição do próprio perfil (o usuário). `foto` ausente = mantém a atual ("" remove). */
 export const perfilSchema = z.object({
   nome: z.string().trim().min(2, "Informe seu nome.").max(120),
   email: z.string().trim().toLowerCase().email("E-mail inválido.").max(160),
+  // Apelido: o nome de EXIBIÇÃO no sistema (vazio = volta a valer o nome).
+  apelido: z.string().trim().max(APELIDO_MAX, `Apelido com no máximo ${APELIDO_MAX} caracteres.`).optional(),
   matricula: z.string().trim().max(60).optional(),
   foto: fotoSchema.optional(),
 });

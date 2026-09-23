@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RegrasAvaliacao } from "./avaliacao-core.ts";
 import { avaliarDfd, type CtxConformidade } from "./dfd-tratamento.ts";
+import { dataAssinaturaValida } from "./reparticao-responsaveis.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
@@ -83,7 +84,11 @@ const assinaturaSchema = z.object({
       em: z.string().trim().max(40).optional(),
     })
     .optional(),
-});
+}).refine(
+  // A assinatura ADICIONADA pela equipe só aceita uma data real "dd/mm/aaaa", não futura (ou nenhuma).
+  (a) => a.fonte !== "manual" || !a.data || dataAssinaturaValida(a.data, new Date().toISOString().slice(0, 10)),
+  { message: "Data da assinatura inválida (use dd/mm/aaaa, não futura).", path: ["data"] },
+);
 
 /**
  * Cabeçalho do DFD (SEM os itens — que vão em lotes `start-dfd`/`append-dfd-itens`

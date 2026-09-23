@@ -3,7 +3,7 @@ import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
@@ -69,9 +69,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação) — só preenche um protocolo ainda sem
+  // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação), se ainda for do grupo — só preenche um protocolo ainda sem
   // responsável (a sobrescrita/reenvio mantém o já designado).
-  const r = await iniciarProtocolo(protocolo, a.u.id, reenvio ? null : await responsavelPadraoDe(a.u.id));
+  const r = await iniciarProtocolo(protocolo, a.u.id, reenvio ? null : await responsavelPadraoDe(a.u.id, await getGrupoAtivoId(a.u)));
   // Histórico: no reenvio, as diferenças da CAPA (a mesma régua da comparação); os DFDs registram as suas.
   const detalhe = gravado ? await detalheSeguro(() => detalheEdicaoProtocolo(gravado, protocolo), null) : null;
   await registrarAuditoria({

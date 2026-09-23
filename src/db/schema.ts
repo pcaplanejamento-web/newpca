@@ -80,6 +80,8 @@ export const usuarios = sqliteTable(
     senhaHash: text("senha_hash").notNull(),
     matricula: text("matricula"),
     foto: text("foto"), // data-URL base64 (avatar redimensionado no cliente)
+    // Apelido (perfil) — o nome de EXIBIÇÃO no sistema (Mesa, seletores, cabeçalho); sem ele, o nome.
+    apelido: text("apelido"),
     role: text("role", { enum: ["admin", "gestor", "membro"] })
       .notNull()
       .default("membro"),
@@ -401,6 +403,32 @@ export const dfds = sqliteTable(
     index("dfds_protocolo_idx").on(t.protocoloId),
     index("dfds_orgao_idx").on(t.orgaoId),
   ],
+);
+
+/**
+ * RASTRO do DFD SOBRESCRITO entre protocolos (migração 0032): quando um DFD é sobrescrito por um DFD de
+ * OUTRO protocolo (mesmo número), o protocolo de onde ele SAIU guarda um retrato leve da versão que tinha
+ * (planejamento/tipo/sigla/itens/valor) — exibido em cinza, separado, apontando o protocolo ATUAL do DFD
+ * (sempre o último da cadeia: o `dfds.protocolo_id` do DFD vivo de mesmo número). Um por (protocolo, nº);
+ * sai quando o DFD volta a esse protocolo; excluir o protocolo apaga o rastro dele.
+ */
+export const dfdPassagens = sqliteTable(
+  "dfd_passagens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    protocoloId: integer("protocolo_id")
+      .notNull()
+      .references(() => dfdProtocolos.id, { onDelete: "cascade" }),
+    dfdNumero: text("dfd_numero").notNull(),
+    planejamento: text("planejamento"),
+    tipo: text("tipo"),
+    sigla: text("sigla"),
+    totalItens: integer("total_itens"),
+    valorTotal: real("valor_total"),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("dfd_passagens_uq").on(t.protocoloId, t.dfdNumero), index("dfd_passagens_numero_idx").on(t.dfdNumero)],
 );
 
 /** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */

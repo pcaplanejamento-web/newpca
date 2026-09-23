@@ -12,10 +12,14 @@ import {
   textoSecao,
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
+import { dataIsoBrasilia } from "@/lib/format";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
 import { type DfdParseado, juntarRefs, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
+  dataAssinaturaDeIso,
+  dataAssinaturaISO,
+  definirDataAssinaturaEquipe,
   desfazerValidacaoEquipe,
   type Responsaveis,
   solicitanteDeResultado,
@@ -233,6 +237,15 @@ export function DfdConferir({
     ? [...new Set([...rep.responsaveis.padroes, ...rep.responsaveis.temporarios].map((r) => r.nome).filter(Boolean))]
     : [];
   const [respSel, setRespSel] = useState("");
+  // DATA da assinatura informada pela equipe ("aaaa-mm-dd" do campo de data): ao VALIDAR vem a data lida (se
+  // houver); ao ADICIONAR (nenhuma assinatura lida) é obrigatória. Não aceita data futura.
+  const hojeIso = dataIsoBrasilia(new Date().toISOString());
+  const alvoValidacao = dfd.assinaturas.find((a) => a.nome.trim()) ?? dfd.assinaturas[0];
+  const [dataSel, setDataSel] = useState(() => dataAssinaturaISO(alvoValidacao?.data ?? ""));
+  const adicionando = dfd.assinaturas.every((a) => a.fonte === "manual") && !dfd.assinaturas.some((a) => a.validacao);
+  const dataBr = dataSel ? dataAssinaturaDeIso(dataSel, hojeIso) : null;
+  const dataInvalida = !!dataSel && !dataBr;
+  const validadaEquipe = dfd.assinaturas.find((a) => a.validacao?.por === "equipe");
   const tipoSel = tipoCurtoDfd(dfd.tipo) ?? "";
 
   // Cadeado POR CAMPO do cabeçalho (conteúdo editável); os identificadores nunca mudam.
@@ -487,6 +500,28 @@ export function DfdConferir({
                   Desfazer validação
                 </Button>
               )}
+              {/* Validada pela equipe: a DATA da assinatura pode ser informada/corrigida aqui. */}
+              {resAss.origem === "equipe" && validadaEquipe && (
+                <label className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
+                  <span className="font-medium">Data da assinatura</span>
+                  {podeValidar ? (
+                    <input
+                      type="date"
+                      aria-label="Data da assinatura"
+                      className={inputCls}
+                      style={{ width: "auto" }}
+                      max={hojeIso}
+                      value={dataAssinaturaISO(validadaEquipe.data)}
+                      onChange={(e) => {
+                        const br = e.target.value ? dataAssinaturaDeIso(e.target.value, hojeIso) : "";
+                        if (br !== null) onAssinaturasChange?.(definirDataAssinaturaEquipe(dfd.assinaturas, br));
+                      }}
+                    />
+                  ) : (
+                    <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
+                  )}
+                </label>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -504,31 +539,49 @@ export function DfdConferir({
                 ) : nomesResp.length === 0 ? (
                   <p className="text-xs text-muted">A unidade não tem responsável por DFDs cadastrado — cadastre-o para validar.</p>
                 ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      aria-label="Responsável que assinou"
-                      className={inputCls}
-                      style={{ width: "auto", flex: "1 1 220px" }}
-                      value={respSel}
-                      onChange={(e) => setRespSel(e.target.value)}
-                    >
-                      <option value="">— Responsável que assinou —</option>
-                      {nomesResp.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      disabled={!respSel}
-                      onClick={() => {
-                        onAssinaturasChange?.(validarAssinaturaPelaEquipe(dfd.assinaturas, respSel));
-                        setRespSel("");
-                      }}
-                    >
-                      Validar assinatura (equipe)
-                    </Button>
-                  </div>
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        aria-label="Responsável que assinou"
+                        className={inputCls}
+                        style={{ width: "auto", flex: "1 1 220px" }}
+                        value={respSel}
+                        onChange={(e) => setRespSel(e.target.value)}
+                      >
+                        <option value="">— Responsável que assinou —</option>
+                        {nomesResp.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                      {/* DATA da assinatura: obrigatória ao ADICIONAR (nenhuma lida); ao validar, a lida (corrigível). */}
+                      <input
+                        type="date"
+                        aria-label={adicionando ? "Data da assinatura (obrigatória)" : "Data da assinatura"}
+                        title="Data da assinatura"
+                        className={inputCls}
+                        style={{ width: "auto", flex: "0 1 170px" }}
+                        max={hojeIso}
+                        value={dataSel}
+                        onChange={(e) => setDataSel(e.target.value)}
+                      />
+                      <Button
+                        disabled={!respSel || dataInvalida || (adicionando && !dataBr)}
+                        onClick={() => {
+                          onAssinaturasChange?.(validarAssinaturaPelaEquipe(dfd.assinaturas, respSel, dataBr ?? undefined));
+                          setRespSel("");
+                        }}
+                      >
+                        {adicionando ? "Adicionar assinatura (equipe)" : "Validar assinatura (equipe)"}
+                      </Button>
+                    </div>
+                    {(dataInvalida || (adicionando && respSel && !dataBr)) && (
+                      <p className="text-xs" style={{ color: dataInvalida ? "var(--danger)" : "var(--muted)" }}>
+                        {dataInvalida ? "Data inválida — use uma data real, até hoje." : "Informe a data da assinatura para adicioná-la."}
+                      </p>
+                    )}
+                  </>
                 ))}
             </div>
           )}

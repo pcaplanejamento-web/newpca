@@ -38,10 +38,11 @@ export type ProtocoloResumo = {
   /** Última gravação de um DFD do protocolo — invalida o cache da conferência agregada (Estado). */
   dfdsAtualizadoEm: string | null;
   // GESTÃO na Mesa: pessoa designada (Responsável), situação (cadastrada pelo ADM) e quem protocolou
-  // (Distribuição = `criado_por`).
+  // (Distribuição = `criado_por`). A foto/apelido vêm do diretório de pessoas da Mesa (pelo id).
   responsavelId: number | null;
   responsavelNome: string | null;
   situacaoId: number | null;
+  distribuidorId: number | null;
   distribuidorNome: string | null;
 };
 
@@ -76,6 +77,7 @@ const colunasGestao = {
   responsavelId: dfdProtocolos.responsavelId,
   responsavelNome: responsavel.nome,
   situacaoId: dfdProtocolos.situacaoId,
+  distribuidorId: dfdProtocolos.criadoPor,
   distribuidorNome: distribuidor.nome,
 };
 

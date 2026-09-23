@@ -2,13 +2,13 @@ import { DfdsView } from "@/components/DfdsView";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { getUsuarioAtual } from "@/lib/auth";
 import { listarDfds, listarPcas } from "@/lib/dfd";
-import { getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
+import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
 import { listarOrgaos } from "@/lib/orgaos";
 import { listarProtocolos } from "@/lib/protocolo";
 import { RESPONSAVEIS_VAZIO } from "@/lib/reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "@/lib/reparticoes";
 import { listarSituacoes } from "@/lib/situacoes";
-import { listarPessoas } from "@/lib/usuarios";
+import { listarPessoasDoGrupo, pessoasPorIds } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +25,18 @@ export default async function MesaPage() {
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
-    // Gestão do protocolo: pessoas (Responsável) e as situações cadastradas pelo ADM.
-    listarPessoas(),
+    // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
+    // situações cadastradas pelo ADM.
+    getGrupoAtivoId(u).then(listarPessoasDoGrupo),
     listarSituacoes(),
   ]);
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
+  // Diretório de EXIBIÇÃO (foto + apelido): quem aparece nas colunas Responsável/Distribuição e não é do
+  // grupo (outro grupo, inativo) — só para mostrar, nunca como opção.
+  const doGrupo = new Set(pessoas.map((p) => p.id));
+  const outrasPessoas = await pessoasPorIds(
+    protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]).filter((id) => id != null && !doGrupo.has(id)),
+  );
 
   // Enriquece as unidades com os RESPONSÁVEIS por DFDs (conferência da assinatura) e os
   // campos de MATCH (interessado/setor/órgão) — a lista base traz só {id,codigo,nome}.
@@ -58,7 +65,9 @@ export default async function MesaPage() {
       regras={regras}
       orgaos={orgaos}
       pessoas={pessoas}
+      outrasPessoas={outrasPessoas}
       situacoes={situacoes}
+      usuarioId={u?.id ?? null}
     />
   );
 }

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
 import type {
   CadastrarPcaPayload,
@@ -330,12 +331,6 @@ export async function listarDfdsCompletosDoProtocolo(protocoloId: number): Promi
 
 /** Tamanho do lote de ids por `IN (...)` — folga sob o limite de 100 parâmetros do D1. */
 const LOTE_IDS = 90;
-/** Ids em lotes de `LOTE_IDS` (cada lote cabe num `IN (...)`). */
-export function lotesDeIds(ids: number[]): number[][] {
-  const out: number[][] = [];
-  for (let i = 0; i < ids.length; i += LOTE_IDS) out.push(ids.slice(i, i + LOTE_IDS));
-  return out;
-}
 
 /**
  * DFDs (por id) COMPLETOS para a CONFERÊNCIA da lista da Mesa (`/api/dfd/conferencia`) — mesmo

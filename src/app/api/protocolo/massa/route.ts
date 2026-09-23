@@ -3,12 +3,12 @@ import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
-import { pessoaAtiva } from "@/lib/usuarios";
+import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +31,8 @@ export async function POST(req: Request) {
     if (!editavelDe(await getRegrasAvaliacao(), "protocolo.reparticao")) return erro("Campo travado nas Configurações → Avaliação.", 403);
     if (!acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   }
-  if (acao.campo === "responsavel" && acao.responsavelId != null && !(await pessoaAtiva(acao.responsavelId)))
-    return erro("Escolha um usuário ativo como responsável.", 422);
+  if (acao.campo === "responsavel" && acao.responsavelId != null && !(await pessoaDoGrupo(acao.responsavelId, await getGrupoAtivoId(a.u))))
+    return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (acao.campo === "situacao" && acao.situacaoId != null && !(await getSituacao(acao.situacaoId)))
     return erro("Situação não encontrada (Configurações → Situações).", 422);
 
