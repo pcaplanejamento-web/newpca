@@ -133,6 +133,9 @@ export function useProtocoloGravado({
   const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // SOBRESCRITA do DFD ao lado em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura.
+  const [sobrescrevendoDfd, setSobrescrevendoDfd] = useState(false);
+  const travado = salvando || sobrescrevendoDfd;
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [incluirAtencao, setIncluirAtencao] = useState(true);
@@ -227,7 +230,7 @@ export function useProtocoloGravado({
   // Recarga externa (outro banner da pilha gravou) — só sem rascunho (nunca perde edição).
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao sinal.
   useEffect(() => {
-    if (sinal > 0 && proto && !sujo && !salvando) void carregar(proto.id, abertoId);
+    if (sinal > 0 && proto && !sujo && !travado) void carregar(proto.id, abertoId);
   }, [sinal]);
   // Alterações não salvas: avisa antes de sair da página.
   useEffect(() => {
@@ -338,7 +341,7 @@ export function useProtocoloGravado({
   /** Pede confirmação para descartar o rascunho (`true` = pode seguir). */
   const podeDescartar = (msg: string) => !sujo || confirm(msg);
   function fechar() {
-    if (salvando) return;
+    if (travado) return;
     if (!podeDescartar("Há alterações não salvas neste protocolo. Fechar e descartá-las?")) return;
     fecharDfd();
     onFechar();
@@ -489,7 +492,7 @@ export function useProtocoloGravado({
       : null;
 
   const botaoAtualizar =
-    proto && !salvando ? (
+    proto && !travado ? (
       <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
         <IconRefresh className="h-5 w-5" />
       </Button>
@@ -507,7 +510,7 @@ export function useProtocoloGravado({
             {erro}
           </Callout>
         )}
-        {sel.size > 0 && podeEditar && !salvando && (
+        {sel.size > 0 && podeEditar && !travado && (
           <BarraSelecaoDfds
             dfds={linhasSel.map((l) => ({ key: l.key, numero: l.numero, planejamento: l.planejamento, valor: l.valor, itens: l.itens }))}
             onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
@@ -529,12 +532,12 @@ export function useProtocoloGravado({
             </span>
           )}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {proto && !salvando && (
+            {proto && !travado && (
               <Button variant="secondary" onClick={() => setHistoricoAberto(true)} icon={<IconClock className="h-4 w-4" />}>
                 Histórico
               </Button>
             )}
-            {!salvando && temRelatorio && (
+            {!travado && temRelatorio && (
               <Button
                 variant="secondary"
                 onClick={() => setRelatorioAberto(true)}
@@ -543,7 +546,7 @@ export function useProtocoloGravado({
                 {temErro ? "Relatório de erro" : "Relatório de atenção"}
               </Button>
             )}
-            {podeEditar && proto && !salvando && (
+            {podeEditar && proto && !travado && (
               <Button
                 variant="secondary"
                 onClick={() => setReenviar((n) => n + 1)}
@@ -554,11 +557,11 @@ export function useProtocoloGravado({
                 Reenviar protocolo
               </Button>
             )}
-            <Button variant="secondary" onClick={fechar} disabled={salvando}>
+            <Button variant="secondary" onClick={fechar} disabled={travado}>
               Fechar
             </Button>
             {podeEditar && (
-              <Button onClick={salvar} loading={salvando} disabled={!sujo}>
+              <Button onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendoDfd}>
                 Salvar alterações
               </Button>
             )}
@@ -577,7 +580,7 @@ export function useProtocoloGravado({
         <ProtocoloView
           key={versao}
           capa={capaView}
-          modoCapa={podeEditar && !salvando ? "cadeado" : "leitura"}
+          modoCapa={podeEditar && !travado ? "cadeado" : "leitura"}
           assuntos={opcoesAssunto(regras, capa.assunto ?? "")}
           onCapaChange={(c, v) => {
             if (c === "numero" || c === "data") return; // identificadores: imutáveis
@@ -588,13 +591,13 @@ export function useProtocoloGravado({
           unidade={{
             id: capa.reparticaoId,
             opcoes: reparticoes,
-            onChange: podeEditar && !salvando ? (id) => setCapa((x) => (x ? { ...x, reparticaoId: id } : x)) : undefined,
+            onChange: podeEditar && !travado ? (id) => setCapa((x) => (x ? { ...x, reparticaoId: id } : x)) : undefined,
             textoLeitura: proto.reparticaoCodigo ? `${proto.reparticaoCodigo}${proto.reparticaoNome ? ` · ${proto.reparticaoNome}` : ""}` : "Sem unidade",
           }}
           pca={<TextField label="PCA (ano)" value={proto.anoPca != null ? String(proto.anoPca) : "—"} disabled readOnly />}
           totais={{ dfds: linhas.length, itens: totalItens, somatorio, sobrescritos: { qtd: sobrescritos.length, valor: valorSobrescritos } }}
           conciliacao={conc}
-          onSubstituir={podeEditar && !salvando ? () => setCapa((x) => (x ? { ...x, valorCapa: conc.somatorio } : x)) : undefined}
+          onSubstituir={podeEditar && !travado ? () => setCapa((x) => (x ? { ...x, valorCapa: conc.somatorio } : x)) : undefined}
           linhas={linhas}
           unica
           selecionavel={podeEditar}
@@ -627,7 +630,7 @@ export function useProtocoloGravado({
         mensagensAbertas={painel?.tipo === "mensagens"}
         onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
         onFechar={fecharDfd}
-        bloqueado={salvando}
+        bloqueado={travado}
         acoes={
           <>
             <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
@@ -638,7 +641,7 @@ export function useProtocoloGravado({
               <Button
                 variant="secondary"
                 onClick={() => setSobrescreverDfd((n) => n + 1)}
-                disabled={sujo}
+                disabled={sujo || sobrescrevendoDfd}
                 title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
               >
                 <IconUpload className="h-4 w-4" /> Sobrescrever DFD
@@ -657,7 +660,7 @@ export function useProtocoloGravado({
           repId={repAbertoId}
           anoPca={anoAberto}
           autoMatch={false}
-          readOnly={!editavelAberto || salvando}
+          readOnly={!editavelAberto || travado}
           tabelaUnica
           categoria={categoria}
           regras={regras}
@@ -698,7 +701,7 @@ export function useProtocoloGravado({
         onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
         conformidade={conformidade}
         regras={regras}
-        editavel={editavelAberto && !salvando}
+        editavel={editavelAberto && !travado}
         onEditarItem={(i, patch) => editarAberto((d) => editarItemDfd(d, i, patch), true)}
         onRemoverItem={(i) => {
           setPainel(null);
@@ -712,8 +715,11 @@ export function useProtocoloGravado({
   // Base do REENVIO: o protocolo gravado + os DFDs completos + o rastro dos sobrescritos (estável entre
   // renders — cache da comparação).
   const baseReenvio: BaseReenvio | null = useMemo(
-    () => (proto ? { protocolo: proto, dfds: ordem.map((id) => orig.get(id)).filter((d): d is DfdDetalhe => !!d), sobrescritos } : null),
-    [proto, orig, ordem, sobrescritos],
+    () =>
+      proto
+        ? { protocolo: proto, dfds: ordem.map((id) => orig.get(id)).filter((d): d is DfdDetalhe => !!d), sobrescritos, unidades: unidadesExtra }
+        : null,
+    [proto, orig, ordem, sobrescritos, unidadesExtra],
   );
   // O DFD aberto ao lado, como GRAVADO (a base da sobrescrita por arquivo novo).
   const gravadoAberto = abertoId != null ? (orig.get(abertoId) ?? null) : null;
@@ -745,6 +751,7 @@ export function useProtocoloGravado({
               onAlterado();
               if (pedidoRef.current === proto.id) void carregar(proto.id, abertoId);
             },
+            onOcupado: setSobrescrevendoDfd,
           }}
           reparticoes={reparticoes}
           reparticaoAtivaId={reparticaoAtivaId}
@@ -791,7 +798,7 @@ export function useProtocoloGravado({
 
   return {
     aberto: protocoloId != null,
-    bloqueado: salvando,
+    bloqueado: travado,
     sujo,
     proto,
     principal,

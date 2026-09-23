@@ -296,9 +296,31 @@ describe("validarAssinatura — origem auto/equipe", () => {
     const v = validarAssinaturaPelaEquipe([], "EDILENE ALVES DA CRUZ", "12/03/2026");
     assert.equal(v[0].fonte, "manual");
     assert.equal(v[0].data, "12/03/2026");
-    // A data pode ser corrigida depois (e limpa na manual).
+    // A data pode ser corrigida depois — mas não apagada (é obrigatória na assinatura adicionada).
     assert.equal(definirDataAssinaturaEquipe(v, "15/03/2026")[0].data, "15/03/2026");
-    assert.equal(definirDataAssinaturaEquipe(v, "")[0].data, "");
+    assert.equal(definirDataAssinaturaEquipe(v, "")[0].data, "12/03/2026");
+  });
+  it("assinatura ADICIONADA pela equipe é sempre 'equipe' (nunca 'auto') — dá para desfazer e corrigir a data", () => {
+    const v = validarAssinaturaPelaEquipe([], "EDILENE ALVES DA CRUZ", "12/03/2026");
+    const r = validarAssinatura(v, padrao("EDILENE ALVES DA CRUZ"), { exigeAssinatura: true });
+    assert.equal(r.status === "ok" && r.origem, "equipe");
+  });
+  it("TEMPORÁRIO na assinatura ADICIONADA: a DATA informada tem de estar no período dele (sem data, vale como antes)", () => {
+    const temp = comTemporario("JOAO TEMP", "2026-03-01", "2026-03-31");
+    const dentro = validarAssinaturaPelaEquipe([], "JOAO TEMP", "15/03/2026");
+    const r1 = validarAssinatura(dentro, temp, { exigeAssinatura: true });
+    assert.equal(r1.status === "ok" && `${r1.origem}/${r1.tipo}`, "equipe/temporario");
+    const fora = validarAssinaturaPelaEquipe([], "JOAO TEMP", "15/04/2026");
+    assert.equal(validarAssinatura(fora, temp, { exigeAssinatura: true }).status, "erro");
+    const semData = validarAssinaturaPelaEquipe([], "JOAO TEMP");
+    assert.equal(validarAssinatura(semData, temp, { exigeAssinatura: true }).status, "ok");
+    // Assinatura LIDA fora do período: sozinha é erro; atestada pela equipe (que conferiu o PDF) vale — como
+    // sempre foi (o período não é reexigido na lida; DFDs já validados não mudam de estado).
+    const lida = mkAss("JOAO TEMP", "20/04/2026 10:00:00");
+    assert.equal(validarAssinatura([lida], temp, { exigeAssinatura: true }).status, "erro");
+    const lidaAtestada = validarAssinaturaPelaEquipe([lida], "JOAO TEMP");
+    const r2 = validarAssinatura(lidaAtestada, temp, { exigeAssinatura: true });
+    assert.equal(r2.status === "ok" && r2.origem, "equipe");
   });
   it("VALIDAR assinatura lida: o MESMO dia mantém a data/hora lida; outro dia grava a informada", () => {
     const lida = mkAss("EDILENE ALVES DA CRUZ", "31/08/2026 16:20:00");

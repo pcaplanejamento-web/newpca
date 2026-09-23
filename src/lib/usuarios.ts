@@ -24,8 +24,9 @@ const paraPessoa = (r: LinhaPessoa): Pessoa => ({ id: r.id, nome: r.nome, apelid
 const porNome = (a: Pessoa, b: Pessoa) => a.nome.localeCompare(b.nome, "pt-BR");
 
 /**
- * PESSOAS DO GRUPO: os usuários ATIVOS do grupo (as únicas designáveis como responsável). Sem grupo
- * (ex.: admin sem grupo) ⇒ todos os ativos — o admin não é escopado por grupo.
+ * PESSOAS DO GRUPO: os usuários ATIVOS do grupo ATIVO de quem está na tela (as únicas designáveis como
+ * responsável — regra do usuário, vale também para o admin que está num grupo). Sem grupo ativo (ex.: admin
+ * sem grupo) ⇒ todos os ativos.
  */
 export async function listarPessoasDoGrupo(grupoId: number | null): Promise<Pessoa[]> {
   const db = getDb();

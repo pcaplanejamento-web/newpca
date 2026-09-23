@@ -8,8 +8,10 @@ import {
   blocoDe,
   comparacaoEscolha,
   entradasEscolha,
+  escolhasParaHistorico,
   estadoEscolha,
   listaCurta,
+  MAX_ROTULOS_HISTORICO,
   marcarItensNovos,
   resumoEscolhas,
   semMarcas,
@@ -168,5 +170,110 @@ describe("sobrescrita com escolha — entradas e estado", () => {
     assert.ok(w.itens.every((i) => i.ref));
     assert.ok(semMarcas(w).itens.every((i) => !("ref" in i)));
     assert.equal(listaCurta(["A", "B", "C"], 2), "A, B e mais 1");
+  });
+});
+
+describe("sobrescrita com escolha — ordem, seções repetidas, histórico e escala", () => {
+  const it2 = (n: number, codigo: string, descricao: string, quantidade: number, valorUnitario = 10): DfdItemParseado => ({
+    item: n,
+    codigo,
+    descricao,
+    unidade: "UN",
+    quantidade,
+    valorUnitario,
+    valorTotal: quantidade * valorUnitario,
+  });
+  const semUnidade = (d: DfdParseado) => ({ ...semMarcas(d), reparticaoId: null, anoPca: null });
+
+  it("a ordem dos itens segue o Nº do item depois das escolhas (manter tudo = o gravado, na ordem)", () => {
+    const g = dfd({ itens: [it2(1, "100", "CADEIRA A", 1), it2(2, "200", "MESA", 1), it2(3, "100", "CADEIRA B", 1)] });
+    const n = dfd({ itens: [it2(1, "200", "MESA", 1), it2(2, "100", "CADEIRA B", 1)] });
+    const nov = marcarItensNovos(n);
+    const entradas = entradasEscolha(comparacaoEscolha(g, nov));
+    const w = aplicarTodas(entradas, "gravado", nov, g, nov);
+    assert.deepEqual(
+      w.itens.map((i) => i.item),
+      [1, 2, 3],
+    );
+    assert.equal(compararDfd({ ...g, reparticaoId: null, anoPca: null }, semUnidade(w)).situacao, "igual");
+    // Vai e volta: "usar todos os novos" devolve o arquivo novo, na ordem dele.
+    const volta = aplicarTodas(entradas, "novo", aplicarTodas(entradas, "gravado", w, g, nov), g, nov);
+    assert.deepEqual(
+      semMarcas(volta).itens,
+      semMarcas(nov).itens,
+    );
+  });
+
+  it("código+descrição REPETIDOS no gravado: manter tudo continua igual ao gravado", () => {
+    const g = dfd({ itens: [it2(1, "100", "CANETA", 5), it2(2, "100", "CANETA", 7), it2(3, "300", "LAPIS", 2)] });
+    const n = dfd({ itens: [it2(1, "100", "CANETA", 9), it2(2, "300", "LAPIS", 2)] });
+    const nov = marcarItensNovos(n);
+    const entradas = entradasEscolha(comparacaoEscolha(g, nov));
+    const w = aplicarTodas(entradas, "gravado", nov, g, nov);
+    assert.equal(compararDfd({ ...g, reparticaoId: null, anoPca: null }, semUnidade(w)).situacao, "igual");
+  });
+
+  it("propriedade (sementes fixas): manter tudo = gravado e usar tudo = novo, sem perder/duplicar itens", () => {
+    let seed = 7;
+    const rnd = (k: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % k;
+    };
+    for (let caso = 0; caso < 300; caso++) {
+      const base = Array.from({ length: 1 + rnd(8) }, (_, i) => it2(i + 1, String(100 + rnd(4) * 100), `ITEM ${rnd(3)}`, 1 + rnd(5)));
+      const g = dfd({ itens: base });
+      const n = dfd({
+        itens: base
+          .filter(() => rnd(4) > 0)
+          .map((it) => (rnd(3) === 0 ? { ...it, quantidade: (it.quantidade ?? 0) + 1, valorTotal: ((it.quantidade ?? 0) + 1) * 10 } : it))
+          .concat(rnd(2) ? [it2(50 + rnd(5), "999", "NOVO", 1)] : [])
+          .map((it, i) => ({ ...it, item: i + 1 })),
+      });
+      const nov = marcarItensNovos(n);
+      const entradas = entradasEscolha(comparacaoEscolha(g, nov));
+      // Uma sequência aleatória de escolhas antes do "todos" não deixa resto.
+      let w = nov;
+      for (const e of entradas) if (rnd(2)) w = aplicarEscolha(e, rnd(2) ? "gravado" : "novo", w, g, nov);
+      const tudoG = aplicarTodas(entradas, "gravado", w, g, nov);
+      assert.equal(compararDfd({ ...g, reparticaoId: null, anoPca: null }, semUnidade(tudoG)).situacao, "igual", `caso ${caso} (gravado)`);
+      const tudoN = aplicarTodas(entradas, "novo", w, g, nov);
+      assert.equal(compararDfd({ ...n, reparticaoId: null, anoPca: null }, semUnidade(tudoN)).situacao, "igual", `caso ${caso} (novo)`);
+      const refs = tudoN.itens.map((i) => i.ref);
+      assert.equal(new Set(refs).size, refs.length, `caso ${caso}: marca repetida`);
+      const nums = tudoG.itens.map((i) => i.item ?? 0);
+      assert.deepEqual(nums, [...nums].sort((a, b) => a - b), `caso ${caso}: fora de ordem`);
+    }
+  });
+
+  it("seção com o MESMO título em duas partes volta num bloco só, na ordem da fonte", () => {
+    const g = dfd({
+      secoes: [
+        { numero: 3, titulo: "3 - JUSTIFICATIVA", texto: "Parte B." },
+        { numero: 3, titulo: "3 - JUSTIFICATIVA", texto: "Parte A." },
+        { numero: 6, titulo: "6 - PRIORIDADE", texto: "ALTA" },
+      ],
+    });
+    const n = dfd({ secoes: [{ numero: 6, titulo: "6 - PRIORIDADE", texto: "ALTA" }] });
+    const nov = marcarItensNovos(n);
+    const e = entradasEscolha(comparacaoEscolha(g, nov)).find((x) => x.tipo === "secao");
+    assert.ok(e);
+    const w = aplicarEscolha(e, "gravado", nov, g, nov);
+    assert.deepEqual(
+      w.secoes.map((s) => s.texto),
+      ["Parte B.", "Parte A.", "ALTA"],
+    );
+    assert.equal(estadoEscolha(e, w, g, nov), "gravado");
+  });
+
+  it("histórico: os primeiros rótulos + as quantidades (nunca recusa por excesso); lista curta com o total", () => {
+    const muitos = Array.from({ length: 600 }, (_, i) => `Item ${i + 1}`);
+    const h = escolhasParaHistorico({ mantidos: muitos, editados: ["x".repeat(300)] });
+    assert.ok(h);
+    assert.equal(h.mantidos.length, MAX_ROTULOS_HISTORICO);
+    assert.equal(h.qtdMantidos, 600);
+    assert.equal(h.editados[0].length, 200);
+    assert.equal(escolhasParaHistorico({ mantidos: [], editados: [] }), null);
+    assert.equal(listaCurta(h.mantidos, 12, h.qtdMantidos), `${h.mantidos.join(", ")} e mais 588`);
+    assert.equal(listaCurta(["A", "B"], 12, 5), "A, B e mais 3");
   });
 });

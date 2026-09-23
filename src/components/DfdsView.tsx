@@ -693,7 +693,11 @@ export function DfdsView({
       header: "Responsável",
       nowrap: true,
       travado: travaResp,
-      value: (r) => nomeExibicao(responsavelDe(r)) || "Sem responsável",
+      // Filtro/ordem pelo "apelido — nome" (duas pessoas com o mesmo apelido não viram uma só opção).
+      value: (r) => {
+        const p = responsavelDe(r);
+        return p ? rotuloOpcaoPessoa(p) : "Sem responsável";
+      },
       // FOTO + APELIDO na célula; a troca é só entre as pessoas DO GRUPO (o atual de fora aparece, sem re-escolha).
       render: (r) => {
         const p = responsavelDe(r);
@@ -715,7 +719,10 @@ export function DfdsView({
       header: "Distribuição",
       nowrap: true,
       // Quem protocolou — FOTO + APELIDO.
-      value: (r) => nomeExibicao(pessoaDe(r.distribuidorId, r.distribuidorNome)) || "—",
+      value: (r) => {
+        const p = pessoaDe(r.distribuidorId, r.distribuidorNome);
+        return p ? rotuloOpcaoPessoa(p) : "—";
+      },
       render: (r) => <PessoaTag pessoa={pessoaDe(r.distribuidorId, r.distribuidorNome)} />,
     },
     {

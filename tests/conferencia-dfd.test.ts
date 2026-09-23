@@ -4,6 +4,7 @@ import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import {
   avaliarLinhaDfd,
   avaliarProtocolo,
+  somatorioProcesso,
   type DfdConferivel,
   estadoDeMensagens,
   mensagensDoDfd,
@@ -220,6 +221,10 @@ describe("avaliarProtocolo — o protocolo ACUMULA os problemas dos DFDs e itens
     // Todos os DFDs foram sobrescritos: o processo tem o rastro — não é "Sem DFDs".
     const soRastro = avaliarProtocolo({ valorCapa: 100, valorTotal: 0, totalDfds: 0, sobrescritos: 1, valorSobrescritos: 100 }, []);
     assert.equal(soRastro.estado, "regular");
+  });
+  it("somatorioProcesso (fonte única da massa 'valor da capa = somatória'): vivos + rastro, ao centavo", () => {
+    assert.deepEqual(somatorioProcesso({ valorTotal: 200.004, totalDfds: 2, sobrescritos: 1, valorSobrescritos: 100 }), { somatorio: 300, dfds: 3 });
+    assert.deepEqual(somatorioProcesso({ valorTotal: 0, totalDfds: 0 }), { somatorio: 0, dfds: 0 });
   });
 });
 

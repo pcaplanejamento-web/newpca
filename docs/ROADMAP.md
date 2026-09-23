@@ -46,6 +46,12 @@ lá (não é puxado de volta).
 cabeçalho (DFD de outra unidade parecia "Novo") — agora consulta o servidor (`POST /api/dfd/existentes`) e aponta, desde a
 análise, o DFD de unidade sem acesso; a importação avulsa de um DFD existente o TIRAVA do protocolo — agora o mantém; o
 selo "sobrescrito" e o valor total não duplicam; **type-check bloqueante** no CI/deploy (baseline limpo).
+✅ **Auditoria independente (servidor, importação e telas) — achados corrigidos:** o `start-dfd` virou tudo-ou-nada (rastro
+lido do banco + cabeçalho + itens num lote só — nova tentativa não perde o histórico da mudança); a massa "valor da capa =
+somatória" conta o rastro; a assinatura adicionada pela equipe nunca vira "auto" (dá para desfazer e corrigir a data); o
+reenvio não trava por DFD gravado de unidade sem acesso sem diferença; a ordem dos itens não embaralha com as escolhas; o
+histórico das escolhas nunca é recusado por excesso; o banner fica só-leitura durante a sobrescrita; "Restaurar" limpa a
+situação do rastro; a unidade do DFD cadastrado prevalece na protocolação; filtros de pessoas não fundem apelidos iguais.
 
 ### Mesa: gestão do protocolo (Responsável/Distribuição/Situação), estado agregado, histórico conectado e ordem fixa dos banners — entregue
 ✅ **Seleção total**: o "selecionar todos" das tabelas marca TODAS as linhas filtradas (não só a página).

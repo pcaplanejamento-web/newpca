@@ -146,20 +146,10 @@ export async function POST(req: Request) {
   const antigo = existente ? await getDfd(existente.id) : null;
   const { escolhas, ...dados } = d;
   // RASTRO: o DFD estava em OUTRO protocolo e vai para este → o de origem guarda o retrato (cinza,
-  // "sobrescrito pelo protocolo X"). Sem `protocoloId` (avulso/banner) o DFD FICA no protocolo dele.
+  // "sobrescrito pelo protocolo X") — gravado no MESMO lote do cabeçalho (`upsertDfdCabecalho`). Sem
+  // `protocoloId` (avulso/banner) o DFD FICA no protocolo dele. `movido` só redige o histórico.
   const movido = antigo?.protocoloId != null && d.protocoloId != null && antigo.protocoloId !== d.protocoloId;
-  const passagem =
-    movido && antigo?.protocoloId != null
-      ? {
-          deProtocoloId: antigo.protocoloId,
-          planejamento: antigo.planejamento,
-          tipo: antigo.tipo,
-          sigla: antigo.reparticaoCodigo,
-          totalItens: antigo.totalItens,
-          valorTotal: antigo.valorTotal,
-        }
-      : null;
-  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows, passagem);
+  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows);
   const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
   // O protocolo por onde a gravação PASSOU (o histórico dele): o de destino, ou o que o DFD já tinha.
   const protocoloHist = d.protocoloId ?? antigo?.protocoloId ?? null;
@@ -184,8 +174,8 @@ export async function POST(req: Request) {
     if (!completo) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
     if (movido) obs.push(`Veio do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`} — lá ele fica como "sobrescrito".`);
     // SOBRESCRITA com escolha por dado: o que o usuário MANTEVE do gravado e o que editou antes de gravar.
-    if (escolhas?.mantidos.length) obs.push(`Mantido do gravado (escolha): ${listaCurta(escolhas.mantidos)}.`);
-    if (escolhas?.editados.length) obs.push(`Editado antes de gravar: ${listaCurta(escolhas.editados)}.`);
+    if (escolhas?.mantidos.length) obs.push(`Mantido do gravado (escolha): ${listaCurta(escolhas.mantidos, 12, escolhas.qtdMantidos)}.`);
+    if (escolhas?.editados.length) obs.push(`Editado antes de gravar: ${listaCurta(escolhas.editados, 12, escolhas.qtdEditados)}.`);
     detalhe = c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs } : { alvo, obs };
     const diferencas = !c ? "" : c.total === 0 ? " — sem diferenças" : ` — ${c.total} diferença(s)`;
     resumo = `DFD ${r.numero} sobrescrito (${ROTULO_ORIGEM[origem].toLowerCase()})${diferencas}`;

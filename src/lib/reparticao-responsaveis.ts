@@ -284,27 +284,33 @@ export function validarAssinatura(
   // Match por responsável — TODOS os formatos (inclusive Dropsigner com nome). `mesmoNome` exige
   // nome não-vazio, então o "carimbo" (nome vazio) naturalmente não casa aqui.
   const temResponsavel = responsaveis.padroes.length > 0 || responsaveis.temporarios.length > 0;
+  /** O período do temporário cobre a data (`iso` "aaaa-mm-dd"). */
+  const cobre = (t: ResponsavelTemporario, iso: string) => !!t.inicio && !!t.fim && t.inicio <= iso && iso <= t.fim;
   if (temResponsavel) {
-    for (const a of assinaturas) {
+    // Conferência AUTOMÁTICA (o sistema casa o assinante LIDO). A assinatura ADICIONADA pela equipe
+    // (`manual`) leva o nome do responsável atestado — não é leitura: vale só como validação da equipe.
+    const lidas = assinaturas.filter((a) => a.fonte !== "manual");
+    for (const a of lidas) {
       const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
       if (padrao) return { status: "ok", origem: "auto", tipo: "padrao", assinatura: a, responsavel: padrao };
     }
-    for (const a of assinaturas) {
+    for (const a of lidas) {
       const iso = dataAssinaturaISO(a.data);
-      const temp = responsaveis.temporarios.find(
-        (t) => mesmoNome(t.nome, a.nome) && t.inicio && t.fim && t.inicio <= iso && iso <= t.fim,
-      );
+      const temp = responsaveis.temporarios.find((t) => mesmoNome(t.nome, a.nome) && cobre(t, iso));
       if (temp) return { status: "ok", origem: "auto", tipo: "temporario", assinatura: a, responsavel: temp };
     }
-    // Validação MANUAL pela EQUIPE: vale enquanto o responsável atestado for da unidade (padrão ou
-    // temporário — o usuário conferiu o PDF, então o período não é reexigido). Trocar a unidade para
-    // uma sem esse responsável desfaz o efeito (cai nas regras abaixo).
+    // Validação MANUAL pela EQUIPE: vale enquanto o responsável atestado for da unidade. Na assinatura LIDA
+    // validada pela equipe, ela conferiu o PDF — o período do temporário não é reexigido (como sempre foi).
+    // Na assinatura ADICIONADA pela equipe (`manual`), a DATA é a que ela informou: um TEMPORÁRIO só vale se
+    // o período dele a cobre (sem data — legado —, vale como antes). Trocar a unidade para uma sem esse
+    // responsável desfaz o efeito (cai nas regras abaixo).
     for (const a of assinaturas) {
       const nome = a.validacao?.por === "equipe" ? a.validacao.responsavel : "";
       if (!nome) continue;
       const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, nome));
       if (padrao) return { status: "ok", origem: "equipe", tipo: "padrao", assinatura: a, responsavel: padrao };
-      const temp = responsaveis.temporarios.find((t) => mesmoNome(t.nome, nome));
+      const iso = a.fonte === "manual" ? dataAssinaturaISO(a.data) : "";
+      const temp = responsaveis.temporarios.find((t) => mesmoNome(t.nome, nome) && (!iso || cobre(t, iso)));
       if (temp) return { status: "ok", origem: "equipe", tipo: "temporario", assinatura: a, responsavel: temp };
     }
   }
@@ -380,15 +386,12 @@ export function validarAssinaturaPelaEquipe(assinaturas: Assinatura[], responsav
   return limpas.map((a, j) => (j === i ? { ...comData(a, d), validacao } : a));
 }
 
-/** Altera a DATA da assinatura VALIDADA pela equipe (a que tem a marca). Vazio limpa só a da assinatura
- * ADICIONADA pela equipe (`manual`) — a data lida do PDF fica. Puro. */
+/** Altera a DATA da assinatura VALIDADA pela equipe (a que tem a marca). Vazio não muda nada: a data da
+ * assinatura ADICIONADA é obrigatória e a lida do PDF fica. Puro. */
 export function definirDataAssinaturaEquipe(assinaturas: Assinatura[], data: string): Assinatura[] {
   const d = data.trim();
-  return assinaturas.map((a) => {
-    if (a.validacao?.por !== "equipe") return a;
-    if (!d) return a.fonte === "manual" ? { ...a, data: "" } : a;
-    return comData(a, d);
-  });
+  if (!d) return assinaturas;
+  return assinaturas.map((a) => (a.validacao?.por === "equipe" ? comData(a, d) : a));
 }
 
 /** Desfaz a validação pela equipe (remove a marca e a assinatura `manual` criada por ela). Puro. */

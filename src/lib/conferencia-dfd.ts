@@ -189,6 +189,18 @@ export type ConferenciaProtocolo = {
 type ProblemaDfd = { status: "erro" | "atencao" | "acerto"; chave: string; texto: string; cor?: string; rotulo?: string };
 
 /**
+ * A SOMATÓRIA do processo para a conciliação da capa: os DFDs VIVOS + o RASTRO dos sobrescritos por outro
+ * protocolo (o valor DA ÉPOCA — a capa foi emitida com eles), arredondada ao centavo, e quantos DFDs o
+ * processo teve. Fonte única: o estado agregado, a massa "valor da capa = somatória" e os banners. Puro.
+ */
+export function somatorioProcesso(p: { valorTotal: number; totalDfds: number; sobrescritos?: number; valorSobrescritos?: number }): {
+  somatorio: number;
+  dfds: number;
+} {
+  return { somatorio: Math.round((p.valorTotal + (p.valorSobrescritos ?? 0)) * 100) / 100, dfds: p.totalDfds + (p.sobrescritos ?? 0) };
+}
+
+/**
  * ESTADO do PROTOCOLO — ele ACUMULA os problemas de dentro: (1) a conciliação da CAPA (valor ausente/
  * diferente da somatória — a MESMA régua do banner), (2) protocolo SEM DFDs (atenção) e (3) TODOS os
  * problemas de TODOS os DFDs (inclusive os dos itens — sem valor/quantidade, duplicados — que vêm nas
@@ -213,15 +225,11 @@ export function avaliarProtocolo(
 ): ConferenciaProtocolo {
   type Msg = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string; cor?: string; n: number; capa?: boolean };
   const msgs: Msg[] = [];
-  const sobrescritos = capa.sobrescritos ?? 0;
-  const conc = conciliacaoCapa(
-    { valorCapa: capa.valorCapa, somatorio: capa.valorTotal + (capa.valorSobrescritos ?? 0), totalDfds: capa.totalDfds + sobrescritos },
-    regras,
-    { categoria: capa.categoria ?? null },
-  );
+  const proc = somatorioProcesso(capa);
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: proc.somatorio, totalDfds: proc.dfds }, regras, { categoria: capa.categoria ?? null });
   if (conc.divergente && conc.motivo)
     msgs.push({ status: conc.bloqueia ? "erro" : "atencao", chave: "protocolo.valorCapa", texto: conc.motivo, rotulo: conc.zerada ? "Capa sem valor" : "Capa ≠ somatória", n: 0, capa: true });
-  if (capa.totalDfds + sobrescritos === 0)
+  if (proc.dfds === 0)
     msgs.push({ status: "atencao", chave: "protocolo.semDfds", texto: "Protocolo sem DFDs vinculados.", rotulo: "Sem DFDs", n: 0, capa: true });
 
   let dfdsComErro = 0;

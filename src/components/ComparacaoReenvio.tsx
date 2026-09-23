@@ -173,12 +173,24 @@ export type EscolhaSobrescritaProps = {
 };
 
 /** Seletor da escolha de UM dado: Manter gravado | Usar novo (+ "Editado" quando mudado à mão). */
-function SeletorLado({ estado, onEscolher, bloqueado }: { estado: EstadoEscolha; onEscolher: (l: Lado) => void; bloqueado?: boolean }) {
+function SeletorLado({
+  estado,
+  onEscolher,
+  bloqueado,
+  rotulo,
+}: {
+  estado: EstadoEscolha;
+  onEscolher: (l: Lado) => void;
+  bloqueado?: boolean;
+  /** O dado escolhido (nome acessível do seletor). */
+  rotulo: string;
+}) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       {estado === "editado" && <Badge tone="amber">Editado</Badge>}
       <Segmented<EstadoEscolha>
         value={estado}
+        ariaLabel={`Escolha: ${rotulo}`}
         disabled={bloqueado}
         onChange={(v) => v !== "editado" && onEscolher(v)}
         options={[
@@ -254,10 +266,10 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
   const c = comparacao;
   // Com ESCOLHA: o seletor de cada diferença + "todos" por bloco; sem ela, a leitura (vale o novo).
   const lado = (chave: string | undefined) => (escolha && chave ? escolha.estado(chave) : null);
-  const acao = (chave: string | undefined) => {
+  const acao = (chave: string | undefined, rotulo: string) => {
     const e = lado(chave);
     return escolha && chave && e ? (
-      <SeletorLado estado={e} onEscolher={(l) => escolha.onEscolher(chave, l)} bloqueado={escolha.bloqueado} />
+      <SeletorLado estado={e} onEscolher={(l) => escolha.onEscolher(chave, l)} bloqueado={escolha.bloqueado} rotulo={rotulo} />
     ) : undefined;
   };
   const todos = (bloco: BlocoEscolha) => (escolha ? <AcoesTodos onTodos={escolha.onTodos} bloco={bloco} bloqueado={escolha.bloqueado} /> : undefined);
@@ -281,26 +293,31 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
       {c.campos.length > 0 && (
         <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length} acoes={c.campos.some((d) => lado(d.campo)) ? todos("cabecalho") : undefined}>
           {c.campos.map((d) => (
-            <DiffLinha key={d.campo} d={d} acao={acao(d.campo)} escolhido={lado(d.campo)} />
+            <DiffLinha key={d.campo} d={d} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.secoes.length > 0 && (
         <BlocoDiff titulo="Seções" qtd={c.secoes.length} acoes={todos("secoes")}>
           {c.secoes.map((d) => (
-            <DiffLinha key={d.campo} d={d} compacto={!!escolha} acao={acao(d.campo)} escolhido={lado(d.campo)} />
+            <DiffLinha key={d.campo} d={d} compacto={!!escolha} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.assinaturas && (
         <BlocoDiff titulo="Assinaturas" qtd={1}>
-          <DiffLinha d={c.assinaturas} acao={acao("assinaturas")} escolhido={lado("assinaturas")} />
+          <DiffLinha d={c.assinaturas} acao={acao("assinaturas", "Assinaturas")} escolhido={lado("assinaturas")} />
         </BlocoDiff>
       )}
       {c.itens.length > 0 && (
         <BlocoDiff titulo="Itens" qtd={c.itens.length} acoes={todos("itens")}>
           {c.itens.map((it, k) => (
-            <DiffItem key={it.chave ?? `${it.tipo}:${it.item}:${it.codigo}:${k}`} it={it} acao={acao(it.chave)} escolhido={lado(it.chave)} />
+            <DiffItem
+              key={it.chave ?? `${it.tipo}:${it.item}:${it.codigo}:${k}`}
+              it={it}
+              acao={acao(it.chave, `Item ${it.item ?? "—"}${it.codigo ? ` (${it.codigo})` : ""}`)}
+              escolhido={lado(it.chave)}
+            />
           ))}
         </BlocoDiff>
       )}

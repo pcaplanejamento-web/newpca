@@ -121,12 +121,15 @@ export const dfdMetaSchema = z.object({
    * DFD por um arquivo novo (banner do DFD). Ausente ⇒ o servidor deduz (com protocolo = protocolação;
    * sem = avulso). */
   origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita"]).optional(),
-  /** SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado e o que foi EDITADO à mão (rótulos) —
-   * só para o histórico (o DFD enviado já é o resultado das escolhas). */
+  /** SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado e o que foi EDITADO à mão — os primeiros
+   * rótulos + as quantidades (`escolhasParaHistorico`) — só para o histórico (o DFD enviado já é o resultado
+   * das escolhas). */
   escolhas: z
     .object({
-      mantidos: z.array(z.string().trim().max(200)).max(500).default([]),
-      editados: z.array(z.string().trim().max(200)).max(500).default([]),
+      mantidos: z.array(z.string().trim().max(200)).max(50).default([]),
+      editados: z.array(z.string().trim().max(200)).max(50).default([]),
+      qtdMantidos: z.number().int().nonnegative().max(1_000_000).optional(),
+      qtdEditados: z.number().int().nonnegative().max(1_000_000).optional(),
     })
     .optional(),
 });

@@ -174,7 +174,9 @@ export const LOGICAS: LogicaRef[] = [
     detalhes: [
       "Pelo banner do DFD (ou importação avulsa) o DFD continua no protocolo dele.",
       "O histórico registra a sobrescrita (canal 'Sobrescrita do DFD'), as diferenças e o que foi mantido/editado.",
-      "DFD de mesmo número numa unidade sem acesso não pode ser sobrescrito (aparece como erro; use 'Manter o existente').",
+      "DFD de mesmo número numa unidade sem acesso não pode ser sobrescrito (aparece como erro; mantenha o já cadastrado).",
+      "Na protocolação, o DFD que substitui/move um cadastrado fica na unidade dele (salvo escolha); a escolha espera a leitura da assinatura por OCR.",
+      "Enquanto a sobrescrita está em andamento, o banner do DFD fica só-leitura; fechar a conferência com escolhas feitas pede confirmação.",
     ],
     fonte: "sobrescrita-dfd / useSobrescrita / POST /api/dfd",
   },
@@ -188,6 +190,7 @@ export const LOGICAS: LogicaRef[] = [
       "Os valores do rastro entram na conciliação da capa do protocolo de origem (a capa foi emitida com eles).",
       "O DFD que volta a um protocolo tira o rastro dele ali; excluir o protocolo apaga o rastro dele.",
       "No reenvio, um DFD do PDF que outro protocolo sobrescreveu fica mantido lá ('Restaurar' traz de volta).",
+      "Mover um DFD à mão (vínculo) não deixa rastro — o rastro é da sobrescrita por outro protocolo.",
     ],
     fonte: "dfd_passagens (migração 0032) / listarSobrescritos / TabelaSobrescritos",
   },
@@ -310,7 +313,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "assinatura",
     titulo: "Assinatura adicionada pela equipe tem data",
     descricao:
-      "Ao ADICIONAR a assinatura à mão (nenhuma lida no arquivo), a equipe informa a DATA da assinatura (obrigatória); ao validar uma assinatura lida, vem a data lida (corrigível). Com ela, o responsável TEMPORÁRIO é conferido pelo período dele, como numa assinatura lida do PDF. Data futura ou inválida é recusada (também no servidor).",
+      "Ao ADICIONAR a assinatura à mão (nenhuma lida no arquivo), a equipe informa a DATA da assinatura (obrigatória, não pode ser apagada depois — só corrigida); ao validar uma assinatura lida, vem a data lida (corrigível). A assinatura adicionada é sempre 'validada pela equipe' (dá para desfazer) e, nela, um responsável TEMPORÁRIO só vale se o período dele cobre a data informada. Na assinatura LIDA validada pela equipe, o período não é reexigido (a equipe conferiu o PDF). Data futura ou inválida é recusada (também no servidor).",
     fonte: "validarAssinaturaPelaEquipe (reparticao-responsaveis) / DfdConferir",
   },
   {

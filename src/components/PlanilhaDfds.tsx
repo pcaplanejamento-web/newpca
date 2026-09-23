@@ -332,8 +332,9 @@ function destinoSobrescrito(s: DfdSobrescrito): string {
 /**
  * RASTRO dos DFDs SOBRESCRITOS por outro protocolo — tabela CINZA, separada, abaixo dos DFDs do protocolo:
  * o retrato da versão que este protocolo tinha (planejamento/sigla/tipo/itens/valor NA ÉPOCA) e "Sobrescrito
- * pelo" = o protocolo ATUAL do DFD (sempre o último da cadeia A → B → C). Clicar leva ao protocolo atual.
- * Os valores entram na conciliação da capa (a capa foi emitida com eles).
+ * pelo" = o protocolo ATUAL do DFD (sempre o último da cadeia A → B → C) — o link leva a ele (as linhas não
+ * são clicáveis: sem acesso/DFD excluído não há destino). Os valores entram na conciliação da capa (a capa foi
+ * emitida com eles).
  */
 export function TabelaSobrescritos({
   sobrescritos,
@@ -404,7 +405,6 @@ export function TabelaSobrescritos({
         rows={sobrescritos}
         columns={cols}
         getKey={(s) => s.numero}
-        onRowClick={(s) => pode(s) && s.protocoloAtualId != null && onVerProtocolo?.(s.protocoloAtualId)}
         minWidth={760}
         pageSize={compacta ? 8 : 12}
         resumo={(l) => `${l.length} DFD${l.length === 1 ? "" : "s"} sobrescrito${l.length === 1 ? "" : "s"} · ${brl(l.reduce((t, s) => t + (s.valorTotal ?? 0), 0))}`}

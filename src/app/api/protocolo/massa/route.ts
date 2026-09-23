@@ -2,6 +2,7 @@ import { exigirEditor } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
+import { somatorioProcesso } from "@/lib/conferencia-dfd";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -51,13 +52,14 @@ export async function POST(req: Request) {
       else if (acao.campo === "responsavel") campos = pr.responsavelId === acao.responsavelId ? null : { responsavelId: acao.responsavelId };
       else if (acao.campo === "situacao") campos = pr.situacaoId === acao.situacaoId ? null : { situacaoId: acao.situacaoId };
       else {
-        // Valor da capa = somatória dos DFDs (mesma régua da conciliação do banner).
-        if (pr.totalDfds === 0) {
+        // Valor da capa = somatória do processo (os DFDs + o rastro dos sobrescritos — a MESMA régua da
+        // conciliação do banner e do estado agregado).
+        const proc = somatorioProcesso(pr);
+        if (proc.dfds === 0) {
           falhas.push({ id: pr.id, numero: pr.numero, motivo: "Protocolo sem DFDs — não há somatória." });
           continue;
         }
-        const soma = Math.round(pr.valorTotal * 100) / 100;
-        campos = valoresBatem(pr.valorCapa, soma) ? null : { valorCapa: soma };
+        campos = valoresBatem(pr.valorCapa, proc.somatorio) ? null : { valorCapa: proc.somatorio };
       }
       if (!campos) continue;
       await atualizarProtocolo(pr.id, campos);

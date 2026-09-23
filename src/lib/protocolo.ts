@@ -4,6 +4,7 @@ import { dfdPassagens, dfdProtocolos, dfds, reparticoes, usuarios } from "@/db/s
 import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
+import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
@@ -357,7 +358,7 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null, num
     await vinculo;
     return;
   }
-  await db.batch([vinculo, db.delete(dfdPassagens).where(and(eq(dfdPassagens.protocoloId, protocoloId), eq(dfdPassagens.dfdNumero, numero)))]);
+  await db.batch([vinculo, db.run(limparRastroDestino(sql, numero, protocoloId))]);
 }
 
 /** Repartição (+ nº, p/ o histórico) de um protocolo — o guard de acesso nas escritas; `null` se não existe. */

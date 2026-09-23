@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { classificarAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
+import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
@@ -40,7 +40,8 @@ export type ItemRef = { item: number | null; codigo: string | null };
 export type ConteudoBanner = { titulo: string; cabecalho?: ReactNode; acoesCabecalho?: ReactNode; rodape?: ReactNode; children: ReactNode };
 
 /** Índice do item (no DFD) que corresponde a uma linha da visão "Itens": pelo NÚMERO do item (único
- * no DFD), depois pelo código; senão o 1º. */
+ * no DFD), depois pelo código; `-1` = não está mais no DFD (ex.: removido por uma sobrescrita) — o banner
+ * diz "Item não encontrado" em vez de trocar de item em silêncio. */
 function indiceDoItem(itens: DfdParseado["itens"], alvo: ItemRef): number {
   if (alvo.item != null) {
     const i = itens.findIndex((it) => it.item === alvo.item);
@@ -50,7 +51,7 @@ function indiceDoItem(itens: DfdParseado["itens"], alvo: ItemRef): number {
     const i = itens.findIndex((it) => it.codigo === alvo.codigo);
     if (i >= 0) return i;
   }
-  return itens.length > 0 ? 0 : -1;
+  return -1;
 }
 
 /**
@@ -112,6 +113,9 @@ export function useDfdGravado({
   const [itemIdx, setItemIdx] = useState<number | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // SOBRESCRITA em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura até terminar.
+  const [sobrescrevendo, setSobrescrevendo] = useState(false);
+  const travado = salvando || sobrescrevendo;
   // Versão dos dados carregados: remonta o corpo após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
 
@@ -177,7 +181,7 @@ export function useDfdGravado({
   // Recarga externa (outro banner da pilha gravou) — só sem rascunho (nunca perde edição).
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao sinal.
   useEffect(() => {
-    if (sinal > 0 && orig && !sujo && !salvando) void carregar(orig.id, alvoAtual());
+    if (sinal > 0 && orig && !sujo && !travado) void carregar(orig.id, alvoAtual());
   }, [sinal]);
 
   useEffect(() => {
@@ -215,7 +219,7 @@ export function useDfdGravado({
   const podeDescartar = (msg: string) => !sujo || confirm(msg);
 
   function fechar() {
-    if (salvando) return;
+    if (travado) return;
     // No modo item o rascunho é o MESMO do banner do item (que segue aberto): tirar o DFD da pilha não
     // descarta nada — não pergunta.
     if (!modoItem && !podeDescartar("Há alterações não salvas neste DFD. Fechar e descartá-las?")) return;
@@ -277,24 +281,25 @@ export function useDfdGravado({
     </Callout>
   );
   const botaoSalvar = editavel ? (
-    <Button onClick={salvar} loading={salvando} disabled={!sujo}>
+    <Button onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendo}>
       Salvar alterações
     </Button>
   ) : undefined;
   const botaoAtualizar =
-    orig && !salvando ? (
+    orig && !travado ? (
       <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
         <IconRefresh className="h-5 w-5" />
       </Button>
     ) : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
-  /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever. */
+  /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever.
+   * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */
   const botaoSobrescrever =
-    editavel && orig && !salvando ? (
+    editavel && orig && !salvando && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
       <Button
         variant="secondary"
         onClick={() => setSobrescrever((n) => n + 1)}
-        disabled={sujo}
+        disabled={sujo || sobrescrevendo}
         title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
       >
         <IconUpload className="h-4 w-4" /> Sobrescrever DFD
@@ -316,7 +321,7 @@ export function useDfdGravado({
           mensagensAbertas={painel?.tipo === "mensagens"}
           onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
           onFechar={fechar}
-          bloqueado={salvando}
+          bloqueado={travado}
           acoes={
             <>
               <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
@@ -345,7 +350,7 @@ export function useDfdGravado({
         repId={repId}
         anoPca={anoPca}
         autoMatch={false}
-        readOnly={!editavel || salvando}
+        readOnly={!editavel || travado}
         tabelaUnica
         categoria={categoria}
         regras={regras}
@@ -389,7 +394,7 @@ export function useDfdGravado({
         onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
         conformidade={conformidade}
         regras={regras}
-        editavel={editavel && !salvando}
+        editavel={editavel && !travado}
         onEditarItem={(i, patch) => editar((d) => editarItemDfd(d, i, patch), true)}
         onRemoverItem={(i) => {
           setPainel(null);
@@ -426,7 +431,7 @@ export function useDfdGravado({
             onVerProtocolo={temProtocolo ? acoes.onVerProtocolo : undefined}
             onFechar={acoes.onFechar}
             principal={botaoSalvar}
-            bloqueado={salvando}
+            bloqueado={travado}
           />
         </div>
       ) : undefined,
@@ -439,10 +444,10 @@ export function useDfdGravado({
           conformidade={conformidade}
           regras={regras}
           tipo={dfd.tipo}
-          editavel={editavel && !salvando}
-          onChange={editavel && !salvando ? (patch) => editar((d) => editarItemDfd(d, itemIdx, patch), true) : undefined}
+          editavel={editavel && !travado}
+          onChange={editavel && !travado ? (patch) => editar((d) => editarItemDfd(d, itemIdx, patch), true) : undefined}
           onRemover={
-            editavel && !salvando
+            editavel && !travado
               ? () => {
                   editar((d) => removerItemDfd(d, itemIdx), true);
                   setItemIdx(null);
@@ -470,6 +475,7 @@ export function useDfdGravado({
             onAlterado();
             if (pedidoRef.current === orig.id) void carregar(orig.id, alvoAtual());
           },
+          onOcupado: setSobrescrevendo,
         }}
         reparticoes={reparticoes}
         reparticaoAtivaId={reparticaoAtivaId}
@@ -482,7 +488,7 @@ export function useDfdGravado({
   return {
     aberto: dfdId != null,
     carregado: !!dfd,
-    bloqueado: salvando,
+    bloqueado: travado,
     sujo,
     orig,
     numero,

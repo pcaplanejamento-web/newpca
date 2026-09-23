@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
-import { dfdItens, dfdPassagens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
+import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
 import type {
@@ -23,7 +24,7 @@ import { type Assinatura, coerceFonte, coerceValidacao, juntarRefs } from "./par
 const ROWS_PER_STMT = 11;
 
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
-function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdItemPayload[], seqBase = 0): any[] {
+function insertsItens(db: ReturnType<typeof getDb>, dfdId: number | SQL, itens: DfdItemPayload[], seqBase = 0): any[] {
   const stmts = [];
   for (let i = 0; i < itens.length; i += ROWS_PER_STMT) {
     stmts.push(
@@ -552,32 +553,21 @@ export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): 
   await db.batch(stmts as [Stmt, ...Stmt[]]);
 }
 
-/** Retrato leve do DFD que SAIU de um protocolo (sobrescrito por um DFD de outro protocolo). */
-export type RetratoPassagem = {
-  deProtocoloId: number;
-  planejamento: string | null;
-  tipo: string | null;
-  sigla: string | null;
-  totalItens: number | null;
-  valorTotal: number | null;
-};
-
 /**
- * `start-dfd`: cria (ou substitui, pelo `numero`) o CABEÇALHO do DFD, **apaga os
- * itens antigos** e grava o 1º lote — tudo num `db.batch` atômico. `totalItens`
- * é o total DECLARADO (o cliente envia os itens em lotes via `appendDfdItens`).
- * Retomável: reexecutar zera e regrava. Base do import de 1 DFD e do protocolo.
- * - `protocoloId` AUSENTE (DFD avulso / sobrescrita pelo banner) MANTÉM o protocolo do DFD que já existia —
- *   sobrescrever não tira o DFD do processo de origem.
- * - RASTRO entre protocolos: `passagem` = o DFD existia em OUTRO protocolo e agora vai para `protocoloId`
- *   → o de origem guarda o retrato (cinza, "sobrescrito pelo protocolo X"); e o destino perde um rastro
- *   antigo desse DFD (ele volta a estar vivo lá). Tudo no MESMO lote atômico dos itens.
+ * `start-dfd`: cria (ou substitui, pelo `numero`) o CABEÇALHO do DFD, **apaga os itens antigos** e grava o
+ * 1º lote — TUDO num `db.batch` atômico (tudo ou nada: uma nova tentativa encontra o DFD como estava).
+ * `totalItens` é o total DECLARADO (o cliente envia os itens em lotes via `appendDfdItens`). Retomável:
+ * reexecutar zera e regrava. Base do import de 1 DFD e do protocolo.
+ * - `protocoloId` AUSENTE ou nulo (DFD avulso / sobrescrita pelo banner) MANTÉM o protocolo do DFD que já
+ *   existia — o `start-dfd` nunca desvincula (desvincular é o PATCH do vínculo).
+ * - RASTRO entre protocolos (`rastro-sql.ts`): o DFD estava vivo em OUTRO protocolo e vai para `protocoloId`
+ *   → o de origem guarda o retrato (cinza, "sobrescrito pelo protocolo X"), lido do banco no MESMO lote; e o
+ *   destino perde um rastro antigo desse DFD (ele volta a estar vivo lá).
  */
 export async function upsertDfdCabecalho(
   dados: DfdMetaPayload,
   criadoPor: number | null,
   primeiroLote: DfdItemPayload[],
-  passagem: RetratoPassagem | null = null,
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
   const set = {
@@ -590,8 +580,8 @@ export async function upsertDfdCabecalho(
     reparticaoId: dados.reparticaoId ?? null,
     // Ponto 4: o DFD registra o ÓRGÃO — derivado da unidade escolhida (unidade ∈ órgão).
     orgaoId: dados.reparticaoId != null ? sql`(SELECT orgao_id FROM reparticoes WHERE id = ${dados.reparticaoId})` : null,
-    // Ausente = mantém o protocolo atual (avulso/sobrescrita não desvincula).
-    ...(dados.protocoloId !== undefined ? { protocoloId: dados.protocoloId } : {}),
+    // Ausente/nulo = mantém o protocolo atual (avulso/sobrescrita não desvincula).
+    ...(dados.protocoloId != null ? { protocoloId: dados.protocoloId } : {}),
     responsavel: dados.responsavel ?? null,
     matricula: dados.matricula ?? null,
     email: dados.email ?? null,
@@ -608,40 +598,26 @@ export async function upsertDfdCabecalho(
     totalItens: dados.totalItens ?? primeiroLote.length,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  // RASTRO (antes do upsert: o retrato lê o protocolo em que o DFD ESTAVA) — só quando vai para um protocolo.
+  const rastro: Stmt[] =
+    dados.protocoloId != null
+      ? [db.run(retratoRastro(sql, dados.numero, dados.protocoloId, criadoPor)), db.run(limparRastroDestino(sql, dados.numero, dados.protocoloId))]
+      : [];
   const upsert = db
     .insert(dfds)
     .values({ numero: dados.numero, criadoPor: criadoPor ?? null, protocoloId: dados.protocoloId ?? null, ...set })
     .onConflictDoUpdate({ target: dfds.numero, set })
     .returning({ id: dfds.id });
-  // RASTRO entre protocolos — no MESMO lote atômico do cabeçalho (uma nova tentativa, após falha nos itens, já
-  // veria o DFD no destino e não saberia mais de onde ele veio).
-  type Stmt = Parameters<typeof db.batch>[0][number];
-  const rastro: Stmt[] = [];
-  // O DFD está VIVO no protocolo de destino → sai um rastro antigo dele ali (voltou a esse protocolo).
-  if (dados.protocoloId != null)
-    rastro.push(db.delete(dfdPassagens).where(and(eq(dfdPassagens.protocoloId, dados.protocoloId), eq(dfdPassagens.dfdNumero, dados.numero))));
-  // Saiu de OUTRO protocolo → o de origem guarda o retrato (um por protocolo + nº: a última passagem vale).
-  if (passagem) {
-    const retrato = {
-      planejamento: passagem.planejamento,
-      tipo: passagem.tipo,
-      sigla: passagem.sigla,
-      totalItens: passagem.totalItens,
-      valorTotal: passagem.valorTotal,
-      usuarioId: criadoPor ?? null,
-      criadoEm: sql`(CURRENT_TIMESTAMP)`,
-    };
-    rastro.push(
-      db
-        .insert(dfdPassagens)
-        .values({ protocoloId: passagem.deProtocoloId, dfdNumero: dados.numero, ...retrato })
-        .onConflictDoUpdate({ target: [dfdPassagens.protocoloId, dfdPassagens.dfdNumero], set: retrato }),
-    );
-  }
-  const [linhas] = rastro.length > 0 ? await db.batch([upsert, ...rastro] as [typeof upsert, ...Stmt[]]) : [await upsert];
-  const id = linhas[0].id;
-  const stmts = insertsItens(db, id, primeiroLote, 0);
-  await db.batch([db.delete(dfdItens).where(eq(dfdItens.dfdId, id)), ...stmts] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  // O id do DFD DENTRO do lote (a linha é criada/atualizada nele mesmo): pelo `numero` (único).
+  const idDoDfd = sql`(SELECT id FROM dfds WHERE numero = ${dados.numero})`;
+  const res = await db.batch([
+    ...rastro,
+    upsert,
+    db.delete(dfdItens).where(eq(dfdItens.dfdId, idDoDfd)),
+    ...insertsItens(db, idDoDfd, primeiroLote, 0),
+  ] as [Stmt, ...Stmt[]]);
+  const id = (res[rastro.length] as { id: number }[])[0].id;
   return { id, numero: dados.numero };
 }
 

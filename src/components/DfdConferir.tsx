@@ -505,17 +505,10 @@ export function DfdConferir({
                 <label className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
                   <span className="font-medium">Data da assinatura</span>
                   {podeValidar ? (
-                    <input
-                      type="date"
-                      aria-label="Data da assinatura"
-                      className={inputCls}
-                      style={{ width: "auto" }}
-                      max={hojeIso}
-                      value={dataAssinaturaISO(validadaEquipe.data)}
-                      onChange={(e) => {
-                        const br = e.target.value ? dataAssinaturaDeIso(e.target.value, hojeIso) : "";
-                        if (br !== null) onAssinaturasChange?.(definirDataAssinaturaEquipe(dfd.assinaturas, br));
-                      }}
+                    <CampoDataAssinatura
+                      data={validadaEquipe.data}
+                      hojeIso={hojeIso}
+                      onData={(br) => onAssinaturasChange?.(definirDataAssinaturaEquipe(dfd.assinaturas, br))}
                     />
                   ) : (
                     <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
@@ -649,5 +642,43 @@ export function DfdConferir({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * DATA da assinatura validada pela equipe — com RASCUNHO local: digitar o ano no teclado passa por datas
+ * intermediárias inválidas ("0002-…"), que não podem voltar o campo sozinho. Só uma data REAL, até hoje,
+ * muda a assinatura; inválida mostra o aviso e, ao sair do campo, volta à data gravada (nunca a apaga).
+ */
+function CampoDataAssinatura({ data, hojeIso, onData }: { data: string; hojeIso: string; onData: (dataBr: string) => void }) {
+  const gravada = dataAssinaturaISO(data);
+  const [rascunho, setRascunho] = useState(gravada);
+  useEffect(() => setRascunho(gravada), [gravada]);
+  const invalida = !!rascunho && rascunho !== gravada && !dataAssinaturaDeIso(rascunho, hojeIso);
+  return (
+    <>
+      <input
+        type="date"
+        aria-label="Data da assinatura"
+        className={inputCls}
+        style={{ width: "auto" }}
+        max={hojeIso}
+        value={rascunho}
+        onChange={(e) => {
+          const v = e.target.value;
+          setRascunho(v);
+          const br = v ? dataAssinaturaDeIso(v, hojeIso) : null;
+          if (br && v !== gravada) onData(br);
+        }}
+        onBlur={() => {
+          if (!rascunho || !dataAssinaturaDeIso(rascunho, hojeIso)) setRascunho(gravada);
+        }}
+      />
+      {invalida && (
+        <span className="text-xs" style={{ color: "var(--danger)" }}>
+          Data inválida — use uma data real, até hoje.
+        </span>
+      )}
+    </>
   );
 }

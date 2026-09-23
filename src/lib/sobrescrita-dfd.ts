@@ -48,7 +48,7 @@ export type EntradaEscolha =
   | { tipo: "campo"; chave: string; campo: CampoEscolha; rotulo: string }
   | { tipo: "secao"; chave: string; secao: string; rotulo: string }
   | { tipo: "assinaturas"; chave: string; rotulo: string }
-  | { tipo: "item"; chave: string; item: number | null; rotulo: string };
+  | { tipo: "item"; chave: string; item: number | null; codigo: string | null; rotulo: string };
 
 /** Bloco da escolha (as ações "todos" por bloco na tela). */
 export type BlocoEscolha = "cabecalho" | "secoes" | "assinaturas" | "itens";
@@ -87,7 +87,8 @@ export function entradasEscolha(c: ComparacaoDfd): EntradaEscolha[] {
   for (const d of c.secoes) out.push({ tipo: "secao", chave: d.campo, secao: d.campo.slice("secao:".length), rotulo: d.rotulo });
   if (c.assinaturas) out.push({ tipo: "assinaturas", chave: "assinaturas", rotulo: "Assinaturas" });
   for (const it of c.itens)
-    if (it.chave) out.push({ tipo: "item", chave: it.chave, item: it.item, rotulo: `Item ${it.item ?? "—"}${it.codigo ? ` (${it.codigo})` : ""}` });
+    if (it.chave)
+      out.push({ tipo: "item", chave: it.chave, item: it.item, codigo: it.codigo, rotulo: `Item ${it.item ?? "—"}${it.codigo ? ` (${it.codigo})` : ""}` });
   return out;
 }
 
@@ -110,6 +111,27 @@ function indicesItem(chave: string): { g: number | null; n: number | null } {
 const refG = (i: number) => `g:${i}`;
 const refN = (j: number) => `n:${j}`;
 const igualItem = (a: DfdItemParseado, b: DfdItemParseado) => diffItem(a, b).length === 0;
+/** Índice dos itens do DFD de trabalho pela marca de origem — uma vez por versão do DFD (a tela consulta o
+ * estado de CADA escolha a cada edição: sem o índice seria escolhas × itens). */
+const indicesRef = new WeakMap<DfdItemParseado[], Map<string, DfdItemParseado>>();
+function porRef(itens: DfdItemParseado[]): Map<string, DfdItemParseado> {
+  let m = indicesRef.get(itens);
+  if (!m) {
+    m = new Map();
+    for (const it of itens) if (it.ref && !m.has(it.ref)) m.set(it.ref, it);
+    indicesRef.set(itens, m);
+  }
+  return m;
+}
+/** Ordena pelo Nº do item (os sem nº no fim), ESTÁVEL — a ordem da tabela (e do `sequencial` gravado) não
+ * muda com as escolhas. */
+function ordenarPorItem(itens: DfdItemParseado[]): DfdItemParseado[] {
+  const n = (it: DfdItemParseado) => it.item ?? Number.MAX_SAFE_INTEGER;
+  return itens
+    .map((it, i) => [it, i] as const)
+    .sort((a, b) => n(a[0]) - n(b[0]) || a[1] - b[1])
+    .map(([it]) => it);
+}
 
 /** O DFD NOVO pronto para a escolha: cada item marca a sua ORIGEM (`n:<j>`) — a escolha o reencontra
  * mesmo depois de editado/reordenado. O ponto de partida do DFD de trabalho (tudo "novo"). */
@@ -132,7 +154,9 @@ export function estadoEscolha(e: EntradaEscolha, trabalho: DfdParseado, gravado:
     return w === assinantes(novo.assinaturas) ? "novo" : w === assinantes(gravado.assinaturas) ? "gravado" : "editado";
   }
   const { g, n } = indicesItem(e.chave);
-  const achado = trabalho.itens.find((it) => (n != null && it.ref === refN(n)) || (g != null && it.ref === refG(g)));
+  const idx = porRef(trabalho.itens);
+  // Depois de qualquer escolha só um dos dois existe no trabalho (a escolha troca um pelo outro).
+  const achado = (n != null ? idx.get(refN(n)) : undefined) ?? (g != null ? idx.get(refG(g)) : undefined);
   if (!achado) return n != null && g == null ? "gravado" : g != null && n == null ? "novo" : "editado";
   if (n != null && achado.ref === refN(n)) return igualItem(achado, novo.itens[n]) ? "novo" : "editado";
   if (g != null && achado.ref === refG(g)) return igualItem(achado, gravado.itens[g]) ? "gravado" : "editado";
@@ -145,11 +169,38 @@ function comTotal(d: DfdParseado, itens: DfdItemParseado[]): DfdParseado {
   return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
 }
 
-/** Insere o item na posição pelo Nº do item (os sem nº no fim) — estável. */
-function inserirOrdenado(itens: DfdItemParseado[], it: DfdItemParseado): DfdItemParseado[] {
-  const n = it.item ?? Number.MAX_SAFE_INTEGER;
-  const i = itens.findIndex((x) => (x.item ?? Number.MAX_SAFE_INTEGER) > n);
-  return i < 0 ? [...itens, it] : [...itens.slice(0, i), it, ...itens.slice(i)];
+/** O item do `lado` escolhido para uma chave de item (com a marca de origem) — `null` = esse lado não tem. */
+function itemDoLado(chave: string, lado: Lado, gravado: DfdParseado, novo: DfdParseado): DfdItemParseado | null {
+  const { g, n } = indicesItem(chave);
+  if (lado === "novo") return n != null ? { ...novo.itens[n], ref: refN(n) } : null;
+  return g != null ? { ...gravado.itens[g], ref: refG(g) } : null;
+}
+
+/** Troca, nos itens do trabalho, os PARES das escolhas pelo item do lado escolhido — no lugar do par (senão no
+ * fim) — e ordena pelo Nº do item. Uma passada só (linear), para 1 ou N escolhas. */
+function trocarItens(trabalho: DfdParseado, escolhas: { chave: string; item: DfdItemParseado | null }[]): DfdParseado {
+  const donoDaRef = new Map<string, number>(); // ref (n:/g:) → índice da escolha
+  escolhas.forEach((c, k) => {
+    const { g, n } = indicesItem(c.chave);
+    if (n != null) donoDaRef.set(refN(n), k);
+    if (g != null) donoDaRef.set(refG(g), k);
+  });
+  const colocado = new Set<number>();
+  const out: DfdItemParseado[] = [];
+  for (const it of trabalho.itens) {
+    const k = it.ref != null ? donoDaRef.get(it.ref) : undefined;
+    if (k == null) {
+      out.push(it);
+      continue;
+    }
+    const escolhido = escolhas[k].item;
+    if (escolhido && !colocado.has(k)) out.push(escolhido); // no lugar do par
+    colocado.add(k);
+  }
+  escolhas.forEach((c, k) => {
+    if (c.item && !colocado.has(k)) out.push(c.item); // o par não estava no trabalho → entra (a ordem vem abaixo)
+  });
+  return comTotal(trabalho, ordenarPorItem(out));
 }
 
 /** APLICA uma escolha: copia o valor do `lado` escolhido para o DFD de trabalho (sobrepõe uma edição à mão
@@ -167,28 +218,21 @@ export function aplicarEscolha(e: EntradaEscolha, lado: Lado, trabalho: DfdParse
       const antes = trabalho.secoes.slice(0, pos).filter((s) => !daChave(s)).length;
       return { ...trabalho, secoes: [...resto.slice(0, antes), ...escolhidas, ...resto.slice(antes)] };
     }
-    // A seção não estava no trabalho: entra na ordem pelo número da seção.
-    let secoes = resto;
-    for (const s of escolhidas) {
-      const i = secoes.findIndex((x) => x.numero > s.numero);
-      secoes = i < 0 ? [...secoes, s] : [...secoes.slice(0, i), s, ...secoes.slice(i)];
-    }
-    return { ...trabalho, secoes };
+    // A seção não estava no trabalho: entra num BLOCO só (na ordem da fonte), antes da 1ª de número maior.
+    const n0 = escolhidas[0]?.numero ?? Number.MAX_SAFE_INTEGER;
+    const i = resto.findIndex((x) => x.numero > n0);
+    return { ...trabalho, secoes: i < 0 ? [...resto, ...escolhidas] : [...resto.slice(0, i), ...escolhidas, ...resto.slice(i)] };
   }
-  const { g, n } = indicesItem(e.chave);
-  const eDoPar = (it: DfdItemParseado) => (n != null && it.ref === refN(n)) || (g != null && it.ref === refG(g));
-  const pos = trabalho.itens.findIndex(eDoPar);
-  const resto = trabalho.itens.filter((it) => !eDoPar(it));
-  const escolhido: DfdItemParseado | null =
-    lado === "novo" ? (n != null ? { ...novo.itens[n], ref: refN(n) } : null) : g != null ? { ...gravado.itens[g], ref: refG(g) } : null;
-  if (!escolhido) return comTotal(trabalho, resto); // o lado escolhido NÃO tem o item → fica sem ele
-  if (pos >= 0) return comTotal(trabalho, [...resto.slice(0, pos), escolhido, ...resto.slice(pos)]);
-  return comTotal(trabalho, inserirOrdenado(resto, escolhido));
+  // Item: o lado escolhido NÃO tem o item ⇒ fica sem ele.
+  return trocarItens(trabalho, [{ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) }]);
 }
 
-/** Aplica o MESMO lado a várias escolhas (os botões "usar todos os novos" / "manter todos os gravados"). */
+/** Aplica o MESMO lado a várias escolhas (os botões "usar todos os novos" / "manter todos os gravados") — os
+ * itens numa passada só (linear, mesmo com milhares). */
 export function aplicarTodas(entradas: EntradaEscolha[], lado: Lado, trabalho: DfdParseado, gravado: DfdParseado, novo: DfdParseado): DfdParseado {
-  return entradas.reduce((w, e) => aplicarEscolha(e, lado, w, gravado, novo), trabalho);
+  const itens = entradas.filter((e) => e.tipo === "item");
+  const demais = entradas.filter((e) => e.tipo !== "item").reduce((w, e) => aplicarEscolha(e, lado, w, gravado, novo), trabalho);
+  return itens.length === 0 ? demais : trocarItens(demais, itens.map((e) => ({ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) })));
 }
 
 /** O que foi MANTIDO do gravado e o que foi EDITADO à mão — vai ao histórico da sobrescrita. */
@@ -217,10 +261,12 @@ export function resumoEscolhas(
  */
 export function outrasDiferencas(comp: ComparacaoDfd, entradas: EntradaEscolha[]): { campos: DiffCampo[]; itens: DiffItemDfd[] } {
   const chaves = new Set(entradas.map((e) => e.chave));
-  const nums = new Set(entradas.flatMap((e) => (e.tipo === "item" ? [e.item] : [])));
+  // O item "já escolhido" é o de mesmo Nº E código (o nº sozinho esconderia outro item renumerado).
+  const idItem = (item: number | null, codigo: string | null) => `${item ?? ""}|${txt(codigo)}`;
+  const itensEscolha = new Set(entradas.flatMap((e) => (e.tipo === "item" ? [idItem(e.item, e.codigo)] : [])));
   return {
     campos: [...comp.campos, ...comp.secoes, ...(comp.assinaturas ? [comp.assinaturas] : [])].filter((d) => !chaves.has(d.campo)),
-    itens: comp.itens.filter((it) => !nums.has(it.item)),
+    itens: comp.itens.filter((it) => !itensEscolha.has(idItem(it.item, it.codigo))),
   };
 }
 
@@ -229,7 +275,25 @@ export function semMarcas<T extends { itens: DfdItemParseado[] }>(d: T): T {
   return d.itens.some((it) => it.ref !== undefined) ? { ...d, itens: d.itens.map(({ ref: _r, ...it }) => it) } : d;
 }
 
-/** Lista curta p/ o histórico ("A, B, C e mais N"). */
-export function listaCurta(l: string[], max = 12): string {
-  return l.length > max ? `${l.slice(0, max).join(", ")} e mais ${l.length - max}` : l.join(", ");
+/** Lista curta p/ o histórico ("A, B, C e mais N") — `total` = quantos eram de fato (a lista pode vir cortada). */
+export function listaCurta(l: string[], max = 12, total = l.length): string {
+  const mostra = l.slice(0, max);
+  const resto = Math.max(total, l.length) - mostra.length;
+  return resto > 0 ? `${mostra.join(", ")} e mais ${resto}` : mostra.join(", ");
+}
+
+/** Quantos rótulos das escolhas vão ao histórico (o resto vira "e mais N") e o tamanho de cada rótulo. */
+export const MAX_ROTULOS_HISTORICO = 12;
+const MAX_ROTULO = 200;
+/** As ESCOLHAS da sobrescrita no formato do histórico (`start-dfd.escolhas`): os primeiros rótulos + as
+ * quantidades — o envio nunca é recusado por um DFD com milhares de diferenças. Puro. */
+export function escolhasParaHistorico(r: { mantidos: string[]; editados: string[] }): {
+  mantidos: string[];
+  editados: string[];
+  qtdMantidos: number;
+  qtdEditados: number;
+} | null {
+  if (r.mantidos.length === 0 && r.editados.length === 0) return null;
+  const corta = (l: string[]) => l.slice(0, MAX_ROTULOS_HISTORICO).map((t) => t.slice(0, MAX_ROTULO));
+  return { mantidos: corta(r.mantidos), editados: corta(r.editados), qtdMantidos: r.mantidos.length, qtdEditados: r.editados.length };
 }
