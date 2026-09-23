@@ -6,7 +6,9 @@ import {
   podeRebaixarOrgao,
   podeRemoverUnidadePropria,
   podeTornarUnidade,
+  propriaRebaixada,
   unidadeDeOrgao,
+  unidadePreservadaNoPromover,
   unidadePropriaDeOrgao,
 } from "../src/lib/orgao-unidade-ops.ts";
 
@@ -42,17 +44,43 @@ describe("orgao-unidade-ops — mapa de campos (o que SEGUE na transformação)"
   });
 });
 
-describe("orgao-unidade-ops — permissões (mesmas travas do ponto 8)", () => {
-  it("promover: só unidade comum e sem vínculo", () => {
-    assert.equal(podePromoverUnidade({ orgaoProprio: false, temVinculo: false }).ok, true);
-    assert.equal(podePromoverUnidade({ orgaoProprio: true, temVinculo: false }).ok, false); // é a própria do órgão
-    assert.equal(podePromoverUnidade({ orgaoProprio: false, temVinculo: true }).ok, false); // seria excluída
+describe("orgao-unidade-ops — com vínculo (a unidade que carrega os vínculos é PRESERVADA)", () => {
+  it("PROMOVER c/ vínculo: a unidade vira a própria do novo órgão; o nº sobe p/ o órgão; responsáveis ficam", () => {
+    const p = unidadePreservadaNoPromover({ responsavelDfd: '{"padroes":["A"]}' }, { assinaturaUnica: true, responsavelDfd: '{"padroes":["X"]}' });
+    assert.equal(p.orgaoProprio, true);
+    assert.equal(p.numeroInteressado, null);
+    assert.equal(p.responsavelDfd, '{"padroes":["A"]}'); // os seus têm precedência
   });
 
-  it("rebaixar: só órgão sem unidades e sem vínculo", () => {
-    assert.equal(podeRebaixarOrgao({ temUnidades: false, temVinculo: false }).ok, true);
-    assert.equal(podeRebaixarOrgao({ temUnidades: true, temVinculo: false }).ok, false);
-    assert.equal(podeRebaixarOrgao({ temUnidades: false, temVinculo: true }).ok, false);
+  it("PROMOVER c/ vínculo: sem responsáveis próprios, herda os do órgão de origem de assinatura ÚNICA", () => {
+    assert.equal(unidadePreservadaNoPromover({ responsavelDfd: null }, { assinaturaUnica: true, responsavelDfd: "R" }).responsavelDfd, "R");
+    assert.equal(unidadePreservadaNoPromover({ responsavelDfd: null }, { assinaturaUnica: false, responsavelDfd: "R" }).responsavelDfd, null);
+    assert.equal(unidadePreservadaNoPromover({ responsavelDfd: null }, null).responsavelDfd, null);
+  });
+
+  it("REBAIXAR dual: a própria desce como comum; recebe o nº do órgão e os responsáveis efetivos", () => {
+    const o = { numeroInteressado: "7", assinaturaUnica: true, responsavelDfd: "ORG", oculto: false };
+    const r = propriaRebaixada(o, { numeroInteressado: null, responsavelDfd: "UNI", oculto: false }, 9);
+    assert.equal(r.orgaoId, 9);
+    assert.equal(r.orgaoProprio, false);
+    assert.equal(r.numeroInteressado, "7");
+    assert.equal(r.responsavelDfd, "ORG"); // assinatura única → os do órgão eram os efetivos
+    const r2 = propriaRebaixada({ ...o, assinaturaUnica: false, oculto: true }, { numeroInteressado: "8", responsavelDfd: "UNI", oculto: false }, 9);
+    assert.equal(r2.numeroInteressado, "8");
+    assert.equal(r2.responsavelDfd, "UNI");
+    assert.equal(r2.oculto, true);
+  });
+});
+
+describe("orgao-unidade-ops — permissões (mesmas travas do ponto 8)", () => {
+  it("promover: qualquer unidade comum (com vínculo ela é preservada); nunca a própria do órgão", () => {
+    assert.equal(podePromoverUnidade({ orgaoProprio: false }).ok, true);
+    assert.equal(podePromoverUnidade({ orgaoProprio: true }).ok, false);
+  });
+
+  it("rebaixar: qualquer órgão sem unidades-FILHAS (com vínculo ou dual pode)", () => {
+    assert.equal(podeRebaixarOrgao({ temUnidadesFilhas: false }).ok, true);
+    assert.equal(podeRebaixarOrgao({ temUnidadesFilhas: true }).ok, false);
   });
 
   it("tornar unidade: só órgão sem unidades-filhas e não-dual", () => {
