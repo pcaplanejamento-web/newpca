@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
@@ -68,6 +68,10 @@ export type DfdResumo = {
   protocoloAnoPca: number | null;
   /** Responsável do protocolo de origem — o filtro de responsável da Mesa vale também para DFDs/itens. */
   protocoloResponsavelId: number | null;
+  /** Mesa do PCA (migração `0034`): o PCA para onde o protocolo de origem foi enviado e quando foi
+   * INCORPORADO (≠ null ⇒ o DFD e os itens estão TRAVADOS para edição). */
+  protocoloPcaId: number | null;
+  protocoloPcaIncorporadoEm: string | null;
   // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO nas listas sem abrir o DFD.
   numeroContrato: string | null;
   numeroAta: string | null;
@@ -95,6 +99,7 @@ export type ItemDfdRow = {
   dfdId: number;
   dfdNumero: string;
   sigla: string | null; // código da unidade do DFD
+  reparticaoId: number | null; // unidade do DFD (escopo de acesso da Mesa do PCA)
   protocoloNumero: string | null;
   item: number | null;
   codigo: string | null;
@@ -181,7 +186,12 @@ const colunasDfd = {
   numeroContrato: dfds.numeroContrato,
   numeroAta: dfds.numeroAta,
   numeroLicitacao: dfds.numeroLicitacao,
+  protocoloPcaId: dfdProtocolos.pcaId,
+  protocoloPcaIncorporadoEm: dfdProtocolos.pcaIncorporadoEm,
 };
+
+/** Escopo da Mesa: a PRINCIPAL (DFDs fora de protocolo enviado a um PCA) ou a de um PCA (`pcaId`). */
+const escopoMesa = (pcaId?: number) => (pcaId ? eq(dfdProtocolos.pcaId, pcaId) : isNull(dfdProtocolos.pcaId));
 
 /** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe/Foxit) derivados do JSON. `colunasDfd` NÃO traz
  * as assinaturas (peso) → seleciona só aqui e mapeia para os grupos (leve). */
@@ -191,13 +201,13 @@ function comGrupos(r: Omit<DfdResumo, "assinaturaGrupos"> & { assinaturas: strin
 }
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
-export async function listarDfds(reparticaoId?: number): Promise<DfdResumo[]> {
+export async function listarDfds(reparticaoId?: number, pcaId?: number): Promise<DfdResumo[]> {
   const rows = await getDb()
     .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
-    .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
   return rows.map(comGrupos);
 }
@@ -219,13 +229,14 @@ export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdRes
  * enriquecido com o DFD/unidade/protocolo de origem. Escopado por unidade como `listarDfds`
  * (Geral ⇒ `undefined` = todos). Carregado sob demanda (lazy) só ao abrir a visão Itens.
  */
-export async function listarItensDfds(reparticaoId?: number): Promise<ItemDfdRow[]> {
+export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Promise<ItemDfdRow[]> {
   return getDb()
     .select({
       id: dfdItens.id,
       dfdId: dfds.id,
       dfdNumero: dfds.numero,
       sigla: reparticoes.codigo,
+      reparticaoId: dfds.reparticaoId,
       protocoloNumero: dfdProtocolos.numero,
       item: dfdItens.item,
       codigo: dfdItens.codigo,
@@ -239,7 +250,7 @@ export async function listarItensDfds(reparticaoId?: number): Promise<ItemDfdRow
     .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
-    .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
 
@@ -814,6 +825,8 @@ export type PcaResumo = {
   totalItens: number | null;
   valorEstimado: number | null;
   criadoEm: string | null;
+  /** Fonte do PCA como espaço (migração `0033`) — só os de `protocolo` recebem protocolos da Mesa. */
+  fonte?: "lista" | "protocolo";
 };
 
 export type PcaDfdBloco = {
@@ -849,6 +862,7 @@ export async function listarPcas(): Promise<PcaResumo[]> {
       totalItens: pcas.totalItens,
       valorEstimado: pcas.valorEstimado,
       criadoEm: pcas.criadoEm,
+      fonte: pcas.fonte,
     })
     .from(pcas)
     .orderBy(desc(pcas.ativo), desc(pcas.criadoEm), desc(pcas.id));
@@ -989,8 +1003,16 @@ export async function gerarPca(
   return { id };
 }
 
+/** Exclui o PCA: os protocolos da Mesa dele voltam à Mesa principal (e destravam) e `pca_dfds` cai em cascata. */
 export async function excluirPca(id: number): Promise<void> {
-  await getDb().delete(pcas).where(eq(pcas.id, id)); // cascade apaga pca_dfds
+  const db = getDb();
+  await db.batch([
+    db
+      .update(dfdProtocolos)
+      .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null, pcaIncorporadoEm: null })
+      .where(eq(dfdProtocolos.pcaId, id)),
+    db.delete(pcas).where(eq(pcas.id, id)),
+  ]);
 }
 
 /**

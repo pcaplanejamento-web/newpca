@@ -3,23 +3,31 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { listarOrgaos } from "./orgaos";
-import { listarProtocolos } from "./protocolo";
+import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "./reparticoes";
 import { listarSituacoes } from "./situacoes";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
+/** O escopo de acesso por unidade das rotas: sem unidade OU uma unidade da lista (admin = todas). */
+export function acessivelNaLista(lista: { id: number }[]) {
+  const ids = new Set(lista.map((r) => r.id));
+  return (reparticaoId: number | null | undefined) => reparticaoId == null || ids.has(reparticaoId);
+}
+
 /**
- * Dados da MESA (Protocolos · DFDs · Itens) — o MESMO carregamento da tela `/painel/mesa` e da aba
- * Mesa do PCA: listas escopadas pela unidade ativa do head (Geral = tudo) + as unidades enriquecidas
- * com os RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH.
+ * Dados da MESA (Protocolos · DFDs · Itens) — o MESMO carregamento da tela `/painel/mesa` e da aba Mesa do
+ * PCA. Mesa PRINCIPAL: escopada pela unidade ativa do head (Geral = tudo), sem os protocolos enviados a um
+ * PCA. Mesa do PCA (`pcaId`): só os protocolos ENVIADOS a ele, nas unidades ACESSÍVEIS ao usuário (a Mesa do
+ * PCA é independente da unidade ativa). Mais as unidades enriquecidas com os RESPONSÁVEIS (conferência da
+ * assinatura) e os campos de MATCH.
  */
-export async function carregarMesa(u: UsuarioSessao | null) {
-  const rep = await getReparticaoFiltro(u);
-  const [dfds, protocolos, repCtx, pcas, regras, orgaos, pessoas, situacoes] = await Promise.all([
-    listarDfds(rep?.id),
-    listarProtocolos(rep?.id),
-    getReparticaoContexto(u),
+export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
+  const [rep, repCtx] = await Promise.all([getReparticaoFiltro(u), getReparticaoContexto(u)]);
+  const acessivel = acessivelNaLista(repCtx.lista);
+  const [dfdsBrutos, protocolosBrutos, pcas, regras, orgaos, pessoas, situacoes] = await Promise.all([
+    pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id),
+    pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
@@ -28,6 +36,8 @@ export async function carregarMesa(u: UsuarioSessao | null) {
     getGrupoAtivoId(u).then(listarPessoasDoGrupo),
     listarSituacoes(),
   ]);
+  const protocolos = pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos;
+  const dfds = pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos;
   // Diretório de EXIBIÇÃO (foto + apelido): quem aparece nas colunas Responsável/Distribuição e não é do
   // grupo (outro grupo, inativo) — só para mostrar, nunca como opção.
   const doGrupo = new Set(pessoas.map((p) => p.id));

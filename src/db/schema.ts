@@ -338,6 +338,12 @@ export const dfdProtocolos = sqliteTable(
     // (só as cadastradas pelo ADM). A DISTRIBUIÇÃO (quem protocolou) é o `criadoPor`.
     responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
     situacaoId: integer("situacao_id").references(() => protocoloSituacoes.id, { onDelete: "set null" }),
+    // Mesa do PCA (migração `0034`): o PCA para onde o protocolo foi ENVIADO (sai da Mesa principal) e quando
+    // foi INCORPORADO (≠ null ⇒ os DFDs estão no PCA e protocolo/DFDs/itens ficam TRAVADOS para edição).
+    pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "set null" }),
+    pcaEnviadoEm: text("pca_enviado_em"),
+    pcaEnviadoPor: integer("pca_enviado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    pcaIncorporadoEm: text("pca_incorporado_em"),
     // Totais (nº de DFDs, itens, valor somado) são recompostos AO VIVO em
     // `protocolo.ts` — o vínculo é dinâmico (link/unlink/re-import), como em `pcas`.
     criadoPor: integer("criado_por").references(() => usuarios.id, {
@@ -352,6 +358,7 @@ export const dfdProtocolos = sqliteTable(
     index("protocolos_dfd_orgao_idx").on(t.orgaoId),
     index("protocolos_dfd_responsavel_idx").on(t.responsavelId),
     index("protocolos_dfd_situacao_idx").on(t.situacaoId),
+    index("protocolos_dfd_pca_idx").on(t.pcaId),
   ],
 );
 

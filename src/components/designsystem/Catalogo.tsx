@@ -10,6 +10,7 @@ import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
+import { mensagemTravaPca } from "@/lib/pca-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
@@ -138,8 +139,9 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /** Demo do painel de item EDITÁVEL (importação/gravado destravado). */
-// PCA como ESPAÇO — card 4:5 (capa padrão com o ano / com imagem), seletor múltiplo (visões do
-// orçamento) e o comparativo Orçamento × Contratações.
+// PCA como ESPAÇO — card 4:5 (capa padrão com o ano / com imagem), estados da Mesa do PCA (Enviado /
+// Incorporado) + a TRAVA do incorporado, seletor múltiplo (visões do orçamento) e o comparativo
+// Orçamento × Contratações. ("Enviar ao PCA" = `EnviarAoPca`, na barra de seleção de protocolos da Mesa.)
 function PcaEspacoDemo() {
   const [sel, setSel] = useState<string[]>(["MATERIAL DE CONSUMO"]);
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -158,6 +160,20 @@ function PcaEspacoDemo() {
           </label>
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="amber" dot>
+          Enviado
+        </Badge>
+        <Badge tone="slate" dot>
+          Enviado (não incorporável)
+        </Badge>
+        <Badge tone="blue" dot>
+          Incorporado · Substituir
+        </Badge>
+      </div>
+      <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>
+        {mensagemTravaPca("PCA 2027")}
+      </Callout>
       <RecorteImagem
         arquivo={arquivo}
         onCancelar={() => setArquivo(null)}

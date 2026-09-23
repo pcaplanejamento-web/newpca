@@ -18,6 +18,7 @@ import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
+import { respostaTravado, travaDeProtocolos, travaDoDfd } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 /**
@@ -43,6 +44,8 @@ export async function POST(req: Request) {
     const dfd = await getDfdReparticao(d.dfdId);
     if (!dfd) return erro("DFD não encontrado para acrescentar itens.", 404);
     if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à unidade deste DFD.", 403);
+    const travaLote = await travaDoDfd(d.dfdId);
+    if (travaLote) return respostaTravado(travaLote);
     if (!d.rows.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
       return erro("Todos os itens precisam de valor unitário.", 422);
     }
@@ -125,6 +128,10 @@ export async function POST(req: Request) {
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra unidade, sem acesso.", 403);
   }
+  // TRAVA do PCA: não sobrescreve um DFD de protocolo INCORPORADO nem grava num protocolo incorporado.
+  const travas = await travaDeProtocolos([existente?.protocoloId, d.protocoloId]);
+  const travaDfd = [...travas.values()][0];
+  if (travaDfd) return respostaTravado(travaDfd);
   // Importação AVULSA desligada pelo ADM: vale para o DFD que ficaria SEM protocolo — a sobrescrita de um DFD
   // que já está num protocolo (banner / avulso de mesmo nº) o mantém lá, então não é "avulsa".
   if (d.protocoloId == null && existente?.protocoloId == null && !importarDfdHabilitado(regras))

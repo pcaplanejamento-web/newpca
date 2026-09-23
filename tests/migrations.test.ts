@@ -355,6 +355,18 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual(us.map((u) => u.pca_id), [pub[0].id, pub[0].id]);
   });
 
+  it("0034 Mesa do PCA: protocolo enviado/incorporado; excluir o PCA devolve o protocolo (set null)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('dfd_protocolos')");
+    for (const c of ["pca_id", "pca_enviado_em", "pca_enviado_por", "pca_incorporado_em"]) assert.ok(cols.includes(c), `coluna ausente em dfd_protocolos: ${c}`);
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='index'").includes("protocolos_dfd_pca_idx"));
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO pcas (id, nome, ano, fonte) VALUES (995, 'PCA M', 2027, 'protocolo')");
+    db.exec("INSERT INTO dfd_protocolos (id, numero, pca_id, pca_incorporado_em) VALUES (996, 'P-996/2027', 995, CURRENT_TIMESTAMP)");
+    db.exec("DELETE FROM pcas WHERE id = 995");
+    const p = db.prepare("SELECT pca_id FROM dfd_protocolos WHERE id = 996").get() as { pca_id: number | null };
+    assert.equal(p.pca_id, null, "excluir o PCA deveria devolver o protocolo à Mesa principal");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

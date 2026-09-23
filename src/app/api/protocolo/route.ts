@@ -7,6 +7,7 @@ import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
+import { respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 import { responsavelPadraoDe } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -62,12 +63,14 @@ export async function POST(req: Request) {
   }
   // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não
   // se ele estiver numa unidade INACESSÍVEL (não deixa sequestrar/apagar via re-import).
-  if (protocolo.idExterno) {
-    const existente = await getProtocoloPorIdExterno(protocolo.idExterno);
-    if (existente && existente.numero !== protocolo.numero && !acessivel(existente.reparticaoId)) {
-      return erro("Já existe um protocolo com esse Id em outra unidade, sem acesso.", 403);
-    }
+  const mesmoId = protocolo.idExterno ? await getProtocoloPorIdExterno(protocolo.idExterno) : null;
+  if (mesmoId && mesmoId.numero !== protocolo.numero && !acessivel(mesmoId.reparticaoId)) {
+    return erro("Já existe um protocolo com esse Id em outra unidade, sem acesso.", 403);
   }
+  // TRAVA do PCA: um protocolo INCORPORADO (o reenviado, o de mesmo nº ou o de mesmo Id) não é sobrescrito.
+  const travas = await travaDeProtocolos([gravado?.id, mesmoNumero?.id, mesmoId?.id]);
+  const trava = [...travas.values()][0];
+  if (trava) return respostaTravado(trava);
 
   // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação), se ainda for do grupo — só preenche um protocolo ainda sem
   // responsável (a sobrescrita/reenvio mantém o já designado).

@@ -742,11 +742,19 @@ catálogo usa o **mesmo tamanho de fonte** da descrição do item importado (com
 tem **fonte** (lista pronta = planilhas | protocolos = DFDs dos protocolos movidos da Mesa), **status** Preview/Publicado
 (publicado aparece no **seletor de PCA da tela inicial**) e o espaço `/painel/pca/[id]`: **Dashboard** (mesmos gráficos do
 público), **Orçamento** (dotação do ano filtrada pela **visão salva** × planejado; comparativo por unidade com faixas de
-comprometimento e exportação), **Mesa** (Todos | Neste PCA; mover/retirar protocolos com ação Incorporar/Substituir/Excluir)
+comprometimento e exportação), **Mesa** (evoluiu para a Mesa do PCA independente — abaixo)
 ou **Importação** (várias planilhas + cards) e **Configuração**. A **situação** do protocolo define se ele pode ser movido e
 em qual camada conta. Orçamento ganhou **Visões salvas** (filtro por vários valores de cada dimensão). Migração `0033`
 (aditiva; legado vira PCA publicado). Testes: núcleo do PCA, visões/comparativo, recorte e a cadeia de migrações.
 🔜 Dimensões extras do CUBO (subelemento, ação, programa, fonte, licitação, credor, contrato) quando o arquivo as trouxer.
+
+### Mesa do PCA independente + incorporação com trava — entregue
+Protocolos vão da Mesa principal para a **Mesa do PCA** pelo botão **"Enviar ao PCA"** da barra de seleção (e voltam por
+**"Devolver à Mesa"**). Na Mesa do PCA, a seleção **incorpora** os protocolos (DFDs + itens passam a compor o PCA, com a ação
+incorporar/substituir/excluir) ou os **desincorpora**. Enquanto incorporado, protocolo/DFDs/itens ficam **somente leitura**
+(servidor responde 423; a tela mostra o aviso) — só situação e responsável seguem editáveis. Também: carga por aba no espaço do
+PCA, filtro por unidade no Dashboard, capa servida por rota com cache, recorte da capa robusto (medição, roda, fallback) e
+tabelas da Mesa medindo a altura útil corretamente. Migração `0034`.
 
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

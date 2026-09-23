@@ -22,6 +22,8 @@ const gravado = (): DfdDetalhe => ({
   protocoloAssunto: "INCLUSÃO - PCA",
   protocoloAnoPca: 2027,
   protocoloResponsavelId: null,
+  protocoloPcaId: null,
+  protocoloPcaIncorporadoEm: null,
   numeroContrato: null,
   numeroAta: null,
   numeroLicitacao: null,

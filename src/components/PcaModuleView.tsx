@@ -62,7 +62,7 @@ export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas:
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}

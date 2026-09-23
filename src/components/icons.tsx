@@ -54,6 +54,7 @@ import {
   Trash2,
   TrendingUp,
   Trophy,
+  Undo2,
   Upload,
   User,
   Users,
@@ -112,6 +113,7 @@ export const IconLockOpen = LockOpen;
 export const IconEye = Eye;
 export const IconEyeOff = EyeOff;
 export const IconArrowRight = ArrowRight;
+export const IconUndo = Undo2;
 export const IconArrowUp = ArrowUp;
 export const IconArrowDown = ArrowDown;
 export const IconCalendar = Calendar;

@@ -4,8 +4,7 @@ import {
   capaSchema,
   criarPcaEspacoSchema,
   editarPcaEspacoSchema,
-  moverParaPcaSchema,
-  retirarDoPcaSchema,
+  acaoProtocolosPcaSchema,
   visaoOrcamentoSchema,
 } from "../src/lib/pca-espaco-validation.ts";
 import {
@@ -356,12 +355,12 @@ describe("pca-espaco-validation", () => {
     assert.equal(capaSchema.safeParse("javascript:alert(1)").success, false);
     assert.equal(capaSchema.safeParse("data:image/svg+xml;base64,AAAA").success, false);
   });
-  it("mover/retirar", () => {
-    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [1], acoes: { "10": "substituir" } }).success, true);
-    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [] }).success, false);
-    assert.equal(moverParaPcaSchema.safeParse({ protocoloIds: [1], acoes: { "10": "apagar" } }).success, false);
-    assert.equal(retirarDoPcaSchema.safeParse({}).success, false);
-    assert.equal(retirarDoPcaSchema.safeParse({ dfdIds: [3] }).success, true);
+  it("ações da Mesa do PCA (enviar/devolver/incorporar/desincorporar)", () => {
+    assert.equal(acaoProtocolosPcaSchema.safeParse({ acao: "incorporar", ids: [1], acoes: { "1": "substituir" } }).success, true);
+    assert.equal(acaoProtocolosPcaSchema.safeParse({ acao: "enviar", ids: [] }).success, false);
+    assert.equal(acaoProtocolosPcaSchema.safeParse({ acao: "incorporar", ids: [1], acoes: { "1": "apagar" } }).success, false);
+    assert.equal(acaoProtocolosPcaSchema.safeParse({ acao: "mover", ids: [1] }).success, false);
+    for (const acao of ["enviar", "devolver", "desincorporar"]) assert.equal(acaoProtocolosPcaSchema.safeParse({ acao, ids: [3] }).success, true);
   });
   it("visão: nome + filtros só das dimensões conhecidas", () => {
     const r = visaoOrcamentoSchema.parse({ nome: "PCA", filtros: { nomeElemento: ["MATERIAL"], lixo: ["x"] } });

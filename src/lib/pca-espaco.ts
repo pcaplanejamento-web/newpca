@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   dfdItens,
   dfdProtocolos,
@@ -51,6 +51,7 @@ export type PcaEspaco = {
   ativo: boolean;
   fonte: FontePca;
   status: StatusPca;
+  /** URL da capa (`/api/pca/[id]/capa?v=…` — a imagem NÃO trafega nas listas) ou `null` = capa padrão. */
   capa: string | null;
   publicadoEm: string | null;
   orcamentoVisaoId: number | null;
@@ -71,7 +72,8 @@ const COLS_PCA = {
   ativo: pcas.ativo,
   fonte: pcas.fonte,
   status: pcas.status,
-  capa: pcas.capa,
+  // Só a VERSÃO da capa (a data-URL fica no banco e sai pela rota da capa, com cache imutável).
+  capaVersao: sql<string | null>`CASE WHEN ${pcas.capa} IS NULL OR ${pcas.capa} = '' THEN NULL ELSE COALESCE(${pcas.atualizadoEm}, '') || '-' || LENGTH(${pcas.capa}) END`,
   publicadoEm: pcas.publicadoEm,
   orcamentoVisaoId: pcas.orcamentoVisaoId,
 };
@@ -85,10 +87,16 @@ function paraEspaco(r: RowPca): PcaEspaco {
     ativo: !!r.ativo,
     fonte: coerceFonte(r.fonte),
     status: coerceStatus(r.status),
-    capa: typeof r.capa === "string" && r.capa ? r.capa : null,
+    capa: r.capaVersao ? `/api/pca/${Number(r.id)}/capa?v=${encodeURIComponent(String(r.capaVersao))}` : null,
     publicadoEm: (r.publicadoEm as string | null) ?? null,
     orcamentoVisaoId: r.orcamentoVisaoId == null ? null : Number(r.orcamentoVisaoId),
   };
+}
+
+/** A data-URL da capa (a rota `/api/pca/[id]/capa` a serve como imagem). */
+export async function capaDoPca(id: number): Promise<string | null> {
+  const [r] = await getDb().select({ capa: pcas.capa }).from(pcas).where(eq(pcas.id, id)).limit(1);
+  return r?.capa ?? null;
 }
 
 export async function getPcaEspaco(id: number): Promise<PcaEspaco | null> {
@@ -166,7 +174,11 @@ export async function listarPcasCards(): Promise<PcaCard[]> {
   ]);
   const plan = new Map(porPlanilha.map((p) => [p.pcaId, p]));
   const porPca = new Map<number, VinculoDfd[]>();
-  for (const v of todos) porPca.set(v.pcaId, [...(porPca.get(v.pcaId) ?? []), v]);
+  for (const v of todos) {
+    const l = porPca.get(v.pcaId);
+    if (l) l.push(v);
+    else porPca.set(v.pcaId, [v]);
+  }
   return rows.map((r) => {
     const p = paraEspaco(r);
     if (p.fonte === "lista") {
@@ -250,9 +262,36 @@ export async function dfdsEmOutroPca(dfdIds: number[], pcaId: number): Promise<M
   return m;
 }
 
-/** Vincula (ou atualiza a ação de) DFDs no PCA — UPSERT por (pca, dfd). */
-export async function vincularDfds(pcaId: number, entradas: { dfdId: number; acao: AcaoDfdPca }[], usuarioId: number | null): Promise<void> {
-  if (entradas.length === 0) return;
+// ---------------------------------------------------------------------------
+// Mesa do PCA: enviar · devolver · incorporar · desincorporar (migração `0034`)
+// ---------------------------------------------------------------------------
+
+/** ENVIA o protocolo à Mesa do PCA (sai da Mesa principal). Só se ainda não está em um PCA. */
+export async function enviarProtocolo(pcaId: number, protocoloId: number, usuarioId: number | null): Promise<void> {
+  await getDb()
+    .update(dfdProtocolos)
+    .set({ pcaId, pcaEnviadoEm: sql`(CURRENT_TIMESTAMP)`, pcaEnviadoPor: usuarioId, pcaIncorporadoEm: null })
+    .where(and(eq(dfdProtocolos.id, protocoloId), isNull(dfdProtocolos.pcaId)));
+}
+
+/** DEVOLVE o protocolo à Mesa principal. Só o enviado a ESTE PCA e NÃO incorporado. */
+export async function devolverProtocolo(pcaId: number, protocoloId: number): Promise<void> {
+  await getDb()
+    .update(dfdProtocolos)
+    .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null })
+    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId), isNull(dfdProtocolos.pcaIncorporadoEm)));
+}
+
+/**
+ * INCORPORA o protocolo ao PCA: vincula os DFDs dele (`pca_dfds`, com a ação de cada um — os itens entram pelo
+ * DFD) e marca a incorporação (a partir daqui protocolo/DFDs/itens ficam TRAVADOS) — num lote ATÔMICO.
+ */
+export async function incorporarProtocolo(
+  pcaId: number,
+  protocoloId: number,
+  entradas: { dfdId: number; acao: AcaoDfdPca }[],
+  usuarioId: number | null,
+): Promise<void> {
   const db = getDb();
   // 5 parâmetros por linha → 18 linhas por statement (90 < 100 do D1).
   const stmts = [];
@@ -264,12 +303,25 @@ export async function vincularDfds(pcaId: number, entradas: { dfdId: number; aca
         .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { acao: sql`excluded.acao` } }),
     );
   }
-  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  const marca = db
+    .update(dfdProtocolos)
+    .set({ pcaIncorporadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId)));
+  await db.batch([...stmts, marca] as unknown as [typeof marca, ...(typeof marca)[]]);
 }
 
-export async function desvincularDfds(pcaId: number, dfdIds: number[]): Promise<void> {
+/** DESINCORPORA: tira do PCA os DFDs do protocolo e destrava (o protocolo segue na Mesa do PCA) — atômico. */
+export async function desincorporarProtocolo(pcaId: number, protocoloId: number): Promise<void> {
   const db = getDb();
-  for (const lote of lotesDeIds(dfdIds)) await db.delete(pcaDfds).where(and(eq(pcaDfds.pcaId, pcaId), inArray(pcaDfds.dfdId, lote)));
+  await db.batch([
+    db
+      .delete(pcaDfds)
+      .where(and(eq(pcaDfds.pcaId, pcaId), sql`${pcaDfds.dfdId} IN (SELECT ${dfds.id} FROM ${dfds} WHERE ${dfds.protocoloId} = ${protocoloId})`)),
+    db
+      .update(dfdProtocolos)
+      .set({ pcaIncorporadoEm: null })
+      .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId))),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,10 +581,4 @@ export async function dfdsDosProtocolos(protocoloIds: number[]): Promise<{ id: n
     for (const r of rows) if (r.protocoloId != null) out.push({ id: r.id, protocoloId: r.protocoloId });
   }
   return out;
-}
-
-/** Troca a AÇÃO de DFDs já vinculados ao PCA. */
-export async function definirAcaoDfds(pcaId: number, dfdIds: number[], acao: AcaoDfdPca): Promise<void> {
-  const db = getDb();
-  for (const lote of lotesDeIds(dfdIds)) await db.update(pcaDfds).set({ acao }).where(and(eq(pcaDfds.pcaId, pcaId), inArray(pcaDfds.dfdId, lote)));
 }

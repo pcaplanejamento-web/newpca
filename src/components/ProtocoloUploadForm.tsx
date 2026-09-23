@@ -101,7 +101,7 @@ type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: num
 
 const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
-const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move", semAcesso: "Outra unidade (sem acesso)" };
+const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move", semAcesso: "Sem acesso ou no PCA" };
 
 /** REENVIO: o protocolo GRAVADO (capa + DFDs completos + o RASTRO dos DFDs dele sobrescritos por outro
  * protocolo + as UNIDADES reais dos DFDs, inclusive as sem acesso — a conferência usa a unidade REAL, como no
@@ -115,8 +115,8 @@ const MSG_SEM_ACESSO: MensagemDfd = {
   chave: "dfd.semAcesso",
   status: "erro",
   ancora: "reparticao",
-  rotulo: "Unidade sem acesso",
-  texto: "Já existe um DFD com este número numa unidade sem acesso para você — ele não pode ser sobrescrito daqui. Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
+  rotulo: "Não sobrescrevível",
+  texto: "Já existe um DFD com este número que não pode ser sobrescrito daqui — numa unidade sem acesso para você ou num protocolo incorporado a um PCA (travado). Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
 };
 /** A avaliação da linha + o erro de unidade sem acesso (a MESMA régua da célula, do painel e do rodapé). */
 function comSemAcesso(r: LinhaAvaliada): LinhaAvaliada {

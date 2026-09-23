@@ -11,6 +11,7 @@ import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
+import { respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
     return erro("Sem acesso a este DFD.", 403);
   }
+  const travaEx = (await travaDeProtocolos([dfd.protocoloId])).get(dfd.protocoloId ?? 0);
+  if (travaEx) return respostaTravado(travaEx);
   const alvo = await getDfd(id); // snapshot p/ o log antes de apagar
   const r = await excluirDfd(id);
   if (!r.ok) return erro(r.erro, 409);
@@ -76,6 +79,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
   if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
+  // TRAVA do PCA: DFD de protocolo INCORPORADO (ou vínculo PARA um protocolo incorporado) não se edita.
+  const travas = await travaDeProtocolos([dfd.protocoloId, p.data.protocoloId]);
+  const trava = [...travas.values()][0];
+  if (trava) return respostaTravado(trava);
   // Itens validados ANTES de qualquer escrita (o banner envia campos + itens juntos: nada é gravado
   // pela metade). Mesma regra do import: ao menos um item e todo item com valor unitário (> 0).
   if (p.data.itens !== undefined) {

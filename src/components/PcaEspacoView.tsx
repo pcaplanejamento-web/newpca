@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { type CamadaPca, type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { Badge } from "./Badge";
 import { IconChevronLeft } from "./icons";
 import { PcaCapa } from "./PcaCard";
 import { Segmented } from "./Segmented";
+import { Skeleton, SkeletonLinhas } from "./Skeleton";
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 
@@ -20,24 +21,30 @@ export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 export function PcaEspacoView({
   pca,
   camada,
-  abaInicial,
-  abas,
+  aba: abaServidor,
+  children,
 }: {
   pca: { nome: string; ano: number | null; fonte: FontePca; status: StatusPca; capa: string | null };
   camada: CamadaPca;
-  abaInicial: AbaPca;
-  abas: Record<AbaPca, ReactNode>;
+  /** A aba que o servidor montou (`children`). */
+  aba: AbaPca;
+  children: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const [aba, setAba] = useState<AbaPca>(abaInicial);
+  // A aba pedida (clique) até o servidor devolvê-la; depois vale a do servidor (inclusive voltar/avançar).
+  const [pedida, setPedida] = useState<AbaPca | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera a pendência quando a aba do SERVIDOR muda.
+  useEffect(() => setPedida(null), [abaServidor]);
+  const aba = pedida ?? abaServidor;
 
   const trocarAba = (a: AbaPca) => {
-    setAba(a);
+    if (a === aba) return;
+    setPedida(a);
     const p = new URLSearchParams(sp.toString());
     p.set("aba", a);
-    window.history.replaceState(null, "", `${pathname}?${p.toString()}`);
+    router.push(`${pathname}?${p.toString()}`, { scroll: false });
   };
   const trocarCamada = (c: CamadaPca) => {
     const p = new URLSearchParams(sp.toString());
@@ -59,7 +66,7 @@ export function PcaEspacoView({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-black tracking-tight text-text sm:text-3xl">{pca.nome}</h1>
+            <h1 className="min-w-0 max-w-full truncate text-2xl font-black tracking-tight text-text sm:text-3xl">{pca.nome}</h1>
             <Badge tone={pca.status === "publicado" ? "emerald" : "amber"} dot>
               {ROTULO_STATUS[pca.status]}
             </Badge>
@@ -94,9 +101,16 @@ export function PcaEspacoView({
         ]}
       />
 
-      <div key={aba} className="animate-cat-morph">
-        {abas[aba]}
-      </div>
+      {aba === abaServidor ? (
+        <div key={aba} className="animate-cat-morph">
+          {children}
+        </div>
+      ) : (
+        <div className="space-y-4" aria-busy="true">
+          <Skeleton className="h-24 w-full" />
+          <SkeletonLinhas linhas={8} />
+        </div>
+      )}
     </div>
   );
 }

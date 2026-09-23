@@ -30,27 +30,21 @@ export const editarPcaEspacoSchema = z
   })
   .refine((o) => Object.values(o).some((v) => v !== undefined), "Nada para alterar.");
 
-const acao = z.enum(["incorporar", "substituir", "excluir"]);
+const acaoDfd = z.enum(["incorporar", "substituir", "excluir"]);
+const idsProtocolos = z.array(z.number().int().positive()).min(1, "Escolha ao menos um protocolo.").max(50);
 
-/** Mover protocolos (os DFDs deles) para o PCA; `acoes` sobrescreve a ação sugerida por DFD. */
-export const moverParaPcaSchema = z.object({
-  protocoloIds: z.array(z.number().int().positive()).min(1, "Escolha ao menos um protocolo.").max(50),
-  acoes: z.record(z.string().regex(/^\d+$/), acao).optional(),
-});
-
-/** Retirar DFDs (ou protocolos inteiros) do PCA. */
-export const retirarDoPcaSchema = z
-  .object({
-    dfdIds: z.array(z.number().int().positive()).max(2000).optional(),
-    protocoloIds: z.array(z.number().int().positive()).max(200).optional(),
-  })
-  .refine((o) => (o.dfdIds?.length ?? 0) + (o.protocoloIds?.length ?? 0) > 0, "Nada para retirar.");
-
-/** Trocar a ação de DFDs já vinculados. */
-export const acaoDfdsPcaSchema = z.object({
-  dfdIds: z.array(z.number().int().positive()).min(1).max(2000),
-  acao,
-});
+/**
+ * Ações da Mesa do PCA sobre PROTOCOLOS: ENVIAR (da Mesa principal para a do PCA), DEVOLVER (à Mesa principal),
+ * INCORPORAR (os DFDs entram no PCA — `acoes` = a ação por protocolo; sem ela, a sugerida pelo assunto) e
+ * DESINCORPORAR.
+ */
+export const acaoProtocolosPcaSchema = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("enviar"), ids: idsProtocolos }),
+  z.object({ acao: z.literal("devolver"), ids: idsProtocolos }),
+  z.object({ acao: z.literal("incorporar"), ids: idsProtocolos, acoes: z.record(z.string().regex(/^\d+$/), acaoDfd).optional() }),
+  z.object({ acao: z.literal("desincorporar"), ids: idsProtocolos }),
+]);
+export type AcaoProtocolosPca = z.infer<typeof acaoProtocolosPcaSchema>;
 
 const filtros = z
   .object(

@@ -7,6 +7,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
+import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca } from "@/lib/pca-core";
+import { respostaTravado, travaDoProtocolo } from "@/lib/trava-pca";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +53,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const { lista } = await getReparticaoContexto(a.u);
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
   if (!acessivel(proto.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
+  // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
+  if (estaTravado(proto) && !edicaoPermitidaTravado(campos)) return erro(mensagemTravaPca(proto.pcaNome), 423);
   if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
     return erro("Sem acesso à unidade de destino.", 403);
   }
@@ -87,6 +91,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (proto.reparticaoId != null && !lista.some((r) => r.id === proto.reparticaoId)) {
     return erro("Sem acesso a este protocolo.", 403);
   }
+  const trava = await travaDoProtocolo(id);
+  if (trava) return respostaTravado(trava);
   await excluirProtocolo(id);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído (com os DFDs vinculados)`, protocoloId: id, origem: "exclusao" });
   return ok();

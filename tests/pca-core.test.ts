@@ -6,27 +6,57 @@ import {
   consolidarPca,
   type ItemDashboard,
   type LinhaVinculo,
-  motivosNaoMover,
+  edicaoPermitidaTravado,
+  estaTravado,
+  mensagemTravaPca,
+  motivoNaoDevolver,
+  motivosNaoEnviar,
+  motivosNaoIncorporar,
   previsaoDoDfd,
 } from "../src/lib/pca-core.ts";
 
-const base = { situacaoPermite: true, situacaoNome: "Aprovado", anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, dfdsEmOutroPca: 0, fonteProtocolo: true };
+const base = { situacaoPermite: true, situacaoNome: "Aprovado", anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, fonteProtocolo: true, jaEmPca: null };
 
-describe("pca-core — travas para mover protocolo", () => {
-  it("tudo certo ⇒ pode mover", () => assert.deepEqual(motivosNaoMover(base), []));
+describe("pca-core — enviar ao PCA", () => {
+  it("tudo certo ⇒ pode enviar", () => assert.deepEqual(motivosNaoEnviar(base), []));
   it("sem situação / situação que não permite", () => {
-    assert.match(motivosNaoMover({ ...base, situacaoPermite: null }).join(), /sem situação/);
-    assert.match(motivosNaoMover({ ...base, situacaoPermite: false }).join(), /não permite/);
+    assert.match(motivosNaoEnviar({ ...base, situacaoPermite: null }).join(), /sem situação/);
+    assert.match(motivosNaoEnviar({ ...base, situacaoPermite: false }).join(), /não permite/);
   });
   it("ano divergente ou ausente", () => {
-    assert.match(motivosNaoMover({ ...base, anoProtocolo: 2026 }).join(), /PCA 2026/);
-    assert.match(motivosNaoMover({ ...base, anoProtocolo: null }).join(), /sem ano/);
+    assert.match(motivosNaoEnviar({ ...base, anoProtocolo: 2026 }).join(), /PCA 2026/);
+    assert.match(motivosNaoEnviar({ ...base, anoProtocolo: null }).join(), /sem ano/);
   });
-  it("sem DFDs / todos em outro PCA / PCA de lista", () => {
-    assert.match(motivosNaoMover({ ...base, totalDfds: 0 }).join(), /sem DFDs/);
-    assert.match(motivosNaoMover({ ...base, dfdsEmOutroPca: 3 }).join(), /outro PCA/);
-    assert.deepEqual(motivosNaoMover({ ...base, dfdsEmOutroPca: 1 }), []);
-    assert.match(motivosNaoMover({ ...base, fonteProtocolo: false }).join(), /lista pronta/);
+  it("sem DFDs / já em PCA / PCA de lista", () => {
+    assert.match(motivosNaoEnviar({ ...base, totalDfds: 0 }).join(), /sem DFDs/);
+    assert.match(motivosNaoEnviar({ ...base, jaEmPca: "PCA 2027" }).join(), /Já está no PCA 2027/);
+    assert.match(motivosNaoEnviar({ ...base, fonteProtocolo: false }).join(), /lista pronta/);
+  });
+});
+
+describe("pca-core — incorporar, devolver e trava", () => {
+  const inc = { enviadoAEste: true, incorporado: false, totalDfds: 2, dfdsEmOutroPca: 0 };
+  it("incorporar", () => {
+    assert.deepEqual(motivosNaoIncorporar(inc), []);
+    assert.match(motivosNaoIncorporar({ ...inc, enviadoAEste: false }).join(), /não está na Mesa/);
+    assert.match(motivosNaoIncorporar({ ...inc, incorporado: true }).join(), /Já incorporado/);
+    assert.match(motivosNaoIncorporar({ ...inc, dfdsEmOutroPca: 2 }).join(), /outro PCA/);
+    assert.deepEqual(motivosNaoIncorporar({ ...inc, dfdsEmOutroPca: 1 }), []);
+  });
+  it("devolver só o não incorporado deste PCA", () => {
+    assert.equal(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: null }, 5), null);
+    assert.match(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, 5) ?? "", /desincorpore/);
+    assert.match(motivoNaoDevolver({ pcaId: 6, pcaIncorporadoEm: null }, 5) ?? "", /não está/);
+  });
+  it("travado: só a gestão passa", () => {
+    assert.equal(edicaoPermitidaTravado({ situacaoId: 3, origem: "celula" }), true);
+    assert.equal(edicaoPermitidaTravado({ responsavelId: null }), true);
+    assert.equal(edicaoPermitidaTravado({ situacaoId: 3, assunto: "X" }), false);
+    assert.equal(edicaoPermitidaTravado({ valorCapa: 10, assunto: undefined }), false);
+    assert.match(mensagemTravaPca("PCA 2027"), /Incorporado ao PCA 2027/);
+    assert.equal(estaTravado({ pcaId: 1, pcaIncorporadoEm: "2027-01-01" }), true);
+    assert.equal(estaTravado({ pcaId: null, pcaIncorporadoEm: "2027-01-01" }), false);
+    assert.equal(estaTravado({ pcaId: 1, pcaIncorporadoEm: null }), false);
   });
 });
 

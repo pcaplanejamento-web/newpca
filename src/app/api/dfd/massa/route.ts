@@ -12,6 +12,8 @@ import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
+import { mensagemTravaPca } from "@/lib/pca-core";
+import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 const CHAVE_CAMPO: Record<CampoMassa, ChaveAvaliacao> = {
@@ -51,6 +53,7 @@ export async function POST(req: Request) {
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 
   const dfds = await listarCamposMassa(ids);
+  const travas = await travaDeDfds(dfds.map((d) => d.id));
   // Siglas das unidades (histórico) — UMA consulta para o lote inteiro (≤ 50 DFDs + o destino).
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
@@ -59,6 +62,11 @@ export async function POST(req: Request) {
     try {
       if (!acessivel(d.reparticaoId)) {
         falhas.push({ id: d.id, numero: d.numero, motivo: "Sem acesso à unidade deste DFD." });
+        continue;
+      }
+      const trava = travas.get(d.id);
+      if (trava) {
+        falhas.push({ id: d.id, numero: d.numero, motivo: mensagemTravaPca(trava.nome) });
         continue;
       }
       if (acao.campo === "reparticao") {
