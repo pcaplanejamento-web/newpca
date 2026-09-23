@@ -1,11 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { classificarAssunto, comportamentoNo, opcoesAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { apontamentosGravado, type GrupoAssinatura, resumoEstado } from "@/lib/dfd-tratamento";
-import { brl, dataBR, num } from "@/lib/format";
-import { valoresBatem } from "@/lib/normalize";
-import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
+import { brl, num } from "@/lib/format";
+import { Button } from "./Button";
 import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
@@ -41,7 +40,6 @@ export function CapaCampos({
   modo = "leitura",
   onChange,
   onChangeValorCapa,
-  onEditandoChange,
   children,
 }: {
   numero: string;
@@ -60,10 +58,9 @@ export function CapaCampos({
   modo?: ModoCapa;
   onChange?: (campo: CampoCapa, valor: string) => void;
   onChangeValorCapa?: (valor: number | null) => void;
-  onEditandoChange?: (editando: boolean) => void;
   children?: ReactNode;
 }) {
-  const { abertos, alternar } = useCadeados<CampoCapaEditavel>(onEditandoChange);
+  const { abertos, alternar } = useCadeados<CampoCapaEditavel>();
   const podeEditar = modo === "cadeado";
   const props = (campo: CampoCapaEditavel) => ({
     editavel: podeEditar,
@@ -135,72 +132,18 @@ export function CapaCampos({
   );
 }
 
-/**
- * Campos editáveis do protocolo (banner destravado). Os **IDENTIFICADORES** da capa
- * (número/Id/data) são IMUTÁVEIS; os campos de **CONTEÚDO** (interessado/assunto/
- * observação/CPF-CNPJ/valor/local) e a **repartição** (roteamento) são editáveis
- * com cadeado por campo.
- */
-export type ProtocoloEdicaoValores = {
-  reparticaoId: number | null;
-  interessado?: string | null;
-  assunto?: string | null;
-  observacao?: string | null;
-  documento?: string | null;
-  valorCapa?: number | null;
-  localReparticao?: string | null;
-};
-export type ProtocoloEdicao = {
-  trancado: boolean;
-  reparticoes: { id: number; codigo: string; nome: string }[];
-  valores: ProtocoloEdicaoValores;
-  onChange: (patch: Partial<ProtocoloEdicaoValores>) => void;
-};
-
-/**
- * Visão COMPLETA (read-only) do protocolo — metadados da capa + a lista dos DFDs
- * que ele reúne. Componente presentacional (forma estrutural satisfeita por
- * `ProtocoloDetalhe`); o "Ver" de cada DFD é delegado via `onVerDfd` (opcional,
- * para catalogar com mock sem buscar dados).
- */
-export type ProtocoloVisualDfd = {
-  id: number;
-  numero: string;
-  planejamento: string | null;
-  tipo: string | null;
-  setorRequisitante: string | null;
-  reparticaoCodigo: string | null;
-  totalItens: number | null;
-  valorTotal: number | null;
-  // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO na lista.
-  numeroContrato?: string | null;
-  numeroAta?: string | null;
-  numeroLicitacao?: string | null;
-  // Tipos de assinatura (Centi/Dropsigner/Adobe) — coluna "Assinatura" (vem do DfdResumo).
-  assinaturaGrupos?: GrupoAssinatura[];
-};
-
-export type ProtocoloVisual = {
+/** Valores da CAPA do protocolo — a MESMA forma na análise (PDF/manual) e no protocolo gravado. */
+export type CapaValores = {
   numero: string;
   idExterno: string | null;
-  anoPca: number | null;
-  data: string | null;
-  interessado: string | null;
-  documento: string | null;
-  assunto: string | null;
-  observacao: string | null;
-  localReparticao: string | null;
+  data: string;
+  documento: string;
+  interessado: string;
+  assunto: string;
+  observacao: string;
   valorCapa: number | null;
-  reparticaoCodigo: string | null;
-  reparticaoNome: string | null;
-  criadoEm?: string | null;
-  totalDfds: number;
-  totalItens: number;
-  valorTotal: number;
-  dfds: ProtocoloVisualDfd[];
+  localReparticao: string | null;
 };
-
-const valorDfd = (d: ProtocoloVisualDfd) => d.valorTotal ?? 0;
 
 /**
  * Cabeçalho FIXO do banner do protocolo (topo do `Modal`, não o corpo): nº do processo +
@@ -228,149 +171,193 @@ export function ProtocoloCabecalho({
   );
 }
 
+/**
+ * CORPO ÚNICO do banner do protocolo — o MESMO na ANÁLISE (importação do PDF / criação manual) e no
+ * protocolo GRAVADO: mini banners (DFDs · itens · somatória), a CONCILIAÇÃO do valor da capa ×
+ * somatória dos DFDs (com "Substituir pela somatória"), os dados da capa (`CapaCampos` — cadeado por
+ * campo nos de conteúdo; identificadores sempre travados) + unidade/PCA e a planilha de DFDs
+ * (`PlanilhaDfds`, com seleção para a edição em massa). Na análise os DFDs com erro/atenção ficam em
+ * tabelas separadas; no gravado (`unica`) é UMA tabela só. Presentacional: o host é dono do estado.
+ */
 export function ProtocoloView({
-  protocolo,
+  capa,
+  modoCapa = "leitura",
+  numeroEditavel = false,
+  assuntos,
+  onCapaChange,
+  onValorCapaChange,
+  unidade,
+  pca,
+  totais,
+  conciliacao,
+  onSubstituir,
+  linhas,
+  unica = false,
+  selecionavel = false,
+  selected,
+  onSelected,
   onVerDfd,
   dfdAtivo = null,
-  edicao,
+  compacta = false,
   regras = regrasPadrao(),
+  vazio,
+  nota,
 }: {
-  protocolo: ProtocoloVisual;
-  onVerDfd?: (id: number) => void;
-  /** DFD ATIVO (banner aberto ao lado) — linha destacada na tabela (mestre-detalhe). */
+  capa: CapaValores;
+  modoCapa?: ModoCapa;
+  numeroEditavel?: boolean;
+  /** Opções do ASSUNTO (seleção). */
+  assuntos?: string[];
+  onCapaChange?: (campo: CampoCapa, valor: string) => void;
+  onValorCapaChange?: (valor: number | null) => void;
+  /** Unidade do protocolo: seleção (com `onChange`) ou só-leitura. */
+  unidade: {
+    id: number | null;
+    opcoes: { id: number; codigo: string; nome: string; oculto?: boolean | null }[];
+    onChange?: (id: number | null) => void;
+    rotulo?: string;
+    obrigatoria?: boolean;
+    /** Texto só-leitura quando a unidade não está entre as opções (ex.: sem acesso). */
+    textoLeitura?: string;
+  };
+  /** PCA do processo: o `PcaPicker` na análise; só-leitura no gravado (identificador). */
+  pca: ReactNode;
+  totais: { dfds: number; itens: number; somatorio: number; dica?: string };
+  conciliacao: ConciliacaoCapa;
+  /** Substitui o valor da capa pela somatória (um clique). Ausente = só aponta. */
+  onSubstituir?: () => void;
+  linhas: LinhaDfd[];
+  unica?: boolean;
+  selecionavel?: boolean;
+  selected?: Set<string | number>;
+  onSelected?: (s: Set<string | number>) => void;
+  onVerDfd?: (key: number) => void;
+  /** DFD ATIVO (banner aberto ao lado) — linha destacada (mestre-detalhe). */
   dfdAtivo?: number | null;
-  edicao?: ProtocoloEdicao;
+  compacta?: boolean;
   regras?: RegrasAvaliacao;
+  /** Conteúdo quando não há DFDs. */
+  vazio?: ReactNode;
+  /** Nota ao pé (ex.: "Protocolado em …"). */
+  nota?: ReactNode;
 }) {
-  const editando = !!edicao && !edicao.trancado;
-  // Destravado → a capa mostra o RASCUNHO (`edicao.valores`); senão, o gravado.
-  const capaVals = editando && edicao ? edicao.valores : null;
-  const rep =
-    protocolo.reparticaoCodigo || protocolo.reparticaoNome
-      ? `${protocolo.reparticaoCodigo ?? ""}${protocolo.reparticaoNome ? ` · ${protocolo.reparticaoNome}` : ""}`
-      : "Sem unidade";
-  const categoria = classificarAssunto(protocolo.assunto);
-  // Valor da capa × somatória dos valores dos DFDs (o valor de cada DFD é a soma dos
-  // seus itens). A capa é imutável; aqui a divergência é só APONTADA (a conciliação
-  // acontece uma única vez, na importação, antes de gravar). "ignorar" desliga a nota.
-  const capaDivergente =
-    comportamentoNo(regras, "protocolo.valorCapa", { categoria }) !== "ignora" &&
-    protocolo.valorCapa != null &&
-    !valoresBatem(protocolo.valorCapa, protocolo.valorTotal);
-
-  // Planilha ÚNICA de DFDs (a mesma da importação e da aba DFDs). Um DFD gravado já passou pela
-  // validação; a lista aponta só o que o resumo permite (`apontamentosGravado`).
-  const linhasDfd: LinhaDfd[] = protocolo.dfds.map((d) => ({
-    key: d.id,
-    numero: d.numero,
-    planejamento: d.planejamento,
-    sigla: d.reparticaoCodigo ?? "—",
-    tipo: tipoCurtoDfd(d.tipo),
-    itens: d.totalItens,
-    valor: valorDfd(d),
-    // Gravados: aponta o que o resumo permite (tipo ausente / DFD-R sem referência), no nível do ADM.
-    estado: apontamentosGravado(d, regras, categoria).estado,
-    resumo: resumoEstado(apontamentosGravado(d, regras, categoria).msgs),
-    assinaturas: d.assinaturaGrupos ?? [],
-  }));
-
+  const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
+  const c = conciliacao;
   return (
     <div className="space-y-5">
-      {/* O nº/Id/Assunto do processo ficam no cabeçalho FIXO do banner (`ProtocoloCabecalho`),
-          não aqui. Nas telas soltas (catálogo) o `ProtocoloCabecalho` é renderizado acima. */}
+      {/* Head — mini banners (um por informação): DFDs · itens · somatória. 2-up no mobile. */}
+      {totais.dfds > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatMini label="Total de DFDs" value={num(totais.dfds)} />
+          <StatMini label="Total de itens" value={num(totais.itens)} hint={totais.dica} />
+          <StatMini
+            label="Somatória dos DFDs"
+            value={brl(c.somatorio || totais.somatorio)}
+            tone={c.divergente ? (c.bloqueia ? "danger" : "warn") : "default"}
+            hint={totais.dica}
+            className="col-span-2 sm:col-span-1"
+          />
+        </div>
+      )}
 
-      {/* Head — mini banners (um por informação): total de DFDs + somatória dos valores.
-          2-up no mobile (a somatória em R$ cabe inteira) → 3-up a partir de sm. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatMini label="Total de DFDs" value={num(protocolo.totalDfds)} />
-        <StatMini label="Total de itens" value={num(protocolo.totalItens)} />
-        <StatMini
-          label="Somatória dos DFDs"
-          value={brl(protocolo.valorTotal)}
-          tone={capaDivergente ? "warn" : "default"}
-          className="col-span-2 sm:col-span-1"
-        />
-      </div>
-
-      {capaDivergente && (
-        <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
-          <p className="font-semibold">O valor da capa diverge da somatória dos DFDs</p>
-          <p className="mt-1 opacity-90">
-            Valor da capa: {brl(protocolo.valorCapa)} · Somatória dos DFDs: {brl(protocolo.valorTotal)}.
+      {/* Conciliação do VALOR DA CAPA × somatória (mesma régua da análise e do gravado). */}
+      {c.divergente && (
+        <Callout kind={c.bloqueia ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
+          <p className="font-semibold">
+            {c.zerada ? "O valor da capa está ausente/zerado" : "O valor da capa diverge da somatória dos DFDs"}
+            {c.bloqueia ? "" : " (atenção — não bloqueia)"}
           </p>
+          <p className="mt-1 opacity-90">
+            Valor da capa: {capa.valorCapa != null ? brl(capa.valorCapa) : "—"} · Somatória dos DFDs: {brl(c.somatorio)}.
+            {onSubstituir ? " Substitua o valor da capa pela somatória para conciliar." : ""}
+          </p>
+          {onSubstituir && (
+            <div className="mt-2">
+              <Button variant="secondary" onClick={onSubstituir}>
+                Substituir pela somatória ({brl(c.somatorio)})
+              </Button>
+            </div>
+          )}
         </Callout>
       )}
 
-      {/* Dados da capa — MESMA grade (`CapaCampos`) da importação. Os IDENTIFICADORES
-          (número/Id/data) ficam sempre travados; os campos de CONTEÚDO ganham cadeado por
-          campo quando destravado. Quando editando, mostra o RASCUNHO (`edicao.valores`). */}
+      {/* Dados da capa — MESMA grade (`CapaCampos`); identificadores sempre travados; conteúdo com
+          cadeado por campo (análise do PDF / gravado editável) ou inputs simples (criação manual). */}
       <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
         <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
         <CapaCampos
-          numero={protocolo.numero}
-          idExterno={protocolo.idExterno}
-          data={protocolo.data ?? ""}
-          documento={(capaVals ? capaVals.documento : protocolo.documento) ?? ""}
-          interessado={(capaVals ? capaVals.interessado : protocolo.interessado) ?? ""}
-          assunto={(capaVals ? capaVals.assunto : protocolo.assunto) ?? ""}
-          observacao={(capaVals ? capaVals.observacao : protocolo.observacao) ?? ""}
-          valorCapa={capaVals ? (capaVals.valorCapa ?? null) : protocolo.valorCapa}
-          localReparticao={capaVals ? (capaVals.localReparticao ?? null) : protocolo.localReparticao}
-          assuntos={opcoesAssunto(regras, capaVals ? capaVals.assunto : protocolo.assunto)}
-          modo={editando ? "cadeado" : "leitura"}
-          onChange={
-            editando && edicao
-              ? (campo, v) => edicao.onChange({ [campo]: v || null } as Partial<ProtocoloEdicaoValores>)
-              : undefined
-          }
-          onChangeValorCapa={editando && edicao ? (v) => edicao.onChange({ valorCapa: v }) : undefined}
+          numero={capa.numero}
+          idExterno={capa.idExterno}
+          data={capa.data}
+          documento={capa.documento}
+          interessado={capa.interessado}
+          assunto={capa.assunto}
+          observacao={capa.observacao}
+          valorCapa={capa.valorCapa}
+          localReparticao={capa.localReparticao}
+          assuntos={assuntos}
+          numeroEditavel={numeroEditavel}
+          modo={modoCapa}
+          onChange={onCapaChange}
+          onChangeValorCapa={onValorCapaChange}
         >
-          <div>
-            <TextField label="PCA (ano)" value={protocolo.anoPca != null ? String(protocolo.anoPca) : "—"} disabled readOnly />
+          <div className="sm:col-span-2">
+            {unidade.onChange ? (
+              <>
+                <label className={labelCls} htmlFor="proto-unidade">
+                  {unidade.rotulo ?? "Unidade"} {unidade.obrigatoria && <span style={{ color: "var(--danger)" }}>*</span>}
+                </label>
+                <select
+                  id="proto-unidade"
+                  className={inputCls}
+                  value={unidade.id ?? ""}
+                  onChange={(e) => unidade.onChange?.(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">— Selecione a unidade —</option>
+                  {unidade.opcoes
+                    .filter((r) => !r.oculto || r.id === unidade.id)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.codigo} · {r.nome}
+                      </option>
+                    ))}
+                </select>
+              </>
+            ) : (
+              <TextField
+                label={unidade.rotulo ?? "Unidade"}
+                value={repSel ? `${repSel.codigo} · ${repSel.nome}` : (unidade.textoLeitura ?? "Sem unidade")}
+                disabled
+                readOnly
+              />
+            )}
           </div>
-          {editando && edicao ? (
-            <div className="sm:col-span-2">
-              <label className={labelCls} htmlFor="proto-edit-rep">
-                Unidade
-              </label>
-              <select
-                id="proto-edit-rep"
-                className={inputCls}
-                value={edicao.valores.reparticaoId ?? ""}
-                onChange={(e) => edicao.onChange({ reparticaoId: e.target.value ? Number(e.target.value) : null })}
-              >
-                <option value="">— Selecione a unidade —</option>
-                {edicao.reparticoes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.codigo} · {r.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="sm:col-span-2">
-              <TextField label="Unidade" value={rep} disabled readOnly />
-            </div>
-          )}
+          <div className="sm:col-span-2">{pca}</div>
         </CapaCampos>
       </section>
 
-      <section>
-        <h3 className="mb-2 text-sm font-bold text-text">DFDs do protocolo ({protocolo.dfds.length})</h3>
-        {protocolo.dfds.length === 0 ? (
+      {/* Planilha ÚNICA de DFDs (a mesma da análise, do gravado e da aba DFDs). */}
+      {linhas.length === 0 ? (
+        (vazio ?? (
           <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum DFD vinculado a este protocolo ainda.
+            Nenhum DFD vinculado a este protocolo.
           </p>
-        ) : (
-          <PlanilhaDfds linhas={linhasDfd} onRowClick={onVerDfd} ativa={dfdAtivo} regras={regras} />
-        )}
-      </section>
-
-      {protocolo.criadoEm && (
-        <p className="text-[11px] text-faint">Protocolado em {dataBR(protocolo.criadoEm)}.</p>
+        ))
+      ) : (
+        <PlanilhaDfds
+          linhas={linhas}
+          unica={unica}
+          selecionavel={selecionavel}
+          selected={selected}
+          onSelected={onSelected}
+          onRowClick={onVerDfd}
+          ativa={dfdAtivo}
+          compacta={compacta}
+          regras={regras}
+        />
       )}
+
+      {nota}
     </div>
   );
 }
-
-

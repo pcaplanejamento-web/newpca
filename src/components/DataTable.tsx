@@ -23,6 +23,9 @@ export type Column<R> = {
   /** Valor textual da célula: p/ derivar opções, ordenar e filtrar (datas em ISO). */
   value?: (row: R) => string;
   minWidth?: number;
+  /** Sem quebra de linha: a coluna ganha a largura do CONTEÚDO (dados curtos — nº, sigla, badges,
+   * valores). A tabela cresce e rola no eixo x do próprio container (nunca estoura a página). */
+  nowrap?: boolean;
 };
 
 type Key = string | number;
@@ -288,7 +291,7 @@ export function DataTable<R>({
                 return (
                   <th
                     key={c.key}
-                    className={`${head} ${alinhaTexto}`}
+                    className={`${head} ${alinhaTexto} ${c.nowrap ? "whitespace-nowrap" : ""}`}
                     style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                   >
                     {tipo === "date" ? (
@@ -362,7 +365,7 @@ export function DataTable<R>({
                   {columns.map((c) => (
                     <td
                       key={c.key}
-                      className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center"}`}
+                      className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center"} ${c.nowrap ? "whitespace-nowrap" : ""}`}
                     >
                       {c.render?.(r)}
                     </td>

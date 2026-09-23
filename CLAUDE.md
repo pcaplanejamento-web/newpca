@@ -422,16 +422,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pendência — prioridade que não é ALTA/MÉDIA/BAIXA, previsão que não é MÊS/AAAA nem ANUAL (`normPrevisao`; "12 MESES"
     = ANUAL), fundamentação que não cita norma ("BAIXA" não é fundamentação). Antes o Tratamento mostrava "tratar" e as
     mensagens "preenchida". **Seção trocada** (DFD 136 real: "6 - FUNDAMENTAÇÃO LEGAL: BAIXA", sem a seção de prioridade)
-    → `normalizarSecoesDfd` move para a PRIORIDADE (auto) e a fundamentação fica a tratar. A **Justificativa (§3)** ganhou
-    editor no bloco Tratamento (antes a falta não tinha onde ser tratada).
+    → `normalizarSecoesDfd` move para a PRIORIDADE (auto) e a fundamentação fica a tratar.
+  - **TODAS as seções editáveis NA PRÓPRIA SEÇÃO (cadeado por seção):** o `DfdView` (`onSecoesChange` + `secaoEditavel`)
+    mostra cada seção num `SecaoCard` com **cadeado** (`CadeadoBotao`): destravar = `AutoTextarea` com o texto inteiro.
+    Vale para TODAS (2, 3, 5, 6, 7, 8, 9… e o texto de apoio da §4); as **obrigatórias AUSENTES** (§3/§5/§6/§7,
+    `SECOES_OBRIGATORIAS` com título/nº canônicos) aparecem como **"não preenchida"** (na cor da importância do ADM) e,
+    ao preencher, são criadas (`setTextoSecao`) — a chave do card é ESTÁVEL (`obr:<kw>`), então o foco não se perde. A
+    **Justificativa saiu do bloco Tratamento** (edita-se direto na §3); o Tratamento ficou com os controles estruturados
+    de prioridade/previsão/fundamentação. O "editável" do ADM (`editavelDe`) vale por seção obrigatória.
   - **Tipo do DFD obrigatório (`dfd.tipo`, configurável, padrão `bloqueia`, editável):** muitos formulários NÃO trazem o
     "Tipo DFD" (todos os 15 do `pd101820`). Tratamento por **seleção** (`DfdConferir`, select DFD-S/R/O/E → `TIPO_DFD_ROTULO`)
     e **em massa** no protocolo (barra de edição em massa → "Tipo"); no gravado vai pelo `PATCH /api/dfd/[id]` (`tipo`).
   - **Item duplicado (`item.duplicado`, antes só no catálogo — nunca avaliado):** mesmo código **E** mesma descrição
     (`itensDuplicados`; o mesmo código com descrição diferente — outro local — é legítimo, DFD 136 real). Tratamento:
     **"Remover item"** no `ItemDetalhe` (`removerItemDfd`, recomputa o total; no gravado grava os itens no D1).
-  - **Listas de DFDs GRAVADOS** apontam o que o resumo permite (`apontamentosGravado`: tipo ausente + DFD-R sem referência),
-    no nível do ADM; o detalhe completo vem ao abrir o DFD.
+  - **Conferência por LINHA única (`avaliarLinhaDfd`, `src/lib/conferencia-dfd.ts`, puro):** o ESTADO de cada DFD nas
+    tabelas é DERIVADO das MESMAS mensagens do painel (`mensagensDoDfd`, agora no lib): algum erro ⇒ `erro`; senão alguma
+    atenção ⇒ `atencao`; senão o ciclo (editado › regularizado › regular). Fora da linha só o **ano do PCA** (portão do
+    protocolo) e o **catálogo** (lazy, ao abrir). Usada na ANÁLISE (`ProtocoloUploadForm`, com cache por objeto de DFD),
+    no PROTOCOLO GRAVADO (`ProtocoloGravado`), no DFD gravado (`DfdGravado`) e na LISTA da Mesa — calculada no servidor
+    (`POST /api/dfd/conferencia`, em fatias de 150 ids, DFD completo + a unidade REAL com os responsáveis). O
+    `protocolar()` também usa a mesma função por DFD (não protocola DFD em erro) e o "Importar DFD" avulso bloqueia se as
+    mensagens têm erro — célula, painel e botões nunca se contradizem. (O antigo `apontamentosGravado` foi removido.)
   - **Protocolo:** assunto por **seleção** (`opcoesAssunto` = atual + categorias fixas + assuntos cadastrados; primitivo
     `CampoSelecao` com cadeado) e, se a capa do PDF veio **sem número**, o número pode ser informado (`numeroEditavel`).
 - **Avaliação CONFIGURÁVEL pelo ADM — IMPORTÂNCIAS gerenciáveis (`avaliacao-core.ts` puro + `avaliacao.ts` loader):**
@@ -493,8 +505,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   precedência (permite a edição do usuário). `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
   protocolo, ou do próprio DFD no avulso). O que não dá
   para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
-  PREVISÃO (mês + ano [padrão = ano do PCA] + toggle ANUAL) e FUNDAMENTAÇÃO LEGAL (`TextField`, padrão "Lei 14.133/2021") — só componentes
-  do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio normal (sem migração). Cada DFD ganha um
+  PREVISÃO (mês + ano [padrão = ano do PCA] + toggle ANUAL; `buildPrevisao`, puro) e FUNDAMENTAÇÃO LEGAL (`TextField`,
+  padrão "Lei 14.133/2021") — só componentes do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio
+  normal (sem migração). A JUSTIFICATIVA e as demais seções editam-se direto na seção (cadeado por seção, ver acima). Cada DFD ganha um
   **estado** (`estadoDfd`: com erro › editado › regularizado › regular › pendente; cor por token `--danger/--info/
   --warn/--ok/--muted`). Setor **é** repartição (rótulo unificado; a "regularização" é gravar `reparticaoId`).
 - **Edição de PCA** (`pcas`/`pca_dfds`) une DFDs selecionados **por referência** (DFDs novos não mudam uma
@@ -568,19 +581,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + `max-width` animados por token de motion] e um por vez no mobile; trocar de DFD atualiza o lateral
   (`animate-fade-in-up`). Analisa/normaliza
   em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
-  sobreviverem** ao envio; `protocolar` usa a cópia do cache e só re-parseia o que faltou. `ProtocoloView` read-only,
-  catalogado). **Capa: identificadores IMUTÁVEIS, conteúdo editável (cadeado por campo) + conferência do valor:** os
+  sobreviverem** ao envio (a análise NÃO re-parseia/sobrescreve um DFD que o usuário já abriu — `parsedRef`);
+  `protocolar` usa a cópia do cache e só re-parseia o que faltou. **Progresso REAL da análise:** `analise =
+  {fase:"texto"|"ocr", feito, total, atual}` → barra `Progress` no rodapé ("Analisando DFD 1234 (3 de 15)…" /
+  "Lendo assinatura por OCR — DFD …") e, por linha, `LinhaDfd.processando` ("Lendo o DFD…"/"Lendo assinatura
+  (OCR)…"/"Na fila", com spinner na célula Estado); a leitura do PDF (índice) mostra "Página p de N"
+  (`indexarProtocoloPdf(file, onProgresso)`). Corpo do banner = `ProtocoloView` (corpo ÚNICO, ver abaixo). **Capa: identificadores IMUTÁVEIS, conteúdo editável (cadeado por campo) + conferência do valor:** os
   **IDENTIFICADORES** da capa (número/Id/data/ano do PCA) **não são editáveis em nenhum tempo**; os campos de
   **CONTEÚDO** (interessado/assunto/observação/CPF-CNPJ/valor/local) têm **cadeado POR CAMPO** (a mesma lógica dos itens,
   primitivos em `CampoCadeado`) — destraváveis tanto no **preview do PDF** (`modo="cadeado"` do `CapaCampos`) quanto no
   **gravado destravado**; a criação manual usa inputs simples (`modo="criar"`). A **repartição** (roteamento) segue
-  editável (seletor obrigatório no import, cadeado no gravado). O **Valor da capa** é editável e **conciliado** uma vez
-  na importação (o botão "Substituir pela somatória" continua). O
-  preview mostra TODOS os dados da capa igual ao gravado (Id, CPF/CNPJ, **Valor da capa**, Local) + **mini banners**
-  (`StatMini`) de total de DFDs + **somatória dos valores dos DFDs** (valor do DFD = soma dos itens, `valorTotal`).
-  **NÃO protocola** com o Valor da capa **zerado/nulo** OU **diferente** da somatória (`valoresBatem`, tolerância 1
-  centavo) — divergência **trava** e o usuário **substitui** a capa pela somatória (um clique) para liberar.
-  `ProtocoloView` só **aponta** a divergência (não substitui sozinho; o usuário destrava o Valor e ajusta). **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
+  editável (seletor obrigatório na análise e no gravado). O **Valor da capa** é editável e **conciliado** — na análise E
+  no gravado — pela fonte única **`conciliacaoCapa`** (`dfd-tratamento`, pura): capa **nula/zerada** OU **diferente** da
+  somatória (arredondada ao centavo; `valoresBatem`) ⇒ divergente; só confere com a somatória COMPLETA (análise
+  terminada; descartados fora) e **NÃO depende de os DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
+  DFD com erro — e o relatório perdia a linha da capa). O botão **"Substituir pela somatória"** (um clique) aparece na
+  análise e no gravado; `protocolo.valorCapa` do ADM decide se trava (padrão) ou só avisa. `estadoProtocolo` (lista de
+  protocolos) usa a MESMA régua; o `motivo` vai ao despacho. O preview mostra TODOS os dados da capa igual ao gravado
+  (Id, CPF/CNPJ, **Valor da capa**, Local) + **mini banners** (`StatMini`) de total de DFDs + **somatória**. **Separa as vias** (`classificarPdf`, em `parse-protocolo-pdf-core.ts`): protocolo (capa OU ≥2
   "Número DFD") não entra pela aba DFDs e o DFD avulso não entra pela aba Protocolos; documento estranho é recusado.
   Sem nova aba.
 - **Importação por botão único + lançador (`Dropzone`):** cada tela de importação (Protocolos, DFD, Planilha PCA) tem
@@ -595,8 +613,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   TODO lugar — banner de importação, banner do protocolo GRAVADO (`ProtocoloView`) e a **aba DFDs** (`DfdsView`). Cada
   tela mapeia seus dados (parse do PDF / D1) para o modelo `LinhaDfd`. Colunas: **[seleção] · Estado · [Situação] · Nº
   DFD · Nº Plan. · Sigla · Tipo (`tipoCurtoDfd`) · Assinatura · [Protocolo] · Itens · Valor total · [ações]** (as
-  opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis**; os **DFDs com erro numa tabela SEPARADA** acima
-  da de regulares; **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição
+  opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis** e **sem quebra de linha** (`Column.nowrap` do
+  `DataTable`: a coluna ganha a largura do CONTEÚDO — ex.: os badges da Assinatura + "(auto)" numa linha só; a tabela
+  rola no eixo x do próprio container). Na **ANÁLISE** os **DFDs com erro/atenção ficam em tabelas SEPARADAS** acima das
+  regulares; **depois de protocolado** (`unica`) é **UMA tabela só** (o filtro da coluna Estado separa) — a única
+  diferença entre análise e gravado. `LinhaDfd.processando` mostra spinner + o que está acontecendo ("Lendo o DFD…",
+  "Lendo assinatura (OCR)…", "Na fila", "Conferindo…"). A célula Estado é o componente `EstadoCelula`
+  (`EstadoResumo`/`EstadoPonto`, o MESMO nas tabelas de DFDs, itens e protocolos); **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição
   pela edição em massa ou abrindo o DFD ao lado) — a sigla vem em **AZUL (accent) quando detectada automaticamente**
   (a própria cor denota o auto; **sem** o antigo rótulo "auto"), e na cor normal quando definida à mão.
   - **Célula "Estado" APONTA o erro (≤ 3 palavras) em vez de "Com erro"/"Atenção"** (`resumoEstado`/`ROTULO_CURTO`, puros):
@@ -611,12 +634,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadeado por campo (`modo` `leitura`/`criar`/`cadeado`).
   O **head** mostra **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o
   `RelatorioErros`. A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
-  campo + Aplicar + Limpar embaixo). **Banner do protocolo gravado = mesmos blocos do de importação** (CapaCampos +
-  StatMini + conciliação + PlanilhaDfds), + o **cadeado**.
+  campo + Aplicar + Limpar embaixo) — é o componente **`BarraEdicaoMassa`** (emite uma `AcaoMassa`; conteúdo aplicado por
+  `aplicarMassaDfd`, puro; só oferece os campos que o ADM deixou editáveis). **Corpo do banner do protocolo = UM
+  componente (`ProtocoloView`)** na análise E no gravado: mini banners + conciliação da capa (+ "Substituir pela
+  somatória") + `CapaCampos` + unidade/PCA + `PlanilhaDfds` (com seleção).
 - **Item/DFD com ESTADO + relatório de erro (DfdView/DfdConferir):** a **tabela de itens** (Seção 4) tem uma coluna
   **Estado** por item que **aponta a falta ESPECÍFICA** (`resumoEstado(mensagensItem(it))`: "Item sem valor"/"Item sem
-  quantidade" + `+N` + tooltip `title`; `estadoItem`/`faltasDoItem` seguem como base), **filtro em todas as colunas** e os
-  **itens com pendência numa tabela SEPARADA** (acima da de regulares). O nº/tipo/planejamento
+  quantidade" + `+N` + tooltip `title`; `estadoItem`/`faltasDoItem` seguem como base), **filtro em todas as colunas** e,
+  na ANÁLISE, os **itens com pendência numa tabela SEPARADA** (acima da de regulares); no DFD gravado (`unica` /
+  `DfdConferir.tabelaUnica`) é UMA tabela só. O nº/tipo/planejamento
   do DFD (e nº/Id/Assunto do protocolo) ficam no **cabeçalho FIXO do banner** (`Modal.cabecalho` = `DfdCabecalho`/
   `ProtocoloCabecalho`) — NÃO se repetem no corpo. **Rodapé de TODA tabela = só os agregados das linhas** (`resumo`):
   nº de itens/DFDs + somatória dos valores (nunca texto de ajuda). **Mensagens/relatórios CIRÚRGICOS:** `faltasCirurgicasDfd`
@@ -631,8 +657,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aparecem mais soltas no corpo do banner do DFD. `mensagensDfd` (puro, `dfd-tratamento`) monta a lista COMPLETA
   (erro/atenção/**acerto**, sem exceção — só omite pontos "ignorar" do ADM), cada uma com uma **âncora** (id do
   componente: `reparticao`/`anoPca`/`justificativa`/`previsao`/`prioridade`/`fundamentacao`/`referenciaRenovacao`/
-  `itens`/`valor`/`assinatura`, marcadas com `data-ancora` no `DfdConferir`/`DfdView`). `mensagensDoDfd` (exportado de
-  `DfdConferir`) já confere a assinatura e é a **fonte única** (contador do botão + painel). O botão **`BotaoVerMensagens`**
+  `itens`/`valor`/`assinatura`, marcadas com `data-ancora` no `DfdConferir`/`DfdView`). `mensagensDoDfd` (`src/lib/
+  conferencia-dfd.ts`) já confere a assinatura e é a **fonte única** (contador do botão + painel + célula Estado via
+  `avaliarLinhaDfd`). O rodapé do banner do DFD é o componente **`DfdRodape`** (estado + ações + mensagens + Fechar +
+  ação principal) e o painel da direita é **`DfdPainelDireito`** (mensagens / item / histórico) — os MESMOS na análise
+  (avulso e protocolo) e no gravado (DFD solto e DFD ao lado do protocolo gravado). O botão **`BotaoVerMensagens`**
   (Ver/Ocultar mensagens + a numeração por status) fica no **RODAPÉ FIXO do banner do DFD, à esquerda do Fechar** (não
   no corpo). Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação de lateral),
   ficando **ambos manipuláveis** (o DFD NÃO é substituído): **DFD avulso / gravado solto** → o DFD é o principal e as
@@ -655,36 +684,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   catálogo NÃO pode ser alterado** (`toast.error`): Código (chave do match), Descrição (`!conf.divergDescricao`), Unidade
   (`!conf.divergUnidade`); Quantidade/Valores não têm equivalente → sempre livres; item não catalogado → tudo livre.
   Vale na **importação E no gravado** (os hosts passam `editavel`+`conformidade`). A edição recomputa o **valorTotal do
-  DFD** (Σ) via `editarItemDfd`. No **gravado** (`DfdsView`), o `ItemDetalhe` avisa quando **algum campo está aberto**
-  (`onEditandoChange`) e mostra **"Salvar alterações"** no rodapé → `PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`
-  (apaga+reinsere + recomputa total); ao salvar, o painel remonta (nonce) e re-trava. Só **editor**; escopo por unidade e
-  `valorUnitario>0` no servidor.
-- **Editar DFD/protocolo JÁ GRAVADO (mesmo banner da importação, com cadeado):** clicar num DFD/protocolo da lista
-  abre o **MESMO componente** da importação (`DfdConferir` p/ DFD; `ProtocoloView` editável p/ protocolo), começando
-  **TRAVADO** (read-only). Um **cadeado** (`Modal.acoesCabecalho`) ao lado do X destrava (com **confirmação**) → os
-  campos ficam editáveis (incl. o **cabeçalho do DFD com cadeado por campo** — bloco "Cabeçalho — conteúdo" no
-  `DfdConferir`, primitivos `CampoCadeado`, `onCamposChange`) e um **"Salvar alterações"** grava **direto no D1**
-  (`PATCH /api/dfd/[id]` edita repartição/seções/itens/refs + conteúdo do cabeçalho via `atualizarDfdCampos`;
-  `PATCH /api/protocolo/[id]` edita **repartição + conteúdo da capa** via
-  `atualizarProtocolo` — os identificadores de DFD/capa seguem imutáveis) e o
-  `router.refresh()` reflete em todas as telas. Só **editor** (admin/gestor) vê o cadeado; escopo por repartição em
-  toda escrita. `DfdConferir` e `Segmented` ganham `readOnly`/`disabled` para o estado travado.
-  - **Botão de ATUALIZAR ao lado do X (banner de protocolo/DFD/itens):** o `Modal.acoesCabecalho` do banner gravado
-    (em `DfdsView`) traz, **antes do cadeado**, um botão **`IconRefresh`** que **rebusca os dados atuais do banco**
-    (re-chama `verProtocolo`/`verDfd` → `GET /api/protocolo|dfd/[id]`) — recarrega o banner com o que está gravado no
-    D1 (descartando edições não salvas), sem fechar. Aparece sempre que o banner está aberto (não depende do cadeado).
-  - **"1 · Área requisitante da demanda" TOTALMENTE editável (cadeado por campo):** quando o cadeado do DFD está
-    aberto, o bloco da Seção 1 vira editável com a **mesma lógica de cadeado por campo** dos itens/capa
-    (`CampoCadeado`). O `DfdView` ganhou `ocultarSecao1?` (guarda a Seção 1 read-only) e o `DfdConferir` passa
-    `ocultarSecao1={cabEditavel}` — quando editável, a Seção 1 read-only some e no lugar entra o bloco editável (os
-    **identificadores** Nº DFD/Planejamento/Ano do PCA seguem **travados**, `editavel={false}`; o conteúdo
-    Órgão/Setor/Responsável/matrícula/e-mail/telefone é editável e flui pelo `onCamposChange` → `atualizarDfdCampos`).
-- **DFD ao lado do protocolo gravado (mesma animação da importação):** o banner do protocolo gravado é
-  **mestre-detalhe** igual ao da importação — clicar num DFD abre `DfdConferir` como **LATERAL à direita** (mesmo
-  componente, animação e comportamento; a única diferença é o **cadeado**). O `Modal.lateral` ganhou
-  `acoesCabecalho` (cadeado próprio do lateral); em `DfdsView` o estado de edição do DFD é **reusado** — o modal
-  avulso do DFD só aparece **fora** de um protocolo (`open={!!dfdView && !protoView}`), senão vira o lateral do
-  protocolo; `fecharProto` fecha também o DFD do lateral.
+  DFD** (Σ) via `editarItemDfd`. No **gravado**, a edição do item entra no RASCUNHO do DFD e vai ao banco no "Salvar
+  alterações" do banner (`PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`, apaga+reinsere + recomputa total). Só
+  **editor**; escopo por unidade e `valorUnitario>0` no servidor.
+- **GRAVADO = ANÁLISE (mesmos componentes, conferência, seleção e ajustes — a ÚNICA diferença é a tabela única):**
+  - **`ProtocoloGravado`** (banner do protocolo já protocolado): carrega o protocolo COMPLETO (`GET /api/protocolo/[id]
+    ?completo=1` → capa + DFDs com seções/assinaturas/itens + as UNIDADES deles com os responsáveis, via
+    `listarDfdsCompletosDoProtocolo`/`unidadesConferencia`) e usa o MESMO corpo (`ProtocoloView`), a MESMA conferência por
+    linha (`avaliarLinhaDfd`), a MESMA barra de massa (`BarraEdicaoMassa`), o MESMO DFD ao lado (`DfdConferir` +
+    `DfdRodape`), o MESMO painel da direita (`DfdPainelDireito`: mensagens/item/**histórico**) e o MESMO relatório
+    (despacho). As edições ficam num **RASCUNHO** (capa + DFDs + itens) até **"Salvar alterações"**, que envia **só o que
+    mudou** (`diffCapaGravada`/`diffDfdGravado`, `src/lib/dfd-edicao.ts`, puros e testados): `PATCH /api/protocolo/[id]` +
+    um `PATCH /api/dfd/[id]` por DFD alterado, com barra de progresso; falhas mantêm o rascunho daquele DFD (o resto
+    recarrega do banco). Fechar/Atualizar com alterações pendentes pede confirmação (+ `beforeunload`). DFD de unidade
+    sem acesso fica só-leitura (conferido com a unidade REAL). **Sem o antigo cadeado global** — vale o cadeado POR
+    CAMPO/SEÇÃO, igual à análise; os não-editores veem tudo só-leitura.
+  - **`DfdGravado`** (DFD solto, aberto pelas listas DFDs/Itens da Mesa): o MESMO `DfdConferir` (tabela de itens única),
+    `DfdRodape` (estado + Histórico + Ver protocolo + "Salvar alterações") e `DfdPainelDireito`; rascunho + diff igual.
+    `GET /api/dfd/[id]` devolve também a `unidade` (responsáveis) p/ conferir com a unidade real. "Ver protocolo" abre
+    o `ProtocoloGravado` com este DFD ao lado.
+  - **Mesa → DFDs:** `PlanilhaDfds` **única** + `scrollInterno`, com a conferência REAL por linha (`POST
+    /api/dfd/conferencia`, lazy em fatias de 150 — "Conferindo…" até chegar), **seleção** + `BarraEdicaoMassa` → `POST
+    /api/dfd/massa` (`massaDfdsSchema`: ids + `AcaoMassa`; por DFD: escopo por unidade, campo travado pelo ADM recusado,
+    troca de unidade reconfere a assinatura contra o destino; auditoria por DFD; devolve `{alterados, falhas}`).
+    **Mesa → Itens:** coluna **Estado** do item (mesma célula `EstadoCelula`). **Mesa → Protocolos:** Estado =
+    `conciliacaoCapa`. Excluir protocolo avisa que os DFDs vinculados (e itens) são excluídos junto (cascata).
+  - **Botão ATUALIZAR** (`IconRefresh`, ao lado do X) nos banners gravados: recarrega do banco (confirma se há rascunho).
+  - **"1 · Área requisitante da demanda" editável (cadeado por campo):** para editores, o `DfdConferir` mostra o bloco
+    editável (âncora `anoPca`) no lugar da Seção 1 só-leitura (`ocultarSecao1`); identificadores (Nº DFD/Planejamento/Ano
+    do PCA) seguem travados; o conteúdo flui por `onCamposChange` → `atualizarDfdCampos` (que agora também sincroniza o
+    `orgao_id` quando a unidade muda).
+  - **PATCH /api/dfd/[id]** reconfere a assinatura **só quando a unidade ou as assinaturas MUDAM de fato** (comparação
+    canônica) — salvar uma seção de um DFD cuja assinatura já não confere não fica travado.
 - **Ano do PCA + referências de renovação (migração `0021`) — `ano_pca` no protocolo e no DFD; `numero_contrato`/
   `numero_ata`/`numero_licitacao` no DFD (tudo nullable):** ao ler o PDF, `anoPcaDoTexto` (`parse-dfd-comum.ts`, puro)
   **identifica o ano do PCA pela descrição** — ponto 6: "PCA 2027", "PCA/2027", "PCA DE 2027", **"PCA DO ANO DE 2027"**
@@ -863,6 +894,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (valida Zod e devolve 422 pronto). **Rotas novas/editadas devem usá-los** + as guardas
   `exigir*` e `intId` de `api-auth`.
 - Validação de entrada sempre com **Zod** (`src/lib/*-validation` / schemas em `protocolos`/`tabelas`).
+- DFD/protocolo (além das já citadas): `GET /api/protocolo/[id]?completo=1` (protocolo + DFDs COMPLETOS + unidades com
+  responsáveis — banner gravado), `GET /api/dfd/[id]` (DFD + `unidade`), `POST /api/dfd/conferencia` (`{ids ≤ 200}` →
+  estado/resumo/validação por DFD, `exigirUsuario`), `POST /api/dfd/massa` (`{ids ≤ 500, acao}` → edição em massa,
+  `exigirEditor`). IN (...) sempre em lotes de ≤ 90 ids (`LOTE_IDS`/`lotesDeIds`) — limite de 100 parâmetros do D1.
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
 - **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
@@ -886,7 +921,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sem scroll do navegador, com um **seletor de linhas por página (30/50/100/200)** no rodapé (`linhasPadrao` = default do
   ADM; limita as linhas em DOM — performático com milhares); só desktop, opt-in, exclui `fillHeight` — usado na **Mesa**;
   **alinhamento das células = CENTRO por padrão** (horizontal + vertical `align-middle`), `align:"right"` **só p/ valores monetários (R$)** e `align:"left"` em exceções — o `Column.align` é `"left"|"center"|"right"`;
-  **`density`** (`compact`/`default`/`comfortable`) ajusta a altura da linha SÓ daquela tabela (via `--cell-py` LOCAL) — usada p/ diferenciar visões que dividem o mesmo espaço),
+  **`density`** (`compact`/`default`/`comfortable`) ajusta a altura da linha SÓ daquela tabela (via `--cell-py` LOCAL) — usada p/ diferenciar visões que dividem o mesmo espaço;
+  **`Column.nowrap`** = sem quebra de linha, a coluna ganha a LARGURA DO CONTEÚDO (dados curtos: nº, sigla, badges,
+  valores) — usado em todas as tabelas de protocolo/DFD/itens/PCA; textos longos seguem com `minWidth` + `line-clamp`),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
   matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
@@ -906,7 +943,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
-  catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis).
+  catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
+  **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
+  acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto` — a célula "Estado" de TODA tabela),
+  **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do
+  DFD: estado + ações + mensagens + Fechar + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
+  item / histórico), **`ProtocoloView`** (CORPO ÚNICO do banner do protocolo — análise e gravado), `CampoCadeado`
+  (+ **`CadeadoBotao`**, o cadeado reusado por campos, itens e SEÇÕES do DFD). Hook `useConformidade` (conformidade do
+  DFD aberto com o catálogo, lazy). Contêineres com dados (fora do catálogo, como o `DfdsView`): `ProtocoloUploadForm`,
+  `DfdUploadForm`, **`ProtocoloGravado`**, **`DfdGravado`**.
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.

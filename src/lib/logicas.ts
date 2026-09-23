@@ -174,15 +174,15 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "estados",
     titulo: "Precedência do estado do DFD",
     descricao:
-      "O estado de um DFD segue a ordem: erro › atenção › editado › regularizado (automático) › regular. A atenção (âmbar) sinaliza sem bloquear (ex.: DFD-R sem referência de renovação).",
-    fonte: "estadoDfd (dfd-tratamento)",
+      "O estado de um DFD segue a ordem: erro › atenção › editado › regularizado (automático) › regular. A atenção (âmbar) sinaliza sem bloquear (ex.: DFD-R sem referência de renovação). O estado é DERIVADO das mesmas mensagens do painel 'Ver mensagens' — na análise, no protocolo gravado, na lista de DFDs e no servidor — então tabela, painel e botões nunca se contradizem.",
+    fonte: "avaliarLinhaDfd / mensagensDoDfd (conferencia-dfd) + estadoDfd",
   },
   {
     id: "est-item",
     dominio: "estados",
     titulo: "Estado por item da tabela",
     descricao:
-      "Cada item da Seção 4 marca 'Com erro' (vermelho) quando falta valor unitário ou quantidade. Os itens com pendência aparecem numa tabela separada, acima dos regulares.",
+      "Cada item da Seção 4 aponta a falta (valor unitário ou quantidade) na coluna Estado. Na análise, os itens com pendência aparecem numa tabela separada, acima dos regulares; depois de protocolado a tabela é única (o filtro da coluna Estado separa).",
     fonte: "estadoItem / faltasDoItem",
   },
   {
@@ -190,8 +190,8 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "estados",
     titulo: "Estado × Situação do protocolo",
     descricao:
-      "No protocolo gravado, ESTADO = integridade do valor da capa × somatória dos DFDs (regular/atenção); SITUAÇÃO = tem DFDs ou não (vazio/com DFDs).",
-    fonte: "estadoProtocolo / situacaoProtocolo",
+      "ESTADO do protocolo = conciliação do valor da capa × somatória dos DFDs (capa ausente/zerada ou diferente = atenção), com a MESMA régua da análise e do banner — que também oferece 'Substituir pela somatória'. A conciliação não depende de os DFDs estarem sem erro. SITUAÇÃO = tem DFDs ou não (vazio/com DFDs).",
+    fonte: "conciliacaoCapa / estadoProtocolo / situacaoProtocolo",
   },
 
   // ---- Normalização ----

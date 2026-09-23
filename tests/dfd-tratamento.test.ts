@@ -4,7 +4,6 @@ import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import type { ConferenciaItem } from "../src/lib/catalogo-conferencia.ts";
 import {
   algumCatalogoFundamental,
-  apontamentosGravado,
   avaliarDfd,
   bloqueantesCatalogo,
   contarMensagens,
@@ -397,14 +396,5 @@ describe("normalizarSecoesDfd — seção trocada (fundamentação = prioridade)
     ];
     const { dfd } = normalizarSecoesDfd({ ...base, secoes });
     assert.equal(situacaoSecao(dfd.secoes, "FUNDAMENTACAO LEGAL"), "invalida");
-  });
-});
-
-describe("apontamentosGravado (listas de DFDs gravados)", () => {
-  it("sem tipo → erro por padrão; DFD-R sem referência → atenção; ok → regular", () => {
-    assert.equal(apontamentosGravado({ tipo: null }).estado, "erro");
-    assert.equal(apontamentosGravado({ tipo: "DFD-R · Renovação" }).estado, "atencao");
-    assert.equal(apontamentosGravado({ tipo: "DFD-R", numeroContrato: "12/2025" }).estado, "regular");
-    assert.equal(apontamentosGravado({ tipo: null }, { ...regrasPadrao(), pontos: { "dfd.tipo": "ignorar" } }).estado, "regular");
   });
 });

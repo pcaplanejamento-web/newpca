@@ -10,7 +10,7 @@ import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
+import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
@@ -88,11 +88,16 @@ export async function POST(req: Request) {
     return erro(`Tipo de DFD não permitido para protocolar: ${ctxAv.dfdTipo ?? "sem tipo"} (Configurações → Protocolação).`, 422);
   if (d.protocoloId == null && !importarDfdHabilitado(regras))
     return erro("A importação de DFD avulso está desabilitada nas Configurações.", 422);
-  // Divergência órgão × unidade — portão à parte, só EXECUTA (e só bloqueia) quando o ADM
-  // pôs o ponto numa importância que "bloqueia" (padrão avisa = atenção, não bloqueia → sem custo).
-  if (comportamentoNo(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "bloqueia" && d.reparticaoId != null) {
-    const [orgaos, orgaoUnidade] = await Promise.all([listarOrgaos(), orgaoIdDaReparticao(d.reparticaoId)]);
-    if (orgaoDivergeDaUnidade(d.orgaoEntidade, orgaoUnidade, orgaos))
+  // Órgão não identificado / divergência órgão × unidade — portões à parte, só EXECUTAM (e só
+  // bloqueiam) quando o ADM pôs o ponto numa importância que "bloqueia" (padrão avisa = atenção, não
+  // bloqueia → sem custo). Mesma régua da conferência do cliente (`mensagensDoDfd`).
+  const orgaoBloqueia = comportamentoNo(regras, "dfd.orgao", ctxAv) === "bloqueia";
+  const divergBloqueia = comportamentoNo(regras, "dfd.orgaoUnidadeDivergente", ctxAv) === "bloqueia" && d.reparticaoId != null;
+  if (orgaoBloqueia || divergBloqueia) {
+    const orgaos = await listarOrgaos();
+    if (orgaoBloqueia && orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null)
+      return erro("O Órgão/Entidade do DFD não corresponde a nenhum órgão cadastrado.", 422);
+    if (divergBloqueia && orgaoDivergeDaUnidade(d.orgaoEntidade, await orgaoIdDaReparticao(d.reparticaoId), orgaos))
       return erro("O Órgão/Entidade do DFD diverge do órgão da unidade cadastrada.", 422);
   }
   // Conformidade com o catálogo — portão à parte (lazy): só consulta e bloqueia quando o ADM

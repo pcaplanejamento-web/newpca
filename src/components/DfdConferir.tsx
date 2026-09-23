@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
+import { type ChaveAvaliacao, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
+import { conferirAssinaturaDfd } from "@/lib/conferencia-dfd";
 import {
+  buildPrevisao,
   type CampoTratavel,
-  type MensagemDfd,
-  mensagensDfd,
   setTextoSecao,
   situacaoSecao,
   textoSecao,
@@ -17,18 +17,15 @@ import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
   desfazerValidacaoEquipe,
-  pdfExigeAssinatura,
   type Responsaveis,
-  RESPONSAVEIS_VAZIO,
   solicitanteDeResultado,
-  validarAssinatura,
   validarAssinaturaPelaEquipe,
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
-import { Checkbox, TextArea, TextField } from "./Field";
+import { Checkbox, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
@@ -65,9 +62,7 @@ export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | 
  * escolhida — reflete a troca de repartição no banner. O `anoPca` efetivo (herdado
  * do protocolo / definido no avulso) pode sobrescrever o do parse. */
 export function toVisual(d: DfdParseado, rep: Rep | null, anoPca?: number | null): DfdVisual {
-  const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-    exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
-  });
+  const res = conferirAssinaturaDfd(d, rep);
   return {
     numero: d.numero,
     planejamento: d.planejamento,
@@ -98,66 +93,11 @@ export function toVisual(d: DfdParseado, rep: Rep | null, anoPca?: number | null
 }
 
 /**
- * TODAS as mensagens de conferência de um DFD (erro/atenção/acerto), já com a assinatura
- * conferida contra o responsável da repartição escolhida. Fonte ÚNICA usada tanto pelo
- * `DfdConferir` (contador do botão "Ver mensagens") quanto pelo painel lateral
- * `MensagensDfd` (renderizado pelo pai) — os dois recebem exatamente a mesma lista.
- */
-export function mensagensDoDfd(
-  d: DfdParseado,
-  rep: Rep | null,
-  anoPca: number | null | undefined,
-  regras: RegrasAvaliacao = regrasPadrao(),
-  categoria: string | null = null,
-  orgaos: Orgao[] = [],
-  conformidade?: Map<string, ConferenciaItem>,
-): MensagemDfd[] {
-  const res = validarAssinatura(d.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-    exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
-  });
-  // Divergência órgão × unidade (item 6.3): compara o "Órgão/Entidade" do DFD com o órgão da
-  // unidade SELECIONADA. Só quando há órgãos cadastrados e a unidade tem órgão.
-  const orgaoUnidadeDivergente =
-    orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(d.orgaoEntidade, rep.orgaoId, orgaos);
-  // Ponto 6: órgão não identificado (Órgão/Entidade não casa nenhum órgão cadastrado).
-  const orgaoNaoIdentificado = orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null;
-  return mensagensDfd(
-    {
-      itens: d.itens,
-      secoes: d.secoes,
-      reparticaoId: rep?.id ?? null,
-      tipo: d.tipo,
-      numeroContrato: d.numeroContrato,
-      numeroAta: d.numeroAta,
-      numeroLicitacao: d.numeroLicitacao,
-      anoPca: anoPca !== undefined ? anoPca : d.anoPca,
-      assinatura: {
-        status: res.status,
-        motivo: res.status === "erro" ? res.motivo : null,
-        origem: res.status === "ok" ? res.origem : undefined,
-        responsavel: res.status === "ok" ? res.responsavel.nome : null,
-      },
-    },
-    regras,
-    { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
-  );
-}
-
-/**
- * Constrói o texto canônico da PREVISÃO a partir do editor. É **um OU outro**:
- * ANUAL (com ano opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA`
- * (exige mês E ano). Vazio = ainda a preencher.
- */
-export function buildPrevisao(mes: string, ano: string, anual: boolean): string {
-  if (anual) return ano ? `ANUAL/${ano}` : "ANUAL";
-  return mes && ano ? `${mes}/${ano}` : "";
-}
-
-/**
- * CORPO de conferência/edição do DFD — MESMO componente no import avulso e por DFD
- * do protocolo. Controlado: repartição por `repId`/`onRepChange`; seções tratáveis
- * (PRIORIDADE/PREVISÃO/FUNDAMENTAÇÃO) por `dfd.secoes`/`onSecoesChange`. Mostra as
- * faltas ao vivo e o DFD completo (`DfdView`, read-only, reflete as edições).
+ * CORPO de conferência/edição do DFD — MESMO componente na análise (avulso e por DFD do protocolo)
+ * e no GRAVADO (DFD solto e ao lado do protocolo gravado). Controlado: unidade por `repId`/
+ * `onRepChange`; o bloco Tratamento edita PRIORIDADE/PREVISÃO/FUNDAMENTAÇÃO com controles
+ * estruturados e TODAS as seções editam-se direto no documento (`DfdView`, cadeado por seção) —
+ * tudo por `dfd.secoes`/`onSecoesChange`. `readOnly` trava tudo (sem permissão/unidade sem acesso).
  */
 export function DfdConferir({
   dfd,
@@ -173,6 +113,7 @@ export function DfdConferir({
   conformidade,
   ancoraAlvo = null,
   itemAtivo = null,
+  tabelaUnica = false,
   onRepChange,
   onSecoesChange,
   onRefsChange,
@@ -202,6 +143,8 @@ export function DfdConferir({
   ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
   /** Índice do item ATIVO (detalhe aberto ao lado) — destacado na tabela de itens. */
   itemAtivo?: number | null;
+  /** Tabela ÚNICA de itens (DFD já protocolado) — sem separar os itens com pendência. */
+  tabelaUnica?: boolean;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
@@ -280,9 +223,7 @@ export function DfdConferir({
   const roRefs = readOnly || !editavelDe(regras, "dfd.referenciaRenovacao");
   const roTipo = readOnly || !onTipoChange || !editavelDe(regras, "dfd.tipo");
   // Conferência da assinatura contra a unidade escolhida (auto) + validação manual pela equipe.
-  const resAss = validarAssinatura(dfd.assinaturas, rep?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-    exigeAssinatura: pdfExigeAssinatura(dfd.nomeArquivo),
-  });
+  const resAss = conferirAssinaturaDfd(dfd, rep);
   const podeValidar = !readOnly && !!onAssinaturasChange;
   const nomesResp = rep
     ? [...new Set([...rep.responsaveis.padroes, ...rep.responsaveis.temporarios].map((r) => r.nome).filter(Boolean))]
@@ -307,9 +248,9 @@ export function DfdConferir({
   // reconhece só o MÊS por extenso e completa o ano com o do PCA (ponto 8).
   const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca).valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
-  // Justificativa (§3) — obrigatória; editável aqui (antes não havia onde tratar a falta).
-  const JUST = { kw: "JUSTIFICATIVA", titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", numero: 3 };
-  const just = textoSecao(dfd.secoes, JUST.kw);
+  // Seções editáveis DIRETO no documento (cadeado por seção, no `DfdView`): todas, respeitando o
+  // "editável" do ADM nos pontos que o suportam (previsão/prioridade/fundamentação).
+  const secaoEditavel = ({ obrig }: { titulo: string; obrig?: string }) => !obrig || editavelDe(regras, obrig as ChaveAvaliacao);
   // Mesma régua dos erros (`situacaoSecao`): fundamentação precisa citar a norma.
   const fundOk = situacaoSecao(dfd.secoes, fCfg.kw) === "ok";
   // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
@@ -404,7 +345,7 @@ export function DfdConferir({
           (import / gravado destravado); os IDENTIFICADORES (número/planejamento/tipo) são imutáveis.
           O DfdView abaixo reflete tudo em só-leitura. */}
       {cabEditavel && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="cabecalho">
+        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="anoPca">
           <h3 className="mb-1 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <p className="mb-3 text-[12px] text-muted">
             Destrave um campo para corrigir. Número e planejamento do DFD são imutáveis (o tipo é escolhido acima).
@@ -486,24 +427,6 @@ export function DfdConferir({
                 onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.checked))}
               />
             </div>
-          </div>
-
-          {/* JUSTIFICATIVA (§3) */}
-          <div className="sm:col-span-2" data-ancora="justificativa">
-            <span className="mb-1.5 block text-[13px] font-medium text-text-2">
-              Justificativa da necessidade{" "}
-              <span className="ml-2 text-[10px] font-semibold uppercase" style={{ color: just.trim() ? "var(--ok)" : "var(--danger)" }}>
-                {just.trim() ? "ok" : "tratar"}
-              </span>
-            </span>
-            <TextArea
-              aria-label="Justificativa da necessidade"
-              rows={3}
-              value={just}
-              disabled={readOnly}
-              onChange={(e) => onSecoesChange(setTextoSecao(dfd.secoes, JUST, e.target.value))}
-              placeholder="Descreva a necessidade da contratação."
-            />
           </div>
 
           {/* FUNDAMENTAÇÃO */}
@@ -647,7 +570,17 @@ export function DfdConferir({
       {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
-        <DfdView dfd={toVisual(dfd, rep, anoPca)} regras={regras} conformidade={conformidade} onItemClick={onItemClick} itemAtivo={itemAtivo} ocultarSecao1={cabEditavel} />
+        <DfdView
+          dfd={toVisual(dfd, rep, anoPca)}
+          regras={regras}
+          conformidade={conformidade}
+          onItemClick={onItemClick}
+          itemAtivo={itemAtivo}
+          ocultarSecao1={cabEditavel}
+          unica={tabelaUnica}
+          onSecoesChange={readOnly ? undefined : onSecoesChange}
+          secaoEditavel={secaoEditavel}
+        />
       </div>
     </div>
   );

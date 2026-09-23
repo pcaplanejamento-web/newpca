@@ -25,6 +25,20 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Gravado = análise (mesmos componentes após protocolar) + capa conciliada + seções com cadeado + progresso real — entregue
+✅ **Protocolo/DFD/Itens JÁ PROTOCOLADOS usam os MESMOS componentes da análise**: corpo único `ProtocoloView`, a mesma
+conferência por linha (`avaliarLinhaDfd` — célula Estado, painel de mensagens e botões nunca se contradizem), a mesma
+seleção + **edição em massa** (`BarraEdicaoMassa`; na Mesa grava via `POST /api/dfd/massa`), o mesmo DFD ao lado
+(`DfdConferir` + `DfdRodape`) e o mesmo painel da direita (mensagens/item/histórico). Única diferença: **tabela única**.
+Rascunho + **"Salvar alterações"** enviando só o que mudou (sem o antigo cadeado global). **Valor da capa**: conciliação
+única (`conciliacaoCapa`) na análise e no gravado — não some mais quando há DFD com erro; "Substituir pela somatória"
+também no gravado; capa nula apontada. **Todas as seções do DFD editáveis na própria seção** com cadeado (Justificativa
+saiu do Tratamento; obrigatória ausente aparece "não preenchida"). **Progresso real** da análise (barra + spinner por
+linha: lendo o DFD / assinatura OCR / na fila) e da leitura do PDF (página p de N). **Colunas na largura do conteúdo**
+(`Column.nowrap` — fim da "Assinatura" quebrada). Correções da auditoria: análise em background não sobrescreve mais um DFD
+que o usuário abriu/editou; erro ao protocolar agora aparece no banner; PATCH do DFD só reconfere a assinatura se a
+unidade/assinaturas mudaram; o DFD passa a registrar o órgão ao trocar de unidade; `IN (...)` em lotes ≤ 90.
+
 ### Conferência completa do protocolo: assinatura auto/equipe, tipo, assunto, seções padronizadas — entregue
 ✅ **Assinaturas achatadas lidas NA ANÁLISE** do protocolo (antes de apontar erro; DFD fica "pendente" até a leitura) e a
 **unidade prevista pelo assinante**. **Validação auto × equipe**: selo "(auto)" quando o sistema confere o assinante;

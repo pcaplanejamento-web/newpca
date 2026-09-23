@@ -30,20 +30,34 @@ export async function carregarResponsaveis(reparticaoId: number | null | undefin
   return responsaveisEfetivos({ assinaturaUnica: r.assinaturaUnica ?? false, orgaoRaw: r.orgaoRaw, unidadeRaw: r.unidadeRaw });
 }
 
+/** Ids únicos válidos em LOTES de ≤ 90 (folga sob o limite de 100 parâmetros por statement do D1). */
+function lotesDeIds(ids: number[]): number[][] {
+  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
+  const out: number[][] = [];
+  for (let i = 0; i < uniq.length; i += 90) out.push(uniq.slice(i, i + 90));
+  return out;
+}
+
 /** Mapa `reparticaoId → Responsaveis` EFETIVOS (enriquece a lista de unidades dos banners). */
 export async function responsaveisPorReparticao(ids: number[]): Promise<Record<number, Responsaveis>> {
-  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
-  if (uniq.length === 0) return {};
-  const linhas = await getDb()
-    .select({
-      id: reparticoes.id,
-      unidadeRaw: reparticoes.responsavelDfd,
-      assinaturaUnica: orgaos.assinaturaUnica,
-      orgaoRaw: orgaos.responsavelDfd,
-    })
-    .from(reparticoes)
-    .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
-    .where(inArray(reparticoes.id, uniq));
+  const lotes = lotesDeIds(ids);
+  if (lotes.length === 0) return {};
+  const linhas = (
+    await Promise.all(
+      lotes.map((lote) =>
+        getDb()
+          .select({
+            id: reparticoes.id,
+            unidadeRaw: reparticoes.responsavelDfd,
+            assinaturaUnica: orgaos.assinaturaUnica,
+            orgaoRaw: orgaos.responsavelDfd,
+          })
+          .from(reparticoes)
+          .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
+          .where(inArray(reparticoes.id, lote)),
+      ),
+    )
+  ).flat();
   const out: Record<number, Responsaveis> = {};
   for (const l of linhas)
     out[l.id] = responsaveisEfetivos({ assinaturaUnica: l.assinaturaUnica ?? false, orgaoRaw: l.orgaoRaw, unidadeRaw: l.unidadeRaw });
@@ -68,19 +82,25 @@ export type DadosMatchReparticao = {
 };
 
 export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<number, DadosMatchReparticao>> {
-  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
-  if (uniq.length === 0) return {};
-  const linhas = await getDb()
-    .select({
-      id: reparticoes.id,
-      numeroInteressado: reparticoes.numeroInteressado,
-      setorRequisitante: reparticoes.setorRequisitante,
-      orgaoId: reparticoes.orgaoId,
-      orgaoProprio: reparticoes.orgaoProprio,
-      oculto: reparticoes.oculto,
-    })
-    .from(reparticoes)
-    .where(inArray(reparticoes.id, uniq));
+  const lotes = lotesDeIds(ids);
+  if (lotes.length === 0) return {};
+  const linhas = (
+    await Promise.all(
+      lotes.map((lote) =>
+        getDb()
+          .select({
+            id: reparticoes.id,
+            numeroInteressado: reparticoes.numeroInteressado,
+            setorRequisitante: reparticoes.setorRequisitante,
+            orgaoId: reparticoes.orgaoId,
+            orgaoProprio: reparticoes.orgaoProprio,
+            oculto: reparticoes.oculto,
+          })
+          .from(reparticoes)
+          .where(inArray(reparticoes.id, lote)),
+      ),
+    )
+  ).flat();
   const out: Record<number, DadosMatchReparticao> = {};
   for (const l of linhas)
     out[l.id] = {
@@ -103,4 +123,29 @@ export async function unidadeTemVinculo(reparticaoId: number): Promise<boolean> 
   if (d) return true;
   const [p] = await db.select({ n: sql<number>`1` }).from(dfdProtocolos).where(eq(dfdProtocolos.reparticaoId, reparticaoId)).limit(1);
   return !!p;
+}
+
+/** Unidade para a CONFERÊNCIA de DFDs (código/nome p/ exibir + órgão + responsáveis EFETIVOS). */
+export type UnidadeConferencia = { id: number; codigo: string; nome: string; orgaoId: number | null; responsaveis: Responsaveis };
+
+/**
+ * Unidades REFERENCIADAS por DFDs (inclusive fora da lista do usuário — ex.: DFD de outra unidade num
+ * protocolo acessível), com os responsáveis EFETIVOS: a conferência (assinatura/unidade) dos DFDs do
+ * protocolo gravado e da lista da Mesa usa a unidade REAL do DFD, nunca "sem unidade" por falta de acesso.
+ */
+export async function unidadesConferencia(ids: (number | null | undefined)[]): Promise<UnidadeConferencia[]> {
+  const lotes = lotesDeIds(ids.filter((n): n is number => n != null));
+  if (lotes.length === 0) return [];
+  const [linhas, resp] = await Promise.all([
+    Promise.all(
+      lotes.map((lote) =>
+        getDb()
+          .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId })
+          .from(reparticoes)
+          .where(inArray(reparticoes.id, lote)),
+      ),
+    ),
+    responsaveisPorReparticao(lotes.flat()),
+  ]);
+  return linhas.flat().map((l) => ({ ...l, responsaveis: resp[l.id] ?? RESPONSAVEIS_VAZIO }));
 }

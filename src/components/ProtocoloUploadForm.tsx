@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   classificarAssunto,
   comportamentoNo,
@@ -10,38 +10,26 @@ import {
   protocolarHabilitado,
   type RegrasAvaliacao,
   regrasPadrao,
-  TIPO_DFD_ROTULO,
-  TIPOS_DFD,
 } from "@/lib/avaliacao-core";
-import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
-import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
-import { encerrarOcr } from "@/lib/ocr-assinatura";
-import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
+import { avaliarLinhaDfd, conferirAssinaturaDfd, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import {
-  avaliarDfd,
+  type AcaoMassa,
+  aplicarMassaDfd,
   type CampoTratavel,
-  estadoRotulo,
-  type EstadoDfd,
-  estadoCor,
+  conciliacaoCapa,
   dfdsDuplicados,
   editarItemDfd,
-  estadoDfd,
   faltasCirurgicasDfd,
-  type GrupoAssinatura,
   gruposAssinatura,
   linhasRelatorioProtocolo,
   normalizarSecoesDfd,
   removerItemDfd,
-  type ResumoEstado,
-  resumoEstado,
-  setTextoSecao,
   STATUS_MENSAGEM_COR,
-  TRATAVEIS,
 } from "@/lib/dfd-tratamento";
-import { faltasObrigatorias } from "@/lib/dfd-validation";
-import { brl, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
-import { MESES, type Prioridade, valoresBatem } from "@/lib/normalize";
+import { encerrarOcr } from "@/lib/ocr-assinatura";
+import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
@@ -51,32 +39,23 @@ import {
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
-import {
-  assinaturaPendenteValidacao,
-  bloqueiaAssinatura,
-  pdfExigeAssinatura,
-  type Responsaveis,
-  RESPONSAVEIS_VAZIO,
-  validarAssinatura,
-} from "@/lib/reparticao-responsaveis";
+import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { buildPrevisao, DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
+import { DfdConferir, type PainelDfd } from "./DfdConferir";
+import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
+import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { Checkbox, TextField } from "./Field";
-import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
-import { ItemDetalhe } from "./ItemDetalhe";
-import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
-import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
+import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
-import { CapaCampos, ProtocoloCabecalho } from "./ProtocoloView";
+import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
-import { Segmented } from "./Segmented";
-import { StatMini } from "./StatMini";
+import { useConformidade } from "./useConformidade";
 
 type Rep = {
   id: number;
@@ -94,10 +73,12 @@ type DfdExistente = { numero: string; protocoloNumero: string | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move";
-type CampoBulk = "reparticao" | "tipo" | "prioridade" | "previsao" | "fundamentacao";
+/** Progresso REAL da análise em background: 1ª passada (texto) e 2ª (assinaturas por OCR). */
+type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: number | null };
 
 const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
+const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
 
 export function ProtocoloUploadForm({
   reparticoes,
@@ -116,18 +97,17 @@ export function ProtocoloUploadForm({
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
-  // DFDs em que o OCR do carimbo Foxit (Formato E) já foi tentado — não repete (o OCR é caro; roda só
-  // uma vez por DFD, ao abrir/protocolar um que ficou sem assinatura de texto).
+  // DFDs em que o OCR da assinatura achatada já foi tentado — não repete (o OCR é caro).
   const ocrTentadoRef = useRef<Set<number>>(new Set());
   const [status, setStatus] = useState<Status>("idle");
+  const [leitura, setLeitura] = useState<{ pagina: number; total: number } | null>(null); // leitura do PDF (índice)
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
   const [launcher, setLauncher] = useState(false); // banner lançador (soltar/escolher | criar manual)
-  // Origem PDF → os dados da CAPA são IMUTÁVEIS (só leitura); no "criar manual" (sem
-  // PDF) o usuário digita a capa que está criando.
+  // Origem PDF → a CAPA mostra cadeado por campo nos de conteúdo; no "criar manual" os campos são inputs.
   const [origemPdf, setOrigemPdf] = useState(false);
   const [relatorioAberto, setRelatorioAberto] = useState(false); // banner de relatório de erros
-  const [incluirAtencao, setIncluirAtencao] = useState(true); // incluir DFD-R sem referência no relatório
+  const [incluirAtencao, setIncluirAtencao] = useState(true); // incluir DFDs em atenção no relatório
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -138,31 +118,34 @@ export function ProtocoloUploadForm({
   const [protoRepId, setProtoRepId] = useState<number | null>(null);
   const [protoOrgaoId, setProtoOrgaoId] = useState<number | null>(null); // protocolo em nome do ÓRGÃO (ponto 2)
   const [extra, setExtra] = useState<Extra>(EXTRA_VAZIO);
-  // PCA do protocolo (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Os
-  // DFDs herdam este ano ao protocolar. Obrigatório para protocolar.
+  // PCA do protocolo (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Os DFDs herdam
+  // este ano ao protocolar. Obrigatório para protocolar.
   const [anoPca, setAnoPca] = useState<number | null>(null);
   const [anoPcaDetectado, setAnoPcaDetectado] = useState<number | null>(null);
 
-  // Índice leve + repartição por DFD.
+  // Índice leve + unidade por DFD.
   const [index, setIndex] = useState<ProtocoloIndex | null>(null);
   const [dfdRepIds, setDfdRepIds] = useState<(number | null)[]>([]);
   const [autoRepIds, setAutoRepIds] = useState<(number | null)[]>([]);
 
   // Cache de parse/edição por DFD (idx) + estados.
   const [parsed, setParsed] = useState<Map<number, DfdParseado>>(new Map());
+  // Espelho do cache p/ a análise em background (closure antiga): não re-parsear/sobrescrever um DFD
+  // que o usuário já abriu (e talvez editou) antes de a análise chegar nele.
+  const parsedRef = useRef(parsed);
+  parsedRef.current = parsed;
   const [autoMap, setAutoMap] = useState<Map<number, CampoTratavel[]>>(new Map());
   const [editados, setEditados] = useState<Set<number>>(new Set());
-  // DFDs DUPLICADOS descartados pelo usuário (o "perdedor" de cada grupo) — ficam cinza,
-  // fora da somatória e da protocolação. Chave = idx do DFD no `index.dfds`.
+  // DFDs DUPLICADOS descartados pelo usuário (o "perdedor" de cada grupo) — cinza, fora da
+  // somatória e da protocolação. Chave = idx do DFD no `index.dfds`.
   const [descartados, setDescartados] = useState<Set<number>>(new Set());
-  // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta no PDF) —
-  // vira estado "erro" com a mensagem, em vez de ficar "pendente" sem explicação.
+  // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta) → estado "erro".
   const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
-  const [analisando, setAnalisando] = useState(false);
-  // DFDs cuja assinatura ACHATADA ainda está sendo lida por OCR na análise — ficam "pendente" (não
-  // apontam "sem assinatura" antes da leitura) e a protocolação espera. `ocrProgresso` = n/total.
+  // Análise em background com progresso REAL (fase, n/N e o DFD atual).
+  const [analise, setAnalise] = useState<Analise | null>(null);
+  // DFDs cuja assinatura ACHATADA ainda será lida por OCR — ficam "pendente" (não apontam "sem
+  // assinatura" antes da leitura) e a protocolação espera.
   const [ocrPendente, setOcrPendente] = useState<Set<number>>(new Set());
-  const [ocrProgresso, setOcrProgresso] = useState<{ feito: number; total: number } | null>(null);
 
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
@@ -170,17 +153,8 @@ export function ProtocoloUploadForm({
   const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [carregandoIdx, setCarregandoIdx] = useState<number | null>(null);
-  // Conformidade do DFD ABERTO com o catálogo (lazy — só o DFD aberto; a lista fica leve/escalável).
-  const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
-  const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number); tipo do DataTable
-  const [bulkCampo, setBulkCampo] = useState<CampoBulk>("reparticao");
-  const [bulkRep, setBulkRep] = useState<number | null>(null);
-  const [bulkTipo, setBulkTipo] = useState<string>("");
-  const [bulkPrio, setBulkPrio] = useState<Prioridade | "">("");
-  const [bulkMes, setBulkMes] = useState("");
-  const [bulkAno, setBulkAno] = useState("");
-  const [bulkAnual, setBulkAnual] = useState(false);
-  const [bulkFund, setBulkFund] = useState("Lei 14.133/2021");
+  const [sel, setSel] = useState<Set<string | number>>(new Set()); // chaves = idx (number)
+  const [aplicandoMassa, setAplicandoMassa] = useState(false);
 
   const [importando, setImportando] = useState(false);
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
@@ -210,11 +184,13 @@ export function ProtocoloUploadForm({
     setParsed(new Map());
     setAutoMap(new Map());
     setEditados(new Set());
+    setDescartados(new Set());
     setErrosParse(new Map());
     setSel(new Set());
     setAbertoIdx(-1);
+    setPainel(null);
     setOcrPendente(new Set());
-    setOcrProgresso(null);
+    setAnalise(null);
   }
 
   function abrirVazio() {
@@ -248,10 +224,11 @@ export function ProtocoloUploadForm({
       return;
     }
     setStatus("parsing");
+    setLeitura(null);
     try {
       limparDoc();
       resetCache();
-      const { index: idx, doc } = await indexarProtocoloPdf(file);
+      const { index: idx, doc } = await indexarProtocoloPdf(file, (pagina, total) => setLeitura({ pagina, total }));
       const p = idx.protocolo;
       // Separa as vias / recusa documento errado: protocolo exige capa OU ≥2 DFDs.
       if (p.numero == null && idx.dfds.length <= 1) {
@@ -267,8 +244,7 @@ export function ProtocoloUploadForm({
       docRef.current = doc;
       const autos = idx.dfds.map((d) => preverUnidadeDoDfd(d, orgaos, reparticoes));
       // Ponto 2: o protocolo pode vir em nome do ÓRGÃO ou da UNIDADE (pelo Interessado — número
-      // cadastrado, senão nome). Unidade → vira a unidade do protocolo; Órgão → guarda o órgão
-      // (a unidade cai no 1º DFD casado / a ativa).
+      // cadastrado, senão nome). Unidade → vira a unidade do protocolo; Órgão → guarda o órgão.
       const alvoInteressado = casarPorInteressado(p.interessado, orgaos, reparticoes);
       const repInteressado = alvoInteressado?.tipo === "unidade" ? alvoInteressado.id : null;
       const orgaoInteressado = alvoInteressado?.tipo === "orgao" ? alvoInteressado.id : null;
@@ -281,60 +257,63 @@ export function ProtocoloUploadForm({
       // Adivinha o PCA pela capa; pré-seleciona só se o ano existir cadastrado.
       setAnoPcaDetectado(p.anoPca);
       setAnoPca(p.anoPca != null && pcas.some((x) => x.ano === p.anoPca) ? p.anoPca : null);
-      setOrigemPdf(true); // capa lida do PDF: imutável (só leitura)
+      setOrigemPdf(true);
       setIndex(idx);
       setDfdRepIds(autos);
       setAutoRepIds(autos);
       setProtoRepId(repInteressado ?? autos.find((x) => x != null) ?? reparticaoAtivaId);
       setProtoOrgaoId(orgaoInteressado);
       setStatus("idle");
+      setLeitura(null);
       setAberto(true);
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
     } catch (e) {
       setStatus("error");
+      setLeitura(null);
       setErro(e instanceof Error ? e.message : "Falha ao ler o protocolo.");
       limparDoc();
     }
   }
 
-  /** Parseia (background) os DFDs até o teto, atualizando os estados incrementalmente. */
+  /** Parseia (background) os DFDs até o teto, atualizando estados e o PROGRESSO real. */
   async function analisarTodos(idx0: ProtocoloIndex, doc: PdfDoc) {
     const nome = idx0.protocolo.nomeArquivo ?? "protocolo.pdf";
     const total = Math.min(idx0.dfds.length, CAP_ANALISE);
     if (total === 0) return;
-    setAnalisando(true);
     const paraOcr: { i: number; dfd: DfdParseado }[] = []; // DFDs sem assinatura NOMEADA de texto (achatada)
     for (let i = 0; i < total; i++) {
+      if (docRef.current !== doc) return; // outro protocolo foi aberto / banner fechado — aborta
+      setAnalise({ fase: "texto", feito: i, total, atual: i });
+      if (parsedRef.current.has(i)) continue; // já aberto pelo usuário (cache vale — preserva edições)
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
-        // Previsão segue o PCA do PROTOCOLO (ponto 7) — usa o ano detectado na capa (o estado
-        // `anoPca` ainda não reflete o setState recém-disparado; `idx0.protocolo.anoPca` é fresco).
+        if (docRef.current !== doc) return;
+        // Previsão segue o PCA do PROTOCOLO (ponto 7) — o ano detectado na capa (fresco no índice).
         const { dfd, auto } = normalizarSecoesDfd(raw, regras, idx0.protocolo.anoPca);
-        setParsed((m) => new Map(m).set(i, dfd));
-        if (auto.length) setAutoMap((m) => new Map(m).set(i, auto));
-        // Refina a UNIDADE com as assinaturas do PARSE COMPLETO — que inclui a **Dropsigner**
-        // (o índice só tem A/B, então DFD só-Dropsigner ficava sem previsão). A lógica é a MESMA
-        // p/ todas as assinaturas (`preverUnidadeDoDfd`). Só PREENCHE quando ainda está sem unidade
-        // (não sobrescreve previsão do índice nem escolha manual do usuário).
+        if (parsedRef.current.has(i)) continue; // aberto durante o parse — mantém a cópia do usuário
+        setParsed((m) => (m.has(i) ? m : new Map(m).set(i, dfd)));
+        if (auto.length) setAutoMap((m) => (m.has(i) ? m : new Map(m).set(i, auto)));
+        // Refina a UNIDADE com as assinaturas do PARSE COMPLETO (inclui Dropsigner/Adobe inline). Só
+        // PREENCHE quando ainda está sem unidade (não sobrescreve previsão do índice nem escolha manual).
         refinarUnidade(i, dfd);
         if (precisaOcr(dfd.assinaturas)) {
           paraOcr.push({ i, dfd });
           setOcrPendente((s) => new Set(s).add(i));
         }
       } catch (e) {
-        // Leitura falhou (ex.: item sem número no PDF → tabela incompleta). Guarda o
-        // motivo → estado "erro" com a mensagem (não fica "pendente" sem explicação).
+        if (docRef.current !== doc) return;
+        // Leitura falhou (ex.: item sem número → tabela incompleta): estado "erro" com o motivo.
         setErrosParse((m) => new Map(m).set(i, e instanceof Error ? e.message : "Falha ao ler o DFD."));
       }
       if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0)); // cede o event loop
     }
-    // 2ª passada — assinaturas ACHATADAS (sem camada de texto) lidas por OCR ANTES de apontar
-    // "sem assinatura": cada DFD fica "pendente" até a leitura; ao ler, a assinatura é mesclada no
-    // cache (preserva edições feitas nesse meio-tempo) e a UNIDADE é prevista pelo assinante.
-    if (paraOcr.length > 0) setOcrProgresso({ feito: 0, total: paraOcr.length });
+    // 2ª passada — assinaturas ACHATADAS (sem camada de texto) lidas por OCR ANTES de apontar "sem
+    // assinatura": cada DFD fica "pendente" até a leitura; ao ler, a assinatura é mesclada no cache
+    // (preserva edições feitas nesse meio-tempo) e a UNIDADE é prevista pelo assinante.
     for (let k = 0; k < paraOcr.length; k++) {
       const { i, dfd } = paraOcr[k];
-      if (docRef.current !== doc) return; // outro protocolo foi aberto — aborta
+      if (docRef.current !== doc) return;
+      setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i });
       if (!ocrTentadoRef.current.has(i)) {
         ocrTentadoRef.current.add(i);
         const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
@@ -344,7 +323,7 @@ export function ProtocoloUploadForm({
             const cur = m.get(i);
             return cur ? new Map(m).set(i, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
           });
-          // As assinaturas não são editáveis → a cópia local basta p/ prever a unidade.
+          // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
           refinarUnidade(i, { ...dfd, assinaturas: mesclarAssinaturasOcr(dfd.assinaturas, ocr) });
         }
       }
@@ -353,10 +332,8 @@ export function ProtocoloUploadForm({
         n.delete(i);
         return n;
       });
-      setOcrProgresso({ feito: k + 1, total: paraOcr.length });
     }
-    setOcrProgresso(null);
-    setAnalisando(false);
+    if (docRef.current === doc) setAnalise(null);
   }
 
   /** Prevê a UNIDADE do DFD pela ASSINATURA (lógica única `preverUnidadeDoDfd`, todas as formas —
@@ -371,6 +348,8 @@ export function ProtocoloUploadForm({
   function fechar() {
     setAberto(false);
     setAbertoIdx(-1);
+    setPainel(null);
+    setAnalise(null);
     limparDoc();
   }
 
@@ -385,21 +364,14 @@ export function ProtocoloUploadForm({
 
   // Categoria do protocolo (classifica o assunto livre) → aplica as exceções por categoria.
   const categoria = classificarAssunto(assunto);
-
-  /** Confere a assinatura do DFD contra o responsável da repartição escolhida. */
-  const confereAssinatura = (idx: number, d: DfdParseado) =>
-    validarAssinatura(d.assinaturas, reparticoes.find((r) => r.id === dfdRepIds[idx])?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-      exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
-    });
+  const repDe = (id: number | null | undefined): Rep | null => (id != null ? (reparticoes.find((r) => r.id === id) ?? null) : null);
 
   // ---- DFDs DUPLICADOS (mesmo nº de DFD ou de planejamento) — ponto configurável `protocolo.dfdDuplicado`.
   const dupComp = comportamentoNo(regras, "protocolo.dfdDuplicado", { categoria });
   const gruposDup =
     dupComp === "ignora"
       ? []
-      : dfdsDuplicados(
-          (index?.dfds ?? []).map((di, i) => ({ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null })),
-        );
+      : dfdsDuplicados((index?.dfds ?? []).map((di, i) => ({ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null })));
   const grupoDupDe = (idx: number): number[] | undefined => gruposDup.find((g) => g.includes(idx));
   /** Duplicata AINDA não resolvida: o grupo tem 2+ DFDs não-descartados (falta escolher um). */
   const dupPendente = (idx: number): boolean => {
@@ -415,7 +387,7 @@ export function ProtocoloUploadForm({
       for (const j of g) if (j !== idx) s.add(j);
       return s;
     });
-    setSel(new Set()); // as linhas mudam de tabela → limpa a seleção em massa
+    setSel(new Set());
   };
   /** Reincluir um DFD descartado (o grupo volta a "pendente"). */
   const restaurarDfd = (idx: number) => {
@@ -430,80 +402,113 @@ export function ProtocoloUploadForm({
     const n = index?.dfds[idx]?.numero;
     return n != null && classificar(n) !== "novo";
   };
-  /** "Manter o existente": descarta ESTE DFD do envio → o já cadastrado PREVALECE (não é
-   * sobrescrito). Sem descartar, o novo prevalece (substitui/move). É a escolha de qual DFD vence. */
+  /** "Manter o existente": descarta ESTE DFD do envio → o já cadastrado PREVALECE. */
   const descartarDfd = (idx: number) => {
     setDescartados((prev) => new Set(prev).add(idx));
     setSel(new Set());
   };
 
-  const estadoBase = (idx: number): EstadoDfd => {
-    if (errosParse.has(idx)) return "erro"; // falha de leitura (ex.: tabela incompleta)
-    const d = parsed.get(idx);
-    if (!d || ocrPendente.has(idx)) return "pendente"; // ainda lendo (texto ou assinatura por OCR)
-    const compAss = comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria });
-    // Assinatura não conferida — bloqueia só se `dfd.assinatura` estiver numa importância que bloqueia (regra 6).
-    const assRes = confereAssinatura(idx, d);
-    if (bloqueiaAssinatura(assRes, compAss)) return "erro";
-    // Avaliação configurável: bloqueantes (bloqueia) → erro; atenções (avisa/automático,
-    // incl. DFD-R sem referência e quantidade) → âmbar.
-    const av = avaliarDfd({ ...d, reparticaoId: dfdRepIds[idx], anoPca }, regras, { categoria });
-    if (av.bloqueantes.length > 0) return "erro";
-    // Atenção: assinatura não conferida em nível "avisa" OU reconhecida mas pendente de validação.
-    const assAtencao = (assRes.status === "erro" && compAss === "avisa") || (assinaturaPendenteValidacao(assRes) && compAss !== "ignora");
-    const atencao = av.atencoes.length > 0 || assAtencao;
-    return estadoDfd(0, (autoMap.get(idx)?.length ?? 0) > 0, editados.has(idx), atencao);
+  // ---- Conferência por LINHA — a MESMA do protocolo gravado (`avaliarLinhaDfd`). Cache por objeto
+  // de DFD (só o DFD editado é reavaliado a cada tecla); zera quando as regras/cadastros mudam.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (regras/cadastros novos ⇒ reconferir tudo).
+  const cacheLinha = useMemo(() => new WeakMap<DfdParseado, { k: string; r: LinhaAvaliada }>(), [regras, orgaos, reparticoes]);
+  const avaliarLinha = (idx: number, d: DfdParseado): LinhaAvaliada => {
+    const repId = dfdRepIds[idx] ?? null;
+    const dup = dupComp !== "ignora" && dupPendente(idx) ? (dupComp === "bloqueia" ? "erro" : "atencao") : null;
+    const auto = (autoMap.get(idx)?.length ?? 0) > 0;
+    const editado = editados.has(idx);
+    const k = `${repId}|${anoPca}|${categoria}|${auto}|${editado}|${dup}`;
+    const c = cacheLinha.get(d);
+    if (c && c.k === k) return c.r;
+    const r = avaliarLinhaDfd(d, repDe(repId), { anoPca, regras, categoria, orgaos, auto, editado, duplicado: dup });
+    cacheLinha.set(d, { k, r });
+    return r;
   };
-
-  /** Estado FINAL: descartado (cinza) › duplicata pendente (bloqueia→erro / avisa→atenção) › base. */
-  const estado = (idx: number): EstadoDfd => {
-    if (descartados.has(idx)) return "descartado";
-    const base = estadoBase(idx);
-    if (dupComp !== "ignora" && dupPendente(idx)) {
-      if (dupComp === "bloqueia") return "erro";
-      return base === "erro" ? "erro" : "atencao"; // "avisa" não rebaixa um erro real
+  /** O que está acontecendo com a linha AGORA (feedback real da análise). */
+  const processandoDe = (idx: number): ProcessandoDfd | null => {
+    if (errosParse.has(idx) || descartados.has(idx)) return null;
+    if (carregandoIdx === idx) return "texto";
+    if (!parsed.has(idx)) {
+      if (analise?.fase === "texto") return analise.atual === idx ? "texto" : idx < CAP_ANALISE ? "fila" : null;
+      return null; // além do teto: analisado ao abrir/protocolar
     }
-    return base;
+    if (ocrPendente.has(idx)) return analise?.fase === "ocr" && analise.atual === idx ? "ocr" : "fila";
+    return null;
   };
 
-  // Resumo da célula "Estado" (erro/atenção ESPECÍFICO + contadores + tooltip) — reusa
-  // `mensagensDoDfd`. ALINHADO ao AGRUPAMENTO (`estado`/`avaliarDfd`): sem catálogo (lazy), SEM as
-  // flags de órgão (não entram no agrupamento → `orgaos: []`) e EXCLUINDO o ano do PCA (portão do
-  // PROTOCOLO, resolvido uma vez no PcaPicker — não é falta por-DFD). Assim a célula nunca contradiz
-  // a seção (erro/atenção/regular) em que a linha foi colocada. Sem parse ainda ⇒ undefined.
-  const resumoDfd = (idx: number): ResumoEstado | undefined => {
-    if (descartados.has(idx)) return undefined; // célula mostra "Descartado" (rótulo do estado)
-    const dup = dupComp !== "ignora" && dupPendente(idx);
-    const d = ocrPendente.has(idx) ? undefined : parsed.get(idx);
-    const rep = reparticoes.find((r) => r.id === dfdRepIds[idx]) ?? null;
-    const msgs = d ? mensagensDoDfd(d, rep, anoPca, regras, categoria, []).filter((m) => m.chave !== "dfd.anoPca") : [];
-    if (dup)
-      msgs.unshift({
-        status: dupComp === "bloqueia" ? "erro" : "atencao",
-        chave: "protocolo.dfdDuplicado",
-        texto: "DFD duplicado (mesmo nº ou planejamento) — escolha um para manter.",
-        ancora: "",
-      });
-    return msgs.length > 0 ? resumoEstado(msgs) : undefined;
-  };
-  // Tipos de assinatura do DFD (Centi/Dropsigner/Adobe). Antes do parse completo, cai nas A/B do índice.
-  const assinaturasDfd = (idx: number): GrupoAssinatura[] =>
-    gruposAssinatura(parsed.get(idx)?.assinaturas ?? index?.dfds[idx]?.assinaturas ?? []);
-
-  // Quem validou a assinatura (auto/equipe) — só após o parse e a leitura por OCR.
-  const validacaoDfd = (idx: number): "auto" | "equipe" | null => {
+  const compacta = abertoIdx >= 0; // DFD aberto ao lado → tabela estreita (rola no eixo x)
+  // Uma linha por DFD para a planilha (`PlanilhaDfds`). `key` = idx (chave da seleção/edição em massa).
+  const avaliacoes = new Map<number, LinhaAvaliada>();
+  const linhasDfd: LinhaDfd[] = (index?.dfds ?? []).map((di, idx): LinhaDfd => {
     const d = parsed.get(idx);
-    if (!d || ocrPendente.has(idx)) return null;
-    const r = confereAssinatura(idx, d);
-    return r.status === "ok" ? r.origem : null;
-  };
+    const id = dfdRepIds[idx];
+    const base = {
+      key: idx,
+      numero: di.numero,
+      planejamento: d?.planejamento ?? null,
+      sigla: repDe(id)?.codigo ?? di.siglaSetor ?? "—",
+      auto: id != null && id === autoRepIds[idx],
+      tipo: tipoCurtoDfd(d?.tipo),
+      itens: d ? d.itens.length : null,
+      valor: d ? (d.valorTotal ?? 0) : null,
+      // Tipos de assinatura (Centi/Dropsigner/Adobe/Foxit). Antes do parse completo, as A/B do índice.
+      assinaturas: gruposAssinatura(d?.assinaturas ?? di.assinaturas),
+      situacao: SITUACAO[classificar(di.numero)],
+      processando: processandoDe(idx),
+    };
+    if (descartados.has(idx)) return { ...base, estado: "descartado" };
+    const motivo = errosParse.get(idx);
+    if (motivo) return { ...base, estado: "erro", estadoMotivo: motivo };
+    if (!d || ocrPendente.has(idx)) return { ...base, estado: "pendente" };
+    const r = avaliarLinha(idx, d);
+    avaliacoes.set(idx, r);
+    return { ...base, estado: r.estado, resumo: r.resumo, validacao: r.validacao };
+  });
+  const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
+  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // não bloqueiam (avisos)
+  const dfdsComErro = linhasErro.length;
+  const totalDfds = index?.dfds.length ?? 0;
+  const temDfds = totalDfds > 0;
+  const analisando = analise != null;
+  const semRep = linhasDfd.filter((l) => l.estado !== "descartado" && dfdRepIds[l.key] == null).length;
+
+  // ---- Conciliação do VALOR DA CAPA × somatória (mesma régua do gravado). A somatória IGNORA os
+  // descartados; só é conferida com a análise COMPLETA — e NÃO depende de os DFDs estarem sem erro.
+  const ativos = linhasDfd.filter((l) => l.estado !== "descartado").map((l) => l.key);
+  const somatorioDfds = ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0);
+  const itensDfds = ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0);
+  const lidos = ativos.filter((i) => parsed.has(i) || errosParse.has(i)).length;
+  const completo = !analisando && lidos === ativos.length;
+  const conc = conciliacaoCapa({ valorCapa: extra.valorCapa, somatorio: somatorioDfds, totalDfds: ativos.length, completo }, regras, { categoria });
+
+  // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
+  const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
+  const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia";
+  const semErroBloqueia = dfdsComErro > 0 && comportamentoNo(regras, "protocolo.semDfdEmErro", { categoria }) === "bloqueia";
+  const dupBloqueia = dupComp === "bloqueia" && (index?.dfds ?? []).some((_, i) => dupPendente(i));
+  // Trava de protocolação do ADM (assunto não cadastrado / tipo de DFD não permitido / botão desligado).
+  const tiposCurtosGate = ativos.map((i) => parsed.get(i)).filter((d): d is DfdParseado => !!d).map((d) => tipoCurtoDfd(d.tipo));
+  const gateTrava = gateProtocolo(assunto, tiposCurtosGate, regras);
+  const protocolarDesligado = !protocolarHabilitado(regras);
+  const bloqueadoPorRegra =
+    repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
+  const podeProtocolar = numero.trim().length > 0 && !importando && !analisando && ocrPendente.size === 0 && !bloqueadoPorRegra;
+  const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
+
+  // ---- DFD aberto ao lado.
+  const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
+  const repAberto = abertoIdx >= 0 ? repDe(dfdRepIds[abertoIdx]) : null;
+  // Conformidade do DFD ABERTO com o catálogo (lazy — só o DFD aberto; a lista fica leve).
+  const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
+  // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
+  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade) : [];
 
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
     setEditados((s) => new Set(s).add(idx));
   }
 
-  /** Garante o DFD parseado+normalizado no cache (uso: abrir/bulk). */
+  /** Garante o DFD parseado+normalizado no cache (uso: abrir/edição em massa). */
   async function garantirParse(idx: number): Promise<DfdParseado | null> {
     const doc = docRef.current;
     const di = index?.dfds[idx];
@@ -517,15 +522,11 @@ export function ProtocoloUploadForm({
     return dfd;
   }
 
-  /** Assinatura ACHATADA (Dropsigner/Foxit/Adobe sem camada de texto) — se o DFD ficou sem assinatura
-   * NOMEADA de texto (`precisaOcr`) e o OCR ainda não foi tentado (a análise em background lê todos em
-   * fila; abrir um DFD antes disso adianta a leitura dele), tenta UMA vez e MESCLA no parse cacheado
-   * (preserva edições). Best-effort: nunca trava o import. */
+  /** Assinatura ACHATADA — se o DFD ficou sem assinatura NOMEADA de texto e o OCR ainda não foi
+   * tentado, tenta UMA vez e MESCLA no parse cacheado (preserva edições). Best-effort. */
   async function mesclarOcrSePreciso(idx: number, d: DfdParseado | null): Promise<void> {
     const doc = docRef.current;
     const di = index?.dfds[idx];
-    // `d` vem do `garantirParse` (o `parsed` do closure ainda não reflete o `setParsed` recém-agendado,
-    // então DFD não-cacheado — idx ≥ CAP_ANALISE ou antes do background — leria `undefined` aqui).
     if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
     const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
@@ -551,7 +552,7 @@ export function ProtocoloUploadForm({
     setAncoraAlvo(null);
     try {
       const d = await garantirParse(idx);
-      await mesclarOcrSePreciso(idx, d); // assinatura achatada: OCR se faltou assinatura nomeada de texto
+      await mesclarOcrSePreciso(idx, d);
       setAbertoIdx(idx);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível ler este DFD.");
@@ -571,78 +572,39 @@ export function ProtocoloUploadForm({
     setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
   }
 
-  const onSecoesAberto = (secoes: DfdParseado["secoes"]) => {
+  /** Aplica um patch ao DFD aberto no lateral (seções/refs/cabeçalho/tipo/assinaturas) e o marca editado. */
+  const editarAberto = (fn: (d: DfdParseado) => DfdParseado) => {
     setParsed((m) => {
       const d = m.get(abertoIdx);
-      if (!d) return m;
-      return new Map(m).set(abertoIdx, { ...d, secoes });
+      return d ? new Map(m).set(abertoIdx, fn(d)) : m;
     });
     setEditados((s) => new Set(s).add(abertoIdx));
   };
 
-  // Edição manual das referências de renovação (DFD-R) do DFD aberto no lateral.
-  const onRefsAberto = (refs: { numeroContrato: string | null; numeroAta: string | null; numeroLicitacao: string | null }) => {
-    setParsed((m) => {
-      const d = m.get(abertoIdx);
-      if (!d) return m;
-      return new Map(m).set(abertoIdx, { ...d, ...refs });
-    });
-    setEditados((s) => new Set(s).add(abertoIdx));
-  };
-
-  // Edição dos campos de CONTEÚDO do cabeçalho do DFD aberto no lateral (cadeado por campo).
-  const onCamposAberto = (campos: Partial<DfdParseado>) => {
-    setParsed((m) => {
-      const d = m.get(abertoIdx);
-      if (!d) return m;
-      return new Map(m).set(abertoIdx, { ...d, ...campos });
-    });
-    setEditados((s) => new Set(s).add(abertoIdx));
-  };
-
-  // Edição de UM item (índice `painelIdx`) do DFD aberto no lateral (recomputa o total do DFD).
-  const onItemAberto = (painelIdx: number, patch: Partial<DfdParseado["itens"][number]>) => {
-    setParsed((m) => {
-      const d = m.get(abertoIdx);
-      if (!d) return m;
-      return new Map(m).set(abertoIdx, editarItemDfd(d, painelIdx, patch));
-    });
-    setEditados((s) => new Set(s).add(abertoIdx));
-  };
-
-  async function aplicarBulk() {
-    const idxs = [...sel].map(Number); // chaves são idx numéricos
+  /** Edição EM MASSA (mesma barra do protocolo gravado): unidade no host; conteúdo por `aplicarMassaDfd`. */
+  async function aplicarMassa(acao: AcaoMassa) {
+    const idxs = [...sel].map(Number);
     if (idxs.length === 0) return;
-    if (bulkCampo === "reparticao") {
-      setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? bulkRep : x)));
-    } else if (bulkCampo === "tipo") {
-      if (!bulkTipo) return;
-      const tipo = TIPO_DFD_ROTULO[bulkTipo as (typeof TIPOS_DFD)[number]];
-      for (const i of idxs) {
-        const d = await garantirParse(i);
-        if (!d) continue;
-        setParsed((m) => {
-          const cur = m.get(i) ?? d;
-          return new Map(m).set(i, { ...cur, tipo });
-        });
+    setAplicandoMassa(true);
+    try {
+      if (acao.campo === "reparticao") {
+        setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? acao.reparticaoId : x)));
+      } else {
+        for (const i of idxs) {
+          const d = await garantirParse(i);
+          if (!d) continue;
+          setParsed((m) => new Map(m).set(i, aplicarMassaDfd(m.get(i) ?? d, acao)));
+        }
       }
-    } else {
-      const cfg = bulkCampo === "prioridade" ? TRATAVEIS[0] : bulkCampo === "previsao" ? TRATAVEIS[1] : TRATAVEIS[2];
-      const texto =
-        bulkCampo === "prioridade" ? bulkPrio : bulkCampo === "previsao" ? buildPrevisao(bulkMes, bulkAno, bulkAnual) : bulkFund;
-      if (!texto) return;
-      for (const i of idxs) {
-        const d = await garantirParse(i);
-        if (!d) continue;
-        setParsed((m) => new Map(m).set(i, { ...d, secoes: setTextoSecao(d.secoes, cfg, texto) }));
-      }
+      setEditados((s) => {
+        const n = new Set(s);
+        for (const i of idxs) n.add(i);
+        return n;
+      });
+      setSel(new Set());
+    } finally {
+      setAplicandoMassa(false);
     }
-    setEditados((s) => {
-      const n = new Set(s);
-      for (const i of idxs) n.add(i);
-      return n;
-    });
-    setSel(new Set());
   }
 
   async function protocolar() {
@@ -682,7 +644,7 @@ export function ProtocoloUploadForm({
       const bloqueados: { numero: string; motivo: string }[] = [];
       let importados = 0;
       for (let i = 0; i < dfds.length; i++) {
-        if (descartados.has(i)) continue; // DFD duplicado descartado — não protocola
+        if (descartados.has(i)) continue; // DFD descartado (duplicado / "manter o existente") — não protocola
         const di = dfds[i];
         setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
         // Usa a cópia EDITADA do cache; senão parseia local (streaming, sem acumular).
@@ -696,8 +658,7 @@ export function ProtocoloUploadForm({
             continue;
           }
         }
-        // Assinatura achatada — DFD que a análise não chegou a ler (além do teto `CAP_ANALISE`): tenta o
-        // OCR e mescla (uma vez). A assinatura lida entra no `full` → é conferida e GRAVADA com o DFD.
+        // Assinatura achatada de um DFD além do teto da análise: tenta o OCR (uma vez) e mescla.
         if (precisaOcr(full.assinaturas) && !ocrTentadoRef.current.has(i) && doc) {
           ocrTentadoRef.current.add(i);
           setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
@@ -705,31 +666,16 @@ export function ProtocoloUploadForm({
             const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
             if (ocr.length > 0) full = { ...full, assinaturas: mesclarAssinaturasOcr(full.assinaturas, ocr) };
           } catch {
-            /* OCR é auxiliar — segue sem assinatura (o gate decide) */
+            /* OCR é auxiliar — segue sem assinatura (a conferência decide) */
           }
         }
-        const faltas = faltasObrigatorias(
-          {
-            reparticaoId: dfdRepIds[i],
-            anoPca,
-            itens: full.itens,
-            secoes: full.secoes,
-            tipo: full.tipo,
-            numeroContrato: full.numeroContrato,
-            numeroAta: full.numeroAta,
-            numeroLicitacao: full.numeroLicitacao,
-          },
-          regras,
-          { categoria },
-        );
-        if (faltas.length > 0) {
-          bloqueados.push({ numero: di.numero, motivo: faltas.join(", ") });
-          continue;
-        }
-        // Confere a assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
-        const resAss = confereAssinatura(i, full);
-        if (bloqueiaAssinatura(resAss, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(full.tipo), categoria }))) {
-          bloqueados.push({ numero: di.numero, motivo: resAss.status === "erro" ? resAss.motivo : "assinatura" });
+        // MESMA conferência da tabela (fonte única): DFD com erro nunca é protocolado.
+        const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos });
+        if (conf.estado === "erro") {
+          bloqueados.push({
+            numero: di.numero,
+            motivo: conf.mensagens.filter((m) => m.status === "erro").map((m) => m.texto).join(" "),
+          });
           continue;
         }
         try {
@@ -777,149 +723,31 @@ export function ProtocoloUploadForm({
     }
   }
 
-  const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
-
-  const compacta = abertoIdx >= 0; // DFD aberto ao lado → tabela estreita (rola no eixo x)
-  // Acessores por linha (puxam do cache de parse + repartição atribuída).
-  const repCod = (idx: number): string => {
-    const id = dfdRepIds[idx];
-    const c = id != null ? reparticoes.find((r) => r.id === id)?.codigo : null;
-    return c ?? index?.dfds[idx].siglaSetor ?? "—";
-  };
-  const planNum = (idx: number): string => parsed.get(idx)?.planejamento ?? "";
-  const qtdItens = (idx: number): number | null => parsed.get(idx)?.itens.length ?? null;
-  const valorItens = (idx: number): number | null => {
-    const d = parsed.get(idx);
-    return d ? (d.valorTotal ?? null) : null;
-  };
-  // Uma linha NORMALIZADA por DFD para a planilha única (`PlanilhaDfds`). O `key` é o
-  // idx (chave da seleção/edição em massa). Estado/Situação/valores vêm do parse+validação.
-  const linhasDfd: LinhaDfd[] = (index?.dfds ?? []).map((di, idx) => ({
-    key: idx,
-    numero: di.numero,
-    planejamento: planNum(idx) || null,
-    sigla: repCod(idx),
-    auto: dfdRepIds[idx] != null && dfdRepIds[idx] === autoRepIds[idx],
-    tipo: tipoCurtoDfd(parsed.get(idx)?.tipo),
-    itens: qtdItens(idx),
-    valor: valorItens(idx),
-    estado: estado(idx),
-    resumo: resumoDfd(idx),
-    assinaturas: assinaturasDfd(idx),
-    validacao: validacaoDfd(idx),
-    estadoMotivo: errosParse.get(idx) ?? null,
-    situacao: SITUACAO[classificar(di.numero)],
-  }));
-  const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
-  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // não bloqueiam (avisos)
-  const semRep = (index?.dfds.length ?? 0) - dfdRepIds.filter((x) => x != null).length;
-  // Bloqueia a protocolação enquanto houver DFD com erro (não permite protocolo com DFDs defeituosos).
-  const dfdsComErro = linhasErro.length;
-  const temDfds = (index?.dfds.length ?? 0) > 0;
-  // Somatória dos valores dos DFDs (valor do DFD = soma dos seus itens). Só é completa
-  // quando todos foram analisados e nenhum está com erro.
-  // Somatória/contagem IGNORAM os DFDs duplicados descartados (fora do processo).
-  const somatorioDfds = [...parsed.entries()].reduce((s, [i, d]) => (descartados.has(i) ? s : s + (d.valorTotal ?? 0)), 0);
-  const itensDfds = [...parsed.entries()].reduce((s, [i, d]) => (descartados.has(i) ? s : s + d.itens.length), 0);
-  const conciliavel = temDfds && !analisando && dfdsComErro === 0;
-  // Regra 2 (configurável por `protocolo.valorCapa` + categoria): capa **zerada/nula** OU
-  // **diferente** da somatória dos DFDs. "ignora" desliga; "bloqueia" trava; senão avisa.
-  const compCapa = comportamentoNo(regras, "protocolo.valorCapa", { categoria });
-  const capaZeradaOuNula = extra.valorCapa == null || extra.valorCapa <= 0;
-  const capaMismatch =
-    conciliavel && compCapa !== "ignora" && (capaZeradaOuNula || !valoresBatem(extra.valorCapa, somatorioDfds));
-  const capaBloqueia = capaMismatch && compCapa === "bloqueia";
-  // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
-  const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
-  const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia";
-  const semErroBloqueia = dfdsComErro > 0 && comportamentoNo(regras, "protocolo.semDfdEmErro", { categoria }) === "bloqueia";
-  // DFD duplicado não resolvido (mesmo nº/planejamento) — bloqueia até escolher um (regra própria).
-  const dupBloqueia = dupComp === "bloqueia" && (index?.dfds ?? []).some((_, i) => dupPendente(i));
-  // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): assunto não
-  // cadastrado / tipo de DFD não permitido barram o protocolo INTEIRO; e o botão pode estar
-  // desligado. Os tipos vêm dos DFDs JÁ analisados (o servidor reconfere cada um, por garantia).
-  const tiposCurtosGate = (index?.dfds ?? [])
-    .map((_, i) => parsed.get(i))
-    .filter((d): d is DfdParseado => !!d)
-    .map((d) => tipoCurtoDfd(d.tipo));
-  const gateTrava = gateProtocolo(assunto, tiposCurtosGate, regras);
-  const protocolarDesligado = !protocolarHabilitado(regras);
-  const bloqueadoPorRegra =
-    repBloqueia || anoPcaBloqueia || semErroBloqueia || capaBloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
-  const podeProtocolar =
-    numero.trim().length > 0 && !importando && !analisando && !bloqueadoPorRegra;
-  const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
-  const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
-  const repAberto = abertoIdx >= 0 ? (reparticoes.find((r) => r.id === dfdRepIds[abertoIdx]) ?? null) : null;
-  // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
-  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade) : [];
-
-  // Confere o DFD ABERTO contra o catálogo (lazy — só ao abrir/trocar de DFD; itens estáveis
-  // na edição de seções/refs). Fechar o lateral (dfdAberto = null) limpa o veredito.
-  const itensAberto = dfdAberto?.itens;
-  const tipoAberto = dfdAberto?.tipo ?? null;
-  useEffect(() => {
-    if (!itensAberto || itensAberto.length === 0) {
-      setConformidade(undefined);
-      return;
-    }
-    const ac = new AbortController();
-    setConformidade(undefined);
-    conferirItensCliente(itensAberto, tipoAberto, ac.signal).then((m) => {
-      if (!ac.signal.aborted) setConformidade(m);
-    });
-    return () => ac.abort();
-  }, [itensAberto, tipoAberto]);
-
-  // Relatório de erros do protocolo em DESPACHO (copiável) — pendências CIRÚRGICAS por
-  // DFD com erro + capa (aponta o que corrigir e onde).
+  // ---- Relatório de erros do protocolo em DESPACHO (copiável): pendências CIRÚRGICAS por DFD + capa.
+  const ERRO_EXTRA = new Set(["protocolo.dfdDuplicado", "dfd.orgao", "dfd.orgaoUnidadeDivergente"]);
   const faltasDoDfd = (idx: number): string[] => {
     const parseErr = errosParse.get(idx);
     if (parseErr) return [`Leitura incompleta da tabela de itens (${parseErr}). Reenviar o DFD com a tabela completa.`];
     const d = parsed.get(idx);
     if (!d) return ["DFD ainda em análise — reabrir para conferir."];
-    const resAss = confereAssinatura(idx, d);
-    return faltasCirurgicasDfd(
-      {
-        itens: d.itens,
-        secoes: d.secoes,
-        reparticaoId: dfdRepIds[idx],
-        assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null,
-        tipo: d.tipo,
-        anoPca,
-      },
+    const resAss = conferirAssinaturaDfd(d, repDe(dfdRepIds[idx]));
+    const cirurgicas = faltasCirurgicasDfd(
+      { itens: d.itens, secoes: d.secoes, reparticaoId: dfdRepIds[idx], assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca },
       regras,
       { categoria },
     );
+    // Erros que não são faltas do formulário (duplicado, órgão) também vão ao despacho.
+    const extras = (avaliacoes.get(idx)?.mensagens ?? []).filter((m) => m.status === "erro" && ERRO_EXTRA.has(m.chave)).map((m) => m.texto);
+    return [...extras, ...cirurgicas];
   };
-  const capaMotivo = capaMismatch
-    ? capaZeradaOuNula
-      ? `Valor da capa ausente/zerado — informar o valor da capa (usar "Substituir pela somatória": ${brl(somatorioDfds)}).`
-      : `Valor da capa (${extra.valorCapa != null ? brl(extra.valorCapa) : "—"}) diferente da somatória dos DFDs (${brl(somatorioDfds)}) — corrigir a capa (usar "Substituir pela somatória").`
-    : null;
-  const temErroProto = dfdsComErro > 0 || capaMismatch;
-  // O relatório (despacho) fica disponível quando há erro OU DFD-R em atenção (o usuário
-  // escolhe incluir os de atenção). Só de atenção também gera um despacho.
+  const temErroProto = dfdsComErro > 0 || conc.divergente;
   const temAtencao = linhasAtencao.length > 0;
   const temRelatorio = temErroProto || temAtencao;
+  const atencoesDe = (idx: number) => (avaliacoes.get(idx)?.mensagens ?? []).filter((m) => m.status === "atencao").map((m) => m.texto);
   const dfdsRelatorio = [
-    ...linhasErro.map((l) => ({
-      numero: index?.dfds[l.key].numero ?? "?",
-      planejamento: l.planejamento,
-      tipo: parsed.get(l.key)?.tipo ?? null,
-      faltas: faltasDoDfd(l.key),
-    })),
+    ...linhasErro.map((l) => ({ numero: l.numero, planejamento: l.planejamento, tipo: parsed.get(l.key)?.tipo ?? null, faltas: faltasDoDfd(l.key) })),
     ...(incluirAtencao
-      ? linhasAtencao.map((l) => ({
-          numero: index?.dfds[l.key].numero ?? "?",
-          planejamento: l.planejamento,
-          tipo: parsed.get(l.key)?.tipo ?? null,
-          // Todas as ATENÇÕES do DFD (DFD-R sem referência, assinatura a validar, pontos em "avisa"…).
-          faltas: (resumoDfd(l.key)?.titulo ?? "")
-            .split("\n")
-            .filter((t) => t.startsWith("Atenção: "))
-            .map((t) => t.slice("Atenção: ".length)),
-        }))
+      ? linhasAtencao.map((l) => ({ numero: l.numero, planejamento: l.planejamento, tipo: parsed.get(l.key)?.tipo ?? null, faltas: atencoesDe(l.key) }))
       : []),
   ];
   const relatorioLinhas = linhasRelatorioProtocolo({
@@ -927,86 +755,38 @@ export function ProtocoloUploadForm({
     idExterno: extra.idExterno,
     interessado: interessado || null,
     assunto: assunto || null,
-    capaMotivo,
+    capaMotivo: conc.motivo,
     dfds: dfdsRelatorio,
   });
 
-  // Barra de edição em massa — FIXA no rodapé do banner, tamanho constante:
-  // cima = controle do valor (altura fixa); baixo = seletor do campo + Aplicar + Limpar.
-  const barraMassa = sel.size > 0 && !importando && (
-    <div className="mb-3 rounded-card border border-border bg-surface-2 p-3">
-      <div className="flex min-h-[42px] flex-wrap items-center gap-2">
-        {bulkCampo === "reparticao" && (
-          <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkRep ?? ""} onChange={(e) => setBulkRep(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Unidade —</option>
-            {reparticoes.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.codigo} · {r.nome}
-              </option>
-            ))}
-          </select>
-        )}
-        {bulkCampo === "tipo" && (
-          <select className={inputCls} style={{ width: "auto", minWidth: 200 }} value={bulkTipo} onChange={(e) => setBulkTipo(e.target.value)}>
-            <option value="">— Tipo do DFD —</option>
-            {TIPOS_DFD.map((t) => (
-              <option key={t} value={t}>
-                {TIPO_DFD_ROTULO[t]}
-              </option>
-            ))}
-          </select>
-        )}
-        {bulkCampo === "prioridade" && (
-          <Segmented<Prioridade | "">
-            value={bulkPrio}
-            options={[
-              { value: "ALTA", label: "Alta" },
-              { value: "MÉDIA", label: "Média" },
-              { value: "BAIXA", label: "Baixa" },
-            ]}
-            onChange={setBulkPrio}
-          />
-        )}
-        {bulkCampo === "previsao" && (
-          <>
-            <select className={inputCls} style={{ width: "auto", flex: "0 1 140px" }} value={bulkMes} disabled={bulkAnual} onChange={(e) => setBulkMes(e.target.value)}>
-              <option value="">— Mês —</option>
-              {MESES.map((m) => (
-                <option key={m} value={m}>
-                  {m[0] + m.slice(1).toLowerCase()}
-                </option>
-              ))}
-            </select>
-            <input className={inputCls} style={{ width: 84 }} inputMode="numeric" maxLength={4} placeholder="Ano" value={bulkAno} onChange={(e) => setBulkAno(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-            <Checkbox label="Anual" checked={bulkAnual} onChange={(e) => setBulkAnual(e.target.checked)} />
-          </>
-        )}
-        {bulkCampo === "fundamentacao" && (
-          <div className="min-w-[220px] flex-1">
-            <TextField aria-label="Fundamentação legal" value={bulkFund} onChange={(e) => setBulkFund(e.target.value)} />
-          </div>
-        )}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Segmented<CampoBulk>
-          value={bulkCampo}
-          options={[
-            { value: "reparticao", label: "Repartição" },
-            { value: "tipo", label: "Tipo" },
-            { value: "prioridade", label: "Prioridade" },
-            { value: "previsao", label: "Previsão" },
-            { value: "fundamentacao", label: "Fund. legal" },
-          ]}
-          onChange={setBulkCampo}
-        />
-        <Button onClick={aplicarBulk}>Aplicar</Button>
-        <Button variant="ghost" onClick={() => setSel(new Set())}>
-          Limpar
-        </Button>
-        <span className="ml-auto text-[11px] font-semibold uppercase text-muted">{sel.size} selecionado(s)</span>
-      </div>
-    </div>
-  );
+  // Texto de estado do rodapé (o PROGRESSO real da análise tem precedência, com barra).
+  const statusTexto = protocolarDesligado
+    ? "Protocolação desabilitada nas Configurações"
+    : !numero.trim()
+      ? "Informe o número do processo para protocolar"
+      : !gateTrava.ok
+        ? gateTrava.motivos.join(" ")
+        : anoPcaBloqueia
+          ? "Defina o PCA do processo para protocolar"
+          : repBloqueia
+            ? "Defina a unidade do processo para protocolar"
+            : !temDfds
+              ? "Sem DFDs — cria só o protocolo."
+              : semErroBloqueia
+                ? `${dfdsComErro} DFD(s) com erro`
+                : conc.bloqueia
+                  ? "Valor da capa diverge da somatória — substitua para liberar"
+                  : dupBloqueia
+                    ? "DFD duplicado — escolha qual manter"
+                    : `${totalDfds} DFD(s) · ${semRep} sem unidade · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`;
+  const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
+  const numeroAtual = analise?.atual != null ? (index?.dfds[analise.atual]?.numero ?? "") : "";
+  const rotuloAnalise = !analise
+    ? ""
+    : analise.fase === "texto"
+      ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`
+      : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`;
+  const estadoAberto = abertoIdx >= 0 ? (linhasDfd[abertoIdx]?.estado ?? null) : null;
 
   return (
     <div className="space-y-4">
@@ -1025,7 +805,15 @@ export function ProtocoloUploadForm({
       )}
       {status === "parsing" && (
         <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />} className="mt-4">
-          Lendo o protocolo e identificando os DFDs...
+          <p className="font-semibold">Lendo o protocolo e identificando os DFDs…</p>
+          {leitura && (
+            <div className="mt-2">
+              <Progress
+                value={(leitura.pagina / Math.max(1, leitura.total)) * 100}
+                label={`Página ${num(leitura.pagina)} de ${num(leitura.total)}`}
+              />
+            </div>
+          )}
         </Callout>
       )}
       {relatorio && (
@@ -1097,61 +885,41 @@ export function ProtocoloUploadForm({
                 titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
                 cabecalho:
                   abertoIdx >= 0 ? (
-                    <DfdCabecalho
-                      numero={index?.dfds[abertoIdx]?.numero ?? ""}
-                      tipo={dfdAberto?.tipo ?? null}
-                      planejamento={dfdAberto?.planejamento ?? null}
-                    />
+                    <DfdCabecalho numero={index?.dfds[abertoIdx]?.numero ?? ""} tipo={dfdAberto?.tipo ?? null} planejamento={dfdAberto?.planejamento ?? null} />
                   ) : undefined,
                 onClose: fecharDfdLateral,
                 rodape:
                   abertoIdx < 0 ? undefined : (
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      {dfdAberto ? (
-                        <span
-                          className="inline-flex items-center gap-1.5 text-[12px] font-medium"
-                          style={{ color: estadoCor(estado(abertoIdx), regras) }}
-                        >
-                          <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(estado(abertoIdx), regras) }} />
-                          {estadoRotulo(estado(abertoIdx), regras)}
-                        </span>
-                      ) : (
-                        <span />
-                      )}
-                      <div className="flex items-center gap-2">
-                        {/* DFD duplicado: manter ESTE (descarta os demais do grupo) ou restaurar o descartado. */}
-                        {abertoIdx >= 0 && descartados.has(abertoIdx) && (
-                          <Button variant="secondary" onClick={() => restaurarDfd(abertoIdx)} disabled={importando}>
-                            Restaurar
-                          </Button>
-                        )}
-                        {abertoIdx >= 0 && !descartados.has(abertoIdx) && dupComp !== "ignora" && dupPendente(abertoIdx) && (
-                          <Button onClick={() => manterDfd(abertoIdx)} disabled={importando}>
-                            Manter este DFD
-                          </Button>
-                        )}
-                        {/* Conflito com um DFD já cadastrado (substitui/move): manter o EXISTENTE
-                            = descartar este do envio (o novo, se mantido, prevalece/sobrescreve). */}
-                        {abertoIdx >= 0 &&
-                          !descartados.has(abertoIdx) &&
-                          !(dupComp !== "ignora" && dupPendente(abertoIdx)) &&
-                          conflitaComExistente(abertoIdx) && (
+                    <DfdRodape
+                      estado={dfdAberto ? estadoAberto : null}
+                      regras={regras}
+                      mensagens={mensagensAberto}
+                      mensagensAbertas={painel?.tipo === "mensagens"}
+                      onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
+                      onFechar={fecharDfdLateral}
+                      bloqueado={importando}
+                      acoes={
+                        <>
+                          {/* DFD duplicado: manter ESTE (descarta os demais do grupo) ou restaurar o descartado. */}
+                          {descartados.has(abertoIdx) && (
+                            <Button variant="secondary" onClick={() => restaurarDfd(abertoIdx)} disabled={importando}>
+                              Restaurar
+                            </Button>
+                          )}
+                          {!descartados.has(abertoIdx) && dupComp !== "ignora" && dupPendente(abertoIdx) && (
+                            <Button onClick={() => manterDfd(abertoIdx)} disabled={importando}>
+                              Manter este DFD
+                            </Button>
+                          )}
+                          {/* Conflito com um DFD já cadastrado: manter o EXISTENTE = descartar este do envio. */}
+                          {!descartados.has(abertoIdx) && !(dupComp !== "ignora" && dupPendente(abertoIdx)) && conflitaComExistente(abertoIdx) && (
                             <Button variant="secondary" onClick={() => descartarDfd(abertoIdx)} disabled={importando}>
                               Manter o existente
                             </Button>
                           )}
-                        {dfdAberto && (
-                          <BotaoVerMensagens
-                            mensagens={mensagensAberto}
-                            aberto={painel?.tipo === "mensagens"}
-                            onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-                          />
-                        )}
-                        <Button variant="secondary" onClick={fecharDfdLateral} disabled={importando}>
-                          Fechar
-                        </Button>
-                      </div>
-                    </div>
+                        </>
+                      }
+                    />
                   ),
                 children: (
                   <div key={abertoIdx} className="animate-fade-in-up">
@@ -1175,11 +943,11 @@ export function ProtocoloUploadForm({
                         itemAtivo={painel?.tipo === "item" ? painel.idx : null}
                         onItemClick={(idx) => setPainel({ tipo: "item", idx })}
                         onRepChange={(id) => setRepDfd(abertoIdx, id)}
-                        onSecoesChange={onSecoesAberto}
-                        onRefsChange={onRefsAberto}
-                        onCamposChange={onCamposAberto}
-                        onTipoChange={(tipo) => onCamposAberto({ tipo })}
-                        onAssinaturasChange={(assinaturas) => onCamposAberto({ assinaturas })}
+                        onSecoesChange={(secoes) => editarAberto((d) => ({ ...d, secoes }))}
+                        onRefsChange={(refs) => editarAberto((d) => ({ ...d, ...refs }))}
+                        onCamposChange={(campos) => editarAberto((d) => ({ ...d, ...campos }))}
+                        onTipoChange={(tipo) => editarAberto((d) => ({ ...d, tipo }))}
+                        onAssinaturasChange={(assinaturas) => editarAberto((d) => ({ ...d, assinaturas }))}
                       />
                     )}
                   </div>
@@ -1191,210 +959,136 @@ export function ProtocoloUploadForm({
           temDfds
             ? {
                 aberto: abertoIdx >= 0 && painel != null,
-                titulo:
-                  painel?.tipo === "item"
-                    ? `Item ${dfdAberto?.itens[painel.idx]?.item ?? painel.idx + 1} — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`
-                    : `Mensagens — DFD ${index?.dfds[abertoIdx]?.numero ?? ""}`,
+                titulo: tituloPainelDfd(painel, dfdAberto, index?.dfds[abertoIdx]?.numero ?? ""),
                 onClose: () => setPainel(null),
-                children:
-                  painel?.tipo === "item" && dfdAberto?.itens[painel.idx] ? (
-                    <ItemDetalhe
-                      key={painel.idx}
-                      item={dfdAberto.itens[painel.idx]}
-                      conformidade={conformidade}
-                      regras={regras}
-                      tipo={dfdAberto.tipo}
-                      editavel
-                      onChange={(patch) => onItemAberto((painel as { idx: number }).idx, patch)}
-                      onRemover={() => {
-                        const idx = (painel as { idx: number }).idx;
-                        setPainel(null);
-                        setParsed((m) => {
-                          const d = m.get(abertoIdx);
-                          return d ? new Map(m).set(abertoIdx, removerItemDfd(d, idx)) : m;
-                        });
-                        setEditados((s) => new Set(s).add(abertoIdx));
-                      }}
-                    />
-                  ) : (
-                    <MensagensDfd
-                      mensagens={mensagensAberto}
-                      numero={index?.dfds[abertoIdx]?.numero ?? ""}
-                      tipo={dfdAberto?.tipo}
-                      onIrPara={irParaMensagem}
-                    />
-                  ),
+                rodape: painel?.tipo === "item" ? <RodapePainelItem onVerDfd={() => setPainel(null)} /> : undefined,
+                children: (
+                  <DfdPainelDireito
+                    painel={painel}
+                    dfd={dfdAberto}
+                    numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                    mensagens={mensagensAberto}
+                    onIrPara={irParaMensagem}
+                    conformidade={conformidade}
+                    regras={regras}
+                    editavel
+                    onEditarItem={(i, patch) => editarAberto((d) => editarItemDfd(d, i, patch))}
+                    onRemoverItem={(i) => {
+                      setPainel(null);
+                      editarAberto((d) => removerItemDfd(d, i));
+                    }}
+                  />
+                ),
               }
             : undefined
         }
         rodape={
           <div>
-            {barraMassa}
+            {/* Falha ao abrir um DFD / ao protocolar — aparece DENTRO do banner (antes ficava invisível). */}
+            {erro && (
+              <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
+                {erro}
+              </Callout>
+            )}
+            {sel.size > 0 && !importando && (
+              <BarraEdicaoMassa
+                qtd={sel.size}
+                reparticoes={reparticoes}
+                anoPadrao={anoPca}
+                regras={regras}
+                aplicando={aplicandoMassa}
+                onAplicar={aplicarMassa}
+                onLimpar={() => setSel(new Set())}
+              />
+            )}
             <div className="flex flex-wrap items-center justify-between gap-3">
               {importando && progresso ? (
                 <div className="min-w-[200px] flex-1">
                   <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
                 </div>
+              ) : analise ? (
+                <div className="min-w-[200px] flex-1">
+                  <Progress value={pctAnalise} label={rotuloAnalise} />
+                </div>
               ) : (
-              <span
-                className="text-[12px]"
-                style={{ color: bloqueadoPorRegra || !numero.trim() ? "var(--danger)" : "var(--muted)" }}
-              >
-                {protocolarDesligado
-                  ? "Protocolação desabilitada nas Configurações"
-                  : !numero.trim()
-                    ? "Informe o número do processo para protocolar"
-                  : !gateTrava.ok
-                    ? gateTrava.motivos.join(" ")
-                    : anoPcaBloqueia
-                  ? "Defina o PCA do processo para protocolar"
-                  : repBloqueia
-                    ? "Defina a unidade do processo para protocolar"
-                    : !temDfds
-                      ? "Sem DFDs — cria só o protocolo."
-                      : ocrProgresso
-                        ? `Lendo assinaturas por OCR (${ocrProgresso.feito}/${ocrProgresso.total})...`
-                        : analisando
-                        ? `Analisando ${index?.dfds.length} DFD(s)...`
-                        : semErroBloqueia
-                          ? `${dfdsComErro} DFD(s) com erro`
-                          : capaBloqueia
-                            ? "Valor da capa diverge da somatória — substitua para liberar"
-                            : `${index?.dfds.length} DFD(s) · ${semRep} sem unidade · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
-              </span>
-            )}
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-              {!importando && temRelatorio && (
-                <Button
-                  variant="secondary"
-                  onClick={() => setRelatorioAberto(true)}
-                  icon={<IconAlert className="h-4 w-4" style={{ color: temErroProto ? "var(--danger)" : "var(--warn)" }} />}
-                >
-                  {temErroProto ? "Relatório de erro" : "Relatório de atenção"}
-                </Button>
+                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || !numero.trim() ? "var(--danger)" : "var(--muted)" }}>
+                  {statusTexto}
+                </span>
               )}
-              {!importando && (
-                <Button variant="secondary" onClick={fechar}>
-                  Cancelar
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                {!importando && temRelatorio && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setRelatorioAberto(true)}
+                    icon={<IconAlert className="h-4 w-4" style={{ color: temErroProto ? "var(--danger)" : "var(--warn)" }} />}
+                  >
+                    {temErroProto ? "Relatório de erro" : "Relatório de atenção"}
+                  </Button>
+                )}
+                {!importando && (
+                  <Button variant="secondary" onClick={fechar}>
+                    Cancelar
+                  </Button>
+                )}
+                <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+                  Protocolar
                 </Button>
-              )}
-              <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-                Protocolar
-              </Button>
               </div>
             </div>
           </div>
         }
       >
-        <div className="space-y-5">
-          {/* Head — mini banners (um por informação) + conferência do valor da capa */}
-          {temDfds && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <StatMini label="Total de DFDs" value={num(index?.dfds.length ?? 0)} />
-              <StatMini label="Total de itens" value={num(itensDfds)} hint={analisando ? "analisando…" : undefined} />
-              <StatMini
-                label="Somatória dos DFDs"
-                value={brl(somatorioDfds)}
-                tone={capaMismatch ? "warn" : "default"}
-                hint={analisando ? "analisando…" : undefined}
-                className="col-span-2 sm:col-span-1"
-              />
-            </div>
-          )}
-          {capaMismatch && (
-            <Callout kind={capaBloqueia ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
-              <p className="font-semibold">
-                {capaZeradaOuNula
-                  ? capaBloqueia
-                    ? "O valor da capa está zerado — não é possível protocolar"
-                    : "O valor da capa está zerado (atenção — não bloqueia)"
-                  : capaBloqueia
-                    ? "O valor da capa diverge da somatória dos DFDs"
-                    : "O valor da capa diverge da somatória dos DFDs (atenção — não bloqueia)"}
-              </p>
-              <p className="mt-1 opacity-90">
-                Valor da capa: {extra.valorCapa != null ? brl(extra.valorCapa) : "—"} · Somatória dos DFDs:{" "}
-                {brl(somatorioDfds)}. Substitua o valor da capa pela somatória para conciliar.
-              </p>
-              <div className="mt-2">
-                <Button variant="secondary" onClick={() => setExtra((x) => ({ ...x, valorCapa: somatorioDfds }))}>
-                  Substituir pela somatória ({brl(somatorioDfds)})
-                </Button>
-              </div>
-            </Callout>
-          )}
-
-          {/* Dados da capa — MESMA grade (`CapaCampos`) do protocolo gravado. Criação manual
-              = inputs simples; importação de PDF = cadeado por campo nos de CONTEÚDO
-              (identificadores número/Id/data ficam travados). */}
-          <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-            <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
-            <CapaCampos
-              numero={numero}
-              idExterno={extra.idExterno}
-              data={data}
-              documento={extra.documento ?? ""}
-              interessado={interessado}
-              assunto={assunto}
-              observacao={observacao}
-              valorCapa={extra.valorCapa}
-              localReparticao={extra.localReparticao}
-              assuntos={opcoesAssunto(regras, assunto)}
-              numeroEditavel={origemPdf && index?.protocolo.numero == null}
-              modo={origemPdf ? "cadeado" : "criar"}
-              onChange={(c, v) => {
-                if (c === "numero") setNumero(v);
-                else if (c === "data") setData(v);
-                else if (c === "interessado") setInteressado(v);
-                else if (c === "assunto") setAssunto(v);
-                else if (c === "observacao") setObservacao(v);
-                else if (c === "localReparticao") setExtra((x) => ({ ...x, localReparticao: v || null }));
-                else setExtra((x) => ({ ...x, documento: v || null }));
-              }}
-              onChangeValorCapa={(v) => setExtra((x) => ({ ...x, valorCapa: v }))}
-            >
-              <div className="sm:col-span-2">
-                <label className={labelCls} htmlFor="proto-rep">
-                  Unidade do protocolo (pelo Interessado) <span style={{ color: "var(--danger)" }}>*</span>
-                </label>
-                <select id="proto-rep" className={inputCls} value={protoRepId ?? ""} onChange={(e) => setProtoRepId(e.target.value ? Number(e.target.value) : null)}>
-                  <option value="">— Selecione a unidade —</option>
-                  {reparticoes.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.codigo} · {r.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* PCA do protocolo (obrigatório) — os DFDs herdam este ano ao protocolar. */}
-              <div className="sm:col-span-2">
-                <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
-              </div>
-            </CapaCampos>
-          </section>
-
-          {!temDfds ? (
+        {/* CORPO ÚNICO do protocolo (o MESMO do protocolo gravado): mini banners + conciliação da capa
+            + dados do processo (capa com cadeado por campo) + planilha de DFDs (erro/atenção separados). */}
+        <ProtocoloView
+          capa={{
+            numero,
+            idExterno: extra.idExterno,
+            data,
+            documento: extra.documento ?? "",
+            interessado,
+            assunto,
+            observacao,
+            valorCapa: extra.valorCapa,
+            localReparticao: extra.localReparticao,
+          }}
+          modoCapa={origemPdf ? "cadeado" : "criar"}
+          numeroEditavel={origemPdf && index?.protocolo.numero == null}
+          assuntos={opcoesAssunto(regras, assunto)}
+          onCapaChange={(c, v) => {
+            if (c === "numero") setNumero(v);
+            else if (c === "data") setData(v);
+            else if (c === "interessado") setInteressado(v);
+            else if (c === "assunto") setAssunto(v);
+            else if (c === "observacao") setObservacao(v);
+            else if (c === "localReparticao") setExtra((x) => ({ ...x, localReparticao: v || null }));
+            else setExtra((x) => ({ ...x, documento: v || null }));
+          }}
+          onValorCapaChange={(v) => setExtra((x) => ({ ...x, valorCapa: v }))}
+          unidade={{ id: protoRepId, opcoes: reparticoes, onChange: setProtoRepId, rotulo: "Unidade do protocolo (pelo Interessado)", obrigatoria: true }}
+          pca={<PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />}
+          totais={{
+            dfds: totalDfds,
+            itens: itensDfds,
+            somatorio: somatorioDfds,
+            dica: analisando ? "analisando…" : !completo ? `parcial — ${num(lidos)} de ${num(ativos.length)} DFDs lidos` : undefined,
+          }}
+          conciliacao={conc}
+          onSubstituir={() => setExtra((x) => ({ ...x, valorCapa: conc.somatorio }))}
+          linhas={linhasDfd}
+          selecionavel
+          selected={sel}
+          onSelected={setSel}
+          onVerDfd={abrir}
+          dfdAtivo={abertoIdx >= 0 ? abertoIdx : null}
+          compacta={compacta}
+          regras={regras}
+          vazio={
             <Callout kind="info">
-              Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule
-              existentes.
+              Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule existentes.
             </Callout>
-          ) : (
-            <section>
-              {/* Planilha ÚNICA de DFDs (a mesma do protocolo gravado e da aba DFDs):
-                  DFDs com erro em tabela separada; clique numa linha abre o DFD ao lado. */}
-              <PlanilhaDfds
-                linhas={linhasDfd}
-                selecionavel
-                selected={sel}
-                onSelected={setSel}
-                onRowClick={abrir}
-                ativa={abertoIdx >= 0 ? abertoIdx : null}
-                compacta={compacta}
-                regras={regras}
-              />
-            </section>
-          )}
-        </div>
+          }
+        />
       </Modal>
 
       <RelatorioErros

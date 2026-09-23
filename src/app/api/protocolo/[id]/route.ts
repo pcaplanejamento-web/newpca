@@ -1,14 +1,18 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
+import { unidadesConferencia } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
-/** Protocolo completo + seus DFDs (banner de visualização) — escopado por unidade. */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** Protocolo + seus DFDs (banner) — escopado por unidade. Com `?completo=1`, os DFDs vêm COMPLETOS
+ * (cabeçalho/seções/assinaturas/itens) + as unidades deles com os responsáveis — o banner do protocolo
+ * GRAVADO usa a MESMA conferência/componentes da análise. */
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
@@ -19,7 +23,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (protocolo.reparticaoId != null && !lista.some((r) => r.id === protocolo.reparticaoId)) {
     return erro("Sem acesso a este protocolo.", 403);
   }
-  return ok({ protocolo });
+  if (new URL(req.url).searchParams.get("completo") !== "1") return ok({ protocolo });
+  const dfds = await listarDfdsCompletosDoProtocolo(id);
+  const unidades = await unidadesConferencia(dfds.map((d) => d.reparticaoId));
+  return ok({ protocolo, dfds, unidades });
 }
 
 /** Edita um protocolo já gravado (banner destravado) — escopo por unidade. */
@@ -66,7 +73,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return ok();
 }
 
-/** Exclui o protocolo. Os DFDs permanecem (apenas desvinculados). */
+/** Exclui o protocolo EM CASCATA (os DFDs vinculados e seus itens são apagados junto — `excluirProtocolo`). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;

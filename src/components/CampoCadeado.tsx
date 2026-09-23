@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { parseNumberBR } from "@/lib/normalize";
 import { cellCls } from "./formStyles";
@@ -21,15 +21,11 @@ export function fmtNumEdit(v: number | null | undefined): string {
 }
 
 /**
- * Estado dos cadeados por campo (conjunto de campos abertos) + aviso ao host quando
- * ALGUM está aberto (para mostrar "Salvar alterações"). O predicado de bloqueio é do
+ * Estado dos cadeados por campo (conjunto de campos abertos). O predicado de bloqueio é do
  * host (identificador, igual ao catálogo…): passe a mensagem de bloqueio para `alternar`.
  */
-export function useCadeados<K extends string>(onEditandoChange?: (editando: boolean) => void) {
+export function useCadeados<K extends string>() {
   const [abertos, setAbertos] = useState<Set<K>>(new Set());
-  useEffect(() => {
-    onEditandoChange?.(abertos.size > 0);
-  }, [abertos, onEditandoChange]);
   const alternar = (campo: K, bloqueio?: string | false) => {
     if (bloqueio) {
       toast.error(bloqueio);
@@ -43,6 +39,34 @@ export function useCadeados<K extends string>(onEditandoChange?: (editando: bool
     });
   };
   return { abertos, alternar, setAbertos };
+}
+
+/** O CADEADO de um campo/seção: fechado = só-leitura; aberto = editando. Alvo compacto (dentro de
+ * rótulos); o `title` explica o estado (inclusive "bloqueado"). Reusado por campos e seções do DFD. */
+export function CadeadoBotao({
+  rotulo,
+  aberto,
+  bloqueado = false,
+  onClick,
+}: {
+  rotulo: string;
+  aberto: boolean;
+  bloqueado?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      // Visual compacto (28px, cabe no rótulo) com ÁREA DE TOQUE de 44px (pseudo-elemento -inset-2).
+      className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-muted transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-surface-2 hover:text-text"
+      aria-label={aberto ? `Travar ${rotulo}` : `Destravar ${rotulo}`}
+      aria-pressed={aberto}
+      title={bloqueado ? "Bloqueado — não pode alterar" : aberto ? "Travar" : "Destravar para editar"}
+    >
+      {aberto && !bloqueado ? <IconLockOpen className="h-3.5 w-3.5 text-accent" /> : <IconLock className="h-3.5 w-3.5" />}
+    </button>
+  );
 }
 
 /** Rótulo + cadeado por campo (quando editável) + conteúdo (só-leitura ou input). */
@@ -67,21 +91,7 @@ export function LinhaCampo({
     <div className={span ? "sm:col-span-2" : ""}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted">{label}</span>
-        {editavel && (
-          <button
-            type="button"
-            onClick={onLock}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-muted transition-colors hover:bg-surface-2 hover:text-text"
-            aria-label={aberto ? `Travar ${label}` : `Destravar ${label}`}
-            title={bloqueado ? "Bloqueado — não pode alterar" : aberto ? "Travar campo" : "Destravar para editar"}
-          >
-            {aberto && !bloqueado ? (
-              <IconLockOpen className="h-3.5 w-3.5 text-accent" />
-            ) : (
-              <IconLock className="h-3.5 w-3.5" />
-            )}
-          </button>
-        )}
+        {editavel && <CadeadoBotao rotulo={label} aberto={aberto} bloqueado={bloqueado} onClick={onLock} />}
       </div>
       {children}
     </div>

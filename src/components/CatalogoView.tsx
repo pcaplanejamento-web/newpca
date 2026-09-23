@@ -443,12 +443,12 @@ export function CatalogoView({
   const colTipos: Column<CatalogoItemRow> = {
     key: "tipos",
     header: "Tipos",
-    minWidth: 150,
     filter: "none",
+    nowrap: true,
     value: (r) => r.tipos.join(", "),
     render: (r) =>
       r.tipos.length > 0 ? (
-        <span className="flex flex-wrap gap-1">
+        <span className="inline-flex flex-nowrap gap-1">
           {r.tipos.map((tp) => (
             <Badge key={tp} tone="blue">
               {tp}

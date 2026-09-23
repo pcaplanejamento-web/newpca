@@ -25,10 +25,15 @@ export type { PdfDoc } from "./parse-dfd-pdf.ts";
 // assinatura de texto), NÃO na análise em background (escala: a lista permanece leve). Ver `ProtocoloUploadForm`.
 export { ocrAssinaturasEmPaginas } from "./parse-dfd-pdf.ts";
 
-export async function indexarProtocoloPdf(file: File): Promise<{ index: ProtocoloIndex; doc: PdfDoc }> {
+export async function indexarProtocoloPdf(
+  file: File,
+  /** Progresso REAL da leitura (página lida / total) — feedback de carregamento no cliente. */
+  onProgresso?: (pagina: number, total: number) => void,
+): Promise<{ index: ProtocoloIndex; doc: PdfDoc }> {
   const doc = await abrirPdf(file);
   const paginas: PaginaTexto[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
+    onProgresso?.(p, doc.numPages);
     const items = await doc.pageItems(p);
     const lines = linhasDeTexto(items);
     // Geometria descartada por página (índice leve, memória O(nº DFDs)) — EXCETO a da CAPA,

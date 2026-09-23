@@ -224,6 +224,24 @@ export const editarDfdSchema = z
     { message: "Nada para editar." },
   );
 
+/** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */
+export const conferenciaDfdsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(200),
+});
+
+/**
+ * Edição EM MASSA de DFDs gravados (`POST /api/dfd/massa`) — a MESMA ação da barra de massa da
+ * análise (`AcaoMassa`): unidade OU um campo de conteúdo (tipo/prioridade/previsão/fundamentação).
+ */
+export const massaDfdsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  acao: z.discriminatedUnion("campo", [
+    z.object({ campo: z.literal("reparticao"), reparticaoId: z.number().int().positive() }),
+    z.object({ campo: z.enum(["tipo", "prioridade", "previsao", "fundamentacao"]), valor: z.string().trim().min(1).max(4000) }),
+  ]),
+});
+export type MassaDfdsPayload = z.infer<typeof massaDfdsSchema>;
+
 /** Gera uma edição de PCA unindo os DFDs selecionados. */
 export const gerarPcaSchema = z.object({
   nome: z.coerce.string().trim().min(1, "Informe um nome para a edição do PCA.").max(120),

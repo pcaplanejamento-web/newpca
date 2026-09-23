@@ -2,36 +2,36 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { comportamentoNo, importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
-import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
-import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
-import { type CampoTratavel, editarItemDfd, normalizarSecoesDfd, removerItemDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
-import { faltasObrigatorias } from "@/lib/dfd-validation";
+import { importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
+import { mensagensDoDfd } from "@/lib/conferencia-dfd";
+import {
+  type CampoTratavel,
+  editarItemDfd,
+  estadoDfd,
+  normalizarSecoesDfd,
+  removerItemDfd,
+  STATUS_MENSAGEM_COR,
+} from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
+import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
-import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
-import {
-  bloqueiaAssinatura,
-  pdfExigeAssinatura,
-  type Responsaveis,
-  RESPONSAVEIS_VAZIO,
-  validarAssinatura,
-} from "@/lib/reparticao-responsaveis";
+import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { DfdConferir, mensagensDoDfd, type PainelDfd } from "./DfdConferir";
+import { DfdConferir, type PainelDfd } from "./DfdConferir";
+import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
+import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconCheck, IconSpinner, IconUpload } from "./icons";
-import { ItemDetalhe } from "./ItemDetalhe";
-import { BotaoVerMensagens, MensagensDfd } from "./MensagensDfd";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
+import { useConformidade } from "./useConformidade";
 
 type Rep = {
   id: number;
@@ -64,8 +64,6 @@ export function DfdUploadForm({
   const [status, setStatus] = useState<Status>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<DfdParseado | null>(null);
-  // Conformidade dos itens com o catálogo (veredito por código) — conferida no servidor.
-  const [conformidade, setConformidade] = useState<Map<string, ConferenciaItem>>();
   const [repId, setRepId] = useState<number | null>(null);
   // PCA do DFD (ano). Adivinhado pela descrição; o usuário confirma/escolhe. Obrigatório.
   const [anoPca, setAnoPca] = useState<number | null>(null);
@@ -95,22 +93,8 @@ export function DfdUploadForm({
     return () => window.removeEventListener("beforeunload", h);
   }, [status]);
 
-  // Confere os itens contra o catálogo quando o DFD é lido (os itens não mudam na edição,
-  // então a referência de `preview.itens` é estável — só reconfere ao trocar de arquivo).
-  const itensPreview = preview?.itens;
-  const tipoPreview = preview?.tipo ?? null;
-  useEffect(() => {
-    if (!itensPreview || itensPreview.length === 0) {
-      setConformidade(undefined);
-      return;
-    }
-    const ac = new AbortController();
-    setConformidade(undefined);
-    conferirItensCliente(itensPreview, tipoPreview, ac.signal).then((m) => {
-      if (!ac.signal.aborted) setConformidade(m);
-    });
-    return () => ac.abort();
-  }, [itensPreview, tipoPreview]);
+  // Conformidade dos itens com o catálogo (veredito por código) — conferida no servidor (lazy).
+  const conformidade = useConformidade(preview?.itens, preview?.tipo ?? null);
 
   async function handleFile(file: File) {
     setErro(null);
@@ -204,42 +188,21 @@ export function DfdUploadForm({
 
   // Avulso: sem protocolo → categoria nula; exceções por TIPO do DFD valem pelo `tipo`.
   const ctxAv = { dfdTipo: preview ? tipoCurtoDfd(preview.tipo) : null };
-  const faltas = preview
-    ? faltasObrigatorias(
-        {
-          reparticaoId: repId,
-          anoPca,
-          itens: preview.itens,
-          secoes: preview.secoes,
-          tipo: preview.tipo,
-          numeroContrato: preview.numeroContrato,
-          numeroAta: preview.numeroAta,
-          numeroLicitacao: preview.numeroLicitacao,
-        },
-        regras,
-        { conformidade },
-      )
-    : [];
-  // Conferência da assinatura (mesma regra do servidor) — o nível `dfd.assinatura` decide.
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
-  // Mensagens (erro/atenção/acerto) do DFD — para o botão e o painel lateral. Avulso: sem categoria.
+  // Mensagens (erro/atenção/acerto) — FONTE ÚNICA: o botão/painel e o bloqueio do "Importar" saem daqui
+  // (inclui ano do PCA, assinatura, órgão e catálogo, cada um no nível do ADM).
   const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos, conformidade) : [];
-  const assinaturaBloqueia = preview
-    ? bloqueiaAssinatura(
-        validarAssinatura(preview.assinaturas, repSel?.responsaveis ?? RESPONSAVEIS_VAZIO, {
-          exigeAssinatura: pdfExigeAssinatura(preview.nomeArquivo),
-        }),
-        comportamentoNo(regras, "dfd.assinatura", ctxAv),
-      )
-    : false;
-  // O PCA é obrigatório no envio do DFD avulso quando `dfd.anoPca` bloqueia.
-  const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "dfd.anoPca", ctxAv) === "bloqueia";
+  const temErro = mensagens.some((m) => m.status === "erro");
+  const estadoPrev = temErro
+    ? "erro"
+    : mensagens.some((m) => m.status === "atencao")
+      ? "atencao"
+      : estadoDfd(0, autoCampos.length > 0, false);
   // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): importação de DFD
   // avulso desligada, ou tipo não permitido (quando a trava de tipo está ligada). Servidor reconfere.
   const importDesligado = !importarDfdHabilitado(regras);
   const tipoNaoPermitido = !!regras.gate?.exigirTipo && !tipoPermitido(ctxAv.dfdTipo, regras);
-  const bloqueado =
-    faltas.length > 0 || assinaturaBloqueia || anoPcaBloqueia || importDesligado || tipoNaoPermitido;
+  const bloqueado = temErro || importDesligado || tipoNaoPermitido;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
 
   return (
@@ -335,80 +298,57 @@ export function DfdUploadForm({
           preview
             ? {
                 aberto: painel != null,
-                titulo:
-                  painel?.tipo === "item"
-                    ? `Item ${preview.itens[painel.idx]?.item ?? painel.idx + 1} — DFD ${preview.numero}`
-                    : `Mensagens — DFD ${preview.numero}`,
+                titulo: tituloPainelDfd(painel, preview, preview.numero),
                 onClose: () => setPainel(null),
-                children:
-                  painel?.tipo === "item" && preview.itens[painel.idx] ? (
-                    <ItemDetalhe
-                      key={painel.idx}
-                      item={preview.itens[painel.idx]}
-                      conformidade={conformidade}
-                      regras={regras}
-                      tipo={preview.tipo}
-                      editavel
-                      onChange={(patch) =>
-                        setPreview((p) => (p ? editarItemDfd(p, (painel as { idx: number }).idx, patch) : p))
-                      }
-                      onRemover={() => {
-                        const idx = (painel as { idx: number }).idx;
-                        setPainel(null);
-                        setPreview((p) => (p ? removerItemDfd(p, idx) : p));
-                      }}
-                    />
-                  ) : (
-                    <MensagensDfd
-                      mensagens={mensagens}
-                      numero={preview.numero}
-                      tipo={preview.tipo}
-                      onIrPara={(m) =>
-                        setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })
-                      }
-                    />
-                  ),
+                rodape: painel?.tipo === "item" ? <RodapePainelItem onVerDfd={() => setPainel(null)} /> : undefined,
+                children: (
+                  <DfdPainelDireito
+                    painel={painel}
+                    dfd={preview}
+                    numero={preview.numero}
+                    mensagens={mensagens}
+                    onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
+                    conformidade={conformidade}
+                    regras={regras}
+                    editavel
+                    onEditarItem={(i, patch) => setPreview((p) => (p ? editarItemDfd(p, i, patch) : p))}
+                    onRemoverItem={(i) => {
+                      setPainel(null);
+                      setPreview((p) => (p ? removerItemDfd(p, i) : p));
+                    }}
+                  />
+                ),
               }
             : undefined
         }
         rodape={
-          preview ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {status === "sending" ? (
-                <div className="min-w-[180px] flex-1">
-                  <Progress value={progresso} label={`Enviando ${num(preview?.itens.length ?? 0)} itens... ${progresso}% — não feche esta janela`} />
-                </div>
-              ) : (
-                <BotaoVerMensagens
-                  mensagens={mensagens}
-                  aberto={painel?.tipo === "mensagens"}
-                  onToggle={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-                />
-              )}
-              {(importDesligado || tipoNaoPermitido) && (
-                <span className="self-center text-[12px]" style={{ color: "var(--danger)" }}>
-                  {importDesligado
-                    ? "Importação de DFD avulso desabilitada nas Configurações"
-                    : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
-                </span>
-              )}
-              <div className="flex gap-2">
-                {status !== "sending" && (
-                  <Button variant="secondary" onClick={() => reset()}>
-                    Cancelar
-                  </Button>
-                )}
-                <Button
-                  onClick={enviar}
-                  loading={status === "sending"}
-                  disabled={bloqueado || status === "sending"}
-                  icon={<IconUpload className="h-[18px] w-[18px]" />}
-                >
+          !preview ? undefined : status === "sending" ? (
+            <Progress value={progresso} label={`Enviando ${num(preview.itens.length)} itens... ${progresso}% — não feche esta janela`} />
+          ) : (
+            <DfdRodape
+              estado={estadoPrev}
+              regras={regras}
+              mensagens={mensagens}
+              mensagensAbertas={painel?.tipo === "mensagens"}
+              onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
+              onFechar={reset}
+              rotuloFechar="Cancelar"
+              acoes={
+                (importDesligado || tipoNaoPermitido) && (
+                  <span className="text-[12px]" style={{ color: "var(--danger)" }}>
+                    {importDesligado
+                      ? "Importação de DFD avulso desabilitada nas Configurações"
+                      : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
+                  </span>
+                )
+              }
+              principal={
+                <Button onClick={enviar} disabled={bloqueado} icon={<IconUpload className="h-[18px] w-[18px]" />}>
                   Importar DFD
                 </Button>
-              </div>
-            </div>
-          ) : undefined
+              }
+            />
+          )
         }
       >
         {preview && (

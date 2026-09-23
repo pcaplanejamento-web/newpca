@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
@@ -39,7 +39,6 @@ export function ItemDetalhe({
   tipo = null,
   editavel = false,
   onChange,
-  onEditandoChange,
   onRemover,
 }: {
   item: DfdVisualItem;
@@ -52,8 +51,6 @@ export function ItemDetalhe({
   editavel?: boolean;
   /** Grava um patch parcial do item no host (que é dono do estado dos itens). */
   onChange?: (patch: Partial<DfdVisualItem>) => void;
-  /** Avisa o host quando ALGUM campo está destravado (para mostrar "Salvar alterações"). */
-  onEditandoChange?: (editando: boolean) => void;
   /** Remove este item do DFD (tratamento do ITEM DUPLICADO). Ausente = sem o botão. */
   onRemover?: () => void;
 }) {
@@ -71,9 +68,6 @@ export function ItemDetalhe({
 
   // Cadeado por campo. Um campo IGUAL ao catálogo não pode ser alterado (bloqueado).
   const [abertos, setAbertos] = useState<Set<CampoK>>(new Set());
-  useEffect(() => {
-    onEditandoChange?.(abertos.size > 0);
-  }, [abertos, onEditandoChange]);
   const catalogado = !!conf?.sugestao && conf.sugestao.score >= 1;
   const bloqueado = (campo: CampoK): boolean => {
     if (!catalogado) return false; // sem item casado no catálogo → nada bloqueado

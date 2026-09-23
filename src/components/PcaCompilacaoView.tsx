@@ -18,11 +18,12 @@ type LinhaComp = {
 };
 
 const COLS: Column<LinhaComp>[] = [
-  { key: "dfd", header: "DFD", render: (r) => <span className="font-mono text-[12px] text-accent">{r.dfdNumero}</span> },
-  { key: "item", header: "Item", align: "center", render: (r) => r.item ?? "—" },
+  { key: "dfd", header: "DFD", nowrap: true, render: (r) => <span className="font-mono text-[12px] text-accent">{r.dfdNumero}</span> },
+  { key: "item", header: "Item", align: "center", nowrap: true, render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
+    nowrap: true,
     render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
   },
   {
@@ -31,23 +32,26 @@ const COLS: Column<LinhaComp>[] = [
     minWidth: 300,
     render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
   },
-  { key: "unidade", header: "Unidade", render: (r) => r.unidade ?? "—" },
+  { key: "unidade", header: "Unidade", nowrap: true, render: (r) => r.unidade ?? "—" },
   {
     key: "quantidade",
     header: "Qtd.",
     align: "center",
+    nowrap: true,
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
   },
   {
     key: "vunit",
     header: "Vlr. unit.",
     align: "right",
+    nowrap: true,
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {
     key: "vtot",
     header: "Vlr. total",
     align: "right",
+    nowrap: true,
     render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—"),
   },
 ];

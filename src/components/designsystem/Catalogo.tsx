@@ -17,7 +17,12 @@ import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView, type DfdVisualItem } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
-import { ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
+import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
+import { BarraEdicaoMassa } from "@/components/BarraEdicaoMassa";
+import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
+import { DfdRodape } from "@/components/DfdRodape";
+import { EstadoPonto, EstadoResumo } from "@/components/EstadoCelula";
+import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
@@ -41,7 +46,7 @@ import {
   IconUpload,
   IconWallet,
 } from "@/components/icons";
-import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
+import { CadeadoBotao, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
@@ -145,8 +150,14 @@ function CampoCadeadoDemo() {
     bloqueado: false,
     onLock: () => alternar(k),
   });
+  const [cadeadoSolto, setCadeadoSolto] = useState(false);
   return (
     <dl className="grid max-w-md gap-x-6 gap-y-3 sm:grid-cols-2">
+      {/* CadeadoBotao solto — o mesmo cadeado dos campos, das seções do DFD e dos itens. */}
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <CadeadoBotao rotulo="exemplo" aberto={cadeadoSolto} onClick={() => setCadeadoSolto((v) => !v)} />
+        <span className="text-xs text-muted">CadeadoBotao — {cadeadoSolto ? "aberto (editando)" : "fechado (só-leitura)"}</span>
+      </div>
       {/* Identificador: sem cadeado (só-leitura permanente) */}
       <CampoTexto
         label="Id (identificador — travado)"
@@ -528,30 +539,69 @@ const PCA_DEMO = {
   ],
 };
 
-// Protocolo (processo) com vários DFDs — visão read-only (o upload, que carrega
-// o pdf.js, fica fora do catálogo, como o DfdUploadForm).
-const PROTO_DEMO = {
+// Protocolo (processo) com vários DFDs — CORPO ÚNICO (`ProtocoloView`) da análise e do gravado. O
+// upload (que carrega o pdf.js) e os banners com dados (gravado) ficam fora do catálogo.
+const PROTO_CAPA_DEMO: CapaValores = {
   numero: "144756/2026",
   idExterno: "2273524",
-  anoPca: 2027,
   data: "09/09/2026 16:41:38",
-  interessado: "1008171 - FUNDO MUNICIPAL DOS DIREITOS DO IDOSO",
   documento: "29.788.950/0001-04",
+  interessado: "1008171 - FUNDO MUNICIPAL DOS DIREITOS DO IDOSO",
   assunto: "INCLUSÃO - PCA",
   observacao: "PCA 2027",
-  localReparticao: "COMPRAS FMAS",
   valorCapa: 32705,
-  reparticaoCodigo: "SMIR",
-  reparticaoNome: "Secretaria Municipal de Infraestrutura Rural",
-  criadoEm: null,
-  totalDfds: 2,
-  totalItens: 3,
-  valorTotal: 512342.72,
-  dfds: [
-    { id: 1, numero: "1586", planejamento: "1639", tipo: "DFD-S — Solução / com ETP", setorRequisitante: "SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", reparticaoCodigo: "SMIR", totalItens: 2, valorTotal: 342342.72 },
-    { id: 2, numero: "1720", planejamento: "1802", tipo: "DFD-R — Renovação / Ata vigente", setorRequisitante: "SMS - SECRETARIA MUNICIPAL DE SAÚDE", reparticaoCodigo: "SMS", totalItens: 1, valorTotal: 170000, numeroAta: "045/2025" },
-  ],
+  localReparticao: "COMPRAS FMAS",
 };
+const PROTO_LINHAS_DEMO = [
+  { key: 1, numero: "1586", planejamento: "1639", sigla: "SMIR", tipo: "DFD-S", itens: 2, valor: 342342.72, estado: "regular" as const, assinaturas: ["centi" as const], validacao: "auto" as const },
+  {
+    key: 2,
+    numero: "1720",
+    planejamento: "1802",
+    sigla: "SMS",
+    tipo: "DFD-R",
+    itens: 1,
+    valor: 170000,
+    estado: "atencao" as const,
+    resumo: resumoEstado([{ status: "atencao", chave: "dfd.assinaturaValidar", texto: "Assinatura Dropsigner reconhecida só pelo código — confira e valide." }]),
+    assinaturas: ["dropsigner" as const],
+  },
+];
+
+/** Demo do CORPO do protocolo: conciliação da capa com "Substituir pela somatória" + seleção. */
+function ProtocoloViewDemo() {
+  const [capa, setCapa] = useState<CapaValores>(PROTO_CAPA_DEMO);
+  const [sel, setSel] = useState<Set<string | number>>(new Set());
+  const somatorio = PROTO_LINHAS_DEMO.reduce((a, l) => a + l.valor, 0);
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio, totalDfds: PROTO_LINHAS_DEMO.length });
+  return (
+    <ProtocoloView
+      capa={capa}
+      modoCapa="cadeado"
+      assuntos={["INCLUSÃO - PCA", "EXCLUSÃO", "ALTERAÇÃO NÃO ONEROSA"]}
+      onCapaChange={(c, v) => setCapa((x) => ({ ...x, [c]: v }) as CapaValores)}
+      onValorCapaChange={(v) => setCapa((x) => ({ ...x, valorCapa: v }))}
+      unidade={{ id: 1, opcoes: [{ id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" }] }}
+      pca={<TextField label="PCA (ano)" value="2027" disabled readOnly />}
+      totais={{ dfds: PROTO_LINHAS_DEMO.length, itens: 3, somatorio }}
+      conciliacao={conc}
+      onSubstituir={() => setCapa((x) => ({ ...x, valorCapa: conc.somatorio }))}
+      linhas={PROTO_LINHAS_DEMO}
+      unica
+      selecionavel
+      selected={sel}
+      onSelected={setSel}
+      onVerDfd={(k) => toast(`Abrir o DFD ${k} ao lado`)}
+      nota={<p className="text-[11px] text-faint">Protocolado em 09/09/2026.</p>}
+    />
+  );
+}
+
+/** Demo do DfdView com as SEÇÕES editáveis por cadeado (obrigatória ausente = "não preenchida"). */
+function DfdViewSecoesDemo() {
+  const [secoes, setSecoes] = useState(DFD_DEMO.secoes.filter((x) => x.numero !== 3));
+  return <DfdView dfd={{ ...DFD_DEMO, secoes }} onSecoesChange={setSecoes} unica />;
+}
 
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
@@ -1138,15 +1188,95 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="PlanilhaDfds (tabela ÚNICA de DFDs — banners + aba DFDs)">
+      <Secao titulo="PlanilhaDfds (planilha de DFDs — análise: erro/atenção separados; colunas na largura do conteúdo)">
         <PlanilhaDfds
           linhas={[
-            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", auto: true, tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", situacao: "Novo" },
-            { key: 2, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "regular", situacao: "Substitui" },
+            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", auto: true, tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", situacao: "Novo", assinaturas: ["dropsigner"], validacao: "auto" },
+            { key: 2, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "regular", situacao: "Substitui", assinaturas: ["centi"], validacao: "equipe" },
             { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", situacao: "Novo" },
             { key: 3, numero: "1024", planejamento: "1066", sigla: "FMS", tipo: "DFD-R", itens: 0, valor: 0, estado: "erro", estadoMotivo: "Leitura incompleta da tabela", situacao: "Novo" },
+            // Análise em andamento: spinner + o que o sistema está fazendo (feedback real).
+            { key: 5, numero: "1100", planejamento: null, sigla: "FMS", tipo: null, itens: null, valor: null, estado: "pendente", processando: "texto", situacao: "Novo" },
+            { key: 6, numero: "1101", planejamento: "1190", sigla: "FMS", tipo: "DFD-S", itens: 12, valor: 4200, estado: "pendente", processando: "ocr", situacao: "Novo" },
+            { key: 7, numero: "1102", planejamento: null, sigla: "FMS", tipo: null, itens: null, valor: null, estado: "pendente", processando: "fila", situacao: "Novo" },
           ]}
         />
+      </Secao>
+
+      <Secao titulo="PlanilhaDfds ÚNICA (depois de protocolado — uma tabela só; o filtro de Estado separa)">
+        <PlanilhaDfds
+          unica
+          linhas={[
+            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", protocolo: "144756/2026", assinaturas: ["centi"], validacao: "auto" },
+            { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", protocolo: "144756/2026", resumo: resumoEstado([{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: "DFD-R sem referência." }]) },
+            { key: 8, numero: "900", planejamento: "950", sigla: "SMS", tipo: null, itens: 3, valor: 900, estado: "pendente", processando: "conferindo", protocolo: null },
+          ]}
+        />
+      </Secao>
+
+      <Secao titulo="EstadoCelula (célula Estado — resumo do problema + contadores; ou ponto + rótulo)">
+        <div className="flex flex-wrap items-center gap-4">
+          <EstadoResumo
+            res={resumoEstado([
+              { status: "erro", chave: "dfd.tipo", texto: "Tipo do DFD não identificado." },
+              { status: "erro", chave: "dfd.justificativa", texto: "Justificativa não preenchida." },
+              { status: "atencao", chave: "dfd.referenciaRenovacao", texto: "DFD-R sem referência." },
+            ])}
+          />
+          <EstadoPonto cor="var(--ok)" rotulo="Regular" />
+          <EstadoPonto cor="var(--danger)" rotulo="Leitura incompleta" title="Item sem número no PDF" />
+        </div>
+      </Secao>
+
+      <Secao titulo="BarraEdicaoMassa (edição em massa — análise, protocolo gravado e lista de DFDs)">
+        <BarraEdicaoMassa
+          qtd={3}
+          reparticoes={[
+            { id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" },
+            { id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" },
+          ]}
+          anoPadrao={2027}
+          onAplicar={(a) => toast(`Aplicar: ${a.campo}`)}
+          onLimpar={() => toast("Limpar seleção")}
+        />
+      </Secao>
+
+      <Secao titulo="DfdRodape (rodapé fixo do banner do DFD — estado + mensagens + ações)">
+        <DfdRodape
+          estado="atencao"
+          mensagens={[
+            { chave: "a", status: "atencao", texto: "", ancora: "" },
+            { chave: "b", status: "acerto", texto: "", ancora: "" },
+          ]}
+          mensagensAbertas={false}
+          onToggleMensagens={() => toast("Abrir/ocultar mensagens")}
+          onFechar={() => toast("Fechar")}
+          acoes={
+            <Button variant="secondary" onClick={() => toast("Histórico")}>
+              <Icons.IconClock className="h-4 w-4" /> Histórico
+            </Button>
+          }
+          principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+        />
+      </Secao>
+
+      <Secao titulo="DfdPainelDireito (painel da direita do DFD — mensagens / item / histórico)">
+        <div className="max-w-md">
+          <DfdPainelDireito
+            painel={{ tipo: "mensagens" }}
+            dfd={null}
+            numero="1586"
+            mensagens={[
+              { chave: "dfd.justificativa", status: "erro", texto: "Justificativa da necessidade (Seção 3) não preenchida.", ancora: "justificativa" },
+              { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura validada automaticamente (auto).", ancora: "assinatura" },
+            ]}
+            onIrPara={(m) => toast(`Rolar até: ${m.ancora}`)}
+          />
+          {/* Rodapé do painel quando mostra um ITEM (voltar ao DFD / subir ao protocolo). */}
+          <div className="mt-4 border-t border-border pt-3">
+            <RodapePainelItem onVerDfd={() => toast("Voltar ao DFD")} onVerProtocolo={() => toast("Ver protocolo")} />
+          </div>
+        </div>
       </Secao>
 
       <Secao titulo="PcaPicker (definição do PCA do processo — obrigatório)">
@@ -1274,11 +1404,15 @@ export function Catalogo() {
         <DfdView dfd={DFD_DEMO} />
       </Secao>
 
-      <Secao titulo="Protocolo — processo com vários DFDs (visão)">
+      <Secao titulo="DFD — seções editáveis com cadeado (todas; obrigatória ausente aparece como “não preenchida”)">
+        <DfdViewSecoesDemo />
+      </Secao>
+
+      <Secao titulo="Protocolo — corpo único do banner (análise = gravado): capa, conciliação, planilha">
         <div className="mb-4 border-b border-border pb-3">
-          <ProtocoloCabecalho numero={PROTO_DEMO.numero} idExterno={PROTO_DEMO.idExterno} assunto={PROTO_DEMO.assunto} />
+          <ProtocoloCabecalho numero={PROTO_CAPA_DEMO.numero} idExterno={PROTO_CAPA_DEMO.idExterno} assunto={PROTO_CAPA_DEMO.assunto} />
         </div>
-        <ProtocoloView protocolo={PROTO_DEMO} />
+        <ProtocoloViewDemo />
       </Secao>
 
       <Secao titulo="PCA — compilação dos DFDs por unidade">

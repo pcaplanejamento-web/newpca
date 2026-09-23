@@ -99,11 +99,11 @@ export function PcaModuleView({
         </span>
       ),
     },
-    { key: "ano", header: "Ano", align: "center", filter: "none", render: (r) => r.ano ?? "—" },
-    { key: "dfds", header: "DFDs", align: "center", filter: "none", render: (r) => num(r.totalDfds ?? 0) },
-    { key: "itens", header: "Itens", align: "center", filter: "none", render: (r) => num(r.totalItens ?? 0) },
-    { key: "valor", header: "Estimado", align: "right", filter: "none", render: (r) => brl(r.valorEstimado ?? 0) },
-    { key: "criadoEm", header: "Gerado", filter: "none", render: (r) => (r.criadoEm ? dataBR(r.criadoEm) : "—") },
+    { key: "ano", header: "Ano", align: "center", filter: "none", nowrap: true, render: (r) => r.ano ?? "—" },
+    { key: "dfds", header: "DFDs", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalDfds ?? 0) },
+    { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens ?? 0) },
+    { key: "valor", header: "Estimado", align: "right", filter: "none", nowrap: true, render: (r) => brl(r.valorEstimado ?? 0) },
+    { key: "criadoEm", header: "Gerado", filter: "none", nowrap: true, render: (r) => (r.criadoEm ? dataBR(r.criadoEm) : "—") },
     {
       key: "acoes",
       header: "",
@@ -129,10 +129,10 @@ export function PcaModuleView({
   ];
 
   const colsPicker: Column<DfdResumo>[] = [
-    { key: "numero", header: "Nº DFD", filter: "none", render: (r) => <span className="font-mono">{r.numero}</span> },
-    { key: "reparticao", header: "Repartição", value: (r) => r.reparticaoCodigo ?? "—", render: (r) => r.reparticaoCodigo ?? <span className="text-faint">—</span> },
+    { key: "numero", header: "Nº DFD", filter: "none", nowrap: true, render: (r) => <span className="font-mono">{r.numero}</span> },
+    { key: "reparticao", header: "Unidade", nowrap: true, value: (r) => r.reparticaoCodigo ?? "—", render: (r) => r.reparticaoCodigo ?? <span className="text-faint">—</span> },
     { key: "objeto", header: "Objeto", filter: "none", minWidth: 200, render: (r) => <span className="line-clamp-1">{r.objeto ?? "—"}</span> },
-    { key: "valor", header: "Valor", align: "right", filter: "none", render: (r) => brl(r.valorTotal ?? 0) },
+    { key: "valor", header: "Valor", align: "right", filter: "none", nowrap: true, render: (r) => brl(r.valorTotal ?? 0) },
   ];
 
   // ---- Painel: Planilha (PCA) achatada — fluxo atual, intacto ----

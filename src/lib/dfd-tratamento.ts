@@ -10,6 +10,8 @@ import {
   type RegrasAvaliacao,
   regrasPadrao,
   sinonimosDe,
+  TIPO_DFD_ROTULO,
+  TIPOS_DFD,
 } from "./avaliacao-core.ts";
 import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
 import { type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
@@ -58,6 +60,43 @@ export function setTextoSecao(
     return n;
   }
   return [...secoes, { numero: cfg.numero, titulo: cfg.titulo, texto }];
+}
+
+/**
+ * Texto canônico da PREVISÃO a partir do editor (mês/ano/anual). É **um OU outro**: ANUAL (com ano
+ * opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA` (exige mês E ano). Vazio = ainda a
+ * preencher. Puro — usado pelo bloco Tratamento e pela edição em massa.
+ */
+export function buildPrevisao(mes: string, ano: string, anual: boolean): string {
+  if (anual) return ano ? `ANUAL/${ano}` : "ANUAL";
+  return mes && ano ? `${mes}/${ano}` : "";
+}
+
+// ---- Edição EM MASSA — fonte única (análise do protocolo, protocolo gravado e lista de DFDs) ----
+export type CampoMassa = "reparticao" | "tipo" | "prioridade" | "previsao" | "fundamentacao";
+/** Uma ação de massa: a UNIDADE (vive fora do conteúdo do DFD — o host aplica) ou um campo de CONTEÚDO. */
+export type AcaoMassa =
+  | { campo: "reparticao"; reparticaoId: number }
+  | { campo: Exclude<CampoMassa, "reparticao">; valor: string };
+
+/**
+ * Aplica uma ação de massa de CONTEÚDO (tipo ou seção tratável) a UM DFD. O tipo aceita o código
+ * curto ou o rótulo e grava o RÓTULO canônico (`TIPO_DFD_ROTULO`); as seções usam `setTextoSecao`
+ * (cria a seção se faltava). Valor vazio/tipo inválido ⇒ sem efeito (devolve o mesmo objeto). A
+ * `reparticao` é do host. Puro/genérico (DfdParseado ou o registro do servidor).
+ */
+export function aplicarMassaDfd<T extends { tipo: string | null; secoes: DfdSecao[] }>(d: T, acao: AcaoMassa): T {
+  if (acao.campo === "reparticao") return d;
+  const v = acao.valor.trim();
+  if (!v) return d;
+  if (acao.campo === "tipo") {
+    const cod = tipoCurtoDfd(v) as (typeof TIPOS_DFD)[number] | null;
+    if (!cod || !TIPOS_DFD.includes(cod)) return d;
+    const rotulo = TIPO_DFD_ROTULO[cod];
+    return d.tipo === rotulo ? d : { ...d, tipo: rotulo };
+  }
+  const cfg = TRATAVEIS.find((t) => t.campo === acao.campo);
+  return cfg ? { ...d, secoes: setTextoSecao(d.secoes, cfg, v) } : d;
 }
 
 /**
@@ -203,28 +242,47 @@ export function dfdRSemReferencia(d: {
 export const FALTA_REFERENCIA_RENOVACAO =
   "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação — informar ao menos uma.";
 
+// ---- Conciliação do VALOR DA CAPA × somatória dos DFDs (fonte única: análise, gravado e lista) ----
+
+/** Resultado da conciliação da capa. `ativa` = há o que conferir (DFDs + somatória completa + ponto não
+ * ignorado); `divergente` = capa nula/zerada OU diferente da somatória; `bloqueia` = divergente e o ADM
+ * pôs `protocolo.valorCapa` numa importância que bloqueia; `motivo` = linha do despacho (relatório). */
+export type ConciliacaoCapa = {
+  ativa: boolean;
+  divergente: boolean;
+  zerada: boolean;
+  bloqueia: boolean;
+  somatorio: number;
+  motivo: string | null;
+};
+
+/** Valor em R$ (pt-BR) para as mensagens puras (sem depender do `format` do cliente). */
+const reais = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 /**
- * Apontamentos de um DFD JÁ GRAVADO nas LISTAS (aba DFDs / protocolo gravado), só com o que o resumo
- * traz (tipo + refs): TIPO ausente (gravado antes da regra) e DFD-R sem referência — cada um no nível do
- * ADM. O detalhe completo vem ao abrir o DFD (`mensagensDfd`). Devolve o `estado` + as mensagens. Puro.
+ * Concilia o VALOR DA CAPA com a SOMATÓRIA dos DFDs (valor do DFD = Σ itens). Só confere quando há DFDs
+ * e a somatória está COMPLETA (`completo` — na análise, todos os DFDs lidos; padrão `true` no gravado);
+ * **não depende de os DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse DFD com
+ * erro). A somatória é arredondada ao centavo. Respeita `protocolo.valorCapa` do ADM (+ categoria). Puro.
  */
-export function apontamentosGravado(
-  d: { tipo?: string | null; numeroContrato?: string | null; numeroAta?: string | null; numeroLicitacao?: string | null },
+export function conciliacaoCapa(
+  p: { valorCapa: number | null | undefined; somatorio: number; totalDfds: number; completo?: boolean },
   regras: RegrasAvaliacao = regrasPadrao(),
-  categoria: string | null = null,
-): { estado: "erro" | "atencao" | "regular"; msgs: { status: StatusMensagem; chave: string; texto: string }[] } {
-  const dfdTipo = tipoCurtoDfd(d.tipo);
-  const msgs: { status: StatusMensagem; chave: string; texto: string }[] = [];
-  const add = (chave: ChaveAvaliacao, falta: boolean, texto: string) => {
-    if (!falta) return;
-    const comp = comportamentoNo(regras, chave, { dfdTipo, categoria });
-    if (comp === "ignora") return;
-    msgs.push({ status: comp === "bloqueia" ? "erro" : "atencao", chave, texto });
-  };
-  add("dfd.tipo", dfdTipo == null, "Tipo do DFD não definido — abra o DFD e selecione o tipo.");
-  add("dfd.referenciaRenovacao", dfdRSemReferencia(d), FALTA_REFERENCIA_RENOVACAO);
-  const estado = msgs.some((m) => m.status === "erro") ? "erro" : msgs.length > 0 ? "atencao" : "regular";
-  return { estado, msgs };
+  ctx?: { categoria?: string | null },
+): ConciliacaoCapa {
+  const somatorio = Math.round((p.somatorio || 0) * 100) / 100;
+  const inativa: ConciliacaoCapa = { ativa: false, divergente: false, zerada: false, bloqueia: false, somatorio, motivo: null };
+  if (p.totalDfds <= 0 || p.completo === false) return inativa;
+  const comp = comportamentoNo(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null });
+  if (comp === "ignora") return inativa;
+  const zerada = p.valorCapa == null || p.valorCapa <= 0;
+  const divergente = zerada || !valoresBatem(p.valorCapa, somatorio);
+  const motivo = !divergente
+    ? null
+    : zerada
+      ? `Valor da capa ausente/zerado — informar o valor da capa (somatória dos DFDs: ${reais(somatorio)}).`
+      : `Valor da capa (${reais(p.valorCapa as number)}) diferente da somatória dos DFDs (${reais(somatorio)}) — corrigir a capa.`;
+  return { ativa: true, divergente, zerada, bloqueia: divergente && comp === "bloqueia", somatorio, motivo };
 }
 
 // ---- Estado/Situação de um PROTOCOLO já gravado (para a tabela de protocolos) ----
@@ -236,11 +294,10 @@ export function estadoProtocolo(
   regras: RegrasAvaliacao = regrasPadrao(),
   ctx?: { categoria?: string | null },
 ): EstadoProtocolo {
-  if (p.totalDfds === 0) return "regular"; // sem DFDs: nada a conferir
-  // O ADM pode desligar a conferência do valor da capa ("ignora").
-  if (comportamentoNo(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null }) === "ignora") return "regular";
-  if (p.valorCapa == null || p.valorCapa <= 0 || !valoresBatem(p.valorCapa, p.valorTotal)) return "atencao";
-  return "regular";
+  // MESMA régua da análise/banner (`conciliacaoCapa`): capa nula/zerada ou diferente da somatória.
+  return conciliacaoCapa({ valorCapa: p.valorCapa, somatorio: p.valorTotal, totalDfds: p.totalDfds }, regras, ctx).divergente
+    ? "atencao"
+    : "regular";
 }
 
 export const ESTADO_PROTOCOLO_ROTULO: Record<EstadoProtocolo, string> = {
@@ -398,11 +455,11 @@ const DICA_PADRAO_SECAO: Record<string, string> = {
   "FUNDAMENTACAO LEGAL": "citar a norma (ex.: Lei 14.133/2021)",
 };
 
-export const SECOES_OBRIGATORIAS: { chave: ChaveAvaliacao; kw: string; rotulo: string }[] = [
-  { chave: "dfd.justificativa", kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)" },
-  { chave: "dfd.previsao", kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)" },
-  { chave: "dfd.prioridade", kw: "PRIORIDADE", rotulo: "Prioridade da compra/contratação (Seção 6)" },
-  { chave: "dfd.fundamentacao", kw: "FUNDAMENTACAO LEGAL", rotulo: "Fundamentação legal (Seção 7)" },
+export const SECOES_OBRIGATORIAS: { chave: ChaveAvaliacao; kw: string; rotulo: string; titulo: string; numero: number }[] = [
+  { chave: "dfd.justificativa", kw: "JUSTIFICATIVA", rotulo: "Justificativa da necessidade (Seção 3)", titulo: "JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", numero: 3 },
+  { chave: "dfd.previsao", kw: "PREVISAO DE ENTREGA", rotulo: "Previsão de entrega/execução (Seção 5)", titulo: "PREVISÃO DE ENTREGA/EXECUÇÃO", numero: 5 },
+  { chave: "dfd.prioridade", kw: "PRIORIDADE", rotulo: "Prioridade da compra/contratação (Seção 6)", titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", numero: 6 },
+  { chave: "dfd.fundamentacao", kw: "FUNDAMENTACAO LEGAL", rotulo: "Fundamentação legal (Seção 7)", titulo: "FUNDAMENTAÇÃO LEGAL", numero: 7 },
 ];
 
 function temSecaoPreenchida(secoes: { titulo: string; texto: string }[], kw: string): boolean {
@@ -672,7 +729,9 @@ export function mensagensDfd(
       s.chave,
       ancora,
       sit === "ok",
-      sit === "vazia" ? `${s.rotulo} não preenchida.` : `${s.rotulo} fora do padrão — trate no bloco Tratamento.`,
+      sit === "vazia"
+        ? `${s.rotulo} não preenchida — destrave a seção (cadeado) para preencher.`
+        : `${s.rotulo} fora do padrão — trate no bloco Tratamento ou destrave a seção.`,
       `${s.rotulo} preenchida.`,
     );
   }

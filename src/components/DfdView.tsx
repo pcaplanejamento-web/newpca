@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
-import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { useMemo, useState } from "react";
+import { comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
+  acharSecao,
   corVeredictoCatalogo,
   ESTADO_ITEM_ROTULO,
   estadoItem,
@@ -11,6 +12,9 @@ import {
   itemComErro,
   mensagensItem,
   resumoEstado,
+  SECOES_OBRIGATORIAS,
+  setTextoSecao,
+  situacaoSecao,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
@@ -18,7 +22,9 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { type Assinatura, buracosSequencia, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
+import { AutoTextarea, CadeadoBotao } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
+import { EstadoPonto, EstadoResumo } from "./EstadoCelula";
 import { IconFile, IconShield } from "./icons";
 import { LinkExterno } from "./LinkExterno";
 import { StatMini } from "./StatMini";
@@ -90,32 +96,21 @@ const COLS: Column<ItemK>[] = [
   {
     key: "estado",
     header: "Estado",
+    nowrap: true,
     value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
     render: (r) => {
       // Com erro: aponta a falta ESPECÍFICA (valor/quantidade) + "+N" + tooltip; senão "Regular".
       const res = resumoEstado(mensagensItem(r));
-      if (res.rotulo)
-        return (
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium" title={res.titulo || undefined}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.cor }} />
-            <span style={{ color: res.cor }}>{res.rotulo}</span>
-            {res.extraErros > 0 && <span className="font-bold" style={{ color: "var(--danger)" }}>+{res.extraErros}</span>}
-            {res.extraAtencoes > 0 && <span className="font-bold" style={{ color: "var(--warn)" }}>+{res.extraAtencoes}</span>}
-          </span>
-        );
+      if (res.rotulo) return <EstadoResumo res={res} />;
       const e = estadoItem(r);
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoItemCor(e) }}>
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: estadoItemCor(e) }} />
-          {ESTADO_ITEM_ROTULO[e]}
-        </span>
-      );
+      return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
     },
   },
-  { key: "item", header: "Item", align: "center", value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
+  { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
+    nowrap: true,
     value: (r) => r.codigo ?? "",
     render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
   },
@@ -126,11 +121,12 @@ const COLS: Column<ItemK>[] = [
     value: (r) => r.descricao ?? "",
     render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
   },
-  { key: "unidade", header: "Unidade", value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
+  { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
   {
     key: "quantidade",
     header: "Qtd.",
     align: "center",
+    nowrap: true,
     value: (r) => String(r.quantidade ?? ""),
     render: (r) => (r.quantidade != null ? num(r.quantidade) : "—"),
   },
@@ -138,6 +134,7 @@ const COLS: Column<ItemK>[] = [
     key: "vunit",
     header: "Vlr. unit.",
     align: "right",
+    nowrap: true,
     value: (r) => String(r.valorUnitario ?? ""),
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
@@ -145,6 +142,7 @@ const COLS: Column<ItemK>[] = [
     key: "vtot",
     header: "Vlr. total",
     align: "right",
+    nowrap: true,
     value: (r) => String(r.valorTotal ?? ""),
     render: (r) =>
       r.valorTotal != null ? <span className="font-semibold">{brl(r.valorTotal)}</span> : "—",
@@ -183,6 +181,18 @@ export function DfdCabecalho({
   );
 }
 
+/** Seção como EXIBIDA: a real (`idx` no array) ou o espaço de uma OBRIGATÓRIA ausente (`idx: null`,
+ * criada com `cfg` ao preencher). `chave` é ESTÁVEL (obrigatórias por palavra-chave; demais pelo índice)
+ * — o cadeado aberto e o foco sobrevivem quando a seção ausente passa a existir. */
+type SecaoExib = {
+  chave: string;
+  idx: number | null;
+  numero: number;
+  titulo: string;
+  texto: string;
+  obrig?: (typeof SECOES_OBRIGATORIAS)[number];
+};
+
 export function DfdView({
   dfd,
   regras = regrasPadrao(),
@@ -190,6 +200,9 @@ export function DfdView({
   onItemClick,
   itemAtivo = null,
   ocultarSecao1 = false,
+  unica = false,
+  onSecoesChange,
+  secaoEditavel,
 }: {
   dfd: DfdVisual;
   regras?: RegrasAvaliacao;
@@ -204,6 +217,12 @@ export function DfdView({
   /** Oculta a Seção 1 (só-leitura) quando o `DfdConferir` mostra a versão EDITÁVEL acima
    * (evita duplicar a "Área requisitante da demanda"). */
   ocultarSecao1?: boolean;
+  /** Tabela ÚNICA de itens (DFD já protocolado): sem separar os itens com pendência numa tabela à parte. */
+  unica?: boolean;
+  /** Edição das SEÇÕES com cadeado por seção (todas, inclusive as obrigatórias ausentes). Ausente = só-leitura. */
+  onSecoesChange?: (secoes: DfdVisual["secoes"]) => void;
+  /** Seção editável? (ADM: `editavelDe` por ponto). Ausente = todas editáveis quando há `onSecoesChange`. */
+  secaoEditavel?: (s: { titulo: string; obrig?: string }) => boolean;
 }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
@@ -219,6 +238,7 @@ export function DfdView({
     const cat: Column<ItemK> = {
       key: "catalogo",
       header: "Catálogo",
+      nowrap: true,
       value: (r) => {
         const v = veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo);
         return v ? (v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme") : "";
@@ -230,28 +250,59 @@ export function DfdView({
         const cor = corVeredictoCatalogo(v.nivel);
         // Detalhe ESPECÍFICO (descrição/unidade/tipo diferentes) no tooltip; o painel do item mostra por extenso.
         const espec = conf ? rotulosDivergencia(conf).join(" · ") : "";
-        return (
-          <span
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium"
-            style={{ color: cor }}
-            title={espec || undefined}
-          >
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />
-            {v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme"}
-          </span>
-        );
+        return <EstadoPonto cor={cor} rotulo={v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme"} title={espec || undefined} />;
       },
     };
     const i = COLS.findIndex((c) => c.key === "codigo");
     return [...COLS.slice(0, i + 1), cat, ...COLS.slice(i + 1)];
   }, [conformidade, regras, dfdTipo]);
-  // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA (como a de DFDs
-  // no protocolo); os regulares na tabela principal.
-  const rowsErro = rows.filter((r) => itemComErro(r));
-  const rowsOk = rows.filter((r) => !itemComErro(r));
-  // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4).
-  const apoioItens = dfd.secoes.find((s) => s.numero === 4)?.texto ?? "";
-  const secoesGerais = dfd.secoes.filter((s) => s.numero !== 4);
+  // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA na análise; depois de
+  // protocolado (`unica`) é UMA tabela só (o filtro da coluna Estado separa).
+  const rowsErro = unica ? [] : rows.filter((r) => itemComErro(r));
+  const rowsOk = unica ? rows : rows.filter((r) => !itemComErro(r));
+  // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4). As OBRIGATÓRIAS
+  // ausentes aparecem como espaço "não preenchida" (aponta a falta e permite preencher com o cadeado).
+  const idxApoio = dfd.secoes.findIndex((s) => s.numero === 4);
+  const apoio: SecaoExib | null =
+    idxApoio >= 0
+      ? { chave: `s:${idxApoio}`, idx: idxApoio, numero: 4, titulo: dfd.secoes[idxApoio].titulo, texto: dfd.secoes[idxApoio].texto }
+      : null;
+  const secoesGerais = useMemo<SecaoExib[]>(() => {
+    const obrigPorIdx = new Map<number, (typeof SECOES_OBRIGATORIAS)[number]>();
+    const faltando: SecaoExib[] = [];
+    for (const o of SECOES_OBRIGATORIAS) {
+      const i = acharSecao(dfd.secoes, o.kw);
+      if (i >= 0 && dfd.secoes[i].numero !== 4) obrigPorIdx.set(i, o);
+      else if (i < 0) faltando.push({ chave: `obr:${o.kw}`, idx: null, numero: o.numero, titulo: o.titulo, texto: "", obrig: o });
+    }
+    const reais: SecaoExib[] = dfd.secoes
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => s.numero !== 4)
+      .map(({ s, i }) => {
+        const o = obrigPorIdx.get(i);
+        return { chave: o ? `obr:${o.kw}` : `s:${i}`, idx: i, numero: s.numero, titulo: s.titulo, texto: s.texto, obrig: o };
+      });
+    // Ordem do documento pelo nº da seção (estável: seções de mesmo nº mantêm a ordem lida).
+    return [...reais, ...faltando].sort((a, b) => a.numero - b.numero);
+  }, [dfd.secoes]);
+  const dfdTipoCtx = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
+  /** Grava o texto de UMA seção (a real pelo índice; a obrigatória ausente é CRIADA). */
+  const gravarSecao = (sx: SecaoExib, texto: string) => {
+    if (!onSecoesChange) return;
+    if (sx.idx != null) onSecoesChange(dfd.secoes.map((x, i) => (i === sx.idx ? { ...x, texto } : x)));
+    else if (sx.obrig) onSecoesChange(setTextoSecao(dfd.secoes, sx.obrig, texto));
+  };
+  const podeEditarSecao = (sx: SecaoExib) =>
+    !!onSecoesChange && (secaoEditavel ? secaoEditavel({ titulo: sx.titulo, obrig: sx.obrig?.chave }) : true);
+  /** Pendência de uma seção OBRIGATÓRIA (mesma régua dos erros): rótulo + cor pela importância do ADM. */
+  const pendenciaSecao = (sx: SecaoExib): { txt: string; cor: string } | null => {
+    if (!sx.obrig) return null;
+    const sit = situacaoSecao(dfd.secoes, sx.obrig.kw, dfd.anoPca);
+    if (sit === "ok") return null;
+    const comp = comportamentoNo(regras, sx.obrig.chave, dfdTipoCtx);
+    if (comp === "ignora") return null;
+    return { txt: sit === "vazia" ? "não preenchida" : "fora do padrão", cor: comp === "bloqueia" ? "var(--danger)" : "var(--warn)" };
+  };
   // Buracos na sequência de ITEM (normal: itens removidos) — só APONTA, não é erro.
   const buracos = buracosSequencia(dfd.itens);
   // DFD de renovação → mostra as referências (contrato/ata/licitação).
@@ -357,13 +408,15 @@ export function DfdView({
             />
           </>
         )}
-        {apoioItens && (
-          <div className="mt-3 rounded-card border border-border-2 bg-surface-2 p-4">
-            <div className="mb-1 text-xs font-semibold text-muted">Observações da estimativa</div>
-            <p className="whitespace-pre-line break-words text-[13.5px] leading-relaxed text-text-2">
-              {apoioItens}
-            </p>
-          </div>
+        {apoio && (apoio.texto || podeEditarSecao(apoio)) && (
+          <SecaoCard
+            key={apoio.chave}
+            titulo="Observações da estimativa"
+            texto={apoio.texto}
+            editavel={podeEditarSecao(apoio)}
+            onChange={(t) => gravarSecao(apoio, t)}
+            apoio
+          />
         )}
         {buracos.length > 0 && (
           <p className="mt-2 text-xs text-muted">
@@ -374,22 +427,20 @@ export function DfdView({
         )}
       </section>
 
-      {/* Demais seções (2, 3, 5, 6, 7, 8, 9…) */}
+      {/* Demais seções (2, 3, 5, 6, 7, 8, 9…) — TODAS editáveis com cadeado por seção (quando o host
+          permite); as obrigatórias ausentes aparecem como "não preenchida" (âncora das mensagens). */}
       {secoesGerais.length > 0 && (
         <section className="space-y-3">
-          {secoesGerais.map((s) => (
-            <div
-              key={s.numero}
-              className="rounded-card border border-border bg-surface p-5 shadow-ring"
-              data-ancora={s.titulo.toUpperCase().includes("JUSTIFICATIVA") ? "justificativa" : undefined}
-            >
-              <h3 className="mb-1.5 text-sm font-bold text-text">
-                {s.numero} · {s.titulo}
-              </h3>
-              <p className="whitespace-pre-line break-words text-[13.5px] leading-relaxed text-text-2">
-                {s.texto}
-              </p>
-            </div>
+          {secoesGerais.map((sx) => (
+            <SecaoCard
+              key={sx.chave}
+              titulo={`${sx.numero} · ${sx.titulo}`}
+              texto={sx.texto}
+              editavel={podeEditarSecao(sx)}
+              onChange={(t) => gravarSecao(sx, t)}
+              ancora={sx.obrig ? sx.obrig.chave.replace(/^dfd\./, "") : undefined}
+              pendencia={pendenciaSecao(sx)}
+            />
           ))}
         </section>
       )}
@@ -553,6 +604,58 @@ export function DfdView({
             })}
           </div>
         </section>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Card de UMA seção do DFD: título + texto só-leitura; com `editavel`, um CADEADO destrava a edição
+ * direta do texto (textarea que cresce com o conteúdo — mostra o texto inteiro). A pendência de uma
+ * seção obrigatória (não preenchida / fora do padrão) aparece no título, na cor da importância.
+ */
+function SecaoCard({
+  titulo,
+  texto,
+  editavel,
+  onChange,
+  ancora,
+  pendencia = null,
+  apoio = false,
+}: {
+  titulo: string;
+  texto: string;
+  editavel: boolean;
+  onChange: (texto: string) => void;
+  ancora?: string;
+  pendencia?: { txt: string; cor: string } | null;
+  /** Texto de apoio da Seção 4 (abaixo da tabela de itens) — estilo discreto. */
+  apoio?: boolean;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const editando = editavel && aberto;
+  return (
+    <div
+      className={apoio ? "mt-3 rounded-card border border-border-2 bg-surface-2 p-4" : "rounded-card border border-border bg-surface p-5 shadow-ring"}
+      data-ancora={ancora}
+    >
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <h3 className={apoio ? "text-xs font-semibold text-muted" : "text-sm font-bold text-text"}>
+          {titulo}
+          {pendencia && (
+            <span className="ml-2 text-[10px] font-semibold uppercase" style={{ color: pendencia.cor }}>
+              {pendencia.txt}
+            </span>
+          )}
+        </h3>
+        {editavel && <CadeadoBotao rotulo={titulo} aberto={aberto} onClick={() => setAberto((v) => !v)} />}
+      </div>
+      {editando ? (
+        <AutoTextarea value={texto} onChange={onChange} />
+      ) : texto ? (
+        <p className="whitespace-pre-line break-words text-[13.5px] leading-relaxed text-text-2">{texto}</p>
+      ) : (
+        <p className="text-[13px] text-faint">{editavel ? "Não preenchida — destrave para preencher." : "Não preenchida."}</p>
       )}
     </div>
   );

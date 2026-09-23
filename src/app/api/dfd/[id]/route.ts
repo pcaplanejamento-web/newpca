@@ -10,12 +10,13 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
-import { carregarResponsaveis } from "@/lib/reparticoes";
+import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
-/** DFD completo (para o banner de visualização). Leitura segue o escopo da LISTA
- * (que em "Geral" mostra tudo) — o aperto de segurança é nas ESCRITAS, abaixo. */
+/** DFD completo (para o banner) + a sua UNIDADE com os responsáveis (a conferência usa a unidade real
+ * do DFD, mesmo fora da lista do usuário). Leitura segue o escopo da LISTA (que em "Geral" mostra
+ * tudo) — o aperto de segurança é nas ESCRITAS, abaixo. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -23,7 +24,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("ID inválido.");
   const dfd = await getDfd(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  return ok({ dfd });
+  const [unidade] = await unidadesConferencia([dfd.reparticaoId]);
+  return ok({ dfd, unidade: unidade ?? null });
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -117,10 +119,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       p.data.assinaturas !== undefined
         ? carimbarValidacao(p.data.assinaturas, gravadas?.assinaturas ?? [], a.u.nome, new Date().toISOString())
         : undefined;
-    // Ao mudar a unidade OU as assinaturas, reconfere a assinatura contra o responsável da unidade
-    // (regra 6: não salvar com assinatura não permitida).
+    // Reconfere a assinatura contra o responsável da unidade SÓ quando a unidade OU as assinaturas
+    // MUDAM de fato (regra 6: não salvar com assinatura não permitida). Salvar outra correção (seções,
+    // cabeçalho…) de um DFD cuja assinatura já não confere não fica travado por isso.
     const repAlvo = p.data.reparticaoId !== undefined ? p.data.reparticaoId : dfd.reparticaoId;
-    if (repAlvo != null && (p.data.reparticaoId != null || assinaturas !== undefined)) {
+    const mudouUnidade = p.data.reparticaoId !== undefined && p.data.reparticaoId !== dfd.reparticaoId;
+    // Comparação CANÔNICA (só o que muda a conferência) — ordem de chaves/campos default não conta.
+    const chaveAss = (l: { nome: string; eCpf: string; data: string; codigo: string; fonte: string; ocr?: boolean; validacao?: { responsavel: string } }[]) =>
+      JSON.stringify(l.map((x) => [x.nome, x.eCpf, x.data, x.codigo, x.fonte, !!x.ocr, x.validacao?.responsavel ?? ""]));
+    const mudouAssinaturas = assinaturas !== undefined && chaveAss(assinaturas) !== chaveAss(gravadas?.assinaturas ?? []);
+    if (repAlvo != null && (mudouUnidade || mudouAssinaturas)) {
       const ass = gravadas;
       const res = validarAssinatura(assinaturas ?? ass?.assinaturas ?? [], await carregarResponsaveis(repAlvo), {
         exigeAssinatura: pdfExigeAssinatura(ass?.nomeArquivo),
