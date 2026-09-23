@@ -135,7 +135,8 @@ export function DataTable<R>({
         setAutoRows(null);
         return;
       }
-      const top = el.getBoundingClientRect().top;
+      // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
+      const top = el.getBoundingClientRect().top + window.scrollY;
       if (top <= 0) return; // ainda não posicionada — mantém o fallback
       // Mede as alturas REAIS (linha varia com o conteúdo — ex.: botões de ação).
       const altLinha = el.querySelector("tbody tr")?.getBoundingClientRect().height || 48;
@@ -150,8 +151,11 @@ export function DataTable<R>({
     // Recalcula quando o layout acima da tabela muda (callouts, etc.).
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
+    // Remede ao fim das animações de entrada (morph/escala das abas mudam o `top` medido no meio delas).
+    document.addEventListener("animationend", calc);
     return () => {
       window.removeEventListener("resize", calc);
+      document.removeEventListener("animationend", calc);
       ro.disconnect();
     };
   }, [fillHeight, reservaInferior]);
@@ -167,7 +171,8 @@ export function DataTable<R>({
         setMaxH(null); // mobile: rola normal (paginado)
         return;
       }
-      const top = el.getBoundingClientRect().top;
+      // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
+      const top = el.getBoundingClientRect().top + window.scrollY;
       if (top <= 0) return;
       const altRodape = 48; // barra do rodapé/seletor/pager
       setMaxH(Math.max(200, window.innerHeight - top - RESERVA - altRodape));
@@ -176,8 +181,11 @@ export function DataTable<R>({
     window.addEventListener("resize", calc);
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
+    // Remede ao fim das animações de entrada (morph/escala das abas mudam o `top` medido no meio delas).
+    document.addEventListener("animationend", calc);
     return () => {
       window.removeEventListener("resize", calc);
+      document.removeEventListener("animationend", calc);
       ro.disconnect();
     };
   }, [scrollInterno, reservaInferior]);

@@ -1070,25 +1070,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`pca_dfds` + `acao` incorporar/substituir/excluir, `substitui_dfd_id`, `vinculado_por/em`); o protocolo é o veículo.
   `protocolo_situacoes` ganhou **`permite_mover_pca`** + **`camada_pca`** (preview/publicado). **Legado:** as planilhas atuais
   viraram um PCA "lista pronta" **publicado** (a tela inicial não muda) e as edições que já uniam DFDs viraram fonte `protocolo`.
-- **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoMover` (travas: fonte protocolo · situação que permite · `ano_pca` do
-  protocolo = ano do PCA · ter DFD · um DFD em UM PCA), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
+- **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoEnviar` (travas: fonte protocolo · situação que permite · `ano_pca` do
+  protocolo = ano do PCA · ter DFD · não estar já em um PCA), `motivosNaoIncorporar` (na Mesa deste PCA · não incorporado · DFD
+  livre — um DFD em UM PCA), `motivoNaoDevolver`, a TRAVA (`estaTravado`/`edicaoPermitidaTravado`/`CAMPOS_LIVRES_TRAVADO`/
+  `mensagemTravaPca`, ver "Mesa do PCA" abaixo), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
   incorporar), **`consolidarPca(linhas, camada)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
   ⇒ aviso), `previsaoDoDfd` (seção PREVISÃO → mês/ano; ANUAL espalha nos 12 meses) e **`agregarDashboard`** (as MESMAS formas de
   `queries.ts`). **Camada:** Preview = todos os DFDs vinculados; Publicado (e o público) = só os de protocolos em situação de
   camada Publicado — mudar a situação move a camada AO VIVO. Acesso em **`pca-espaco.ts`** (`listarPcasCards`,
   `listarPcasPublicados`, `dashboardDoPca` [lista = SQL de `queries.ts` com `pcaId`; protocolo = itens consolidados em JS],
-  `orcamentoDoPca`, `vincularDfds`/`desvincularDfds`/`definirAcaoDfds`, visões). Schemas em `pca-espaco-validation.ts`.
+  `orcamentoDoPca`, `enviarProtocolo`/`devolverProtocolo`/`incorporarProtocolo`/`desincorporarProtocolo`, `capaDoPca`, visões).
+  Schemas em `pca-espaco-validation.ts`. **A capa NÃO trafega nas listas:** `PcaEspaco.capa` é a URL **`GET /api/pca/[id]/capa?v=`**
+  (versão = `atualizado_em` + tamanho; cache `immutable`, como a foto do usuário); `PcaCapa` dimensiona o ano por container query
+  (`cqw`) — cabe no card e na miniatura do cabeçalho.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público; `Callout` âmbar no Preview com quantos
   protocolos ainda estão em camada Preview). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
-  **`modoPca`** (sem importação; `Segmented` **Todos | Neste PCA**; coluna "PCA" Neste PCA/Elegível/Bloqueado com os motivos;
-  ações da seleção **Mover para o PCA** [ação por protocolo] e **Retirar do PCA**) — dados pelo MESMO `carregarMesa`
-  (`mesa-dados.ts`, também da `/painel/mesa`). **Importação** (fonte lista) = `PlanilhasPca` (`Dropzone` com `onFiles` — várias
+  **`modoPca`** (ver "Mesa do PCA" abaixo). **Importação** (fonte lista) = `PlanilhasPca` (`Dropzone` com `onFiles` — várias
   planilhas em fila — + cards "Planilhas deste PCA" com excluir). **Configuração** = `PcaConfiguracao` (identificação; fonte em
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
+- **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
+  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha).
 - **Situações (Configurações → Situações):** `Switch` "pode ser movido para o PCA" + `Segmented` da camada; coluna "PCA".
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por
   dimensão (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Elemento, Código) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
@@ -1098,8 +1103,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); só a camada Publicada.
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
-  capa/visão), `POST`/`DELETE`/`PATCH /api/pca/[id]/dfds` (mover protocolos · retirar · trocar ação), `DELETE
-  /api/pca/[id]/planilhas/[unidadeId]` — todas `exigirEditor` + auditoria `pca`.
+  capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar · desincorporar), `GET /api/pca/[id]/capa`
+  (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.
+
+### Mesa do PCA INDEPENDENTE + incorporação com TRAVA — migração `0034`
+- **Modelo (aditivo):** `dfd_protocolos` ganhou `pca_id` (FK `pcas` **set null** — o protocolo está na Mesa desse PCA),
+  `pca_enviado_em`/`pca_enviado_por` e **`pca_incorporado_em`** (≠ null ⇒ INCORPORADO = travado). Excluir o PCA devolve os
+  protocolos à Mesa principal (`excluirPca` zera os campos no mesmo lote; `pca_dfds` cascade).
+- **Fluxo:** Mesa principal → seleção de protocolos → **"Enviar ao PCA"** (`EnviarAoPca`, na `BarraSelecao`: escolhe um PCA de
+  fonte protocolo — sugerido pelo ano —, mostra Vai/Não vai por protocolo com `motivosNaoEnviar`). O enviado **SOME da Mesa
+  principal** (`listarProtocolos`/`listarDfds`/`listarItensDfds` só com `pca_id IS NULL`) e aparece **só** na Mesa daquele PCA
+  (`carregarMesa(u, pcaId)` — escopo pelas unidades ACESSÍVEIS, não pela ativa do head; itens por `GET /api/dfd/itens?pca=`).
+  Na Mesa do PCA (`MesaPca`): `Segmented` **Todos | Enviados | Incorporados**, coluna "PCA" (Enviado [motivos no `title`] /
+  Incorporado · ação) e as ações da seleção **Incorporar** (modal com a ação por protocolo: incorporar/substituir/excluir,
+  sugerida pelo assunto; grava `pca_dfds` + `pca_incorporado_em` num lote atômico — os itens entram pelo DFD), **Desincorporar**
+  (tira os `pca_dfds` do protocolo e destrava, atômico) e **Devolver à Mesa** (só o NÃO incorporado). Só o incorporado conta no
+  Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, `exigirEditor`,
+  escopo por unidade, `{alterados, falhas}`, auditoria por protocolo com a ação REAL).
+- **TRAVA (profissional, servidor + tela):** protocolo INCORPORADO ⇒ protocolo, DFDs e itens **somente leitura**; só a GESTÃO
+  (`responsavelId`/`situacaoId` — a situação move a camada Preview → Publicado) passa. Servidor: `src/lib/trava-pca.ts`
+  (`travaDeProtocolos`/`travaDeDfds`, lotes ≤ 90) → **423** com `mensagemTravaPca` em `POST /api/protocolo` (start/reenvio),
+  `PATCH`/`DELETE /api/protocolo/[id]`, `POST /api/protocolo/massa` (exceto responsável/situação), `POST /api/dfd` (start-dfd:
+  DFD existente + protocolo destino; append), `PATCH`/`DELETE /api/dfd/[id]` (inclui vincular de/para travado), `POST
+  /api/dfd/massa` e `POST /api/dfd/itens/massa` (por alvo → `falhas`); `POST /api/dfd/existentes` devolve o travado como
+  `{acessivel:false}` (a importação o mostra como "Não sobrescrevível"). Tela: `useProtocoloGravado`/`useDfdGravado` dobram a
+  trava em `podeEditar`/`editavel` + `Callout` âmbar com cadeado; a `DfdsView` esconde vincular/excluir do travado.
 
 ## Orçamento municipal (relatório CUBO) — migração `0028`
 - **O que é:** módulo para subir e consultar o **orçamento** da Prefeitura (dotação por Órgão/Unidade/**Elemento de

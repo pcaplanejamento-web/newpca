@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { dfdPassagens, dfdProtocolos, dfds, reparticoes, usuarios } from "@/db/schema";
+import { dfdPassagens, dfdProtocolos, dfds, pcas, reparticoes, usuarios } from "@/db/schema";
 import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
@@ -49,6 +49,11 @@ export type ProtocoloResumo = {
    * soma do valor deles NA ÉPOCA: a capa foi emitida com eles, então entram na conciliação da capa. */
   sobrescritos: number;
   valorSobrescritos: number;
+  /** Mesa do PCA (migração `0034`): o PCA para onde foi ENVIADO (`null` = na Mesa principal) e quando foi
+   * INCORPORADO (≠ null ⇒ protocolo, DFDs e itens TRAVADOS para edição). */
+  pcaId: number | null;
+  pcaNome: string | null;
+  pcaIncorporadoEm: string | null;
 };
 
 /**
@@ -88,10 +93,15 @@ const colunasSobrescritos = {
   valorSobrescritos: sql<number>`(SELECT COALESCE(SUM(${dfdPassagens.valorTotal}), 0) FROM ${dfdPassagens} WHERE ${dfdPassagens.protocoloId} = ${dfdProtocolos.id})`,
 };
 
-/** Protocolos (opcionalmente filtrados por repartição — Geral passa `undefined`),
- * com totais agregados ao vivo dos DFDs vinculados. */
+/** Protocolos da MESA PRINCIPAL (os não enviados a um PCA) — opcionalmente filtrados por repartição (Geral
+ * passa `undefined`), com totais agregados ao vivo dos DFDs vinculados. */
 export async function listarProtocolos(reparticaoId?: number): Promise<ProtocoloResumo[]> {
-  return consultaProtocolos(reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined);
+  return consultaProtocolos(and(isNull(dfdProtocolos.pcaId), reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined));
+}
+
+/** Protocolos da MESA DO PCA (os enviados a ele), com os mesmos totais ao vivo. */
+export async function listarProtocolosDoPca(pcaId: number): Promise<ProtocoloResumo[]> {
+  return consultaProtocolos(eq(dfdProtocolos.pcaId, pcaId));
 }
 
 /** Protocolos pelos ids (edição em massa — ≤ 20 por requisição), com os mesmos totais ao vivo. */
@@ -110,6 +120,9 @@ const colunasGestao = {
   situacaoId: dfdProtocolos.situacaoId,
   distribuidorId: dfdProtocolos.criadoPor,
   distribuidorNome: distribuidor.nome,
+  pcaId: dfdProtocolos.pcaId,
+  pcaNome: pcas.nome,
+  pcaIncorporadoEm: dfdProtocolos.pcaIncorporadoEm,
 };
 
 function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
@@ -138,6 +151,7 @@ function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
     .leftJoin(responsavel, eq(dfdProtocolos.responsavelId, responsavel.id))
     .leftJoin(distribuidor, eq(dfdProtocolos.criadoPor, distribuidor.id))
+    .leftJoin(pcas, eq(dfdProtocolos.pcaId, pcas.id))
     .leftJoin(dfds, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(onde)
     .groupBy(dfdProtocolos.id)
@@ -172,6 +186,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
     .leftJoin(responsavel, eq(dfdProtocolos.responsavelId, responsavel.id))
     .leftJoin(distribuidor, eq(dfdProtocolos.criadoPor, distribuidor.id))
+    .leftJoin(pcas, eq(dfdProtocolos.pcaId, pcas.id))
     .where(eq(dfdProtocolos.id, id))
     .limit(1);
   if (!p) return null;

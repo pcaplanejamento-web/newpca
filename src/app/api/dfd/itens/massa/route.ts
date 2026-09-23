@@ -9,6 +9,8 @@ import { type DiffItemDfd, diffItem } from "@/lib/comparar-protocolo";
 import { descreverAcaoItem, type ItemMassa, type PlanoMassaItens, planejarMassaItens } from "@/lib/massa-itens";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
+import { mensagemTravaPca } from "@/lib/pca-core";
+import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 /**
@@ -38,6 +40,7 @@ export async function POST(req: Request) {
   const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
 
   const dfds = await dfdsParaMassa([...porDfd.keys()]);
+  const travas = await travaDeDfds(dfds.map((d) => d.id));
   // Catálogo só quando a ação depende dele (padronizar / trava da unidade) — só os códigos envolvidos.
   const alvos = new Set(ids);
   const catalogo =
@@ -49,6 +52,11 @@ export async function POST(req: Request) {
     const sel = porDfd.get(d.id) ?? [];
     if (!acessivel(d.reparticaoId)) {
       for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: "sem acesso à unidade deste DFD" });
+      continue;
+    }
+    const trava = travas.get(d.id);
+    if (trava) {
+      for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: mensagemTravaPca(trava.nome) });
       continue;
     }
     const plano = planejarMassaItens(sel, alvos, acao, catalogo, d.totalItens);

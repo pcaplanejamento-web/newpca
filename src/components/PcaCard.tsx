@@ -22,15 +22,16 @@ export function PcaCapa({
   className?: string;
 }) {
   return (
-    <div className={`relative isolate aspect-[4/5] w-full overflow-hidden rounded-card bg-accent-soft ${className}`}>
+    <div className={`relative isolate aspect-[4/5] w-full overflow-hidden rounded-card bg-accent-soft [container-type:inline-size] ${className}`}>
       {capa ? (
-        // biome-ignore lint/performance/noImgElement: capa é data-URL (recorte no navegador); next/image não otimiza data-URL.
-        <img src={capa} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        // biome-ignore lint/performance/noImgElement: capa = rota própria (já é o recorte WebP 800×1000) ou data-URL do recorte recém-feito; next/image não agrega.
+        <img src={capa} alt="" loading="lazy" decoding="async" className="absolute inset-0 -z-10 h-full w-full object-cover" />
       ) : (
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-[38%] -z-10 select-none text-center font-black leading-none tracking-tighter text-accent/25"
-          style={{ fontSize: "clamp(56px, 11vw, 120px)" }}
+          // Proporcional à LARGURA da própria capa (container query): cabe no card e na miniatura do cabeçalho.
+          style={{ fontSize: "30cqw" }}
         >
           {ano ?? "PCA"}
         </span>

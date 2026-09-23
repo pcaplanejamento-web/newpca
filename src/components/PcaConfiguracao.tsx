@@ -123,7 +123,7 @@ export function PcaConfiguracao({
   const ro = !podeEditar;
 
   return (
-    <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
       <div className="space-y-[var(--gap-block)]">
         <section className={CARTAO}>
           <h2 className="mb-4 font-bold text-text">Identificação</h2>

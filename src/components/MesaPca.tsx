@@ -3,145 +3,141 @@
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
-import { ACOES_DFD_PCA, type AcaoDfdPca, acaoSugerida, motivosNaoMover, ROTULO_ACAO } from "@/lib/pca-core";
+import { ACOES_DFD_PCA, type AcaoDfdPca, acaoSugerida, motivoNaoDevolver, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
 import type { ProtocoloResumo } from "@/lib/protocolo";
-import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
+import { acaoProtocolosPca, type ResultadoAcaoPca } from "./EnviarAoPca";
 import { selectCls } from "./formStyles";
-import { IconArrowRight, IconTrash } from "./icons";
+import { IconUndo, IconCheck, IconLockOpen } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
+import { toast } from "./Toast";
 
-type Escopo = "todos" | "neste";
+type Escopo = "todos" | "enviados" | "incorporados";
 
 type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca"> & {
   pca: { id: number; nome: string; ano: number | null };
-  /** Protocolos com DFD neste PCA. */
-  protocolosNoPca: number[];
-  /** DFDs vinculados a este PCA (inclusive os sem protocolo, do legado). */
-  dfdsNoPca: number[];
-  /** Por protocolo: quantos DFDs dele já estão em OUTRO PCA. */
+  /** Por protocolo: quantos DFDs dele já estão em OUTRO PCA (ficam de fora da incorporação). */
   emOutroPcaPorProtocolo: Record<number, number>;
+  /** Por protocolo incorporado: a ação com que os DFDs dele entraram no PCA. */
+  acaoPorProtocolo: Record<number, AcaoDfdPca>;
 };
 
+const incorporado = (p: ProtocoloResumo) => p.pcaIncorporadoEm != null;
+
 /**
- * Aba MESA do PCA (fonte protocolo): a MESMA Mesa (Protocolos · DFDs · Itens — Estado, Situação na
- * célula, banners) restrita aos protocolos do ANO do PCA, com o seletor **Todos | Neste PCA** e as ações
- * da seleção: **Mover para o PCA** (vincula os DFDs; a ação de cada protocolo é sugerida pelo assunto e
- * editável) e **Retirar do PCA**. As travas (`motivosNaoMover`) aparecem na coluna "PCA".
+ * Aba MESA do PCA (fonte protocolo) — INDEPENDENTE da Mesa principal: só os protocolos ENVIADOS a este PCA
+ * (Mesa principal → barra de seleção → "Enviar ao PCA"), com a MESMA Mesa (Protocolos · DFDs · Itens, Estado,
+ * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados** e as ações da seleção:
+ * **Incorporar** (os DFDs e os itens passam a compor o PCA com a ação por protocolo — a partir daí protocolo,
+ * DFDs e itens ficam TRAVADOS), **Desincorporar** (destrava) e **Devolver à Mesa** (só o não incorporado).
  */
-export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocolo, protocolos, dfds, situacoes = [], ...mesa }: Props) {
+export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protocolos, dfds, ...mesa }: Props) {
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
-  const [mover, setMover] = useState<ProtocoloResumo[] | null>(null);
+  const [incorporar, setIncorporar] = useState<ProtocoloResumo[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
   const [gravando, setGravando] = useState(false);
-  const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
 
-  const noPca = useMemo(() => new Set(protocolosNoPca), [protocolosNoPca]);
-  const dfdNoPca = useMemo(() => new Set(dfdsNoPca), [dfdsNoPca]);
-  const sit = useMemo(() => new Map(situacoes.map((s) => [s.id, s])), [situacoes]);
   const dfdsPorProto = useMemo(() => {
     const m = new Map<number, number>();
     for (const d of dfds) if (d.protocoloId != null) m.set(d.protocoloId, (m.get(d.protocoloId) ?? 0) + 1);
     return m;
   }, [dfds]);
+  const totalDfds = (p: ProtocoloResumo) => dfdsPorProto.get(p.id) ?? p.totalDfds;
+  const motivosInc = (p: ProtocoloResumo) =>
+    motivosNaoIncorporar({ enviadoAEste: p.pcaId === pca.id, incorporado: incorporado(p), totalDfds: totalDfds(p), dfdsEmOutroPca: emOutroPcaPorProtocolo[p.id] ?? 0 });
 
-  const motivos = (p: ProtocoloResumo) => {
-    const s = p.situacaoId != null ? sit.get(p.situacaoId) : undefined;
-    return motivosNaoMover({
-      situacaoPermite: s ? s.permiteMoverPca : null,
-      situacaoNome: s?.nome,
-      anoProtocolo: p.anoPca,
-      anoPca: pca.ano,
-      totalDfds: dfdsPorProto.get(p.id) ?? p.totalDfds,
-      dfdsEmOutroPca: emOutroPcaPorProtocolo[p.id] ?? 0,
-      fonteProtocolo: true,
-    });
-  };
-
-  const doAno = useMemo(() => protocolos.filter((p) => noPca.has(p.id) || (pca.ano != null && p.anoPca === pca.ano)), [protocolos, noPca, pca.ano]);
-  const nesse = useMemo(() => doAno.filter((p) => noPca.has(p.id)), [doAno, noPca]);
-  const protos = escopo === "todos" ? doAno : nesse;
-  const idsProto = useMemo(() => new Set(protos.map((p) => p.id)), [protos]);
-  const dfdsVis = useMemo(
-    () => dfds.filter((d) => (d.protocoloId != null && idsProto.has(d.protocoloId)) || (escopo === "neste" && dfdNoPca.has(d.id))),
-    [dfds, idsProto, escopo, dfdNoPca],
+  const nIncorporados = useMemo(() => protocolos.filter(incorporado).length, [protocolos]);
+  const protos = useMemo(
+    () => (escopo === "todos" ? protocolos : protocolos.filter((p) => incorporado(p) === (escopo === "incorporados"))),
+    [protocolos, escopo],
   );
+  const dfdsVis = useMemo(() => {
+    if (escopo === "todos") return dfds;
+    const ids = new Set(protos.map((p) => p.id));
+    return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId));
+  }, [dfds, protos, escopo]);
 
   const colunaPca: Column<ProtocoloResumo> = {
     key: "pca",
     header: "PCA",
     nowrap: true,
-    value: (r) => (noPca.has(r.id) ? "Neste PCA" : motivos(r).length ? "Bloqueado" : "Elegível"),
+    value: (r) => (incorporado(r) ? "Incorporado" : "Enviado"),
     render: (r) => {
-      if (noPca.has(r.id)) return <Badge tone="blue">Neste PCA</Badge>;
-      const m = motivos(r);
-      return m.length ? (
-        <span title={m.join("\n")}>
-          <Badge tone="slate">Bloqueado</Badge>
+      if (incorporado(r)) {
+        const a = acaoPorProtocolo[r.id];
+        return (
+          <span title="Protocolo, DFDs e itens travados enquanto incorporado">
+            <Badge tone="blue" dot>
+              Incorporado{a ? ` · ${ROTULO_ACAO[a]}` : ""}
+            </Badge>
+          </span>
+        );
+      }
+      const m = motivosInc(r);
+      return (
+        <span title={m.length ? m.join("\n") : "Pronto para incorporar"}>
+          <Badge tone={m.length ? "slate" : "amber"} dot>
+            Enviado
+          </Badge>
         </span>
-      ) : (
-        <Badge tone="emerald">Elegível</Badge>
       );
     },
   };
 
-  function abrirMover(sel: ProtocoloResumo[]) {
-    const eleg = sel.filter((p) => !noPca.has(p.id) && motivos(p).length === 0);
-    if (eleg.length === 0) {
-      setAviso({ kind: "danger", texto: "Nenhum protocolo selecionado pode ser movido — veja o motivo na coluna PCA (passe o mouse em \"Bloqueado\")." });
-      return;
-    }
-    setAcoes(Object.fromEntries(eleg.map((p) => [p.id, acaoSugerida(p.assunto)])));
-    setMover(eleg);
-  }
-
-  async function confirmarMover() {
-    if (!mover) return;
+  /** Executa a ação com trava de duplo clique, aviso global e recarga. */
+  async function executar(corpo: Record<string, unknown>, sucesso: (r: ResultadoAcaoPca) => string, limpar?: () => void): Promise<boolean> {
+    if (gravando) return false;
     setGravando(true);
     try {
-      // A ação escolhida por protocolo vale para cada DFD dele.
-      const porDfd: Record<string, AcaoDfdPca> = {};
-      for (const d of dfds) if (d.protocoloId != null && acoes[d.protocoloId]) porDfd[String(d.id)] = acoes[d.protocoloId];
-      const r = await fetch(`/api/pca/${pca.id}/dfds`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ protocoloIds: mover.map((p) => p.id), acoes: porDfd }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; vinculados?: number; falhas?: { numero: string; motivo: string }[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível mover.");
-      const f = j.falhas ?? [];
-      setAviso(
-        f.length
-          ? { kind: "danger", texto: `${num(j.vinculados ?? 0)} DFD(s) movidos. Não movidos: ${f.map((x) => `${x.numero} (${x.motivo})`).join(" · ")}` }
-          : { kind: "ok", texto: `${num(j.vinculados ?? 0)} DFD(s) de ${mover.length} protocolo(s) movidos para o ${pca.nome}.` },
-      );
-      setMover(null);
+      const r = await acaoProtocolosPca(pca.id, corpo);
+      if (r.falhas.length) toast.error(`${sucesso(r)} Não aplicados: ${r.falhas.map((f) => `${f.numero} (${f.motivo})`).join(" · ")}`);
+      else toast.success(sucesso(r));
+      limpar?.();
       router.refresh();
+      return true;
     } catch (e) {
-      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Não foi possível mover." });
+      toast.error(e instanceof Error ? e.message : "Não foi possível concluir.");
+      return false;
     } finally {
       setGravando(false);
     }
   }
 
-  async function retirar(sel: ProtocoloResumo[], limpar: () => void) {
-    const alvo = sel.filter((p) => noPca.has(p.id));
-    if (alvo.length === 0) return;
-    if (!confirm(`Retirar ${alvo.length} protocolo(s) (e os DFDs deles) do ${pca.nome}?`)) return;
-    const r = await fetch(`/api/pca/${pca.id}/dfds`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ protocoloIds: alvo.map((p) => p.id) }),
-    });
-    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; retirados?: number };
-    setAviso(r.ok && j.ok ? { kind: "ok", texto: `${num(j.retirados ?? 0)} DFD(s) retirados do PCA.` } : { kind: "danger", texto: j.error ?? "Não foi possível retirar." });
-    limpar();
-    router.refresh();
+  function abrirIncorporar(sel: ProtocoloResumo[]) {
+    const eleg = sel.filter((p) => motivosInc(p).length === 0);
+    if (eleg.length === 0) {
+      toast.error('Nenhum protocolo selecionado pode ser incorporado — passe o mouse em "Enviado" na coluna PCA para ver o motivo.');
+      return;
+    }
+    setAcoes(Object.fromEntries(eleg.map((p) => [p.id, acaoSugerida(p.assunto)])));
+    setIncorporar(eleg);
+  }
+
+  async function confirmarIncorporar() {
+    if (!incorporar) return;
+    const alvo = incorporar;
+    const okk = await executar(
+      { acao: "incorporar", ids: alvo.map((p) => p.id), acoes: Object.fromEntries(alvo.map((p) => [String(p.id), acoes[p.id] ?? acaoSugerida(p.assunto)])) },
+      (r) => `${num(r.alterados)} protocolo(s) incorporado(s) ao ${pca.nome}.`,
+    );
+    if (okk) setIncorporar(null);
+  }
+
+  function desincorporar(sel: ProtocoloResumo[], limpar: () => void) {
+    const alvo = sel.filter(incorporado);
+    if (!alvo.length || !confirm(`Desincorporar ${alvo.length} protocolo(s)? Os DFDs saem do ${pca.nome} e voltam a ser editáveis.`)) return;
+    void executar({ acao: "desincorporar", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) desincorporado(s).`, limpar);
+  }
+
+  function devolver(sel: ProtocoloResumo[], limpar: () => void) {
+    const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
+    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?`)) return;
+    void executar({ acao: "devolver", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) devolvido(s) à Mesa principal.`, limpar);
   }
 
   return (
@@ -150,15 +146,17 @@ export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocol
         {...mesa}
         protocolos={protos}
         dfds={dfdsVis}
-        situacoes={situacoes}
         modoPca={{
+          pcaId: pca.id,
           ferramenta: (
             <Segmented<Escopo>
               value={escopo}
               onChange={setEscopo}
+              ariaLabel="Protocolos da Mesa do PCA"
               options={[
-                { value: "todos", label: `Todos (${doAno.length})` },
-                { value: "neste", label: `Neste PCA (${nesse.length})` },
+                { value: "todos", label: `Todos (${protocolos.length})` },
+                { value: "enviados", label: `Enviados (${protocolos.length - nIncorporados})` },
+                { value: "incorporados", label: `Incorporados (${nIncorporados})` },
               ]}
             />
           ),
@@ -166,21 +164,26 @@ export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocol
           rodapeProtocolos: (linhas) =>
             `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
               linhas.reduce((s, p) => s + p.valorTotal, 0),
-            )} · a situação define a elegibilidade e a camada — altere direto na coluna Situação`,
+            )}`,
           acoesProtocolos: mesa.podeEditar
             ? (sel, limpar) => {
-                const podeMover = sel.some((p) => !noPca.has(p.id));
-                const podeRetirar = sel.some((p) => noPca.has(p.id));
+                const nInc = sel.filter((p) => !incorporado(p)).length;
+                const nDes = sel.length - nInc;
                 return (
                   <div className="flex flex-wrap gap-2">
-                    {podeMover && (
-                      <Button icon={<IconArrowRight className="h-4 w-4" />} onClick={() => abrirMover(sel)}>
-                        Mover para o PCA
+                    {nInc > 0 && (
+                      <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
+                        Incorporar ({nInc})
                       </Button>
                     )}
-                    {podeRetirar && (
-                      <Button variant="secondary" icon={<IconTrash className="h-4 w-4" />} onClick={() => retirar(sel, limpar)}>
-                        Retirar do PCA
+                    {nDes > 0 && (
+                      <Button variant="secondary" icon={<IconLockOpen className="h-4 w-4" />} onClick={() => desincorporar(sel, limpar)} loading={gravando}>
+                        Desincorporar ({nDes})
+                      </Button>
+                    )}
+                    {nInc > 0 && (
+                      <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} disabled={gravando}>
+                        Devolver à Mesa ({nInc})
                       </Button>
                     )}
                   </div>
@@ -191,35 +194,35 @@ export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocol
       />
 
       <Modal
-        open={!!mover}
-        onClose={() => setMover(null)}
-        titulo={`Mover para o ${pca.nome}`}
+        open={!!incorporar}
+        onClose={() => setIncorporar(null)}
+        titulo={`Incorporar ao ${pca.nome}`}
         size="lg"
         bloqueado={gravando}
         rodape={
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setMover(null)} disabled={gravando}>
+            <Button variant="secondary" onClick={() => setIncorporar(null)} disabled={gravando}>
               Cancelar
             </Button>
-            <Button onClick={confirmarMover} loading={gravando}>
-              Mover {mover?.length ?? 0} protocolo(s)
+            <Button icon={<IconCheck className="h-4 w-4" />} onClick={confirmarIncorporar} loading={gravando}>
+              Incorporar {incorporar?.length ?? 0} protocolo(s)
             </Button>
           </div>
         }
       >
         <div className="space-y-3">
           <p className="text-sm text-muted">
-            Os DFDs de cada protocolo entram no PCA com a ação escolhida: <b>Incorporar</b> (DFD novo), <b>Substituir</b> (troca o DFD
-            do PCA com o mesmo nº de planejamento) ou <b>Excluir</b> (retira do PCA o DFD de mesmo planejamento). A sugestão vem do
-            assunto do protocolo.
+            Os DFDs (e os itens) de cada protocolo passam a compor o PCA com a ação escolhida: <b>Incorporar</b> (DFD novo),{" "}
+            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). Enquanto
+            incorporado, o protocolo, os DFDs e os itens ficam <b>somente leitura</b> (a situação e o responsável seguem editáveis).
           </p>
           <ul className="divide-y divide-border rounded-card border border-border">
-            {(mover ?? []).map((p) => (
+            {(incorporar ?? []).map((p) => (
               <li key={p.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="font-semibold text-text">Protocolo {p.numero}</div>
                   <div className="truncate text-xs text-muted">
-                    {p.assunto ?? "Sem assunto"} · {num(dfdsPorProto.get(p.id) ?? p.totalDfds)} DFD(s) · {brl(p.valorTotal)}
+                    {p.assunto ?? "Sem assunto"} · {num(totalDfds(p))} DFD(s) · {brl(p.valorTotal)}
                     {(emOutroPcaPorProtocolo[p.id] ?? 0) > 0 ? ` · ${emOutroPcaPorProtocolo[p.id]} já em outro PCA (ficam de fora)` : ""}
                   </div>
                 </div>
@@ -228,6 +231,7 @@ export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocol
                   value={acoes[p.id] ?? "incorporar"}
                   onChange={(e) => setAcoes((a) => ({ ...a, [p.id]: e.target.value as AcaoDfdPca }))}
                   aria-label={`Ação do protocolo ${p.numero}`}
+                  disabled={gravando}
                 >
                   {ACOES_DFD_PCA.map((a) => (
                     <option key={a} value={a}>
@@ -240,12 +244,6 @@ export function MesaPca({ pca, protocolosNoPca, dfdsNoPca, emOutroPcaPorProtocol
           </ul>
         </div>
       </Modal>
-
-      {aviso && (
-        <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 6000 : undefined}>
-          {aviso.texto}
-        </AvisoFlutuante>
-      )}
     </>
   );
 }

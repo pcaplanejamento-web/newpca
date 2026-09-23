@@ -47,37 +47,89 @@ export function acaoSugerida(assunto: string | null | undefined): AcaoDfdPca {
   return "incorporar";
 }
 
-/** Fatos de UM protocolo candidato a entrar no PCA (apurados no servidor ou na tela). */
-export type FatosMover = {
-  /** A situação do protocolo permite mover? (`null` = sem situação). */
+/** Fatos de UM protocolo candidato a ser ENVIADO a um PCA (Mesa principal → Mesa do PCA). */
+export type FatosEnvio = {
+  /** A situação do protocolo permite enviar? (`null` = sem situação). */
   situacaoPermite: boolean | null;
   situacaoNome?: string | null;
   anoProtocolo: number | null;
   anoPca: number | null;
   /** Nº de DFDs do protocolo. */
   totalDfds: number;
-  /** Nº de DFDs do protocolo já vinculados a OUTRO PCA. */
-  dfdsEmOutroPca: number;
-  /** O PCA é de fonte `protocolo`? */
+  /** O PCA de destino é de fonte `protocolo`? */
   fonteProtocolo: boolean;
+  /** Nome do PCA em que o protocolo JÁ está (`null` = na Mesa principal). */
+  jaEmPca: string | null;
 };
 
 /**
- * Motivos que IMPEDEM mover o protocolo para o PCA (vazio = pode). As travas: fonte do PCA =
- * protocolo; situação que permite mover; `ano_pca` do protocolo = ano do PCA; ter DFD; e um DFD
- * só pode estar em UM PCA.
+ * Motivos que IMPEDEM enviar o protocolo ao PCA (vazio = pode). As travas: fonte do PCA = protocolo;
+ * situação que permite; `ano_pca` do protocolo = ano do PCA; ter DFD; não estar já em um PCA.
  */
-export function motivosNaoMover(f: FatosMover): string[] {
+export function motivosNaoEnviar(f: FatosEnvio): string[] {
   const m: string[] = [];
   if (!f.fonteProtocolo) m.push("O PCA é de lista pronta (não recebe protocolos)");
+  if (f.jaEmPca) m.push(`Já está no ${f.jaEmPca}`);
   if (f.situacaoPermite == null) m.push("Protocolo sem situação");
-  else if (!f.situacaoPermite) m.push(`A situação "${f.situacaoNome ?? "—"}" não permite mover para o PCA`);
+  else if (!f.situacaoPermite) m.push(`A situação "${f.situacaoNome ?? "—"}" não permite enviar ao PCA`);
   if (f.anoPca == null) m.push("O PCA não tem ano definido");
   else if (f.anoProtocolo == null) m.push("Protocolo sem ano do PCA");
   else if (f.anoProtocolo !== f.anoPca) m.push(`Protocolo marcado com o PCA ${f.anoProtocolo} (este é ${f.anoPca})`);
   if (f.totalDfds === 0) m.push("Protocolo sem DFDs");
+  return m;
+}
+
+/** Fatos de UM protocolo da Mesa do PCA candidato a ser INCORPORADO. */
+export type FatosIncorporacao = {
+  /** Foi enviado a ESTE PCA? */
+  enviadoAEste: boolean;
+  incorporado: boolean;
+  totalDfds: number;
+  /** DFDs do protocolo já vinculados a OUTRO PCA. */
+  dfdsEmOutroPca: number;
+};
+
+/** Motivos que IMPEDEM incorporar (vazio = pode): estar na Mesa deste PCA, ainda não incorporado, com DFD livre. */
+export function motivosNaoIncorporar(f: FatosIncorporacao): string[] {
+  const m: string[] = [];
+  if (!f.enviadoAEste) m.push("O protocolo não está na Mesa deste PCA");
+  else if (f.incorporado) m.push("Já incorporado");
+  if (f.totalDfds === 0) m.push("Protocolo sem DFDs");
   else if (f.dfdsEmOutroPca >= f.totalDfds) m.push("Os DFDs já estão em outro PCA");
   return m;
+}
+
+/** Devolver à Mesa principal só vale para o protocolo ENVIADO e NÃO incorporado (desincorpore antes). */
+export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: string | null }, pcaId: number): string | null {
+  if (p.pcaId !== pcaId) return "O protocolo não está na Mesa deste PCA";
+  if (p.pcaIncorporadoEm) return "Incorporado — desincorpore antes de devolver";
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Trava de edição (protocolo INCORPORADO)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enquanto o protocolo está INCORPORADO a um PCA, protocolo, DFDs e itens ficam TRAVADOS. Só a GESTÃO passa
+ * (responsável e situação — a situação é justamente o que move a camada Preview → Publicado no PCA).
+ */
+export const CAMPOS_LIVRES_TRAVADO = ["responsavelId", "situacaoId"] as const;
+
+/** O protocolo está TRAVADO? (incorporado a um PCA que existe — a fonte única da trava, servidor e tela). */
+export function estaTravado(p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined }): boolean {
+  return p.pcaId != null && !!p.pcaIncorporadoEm;
+}
+
+/** A edição do protocolo (as chaves enviadas no PATCH, fora o canal `origem`) é permitida mesmo travado? */
+export function edicaoPermitidaTravado(campos: Record<string, unknown>): boolean {
+  const livres = new Set<string>([...CAMPOS_LIVRES_TRAVADO, "origem"]);
+  return Object.keys(campos).every((k) => campos[k] === undefined || livres.has(k));
+}
+
+/** A mensagem única da trava (servidor e tela). */
+export function mensagemTravaPca(nomePca: string | null | undefined): string {
+  return `Incorporado ao ${nomePca?.trim() || "PCA"} — somente leitura. Desincorpore na Mesa do PCA para editar.`;
 }
 
 // ---------------------------------------------------------------------------

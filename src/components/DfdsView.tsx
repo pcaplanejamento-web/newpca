@@ -21,6 +21,7 @@ import {
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { estaTravado } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { ProtocoloResumo } from "@/lib/protocolo";
@@ -34,6 +35,7 @@ import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
+import { EnviarAoPca } from "./EnviarAoPca";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { inputCls, labelCls } from "./formStyles";
 import { IconFilter, IconLayers, IconTrash, IconUser } from "./icons";
@@ -81,10 +83,12 @@ type Sel = Set<string | number>;
 
 /**
  * A Mesa DENTRO do PCA (aba Mesa do espaço do PCA): sem os lançadores de importação, com uma
- * ferramenta à direita das visões (ex.: Todos | Neste PCA), colunas extras na tabela de protocolos e
- * as ações da seleção de protocolos (Mover para o PCA / Retirar). As listas já chegam filtradas.
+ * ferramenta à direita das visões (ex.: Todos | Enviados | Incorporados), colunas extras na tabela de
+ * protocolos e as ações da seleção de protocolos (Incorporar / Desincorporar / Devolver). As listas já
+ * chegam restritas aos protocolos ENVIADOS ao PCA; os itens vêm do escopo do PCA (`?pca=`).
  */
 export type ModoPcaMesa = {
+  pcaId: number;
   ferramenta?: ReactNode;
   colunasProtocolo?: Column<ProtocoloResumo>[];
   acoesProtocolos?: (selecionados: ProtocoloResumo[], limpar: () => void) => ReactNode;
@@ -143,7 +147,7 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
-  /** Mesa dentro do PCA (sem importação; ações de mover/retirar). */
+  /** Mesa dentro do PCA (sem importação; ações de incorporar/desincorporar/devolver). */
   modoPca?: ModoPcaMesa;
 }) {
   const router = useRouter();
@@ -215,11 +219,12 @@ export function DfdsView({
     setItens(null);
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
   }, [dfds]);
+  const pcaDaMesa = modoPca?.pcaId;
   useEffect(() => {
     if (vista !== "itens" || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
-    fetch("/api/dfd/itens", { signal: ac.signal })
+    fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : "/api/dfd/itens", { signal: ac.signal })
       .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[] }>)
       .then((j) => {
         if (!ac.signal.aborted) setItens(j.ok ? (j.itens ?? []) : []);
@@ -231,9 +236,9 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens]);
+  }, [vista, itens, pcaDaMesa]);
   // Itens seguem o filtro de hierarquia pelo DFD de origem (que segue o do protocolo).
-  // No PCA a lista de DFDs já chega restrita (o endpoint traz todos) → os itens seguem os DFDs visíveis.
+  // No PCA os itens seguem os DFDs VISÍVEIS (o escopo Todos/Enviados/Incorporados filtra os DFDs).
   const emPca = !!modoPca;
   const itensF = useMemo(() => {
     if (!itens || (!filtroMesaAtivo(filtro) && !emPca)) return itens;
@@ -610,7 +615,8 @@ export function DfdsView({
   });
   const acoesDfd = (l: LinhaDfd) => {
     const d = dfdPorId.get(l.key);
-    if (!podeEditar || !d) return null;
+    // DFD de protocolo INCORPORADO a um PCA: travado (sem vincular/excluir — o servidor recusa também).
+    if (!podeEditar || !d || estaTravado({ pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm })) return null;
     return (
       <div className="flex justify-end gap-1">
         <Button variant="ghost" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
@@ -805,7 +811,7 @@ export function DfdsView({
       filter: "none",
       nowrap: true,
       render: (r) =>
-        podeEditar ? (
+        podeEditar && !estaTravado(r) ? (
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
@@ -977,7 +983,13 @@ export function DfdsView({
         registros={sel.map((p) => ({ key: p.id, rotulo: `Protocolo ${p.numero}` }))}
         onRemover={tirar(setSelProtos)}
         onLimpar={() => setSelProtos(new Set())}
-        acoes={modoPca?.acoesProtocolos?.(sel, () => setSelProtos(new Set()))}
+        acoes={
+          modoPca ? (
+            modoPca.acoesProtocolos?.(sel, () => setSelProtos(new Set()))
+          ) : (
+            <EnviarAoPca selecionados={sel} pcas={pcas} situacoes={situacoes} onConcluido={() => setSelProtos(new Set())} />
+          )
+        }
         resumo={
           <ResumoSelecao
             qtd={sel.length}

@@ -7,6 +7,7 @@ import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
 import { editarItemDfd, removerItemDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { Button } from "./Button";
@@ -16,7 +17,7 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainel
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconLock, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -196,7 +197,12 @@ export function useDfdGravado({
 
   // Unidade: a da lista do usuário (editável) ou a REAL do DFD (conferência correta, só-leitura).
   const acessivel = orig?.reparticaoId == null || reparticoes.some((r) => r.id === orig?.reparticaoId);
-  const editavel = podeEditar && acessivel;
+  // TRAVA do PCA: DFD de protocolo INCORPORADO ⇒ só-leitura (cabeçalho, seções, itens, sobrescrita).
+  const travaPca =
+    orig && estaTravado({ pcaId: orig.protocoloPcaId, pcaIncorporadoEm: orig.protocoloPcaIncorporadoEm })
+      ? mensagemTravaPca(pcas.find((p) => p.id === orig.protocoloPcaId)?.nome)
+      : null;
+  const editavel = podeEditar && acessivel && !travaPca;
   const reps: Rep[] = editavel || !unidade || reparticoes.some((r) => r.id === unidade.id) ? reparticoes : [...reparticoes, unidade];
   const rep = repId != null ? (reps.find((r) => r.id === repId) ?? null) : null;
   const categoria = classificarAssunto(orig?.protocoloAssunto ?? null);
@@ -266,10 +272,19 @@ export function useDfdGravado({
   }
 
   const numero = dfd?.numero ?? orig?.numero ?? "";
-  const erroCallout = erro && (
-    <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
-      {erro}
-    </Callout>
+  const erroCallout = (
+    <>
+      {travaPca && (
+        <Callout kind="warn" icon={<IconLock className="h-4 w-4" />} className="mb-3">
+          {travaPca}
+        </Callout>
+      )}
+      {erro && (
+        <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />} className="mb-3">
+          {erro}
+        </Callout>
+      )}
+    </>
   );
   const carregando = erro ? (
     <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />}>

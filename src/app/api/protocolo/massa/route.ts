@@ -9,6 +9,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
+import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,11 @@ export async function POST(req: Request) {
     try {
       if (!acessivel(pr.reparticaoId)) {
         falhas.push({ id: pr.id, numero: pr.numero, motivo: "Sem acesso à unidade deste protocolo." });
+        continue;
+      }
+      // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
+      if (estaTravado(pr) && acao.campo !== "responsavel" && acao.campo !== "situacao") {
+        falhas.push({ id: pr.id, numero: pr.numero, motivo: mensagemTravaPca(pr.pcaNome) });
         continue;
       }
       // O que muda neste protocolo (nada ⇒ pulado).

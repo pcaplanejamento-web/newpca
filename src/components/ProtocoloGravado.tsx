@@ -24,6 +24,7 @@ import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
 import { Button } from "./Button";
+import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
@@ -32,7 +33,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLock, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -84,7 +85,7 @@ export function useProtocoloGravado({
   dfdInicial = null,
   onFechar,
   empilhado = null,
-  podeEditar,
+  podeEditar: podeEditarBase,
   reparticoes,
   reparticaoAtivaId,
   regras,
@@ -118,6 +119,9 @@ export function useProtocoloGravado({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [proto, setProto] = useState<ProtocoloDetalhe | null>(null);
+  // TRAVA do PCA: protocolo INCORPORADO ⇒ o banner inteiro (capa, DFDs, itens, reenvio) fica só-leitura.
+  const travaPca = proto && estaTravado(proto) ? mensagemTravaPca(proto.pcaNome) : null;
+  const podeEditar = podeEditarBase && !travaPca;
   const [orig, setOrig] = useState<Map<number, DfdDetalhe>>(new Map());
   const [ordem, setOrdem] = useState<number[]>([]);
   const [dfds, setDfds] = useState<Map<number, DfdParseado>>(new Map());
@@ -579,6 +583,7 @@ export function useProtocoloGravado({
       ) : (
         <ProtocoloView
           key={versao}
+          topo={travaPca ? <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>{travaPca}</Callout> : undefined}
           capa={capaView}
           modoCapa={podeEditar && !travado ? "cadeado" : "leitura"}
           assuntos={opcoesAssunto(regras, capa.assunto ?? "")}
