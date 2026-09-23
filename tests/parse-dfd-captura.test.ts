@@ -346,6 +346,13 @@ describe("célula que atravessa a página (grade) e código que vira a página (
     }
   });
 
+  it("linha da descrição que é só \"PÁGINA 12\" (referência a um documento) NÃO é rodapé — fica na descrição", () => {
+    const x: ItemCenti = { n: "2", codigo: ["5241900002"], desc: ["CONFORME ESPECIFICADO NO EDITAL,", "PÁGINA 12", "ITEM 3."] };
+    for (const d of lerNasDuasVias([curto(1), x, curto(3)])) {
+      assert.equal(d.itens.find((i) => i.item === 2)?.descricao, "CONFORME ESPECIFICADO NO EDITAL, PÁGINA 12 ITEM 3.");
+    }
+  });
+
   it("GEOMETRIA: trecho da descrição depois de um TAB, à direita do meio entre os rótulos, continua descrição (não unidade)", () => {
     const x: ItemCenti = { n: "2", codigo: ["5241900002"], desc: ["LUMINÁRIA LED PARA ÁREA EXTERNA,", ["COMPATÍVEL COM AMBIENTE EXTERNO E", "• IP65"], "GARANTIA DE 5 ANOS."] };
     const d = dfdCenti([curto(1), x, curto(3)], { semGrade: true });

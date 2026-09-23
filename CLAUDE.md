@@ -448,10 +448,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     que cita "item … quantidade" não some); **TOTAL GERAL** = rótulo próprio na ÁREA DOS VALORES ("…o valor total…" na
     descrição fica) — o VALOR do total ≥ R$ 10 mi QUEBRA em 2 linhas na célula mesclada (uma parte acima e outra abaixo
     do rótulo, ±½ entrelinha): linha só com números na coluna VALOR TOTAL a até 6pt do rótulo = PARTE DO TOTAL (juntas
-    antes de converter; antes o pedaço caía no corpo, a grade era descartada e o total perdia as casas); **rodapé** pela
-    FORMA em qualquer posição (`ehRodapeNorm`: `/^CENTI\b/`, "Emitido em[:] dd/…", "Emitido por usuario", "Página N de
-    M"/"N/M") e os demais ruídos só à margem, sempre sem nº — "CENTÍMETROS…", "PÁGINA 3 DO…", "EMITIDO EM DUAS VIAS"
-    ficam; **apoio** só à MARGEM;
+    antes de converter; antes o pedaço caía no corpo, a grade era descartada e o total perdia as casas); **rodapé** na
+    forma COMPLETA do Centi em QUALQUER posição (`ehRodapeCentiNorm`: "Centi … e-Assinatura", "Emitido em dd/…",
+    "Emitido por usuario.nome", "Página N de M") e as formas curtas ("Página 2", "Página 1/2", "Emitido por admin" —
+    `ehRodapeNorm`/`ehRuido`) só à MARGEM, sempre sem nº — uma linha de descrição "PÁGINA 12", "CENTÍMETROS…",
+    "PÁGINA 3 DO…", "EMITIDO EM DUAS VIAS" ficam; **apoio** só à MARGEM;
     cabeçalho de coluna repetido DEPOIS de um "apoio" = a tabela continua (era rodapé não reconhecido — não perde
     itens); **nº do item** CENTRADO sob o rótulo "ITEM" (o "12" de "12 MESES." à margem não vira item; pedaços "1"+"2" =
     12; "1."/"01" valem; sem nenhum nº assim — ou quando só a varredura LIVRE deixa a GRADE explicar o corpo (nº

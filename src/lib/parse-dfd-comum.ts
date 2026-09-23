@@ -326,9 +326,23 @@ export function buscar(linhas: string[], re: RegExp): string | null {
 }
 
 /**
- * RODAPÉ do Centi pela FORMA ("Centi ® e-Assinatura: …", "Emitido em dd/mm/aaaa …", "Emitido por usuario",
- * "Página N de M"), sobre o texto já `norm`alizado — só o prefixo derrubava linhas legítimas ("CENTÍMETROS DE
- * ALTURA", "PÁGINAS…", "EMITIDO EM DUAS VIAS"). Puro.
+ * Rodapé do Centi na forma COMPLETA ("Centi ® e-Assinatura: …", "Emitido em dd/mm/aaaa …", "Emitido por
+ * usuario.nome", "Página N de M") — reconhecível em QUALQUER posição da página (um pedaço numa linha de base própria,
+ * longe da margem): nenhuma linha de descrição tem essas formas. Texto já `norm`alizado. Puro.
+ */
+export function ehRodapeCentiNorm(n: string): boolean {
+  return (
+    /^CENTI\b.*\bE-?ASSINATURA\b/.test(n) ||
+    /^EMITIDO EM:?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/.test(n) ||
+    /^EMITIDO POR:?\s*[\w.@-]*[._@\d][\w.@-]*(?:\s|$)/.test(n) ||
+    /^PAGINA \d+\s*DE\s*\d+$/.test(n)
+  );
+}
+
+/**
+ * RODAPÉ pela FORMA, inclusive as variantes CURTAS ("Página 2", "Página 1/2", "Emitido por admin", "Centi …") — sobre o
+ * texto já `norm`alizado; só vale À MARGEM (uma linha "PÁGINA 12" pode ser descrição). Só o prefixo derrubava linhas
+ * legítimas ("CENTÍMETROS DE ALTURA", "PÁGINAS…", "EMITIDO EM DUAS VIAS"). Puro.
  */
 export function ehRodapeNorm(n: string): boolean {
   return (

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { codigoDoItem, ehRuido, extrairCabecalho, limparDescricaoItem, numeroDfd } from "../src/lib/parse-dfd-comum.ts";
+import { codigoDoItem, ehRodapeCentiNorm, ehRuido, extrairCabecalho, limparDescricaoItem, norm, numeroDfd } from "../src/lib/parse-dfd-comum.ts";
 
 // Lógica de cabeçalho compartilhada entre .xlsx e .pdf (e entre o import de DFD e
 // o de PROTOCOLO). Foco: extração dos campos do cabeçalho a partir das "linhas".
@@ -57,6 +57,15 @@ describe("parse-dfd-comum (ehRuido — rodapé pela FORMA, não pelo prefixo)", 
     assert.equal(ehRuido("Página 2"), true);
     assert.equal(ehRuido("EMITIDO EM 2 VIAS"), false);
     assert.equal(ehRuido("PÁGINA 3 DO MANUAL"), false);
+    // Em QUALQUER posição só vale a forma COMPLETA do rodapé do Centi — "PÁGINA 12" pode ser uma linha da descrição.
+    const r = (s: string) => ehRodapeCentiNorm(norm(s));
+    assert.equal(r("Centi ® e-Assinatura: AbC1dZ58teX"), true);
+    assert.equal(r("Emitido em 30/06/2026 09:43 por fernanda.mello"), true);
+    assert.equal(r("Emitido por fernanda.mello"), true);
+    assert.equal(r("Página 1 de 9"), true);
+    assert.equal(r("PÁGINA 12"), false);
+    assert.equal(r("EMITIDO POR ÓRGÃO COMPETENTE"), false);
+    assert.equal(r("CENTI LITRO"), false);
   });
 });
 

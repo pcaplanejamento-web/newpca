@@ -24,6 +24,7 @@ export async function GET(req: Request) {
     const rep = await getReparticaoFiltro(g.u);
     itens = await listarItensDfds(rep?.id);
   }
-  const catalogo = await conformidadeDosItens(itens);
+  // Auxiliar: uma falha na conferência do catálogo nunca derruba a lista (a coluna fica "—").
+  const catalogo = await conformidadeDosItens(itens).catch(() => itens.map(() => null));
   return ok({ itens: itens.map((it, i) => ({ ...it, catalogo: catalogo[i] })) });
 }

@@ -6,7 +6,7 @@ import {
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
-  ehRodapeNorm,
+  ehRodapeCentiNorm,
   ehRuido,
   extrairAssinaturas,
   extrairCabecalho,
@@ -1039,9 +1039,10 @@ export function lerTabelaItens(
         continue;
       }
       if (!viuColuna.has(l.page)) continue; // cabeçalho do documento (antes do cabeçalho de coluna desta página)
-      // Rodapé do Centi pela FORMA (em qualquer posição: um pedaço do rodapé numa linha de base própria, longe da
-      // margem, também é rodapé) e demais ruídos à MARGEM — sem nº; "CENTÍMETROS…" na descrição fica.
-      if (!mNum && (ehRodapeNorm(joined) || (minx < itemBound && ehRuido(joined)))) continue;
+      // Rodapé do Centi na forma COMPLETA em qualquer posição (um pedaço numa linha de base própria, longe da margem)
+      // e os demais ruídos (inclusive "Página 2" curto) só À MARGEM — sempre sem nº; "CENTÍMETROS…" e uma linha de
+      // descrição "PÁGINA 12" ficam.
+      if (!mNum && (ehRodapeCentiNorm(joined) || (minx < itemBound && ehRuido(joined)))) continue;
       // Linha do TOTAL GERAL (e as partes do valor quebrado) — captura, mas NÃO encerra.
       if (!mNum && ehLinhaTotal(l)) {
         parteDoTotal(k, l.items.filter((i) => naColunaValorTotal(i) && /\d/.test(i.str)), k);
