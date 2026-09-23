@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const unidades = new Map((await unidadesConferencia(dfds.map((d) => d.reparticaoId))).map((u) => [u.id, u]));
   const linhas = dfds.map((d) => {
     const r = avaliarLinhaDfd(d, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
-      anoPca: d.anoPca,
+      anoPca: d.anoPca ?? d.protocoloAnoPca,
       regras,
       categoria: classificarAssunto(d.protocoloAssunto),
       orgaos,

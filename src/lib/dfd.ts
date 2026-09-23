@@ -61,6 +61,8 @@ export type DfdResumo = {
   protocoloNumero: string | null;
   /** Assunto do protocolo de origem — a CATEGORIA (exceções do ADM) da conferência do DFD. */
   protocoloAssunto: string | null;
+  /** Ano do PCA do protocolo de origem (o DFD herda; referência p/ DFDs antigos sem o próprio ano). */
+  protocoloAnoPca: number | null;
   // Referências de renovação (DFD-R) — para sinalizar ATENÇÃO nas listas sem abrir o DFD.
   numeroContrato: string | null;
   numeroAta: string | null;
@@ -169,6 +171,7 @@ const colunasDfd = {
   protocoloId: dfds.protocoloId,
   protocoloNumero: dfdProtocolos.numero,
   protocoloAssunto: dfdProtocolos.assunto,
+  protocoloAnoPca: dfdProtocolos.anoPca,
   numeroContrato: dfds.numeroContrato,
   numeroAta: dfds.numeroAta,
   numeroLicitacao: dfds.numeroLicitacao,

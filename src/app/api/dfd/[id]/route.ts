@@ -71,6 +71,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
   if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
+  // Itens validados ANTES de qualquer escrita (o banner envia campos + itens juntos: nada é gravado
+  // pela metade). Mesma regra do import: ao menos um item e todo item com valor unitário (> 0).
+  if (p.data.itens !== undefined) {
+    if (p.data.itens.length === 0) return erro("O DFD precisa ter ao menos um item.", 422);
+    if (!p.data.itens.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
+      return erro("Todos os itens precisam de valor unitário.", 422);
+    }
+  }
 
   // Vincular/desvincular a um protocolo (unidade do protocolo tem de ser acessível).
   if (p.data.protocoloId !== undefined) {
@@ -211,10 +219,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // `valorTotal` do cabeçalho. Escopo por unidade já garantido acima. Mesma regra do
   // import: todo item precisa de valor unitário (> 0).
   if (p.data.itens !== undefined) {
-    if (p.data.itens.length === 0) return erro("O DFD precisa ter ao menos um item.", 422);
-    if (!p.data.itens.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
-      return erro("Todos os itens precisam de valor unitário.", 422);
-    }
     await reescreverDfdItens(id, p.data.itens);
     // Log: por item, o que mudou (descrição só sinaliza "alterada" p/ manter o resumo curto).
     const antesItens = antes?.itens ?? [];

@@ -53,42 +53,47 @@ export async function POST(req: Request) {
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   for (const d of dfds) {
-    if (!acessivel(d.reparticaoId)) {
-      falhas.push({ id: d.id, numero: d.numero, motivo: "Sem acesso à unidade deste DFD." });
-      continue;
-    }
-    if (acao.campo === "reparticao") {
-      if (d.reparticaoId === acao.reparticaoId || !respDestino) continue; // já está nessa unidade
-      const res = validarAssinatura(d.assinaturas, respDestino, { exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo) });
-      if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo) }))) {
-        falhas.push({ id: d.id, numero: d.numero, motivo: res.motivo });
+    try {
+      if (!acessivel(d.reparticaoId)) {
+        falhas.push({ id: d.id, numero: d.numero, motivo: "Sem acesso à unidade deste DFD." });
         continue;
       }
-      await atualizarDfdCampos(d.id, { reparticaoId: acao.reparticaoId });
+      if (acao.campo === "reparticao") {
+        if (d.reparticaoId === acao.reparticaoId || !respDestino) continue; // já está nessa unidade
+        const res = validarAssinatura(d.assinaturas, respDestino, { exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo) });
+        if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo) }))) {
+          falhas.push({ id: d.id, numero: d.numero, motivo: res.motivo });
+          continue;
+        }
+        await atualizarDfdCampos(d.id, { reparticaoId: acao.reparticaoId });
+        await registrarAuditoria({
+          usuario: a.u,
+          acao: "editar",
+          entidade: "dfd",
+          entidadeId: d.id,
+          resumo: `DFD ${d.numero}: unidade alterada em massa (#${d.reparticaoId ?? "—"} → #${acao.reparticaoId})`,
+          antes: { reparticaoId: d.reparticaoId },
+          depois: { reparticaoId: acao.reparticaoId },
+        });
+        alterados++;
+        continue;
+      }
+      const novo = aplicarMassaDfd({ tipo: d.tipo, secoes: d.secoes }, acao);
+      if (novo.tipo === d.tipo && novo.secoes === d.secoes) continue; // nada muda
+      await atualizarDfdCampos(d.id, acao.campo === "tipo" ? { tipo: novo.tipo } : { secoes: novo.secoes });
       await registrarAuditoria({
         usuario: a.u,
         acao: "editar",
         entidade: "dfd",
         entidadeId: d.id,
-        resumo: `DFD ${d.numero}: unidade alterada em massa (#${d.reparticaoId ?? "—"} → #${acao.reparticaoId})`,
-        antes: { reparticaoId: d.reparticaoId },
-        depois: { reparticaoId: acao.reparticaoId },
+        resumo: `DFD ${d.numero}: ${ROTULO_CAMPO[acao.campo]} (edição em massa) — ${acao.valor}`.slice(0, 500),
+        ...(acao.campo === "tipo" ? { antes: { tipo: d.tipo }, depois: { tipo: novo.tipo } } : {}),
       });
       alterados++;
-      continue;
+    } catch (e) {
+      // Falha de UM DFD não derruba o lote: vai para `falhas` (os demais seguem).
+      falhas.push({ id: d.id, numero: d.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
     }
-    const novo = aplicarMassaDfd({ tipo: d.tipo, secoes: d.secoes }, acao);
-    if (novo.tipo === d.tipo && novo.secoes === d.secoes) continue; // nada muda
-    await atualizarDfdCampos(d.id, acao.campo === "tipo" ? { tipo: novo.tipo } : { secoes: novo.secoes });
-    await registrarAuditoria({
-      usuario: a.u,
-      acao: "editar",
-      entidade: "dfd",
-      entidadeId: d.id,
-      resumo: `DFD ${d.numero}: ${ROTULO_CAMPO[acao.campo]} (edição em massa) — ${acao.valor}`.slice(0, 500),
-      ...(acao.campo === "tipo" ? { antes: { tipo: d.tipo }, depois: { tipo: novo.tipo } } : {}),
-    });
-    alterados++;
   }
   return ok({ alterados, falhas });
 }

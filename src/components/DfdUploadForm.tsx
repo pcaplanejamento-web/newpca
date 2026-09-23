@@ -3,11 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
-import { mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import {
   type CampoTratavel,
   editarItemDfd,
-  estadoDfd,
   normalizarSecoesDfd,
   removerItemDfd,
   STATUS_MENSAGEM_COR,
@@ -193,11 +192,8 @@ export function DfdUploadForm({
   // (inclui ano do PCA, assinatura, órgão e catálogo, cada um no nível do ADM).
   const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos, conformidade) : [];
   const temErro = mensagens.some((m) => m.status === "erro");
-  const estadoPrev = temErro
-    ? "erro"
-    : mensagens.some((m) => m.status === "atencao")
-      ? "atencao"
-      : estadoDfd(0, autoCampos.length > 0, false);
+  // Rodapé = a MESMA régua do painel e das tabelas (`estadoDeMensagens`).
+  const estadoPrev = estadoDeMensagens(mensagens, { auto: autoCampos.length > 0 });
   // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): importação de DFD
   // avulso desligada, ou tipo não permitido (quando a trava de tipo está ligada). Servidor reconfere.
   const importDesligado = !importarDfdHabilitado(regras);

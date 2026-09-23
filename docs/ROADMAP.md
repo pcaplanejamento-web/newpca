@@ -37,7 +37,11 @@ saiu do Tratamento; obrigatória ausente aparece "não preenchida"). **Progresso
 linha: lendo o DFD / assinatura OCR / na fila) e da leitura do PDF (página p de N). **Colunas na largura do conteúdo**
 (`Column.nowrap` — fim da "Assinatura" quebrada). Correções da auditoria: análise em background não sobrescreve mais um DFD
 que o usuário abriu/editou; erro ao protocolar agora aparece no banner; PATCH do DFD só reconfere a assinatura se a
-unidade/assinaturas mudaram; o DFD passa a registrar o órgão ao trocar de unidade; `IN (...)` em lotes ≤ 90.
+unidade/assinaturas mudaram; o DFD passa a registrar o órgão ao trocar de unidade; `IN (...)` em lotes ≤ 90. Auditoria
+independente do diff (13 achados, todos corrigidos): OCR/unidade para DFDs abertos antes da análise, capa só com todos os
+DFDs lidos, "Manter o existente" na somatória, edição em massa em fatias de 20 com progresso, salvar resiliente a rede,
+rascunho zerado ao fechar, resposta atrasada ignorada, rodapé = painel (`estadoDeMensagens`), categoria nas seções e cache
+da conferência da Mesa (só reconfere o que mudou).
 
 ### Conferência completa do protocolo: assinatura auto/equipe, tipo, assunto, seções padronizadas — entregue
 ✅ **Assinaturas achatadas lidas NA ANÁLISE** do protocolo (antes de apontar erro; DFD fica "pendente" até a leitura) e a

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, opcoesAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, conferirAssinaturaDfd, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { type CapaEditavel, detalheParaParseado, diffCapaGravada, diffDfdGravado } from "@/lib/dfd-edicao";
 import {
@@ -116,17 +116,22 @@ export function ProtocoloGravado({
   // Versão dos dados carregados: remonta o corpo/DFD após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
 
+  // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (abrir A, fechar e abrir B: uma
+  // resposta atrasada de A nunca aparece no banner de B).
+  const cargaRef = useRef(0);
   async function carregar(id: number, abrir: number | null, preservar?: Preservar) {
+    const minha = ++cargaRef.current;
     setErro(null);
     try {
       const r = await fetch(`/api/protocolo/${id}?completo=1`);
-      const j = (await r.json()) as {
+      const j = (await r.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
         protocolo?: ProtocoloDetalhe;
         dfds?: DfdDetalhe[];
         unidades?: UnidadeConferencia[];
       };
+      if (minha !== cargaRef.current) return;
       if (!r.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
       const lista = j.dfds ?? [];
       const rascunhos = new Map(lista.map((d) => [d.id, detalheParaParseado(d)]));
@@ -156,19 +161,28 @@ export function ProtocoloGravado({
       setAncoraAlvo(null);
       setVersao((v) => v + 1);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
+      if (minha === cargaRef.current) setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
     }
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: recarrega só ao trocar o protocolo/DFD inicial pedido pelo host.
   useEffect(() => {
-    if (protocoloId == null) {
-      setProto(null);
-      setCapa(null);
-      return;
-    }
+    // Zera TODO o estado do banner anterior (rascunho, seleção, painéis) — fechar descarta o rascunho
+    // e o aviso de "alterações não salvas" não fica ligado depois de fechar.
+    cargaRef.current++;
     setProto(null);
-    void carregar(protocoloId, dfdInicial);
+    setCapa(null);
+    setOrig(new Map());
+    setOrdem([]);
+    setDfds(new Map());
+    setRepIds(new Map());
+    setEditados(new Set());
+    setItensEditados(new Set());
+    setSel(new Set());
+    setAbertoId(null);
+    setPainel(null);
+    setErro(null);
+    if (protocoloId != null) void carregar(protocoloId, dfdInicial);
   }, [protocoloId, dfdInicial]);
 
   const capaSuja = !!proto && !!capa && Object.keys(diffCapaGravada(capaDe(proto), capa)).length > 0;
@@ -241,7 +255,10 @@ export function ProtocoloGravado({
   const editavelAberto = abertoId != null && editavelDfd(abertoId);
   const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
-  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade) : [];
+  // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
+  const mensagensAberto = dfdAberto
+    ? mensagensDoDfd(dfdAberto, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
+    : [];
   // DFD de unidade sem acesso: só-leitura, mas exibido/conferido com a unidade REAL (vinda do servidor).
   const reparticoesAberto: Rep[] = editavelAberto
     ? reparticoes
@@ -317,17 +334,22 @@ export function ProtocoloGravado({
     const preservar: Preservar = { dfds: new Map(), capa: null };
     const sujos = ordem.filter((id) => editados.has(id) || itensEditados.has(id));
     try {
+      /** PATCH resiliente: rede fora / 5xx sem corpo viram FALHA daquele alvo (os demais seguem). */
+      const enviar = async (url: string, body: unknown): Promise<string | null> => {
+        try {
+          const r = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+          return r.ok && j.ok ? null : (j.error ?? `falha ao salvar (HTTP ${r.status})`);
+        } catch {
+          return "sem conexão com o servidor";
+        }
+      };
       const bodyCapa = diffCapaGravada(capaDe(proto), capa);
       if (Object.keys(bodyCapa).length > 0) {
         setProgresso({ feito: 0, total: sujos.length + 1, label: "capa do protocolo" });
-        const r = await fetch(`/api/protocolo/${proto.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bodyCapa),
-        });
-        const j = (await r.json()) as { ok?: boolean; error?: string };
-        if (!r.ok || !j.ok) {
-          falhas.push(`Capa: ${j.error ?? "falha ao salvar"}`);
+        const falha = await enviar(`/api/protocolo/${proto.id}`, bodyCapa);
+        if (falha) {
+          falhas.push(`Capa: ${falha}`);
           preservar.capa = capa;
         }
       }
@@ -339,14 +361,9 @@ export function ProtocoloGravado({
         setProgresso({ feito: k, total: sujos.length, label: `DFD ${d.numero} (${k + 1}/${sujos.length})` });
         const body = diffDfdGravado(o, d, repIds.get(id) ?? null, itensEditados.has(id));
         if (Object.keys(body).length === 0) continue;
-        const r = await fetch(`/api/dfd/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const j = (await r.json()) as { ok?: boolean; error?: string };
-        if (!r.ok || !j.ok) {
-          falhas.push(`DFD ${d.numero}: ${j.error ?? "falha ao salvar"}`);
+        const falha = await enviar(`/api/dfd/${id}`, body);
+        if (falha) {
+          falhas.push(`DFD ${d.numero}: ${falha}`);
           preservar.dfds.set(id, { d, rep: repIds.get(id) ?? null, itens: itensEditados.has(id) });
         }
       }
@@ -412,7 +429,11 @@ export function ProtocoloGravado({
       : null;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   const numeroAberto = dfdAberto?.numero ?? "";
-  const estadoAberto = abertoId != null ? (avaliacoes.get(abertoId)?.estado ?? null) : null;
+  // Rodapé do DFD aberto = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo).
+  const estadoAberto =
+    abertoId != null && dfdAberto
+      ? estadoDeMensagens(mensagensAberto, { editado: editados.has(abertoId) || itensEditados.has(abertoId) })
+      : null;
 
   return (
     <>
@@ -425,7 +446,7 @@ export function ProtocoloGravado({
         fecharNoBackdrop={false}
         bloqueado={salvando}
         acoesCabecalho={
-          proto ? (
+          proto && !salvando ? (
             <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
               <IconRefresh className="h-5 w-5" />
             </Button>
@@ -464,8 +485,9 @@ export function ProtocoloGravado({
                       repId={repAbertoId}
                       anoPca={anoAberto}
                       autoMatch={false}
-                      readOnly={!editavelAberto}
+                      readOnly={!editavelAberto || salvando}
                       tabelaUnica
+                      categoria={categoria}
                       regras={regras}
                       orgaos={orgaos}
                       conformidade={conformidade}
@@ -505,7 +527,7 @@ export function ProtocoloGravado({
                     onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
                     conformidade={conformidade}
                     regras={regras}
-                    editavel={editavelAberto}
+                    editavel={editavelAberto && !salvando}
                     onEditarItem={(i, patch) => editarAberto((d) => editarItemDfd(d, i, patch), true)}
                     onRemoverItem={(i) => {
                       setPainel(null);
@@ -578,7 +600,7 @@ export function ProtocoloGravado({
           <ProtocoloView
             key={versao}
             capa={capaView}
-            modoCapa={podeEditar ? "cadeado" : "leitura"}
+            modoCapa={podeEditar && !salvando ? "cadeado" : "leitura"}
             assuntos={opcoesAssunto(regras, capa.assunto ?? "")}
             onCapaChange={(c, v) => {
               if (c === "numero" || c === "data") return; // identificadores: imutáveis
@@ -589,13 +611,13 @@ export function ProtocoloGravado({
             unidade={{
               id: capa.reparticaoId,
               opcoes: reparticoes,
-              onChange: podeEditar ? (id) => setCapa((x) => (x ? { ...x, reparticaoId: id } : x)) : undefined,
+              onChange: podeEditar && !salvando ? (id) => setCapa((x) => (x ? { ...x, reparticaoId: id } : x)) : undefined,
               textoLeitura: proto.reparticaoCodigo ? `${proto.reparticaoCodigo}${proto.reparticaoNome ? ` · ${proto.reparticaoNome}` : ""}` : "Sem unidade",
             }}
             pca={<TextField label="PCA (ano)" value={proto.anoPca != null ? String(proto.anoPca) : "—"} disabled readOnly />}
             totais={{ dfds: linhas.length, itens: totalItens, somatorio }}
             conciliacao={conc}
-            onSubstituir={podeEditar ? () => setCapa((x) => (x ? { ...x, valorCapa: conc.somatorio } : x)) : undefined}
+            onSubstituir={podeEditar && !salvando ? () => setCapa((x) => (x ? { ...x, valorCapa: conc.somatorio } : x)) : undefined}
             linhas={linhas}
             unica
             selecionavel={podeEditar}

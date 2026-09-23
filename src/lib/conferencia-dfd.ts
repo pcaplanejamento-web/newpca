@@ -114,6 +114,20 @@ export type LinhaAvaliada = {
   mensagens: MensagemDfd[];
 };
 
+/**
+ * ESTADO derivado de uma lista de mensagens — a régua ÚNICA da célula "Estado", do rodapé do banner e
+ * do painel: algum erro ⇒ `erro`; senão alguma atenção ⇒ `atencao`; senão o ciclo (editado ›
+ * regularizado › regular). Puro.
+ */
+export function estadoDeMensagens(
+  msgs: { status: "erro" | "atencao" | "acerto" }[],
+  ciclo: { auto?: boolean; editado?: boolean } = {},
+): EstadoDfd {
+  if (msgs.some((m) => m.status === "erro")) return "erro";
+  if (msgs.some((m) => m.status === "atencao")) return "atencao";
+  return estadoDfd(0, !!ciclo.auto, !!ciclo.editado);
+}
+
 /** Mensagem do DFD DUPLICADO no protocolo (mesmo nº de DFD ou de planejamento) — ponto do protocolo. */
 export const MSG_DFD_DUPLICADO = "DFD duplicado (mesmo nº ou planejamento) — escolha um para manter.";
 
@@ -147,13 +161,8 @@ export function avaliarLinhaDfd(
   );
   if (opts.duplicado) msgs.unshift({ status: opts.duplicado, chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "" });
   const problemas = msgs.filter((m) => m.status !== "acerto");
-  const estado: EstadoDfd = problemas.some((m) => m.status === "erro")
-    ? "erro"
-    : problemas.length > 0
-      ? "atencao"
-      : estadoDfd(0, !!opts.auto, !!opts.editado);
   return {
-    estado,
+    estado: estadoDeMensagens(problemas, opts),
     resumo: problemas.length > 0 ? resumoEstado(problemas) : undefined,
     validacao: res.status === "ok" ? res.origem : null,
     mensagens: problemas,

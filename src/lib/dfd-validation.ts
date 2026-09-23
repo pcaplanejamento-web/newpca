@@ -234,7 +234,9 @@ export const conferenciaDfdsSchema = z.object({
  * análise (`AcaoMassa`): unidade OU um campo de conteúdo (tipo/prioridade/previsão/fundamentação).
  */
 export const massaDfdsSchema = z.object({
-  ids: z.array(z.number().int().positive()).min(1).max(500),
+  // ≤ 50 por requisição (o cliente fatia): ~2 consultas por DFD cabem no limite de consultas por
+  // invocação do Worker/D1.
+  ids: z.array(z.number().int().positive()).min(1).max(50),
   acao: z.discriminatedUnion("campo", [
     z.object({ campo: z.literal("reparticao"), reparticaoId: z.number().int().positive() }),
     z.object({ campo: z.enum(["tipo", "prioridade", "previsao", "fundamentacao"]), valor: z.string().trim().min(1).max(4000) }),

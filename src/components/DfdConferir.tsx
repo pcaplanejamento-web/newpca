@@ -114,6 +114,7 @@ export function DfdConferir({
   ancoraAlvo = null,
   itemAtivo = null,
   tabelaUnica = false,
+  categoria = null,
   onRepChange,
   onSecoesChange,
   onRefsChange,
@@ -145,6 +146,8 @@ export function DfdConferir({
   itemAtivo?: number | null;
   /** Tabela ÚNICA de itens (DFD já protocolado) — sem separar os itens com pendência. */
   tabelaUnica?: boolean;
+  /** Categoria do protocolo (assunto) — exceções do ADM por categoria. */
+  categoria?: string | null;
   onRepChange: (id: number | null) => void;
   onSecoesChange: (secoes: DfdParseado["secoes"]) => void;
   /** Edição das referências de renovação (DFD-R): contrato/ata/licitação. */
@@ -580,6 +583,7 @@ export function DfdConferir({
           unica={tabelaUnica}
           onSecoesChange={readOnly ? undefined : onSecoesChange}
           secaoEditavel={secaoEditavel}
+          categoria={categoria}
         />
       </div>
     </div>

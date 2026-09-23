@@ -581,7 +581,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + `max-width` animados por token de motion] e um por vez no mobile; trocar de DFD atualiza o lateral
   (`animate-fade-in-up`). Analisa/normaliza
   em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
-  sobreviverem** ao envio (a análise NÃO re-parseia/sobrescreve um DFD que o usuário já abriu — `parsedRef`);
+  sobreviverem** ao envio (a análise NÃO re-parseia/sobrescreve um DFD que o usuário já abriu ou editou em massa —
+  `parsedRef` —, mas ainda prevê a unidade e põe na fila do OCR a partir da cópia do cache);
   `protocolar` usa a cópia do cache e só re-parseia o que faltou. **Progresso REAL da análise:** `analise =
   {fase:"texto"|"ocr", feito, total, atual}` → barra `Progress` no rodapé ("Analisando DFD 1234 (3 de 15)…" /
   "Lendo assinatura por OCR — DFD …") e, por linha, `LinhaDfd.processando` ("Lendo o DFD…"/"Lendo assinatura
@@ -594,7 +595,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   editável (seletor obrigatório na análise e no gravado). O **Valor da capa** é editável e **conciliado** — na análise E
   no gravado — pela fonte única **`conciliacaoCapa`** (`dfd-tratamento`, pura): capa **nula/zerada** OU **diferente** da
   somatória (arredondada ao centavo; `valoresBatem`) ⇒ divergente; só confere com a somatória COMPLETA (análise
-  terminada; descartados fora) e **NÃO depende de os DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
+  terminada e TODOS os DFDs lidos — um DFD ilegível somaria 0; descartados fora, mas o DFD EXISTENTE mantido por
+  "Manter o existente" deste MESMO protocolo continua no processo e entra na somatória/contagem) e **NÃO depende de os
+  DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
   DFD com erro — e o relatório perdia a linha da capa). O botão **"Substituir pela somatória"** (um clique) aparece na
   análise e no gravado; `protocolo.valorCapa` do ADM decide se trava (padrão) ou só avisa. `estadoProtocolo` (lista de
   protocolos) usa a MESMA régua; o `motivo` vai ao despacho. O preview mostra TODOS os dados da capa igual ao gravado
@@ -698,15 +701,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     um `PATCH /api/dfd/[id]` por DFD alterado, com barra de progresso; falhas mantêm o rascunho daquele DFD (o resto
     recarrega do banco). Fechar/Atualizar com alterações pendentes pede confirmação (+ `beforeunload`). DFD de unidade
     sem acesso fica só-leitura (conferido com a unidade REAL). **Sem o antigo cadeado global** — vale o cadeado POR
-    CAMPO/SEÇÃO, igual à análise; os não-editores veem tudo só-leitura.
+    CAMPO/SEÇÃO, igual à análise; os não-editores veem tudo só-leitura. Robustez: só a carga MAIS RECENTE é aplicada
+    (resposta atrasada de outro protocolo é ignorada), fechar zera o rascunho (o aviso de saída não fica ligado),
+    durante a gravação tudo fica só-leitura (e sem "Atualizar"), e cada PATCH é resiliente a rede/5xx (vira falha
+    daquele alvo; os demais seguem). No gravado o **ano do PCA** é identificador → fora das mensagens do banner; DFD
+    antigo sem ano herda o do protocolo (`protocoloAnoPca`). O rodapé do DFD usa a MESMA régua do painel
+    (`estadoDeMensagens`, em `conferencia-dfd.ts`).
   - **`DfdGravado`** (DFD solto, aberto pelas listas DFDs/Itens da Mesa): o MESMO `DfdConferir` (tabela de itens única),
     `DfdRodape` (estado + Histórico + Ver protocolo + "Salvar alterações") e `DfdPainelDireito`; rascunho + diff igual.
     `GET /api/dfd/[id]` devolve também a `unidade` (responsáveis) p/ conferir com a unidade real. "Ver protocolo" abre
     o `ProtocoloGravado` com este DFD ao lado.
   - **Mesa → DFDs:** `PlanilhaDfds` **única** + `scrollInterno`, com a conferência REAL por linha (`POST
-    /api/dfd/conferencia`, lazy em fatias de 150 — "Conferindo…" até chegar), **seleção** + `BarraEdicaoMassa` → `POST
-    /api/dfd/massa` (`massaDfdsSchema`: ids + `AcaoMassa`; por DFD: escopo por unidade, campo travado pelo ADM recusado,
-    troca de unidade reconfere a assinatura contra o destino; auditoria por DFD; devolve `{alterados, falhas}`).
+    /api/dfd/conferencia`, lazy em fatias de 150 — "Conferindo…" até chegar; resultados em CACHE pela chave do DFD
+    `id|atualizadoEm|unidade|assunto do protocolo` → após `router.refresh()` só os DFDs que mudaram são reconferidos;
+    regras/órgãos/unidades novos zeram o cache), **seleção** + `BarraEdicaoMassa` → `POST /api/dfd/massa` enviado em
+    FATIAS de 20 (≤ 50 por requisição no `massaDfdsSchema` — cabe no limite de consultas por invocação do D1), com
+    barra de progresso; por DFD: escopo por unidade, campo travado pelo ADM recusado, troca de unidade reconfere a
+    assinatura contra o destino, falha de um DFD vira `falhas` (não derruba o lote); auditoria por DFD.
     **Mesa → Itens:** coluna **Estado** do item (mesma célula `EstadoCelula`). **Mesa → Protocolos:** Estado =
     `conciliacaoCapa`. Excluir protocolo avisa que os DFDs vinculados (e itens) são excluídos junto (cascata).
   - **Botão ATUALIZAR** (`IconRefresh`, ao lado do X) nos banners gravados: recarrega do banco (confirma se há rascunho).
@@ -715,7 +726,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do PCA) seguem travados; o conteúdo flui por `onCamposChange` → `atualizarDfdCampos` (que agora também sincroniza o
     `orgao_id` quando a unidade muda).
   - **PATCH /api/dfd/[id]** reconfere a assinatura **só quando a unidade ou as assinaturas MUDAM de fato** (comparação
-    canônica) — salvar uma seção de um DFD cuja assinatura já não confere não fica travado.
+    canônica) — salvar uma seção de um DFD cuja assinatura já não confere não fica travado — e valida os ITENS (≥ 1,
+    todos com valor unitário) ANTES de qualquer escrita (campos + itens vão juntos; nada é gravado pela metade).
 - **Ano do PCA + referências de renovação (migração `0021`) — `ano_pca` no protocolo e no DFD; `numero_contrato`/
   `numero_ata`/`numero_licitacao` no DFD (tudo nullable):** ao ler o PDF, `anoPcaDoTexto` (`parse-dfd-comum.ts`, puro)
   **identifica o ano do PCA pela descrição** — ponto 6: "PCA 2027", "PCA/2027", "PCA DE 2027", **"PCA DO ANO DE 2027"**

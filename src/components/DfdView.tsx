@@ -203,6 +203,7 @@ export function DfdView({
   unica = false,
   onSecoesChange,
   secaoEditavel,
+  categoria = null,
 }: {
   dfd: DfdVisual;
   regras?: RegrasAvaliacao;
@@ -223,6 +224,8 @@ export function DfdView({
   onSecoesChange?: (secoes: DfdVisual["secoes"]) => void;
   /** Seção editável? (ADM: `editavelDe` por ponto). Ausente = todas editáveis quando há `onSecoesChange`. */
   secaoEditavel?: (s: { titulo: string; obrig?: string }) => boolean;
+  /** Categoria do protocolo (assunto) — as exceções do ADM por categoria valem na pendência das seções. */
+  categoria?: string | null;
 }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
@@ -285,7 +288,7 @@ export function DfdView({
     // Ordem do documento pelo nº da seção (estável: seções de mesmo nº mantêm a ordem lida).
     return [...reais, ...faltando].sort((a, b) => a.numero - b.numero);
   }, [dfd.secoes]);
-  const dfdTipoCtx = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
+  const dfdTipoCtx = { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria };
   /** Grava o texto de UMA seção (a real pelo índice; a obrigatória ausente é CRIADA). */
   const gravarSecao = (sx: SecaoExib, texto: string) => {
     if (!onSecoesChange) return;

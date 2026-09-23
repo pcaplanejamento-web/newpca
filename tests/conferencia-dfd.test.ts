@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
-import { avaliarLinhaDfd, type DfdConferivel, mensagensDoDfd, type RepConferencia } from "../src/lib/conferencia-dfd.ts";
+import {
+  avaliarLinhaDfd,
+  type DfdConferivel,
+  estadoDeMensagens,
+  mensagensDoDfd,
+  type RepConferencia,
+} from "../src/lib/conferencia-dfd.ts";
 import { aplicarMassaDfd, buildPrevisao, conciliacaoCapa, estadoProtocolo, textoSecao } from "../src/lib/dfd-tratamento.ts";
 import type { Assinatura } from "../src/lib/parse-dfd-comum.ts";
 
@@ -105,6 +111,14 @@ describe("avaliarLinhaDfd — conferência ÚNICA por linha (análise = gravado)
       const temErro = mensagensDoDfd(c, rep, 2026).some((m) => m.status === "erro" && m.chave !== "dfd.anoPca");
       assert.equal(avaliarLinhaDfd(c, rep, { anoPca: 2026 }).estado === "erro", temErro);
     }
+  });
+
+  it("estadoDeMensagens: a MESMA régua p/ célula, rodapé e painel (erro › atenção › ciclo)", () => {
+    assert.equal(estadoDeMensagens([{ status: "acerto" }, { status: "erro" }, { status: "atencao" }]), "erro");
+    assert.equal(estadoDeMensagens([{ status: "acerto" }, { status: "atencao" }]), "atencao");
+    assert.equal(estadoDeMensagens([{ status: "acerto" }]), "regular");
+    assert.equal(estadoDeMensagens([], { auto: true }), "regularizado");
+    assert.equal(estadoDeMensagens([], { auto: true, editado: true }), "editado");
   });
 
   it("respeita o ADM: ponto em 'ignorar' some da linha", () => {

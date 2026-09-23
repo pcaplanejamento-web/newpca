@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { classificarAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
 import { editarItemDfd, removerItemDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
@@ -92,11 +92,15 @@ export function DfdGravado({
   // Versão dos dados carregados: remonta o corpo após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
 
+  // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (resposta atrasada é ignorada).
+  const cargaRef = useRef(0);
   async function carregar(id: number, item: { item: number | null; codigo: string | null } | null) {
+    const minha = ++cargaRef.current;
     setErro(null);
     try {
       const r = await fetch(`/api/dfd/${id}`);
-      const j = (await r.json()) as { ok?: boolean; error?: string; dfd?: DfdDetalhe; unidade?: UnidadeConferencia | null };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe; unidade?: UnidadeConferencia | null };
+      if (minha !== cargaRef.current) return;
       if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
       const d = detalheParaParseado(j.dfd);
       setOrig(j.dfd);
@@ -110,14 +114,21 @@ export function DfdGravado({
       setPainel(idx >= 0 ? { tipo: "item", idx } : null);
       setVersao((v) => v + 1);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
+      if (minha === cargaRef.current) setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
     }
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: recarrega só ao trocar o DFD/item pedido pelo host.
   useEffect(() => {
+    // Zera o banner anterior (rascunho/painéis): fechar descarta o rascunho e desliga o aviso de saída.
+    cargaRef.current++;
     setOrig(null);
     setDfd(null);
+    setEditado(false);
+    setItensEditados(false);
+    setPainel(null);
+    setAncoraAlvo(null);
+    setErro(null);
     if (dfdId != null) void carregar(dfdId, itemInicial);
   }, [dfdId, itemInicial]);
 
@@ -138,10 +149,15 @@ export function DfdGravado({
   const reps: Rep[] = editavel || !unidade || reparticoes.some((r) => r.id === unidade.id) ? reparticoes : [...reparticoes, unidade];
   const rep = repId != null ? (reps.find((r) => r.id === repId) ?? null) : null;
   const categoria = classificarAssunto(orig?.protocoloAssunto ?? null);
+  // Ano do PCA: o do DFD; DFD antigo sem ele herda o do protocolo de origem (completa a previsão).
+  const anoPca = dfd?.anoPca ?? orig?.protocoloAnoPca ?? null;
   const conformidade = useConformidade(dfd?.itens, dfd?.tipo ?? null);
-  const mensagens = dfd ? mensagensDoDfd(dfd, rep, dfd.anoPca, regras, categoria, orgaos, conformidade) : [];
-  // Estado da LINHA (o mesmo da lista da Mesa / do protocolo) — rodapé do banner.
-  const estado = dfd ? avaliarLinhaDfd(dfd, rep, { anoPca: dfd.anoPca, regras, categoria, orgaos, editado: sujo }).estado : null;
+  // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
+  const mensagens = dfd
+    ? mensagensDoDfd(dfd, rep, anoPca, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
+    : [];
+  // Rodapé = a MESMA régua do painel de mensagens ao lado (e da célula Estado da lista).
+  const estado = dfd ? estadoDeMensagens(mensagens, { editado: sujo }) : null;
 
   const editar = (fn: (d: DfdParseado) => DfdParseado, itens = false) => {
     setDfd((d) => (d ? fn(d) : d));
@@ -182,12 +198,13 @@ export function DfdGravado({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar.");
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? `Não foi possível salvar (HTTP ${r.status}).`);
       onAlterado();
       await carregar(orig.id, null);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
+      // `fetch` sem rede lança TypeError ("Failed to fetch") — mensagem em pt-BR.
+      setErro(e instanceof TypeError ? "Sem conexão com o servidor — tente novamente." : e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
       setSalvando(false);
     }
@@ -204,7 +221,7 @@ export function DfdGravado({
       fecharNoBackdrop={false}
       bloqueado={salvando}
       acoesCabecalho={
-        orig ? (
+        orig && !salvando ? (
           <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
             <IconRefresh className="h-5 w-5" />
           </Button>
@@ -268,7 +285,7 @@ export function DfdGravado({
                   onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
                   conformidade={conformidade}
                   regras={regras}
-                  editavel={editavel}
+                  editavel={editavel && !salvando}
                   onEditarItem={(i, patch) => editar((d) => editarItemDfd(d, i, patch), true)}
                   onRemoverItem={(i) => {
                     setPainel(null);
@@ -298,10 +315,11 @@ export function DfdGravado({
           reparticoes={reps}
           reparticaoAtivaId={reparticaoAtivaId}
           repId={repId}
-          anoPca={dfd.anoPca}
+          anoPca={anoPca}
           autoMatch={false}
-          readOnly={!editavel}
+          readOnly={!editavel || salvando}
           tabelaUnica
+          categoria={categoria}
           regras={regras}
           orgaos={orgaos}
           conformidade={conformidade}

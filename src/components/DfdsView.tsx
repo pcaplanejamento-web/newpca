@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import {
@@ -34,6 +34,7 @@ import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconLayers, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
+import { Progress } from "./Progress";
 import { ProtocoloGravado } from "./ProtocoloGravado";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -58,6 +59,11 @@ type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; v
 type Vista = "protocolos" | "dfds" | "itens";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
 const FATIA_CONFERENCIA = 150;
+/** DFDs por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
+const FATIA_MASSA = 20;
+/** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
+ * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
+const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
 
 export function DfdsView({
   podeEditar,
@@ -88,7 +94,7 @@ export function DfdsView({
   const [salvandoVinc, setSalvandoVinc] = useState(false);
   // Seleção + edição EM MASSA na lista de DFDs (mesma barra da análise; grava no banco).
   const [selDfds, setSelDfds] = useState<Set<string | number>>(new Set());
-  const [aplicandoMassa, setAplicandoMassa] = useState(false);
+  const [aplicandoMassa, setAplicandoMassa] = useState<{ feito: number; total: number } | null>(null);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
   const [vista, setVista] = useState<Vista>("protocolos");
@@ -117,19 +123,25 @@ export function DfdsView({
   }, [vista, itens]);
 
   // CONFERÊNCIA da lista de DFDs (a MESMA da análise, calculada no servidor sobre o DFD completo) —
-  // lazy: só com a visão DFDs aberta, em fatias; cada linha mostra "Conferindo…" até chegar. Refaz
-  // quando a lista muda (router.refresh após edição/importação).
-  const confRef = useRef<{ base: DfdResumo[] | null; m: Map<number, ConfLinha> }>({ base: null, m: new Map() });
+  // lazy: só com a visão DFDs aberta, em fatias; cada linha mostra "Conferindo…" até chegar. Os
+  // resultados ficam em cache pela chave do DFD (`chaveConf`): depois de um `router.refresh()` só os
+  // DFDs que MUDARAM são reconferidos. Regras/órgãos/unidades novos (contexto) zeram o cache.
+  const ctxConf = useMemo(
+    () => JSON.stringify([regras, orgaos, reparticoes.map((r) => [r.id, r.orgaoId ?? null, r.responsaveis])]),
+    [regras, orgaos, reparticoes],
+  );
+  const confRef = useRef<{ ctx: string; m: Map<string, ConfLinha> }>({ ctx: "", m: new Map() });
   const [, setConfVersao] = useState(0);
   // Falha de rede/servidor na conferência: as linhas pendentes param de girar (ficam "Pendente").
   const [confFalhou, setConfFalhou] = useState(false);
   useEffect(() => {
     if (vista !== "dfds") return;
     setConfFalhou(false);
-    if (confRef.current.base !== dfds) confRef.current = { base: dfds, m: new Map() };
+    if (confRef.current.ctx !== ctxConf) confRef.current = { ctx: ctxConf, m: new Map() };
     const alvo = confRef.current;
-    const faltam = dfds.map((d) => d.id).filter((id) => !alvo.m.has(id));
+    const faltam = dfds.filter((d) => !alvo.m.has(chaveConf(d)));
     if (faltam.length === 0) return;
+    const chavePorId = new Map(faltam.map((d) => [d.id, chaveConf(d)]));
     const ac = new AbortController();
     void (async () => {
       for (let i = 0; i < faltam.length && !ac.signal.aborted; i += FATIA_CONFERENCIA) {
@@ -137,16 +149,19 @@ export function DfdsView({
           const r = await fetch("/api/dfd/conferencia", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: faltam.slice(i, i + FATIA_CONFERENCIA) }),
+            body: JSON.stringify({ ids: faltam.slice(i, i + FATIA_CONFERENCIA).map((d) => d.id) }),
             signal: ac.signal,
           });
-          const j = (await r.json()) as { ok?: boolean; linhas?: ConfLinha[] };
+          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; linhas?: ConfLinha[] };
           if (ac.signal.aborted) break;
           if (!r.ok || !j.ok) {
             setConfFalhou(true);
             break;
           }
-          for (const l of j.linhas ?? []) alvo.m.set(l.id, l);
+          for (const l of j.linhas ?? []) {
+            const k = chavePorId.get(l.id);
+            if (k) alvo.m.set(k, l);
+          }
           setConfVersao((v) => v + 1);
         } catch {
           if (!ac.signal.aborted) setConfFalhou(true); // rede — reconfere na próxima abertura da visão
@@ -155,8 +170,9 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [vista, dfds]);
-  const conf = confRef.current.base === dfds ? confRef.current.m : new Map<number, ConfLinha>();
+  }, [vista, dfds, ctxConf]);
+  const confDe = (d: DfdResumo): ConfLinha | undefined =>
+    confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
   const atualizarListas = () => router.refresh();
 
@@ -215,37 +231,54 @@ export function DfdsView({
     }
   }
 
-  /** Edição EM MASSA na lista de DFDs gravados — mesma barra da análise; grava no banco (com confirmação). */
+  /** Edição EM MASSA na lista de DFDs gravados — mesma barra da análise; grava no banco (com
+   * confirmação), em fatias de 20 DFDs (progresso real; falha de uma fatia não perde as demais). */
   async function aplicarMassa(acao: AcaoMassa) {
     const ids = [...selDfds].map(Number);
     if (ids.length === 0) return;
     if (!confirm(`Aplicar a alteração em ${ids.length} DFD(s)? Ela é gravada diretamente no banco.`)) return;
-    setAplicandoMassa(true);
     setErro(null);
+    let alterados = 0;
+    const falhas: string[] = [];
     try {
-      const res = await fetch("/api/dfd/massa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, acao }),
-      });
-      const j = (await res.json()) as { ok?: boolean; error?: string; alterados?: number; falhas?: { numero: string; motivo: string }[] };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível aplicar a edição em massa.");
-      const falhas = j.falhas ?? [];
-      toast.success(`${num(j.alterados ?? 0)} DFD(s) alterado(s).`);
-      if (falhas.length > 0) setErro(`Não alterados: ${falhas.map((f) => `DFD ${f.numero} (${f.motivo})`).join(" · ")}`);
-      setSelDfds(new Set());
-      router.refresh();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível aplicar a edição em massa.");
+      for (let i = 0; i < ids.length; i += FATIA_MASSA) {
+        const fatia = ids.slice(i, i + FATIA_MASSA);
+        setAplicandoMassa({ feito: i, total: ids.length });
+        try {
+          const res = await fetch("/api/dfd/massa", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: fatia, acao }),
+          });
+          const j = (await res.json().catch(() => ({}))) as {
+            ok?: boolean;
+            error?: string;
+            alterados?: number;
+            falhas?: { numero: string; motivo: string }[];
+          };
+          if (!res.ok || !j.ok) {
+            falhas.push(`${fatia.length} DFD(s): ${j.error ?? `falha (HTTP ${res.status})`}`);
+            continue;
+          }
+          alterados += j.alterados ?? 0;
+          for (const f of j.falhas ?? []) falhas.push(`DFD ${f.numero} (${f.motivo})`);
+        } catch {
+          falhas.push(`${fatia.length} DFD(s): sem conexão com o servidor`);
+        }
+      }
     } finally {
-      setAplicandoMassa(false);
+      setAplicandoMassa(null);
+      setSelDfds(new Set());
+      router.refresh(); // reflete o que foi gravado (mesmo com falhas parciais)
     }
+    if (alterados > 0) toast.success(`${num(alterados)} DFD(s) alterado(s).`);
+    if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }
 
   // ---- Planilha ÚNICA de DFDs (a MESMA dos banners) para a aba DFDs — conferência real por linha. ----
   const dfdPorId = new Map(dfds.map((d) => [d.id, d]));
   const linhasDfdTab: LinhaDfd[] = dfds.map((d): LinhaDfd => {
-    const c = conf.get(d.id);
+    const c = confDe(d);
     return {
       key: d.id,
       numero: d.numero,
@@ -435,15 +468,23 @@ export function DfdsView({
       vazio(`Nenhum DFD nesta visão. ${podeEditar ? "Importe um DFD pelo botão acima." : ""}`)
     ) : (
       <div>
-        {podeEditar && selDfds.size > 0 && (
+        {podeEditar && (selDfds.size > 0 || aplicandoMassa) && (
           <BarraEdicaoMassa
             qtd={selDfds.size}
             reparticoes={reparticoes}
             regras={regras}
-            aplicando={aplicandoMassa}
+            aplicando={!!aplicandoMassa}
             onAplicar={aplicarMassa}
             onLimpar={() => setSelDfds(new Set())}
           />
+        )}
+        {aplicandoMassa && (
+          <div className="mb-3">
+            <Progress
+              value={(aplicandoMassa.feito / Math.max(1, aplicandoMassa.total)) * 100}
+              label={`Aplicando em ${num(aplicandoMassa.total)} DFD(s)… ${num(aplicandoMassa.feito)} de ${num(aplicandoMassa.total)}`}
+            />
+          </div>
         )}
         <PlanilhaDfds
           linhas={linhasDfdTab}
@@ -502,7 +543,7 @@ export function DfdsView({
               <ProtocoloUploadForm
                 reparticoes={reparticoes}
                 reparticaoAtivaId={reparticaoAtivaId}
-                dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero }))}
+                dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero, valorTotal: d.valorTotal, totalItens: d.totalItens }))}
                 pcas={pcas}
                 regras={regras}
                 orgaos={orgaos}

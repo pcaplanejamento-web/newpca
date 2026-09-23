@@ -11,7 +11,7 @@ import {
   type RegrasAvaliacao,
   regrasPadrao,
 } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, conferirAssinaturaDfd, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import {
   type AcaoMassa,
   aplicarMassaDfd,
@@ -69,7 +69,8 @@ type Rep = {
   responsaveis: Responsaveis;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
-type DfdExistente = { numero: string; protocoloNumero: string | null };
+/** DFD já cadastrado (conflito de número): de qual protocolo é + seus totais (p/ a somatória quando ele PREVALECE). */
+type DfdExistente = { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move";
@@ -139,6 +140,9 @@ export function ProtocoloUploadForm({
   // DFDs DUPLICADOS descartados pelo usuário (o "perdedor" de cada grupo) — cinza, fora da
   // somatória e da protocolação. Chave = idx do DFD no `index.dfds`.
   const [descartados, setDescartados] = useState<Set<number>>(new Set());
+  // Descartados por "Manter o existente" (subconjunto de `descartados`): o DFD já cadastrado PREVALECE —
+  // se ele é deste MESMO protocolo, continua no processo e entra na somatória da capa.
+  const [mantidosExistentes, setMantidosExistentes] = useState<Set<number>>(new Set());
   // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta) → estado "erro".
   const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
   // Análise em background com progresso REAL (fase, n/N e o DFD atual).
@@ -185,6 +189,7 @@ export function ProtocoloUploadForm({
     setAutoMap(new Map());
     setEditados(new Set());
     setDescartados(new Set());
+    setMantidosExistentes(new Set());
     setErrosParse(new Map());
     setSel(new Set());
     setAbertoIdx(-1);
@@ -281,16 +286,33 @@ export function ProtocoloUploadForm({
     const total = Math.min(idx0.dfds.length, CAP_ANALISE);
     if (total === 0) return;
     const paraOcr: { i: number; dfd: DfdParseado }[] = []; // DFDs sem assinatura NOMEADA de texto (achatada)
+    /** DFD que JÁ está no cache (o usuário abriu / editou em massa antes da análise chegar): não
+     * re-parseia nem sobrescreve (preserva as edições), mas a previsão da unidade e a fila do OCR valem. */
+    const viaCache = (i: number, d: DfdParseado) => {
+      refinarUnidade(i, d);
+      if (precisaOcr(d.assinaturas) && !ocrTentadoRef.current.has(i)) {
+        paraOcr.push({ i, dfd: d });
+        setOcrPendente((s) => new Set(s).add(i));
+      }
+    };
     for (let i = 0; i < total; i++) {
       if (docRef.current !== doc) return; // outro protocolo foi aberto / banner fechado — aborta
       setAnalise({ fase: "texto", feito: i, total, atual: i });
-      if (parsedRef.current.has(i)) continue; // já aberto pelo usuário (cache vale — preserva edições)
+      const jaLido = parsedRef.current.get(i);
+      if (jaLido) {
+        viaCache(i, jaLido);
+        continue;
+      }
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
         if (docRef.current !== doc) return;
         // Previsão segue o PCA do PROTOCOLO (ponto 7) — o ano detectado na capa (fresco no índice).
         const { dfd, auto } = normalizarSecoesDfd(raw, regras, idx0.protocolo.anoPca);
-        if (parsedRef.current.has(i)) continue; // aberto durante o parse — mantém a cópia do usuário
+        const abertoNoMeio = parsedRef.current.get(i); // aberto pelo usuário durante o parse
+        if (abertoNoMeio) {
+          viaCache(i, abertoNoMeio);
+          continue;
+        }
         setParsed((m) => (m.has(i) ? m : new Map(m).set(i, dfd)));
         if (auto.length) setAutoMap((m) => (m.has(i) ? m : new Map(m).set(i, auto)));
         // Refina a UNIDADE com as assinaturas do PARSE COMPLETO (inclui Dropsigner/Adobe inline). Só
@@ -391,11 +413,13 @@ export function ProtocoloUploadForm({
   };
   /** Reincluir um DFD descartado (o grupo volta a "pendente"). */
   const restaurarDfd = (idx: number) => {
-    setDescartados((prev) => {
+    const tirar = (prev: Set<number>) => {
       const s = new Set(prev);
       s.delete(idx);
       return s;
-    });
+    };
+    setDescartados(tirar);
+    setMantidosExistentes(tirar);
   };
   /** Este DFD substitui/move um já CADASTRADO (conflito com o banco)? */
   const conflitaComExistente = (idx: number): boolean => {
@@ -405,6 +429,7 @@ export function ProtocoloUploadForm({
   /** "Manter o existente": descarta ESTE DFD do envio → o já cadastrado PREVALECE. */
   const descartarDfd = (idx: number) => {
     setDescartados((prev) => new Set(prev).add(idx));
+    setMantidosExistentes((prev) => new Set(prev).add(idx));
     setSel(new Set());
   };
 
@@ -475,11 +500,22 @@ export function ProtocoloUploadForm({
   // ---- Conciliação do VALOR DA CAPA × somatória (mesma régua do gravado). A somatória IGNORA os
   // descartados; só é conferida com a análise COMPLETA — e NÃO depende de os DFDs estarem sem erro.
   const ativos = linhasDfd.filter((l) => l.estado !== "descartado").map((l) => l.key);
-  const somatorioDfds = ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0);
-  const itensDfds = ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0);
-  const lidos = ativos.filter((i) => parsed.has(i) || errosParse.has(i)).length;
+  // "Manter o existente" de um DFD deste MESMO protocolo (re-importação): o cadastrado continua no
+  // processo → entra na somatória/contagem da capa (o de outro protocolo sai — segue lá).
+  const existentesMantidos = [...mantidosExistentes]
+    .map((i) => index?.dfds[i]?.numero)
+    .filter((n): n is string => n != null && classificar(n) === "substitui")
+    .map((n) => dfdsExistentes.find((x) => x.numero.trim() === n.trim()))
+    .filter((x): x is DfdExistente => !!x);
+  const somatorioDfds =
+    ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0) + existentesMantidos.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
+  const itensDfds =
+    ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0) + existentesMantidos.reduce((s, x) => s + (x.totalItens ?? 0), 0);
+  const totalConsiderados = ativos.length + existentesMantidos.length;
+  // Somatória COMPLETA = todos os DFDs do processo LIDOS (um DFD ilegível somaria 0 → falsa divergência).
+  const lidos = ativos.filter((i) => parsed.has(i)).length;
   const completo = !analisando && lidos === ativos.length;
-  const conc = conciliacaoCapa({ valorCapa: extra.valorCapa, somatorio: somatorioDfds, totalDfds: ativos.length, completo }, regras, { categoria });
+  const conc = conciliacaoCapa({ valorCapa: extra.valorCapa, somatorio: somatorioDfds, totalDfds: totalConsiderados, completo }, regras, { categoria });
 
   // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
   const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
@@ -519,6 +555,7 @@ export function ProtocoloUploadForm({
     const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoPca);
     setParsed((m) => new Map(m).set(idx, dfd));
     setAutoMap((m) => new Map(m).set(idx, auto));
+    refinarUnidade(idx, dfd); // prevê a unidade pela assinatura (só preenche se vazia)
     return dfd;
   }
 
@@ -586,23 +623,33 @@ export function ProtocoloUploadForm({
     const idxs = [...sel].map(Number);
     if (idxs.length === 0) return;
     setAplicandoMassa(true);
+    setErro(null);
+    const aplicados: number[] = [];
+    const falhas: string[] = [];
     try {
       if (acao.campo === "reparticao") {
         setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? acao.reparticaoId : x)));
+        aplicados.push(...idxs);
       } else {
         for (const i of idxs) {
-          const d = await garantirParse(i);
-          if (!d) continue;
-          setParsed((m) => new Map(m).set(i, aplicarMassaDfd(m.get(i) ?? d, acao)));
+          try {
+            const d = await garantirParse(i);
+            if (!d) continue;
+            setParsed((m) => new Map(m).set(i, aplicarMassaDfd(m.get(i) ?? d, acao)));
+            aplicados.push(i);
+          } catch {
+            falhas.push(index?.dfds[i]?.numero ?? String(i)); // DFD ilegível — segue com os demais
+          }
         }
       }
       setEditados((s) => {
         const n = new Set(s);
-        for (const i of idxs) n.add(i);
+        for (const i of aplicados) n.add(i);
         return n;
       });
-      setSel(new Set());
+      if (falhas.length > 0) setErro(`Não foi possível aplicar em ${falhas.length} DFD(s) com leitura incompleta: ${falhas.join(", ")}.`);
     } finally {
+      setSel(new Set());
       setAplicandoMassa(false);
     }
   }
@@ -786,7 +833,17 @@ export function ProtocoloUploadForm({
     : analise.fase === "texto"
       ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`
       : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`;
-  const estadoAberto = abertoIdx >= 0 ? (linhasDfd[abertoIdx]?.estado ?? null) : null;
+  // Estado do DFD ABERTO no rodapé = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo
+  // e ano do PCA) + o duplicado pendente; descartado segue "Descartado".
+  const estadoAberto =
+    abertoIdx < 0 || !dfdAberto
+      ? null
+      : descartados.has(abertoIdx)
+        ? "descartado"
+        : estadoDeMensagens(
+            [...(avaliacoes.get(abertoIdx)?.mensagens.filter((m) => m.chave === "protocolo.dfdDuplicado") ?? []), ...mensagensAberto],
+            { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) },
+          );
 
   return (
     <div className="space-y-4">
@@ -891,7 +948,7 @@ export function ProtocoloUploadForm({
                 rodape:
                   abertoIdx < 0 ? undefined : (
                     <DfdRodape
-                      estado={dfdAberto ? estadoAberto : null}
+                      estado={estadoAberto}
                       regras={regras}
                       mensagens={mensagensAberto}
                       mensagensAbertas={painel?.tipo === "mensagens"}
@@ -934,6 +991,7 @@ export function ProtocoloUploadForm({
                         reparticaoAtivaId={reparticaoAtivaId}
                         repId={dfdRepIds[abertoIdx] ?? null}
                         anoPca={anoPca}
+                        categoria={categoria}
                         autoMatch={dfdRepIds[abertoIdx] != null && dfdRepIds[abertoIdx] === autoRepIds[abertoIdx]}
                         autoCampos={autoMap.get(abertoIdx) ?? []}
                         regras={regras}
@@ -1068,7 +1126,7 @@ export function ProtocoloUploadForm({
           unidade={{ id: protoRepId, opcoes: reparticoes, onChange: setProtoRepId, rotulo: "Unidade do protocolo (pelo Interessado)", obrigatoria: true }}
           pca={<PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />}
           totais={{
-            dfds: totalDfds,
+            dfds: totalConsiderados,
             itens: itensDfds,
             somatorio: somatorioDfds,
             dica: analisando ? "analisando…" : !completo ? `parcial — ${num(lidos)} de ${num(ativos.length)} DFDs lidos` : undefined,
