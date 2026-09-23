@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import type { IntervaloData } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
-import { IconArrowDown, IconArrowUp, IconChevronDown } from "./icons";
+import { GatilhoFiltro } from "./GatilhoFiltro";
+import { IconArrowDown, IconArrowUp } from "./icons";
 import { type Periodo, PeriodoCorpo, periodoParaIntervalo } from "./PeriodoPicker";
 
 // Filtro de DATA no cabeçalho da tabela. Reutiliza o MESMO componente de período
 // (`PeriodoCorpo`: presets + ano + meses + intervalo) e acrescenta ordenar. Emite
 // `{ de, ate }` (ISO) — a tabela filtra por intervalo. Por token; via portal, nunca corta.
-export type IntervaloData = { de?: string; ate?: string };
 
 export function DateFilterHeader({
   label,
@@ -38,14 +39,7 @@ export function DateFilterHeader({
       ariaLabel={`Filtrar ${label}`}
       triggerClassName="w-full gap-1.5 px-1 py-2"
       width={300}
-      trigger={
-        <span className="flex w-full items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">
-          <span className="truncate">{label}</span>
-          {sortDir === "asc" && <IconArrowUp className="h-3 w-3 shrink-0" />}
-          {sortDir === "desc" && <IconArrowDown className="h-3 w-3 shrink-0" />}
-          <IconChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 ${ativo ? "text-accent" : "opacity-60"}`} />
-        </span>
-      }
+      trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={ativo} />}
     >
       {(close) => (
         <div className="w-full">

@@ -45,6 +45,8 @@ const COLS: Column<LinhaComp>[] = [
     header: "Vlr. unit.",
     align: "right",
     nowrap: true,
+    filter: "range",
+    numero: (r) => r.valorUnitario,
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {
@@ -52,6 +54,8 @@ const COLS: Column<LinhaComp>[] = [
     header: "Vlr. total",
     align: "right",
     nowrap: true,
+    filter: "range",
+    numero: (r) => r.valorTotal,
     render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—"),
   },
 ];

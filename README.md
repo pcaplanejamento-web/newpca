@@ -12,6 +12,11 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   e uma consulta de itens com busca, filtro, ordenação e paginação.
 - **Multi-unidade**: cada planilha importada é uma unidade (identificada pelo `Código`). Reimportar
   o mesmo código substitui os itens daquela unidade.
+- **Mesa (Protocolos · DFDs · Itens)**: importa protocolos/DFDs em PDF (lidos no navegador, com OCR das
+  assinaturas achatadas), confere cada DFD pelas regras do ADM e permite **filtros conectados** em todas as
+  colunas (inclusive faixa de valores R$), **seleção com somatório e edição em massa** (barra fixa no rodapé),
+  banners empilhados (item → DFD → protocolo) e o **reenvio do mesmo protocolo** com comparação campo a campo
+  (capa, DFDs e itens) antes de sobrescrever — só o que mudou é regravado.
 
 ## Stack
 

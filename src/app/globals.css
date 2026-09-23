@@ -289,6 +289,74 @@
   animation: none;
 }
 
+/* Barra de FAIXA (filtro R$ do cabeçalho): dois <input type=range> sobrepostos num trilho — só as
+   ALÇAS recebem clique/toque (o trilho é desenhado por baixo). Alça grande o bastante p/ o dedo. */
+.faixa-dupla {
+  position: relative;
+  height: 44px;
+  margin: 2px 0 6px;
+}
+.faixa-dupla input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* O foco aparece no ANEL da alça (abaixo), não num retângulo em volta do trilho inteiro. */
+.faixa-dupla input[type="range"]:focus {
+  outline: none;
+}
+.faixa-dupla input[type="range"]::-webkit-slider-runnable-track {
+  height: 44px;
+  background: transparent;
+}
+.faixa-dupla input[type="range"]::-moz-range-track {
+  height: 44px;
+  background: transparent;
+}
+.faixa-dupla input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 24px;
+  height: 24px;
+  margin-top: 10px;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  cursor: grab;
+}
+.faixa-dupla input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  cursor: grab;
+}
+.faixa-dupla input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.faixa-dupla input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.faixa-dupla input[type="range"]:disabled::-webkit-slider-thumb {
+  border-color: var(--border-2);
+  cursor: default;
+}
+.faixa-dupla input[type="range"]:disabled::-moz-range-thumb {
+  border-color: var(--border-2);
+  cursor: default;
+}
+
 /* Shimmer para skeletons de carregamento */
 @keyframes shimmer {
   0% {

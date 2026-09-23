@@ -1,11 +1,13 @@
 import {
   aplicarSinonimos,
   type ChaveAvaliacao,
+  comportamentoDaFalta,
   comportamentoDe,
   comportamentoNo,
   corComportamentoPadrao,
   corImportancia,
   estadoCicloCfg,
+  nivelDaFalta,
   nivelDe,
   type RegrasAvaliacao,
   regrasPadrao,
@@ -608,7 +610,8 @@ export function avaliarDfd(
   const atencoes: string[] = [];
   const add = (chave: ChaveAvaliacao, falta: boolean, rotulo: string) => {
     if (!falta) return;
-    const comp = comportamentoNo(regras, chave, c);
+    // Comportamento da FALTA: o "automático" de um ponto `faltaEhErro` (Prioridade) não rebaixa a falta.
+    const comp = comportamentoDaFalta(regras, chave, c);
     if (comp === "bloqueia") bloqueantes.push(rotulo);
     else if (comp === "avisa" || comp === "automatico") atencoes.push(rotulo);
     // "ignora": não entra em lugar nenhum.
@@ -645,7 +648,15 @@ export type StatusMensagem = "erro" | "atencao" | "acerto";
  * o `status` (erro bloqueia · atenção avisa · acerto ok), o `texto` e a `ancora` — o id
  * do componente correspondente no banner do DFD (para rolar/destacar ao clicar).
  */
-export type MensagemDfd = { chave: string; status: StatusMensagem; texto: string; ancora: string; cor?: string };
+export type MensagemDfd = {
+  chave: string;
+  status: StatusMensagem;
+  texto: string;
+  ancora: string;
+  cor?: string;
+  /** Rótulo CURTO específico (célula/filtro "Estado") — sobrepõe o `ROTULO_CURTO` da chave. */
+  rotulo?: string;
+};
 
 export const STATUS_MENSAGEM_COR: Record<StatusMensagem, string> = {
   erro: "var(--danger)",
@@ -686,12 +697,16 @@ export function mensagensDfd(
 ): MensagemDfd[] {
   const c = { dfdTipo: tipoCurtoDfd(d.tipo ?? null), categoria: ctx?.categoria ?? null };
   const out: MensagemDfd[] = [];
-  const add = (chave: ChaveAvaliacao, ancora: string, ok: boolean, faltaTexto: string, okTexto: string) => {
-    const id = nivelDe(regras, chave, c);
-    const comp = comportamentoDe(regras, id);
-    if (comp === "ignora") return;
-    if (ok) out.push({ chave, status: "acerto", texto: okTexto, ancora });
-    else out.push({ chave, status: comp === "bloqueia" ? "erro" : "atencao", texto: faltaTexto, ancora, cor: corImportancia(regras, id) });
+  const add = (chave: ChaveAvaliacao, ancora: string, ok: boolean, faltaTexto: string, okTexto: string, rotulo?: string) => {
+    if (comportamentoNo(regras, chave, c) === "ignora") return;
+    if (ok) {
+      out.push({ chave, status: "acerto", texto: okTexto, ancora });
+      return;
+    }
+    // A FALTA segue a importância da falta (o "automático" da Prioridade não a rebaixa — é erro).
+    const id = nivelDaFalta(regras, chave, c);
+    const status: StatusMensagem = comportamentoDe(regras, id) === "bloqueia" ? "erro" : "atencao";
+    out.push({ chave, status, texto: faltaTexto, ancora, cor: corImportancia(regras, id), ...(rotulo ? { rotulo } : {}) });
   };
   const plural = (n: number) => (n === 1 ? "item" : "itens");
 
@@ -733,6 +748,7 @@ export function mensagensDfd(
         ? `${s.rotulo} não preenchida — destrave a seção (cadeado) para preencher.`
         : `${s.rotulo} fora do padrão — trate no bloco Tratamento ou destrave a seção.`,
       `${s.rotulo} preenchida.`,
+      sit === "invalida" ? ROTULO_CURTO_INVALIDA[s.chave] : undefined,
     );
   }
 
@@ -853,6 +869,13 @@ export const ROTULO_CURTO: Record<string, string> = {
   "item.duplicado": "Item duplicado",
 };
 
+/** Rótulo CURTO de uma seção obrigatória PREENCHIDA mas FORA DO PADRÃO (≠ "Sem …", que é vazia). */
+export const ROTULO_CURTO_INVALIDA: Partial<Record<string, string>> = {
+  "dfd.previsao": "Previsão inválida",
+  "dfd.prioridade": "Prioridade inválida",
+  "dfd.fundamentacao": "Fundamentação inválida",
+};
+
 /** Resumo compacto para a célula "Estado": o problema PRINCIPAL (rótulo curto + cor), os contadores
  * "+N" por severidade (erros em vermelho, atenções em âmbar) e o `titulo` (lista completa) p/ o
  * tooltip (atributo `title`, sem precisar abrir o DFD/item). */
@@ -862,21 +885,28 @@ export type ResumoEstado = {
   extraErros: number; // erros ALÉM do principal (contador "+N" vermelho)
   extraAtencoes: number; // atenções a mostrar como "+N" âmbar
   titulo: string; // lista completa (erros + atenções) p/ o tooltip nativo (`title`)
+  /** Rótulos curtos de TODOS os problemas (erros primeiro, sem repetir) — inclusive os ocultos no "+N":
+   * alimentam o FILTRO da coluna "Estado" (filtrar por um problema acha a linha mesmo se não é o principal). */
+  rotulos: string[];
 };
 
 /**
  * Monta o resumo da célula "Estado" a partir das mensagens (só erros/atenções contam). PRINCIPAL =
  * 1º erro; sem erros, 1ª atenção. Sem problema ⇒ `rotulo:""` (regular, nada muda). Puro/testável.
  */
-export function resumoEstado(msgs: { status: StatusMensagem; chave: string; texto: string; cor?: string }[]): ResumoEstado {
+export function resumoEstado(
+  msgs: { status: StatusMensagem; chave: string; texto: string; cor?: string; rotulo?: string }[],
+): ResumoEstado {
   const erros = msgs.filter((m) => m.status === "erro");
   const atencoes = msgs.filter((m) => m.status === "atencao");
   const principal = erros[0] ?? atencoes[0];
-  if (!principal) return { rotulo: "", cor: "var(--ok)", extraErros: 0, extraAtencoes: 0, titulo: "" };
+  if (!principal) return { rotulo: "", cor: "var(--ok)", extraErros: 0, extraAtencoes: 0, titulo: "", rotulos: [] };
   const ehErro = principal.status === "erro";
   const titulo = [...erros, ...atencoes].map((m) => `${m.status === "erro" ? "Erro" : "Atenção"}: ${m.texto}`).join("\n");
+  const curto = (m: { chave: string; texto: string; rotulo?: string }) => m.rotulo ?? ROTULO_CURTO[m.chave] ?? m.texto;
   return {
-    rotulo: ROTULO_CURTO[principal.chave] ?? principal.texto,
+    rotulo: curto(principal),
+    rotulos: [...new Set([...erros, ...atencoes].map(curto))],
     // A cor SEGUE a importância do ponto (definida pelo ADM em `mensagensDfd`); sem `cor`
     // explícita, cai na severidade (erro=vermelho / atenção=âmbar).
     cor: principal.cor ?? (ehErro ? "var(--danger)" : "var(--warn)"),

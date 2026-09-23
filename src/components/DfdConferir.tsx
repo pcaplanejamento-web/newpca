@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type ChaveAvaliacao, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
+import { type ChaveAvaliacao, comportamentoDaFalta, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirAssinaturaDfd } from "@/lib/conferencia-dfd";
 import {
@@ -55,7 +55,7 @@ type CampoCabK = keyof CamposCabecalhoDfd;
 const naoOp = () => {};
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
-export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" };
+export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" } | { tipo: "diferencas" };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
@@ -264,12 +264,19 @@ export function DfdConferir({
   const anoSel = (prev ? (prev.split("/")[1] ?? "") : "") || (anoPca != null ? String(anoPca) : "");
 
   const status = (campo: CampoTratavel, ok: boolean): { txt: string; cor: string } => {
-    if (!ok) return { txt: "tratar", cor: "var(--danger)" };
+    if (!ok) {
+      // Mesma régua das mensagens: a cor da FALTA segue a importância (erro vermelho / atenção âmbar).
+      const chave = TRATAVEIS.find((t) => t.campo === campo)?.chave;
+      const comp = chave ? comportamentoDaFalta(regras, chave, { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria }) : "bloqueia";
+      if (comp === "ignora") return { txt: "", cor: "var(--muted)" };
+      return { txt: "tratar", cor: comp === "bloqueia" ? "var(--danger)" : "var(--warn)" };
+    }
     if (autoCampos.includes(campo)) return { txt: "auto", cor: "var(--warn)" };
     return { txt: "ok", cor: "var(--ok)" };
   };
   const Tag = ({ campo, ok }: { campo: CampoTratavel; ok: boolean }) => {
     const s = status(campo, ok);
+    if (!s.txt) return null;
     return (
       <span className="ml-2 text-[10px] font-semibold uppercase" style={{ color: s.cor }}>
         {s.txt}

@@ -25,6 +25,28 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Mesa: filtros conectados, faixa R$, seleção fixa com somatório, massa em Protocolos/Itens, pilha de banners e REENVIO do protocolo — entregue
+✅ **Filtros conectados em TODAS as tabelas** (`DataTable` + `tabela-filtros.ts`, puro e testado): as opções de cada coluna
+refletem os demais filtros (facetas), a coluna filtrada fica **marcada** (chip accent + sublinhado) e o rodapé ganha
+"Limpar filtros (N)". **Filtro de FAIXA nas colunas R$** (`RangeFilterHeader`): barra de arrasto dupla (mín.–máx. do que
+está visível), Crescente/Decrescente e "Valor cheio" (arrastar desmarca; marcar limpa a barra) — também conectado.
+**Estado com TODOS os problemas**: o filtro da coluna Estado lista inclusive os escondidos no "+N" e filtra por eles;
+**falta de prioridade = ERRO** (`faltaEhErro`: o Automático corrige o que dá, mas vazio/fora do padrão continua erro).
+**Seleção nas 3 visões da Mesa** (DFDs, Protocolos e Itens): `BarraSelecao` **fixa no rodapé do display** com os chips
+dos selecionados (removíveis), o **somatório (R$)** e o editor de massa — DFDs (unidade/tipo/prioridade/previsão/
+fundamentação), **Protocolos** (unidade, assunto, valor da capa = somatória; `POST /api/protocolo/massa`) e **Itens**
+(padronizar pelo catálogo, unidade, quantidade, valor unitário, remover; `POST /api/dfd/itens/massa`, lote atômico por
+DFD com totais recomputados), com confirmação, progresso e auditoria. **Pilha de banners** (`BannersMesa` +
+`Modal.paineis`): o item da visão Itens abre SÓ o item; "Ver DFD" entra da direita; "Ver protocolo" traz o DFD e, em
+seguida, o protocolo — sempre da direita para a esquerda (Esc desempilha). **Reenviar protocolo** (banner do gravado): só o
+MESMO nº e Id (checado também no servidor); compara capa e DFDs (cabeçalho, seções por título, assinaturas e itens novo/
+removido/alterado), mostra "Diferenças" por DFD, herda do gravado o que o PDF não traz e já foi tratado (tipo, seções
+obrigatórias, referências, validação da assinatura), permite editar antes e, ao sobrescrever, **regrava só o que mudou** e
+exclui (ou mantém, à escolha) os DFDs gravados que não vieram no PDF — com relatório de diferenças copiável e auditoria.
+Validado de ponta a ponta com o PDF real `pd101820` (import → alteração do gravado → reenvio → comparação → sobrescrita).
+**Compatibilidade:** o pdf.js passou ao build **legacy** oficial (com polyfills) — o build moderno exigia `Math.sumPrecise`
+e, em navegadores sem essa API, nenhum DFD era lido.
+
 ### Gravado = análise (mesmos componentes após protocolar) + capa conciliada + seções com cadeado + progresso real — entregue
 ✅ **Protocolo/DFD/Itens JÁ PROTOCOLADOS usam os MESMOS componentes da análise**: corpo único `ProtocoloView`, a mesma
 conferência por linha (`avaliarLinhaDfd` — célula Estado, painel de mensagens e botões nunca se contradizem), a mesma

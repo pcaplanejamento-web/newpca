@@ -151,6 +151,14 @@ export const protocoloMetaSchema = z.object({
 export const startProtocoloSchema = z.object({
   mode: z.literal("start-protocolo"),
   protocolo: protocoloMetaSchema,
+  /** REENVIO (sobrescrever o protocolo gravado com o mesmo PDF corrigido): o servidor confere que é o
+   * MESMO protocolo (nº e Id) e registra a sobrescrita com o resumo das diferenças na auditoria. */
+  reenvio: z
+    .object({
+      protocoloId: z.number().int().positive(),
+      resumo: z.string().trim().max(500),
+    })
+    .optional(),
 });
 
 /** Edição de um protocolo já gravado (banner destravado): a **repartição**
@@ -243,6 +251,38 @@ export const massaDfdsSchema = z.object({
   ]),
 });
 export type MassaDfdsPayload = z.infer<typeof massaDfdsSchema>;
+
+/**
+ * Edição EM MASSA de PROTOCOLOS gravados (`POST /api/protocolo/massa`): unidade, assunto ou "valor da
+ * capa = somatória dos DFDs". ≤ 20 por requisição (o cliente fatia): 2 consultas por protocolo.
+ */
+export const massaProtocolosSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(20),
+  acao: z.discriminatedUnion("campo", [
+    z.object({ campo: z.literal("reparticao"), reparticaoId: z.number().int().positive() }),
+    z.object({ campo: z.literal("assunto"), valor: z.string().trim().min(1).max(300) }),
+    z.object({ campo: z.literal("valorCapa") }),
+  ]),
+});
+export type MassaProtocolosPayload = z.infer<typeof massaProtocolosSchema>;
+export type AcaoMassaProtocolo = MassaProtocolosPayload["acao"];
+
+/**
+ * Edição EM MASSA de ITENS gravados (`POST /api/dfd/itens/massa`): padronizar pelo catálogo, unidade,
+ * quantidade, valor unitário ou remover. ≤ 100 itens de ≤ 5 DFDs por requisição (o cliente agrupa por
+ * DFD e fatia) — cada DFD grava num lote só (atômico), dentro do limite de consultas do D1.
+ */
+export const MASSA_ITENS_MAX_DFDS = 5;
+export const massaItensSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  acao: z.discriminatedUnion("campo", [
+    z.object({ campo: z.literal("catalogo") }),
+    z.object({ campo: z.literal("unidade"), valor: z.string().trim().min(1).max(100) }),
+    z.object({ campo: z.enum(["quantidade", "valorUnitario"]), valor: z.number().positive().max(1e12) }),
+    z.object({ campo: z.literal("remover") }),
+  ]),
+});
+export type MassaItensPayload = z.infer<typeof massaItensSchema>;
 
 /** Gera uma edição de PCA unindo os DFDs selecionados. */
 export const gerarPcaSchema = z.object({

@@ -80,6 +80,7 @@ export function PlanilhaDfds({
   scrollInterno = false,
   unica = false,
   regras,
+  reservaInferior = 0,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -98,6 +99,8 @@ export function PlanilhaDfds({
   unica?: boolean;
   /** Regras do ADM — cor/rótulo dos estados de ciclo seguem a configuração (fallback = tokens). */
   regras?: RegrasAvaliacao;
+  /** Altura reservada no fim do display (barra de seleção fixa) — repassada ao `DataTable`. */
+  reservaInferior?: number;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -113,6 +116,15 @@ export function PlanilhaDfds({
           : r.estadoMotivo
             ? "Leitura incompleta"
             : r.resumo?.rotulo || estadoRotulo(r.estado, regras),
+      // Filtro: TODOS os problemas da linha (inclusive os ocultos no "+N") — filtrar por um deles acha o DFD.
+      valores: (r) =>
+        r.processando
+          ? [PROCESSANDO_ROTULO[r.processando]]
+          : r.estadoMotivo
+            ? ["Leitura incompleta"]
+            : r.resumo?.rotulos?.length
+              ? r.resumo.rotulos
+              : [r.resumo?.rotulo || estadoRotulo(r.estado, regras)],
       render: (r) => {
         // Em processamento: spinner + O QUE está acontecendo (feedback real da análise/conferência).
         if (r.processando)
@@ -136,7 +148,8 @@ export function PlanilhaDfds({
             key: "situacao",
             header: "Situação",
             nowrap: true,
-            value: (r: LinhaDfd) => r.situacao ?? "—",
+            // Filtro pela situação SEM a contagem ("Alterado (3)" → "Alterado"): uma opção pega todos os alterados.
+            value: (r: LinhaDfd) => (r.situacao ?? "—").replace(/\s*\(\d+\)$/, ""),
             render: (r: LinhaDfd) => <span className="text-[12px] text-muted">{r.situacao ?? "—"}</span>,
           },
         ]
@@ -225,7 +238,8 @@ export function PlanilhaDfds({
       header: "Valor total",
       align: "right",
       nowrap: true,
-      value: (r) => String(r.valor ?? ""),
+      filter: "range",
+      numero: (r) => r.valor,
       render: (r) => (r.valor == null ? <span className="text-faint">…</span> : brl(r.valor)),
     },
     ...(acoes
@@ -255,6 +269,7 @@ export function PlanilhaDfds({
     activeKey: ativa,
     minWidth: mw,
     resumo,
+    reservaInferior,
   } as const;
 
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.

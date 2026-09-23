@@ -103,6 +103,9 @@ export type PontoAvaliacao = {
   editavelPadrao?: boolean;
   /** Aceita ajuste automático por palavras-chave (troca o texto todo da seção)? */
   suportaAuto?: boolean;
+  /** A FALTA do ponto (vazio/fora do padrão que o ajuste automático NÃO corrigiu) segue a lógica padrão
+   * dos ERROS mesmo no comportamento "automático" — o automático só corrige, nunca rebaixa a falta. */
+  faltaEhErro?: boolean;
 };
 
 const BASE = ["bloqueia", "avisa", "ignora"] as Comportamento[];
@@ -125,7 +128,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "dfd.orgaoUnidadeDivergente", sujeito: "dfd", rotulo: "Órgão × Unidade (divergência)", descricao: "Aviso quando o Órgão/Entidade do DFD aponta um órgão diferente do órgão dono da unidade casada pelo Setor Requisitante. Não bloqueia por padrão.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "dfd.justificativa", sujeito: "dfd", rotulo: "§3 Justificativa", descricao: "Justificativa da necessidade preenchida.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "dfd.previsao", sujeito: "dfd", rotulo: "§5 Previsão de entrega", descricao: "Previsão de entrega/execução preenchida (normalizada automaticamente).", comportamentosPermitidos: BASE_AUTO, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true, suportaAuto: true },
-  { chave: "dfd.prioridade", sujeito: "dfd", rotulo: "§6 Prioridade", descricao: "Prioridade da compra/contratação preenchida (normalizada automaticamente).", comportamentosPermitidos: BASE_AUTO, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true, suportaAuto: true },
+  { chave: "dfd.prioridade", sujeito: "dfd", rotulo: "§6 Prioridade", descricao: "Prioridade da compra/contratação preenchida (normalizada automaticamente). No Automático, a FALTA (vazia ou fora de ALTA/MÉDIA/BAIXA) continua ERRO — o ajuste só corrige o que dá para corrigir.", comportamentosPermitidos: BASE_AUTO, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true, suportaAuto: true, faltaEhErro: true },
   { chave: "dfd.fundamentacao", sujeito: "dfd", rotulo: "§7 Fundamentação legal", descricao: "Fundamentação legal preenchida (há o botão 'Preencher padrão → Lei 14.133/2021' no banner).", comportamentosPermitidos: BASE_AUTO, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true, suportaAuto: true },
   { chave: "dfd.anoPca", sujeito: "dfd", rotulo: "Ano do PCA", descricao: "PCA (ano) definido no DFD.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "dfd.assinatura", sujeito: "dfd", rotulo: "Assinatura digital", descricao: "Assinatura digital válida (PDF exige assinatura; .xlsx é opcional).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
@@ -297,6 +300,29 @@ export function comportamentoNo(
   ctx?: { dfdTipo?: string | null; categoria?: string | null },
 ): Comportamento {
   return comportamentoDe(regras, nivelDe(regras, chave, ctx));
+}
+
+/**
+ * Importância (ID) aplicada à FALTA de um ponto — a efetiva (`nivelDe`), exceto no "automático" de um
+ * ponto `faltaEhErro` (ex.: §6 Prioridade): o ajuste automático só CORRIGE; o que ele não corrigiu é
+ * ERRO (importância base "fundamental" — lógica padrão dos erros). Os demais pontos: igual a `nivelDe`.
+ */
+export function nivelDaFalta(
+  regras: RegrasAvaliacao,
+  chave: ChaveAvaliacao,
+  ctx?: { dfdTipo?: string | null; categoria?: string | null },
+): Nivel {
+  const id = nivelDe(regras, chave, ctx);
+  return POR_CHAVE.get(chave)?.faltaEhErro && comportamentoDe(regras, id) === "automatico" ? BUILTIN_POR_COMPORTAMENTO.bloqueia : id;
+}
+
+/** Comportamento aplicado à FALTA de um ponto (atalho `comportamentoDe(regras, nivelDaFalta(...))`). */
+export function comportamentoDaFalta(
+  regras: RegrasAvaliacao,
+  chave: ChaveAvaliacao,
+  ctx?: { dfdTipo?: string | null; categoria?: string | null },
+): Comportamento {
+  return comportamentoDe(regras, nivelDaFalta(regras, chave, ctx));
 }
 
 /** O campo pode ser editado pelo usuário na análise? (default: sim, onde há suporte). */

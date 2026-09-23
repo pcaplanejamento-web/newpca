@@ -85,8 +85,8 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
         header: "Vlr. Ref.",
         align: "right",
         minWidth: 110,
-        filter: "none",
-        value: (r) => String(r.valorReferencia ?? ""),
+        filter: "range",
+        numero: (r) => r.valorReferencia,
         render: (r) => (
           <span className="tabular-nums text-text-2">{r.valorReferencia != null ? brl(r.valorReferencia) : "—"}</span>
         ),
@@ -96,8 +96,8 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
         header: "Vlr. Total",
         align: "right",
         minWidth: 120,
-        filter: "none",
-        value: (r) => String(r.valorTotal ?? ""),
+        filter: "range",
+        numero: (r) => r.valorTotal,
         render: (r) => (
           <span className="font-semibold tabular-nums text-text">{r.valorTotal != null ? brl(r.valorTotal) : "—"}</span>
         ),

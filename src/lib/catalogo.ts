@@ -490,6 +490,23 @@ function tokenBusca(descricao: string | null): string | null {
   return toks[0] ?? null;
 }
 
+/** Entradas do catálogo SÓ dos códigos pedidos (normalizados), em lotes `inArray` — escalável, nunca
+ * carrega o catálogo inteiro. Usada pela conferência e pela edição em massa de itens (padronizar). */
+export async function entradasCatalogo(codigos: string[]): Promise<Map<string, CatalogoRef>> {
+  const index = new Map<string, CatalogoRef>();
+  const lista = [...new Set(codigos.filter(Boolean))];
+  const db = getDb();
+  for (let i = 0; i < lista.length; i += IN_CHUNK) {
+    const linhas = await db
+      .select(COLS_REF)
+      .from(catalogoItens)
+      .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
+      .where(inArray(catalogoItens.codigo, lista.slice(i, i + IN_CHUNK)));
+    for (const l of linhas) index.set(l.codigo, toRef(l));
+  }
+  return index;
+}
+
 /**
  * Confere os itens de UM DFD contra o catálogo. Busca só as entradas dos CÓDIGOS do DFD
  * (chunked `inArray`, escalável — NÃO carrega o catálogo inteiro) e, para os não
@@ -511,15 +528,7 @@ export async function conferirItensNoCatalogo(
   if (Number(tot?.n ?? 0) === 0) return out;
 
   // Entradas do catálogo apenas dos códigos do DFD.
-  const index = new Map<string, CatalogoRef>();
-  for (let i = 0; i < codigos.length; i += IN_CHUNK) {
-    const linhas = await db
-      .select(COLS_REF)
-      .from(catalogoItens)
-      .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
-      .where(inArray(catalogoItens.codigo, codigos.slice(i, i + IN_CHUNK)));
-    for (const l of linhas) index.set(l.codigo, toRef(l));
-  }
+  const index = await entradasCatalogo(codigos);
 
   // Candidatos por semelhança — só p/ não catalogados, limitados por custo.
   const candPorCodigo = new Map<string, CatalogoRef[]>();

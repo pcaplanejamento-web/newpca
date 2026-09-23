@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
 import type {
   CadastrarPcaPayload,
   DfdItemPayload,
@@ -380,6 +381,100 @@ export async function listarCamposMassa(ids: number[]): Promise<
     for (const l of linhas) out.push({ ...l, secoes: parseSecoes(l.secoes), assinaturas: parseAssinaturas(l.assinaturas) });
   }
   return out;
+}
+
+// ---- Edição EM MASSA de ITENS (lista "Itens" da Mesa) ----
+
+/** DFD de cada item pedido (agrupar a massa por DFD), em lotes de ids. */
+export async function dfdsDosItens(ids: number[]): Promise<Map<number, number>> {
+  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n) && n > 0);
+  const out = new Map<number, number>();
+  for (let i = 0; i < uniq.length; i += LOTE_IDS) {
+    const linhas = await getDb()
+      .select({ id: dfdItens.id, dfdId: dfdItens.dfdId })
+      .from(dfdItens)
+      .where(inArray(dfdItens.id, uniq.slice(i, i + LOTE_IDS)));
+    for (const l of linhas) out.set(l.id, l.dfdId);
+  }
+  return out;
+}
+
+/** Os DFDs (nº, unidade) com TODOS os seus itens — para planejar a massa e recompor os totais. */
+export async function dfdsComItensMassa(dfdIds: number[]): Promise<{ id: number; numero: string; reparticaoId: number | null; itens: ItemMassa[] }[]> {
+  const uniq = [...new Set(dfdIds)].filter((n) => Number.isInteger(n) && n > 0);
+  if (uniq.length === 0) return [];
+  const db = getDb();
+  const cab = await db.select({ id: dfds.id, numero: dfds.numero, reparticaoId: dfds.reparticaoId }).from(dfds).where(inArray(dfds.id, uniq));
+  const linhas = await db
+    .select({
+      id: dfdItens.id,
+      dfdId: dfdItens.dfdId,
+      item: dfdItens.item,
+      codigo: dfdItens.codigo,
+      descricao: dfdItens.descricao,
+      unidade: dfdItens.unidade,
+      quantidade: dfdItens.quantidade,
+      valorUnitario: dfdItens.valorUnitario,
+      valorTotal: dfdItens.valorTotal,
+    })
+    .from(dfdItens)
+    .where(inArray(dfdItens.dfdId, uniq))
+    .orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial));
+  return cab.map((c) => ({ ...c, itens: linhas.filter((l) => l.dfdId === c.id).map(({ dfdId: _d, ...it }) => it) }));
+}
+
+/** Colunas do item que a massa altera (propriedade Drizzle → coluna SQL). */
+const COL_ITEM: Record<keyof PatchItem, string> = {
+  descricao: "descricao",
+  unidade: "unidade",
+  quantidade: "quantidade",
+  valorUnitario: "valor_unitario",
+  valorTotal: "valor_total",
+};
+
+/**
+ * Aplica o PLANO de massa de UM DFD num `db.batch` ATÔMICO: os patches viram `UPDATE … SET col = CASE
+ * id WHEN ? THEN ? … END` em blocos que cabem nos 100 parâmetros do D1 (poucas consultas mesmo com
+ * centenas de itens), as remoções um `DELETE … IN`, e os totais do DFD são regravados (Σ dos itens).
+ */
+export async function aplicarPlanoItens(
+  dfdId: number,
+  plano: PlanoMassaItens,
+  totais: { valorTotal: number | null; totalItens: number },
+): Promise<void> {
+  const db = getDb();
+  const stmts: unknown[] = [];
+  const campos = [...new Set(plano.atualizar.flatMap((a) => Object.keys(a.patch)))] as (keyof PatchItem)[];
+  if (campos.length > 0) {
+    // Parâmetros por item: 2 por campo (WHEN id THEN valor) + 1 no IN; + o dfdId.
+    const porBloco = Math.max(1, Math.floor(98 / (2 * campos.length + 1)));
+    for (let i = 0; i < plano.atualizar.length; i += porBloco) {
+      const bloco = plano.atualizar.slice(i, i + porBloco);
+      const set: Record<string, SQL> = {};
+      for (const c of campos) {
+        const quando = bloco.filter((a) => c in a.patch).map((a) => sql`WHEN ${a.id} THEN ${a.patch[c] ?? null}`);
+        if (quando.length === 0) continue;
+        set[c] = sql`CASE ${sql.raw('"id"')} ${sql.join(quando, sql` `)} ELSE ${sql.raw(`"${COL_ITEM[c]}"`)} END`;
+      }
+      stmts.push(
+        db
+          .update(dfdItens)
+          .set(set)
+          .where(and(eq(dfdItens.dfdId, dfdId), inArray(dfdItens.id, bloco.map((a) => a.id)))),
+      );
+    }
+  }
+  for (let i = 0; i < plano.remover.length; i += LOTE_IDS) {
+    stmts.push(db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), inArray(dfdItens.id, plano.remover.slice(i, i + LOTE_IDS)))));
+  }
+  stmts.push(
+    db
+      .update(dfds)
+      .set({ valorTotal: totais.valorTotal, totalItens: totais.totalItens, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(dfds.id, dfdId)),
+  );
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  await db.batch(stmts as [Stmt, ...Stmt[]]);
 }
 
 /**

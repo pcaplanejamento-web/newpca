@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { comportamentoDaFalta, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
   acharSecao,
@@ -98,6 +98,11 @@ const COLS: Column<ItemK>[] = [
     header: "Estado",
     nowrap: true,
     value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+    // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
+    valores: (r) => {
+      const res = resumoEstado(mensagensItem(r));
+      return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
+    },
     render: (r) => {
       // Com erro: aponta a falta ESPECÍFICA (valor/quantidade) + "+N" + tooltip; senão "Regular".
       const res = resumoEstado(mensagensItem(r));
@@ -135,7 +140,8 @@ const COLS: Column<ItemK>[] = [
     header: "Vlr. unit.",
     align: "right",
     nowrap: true,
-    value: (r) => String(r.valorUnitario ?? ""),
+    filter: "range",
+    numero: (r) => r.valorUnitario,
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {
@@ -143,7 +149,8 @@ const COLS: Column<ItemK>[] = [
     header: "Vlr. total",
     align: "right",
     nowrap: true,
-    value: (r) => String(r.valorTotal ?? ""),
+    filter: "range",
+    numero: (r) => r.valorTotal,
     render: (r) =>
       r.valorTotal != null ? <span className="font-semibold">{brl(r.valorTotal)}</span> : "—",
   },
@@ -302,7 +309,8 @@ export function DfdView({
     if (!sx.obrig) return null;
     const sit = situacaoSecao(dfd.secoes, sx.obrig.kw, dfd.anoPca);
     if (sit === "ok") return null;
-    const comp = comportamentoNo(regras, sx.obrig.chave, dfdTipoCtx);
+    // Mesma régua dos erros: a FALTA segue a importância da falta (Automático não rebaixa a Prioridade).
+    const comp = comportamentoDaFalta(regras, sx.obrig.chave, dfdTipoCtx);
     if (comp === "ignora") return null;
     return { txt: sit === "vazia" ? "não preenchida" : "fora do padrão", cor: comp === "bloqueia" ? "var(--danger)" : "var(--warn)" };
   };

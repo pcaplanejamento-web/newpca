@@ -11,7 +11,18 @@ import {
   type RegrasAvaliacao,
   regrasPadrao,
 } from "@/lib/avaliacao-core";
+import {
+  type ComparacaoDfd,
+  compararCapa,
+  compararDfd,
+  type DfdComparavel,
+  herdarTratamentos,
+  identidadeReenvio,
+  linhasRelatorioReenvio,
+  rotuloSituacaoReenvio,
+} from "@/lib/comparar-protocolo";
 import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import type { DfdDetalhe } from "@/lib/dfd";
 import {
   type AcaoMassa,
   aplicarMassaDfd,
@@ -38,17 +49,20 @@ import {
   type PdfDoc,
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
+import type { ProtocoloDetalhe } from "@/lib/protocolo";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
+import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { ComparacaoProtocolo } from "./ComparacaoReenvio";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconClipboard, IconFile, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconCheck, IconClipboard, IconFile, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
@@ -81,6 +95,11 @@ const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: 
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
 const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
 
+/** REENVIO: o protocolo GRAVADO (capa + DFDs completos) que o PDF reenviado vai SOBRESCREVER. */
+export type BaseReenvio = { protocolo: ProtocoloDetalhe; dfds: DfdDetalhe[] };
+/** Nº do DFD comparável (o mesmo DFD no gravado e no PDF). */
+const chaveDfd = (n: string | null | undefined) => String(n ?? "").trim();
+
 export function ProtocoloUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
@@ -88,6 +107,9 @@ export function ProtocoloUploadForm({
   pcas = [],
   regras = regrasPadrao(),
   orgaos = [],
+  reenvio = null,
+  iniciar = 0,
+  onConcluido,
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
@@ -95,6 +117,17 @@ export function ProtocoloUploadForm({
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
+  /**
+   * REENVIO (sobrescrever o protocolo GRAVADO com o mesmo PDF corrigido): só aceita o MESMO protocolo
+   * (nº e Id); compara capa/DFDs/itens com o gravado, herda os tratamentos que o PDF não traz, deixa
+   * editar tudo e, ao confirmar, regrava só o que mudou e exclui (ou mantém) os DFDs que não vieram.
+   * Sem ele: importação normal (botão "Importar protocolo").
+   */
+  reenvio?: BaseReenvio | null;
+  /** (reenvio) abre o lançador a cada mudança (o botão fica no banner do protocolo gravado). */
+  iniciar?: number;
+  /** (reenvio) sobrescrita concluída — o banner do gravado recarrega. */
+  onConcluido?: () => void;
 }) {
   const router = useRouter();
   const docRef = useRef<PdfDoc | null>(null);
@@ -162,7 +195,21 @@ export function ProtocoloUploadForm({
 
   const [importando, setImportando] = useState(false);
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
-  const [relatorio, setRelatorio] = useState<{ numero: string; importados: number; bloqueados: { numero: string; motivo: string }[] } | null>(null);
+  const [relatorio, setRelatorio] = useState<{
+    numero: string;
+    importados: number;
+    bloqueados: { numero: string; motivo: string }[];
+    /** (reenvio) DFDs sem diferença (não regravados) e gravados excluídos por não virem no PDF. */
+    iguais?: number;
+    excluidos?: number;
+  } | null>(null);
+  // REENVIO: DFDs gravados que NÃO vieram no PDF e o usuário decidiu MANTER (o padrão é excluir) +
+  // tratamentos herdados do gravado por DFD (transparência) + relatório de diferenças.
+  const [removidosManter, setRemovidosManter] = useState<Set<number>>(new Set());
+  const [herdados, setHerdados] = useState<Map<number, string[]>>(new Map());
+  const [relDiffAberto, setRelDiffAberto] = useState(false);
+  const gravadosPorNumero = useMemo(() => new Map((reenvio?.dfds ?? []).map((d) => [chaveDfd(d.numero), d])), [reenvio]);
+  const gravadoDe = (numero: string | null | undefined): DfdDetalhe | null => (reenvio ? (gravadosPorNumero.get(chaveDfd(numero)) ?? null) : null);
 
   useEffect(() => () => {
     void docRef.current?.destroy();
@@ -196,6 +243,28 @@ export function ProtocoloUploadForm({
     setPainel(null);
     setOcrPendente(new Set());
     setAnalise(null);
+    setRemovidosManter(new Set());
+    setHerdados(new Map());
+  }
+
+  // REENVIO: o botão do banner do gravado abre o lançador (só o PDF — sem criação manual).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do banner.
+  useEffect(() => {
+    if (!reenvio || iniciar <= 0) return;
+    setErro(null);
+    setStatus("idle");
+    setRelatorio(null);
+    setLauncher(true);
+  }, [iniciar]);
+
+  /** Normaliza o DFD lido do PDF e, no REENVIO, herda do gravado o que o PDF não traz (tratamentos). */
+  function prepararDfd(i: number, raw: DfdParseado, anoRef: number | null | undefined): { dfd: DfdParseado; auto: CampoTratavel[] } {
+    const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoRef);
+    const g = gravadoDe(dfd.numero);
+    if (!g) return { dfd, auto };
+    const h = herdarTratamentos(dfd, g, anoRef);
+    if (h.herdados.length > 0) setHerdados((m) => new Map(m).set(i, h.herdados));
+    return { dfd: h.dfd, auto };
   }
 
   function abrirVazio() {
@@ -246,8 +315,21 @@ export function ProtocoloUploadForm({
         await doc.destroy();
         return;
       }
+      // REENVIO: só o MESMO protocolo (nº e Id) — senão recusa sem tocar em nada.
+      if (reenvio) {
+        const motivo = identidadeReenvio(reenvio.protocolo, { numero: p.numero, idExterno: p.idExterno });
+        if (motivo) {
+          setStatus("error");
+          setErro(motivo);
+          await doc.destroy();
+          return;
+        }
+      }
       docRef.current = doc;
-      const autos = idx.dfds.map((d) => preverUnidadeDoDfd(d, orgaos, reparticoes));
+      // Unidade de cada DFD: a prevista pela assinatura; no REENVIO, a do DFD GRAVADO prevalece (é o
+      // tratamento já feito pela equipe) — a prevista segue como referência do "auto".
+      const previstos = idx.dfds.map((d) => preverUnidadeDoDfd(d, orgaos, reparticoes));
+      const autos = reenvio ? idx.dfds.map((d, i) => gravadoDe(d.numero)?.reparticaoId ?? previstos[i]) : previstos;
       // Ponto 2: o protocolo pode vir em nome do ÓRGÃO ou da UNIDADE (pelo Interessado — número
       // cadastrado, senão nome). Unidade → vira a unidade do protocolo; Órgão → guarda o órgão.
       const alvoInteressado = casarPorInteressado(p.interessado, orgaos, reparticoes);
@@ -259,17 +341,25 @@ export function ProtocoloUploadForm({
       setAssunto(p.assunto ?? "");
       setObservacao(p.observacao ?? "");
       setExtra({ idExterno: p.idExterno, documento: p.documento, localReparticao: p.localReparticao, valorCapa: p.valorCapa, nomeArquivo: p.nomeArquivo });
-      // Adivinha o PCA pela capa; pré-seleciona só se o ano existir cadastrado.
+      // Adivinha o PCA pela capa; pré-seleciona só se o ano existir cadastrado. No REENVIO, o PCA e a
+      // unidade do protocolo GRAVADO prevalecem (já definidos pela equipe; a comparação mostra se mudar).
       setAnoPcaDetectado(p.anoPca);
-      setAnoPca(p.anoPca != null && pcas.some((x) => x.ano === p.anoPca) ? p.anoPca : null);
+      setAnoPca(
+        reenvio?.protocolo.anoPca != null
+          ? reenvio.protocolo.anoPca
+          : p.anoPca != null && pcas.some((x) => x.ano === p.anoPca)
+            ? p.anoPca
+            : null,
+      );
       setOrigemPdf(true);
       setIndex(idx);
       setDfdRepIds(autos);
-      setAutoRepIds(autos);
-      setProtoRepId(repInteressado ?? autos.find((x) => x != null) ?? reparticaoAtivaId);
+      setAutoRepIds(previstos);
+      setProtoRepId(reenvio ? (reenvio.protocolo.reparticaoId ?? repInteressado) : (repInteressado ?? autos.find((x) => x != null) ?? reparticaoAtivaId));
       setProtoOrgaoId(orgaoInteressado);
       setStatus("idle");
       setLeitura(null);
+      setLauncher(false);
       setAberto(true);
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
     } catch (e) {
@@ -306,8 +396,9 @@ export function ProtocoloUploadForm({
       try {
         const raw = await parseDfdDoProtocolo(doc, idx0.dfds[i], nome);
         if (docRef.current !== doc) return;
-        // Previsão segue o PCA do PROTOCOLO (ponto 7) — o ano detectado na capa (fresco no índice).
-        const { dfd, auto } = normalizarSecoesDfd(raw, regras, idx0.protocolo.anoPca);
+        // Previsão segue o PCA do PROTOCOLO (ponto 7) — o ano detectado na capa (fresco no índice); no
+        // reenvio, o do protocolo gravado. Reenvio: herda do gravado o que o PDF não traz.
+        const { dfd, auto } = prepararDfd(i, raw, reenvio?.protocolo.anoPca ?? idx0.protocolo.anoPca);
         const abertoNoMeio = parsedRef.current.get(i); // aberto pelo usuário durante o parse
         if (abertoNoMeio) {
           viaCache(i, abertoNoMeio);
@@ -377,8 +468,15 @@ export function ProtocoloUploadForm({
 
   const nomeArq = extra.nomeArquivo ?? "protocolo.pdf";
 
+  // Já cadastrados: os da Mesa + (reenvio) os DFDs do protocolo GRAVADO — são deste mesmo processo.
+  const existentes: DfdExistente[] = reenvio
+    ? [
+        ...reenvio.dfds.map((d) => ({ numero: d.numero, protocoloNumero: reenvio.protocolo.numero, valorTotal: d.valorTotal, totalItens: d.totalItens })),
+        ...dfdsExistentes.filter((x) => !gravadosPorNumero.has(chaveDfd(x.numero))),
+      ]
+    : dfdsExistentes;
   const classificar = (dfdNumero: string): Situacao => {
-    const ex = dfdsExistentes.find((x) => x.numero.trim() === dfdNumero.trim());
+    const ex = existentes.find((x) => x.numero.trim() === dfdNumero.trim());
     if (!ex) return "novo";
     if (ex.protocoloNumero && ex.protocoloNumero.trim() !== numero.trim()) return "move";
     return "substitui";
@@ -461,6 +559,31 @@ export function ProtocoloUploadForm({
     return null;
   };
 
+  // ---- REENVIO: comparação de cada DFD (PDF + edições) com o GRAVADO — cache por objeto de DFD.
+  const rotuloUnidade = (id: number | null) => (id == null ? "—" : (repDe(id)?.codigo ?? `#${id}`));
+  const anoGravado = (g: DfdDetalhe) => g.anoPca ?? reenvio?.protocolo.anoPca ?? null;
+  const comparavelGravado = (g: DfdDetalhe): DfdComparavel => ({ ...g, anoPca: anoGravado(g) });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (gravado/cadastros novos).
+  const cacheComp = useMemo(() => new WeakMap<DfdParseado, { k: string; c: ComparacaoDfd }>(), [reenvio, reparticoes]);
+  const comparacaoDe = (idx: number): ComparacaoDfd | null => {
+    const d = parsed.get(idx);
+    const g = gravadoDe(index?.dfds[idx]?.numero);
+    if (!reenvio || !d) return null;
+    const repId = dfdRepIds[idx] ?? null;
+    const k = `${repId}|${anoPca}|${g?.id ?? "novo"}`;
+    const hit = cacheComp.get(d);
+    if (hit && hit.k === k) return hit.c;
+    // O DFD herda o ANO do PCA do protocolo ao gravar — a comparação usa o mesmo.
+    const c = compararDfd(g ? comparavelGravado(g) : null, { ...d, reparticaoId: repId, anoPca }, rotuloUnidade);
+    cacheComp.set(d, { k, c });
+    return c;
+  };
+  const situacaoDe = (idx: number, numeroDfd: string): string => {
+    if (!reenvio || !gravadoDe(numeroDfd)) return SITUACAO[classificar(numeroDfd)];
+    const c = comparacaoDe(idx);
+    return c ? rotuloSituacaoReenvio(c) : "A comparar";
+  };
+
   const compacta = abertoIdx >= 0; // DFD aberto ao lado → tabela estreita (rola no eixo x)
   // Uma linha por DFD para a planilha (`PlanilhaDfds`). `key` = idx (chave da seleção/edição em massa).
   const avaliacoes = new Map<number, LinhaAvaliada>();
@@ -478,7 +601,7 @@ export function ProtocoloUploadForm({
       valor: d ? (d.valorTotal ?? 0) : null,
       // Tipos de assinatura (Centi/Dropsigner/Adobe/Foxit). Antes do parse completo, as A/B do índice.
       assinaturas: gruposAssinatura(d?.assinaturas ?? di.assinaturas),
-      situacao: SITUACAO[classificar(di.numero)],
+      situacao: situacaoDe(idx, di.numero),
       processando: processandoDe(idx),
     };
     if (descartados.has(idx)) return { ...base, estado: "descartado" };
@@ -489,6 +612,8 @@ export function ProtocoloUploadForm({
     avaliacoes.set(idx, r);
     return { ...base, estado: r.estado, resumo: r.resumo, validacao: r.validacao };
   });
+  // Registro da seleção (chips + somatório) — as linhas marcadas, na ordem da planilha.
+  const linhasSel = linhasDfd.filter((l) => sel.has(l.key));
   const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
   const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // não bloqueiam (avisos)
   const dfdsComErro = linhasErro.length;
@@ -505,17 +630,69 @@ export function ProtocoloUploadForm({
   const existentesMantidos = [...mantidosExistentes]
     .map((i) => index?.dfds[i]?.numero)
     .filter((n): n is string => n != null && classificar(n) === "substitui")
-    .map((n) => dfdsExistentes.find((x) => x.numero.trim() === n.trim()))
+    .map((n) => existentes.find((x) => x.numero.trim() === n.trim()))
     .filter((x): x is DfdExistente => !!x);
+  // REENVIO: DFDs GRAVADOS que não vieram no PDF — excluídos ao sobrescrever, salvo os que o usuário MANTÉM
+  // (esses continuam no processo → entram na somatória/contagem da capa).
+  const numerosPdf = new Set((index?.dfds ?? []).map((d) => chaveDfd(d.numero)));
+  const removidos = (reenvio?.dfds ?? [])
+    .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
+    .map((g) => ({ id: g.id, numero: g.numero, planejamento: g.planejamento, valorTotal: g.valorTotal, totalItens: g.totalItens, excluir: !removidosManter.has(g.id) }));
+  const removidosMantidos = removidos.filter((r) => !r.excluir);
   const somatorioDfds =
-    ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0) + existentesMantidos.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
+    ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0) +
+    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.valorTotal ?? 0), 0);
   const itensDfds =
-    ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0) + existentesMantidos.reduce((s, x) => s + (x.totalItens ?? 0), 0);
-  const totalConsiderados = ativos.length + existentesMantidos.length;
+    ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0) +
+    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.totalItens ?? 0), 0);
+  const totalConsiderados = ativos.length + existentesMantidos.length + removidosMantidos.length;
   // Somatória COMPLETA = todos os DFDs do processo LIDOS (um DFD ilegível somaria 0 → falsa divergência).
   const lidos = ativos.filter((i) => parsed.has(i)).length;
   const completo = !analisando && lidos === ativos.length;
   const conc = conciliacaoCapa({ valorCapa: extra.valorCapa, somatorio: somatorioDfds, totalDfds: totalConsiderados, completo }, regras, { categoria });
+
+  // REENVIO: contagem por situação (os descartados — "Manter o gravado" — não contam), diferenças da capa.
+  const contagemReenvio = { novos: 0, alterados: 0, iguais: 0, analisando: 0 };
+  if (reenvio) {
+    for (const i of ativos) {
+      const g = gravadoDe(index?.dfds[i]?.numero);
+      const c = comparacaoDe(i);
+      if (!g) contagemReenvio.novos++;
+      else if (!c) contagemReenvio.analisando++;
+      else if (c.situacao === "igual") contagemReenvio.iguais++;
+      else contagemReenvio.alterados++;
+    }
+  }
+  const capaDiffs = reenvio
+    ? compararCapa(
+        { ...reenvio.protocolo },
+        {
+          data: data || null,
+          interessado: interessado || null,
+          documento: extra.documento,
+          assunto: assunto || null,
+          observacao: observacao || null,
+          valorCapa: extra.valorCapa,
+          localReparticao: extra.localReparticao,
+          anoPca,
+          reparticaoId: protoRepId,
+        },
+        rotuloUnidade,
+      )
+    : [];
+  const relatorioDiffLinhas = reenvio
+    ? linhasRelatorioReenvio({
+        numero,
+        idExterno: extra.idExterno,
+        capa: capaDiffs,
+        dfds: ativos.flatMap((i) => {
+          const c = comparacaoDe(i);
+          const di = index?.dfds[i];
+          return c && di ? [{ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null, comparacao: c }] : [];
+        }),
+        removidos,
+      })
+    : [];
 
   // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
   const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
@@ -552,7 +729,7 @@ export function ProtocoloUploadForm({
     const cached = parsed.get(idx);
     if (cached) return cached;
     const raw = await parseDfdDoProtocolo(doc, di, nomeArq);
-    const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoPca);
+    const { dfd, auto } = prepararDfd(idx, raw, anoPca);
     setParsed((m) => new Map(m).set(idx, dfd));
     setAutoMap((m) => new Map(m).set(idx, auto));
     refinarUnidade(idx, dfd); // prevê a unidade pela assinatura (só preenche se vazia)
@@ -656,6 +833,22 @@ export function ProtocoloUploadForm({
 
   async function protocolar() {
     if (!index) return;
+    // REENVIO: confirma a sobrescrita com o resumo do que muda (o que é igual não é regravado).
+    const aExcluir = removidos.filter((r) => r.excluir);
+    const resumoReenvio = reenvio
+      ? `${contagemReenvio.novos} novo(s), ${contagemReenvio.alterados} alterado(s), ${contagemReenvio.iguais} sem diferença` +
+        `${contagemReenvio.analisando > 0 ? `, ${contagemReenvio.analisando} ainda a comparar` : ""}` +
+        `${capaDiffs.length > 0 ? `, ${capaDiffs.length} campo(s) da capa` : ""}` +
+        `${removidos.length > 0 ? `; fora do PDF: ${aExcluir.length} excluído(s), ${removidos.length - aExcluir.length} mantido(s)` : ""}`
+      : "";
+    if (
+      reenvio &&
+      !confirm(
+        `Sobrescrever o protocolo ${numero} com o PDF reenviado?\n\n${resumoReenvio}.\n\n` +
+          `${aExcluir.length > 0 ? `ATENÇÃO: ${aExcluir.length} DFD(s) gravado(s) serão EXCLUÍDOS (com os itens).\n` : ""}Esta ação regrava os dados no banco.`,
+      )
+    )
+      return;
     setImportando(true);
     setErro(null);
     setRelatorio(null);
@@ -665,6 +858,7 @@ export function ProtocoloUploadForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "start-protocolo",
+          ...(reenvio ? { reenvio: { protocoloId: reenvio.protocolo.id, resumo: resumoReenvio.slice(0, 500) } } : {}),
           protocolo: {
             numero,
             idExterno: extra.idExterno,
@@ -690,6 +884,8 @@ export function ProtocoloUploadForm({
       const dfds = index.dfds;
       const bloqueados: { numero: string; motivo: string }[] = [];
       let importados = 0;
+      let iguais = 0;
+      let excluidos = 0;
       for (let i = 0; i < dfds.length; i++) {
         if (descartados.has(i)) continue; // DFD descartado (duplicado / "manter o existente") — não protocola
         const di = dfds[i];
@@ -699,7 +895,7 @@ export function ProtocoloUploadForm({
         if (!full) {
           if (!doc) break;
           try {
-            full = normalizarSecoesDfd(await parseDfdDoProtocolo(doc, di, nomeArq), regras, anoPca).dfd;
+            full = prepararDfd(i, await parseDfdDoProtocolo(doc, di, nomeArq), anoPca).dfd;
           } catch (e) {
             bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
             continue;
@@ -715,6 +911,13 @@ export function ProtocoloUploadForm({
           } catch {
             /* OCR é auxiliar — segue sem assinatura (a conferência decide) */
           }
+        }
+        // REENVIO: DFD sem NENHUMA diferença em relação ao gravado não é regravado (fica como está).
+        const gravado = gravadoDe(di.numero);
+        if (gravado && compararDfd(comparavelGravado(gravado), { ...full, reparticaoId: dfdRepIds[i] ?? null, anoPca }).situacao === "igual") {
+          iguais++;
+          setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length}) — sem diferença` });
+          continue;
         }
         // MESMA conferência da tabela (fonte única): DFD com erro nunca é protocolado.
         const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos });
@@ -759,9 +962,23 @@ export function ProtocoloUploadForm({
         }
         setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
       }
-      setRelatorio({ numero, importados, bloqueados });
+      // REENVIO: exclui os DFDs gravados que não vieram no PDF (os que o usuário não decidiu manter).
+      for (let k = 0; k < aExcluir.length; k++) {
+        const r = aExcluir[k];
+        setProgresso({ feito: k, total: aExcluir.length, label: `excluindo DFD ${r.numero} (${k + 1}/${aExcluir.length})` });
+        try {
+          const del = await fetch(`/api/dfd/${r.id}`, { method: "DELETE" });
+          const dj = (await del.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+          if (!del.ok || !dj.ok) throw new Error(dj.error ?? `HTTP ${del.status}`);
+          excluidos++;
+        } catch (e) {
+          bloqueados.push({ numero: r.numero, motivo: `não foi possível excluir (${e instanceof Error ? e.message : "falha"})` });
+        }
+      }
+      setRelatorio({ numero, importados, bloqueados, ...(reenvio ? { iguais, excluidos } : {}) });
       fechar();
       router.refresh();
+      onConcluido?.();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao protocolar.");
     } finally {
@@ -845,18 +1062,12 @@ export function ProtocoloUploadForm({
             { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) },
           );
 
-  return (
-    <div className="space-y-4">
-      {/* Botão único de importação (à direita) — abre o lançador */}
-      <div className="flex justify-end">
-        <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-          Importar protocolo
-        </Button>
-      </div>
-
+  // Leitura do PDF (índice) e falha — na página (importação) ou dentro do lançador (reenvio).
+  const avisoLeitura = (
+    <>
       {erro && status === "error" && (
         <Callout kind="danger" icon={<IconAlert className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Não foi possível ler o protocolo</p>
+          <p className="font-semibold">{reenvio ? "Não foi possível reenviar este PDF" : "Não foi possível ler o protocolo"}</p>
           <p className="opacity-90">{erro}</p>
         </Callout>
       )}
@@ -873,28 +1084,77 @@ export function ProtocoloUploadForm({
           )}
         </Callout>
       )}
-      {relatorio && (
-        <Callout kind={relatorio.bloqueados.length > 0 ? "warn" : "ok"} icon={<IconCheck className="h-5 w-5" />} className="mt-4">
-          <p className="font-semibold">Protocolo {relatorio.numero} salvo!</p>
-          <p className="opacity-90">
-            {num(relatorio.importados)} DFD{relatorio.importados === 1 ? "" : "s"} protocolado
-            {relatorio.importados === 1 ? "" : "s"}
-            {relatorio.bloqueados.length > 0 ? ` · ${relatorio.bloqueados.length} bloqueado(s)` : ""}.
-          </p>
-          {relatorio.bloqueados.length > 0 && (
-            <ul className="mt-1.5 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-[12px] opacity-90">
-              {relatorio.bloqueados.map((b) => (
-                <li key={b.numero}>
-                  DFD {b.numero}: {b.motivo}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Callout>
+    </>
+  );
+  // Resultado da protocolação/sobrescrita (importados, bloqueados; no reenvio: sem diferença e excluídos).
+  const resultado = relatorio && (
+    <Callout kind={relatorio.bloqueados.length > 0 ? "warn" : "ok"} icon={<IconCheck className="h-5 w-5" />} className={reenvio ? "" : "mt-4"}>
+      <p className="font-semibold">
+        Protocolo {relatorio.numero} {reenvio ? "sobrescrito" : "salvo"}!
+      </p>
+      <p className="opacity-90">
+        {num(relatorio.importados)} DFD{relatorio.importados === 1 ? "" : "s"} {reenvio ? "regravado" : "protocolado"}
+        {relatorio.importados === 1 ? "" : "s"}
+        {relatorio.iguais != null ? ` · ${num(relatorio.iguais)} sem diferença (mantido${relatorio.iguais === 1 ? "" : "s"})` : ""}
+        {relatorio.excluidos != null && relatorio.excluidos > 0 ? ` · ${num(relatorio.excluidos)} excluído(s) (fora do PDF)` : ""}
+        {relatorio.bloqueados.length > 0 ? ` · ${relatorio.bloqueados.length} bloqueado(s)` : ""}.
+      </p>
+      {relatorio.bloqueados.length > 0 && (
+        <ul className="mt-1.5 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-[12px] opacity-90">
+          {relatorio.bloqueados.map((b) => (
+            <li key={b.numero}>
+              DFD {b.numero}: {b.motivo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Callout>
+  );
+
+  return (
+    <div className={reenvio ? "contents" : "space-y-4"}>
+      {/* Botão único de importação (à direita) — abre o lançador. No REENVIO o botão fica no banner do
+          protocolo gravado (e a leitura/erro aparecem no próprio lançador). */}
+      {!reenvio && (
+        <>
+          <div className="flex justify-end">
+            <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+              Importar protocolo
+            </Button>
+          </div>
+          {avisoLeitura}
+          {resultado}
+        </>
+      )}
+
+      {/* REENVIO: lançador SÓ do PDF (o mesmo protocolo) + leitura/erro dentro dele. */}
+      {reenvio && (
+        <Modal
+          open={launcher}
+          onClose={() => status !== "parsing" && setLauncher(false)}
+          titulo={`Reenviar o protocolo ${reenvio.protocolo.numero}`}
+          size="lg"
+          bloqueado={status === "parsing"}
+        >
+          <Dropzone
+            accept=".pdf"
+            onFile={(f) => handleFile(f)}
+            titulo="Soltar o PDF corrigido do protocolo"
+            icon={<IconRefresh className="h-7 w-7" />}
+            dica={`Só o MESMO protocolo (nº ${reenvio.protocolo.numero}${reenvio.protocolo.idExterno ? ` · Id ${reenvio.protocolo.idExterno}` : ""}). Você compara, ajusta e só então sobrescreve.`}
+          />
+          {avisoLeitura}
+        </Modal>
+      )}
+      {/* REENVIO concluído: o resumo (o banner do gravado recarrega por baixo). */}
+      {reenvio && (
+        <Modal open={!!relatorio} onClose={() => setRelatorio(null)} titulo="Reenvio concluído" size="md">
+          {resultado}
+        </Modal>
       )}
 
       {/* Lançador de importação — banner dividido ao meio: soltar/escolher | criar manual */}
-      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Importar protocolo" size="xl">
+      <Modal open={launcher && !reenvio} onClose={() => setLauncher(false)} titulo="Importar protocolo" size="xl">
         <div className="grid gap-4 sm:grid-cols-2">
           <Dropzone
             accept=".pdf"
@@ -930,8 +1190,8 @@ export function ProtocoloUploadForm({
       <Modal
         open={aberto}
         onClose={fechar}
-        titulo={numero ? `Protocolo ${numero}` : "Novo protocolo"}
-        cabecalho={<ProtocoloCabecalho numero={numero || "novo"} idExterno={extra.idExterno} assunto={assunto || null} />}
+        titulo={reenvio ? `Reenvio — Protocolo ${numero}` : numero ? `Protocolo ${numero}` : "Novo protocolo"}
+        cabecalho={<ProtocoloCabecalho numero={numero || "novo"} idExterno={extra.idExterno} assunto={assunto || null} reenvio={!!reenvio} />}
         size="lg"
         fecharNoBackdrop={false}
         bloqueado={importando}
@@ -971,7 +1231,16 @@ export function ProtocoloUploadForm({
                           {/* Conflito com um DFD já cadastrado: manter o EXISTENTE = descartar este do envio. */}
                           {!descartados.has(abertoIdx) && !(dupComp !== "ignora" && dupPendente(abertoIdx)) && conflitaComExistente(abertoIdx) && (
                             <Button variant="secondary" onClick={() => descartarDfd(abertoIdx)} disabled={importando}>
-                              Manter o existente
+                              {gravadoDe(index?.dfds[abertoIdx]?.numero) ? "Manter o gravado" : "Manter o existente"}
+                            </Button>
+                          )}
+                          {/* REENVIO: as diferenças deste DFD em relação ao gravado (painel da direita). */}
+                          {reenvio && gravadoDe(index?.dfds[abertoIdx]?.numero) && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
+                            >
+                              Diferenças ({num(comparacaoDe(abertoIdx)?.total ?? 0)})
                             </Button>
                           )}
                         </>
@@ -1035,6 +1304,8 @@ export function ProtocoloUploadForm({
                       setPainel(null);
                       editarAberto((d) => removerItemDfd(d, i));
                     }}
+                    comparacao={abertoIdx >= 0 ? comparacaoDe(abertoIdx) : null}
+                    herdados={abertoIdx >= 0 ? herdados.get(abertoIdx) : undefined}
                   />
                 ),
               }
@@ -1049,15 +1320,23 @@ export function ProtocoloUploadForm({
               </Callout>
             )}
             {sel.size > 0 && !importando && (
-              <BarraEdicaoMassa
-                qtd={sel.size}
-                reparticoes={reparticoes}
-                anoPadrao={anoPca}
-                regras={regras}
-                aplicando={aplicandoMassa}
-                onAplicar={aplicarMassa}
+              <BarraSelecao
+                registros={linhasSel.map((l) => ({ key: l.key, rotulo: `DFD ${l.numero}` }))}
+                onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
                 onLimpar={() => setSel(new Set())}
-              />
+                bloqueada={aplicandoMassa}
+                resumo={
+                  <ResumoSelecao
+                    qtd={linhasSel.length}
+                    singular="DFD"
+                    plural="DFDs"
+                    soma={linhasSel.reduce((t, l) => t + (l.valor ?? 0), 0)}
+                    extra={`${num(linhasSel.reduce((t, l) => t + (l.itens ?? 0), 0))} itens`}
+                  />
+                }
+              >
+                <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={anoPca} regras={regras} aplicando={aplicandoMassa} onAplicar={aplicarMassa} />
+              </BarraSelecao>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
               {importando && progresso ? (
@@ -1088,9 +1367,15 @@ export function ProtocoloUploadForm({
                     Cancelar
                   </Button>
                 )}
-                <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-                  Protocolar
-                </Button>
+                {reenvio ? (
+                  <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconRefresh className="h-[18px] w-[18px]" />}>
+                    Sobrescrever protocolo
+                  </Button>
+                ) : (
+                  <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+                    Protocolar
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1146,8 +1431,38 @@ export function ProtocoloUploadForm({
               Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule existentes.
             </Callout>
           }
+          topo={
+            reenvio ? (
+              <ComparacaoProtocolo
+                contagem={contagemReenvio}
+                capa={capaDiffs}
+                removidos={removidos}
+                bloqueado={importando}
+                onRemovidoChange={(id, excluir) =>
+                  setRemovidosManter((s) => {
+                    const n = new Set(s);
+                    if (excluir) n.delete(id);
+                    else n.add(id);
+                    return n;
+                  })
+                }
+                onTodosRemovidos={(excluir) => setRemovidosManter(excluir ? new Set() : new Set(removidos.map((r) => r.id)))}
+                onRelatorio={() => setRelDiffAberto(true)}
+              />
+            ) : undefined
+          }
         />
       </Modal>
+
+      {/* REENVIO: relatório de DIFERENÇAS (copiável) — capa, DFDs alterados campo a campo, itens e removidos. */}
+      {reenvio && (
+        <RelatorioErros
+          open={relDiffAberto}
+          onClose={() => setRelDiffAberto(false)}
+          titulo={`Diferenças — reenvio do protocolo ${numero}`}
+          linhas={relatorioDiffLinhas}
+        />
+      )}
 
       <RelatorioErros
         open={relatorioAberto}

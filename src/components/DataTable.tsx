@@ -1,14 +1,28 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { DateFilterHeader, type IntervaloData } from "./DateFilterHeader";
+import {
+  aplicarFiltros,
+  type ColunaDados,
+  type FaixaValor,
+  type FiltroValor,
+  filtroAtivo,
+  type IntervaloData,
+  normalizarFaixa,
+  normalizarSelecao,
+  ordenarIndices,
+} from "@/lib/tabela-filtros";
+import { DateFilterHeader } from "./DateFilterHeader";
+import { IconFilter } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
+import { RangeFilterHeader } from "./RangeFilterHeader";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
-// **filtro em TODOS os cabeçalhos** (multi-select por padrão; **filtro de datas**
-// nas colunas de data), ordenação e **paginação** — tudo interno. Por token; rola
-// no mobile sem estourar a página.
+// **filtro em TODOS os cabeçalhos** — multi-select por padrão (inclusive colunas com VÁRIOS valores
+// por linha), **datas** (intervalo) e **faixa R$** (barra de arrasto) — CONECTADOS entre si (as opções
+// de cada coluna vêm das linhas que passam nos demais filtros), coluna filtrada com o tópico MARCADO,
+// ordenação e **paginação** — tudo interno. Por token; rola no mobile sem estourar a página.
 export type Column<R> = {
   key: string;
   header: string;
@@ -16,12 +30,18 @@ export type Column<R> = {
   /** Alinhamento horizontal da coluna. Padrão = **center** (dados centralizados); use "right"
    * para valores monetários (R$) e "left" só em exceções. */
   align?: "left" | "center" | "right";
-  /** "values" (padrão), "date" (intervalo DE/ATÉ) ou "none" (sem filtro). */
-  filter?: "values" | "date" | "none";
-  /** Opções fixas do multi-select; se omitido, derivadas de `value`. */
+  /** "values" (padrão), "date" (intervalo DE/ATÉ), "range" (faixa numérica — colunas R$, com
+   * `numero`) ou "none" (sem filtro). */
+  filter?: "values" | "date" | "range" | "none";
+  /** Opções fixas (ordem) do multi-select; se omitido, derivadas de `value`/`valores`. */
   filterOptions?: string[];
   /** Valor textual da célula: p/ derivar opções, ordenar e filtrar (datas em ISO). */
   value?: (row: R) => string;
+  /** VÁRIOS valores da célula para o FILTRO (ex.: Estado = todos os problemas, inclusive os ocultos
+   * no "+N"): a linha passa se QUALQUER um estiver marcado. A ordenação segue `value`. */
+  valores?: (row: R) => string[];
+  /** Valor NUMÉRICO da célula (filtro "range" e ordenação numérica — ex.: valores R$). */
+  numero?: (row: R) => number | null | undefined;
   minWidth?: number;
   /** Sem quebra de linha: a coluna ganha a largura do CONTEÚDO (dados curtos — nº, sigla, badges,
    * valores). A tabela cresce e rola no eixo x do próprio container (nunca estoura a página). */
@@ -29,7 +49,6 @@ export type Column<R> = {
 };
 
 type Key = string | number;
-type FiltroValor = string[] | IntervaloData;
 
 export function DataTable<R>({
   columns,
@@ -48,6 +67,7 @@ export function DataTable<R>({
   scrollInterno = false,
   linhasPadrao,
   density,
+  reservaInferior = 0,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -86,6 +106,9 @@ export function DataTable<R>({
    * Usado para diferenciar visualmente visões que compartilham o mesmo espaço.
    */
   density?: "compact" | "default" | "comfortable";
+  /** Altura (px) RESERVADA no fim do display para algo fixo abaixo da tabela (ex.: a barra de
+   * seleção da Mesa) — `scrollInterno`/`fillHeight` descontam, então nada fica por baixo dela. */
+  reservaInferior?: number;
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
@@ -100,7 +123,7 @@ export function DataTable<R>({
   const [maxH, setMaxH] = useState<number | null>(null); // altura do corpo rolável (scrollInterno)
   useEffect(() => {
     if (!fillHeight) return;
-    const RESERVA = 32; // respiro até a borda inferior (padding do main + folga)
+    const RESERVA = 32 + reservaInferior; // respiro até a borda inferior (padding do main + folga + barra fixa)
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
@@ -128,12 +151,12 @@ export function DataTable<R>({
       window.removeEventListener("resize", calc);
       ro.disconnect();
     };
-  }, [fillHeight]);
+  }, [fillHeight, reservaInferior]);
 
   // scrollInterno: mede a altura disponível até o fim da viewport p/ o corpo rolável (desktop).
   useEffect(() => {
     if (!scrollInterno) return;
-    const RESERVA = 32;
+    const RESERVA = 32 + reservaInferior;
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
@@ -154,78 +177,37 @@ export function DataTable<R>({
       window.removeEventListener("resize", calc);
       ro.disconnect();
     };
-  }, [scrollInterno]);
+  }, [scrollInterno, reservaInferior]);
 
   // Linhas por página efetivas: scrollInterno (seletor) › fillHeight (medido) › pageSize.
   const tamPagina = scrollInterno ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
-  const opcoes = useMemo(() => {
-    const o: Record<string, string[]> = {};
-    for (const c of columns) {
-      if ((c.filter ?? "values") === "values") {
-        o[c.key] = c.filterOptions ??
-          (c.value ? [...new Set(rows.map((r) => c.value?.(r) ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")) : []);
-      }
-    }
-    return o;
-  }, [columns, rows]);
-
-  // Anos presentes em cada coluna de data — alimentam a grade "Ano" do período.
-  const anosData = useMemo(() => {
-    const m: Record<string, number[]> = {};
-    for (const c of columns) {
-      if ((c.filter ?? "values") === "date" && c.value) {
-        const ys = [
-          ...new Set(
-            rows
-              .map((r) => c.value?.(r)?.slice(0, 4))
-              .filter((s): s is string => !!s && /^\d{4}$/.test(s)),
-          ),
-        ]
-          .map(Number)
-          .sort((a, b) => b - a);
-        m[c.key] = ys.length ? ys : [new Date().getFullYear()];
-      }
-    }
-    return m;
-  }, [columns, rows]);
-
-  const filtradas = useMemo(() => {
-    return rows.filter((r) => {
-      for (const c of columns) {
-        const f = filters[c.key];
-        if (!f || !c.value) continue;
-        if ((c.filter ?? "values") === "date" && !Array.isArray(f)) {
-          const v = c.value(r);
-          if (f.de && v < f.de) return false;
-          if (f.ate && v > f.ate) return false;
-        } else if (Array.isArray(f) && f.length > 0) {
-          const opts = opcoes[c.key] ?? [];
-          if (f.length < opts.length && !f.includes(c.value(r))) return false;
+  // Valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui).
+  const dados = useMemo<ColunaDados[]>(
+    () =>
+      columns.map((c): ColunaDados => {
+        const tipo = c.filter ?? "values";
+        if (tipo === "values") {
+          const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
+          return { tipo, vals, ordem: c.filterOptions };
         }
-      }
-      return true;
-    });
-  }, [rows, columns, filters, opcoes]);
+        if (tipo === "date") return { tipo, vals: rows.map((r) => c.value?.(r) ?? "") };
+        if (tipo === "range") return { tipo, vals: rows.map((r) => c.numero?.(r) ?? null) };
+        return { tipo: "none" };
+      }),
+    [columns, rows],
+  );
 
+  // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada.
+  const facetas = useMemo(() => aplicarFiltros(rows.length, dados, columns.map((c) => filters[c.key])), [rows.length, dados, columns, filters]);
+
+  // Ordenação pela chave extraída uma vez (numérica p/ `numero`; texto natural senão; vazios no fim).
   const ordenadas = useMemo(() => {
-    if (!sort.key) return filtradas;
-    const col = columns.find((c) => c.key === sort.key);
-    if (!col?.value) return filtradas;
-    const getV = col.value;
-    const arr = [...filtradas].sort((a, b) => {
-      const va = getV(a);
-      const vb = getV(b);
-      const na = Number(va);
-      const nb = Number(vb);
-      const cmp =
-        va !== "" && vb !== "" && !Number.isNaN(na) && !Number.isNaN(nb)
-          ? na - nb
-          : va.localeCompare(vb, "pt-BR");
-      return sort.dir === "asc" ? cmp : -cmp;
-    });
-    return arr;
-  }, [filtradas, sort, columns]);
+    const col = sort.key ? columns.find((c) => c.key === sort.key) : undefined;
+    if (!col || (!col.numero && !col.value)) return facetas.passam.map((i) => rows[i]);
+    const chaves = rows.map((r) => (col.numero ? col.numero(r) : col.value?.(r)));
+    return ordenarIndices(facetas.passam, chaves, sort.dir).map((i) => rows[i]);
+  }, [facetas, sort, columns, rows]);
 
   const total = ordenadas.length;
   const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;
@@ -234,9 +216,17 @@ export function DataTable<R>({
 
   const sel = selected ?? new Set<Key>();
   const todos = visiveis.length > 0 && visiveis.every((r) => sel.has(getKey(r)));
+  // Colunas com filtro ATIVO (tópico marcado) — e o "Limpar filtros" do rodapé.
+  const ativos = columns.filter((c) => filtroAtivo(c.filter ?? "values", filters[c.key]));
 
-  function aplicarFiltro(key: string, v: FiltroValor) {
-    setFilters((f) => ({ ...f, [key]: v }));
+  /** Grava (ou remove, com `null`) o filtro de uma coluna e volta à 1ª página. */
+  function aplicarFiltro(key: string, v: FiltroValor | null) {
+    setFilters((f) => {
+      const n = { ...f };
+      if (v == null) delete n[key];
+      else n[key] = v;
+      return n;
+    });
     setPage(1);
   }
   function alternarTodos() {
@@ -282,37 +272,53 @@ export function DataTable<R>({
                   />
                 </th>
               )}
-              {columns.map((c) => {
+              {columns.map((c, j) => {
                 const tipo = c.filter ?? "values";
+                const marcado = filtroAtivo(tipo, filters[c.key]);
                 // Texto do cabeçalho: right→direita, left→esquerda, padrão→CENTRO (como as células).
                 const alinhaTexto = c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center";
-                // Popover do filtro (MultiSelectHeader) abre alinhado ao início, exceto colunas à direita.
+                // Popover do filtro abre alinhado ao início, exceto colunas à direita.
                 const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
+                const opcoes = facetas.opcoes[j] ?? [];
                 return (
                   <th
                     key={c.key}
                     className={`${head} ${alinhaTexto} ${c.nowrap ? "whitespace-nowrap" : ""}`}
-                    style={c.minWidth ? { minWidth: c.minWidth } : undefined}
+                    // Coluna FILTRADA: tópico marcado também por um sublinhado accent no cabeçalho.
+                    style={{ ...(c.minWidth ? { minWidth: c.minWidth } : {}), ...(marcado ? { boxShadow: "inset 0 -2px 0 var(--accent)" } : {}) }}
+                    aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                   >
                     {tipo === "date" ? (
                       <DateFilterHeader
                         label={c.header}
-                        value={filters[c.key] as IntervaloData}
-                        anos={anosData[c.key]}
-                        onApply={(v) => aplicarFiltro(c.key, v)}
+                        value={filters[c.key] as IntervaloData | undefined}
+                        anos={facetas.anos[j]?.length ? (facetas.anos[j] as number[]) : undefined}
+                        onApply={(v) => aplicarFiltro(c.key, v.de || v.ate ? v : null)}
                         onSort={(d) => setSort({ key: c.key, dir: d })}
                         sortDir={sortDe(c.key)}
                         align={alinha}
                       />
-                    ) : tipo === "values" && (opcoes[c.key]?.length ?? 0) > 0 ? (
-                      <MultiSelectHeader
+                    ) : tipo === "range" ? (
+                      <RangeFilterHeader
                         label={c.header}
-                        options={opcoes[c.key]}
-                        value={(filters[c.key] as string[]) ?? []}
-                        onApply={(v) => aplicarFiltro(c.key, v)}
+                        dominio={facetas.dominios[j] ?? []}
+                        value={filters[c.key] as FaixaValor | undefined}
+                        onApply={(f) => aplicarFiltro(c.key, normalizarFaixa(f, facetas.dominios[j] ?? []))}
                         onSort={(d) => setSort({ key: c.key, dir: d })}
                         sortDir={sortDe(c.key)}
                         align={alinha}
+                        marcado={marcado}
+                      />
+                    ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
+                      <MultiSelectHeader
+                        label={c.header}
+                        options={opcoes}
+                        value={(filters[c.key] as string[] | undefined) ?? []}
+                        onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
+                        onSort={(d) => setSort({ key: c.key, dir: d })}
+                        sortDir={sortDe(c.key)}
+                        align={alinha}
+                        marcado={marcado}
                       />
                     ) : (
                       <span>{c.header}</span>
@@ -392,6 +398,19 @@ export function DataTable<R>({
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
         <div className="flex items-center gap-3">
+          {ativos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilters({});
+                setPage(1);
+              }}
+              title={`Filtros ativos: ${ativos.map((c) => c.header).join(", ")}`}
+              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-chip px-2 text-[12px] font-semibold text-accent hover:bg-accent-soft"
+            >
+              <IconFilter className="h-3.5 w-3.5" /> Limpar filtros ({ativos.length})
+            </button>
+          )}
           {scrollInterno && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span>Linhas</span>

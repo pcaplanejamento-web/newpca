@@ -18,11 +18,17 @@ import { DfdCabecalho, DfdView, type DfdVisualItem } from "@/components/DfdView"
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
-import { BarraEdicaoMassa } from "@/components/BarraEdicaoMassa";
+import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
+import { BarraSelecao, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
+import { GatilhoFiltro } from "@/components/GatilhoFiltro";
+import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
 import { EstadoPonto, EstadoResumo } from "@/components/EstadoCelula";
 import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
+import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
+import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
+import { brl } from "@/lib/format";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
@@ -248,6 +254,73 @@ function PcaPickerDemo() {
   );
 }
 
+/** Reenvio do protocolo: DFD gravado × o do PDF corrigido (diferenças reais via `compararDfd`, puro). */
+const REENVIO_GRAVADO: DfdComparavel = {
+  numero: "531",
+  planejamento: "600",
+  tipo: "DFD-S — Solução",
+  objeto: "Aquisição de material de expediente",
+  orgaoEntidade: "Prefeitura Municipal de Rio Verde",
+  setorRequisitante: "SMS",
+  responsavel: "ANA SOUZA",
+  matricula: "1",
+  email: null,
+  telefone: null,
+  numeroContrato: null,
+  numeroAta: null,
+  numeroLicitacao: null,
+  anoPca: 2027,
+  reparticaoId: 2,
+  valorTotal: 150,
+  secoes: [
+    { titulo: "3 - JUSTIFICATIVA", texto: "Atender a demanda das unidades de saúde." },
+    { titulo: "6 - PRIORIDADE", texto: "BAIXA" },
+  ],
+  assinaturas: [{ nome: "ANA SOUZA", data: "10/03/2026" }],
+  itens: [
+    { item: 1, codigo: "100", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 10, valorUnitario: 5, valorTotal: 50 },
+    { item: 2, codigo: "200", descricao: "PAPEL A4", unidade: "RESMA", quantidade: 5, valorUnitario: 20, valorTotal: 100 },
+  ],
+};
+const REENVIO_COMPARACAO = compararDfd(REENVIO_GRAVADO, {
+  ...REENVIO_GRAVADO,
+  valorTotal: 219,
+  secoes: [
+    { titulo: "3 - JUSTIFICATIVA", texto: "Atender a demanda das unidades de saúde." },
+    { titulo: "6 - PRIORIDADE", texto: "ALTA" },
+  ],
+  itens: [
+    { item: 1, codigo: "100", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 12, valorUnitario: 5, valorTotal: 60 },
+    { item: 2, codigo: "200", descricao: "PAPEL A4", unidade: "RESMA", quantidade: 5, valorUnitario: 20, valorTotal: 100 },
+    { item: 3, codigo: "300", descricao: "CLIPS Nº 2", unidade: "CX", quantidade: 1, valorUnitario: 9, valorTotal: 9 },
+  ],
+});
+
+function ReenvioDemo() {
+  const [removidos, setRemovidos] = useState<RemovidoReenvio[]>([
+    { id: 1, numero: "702", planejamento: "811", valorTotal: 12_450.9, excluir: true },
+    { id: 2, numero: "705", planejamento: null, valorTotal: 380, excluir: false },
+  ]);
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <ComparacaoProtocolo
+        contagem={{ novos: 1, alterados: 2, iguais: 12, analisando: 0 }}
+        capa={[{ campo: "assunto", rotulo: "Assunto", antes: "INCLUSÃO - PCA 2027", depois: "ALTERAÇÃO NÃO ONEROSA - PCA 2027" }]}
+        removidos={removidos}
+        onRemovidoChange={(id, excluir) => setRemovidos((l) => l.map((r) => (r.id === id ? { ...r, excluir } : r)))}
+        onTodosRemovidos={(excluir) => setRemovidos((l) => l.map((r) => ({ ...r, excluir })))}
+        onRelatorio={() => toast("Relatório de diferenças (copiável)")}
+      />
+      <div className="space-y-4">
+        {/* Painel "Diferenças" do DFD aberto (ao lado, no banner do reenvio). */}
+        <ComparacaoDfdView comparacao={REENVIO_COMPARACAO} herdados={["Tipo", "Validação da assinatura (equipe)"]} />
+        {/* Um campo isolado: gravado × novo. */}
+        <DiffLinha d={{ campo: "observacao", rotulo: "Observação", antes: "PCA 2027", depois: "PCA 2027 — inclusão complementar" }} />
+      </div>
+    </div>
+  );
+}
+
 function Swatch({ nome, token }: { nome: string; token: string }) {
   return (
     <div className="min-w-0">
@@ -291,6 +364,7 @@ type Proto = {
   natureza: string;
   responsavel: string;
   situacao: string;
+  valor: number;
 };
 const SIT_LABEL: Record<string, string> = {
   em_analise: "Em análise",
@@ -300,12 +374,12 @@ const SIT_LABEL: Record<string, string> = {
   cancelado: "Cancelado",
 };
 const PROTOS: Proto[] = [
-  { id: 118223, data: "02/09/2026", orgao: "Secretaria Municipal de Saúde", sigla: "SMS", natureza: "INCLUSÃO 2027", responsavel: "Naty", situacao: "em_analise" },
-  { id: 115282, data: "28/08/2026", orgao: "Secretaria Municipal de Educação", sigla: "SME", natureza: "EXCLUSÃO", responsavel: "Cris", situacao: "finalizado" },
-  { id: 117904, data: "30/08/2026", orgao: "Secretaria de Infraestrutura", sigla: "SEINFRA", natureza: "CORREÇÃO", responsavel: "Thamires", situacao: "em_analise" },
-  { id: 116540, data: "25/08/2026", orgao: "Diretoria de Logística e Transporte", sigla: "DLT", natureza: "INCLUSÃO 2026", responsavel: "Naty", situacao: "devolvido" },
-  { id: 118990, data: "04/09/2026", orgao: "Secretaria Municipal da Fazenda", sigla: "SEFAZ", natureza: "COMUNICAÇÃO INTERNA", responsavel: "", situacao: "em_analise" },
-  { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", natureza: "EXCLUSÃO", responsavel: "Naty", situacao: "cancelado" },
+  { id: 118223, data: "02/09/2026", orgao: "Secretaria Municipal de Saúde", sigla: "SMS", natureza: "INCLUSÃO 2027", responsavel: "Naty", situacao: "em_analise", valor: 1250000 },
+  { id: 115282, data: "28/08/2026", orgao: "Secretaria Municipal de Educação", sigla: "SME", natureza: "EXCLUSÃO", responsavel: "Cris", situacao: "finalizado", valor: 84300.5 },
+  { id: 117904, data: "30/08/2026", orgao: "Secretaria de Infraestrutura", sigla: "SEINFRA", natureza: "CORREÇÃO", responsavel: "Thamires", situacao: "em_analise", valor: 3200000 },
+  { id: 116540, data: "25/08/2026", orgao: "Diretoria de Logística e Transporte", sigla: "DLT", natureza: "INCLUSÃO 2026", responsavel: "Naty", situacao: "devolvido", valor: 15900 },
+  { id: 118990, data: "04/09/2026", orgao: "Secretaria Municipal da Fazenda", sigla: "SEFAZ", natureza: "COMUNICAÇÃO INTERNA", responsavel: "", situacao: "em_analise", valor: 452000 },
+  { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", natureza: "EXCLUSÃO", responsavel: "Naty", situacao: "cancelado", valor: 7800 },
 ];
 const COLUNAS: Column<Proto>[] = [
   {
@@ -365,6 +439,8 @@ const COLUNAS: Column<Proto>[] = [
     value: (r) => SIT_LABEL[r.situacao] ?? "—",
     render: (r) => <SituacaoDot situacao={r.situacao} label={SIT_LABEL[r.situacao] ?? "—"} />,
   },
+  // Coluna R$: filtro de FAIXA (barra de arrasto + "Valor cheio"), conectado aos demais filtros.
+  { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (r) => r.valor, render: (r) => brl(r.valor) },
 ];
 
 const G_CLASS = [
@@ -620,6 +696,14 @@ export function Catalogo() {
   const [incluirAtencaoDemo, setIncluirAtencaoDemo] = useState(true);
   const [mdAberto, setMdAberto] = useState(false);
   const [mdLateral, setMdLateral] = useState(false);
+  const [pilhaDemo, setPilhaDemo] = useState<number>(0); // banners empilhados à direita (0, 1 ou 2)
+  const [faixaDemo, setFaixaDemo] = useState<{ min?: number; max?: number } | null>(null);
+  const [selDemo, setSelDemo] = useState<RegistroSelecao[]>([
+    { key: 1, rotulo: "DFD 531" },
+    { key: 2, rotulo: "DFD 389" },
+    { key: 3, rotulo: "DFD 712" },
+  ]);
+  const [editorDemo, setEditorDemo] = useState<"dfds" | "protocolos" | "itens">("dfds");
   const [dzFile, setDzFile] = useState<string | null>(null);
   const [respDemo, setRespDemo] = useState<Responsaveis>({
     padroes: [
@@ -870,7 +954,31 @@ export function Catalogo() {
           <div className="rounded-control border border-border bg-surface-2 px-2">
             <MultiSelectHeader label="Órgão" options={ORGAOS} value={orgaos} onApply={setOrgaos} onSort={setSortOrgao} sortDir={sortOrgao} />
           </div>
+          {/* Filtro de FAIXA (colunas R$): barra de arrasto do menor ao maior valor, crescente/decrescente e
+              "Valor cheio" (a faixa inteira) — arrastar desmarca; marcar limpa a barra. */}
+          <div className="w-48 rounded-control border border-border bg-surface-2 px-2">
+            <RangeFilterHeader
+              label="Valor total"
+              dominio={[0, 1500, 15900, 84300.5, 452000, 1250000, 3200000]}
+              value={faixaDemo ?? undefined}
+              marcado={!!faixaDemo}
+              onApply={setFaixaDemo}
+              onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)}
+            />
+          </div>
           <PeriodoPicker anos={[2027, 2026, 2025]} value={{ preset: "todo" }} />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          {/* Gatilho comum dos 3 filtros: coluna FILTRADA = tópico MARCADO (accent + funil). */}
+          <div className="w-40">
+            <GatilhoFiltro label="Sigla" />
+          </div>
+          <div className="w-40">
+            <GatilhoFiltro label="Estado" sortDir="asc" marcado />
+          </div>
+          <span className="text-[12px] text-faint">
+            {faixaDemo ? `Faixa: ${faixaDemo.min != null ? brl(faixaDemo.min) : "…"} a ${faixaDemo.max != null ? brl(faixaDemo.max) : "…"}` : "Valor cheio (sem faixa)"}
+          </span>
         </div>
         <p className="mt-2 text-[12px] text-faint">
           {orgaos.length > 0 && orgaos.length < ORGAOS.length ? `${orgaos.length} órgão(s) filtrado(s)` : "Sem filtro"}
@@ -1072,6 +1180,9 @@ export function Catalogo() {
           >
             Abrir modal com painel lateral
           </Button>
+          <Button variant="secondary" onClick={() => setPilhaDemo(1)}>
+            Abrir pilha de banners (item → DFD → protocolo)
+          </Button>
           <Pager page={pag} pages={8} onChange={setPag} />
         </div>
         <Modal open={modalAberto} onClose={() => setModalAberto(false)} titulo="Exemplo de modal">
@@ -1124,6 +1235,51 @@ export function Catalogo() {
               {mdLateral ? "Fechar lateral" : "Abrir lateral"}
             </Button>
           </div>
+        </Modal>
+
+        {/* Pilha de banners (`paineis`): cada "Ver …" ENTRA PELA DIREITA — ex.: Item → DFD → Protocolo. */}
+        <Modal
+          open={pilhaDemo > 0}
+          onClose={() => setPilhaDemo(0)}
+          titulo="Item 3 — DFD 531"
+          larguraPrincipal={34}
+          rodape={
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setPilhaDemo((n) => Math.max(n, 2))} disabled={pilhaDemo >= 2}>
+                <Icons.IconFile className="h-4 w-4" /> Ver DFD
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setPilhaDemo(2);
+                  window.setTimeout(() => setPilhaDemo(3), 250);
+                }}
+                disabled={pilhaDemo >= 3}
+              >
+                <Icons.IconLayers className="h-4 w-4" /> Ver protocolo
+              </Button>
+            </div>
+          }
+          paineis={[
+            {
+              id: "dfd",
+              aberto: pilhaDemo >= 2,
+              largura: 52,
+              titulo: "DFD 531",
+              onClose: () => setPilhaDemo(1),
+              children: <p className="text-[13px] text-text-2">O DFD entrou pela direita; o item seguiu à esquerda.</p>,
+            },
+            {
+              id: "protocolo",
+              aberto: pilhaDemo >= 3,
+              largura: 50,
+              titulo: "Protocolo 144756/2026",
+              onClose: () => setPilhaDemo(2),
+              children: <p className="text-[13px] text-text-2">E o protocolo em seguida — X fecha da direita para a esquerda.</p>,
+            },
+          ]}
+        >
+          <p className="text-[13px] text-text-2">Banner SÓ do item (linha da visão Itens). "Ver DFD" / "Ver protocolo" empilham à direita.</p>
         </Modal>
       </Secao>
 
@@ -1228,17 +1384,61 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="BarraEdicaoMassa (edição em massa — análise, protocolo gravado e lista de DFDs)">
-        <BarraEdicaoMassa
-          qtd={3}
-          reparticoes={[
-            { id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" },
-            { id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" },
-          ]}
-          anoPadrao={2027}
-          onAplicar={(a) => toast(`Aplicar: ${a.campo}`)}
-          onLimpar={() => toast("Limpar seleção")}
-        />
+      <Secao titulo="BarraSelecao + editores de massa (registro das seleções, somatório R$ e edição — DFDs · Protocolos · Itens)">
+        <div className="mb-3">
+          <Segmented<"dfds" | "protocolos" | "itens">
+            value={editorDemo}
+            onChange={setEditorDemo}
+            options={[
+              { value: "dfds", label: "DFDs" },
+              { value: "protocolos", label: "Protocolos" },
+              { value: "itens", label: "Itens" },
+            ]}
+          />
+        </div>
+        {selDemo.length === 0 ? (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setSelDemo([
+                { key: 1, rotulo: "DFD 531" },
+                { key: 2, rotulo: "DFD 389" },
+                { key: 3, rotulo: "DFD 712" },
+              ])
+            }
+          >
+            Refazer a seleção (demo)
+          </Button>
+        ) : (
+          <BarraSelecao
+            registros={selDemo}
+            onRemover={(k) => setSelDemo((l) => l.filter((r) => r.key !== k))}
+            onLimpar={() => setSelDemo([])}
+            resumo={<ResumoSelecao qtd={selDemo.length} singular="DFD" plural="DFDs" soma={selDemo.length * 412_345.67} extra={`${selDemo.length * 37} itens`} />}
+          >
+            {editorDemo === "dfds" ? (
+              <BarraEdicaoMassa
+                reparticoes={[
+                  { id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" },
+                  { id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" },
+                ]}
+                anoPadrao={2027}
+                onAplicar={(a) => toast(`Aplicar: ${a.campo}`)}
+              />
+            ) : editorDemo === "protocolos" ? (
+              <BarraEdicaoMassaProtocolos
+                reparticoes={[{ id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" }]}
+                onAplicar={(a) => toast(`Aplicar nos protocolos: ${a.campo}`)}
+              />
+            ) : (
+              <BarraEdicaoMassaItens onAplicar={(a) => toast(`Aplicar nos itens: ${a.campo}`)} />
+            )}
+          </BarraSelecao>
+        )}
+        <p className="mt-2 text-[12px] text-faint">
+          Na Mesa a barra é <span className="font-mono">fixa</span> no rodapé do display (acima da navegação inferior no
+          celular, com recolher) e a tabela reserva a altura dela; nos banners fica no rodapé fixo.
+        </p>
       </Secao>
 
       <Secao titulo="DfdRodape (rodapé fixo do banner do DFD — estado + mensagens + ações)">
@@ -1276,7 +1476,25 @@ export function Catalogo() {
           <div className="mt-4 border-t border-border pt-3">
             <RodapePainelItem onVerDfd={() => toast("Voltar ao DFD")} onVerProtocolo={() => toast("Ver protocolo")} />
           </div>
+          {/* Banner SÓ do item (visão Itens da Mesa): + Fechar e Salvar alterações. */}
+          <div className="mt-3 border-t border-border pt-3">
+            <RodapePainelItem
+              onVerDfd={() => toast("O DFD entra pela direita")}
+              onVerProtocolo={() => toast("O DFD e depois o protocolo entram pela direita")}
+              onFechar={() => toast("Fechar")}
+              principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+            />
+          </div>
         </div>
+      </Secao>
+
+      <Secao titulo="ComparacaoReenvio (reenviar o MESMO protocolo — comparação gravado × PDF novo, antes de sobrescrever)">
+        <ReenvioDemo />
+        <p className="mt-3 text-[12px] text-faint">
+          No banner do protocolo gravado, "Reenviar protocolo" aceita só o MESMO nº e Id. O bloco de comparação vai no topo
+          do banner (<span className="font-mono">ProtocoloView.topo</span>); cada DFD tem o painel "Diferenças" ao lado; só
+          o que mudou é regravado ao sobrescrever.
+        </p>
       </Secao>
 
       <Secao titulo="PcaPicker (definição do PCA do processo — obrigatório)">
@@ -1409,8 +1627,10 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="Protocolo — corpo único do banner (análise = gravado): capa, conciliação, planilha">
-        <div className="mb-4 border-b border-border pb-3">
+        <div className="mb-4 space-y-2 border-b border-border pb-3">
           <ProtocoloCabecalho numero={PROTO_CAPA_DEMO.numero} idExterno={PROTO_CAPA_DEMO.idExterno} assunto={PROTO_CAPA_DEMO.assunto} />
+          {/* Banner do REENVIO (PDF corrigido × gravado). */}
+          <ProtocoloCabecalho numero={PROTO_CAPA_DEMO.numero} idExterno={PROTO_CAPA_DEMO.idExterno} assunto={PROTO_CAPA_DEMO.assunto} reenvio />
         </div>
         <ProtocoloViewDemo />
       </Secao>

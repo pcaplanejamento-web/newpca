@@ -5,6 +5,7 @@ import {
   assuntoCadastrado,
   classificarAssunto,
   coerceRegras,
+  comportamentoDaFalta,
   comportamentoDe,
   comportamentoNo,
   corImportancia,
@@ -24,7 +25,7 @@ import {
   tipoPermitido,
 } from "../src/lib/avaliacao-core.ts";
 import { avaliacaoSchema } from "../src/lib/avaliacao-validation.ts";
-import { avaliarDfd, estadoCor, normalizarSecoesDfd } from "../src/lib/dfd-tratamento.ts";
+import { avaliarDfd, estadoCor, mensagensDfd, normalizarSecoesDfd, resumoEstado } from "../src/lib/dfd-tratamento.ts";
 import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 
 // Monta uma conferência de DFD completa (nada falta); os testes removem 1 coisa.
@@ -329,5 +330,51 @@ describe("opcoesAssunto (seletor do assunto do protocolo)", () => {
   });
   it("sem atual → só as opções", () => {
     assert.deepEqual(opcoesAssunto(regrasPadrao(), ""), ["INCLUSÃO", "EXCLUSÃO", "ALTERAÇÃO NÃO ONEROSA"]);
+  });
+});
+
+describe("falta da PRIORIDADE = erro (Automático não rebaixa a falta)", () => {
+  const semPrioridade = () => ({ ...dfdCompleto(), secoes: dfdCompleto().secoes.filter((x) => !x.titulo.includes("PRIORIDADE")) });
+  const prioridadeInvalida = () => ({
+    ...dfdCompleto(),
+    anoPca: 2026,
+    secoes: dfdCompleto().secoes.map((x) => (x.titulo.includes("PRIORIDADE") ? { ...x, texto: "A DEFINIR" } : x)),
+  });
+  const auto: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.prioridade": "automatico" } };
+
+  it("padrão (fundamental): falta de prioridade bloqueia", () => {
+    assert.ok(avaliarDfd(semPrioridade()).bloqueantes.some((x) => x.includes("Seção 6")));
+  });
+  it("Automático: a FALTA (vazia) continua ERRO — bloqueia e vem como erro no painel", () => {
+    assert.equal(comportamentoNo(auto, "dfd.prioridade"), "automatico");
+    assert.equal(comportamentoDaFalta(auto, "dfd.prioridade"), "bloqueia");
+    assert.ok(avaliarDfd(semPrioridade(), auto).bloqueantes.some((x) => x.includes("Seção 6")));
+    const m = mensagensDfd(semPrioridade(), auto).find((x) => x.chave === "dfd.prioridade");
+    assert.equal(m?.status, "erro");
+    assert.equal(m?.cor, corImportancia(auto, "fundamental"));
+    assert.ok(faltasObrigatorias(semPrioridade(), auto).some((x) => x.includes("Seção 6")));
+  });
+  it("Automático: prioridade FORA DO PADRÃO também é erro, com rótulo próprio no Estado", () => {
+    const msgs = mensagensDfd(prioridadeInvalida(), auto);
+    const m = msgs.find((x) => x.chave === "dfd.prioridade");
+    assert.equal(m?.status, "erro");
+    assert.equal(resumoEstado(msgs.filter((x) => x.status !== "acerto")).rotulo, "Prioridade inválida");
+  });
+  it("escolha EXPLÍCITA do ADM é respeitada: Intermediário avisa, Ignorar some", () => {
+    const inter: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.prioridade": "intermediario" } };
+    assert.deepEqual(avaliarDfd(semPrioridade(), inter).bloqueantes, []);
+    assert.ok(avaliarDfd(semPrioridade(), inter).atencoes.some((x) => x.includes("Seção 6")));
+    const ign: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.prioridade": "ignorar" } };
+    assert.equal(mensagensDfd(semPrioridade(), ign).some((x) => x.chave === "dfd.prioridade"), false);
+  });
+  it("prioridade preenchida no Automático: acerto (nada muda)", () => {
+    const m = mensagensDfd(dfdCompleto(), auto).find((x) => x.chave === "dfd.prioridade");
+    assert.equal(m?.status, "acerto");
+  });
+  it("só a Prioridade tem a regra: a previsão no Automático segue avisando", () => {
+    const d = { ...dfdCompleto(), secoes: dfdCompleto().secoes.filter((x) => !x.titulo.includes("PREVISÃO")) };
+    const r: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.previsao": "automatico" } };
+    assert.equal(comportamentoDaFalta(r, "dfd.previsao"), "automatico");
+    assert.ok(avaliarDfd(d, r).atencoes.some((x) => x.includes("Seção 5")));
   });
 });

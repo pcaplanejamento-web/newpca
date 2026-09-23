@@ -37,11 +37,13 @@ let workerPronto = false;
 /** Abre o PDF no navegador (pdf.js dinâmico) e devolve um handle streamável. */
 export async function abrirPdf(file: File): Promise<PdfDoc> {
   const buf = await file.arrayBuffer();
-  const pdfjs = await import("pdfjs-dist");
+  // Build LEGACY (oficial do pdf.js, com polyfills): o build moderno exige APIs novíssimas do JS
+  // (ex.: `Math.sumPrecise`) e, num navegador sem elas, falha ao carregar as fontes → nenhum DFD lido.
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   if (!workerPronto) {
     // O worker é empacotado pelo bundler (não depende de CDN em runtime).
     pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
+      "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
       import.meta.url,
     ).toString();
     workerPronto = true;

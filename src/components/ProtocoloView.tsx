@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
@@ -153,20 +154,29 @@ export function ProtocoloCabecalho({
   numero,
   idExterno,
   assunto,
+  reenvio = false,
 }: {
   numero: string;
   idExterno: string | null;
   assunto: string | null;
+  /** Banner do REENVIO (PDF corrigido × gravado) — selo "Reenvio" ao lado do nº. */
+  reenvio?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+    // Quebra de linha (não corta) quando falta espaço — no celular o Id segue visível ao lado do selo.
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
       <span className="shrink-0 text-base font-bold text-text">Protocolo {numero}</span>
+      {reenvio && (
+        <Badge tone="blue" className="shrink-0">
+          Reenvio
+        </Badge>
+      )}
       {idExterno && (
         <span className="shrink-0 rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
           Id {idExterno}
         </span>
       )}
-      {assunto && <span className="truncate text-[12.5px] text-muted">{assunto}</span>}
+      {assunto && <span className="max-w-full truncate text-[12.5px] text-muted">{assunto}</span>}
     </div>
   );
 }
@@ -202,6 +212,7 @@ export function ProtocoloView({
   regras = regrasPadrao(),
   vazio,
   nota,
+  topo,
 }: {
   capa: CapaValores;
   modoCapa?: ModoCapa;
@@ -240,11 +251,14 @@ export function ProtocoloView({
   vazio?: ReactNode;
   /** Nota ao pé (ex.: "Protocolado em …"). */
   nota?: ReactNode;
+  /** Bloco no TOPO do corpo (ex.: a comparação do reenvio com o protocolo gravado). */
+  topo?: ReactNode;
 }) {
   const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
   const c = conciliacao;
   return (
     <div className="space-y-5">
+      {topo}
       {/* Head — mini banners (um por informação): DFDs · itens · somatória. 2-up no mobile. */}
       {totais.dfds > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import {
@@ -21,13 +21,16 @@ import {
 } from "@/lib/dfd-tratamento";
 import { brl, dataBR, num } from "@/lib/format";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
+import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhasItens } from "@/lib/massa-itens";
 import type { ProtocoloResumo } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
-import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
+import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "./BarraEdicaoMassa";
+import { type AberturaMesa, BannersMesa } from "./BannersMesa";
+import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { DfdGravado } from "./DfdGravado";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EstadoPonto, EstadoResumo } from "./EstadoCelula";
 import { inputCls, labelCls } from "./formStyles";
@@ -35,7 +38,6 @@ import { IconAlert, IconLayers, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
-import { ProtocoloGravado } from "./ProtocoloGravado";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -59,8 +61,19 @@ type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; v
 type Vista = "protocolos" | "dfds" | "itens";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
 const FATIA_CONFERENCIA = 150;
-/** DFDs por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
+/** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
 const FATIA_MASSA = 20;
+/** Itens por requisição da edição em massa: ≤ 100 itens de ≤ 5 DFDs (cada DFD grava num lote atômico). */
+const FATIA_ITENS = 100;
+const FATIA_ITENS_DFDS = 5;
+/** Espaço (px) entre a tabela e a barra de seleção fixa (o `space-y-4` da tela). */
+const GAP_BARRA = 16;
+type Sel = Set<string | number>;
+/** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
+const podar = (sel: Sel, validas: Set<number>): Sel => {
+  const n = new Set([...sel].filter((k) => validas.has(Number(k))));
+  return n.size === sel.size ? sel : n;
+};
 /** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
  * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
 const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
@@ -87,14 +100,21 @@ export function DfdsView({
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   // Banners do GRAVADO — os MESMOS componentes da análise (protocolo / DFD solto).
-  const [protoAberto, setProtoAberto] = useState<{ id: number; dfd: number | null } | null>(null);
-  const [dfdAberto, setDfdAberto] = useState<{ id: number; item: { item: number | null; codigo: string | null } | null } | null>(null);
+  const [aberto, setAberto] = useState<AberturaMesa | null>(null);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
   const [salvandoVinc, setSalvandoVinc] = useState(false);
-  // Seleção + edição EM MASSA na lista de DFDs (mesma barra da análise; grava no banco).
-  const [selDfds, setSelDfds] = useState<Set<string | number>>(new Set());
-  const [aplicandoMassa, setAplicandoMassa] = useState<{ feito: number; total: number } | null>(null);
+  // Seleção + edição EM MASSA nas três visões (a barra fica FIXA no rodapé do display; grava no banco).
+  const [selDfds, setSelDfds] = useState<Sel>(new Set());
+  const [selProtos, setSelProtos] = useState<Sel>(new Set());
+  const [selItens, setSelItens] = useState<Sel>(new Set());
+  const [aplicandoMassa, setAplicandoMassa] = useState<{ feito: number; total: number; rotulo: string } | null>(null);
+  // Altura da barra de seleção fixa — as tabelas (scroll interno) reservam esse espaço.
+  const [alturaBarra, setAlturaBarra] = useState(0);
+  const reserva = alturaBarra > 0 ? alturaBarra + GAP_BARRA : 0;
+  // Listas recarregadas: some da seleção o que não existe mais.
+  useEffect(() => setSelDfds((s) => podar(s, new Set(dfds.map((d) => d.id)))), [dfds]);
+  useEffect(() => setSelProtos((s) => podar(s, new Set(protocolos.map((p) => p.id)))), [protocolos]);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
   const [vista, setVista] = useState<Vista>("protocolos");
@@ -103,7 +123,10 @@ export function DfdsView({
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
   const [carregandoItens, setCarregandoItens] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
-  useEffect(() => setItens(null), [dfds]);
+  useEffect(() => {
+    setItens(null);
+    setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
+  }, [dfds]);
   useEffect(() => {
     if (vista !== "itens" || itens !== null) return;
     const ac = new AbortController();
@@ -175,6 +198,11 @@ export function DfdsView({
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
   const atualizarListas = () => router.refresh();
+  // DFDs já cadastrados (conflito de nº na importação/reenvio: substitui × move de outro protocolo).
+  const dfdsExistentesMesa = useMemo(
+    () => dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero, valorTotal: d.valorTotal, totalItens: d.totalItens })),
+    [dfds],
+  );
 
   async function excluirDfd(id: number, numero: string) {
     if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.`)) return;
@@ -231,47 +259,95 @@ export function DfdsView({
     }
   }
 
-  /** Edição EM MASSA na lista de DFDs gravados — mesma barra da análise; grava no banco (com
-   * confirmação), em fatias de 20 DFDs (progresso real; falha de uma fatia não perde as demais). */
+  /**
+   * Executa uma edição EM MASSA no servidor em FATIAS (progresso real; a falha de uma fatia não perde as
+   * demais), depois recarrega as listas. Devolve quantos mudaram + as falhas cruas (cada rota tem a sua).
+   */
+  async function emFatias(url: string, fatias: number[][], acao: unknown, rotulo: string) {
+    const total = fatias.reduce((t, f) => t + f.length, 0);
+    let feito = 0;
+    let alterados = 0;
+    const falhas: unknown[] = [];
+    const erros: string[] = [];
+    try {
+      for (const fatia of fatias) {
+        setAplicandoMassa({ feito, total, rotulo });
+        try {
+          const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: fatia, acao }) });
+          const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number; falhas?: unknown[] };
+          if (!res.ok || !j.ok) erros.push(`${fatia.length} registro(s): ${j.error ?? `falha (HTTP ${res.status})`}`);
+          else {
+            alterados += j.alterados ?? 0;
+            falhas.push(...(j.falhas ?? []));
+          }
+        } catch {
+          erros.push(`${fatia.length} registro(s): sem conexão com o servidor`);
+        }
+        feito += fatia.length;
+      }
+    } finally {
+      setAplicandoMassa(null);
+      router.refresh(); // reflete o que foi gravado (mesmo com falhas parciais)
+    }
+    return { alterados, falhas, erros };
+  }
+  const fatiar = (ids: number[], n: number) => Array.from({ length: Math.ceil(ids.length / n) }, (_, k) => ids.slice(k * n, (k + 1) * n));
+
+  /** DFDs: a MESMA barra da análise; grava no banco (com confirmação). */
   async function aplicarMassa(acao: AcaoMassa) {
     const ids = [...selDfds].map(Number);
     if (ids.length === 0) return;
     if (!confirm(`Aplicar a alteração em ${ids.length} DFD(s)? Ela é gravada diretamente no banco.`)) return;
     setErro(null);
-    let alterados = 0;
-    const falhas: string[] = [];
-    try {
-      for (let i = 0; i < ids.length; i += FATIA_MASSA) {
-        const fatia = ids.slice(i, i + FATIA_MASSA);
-        setAplicandoMassa({ feito: i, total: ids.length });
-        try {
-          const res = await fetch("/api/dfd/massa", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: fatia, acao }),
-          });
-          const j = (await res.json().catch(() => ({}))) as {
-            ok?: boolean;
-            error?: string;
-            alterados?: number;
-            falhas?: { numero: string; motivo: string }[];
-          };
-          if (!res.ok || !j.ok) {
-            falhas.push(`${fatia.length} DFD(s): ${j.error ?? `falha (HTTP ${res.status})`}`);
-            continue;
-          }
-          alterados += j.alterados ?? 0;
-          for (const f of j.falhas ?? []) falhas.push(`DFD ${f.numero} (${f.motivo})`);
-        } catch {
-          falhas.push(`${fatia.length} DFD(s): sem conexão com o servidor`);
-        }
-      }
-    } finally {
-      setAplicandoMassa(null);
-      setSelDfds(new Set());
-      router.refresh(); // reflete o que foi gravado (mesmo com falhas parciais)
+    const r = await emFatias("/api/dfd/massa", fatiar(ids, FATIA_MASSA), acao, "DFD(s)");
+    setSelDfds(new Set());
+    if (r.alterados > 0) toast.success(`${num(r.alterados)} DFD(s) alterado(s).`);
+    const falhas = [...r.erros, ...(r.falhas as { numero: string; motivo: string }[]).map((f) => `DFD ${f.numero} (${f.motivo})`)];
+    if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
+  }
+
+  /** Protocolos: unidade, assunto ou valor da capa = somatória (conciliação em lote). */
+  async function aplicarMassaProtocolos(acao: AcaoMassaProtocolo) {
+    const ids = [...selProtos].map(Number);
+    if (ids.length === 0) return;
+    const pergunta =
+      acao.campo === "valorCapa"
+        ? `Substituir o valor da capa pela somatória dos DFDs em ${ids.length} protocolo(s)?`
+        : `Aplicar ${acao.campo === "assunto" ? `o assunto "${acao.valor}"` : "a unidade"} em ${ids.length} protocolo(s)?`;
+    if (!confirm(`${pergunta} Gravado diretamente no banco.`)) return;
+    setErro(null);
+    const r = await emFatias("/api/protocolo/massa", fatiar(ids, FATIA_MASSA), acao, "protocolo(s)");
+    setSelProtos(new Set());
+    if (r.alterados > 0) toast.success(`${num(r.alterados)} protocolo(s) alterado(s).`);
+    else if (r.erros.length === 0 && r.falhas.length === 0) toast.success("Nada a alterar — os selecionados já estavam assim.");
+    const falhas = [...r.erros, ...(r.falhas as { numero: string; motivo: string }[]).map((f) => `Protocolo ${f.numero} (${f.motivo})`)];
+    if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
+  }
+
+  /** Itens: padronizar/unidade/quantidade/valor unitário/remover — agrupados por DFD (lote atômico por DFD). */
+  async function aplicarMassaItens(acao: AcaoMassaItem) {
+    const lista = itens ?? [];
+    const alvo = lista.filter((it) => selItens.has(it.id));
+    if (alvo.length === 0) return;
+    const rotulo = descreverAcaoItem(acao);
+    if (!confirm(`${acao.campo === "remover" ? "Remover" : "Aplicar"} em ${alvo.length} item(ns) (${rotulo})? Gravado diretamente no banco.`)) return;
+    setErro(null);
+    // Remover TODOS os itens de um DFD não é permitido: recusa aqui (mesmo se a seleção for dividida).
+    const recusas: { dfd: string; item: number | null; motivo: string }[] = [];
+    let ids = alvo.map((it) => it.id);
+    if (acao.campo === "remover") {
+      const porDfd = new Map<number, number>();
+      for (const it of alvo) porDfd.set(it.dfdId, (porDfd.get(it.dfdId) ?? 0) + 1);
+      const cheios = new Set([...porDfd].filter(([id, n]) => n >= (dfdPorId.get(id)?.totalItens ?? Number.POSITIVE_INFINITY)).map(([id]) => id));
+      for (const it of alvo) if (cheios.has(it.dfdId)) recusas.push({ dfd: it.dfdNumero, item: it.item, motivo: "o DFD ficaria sem itens" });
+      ids = alvo.filter((it) => !cheios.has(it.dfdId)).map((it) => it.id);
     }
-    if (alterados > 0) toast.success(`${num(alterados)} DFD(s) alterado(s).`);
+    const dfdDe = new Map(lista.map((it) => [it.id, it.dfdId]));
+    const r = ids.length > 0 ? await emFatias("/api/dfd/itens/massa", fatiarItensPorDfd(ids, dfdDe, FATIA_ITENS_DFDS, FATIA_ITENS), acao, "item(ns)") : { alterados: 0, falhas: [], erros: [] };
+    setSelItens(new Set());
+    if (r.alterados > 0) toast.success(`${num(r.alterados)} item(ns) ${rotulo}.`);
+    else if (r.erros.length === 0 && r.falhas.length === 0 && recusas.length === 0) toast.success("Nada a alterar — os selecionados já estavam assim.");
+    const falhas = [...r.erros, ...resumirFalhasItens([...recusas, ...(r.falhas as typeof recusas)])];
     if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }
 
@@ -376,7 +452,7 @@ export function DfdsView({
     },
     { key: "dfds", header: "DFDs", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalDfds) },
     { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens) },
-    { key: "valor", header: "Valor", align: "right", filter: "none", nowrap: true, render: (r) => brl(r.valorTotal) },
+    { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal, nowrap: true, render: (r) => brl(r.valorTotal) },
     {
       key: "acoes",
       header: "",
@@ -405,6 +481,11 @@ export function DfdsView({
       header: "Estado",
       nowrap: true,
       value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+      // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
+      valores: (r) => {
+        const res = resumoEstado(mensagensItem(r));
+        return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
+      },
       render: (r) => {
         const res = resumoEstado(mensagensItem(r));
         if (res.rotulo) return <EstadoResumo res={res} />;
@@ -438,8 +519,8 @@ export function DfdsView({
     },
     { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
-    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "none", nowrap: true, value: (r) => String(r.valorUnitario ?? ""), render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
-    { key: "vtotal", header: "Vlr. total", align: "right", filter: "none", nowrap: true, value: (r) => String(r.valorTotal ?? ""), render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
   ];
 
   // Corpo de cada visão. Alturas de linha DIFERENTES por visão: protocolo alta · DFD média · item fina.
@@ -452,8 +533,13 @@ export function DfdsView({
         columns={colsProto}
         rows={protocolos}
         getKey={(r) => r.id}
-        onRowClick={(r) => setProtoAberto({ id: r.id, dfd: null })}
+        selectable={podeEditar}
+        selected={selProtos}
+        onSelected={setSelProtos}
+        onRowClick={(r) => setAberto({ tipo: "protocolo", id: r.id })}
+        activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}
         scrollInterno
+        reservaInferior={reserva}
         minWidth={980}
         density="comfortable"
         resumo={(linhas) =>
@@ -467,38 +553,19 @@ export function DfdsView({
     dfds.length === 0 ? (
       vazio(`Nenhum DFD nesta visão. ${podeEditar ? "Importe um DFD pelo botão acima." : ""}`)
     ) : (
-      <div>
-        {podeEditar && (selDfds.size > 0 || aplicandoMassa) && (
-          <BarraEdicaoMassa
-            qtd={selDfds.size}
-            reparticoes={reparticoes}
-            regras={regras}
-            aplicando={!!aplicandoMassa}
-            onAplicar={aplicarMassa}
-            onLimpar={() => setSelDfds(new Set())}
-          />
-        )}
-        {aplicandoMassa && (
-          <div className="mb-3">
-            <Progress
-              value={(aplicandoMassa.feito / Math.max(1, aplicandoMassa.total)) * 100}
-              label={`Aplicando em ${num(aplicandoMassa.total)} DFD(s)… ${num(aplicandoMassa.feito)} de ${num(aplicandoMassa.total)}`}
-            />
-          </div>
-        )}
-        <PlanilhaDfds
-          linhas={linhasDfdTab}
-          unica
-          scrollInterno
-          selecionavel={podeEditar}
-          selected={selDfds}
-          onSelected={setSelDfds}
-          onRowClick={(id) => setDfdAberto({ id, item: null })}
-          ativa={dfdAberto?.id ?? null}
-          acoes={acoesDfd}
-          regras={regras}
-        />
-      </div>
+      <PlanilhaDfds
+        linhas={linhasDfdTab}
+        unica
+        scrollInterno
+        reservaInferior={reserva}
+        selecionavel={podeEditar}
+        selected={selDfds}
+        onSelected={setSelDfds}
+        onRowClick={(id) => setAberto({ tipo: "dfd", id })}
+        ativa={aberto?.tipo === "dfd" ? aberto.id : null}
+        acoes={acoesDfd}
+        regras={regras}
+      />
     );
   const tabelaItens =
     carregandoItens || itens === null ? (
@@ -510,13 +577,96 @@ export function DfdsView({
         columns={colsItens}
         rows={itens}
         getKey={(r) => r.id}
-        onRowClick={(r) => setDfdAberto({ id: r.dfdId, item: { item: r.item, codigo: r.codigo } })}
+        selectable={podeEditar}
+        selected={selItens}
+        onSelected={setSelItens}
+        onRowClick={(r) => setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.item, codigo: r.codigo } })}
+        activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
         scrollInterno
+        reservaInferior={reserva}
         minWidth={1120}
         density="compact"
         resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
       />
     );
+
+  // Barra de SELEÇÃO FIXA no rodapé do display (visão atual): registro das seleções (chips removíveis) +
+  // somatório R$ + o editor de massa da visão. Só para editores.
+  const progressoMassa = aplicandoMassa && (
+    <div className="mb-2">
+      <Progress
+        value={(aplicandoMassa.feito / Math.max(1, aplicandoMassa.total)) * 100}
+        label={`Aplicando em ${num(aplicandoMassa.total)} ${aplicandoMassa.rotulo}… ${num(aplicandoMassa.feito)} de ${num(aplicandoMassa.total)}`}
+      />
+    </div>
+  );
+  const tirar = (set: (f: (s: Sel) => Sel) => void) => (k: string | number) => set((s) => new Set([...s].filter((x) => x !== k)));
+  let barraSelecao: ReactNode = null;
+  if (podeEditar && vista === "dfds" && (selDfds.size > 0 || aplicandoMassa)) {
+    const sel = dfds.filter((d) => selDfds.has(d.id));
+    barraSelecao = (
+      <BarraSelecao
+        fixa
+        onAltura={setAlturaBarra}
+        bloqueada={!!aplicandoMassa}
+        registros={sel.map((d) => ({ key: d.id, rotulo: `DFD ${d.numero}` }))}
+        onRemover={tirar(setSelDfds)}
+        onLimpar={() => setSelDfds(new Set())}
+        resumo={
+          <ResumoSelecao
+            qtd={sel.length}
+            singular="DFD"
+            plural="DFDs"
+            soma={sel.reduce((t, d) => t + (d.valorTotal ?? 0), 0)}
+            extra={`${num(sel.reduce((t, d) => t + (d.totalItens ?? 0), 0))} itens`}
+          />
+        }
+      >
+        {progressoMassa}
+        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
+      </BarraSelecao>
+    );
+  } else if (podeEditar && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {
+    const sel = protocolos.filter((p) => selProtos.has(p.id));
+    barraSelecao = (
+      <BarraSelecao
+        fixa
+        onAltura={setAlturaBarra}
+        bloqueada={!!aplicandoMassa}
+        registros={sel.map((p) => ({ key: p.id, rotulo: `Protocolo ${p.numero}` }))}
+        onRemover={tirar(setSelProtos)}
+        onLimpar={() => setSelProtos(new Set())}
+        resumo={
+          <ResumoSelecao
+            qtd={sel.length}
+            singular="protocolo"
+            plural="protocolos"
+            soma={sel.reduce((t, p) => t + p.valorTotal, 0)}
+            extra={`${num(sel.reduce((t, p) => t + p.totalDfds, 0))} DFDs`}
+          />
+        }
+      >
+        {progressoMassa}
+        <BarraEdicaoMassaProtocolos reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassaProtocolos} />
+      </BarraSelecao>
+    );
+  } else if (podeEditar && vista === "itens" && (selItens.size > 0 || aplicandoMassa)) {
+    const sel = (itens ?? []).filter((it) => selItens.has(it.id));
+    barraSelecao = (
+      <BarraSelecao
+        fixa
+        onAltura={setAlturaBarra}
+        bloqueada={!!aplicandoMassa}
+        registros={sel.map((it) => ({ key: it.id, rotulo: `DFD ${it.dfdNumero} · item ${it.item ?? "—"}` }))}
+        onRemover={tirar(setSelItens)}
+        onLimpar={() => setSelItens(new Set())}
+        resumo={<ResumoSelecao qtd={sel.length} singular="item" plural="itens" soma={sel.reduce((t, it) => t + (it.valorTotal ?? 0), 0)} />}
+      >
+        {progressoMassa}
+        <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />
+      </BarraSelecao>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -543,7 +693,7 @@ export function DfdsView({
               <ProtocoloUploadForm
                 reparticoes={reparticoes}
                 reparticaoAtivaId={reparticaoAtivaId}
-                dfdsExistentes={dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero, valorTotal: d.valorTotal, totalItens: d.totalItens }))}
+                dfdsExistentes={dfdsExistentesMesa}
                 pcas={pcas}
                 regras={regras}
                 orgaos={orgaos}
@@ -560,34 +710,21 @@ export function DfdsView({
         {vista === "protocolos" ? tabelaProtocolos : vista === "dfds" ? tabelaDfds : tabelaItens}
       </div>
 
-      {/* DFD GRAVADO solto (listas DFDs/Itens) — mesmo corpo/rodapé/painel da análise. */}
-      <DfdGravado
-        dfdId={dfdAberto?.id ?? null}
-        itemInicial={dfdAberto?.item ?? null}
-        onClose={() => setDfdAberto(null)}
-        onVerProtocolo={(protocoloId, dfdId) => {
-          setDfdAberto(null);
-          setProtoAberto({ id: protocoloId, dfd: dfdId });
-        }}
-        podeEditar={podeEditar}
-        reparticoes={reparticoes}
-        reparticaoAtivaId={reparticaoAtivaId}
-        regras={regras}
-        orgaos={orgaos}
-        onAlterado={atualizarListas}
-      />
+      {barraSelecao}
 
-      {/* PROTOCOLO GRAVADO — os MESMOS componentes/conferência da protocolação (tabela única). */}
-      <ProtocoloGravado
-        protocoloId={protoAberto?.id ?? null}
-        dfdInicial={protoAberto?.dfd ?? null}
-        onClose={() => setProtoAberto(null)}
+      {/* PILHA DE BANNERS do GRAVADO (protocolo / DFD / item) — os MESMOS componentes/conferência da
+          análise; cada "Ver …" entra pela direita. */}
+      <BannersMesa
+        abrir={aberto}
+        onFechar={() => setAberto(null)}
         podeEditar={podeEditar}
         reparticoes={reparticoes}
         reparticaoAtivaId={reparticaoAtivaId}
         regras={regras}
         orgaos={orgaos}
         onAlterado={atualizarListas}
+        pcas={pcas}
+        dfdsExistentes={dfdsExistentesMesa}
       />
 
       {/* Vincular DFD a um protocolo (rule 4) */}

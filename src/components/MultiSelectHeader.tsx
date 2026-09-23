@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { IconArrowDown, IconArrowUp, IconChevronDown } from "./icons";
+import { GatilhoFiltro } from "./GatilhoFiltro";
+import { IconArrowDown, IconArrowUp } from "./icons";
 
 // Filtro de cabeçalho de tabela (spec do usuário): ordenar (crescente/decrescente)
-// + busca + "Selecionar todos" + checkboxes + Aplicar/Cancelar/Remover.
+// + busca + "Selecionar todos" + checkboxes + Aplicar/Cancelar/Remover. "Remover" (ou nada/tudo
+// marcado) = sem filtro. Na tabela as OPÇÕES já vêm facetadas pelos demais filtros (conectados).
 type Dir = "asc" | "desc" | null;
 
 export function MultiSelectHeader({
@@ -16,6 +18,7 @@ export function MultiSelectHeader({
   onSort,
   sortDir = null,
   align = "start",
+  marcado,
 }: {
   label: string;
   options: string[];
@@ -24,8 +27,10 @@ export function MultiSelectHeader({
   onSort?: (dir: "asc" | "desc") => void;
   sortDir?: Dir;
   align?: "start" | "end";
+  /** Coluna filtrada (tópico marcado). Padrão: há seleção que não cobre todas as opções. */
+  marcado?: boolean;
 }) {
-  const filtrado = value.length > 0 && value.length < options.length;
+  const filtrado = marcado ?? (value.length > 0 && !options.every((o) => value.includes(o)));
 
   return (
     <Dropdown
@@ -34,16 +39,7 @@ export function MultiSelectHeader({
       triggerClassName="w-full gap-1.5 px-1 py-2"
       panelClassName="p-0"
       width={280}
-      trigger={
-        <span className="flex w-full items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint">
-          <span className="truncate">{label}</span>
-          {sortDir === "asc" && <IconArrowUp className="h-3 w-3 shrink-0" />}
-          {sortDir === "desc" && <IconArrowDown className="h-3 w-3 shrink-0" />}
-          <IconChevronDown
-            className={`ml-auto h-3.5 w-3.5 shrink-0 ${filtrado ? "text-accent" : "opacity-60"}`}
-          />
-        </span>
-      }
+      trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={filtrado} />}
     >
       {(close) => (
         <Painel
@@ -76,7 +72,8 @@ function Painel({
   onCancel: () => void;
   onSort?: (dir: "asc" | "desc") => void;
 }) {
-  const inicial = value.length ? value : options;
+  // Abre com a seleção atual (restrita ao que a faceta oferece) ou, sem filtro, com tudo marcado.
+  const inicial = value.length ? value.filter((v) => options.includes(v)) : options;
   const [sel, setSel] = useState<Set<string>>(new Set(inicial));
   const [q, setQ] = useState("");
 
@@ -167,7 +164,7 @@ function Painel({
         </button>
         <button
           type="button"
-          onClick={() => onApply(options)}
+          onClick={() => onApply([])}
           className="rounded-control px-2 py-1.5 text-[12px] font-semibold text-[color:var(--sit-cancelado)] hover:bg-surface-2"
         >
           Remover

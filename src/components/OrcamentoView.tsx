@@ -153,7 +153,8 @@ export function OrcamentoView({
     header,
     align: "right",
     minWidth: forte ? 140 : 128,
-    filter: "none",
+    filter: "range",
+    numero: get,
     render: (r) => (forte ? <span className="tabular-nums font-semibold text-text">{brl(get(r))}</span> : money(get(r))),
   });
   const colBase: Column<OrcamentoItemRow>[] = [

@@ -6,6 +6,7 @@ import {
   gruposAssinatura,
   mensagensItem,
   ROTULO_CURTO,
+  ROTULO_CURTO_INVALIDA,
   resumoEstado,
   type StatusMensagem,
 } from "../src/lib/dfd-tratamento.ts";
@@ -96,9 +97,28 @@ describe("resumoEstado (célula compacta 'Estado')", () => {
   });
 
   it("todo rótulo curto tem no máximo 3 palavras", () => {
-    for (const rot of Object.values(ROTULO_CURTO)) {
-      assert.ok(rot.split(/\s+/).length <= 3, `"${rot}" excede 3 palavras`);
+    for (const rot of [...Object.values(ROTULO_CURTO), ...Object.values(ROTULO_CURTO_INVALIDA)]) {
+      assert.ok(rot && rot.split(/\s+/).length <= 3, `"${rot}" excede 3 palavras`);
     }
+  });
+
+  it("rotulos = TODOS os problemas (erros primeiro, sem repetir) — inclusive os ocultos no +N", () => {
+    const r = resumoEstado([
+      m("atencao", "dfd.referenciaRenovacao"),
+      m("erro", "dfd.tipo"),
+      m("erro", "dfd.prioridade"),
+      m("erro", "item.valorUnitario"),
+      m("erro", "item.valorUnitario"),
+    ]);
+    assert.equal(r.rotulo, "Sem tipo");
+    assert.deepEqual(r.rotulos, ["Sem tipo", "Sem prioridade", "Item sem valor", "DFD-R sem referência"]);
+    assert.deepEqual(resumoEstado([]).rotulos, []);
+  });
+
+  it("rótulo específico da mensagem (seção fora do padrão) vence o da chave", () => {
+    const r = resumoEstado([{ status: "erro", chave: "dfd.prioridade", texto: "T", rotulo: "Prioridade inválida" }]);
+    assert.equal(r.rotulo, "Prioridade inválida");
+    assert.deepEqual(r.rotulos, ["Prioridade inválida"]);
   });
 });
 

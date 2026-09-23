@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { dfdProtocolos, dfds, reparticoes } from "@/db/schema";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
@@ -46,6 +46,16 @@ const VALOR_DFD = sql<number>`COALESCE(${dfds.valorTotal}, 0)`;
 /** Protocolos (opcionalmente filtrados por repartição — Geral passa `undefined`),
  * com totais agregados ao vivo dos DFDs vinculados. */
 export async function listarProtocolos(reparticaoId?: number): Promise<ProtocoloResumo[]> {
+  return consultaProtocolos(reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined);
+}
+
+/** Protocolos pelos ids (edição em massa — ≤ 20 por requisição), com os mesmos totais ao vivo. */
+export async function listarProtocolosPorIds(ids: number[]): Promise<ProtocoloResumo[]> {
+  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n) && n > 0);
+  return uniq.length === 0 ? [] : consultaProtocolos(inArray(dfdProtocolos.id, uniq));
+}
+
+function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
   return getDb()
     .select({
       id: dfdProtocolos.id,
@@ -67,7 +77,7 @@ export async function listarProtocolos(reparticaoId?: number): Promise<Protocolo
     .from(dfdProtocolos)
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
     .leftJoin(dfds, eq(dfds.protocoloId, dfdProtocolos.id))
-    .where(reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined)
+    .where(onde)
     .groupBy(dfdProtocolos.id)
     .orderBy(desc(dfdProtocolos.criadoEm), desc(dfdProtocolos.id));
 }
