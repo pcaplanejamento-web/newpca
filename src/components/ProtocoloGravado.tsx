@@ -18,7 +18,7 @@ import {
 } from "@/lib/dfd-tratamento";
 import { dataBR } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import type { ProtocoloDetalhe } from "@/lib/protocolo";
+import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
@@ -28,6 +28,7 @@ import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
+import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
@@ -91,7 +92,7 @@ export function useProtocoloGravado({
   onAlterado,
   sinal = 0,
   pcas = [],
-  dfdsExistentes = [],
+  onAbrirProtocolo,
 }: {
   /** Protocolo a abrir (`null` = fechado). */
   protocoloId: number | null;
@@ -112,8 +113,8 @@ export function useProtocoloGravado({
   sinal?: number;
   /** PCAs cadastrados (o REENVIO usa o mesmo seletor de PCA da protocolação). */
   pcas?: PcaOpcao[];
-  /** DFDs já cadastrados na Mesa (o REENVIO classifica os que viriam de OUTRO protocolo). */
-  dfdsExistentes?: { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null }[];
+  /** Abre OUTRO protocolo na pilha (o protocolo ATUAL de um DFD sobrescrito — o rastro cinza). */
+  onAbrirProtocolo?: (protocoloId: number) => void;
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [proto, setProto] = useState<ProtocoloDetalhe | null>(null);
@@ -122,6 +123,8 @@ export function useProtocoloGravado({
   const [dfds, setDfds] = useState<Map<number, DfdParseado>>(new Map());
   const [repIds, setRepIds] = useState<Map<number, number | null>>(new Map());
   const [unidadesExtra, setUnidadesExtra] = useState<UnidadeConferencia[]>([]);
+  // RASTRO: DFDs deste processo SOBRESCRITOS por outro protocolo (cinza, com o protocolo atual de cada um).
+  const [sobrescritos, setSobrescritos] = useState<DfdSobrescrito[]>([]);
   const [capa, setCapa] = useState<CapaEditavel | null>(null);
   const [editados, setEditados] = useState<Set<number>>(new Set());
   const [itensEditados, setItensEditados] = useState<Set<number>>(new Set());
@@ -137,6 +140,8 @@ export function useProtocoloGravado({
   const [versao, setVersao] = useState(0);
   // REENVIO do PDF (sobrescrever): contador que abre o lançador do `ProtocoloUploadForm` em modo reenvio.
   const [reenviar, setReenviar] = useState(0);
+  // SOBRESCREVER o DFD aberto ao lado com um arquivo novo (escolha por dado).
+  const [sobrescreverDfd, setSobrescreverDfd] = useState(0);
   // HISTÓRICO conectado do protocolo (capa + DFDs + itens) — modal próprio, carregado só ao abrir.
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const historico = useHistorico(historicoAberto && proto ? `/api/protocolo/${proto.id}/historico` : null);
@@ -155,6 +160,7 @@ export function useProtocoloGravado({
         protocolo?: ProtocoloDetalhe;
         dfds?: DfdDetalhe[];
         unidades?: UnidadeConferencia[];
+        sobrescritos?: DfdSobrescrito[];
       };
       if (minha !== cargaRef.current) return;
       if (!r.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
@@ -178,6 +184,7 @@ export function useProtocoloGravado({
       setDfds(rascunhos);
       setRepIds(reps);
       setUnidadesExtra(j.unidades ?? []);
+      setSobrescritos(j.sobrescritos ?? []);
       setEditados(ed);
       setItensEditados(edItens);
       setSel(new Set());
@@ -204,6 +211,7 @@ export function useProtocoloGravado({
     setOrdem([]);
     setDfds(new Map());
     setRepIds(new Map());
+    setSobrescritos([]);
     setEditados(new Set());
     setItensEditados(new Set());
     setSel(new Set());
@@ -282,7 +290,14 @@ export function useProtocoloGravado({
   const linhasAtencao = linhas.filter((l) => l.estado === "atencao");
   const somatorio = linhas.reduce((s, l) => s + (l.valor ?? 0), 0);
   const totalItens = linhas.reduce((s, l) => s + (l.itens ?? 0), 0);
-  const conc = conciliacaoCapa({ valorCapa: capa?.valorCapa, somatorio, totalDfds: linhas.length }, regras, { categoria });
+  // A capa foi emitida com os DFDs que o processo TINHA — os sobrescritos depois por outro protocolo (o rastro,
+  // com o valor da época) seguem na conciliação.
+  const valorSobrescritos = sobrescritos.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
+  const conc = conciliacaoCapa(
+    { valorCapa: capa?.valorCapa, somatorio: somatorio + valorSobrescritos, totalDfds: linhas.length + sobrescritos.length },
+    regras,
+    { categoria },
+  );
 
   // ---- DFD aberto ao lado (mesmo componente/rodapé/painel da análise).
   const dfdAberto = abertoId != null ? (dfds.get(abertoId) ?? null) : null;
@@ -577,7 +592,7 @@ export function useProtocoloGravado({
             textoLeitura: proto.reparticaoCodigo ? `${proto.reparticaoCodigo}${proto.reparticaoNome ? ` · ${proto.reparticaoNome}` : ""}` : "Sem unidade",
           }}
           pca={<TextField label="PCA (ano)" value={proto.anoPca != null ? String(proto.anoPca) : "—"} disabled readOnly />}
-          totais={{ dfds: linhas.length, itens: totalItens, somatorio }}
+          totais={{ dfds: linhas.length, itens: totalItens, somatorio, sobrescritos: { qtd: sobrescritos.length, valor: valorSobrescritos } }}
           conciliacao={conc}
           onSubstituir={podeEditar && !salvando ? () => setCapa((x) => (x ? { ...x, valorCapa: conc.somatorio } : x)) : undefined}
           linhas={linhas}
@@ -591,6 +606,8 @@ export function useProtocoloGravado({
           compacta={!!empilhado || abertoId != null}
           regras={regras}
           nota={proto.criadoEm ? <p className="text-[11px] text-faint">Protocolado em {dataBR(proto.criadoEm)}.</p> : undefined}
+          sobrescritos={sobrescritos}
+          onVerProtocolo={onAbrirProtocolo}
         />
       ),
   };
@@ -612,9 +629,22 @@ export function useProtocoloGravado({
         onFechar={fecharDfd}
         bloqueado={salvando}
         acoes={
-          <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
-            <IconClock className="h-4 w-4" /> Histórico
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
+              <IconClock className="h-4 w-4" /> Histórico
+            </Button>
+            {/* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */}
+            {editavelAberto && !salvando && (
+              <Button
+                variant="secondary"
+                onClick={() => setSobrescreverDfd((n) => n + 1)}
+                disabled={sujo}
+                title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
+              >
+                <IconUpload className="h-4 w-4" /> Sobrescrever DFD
+              </Button>
+            )}
+          </>
         }
       />
     ) : undefined,
@@ -679,11 +709,14 @@ export function useProtocoloGravado({
     ),
   };
 
-  // Base do REENVIO: o protocolo gravado + os DFDs completos (estável entre renders — cache da comparação).
+  // Base do REENVIO: o protocolo gravado + os DFDs completos + o rastro dos sobrescritos (estável entre
+  // renders — cache da comparação).
   const baseReenvio: BaseReenvio | null = useMemo(
-    () => (proto ? { protocolo: proto, dfds: ordem.map((id) => orig.get(id)).filter((d): d is DfdDetalhe => !!d) } : null),
-    [proto, orig, ordem],
+    () => (proto ? { protocolo: proto, dfds: ordem.map((id) => orig.get(id)).filter((d): d is DfdDetalhe => !!d), sobrescritos } : null),
+    [proto, orig, ordem, sobrescritos],
   );
+  // O DFD aberto ao lado, como GRAVADO (a base da sobrescrita por arquivo novo).
+  const gravadoAberto = abertoId != null ? (orig.get(abertoId) ?? null) : null;
 
   /** Fora da pilha: o relatório (despacho) e o REENVIO do PDF são modais próprios. */
   const extra = (
@@ -698,7 +731,23 @@ export function useProtocoloGravado({
           }}
           reparticoes={reparticoes}
           reparticaoAtivaId={reparticaoAtivaId}
-          dfdsExistentes={dfdsExistentes}
+          pcas={pcas}
+          regras={regras}
+          orgaos={orgaos}
+        />
+      )}
+      {podeEditar && proto && gravadoAberto && editavelAberto && (
+        <DfdUploadForm
+          sobrescrever={{
+            gravado: gravadoAberto,
+            iniciar: sobrescreverDfd,
+            onConcluido: () => {
+              onAlterado();
+              if (pedidoRef.current === proto.id) void carregar(proto.id, abertoId);
+            },
+          }}
+          reparticoes={reparticoes}
+          reparticaoAtivaId={reparticaoAtivaId}
           pcas={pcas}
           regras={regras}
           orgaos={orgaos}

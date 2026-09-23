@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import type { ComparacaoDfd, DiffCampo, DiffItemDfd } from "@/lib/comparar-protocolo";
 import { brl, num } from "@/lib/format";
+import type { BlocoEscolha, EstadoEscolha, Lado } from "@/lib/sobrescrita-dfd";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -11,11 +12,12 @@ import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 
 /**
- * COMPARAÇÃO do REENVIO de um protocolo (PDF corrigido × protocolo gravado) — componentes do
- * design-system: `DiffLinha` (um campo: gravado → novo), `DiffItem` (um item novo/removido/alterado),
- * `BlocoDiff` (bloco com título e contagem) — os três reusados pelo `Historico` —, `ComparacaoDfdView` (as
- * diferenças de UM DFD: cabeçalho, seções, assinaturas e itens) e `ComparacaoProtocolo` (o bloco do topo:
- * contagens, diferenças da capa, gravados que não vieram no PDF com Excluir/Manter e o relatório).
+ * COMPARAÇÃO gravado × novo (reenvio do protocolo e SOBRESCRITA de um DFD) — componentes do design-system:
+ * `DiffLinha` (um campo: gravado → novo), `DiffItem` (um item novo/removido/alterado), `BlocoDiff` (bloco
+ * com título e contagem) — os três reusados pelo `Historico` —, `ComparacaoDfdView` (as diferenças de UM
+ * DFD: cabeçalho, seções, assinaturas e itens — com a ESCOLHA por dado na sobrescrita: manter o gravado ×
+ * usar o novo) e `ComparacaoProtocolo` (o bloco do topo do reenvio: contagens, diferenças da capa,
+ * gravados que não vieram no PDF com Excluir/Manter e o relatório).
  */
 
 const tinta = (cor: string) => ({ background: `color-mix(in srgb, ${cor} 9%, var(--surface))`, borderColor: `color-mix(in srgb, ${cor} 28%, var(--border))` });
@@ -34,12 +36,20 @@ export function DiffLinha({
   d,
   rotulos = ["Gravado", "Novo"],
   compacto = false,
+  acao,
+  escolhido,
 }: {
   d: DiffCampo;
   rotulos?: readonly [string, string];
   compacto?: boolean;
+  /** (sobrescrita) controle da ESCOLHA ao lado do rótulo. */
+  acao?: ReactNode;
+  /** (sobrescrita) o lado que VALE — o outro fica esmaecido; "editado" esmaece os dois. */
+  escolhido?: EstadoEscolha | null;
 }) {
   const [inteiro, setInteiro] = useState(false);
+  const apaga = (lado: Lado) => (escolhido && escolhido !== lado ? " opacity-45" : "");
+  const destaque = (lado: Lado) => (escolhido === lado ? " ring-2 ring-accent/50" : "");
   if (compacto && curto(d.antes) && curto(d.depois)) {
     return (
       <div className="grid gap-x-3 gap-y-0.5 text-[12.5px] sm:grid-cols-[minmax(6rem,10rem)_1fr]">
@@ -56,15 +66,18 @@ export function DiffLinha({
   const clamp = recolhe && !inteiro ? " line-clamp-4" : "";
   return (
     <div className="rounded-control border border-border p-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{d.rotulo}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{d.rotulo}</p>
+        {acao}
+      </div>
       <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
-        <div className="rounded-[8px] border px-2 py-1.5" style={tinta("var(--danger)")}>
+        <div className={`rounded-[8px] border px-2 py-1.5 transition-opacity${apaga("gravado")}${destaque("gravado")}`} style={tinta("var(--danger)")}>
           <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--danger)" }}>
             {rotulos[0]}
           </p>
           <p className={`whitespace-pre-wrap break-words text-[12.5px] text-text-2${clamp}`}>{d.antes}</p>
         </div>
-        <div className="rounded-[8px] border px-2 py-1.5" style={tinta("var(--ok)")}>
+        <div className={`rounded-[8px] border px-2 py-1.5 transition-opacity${apaga("novo")}${destaque("novo")}`} style={tinta("var(--ok)")}>
           <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--ok)" }}>
             {rotulos[1]}
           </p>
@@ -87,32 +100,50 @@ export function DiffLinha({
 const TOM_ITEM: Record<DiffItemDfd["tipo"], Tone> = { novo: "emerald", removido: "red", alterado: "amber" };
 const ROTULO_ITEM: Record<DiffItemDfd["tipo"], string> = { novo: "Novo", removido: "Removido", alterado: "Alterado" };
 
-/** Bloco de diferenças com título e contagem (Cabeçalho/Seções/Assinaturas/Itens) — reenvio e histórico. */
-export function BlocoDiff({ titulo, qtd, children }: { titulo: string; qtd: number; children: ReactNode }) {
+/** Bloco de diferenças com título e contagem (Cabeçalho/Seções/Assinaturas/Itens) — reenvio e histórico.
+ * `acoes` (sobrescrita): "todos novos / todos gravados" do bloco, ao lado do título. */
+export function BlocoDiff({ titulo, qtd, acoes, children }: { titulo: string; qtd: number; acoes?: ReactNode; children: ReactNode }) {
   return (
     <section>
-      <h4 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">
-        {titulo} <span className="text-faint">({num(qtd)})</span>
-      </h4>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-[12px] font-bold uppercase tracking-wide text-muted">
+          {titulo} <span className="text-faint">({num(qtd)})</span>
+        </h4>
+        {acoes}
+      </div>
       <div className="space-y-2">{children}</div>
     </section>
   );
 }
 
-/** A diferença de UM item do DFD (novo / removido / alterado campo a campo) — reenvio e histórico. */
-export function DiffItem({ it, rotulos, compacto = false }: { it: DiffItemDfd; rotulos?: readonly [string, string]; compacto?: boolean }) {
+/** A diferença de UM item do DFD (novo / removido / alterado campo a campo) — reenvio e histórico. `acao`/
+ * `escolhido` = a ESCOLHA da sobrescrita (manter o gravado × usar o novo). */
+export function DiffItem({
+  it,
+  rotulos,
+  compacto = false,
+  acao,
+  escolhido,
+}: {
+  it: DiffItemDfd;
+  rotulos?: readonly [string, string];
+  compacto?: boolean;
+  acao?: ReactNode;
+  escolhido?: EstadoEscolha | null;
+}) {
   return (
     <div className="rounded-control border border-border p-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={TOM_ITEM[it.tipo]}>{ROTULO_ITEM[it.tipo]}</Badge>
         <span className="text-[12.5px] font-semibold text-text">Item {it.item ?? "—"}</span>
         {it.codigo && <span className="font-mono text-[12px] text-muted">{it.codigo}</span>}
+        {acao && <span className="ml-auto">{acao}</span>}
       </div>
       {it.descricao && <p className="mt-1 line-clamp-2 text-[12px] text-text-2">{it.descricao}</p>}
       {it.campos.length > 0 && (
         <div className={`mt-2 ${compacto ? "space-y-1" : "space-y-1.5"}`}>
           {it.campos.map((d) => (
-            <DiffLinha key={d.campo} d={d} rotulos={rotulos} compacto={compacto} />
+            <DiffLinha key={d.campo} d={d} rotulos={rotulos} compacto={compacto} escolhido={escolhido} />
           ))}
         </div>
       )}
@@ -120,24 +151,78 @@ export function DiffItem({ it, rotulos, compacto = false }: { it: DiffItemDfd; r
   );
 }
 
-/** As DIFERENÇAS de UM DFD em relação ao gravado (painel da direita "Diferenças" no reenvio) + o que foi
- * HERDADO do gravado (o PDF não trazia — transparência). */
-export function ComparacaoDfdView({ comparacao, herdados = [] }: { comparacao: ComparacaoDfd | null; herdados?: string[] }) {
+/**
+ * ESCOLHA POR DADO da SOBRESCRITA (o DFD novo × o gravado de mesmo número): em cada diferença, manter o
+ * GRAVADO ou usar o NOVO. O estado vem do DFD de trabalho (`estado` pela chave da diferença — `null` = não
+ * escolhível, ex.: o valor total que segue os itens); `outras` = o que muda por edição à mão/unidade.
+ */
+export type EscolhaSobrescritaProps = {
+  estado: (chave: string) => EstadoEscolha | null;
+  onEscolher: (chave: string, lado: Lado) => void;
+  onTodos: (lado: Lado, bloco?: BlocoEscolha) => void;
+  bloqueado?: boolean;
+  outras?: { campos: DiffCampo[]; itens: DiffItemDfd[] } | null;
+};
+
+/** Seletor da escolha de UM dado: Manter gravado | Usar novo (+ "Editado" quando mudado à mão). */
+function SeletorLado({ estado, onEscolher, bloqueado }: { estado: EstadoEscolha; onEscolher: (l: Lado) => void; bloqueado?: boolean }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {estado === "editado" && <Badge tone="amber">Editado</Badge>}
+      <Segmented<EstadoEscolha>
+        value={estado}
+        disabled={bloqueado}
+        onChange={(v) => v !== "editado" && onEscolher(v)}
+        options={[
+          { value: "gravado", label: "Manter gravado" },
+          { value: "novo", label: "Usar novo" },
+        ]}
+      />
+    </span>
+  );
+}
+
+/** "Todos novos / todos gravados" de um bloco (ou de tudo). */
+function AcoesTodos({ onTodos, bloco, bloqueado }: { onTodos: EscolhaSobrescritaProps["onTodos"]; bloco?: BlocoEscolha; bloqueado?: boolean }) {
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      <Button variant="ghost" onClick={() => onTodos("gravado", bloco)} disabled={bloqueado}>
+        {bloco ? "Manter gravados" : "Manter todos os gravados"}
+      </Button>
+      <Button variant="ghost" onClick={() => onTodos("novo", bloco)} disabled={bloqueado}>
+        {bloco ? "Usar novos" : "Usar todos os novos"}
+      </Button>
+    </span>
+  );
+}
+
+/** As DIFERENÇAS de UM DFD em relação ao gravado (painel da direita "Diferenças" — reenvio e sobrescrita)
+ * + o que foi HERDADO do gravado (o PDF não trazia — transparência). Com `escolha`, cada diferença traz o
+ * seletor Manter gravado | Usar novo. */
+export function ComparacaoDfdView({
+  comparacao,
+  herdados = [],
+  escolha = null,
+}: {
+  comparacao: ComparacaoDfd | null;
+  herdados?: string[];
+  escolha?: EscolhaSobrescritaProps | null;
+}) {
   const nota =
     herdados.length > 0 ? (
       <Callout kind="info" icon={<IconCheck className="h-5 w-5" />} className="mb-4">
-        Herdado do gravado (o PDF não trazia): {herdados.join(", ")}.
+        Herdado do gravado (o arquivo não trazia): {herdados.join(", ")}.
       </Callout>
     ) : null;
   return (
     <>
       {nota}
-      <Diferencas comparacao={comparacao} />
+      <Diferencas comparacao={comparacao} escolha={escolha} />
     </>
   );
 }
 
-function Diferencas({ comparacao }: { comparacao: ComparacaoDfd | null }) {
+function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null; escolha: EscolhaSobrescritaProps | null }) {
   if (!comparacao)
     return (
       <Callout kind="info" icon={<IconSpinner className="h-5 w-5" />}>
@@ -150,42 +235,74 @@ function Diferencas({ comparacao }: { comparacao: ComparacaoDfd | null }) {
         DFD NOVO — não existe no protocolo gravado; será incluído ao sobrescrever.
       </Callout>
     );
-  if (comparacao.situacao === "igual")
+  const outras = escolha?.outras;
+  const temOutras = !!outras && (outras.campos.length > 0 || outras.itens.length > 0);
+  if (comparacao.situacao === "igual" && !temOutras)
     return (
       <Callout kind="ok" icon={<IconCheck className="h-5 w-5" />}>
         Sem diferenças em relação ao gravado — ao sobrescrever, fica como está.
       </Callout>
     );
   const c = comparacao;
+  // Com ESCOLHA: o seletor de cada diferença + "todos" por bloco; sem ela, a leitura (vale o novo).
+  const lado = (chave: string | undefined) => (escolha && chave ? escolha.estado(chave) : null);
+  const acao = (chave: string | undefined) => {
+    const e = lado(chave);
+    return escolha && chave && e ? (
+      <SeletorLado estado={e} onEscolher={(l) => escolha.onEscolher(chave, l)} bloqueado={escolha.bloqueado} />
+    ) : undefined;
+  };
+  const todos = (bloco: BlocoEscolha) => (escolha ? <AcoesTodos onTodos={escolha.onTodos} bloco={bloco} bloqueado={escolha.bloqueado} /> : undefined);
   return (
     <div className="space-y-5">
-      <p className="text-[12.5px] text-muted">
-        {num(c.total)} diferença(s) em relação ao DFD gravado. Ao sobrescrever, vale o <strong className="text-text">Novo</strong>{" "}
-        (com as suas edições).
-      </p>
+      {escolha ? (
+        <div className="space-y-2">
+          <p className="text-[12.5px] text-muted">
+            {num(c.total)} diferença(s) entre o DFD gravado e o NOVO. Em cada uma, escolha o que vale ao sobrescrever:{" "}
+            <strong className="text-text">Manter gravado</strong> ou <strong className="text-text">Usar novo</strong>. O DFD ao lado já
+            mostra o resultado (e pode ser editado).
+          </p>
+          {c.total > 0 && <AcoesTodos onTodos={escolha.onTodos} bloqueado={escolha.bloqueado} />}
+        </div>
+      ) : (
+        <p className="text-[12.5px] text-muted">
+          {num(c.total)} diferença(s) em relação ao DFD gravado. Ao sobrescrever, vale o <strong className="text-text">Novo</strong>{" "}
+          (com as suas edições).
+        </p>
+      )}
       {c.campos.length > 0 && (
-        <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length}>
+        <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length} acoes={c.campos.some((d) => lado(d.campo)) ? todos("cabecalho") : undefined}>
           {c.campos.map((d) => (
-            <DiffLinha key={d.campo} d={d} />
+            <DiffLinha key={d.campo} d={d} acao={acao(d.campo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.secoes.length > 0 && (
-        <BlocoDiff titulo="Seções" qtd={c.secoes.length}>
+        <BlocoDiff titulo="Seções" qtd={c.secoes.length} acoes={todos("secoes")}>
           {c.secoes.map((d) => (
-            <DiffLinha key={d.campo} d={d} />
+            <DiffLinha key={d.campo} d={d} compacto={!!escolha} acao={acao(d.campo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.assinaturas && (
         <BlocoDiff titulo="Assinaturas" qtd={1}>
-          <DiffLinha d={c.assinaturas} />
+          <DiffLinha d={c.assinaturas} acao={acao("assinaturas")} escolhido={lado("assinaturas")} />
         </BlocoDiff>
       )}
       {c.itens.length > 0 && (
-        <BlocoDiff titulo="Itens" qtd={c.itens.length}>
+        <BlocoDiff titulo="Itens" qtd={c.itens.length} acoes={todos("itens")}>
           {c.itens.map((it, k) => (
-            <DiffItem key={`${it.tipo}:${it.item}:${it.codigo}:${k}`} it={it} />
+            <DiffItem key={it.chave ?? `${it.tipo}:${it.item}:${it.codigo}:${k}`} it={it} acao={acao(it.chave)} escolhido={lado(it.chave)} />
+          ))}
+        </BlocoDiff>
+      )}
+      {temOutras && outras && (
+        <BlocoDiff titulo="Outras alterações (unidade, total e edições)" qtd={outras.campos.length + outras.itens.length}>
+          {outras.campos.map((d) => (
+            <DiffLinha key={`o:${d.campo}`} d={d} compacto />
+          ))}
+          {outras.itens.map((it, k) => (
+            <DiffItem key={`o:${it.chave ?? k}`} it={it} compacto />
           ))}
         </BlocoDiff>
       )}

@@ -94,7 +94,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
       destino = proto;
     }
-    await vincularDfd(id, p.data.protocoloId);
+    await vincularDfd(id, p.data.protocoloId, dfd.numero);
     // Histórico nos DOIS protocolos (o de onde saiu e o para onde foi) — cada um mostra o seu lado.
     if (p.data.protocoloId !== dfd.protocoloId) {
       const alvo = { numero: dfd.numero, planejamento: dfd.planejamento };

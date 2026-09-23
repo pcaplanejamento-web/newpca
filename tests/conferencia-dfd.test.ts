@@ -211,6 +211,16 @@ describe("avaliarProtocolo — o protocolo ACUMULA os problemas dos DFDs e itens
     assert.equal(r.estado, "regular");
     assert.equal(r.dfdsComErro, 0);
   });
+  it("RASTRO: os DFDs sobrescritos por outro protocolo (valor da época) entram na conciliação e não é 'Sem DFDs'", () => {
+    // A capa (300) foi emitida com 3 DFDs; 1 (100) foi sobrescrito depois por outro protocolo.
+    const conferida = avaliarProtocolo({ valorCapa: 300, valorTotal: 200, totalDfds: 2, sobrescritos: 1, valorSobrescritos: 100 }, []);
+    assert.equal(conferida.estado, "regular");
+    // Sem contar o rastro, a capa pareceria divergente.
+    assert.equal(avaliarProtocolo({ valorCapa: 300, valorTotal: 200, totalDfds: 2 }, []).resumo?.rotulo, "Capa ≠ somatória");
+    // Todos os DFDs foram sobrescritos: o processo tem o rastro — não é "Sem DFDs".
+    const soRastro = avaliarProtocolo({ valorCapa: 100, valorTotal: 0, totalDfds: 0, sobrescritos: 1, valorSobrescritos: 100 }, []);
+    assert.equal(soRastro.estado, "regular");
+  });
 });
 
 describe("aplicarMassaDfd + buildPrevisao — edição em massa (fonte única)", () => {

@@ -86,10 +86,10 @@ const podar = (sel: Sel, validas: Set<number>): Sel => {
 /** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
  * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
 const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
-/** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto) e
- * QUALQUER DFD dele gravado. Trocar responsável/situação não reconfere nada. */
+/** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto),
+ * QUALQUER DFD dele gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
 const chaveProto = (p: ProtocoloResumo) =>
-  `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
+  `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.sobrescritos}|${p.valorSobrescritos}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
 const FATIA_PROTOCOLOS = 50;
 /** Estado do protocolo cuja conferência dos DFDs falhou (neutro — nunca um "Regular" falso). */
@@ -344,7 +344,14 @@ export function DfdsView({
     const c = atual?.m.get(k);
     if (c) return { conf: c, pendente: false, naoConferido: false };
     const base = avaliarProtocolo(
-      { valorCapa: p.valorCapa, valorTotal: p.valorTotal, totalDfds: p.totalDfds, categoria: classificarAssunto(p.assunto) },
+      {
+        valorCapa: p.valorCapa,
+        valorTotal: p.valorTotal,
+        totalDfds: p.totalDfds,
+        categoria: classificarAssunto(p.assunto),
+        sobrescritos: p.sobrescritos,
+        valorSobrescritos: p.valorSobrescritos,
+      },
       null,
       regras,
     );
@@ -396,11 +403,6 @@ export function DfdsView({
   const opcoesPessoas = useMemo(() => pessoas.map((p) => ({ id: p.id, nome: rotuloOpcaoPessoa(p, usuarioId), pessoa: p })), [pessoas, usuarioId]);
 
   const atualizarListas = () => router.refresh();
-  // DFDs já cadastrados (conflito de nº na importação/reenvio: substitui × move de outro protocolo).
-  const dfdsExistentesMesa = useMemo(
-    () => dfds.map((d) => ({ numero: d.numero, protocoloNumero: d.protocoloNumero, valorTotal: d.valorTotal, totalItens: d.totalItens })),
-    [dfds],
-  );
 
   async function excluirDfd(id: number, numero: string) {
     if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.`)) return;
@@ -753,7 +755,24 @@ export function DfdsView({
           <span className="text-faint">—</span>
         ),
     },
-    { key: "dfds", header: "DFDs", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalDfds) },
+    {
+      key: "dfds",
+      header: "DFDs",
+      align: "center",
+      filter: "none",
+      nowrap: true,
+      // Os DFDs do processo + o RASTRO dos sobrescritos por outro protocolo ("+N", esmaecido).
+      render: (r) => (
+        <span className="tabular-nums">
+          {num(r.totalDfds)}
+          {r.sobrescritos > 0 && (
+            <span className="ml-1 text-[11px] text-faint" title={`${num(r.sobrescritos)} DFD(s) sobrescrito(s) por outro protocolo`}>
+              +{num(r.sobrescritos)}
+            </span>
+          )}
+        </span>
+      ),
+    },
     { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens) },
     { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal, nowrap: true, render: (r) => brl(r.valorTotal) },
     {
@@ -1033,7 +1052,6 @@ export function DfdsView({
               <ProtocoloUploadForm
                 reparticoes={reparticoes}
                 reparticaoAtivaId={reparticaoAtivaId}
-                dfdsExistentes={dfdsExistentesMesa}
                 pcas={pcas}
                 regras={regras}
                 orgaos={orgaos}
@@ -1064,7 +1082,7 @@ export function DfdsView({
         orgaos={orgaos}
         onAlterado={atualizarListas}
         pcas={pcas}
-        dfdsExistentes={dfdsExistentesMesa}
+        onAbrir={setAberto}
       />
 
       {/* Vincular DFD a um protocolo (rule 4) */}

@@ -19,7 +19,11 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   (capa, DFDs e itens) antes de sobrescrever — só o que mudou é regravado. Cada protocolo tem **Responsável**,
   **Distribuição** e **Situação** (cadastradas pelo ADM), **estado agregado** (capa + todos os DFDs e itens) e
   **histórico conectado** (quem, quando, por qual canal e protocolo, o que mudou — no protocolo, no DFD e no item);
-  filtros de hierarquia (Responsável e Assunto) valem para as três visões.
+  filtros de hierarquia (Responsável e Assunto) valem para as três visões. O responsável é escolhido entre as
+  pessoas do grupo e aparece com **foto + apelido** (apelido definido no Perfil). Um DFD importado de novo
+  **sobrescreve** o cadastrado com **escolha dado a dado** (manter o gravado × usar o novo — botão "Sobrescrever DFD"
+  no banner do DFD), registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link
+  para o protocolo onde ele está agora.
 
 ## Stack
 

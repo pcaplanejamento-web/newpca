@@ -27,10 +27,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (migrações `--remote` + `cf-typegen` + build OpenNext + deploy).
 - **Nunca** rode `wrangler`/`next build`/`opennextjs-cloudflare` no sandbox de ferramentas
   (travam). `git`, `gh`, `npm`, `node` funcionam.
-- **Portão de qualidade** (em `deploy.yml` e no `ci.yml` de PRs): `lint` e `test`
-  **bloqueiam**; `typecheck` é **informativo** (`continue-on-error`) porque o build usa
-  `ignoreBuildErrors` (divergências de tipos workerd×DOM). Tornar o typecheck bloqueante
-  quando o baseline de tipos estiver 100% limpo.
+- **Portão de qualidade** (em `deploy.yml` e no `ci.yml` de PRs): `typecheck`, `lint` e `test`
+  **bloqueiam** (baseline de tipos 100% limpo — um erro de tipos novo não chega ao ar). O `cf-typegen`
+  roda antes (o typecheck depende do `cloudflare-env.d.ts`); o build segue com `ignoreBuildErrors`
+  porque o type-check já foi feito no portão.
 
 ## Banco de dados (D1 + Drizzle)
 - **`getDb()` (`src/lib/db.ts`) só em escopo de request** (Server Components
@@ -330,7 +330,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     a equipe validar. No `DfdConferir`, o bloco **"Validação da assinatura"** mostra "Validada automaticamente (auto)" /
     "Validada pela equipe" ou, se não conferida, o seletor do **responsável da unidade** + "Validar assinatura (equipe)"
     (`validarAssinaturaPelaEquipe`: marca a assinatura com `validacao:{por:"equipe",responsavel}`; sem assinatura lida cria
-    uma `fonte:"manual"`) e "Desfazer validação" (`desfazerValidacaoEquipe`). Vale enquanto o responsável for da unidade
+    uma `fonte:"manual"`) e "Desfazer validação" (`desfazerValidacaoEquipe`). **DATA da assinatura (sem migração):** ao
+    ADICIONAR (nenhuma lida) a equipe informa a data (obrigatória, campo de data → "dd/mm/aaaa"); ao validar uma lida, vem a
+    data lida (corrigível — `definirDataAssinaturaEquipe`; o MESMO dia mantém a hora/fuso do certificado). Com ela, o
+    TEMPORÁRIO é conferido pelo período. `dataAssinaturaValida`/`dataAssinaturaDeIso` (puros) recusam data inválida/futura —
+    e o `assinaturaSchema` (refine) recusa no servidor a `manual` com data inválida/futura. Vale enquanto o responsável for da unidade
     (trocar de unidade desfaz o efeito). **Quem/quando** são carimbados pelo SERVIDOR (`carimbarValidacao`, sessão — nunca o
     cliente) no `POST /api/dfd` e no `PATCH /api/dfd/[id]` (`assinaturas`), com auditoria. Selos "Validada (auto)/(equipe)"
     nos cards do `DfdView` e "(auto)/(equipe)" na coluna Assinatura da lista do protocolo; grupo "Equipe" p/ a `manual`.
@@ -427,10 +431,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
     `situacao_protocolo`) — a antiga situação derivada (Vazio/Com DFDs) foi EXCLUÍDA. **Responsável** = a pessoa designada
-    (`dfd_protocolos.responsavel_id`; usuários ativos — `src/lib/usuarios.ts`); ao protocolar, entra o **responsável
-    PADRÃO** que quem protocola escolheu no **Perfil → Protocolação** (`usuarios.responsavel_padrao_id`, `PATCH
+    (`dfd_protocolos.responsavel_id`) — **SÓ entre as PESSOAS DO GRUPO ativo** (usuários ativos membros do grupo;
+    sem grupo, ex.: admin sem grupo ⇒ todos os ativos — `listarPessoasDoGrupo`/`pessoaDoGrupo`, `src/lib/usuarios.ts`): na
+    célula, na massa e no Perfil; o servidor recusa outra pessoa (`PATCH /api/protocolo/[id]`, massa, preferências) e o
+    padrão só entra na protocolação se ainda for do grupo (`responsavelPadraoDe`). Quem já está gravado e hoje é de outro
+    grupo continua visível (diretório `pessoasPorIds` → `SeletorCelula.atual`, sem re-escolha). Ao protocolar, entra o
+    **responsável PADRÃO** que quem protocola escolheu no **Perfil → Protocolação** (`usuarios.responsavel_padrao_id`, `PATCH
     /api/perfil/preferencias`) — só num protocolo ainda sem responsável (`COALESCE` no upsert; o reenvio mantém).
-    **Distribuição** = `criado_por` (quem protocolou). As duas células são o **`SeletorCelula`** (`<select>` nativo
+    **Distribuição** = `criado_por` (quem protocolou). **Foto + APELIDO nas colunas (migração `0032`):** `usuarios.apelido`
+    (Perfil, ≤ 40, `normalizarApelido`) é o NOME DE EXIBIÇÃO no sistema (`nomeExibicao`, `src/lib/pessoa.ts` puro: cabeçalho,
+    colunas, seletores — a lista nativa mostra "apelido — nome" + "(eu)", `rotuloOpcaoPessoa`); as células mostram o
+    **`PessoaTag`** (avatar com a FOTO + apelido; nome completo no `title`). A foto é servida por **`GET
+    /api/usuarios/[id]/foto`** (`decodificarFoto`; cache `immutable` pela versão `?v=` = `atualizado_em` — `urlFoto`): a
+    sessão, a Mesa e a lista de usuários carregam só a URL (nunca o data-URL — a sessão é lida em toda requisição). As duas células são o **`SeletorCelula`** (`<select>` nativo
     transparente — leve com milhares de linhas, seletor do próprio celular, o clique não abre a linha), gravam na hora
     (`PATCH /api/protocolo/[id]` com `origem:"celula"`, otimista com reversão) e também vão pela edição em massa
     (`BarraEdicaoMassaProtocolos` → ações `responsavel`/`situacao` do `POST /api/protocolo/massa`). Não-editores veem só o texto.
@@ -620,10 +633,46 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
   cascade e o vínculo de edição por `pca_dfds.dfdId` cascade; não deixa DFD órfão (antes o `set null` orfanava).
   **Conflito de DFD na importação — escolher qual PREVALECE (regra do usuário):** quando um DFD do protocolo já existe
-  no banco, o banner mostra **Substitui/Move** (`classificar` sobre `dfdsExistentes`, threado de `DfdsView`) e o botão
-  **"Manter o existente"** (no banner do DFD) descarta o incoming (`descartarDfd` → `descartados`; `protocolar` já pula
-  descartados) → o **já cadastrado prevalece** (não é sobrescrito); sem descartar, o **novo prevalece** (sobrescreve por
-  `numero` + reatribui `protocoloId`). Antes só havia a escolha p/ duplicatas do próprio arquivo (`manterDfd`).
+  no banco, o banner mostra **Substitui/Move/Outra unidade (sem acesso)** — `classificar` sobre a consulta do SERVIDOR
+  **`POST /api/dfd/existentes`** (`buscarExistentes`/`dfdsPorNumeros`, lotes de ≤ 90 no `IN`: em QUALQUER unidade — a lista
+  da Mesa é filtrada pela unidade do cabeçalho e classificava errado; o de unidade sem acesso volta só como
+  `{numero, acessivel:false}` e vira ERRO da linha, `MSG_SEM_ACESSO`, resolvido por "Manter o existente"; sem a consulta
+  a protocolação não segue às cegas) — e o botão **"Manter o existente"** (no banner do DFD) descarta o incoming
+  (`descartarDfd` → `descartados`; `protocolar` já pula descartados) → o **já cadastrado prevalece** (não é
+  sobrescrito); sem descartar, o **novo prevalece** (sobrescreve por `numero` + reatribui `protocoloId`), com a
+  **escolha POR DADO** ao abrir o DFD (ver "Sobrescrita de DFD" abaixo). Antes só havia a escolha p/ duplicatas do
+  próprio arquivo (`manterDfd`).
+  **Sobrescrita de DFD com ESCOLHA POR DADO (não existem dois DFDs com o mesmo nº):** um DFD importado de novo SOBRESCREVE
+  o cadastrado, e cada DIFERENÇA gravado × arquivo novo é uma escolha **"Manter gravado | Usar novo"** (+ "todos" por
+  bloco). Núcleo PURO **`sobrescrita-dfd.ts`** (testado): `comparacaoEscolha` (a MESMA régua do reenvio — `compararDfd`;
+  unidade/ano/valor total fora: não são do arquivo), `entradasEscolha` (campo do cabeçalho `CAMPOS_ESCOLHA`, seção pela
+  chave do título, assinaturas, item novo/alterado/removido pela chave ESTÁVEL do pareamento `parearItens`: `a:g:n`/`n:n`/
+  `r:g`), `aplicarEscolha`/`aplicarTodas` (copiam o lado escolhido para o DFD de TRABALHO; itens reencontrados pela marca
+  de origem `ref` — `marcarItensNovos`, `n:<j>`/`g:<i>`, só na tela, `semMarcas` antes de enviar; total = Σ itens),
+  `estadoEscolha` (lido do próprio DFD de trabalho: gravado / novo / **editado** à mão), `resumoEscolhas` (mantidos/
+  editados → histórico) e `outrasDiferencas` ("Outras alterações": unidade, total e edições). Hook **`useSobrescrita`**
+  (gravado + novo [o arquivo, estável] + trabalho → props `EscolhaSobrescritaProps` do `ComparacaoDfdView`, via o painel
+  "Diferenças (N)" do `DfdPainelDireito`; N = o que muda DE FATO). Onde: **botão "Sobrescrever DFD"** no banner do DFD
+  gravado (`useDfdGravado` e o DFD ao lado no `useProtocoloGravado` — desabilitado com rascunho) → o MESMO
+  **`DfdUploadForm`** em modo `sobrescrever` (só o MESMO nº; lançador próprio; o DFD **continua no protocolo dele** — sem
+  `protocoloId` o `upsertDfdCabecalho` mantém o atual); o **"Importar DFD"** da Mesa quando o nº já existe (acessível) vira a
+  mesma sobrescrita; e a **protocolação** (`ProtocoloUploadForm`: ao abrir um DFD que substitui/move, o gravado carrega sob
+  demanda; no reenvio já veio). O avulso/banner herdam do gravado o que o arquivo não traz (`herdarTratamentos`, como o
+  reenvio). **Histórico:** `origem:"sobrescrita"` ("Sobrescrita do DFD", `ROTULO_ORIGEM`) + o diff gravado × novo + obs
+  "Mantido do gravado (escolha): …"/"Editado antes de gravar: …" (`dfdMetaSchema.escolhas`, só p/ o histórico); na
+  protocolação a origem segue o canal e as escolhas vão nas obs. Selo **"Sobrescrita"** no `DfdCabecalho`.
+  **RASTRO do DFD sobrescrito por OUTRO protocolo (migração `0032`, tabela `dfd_passagens`):** quando um protocolo traz um
+  DFD que estava em outro, o de ORIGEM guarda um RETRATO leve (planejamento/tipo/sigla/itens/valor DA ÉPOCA; único por
+  protocolo + nº) — gravado no MESMO lote atômico do cabeçalho do DFD (`upsertDfdCabecalho(…, passagem)`: uma nova
+  tentativa já veria o DFD no destino); o DFD que volta a um protocolo (start-dfd/`vincularDfd`) tira o rastro dele ali;
+  excluir o protocolo apaga o rastro (cascade). O protocolo ATUAL é DERIVADO do DFD vivo de mesmo nº (`listarSobrescritos`,
+  join) ⇒ numa cadeia A → B → C, A e B apontam **sempre C** ("DFD excluído depois"/"Hoje sem protocolo" quando for o caso).
+  UI: **`TabelaSobrescritos`** (`PlanilhaDfds.tsx`) — cinza, separada, abaixo da planilha no `ProtocoloView`; "Sobrescrito
+  pelo" = link (≥ 44px) que troca a pilha para o protocolo atual (`BannersMesa.onAbrir`, confirma rascunho; sem acesso =
+  texto). Os valores do rastro ENTRAM na conciliação da capa (`colunasSobrescritos` → `ProtocoloResumo.sobrescritos`/
+  `valorSobrescritos` → `avaliarProtocolo`/gravado/reenvio) e evitam o falso "Sem DFDs"; a coluna DFDs da Mesa mostra `+N`.
+  No **reenvio**, os DFDs do PDF que um protocolo POSTERIOR sobrescreveu ficam **mantidos lá** (pré-descartados,
+  "Sobrescrito — está no protocolo X"; "Restaurar" traz de volta).
   O **PDF do protocolo** é lido no navegador em 2 passos, sem OOM: (1) **índice leve** — `abrirPdf` (documento pdf.js
   streamável, `pageItems` sob demanda) + `indexarProtocolo` (só o texto por página → capa + DFDs por "Número DFD"
   com o cabeçalho; a geometria é descartada por página, **EXCETO a da CAPA** — guardada p/ a extração coluna-aware).
@@ -1053,7 +1102,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `POST /api/protocolo/massa` com as ações `responsavel`/`situacao`, `GET /api/protocolo/[id]/historico` e
   `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +
   `PATCH`/`DELETE /api/admin/situacoes/[id]` + `PATCH /api/admin/situacoes/ordem` (`exigirAdmin`) e `PATCH
-  /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA ou `null`).
+  /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA do grupo ou `null`).
+- Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
+  `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000}` → os DFDs já
+  cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`), `POST /api/dfd` `start-dfd` com
+  `origem:"sobrescrita"` + `escolhas {mantidos, editados}` (histórico) e SEM `protocoloId` = mantém o protocolo do DFD, e
+  `GET /api/protocolo/[id]?completo=1` também com **`sobrescritos`** (o rastro, com o protocolo atual de cada um).
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
 - **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
@@ -1115,10 +1169,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Copiar planejamentos") com os editores **`BarraEdicaoMassa`** (DFDs) /
   **`BarraEdicaoMassaProtocolos`** / **`BarraEdicaoMassaItens`** (`BarraEdicaoMassa.tsx`), **`ComparacaoReenvio`**
   (`DiffLinha` antes × depois — `rotulos` Gravado/Novo ou Antes/Depois, `compacto` = valor curto numa linha e texto longo
-  recolhido —, `DiffItem`, `BlocoDiff`, `ComparacaoDfdView`, `ComparacaoProtocolo` — o reenvio do protocolo; `DiffLinha`/
-  `DiffItem`/`BlocoDiff` também servem o `Historico`), **`Historico`** (timeline por evento — escopos global/protocolo/dfd/
-  item; `HistoricoDoItem` recolhível; hook `useHistorico`), **`SeletorCelula`** (dropdown DENTRO da célula — `<select>`
-  nativo transparente, ponto de cor, spinner ao salvar, só texto sem permissão), **`SeletorFiltro`** (filtro de
+  recolhido; `acao`/`escolhido` = a escolha da sobrescrita —, `DiffItem`, `BlocoDiff` (`acoes`), `ComparacaoDfdView`
+  (`escolha` = **Manter gravado | Usar novo** por diferença + "todos" por bloco + "Outras alterações"; hook
+  **`useSobrescrita`**), `ComparacaoProtocolo` — o reenvio do protocolo; `DiffLinha`/`DiffItem`/`BlocoDiff` também servem o
+  `Historico`), **`Historico`** (timeline por evento — escopos global/protocolo/dfd/item; `HistoricoDoItem` recolhível;
+  hook `useHistorico`), **`SeletorCelula`** (dropdown DENTRO da célula — `<select>` nativo transparente, ponto de cor OU
+  **foto + apelido** (`pessoa`), spinner ao salvar, só texto sem permissão; `atual` = valor fora das opções),
+  **`PessoaTag`** (FOTO + APELIDO de uma pessoa — colunas Responsável/Distribuição; nome completo no `title`),
+  **`TabelaSobrescritos`** (o RASTRO cinza dos DFDs sobrescritos por outro protocolo, com o link ao protocolo atual), **`SeletorFiltro`** (filtro de
   HIERARQUIA acima das tabelas — chip com ícone/rótulo/valor, accent quando ativo, largura total no celular),
   **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
@@ -1201,7 +1259,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   avisos (não alterar deps de hooks automaticamente).
 
 ## Ao finalizar qualquer mudança
-1. `npm run lint` e `npm test` verdes; `npm run typecheck` sem novos erros.
+1. `npm run lint`, `npm test` e `npm run typecheck` verdes (os três bloqueiam o deploy).
 2. **Commit + deploy** (push na main) e **verifique o site no ar** sem regressão.
 3. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
    do que mudou. Mudanças limpas, cirúrgicas, sem código morto.

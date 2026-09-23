@@ -14,10 +14,12 @@ import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
+import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconRefresh, IconSpinner } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
+import type { PcaOpcao } from "./PcaPicker";
 import { useConformidade } from "./useConformidade";
 
 type Rep = {
@@ -75,6 +77,7 @@ export function useDfdGravado({
   orgaos,
   onAlterado,
   sinal = 0,
+  pcas = [],
 }: {
   /** DFD a abrir (`null` = fechado). */
   dfdId: number | null;
@@ -93,9 +96,13 @@ export function useDfdGravado({
   onAlterado: () => void;
   /** Recarga EXTERNA (outro banner gravou): recarrega do banco se não houver rascunho. */
   sinal?: number;
+  /** PCAs cadastrados — a SOBRESCRITA de um DFD sem protocolo escolhe o PCA (a de um DFD de protocolo segue o dele). */
+  pcas?: PcaOpcao[];
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [orig, setOrig] = useState<DfdDetalhe | null>(null);
+  // SOBRESCREVER com um arquivo novo (escolha por dado): contador que abre o lançador do `DfdUploadForm`.
+  const [sobrescrever, setSobrescrever] = useState(0);
   const [dfd, setDfd] = useState<DfdParseado | null>(null);
   const [repId, setRepId] = useState<number | null>(null);
   const [unidade, setUnidade] = useState<UnidadeConferencia | null>(null);
@@ -281,6 +288,18 @@ export function useDfdGravado({
       </Button>
     ) : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
+  /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever. */
+  const botaoSobrescrever =
+    editavel && orig && !salvando ? (
+      <Button
+        variant="secondary"
+        onClick={() => setSobrescrever((n) => n + 1)}
+        disabled={sujo}
+        title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
+      >
+        <IconUpload className="h-4 w-4" /> Sobrescrever DFD
+      </Button>
+    ) : null;
 
   /** Banner do DFD (corpo da análise + rodapé com estado/mensagens/histórico/ver protocolo/salvar). */
   const dfdPainel: ConteudoBanner = {
@@ -308,6 +327,7 @@ export function useDfdGravado({
                   <IconLayers className="h-4 w-4" /> Ver protocolo
                 </Button>
               )}
+              {botaoSobrescrever}
             </>
           }
           principal={botaoSalvar}
@@ -439,6 +459,26 @@ export function useDfdGravado({
     };
   }
 
+  /** Fora da pilha: a SOBRESCRITA (lançador + banner da escolha por dado) é um modal próprio. */
+  const extra =
+    editavel && orig ? (
+      <DfdUploadForm
+        sobrescrever={{
+          gravado: orig,
+          iniciar: sobrescrever,
+          onConcluido: () => {
+            onAlterado();
+            if (pedidoRef.current === orig.id) void carregar(orig.id, alvoAtual());
+          },
+        }}
+        reparticoes={reparticoes}
+        reparticaoAtivaId={reparticaoAtivaId}
+        pcas={pcas}
+        regras={regras}
+        orgaos={orgaos}
+      />
+    ) : null;
+
   return {
     aberto: dfdId != null,
     carregado: !!dfd,
@@ -449,6 +489,7 @@ export function useDfdGravado({
     dfdPainel,
     direito,
     itemPainel,
+    extra,
     fechar,
     podeDescartar,
   };

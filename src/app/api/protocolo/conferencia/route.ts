@@ -54,7 +54,13 @@ export async function POST(req: Request) {
         orgaos,
       }).mensagens,
     }));
-    const c = avaliarProtocolo({ valorCapa: pr.valorCapa, valorTotal: pr.valorTotal, totalDfds: pr.totalDfds, categoria }, doProtocolo, regras);
+    // A capa foi emitida com os DFDs que o processo TINHA — os sobrescritos depois por outro protocolo (o
+    // rastro, com o valor da época) seguem na conciliação.
+    const c = avaliarProtocolo(
+      { valorCapa: pr.valorCapa, valorTotal: pr.valorTotal, totalDfds: pr.totalDfds, categoria, sobrescritos: pr.sobrescritos, valorSobrescritos: pr.valorSobrescritos },
+      doProtocolo,
+      regras,
+    );
     return { id: pr.id, estado: c.estado, resumo: c.resumo ?? null, dfdsComErro: c.dfdsComErro, dfdsEmAtencao: c.dfdsEmAtencao };
   });
   return ok({ linhas });

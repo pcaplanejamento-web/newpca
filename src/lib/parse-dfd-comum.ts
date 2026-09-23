@@ -17,6 +17,9 @@ export type DfdItemParseado = {
   quantidade: number | null;
   valorUnitario: number | null;
   valorTotal: number | null;
+  /** Origem do item numa SOBRESCRITA com escolha ("g:3" = item 3 do gravado; "n:5" = item 5 do arquivo
+   * novo) — só na tela, para a escolha reencontrar o item; NUNCA é gravado (`semMarcas`). */
+  ref?: string;
 };
 
 /** Título canônico da Seção 4 (tabela de itens); usado p/ o texto de apoio dela. */

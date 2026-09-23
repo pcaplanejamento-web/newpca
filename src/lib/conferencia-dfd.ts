@@ -198,16 +198,30 @@ type ProblemaDfd = { status: "erro" | "atencao" | "acerto"; chave: string; texto
  * `dfds: null` = a conferência dos DFDs ainda não chegou (só a capa conta). Puro.
  */
 export function avaliarProtocolo(
-  capa: { valorCapa: number | null; valorTotal: number; totalDfds: number; categoria?: string | null },
+  capa: {
+    valorCapa: number | null;
+    valorTotal: number;
+    totalDfds: number;
+    categoria?: string | null;
+    /** DFDs SOBRESCRITOS depois por outro protocolo (o rastro) e o valor deles NA ÉPOCA — a capa foi emitida
+     * com eles: entram na conciliação e contam como DFDs do processo (não é "Sem DFDs"). */
+    sobrescritos?: number;
+    valorSobrescritos?: number;
+  },
   dfds: { numero: string; planejamento: string | null; mensagens: ProblemaDfd[] }[] | null,
   regras: RegrasAvaliacao = regrasPadrao(),
 ): ConferenciaProtocolo {
   type Msg = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string; cor?: string; n: number; capa?: boolean };
   const msgs: Msg[] = [];
-  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: capa.valorTotal, totalDfds: capa.totalDfds }, regras, { categoria: capa.categoria ?? null });
+  const sobrescritos = capa.sobrescritos ?? 0;
+  const conc = conciliacaoCapa(
+    { valorCapa: capa.valorCapa, somatorio: capa.valorTotal + (capa.valorSobrescritos ?? 0), totalDfds: capa.totalDfds + sobrescritos },
+    regras,
+    { categoria: capa.categoria ?? null },
+  );
   if (conc.divergente && conc.motivo)
     msgs.push({ status: conc.bloqueia ? "erro" : "atencao", chave: "protocolo.valorCapa", texto: conc.motivo, rotulo: conc.zerada ? "Capa sem valor" : "Capa ≠ somatória", n: 0, capa: true });
-  if (capa.totalDfds === 0)
+  if (capa.totalDfds + sobrescritos === 0)
     msgs.push({ status: "atencao", chave: "protocolo.semDfds", texto: "Protocolo sem DFDs vinculados.", rotulo: "Sem DFDs", n: 0, capa: true });
 
   let dfdsComErro = 0;

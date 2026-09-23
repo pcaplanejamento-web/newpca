@@ -25,6 +25,28 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Pessoas (apelido + foto), responsável do grupo, data da assinatura, SOBRESCRITA com escolha e RASTRO entre protocolos — entregue
+✅ **Apelido** no Perfil (migração `0032`, aditiva): o nome de exibição no sistema — cabeçalho, colunas e seletores (a lista
+mostra "apelido — nome completo"). **Foto + apelido** nas colunas **Responsável** e **Distribuição** da Mesa (`PessoaTag`); a
+foto vem de `GET /api/usuarios/[id]/foto` com cache (a sessão e as listas levam só a URL — mais leve em toda página).
+✅ **Responsável só entre as pessoas do GRUPO ativo** (célula, edição em massa e Perfil → Protocolação) — conferido no
+servidor; quem já estava designado e hoje é de outro grupo continua visível, sem re-escolha.
+✅ **Data da assinatura** ao ADICIONAR a assinatura pela equipe (obrigatória) e corrigível ao validar uma lida — confere o
+responsável temporário pelo período; data inválida/futura é recusada (também no servidor).
+✅ **Sobrescrever um DFD com ESCOLHA POR DADO**: botão **"Sobrescrever DFD"** no banner do DFD gravado (e o "Importar DFD" de
+um nº já cadastrado, e a protocolação ao abrir o DFD): o painel "Diferenças" compara o gravado com o arquivo novo e, em cada
+diferença (campo, seção, assinaturas, item novo/alterado/removido), o usuário escolhe **Manter gravado | Usar novo** (ou
+todos por bloco) — o DFD ao lado mostra o resultado. Não existem dois DFDs com o mesmo nº; pelo banner, o DFD continua no
+protocolo dele. **O histórico registra** a sobrescrita (canal "Sobrescrita do DFD"), as diferenças e o que foi mantido.
+✅ **Rastro do DFD sobrescrito por outro protocolo** (`dfd_passagens`): o protocolo de origem guarda, em CINZA e separado,
+o retrato da versão que tinha (valor da época — entra na conciliação da capa) e "Sobrescrito pelo protocolo X" leva ao
+protocolo onde o DFD está AGORA (numa cadeia A → B → C, sempre C). No reenvio, o DFD que outro protocolo sobrescreveu fica
+lá (não é puxado de volta).
+✅ **Erros mapeados e corrigidos**: a importação classificava "Substitui/Move" pela lista da Mesa FILTRADA pela unidade do
+cabeçalho (DFD de outra unidade parecia "Novo") — agora consulta o servidor (`POST /api/dfd/existentes`) e aponta, desde a
+análise, o DFD de unidade sem acesso; a importação avulsa de um DFD existente o TIRAVA do protocolo — agora o mantém; o
+selo "sobrescrito" e o valor total não duplicam; **type-check bloqueante** no CI/deploy (baseline limpo).
+
 ### Mesa: gestão do protocolo (Responsável/Distribuição/Situação), estado agregado, histórico conectado e ordem fixa dos banners — entregue
 ✅ **Seleção total**: o "selecionar todos" das tabelas marca TODAS as linhas filtradas (não só a página).
 ✅ **Estado do protocolo AGREGADO** (`avaliarProtocolo` + `POST /api/protocolo/conferencia`): a célula acumula a conciliação

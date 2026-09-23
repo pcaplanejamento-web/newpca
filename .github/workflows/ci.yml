@@ -23,15 +23,13 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # cloudflare-env.d.ts é gerado (não versionado) — só o type-check (informativo)
-      # depende dele; não pode bloquear o CI.
+      # cloudflare-env.d.ts é gerado (não versionado) — o type-check depende dele.
       - name: Gerar tipos do Cloudflare
         run: npm run cf-typegen
-        continue-on-error: true
 
-      - name: Type-check (informativo)
+      # Portão de qualidade: type-check, lint e testes BLOQUEIAM (baseline de tipos limpo).
+      - name: Type-check
         run: npm run typecheck
-        continue-on-error: true
 
       - name: Lint (Biome)
         run: npm run lint

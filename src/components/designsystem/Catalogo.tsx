@@ -21,6 +21,7 @@ import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/component
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
 import { BarraSelecao, BarraSelecaoDfds, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
 import { AvisoFlutuante } from "@/components/AvisoFlutuante";
+import { PessoaTag } from "@/components/PessoaTag";
 import { SeletorCelula } from "@/components/SeletorCelula";
 import { SeletorFiltro } from "@/components/SeletorFiltro";
 import { GatilhoFiltro } from "@/components/GatilhoFiltro";
@@ -31,6 +32,10 @@ import { EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/Estad
 import type { PcaDetalhe } from "@/lib/dfd";
 import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
+import { useSobrescrita } from "@/components/useSobrescrita";
+import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import type { DfdSobrescrito } from "@/lib/protocolo";
+import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl } from "@/lib/format";
 import { EmConstrucao } from "@/components/EmConstrucao";
@@ -79,7 +84,7 @@ import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
-import { PlanilhaDfds } from "@/components/PlanilhaDfds";
+import { PlanilhaDfds, TabelaSobrescritos } from "@/components/PlanilhaDfds";
 import { RelatorioErros } from "@/components/RelatorioErros";
 import { Segmented } from "@/components/Segmented";
 import { Switch } from "@/components/Switch";
@@ -417,10 +422,11 @@ function AvisoFlutuanteDemo() {
   );
 }
 
+// Pessoas (Perfil → apelido + foto): a lista nativa mostra "apelido — nome"; a célula, a FOTO + o APELIDO.
 const PESSOAS_DEMO = [
-  { id: 1, nome: "Ana Souza" },
-  { id: 4, nome: "Carlos Lima" },
-  { id: 7, nome: "Thamires Rocha" },
+  { id: 1, nome: "Ana — Ana Souza", pessoa: { id: 1, nome: "Ana Souza", apelido: "Ana", foto: null } },
+  { id: 4, nome: "Carlão — Carlos Lima", pessoa: { id: 4, nome: "Carlos Lima", apelido: "Carlão", foto: null } },
+  { id: 7, nome: "Thamires Rocha", pessoa: { id: 7, nome: "Thamires Rocha", apelido: null, foto: null } },
 ];
 const SITUACOES_DEMO = [
   { id: 1, nome: "Recebido", cor: "#64748b" },
@@ -605,6 +611,70 @@ function ReenvioDemo() {
         <ComparacaoDfdView comparacao={REENVIO_COMPARACAO} herdados={["Tipo", "Validação da assinatura (equipe)"]} />
         {/* Um campo isolado: gravado × novo. */}
         <DiffLinha d={{ campo: "observacao", rotulo: "Observação", antes: "PCA 2027", depois: "PCA 2027 — inclusão complementar" }} />
+      </div>
+    </div>
+  );
+}
+
+// SOBRESCRITA de um DFD por um arquivo novo (mesmo nº) — a ESCOLHA POR DADO: o gravado × o novo.
+const SOB_GRAVADO: DfdParseado = {
+  numero: "1525",
+  planejamento: "640",
+  tipo: "DFD-S · Solução",
+  objeto: "AQUISIÇÃO DE MATERIAL DE EXPEDIENTE",
+  orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE",
+  setorRequisitante: "SECRETARIA MUNICIPAL DE ADMINISTRAÇÃO",
+  siglaSetor: "SMA",
+  responsavel: "ANA SOUZA",
+  matricula: null,
+  email: null,
+  telefone: null,
+  anoPca: 2027,
+  numeroContrato: null,
+  numeroAta: null,
+  numeroLicitacao: null,
+  valorTotal: 150,
+  nomeArquivo: "dfd-1525.pdf",
+  secoes: [
+    { numero: 3, titulo: "3 - JUSTIFICATIVA", texto: "Atender a demanda das unidades administrativas." },
+    { numero: 6, titulo: "6 - PRIORIDADE", texto: "MÉDIA" },
+  ],
+  assinaturas: [{ nome: "ANA SOUZA", eCpf: "", usuario: "", local: "", data: "10/03/2026 10:00:00", ip: "", codigo: "", url: "", fonte: "certificado" }],
+  itens: [
+    { item: 1, codigo: "100", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 10, valorUnitario: 5, valorTotal: 50 },
+    { item: 2, codigo: "200", descricao: "PAPEL A4", unidade: "RESMA", quantidade: 5, valorUnitario: 20, valorTotal: 100 },
+  ],
+};
+const SOB_NOVO: DfdParseado = marcarItensNovos({
+  ...SOB_GRAVADO,
+  objeto: "AQUISIÇÃO DE MATERIAL DE EXPEDIENTE E ESCRITÓRIO",
+  valorTotal: 169,
+  secoes: [
+    { numero: 3, titulo: "3 - JUSTIFICATIVA", texto: "Atender a demanda das unidades administrativas e das escolas." },
+    { numero: 6, titulo: "6 - PRIORIDADE", texto: "ALTA" },
+  ],
+  itens: [
+    { item: 1, codigo: "100", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 12, valorUnitario: 5, valorTotal: 60 },
+    { item: 2, codigo: "200", descricao: "PAPEL A4", unidade: "RESMA", quantidade: 5, valorUnitario: 20, valorTotal: 100 },
+    { item: 3, codigo: "300", descricao: "CLIPS Nº 2", unidade: "CX", quantidade: 1, valorUnitario: 9, valorTotal: 9 },
+  ],
+});
+
+/** Demo da SOBRESCRITA com escolha por dado (o MESMO hook dos banners: `useSobrescrita`). */
+function SobrescritaDemo() {
+  const [trabalho, setTrabalho] = useState<DfdParseado>(SOB_NOVO);
+  const sob = useSobrescrita({ gravado: SOB_GRAVADO, novo: SOB_NOVO, trabalho, onTrabalho: (fn) => setTrabalho(fn) });
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <ComparacaoDfdView comparacao={sob?.comparacao ?? null} escolha={sob?.escolha ?? null} />
+      <div className="space-y-3">
+        <StatMini label="Resultado — valor total (Σ itens)" value={brl(trabalho.valorTotal ?? 0)} hint={`${trabalho.itens.length} itens`} />
+        {sob && (
+          <Callout kind="info" icon={<IconCheck className="h-5 w-5" />}>
+            {sob.resumo.novos} dado(s) do arquivo novo · {sob.resumo.mantidos.length} mantido(s) do gravado ·{" "}
+            {sob.resumo.editados.length} editado(s). O histórico registra o que foi mantido.
+          </Callout>
+        )}
       </div>
     </div>
   );
@@ -934,12 +1004,42 @@ const PROTO_LINHAS_DEMO = [
   },
 ];
 
-/** Demo do CORPO do protocolo: conciliação da capa com "Substituir pela somatória" + seleção. */
+// RASTRO: DFDs deste processo SOBRESCRITOS por outro protocolo (cinza, com o protocolo ATUAL de cada um).
+const PROTO_SOBRESCRITOS_DEMO: DfdSobrescrito[] = [
+  {
+    numero: "1601",
+    planejamento: "1655",
+    tipo: "DFD-S · Solução",
+    sigla: "SMIR",
+    totalItens: 4,
+    valorTotal: 18250,
+    sobrescritoEm: "2026-09-15 13:22:10",
+    dfdId: 91,
+    protocoloAtualId: 12,
+    protocoloAtualNumero: "150321/2026",
+    acessivel: true,
+  },
+  {
+    numero: "1610",
+    planejamento: null,
+    tipo: "DFD-R · Renovação",
+    sigla: "SMS",
+    totalItens: 1,
+    valorTotal: 2300,
+    sobrescritoEm: "2026-09-16 09:05:44",
+    dfdId: null,
+    protocoloAtualId: null,
+    protocoloAtualNumero: null,
+  },
+];
+
+/** Demo do CORPO do protocolo: conciliação da capa com "Substituir pela somatória" + seleção + o RASTRO cinza. */
 function ProtocoloViewDemo() {
   const [capa, setCapa] = useState<CapaValores>(PROTO_CAPA_DEMO);
   const [sel, setSel] = useState<Set<string | number>>(new Set());
-  const somatorio = PROTO_LINHAS_DEMO.reduce((a, l) => a + l.valor, 0);
-  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio, totalDfds: PROTO_LINHAS_DEMO.length });
+  const valorRastro = PROTO_SOBRESCRITOS_DEMO.reduce((a, s) => a + (s.valorTotal ?? 0), 0);
+  const somatorio = PROTO_LINHAS_DEMO.reduce((a, l) => a + l.valor, 0) + valorRastro;
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio, totalDfds: PROTO_LINHAS_DEMO.length + PROTO_SOBRESCRITOS_DEMO.length });
   return (
     <ProtocoloView
       capa={capa}
@@ -949,7 +1049,7 @@ function ProtocoloViewDemo() {
       onValorCapaChange={(v) => setCapa((x) => ({ ...x, valorCapa: v }))}
       unidade={{ id: 1, opcoes: [{ id: 1, codigo: "SMIR", nome: "Secretaria Municipal de Infraestrutura Rural" }] }}
       pca={<TextField label="PCA (ano)" value="2027" disabled readOnly />}
-      totais={{ dfds: PROTO_LINHAS_DEMO.length, itens: 3, somatorio }}
+      totais={{ dfds: PROTO_LINHAS_DEMO.length, itens: 3, somatorio, sobrescritos: { qtd: PROTO_SOBRESCRITOS_DEMO.length, valor: valorRastro } }}
       conciliacao={conc}
       onSubstituir={() => setCapa((x) => ({ ...x, valorCapa: conc.somatorio }))}
       linhas={PROTO_LINHAS_DEMO}
@@ -959,6 +1059,8 @@ function ProtocoloViewDemo() {
       onSelected={setSel}
       onVerDfd={(k) => toast(`Abrir o DFD ${k} ao lado`)}
       nota={<p className="text-[11px] text-faint">Protocolado em 09/09/2026.</p>}
+      sobrescritos={PROTO_SOBRESCRITOS_DEMO}
+      onVerProtocolo={(id) => toast(`Abrir o protocolo atual (#${id}) na pilha`)}
     />
   );
 }
@@ -1210,6 +1312,19 @@ export function Catalogo() {
             </div>
           ))}
         </div>
+      </Secao>
+
+      <Secao titulo="PessoaTag (FOTO + APELIDO — colunas Responsável e Distribuição da Mesa; nome completo no title)">
+        <div className="flex flex-wrap items-center gap-4">
+          {PESSOAS_DEMO.map((p) => (
+            <PessoaTag key={p.id} pessoa={p.pessoa} />
+          ))}
+          <PessoaTag pessoa={null} vazio="Sem responsável" />
+        </div>
+        <p className="mt-2 text-[12px] text-faint">
+          O apelido é cadastrado no Perfil (sem apelido, vale o nome); sem foto, as iniciais na cor da pessoa. A foto vem
+          da rota <span className="font-mono">/api/usuarios/[id]/foto</span> com cache (a versão muda ao salvar o perfil).
+        </p>
       </Secao>
 
       <Secao titulo="Abas (swipe no mobile, sublinhado animado)">
@@ -1670,6 +1785,14 @@ export function Catalogo() {
         />
       </Secao>
 
+      <Secao titulo="TabelaSobrescritos (RASTRO cinza — DFDs do processo sobrescritos por outro protocolo; leva ao protocolo ATUAL)">
+        <TabelaSobrescritos sobrescritos={PROTO_SOBRESCRITOS_DEMO} onVerProtocolo={(id) => toast(`Abrir o protocolo atual (#${id})`)} />
+        <p className="mt-2 text-[12px] text-faint">
+          O retrato é da versão que ESTE processo tinha (valor da época — entra na conciliação da capa). "Sobrescrito pelo"
+          é sempre o protocolo onde o DFD está AGORA (o último da cadeia A → B → C).
+        </p>
+      </Secao>
+
       <Secao titulo="EstadoCelula (célula Estado — resumo do problema + contadores; ou ponto + rótulo)">
         <div className="flex flex-wrap items-center gap-4">
           <EstadoResumo
@@ -1826,6 +1949,15 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Sobrescrita do DFD — ESCOLHA POR DADO (Manter gravado | Usar novo; o DFD ao lado mostra o resultado)">
+        <SobrescritaDemo />
+        <p className="mt-3 text-[12px] text-faint">
+          Botão "Sobrescrever DFD" no banner do DFD gravado (e o "Importar DFD" de um nº já cadastrado): o arquivo novo é
+          comparado com o gravado e cada diferença — campo, seção, assinaturas, item — tem a escolha. O DFD continua no
+          protocolo dele; o histórico registra a sobrescrita e o que foi mantido.
+        </p>
+      </Secao>
+
       <Secao titulo="ComparacaoReenvio (reenviar o MESMO protocolo — comparação gravado × PDF novo, antes de sobrescrever)">
         <ReenvioDemo />
         <p className="mt-3 text-[12px] text-faint">
@@ -1974,6 +2106,10 @@ export function Catalogo() {
         {/* Cabeçalho FIXO (`DfdCabecalho`) — no app vai no topo do banner; solto, acima. */}
         <div className="mb-4 border-b border-border pb-3">
           <DfdCabecalho numero={DFD_DEMO.numero} tipo={DFD_DEMO.tipo} planejamento={DFD_DEMO.planejamento} />
+          {/* Sobrescrita por um arquivo novo (escolha por dado) — o selo no cabeçalho do banner. */}
+          <div className="mt-2">
+            <DfdCabecalho numero={DFD_DEMO.numero} tipo={DFD_DEMO.tipo} planejamento={DFD_DEMO.planejamento} sobrescrita />
+          </div>
         </div>
         <DfdView dfd={DFD_DEMO} />
       </Secao>

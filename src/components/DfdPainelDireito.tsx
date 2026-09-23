@@ -7,7 +7,7 @@ import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
 import type { MensagemDfd } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { Button } from "./Button";
-import { ComparacaoDfdView } from "./ComparacaoReenvio";
+import { ComparacaoDfdView, type EscolhaSobrescritaProps } from "./ComparacaoReenvio";
 import type { PainelDfd } from "./DfdConferir";
 import { Historico, useHistorico } from "./Historico";
 import { ItemDetalhe } from "./ItemDetalhe";
@@ -86,6 +86,7 @@ export function DfdPainelDireito({
   dfdId = null,
   comparacao = null,
   herdados,
+  escolha = null,
 }: {
   painel: PainelDfd | null;
   dfd: DfdParseado | null;
@@ -103,11 +104,13 @@ export function DfdPainelDireito({
   comparacao?: ComparacaoDfd | null;
   /** (reenvio) tratamentos herdados do gravado (o PDF não trazia). */
   herdados?: string[];
+  /** (sobrescrita) ESCOLHA por dado — manter o gravado × usar o novo — no painel "Diferenças". */
+  escolha?: EscolhaSobrescritaProps | null;
 }) {
   const verHistorico = painel?.tipo === "historico" && dfdId != null;
   const historico = useHistorico(verHistorico ? `/api/dfd/${dfdId}/historico` : null);
 
-  if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} />;
+  if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} escolha={escolha} />;
   if (verHistorico) {
     return (
       <Historico

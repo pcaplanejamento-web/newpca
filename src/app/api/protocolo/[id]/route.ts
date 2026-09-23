@@ -4,7 +4,7 @@ import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
+import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
 import { pessoaDoGrupo } from "@/lib/usuarios";
@@ -26,9 +26,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     return erro("Sem acesso a este protocolo.", 403);
   }
   if (new URL(req.url).searchParams.get("completo") !== "1") return ok({ protocolo });
-  const dfds = await listarDfdsCompletosDoProtocolo(id);
+  const [dfds, sobrescritos] = await Promise.all([
+    listarDfdsCompletosDoProtocolo(id),
+    // O RASTRO dos DFDs sobrescritos por outro protocolo (cinza) — com o protocolo ATUAL de cada um.
+    listarSobrescritos(id, (rid) => rid == null || lista.some((r) => r.id === rid)),
+  ]);
   const unidades = await unidadesConferencia(dfds.map((d) => d.reparticaoId));
-  return ok({ protocolo, dfds, unidades });
+  return ok({ protocolo, dfds, unidades, sobrescritos });
 }
 
 /** Edita um protocolo já gravado — o banner (capa/unidade) ou a célula da Mesa (responsável/situação).
