@@ -1017,6 +1017,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`Modal.lateral`, SÓ-leitura). Importa via `Dropzone` (`.xlsx`) → prévia com **Nome + Ano** (obrigatório) → grava.
   Exporta XLSX/PDF (`exportar-orcamento.ts`). Só componentes do DS; ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) +
   nav em `AppShell`.
+- **Vínculos Órgão/Unidade do CUBO → cadastro do sistema (migração `0030`):** o CUBO traz Órgão/Unidade como TEXTO
+  próprio ("FUNDO MUNICIPAL DE EDUCACAO DE RIO V…", "2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"). Tabela
+  **`orcamento_vinculos`** (`tipo` `orgao`|`unidade` + `chave` = texto normalizado, **único** por tipo+chave; `orgao_id`/
+  `reparticao_id` FK **set null**) — **GLOBAL** (não por orçamento): o vínculo vale para todos os orçamentos, inclusive os
+  próximos anos; alvo NULL = sem vínculo. Núcleo PURO **`orcamento-vinculo.ts`** (`chaveVinculo`, `nomeSemCodigo` tira o
+  "N - " do CUBO, **`sugerirAlvo`** = nome/sigla iguais ⇒ certeza, senão Jaccard ≥ `LIMIAR_SUGESTAO` 0,6 — empate ⇒ nada,
+  ignora ocultos; `linhasVinculo` agrupa os textos distintos com nº de lançamentos + Σ dotação + contexto do órgão;
+  `mapaVinculos`/`alvoDoTexto`). Acesso em `orcamento.ts` (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — órgãos +
+  unidades sem a "Geral", `definirVinculosOrcamento` = UPSERT `ON CONFLICT(tipo,chave)` em lotes de 16 linhas (80 params),
+  conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (`exigirEditor`, `vinculosOrcamentoSchema` ≤ 200,
+  auditoria). UI: 3ª visão **"Vínculos"** no `Segmented` da `OrcamentoView` → componente **`OrcamentoVinculos`** (DS,
+  catalogado): tabela filtrável Estado (Vinculado/Sugestão/Sem vínculo) · Tipo · No orçamento · **No sistema** (`select`,
+  unidades por `optgroup` de órgão, ocultos só se já vinculados; alvo ≥44px no mobile) · Lançamentos · Dotação, com
+  **"Aceitar SIGLA"** por linha e **"Vincular N sugestões"** em massa; gravação otimista (pendentes valem só sobre a base de
+  vínculos em que foram feitas). O vínculo aparece na coluna **"No sistema"** dos lançamentos e no bloco "No sistema" do
+  `OrcamentoItemDetalhe` (prop `vinculo`). Ícone `IconLink`. `lotesDeIds` agora é exportado por `reparticoes.ts`.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

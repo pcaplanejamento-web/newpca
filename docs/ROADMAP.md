@@ -705,6 +705,13 @@ lançamento. Parser dedicado (`parse-orcamento-xlsx`) com detecção de colunas 
 `orcamentos`/`orcamento_itens` + concede a aba a quem já vê o catálogo), **auditoria** e export XLSX/PDF. Validado contra
 o CUBO real (**1.345 lançamentos, 18 órgãos, 39 unidades**). Só componentes do DS; ícone `IconWallet`. Testes de parser
 + validação + migração.
+✅ **Vínculos do orçamento com o cadastro** (migração `0030`, aditiva — `orcamento_vinculos`): cada Órgão/Unidade do CUBO
+(texto próprio do relatório) é ligado a um **órgão/unidade cadastrado**, na nova visão **"Vínculos"** (`OrcamentoVinculos`).
+O sistema **sugere** o alvo por nome/sigla (sem o código "N - " do CUBO; Jaccard ≥ 0,6; empate não sugere) e o editor
+aceita uma a uma ou **todas as sugestões** de uma vez, ou escolhe no seletor (unidades agrupadas por órgão). O vínculo é
+**global** (vale para os próximos anos importados), aparece na coluna **"No sistema"** dos lançamentos e no detalhe; excluir
+o órgão/unidade zera o vínculo (FK set null). Rota `PUT /api/orcamento/vinculos` (editor, auditoria). Testes puros +
+schema + migração.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

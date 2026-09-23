@@ -66,6 +66,7 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar } from "@/components/BotaoCopiar";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
+import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
@@ -1939,8 +1940,28 @@ export function Catalogo() {
               valorAnulacao: 0,
               sequencial: 1,
             }}
+            vinculo={{ orgao: "PMRV — Prefeitura Municipal de Rio Verde", unidade: "SME — Secretaria Municipal de Educação" }}
           />
         </div>
+      </Secao>
+
+      <Secao titulo="OrcamentoVinculos (Órgão/Unidade do CUBO → órgão/unidade cadastrado; sugestão automática)">
+        <OrcamentoVinculos
+          podeEditar
+          onVincular={() => {}}
+          alvos={{
+            orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde" }],
+            unidades: [
+              { id: 15, sigla: "SME", nome: "Secretaria Municipal de Educação", orgaoId: 1 },
+              { id: 16, sigla: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1 },
+            ],
+          }}
+          linhas={[
+            { tipo: "orgao", chave: "PREFEITURA", texto: "PREFEITURA MUNICIPAL DE RIO VERDE", contexto: "", lancamentos: 120, valorInicial: 98000000, alvoId: 1, sugestaoId: null },
+            { tipo: "unidade", chave: "2 - SME", texto: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE", lancamentos: 48, valorInicial: 25000000, alvoId: null, sugestaoId: 15 },
+            { tipo: "unidade", chave: "26 - FMACL", texto: "26 - FMACL", contexto: "FD. MUN. DE ASS. SOCIAL", lancamentos: 9, valorInicial: 1200000, alvoId: null, sugestaoId: null },
+          ]}
+        />
       </Secao>
 
       <Secao titulo="Histórico (quem, quando, por qual canal e protocolo, o que mudou antes → depois — protocolo · DFD · item · ADM)">

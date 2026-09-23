@@ -258,6 +258,23 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(restantes.n, 0, "excluir o orçamento deveria apagar os lançamentos (cascade)");
   });
 
+  it("0030 cria orcamento_vinculos (único por tipo+chave; excluir o alvo zera o vínculo)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('orcamento_vinculos')");
+    for (const c of ["tipo", "chave", "texto", "orgao_id", "reparticao_id"]) {
+      assert.ok(cols.includes(c), `coluna ausente em orcamento_vinculos: ${c}`);
+    }
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO orgaos (id, nome, sigla) VALUES (981, 'Fundo X', 'FX')");
+    db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, orgao_id) VALUES ('orgao', 'FUNDO X', 'Fundo X', 981)");
+    assert.throws(
+      () => db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto) VALUES ('orgao', 'FUNDO X', 'outro')"),
+      "o mesmo texto (tipo+chave) deveria ser único",
+    );
+    db.exec("DELETE FROM orgaos WHERE id = 981");
+    const v = db.prepare("SELECT orgao_id FROM orcamento_vinculos WHERE chave = 'FUNDO X'").get() as { orgao_id: number | null };
+    assert.equal(v.orgao_id, null, "excluir o órgão deveria zerar o vínculo (set null)");
+  });
+
   it("0029 adiciona orgao_proprio em reparticoes (default 0 preserva o legado)", () => {
     const cols = nomes(db, "SELECT name FROM pragma_table_info('reparticoes')");
     assert.ok(cols.includes("orgao_proprio"), "coluna orgao_proprio ausente");

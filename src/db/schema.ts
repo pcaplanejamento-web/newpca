@@ -581,6 +581,25 @@ export const orcamentoItens = sqliteTable(
   (t) => [index("orcamento_itens_orcamento_idx").on(t.orcamentoId)],
 );
 
+/**
+ * VÍNCULO do texto de Órgão/Unidade do ORÇAMENTO (CUBO) com o cadastro do sistema. `chave` =
+ * texto normalizado (`chaveVinculo`); `tipo` 'orgao' → `orgao_id`, 'unidade' → `reparticao_id`.
+ * GLOBAL (vale p/ todos os orçamentos). Alvo NULL = sem vínculo (FK set null ao excluir o alvo).
+ */
+export const orcamentoVinculos = sqliteTable(
+  "orcamento_vinculos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tipo: text("tipo", { enum: ["orgao", "unidade"] }).notNull(),
+    chave: text("chave").notNull(),
+    texto: text("texto").notNull(), // texto original do CUBO (exibição)
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("orcamento_vinculos_tipo_chave_uq").on(t.tipo, t.chave)],
+);
+
 export type Unidade = typeof unidades.$inferSelect;
 export type NovaUnidade = typeof unidades.$inferInsert;
 export type Item = typeof itens.$inferSelect;

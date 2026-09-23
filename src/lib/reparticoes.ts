@@ -31,7 +31,7 @@ export async function carregarResponsaveis(reparticaoId: number | null | undefin
 }
 
 /** Ids únicos válidos em LOTES de ≤ 90 (folga sob o limite de 100 parâmetros por statement do D1). */
-function lotesDeIds(ids: number[]): number[][] {
+export function lotesDeIds(ids: number[]): number[][] {
   const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
   const out: number[][] = [];
   for (let i = 0; i < uniq.length; i += 90) out.push(uniq.slice(i, i + 90));
