@@ -320,7 +320,6 @@ const alvoDoResumo = (resumo: string | null) => {
  * por chave; itens da massa em `antes.itens`/`depois.itens`; itens do "Salvar" só no `resumo`). Puro.
  */
 export function interpretarAlteracao(l: Pick<LinhaHistorico, "detalhe" | "antes" | "depois" | "resumo" | "entidade">): AlteracaoHistorico {
-  const vazio: AlteracaoHistorico = { alvo: null, campos: [], secoes: [], assinaturas: null, itens: [], obs: [] };
   const det = objeto(l.detalhe);
   if (Object.keys(det).length > 0) {
     const alvo = det.alvo && typeof det.alvo === "object" ? (det.alvo as { numero?: unknown; planejamento?: unknown }) : null;
@@ -344,7 +343,7 @@ export function interpretarAlteracao(l: Pick<LinhaHistorico, "detalhe" | "antes"
   const itens = Array.isArray(antes.itens) ? itensLegadoMassa(antes, depois) : l.entidade === "dfd" ? itensLegadoResumo(String(l.resumo ?? "")) : [];
   const chaves = [...new Set([...Object.keys(antes), ...Object.keys(depois)])].filter((k) => k !== "itens" && k !== "itensAlterados");
   const campos = chaves.map((k) => ({ campo: k, rotulo: ROTULO_CAMPO[k] ?? k, antes: fmtCampo(k, antes[k]), depois: fmtCampo(k, depois[k]) }));
-  return { ...vazio, alvo: l.entidade === "dfd" ? alvoDoResumo(l.resumo) : null, campos, itens };
+  return { alvo: l.entidade === "dfd" ? alvoDoResumo(l.resumo) : null, campos, secoes: [], assinaturas: null, itens, obs: [] };
 }
 
 /** A alteração de UM item dentro de uma alteração do DFD (pelo nº do item; sem nº, pelo código). */
