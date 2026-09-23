@@ -318,8 +318,8 @@ export async function incorporarProtocolo(
     .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId)));
   await db.batch([
     ...stmts,
-    db.run(numerarItensDoProtocolo(sql, pcaId, protocoloId)),
-    db.run(gravarSequencialNosItens(sql, pcaId, protocoloId)),
+    numerarItensDoProtocolo(db, pcaId, protocoloId),
+    gravarSequencialNosItens(db, pcaId, protocoloId),
     marca,
   ] as unknown as [typeof marca, ...(typeof marca)[]]);
   await sincronizarAtivosPca(pcaId, usuarioId);

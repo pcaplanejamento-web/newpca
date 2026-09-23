@@ -1143,7 +1143,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Modelo (aditivo):** tabela **`pca_itens`** (`pca_id` cascade + **`sequencial`**, **ÚNICO por PCA** `pca_itens_pca_seq_uq`;
   `dfd_item_id`/`dfd_id`/`protocolo_id` set null; `ativo`, `inativado_em/por`, `motivo`) + o nº no PRÓPRIO item
   (`dfd_itens.pca_id`/`pca_sequencial`). Backfill dos protocolos já incorporados (`ROW_NUMBER() OVER (PARTITION BY pca_id)`).
-- **Numeração** (SQL PURO `pca-itens-sql.ts`, testado em `node:sqlite` — `tests/pca-itens-sql.test.ts`):
+- **Numeração** (BUILDERS do Drizzle em `pca-itens-sql.ts` — nada de `db.run(sql…)` em `db.batch`; testados pelo driver D1 REAL
+  dentro de `db.batch`, `tests/pca-itens-sql.test.ts`):
   `numerarItensDoProtocolo` = `MAX(sequencial)` do PCA (inclui os INATIVOS — nunca reaproveita) + `ROW_NUMBER()` na ordem DFD →
   item, só DFDs vinculados a ESTE PCA com ação ≠ excluir, idempotente (`NOT EXISTS`); `gravarSequencialNosItens` registra no
   item. Os dois rodam no MESMO `db.batch` da incorporação (transação sequencial — sem corrida no MAX). Depois,

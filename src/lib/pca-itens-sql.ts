@@ -1,8 +1,12 @@
-import type { TagSql } from "./rastro-sql.ts";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import type * as schema from "../db/schema.ts";
+import { dfdItens, dfds, pcaDfds, pcaItens } from "../db/schema.ts";
 
 /**
- * SEQUENCIAL do ITEM no PCA — o SQL PURO (sem getDb; testado em `node:sqlite`), no padrão de `rastro-sql.ts`: o
- * servidor passa o `sql` do Drizzle; os testes, uma tag que monta texto + parâmetros.
+ * SEQUENCIAL do ITEM no PCA — os comandos como BUILDERS do Drizzle (sem getDb: testados pelo driver D1 sobre
+ * `node:sqlite`, DENTRO de `db.batch` — `tests/pca-itens-sql.test.ts`). Builders, e não `db.run(sql…)`: no driver
+ * D1 um comando cru com parâmetros quebra dentro de `db.batch` (ver `rastro-sql.ts`).
  *
  * - `numerarItensDoProtocolo`: na INCORPORAÇÃO (depois do upsert em `pca_dfds`, no MESMO lote atômico), dá a cada
  *   item dos DFDs do protocolo vinculados a ESTE PCA (ação ≠ excluir) o próximo número ÚNICO do PCA (MAX + ordem
@@ -10,19 +14,54 @@ import type { TagSql } from "./rastro-sql.ts";
  *   (o MAX conta também os INATIVOS).
  * - `gravarSequencialNosItens`: o item REGISTRA o número no próprio banco (`dfd_itens.pca_id`/`pca_sequencial`).
  */
-export function numerarItensDoProtocolo<T>(q: TagSql<T>, pcaId: number, protocoloId: number): T {
-  return q`INSERT INTO pca_itens (pca_id, sequencial, dfd_item_id, dfd_id, protocolo_id)
-    SELECT ${pcaId}, (SELECT COALESCE(MAX(x.sequencial), 0) FROM pca_itens x WHERE x.pca_id = ${pcaId})
-      + ROW_NUMBER() OVER (ORDER BY d.id, i.sequencial, i.id), i.id, d.id, d.protocolo_id
-    FROM dfd_itens i
-    JOIN dfds d ON d.id = i.dfd_id
-    JOIN pca_dfds pd ON pd.dfd_id = d.id AND pd.pca_id = ${pcaId}
-    WHERE d.protocolo_id = ${protocoloId} AND pd.acao <> 'excluir'
-      AND NOT EXISTS (SELECT 1 FROM pca_itens y WHERE y.pca_id = ${pcaId} AND y.dfd_item_id = i.id)`;
+type Db = DrizzleD1Database<typeof schema>;
+
+export function numerarItensDoProtocolo(db: Db, pcaId: number, protocoloId: number) {
+  // As chaves na MESMA ordem das colunas da tabela (exigência do insert…select do Drizzle).
+  const numerados = db
+    .select({
+      id: sql<number>`NULL`.as("id"),
+      pcaId: sql<number>`${pcaId}`.as("pca_id"),
+      sequencial:
+        sql<number>`(SELECT COALESCE(MAX(x.sequencial), 0) FROM pca_itens x WHERE x.pca_id = ${pcaId}) + ROW_NUMBER() OVER (ORDER BY ${dfds.id}, ${dfdItens.sequencial}, ${dfdItens.id})`.as(
+          "sequencial",
+        ),
+      dfdItemId: dfdItens.id,
+      dfdId: dfds.id,
+      protocoloId: dfds.protocoloId,
+      ativo: sql<number>`1`.as("ativo"),
+      inativadoEm: sql<string | null>`NULL`.as("inativado_em"),
+      inativadoPor: sql<number | null>`NULL`.as("inativado_por"),
+      motivo: sql<string | null>`NULL`.as("motivo"),
+      criadoEm: sql<string>`CURRENT_TIMESTAMP`.as("criado_em"),
+    })
+    .from(dfdItens)
+    .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))
+    .innerJoin(pcaDfds, and(eq(pcaDfds.dfdId, dfds.id), eq(pcaDfds.pcaId, pcaId)))
+    .where(
+      and(
+        eq(dfds.protocoloId, protocoloId),
+        ne(pcaDfds.acao, "excluir"),
+        sql`NOT EXISTS (SELECT 1 FROM pca_itens y WHERE y.pca_id = ${pcaId} AND y.dfd_item_id = ${dfdItens.id})`,
+      ),
+    );
+  return db.insert(pcaItens).select(numerados);
 }
 
-export function gravarSequencialNosItens<T>(q: TagSql<T>, pcaId: number, protocoloId: number): T {
-  return q`UPDATE dfd_itens SET pca_id = ${pcaId},
-      pca_sequencial = (SELECT x.sequencial FROM pca_itens x WHERE x.pca_id = ${pcaId} AND x.dfd_item_id = dfd_itens.id)
-    WHERE id IN (SELECT y.dfd_item_id FROM pca_itens y WHERE y.pca_id = ${pcaId} AND y.protocolo_id = ${protocoloId})`;
+export function gravarSequencialNosItens(db: Db, pcaId: number, protocoloId: number) {
+  return db
+    .update(dfdItens)
+    .set({
+      pcaId,
+      pcaSequencial: sql`(SELECT x.sequencial FROM pca_itens x WHERE x.pca_id = ${pcaId} AND x.dfd_item_id = ${dfdItens.id})`,
+    })
+    .where(
+      inArray(
+        dfdItens.id,
+        db
+          .select({ id: pcaItens.dfdItemId })
+          .from(pcaItens)
+          .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.protocoloId, protocoloId))),
+      ),
+    );
 }
