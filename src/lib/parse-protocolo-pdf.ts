@@ -1,3 +1,4 @@
+import type { PdfTraco } from "./grade-pdf.ts";
 import { abrirPdf, type PdfDoc } from "./parse-dfd-pdf.ts";
 import { linhasDeTexto, type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
 import {
@@ -46,13 +47,17 @@ export async function indexarProtocoloPdf(
 export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArquivo: string) {
   const items: PdfItem[] = [];
   const render: string[] = [];
+  const tracos: PdfTraco[] = [];
   for (const p of dfd.pages) {
     items.push(...(await doc.pageItems(p)));
     // Texto RENDERIZADO POR PÁGINA (aparência das anotações Dropsigner) — o parser pareia
-    // cada bloco ao código da própria página e mantém só o documento primário (o DFD).
-    render.push(await doc.pageRenderText(p));
+    // cada bloco ao código da própria página e mantém só o documento primário (o DFD) — e os
+    // traços desenhados (grade da tabela de itens: leitura exata das células).
+    const r = await doc.pageRender(p);
+    render.push(r.texto);
+    tracos.push(...r.tracos);
   }
-  const parsed = parseDfdFromPdfItems(items, nomeArquivo, render);
+  const parsed = parseDfdFromPdfItems(items, nomeArquivo, render, tracos);
   // Assinaturas A/B (certificado/sistema) ficam em páginas SEPARADAS após o DFD (fora de
   // `dfd.pages`) → vêm do ÍNDICE (`dfd.assinaturas`). As assinaturas INLINE — **Dropsigner** (C) e
   // **Adobe/ICP-Brasil** (D) — estão na APARÊNCIA da anotação nas páginas do próprio DFD (texto

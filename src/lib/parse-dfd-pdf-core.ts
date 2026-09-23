@@ -1,6 +1,8 @@
-import { parseNumberBR } from "./normalize.ts";
+import { colunaDe, type Grade, linhaDe, montarGrade, type PdfTraco } from "./grade-pdf.ts";
+import { limparTexto } from "./normalize.ts";
 import {
   type Assinatura,
+  codigoDoItem,
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
@@ -8,7 +10,9 @@ import {
   extrairAssinaturas,
   extrairCabecalho,
   extrairRefsDfd,
+  limparDescricaoItem,
   norm,
+  numeroDfd,
   TITULO_SECAO_ITENS,
   tituloSecaoPadrao,
 } from "./parse-dfd-comum.ts";
@@ -19,11 +23,13 @@ import {
  * reconstrói a estrutura. O cabeçalho e as seções reaproveitam `parse-dfd-comum`;
  * a TABELA é remontada por posição de coluna, tratando os defeitos do PDF:
  * - rótulo e valor em trechos separados → usa o texto da LINHA (trechos juntos);
- * - o número do item fica na linha do MEIO da célula → cada trecho é atribuído ao
- *   item de número mais próximo em `y` (corrige ordem do código e vazamento de descrição);
- * - código quebrado em 2 linhas (ex.: "524193726" + "3") → rejuntado por `y`.
+ * - com a GRADE desenhada (bordas das células, `grade-pdf.ts`) cada trecho cai na célula exata;
+ *   sem ela, o número do item fica na linha do MEIO da célula e a descrição é casada pela borda
+ *   (vão maior que a entrelinha);
+ * - código quebrado em 2 linhas (ex.: "524193726" + "3") → rejuntado na ordem de leitura, só dígitos.
  * Sem pdf.js/D1 aqui → testável no Node com trechos sintéticos.
  */
+export type { PdfTraco } from "./grade-pdf.ts";
 
 /** Trecho de texto posicionado. Opcionais (vindos do pdf.js, ausentes nos fixtures antigos): `rot` = texto
  * NÃO horizontal (marca d'água vertical); `w` = largura; `h` = altura da fonte (pt). */
@@ -33,10 +39,14 @@ export type PdfLine = { page: number; y: number; items: PdfItem[] };
 const HDR: Record<string, keyof ColMap> = {
   ITEM: "item",
   CODIGO: "codigo",
+  "COD.": "codigo",
   DESCRICAO: "descricao",
   UNIDADE: "unidade",
+  "UNID.": "unidade",
   QUANTIDADE: "quantidade",
   QTD: "quantidade",
+  "QTD.": "quantidade",
+  QTDE: "quantidade",
   "VALOR UNITARIO": "valorUnitario",
   UNITARIO: "valorUnitario",
   "VALOR TOTAL": "valorTotal",
@@ -45,11 +55,10 @@ const HDR: Record<string, keyof ColMap> = {
 type ColunaItem = Exclude<keyof DfdItemParseado, "ref">;
 type ColMap = Partial<Record<ColunaItem, number>>;
 
-/** Normaliza os trechos (colapsa espaços) e descarta os vazios. */
+/** Normaliza os trechos — texto limpo (`limparTexto`: tabs/NBSP/quebras viram um espaço; caracteres invisíveis,
+ * de controle e o U+FFFD somem; o marcador em fonte de símbolo vira "•") — e descarta os vazios. */
 export function normalizar(bruto: PdfItem[]): PdfItem[] {
-  return bruto
-    .map((i) => ({ ...i, str: String(i.str ?? "").replace(/\s+/g, " ").trim() }))
-    .filter((i) => i.str);
+  return bruto.map((i) => ({ ...i, str: limparTexto(i.str) })).filter((i) => i.str);
 }
 
 /** Agrupa os trechos em linhas (mesma página + `y` dentro de 2pt), topo→base. */
@@ -121,7 +130,7 @@ function normalizarDataDropsigner(data: string, ingles: boolean): string {
 
 /**
  * Formato C — assinatura **Dropsigner** (Lacuna Software), a partir do TEXTO RENDERIZADO **por
- * página** (`getOperatorList`, ver `pageRenderText`). É preciso o texto RENDERIZADO — e não o
+ * página** (`getOperatorList`, ver `pageRender`). É preciso o texto RENDERIZADO — e não o
  * `getTextContent` — porque o bloco visível costuma ser a **aparência de uma ANOTAÇÃO de assinatura**
  * (widget `Sig`), que o `getTextContent` NÃO extrai. Cada página traz, na marca d'água, o CÓDIGO do
  * documento (`dropsigner.com/validate/<código>`); o bloco visível é pareado com o código DA PRÓPRIA
@@ -544,6 +553,483 @@ export function itemPorCuts(cuts: number[], y: number): number {
   return lo;
 }
 
+// ─────────────────────────── Tabela de itens (Seção 4) ───────────────────────────
+
+/** Colunas da tabela, na ordem do formulário. */
+const ORDEM_COLUNAS: readonly ColunaItem[] = ["item", "codigo", "descricao", "unidade", "quantidade", "valorUnitario", "valorTotal"];
+const COLUNAS_VALOR: readonly ColunaItem[] = ["quantidade", "valorUnitario", "valorTotal"];
+// Rótulo de QUANTIDADE no cabeçalho ("QUANTIDADE", "QTD", "QTDE").
+const RE_ROTULO_QTD = /QUANTIDADE|^QTDE?\.?$/;
+// Partes do cabeçalho de coluna que ocupam uma linha própria ("VALOR" ⏎ "UNITÁRIO").
+const PARTES_CABECALHO = new Set(["VALOR", "UNITARIO", "VALOR UNITARIO", "VALOR TOTAL"]);
+// Rótulo da linha do TOTAL GERAL (na área dos valores, nunca na descrição).
+const ROTULOS_TOTAL = new Set(["VALOR TOTAL", "TOTAL", "TOTAL GERAL", "VALOR TOTAL GERAL", "VALOR GLOBAL"]);
+// Conteúdo da célula ITEM: o nº (até 6 dígitos; "1." / "1)" / "1º" também valem).
+const RE_NUMERO_ITEM = /^(\d{1,6})[.)º°]?$/;
+
+/** Linha do CABEÇALHO da tabela de itens: um trecho EXATAMENTE "ITEM" + um de QUANTIDADE/QTD — uma descrição
+ * que cita "item" e "quantidade" no meio do texto não é cabeçalho (não some da tabela). */
+export function ehCabecalhoItens(l: PdfLine): boolean {
+  return l.items.some((i) => norm(i.str) === "ITEM") && l.items.some((i) => RE_ROTULO_QTD.test(norm(i.str)));
+}
+
+/** Trecho do corpo da tabela + o índice da sua linha visual (`agruparLinhas`). */
+type TrechoCorpo = { f: PdfItem; k: number };
+/** Nº de item achado pelo texto (âncora no MEIO da célula): y da linha visual + os trechos que o formam. */
+type NumeroItem = { page: number; y: number; n: number; fr: PdfItem[] };
+type Colunas = Record<ColunaItem, TrechoCorpo[]>;
+const colunasVazias = (): Colunas => ({ item: [], codigo: [], descricao: [], unidade: [], quantidade: [], valorUnitario: [], valorTotal: [] });
+/** Ordem de leitura: página, linha visual, x. */
+const ordemLeitura = (a: TrechoCorpo, b: TrechoCorpo) => a.f.page - b.f.page || a.k - b.k || a.f.x - b.f.x;
+const mediana = (arr: number[]): number => {
+  if (arr.length === 0) return 0;
+  const s = [...arr].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+/** Há algum `y` em (lo, hi] na lista em ordem DESC? Busca binária — O(log n). */
+function algumEntre(ysDesc: number[], lo: number, hi: number): boolean {
+  let a = 0;
+  let b = ysDesc.length;
+  while (a < b) {
+    const m = (a + b) >> 1;
+    if (ysDesc[m] > hi) a = m + 1;
+    else b = m;
+  }
+  return a < ysDesc.length && ysDesc[a] > lo;
+}
+
+/**
+ * Item a partir dos trechos de cada coluna, em ordem de leitura: o CÓDIGO junta os pedaços SEM espaço e fica só
+ * com os dígitos ("524194727" ⏎ "0" = "5241947270"; zero à esquerda preservado); a DESCRIÇÃO junta as linhas com
+ * espaço e sai limpa (sem marcadores de lista, tabs ou caracteres invisíveis); a UNIDADE junta as linhas; os
+ * VALORES juntam os pedaços quebrados ANTES de converter (um valor quebrado não perde as casas decimais).
+ */
+function montarItem(n: number | null, col: Colunas): DfdItemParseado {
+  const texto = (k: ColunaItem, sep: string) => [...col[k]].sort(ordemLeitura).map((c) => c.f.str).join(sep);
+  return {
+    item: n,
+    codigo: codigoDoItem(texto("codigo", "")),
+    descricao: limparDescricaoItem(texto("descricao", " ")) || null,
+    unidade: limparTexto(texto("unidade", " ")) || null,
+    quantidade: numeroDfd(texto("quantidade", "")),
+    valorUnitario: numeroDfd(texto("valorUnitario", "")),
+    valorTotal: numeroDfd(texto("valorTotal", "")),
+  };
+}
+
+/**
+ * Itens pela GRADE DESENHADA (Centi — ver `grade-pdf.ts`): cada trecho cai na CÉLULA (linha × coluna) que o
+ * contém, sem adivinhação por espaçamento. Uma linha da grade = um item. Célula que ATRAVESSA a página: a linha
+ * sem nº no TOPO da página continua o item anterior; a do FIM da página (com o nº na seguinte) é a cabeça do
+ * próximo. Linha sem nº, código nem descrição (subtotal) não é item; linha sem nº no meio da página vira um item
+ * próprio (nunca se mistura a outro). `null` quando a grade não explica o corpo da tabela (trecho fora das linhas
+ * desenhadas, nº em 2 linhas = borda faltando, ou nº de itens diferente do que o texto viu) — aí vale a geometria
+ * do texto.
+ */
+function itensPelaGrade(corpo: TrechoCorpo[], grade: Grade<ColunaItem>, qtdNumeros: number): DfdItemParseado[] | null {
+  type LinhaG = { page: number; idx: number; col: Colunas };
+  const porChave = new Map<string, LinhaG>();
+  for (const c of corpo) {
+    const idx = linhaDe(grade, c.f.page, c.f.y);
+    if (idx == null) return null;
+    const key = colunaDe(grade, c.f.x);
+    if (key == null) continue; // fora das colunas (margem da página): não é dado de item
+    const chave = `${c.f.page}:${idx}`;
+    let l = porChave.get(chave);
+    if (!l) {
+      l = { page: c.f.page, idx, col: colunasVazias() };
+      porChave.set(chave, l);
+    }
+    l.col[key].push(c);
+  }
+  const linhasG = [...porChave.values()].sort((a, b) => a.page - b.page || a.idx - b.idx);
+  if (linhasG.some((l) => new Set(l.col.item.map((c) => c.k)).size > 1)) return null; // nº em 2 linhas: borda faltando
+  const numeros = linhasG.map((l) => {
+    const m = [...l.col.item].sort(ordemLeitura).map((c) => c.f.str).join("").match(RE_NUMERO_ITEM);
+    return m ? Number(m[1]) : null;
+  });
+  const numerados = numeros.filter((n) => n != null).length;
+  if (numerados === 0 || numerados !== qtdNumeros) return null;
+  const primeira = new Map<number, number>();
+  const ultima = new Map<number, number>();
+  for (const l of linhasG) {
+    if (!primeira.has(l.page)) primeira.set(l.page, l.idx);
+    ultima.set(l.page, l.idx);
+  }
+  const itens: { n: number | null; partes: LinhaG[] }[] = [];
+  let cabeca: LinhaG[] = []; // parte(s) SEM nº no fim da página, à espera do nº na página seguinte
+  for (let i = 0; i < linhasG.length; i++) {
+    const l = linhasG[i];
+    const n = numeros[i];
+    if (n != null) {
+      itens.push({ n, partes: [...cabeca, l] });
+      cabeca = [];
+      continue;
+    }
+    if (l.col.codigo.length === 0 && l.col.descricao.length === 0) continue; // subtotal/soma: não é item
+    const ehPrimeira = primeira.get(l.page) === l.idx;
+    if (cabeca.length > 0 && ehPrimeira) cabeca.push(l); // meio de uma célula de 3+ páginas
+    else if (ehPrimeira && itens.length > 0) itens[itens.length - 1].partes.push(l); // cauda da célula da pág. anterior
+    else if (ultima.get(l.page) === l.idx && (linhasG[i + 1]?.page ?? l.page) > l.page) cabeca = [l];
+    else itens.push({ n: null, partes: [l] });
+  }
+  if (cabeca.length > 0) itens.push({ n: null, partes: cabeca });
+  return itens.map((it) => {
+    const col = colunasVazias();
+    for (const p of it.partes) for (const k of ORDEM_COLUNAS) col[k].push(...p.col[k]);
+    return montarItem(it.n, col);
+  });
+}
+
+/**
+ * Itens pela GEOMETRIA DO TEXTO (PDF sem grade desenhada). O nº/código/valores ficam na ÂNCORA (meio da célula);
+ * a descrição ocupa várias linhas ACIMA e ABAIXO do nº e é casada pela BORDA da célula = um vão entre linhas
+ * MAIOR que a entrelinha (`LIM`). Robustez: a entrelinha é o MENOR vão recorrente (a mediana errava num DFD com
+ * muitos itens de 1 linha e um item enorme: a borda não era vista e a descrição vazava); os vãos são por LINHA
+ * VISUAL (um marcador/sobrescrito fora da linha de base não inventa vão); com mais de uma borda possível (linha em
+ * branco na descrição), vale a que deixa o item SIMÉTRICO em volta do seu nº (célula centralizada); o código e os
+ * valores acima do 1º nº de uma página de continuação ou numa página sem nº seguem a mesma regra da descrição (o
+ * "0" de um código que virou a página não vira zero à esquerda do item seguinte).
+ */
+function itensPelaGeometria(
+  corpo: TrechoCorpo[],
+  numeros: NumeroItem[],
+  linhas: PdfLine[],
+  anchors: ColMap,
+  /** Borda DIREITA do rótulo de cada coluna (quando a largura é conhecida). */
+  direitas: Partial<Record<ColunaItem, number>>,
+): DfdItemParseado[] {
+  const nums = [...numeros].sort((a, b) => a.page - b.page || b.y - a.y);
+  if (nums.length === 0) return [];
+  const doNumero = new Set(nums.flatMap((n) => n.fr));
+  const trechos = corpo.filter((c) => !doNumero.has(c.f));
+  const cols = ORDEM_COLUNAS.map((key) => ({ key, x: anchors[key] })).filter((c): c is { key: ColunaItem; x: number } => c.x != null);
+  // INÍCIO REAL do texto da descrição (alinhado à esquerda, bem antes do rótulo "DESCRIÇÃO") = o menor x de um
+  // trecho com LETRA entre o código e a unidade — só DA TABELA (varrer as seções 5–9 derrubava o limite com um
+  // texto qualquer e mandava dígitos do código p/ a descrição). Dígito à direita dele é descrição (nº de peça).
+  const codAnchor = anchors.codigo ?? 0;
+  const uniAnchor = anchors.unidade ?? Number.POSITIVE_INFINITY;
+  let descStartX = anchors.descricao ?? Number.POSITIVE_INFINITY;
+  for (const c of trechos) if (c.f.x > codAnchor + 5 && c.f.x < uniAnchor && c.f.x < descStartX && /\p{L}/u.test(c.f.str)) descStartX = c.f.x;
+  // Número ALINHADO À DIREITA (quantidade/valores): a coluna do rótulo cuja borda direita fica mais perto da borda
+  // direita do número — um pedaço curto ("8912" de um valor quebrado) começa bem à direita e cruzaria o ponto médio.
+  const colunaNumero = (f: PdfItem): ColunaItem | null => {
+    if (f.w == null || !/^[\d.,\s-]+$/.test(f.str)) return null;
+    let melhor: ColunaItem | null = null;
+    let dist = Number.POSITIVE_INFINITY;
+    for (const k of COLUNAS_VALOR) {
+      const r = direitas[k];
+      if (r != null && Math.abs(f.x + f.w - r) < dist) {
+        dist = Math.abs(f.x + f.w - r);
+        melhor = k;
+      }
+    }
+    return dist <= 20 ? melhor : null;
+  };
+  const colOf = (f: PdfItem): ColunaItem => {
+    let idx = 0;
+    for (let i = 0; i < cols.length - 1; i++) if (f.x >= (cols[i].x + cols[i + 1].x) / 2) idx = i + 1;
+    const c: ColunaItem = cols[idx]?.key ?? "descricao";
+    // Entre o código e a descrição: dígitos (mesmo com espaço no meio) antes do início do texto = código.
+    if (c === "codigo" || c === "descricao") return /^\d[\d\s]*$/.test(f.str) && f.x < descStartX ? "codigo" : "descricao";
+    if (COLUNAS_VALOR.includes(c)) return colunaNumero(f) ?? c;
+    return c;
+  };
+  const yDe = (c: TrechoCorpo) => linhas[c.k].y; // y da LINHA VISUAL (todos os trechos da linha andam juntos)
+  const trechosCol = trechos.map((c) => ({ c, col: colOf(c.f) }));
+
+  // Âncoras (nº) por página, em y DESC.
+  const porPagina = new Map<number, { ys: number[]; bi: number[]; topo: number; first: number }>();
+  nums.forEach((b, i) => {
+    const g = porPagina.get(b.page);
+    if (!g) porPagina.set(b.page, { ys: [b.y], bi: [i], topo: b.y, first: i });
+    else {
+      g.ys.push(b.y);
+      g.bi.push(i);
+      if (b.y > g.topo) g.topo = b.y;
+    }
+  });
+  // Linhas visuais com descrição, por página (y DESC, uma por linha).
+  const descPorPagina = new Map<number, number[]>();
+  const vistas = new Set<number>();
+  for (const { c, col } of trechosCol) {
+    if (col !== "descricao" || vistas.has(c.k)) continue;
+    vistas.add(c.k);
+    const arr = descPorPagina.get(c.f.page);
+    if (arr) arr.push(yDe(c));
+    else descPorPagina.set(c.f.page, [yDe(c)]);
+  }
+  for (const ys of descPorPagina.values()) ys.sort((x, y) => y - x);
+  // ── Entrelinha e limiar de BORDA: o menor vão RECORRENTE (≥ 2 ocorrências e ≥ 5% dos vãos) acima de um piso
+  // pela altura da fonte (vão menor que 0,9 do corpo não é linha — é sobrescrito/ruído). Sem recorrência, a
+  // mediana (comportamento anterior). ──
+  const vaos: number[] = [];
+  for (const ys of descPorPagina.values())
+    for (let i = 0; i + 1 < ys.length; i++) if (ys[i] - ys[i + 1] > 0 && ys[i] - ys[i + 1] <= 40) vaos.push(ys[i] - ys[i + 1]);
+  const hDesc = trechosCol.filter((t) => t.col === "descricao" && (t.c.f.h ?? 0) > 0).map((t) => t.c.f.h as number);
+  const piso = hDesc.length > 0 ? 0.9 * mediana(hDesc) : 0.6 * mediana(vaos);
+  const minimo = Math.max(2, Math.ceil(vaos.length * 0.05));
+  const acimaDoPiso = vaos.filter((v) => v >= piso).sort((x, y) => x - y);
+  let entrelinha = 0;
+  // Janela deslizante (O(n)): quantos vãos caem em ±0,5 de cada candidato, do menor para o maior.
+  for (let i = 0, lo = 0, hi = 0; i < acimaDoPiso.length && entrelinha === 0; i++) {
+    const v = acimaDoPiso[i];
+    while (acimaDoPiso[lo] < v - 0.5) lo++;
+    while (hi < acimaDoPiso.length && acimaDoPiso[hi] <= v + 0.5) hi++;
+    if (hi - lo >= minimo) entrelinha = v;
+  }
+  if (entrelinha === 0) entrelinha = mediana(vaos);
+  const LIM = entrelinha > 0 ? Math.max(entrelinha * 1.3, entrelinha + 2) : 12;
+
+  // ── Fronteira do TOPO de cada página de continuação: acima do 1º nº há a CAUDA do item anterior e a CABEÇA do
+  // 1º item desta página (nº no meio); subindo do nº, a cabeça é contígua (vão ≤ LIM) e o 1º vão > LIM é a borda.
+  // Sem borda ⇒ o item anterior terminou na página anterior (tudo é cabeça). ──
+  const topCutPorPagina = new Map<number, number>();
+  const topoPrimeiro = new Map<number, number>(); // y mais alto do 1º item da página (cabeça incluída)
+  for (const [page, g] of porPagina) {
+    const acima = (descPorPagina.get(page) ?? []).filter((y) => y > g.topo).sort((x, y) => x - y); // ASC
+    let topCut = Number.POSITIVE_INFINITY;
+    if (g.first > 0) {
+      let prev = g.topo;
+      for (const y of acima) {
+        if (y - prev <= LIM) prev = y;
+        else {
+          topCut = y;
+          break;
+        }
+      }
+      topCutPorPagina.set(page, topCut);
+    }
+    topoPrimeiro.set(page, Math.max(g.topo, ...acima.filter((y) => y < topCut)));
+  }
+
+  // ── Fronteiras (cuts) entre itens da MESMA página: numa borda (vão > LIM) entre as âncoras. Várias bordas
+  // possíveis (linha em branco) ⇒ a que deixa o item simétrico em volta do nº (se o leiaute é centralizado);
+  // nenhuma ⇒ a posição simétrica (centralizado) ou o ponto médio das âncoras. ──
+  type Faixa = { seq: number[]; cands: number[] };
+  const faixas = new Map<number, Faixa[]>();
+  // Leiaute CENTRALIZADO (o do Centi: o nº fica no MEIO da célula) é o padrão; só vale "nº no topo" (outro emissor)
+  // com evidência: itens com a 1ª linha NA ALTURA do nº e a seguinte logo abaixo, e nenhum com descrição logo ACIMA.
+  let votoCentro = 0;
+  let votoTopo = 0;
+  for (const [page, g] of porPagina) {
+    const dys = descPorPagina.get(page) ?? [];
+    const lista: Faixa[] = [];
+    let p = 0;
+    for (let j = 0; j + 1 < g.ys.length; j++) {
+      const hiA = g.ys[j];
+      const loA = g.ys[j + 1];
+      while (p < dys.length && dys[p] >= hiA) p++;
+      const seq = [hiA];
+      while (p < dys.length && dys[p] > loA) seq.push(dys[p++]);
+      seq.push(loA);
+      const cands: number[] = [];
+      for (let i = 0; i + 1 < seq.length; i++) if (seq[i] - seq[i + 1] > LIM) cands.push(i);
+      lista.push({ seq, cands });
+    }
+    faixas.set(page, lista);
+    for (const a of g.ys) {
+      if (algumEntre(dys, a + 1, a + LIM)) votoCentro++;
+      else if (algumEntre(dys, a - 1, a + 1) && algumEntre(dys, a - LIM, a - 1)) votoTopo++;
+    }
+  }
+  const centrado = votoCentro > 0 || votoTopo === 0;
+  const cutsPorPagina = new Map<number, number[]>();
+  for (const [page, g] of porPagina) {
+    const cuts: number[] = [];
+    let topoItem = topoPrimeiro.get(page) ?? g.topo;
+    for (const [j, { seq, cands }] of (faixas.get(page) ?? []).entries()) {
+      const fundo = 2 * g.ys[j] - topoItem; // base prevista do item j (simétrico em volta do nº)
+      const maisPerto = (is: number[]) => is.reduce((m, i) => (Math.abs(seq[i] - fundo) < Math.abs(seq[m] - fundo) ? i : m), is[0]);
+      const maiorVao = (is: number[]) => is.reduce((m, i) => (seq[i] - seq[i + 1] > seq[m] - seq[m + 1] ? i : m), is[0]);
+      let i = -1;
+      if (cands.length === 1) i = cands[0];
+      else if (cands.length > 1) i = centrado ? maisPerto(cands) : maiorVao(cands);
+      else if (centrado) i = maisPerto(seq.slice(0, -1).map((_, k) => k));
+      const cut = i >= 0 ? (seq[i] + seq[i + 1]) / 2 : (g.ys[j] + g.ys[j + 1]) / 2;
+      cuts.push(cut);
+      topoItem = Math.max(g.ys[j + 1], ...seq.filter((y) => y < cut));
+    }
+    cutsPorPagina.set(page, cuts);
+  }
+
+  // Último item de cada página COM itens → alvo de uma página SÓ de continuação (sem nº).
+  const ultimoDaPagina = new Map<number, number>();
+  nums.forEach((b, i) => {
+    ultimoDaPagina.set(b.page, i);
+  });
+  const paginasComItem = [...ultimoDaPagina.keys()].sort((x, y) => x - y);
+  const itemAntesDaPagina = (page: number): number | undefined => {
+    let alvo: number | undefined;
+    for (const pg of paginasComItem) {
+      if (pg < page) alvo = ultimoDaPagina.get(pg);
+      else break;
+    }
+    return alvo;
+  };
+
+  const buckets = nums.map(() => colunasVazias());
+  for (const { c, col } of trechosCol) {
+    if (col === "item") continue; // célula ITEM sem nº legível: não é dado do item
+    const g = porPagina.get(c.f.page);
+    const y = yDe(c);
+    let b: number | undefined;
+    if (!g) b = itemAntesDaPagina(c.f.page); // página sem nº = continuação do último item anterior
+    else if (y > g.topo && g.first > 0) {
+      // Acima do 1º nº da página: cauda do item anterior (acima da borda) ou cabeça do 1º item desta página.
+      b = y >= (topCutPorPagina.get(c.f.page) ?? Number.POSITIVE_INFINITY) ? g.first - 1 : g.first;
+    } else if (col === "descricao") b = g.bi[itemPorCuts(cutsPorPagina.get(c.f.page) ?? [], y)];
+    else b = g.bi[nearestByY(g.ys, y)]; // código/unidade/valores: na âncora
+    if (b != null) buckets[b][col].push(c);
+  }
+  return nums.map((n, i) => {
+    const col = buckets[i];
+    // Valores: a linha MAIS PERTO do nº (+ a linha seguinte da coluna, se o número quebrou no separador) — um
+    // valor solto que caiu no item (ex.: total geral numa linha própria) não se junta ao valor do item.
+    for (const k of COLUNAS_VALOR) {
+      if (col[k].length === 0) continue;
+      const ks = [...new Set(col[k].map((c) => c.k))].sort((a, b) => a - b);
+      const perto = [...ks].sort((a, b) => Math.abs(linhas[a].y - n.y) - Math.abs(linhas[b].y - n.y) || a - b)[0];
+      const manter = new Set([perto]);
+      const texto0 = col[k].filter((c) => c.k === perto).sort(ordemLeitura).map((c) => c.f.str).join("");
+      const seguinte = ks[ks.indexOf(perto) + 1];
+      if (/[.,]$/.test(texto0) && seguinte != null) manter.add(seguinte);
+      col[k] = col[k].filter((c) => manter.has(c.k));
+    }
+    return montarItem(n.n, col);
+  });
+}
+
+/**
+ * Lê a TABELA DE ITENS (Seção 4) a partir da linha do cabeçalho (`hi`): varre as linhas (todas as páginas),
+ * separa o CORPO (linhas de item) do cabeçalho de coluna repetido, do cabeçalho do documento, do rodapé, do TOTAL
+ * GERAL e do texto de APOIO abaixo da tabela, e monta os itens pela GRADE desenhada (quando há) ou pela geometria
+ * do texto. `fim` = índice da linha que encerra a tabela (próxima seção); `viaGrade` = os itens vieram da grade.
+ */
+export function lerTabelaItens(
+  linhas: PdfLine[],
+  hi: number,
+  tracos: PdfTraco[],
+): { itens: DfdItemParseado[]; valorTotal: number | null; apoio: string; fim: number; viaGrade: boolean } {
+  // Âncoras (x) de cada coluna — "VALOR UNITÁRIO" pode vir só como "UNITÁRIO" numa 2ª linha do cabeçalho.
+  const anchors: ColMap = {};
+  const rotulos: { key: ColunaItem; x: number; y: number; page: number; w?: number }[] = [];
+  for (const off of [0, 1, -1]) {
+    const l = linhas[hi + off];
+    if (!l) continue;
+    for (const it of l.items) {
+      const k = HDR[norm(it.str)];
+      if (k && anchors[k] == null) {
+        anchors[k] = it.x;
+        rotulos.push({ key: k, x: it.x, y: it.y, page: it.page, w: it.w });
+      }
+    }
+  }
+  const cols = ORDEM_COLUNAS.map((key) => ({ key, x: anchors[key] })).filter((c): c is { key: ColunaItem; x: number } => c.x != null);
+  const [c0, c1] = cols;
+  const itemBound = c0 && c1 ? (c0.x + c1.x) / 2 : 70;
+  const colValoresX = Math.min(anchors.unidade ?? Number.POSITIVE_INFINITY, anchors.quantidade ?? Number.POSITIVE_INFINITY) - 15;
+  // Coluna pela posição do rótulo do cabeçalho (ponto médio entre rótulos vizinhos).
+  const colunaTexto = (x: number): ColunaItem | undefined => {
+    let idx = 0;
+    for (let i = 0; i < cols.length - 1; i++) if (x >= (cols[i].x + cols[i + 1].x) / 2) idx = i + 1;
+    return cols[idx]?.key;
+  };
+  // Nº do item: na coluna ITEM e CENTRADO sob o rótulo "ITEM" (com largura conhecida) — um "12" solto do texto de
+  // apoio ("12 MESES.", à margem) não vira item.
+  const rItem = rotulos.find((r) => r.key === "item");
+  const centroItem = rItem?.w != null ? rItem.x + rItem.w / 2 : null;
+  const naColunaItem = (i: PdfItem, centrado: boolean) =>
+    i.x < itemBound && (!centrado || centroItem == null || i.w == null || Math.abs(i.x + i.w / 2 - centroItem) <= 8);
+  // Margem esquerda do documento (títulos de seção e texto de apoio começam nela).
+  const xsTitulos = linhas.filter((l) => tituloSecaoPadrao(l.items.map((i) => i.str).join(" ")) != null).map((l) => Math.min(...l.items.map((i) => i.x)));
+  const margem = xsTitulos.length > 0 ? mediana(xsTitulos) : null;
+  const grade = montarGrade(tracos, rotulos, ["item", "codigo", "descricao"], ["item", "descricao"]);
+  const naColunaValorTotal = (i: PdfItem) => (grade ? colunaDe(grade, i.x) : colunaTexto(i.x)) === "valorTotal";
+  const direitas: Partial<Record<ColunaItem, number>> = {};
+  for (const r of rotulos) if (r.w != null) direitas[r.key] = r.x + r.w;
+
+  // Cabeçalho de coluna repetido a cada página: a linha "ITEM … QUANTIDADE" ou uma linha só com as partes do
+  // rótulo dos valores ("VALOR" / "UNITÁRIO") na área dos valores.
+  const ehCabecalhoColuna = (l: PdfLine) =>
+    ehCabecalhoItens(l) || l.items.every((i) => i.x >= colValoresX && PARTES_CABECALHO.has(norm(i.str)));
+  // Próxima seção ("5 - PREVISÃO…") encerra a Seção 4 — só um TÍTULO PADRONIZADO e sem nada nas colunas de
+  // unidade/quantidade/valores. Uma LINHA DE ITEM cuja descrição começa com "- " não encerra a tabela.
+  const ehSecaoHeading = (l: PdfLine) =>
+    tituloSecaoPadrao(l.items.map((i) => i.str).join(" ")) != null && !l.items.some((i) => i.x >= colValoresX);
+  // TOTAL GERAL: o rótulo ("VALOR TOTAL") é um trecho próprio NA ÁREA DOS VALORES — "…o valor total…" dentro da
+  // descrição não é o total (antes a linha inteira da descrição sumia).
+  const ehLinhaTotal = (l: PdfLine) => l.items.some((i) => i.x >= colValoresX && ROTULOS_TOTAL.has(norm(i.str)));
+
+  const varrer = (centrado: boolean) => {
+    const corpo: TrechoCorpo[] = [];
+    const numeros: NumeroItem[] = [];
+    const apoioLinhas: string[] = [];
+    let valorTotal: number | null = null;
+    let fimTabela = false; // após a última linha de item vem o texto de apoio
+    let fim = linhas.length;
+    // Páginas cujo CABEÇALHO DE COLUNA já apareceu — acima dele (por página) fica o CABEÇALHO DO DOCUMENTO repetido
+    // (ESTADO DE GOIÁS / <órgão> / DOCUMENTO… / Número DFD / Tipo DFD), pulado para não grudar na descrição.
+    const viuColuna = new Set<number>([linhas[hi].page]);
+    for (let k = hi + 1; k < linhas.length; k++) {
+      const l = linhas[k];
+      const joined = norm(l.items.map((i) => i.str).join(" "));
+      const minx = Math.min(...l.items.map((i) => i.x));
+      // Nº do item da linha (pedaços do nº partido pelo PDF são reunidos).
+      const frNum = l.items.filter((i) => naColunaItem(i, centrado)).sort((a, b) => a.x - b.x);
+      const mNum = frNum.map((i) => i.str).join("").match(RE_NUMERO_ITEM);
+
+      // Só uma seção "N - …" À MARGEM ESQUERDA encerra a tabela; um "2-52" no meio de uma descrição não é seção.
+      if (minx < itemBound && ehSecaoHeading(l)) {
+        fim = k;
+        break;
+      }
+      if (ehCabecalhoColuna(l)) {
+        viuColuna.add(l.page);
+        // A tabela CONTINUA nesta página: o que parecia apoio na página anterior era rodapé (não perde itens).
+        if (fimTabela) {
+          fimTabela = false;
+          apoioLinhas.length = 0;
+        }
+        continue;
+      }
+      if (!viuColuna.has(l.page)) continue; // cabeçalho do documento (antes do cabeçalho de coluna desta página)
+      // Rodapé (Centi/Emitido/Página) e afins: à MARGEM e sem nº — uma descrição que começa com "CENTÍMETROS…" fica.
+      if (!mNum && minx < itemBound && ehRuido(joined)) continue;
+      // Linha do TOTAL GERAL — captura, mas NÃO encerra.
+      if (!mNum && ehLinhaTotal(l)) {
+        const v = l.items.filter((i) => naColunaValorTotal(i) && /\d/.test(i.str)).sort((a, b) => a.x - b.x);
+        if (v.length > 0) valorTotal = numeroDfd(v.map((i) => i.str).join(""));
+        continue;
+      }
+      // Texto de apoio: prosa À MARGEM (sem nº de item) DEPOIS da tabela.
+      if (fimTabela || (!mNum && minx < itemBound && (margem == null || minx <= margem + 4))) {
+        fimTabela = true;
+        apoioLinhas.push(l.items.map((i) => i.str).join(" "));
+        continue;
+      }
+      // Linha de item.
+      if (mNum) numeros.push({ page: l.page, y: l.y, n: Number(mNum[1]), fr: frNum });
+      for (const f of l.items) corpo.push({ f, k });
+    }
+    return { corpo, numeros, apoioLinhas, valorTotal, fim };
+  };
+  // Nº CENTRADO sob o rótulo "ITEM" (o Centi); se nenhum aparece assim (outro emissor alinha diferente), vale
+  // qualquer nº na coluna ITEM — nunca "nenhum item" por causa do alinhamento.
+  let varredura = varrer(true);
+  if (varredura.numeros.length === 0) varredura = varrer(false);
+  const { corpo, numeros, apoioLinhas, valorTotal, fim } = varredura;
+  const pelaGrade = grade ? itensPelaGrade(corpo, grade, numeros.length) : null;
+  return {
+    itens: pelaGrade ?? itensPelaGeometria(corpo, numeros, linhas, anchors, direitas),
+    valorTotal,
+    apoio: apoioLinhas.join(" ").replace(/\s+/g, " ").trim(),
+    fim,
+    viaGrade: pelaGrade != null,
+  };
+}
+
 export function parseDfdFromPdfItems(
   bruto: PdfItem[],
   nomeArquivo: string,
@@ -551,10 +1037,10 @@ export function parseDfdFromPdfItems(
   // permite parear o bloco ao código da própria página e descartar anexos; um único texto
   // também é aceito (1 página). Vazio ⇒ sem Dropsigner.
   textosRender: string | string[] = [],
+  // Traços desenhados das páginas (bordas das células — `tracosDaOpList`): com eles, a tabela de itens é lida
+  // pela GRADE (exata). Vazio ⇒ geometria do texto.
+  tracos: PdfTraco[] = [],
 ): DfdParseado {
-  // Remove a APARÊNCIA da assinatura (Adobe flatten) ANTES de reconstruir as linhas — senão o bloco
-  // "Assinado de forma digital por NOME:CPF Dados: …" vaza para o texto das seções (Seção 9/10). A
-  // assinatura já é extraída à parte (texto renderizado), então nada se perde.
   // Tira a assinatura (em QUALQUER lugar: coluna, sobre o texto, marca d'água) da camada de texto ANTES de
   // reconstruir as linhas — senão vaza p/ as seções/itens. As assinaturas A/B são lidas das linhas BRUTAS.
   const normalizados = normalizar(bruto);
@@ -565,324 +1051,14 @@ export function parseDfdFromPdfItems(
 
   const cab = extrairCabecalho(lineTexts);
 
-  // ---- Tabela (Seção 4) por posição de coluna ----
-  const hi = linhas.findIndex(
-    (l) =>
-      l.items.some((i) => norm(i.str) === "ITEM") &&
-      l.items.some((i) => /QUANTIDADE/.test(norm(i.str))),
-  );
-
-  const itens: DfdItemParseado[] = [];
-  let valorTotalGrand: number | null = null;
-  let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
-  // Índice da linha onde a tabela ENCERRA (na próxima seção "5 - …" à margem
-  // esquerda) — usado para dar ao `coletarSecoes` só as linhas FORA da tabela.
-  let tableEndIdx = linhas.length;
-
-  if (hi >= 0) {
-    // Âncoras (x) de cada coluna — "VALOR UNITÁRIO" pode vir só como "UNITÁRIO"
-    // numa 2ª linha do cabeçalho.
-    const anchors: ColMap = {};
-    for (const off of [0, 1, -1]) {
-      const l = linhas[hi + off];
-      if (!l) continue;
-      for (const it of l.items) {
-        const k = HDR[norm(it.str)];
-        if (k && anchors[k] == null) anchors[k] = it.x;
-      }
-    }
-    // Colunas presentes com sua âncora `x` (na ordem esperada).
-    const cols = (
-      ["item", "codigo", "descricao", "unidade", "quantidade", "valorUnitario", "valorTotal"] as const
-    )
-      .map((key) => ({ key, x: anchors[key] }))
-      .filter((c): c is { key: ColunaItem; x: number } => c.x != null);
-    const [c0, c1] = cols;
-    const itemBound = c0 && c1 ? (c0.x + c1.x) / 2 : 70;
-    // INÍCIO REAL do texto da descrição: o conteúdo é alinhado à esquerda, bem à
-    // esquerda do cabeçalho "DESCRIÇÃO" — então usamos o menor `x` de um fragmento
-    // de TEXTO (com letra) na zona código→unidade. Um dígito à DIREITA disso é
-    // conteúdo da descrição (ex.: nº de modelo "40300050630"), NÃO código.
-    const codAnchor = anchors.codigo ?? 0;
-    const uniAnchor = anchors.unidade ?? Number.POSITIVE_INFINITY;
-    let descStartX = anchors.descricao ?? Number.POSITIVE_INFINITY;
-    let minTexto = Number.POSITIVE_INFINITY;
-    for (let k = hi + 1; k < linhas.length; k++) {
-      for (const it of linhas[k].items) {
-        if (it.x > codAnchor + 5 && it.x < uniAnchor && /[A-Za-zÀ-ÿ]/.test(it.str) && it.x < minTexto) {
-          minTexto = it.x;
-        }
-      }
-    }
-    if (minTexto < Number.POSITIVE_INFINITY) descStartX = Math.min(descStartX, minTexto);
-
-    const colOf = (x: number, str: string): ColunaItem => {
-      let idx = 0;
-      for (let i = 0; i < cols.length - 1; i++) {
-        const a = cols[i];
-        const b = cols[i + 1];
-        if (a && b && x >= (a.x + b.x) / 2) idx = i + 1;
-      }
-      let c: ColunaItem = cols[idx]?.key ?? "descricao";
-      // No vão código×descrição, dígitos puros = código; texto = descrição. Mas um
-      // dígito na área da descrição (x ≥ início do texto) fica descrição — senão um
-      // número no meio do texto vira "código" e o polui.
-      if (c === "codigo" || c === "descricao") {
-        c = /^\d+$/.test(str.trim()) && x < descStartX ? "codigo" : "descricao";
-      }
-      return c;
-    };
-
-    const ehNumItem = (it: PdfItem) => it.x < itemBound && /^\d+$/.test(it.str);
-    // Cabeçalho de coluna repetido a cada página (não encerra a tabela).
-    const ehCabecalhoColuna = (j: string) =>
-      (/\bITEM\b/.test(j) && /QUANTIDADE/.test(j)) ||
-      j === "VALOR" ||
-      j === "UNITARIO" ||
-      j === "VALOR UNITARIO" ||
-      j === "VALOR TOTAL";
-    // Próxima seção ("5 - PREVISÃO…") encerra a Seção 4 — só um TÍTULO PADRONIZADO (`tituloSecaoPadrao`)
-    // e sem nada nas colunas de unidade/quantidade/valores. Uma LINHA DE ITEM cuja descrição começa com
-    // "- " (ex.: "29 - SEC. DE ASSISTÊNCIA…") NÃO encerra a tabela.
-    const colValoresX = Math.min(anchors.unidade ?? Number.POSITIVE_INFINITY, anchors.quantidade ?? Number.POSITIVE_INFINITY) - 15;
-    const ehSecaoHeading = (l: PdfLine) =>
-      tituloSecaoPadrao(l.items.map((i) => i.str).join(" ")) != null && !l.items.some((i) => i.x >= colValoresX);
-
-    const bodyFrags: PdfItem[] = [];
-    const itemNums: { page: number; y: number; n: number }[] = [];
-    const apoioLinhas: string[] = [];
-    let fimTabela = false; // após a última linha de item vem o texto de apoio
-    // Páginas cujo CABEÇALHO DE COLUNA já apareceu — acima dele (por página) fica o
-    // CABEÇALHO DO DOCUMENTO repetido (ESTADO DE GOIÁS / <órgão> / DOCUMENTO… / Número
-    // DFD / Tipo DFD), que deve ser pulado para não grudar na descrição de um item.
-    const viuColuna = new Set<number>([linhas[hi].page]);
-
-    // Varre TODAS as páginas do DFD (a tabela pode ocupar dezenas de páginas). O
-    // cabeçalho do documento/coluna e o rodapé se REPETEM por página e são pulados
-    // (nunca encerram a tabela); `y` reinicia por página → tudo é casado por página.
-    for (let k = hi + 1; k < linhas.length; k++) {
-      const l = linhas[k];
-      const joined = norm(l.items.map((i) => i.str).join(" "));
-      const minx = Math.min(...l.items.map((i) => i.x));
-      const temNum = l.items.some(ehNumItem);
-
-      // Só uma seção "N - …" À MARGEM ESQUERDA encerra a tabela; um "2-52" no MEIO de
-      // uma descrição (indentado) NÃO é seção.
-      if (minx < itemBound && ehSecaoHeading(l)) {
-        tableEndIdx = k;
-        break;
-      }
-      if (ehCabecalhoColuna(joined)) {
-        viuColuna.add(l.page);
-        continue; // cabeçalho de coluna repetido por página
-      }
-      // Antes do cabeçalho de coluna DESTA página = cabeçalho do documento repetido → pula.
-      if (!viuColuna.has(l.page)) continue;
-      if (ehRuido(joined)) continue; // rodapé (Centi/Emitido/Página) e afins
-      // Linha do TOTAL GERAL ("VALOR TOTAL" + número) — captura, mas NÃO encerra.
-      if (/VALOR TOTAL/.test(joined) && !temNum) {
-        const v = l.items.find((i) => colOf(i.x, i.str) === "valorTotal" && /\d/.test(i.str));
-        if (v) valorTotalGrand = parseNumberBR(v.str);
-        continue;
-      }
-      // Texto de apoio: prosa à margem esquerda (sem número de item) DEPOIS da tabela.
-      if (fimTabela || (minx < itemBound && !temNum)) {
-        fimTabela = true;
-        apoioLinhas.push(l.items.map((i) => i.str).join(" "));
-        continue;
-      }
-      // Linha de item.
-      for (const it of l.items) {
-        if (ehNumItem(it)) itemNums.push({ page: it.page, y: it.y, n: Number(it.str) });
-        else bodyFrags.push(it);
-      }
-    }
-    // Ordena por (página, y desc) — preserva a ordem real dos itens entre páginas.
-    itemNums.sort((a, b) => a.page - b.page || b.y - a.y);
-    apoioSecao4 = apoioLinhas.join(" ").replace(/\s+/g, " ").trim();
-
-    type Bucket = { page: number; item: number; y: number; codigo: PdfItem[]; descricao: PdfItem[] } & {
-      unidade: string | null;
-      quantidade: number | null;
-      valorUnitario: number | null;
-      valorTotal: number | null;
-    };
-    const buckets: Bucket[] = itemNums.map((n) => ({
-      page: n.page,
-      item: n.n,
-      y: n.y,
-      codigo: [],
-      descricao: [],
-      unidade: null,
-      quantidade: null,
-      valorUnitario: null,
-      valorTotal: null,
-    }));
-
-    // Índice de buckets POR PÁGINA (ys já em DESC dentro da página) → casa cada
-    // fragmento ao item da MESMA página (o `y` reinicia entre páginas). Também guarda
-    // o topo (maior `y` = 1º item) e o 1º índice de cada página para tratar
-    // DESCRIÇÕES QUE ATRAVESSAM a página (continuam no topo da página seguinte).
-    const idxPorPagina = new Map<number, { ys: number[]; bi: number[]; topo: number; first: number }>();
-    buckets.forEach((b, i) => {
-      const g = idxPorPagina.get(b.page);
-      if (!g) idxPorPagina.set(b.page, { ys: [b.y], bi: [i], topo: b.y, first: i });
-      else {
-        g.ys.push(b.y);
-        g.bi.push(i);
-        if (b.y > g.topo) g.topo = b.y;
-      }
-    });
-    // ── Espaçamento típico (entrelinha) e limiar de BORDA de célula, por DFD ──
-    // A âncora (nº/código/valores) fica no MEIO da célula → a descrição tem linhas ACIMA e
-    // ABAIXO do número. A borda REAL entre um item e o seguinte é um "respiro" (padding da
-    // célula) MAIOR que a entrelinha. Nos PDFs reais a entrelinha é ~8–9 e as bordas ~11+
-    // (separação limpa, nunca ocorre vão 10). Calibramos um limiar ADAPTATIVO pela MEDIANA
-    // dos vãos de descrição (dominada pela entrelinha) para funcionar em qualquer fonte.
-    const descYsPorPagina = new Map<number, number[]>();
-    for (const f of bodyFrags) {
-      if (colOf(f.x, f.str) !== "descricao") continue;
-      const arr = descYsPorPagina.get(f.page);
-      if (arr) arr.push(f.y);
-      else descYsPorPagina.set(f.page, [f.y]);
-    }
-    const vaosTodos: number[] = [];
-    for (const ys of descYsPorPagina.values()) {
-      const s = [...ys].sort((x, y) => y - x); // DESC
-      for (let i = 0; i < s.length - 1; i++) {
-        const vao = s[i] - s[i + 1];
-        if (vao > 0 && vao <= 40) vaosTodos.push(vao); // ignora saltos de seção/página
-      }
-    }
-    const mediana = (arr: number[]): number => {
-      if (arr.length === 0) return 0;
-      const s = [...arr].sort((x, y) => x - y);
-      const m = s.length >> 1;
-      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-    };
-    const espacoTipico = mediana(vaosTodos);
-    // Vão > LIM ⇒ BORDA de célula; ≤ LIM ⇒ entrelinha (mesma descrição).
-    const LIM = espacoTipico > 0 ? Math.max(espacoTipico * 1.3, espacoTipico + 2) : 12;
-
-    // ── Fronteiras (cuts) entre itens da MESMA página: no MAIOR vão que excede LIM na faixa
-    // entre as âncoras; sem vão-borda, ponto médio das âncoras (fallback = nearestByY). ──
-    const cutsPorPagina = new Map<number, number[]>();
-    for (const [page, g] of idxPorPagina) {
-      const a = g.ys; // âncoras em `y` DESC
-      const cuts: number[] = [];
-      const dys = (descYsPorPagina.get(page) ?? []).slice().sort((x, y) => y - x); // DESC
-      let p = 0;
-      for (let j = 0; j < a.length - 1; j++) {
-        const hiA = a[j];
-        const loA = a[j + 1];
-        while (p < dys.length && dys[p] >= hiA) p++;
-        const band: number[] = [];
-        while (p < dys.length && dys[p] > loA) band.push(dys[p++]);
-        let cut = (hiA + loA) / 2; // ponto médio (= nearestByY)
-        let maxVao = -1;
-        let idxMax = -1;
-        for (let i = 0; i < band.length - 1; i++) {
-          const vao = band[i] - band[i + 1];
-          if (vao > maxVao) {
-            maxVao = vao;
-            idxMax = i;
-          }
-        }
-        if (idxMax >= 0 && maxVao > LIM) cut = (band[idxMax] + band[idxMax + 1]) / 2;
-        cuts.push(cut);
-      }
-      cutsPorPagina.set(page, cuts);
-    }
-
-    // ── Fronteira do TOPO de cada página de continuação (`g.first>0`): separa a CAUDA do
-    // último item da página anterior (continuação, em cima) da CABEÇA do 1º item desta
-    // página (número no meio → cabeça ACIMA dele). Andando do 1º número para cima, a cabeça
-    // é contígua (vão ≤ LIM); o 1º vão > LIM é a borda (`topCut`). Sem borda ⇒ o item
-    // anterior TERMINOU na página anterior → nada sobe (tudo é cabeça do 1º item). Conserta
-    // o roubo da cabeça do 1º item de toda página de continuação (bug cross-page). ──
-    const topCutPorPagina = new Map<number, number>();
-    for (const [page, g] of idxPorPagina) {
-      if (g.first === 0) continue;
-      const acima = (descYsPorPagina.get(page) ?? []).filter((y) => y > g.topo).sort((x, y) => x - y); // ASC
-      let prev = g.topo;
-      let topCut = Number.POSITIVE_INFINITY;
-      for (const y of acima) {
-        if (y - prev <= LIM) prev = y;
-        else {
-          topCut = y;
-          break;
-        }
-      }
-      topCutPorPagina.set(page, topCut);
-    }
-
-    // Último item (bucket) de cada página COM itens → alvo p/ uma página SÓ de continuação
-    // (descrição que ocupa a página inteira, sem número): continua o último item anterior.
-    const ultimoBucketDaPagina = new Map<number, number>();
-    buckets.forEach((b, i) => {
-      ultimoBucketDaPagina.set(b.page, i); // ordem (page, y desc) ⇒ fica o último
-    });
-    const paginasComItem = [...ultimoBucketDaPagina.keys()].sort((x, y) => x - y);
-    const itemAntesDaPagina = (page: number): number | undefined => {
-      let alvo: number | undefined;
-      for (const pg of paginasComItem) {
-        if (pg < page) alvo = ultimoBucketDaPagina.get(pg);
-        else break;
-      }
-      return alvo;
-    };
-
-    for (const f of bodyFrags) {
-      const g = idxPorPagina.get(f.page);
-      const c = colOf(f.x, f.str);
-      let b: Bucket | undefined;
-      if (c === "descricao" && !g) {
-        // Página SEM número de item = continuação integral do último item anterior
-        // (descrição que ocupa a página inteira).
-        const prev = itemAntesDaPagina(f.page);
-        if (prev != null) b = buckets[prev];
-      } else if (c === "descricao" && g && f.y > g.topo && g.first > 0) {
-        // ACIMA do 1º número da página: a CAUDA do item anterior (y ≥ topCut) OU a CABEÇA
-        // do 1º item desta página (número no meio) — separadas pela borda de célula.
-        const tc = topCutPorPagina.get(f.page) ?? Number.POSITIVE_INFINITY;
-        b = f.y >= tc ? buckets[g.first - 1] : buckets[g.first];
-      } else if (c === "descricao" && g && g.bi.length > 0) {
-        // Descrição → pela BORDA da célula (não pela âncora do meio): não trunca
-        // descrições altas nem vaza para o próximo item.
-        b = buckets[g.bi[itemPorCuts(cutsPorPagina.get(f.page) ?? [], f.y)]];
-      } else if (g && g.ys.length > 0) {
-        // Número/código/unidade/valores ficam na âncora → o mais próximo em `y`.
-        b = buckets[g.bi[nearestByY(g.ys, f.y)]];
-      }
-      if (!b) continue;
-      if (c === "codigo") b.codigo.push(f);
-      else if (c === "descricao") b.descricao.push(f);
-      else if (c === "unidade") {
-        if (b.unidade == null) b.unidade = f.str;
-      } else if (c === "quantidade" || c === "valorUnitario" || c === "valorTotal") {
-        if (b[c] == null) b[c] = parseNumberBR(f.str);
-      }
-    }
-
-    const porPos = (a: PdfItem, b: PdfItem) => a.page - b.page || b.y - a.y || a.x - b.x;
-    for (const b of buckets) {
-      itens.push({
-        item: b.item,
-        codigo: b.codigo.sort(porPos).map((f) => f.str).join("") || null,
-        descricao:
-          b.descricao
-            .sort(porPos)
-            .map((f) => f.str)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim() || null,
-        unidade: b.unidade,
-        quantidade: b.quantidade,
-        valorUnitario: b.valorUnitario,
-        valorTotal: b.valorTotal,
-      });
-    }
-  }
+  // ---- Tabela (Seção 4) ----
+  const hi = linhas.findIndex(ehCabecalhoItens);
+  const tabela = hi >= 0 ? lerTabelaItens(linhas, hi, tracos) : null;
+  const itens: DfdItemParseado[] = tabela?.itens ?? [];
+  const valorTotalGrand = tabela?.valorTotal ?? null;
+  const apoioSecao4 = tabela?.apoio ?? "";
+  // Índice da linha onde a tabela ENCERRA (próxima seção) — o `coletarSecoes` recebe só as linhas FORA da tabela.
+  const tableEndIdx = tabela?.fim ?? linhas.length;
 
   const somaItens = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
   const valorTotal = valorTotalGrand ?? (somaItens > 0 ? Math.round(somaItens * 100) / 100 : null);

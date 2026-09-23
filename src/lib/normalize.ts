@@ -11,6 +11,36 @@ export function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
+// Texto "comum" (ASCII imprimível + Latin-1 imprimível, sem o NBSP e o hífen suave) — o caso de quase todo trecho
+// lido do DFD: basta colapsar os espaços (atalho de desempenho — protocolos têm centenas de milhares de trechos).
+const RE_TEXTO_COMUM = /^[\x20-\x7E\u00A1-\u00AC\u00AE-\u00FF]*$/;
+// Brancos que o `\s` do JS NÃO cobre (NEL) ou que viram espaço antes de remover os controles.
+const RE_BRANCO = /[\s\u0085]/g;
+// Invisíveis que não são conteúdo: controles C0/C1, formatação Unicode (Cf: largura zero, hífen suave, marcas
+// bidi, BOM…), surrogates órfãos, caractere de substituição (U+FFFD) e não-caracteres.
+const RE_INVISIVEL = /[\p{Cc}\p{Cf}\p{Cs}\uFFFD\uFFFE\uFFFF]/gu;
+
+/**
+ * Texto CAPTURADO (PDF/planilha) limpo: sem caracteres invisíveis/de controle (largura zero, hífen suave, BOM,
+ * marcas bidi, U+FFFD), com TAB/quebra/NBSP/espaços Unicode virando UM espaço, acentos compostos juntos (NFC —
+ * "C" + cedilha combinante vira "Ç") e o caractere de USO PRIVADO (o marcador de lista do Word em fonte
+ * Symbol/Wingdings, que o PDF entrega como U+F0B7 e a tela mostra como um quadrado) virando "•". Não mexe em nenhum
+ * caractere visível (pontuação, "²", "®", "°"…). Puro.
+ */
+export function limparTexto(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  if (RE_TEXTO_COMUM.test(s)) return s.replace(/\s+/g, " ").trim();
+  return s
+    .replace(/\uFEFF/g, "") // BOM/ZWNBSP: largura zero (não é espaço)
+    .replace(RE_BRANCO, " ")
+    .replace(RE_INVISIVEL, "")
+    .replace(/\p{Co}/gu, "•")
+    .normalize("NFC")
+    .replace(/(^|\s)\p{M}+/gu, "$1") // acento órfão (sem letra)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Uppercase + colapsa espaços/quebras de linha + trim + tira pontuação solta nas pontas. */
 export function cleanUpper(raw: unknown): string {
   if (raw == null) return "";

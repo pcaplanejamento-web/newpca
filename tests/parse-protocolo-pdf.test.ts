@@ -198,7 +198,7 @@ describe("parseDfdDoProtocolo (combina A/B do índice + INLINE do render)", () =
   const mkDoc = (itens: PdfItem[], render: string): PdfDoc => ({
     numPages: 1,
     pageItems: async () => itens,
-    pageRenderText: async () => render,
+    pageRender: async () => ({ texto: render, tracos: [] }),
     // Só navegador (OCR) — não usados por `parseDfdDoProtocolo`.
     imagensPagina: async () => [],
     renderPagina: async () => {

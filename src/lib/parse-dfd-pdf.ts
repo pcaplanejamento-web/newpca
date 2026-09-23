@@ -1,3 +1,4 @@
+import { type PdfTraco, tracosDaOpList } from "./grade-pdf.ts";
 import { type Caixa, caixasImagensDaOpList, mesclarAssinaturasOcr, precisaOcr } from "./ocr-assinatura-core.ts";
 import type { Assinatura, DfdParseado } from "./parse-dfd-comum.ts";
 import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
@@ -20,10 +21,10 @@ export type { PdfItem } from "./parse-dfd-pdf-core.ts";
 export type PdfDoc = {
   numPages: number;
   pageItems: (page: number) => Promise<PdfItem[]>;
-  /** Texto RENDERIZADO da página (via `getOperatorList`) — inclui a APARÊNCIA das anotações de
-   * assinatura (widgets `Sig`), que o `getTextContent` (pageItems) NÃO traz. Usado só para
-   * capturar a assinatura Dropsigner; mais caro, então chame só quando precisar (por DFD). */
-  pageRenderText: (page: number) => Promise<string>;
+  /** Página RENDERIZADA (um `getOperatorList`): o TEXTO — inclui a APARÊNCIA das anotações de assinatura
+   * (widgets `Sig`), que o `getTextContent` (pageItems) NÃO traz (assinatura Dropsigner) — e os TRAÇOS
+   * desenhados (bordas das células: a GRADE da tabela de itens). Mais caro: chame só por DFD. */
+  pageRender: (page: number) => Promise<{ texto: string; tracos: PdfTraco[] }>;
   /** Caixas (0..1, topo-esquerdo) das IMAGENS da página — apontam o carimbo achatado (logo do Dropsigner,
    * rubrica) p/ o OCR ler só aquela região. Só navegador. */
   imagensPagina: (page: number) => Promise<Caixa[]>;
@@ -75,9 +76,10 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       page.cleanup(); // libera os recursos da página (streaming)
       return items;
     },
-    async pageRenderText(p: number) {
+    async pageRender(p: number) {
       // getOperatorList RENDERIZA a página (inclui a aparência das anotações de assinatura,
-      // que o getTextContent ignora). Concatena o texto das operações `showText`.
+      // que o getTextContent ignora). Concatena o texto das operações `showText` e, no MESMO
+      // passe, extrai os traços retos desenhados (a grade da tabela de itens).
       const page = await doc.getPage(p);
       const opList = await page.getOperatorList();
       let texto = "";
@@ -91,8 +93,9 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
         }
         texto += " ";
       }
+      const tracos = tracosDaOpList(opList.fnArray, opList.argsArray, OPS, p);
       page.cleanup();
-      return texto.replace(/\s+/g, " ");
+      return { texto: texto.replace(/\s+/g, " "), tracos };
     },
     async imagensPagina(p: number) {
       const page = await doc.getPage(p);
@@ -160,10 +163,16 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
       throw new Error('Não reconheci um DFD neste PDF. Envie o DFD emitido (com "Número DFD").');
     }
     // Texto renderizado POR PÁGINA (aparência das anotações de assinatura) — para o Dropsigner
-    // parear cada bloco ao código da própria página e manter só o documento primário (o DFD).
+    // parear cada bloco ao código da própria página e manter só o documento primário (o DFD) — e
+    // os traços desenhados (grade da tabela de itens: leitura exata das células).
     const render: string[] = [];
-    for (let p = 1; p <= doc.numPages; p++) render.push(await doc.pageRenderText(p));
-    const parsed = parseDfdFromPdfItems(items, file.name, render);
+    const tracos: PdfTraco[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const r = await doc.pageRender(p);
+      render.push(r.texto);
+      tracos.push(...r.tracos);
+    }
+    const parsed = parseDfdFromPdfItems(items, file.name, render, tracos);
     // Assinatura ACHATADA (sem camada de texto): nenhuma assinatura NOMEADA de texto → OCR (lazy).
     if (precisaOcr(parsed.assinaturas)) {
       const paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);

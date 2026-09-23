@@ -118,3 +118,71 @@ describe("parse-dfd-core", () => {
     assert.throws(() => parseDfdFromMatriz(aoa, "x.xlsx"), /Seção 4|itens/i);
   });
 });
+
+describe("parse-dfd-core — planilha: valores CRUS, código, texto sujo e linhas sem nº", () => {
+  // Matriz do texto formatado (`raw:false`) + a dos valores crus (`raw:true`) — como o SheetJS entrega.
+  function planilha(): { aoa: (string | null)[][]; valores: unknown[][] } {
+    const aoa: (string | null)[][] = [];
+    const valores: unknown[][] = [];
+    const push = (txt: (string | null)[], crus?: unknown[]) => {
+      aoa.push(txt);
+      valores.push(crus ?? txt);
+    };
+    push(linha([[5, "AQUISIÇÃO DE MATERIAL Número DFD:1586 / Planejamento: 1639"]]));
+    push(linha([[1, "ITEM"], [3, "CÓDIGO"], [6, "DESCRIÇÃO"], [8, "UNIDADE"], [11, "QUANTIDADE"], [14, "VALOR UNITÁRIO"], [16, "VALOR TOTAL"]]));
+    // item 1: quantidade 1000 com formato "#,##0" (o texto en-US "1,000" era lido como 1); código com zeros à esquerda
+    const t1 = linha([[1, "1"], [3, "0524194727"], [6, "PAINEL DE LED\tOUTDOOR;\u00A0• DIMENSÕES 3840 X 2880 MM;\n\uF0B7 ALTA\u200B RESOLUÇÃO"], [8, "UNIDADE"], [11, "1,000"], [14, "1,234.50"], [16, "1,234,500.00"]]);
+    const c1: unknown[] = [...t1];
+    c1[1] = 1;
+    c1[3] = 524194727;
+    c1[11] = 1000;
+    c1[14] = 1234.5;
+    c1[16] = 1234500;
+    push(t1, c1);
+    // continuação (só descrição, sem nº) no MEIO da tabela
+    push(linha([[6, "• CONTINUAÇÃO DO ITEM 1"]]));
+    // item 2: código em TEXTO com tab (quebrado) e zero à esquerda; valores em texto pt-BR
+    push(linha([[1, "2"], [3, "0524194727\t0"], [6, "CABO"], [8, "METRO"], [11, "1.500"], [14, "2,50"], [16, "3.750,00"]]));
+    // item 3: código numérico grande em notação científica no texto formatado; nº "3.0"
+    const t3 = linha([[1, "3.0"], [3, "5.24195E+11"], [6, "ITEM TRÊS"], [8, "UN"], [11, "2"], [14, "10"], [16, "20"]]);
+    const c3: unknown[] = [...t3];
+    c3[3] = 524194727012;
+    c3[11] = 2;
+    c3[14] = 10;
+    c3[16] = 20;
+    push(t3, c3);
+    // linha SEM nº mas com código e valores no meio da tabela → item próprio (não some, não se mistura)
+    push(linha([[3, "5241900099"], [6, "SEM NÚMERO"], [8, "UN"], [11, "1"], [14, "5,00"], [16, "5,00"]]));
+    // item 4 sem código e sem descrição, mas com valores → é item (a tabela não termina aqui)
+    push(linha([[1, "4"], [8, "UN"], [11, "1"], [14, "7,00"], [16, "7,00"]]));
+    push(linha([[1, "5"], [3, "5241900005"], [6, "ÚLTIMO"], [8, "UN"], [11, "1"], [14, "1,00"], [16, "1,00"]]));
+    push(linha([[1, "VALOR TOTAL"], [16, "1.238.283,00"]]));
+    push(linha([[1, "5 - PREVISÃO DE ENTREGA/EXECUÇÃO"]]));
+    return { aoa, valores };
+  }
+
+  it("com os valores crus: quantidade/valores exatos, código grande inteiro, zeros à esquerda e descrição limpa", () => {
+    const { aoa, valores } = planilha();
+    const d = parseDfdFromMatriz(aoa, "x.xlsx", valores);
+    assert.deepEqual(
+      d.itens.map((i) => [i.item, i.codigo, i.descricao, i.unidade, i.quantidade, i.valorUnitario, i.valorTotal]),
+      [
+        [1, "0524194727", "PAINEL DE LED OUTDOOR; DIMENSÕES 3840 X 2880 MM; ALTA RESOLUÇÃO CONTINUAÇÃO DO ITEM 1", "UNIDADE", 1000, 1234.5, 1234500],
+        [2, "05241947270", "CABO", "METRO", 1500, 2.5, 3750],
+        [3, "524194727012", "ITEM TRÊS", "UN", 2, 10, 20],
+        [null, "5241900099", "SEM NÚMERO", "UN", 1, 5, 5],
+        [4, null, null, "UN", 1, 7, 7],
+        [5, "5241900005", "ÚLTIMO", "UN", 1, 1, 1],
+      ],
+    );
+    assert.equal(d.valorTotal, 1238283);
+  });
+
+  it("só o texto formatado (sem os crus): pt-BR com milhar de ponto, e o código nunca vira notação científica", () => {
+    const { aoa } = planilha();
+    const d = parseDfdFromMatriz(aoa, "x.xlsx");
+    assert.equal(d.itens[1].quantidade, 1500); // "1.500" = mil e quinhentos
+    assert.equal(d.itens[1].codigo, "05241947270");
+    assert.equal(d.itens[2].codigo, null); // sem o valor cru os dígitos se perderam: sem código, nunca "52419511"
+  });
+});

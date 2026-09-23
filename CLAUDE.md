@@ -229,7 +229,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 
 ## PCA por DFD (importar e compilar) — migrações `0012`/`0013`/`0016`
 - **DFD** = um formulário (`.xlsx`) lido **no navegador** (`src/lib/parse-dfd.ts`, com `raw:false` p/ o texto
-  formatado — preserva o código longo — e o núcleo puro/testável `parse-dfd-core.ts`); vira `dfds`/`dfd_itens`
+  formatado — preserva o código longo e os zeros à esquerda — **e `raw:true`** p/ os números exatos; núcleo
+  puro/testável `parse-dfd-core.ts`); vira `dfds`/`dfd_itens`
   e é vinculado a uma **repartição** por **auto-match da sigla do Setor Requisitante** (com fallback pelo NOME
   da secretaria, p/ siglas divergentes; confirmável no import).
 - **Captura completa (migração `0013`):** o parser extrai TODO o formulário — cabeçalho (nº/planejamento/
@@ -252,7 +253,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
   (Dropsigner/Lacuna Software): o bloco visível é, na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura**
   (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
-  **TEXTO RENDERIZADO POR PÁGINA** (`getOperatorList`, via `PdfDoc.pageRenderText`) por
+  **TEXTO RENDERIZADO POR PÁGINA** (`getOperatorList`, via `PdfDoc.pageRender`) por
   **`assinaturasDropsignerDeTexto(textos: string|string[])`** (`parse-dfd-pdf-core.ts`, puro). Reconhece o bloco em
   **QUALQUER IDIOMA E VARIANTE** da aparência (ponto 4): PT "Assinado **digitalmente|eletronicamente** por: NOME [CPF: …]
   Data: dd/mm/aaaa …" **e** EN "Digitally signed by: NAME [CPF: …] Date: M/D/AAAA h:mm:ss PM …" — o **`:` após "por"/"by"**
@@ -381,22 +382,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + o worker legacy: o build moderno do v6 exige `Math.sumPrecise` e, num navegador sem ele, falhava ao carregar as fontes →
   NENHUM DFD lido ("Leitura incompleta"); importado
   DINAMICAMENTE no navegador — fora do bundle do Worker; `next.config` transpila e faz `alias canvas:false`; o
-  build roda com `next build --webpack`): a tabela é remontada **por posição de coluna**. Número/código/unidade/
-  valores ficam na **âncora** (1 faixa) → casados pelo `y` mais próximo (`nearestByY`) e **rejuntando o código quebrado
-  em 2 linhas**. Ambos → mesmo `DfdParseado`.
+  build roda com `next build --webpack`): a tabela é lida pela **GRADE DESENHADA** (as bordas das células — ver
+  "Captura dos ITENS" abaixo) e, sem grade, remontada **por posição de coluna** (número/código/unidade/valores na
+  **âncora**, `nearestByY`; o código quebrado em 2 linhas é rejuntado). Ambos → mesmo `DfdParseado`.
 - **Descrição ILIMITADA por item (crítico) — casada pela BORDA da célula, nunca truncada (inclui QUEBRA DE
   PÁGINA):** a âncora (nº/código/valores) fica no **MEIO da célula**, então a descrição tem linhas ACIMA e ABAIXO do
   número. Casar por `nearestByY` truncava (as últimas linhas vazavam para o próximo item). Agora a descrição é casada
-  pela **borda REAL da célula** = o **maior vão** entre linhas de descrição que **excede um limiar ADAPTATIVO** `LIM`.
-  `LIM = max(mediana*1.3, mediana+2)`, onde a mediana dos vãos de descrição do DFD ≈ entrelinha (nos PDFs reais ~8–9;
-  bordas ~11+, separação limpa — nunca ocorre vão 10). **Same-page:** `cutsPorPagina`+`itemPorCuts` (o corte fica no
-  vão-borda entre duas âncoras, senão ponto médio). **QUEBRA DE PÁGINA (`topCutPorPagina`):** acima do 1º número de uma
+  pela **borda REAL da célula** = um vão entre linhas de descrição que **excede um limiar ADAPTATIVO** `LIM`.
+  `LIM = max(entrelinha*1.3, entrelinha+2)`, com a **entrelinha = o MENOR vão RECORRENTE** (≥ 2 ocorrências e ≥ 5% dos
+  vãos, acima de 0,9× o corpo da fonte; vãos por LINHA VISUAL) — a antiga mediana errava num DFD com muitos itens de 1
+  linha e um item enorme (a borda sumia e a descrição vazava). Nos PDFs reais a entrelinha é ~8,1 e as bordas ≥ 11,7.
+  **Same-page:** `cutsPorPagina`+`itemPorCuts`; com VÁRIAS bordas possíveis (linha em branco na descrição) vale a que
+  deixa o item **SIMÉTRICO em volta do nº** (célula centralizada — o padrão; só vira "nº no topo" com evidência), sem
+  nenhuma, a posição simétrica. **QUEBRA DE PÁGINA (`topCutPorPagina`):** acima do 1º número de uma
   página de continuação há DUAS coisas — a **cauda** (continuação) do último item da página anterior E a **cabeça** do
   1º item desta página (número no meio → cabeça acima). Andando do 1º número para cima, a cabeça é a parte contígua
   (vão ≤ LIM); o 1º vão > LIM é a borda: acima dela = item anterior, abaixo = cabeça do 1º item. Sem borda ⇒ o item
   anterior terminou antes ⇒ tudo é cabeça do 1º item (não rouba). Uma **página SEM número** (descrição ocupa a página
-  inteira) é continuação integral do último item anterior. Só código/unidade/valores seguem em `nearestByY` (na
-  âncora). Validado contra o **Protocolo FMC.pdf real (79 págs, 18 DFDs, 329 itens): 0 truncadas, 0 vazamentos**.
+  inteira) é continuação integral do último item anterior — valendo para TODAS as colunas (o "0" de um código que
+  virou a página fica no item de cima, nunca vira zero à esquerda do próximo). Na mesma página, código/unidade/valores
+  seguem em `nearestByY` (na âncora). Validado contra o **Protocolo FMC.pdf real (79 págs, 18 DFDs, 329 itens): 0
+  truncadas, 0 vazamentos**.
   Testes: fixture de descrição alta same-page e fixture CROSS-PAGE (cabeça do 1º item da página não vaza).
 - **Tabelas MULTIPÁGINA (crítico) + reconhecimento CIRÚRGICO dos componentes:** uma tabela de itens pode ocupar
   **dezenas de páginas** e um único item pode ter uma **descrição enorme que atravessa páginas**. O `parse-dfd-pdf-core`
@@ -417,6 +423,46 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   descrição (ex.: nº de peça "40300050630"), **não código** — senão poluiria o código. Validado contra um protocolo
   real de **581 páginas / 104 DFDs** (harness pdf.js): **104/104 importam** todos os itens. Testes: fixture
   multipágina real, buraco no sequencial (importa + aponta), sequência completa (sem nota).
+- **Captura dos ITENS — o PADRÃO DEFINITIVO do DFD (crítico; "é proibido errar a captura"):**
+  - **GRADE DESENHADA (`src/lib/grade-pdf.ts`, puro):** o PDF do Centi desenha **cada célula** da tabela como um
+    retângulo (borda + zebra). `PdfDoc.pageRender(p)` (o MESMO `getOperatorList` do texto renderizado) devolve os
+    **traços retos** da página (`tracosDaOpList`, rastreando a CTM/Form XObject; clip e curvas fora); `montarGrade`
+    tira as **COLUNAS** das bordas verticais em volta de cada RÓTULO do cabeçalho e, por página, as **LINHAS** da tabela
+    (bordas horizontais que cobrem ITEM e DESCRIÇÃO, fechadas pelas divisórias — exclui cabeçalho do documento, rodapé,
+    total mesclado e quadros das seções). `itensPelaGrade` põe cada trecho na **célula exata** (linha × coluna): uma
+    linha = um item; célula que ATRAVESSA a página junta as partes (sem nº no topo da página = cauda do anterior; sem
+    nº no fim = cabeça do item cujo nº está na página seguinte); linha sem nº/código/descrição (subtotal) não é item;
+    linha sem nº no meio da página vira item próprio (`item: null`, nunca mistura). **Validações** → se a grade não
+    explica o corpo (trecho fora das linhas, nº em 2 linhas = borda faltando, nº de itens ≠ do texto), cai na
+    **geometria do texto** (acima). `parseDfdFromPdfItems(items, nome, render, tracos)` — `lerTabelaItens` expõe `viaGrade`.
+    Validado no `pd101820` real: **15/15 DFDs pela grade, 72 itens idênticos**.
+  - **Varredura precisa (`lerTabelaItens`):** cabeçalho de coluna = trecho EXATO "ITEM" + QUANTIDADE/QTD (uma descrição
+    que cita "item … quantidade" não some); **TOTAL GERAL** = rótulo próprio na ÁREA DOS VALORES ("…o valor total…" na
+    descrição fica); **rodapé** só à margem e sem nº, e `ehRuido` casa a FORMA do rodapé (`/^CENTI\b/`, "Emitido em
+    dd/…", "Página N de M") — "CENTÍMETROS…", "PÁGINA 3 DO…", "EMITIDO EM DUAS VIAS" ficam; **apoio** só à MARGEM;
+    cabeçalho de coluna repetido DEPOIS de um "apoio" = a tabela continua (era rodapé não reconhecido — não perde
+    itens); **nº do item** CENTRADO sob o rótulo "ITEM" (o "12" de "12 MESES." à margem não vira item; pedaços "1"+"2" =
+    12; "1."/"01" valem; sem nenhum nº assim, qualquer nº da coluna ITEM — outro emissor).
+  - **Montagem (`montarItem`):** **CÓDIGO = só os dígitos, na ordem** (`codigoDoItem`: "524194727" ⏎ "0" =
+    "5241947270", TAB/espaço/pontuação no meio somem, **zero à esquerda preservado**, NFKC); **DESCRIÇÃO limpa**
+    (`limparDescricaoItem`: sem marcadores de lista •/‣/▪/➢/✓/◆… nem o do Word em fonte Symbol, sem TAB/NBSP/largura
+    zero; ficam ², °, ®, §, →); **UNIDADE** com as linhas juntas ("SERVIÇO MENSAL"); **VALORES** com os pedaços juntos
+    ANTES de converter ("1.234.567," ⏎ "8912" = 1.234.567,8912 — antes perdia as casas) por **`numeroDfd`** (pt-BR;
+    "1.000" só com ponto = MIL). No fallback, número alinhado à direita vai p/ a coluna do rótulo cuja borda DIREITA
+    está mais perto (um pedaço curto não cruza o ponto médio) e o valor é a linha mais perto do nº (+ a continuação).
+  - **Texto limpo em TODA captura (`limparTexto`, `normalize.ts`):** `normalizar` (PDF) e as células do `.xlsx` —
+    tira controles/Cf (largura zero, hífen suave, BOM, bidi)/U+FFFD; TAB/NBSP/quebras/espaços Unicode = 1 espaço; NFC
+    (acento composto); caractere de uso privado (marcador Symbol/Wingdings, que a tela mostrava como quadrado) = "•".
+    Atalho p/ texto Latin-1 comum (desempenho).
+  - **`.xlsx`:** números pelo **valor CRU** da célula (o texto de "#,##0" sai "1,000" em en-US — era lido como 1);
+    código pelo texto formatado (zeros à esquerda) ou pelo inteiro cru quando o texto veio em notação científica
+    ("5.24195E+11" virava "52419511"; sem o cru ⇒ `null`, nunca inventa); linha SEM nº no MEIO da tabela não a encerra
+    (só descrição = continuação do item anterior; com código/valores = item próprio); nº "1.0"/"01" vale.
+  - **Testes:** `tests/fixtures/dfd-centi.ts` (gerador no LEIAUTE EXATO do Centi — texto + grade), `parse-dfd-captura`
+    (o PRINT: código 524194727/0 + descrição enorme com marcadores/TAB/Symbol entre 30+ itens curtos, linhas que citam
+    rodapé/total, linha em branco, valor/unidade quebrados, 100 itens multipágina, célula que atravessa a página, código
+    que vira a página, grade inválida → texto, nº não centrado, rodapé desconhecido — **cada cenário nas DUAS vias**),
+    `grade-pdf`, `parse-dfd-comum`, `normalize`, `parse-dfd` (planilha com valores crus). Escala: 5.000 itens em ~0,3 s.
 - **Tela "Mesa"** (ex-"DFD"; `/painel/mesa` = `MesaPage` → `DfdsView`, aba **`dfd`** intacta — `/painel/dfds` **redireciona** p/ bookmarks; nav/label "Mesa" em `AppShell`/`BottomNav`/`abas.ts`) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,

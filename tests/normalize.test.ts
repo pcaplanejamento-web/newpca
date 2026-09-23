@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   cleanUpper,
+  limparTexto,
   linhaTemConteudo,
   normClassificacao,
   normUnidadeMedida,
@@ -23,6 +24,19 @@ describe("normalize", () => {
     assert.equal(cleanUpper("- item ;"), "ITEM");
     assert.equal(cleanUpper(null), "");
     assert.equal(cleanUpper(123), "123");
+  });
+
+  it("limparTexto: tira invisíveis/controles, TAB/NBSP/quebras viram 1 espaço, NFC, marcador de fonte Symbol vira •", () => {
+    assert.equal(limparTexto("  PAINEL\tDE\u00A0LED\r\nP3  "), "PAINEL DE LED P3");
+    assert.equal(limparTexto("ALTA\u200BRESOLU\u00ADÇÃO\uFEFF"), "ALTARESOLUÇÃO"); // largura zero/hífen suave/BOM
+    assert.equal(limparTexto("A\u0000B\u0007C\u009FD\uFFFDE"), "ABCDE"); // controles e U+FFFD
+    assert.equal(limparTexto("DESCRIC\u0327A\u0303O"), "DESCRIÇÃO"); // acentos compostos (NFC)
+    assert.equal(limparTexto("\uF0B7 ITEM"), "• ITEM"); // uso privado (Symbol/Wingdings)
+    assert.equal(limparTexto("A\u0085B\u2028C\u3000D"), "A B C D"); // brancos Unicode
+    assert.equal(limparTexto("DOTS/M² 40°C INTEL®"), "DOTS/M² 40°C INTEL®"); // visíveis intactos
+    assert.equal(limparTexto(" \u0301ACENTO ÓRFÃO"), "ACENTO ÓRFÃO");
+    assert.equal(limparTexto(null), "");
+    assert.equal(limparTexto(123), "123");
   });
 
   it("parseNumberBR aceita pt-BR e en", () => {

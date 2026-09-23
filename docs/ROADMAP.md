@@ -25,6 +25,21 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Captura dos ITENS do DFD pelo padrão definitivo (grade desenhada) + texto limpo — entregue
+✅ **Leitura exata da tabela de itens pela GRADE**: o PDF do Centi desenha cada célula (borda + zebra); o sistema lê
+esses traços (`grade-pdf.ts`, no mesmo passe do texto renderizado) e põe cada trecho na **célula certa** — código,
+descrição, unidade e valores do item certo mesmo com descrição de dezenas de linhas, linha em branco, código quebrado em
+2 linhas ("524194727" ⏎ "0" = **5241947270**) ou célula que atravessa a página. Sem grade (outro emissor), a geometria
+do texto foi endurecida (entrelinha pelo menor vão recorrente, borda simétrica em volta do nº, código/valores na virada
+de página, valor alinhado à direita pela borda). ✅ **Descrição limpa**: marcadores de lista (•, ▪, ➢, ✓, o marcador U+F0B7 da
+fonte Symbol), TAB, NBSP, largura zero e controles somem; ², °, ®, § ficam. ✅ **Código só com dígitos, zero à
+esquerda preservado**. ✅ **Valores/unidade quebrados em 2 linhas juntados** antes de converter; "1.000" = mil.
+✅ **Linhas que citam o rodapé/total/cabeçalho não somem mais** ("CENTÍMETROS…", "O VALOR TOTAL…", "ITEM … QUANTIDADE").
+✅ **Planilha .xlsx**: números pelo valor cru (a quantidade "1,000" do formato en-US virava 1), código grande sem
+notação científica, linha de continuação sem nº não encerra a tabela. Validado no `pd101820` real (15/15 DFDs pela
+grade, 72 itens idênticos ao anterior); o cenário do print falhava no leitor antigo (perdia o "0" do código, vazava a
+descrição para o item 20 e apagava "O VALOR TOTAL…") e agora sai exato nas duas vias; 5.000 itens em ~0,3 s.
+
 ### Pessoas (apelido + foto), responsável do grupo, data da assinatura, SOBRESCRITA com escolha e RASTRO entre protocolos — entregue
 ✅ **Apelido** no Perfil (migração `0032`, aditiva): o nome de exibição no sistema — cabeçalho, colunas e seletores (a lista
 mostra "apelido — nome completo"). **Foto + apelido** nas colunas **Responsável** e **Distribuição** da Mesa (`PessoaTag`); a

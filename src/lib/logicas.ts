@@ -55,10 +55,25 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "O DFD (Documento de Formalização da Demanda) é lido no navegador. Aceita a planilha .xlsx e o PDF; o cabeçalho e as seções são compartilhados entre os dois formatos e produzem o mesmo resultado.",
     detalhes: [
-      ".xlsx: tabela lida por coluna da matriz (mais determinístico).",
-      ".pdf: tabela remontada por posição de coluna, rejuntando o código quebrado em 2 linhas.",
+      ".xlsx: tabela lida por coluna da matriz; números pelo valor da célula (não pelo texto formatado).",
+      ".pdf: tabela lida pela GRADE desenhada (cada célula tem borda); sem grade, pela posição de coluna.",
     ],
     fonte: "parse-dfd / parse-dfd-pdf / parse-dfd-comum",
+  },
+  {
+    id: "imp-captura-itens",
+    dominio: "importacao",
+    titulo: "Captura exata dos itens: código, descrição, unidade e valores",
+    descricao:
+      "Cada trecho do PDF cai na célula (linha × coluna) desenhada da tabela — o código, a descrição e os valores vão sempre para o item certo, mesmo com descrição de dezenas de linhas, linha em branco ou célula que atravessa a página. O texto sai limpo.",
+    detalhes: [
+      "Código = só os dígitos, na ordem: o código quebrado em 2 linhas (\"524194727\" + \"0\") vira 5241947270; zero à esquerda preservado.",
+      "Descrição sem marcadores de lista (•, ▪, ➢, ✓…), TAB, espaço duro e caracteres invisíveis; ², °, ®, § ficam.",
+      "Unidade e valores quebrados em 2 linhas são juntados antes de converter; \"1.000\" é mil.",
+      "Uma linha da descrição que cita o rodapé, o total ou o cabeçalho (\"CENTÍMETROS…\", \"O VALOR TOTAL…\") não some.",
+    ],
+    fonte: "grade-pdf / parse-dfd-pdf-core / parse-dfd-comum",
+    tecnico: true,
   },
   {
     id: "imp-multipagina",

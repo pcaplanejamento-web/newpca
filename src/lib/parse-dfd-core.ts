@@ -1,21 +1,24 @@
-import { parseIntBR, parseNumberBR } from "./normalize.ts";
+import { limparTexto } from "./normalize.ts";
 import {
+  codigoDoItem,
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
   ehRuido,
   extrairCabecalho,
   extrairRefsDfd,
+  limparDescricaoItem,
   norm,
+  numeroDfd,
   TITULO_SECAO_ITENS,
-  txt,
 } from "./parse-dfd-comum.ts";
 
 /**
  * Núcleo PURO do parser de DFD a partir da PLANILHA (`.xlsx`) — recebe a matriz
- * de células (texto formatado; ver `parse-dfd.ts`) e reaproveita o cabeçalho e as
- * seções de `parse-dfd-comum.ts`; aqui fica só a tabela de itens da Seção 4 (que
- * na planilha é localizada por posição de coluna). Sem SheetJS/D1 → testável.
+ * de células (texto formatado; ver `parse-dfd.ts`) e, opcionalmente, a matriz dos
+ * VALORES crus (números como número) e reaproveita o cabeçalho e as seções de
+ * `parse-dfd-comum.ts`; aqui fica só a tabela de itens da Seção 4 (que na planilha
+ * é localizada por posição de coluna). Sem SheetJS/D1 → testável.
  */
 export type { DfdItemParseado, DfdParseado, DfdSecao } from "./parse-dfd-comum.ts";
 
@@ -45,6 +48,9 @@ type ColMap = {
   valorTotal?: number;
 };
 
+/** Texto LIMPO de uma célula (`limparTexto`: tabs/quebras/NBSP viram um espaço; invisíveis somem). */
+const txt = (v: unknown): string => limparTexto(v);
+
 /** Primeira célula não-vazia da linha (para seções/rótulos). */
 function primeiraCelula(row: unknown[]): string {
   for (const c of row) {
@@ -54,7 +60,31 @@ function primeiraCelula(row: unknown[]): string {
   return "";
 }
 
-export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdParseado {
+// Nº do item na célula ITEM ("1", "01", "1.0", "1,0", "1." — texto formatado).
+const RE_NUMERO_ITEM = /^(\d{1,6})(?:[.,]0+)?\.?$/;
+
+/**
+ * CÓDIGO do item a partir da célula: o texto formatado só com os dígitos (preserva o ZERO À ESQUERDA de um formato
+ * "0000000000"); se a célula é NÚMERO e o texto veio em notação científica ("5.24194E+11") ou com casas decimais
+ * ("5241937263.00"), o código sai do valor inteiro cru (sem inventar dígitos). Puro.
+ */
+function codigoCelula(texto: unknown, cru: unknown): string | null {
+  const t = txt(texto);
+  if (typeof cru === "number" && Number.isInteger(cru) && cru >= 0 && !/^\d+$/.test(t)) {
+    return Number.isSafeInteger(cru) ? String(cru) : BigInt(cru).toString();
+  }
+  // Notação científica sem o valor cru: os dígitos exatos se perderam — sem código (nunca um código inventado).
+  if (/^\d+(?:[.,]\d+)?E[+-]?\d+$/i.test(t)) return null;
+  return codigoDoItem(t);
+}
+
+export function parseDfdFromMatriz(
+  aoa: unknown[][],
+  nomeArquivo: string,
+  // Valores CRUS das células (`sheet_to_json({raw:true})`, mesma forma da `aoa`): número vem como número — a
+  // quantidade/valor não depende do texto formatado ("1,000" do formato en-US virava 1). Ausente ⇒ só o texto.
+  valores?: unknown[][],
+): DfdParseado {
   // Células achatadas (regex de cabeçalho) e "linhas iniciais" (seções).
   const cells: string[] = [];
   const leadings: string[] = [];
@@ -95,32 +125,54 @@ export function parseDfdFromMatriz(aoa: unknown[][], nomeArquivo: string): DfdPa
   let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
   if (headerRow >= 0) {
     const col = (row: unknown[], i?: number) => (i == null ? null : row[i]);
+    const cru = (r: number, i?: number) => (i == null ? undefined : valores?.[r]?.[i]);
+    // Número da célula: o valor CRU quando é número (exato); senão o texto em pt-BR (`numeroDfd`).
+    const num = (r: number, row: unknown[], i?: number) => {
+      const v = cru(r, i);
+      return typeof v === "number" ? (Number.isFinite(v) ? v : null) : numeroDfd(col(row, i));
+    };
+    const numeroItem = (r: number, row: unknown[]): number | null => {
+      const v = cru(r, colMap.item);
+      if (typeof v === "number") return Number.isInteger(v) && v >= 0 ? v : null;
+      const m = txt(col(row, colMap.item)).match(RE_NUMERO_ITEM);
+      return m ? Number(m[1]) : null;
+    };
+    // Linhas da tabela: da 1ª após o cabeçalho até a linha que a encerra (TOTAL/apoio/seção). Uma linha SEM nº
+    // no MEIO da tabela (há item depois dela) NÃO a encerra — antes, todos os itens seguintes se perdiam.
+    const itemDepois: boolean[] = new Array(aoa.length + 1).fill(false);
+    for (let r = aoa.length - 1; r > headerRow; r--) itemDepois[r] = itemDepois[r + 1] || numeroItem(r, aoa[r] ?? []) != null;
     let fim = aoa.length;
     for (let r = headerRow + 1; r < aoa.length; r++) {
       const row = aoa[r] ?? [];
-      const vazia = row.every((c) => txt(c) === "");
-      if (vazia) continue;
-      const itemTxt = txt(col(row, colMap.item));
-      const ehItem = /^\d+(?:[.,]0+)?$/.test(itemTxt);
-      const codigo = txt(col(row, colMap.codigo)) || null;
-      const descricao = txt(col(row, colMap.descricao)) || null;
-      if (!ehItem || (!codigo && !descricao)) {
-        // linha "VALOR TOTAL" (grand total) → captura o total geral.
-        if (colMap.valorTotal != null && /VALOR TOTAL/.test(norm(row.map(txt).join(" ")))) {
-          valorTotalGrand = parseNumberBR(col(row, colMap.valorTotal));
-        }
-        fim = r;
-        break;
-      }
-      itens.push({
-        item: parseIntBR(itemTxt),
-        codigo,
-        descricao,
+      if (row.every((c) => txt(c) === "")) continue;
+      const n = numeroItem(r, row);
+      const codigo = codigoCelula(col(row, colMap.codigo), cru(r, colMap.codigo));
+      const descricao = limparDescricaoItem(col(row, colMap.descricao)) || null;
+      const campos = {
         unidade: txt(col(row, colMap.unidade)) || null,
-        quantidade: parseNumberBR(col(row, colMap.quantidade)),
-        valorUnitario: parseNumberBR(col(row, colMap.valorUnitario)),
-        valorTotal: parseNumberBR(col(row, colMap.valorTotal)),
-      });
+        quantidade: num(r, row, colMap.quantidade),
+        valorUnitario: num(r, row, colMap.valorUnitario),
+        valorTotal: num(r, row, colMap.valorTotal),
+      };
+      const temValor = campos.quantidade != null || campos.valorUnitario != null || campos.valorTotal != null;
+      if (n != null && (codigo || descricao || temValor)) {
+        itens.push({ item: n, codigo, descricao, ...campos });
+        continue;
+      }
+      if (n == null && itens.length > 0 && itemDepois[r + 1] && !txt(col(row, colMap.item)) && (codigo || descricao)) {
+        const anterior = itens[itens.length - 1];
+        // Só descrição = continuação da descrição do item anterior; com código/valores = item sem nº (nunca se
+        // mistura a outro).
+        if (!codigo && !temValor) anterior.descricao = limparDescricaoItem(`${anterior.descricao ?? ""} ${descricao ?? ""}`) || null;
+        else itens.push({ item: null, codigo, descricao, ...campos });
+        continue;
+      }
+      // linha "VALOR TOTAL" (grand total) → captura o total geral.
+      if (colMap.valorTotal != null && /VALOR TOTAL/.test(norm(row.map(txt).join(" ")))) {
+        valorTotalGrand = num(r, row, colMap.valorTotal);
+      }
+      fim = r;
+      break;
     }
     // Texto de apoio: linhas após a tabela até a próxima seção "N -" (pula total/ruído).
     const apoio: string[] = [];
