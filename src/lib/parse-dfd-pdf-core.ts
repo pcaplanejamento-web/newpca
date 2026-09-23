@@ -6,6 +6,7 @@ import {
   coletarSecoes,
   type DfdItemParseado,
   type DfdParseado,
+  ehRodapeNorm,
   ehRuido,
   extrairAssinaturas,
   extrairCabecalho,
@@ -630,11 +631,16 @@ function montarItem(n: number | null, col: Colunas): DfdItemParseado {
 function itensPelaGrade(corpo: TrechoCorpo[], grade: Grade<ColunaItem>, qtdNumeros: number): DfdItemParseado[] | null {
   type LinhaG = { page: number; idx: number; col: Colunas };
   const porChave = new Map<string, LinhaG>();
+  const x0 = grade.colunas[0].x0;
+  const x1 = grade.colunas[grade.colunas.length - 1].x1;
   for (const c of corpo) {
     const idx = linhaDe(grade, c.f.page, c.f.y);
     if (idx == null) return null;
     const key = colunaDe(grade, c.f.x);
-    if (key == null) continue; // fora das colunas (margem da página): não é dado de item
+    if (key == null) {
+      if (c.f.x >= x0 - 0.5 && c.f.x < x1 - 0.5) return null; // DENTRO da tabela sem coluna: a grade não o explica
+      continue; // margem da página: não é dado de item
+    }
     const chave = `${c.f.page}:${idx}`;
     let l = porChave.get(chave);
     if (!l) {
@@ -667,10 +673,10 @@ function itensPelaGrade(corpo: TrechoCorpo[], grade: Grade<ColunaItem>, qtdNumer
       cabeca = [];
       continue;
     }
-    if (l.col.codigo.length === 0 && l.col.descricao.length === 0) continue; // subtotal/soma: não é item
     const ehPrimeira = primeira.get(l.page) === l.idx;
     if (cabeca.length > 0 && ehPrimeira) cabeca.push(l); // meio de uma célula de 3+ páginas
     else if (ehPrimeira && itens.length > 0) itens[itens.length - 1].partes.push(l); // cauda da célula da pág. anterior
+    else if (l.col.codigo.length === 0 && l.col.descricao.length === 0) continue; // subtotal/soma no meio: não é item
     else if (ultima.get(l.page) === l.idx && (linhasG[i + 1]?.page ?? l.page) > l.page) cabeca = [l];
     else itens.push({ n: null, partes: [l] });
   }
@@ -727,12 +733,17 @@ function itensPelaGeometria(
     }
     return dist <= 20 ? melhor : null;
   };
+  // UNIDADE é CENTRALIZADA sob o rótulo: um trecho da descrição que começa depois de um TAB/marcador (à direita do
+  // ponto médio entre os rótulos, mas ainda dentro da célula da descrição) não vira unidade.
+  const centroUnidade = anchors.unidade != null && direitas.unidade != null ? (anchors.unidade + direitas.unidade) / 2 : null;
+  const meiaUnidade = centroUnidade != null ? (direitas.unidade as number) - centroUnidade : 0;
   const colOf = (f: PdfItem): ColunaItem => {
     let idx = 0;
     for (let i = 0; i < cols.length - 1; i++) if (f.x >= (cols[i].x + cols[i + 1].x) / 2) idx = i + 1;
     const c: ColunaItem = cols[idx]?.key ?? "descricao";
     // Entre o código e a descrição: dígitos (mesmo com espaço no meio) antes do início do texto = código.
     if (c === "codigo" || c === "descricao") return /^\d[\d\s]*$/.test(f.str) && f.x < descStartX ? "codigo" : "descricao";
+    if (c === "unidade" && centroUnidade != null && f.w != null && f.x + f.w / 2 < centroUnidade - meiaUnidade - 8) return "descricao";
     if (COLUNAS_VALOR.includes(c)) return colunaNumero(f) ?? c;
     return c;
   };
@@ -782,26 +793,59 @@ function itensPelaGeometria(
   if (entrelinha === 0) entrelinha = mediana(vaos);
   const LIM = entrelinha > 0 ? Math.max(entrelinha * 1.3, entrelinha + 2) : 12;
 
+  // Leiaute CENTRALIZADO (o do Centi: o nº fica no MEIO da célula) é o padrão; só vale "nº no topo" (outro emissor)
+  // com evidência FORTE (3+ itens com a 1ª linha NA ALTURA do nº e a seguinte logo abaixo, nenhum com descrição logo
+  // ACIMA) — uma linha em branco acima do nº num item isolado não vira o leiaute da tabela inteira.
+  let votoCentro = 0;
+  let votoTopo = 0;
+  for (const [page, g] of porPagina) {
+    const dys = descPorPagina.get(page) ?? [];
+    for (const a of g.ys) {
+      if (algumEntre(dys, a + 1, a + LIM)) votoCentro++;
+      else if (algumEntre(dys, a - 1, a + 1) && algumEntre(dys, a - LIM, a - 1)) votoTopo++;
+    }
+  }
+  const centrado = votoCentro > 0 || votoTopo < 3;
+
   // ── Fronteira do TOPO de cada página de continuação: acima do 1º nº há a CAUDA do item anterior e a CABEÇA do
-  // 1º item desta página (nº no meio); subindo do nº, a cabeça é contígua (vão ≤ LIM) e o 1º vão > LIM é a borda.
-  // Sem borda ⇒ o item anterior terminou na página anterior (tudo é cabeça). ──
+  // 1º item desta página (nº no meio). Subindo do nº, cada vão > LIM é uma borda possível; vale a que deixa o item
+  // SIMÉTRICO em volta do nº (célula centralizada — uma linha em branco na cabeça não vira borda) ou, sem simetria
+  // melhor, a 1ª. Sem borda ⇒ o item anterior terminou na página anterior (tudo é cabeça). ──
   const topCutPorPagina = new Map<number, number>();
   const topoPrimeiro = new Map<number, number>(); // y mais alto do 1º item da página (cabeça incluída)
   for (const [page, g] of porPagina) {
-    const acima = (descPorPagina.get(page) ?? []).filter((y) => y > g.topo).sort((x, y) => x - y); // ASC
+    const dys = descPorPagina.get(page) ?? [];
+    const acima = dys.filter((y) => y > g.topo).sort((x, y) => x - y); // ASC
+    const topoCom = (cut: number) => Math.max(g.topo, ...acima.filter((y) => y < cut));
     let topCut = Number.POSITIVE_INFINITY;
     if (g.first > 0) {
+      const bordas: number[] = [];
       let prev = g.topo;
       for (const y of acima) {
-        if (y - prev <= LIM) prev = y;
-        else {
-          topCut = y;
-          break;
+        if (y - prev > LIM) bordas.push(y);
+        prev = y;
+      }
+      if (bordas.length > 0) topCut = bordas[0];
+      if (bordas.length > 1 || (bordas.length === 1 && centrado)) {
+        // Base do 1º item: descendo do nº pelas linhas contíguas (antes do próximo nº da página).
+        let base = g.topo;
+        for (const y of dys.filter((y) => y < g.topo && (g.ys.length < 2 || y > g.ys[1]))) {
+          if (base - y > LIM) break;
+          base = y;
+        }
+        const alvo = 2 * g.topo - base; // topo previsto (simétrico em volta do nº)
+        let dist = Math.abs(topoCom(topCut) - alvo);
+        for (const b of [...bordas.slice(1), Number.POSITIVE_INFINITY]) {
+          const d = Math.abs(topoCom(b) - alvo);
+          if (centrado && d < dist) {
+            dist = d;
+            topCut = b;
+          }
         }
       }
       topCutPorPagina.set(page, topCut);
     }
-    topoPrimeiro.set(page, Math.max(g.topo, ...acima.filter((y) => y < topCut)));
+    topoPrimeiro.set(page, topoCom(topCut));
   }
 
   // ── Fronteiras (cuts) entre itens da MESMA página: numa borda (vão > LIM) entre as âncoras. Várias bordas
@@ -809,10 +853,6 @@ function itensPelaGeometria(
   // nenhuma ⇒ a posição simétrica (centralizado) ou o ponto médio das âncoras. ──
   type Faixa = { seq: number[]; cands: number[] };
   const faixas = new Map<number, Faixa[]>();
-  // Leiaute CENTRALIZADO (o do Centi: o nº fica no MEIO da célula) é o padrão; só vale "nº no topo" (outro emissor)
-  // com evidência: itens com a 1ª linha NA ALTURA do nº e a seguinte logo abaixo, e nenhum com descrição logo ACIMA.
-  let votoCentro = 0;
-  let votoTopo = 0;
   for (const [page, g] of porPagina) {
     const dys = descPorPagina.get(page) ?? [];
     const lista: Faixa[] = [];
@@ -829,12 +869,7 @@ function itensPelaGeometria(
       lista.push({ seq, cands });
     }
     faixas.set(page, lista);
-    for (const a of g.ys) {
-      if (algumEntre(dys, a + 1, a + LIM)) votoCentro++;
-      else if (algumEntre(dys, a - 1, a + 1) && algumEntre(dys, a - LIM, a - 1)) votoTopo++;
-    }
   }
-  const centrado = votoCentro > 0 || votoTopo === 0;
   const cutsPorPagina = new Map<number, number[]>();
   for (const [page, g] of porPagina) {
     const cuts: number[] = [];
@@ -883,20 +918,15 @@ function itensPelaGeometria(
     else b = g.bi[nearestByY(g.ys, y)]; // código/unidade/valores: na âncora
     if (b != null) buckets[b][col].push(c);
   }
+  // Código/unidade/valores ficam na ÂNCORA (meio da célula; quebrados em 2–3 linhas, a até ±1 entrelinha do nº): na
+  // mesma página valem TODAS as linhas até o raio (as partes de um valor quebrado se juntam, qualquer que seja a mais
+  // perto do nº) e nenhuma além (um número solto longe — um total sem rótulo — não se junta ao do item). O que veio
+  // da página vizinha (célula que virou a página) fica.
+  const RAIO = Math.max(1.2 * entrelinha, 9);
+  const naAncora: ColunaItem[] = ["codigo", "unidade", ...COLUNAS_VALOR];
   return nums.map((n, i) => {
     const col = buckets[i];
-    // Valores: a linha MAIS PERTO do nº (+ a linha seguinte da coluna, se o número quebrou no separador) — um
-    // valor solto que caiu no item (ex.: total geral numa linha própria) não se junta ao valor do item.
-    for (const k of COLUNAS_VALOR) {
-      if (col[k].length === 0) continue;
-      const ks = [...new Set(col[k].map((c) => c.k))].sort((a, b) => a - b);
-      const perto = [...ks].sort((a, b) => Math.abs(linhas[a].y - n.y) - Math.abs(linhas[b].y - n.y) || a - b)[0];
-      const manter = new Set([perto]);
-      const texto0 = col[k].filter((c) => c.k === perto).sort(ordemLeitura).map((c) => c.f.str).join("");
-      const seguinte = ks[ks.indexOf(perto) + 1];
-      if (/[.,]$/.test(texto0) && seguinte != null) manter.add(seguinte);
-      col[k] = col[k].filter((c) => manter.has(c.k));
-    }
+    for (const k of naAncora) col[k] = col[k].filter((c) => c.f.page !== n.page || Math.abs(yDe(c) - n.y) <= RAIO);
     return montarItem(n.n, col);
   });
 }
@@ -961,12 +991,26 @@ export function lerTabelaItens(
   // TOTAL GERAL: o rótulo ("VALOR TOTAL") é um trecho próprio NA ÁREA DOS VALORES — "…o valor total…" dentro da
   // descrição não é o total (antes a linha inteira da descrição sumia).
   const ehLinhaTotal = (l: PdfLine) => l.items.some((i) => i.x >= colValoresX && ROTULOS_TOTAL.has(norm(i.str)));
+  // Valor do TOTAL quebrado em 2 linhas (≥ R$ 10 milhões não cabe na célula): as partes ficam ACIMA e ABAIXO do rótulo,
+  // centradas na célula mesclada do total (±½ entrelinha). Uma linha só com NÚMEROS na coluna VALOR TOTAL a até 6pt
+  // do rótulo (mesma página) é PARTE DO TOTAL — nunca corpo de item (a grade deixava de explicar o corpo e o total
+  // perdia as casas).
+  const linhasTotal = linhas.flatMap((l, k) => (k > hi && ehLinhaTotal(l) ? [{ page: l.page, y: l.y, k }] : []));
+  const totalDaParte = (l: PdfLine, k: number): number | undefined =>
+    l.items.every((i) => naColunaValorTotal(i) && /^[\d.,]+$/.test(i.str))
+      ? linhasTotal.find((t) => t.page === l.page && t.k !== k && Math.abs(t.y - l.y) <= 6)?.k
+      : undefined;
 
   const varrer = (centrado: boolean) => {
     const corpo: TrechoCorpo[] = [];
     const numeros: NumeroItem[] = [];
     const apoioLinhas: string[] = [];
-    let valorTotal: number | null = null;
+    const partesTotal = new Map<number, TrechoCorpo[]>(); // linha do rótulo do total → trechos do valor (em ordem)
+    const parteDoTotal = (kTotal: number, fs: PdfItem[], k: number) => {
+      const lista = partesTotal.get(kTotal) ?? [];
+      for (const f of fs) lista.push({ f, k });
+      partesTotal.set(kTotal, lista);
+    };
     let fimTabela = false; // após a última linha de item vem o texto de apoio
     let fim = linhas.length;
     // Páginas cujo CABEÇALHO DE COLUNA já apareceu — acima dele (por página) fica o CABEÇALHO DO DOCUMENTO repetido
@@ -995,12 +1039,17 @@ export function lerTabelaItens(
         continue;
       }
       if (!viuColuna.has(l.page)) continue; // cabeçalho do documento (antes do cabeçalho de coluna desta página)
-      // Rodapé (Centi/Emitido/Página) e afins: à MARGEM e sem nº — uma descrição que começa com "CENTÍMETROS…" fica.
-      if (!mNum && minx < itemBound && ehRuido(joined)) continue;
-      // Linha do TOTAL GERAL — captura, mas NÃO encerra.
+      // Rodapé do Centi pela FORMA (em qualquer posição: um pedaço do rodapé numa linha de base própria, longe da
+      // margem, também é rodapé) e demais ruídos à MARGEM — sem nº; "CENTÍMETROS…" na descrição fica.
+      if (!mNum && (ehRodapeNorm(joined) || (minx < itemBound && ehRuido(joined)))) continue;
+      // Linha do TOTAL GERAL (e as partes do valor quebrado) — captura, mas NÃO encerra.
       if (!mNum && ehLinhaTotal(l)) {
-        const v = l.items.filter((i) => naColunaValorTotal(i) && /\d/.test(i.str)).sort((a, b) => a.x - b.x);
-        if (v.length > 0) valorTotal = numeroDfd(v.map((i) => i.str).join(""));
+        parteDoTotal(k, l.items.filter((i) => naColunaValorTotal(i) && /\d/.test(i.str)), k);
+        continue;
+      }
+      const kTotal = mNum ? undefined : totalDaParte(l, k);
+      if (kTotal != null) {
+        parteDoTotal(kTotal, l.items, k);
         continue;
       }
       // Texto de apoio: prosa À MARGEM (sem nº de item) DEPOIS da tabela.
@@ -1013,14 +1062,35 @@ export function lerTabelaItens(
       if (mNum) numeros.push({ page: l.page, y: l.y, n: Number(mNum[1]), fr: frNum });
       for (const f of l.items) corpo.push({ f, k });
     }
+    // O ÚLTIMO total com valor vale; as partes (acima → rótulo → abaixo) juntam SEM espaço antes de converter.
+    const comValor = [...partesTotal.entries()].filter(([, ps]) => ps.length > 0);
+    const partes = comValor.length > 0 ? comValor[comValor.length - 1][1] : [];
+    const valorTotal = partes.length > 0 ? numeroDfd([...partes].sort(ordemLeitura).map((c) => c.f.str).join("")) : null;
     return { corpo, numeros, apoioLinhas, valorTotal, fim };
   };
-  // Nº CENTRADO sob o rótulo "ITEM" (o Centi); se nenhum aparece assim (outro emissor alinha diferente), vale
-  // qualquer nº na coluna ITEM — nunca "nenhum item" por causa do alinhamento.
+  // Nº CENTRADO sob o rótulo "ITEM" (o Centi); se nenhum aparece assim (outro emissor alinha diferente) — ou a grade
+  // desenhada só explica o corpo contando os nº NÃO centrados (nº alinhado à esquerda: "1" falhava e "12" passava) —
+  // vale qualquer nº na coluna ITEM. A grade valida a escolha: um "12" solto do apoio fica fora das linhas dela.
   let varredura = varrer(true);
-  if (varredura.numeros.length === 0) varredura = varrer(false);
+  let pelaGrade = grade ? itensPelaGrade(varredura.corpo, grade, varredura.numeros.length) : null;
+  if (varredura.numeros.length === 0 || (grade && !pelaGrade)) {
+    const livre = varrer(false);
+    const livreGrade = grade ? itensPelaGrade(livre.corpo, grade, livre.numeros.length) : null;
+    if (varredura.numeros.length === 0 || livreGrade) {
+      varredura = livre;
+      pelaGrade = livreGrade;
+    }
+  } else if (!grade) {
+    // Sem grade: a varredura LIVRE vale se acha MAIS nº, em ordem crescente, e os a mais aparecem ANTES do último
+    // centrado (nº alinhado à esquerda) — não só um nº solto DEPOIS dele (o "12" de "12 MESES." no apoio).
+    const livre = varrer(false);
+    const ns = livre.numeros.map((n) => n.n);
+    const ult = varredura.numeros[varredura.numeros.length - 1];
+    const centrados = new Set(varredura.numeros.map((n) => `${n.page}:${n.y}`));
+    const extraAntes = livre.numeros.some((n) => !centrados.has(`${n.page}:${n.y}`) && (n.page < ult.page || (n.page === ult.page && n.y > ult.y)));
+    if (ns.length > varredura.numeros.length && extraAntes && ns.every((v, i) => i === 0 || v > ns[i - 1])) varredura = livre;
+  }
   const { corpo, numeros, apoioLinhas, valorTotal, fim } = varredura;
-  const pelaGrade = grade ? itensPelaGrade(corpo, grade, numeros.length) : null;
   return {
     itens: pelaGrade ?? itensPelaGeometria(corpo, numeros, linhas, anchors, direitas),
     valorTotal,

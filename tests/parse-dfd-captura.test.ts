@@ -304,6 +304,67 @@ describe("célula que atravessa a página (grade) e código que vira a página (
     );
   });
 
+  it("TOTAL ≥ R$ 10 mi QUEBRADO em 2 linhas: a grade segue valendo e o total/valores saem completos", () => {
+    const grande: ItemCenti = { n: "2", codigo: ["524194727", "0"], desc: ["PAINEL DE LED", "OUTDOOR"], qtd: ["1,0000"], vu: ["14.814.814,", "6944"], vt: ["14.814.814,", "6944"] };
+    for (const semGrade of [false, true]) {
+      const d = dfdCenti([curto(1), grande, curto(3)], { total: "14.814.834,6944", semGrade });
+      // O Centi quebra o total na célula mesclada: uma parte ACIMA e outra ABAIXO do rótulo (±½ entrelinha).
+      const tot = d.items.find((i) => i.str === "14.814.834,6944") as PdfItem;
+      d.items.splice(d.items.indexOf(tot), 1, t(tot.page, 517.9, tot.y + 4.05, "14.814.834,", 39.6), t(tot.page, 543.1, tot.y - 4.05, "6944", 14.4));
+      // A parte de BAIXO do valor do item fica 0,02pt mais perto do nº (assimetria real do Centi).
+      for (const f of d.items) if (f.str === "6944" && f.y > 400) f.y += 0.02;
+      if (!semGrade) assert.equal(viaGrade(d.items, d.tracos), true);
+      const r = parseDfdFromPdfItems(d.items, "x.pdf", [], d.tracos);
+      const i2 = r.itens.find((i) => i.item === 2);
+      assert.equal(i2?.valorUnitario, 14814814.6944, semGrade ? "texto" : "grade");
+      assert.equal(i2?.valorTotal, 14814814.6944);
+      assert.equal(i2?.codigo, "5241947270");
+      assert.equal(r.valorTotal, 14814834.6944);
+    }
+  });
+
+  it("GRADE: um risquinho vertical (carimbo achatado) no cabeçalho não vira borda de coluna nem apaga texto", () => {
+    const x: ItemCenti = { n: "2", codigo: ["5241900002"], desc: ["LUMINÁRIA LED PARA ÁREA EXTERNA,", ["COMPATÍVEL", "• IP65 E IK08"], "GARANTIA DE 5 ANOS."] };
+    const d = dfdCenti([curto(1), x, curto(3)]);
+    const f = d.items.find((i) => i.str === "• IP65 E IK08") as PdfItem;
+    f.x = 260; // 2º trecho de uma linha partida por TAB, dentro da célula da descrição
+    d.tracos.push({ page: 1, o: "v", c: 250, a: 488.6, b: 489.4 }); // traço de 0,8pt sobre o cabeçalho
+    assert.equal(viaGrade(d.items, d.tracos), true);
+    const r = parseDfdFromPdfItems(d.items, "x.pdf", [], d.tracos);
+    assert.equal(r.itens.find((i) => i.item === 2)?.descricao, "LUMINÁRIA LED PARA ÁREA EXTERNA, COMPATÍVEL IP65 E IK08 GARANTIA DE 5 ANOS.");
+  });
+
+  it("rodapé do Centi numa linha de base própria, longe da margem, é rodapé (não gruda no último item da página)", () => {
+    const itens = Array.from({ length: 40 }, (_, i) => curto(i + 1));
+    for (const semGrade of [false, true]) {
+      const d = dfdCenti(itens, { semGrade });
+      for (const f of d.items) if (/^Emitido em/.test(f.str)) f.y = 12.5;
+      if (!semGrade) assert.equal(viaGrade(d.items, d.tracos), true);
+      const r = parseDfdFromPdfItems(d.items, "x.pdf", [], d.tracos);
+      assert.equal(r.itens.length, 40);
+      assert.ok(r.itens.every((i, k) => i.descricao === `ITEM CURTO NÚMERO ${k + 1}`));
+    }
+  });
+
+  it("GEOMETRIA: trecho da descrição depois de um TAB, à direita do meio entre os rótulos, continua descrição (não unidade)", () => {
+    const x: ItemCenti = { n: "2", codigo: ["5241900002"], desc: ["LUMINÁRIA LED PARA ÁREA EXTERNA,", ["COMPATÍVEL COM AMBIENTE EXTERNO E", "• IP65"], "GARANTIA DE 5 ANOS."] };
+    const d = dfdCenti([curto(1), x, curto(3)], { semGrade: true });
+    const f = d.items.find((i) => i.str === "• IP65") as PdfItem;
+    f.x = 275.7;
+    const r = parseDfdFromPdfItems(d.items, "x.pdf");
+    const i2 = r.itens.find((i) => i.item === 2);
+    assert.equal(i2?.descricao, "LUMINÁRIA LED PARA ÁREA EXTERNA, COMPATÍVEL COM AMBIENTE EXTERNO E IP65 GARANTIA DE 5 ANOS.");
+    assert.equal(i2?.unidade, "UNIDADE");
+  });
+
+  it("linha em BRANCO na cabeça do 1º item de uma página de continuação não vira borda (nas duas vias)", () => {
+    const itens = [...Array.from({ length: 30 }, (_, i) => curto(i + 1)), { n: "31", codigo: ["5241900031"], desc: ["CABECA 1", "", "MEIO 3", "MEIO 4", "FIM 5"] }, curto(32)];
+    for (const d of lerNasDuasVias(itens)) {
+      assert.equal(d.itens.find((i) => i.item === 30)?.descricao, "ITEM CURTO NÚMERO 30");
+      assert.equal(d.itens.find((i) => i.item === 31)?.descricao, "CABECA 1 MEIO 3 MEIO 4 FIM 5");
+    }
+  });
+
   it("grade que NÃO explica a tabela (borda faltando: 2 nºs numa célula) → cai na geometria do texto, sem perder nada", () => {
     const g = dfdCenti([curto(1), curto(2), curto(3)]);
     // Tira a borda entre os itens 1 e 2 (e as divisórias): os dois nºs ficam na mesma "linha" da grade.

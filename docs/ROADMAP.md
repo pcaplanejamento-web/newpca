@@ -39,6 +39,11 @@ esquerda preservado**. ✅ **Valores/unidade quebrados em 2 linhas juntados** an
 notação científica, linha de continuação sem nº não encerra a tabela. Validado no `pd101820` real (15/15 DFDs pela
 grade, 72 itens idênticos ao anterior); o cenário do print falhava no leitor antigo (perdia o "0" do código, vazava a
 descrição para o item 20 e apagava "O VALOR TOTAL…") e agora sai exato nas duas vias; 5.000 itens em ~0,3 s.
+✅ **Auditoria da captura (2ª rodada):** total ≥ R$ 10 mi quebrado em 2 linhas lido inteiro e SEM derrubar a grade (antes
+o DFD caía na leitura por texto e o valor do item podia virar "4"); rodapé do Centi reconhecido pela forma em qualquer
+posição; risquinho de carimbo no cabeçalho e desenho de anotação não viram borda; na leitura sem grade, valor quebrado
+completo, unidade só centrada sob o rótulo, linha em branco não corta o item; célula com DOIS números fica vazia para
+conferência (nunca "100200"); caracteres de fonte Symbol/Wingdings e Windows-1252 tratados sem inventar letras.
 
 ### Correção: protocolação e "mover DFD de protocolo" (lote do D1) — entregue
 ✅ O rastro entre protocolos rodava `db.run(sql…)` COM parâmetros dentro de `db.batch` — no driver D1 do Drizzle isso quebra

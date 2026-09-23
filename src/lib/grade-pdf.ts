@@ -25,6 +25,9 @@ export type OpsGrade = {
   paintFormXObjectEnd: number;
   constructPath: number;
   endPath: number;
+  /** Aparência de ANOTAÇÃO (assinatura, carimbo, campo): desenho próprio, fora da tabela — os traços dela são ignorados. */
+  beginAnnotation?: number;
+  endAnnotation?: number;
 };
 
 export type ColunaGrade<K extends string = string> = { key: K; x0: number; x1: number };
@@ -56,13 +59,15 @@ const ehMatriz = (m: unknown): m is ArrayLike<number> =>
 
 /**
  * Traços RETOS desenhados numa página, a partir do operator list do pdf.js (`fnArray`/`argsArray`), rastreando a
- * CTM (save/restore/transform + a matriz dos Form XObjects). Curvas e caminhos só de recorte (clip) ficam de
- * fora. Retângulos viram as 4 bordas. Puro.
+ * CTM (save/restore/transform + a matriz dos Form XObjects). Curvas, caminhos só de recorte (clip) e o desenho
+ * das ANOTAÇÕES (aparência de assinatura/carimbo — outra matriz, fora da tabela) ficam de fora. Retângulos viram
+ * as 4 bordas. Puro.
  */
 export function tracosDaOpList(fnArray: ArrayLike<number>, argsArray: ArrayLike<unknown>, ops: OpsGrade, page: number): PdfTraco[] {
   let ctm: Matriz = [1, 0, 0, 1, 0, 0];
   const pilha: Matriz[] = [];
   const out: PdfTraco[] = [];
+  let anotacao = 0; // profundidade dentro de beginAnnotation … endAnnotation
   const ponto = (x: number, y: number): [number, number] => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]];
   const segmento = (p: [number, number], q: [number, number]) => {
     const dx = Math.abs(p[0] - q[0]);
@@ -82,7 +87,9 @@ export function tracosDaOpList(fnArray: ArrayLike<number>, argsArray: ArrayLike<
       const m = (args as unknown[] | undefined)?.[0];
       if (ehMatriz(m)) ctm = mul(ctm, Array.from(m));
     } else if (f === ops.paintFormXObjectEnd) ctm = pilha.pop() ?? ctm;
-    else if (f === ops.constructPath) {
+    else if (ops.beginAnnotation != null && f === ops.beginAnnotation) anotacao++;
+    else if (ops.endAnnotation != null && f === ops.endAnnotation) anotacao = Math.max(0, anotacao - 1);
+    else if (f === ops.constructPath && anotacao === 0) {
       // pdf.js ≥ 5: [operador de pintura, [Float32Array do caminho], minMax]; comandos 0 moveTo · 1 lineTo ·
       // 2 curveTo (6 números) · 3 quadraticCurveTo (4) · 4 closePath.
       const [pintura, buf] = (args ?? []) as [number, (ArrayLike<number> | null)[] | undefined];
@@ -164,7 +171,11 @@ export function montarGrade<K extends string>(
   const pagCab = rotulos[0].page;
   const yLo = Math.min(...rotulos.map((r) => r.y)) - 2;
   const yHi = Math.max(...rotulos.map((r) => r.y)) + 6;
-  const xs = agruparTracos(tracos.filter((t) => t.page === pagCab && t.o === "v" && t.a <= yHi && t.b >= yLo)).map((g) => g.c);
+  // Bordas verticais do CABEÇALHO: só as que cobrem a faixa dos rótulos — um risquinho (carimbo/logotipo achatado)
+  // que só encosta nela não vira borda de coluna (senão abria um vão entre colunas e sumia texto da descrição).
+  const xs = agruparTracos(tracos.filter((t) => t.page === pagCab && t.o === "v" && t.a <= yHi && t.b >= yLo))
+    .filter((g) => cobertura(g.ts, yLo, yHi) >= COBERTURA)
+    .map((g) => g.c);
   if (xs.length < 2) return null;
   const colunas: ColunaGrade<K>[] = [];
   for (const r of rotulos) {

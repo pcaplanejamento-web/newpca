@@ -325,17 +325,25 @@ export function buscar(linhas: string[], re: RegExp): string | null {
   return null;
 }
 
+/**
+ * RODAPÉ do Centi pela FORMA ("Centi ® e-Assinatura: …", "Emitido em dd/mm/aaaa …", "Emitido por usuario",
+ * "Página N de M"), sobre o texto já `norm`alizado — só o prefixo derrubava linhas legítimas ("CENTÍMETROS DE
+ * ALTURA", "PÁGINAS…", "EMITIDO EM DUAS VIAS"). Puro.
+ */
+export function ehRodapeNorm(n: string): boolean {
+  return (
+    /^CENTI\b/.test(n) ||
+    /^EMITIDO EM:?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/.test(n) || // "Emitido em[:] 30/06/2026 …" (com a DATA)
+    /^EMITIDO POR:?\s*(?:[\w.@-]*[._@\d][\w.@-]*(?:\s|$)|[\w.@-]+$)/.test(n) || // "Emitido por fernanda.mello …" / "… admin"
+    /^PAGINA \d+(?:\s*(?:DE|\/)\s*\d+)?$/.test(n) // "Página 1 de 2" / "Página 1/2" / "Página 2" (a linha INTEIRA)
+  );
+}
+
 /** Ruído de cabeçalho/rodapé repetido nas quebras de página (não é conteúdo). */
 export function ehRuido(s: string): boolean {
   const n = norm(s);
   return (
-    // Rodapé do Centi ("Centi ® e-Assinatura: … Emitido em dd/mm/aaaa … Página N de M"). Casados com a FORMA
-    // do rodapé — só o prefixo derrubava linhas legítimas ("CENTÍMETROS DE ALTURA", "PÁGINAS…", "EMITIDO EM
-    // DUAS VIAS").
-    /^CENTI\b/.test(n) ||
-    /^EMITIDO EM:?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/.test(n) || // "Emitido em[:] 30/06/2026 …" (com a DATA)
-    /^EMITIDO POR:?\s*(?:[\w.@-]*[._@\d][\w.@-]*(?:\s|$)|[\w.@-]+$)/.test(n) || // "Emitido por fernanda.mello …" / "… admin"
-    /^PAGINA \d+(?:\s*(?:DE|\/)\s*\d+)?$/.test(n) || // "Página 1 de 2" / "Página 1/2" / "Página 2" (a linha INTEIRA)
+    ehRodapeNorm(n) ||
     n === "ESTADO DE GOIAS" ||
     n === "PREFEITURA MUNICIPAL DE RIO VERDE" ||
     n.startsWith("DOCUMENTO DE FORMALIZACAO") ||

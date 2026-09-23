@@ -69,8 +69,10 @@ export const LOGICAS: LogicaRef[] = [
     detalhes: [
       "Código = só os dígitos, na ordem: o código quebrado em 2 linhas (\"524194727\" + \"0\") vira 5241947270; zero à esquerda preservado.",
       "Descrição sem marcadores de lista (•, ▪, ➢, ✓…), TAB, espaço duro e caracteres invisíveis; ², °, ®, § ficam.",
-      "Unidade e valores quebrados em 2 linhas são juntados antes de converter; \"1.000\" é mil.",
-      "Uma linha da descrição que cita o rodapé, o total ou o cabeçalho (\"CENTÍMETROS…\", \"O VALOR TOTAL…\") não some.",
+      "Unidade e valores quebrados em 2 linhas são juntados antes de converter; \"1.000\" é mil; uma célula com dois números (\"100 200\") fica vazia para conferência — nunca um valor inventado.",
+      "O total acima de R$ 10 milhões, que o Centi quebra em 2 linhas, é lido inteiro (sem desligar a leitura pela grade).",
+      "Uma linha da descrição que cita o rodapé, o total ou o cabeçalho (\"CENTÍMETROS…\", \"O VALOR TOTAL…\") não some; o rodapé do Centi sai em qualquer posição.",
+      "Símbolo de fonte Symbol/Wingdings: ±, ≥, °, µ… voltam ao caractere real; marcadores de lista (⧫, ●, ❖, ➢, ✓) saem da descrição.",
     ],
     fonte: "grade-pdf / parse-dfd-pdf-core / parse-dfd-comum",
     tecnico: true,

@@ -41,6 +41,17 @@ describe("tracosDaOpList (traços retos do operator list, com a CTM)", () => {
     ]);
   });
 
+  it("desenho de ANOTAÇÃO (aparência de assinatura/carimbo) fica de fora — só com os códigos informados", () => {
+    const ops = { ...OPS, beginAnnotation: 10, endAnnotation: 11 };
+    const linha = [OPS.stroke, caminho(0, 0, 0, 1, 10, 0), null];
+    const fn = [ops.constructPath, ops.beginAnnotation, ops.constructPath, ops.endAnnotation, ops.constructPath];
+    const args = [linha, null, [OPS.stroke, caminho(0, 0, 50, 1, 90, 50), null], null, [OPS.stroke, caminho(0, 0, 70, 1, 30, 70), null]];
+    assert.deepEqual(tracosDaOpList(fn, args, ops, 1), [
+      { page: 1, o: "h", c: 0, a: 0, b: 10 },
+      { page: 1, o: "h", c: 70, a: 0, b: 30 },
+    ]);
+  });
+
   it("caminho vazio/sem dados e comando desconhecido não quebram (nunca lê lixo)", () => {
     const fn = [OPS.constructPath, OPS.constructPath, OPS.constructPath];
     const args = [[OPS.stroke, [null], null], [OPS.stroke, undefined, null], [OPS.stroke, caminho(0, 0, 0, 1, 10, 0, 99, 1, 2), null]];

@@ -430,34 +430,52 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Captura dos ITENS — o PADRÃO DEFINITIVO do DFD (crítico; "é proibido errar a captura"):**
   - **GRADE DESENHADA (`src/lib/grade-pdf.ts`, puro):** o PDF do Centi desenha **cada célula** da tabela como um
     retângulo (borda + zebra). `PdfDoc.pageRender(p)` (o MESMO `getOperatorList` do texto renderizado) devolve os
-    **traços retos** da página (`tracosDaOpList`, rastreando a CTM/Form XObject; clip e curvas fora); `montarGrade`
-    tira as **COLUNAS** das bordas verticais em volta de cada RÓTULO do cabeçalho e, por página, as **LINHAS** da tabela
+    **traços retos** da página (`tracosDaOpList`, rastreando a CTM/Form XObject; clip, curvas e o desenho das
+    ANOTAÇÕES — aparência de assinatura/carimbo — fora); `montarGrade` tira as **COLUNAS** das bordas verticais em volta
+    de cada RÓTULO do cabeçalho (só as que COBREM a faixa dos rótulos — um risquinho de carimbo achatado não vira borda)
+    e, por página, as **LINHAS** da tabela
     (bordas horizontais que cobrem ITEM e DESCRIÇÃO, fechadas pelas divisórias — exclui cabeçalho do documento, rodapé,
     total mesclado e quadros das seções). `itensPelaGrade` põe cada trecho na **célula exata** (linha × coluna): uma
     linha = um item; célula que ATRAVESSA a página junta as partes (sem nº no topo da página = cauda do anterior; sem
     nº no fim = cabeça do item cujo nº está na página seguinte); linha sem nº/código/descrição (subtotal) não é item;
+    linha só com unidade/valores no TOPO da página = cauda (valor que virou a página);
     linha sem nº no meio da página vira item próprio (`item: null`, nunca mistura). **Validações** → se a grade não
-    explica o corpo (trecho fora das linhas, nº em 2 linhas = borda faltando, nº de itens ≠ do texto), cai na
+    explica o corpo (trecho fora das linhas ou DENTRO da tabela sem coluna, nº em 2 linhas = borda faltando, nº de
+    itens ≠ do texto), cai na
     **geometria do texto** (acima). `parseDfdFromPdfItems(items, nome, render, tracos)` — `lerTabelaItens` expõe `viaGrade`.
     Validado no `pd101820` real: **15/15 DFDs pela grade, 72 itens idênticos**.
   - **Varredura precisa (`lerTabelaItens`):** cabeçalho de coluna = trecho EXATO "ITEM" + QUANTIDADE/QTD (uma descrição
     que cita "item … quantidade" não some); **TOTAL GERAL** = rótulo próprio na ÁREA DOS VALORES ("…o valor total…" na
-    descrição fica); **rodapé** só à margem e sem nº, e `ehRuido` casa a FORMA do rodapé (`/^CENTI\b/`, "Emitido em
-    dd/…", "Página N de M") — "CENTÍMETROS…", "PÁGINA 3 DO…", "EMITIDO EM DUAS VIAS" ficam; **apoio** só à MARGEM;
+    descrição fica) — o VALOR do total ≥ R$ 10 mi QUEBRA em 2 linhas na célula mesclada (uma parte acima e outra abaixo
+    do rótulo, ±½ entrelinha): linha só com números na coluna VALOR TOTAL a até 6pt do rótulo = PARTE DO TOTAL (juntas
+    antes de converter; antes o pedaço caía no corpo, a grade era descartada e o total perdia as casas); **rodapé** pela
+    FORMA em qualquer posição (`ehRodapeNorm`: `/^CENTI\b/`, "Emitido em[:] dd/…", "Emitido por usuario", "Página N de
+    M"/"N/M") e os demais ruídos só à margem, sempre sem nº — "CENTÍMETROS…", "PÁGINA 3 DO…", "EMITIDO EM DUAS VIAS"
+    ficam; **apoio** só à MARGEM;
     cabeçalho de coluna repetido DEPOIS de um "apoio" = a tabela continua (era rodapé não reconhecido — não perde
     itens); **nº do item** CENTRADO sob o rótulo "ITEM" (o "12" de "12 MESES." à margem não vira item; pedaços "1"+"2" =
-    12; "1."/"01" valem; sem nenhum nº assim, qualquer nº da coluna ITEM — outro emissor).
+    12; "1."/"01" valem; sem nenhum nº assim — ou quando só a varredura LIVRE deixa a GRADE explicar o corpo (nº
+    alinhado à esquerda: "1" falhava e "12" passava), ou, sem grade, quando ela acha MAIS nº em ordem crescente e não só
+    um nº solto depois do último — qualquer nº da coluna ITEM, de outro emissor).
   - **Montagem (`montarItem`):** **CÓDIGO = só os dígitos, na ordem** (`codigoDoItem`: "524194727" ⏎ "0" =
     "5241947270", TAB/espaço/pontuação no meio somem, **zero à esquerda preservado**, NFKC); **DESCRIÇÃO limpa**
     (`limparDescricaoItem`: sem marcadores de lista •/‣/▪/➢/✓/◆… nem o do Word em fonte Symbol, sem TAB/NBSP/largura
     zero; ficam ², °, ®, §, →); **UNIDADE** com as linhas juntas ("SERVIÇO MENSAL"); **VALORES** com os pedaços juntos
     ANTES de converter ("1.234.567," ⏎ "8912" = 1.234.567,8912 — antes perdia as casas) por **`numeroDfd`** (pt-BR;
-    "1.000" só com ponto = MIL). No fallback, número alinhado à direita vai p/ a coluna do rótulo cuja borda DIREITA
-    está mais perto (um pedaço curto não cruza o ponto médio) e o valor é a linha mais perto do nº (+ a continuação).
+    "1.000" só com ponto = MIL; a célula tem de trazer UM número — "100 M3" = 100, mas "100 200"/"10-20" = ambíguo ⇒
+    `null`, pendência visível, nunca valor inventado). No fallback (sem grade): número alinhado à direita vai p/ a coluna
+    do rótulo cuja borda DIREITA está mais perto; a UNIDADE só vale CENTRADA sob o rótulo (trecho da descrição depois
+    de um TAB não vira unidade); código/unidade/valores = TODAS as linhas na ÂNCORA do nº (raio ≈ 1,2 entrelinha — as
+    duas partes de um valor quebrado, qualquer que seja a mais perto; um nº solto longe não entra); "nº no topo da
+    célula" só com 3+ votos; o topo da página de continuação escolhe a borda que deixa o 1º item SIMÉTRICO (linha em
+    branco na cabeça não vira borda).
   - **Texto limpo em TODA captura (`limparTexto`, `normalize.ts`):** `normalizar` (PDF) e as células do `.xlsx` —
-    tira controles/Cf (largura zero, hífen suave, BOM, bidi)/U+FFFD; TAB/NBSP/quebras/espaços Unicode = 1 espaço; NFC
-    (acento composto); caractere de uso privado (marcador Symbol/Wingdings, que a tela mostrava como quadrado) = "•".
-    Atalho p/ texto Latin-1 comum (desempenho).
+    tira controles/Cf (largura zero, hífen suave, BOM, bidi)/U+FFFD; TAB/NBSP/NEL/quebras/espaços Unicode = 1 espaço;
+    NFC (acento composto); Windows-1252 lido como Latin-1 volta só à PONTUAÇÃO (– — “ ” ‘ ’ • … € ™ — letras
+    estrangeiras Š/Œ/Ÿ/ƒ do 1252 somem: lixo, não conteúdo); caractere de USO PRIVADO (fonte Symbol/Wingdings sem mapa
+    Unicode, que a tela mostrava como quadrado): o MESMO código é símbolo na Symbol e marcador na Wingdings — volta ao real
+    só o que não colide com marcador (± ≥ ≤ ° × ÷ ≠ ≈ √ ′ ″ Δ Ω α β δ ε φ γ e setas; "µ" só antes de unidade: µm, µF);
+    o resto (⧫ ● ■ ❖ ➢ ✓ ▪…) e os desconhecidos = "•" (sai da descrição). Atalho p/ texto Latin-1 comum (desempenho).
   - **`.xlsx`:** números pelo **valor CRU** da célula (o texto de "#,##0" sai "1,000" em en-US — era lido como 1);
     código pelo texto formatado (zeros à esquerda) ou pelo inteiro cru quando o texto veio em notação científica
     ("5.24195E+11" virava "52419511"; sem o cru ⇒ `null`, nunca inventa); linha SEM nº no MEIO da tabela não a encerra
@@ -465,7 +483,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Testes:** `tests/fixtures/dfd-centi.ts` (gerador no LEIAUTE EXATO do Centi — texto + grade), `parse-dfd-captura`
     (o PRINT: código 524194727/0 + descrição enorme com marcadores/TAB/Symbol entre 30+ itens curtos, linhas que citam
     rodapé/total, linha em branco, valor/unidade quebrados, 100 itens multipágina, célula que atravessa a página, código
-    que vira a página, grade inválida → texto, nº não centrado, rodapé desconhecido — **cada cenário nas DUAS vias**),
+    que vira a página, grade inválida → texto, nº não centrado, rodapé desconhecido, TOTAL ≥ R$ 10 mi quebrado, risquinho
+    vertical no cabeçalho, rodapé fora da margem, trecho após TAB, linha em branco no topo da página — **cada cenário
+    nas DUAS vias**),
     `grade-pdf`, `parse-dfd-comum`, `normalize`, `parse-dfd` (planilha com valores crus). Escala: 5.000 itens em ~0,3 s.
 - **Tela "Mesa"** (ex-"DFD"; `/painel/mesa` = `MesaPage` → `DfdsView`, aba **`dfd`** intacta — `/painel/dfds` **redireciona** p/ bookmarks; nav/label "Mesa" em `AppShell`/`BottomNav`/`abas.ts`) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
