@@ -34,6 +34,7 @@ const secOk = [
 ];
 
 const dfd = (over: Partial<DfdConferivel> = {}): DfdConferivel => ({
+  planejamento: "640",
   itens: [{ item: 1, codigo: "1001", descricao: "CANETA", unidade: "UN", quantidade: 2, valorUnitario: 5, valorTotal: 10 }],
   secoes: secOk,
   tipo: "DFD-S · Solução",

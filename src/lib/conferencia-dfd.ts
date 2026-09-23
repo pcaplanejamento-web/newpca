@@ -33,6 +33,7 @@ export type RepConferencia = { id: number; orgaoId?: number | null; responsaveis
 
 /** O que a conferência lê de um DFD — `DfdParseado` (análise) e `DfdDetalhe` (gravado) servem. */
 export type DfdConferivel = {
+  planejamento: string | null;
   itens: DfdItemParseado[];
   secoes: { titulo: string; texto: string }[];
   tipo: string | null;
@@ -70,6 +71,7 @@ function mensagensComAssinatura(
   const orgaoNaoIdentificado = orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null;
   return mensagensDfd(
     {
+      planejamento: d.planejamento,
       itens: d.itens,
       secoes: d.secoes,
       reparticaoId: rep?.id ?? null,

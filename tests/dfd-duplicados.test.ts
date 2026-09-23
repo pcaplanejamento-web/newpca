@@ -84,6 +84,7 @@ describe("itensDuplicados (mesmo código E mesma descrição)", () => {
 
 describe("item duplicado — avaliação + tratamento (remover)", () => {
   const base = {
+    planejamento: "640",
     reparticaoId: 1,
     tipo: "DFD-S",
     secoes: [

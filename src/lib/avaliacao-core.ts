@@ -71,6 +71,7 @@ export type ChaveAvaliacao =
   | "protocolo.valorCapa"
   | "protocolo.semDfdEmErro"
   | "protocolo.dfdDuplicado"
+  | "dfd.planejamento"
   | "dfd.reparticao"
   | "dfd.tipo"
   | "dfd.orgao"
@@ -122,6 +123,7 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "protocolo.semDfdEmErro", sujeito: "protocolo", rotulo: "Sem DFD com erro", descricao: "Nenhum DFD do processo pode estar com erro.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "protocolo.dfdDuplicado", sujeito: "protocolo", rotulo: "DFD duplicado", descricao: "Dois ou mais DFDs do processo com o MESMO nº de DFD ou de planejamento. O usuário escolhe um para prosseguir; os demais ficam descartados (fora da somatória e da protocolação).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   // ---- DFD ----
+  { chave: "dfd.planejamento", sujeito: "dfd", rotulo: "Nº de planejamento", descricao: "DFD com o número de planejamento (identificador do Centi, imutável). Sem ele o DFD fica com ERRO — corrija no Centi e reenvie o DFD.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "dfd.reparticao", sujeito: "dfd", rotulo: "Unidade / Setor", descricao: "DFD vinculado a uma unidade.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true },
   { chave: "dfd.tipo", sujeito: "dfd", rotulo: "Tipo do DFD", descricao: "DFD com tipo definido (DFD-S/R/O/E). Muitos formulários não trazem o 'Tipo DFD' — o usuário escolhe na análise (seleção ou edição em massa).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", suportaEdicao: true, editavelPadrao: true },
   { chave: "dfd.orgao", sujeito: "dfd", rotulo: "Órgão identificado", descricao: "Aviso quando o 'Órgão/Entidade' do DFD não corresponde a nenhum órgão cadastrado (sem órgão não dá para escopar/prever a unidade). Não bloqueia por padrão.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },

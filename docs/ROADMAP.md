@@ -45,6 +45,10 @@ posição; risquinho de carimbo no cabeçalho e desenho de anotação não viram
 completo, unidade só centrada sob o rótulo, linha em branco não corta o item; célula com DOIS números fica vazia para
 conferência (nunca "100200"); caracteres de fonte Symbol/Wingdings e Windows-1252 tratados sem inventar letras.
 
+### DFD sem número de planejamento = ERRO apontado — entregue
+✅ Novo ponto de avaliação **Nº de planejamento** (Configurações → Avaliação → DFD; padrão Fundamental = erro): o DFD sem o
+nº aparece com **"Sem planejamento"** na célula Estado, a mensagem no painel e a linha no relatório de devolução
+(despacho); a importação/protocolação recusa no servidor. O ADM pode rebaixar para atenção ou ignorar.
 ### Filtros com ":" (vários de uma vez) + busca no seletor de protocolo — entregue
 ✅ Em TODO filtro múltiplo — o de cada coluna das tabelas e o das Visões do orçamento — e nas buscas de linhas (catálogo,
 orçamento, membros do grupo, itens do painel), `168:170:174` seleciona vários de uma vez (o mesmo formato do "Copiar

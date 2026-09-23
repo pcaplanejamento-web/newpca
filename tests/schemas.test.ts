@@ -295,6 +295,7 @@ describe("avaliacaoSchema (regras de avaliação do ADM)", () => {
 
 describe("faltasObrigatorias (regras de import de DFD)", () => {
   const completo = {
+    planejamento: "640",
     reparticaoId: 3,
     tipo: "DFD-S",
     itens: [{ valorUnitario: 100 }, { valorUnitario: 50 }],

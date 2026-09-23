@@ -31,6 +31,7 @@ import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 // Monta uma conferência de DFD completa (nada falta); os testes removem 1 coisa.
 function dfdCompleto() {
   return {
+    planejamento: "640" as string | null,
     reparticaoId: 3,
     tipo: "DFD-S — Solução / com ETP",
     itens: [
@@ -175,10 +176,11 @@ describe("faltasObrigatorias — INVARIANTE: config padrão == comportamento de 
   it("DFD completo → nenhuma falta", () => {
     assert.deepEqual(faltasObrigatorias(dfdCompleto()), []);
   });
-  it("mesma lista/ordem de hoje quando falta tudo (+ o tipo do DFD, obrigatório por padrão)", () => {
-    const f = faltasObrigatorias({ reparticaoId: null, itens: [], secoes: [] });
+  it("mesma lista/ordem de hoje quando falta tudo (+ o tipo e o nº de planejamento, obrigatórios por padrão)", () => {
+    const f = faltasObrigatorias({ planejamento: null, reparticaoId: null, itens: [], secoes: [] });
     assert.deepEqual(f, [
       "valor unitário em todos os itens",
+      "número de planejamento",
       "unidade vinculada",
       "tipo do DFD (DFD-S/R/O/E)",
       "Justificativa da necessidade (Seção 3)",
@@ -204,6 +206,29 @@ describe("avaliarDfd — tipo do DFD (configurável)", () => {
   });
   it("tipo selecionado pelo usuário (rótulo do seletor) é reconhecido", () => {
     assert.deepEqual(avaliarDfd({ ...dfdCompleto(), tipo: "DFD-O · Ordinário" }).bloqueantes, []);
+  });
+});
+
+describe("avaliarDfd — nº de planejamento (configurável)", () => {
+  it("sem planejamento (null, vazio ou só espaços) é ERRO por padrão; 'intermediario' vira atenção; 'ignorar' some", () => {
+    for (const planejamento of [null, "", "   "]) {
+      const d = { ...dfdCompleto(), planejamento };
+      assert.ok(avaliarDfd(d).bloqueantes.includes("número de planejamento"));
+      assert.ok(faltasObrigatorias(d).includes("número de planejamento"));
+    }
+    const d = { ...dfdCompleto(), planejamento: null };
+    const avisa: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.planejamento": "intermediario" } };
+    assert.ok(avaliarDfd(d, avisa).atencoes.includes("número de planejamento"));
+    const ign: RegrasAvaliacao = { ...regrasPadrao(), pontos: { "dfd.planejamento": "ignorar" } };
+    assert.deepEqual(avaliarDfd(d, ign), { bloqueantes: [], atencoes: [] });
+  });
+  it("mensagem de ERRO apontada no bloco de identificação e célula Estado 'Sem planejamento'; com o nº, acerto", () => {
+    const msgs = mensagensDfd({ ...dfdCompleto(), planejamento: null });
+    const m = msgs.find((x) => x.chave === "dfd.planejamento");
+    assert.equal(m?.status, "erro");
+    assert.equal(m?.ancora, "anoPca");
+    assert.equal(resumoEstado(msgs).rotulo, "Sem planejamento");
+    assert.equal(mensagensDfd(dfdCompleto()).find((x) => x.chave === "dfd.planejamento")?.status, "acerto");
   });
 });
 

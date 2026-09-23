@@ -132,6 +132,7 @@ describe("faltasCirurgicasDfd (cirúrgico + acionável)", () => {
   const sec = (titulo: string, texto: string) => ({ numero: 0, titulo, texto });
   it("aponta os itens e o que fazer", () => {
     const faltas = faltasCirurgicasDfd({
+      planejamento: "640",
       itens: [item({ item: 3, valorUnitario: null }), item({ item: 5, valorUnitario: 0 }), item({ item: 7, quantidade: null })],
       secoes: [],
       reparticaoId: 1,
@@ -142,6 +143,7 @@ describe("faltasCirurgicasDfd (cirúrgico + acionável)", () => {
   });
   it("aponta repartição, seções e assinatura", () => {
     const faltas = faltasCirurgicasDfd({
+      planejamento: "640",
       itens: [item()],
       secoes: [sec("JUSTIFICATIVA DA NECESSIDADE", "ok")], // só a 3 preenchida
       reparticaoId: null,
@@ -162,7 +164,11 @@ describe("faltasCirurgicasDfd (cirúrgico + acionável)", () => {
       sec("PRIORIDADE", "ALTA"),
       sec("FUNDAMENTAÇÃO LEGAL", "Lei 14.133/2021"),
     ];
-    assert.deepEqual(faltasCirurgicasDfd({ itens: [item()], secoes: secs, reparticaoId: 1, tipo: "DFD-S" }), []);
+    assert.deepEqual(faltasCirurgicasDfd({ planejamento: "640", itens: [item()], secoes: secs, reparticaoId: 1, tipo: "DFD-S" }), []);
+    // DFD sem nº de planejamento: a linha do despacho diz o que fazer.
+    assert.deepEqual(faltasCirurgicasDfd({ planejamento: null, itens: [item()], secoes: secs, reparticaoId: 1, tipo: "DFD-S" }), [
+      "Informar o NÚMERO DE PLANEJAMENTO do DFD (corrigir no Centi e reenviar o DFD).",
+    ]);
   });
 });
 
@@ -219,6 +225,7 @@ describe("mensagensDfd (painel de mensagens: erro/atenção/acerto)", () => {
     { numero: 7, titulo: "FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" },
   ];
   const base = {
+    planejamento: "640",
     itens: [item({ item: 1, valorUnitario: 10, quantidade: 2 })],
     secoes: secOk,
     reparticaoId: 3,
@@ -346,6 +353,7 @@ describe("conformidade dos itens com o catálogo (veredito por linha + portão)"
   it("avaliarDfd: catálogo é ATENÇÃO no padrão (não bloqueia) e vira bloqueante só quando fundamental (invariante preservado)", () => {
     const conformidade = new Map<string, ConferenciaItem>([["1001", cItem({ faltas: ["naoCatalogado"] })]]);
     const d = {
+      planejamento: "640",
       reparticaoId: 3,
       itens: [{ valorUnitario: 10, quantidade: 2, codigo: "1001", item: 1 }],
       secoes: secOk,

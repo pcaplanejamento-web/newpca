@@ -16,6 +16,7 @@ const MAX_ITENS_DFD = 100_000;
 // (`avaliarDfd` em `dfd-tratamento`, com níveis do catálogo). `tipo`/refs opcionais
 // habilitam as exceções por tipo de DFD.
 export type DfdConferencia = {
+  planejamento: string | null;
   reparticaoId?: number | null;
   anoPca?: number | null;
   itens: { valorUnitario?: number | null; quantidade?: number | null; codigo?: string | null; item?: number | null }[];

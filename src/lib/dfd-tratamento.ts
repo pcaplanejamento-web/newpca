@@ -478,7 +478,12 @@ function listaItens(nums: number[]): string {
 }
 
 /** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
+/** O DFD tem nº de planejamento (não vazio)? */
+export const temPlanejamento = (p: string | null | undefined): boolean => (p ?? "").trim() !== "";
+
 export type EntradaAvaliacaoDfd = {
+  /** Nº de planejamento (identificador do Centi) — OBRIGATÓRIO no tipo: todo chamador informa (vazio = falta). */
+  planejamento: string | null;
   reparticaoId?: number | null;
   /** Ano do PCA (completa a previsão só com o MÊS). */
   anoPca?: number | null;
@@ -605,6 +610,7 @@ export function avaliarDfd(
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
   add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
   add("item.duplicado", itensRepetidos(d.itens).length > 0, "itens duplicados (mesmo código e descrição)");
+  add("dfd.planejamento", !temPlanejamento(d.planejamento), "número de planejamento");
   add("dfd.reparticao", d.reparticaoId == null, "unidade vinculada");
   add("dfd.tipo", c.dfdTipo == null, "tipo do DFD (DFD-S/R/O/E)");
   // Órgão identificado + divergência órgão×unidade: flags PRÉ-COMPUTADAS pelo chamador (que tem o
@@ -691,6 +697,10 @@ export function mensagensDfd(
     out.push({ chave, status, texto: faltaTexto, ancora, cor: corImportancia(regras, id), ...(rotulo ? { rotulo } : {}) });
   };
   const plural = (n: number) => (n === 1 ? "item" : "itens");
+
+  // Nº de planejamento (identificador do Centi) — ancorado no bloco de identificação (Nº DFD/Planejamento/Ano).
+  add("dfd.planejamento", "anoPca", temPlanejamento(d.planejamento),
+    "DFD sem número de planejamento — corrija no Centi e reenvie o DFD.", `Nº de planejamento: ${d.planejamento ?? ""}.`);
 
   // Unidade / Setor (topo do banner)
   add("dfd.reparticao", "reparticao", d.reparticaoId != null,
@@ -832,6 +842,7 @@ export function contarMensagens(msgs: MensagemDfd[]): Record<StatusMensagem, num
 export const ROTULO_CURTO: Record<string, string> = {
   "item.valorUnitario": "Item sem valor",
   "item.quantidade": "Item sem quantidade",
+  "dfd.planejamento": "Sem planejamento",
   "dfd.reparticao": "Sem unidade",
   "dfd.tipo": "Sem tipo",
   "dfd.orgao": "Órgão não identificado",
@@ -958,6 +969,7 @@ export function textoPlanejamentos(planejamentos: (string | null | undefined)[])
  */
 export function faltasCirurgicasDfd(
   d: {
+    planejamento: string | null;
     itens: DfdItemParseado[];
     secoes: DfdSecao[];
     reparticaoId?: number | null;
@@ -982,6 +994,8 @@ export function faltasCirurgicasDfd(
     linhas.push(`Remover ${repetidos.length === 1 ? "o item duplicado" : "os itens duplicados"} ${listaItens(repetidos)} (mesmo código e descrição de outro item — Seção 4).`);
   if (ativo("item.quantidade") && semQtd.length > 0)
     linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
+  if (ativo("dfd.planejamento") && !temPlanejamento(d.planejamento))
+    linhas.push("Informar o NÚMERO DE PLANEJAMENTO do DFD (corrigir no Centi e reenviar o DFD).");
   if (ativo("dfd.reparticao") && d.reparticaoId == null)
     linhas.push("Vincular o DFD à repartição/Setor requisitante responsável.");
   if (ativo("dfd.tipo") && c.dfdTipo == null) linhas.push("Definir o TIPO do DFD (DFD-S, DFD-R, DFD-O ou DFD-E).");

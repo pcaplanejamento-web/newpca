@@ -443,7 +443,7 @@ export function useProtocoloGravado({
     const rid = repIds.get(id) ?? null;
     const resAss = conferirAssinaturaDfd(d, repConf(rid));
     const cirurgicas = faltasCirurgicasDfd(
-      { itens: d.itens, secoes: d.secoes, reparticaoId: rid, assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca: d.anoPca },
+      { planejamento: d.planejamento, itens: d.itens, secoes: d.secoes, reparticaoId: rid, assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca: d.anoPca },
       regras,
       { categoria },
     );

@@ -581,6 +581,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Tipo do DFD obrigatório (`dfd.tipo`, configurável, padrão `bloqueia`, editável):** muitos formulários NÃO trazem o
     "Tipo DFD" (todos os 15 do `pd101820`). Tratamento por **seleção** (`DfdConferir`, select DFD-S/R/O/E → `TIPO_DFD_ROTULO`)
     e **em massa** no protocolo (barra de edição em massa → "Tipo"); no gravado vai pelo `PATCH /api/dfd/[id]` (`tipo`).
+  - **Nº de planejamento obrigatório (`dfd.planejamento`, configurável, padrão `bloqueia`, NÃO editável — identificador
+    do Centi):** DFD sem nº de planejamento (vazio/só espaços) fica com ERRO — célula Estado "Sem planejamento",
+    mensagem no painel (âncora do bloco de identificação) e linha do despacho ("Informar o NÚMERO DE PLANEJAMENTO…
+    corrigir no Centi e reenviar"); o servidor recusa no `start-dfd` (422) pela mesma `avaliarDfd`. O campo é
+    OBRIGATÓRIO nos tipos de entrada (`EntradaAvaliacaoDfd`/`DfdConferencia`/`DfdConferivel`/`faltasCirurgicasDfd`) — o
+    TypeScript obriga todo chamador a informá-lo (nunca falso positivo por campo omitido).
   - **Item duplicado (`item.duplicado`, antes só no catálogo — nunca avaliado):** mesmo código **E** mesma descrição
     (`itensDuplicados`; o mesmo código com descrição diferente — outro local — é legítimo, DFD 136 real). Tratamento:
     **"Remover item"** no `ItemDetalhe` (`removerItemDfd`, recomputa o total; no gravado grava os itens no D1).

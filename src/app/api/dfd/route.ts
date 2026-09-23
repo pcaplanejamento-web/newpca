@@ -72,6 +72,7 @@ export async function POST(req: Request) {
   const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo) };
   const faltas = faltasObrigatorias(
     {
+      planejamento: d.planejamento ?? null,
       reparticaoId: d.reparticaoId,
       anoPca: d.anoPca,
       itens: d.rows,

@@ -1253,7 +1253,7 @@ export function ProtocoloUploadForm({
     if (!d) return ["DFD ainda em análise — reabrir para conferir."];
     const resAss = conferirAssinaturaDfd(d, repDe(dfdRepIds[idx]));
     const cirurgicas = faltasCirurgicasDfd(
-      { itens: d.itens, secoes: d.secoes, reparticaoId: dfdRepIds[idx], assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca },
+      { planejamento: d.planejamento, itens: d.itens, secoes: d.secoes, reparticaoId: dfdRepIds[idx], assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca },
       regras,
       { categoria },
     );
