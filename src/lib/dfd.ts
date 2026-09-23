@@ -613,7 +613,7 @@ export async function upsertDfdCabecalho(
   // RASTRO (antes do upsert: o retrato lê o protocolo em que o DFD ESTAVA) — só quando vai para um protocolo.
   const rastro: Stmt[] =
     dados.protocoloId != null
-      ? [db.run(retratoRastro(sql, dados.numero, dados.protocoloId, criadoPor)), db.run(limparRastroDestino(sql, dados.numero, dados.protocoloId))]
+      ? [retratoRastro(db, dados.numero, dados.protocoloId, criadoPor), limparRastroDestino(db, dados.numero, dados.protocoloId)]
       : [];
   const upsert = db
     .insert(dfds)

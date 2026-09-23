@@ -3,13 +3,16 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
-import { limparRastroDestino, retratoRastro, type TagSql } from "../src/lib/rastro-sql.ts";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "../src/db/schema.ts";
+import { dfds } from "../src/db/schema.ts";
+import { limparRastroDestino, retratoRastro } from "../src/lib/rastro-sql.ts";
+import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
-// O SQL do RASTRO (o MESMO texto que o servidor roda pelo `sql` do Drizzle) aplicado sobre a cadeia de
-// migrações num SQLite em memória — o dialeto do D1. Requer --experimental-sqlite.
-
-type Cmd = { texto: string; params: (string | number | null)[] };
-const q: TagSql<Cmd> = (partes, ...valores) => ({ texto: partes.join("?"), params: valores as Cmd["params"] });
+// O RASTRO pelos MESMOS builders que o servidor usa, rodando no driver `drizzle-orm/d1` REAL (sobre um D1
+// mínimo em `node:sqlite`) e DENTRO de `db.batch` — como o start-dfd e o "mover DFD de protocolo". Aplica a
+// cadeia de migrações (o dialeto do D1). Requer --experimental-sqlite.
 
 const DIR = join(process.cwd(), "drizzle");
 function aplicarTudo(): DatabaseSync {
@@ -19,15 +22,17 @@ function aplicarTudo(): DatabaseSync {
   return db;
 }
 
-describe("rastro do DFD sobrescrito entre protocolos (SQL)", () => {
+describe("rastro do DFD sobrescrito entre protocolos (builders no db.batch do D1)", () => {
   let db: DatabaseSync;
-  const run = (c: Cmd) => db.prepare(c.texto).run(...c.params);
-  /** O que o `start-dfd` faz no lote: retrato (antes) + limpa o destino + move o DFD para o destino. */
-  const mover = (numero: string, destino: number, valor: number) => {
-    run(retratoRastro(q, numero, destino, null));
-    run(limparRastroDestino(q, numero, destino));
-    db.prepare("UPDATE dfds SET protocolo_id = ?, valor_total = ? WHERE numero = ?").run(destino, valor, numero);
-  };
+  let orm: ReturnType<typeof drizzle<typeof schema>>;
+  /** O que o `start-dfd` faz no LOTE: retrato (antes) + limpa o destino + move o DFD para o destino. */
+  const mover = (numero: string, destino: number, valor: number) =>
+    orm.batch([
+      retratoRastro(orm, numero, destino, null),
+      limparRastroDestino(orm, numero, destino),
+      orm.update(dfds).set({ protocoloId: destino, valorTotal: valor }).where(eq(dfds.numero, numero)),
+    ]);
+  const retrato = (numero: string, destino: number) => orm.batch([retratoRastro(orm, numero, destino, null)]);
   const rastro = () =>
     (
       db.prepare("SELECT protocolo_id AS p, dfd_numero AS n, sigla, valor_total AS v FROM dfd_passagens ORDER BY protocolo_id").all() as {
@@ -40,6 +45,7 @@ describe("rastro do DFD sobrescrito entre protocolos (SQL)", () => {
 
   before(() => {
     db = aplicarTudo();
+    orm = drizzle(d1Sobre(db) as never, { schema });
     db.exec("INSERT INTO reparticoes (id, codigo, nome) VALUES (901, 'SMS', 'Secretaria Municipal de Saúde')");
     for (const [id, n] of [
       [11, "A/2026"],
@@ -50,13 +56,13 @@ describe("rastro do DFD sobrescrito entre protocolos (SQL)", () => {
     db.exec("INSERT INTO dfds (numero, protocolo_id, reparticao_id, total_itens, valor_total) VALUES ('1525', 11, 901, 2, 100)");
   });
 
-  it("A → B: o de origem (A) guarda o retrato da versão que tinha (sigla e valor DA ÉPOCA)", () => {
-    mover("1525", 12, 200);
+  it("A → B: o de origem (A) guarda o retrato da versão que tinha (sigla e valor DA ÉPOCA)", async () => {
+    await mover("1525", 12, 200);
     assert.deepEqual(rastro(), [{ p: 11, n: "1525", sigla: "SMS", v: 100 }]);
   });
 
-  it("B → C: B também guarda o dele; A continua (os dois apontam o DFD vivo, hoje em C)", () => {
-    mover("1525", 13, 300);
+  it("B → C: B também guarda o dele; A continua (os dois apontam o DFD vivo, hoje em C)", async () => {
+    await mover("1525", 13, 300);
     assert.deepEqual(
       rastro().map((r) => [r.p, r.v]),
       [
@@ -66,8 +72,8 @@ describe("rastro do DFD sobrescrito entre protocolos (SQL)", () => {
     );
   });
 
-  it("C → A: o DFD volta a estar vivo em A (sai o rastro de A) e C ganha o dele", () => {
-    mover("1525", 11, 400);
+  it("C → A: o DFD volta a estar vivo em A (sai o rastro de A) e C ganha o dele", async () => {
+    await mover("1525", 11, 400);
     assert.deepEqual(
       rastro().map((r) => [r.p, r.v]),
       [
@@ -77,22 +83,30 @@ describe("rastro do DFD sobrescrito entre protocolos (SQL)", () => {
     );
   });
 
-  it("reimportar no MESMO protocolo, DFD sem protocolo ou inexistente: nada muda", () => {
+  it("reimportar no MESMO protocolo, DFD sem protocolo ou inexistente: nada muda", async () => {
     const antes = rastro();
-    mover("1525", 11, 500); // já está em A
-    run(retratoRastro(q, "9999", 12, null)); // não existe
+    await mover("1525", 11, 500); // já está em A
+    await retrato("9999", 12); // não existe
     db.exec("INSERT INTO dfds (numero, valor_total) VALUES ('777', 10)"); // avulso, sem protocolo
-    run(retratoRastro(q, "777", 12, null));
+    await retrato("777", 12);
     assert.deepEqual(rastro(), antes);
   });
 
-  it("repetir o lote (nova tentativa) não duplica — a última passagem vale (upsert por protocolo + nº)", () => {
+  it("repetir o lote (nova tentativa) não duplica — a última passagem vale (upsert por protocolo + nº)", async () => {
     db.prepare("UPDATE dfds SET protocolo_id = 12, valor_total = 250 WHERE numero = '1525'").run();
-    run(retratoRastro(q, "1525", 13, null));
-    run(retratoRastro(q, "1525", 13, null));
+    await retrato("1525", 13);
+    await retrato("1525", 13);
     const b = rastro().filter((r) => r.p === 12);
     assert.equal(b.length, 1);
     assert.equal(b[0].v, 250);
+  });
+
+  it("mover o DFD de protocolo (vínculo): update + limpa o rastro do destino no MESMO lote, sem retrato", async () => {
+    const antes = rastro().filter((r) => r.p !== 12);
+    await orm.batch([orm.update(dfds).set({ protocoloId: 12 }).where(eq(dfds.numero, "1525")), limparRastroDestino(orm, "1525", 12)]);
+    assert.deepEqual(rastro(), antes);
+    const [d] = db.prepare("SELECT protocolo_id AS p FROM dfds WHERE numero = '1525'").all() as { p: number }[];
+    assert.equal(d.p, 12);
   });
 
   it("excluir o protocolo apaga o rastro dele (cascade)", () => {
