@@ -7,9 +7,16 @@ import type { OrcamentoItemRow } from "@/lib/orcamento";
  * Corpo de um `Modal.lateral`: detalhe SÓ-LEITURA de UM lançamento do orçamento (Órgão/
  * Unidade/Elemento de despesa + valores). Os lançamentos vêm do sistema oficial — não são
  * editáveis na tela. Só componentes/tokens do design-system. Espelha o modo "consultar"
- * do `CatalogoItemDetalhe`.
+ * do `CatalogoItemDetalhe`. `vinculo` = o Órgão/Unidade do SISTEMA a que o texto do CUBO está
+ * vinculado (tela "Vínculos"); sem vínculo mostra "Sem vínculo".
  */
-export function OrcamentoItemDetalhe({ item }: { item: OrcamentoItemRow }) {
+export function OrcamentoItemDetalhe({
+  item,
+  vinculo,
+}: {
+  item: OrcamentoItemRow;
+  vinculo?: { orgao: string | null; unidade: string | null };
+}) {
   return (
     <div className="space-y-4">
       <div>
@@ -26,6 +33,16 @@ export function OrcamentoItemDetalhe({ item }: { item: OrcamentoItemRow }) {
         <Campo label="Órgão" valor={item.orgao ?? "—"} />
         <Campo label="Unidade" valor={item.unidade ?? "—"} />
       </dl>
+
+      {vinculo && (
+        <div className="rounded-card border border-border p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">No sistema</p>
+          <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            <Campo label="Órgão" valor={vinculo.orgao ?? "Sem vínculo"} />
+            <Campo label="Unidade" valor={vinculo.unidade ?? "Sem vínculo"} />
+          </dl>
+        </div>
+      )}
 
       <div className="rounded-card border border-border bg-surface-2 p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Valores</p>

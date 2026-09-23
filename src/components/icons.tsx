@@ -30,6 +30,7 @@ import {
   Landmark,
   Layers,
   LayoutDashboard,
+  Link2,
   Loader2,
   Lock,
   LockOpen,
@@ -115,6 +116,7 @@ export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
 export const IconRefresh = RefreshCw;
 export const IconPlug = Plug;
+export const IconLink = Link2;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

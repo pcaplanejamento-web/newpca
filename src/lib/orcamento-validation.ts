@@ -56,3 +56,19 @@ export const patchOrcamentoSchema = z
   })
   .refine((v) => v.nome !== undefined || v.ano !== undefined, { message: "Nada para atualizar." });
 export type PatchOrcamentoPayload = z.infer<typeof patchOrcamentoSchema>;
+
+// VÍNCULOS do texto de Órgão/Unidade do CUBO com o cadastro (`alvoId` null = desvincular).
+// Até 200 por requisição (o upsert vai em lotes de 16 linhas × 6 params = 96 < 100 do D1).
+export const vinculosOrcamentoSchema = z.object({
+  vinculos: z
+    .array(
+      z.object({
+        tipo: z.enum(["orgao", "unidade"]),
+        texto: z.string().trim().min(1).max(300),
+        alvoId: z.number().int().positive().nullable(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type VinculosOrcamentoPayload = z.infer<typeof vinculosOrcamentoSchema>;

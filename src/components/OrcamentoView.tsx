@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { brl, dataBR } from "@/lib/format";
 import { enviarOrcamentoEmLotes } from "@/lib/importar-orcamento";
 import type { OrcamentoItemRow, OrcamentoResumo } from "@/lib/orcamento";
+import { type AlvoVinculo, alvoDoTexto, chaveVinculo, linhasVinculo, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import type { OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { exportarOrcamentoPdf, exportarOrcamentoXlsx } from "@/lib/exportar-orcamento";
@@ -17,30 +18,38 @@ import { SearchField, TextField } from "./Field";
 import { IconAlert, IconDownload, IconInbox, IconPlus, IconTrash, IconUpload, IconWallet } from "./icons";
 import { Modal } from "./Modal";
 import { OrcamentoItemDetalhe } from "./OrcamentoItemDetalhe";
+import { type VinculoAlterado, OrcamentoVinculos } from "./OrcamentoVinculos";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 
-type Vista = "orcamentos" | "lancamentos";
+type Vista = "orcamentos" | "lancamentos" | "vinculos";
 type Preview = { itens: OrcamentoItemParseado[]; total: number };
 
 const ANO_ATUAL = new Date().getFullYear();
+const SEM_PENDENTES: ReadonlyMap<string, VinculoAlterado> = new Map();
 const soma = (linhas: { valorInicial: number; saldo: number }[], campo: "valorInicial" | "saldo") =>
   linhas.reduce((s, r) => s + (r[campo] || 0), 0);
 
 /**
- * Módulo ORÇAMENTO (relatório CUBO). Duas visões (Segmented, com transição suave):
- * **Orçamentos** (cards por arquivo importado — nome + ano + dotação) e **Lançamentos**
- * (todos os lançamentos numa tabela única filtrável, com totais no rodapé). Importa `.xlsx`
+ * Módulo ORÇAMENTO (relatório CUBO). Três visões (Segmented, com transição suave):
+ * **Orçamentos** (cards por arquivo importado — nome + ano + dotação), **Lançamentos**
+ * (todos os lançamentos numa tabela única filtrável, com totais no rodapé) e **Vínculos**
+ * (cada Órgão/Unidade do CUBO ligado ao órgão/unidade CADASTRADO — `OrcamentoVinculos`; o
+ * vínculo aparece na coluna "No sistema" e no detalhe do lançamento). Importa `.xlsx`
  * (parse no cliente) informando o ANO; exporta XLSX/PDF; exclui. SOMENTE LEITURA — não edita
  * lançamento. Só editor importa/exclui; demais consultam. 100% design-system.
  */
 export function OrcamentoView({
   orcamentos,
   itens,
+  vinculos,
+  alvos,
   podeEditar,
 }: {
   orcamentos: OrcamentoResumo[];
   itens: OrcamentoItemRow[];
+  vinculos: VinculoOrcamento[];
+  alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
   podeEditar: boolean;
 }) {
   const router = useRouter();
@@ -75,6 +84,68 @@ export function OrcamentoView({
   // Consulta
   const [busca, setBusca] = useState("");
   const [painelItem, setPainelItem] = useState<OrcamentoItemRow | null>(null);
+
+  // Vínculos (Órgão/Unidade do CUBO → cadastro). Alterações aparecem na hora (otimista) e
+  // valem só sobre a base em que foram feitas: quando a página recarrega os vínculos gravados
+  // (nova base), as pendentes somem sozinhas.
+  const [pend, setPend] = useState<{ base: VinculoOrcamento[]; m: Map<string, VinculoAlterado> }>(() => ({ base: vinculos, m: new Map() }));
+  const pendentes = pend.base === vinculos ? pend.m : SEM_PENDENTES;
+  const alterarPendentes = (fn: (m: Map<string, VinculoAlterado>) => void) =>
+    setPend((p) => {
+      const m = new Map(p.base === vinculos ? p.m : SEM_PENDENTES);
+      fn(m);
+      return { base: vinculos, m };
+    });
+  const [salvandoVinc, setSalvandoVinc] = useState(false);
+  const [erroVinc, setErroVinc] = useState<string | null>(null);
+  const vinculosEfetivos = useMemo(() => {
+    if (pendentes.size === 0) return vinculos;
+    const m = new Map(vinculos.map((v) => [`${v.tipo}|${v.chave}`, v]));
+    for (const [k, p] of pendentes) m.set(k, { tipo: p.tipo, chave: k.slice(p.tipo.length + 1), texto: p.texto, alvoId: p.alvoId });
+    return [...m.values()];
+  }, [vinculos, pendentes]);
+  const mapaVinc = useMemo(() => mapaVinculos(vinculosEfetivos), [vinculosEfetivos]);
+  const alvoPorId = useMemo(
+    () => ({ orgao: new Map(alvos.orgaos.map((o) => [o.id, o])), unidade: new Map(alvos.unidades.map((u) => [u.id, u])) }),
+    [alvos],
+  );
+  const vinculoDe = (r: OrcamentoItemRow) => {
+    const o = alvoPorId.orgao.get(alvoDoTexto(mapaVinc, "orgao", r.orgao) ?? -1);
+    const u = alvoPorId.unidade.get(alvoDoTexto(mapaVinc, "unidade", r.unidade) ?? -1);
+    return { orgao: o ? `${o.sigla} — ${o.nome}` : null, unidade: u ? `${u.sigla} — ${u.nome}` : null, siglas: [o?.sigla, u?.sigla].filter(Boolean).join(" / ") };
+  };
+  const linhasVinc = useMemo(
+    () => (vista === "vinculos" ? linhasVinculo(itens, vinculosEfetivos, alvos) : []),
+    [vista, itens, vinculosEfetivos, alvos],
+  );
+
+  async function salvarVinculos(lista: VinculoAlterado[]) {
+    const chaves = lista.map((v) => `${v.tipo}|${chaveVinculo(v.texto)}`);
+    setErroVinc(null);
+    alterarPendentes((m) => {
+      for (let i = 0; i < lista.length; i++) m.set(chaves[i], lista[i]);
+    });
+    setSalvandoVinc(true);
+    try {
+      for (let i = 0; i < lista.length; i += 200) {
+        const resp = await fetch("/api/orcamento/vinculos", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vinculos: lista.slice(i, i + 200) }),
+        });
+        const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar o vínculo.");
+      }
+      router.refresh();
+    } catch (e) {
+      setErroVinc(e instanceof Error ? e.message : "Não foi possível gravar o vínculo.");
+      alterarPendentes((m) => {
+        for (const k of chaves) m.delete(k);
+      });
+    } finally {
+      setSalvandoVinc(false);
+    }
+  }
 
   function trocarVista(v: Vista) {
     setVista(v);
@@ -181,6 +252,22 @@ export function OrcamentoView({
       ),
     },
     {
+      key: "sistema",
+      header: "No sistema",
+      nowrap: true,
+      value: (r) => vinculoDe(r).siglas,
+      render: (r) => {
+        const v = vinculoDe(r);
+        return v.siglas ? (
+          <span className="whitespace-nowrap text-text-2" title={[v.orgao, v.unidade].filter(Boolean).join(" · ")}>
+            {v.siglas}
+          </span>
+        ) : (
+          <span className="text-faint">—</span>
+        );
+      },
+    },
+    {
       key: "elemento",
       header: "Elemento",
       minWidth: 260,
@@ -236,7 +323,10 @@ export function OrcamentoView({
     { key: "inicial", header: "Valor inicial", align: "right", minWidth: 140, filter: "none", render: (r) => <span className="tabular-nums font-semibold text-text">{brl(r.valorInicial)}</span> },
   ];
 
-  const detalheItem = (item: OrcamentoItemRow) => <OrcamentoItemDetalhe key={item.id} item={item} />;
+  const detalheItem = (item: OrcamentoItemRow) => {
+    const v = vinculoDe(item);
+    return <OrcamentoItemDetalhe key={item.id} item={item} vinculo={{ orgao: v.orgao, unidade: v.unidade }} />;
+  };
 
   const barraBusca = (
     <div className="max-w-md">
@@ -276,6 +366,7 @@ export function OrcamentoView({
           options={[
             { value: "orcamentos", label: "Orçamentos" },
             { value: "lancamentos", label: "Lançamentos" },
+            { value: "vinculos", label: "Vínculos" },
           ]}
         />
       </div>
@@ -338,6 +429,15 @@ export function OrcamentoView({
               ))}
               {podeEditar && addCard}
             </div>
+          ) : vista === "vinculos" ? (
+            <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+              {erroVinc && (
+                <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
+                  {erroVinc}
+                </Callout>
+              )}
+              <OrcamentoVinculos linhas={linhasVinc} alvos={alvos} podeEditar={podeEditar} salvando={salvandoVinc} onVincular={salvarVinculos} />
+            </div>
           ) : (
             <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
               {barraBusca}
@@ -346,7 +446,7 @@ export function OrcamentoView({
                 rows={itensListaFiltrados}
                 getKey={(r) => r.id}
                 fillHeight
-                minWidth={1680}
+                minWidth={1800}
                 onRowClick={(r) => setPainelItem(r)}
                 activeKey={abertoId == null ? (painelItem?.id ?? null) : null}
                 resumo={rodapeResumo}
@@ -465,7 +565,7 @@ export function OrcamentoView({
             rows={itensAbertoFiltrados}
             getKey={(r) => r.id}
             pageSize={20}
-            minWidth={1500}
+            minWidth={1620}
             onRowClick={(r) => setPainelItem(r)}
             activeKey={abertoId != null ? (painelItem?.id ?? null) : null}
             resumo={rodapeResumo}
