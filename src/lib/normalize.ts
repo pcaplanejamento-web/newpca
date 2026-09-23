@@ -30,11 +30,12 @@ const CP1252: Record<string, string> = {
 // lista (matemática e as letras gregas de especificação: ± ≥ ≤ ° × ÷ ≠ ≈ √ ′ ″ Δ Ω α β δ ε φ γ e as setas); o "µ" só
 // ANTES de uma unidade ("µm", "µF" — a Wingdings usa o mesmo código como marcador); o resto (U+F0B7 •, U+F0A7 ▪, U+F0D8
 // ➢, U+F0FC ✓, U+F076 ❖, U+F074 ⧫, U+F06C ●, U+F06E ■…) e os desconhecidos viram "•" (marcador).
-const SIMBOLO_PUA: Record<number, string> = {
-  0xf02d: "-", 0xf044: "\u0394", 0xf057: "\u03A9", 0xf061: "\u03B1", 0xf062: "\u03B2", 0xf064: "\u03B4", 0xf065: "\u03B5",
-  0xf066: "\u03C6", 0xf067: "\u03B3", 0xf0a2: "\u2032", 0xf0a3: "\u2264", 0xf0ac: "\u2190", 0xf0ad: "\u2191",
-  0xf0ae: "\u2192", 0xf0af: "\u2193", 0xf0b0: "\u00B0", 0xf0b1: "\u00B1", 0xf0b2: "\u2033", 0xf0b3: "\u2265",
-  0xf0b4: "\u00D7", 0xf0b8: "\u00F7", 0xf0b9: "\u2260", 0xf0bb: "\u2248", 0xf0d6: "\u221A",
+const SIMBOLO_PUA: Record<string, string> = {
+  "\uF02D": "-", "\uF044": "\u0394", "\uF057": "\u03A9", "\uF061": "\u03B1", "\uF062": "\u03B2", "\uF064": "\u03B4",
+  "\uF065": "\u03B5", "\uF066": "\u03C6", "\uF067": "\u03B3", "\uF0A2": "\u2032", "\uF0A3": "\u2264",
+  "\uF0AC": "\u2190", "\uF0AD": "\u2191", "\uF0AE": "\u2192", "\uF0AF": "\u2193", "\uF0B0": "\u00B0",
+  "\uF0B1": "\u00B1", "\uF0B2": "\u2033", "\uF0B3": "\u2265", "\uF0B4": "\u00D7", "\uF0B8": "\u00F7",
+  "\uF0B9": "\u2260", "\uF0BB": "\u2248", "\uF0D6": "\u221A",
 };
 
 /**
@@ -53,7 +54,7 @@ export function limparTexto(v: unknown): string {
     .replace(/[\s\u0085]/g, " ")
     .replace(RE_INVISIVEL, "")
     .replace(/\uF06D(?=[A-Za-z])/g, "\u00B5") // "µ" da Symbol só antes de uma unidade (µm, µF, µg…)
-    .replace(/\p{Co}/gu, (c) => SIMBOLO_PUA[c.codePointAt(0) ?? 0] ?? "\u2022")
+    .replace(/\p{Co}/gu, (c) => SIMBOLO_PUA[c] ?? "\u2022")
     .normalize("NFC")
     .replace(/(^|\s)\p{M}+/gu, "$1") // acento órfão (sem letra)
     .replace(/\s+/g, " ")
