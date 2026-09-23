@@ -66,8 +66,10 @@ export function UploadForm() {
 
       for (let i = 0; i < all.length; i += CHUNK) {
         const slice = all.slice(i, i + CHUNK);
+        // Os lotes seguintes precisam do id devolvido pelo 1º (sem ele, não há onde acrescentar).
+        if (i > 0 && unidadeId == null) throw new Error("A importação não devolveu a planilha criada. Tente de novo.");
         const body =
-          i === 0
+          i === 0 || unidadeId == null
             ? {
                 mode: "start" as const,
                 codigo: preview.codigo,
@@ -77,7 +79,7 @@ export function UploadForm() {
                 valorTotal: preview.total,
                 rows: slice,
               }
-            : { mode: "append" as const, unidadeId: unidadeId!, rows: slice };
+            : { mode: "append" as const, unidadeId, rows: slice };
 
         const res = await fetch("/api/upload", {
           method: "POST",

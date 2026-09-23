@@ -67,7 +67,7 @@ export type DataParts = { iso: string; mes: number; ano: number } | null;
 export function parseDataDesejada(v: unknown): DataParts {
   if (v == null || v === "") return null;
 
-  if (v instanceof Date && !isNaN(v.getTime())) {
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
     return build(v.getFullYear(), v.getMonth() + 1, v.getDate());
   }
 

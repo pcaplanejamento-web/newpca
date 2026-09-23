@@ -491,7 +491,7 @@ export function AppShell({
       </div>
 
       {/* Navegação inferior (mobile) */}
-      <BottomNav />
+      <BottomNav abas={abasSet} />
     </div>
   );
 }

@@ -13,9 +13,9 @@ jobs:
   qualidade:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -36,7 +36,7 @@ jobs:
       - name: Lint (Biome)
         run: npm run lint
 
-      - name: Testes (Vitest)
+      - name: Testes (node:test)
         run: npm test
 
   # E2E dos fluxos LOGADOS (Playwright) contra o app local (Miniflare/D1) com usuário
@@ -46,9 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

@@ -28,6 +28,7 @@ import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import type { PcaDetalhe } from "@/lib/dfd";
 import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
@@ -866,10 +867,11 @@ const DFD_DEMO = {
   itens: DFD_ITENS_DEMO,
 };
 
-const PCA_DEMO = {
+const PCA_DEMO: PcaDetalhe = {
   id: 1,
   nome: "PCA 2026",
   ano: 2026,
+  ativo: true,
   observacao: null,
   totalDfds: 2,
   totalItens: 3,

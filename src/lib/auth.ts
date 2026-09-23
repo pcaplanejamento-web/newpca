@@ -106,7 +106,7 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       ),
     )
     .limit(1);
-  if (!row || row.status !== "ativo") return null;
+  if (row?.status !== "ativo") return null;
   return row as UsuarioSessao;
 }
 

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AparenciaPage() {
   const u = await getUsuarioAtual();
-  if (!u || u.role !== "admin") {
+  if (u?.role !== "admin") {
     return <AcessoRestrito mensagem="Somente administradores podem personalizar a aparência." />;
   }
 

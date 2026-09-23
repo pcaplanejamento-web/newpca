@@ -968,10 +968,14 @@ export async function cadastrarPca(
 
 /** Renomeia/re-ano um PCA (registro ou edição); renova `atualizadoEm`. */
 export async function atualizarPca(id: number, dados: EditarPcaPayload): Promise<void> {
-  const campos: Partial<typeof pcas.$inferInsert> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
-  if (dados.nome !== undefined) campos.nome = dados.nome;
-  if (dados.ano !== undefined) campos.ano = dados.ano;
-  await getDb().update(pcas).set(campos).where(eq(pcas.id, id));
+  await getDb()
+    .update(pcas)
+    .set({
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+      ...(dados.ano !== undefined ? { ano: dados.ano } : {}),
+    })
+    .where(eq(pcas.id, id));
 }
 
 /** Marca UM PCA como o vigente (zera os demais numa transação — só 1 ativo). */
