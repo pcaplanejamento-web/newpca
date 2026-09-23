@@ -674,8 +674,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   leitura mais recente de arquivo vale; fechar a conferência com escolhas/edições feitas pede confirmação; na
   protocolação, a escolha só destrava depois da leitura da assinatura por OCR daquele DFD e o DFD que substitui/move um
   cadastrado fica na **unidade dele** (salvo escolha do usuário — como no reenvio/banner). No **reenvio**, o DFD gravado
-  de unidade SEM ACESSO fica só-leitura: sem diferença, é pulado (não é erro); com diferença, é erro "Unidade sem acesso"
-  (o servidor recusaria) — "Manter o gravado" o mantém NO processo (entra na capa). "Manter o existente" só soma na capa o
+  de unidade SEM ACESSO é conferido com a unidade REAL (`BaseReenvio.unidades`, as mesmas do banner gravado) e fica
+  só-leitura: sem diferença, é pulado (não é erro); com diferença, é erro "Unidade sem acesso" (o servidor recusaria) —
+  "Manter o gravado" o mantém NO processo (entra na capa). "Manter o existente" só soma na capa o
   DFD que é DESTE processo (`existenteNoProcesso`), sem contar duas vezes.
   **RASTRO do DFD sobrescrito por OUTRO protocolo (migração `0032`, tabela `dfd_passagens`):** quando um protocolo traz um
   DFD que estava em outro, o de ORIGEM guarda um RETRATO leve (planejamento/tipo/sigla/itens/valor DA ÉPOCA; único por
