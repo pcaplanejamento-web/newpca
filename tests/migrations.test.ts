@@ -367,6 +367,14 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(p.pca_id, null, "excluir o PCA deveria devolver o protocolo à Mesa principal");
   });
 
+  it("0035 sequencial do item no PCA: pca_itens (único por PCA) + o nº no próprio item", () => {
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='table'").includes("pca_itens"));
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["pca_itens_pca_seq_uq", "pca_itens_item_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('dfd_itens')");
+    for (const c of ["pca_id", "pca_sequencial"]) assert.ok(cols.includes(c), `coluna ausente em dfd_itens: ${c}`);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

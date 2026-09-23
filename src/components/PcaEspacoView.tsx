@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import { type CamadaPca, type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
+import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { Badge } from "./Badge";
 import { IconChevronLeft } from "./icons";
 import { PcaCapa } from "./PcaCard";
@@ -13,19 +13,16 @@ import { Skeleton, SkeletonLinhas } from "./Skeleton";
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 
 /**
- * ESPAÇO do PCA (`/painel/pca/[id]`): cabeçalho (capa, nome, status, fonte · ano), o seletor da
- * CAMADA vista (Preview = tudo · Publicado = o que o público vê — só na fonte protocolo) e as abas
- * Dashboard · Orçamento · Mesa|Importação · Configuração no MESMO espaço, com o morph da Mesa. O
- * conteúdo de cada aba chega pronto do servidor.
+ * ESPAÇO do PCA (`/painel/pca/[id]`): cabeçalho (capa, nome, status, fonte · ano) e as abas Dashboard ·
+ * Orçamento · Mesa|Importação · Configuração no MESMO espaço, com o morph da Mesa. O servidor monta SÓ a aba
+ * ativa (`?aba=`): trocar de aba navega e, até chegar, mostra o esqueleto.
  */
 export function PcaEspacoView({
   pca,
-  camada,
   aba: abaServidor,
   children,
 }: {
   pca: { nome: string; ano: number | null; fonte: FontePca; status: StatusPca; capa: string | null };
-  camada: CamadaPca;
   /** A aba que o servidor montou (`children`). */
   aba: AbaPca;
   children: ReactNode;
@@ -45,13 +42,6 @@ export function PcaEspacoView({
     const p = new URLSearchParams(sp.toString());
     p.set("aba", a);
     router.push(`${pathname}?${p.toString()}`, { scroll: false });
-  };
-  const trocarCamada = (c: CamadaPca) => {
-    const p = new URLSearchParams(sp.toString());
-    p.set("aba", aba);
-    if (c === "publicado") p.set("camada", "publicado");
-    else p.delete("camada");
-    router.push(`${pathname}?${p.toString()}`);
   };
 
   return (
@@ -75,19 +65,6 @@ export function PcaEspacoView({
             {ROTULO_FONTE[pca.fonte]} · ano {pca.ano ?? "—"}
           </p>
         </div>
-        {pca.fonte === "protocolo" && (aba === "dashboard" || aba === "orcamento") && (
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <span className="text-xs text-muted">Visão</span>
-            <Segmented<CamadaPca>
-              value={camada}
-              onChange={trocarCamada}
-              options={[
-                { value: "preview", label: "Preview" },
-                { value: "publicado", label: "Publicado" },
-              ]}
-            />
-          </div>
-        )}
       </div>
 
       <Segmented<AbaPca>

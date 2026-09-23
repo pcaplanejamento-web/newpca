@@ -13,12 +13,8 @@ export type SituacaoCadastrada = {
   nome: string;
   cor: string;
   ordem: number;
-  /** O protocolo nesta situação pode ser movido para o PCA (migração `0033`). */
-  permiteMoverPca: boolean;
-  /** Camada do PCA em que os DFDs do protocolo contam (`publicado` = aparecem na tela inicial). */
-  camadaPca: "preview" | "publicado";
 };
-type DadosSituacao = { nome: string; cor: string; permiteMoverPca?: boolean; camadaPca?: "preview" | "publicado" };
+type DadosSituacao = { nome: string; cor: string };
 /** Para a tela do ADM: quantos protocolos estão em cada situação (aviso ao excluir). */
 export type SituacaoComUso = SituacaoCadastrada & { emUso: number };
 
@@ -27,8 +23,6 @@ const COLS = {
   nome: protocoloSituacoes.nome,
   cor: protocoloSituacoes.cor,
   ordem: protocoloSituacoes.ordem,
-  permiteMoverPca: protocoloSituacoes.permiteMoverPca,
-  camadaPca: protocoloSituacoes.camadaPca,
 };
 
 export async function listarSituacoes(): Promise<SituacaoCadastrada[]> {
@@ -60,7 +54,7 @@ export async function criarSituacao(d: DadosSituacao): Promise<{ id: number }> {
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${protocoloSituacoes.ordem}), -1)` }).from(protocoloSituacoes);
   const [row] = await db
     .insert(protocoloSituacoes)
-    .values({ nome: d.nome, cor: d.cor, ordem: Number(max) + 1, permiteMoverPca: d.permiteMoverPca ?? false, camadaPca: d.camadaPca ?? "preview" })
+    .values({ nome: d.nome, cor: d.cor, ordem: Number(max) + 1 })
     .returning({ id: protocoloSituacoes.id });
   return { id: row.id };
 }
@@ -68,13 +62,7 @@ export async function criarSituacao(d: DadosSituacao): Promise<{ id: number }> {
 export async function atualizarSituacao(id: number, d: DadosSituacao): Promise<void> {
   await getDb()
     .update(protocoloSituacoes)
-    .set({
-      nome: d.nome,
-      cor: d.cor,
-      ...(d.permiteMoverPca !== undefined ? { permiteMoverPca: d.permiteMoverPca } : {}),
-      ...(d.camadaPca !== undefined ? { camadaPca: d.camadaPca } : {}),
-      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-    })
+    .set({ nome: d.nome, cor: d.cor, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(protocoloSituacoes.id, id));
 }
 

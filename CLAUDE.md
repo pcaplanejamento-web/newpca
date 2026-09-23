@@ -1133,29 +1133,29 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
-  **`/painel/pca/[id]`** (`PcaEspacoView`: cabeçalho + `Segmented` de abas com `animate-cat-morph`; `?aba=`/`?camada=`).
+  **`/painel/pca/[id]`** (`PcaEspacoView`: cabeçalho + `Segmented` de abas com `animate-cat-morph`; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
   (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
   **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
   (`unidades_pca_codigo_uq`; `/api/upload` `start` exige `pcaId`, só PCA de lista). **O que se vincula ao PCA é o DFD**
   (`pca_dfds` + `acao` incorporar/substituir/excluir, `substitui_dfd_id`, `vinculado_por/em`); o protocolo é o veículo.
-  `protocolo_situacoes` ganhou **`permite_mover_pca`** + **`camada_pca`** (preview/publicado). **Legado:** as planilhas atuais
+  `protocolo_situacoes` ganhou `permite_mover_pca`/`camada_pca` — **DORMENTES desde a `0035`** (a situação não interfere
+  mais no PCA; sem código). **Legado:** as planilhas atuais
   viraram um PCA "lista pronta" **publicado** (a tela inicial não muda) e as edições que já uniam DFDs viraram fonte `protocolo`.
 - **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoEnviar` (travas: fonte protocolo · situação que permite · `ano_pca` do
   protocolo = ano do PCA · ter DFD · não estar já em um PCA), `motivosNaoIncorporar` (na Mesa deste PCA · não incorporado · DFD
   livre — um DFD em UM PCA), `motivoNaoDevolver`, a TRAVA (`estaTravado`/`edicaoPermitidaTravado`/`CAMPOS_LIVRES_TRAVADO`/
   `mensagemTravaPca`, ver "Mesa do PCA" abaixo), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
-  incorporar), **`consolidarPca(linhas, camada)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
+  incorporar), **`consolidarPca(linhas)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
   ⇒ aviso), `previsaoDoDfd` (seção PREVISÃO → mês/ano; ANUAL espalha nos 12 meses) e **`agregarDashboard`** (as MESMAS formas de
-  `queries.ts`). **Camada:** Preview = todos os DFDs vinculados; Publicado (e o público) = só os de protocolos em situação de
-  camada Publicado — mudar a situação move a camada AO VIVO. Acesso em **`pca-espaco.ts`** (`listarPcasCards`,
+  `queries.ts`). **Dashboard ÚNICO:** o painel e a tela inicial mostram o MESMO (tudo o que foi incorporado — os itens ATIVOS
+  dos DFDs vigentes); não há camada Preview/Publicado. Acesso em **`pca-espaco.ts`** (`listarPcasCards`,
   `listarPcasPublicados`, `dashboardDoPca` [lista = SQL de `queries.ts` com `pcaId`; protocolo = itens consolidados em JS],
-  `orcamentoDoPca`, `enviarProtocolo`/`devolverProtocolo`/`incorporarProtocolo`/`desincorporarProtocolo`, `capaDoPca`, visões).
+  `orcamentoDoPca`, `enviarProtocolo`/`devolverProtocolo`/`incorporarProtocolo`, `itensNumeradosDoPca`/`retirarItensDoPca`, `capaDoPca`, visões).
   Schemas em `pca-espaco-validation.ts`. **A capa NÃO trafega nas listas:** `PcaEspaco.capa` é a URL **`GET /api/pca/[id]/capa?v=`**
   (versão = `atualizado_em` + tamanho; cache `immutable`, como a foto do usuário); `PcaCapa` dimensiona o ano por container query
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
-- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público; `Callout` âmbar no Preview com quantos
-  protocolos ainda estão em camada Preview). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
+- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
@@ -1165,16 +1165,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
   scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha).
-- **Situações (Configurações → Situações):** `Switch` "pode ser movido para o PCA" + `Segmented` da camada; coluna "PCA".
+- **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
+  qualquer que seja a situação).
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por
   dimensão (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Elemento, Código) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
   selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts` puro). Uma coluna
   nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `GET/POST /api/orcamento/visoes` + `PATCH/DELETE
   /api/orcamento/visoes/[id]` (auditoria `orcamento_visao`).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
-  `UnitFilter` (planilha na lista; unidade requisitante no protocolo); só a camada Publicada.
+  `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
-  capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar · desincorporar), `GET /api/pca/[id]/capa`
+  capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar), `POST /api/pca/[id]/itens` (retirar), `GET /api/pca/[id]/capa`
   (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.
 
 ### Mesa do PCA INDEPENDENTE + incorporação com TRAVA — migração `0034`
@@ -1187,18 +1188,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`carregarMesa(u, pcaId)` — escopo pelas unidades ACESSÍVEIS, não pela ativa do head; itens por `GET /api/dfd/itens?pca=`).
   Na Mesa do PCA (`MesaPca`): `Segmented` **Todos | Enviados | Incorporados**, coluna "PCA" (Enviado [motivos no `title`] /
   Incorporado · ação) e as ações da seleção **Incorporar** (modal com a ação por protocolo: incorporar/substituir/excluir,
-  sugerida pelo assunto; grava `pca_dfds` + `pca_incorporado_em` num lote atômico — os itens entram pelo DFD), **Desincorporar**
-  (tira os `pca_dfds` do protocolo e destrava, atômico) e **Devolver à Mesa** (só o NÃO incorporado). Só o incorporado conta no
+  sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico — **PERMANENTE**: não
+  há desincorporar) e **Devolver à Mesa** (só o NÃO incorporado) — a barra de seleção de protocolos do PCA tem SÓ essas duas
+  ações (sem o editor de massa). Só o incorporado conta no
   Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, `exigirEditor`,
   escopo por unidade, `{alterados, falhas}`, auditoria por protocolo com a ação REAL).
 - **TRAVA (profissional, servidor + tela):** protocolo INCORPORADO ⇒ protocolo, DFDs e itens **somente leitura**; só a GESTÃO
-  (`responsavelId`/`situacaoId` — a situação move a camada Preview → Publicado) passa. Servidor: `src/lib/trava-pca.ts`
+  (`responsavelId`/`situacaoId`) passa. Servidor: `src/lib/trava-pca.ts`
   (`travaDeProtocolos`/`travaDeDfds`, lotes ≤ 90) → **423** com `mensagemTravaPca` em `POST /api/protocolo` (start/reenvio),
   `PATCH`/`DELETE /api/protocolo/[id]`, `POST /api/protocolo/massa` (exceto responsável/situação), `POST /api/dfd` (start-dfd:
   DFD existente + protocolo destino; append), `PATCH`/`DELETE /api/dfd/[id]` (inclui vincular de/para travado), `POST
   /api/dfd/massa` e `POST /api/dfd/itens/massa` (por alvo → `falhas`); `POST /api/dfd/existentes` devolve o travado como
   `{acessivel:false}` (a importação o mostra como "Não sobrescrevível"). Tela: `useProtocoloGravado`/`useDfdGravado` dobram a
   trava em `podeEditar`/`editavel` + `Callout` âmbar com cadeado; a `DfdsView` esconde vincular/excluir do travado.
+- **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
+  espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
+  (remede no `animationend`).
+
+### SEQUENCIAL do item no PCA — migração `0035`
+- **Modelo (aditivo):** tabela **`pca_itens`** (`pca_id` cascade + **`sequencial`**, **ÚNICO por PCA** `pca_itens_pca_seq_uq`;
+  `dfd_item_id`/`dfd_id`/`protocolo_id` set null; `ativo`, `inativado_em/por`, `motivo`) + o nº no PRÓPRIO item
+  (`dfd_itens.pca_id`/`pca_sequencial`). Backfill dos protocolos já incorporados (`ROW_NUMBER() OVER (PARTITION BY pca_id)`).
+- **Numeração** (BUILDERS do Drizzle em `pca-itens-sql.ts` — nada de `db.run(sql…)` em `db.batch`; testados pelo driver D1 REAL
+  dentro de `db.batch`, `tests/pca-itens-sql.test.ts`):
+  `numerarItensDoProtocolo` = `MAX(sequencial)` do PCA (inclui os INATIVOS — nunca reaproveita) + `ROW_NUMBER()` na ordem DFD →
+  item, só DFDs vinculados a ESTE PCA com ação ≠ excluir, idempotente (`NOT EXISTS`); `gravarSequencialNosItens` registra no
+  item. Os dois rodam no MESMO `db.batch` da incorporação (transação sequencial — sem corrida no MAX). Depois,
+  `sincronizarAtivosPca` inativa os números dos DFDs que deixaram de ser vigentes (substituídos/excluídos por outro protocolo).
+- **Retirar item do PCA:** Mesa do PCA → Itens → seleção → **"Retirar do PCA"** (`modoPca.acoesItens`) → `POST
+  /api/pca/[id]/itens` (`acaoItensPcaSchema` `{acao:"retirar", ids ≤ 100}`, `exigirEditor`, escopo por unidade, auditoria com os
+  nºs): o nº fica **INATIVO** (riscado na coluna **"Seq. PCA"** — `modoPca.colunasItens`) e o item sai do Dashboard/Orçamento/cards
+  (`itensConsolidados` pula os inativos; `listarPcasCards` desconta via `inativosPorDfd`). O editor de massa da seleção de itens
+  só aparece com itens NÃO incorporados. Excluir o PCA zera `dfd_itens.pca_id/pca_sequencial` no mesmo lote.
 
 ## Orçamento municipal (relatório CUBO) — migração `0028`
 - **O que é:** módulo para subir e consultar o **orçamento** da Prefeitura (dotação por Órgão/Unidade/**Elemento de

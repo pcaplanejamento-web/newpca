@@ -83,16 +83,21 @@ type Sel = Set<string | number>;
 
 /**
  * A Mesa DENTRO do PCA (aba Mesa do espaço do PCA): sem os lançadores de importação, com uma
- * ferramenta à direita das visões (ex.: Todos | Enviados | Incorporados), colunas extras na tabela de
- * protocolos e as ações da seleção de protocolos (Incorporar / Desincorporar / Devolver). As listas já
- * chegam restritas aos protocolos ENVIADOS ao PCA; os itens vêm do escopo do PCA (`?pca=`).
+ * ferramenta à direita das visões (ex.: Todos | Enviados | Incorporados), colunas extras nas tabelas de
+ * protocolos/itens e as ações da seleção (protocolos: Incorporar / Devolver; itens: Retirar do PCA). As listas
+ * já chegam restritas aos protocolos ENVIADOS ao PCA; os itens vêm do escopo do PCA (`?pca=`).
  */
 export type ModoPcaMesa = {
   pcaId: number;
   ferramenta?: ReactNode;
   colunasProtocolo?: Column<ProtocoloResumo>[];
+  /** As ÚNICAS ações da seleção de protocolos no PCA (sem o editor de massa). */
   acoesProtocolos?: (selecionados: ProtocoloResumo[], limpar: () => void) => ReactNode;
   rodapeProtocolos?: (linhas: ProtocoloResumo[]) => string;
+  /** Colunas extras da visão Itens (ex.: o sequencial do item no PCA). */
+  colunasItens?: Column<ItemDfdRow>[];
+  /** Ações da seleção de itens (ex.: "Retirar do PCA"); o editor de massa só aparece com itens NÃO incorporados. */
+  acoesItens?: (selecionados: ItemDfdRow[], limpar: () => void) => ReactNode;
 };
 /** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
 const podar = (sel: Sel, validas: Set<number>): Sel => {
@@ -147,7 +152,7 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
-  /** Mesa dentro do PCA (sem importação; ações de incorporar/desincorporar/devolver). */
+  /** Mesa dentro do PCA (sem importação; ações de incorporar/devolver e retirar item). */
   modoPca?: ModoPcaMesa;
 }) {
   const router = useRouter();
@@ -930,7 +935,7 @@ export function DfdsView({
       vazio(filtrado && (itens?.length ?? 0) > 0 ? semResultado : "Nenhum item nesta visão.")
     ) : (
       <DataTable
-        columns={colsItens}
+        columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
         rows={itensF}
         getKey={(r) => r.id}
         selectable={podeEditar}
@@ -987,7 +992,7 @@ export function DfdsView({
           modoPca ? (
             modoPca.acoesProtocolos?.(sel, () => setSelProtos(new Set()))
           ) : (
-            <EnviarAoPca selecionados={sel} pcas={pcas} situacoes={situacoes} onConcluido={() => setSelProtos(new Set())} />
+            <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />
           )
         }
         resumo={
@@ -1000,15 +1005,20 @@ export function DfdsView({
           />
         }
       >
-        {progressoMassa}
-        <BarraEdicaoMassaProtocolos
-          reparticoes={reparticoes}
-          pessoas={opcoesPessoas}
-          situacoes={situacoes}
-          regras={regras}
-          aplicando={!!aplicandoMassa}
-          onAplicar={aplicarMassaProtocolos}
-        />
+        {/* Na Mesa do PCA a seleção de protocolos só incorpora/devolve (sem edição em massa). */}
+        {!modoPca && (
+          <>
+            {progressoMassa}
+            <BarraEdicaoMassaProtocolos
+              reparticoes={reparticoes}
+              pessoas={opcoesPessoas}
+              situacoes={situacoes}
+              regras={regras}
+              aplicando={!!aplicandoMassa}
+              onAplicar={aplicarMassaProtocolos}
+            />
+          </>
+        )}
       </BarraSelecao>
     );
   } else if (podeEditar && vista === "itens" && (selItens.size > 0 || aplicandoMassa)) {
@@ -1022,9 +1032,15 @@ export function DfdsView({
         onRemover={tirar(setSelItens)}
         onLimpar={() => setSelItens(new Set())}
         resumo={<ResumoSelecao qtd={sel.length} singular="item" plural="itens" soma={sel.reduce((t, it) => t + (it.valorTotal ?? 0), 0)} />}
+        acoes={modoPca?.acoesItens?.(sel, () => setSelItens(new Set()))}
       >
-        {progressoMassa}
-        <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />
+        {/* Item INCORPORADO (com nº no PCA) é somente leitura — o editor de massa só vale para os não incorporados. */}
+        {sel.every((it) => it.pcaSequencial == null) && (
+          <>
+            {progressoMassa}
+            <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />
+          </>
+        )}
       </BarraSelecao>
     );
   }

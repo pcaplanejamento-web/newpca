@@ -56,8 +56,8 @@ export default async function HomePage({
   const escolhido = publicados.find((p) => p.id === pedido) ?? publicados[0];
   const pca = escolhido ? await getPcaEspaco(escolhido.id) : null;
   const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
-  // O público vê SÓ a camada publicada (protocolos em situação de camada "Publicado").
-  const dados = pca ? await dashboardDoPca(pca, "publicado", Number.isFinite(unidadePedida) ? unidadePedida : undefined) : null;
+  // O MESMO Dashboard do painel (tudo o que foi incorporado).
+  const dados = pca ? await dashboardDoPca(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined) : null;
 
   if (!pca || !dados || dados.resumo.count === 0) {
     return (
@@ -107,7 +107,7 @@ export default async function HomePage({
         <PainelPca
           dados={dados}
           unidadeFiltrada={dados.unidadeId != null}
-          hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos.publicados)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
+          hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
         />
       </main>
     </div>

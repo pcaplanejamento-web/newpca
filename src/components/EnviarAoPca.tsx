@@ -6,7 +6,6 @@ import type { PcaResumo } from "@/lib/dfd";
 import { brl, num } from "@/lib/format";
 import { motivosNaoEnviar } from "@/lib/pca-core";
 import type { ProtocoloResumo } from "@/lib/protocolo";
-import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { labelCls, selectCls } from "./formStyles";
@@ -31,18 +30,16 @@ export async function acaoProtocolosPca(pcaId: number, corpo: Record<string, unk
 
 /**
  * "ENVIAR AO PCA" — a ação da barra de seleção de PROTOCOLOS da Mesa principal: escolhe o PCA (só os de fonte
- * protocolo), mostra por protocolo se pode ir (as MESMAS travas do servidor: situação que permite, ano do PCA,
- * ter DFD) e envia os elegíveis. Enviados SAEM da Mesa principal e vão para a Mesa daquele PCA.
+ * protocolo), mostra por protocolo se pode ir (as MESMAS travas do servidor: ano do PCA, ter DFD, não estar em
+ * outro PCA — a situação NÃO interfere) e envia os elegíveis. Enviados SAEM da Mesa principal e vão para a Mesa daquele PCA.
  */
 export function EnviarAoPca({
   selecionados,
   pcas,
-  situacoes,
   onConcluido,
 }: {
   selecionados: ProtocoloResumo[];
   pcas: PcaResumo[];
-  situacoes: SituacaoCadastrada[];
   onConcluido: () => void;
 }) {
   const router = useRouter();
@@ -50,21 +47,16 @@ export function EnviarAoPca({
   const [aberto, setAberto] = useState(false);
   const [pcaId, setPcaId] = useState<number | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const sit = useMemo(() => new Map(situacoes.map((s) => [s.id, s])), [situacoes]);
   const pca = destinos.find((p) => p.id === pcaId) ?? null;
 
-  const motivos = (p: ProtocoloResumo) => {
-    const s = p.situacaoId != null ? sit.get(p.situacaoId) : undefined;
-    return motivosNaoEnviar({
-      situacaoPermite: s ? s.permiteMoverPca : null,
-      situacaoNome: s?.nome,
+  const motivos = (p: ProtocoloResumo) =>
+    motivosNaoEnviar({
       anoProtocolo: p.anoPca,
       anoPca: pca?.ano ?? null,
       totalDfds: p.totalDfds,
       fonteProtocolo: true,
       jaEmPca: p.pcaId != null ? (p.pcaNome ?? "outro PCA") : null,
     });
-  };
   const elegiveis = pca ? selecionados.filter((p) => motivos(p).length === 0) : [];
 
   function abrir() {
@@ -129,7 +121,7 @@ export function EnviarAoPca({
               ))}
             </select>
             <p className="mt-1.5 text-xs text-muted">
-              Os enviados saem da Mesa principal e vão para a Mesa do PCA, onde são incorporados (e podem ser devolvidos).
+              Os enviados saem da Mesa principal e vão para a Mesa do PCA, onde são incorporados (permanente) ou devolvidos.
             </p>
           </div>
           <ul className="divide-y divide-border rounded-card border border-border">

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { ACOES_DFD_PCA, type AcaoDfdPca, acaoSugerida, motivoNaoDevolver, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
+import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloResumo } from "@/lib/protocolo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -11,7 +12,7 @@ import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
 import { acaoProtocolosPca, type ResultadoAcaoPca } from "./EnviarAoPca";
 import { selectCls } from "./formStyles";
-import { IconUndo, IconCheck, IconLockOpen } from "./icons";
+import { IconCheck, IconTrash, IconUndo } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -31,9 +32,10 @@ const incorporado = (p: ProtocoloResumo) => p.pcaIncorporadoEm != null;
 /**
  * Aba MESA do PCA (fonte protocolo) — INDEPENDENTE da Mesa principal: só os protocolos ENVIADOS a este PCA
  * (Mesa principal → barra de seleção → "Enviar ao PCA"), com a MESMA Mesa (Protocolos · DFDs · Itens, Estado,
- * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados** e as ações da seleção:
- * **Incorporar** (os DFDs e os itens passam a compor o PCA com a ação por protocolo — a partir daí protocolo,
- * DFDs e itens ficam TRAVADOS), **Desincorporar** (destrava) e **Devolver à Mesa** (só o não incorporado).
+ * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados**; a seleção de protocolos só tem
+ * **Incorporar** (PERMANENTE: os DFDs e os itens passam a compor o PCA com a ação por protocolo, cada item ganha
+ * o SEQUENCIAL único do PCA e protocolo/DFDs/itens ficam TRAVADOS) e **Devolver à Mesa** (só o não
+ * incorporado). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA** (o nº fica inativo).
  */
 export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protocolos, dfds, ...mesa }: Props) {
   const router = useRouter();
@@ -128,11 +130,52 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
     if (okk) setIncorporar(null);
   }
 
-  function desincorporar(sel: ProtocoloResumo[], limpar: () => void) {
-    const alvo = sel.filter(incorporado);
-    if (!alvo.length || !confirm(`Desincorporar ${alvo.length} protocolo(s)? Os DFDs saem do ${pca.nome} e voltam a ser editáveis.`)) return;
-    void executar({ acao: "desincorporar", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) desincorporado(s).`, limpar);
+  async function retirarItens(sel: ItemDfdRow[], limpar: () => void) {
+    const alvo = sel.filter((it) => it.pcaSequencial != null && it.pcaAtivo);
+    if (
+      !alvo.length ||
+      gravando ||
+      !confirm(`Retirar ${alvo.length} item(ns) do ${pca.nome}? O nº sequencial fica INATIVO (nunca é reaproveitado) e o item sai do Dashboard.`)
+    )
+      return;
+    setGravando(true);
+    try {
+      const r = await fetch(`/api/pca/${pca.id}/itens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "retirar", ids: alvo.map((it) => it.id) }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number; falhas?: { motivo: string }[] };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível retirar.");
+      const msg = `${num(j.alterados ?? 0)} item(ns) retirado(s) do PCA.`;
+      if (j.falhas?.length) toast.error(`${msg} Não retirados: ${j.falhas.map((f) => f.motivo).join(" · ")}`);
+      else toast.success(msg);
+      limpar();
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível retirar.");
+    } finally {
+      setGravando(false);
+    }
   }
+
+  const colunaSeq: Column<ItemDfdRow> = {
+    key: "pcaSeq",
+    header: "Seq. PCA",
+    nowrap: true,
+    numero: (it) => it.pcaSequencial,
+    value: (it) => (it.pcaSequencial == null ? "" : String(it.pcaSequencial)),
+    render: (it) =>
+      it.pcaSequencial == null ? (
+        <span className="text-faint">—</span>
+      ) : it.pcaAtivo ? (
+        <span className="font-semibold tabular-nums text-text">{it.pcaSequencial}</span>
+      ) : (
+        <span className="tabular-nums text-faint line-through" title="Nº inativo — item retirado do PCA">
+          {it.pcaSequencial}
+        </span>
+      ),
+  };
 
   function devolver(sel: ProtocoloResumo[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
@@ -167,27 +210,30 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
             )}`,
           acoesProtocolos: mesa.podeEditar
             ? (sel, limpar) => {
-                const nInc = sel.filter((p) => !incorporado(p)).length;
-                const nDes = sel.length - nInc;
-                return (
+                const n = sel.filter((p) => !incorporado(p)).length;
+                return n === 0 ? (
+                  <span className="text-xs text-muted">Incorporados não voltam — a incorporação é permanente.</span>
+                ) : (
                   <div className="flex flex-wrap gap-2">
-                    {nInc > 0 && (
-                      <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
-                        Incorporar ({nInc})
-                      </Button>
-                    )}
-                    {nDes > 0 && (
-                      <Button variant="secondary" icon={<IconLockOpen className="h-4 w-4" />} onClick={() => desincorporar(sel, limpar)} loading={gravando}>
-                        Desincorporar ({nDes})
-                      </Button>
-                    )}
-                    {nInc > 0 && (
-                      <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} disabled={gravando}>
-                        Devolver à Mesa ({nInc})
-                      </Button>
-                    )}
+                    <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
+                      Incorporar ({n})
+                    </Button>
+                    <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
+                      Devolver à Mesa ({n})
+                    </Button>
                   </div>
                 );
+              }
+            : undefined,
+          colunasItens: [colunaSeq],
+          acoesItens: mesa.podeEditar
+            ? (sel, limpar) => {
+                const n = sel.filter((it) => it.pcaSequencial != null && it.pcaAtivo).length;
+                return n > 0 ? (
+                  <Button variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={() => void retirarItens(sel, limpar)} loading={gravando}>
+                    Retirar do PCA ({n})
+                  </Button>
+                ) : null;
               }
             : undefined,
         }}
@@ -213,8 +259,9 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
         <div className="space-y-3">
           <p className="text-sm text-muted">
             Os DFDs (e os itens) de cada protocolo passam a compor o PCA com a ação escolhida: <b>Incorporar</b> (DFD novo),{" "}
-            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). Enquanto
-            incorporado, o protocolo, os DFDs e os itens ficam <b>somente leitura</b> (a situação e o responsável seguem editáveis).
+            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). A incorporação é{" "}
+            <b>permanente</b>: cada item ganha um <b>nº sequencial único no PCA</b> e o protocolo, os DFDs e os itens ficam{" "}
+            <b>somente leitura</b> (a situação e o responsável seguem editáveis).
           </p>
           <ul className="divide-y divide-border rounded-card border border-border">
             {(incorporar ?? []).map((p) => (

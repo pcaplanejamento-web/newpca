@@ -5,7 +5,6 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { acessivelNaLista } from "@/lib/mesa-dados";
 import { acaoSugerida, motivoNaoDevolver, motivosNaoEnviar, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
 import {
-  desincorporarProtocolo,
   devolverProtocolo,
   dfdsDosProtocolos,
   dfdsEmOutroPca,
@@ -15,23 +14,21 @@ import {
 } from "@/lib/pca-espaco";
 import { acaoProtocolosPcaSchema } from "@/lib/pca-espaco-validation";
 import { listarProtocolosPorIds } from "@/lib/protocolo";
-import { listarSituacoes } from "@/lib/situacoes";
 
 export const dynamic = "force-dynamic";
 
-const ROTULO: Record<"enviar" | "devolver" | "incorporar" | "desincorporar", string> = {
+const ROTULO: Record<"enviar" | "devolver" | "incorporar", string> = {
   enviar: "enviado ao",
   devolver: "devolvido à Mesa principal pelo",
   incorporar: "incorporado ao",
-  desincorporar: "desincorporado do",
 };
 
 /**
  * Ações da MESA DO PCA sobre protocolos (≤ 50 por requisição), cada uma com as suas travas (`pca-core`):
- * ENVIAR (Mesa principal → Mesa do PCA: situação que permite, ano do PCA, ter DFD, não estar em outro PCA),
- * DEVOLVER (só o não incorporado), INCORPORAR (os DFDs entram no PCA com a ação por protocolo; um DFD já em
- * OUTRO PCA fica de fora; a partir daqui protocolo/DFDs/itens TRAVAM) e DESINCORPORAR. Escopo por unidade em
- * TODAS; a falha de um protocolo não derruba os demais (`falhas`); auditoria por protocolo com a ação REAL.
+ * ENVIAR (Mesa principal → Mesa do PCA: ano do PCA, ter DFD, não estar em outro PCA — a situação NÃO
+ * interfere), DEVOLVER (só o não incorporado) e INCORPORAR (PERMANENTE: os DFDs entram no PCA com a ação por
+ * protocolo e cada item ganha o sequencial único do PCA; um DFD já em OUTRO PCA fica de fora; a partir daqui
+ * protocolo/DFDs/itens TRAVAM). Escopo por unidade em TODAS; a falha de um protocolo não derruba os demais (`falhas`); auditoria por protocolo com a ação REAL.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
@@ -45,14 +42,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("resp" in p) return p.resp;
   const corpo = p.data;
 
-  const [{ lista }, protocolos, situacoes, dfds] = await Promise.all([
+  const [{ lista }, protocolos, dfds] = await Promise.all([
     getReparticaoContexto(a.u),
     listarProtocolosPorIds(corpo.ids),
-    corpo.acao === "enviar" ? listarSituacoes() : Promise.resolve([]),
     corpo.acao === "incorporar" ? dfdsDosProtocolos(corpo.ids) : Promise.resolve([]),
   ]);
   const acessivel = acessivelNaLista(lista);
-  const sit = new Map(situacoes.map((s) => [s.id, s]));
   const emOutro = corpo.acao === "incorporar" ? await dfdsEmOutroPca(dfds.map((d) => d.id), pca.id) : new Map<number, number>();
 
   let alterados = 0;
@@ -67,10 +62,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       let resumo = "";
       let depois: unknown = null;
       if (corpo.acao === "enviar") {
-        const s = pr.situacaoId != null ? sit.get(pr.situacaoId) : undefined;
         const m = motivosNaoEnviar({
-          situacaoPermite: s ? s.permiteMoverPca : null,
-          situacaoNome: s?.nome,
           anoProtocolo: pr.anoPca,
           anoPca: pca.ano,
           totalDfds: pr.totalDfds,
@@ -89,7 +81,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           continue;
         }
         await devolverProtocolo(pca.id, pr.id);
-      } else if (corpo.acao === "incorporar") {
+      } else {
         const doProto = dfds.filter((d) => d.protocoloId === pr.id);
         const m = motivosNaoIncorporar({
           enviadoAEste: pr.pcaId === pca.id,
@@ -107,12 +99,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         const fora = doProto.length - entradas.length;
         resumo = ` — ${entradas.length} DFD(s) como "${ROTULO_ACAO[acao]}"${fora ? `; ${fora} já em outro PCA (fora)` : ""}`;
         depois = { acao, dfds: entradas.map((e) => e.dfdId) };
-      } else {
-        if (pr.pcaId !== pca.id || pr.pcaIncorporadoEm == null) {
-          falha("O protocolo não está incorporado a este PCA.");
-          continue;
-        }
-        await desincorporarProtocolo(pca.id, pr.id);
       }
       alterados++;
       await registrarAuditoria({

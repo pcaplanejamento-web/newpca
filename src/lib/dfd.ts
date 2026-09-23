@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, inArray, isNull, type SQL, sql } from "drizzle-orm";
-import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
+import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
@@ -108,6 +108,9 @@ export type ItemDfdRow = {
   quantidade: number | null;
   valorUnitario: number | null;
   valorTotal: number | null;
+  /** Nº do item no PCA (só na Mesa do PCA, item INCORPORADO) e se o nº está ativo (retirado = inativo). */
+  pcaSequencial: number | null;
+  pcaAtivo: boolean | null;
 };
 
 export type DfdDetalhe = DfdResumo & {
@@ -245,11 +248,15 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Pr
       quantidade: dfdItens.quantidade,
       valorUnitario: dfdItens.valorUnitario,
       valorTotal: dfdItens.valorTotal,
+      pcaSequencial: pcaItens.sequencial,
+      pcaAtivo: pcaItens.ativo,
     })
     .from(dfdItens)
     .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
+    // O nº do item NESTE PCA (Mesa do PCA); na Mesa principal não casa nada (−1).
+    .leftJoin(pcaItens, and(eq(pcaItens.dfdItemId, dfdItens.id), eq(pcaItens.pcaId, pcaId ?? -1)))
     .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
@@ -1011,6 +1018,8 @@ export async function excluirPca(id: number): Promise<void> {
       .update(dfdProtocolos)
       .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null, pcaIncorporadoEm: null })
       .where(eq(dfdProtocolos.pcaId, id)),
+    // O nº do item no PCA sai junto (a numeração em `pca_itens` cai por cascade).
+    db.update(dfdItens).set({ pcaId: null, pcaSequencial: null }).where(eq(dfdItens.pcaId, id)),
     db.delete(pcas).where(eq(pcas.id, id)),
   ]);
 }

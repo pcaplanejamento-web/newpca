@@ -5,13 +5,13 @@ import { norm } from "./parse-dfd-comum.ts";
  * PCA como ESPAÇO — núcleo PURO (sem `getDb`/JSX → testável). O PCA tem uma FONTE (`lista` =
  * planilhas importadas | `protocolo` = DFDs vinculados a partir dos protocolos), um STATUS
  * (`preview`/`publicado`) e, na fonte protocolo, o que se vincula é o **DFD** (o protocolo é o
- * veículo). Cada DFD vinculado tem uma AÇÃO; a CAMADA (preview/publicado) em que ele conta vem da
- * SITUAÇÃO do protocolo de origem (Configurações → Situações).
+ * veículo): o protocolo é ENVIADO à Mesa do PCA e INCORPORADO (permanente) — cada DFD vinculado tem uma
+ * AÇÃO e cada item incorporado ganha um SEQUENCIAL único no PCA. O Dashboard é o MESMO para todos (o
+ * STATUS só decide se o PCA aparece na tela inicial).
  */
 
 export type FontePca = "lista" | "protocolo";
 export type StatusPca = "preview" | "publicado";
-export type CamadaPca = "preview" | "publicado";
 export type AcaoDfdPca = "incorporar" | "substituir" | "excluir";
 
 export const ROTULO_FONTE: Record<FontePca, string> = { lista: "Lista pronta", protocolo: "Protocolos" };
@@ -27,9 +27,6 @@ export function coerceFonte(v: unknown): FontePca {
   return v === "protocolo" ? "protocolo" : "lista";
 }
 export function coerceStatus(v: unknown): StatusPca {
-  return v === "publicado" ? "publicado" : "preview";
-}
-export function coerceCamada(v: unknown): CamadaPca {
   return v === "publicado" ? "publicado" : "preview";
 }
 export function coerceAcao(v: unknown): AcaoDfdPca {
@@ -49,9 +46,6 @@ export function acaoSugerida(assunto: string | null | undefined): AcaoDfdPca {
 
 /** Fatos de UM protocolo candidato a ser ENVIADO a um PCA (Mesa principal → Mesa do PCA). */
 export type FatosEnvio = {
-  /** A situação do protocolo permite enviar? (`null` = sem situação). */
-  situacaoPermite: boolean | null;
-  situacaoNome?: string | null;
   anoProtocolo: number | null;
   anoPca: number | null;
   /** Nº de DFDs do protocolo. */
@@ -64,14 +58,12 @@ export type FatosEnvio = {
 
 /**
  * Motivos que IMPEDEM enviar o protocolo ao PCA (vazio = pode). As travas: fonte do PCA = protocolo;
- * situação que permite; `ano_pca` do protocolo = ano do PCA; ter DFD; não estar já em um PCA.
+ * `ano_pca` do protocolo = ano do PCA; ter DFD; não estar já em um PCA. A situação NÃO interfere.
  */
 export function motivosNaoEnviar(f: FatosEnvio): string[] {
   const m: string[] = [];
   if (!f.fonteProtocolo) m.push("O PCA é de lista pronta (não recebe protocolos)");
   if (f.jaEmPca) m.push(`Já está no ${f.jaEmPca}`);
-  if (f.situacaoPermite == null) m.push("Protocolo sem situação");
-  else if (!f.situacaoPermite) m.push(`A situação "${f.situacaoNome ?? "—"}" não permite enviar ao PCA`);
   if (f.anoPca == null) m.push("O PCA não tem ano definido");
   else if (f.anoProtocolo == null) m.push("Protocolo sem ano do PCA");
   else if (f.anoProtocolo !== f.anoPca) m.push(`Protocolo marcado com o PCA ${f.anoProtocolo} (este é ${f.anoPca})`);
@@ -99,10 +91,10 @@ export function motivosNaoIncorporar(f: FatosIncorporacao): string[] {
   return m;
 }
 
-/** Devolver à Mesa principal só vale para o protocolo ENVIADO e NÃO incorporado (desincorpore antes). */
+/** Devolver à Mesa principal só vale para o protocolo ENVIADO a este PCA e NÃO incorporado (a incorporação é permanente). */
 export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: string | null }, pcaId: number): string | null {
   if (p.pcaId !== pcaId) return "O protocolo não está na Mesa deste PCA";
-  if (p.pcaIncorporadoEm) return "Incorporado — desincorpore antes de devolver";
+  if (p.pcaIncorporadoEm) return "Incorporado — a incorporação é permanente";
   return null;
 }
 
@@ -111,8 +103,8 @@ export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: s
 // ---------------------------------------------------------------------------
 
 /**
- * Enquanto o protocolo está INCORPORADO a um PCA, protocolo, DFDs e itens ficam TRAVADOS. Só a GESTÃO passa
- * (responsável e situação — a situação é justamente o que move a camada Preview → Publicado no PCA).
+ * O protocolo INCORPORADO a um PCA (permanente) trava protocolo, DFDs e itens. Só a GESTÃO passa
+ * (responsável e situação).
  */
 export const CAMPOS_LIVRES_TRAVADO = ["responsavelId", "situacaoId"] as const;
 
@@ -129,7 +121,7 @@ export function edicaoPermitidaTravado(campos: Record<string, unknown>): boolean
 
 /** A mensagem única da trava (servidor e tela). */
 export function mensagemTravaPca(nomePca: string | null | undefined): string {
-  return `Incorporado ao ${nomePca?.trim() || "PCA"} — somente leitura. Desincorpore na Mesa do PCA para editar.`;
+  return `Incorporado ao ${nomePca?.trim() || "PCA"} — somente leitura (a incorporação é permanente).`;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +134,6 @@ export type LinhaVinculo = {
   /** Nº de planejamento (a chave de substituição/exclusão); vazio = o DFD só se representa. */
   planejamento: string | null;
   acao: AcaoDfdPca;
-  camada: CamadaPca;
   /** Ordem cronológica (protocolação/vínculo) — texto ISO ou número; menor = antes. */
   ordem: string | number;
 };
@@ -163,14 +154,12 @@ const chavePlan = (l: LinhaVinculo) => {
 };
 
 /**
- * CONSOLIDA os DFDs do PCA na camada pedida (`publicado` = só os de protocolos em situação
- * publicada; `preview` = todos). Em ordem cronológica: INCORPORAR põe o DFD; SUBSTITUIR troca o
+ * CONSOLIDA os DFDs do PCA. Em ordem cronológica: INCORPORAR põe o DFD; SUBSTITUIR troca o
  * DFD de mesmo planejamento (sem par ⇒ entra como incorporar + aviso); EXCLUIR tira o de mesmo
  * planejamento (sem par ⇒ aviso; o DFD de exclusão nunca é vigente).
  */
-export function consolidarPca(linhas: LinhaVinculo[], camada: CamadaPca): Consolidacao {
+export function consolidarPca(linhas: LinhaVinculo[]): Consolidacao {
   const lista = linhas
-    .filter((l) => camada === "preview" || l.camada === "publicado")
     .slice()
     .sort((a, b) => (a.ordem < b.ordem ? -1 : a.ordem > b.ordem ? 1 : a.dfdId - b.dfdId));
   const atual = new Map<string, number>();
