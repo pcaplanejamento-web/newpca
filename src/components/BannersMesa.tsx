@@ -97,8 +97,12 @@ export function BannersMesa({
     limparTimer();
     onFechar();
   }
+  /** Algum banner da pilha está GRAVANDO — nada troca/fecha/empilha até terminar (a recarga pós-gravação
+   * é do banner que gravou). */
+  const gravando = () => dfd.bloqueado || proto.bloqueado;
   /** "Ver protocolo": o protocolo entra pela direita (a partir do ITEM, o DFD entra antes). */
   function verProtocolo(pid: number) {
+    if (gravando()) return;
     limparTimer();
     if (raiz === "item" && !verDfd) {
       setVerDfd(true);
@@ -107,7 +111,7 @@ export function BannersMesa({
   }
   /** Protocolo empilhado: clicar numa linha TROCA o DFD da pilha (o item, de outro DFD, sai). */
   function trocarDfd(id: number) {
-    if (id === dfdId) return;
+    if (id === dfdId || gravando()) return;
     if (!dfd.podeDescartar("Há alterações não salvas neste DFD. Trocar de DFD e descartá-las?")) return;
     if (raiz === "item") {
       setRaiz("dfd");
@@ -125,6 +129,7 @@ export function BannersMesa({
     onFechar:
       raiz === "item"
         ? () => {
+            if (gravando()) return;
             // O protocolo (depois do DFD na pilha) sai junto — pergunta pelo rascunho dele.
             if (protoId != null && !proto.podeDescartar("Há alterações não salvas no protocolo. Fechar e descartá-las?")) return;
             limparTimer();

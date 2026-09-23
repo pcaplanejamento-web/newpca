@@ -10,7 +10,7 @@ import { normalizarCodigo } from "./parse-catalogo-comum.ts";
  * - **Unidade de medida**: uma unidade IGUAL à do catálogo é travada (não se afasta do padrão);
  * - **Quantidade / Valor unitário**: o valor total do item é recalculado (quantidade × unitário);
  * - **Remover**: nunca deixa o DFD sem itens.
- * O servidor aplica o plano e recompõe o total do DFD (Σ valor total dos itens).
+ * O servidor aplica o plano e recalcula NO BANCO o total do DFD (Σ valor total dos itens).
  */
 
 export type CampoMassaItem = "catalogo" | "unidade" | "quantidade" | "valorUnitario" | "remover";
@@ -48,19 +48,21 @@ function totalRecalculado(qtd: number | null, vu: number | null, atual: number |
 }
 
 /**
- * Plano de UM DFD: `itensDfd` = TODOS os itens dele (para a trava "não fica sem itens"); `alvos` = ids
- * selecionados; `catalogo` = entradas do catálogo pelo código normalizado (só as usadas). Puro.
+ * Plano de UM DFD: `itensDfd` = os itens dele (ao menos os selecionados); `alvos` = ids selecionados;
+ * `catalogo` = entradas do catálogo pelo código normalizado (só as usadas); `totalNoDfd` = quantos itens o
+ * DFD tem (trava "não fica sem itens"; padrão = `itensDfd.length`). Puro.
  */
 export function planejarMassaItens(
   itensDfd: ItemMassa[],
   alvos: Set<number>,
   acao: AcaoMassaItem,
   catalogo: Map<string, CatalogoRef>,
+  totalNoDfd = itensDfd.length,
 ): PlanoMassaItens {
   const plano: PlanoMassaItens = { atualizar: [], remover: [], recusas: [] };
   const sel = itensDfd.filter((it) => alvos.has(it.id));
   if (acao.campo === "remover") {
-    if (sel.length >= itensDfd.length) {
+    if (sel.length >= totalNoDfd) {
       for (const it of sel) plano.recusas.push({ id: it.id, item: it.item, motivo: "o DFD ficaria sem itens" });
       return plano;
     }
@@ -107,21 +109,6 @@ export function planejarMassaItens(
     });
   }
   return plano;
-}
-
-/** Totais do DFD DEPOIS do plano — mesma régua do `reescreverDfdItens` (Σ > 0 ⇒ valor; senão null). */
-export function totaisAposPlano(itensDfd: ItemMassa[], plano: PlanoMassaItens): { valorTotal: number | null; totalItens: number } {
-  const fora = new Set(plano.remover);
-  const patch = new Map(plano.atualizar.map((a) => [a.id, a.patch]));
-  let soma = 0;
-  let n = 0;
-  for (const it of itensDfd) {
-    if (fora.has(it.id)) continue;
-    n++;
-    const p = patch.get(it.id);
-    soma += (p && "valorTotal" in p ? p.valorTotal : it.valorTotal) ?? 0;
-  }
-  return { valorTotal: soma > 0 ? round2(soma) : null, totalItens: n };
 }
 
 /** Texto curto da ação (auditoria/confirmação). */

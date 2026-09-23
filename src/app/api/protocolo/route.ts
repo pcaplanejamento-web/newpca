@@ -6,7 +6,7 @@ import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
-import { getProtocolo, getProtocoloPorIdExterno, iniciarProtocolo } from "@/lib/protocolo";
+import { getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,8 @@ export async function POST(req: Request) {
 
   const p = await parseCorpo(startProtocoloSchema, req);
   if ("resp" in p) return p.resp;
-  const { protocolo, reenvio } = p.data;
+  const { reenvio } = p.data;
+  let protocolo = p.data.protocolo;
 
   // Regra CONFIGURÁVEL (por categoria do assunto): se `protocolo.anoPca` for
   // fundamental, não protocola sem o PCA definido (o ano é herdado pelos DFDs).
@@ -47,6 +48,15 @@ export async function POST(req: Request) {
     if (!acessivel(gravado.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
     const motivo = identidadeReenvio(gravado, { numero: protocolo.numero, idExterno: protocolo.idExterno ?? null });
     if (motivo) return erro(motivo, 422);
+    // Sobrescreve o MESMO registro: o nº exatamente como gravado (a identidade ignora espaços) e o Id
+    // gravado quando o PDF não traz (nunca apaga o Id).
+    protocolo = { ...protocolo, numero: gravado.numero, idExterno: protocolo.idExterno || gravado.idExterno };
+  }
+  // Anti-sequestro por Nº: protocolar SOBRESCREVE a capa do protocolo de MESMO número — nunca a de um
+  // protocolo de unidade INACESSÍVEL (não reescreve/move o processo de outra unidade).
+  const mesmoNumero = await getProtocoloPorNumero(protocolo.numero);
+  if (mesmoNumero && !acessivel(mesmoNumero.reparticaoId)) {
+    return erro("Já existe um protocolo com esse número em outra unidade, sem acesso.", 403);
   }
   // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não
   // se ele estiver numa unidade INACESSÍVEL (não deixa sequestrar/apagar via re-import).

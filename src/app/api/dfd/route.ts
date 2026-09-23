@@ -124,8 +124,9 @@ export async function POST(req: Request) {
   if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", ctxAv)))
     return erro(res.motivo, 422);
 
-  // Validação pela EQUIPE: quem/quando vêm da SESSÃO (nunca do cliente).
-  const assinaturas = carimbarValidacao(d.assinaturas, [], a.u.nome, new Date().toISOString());
+  // Validação pela EQUIPE: quem/quando vêm da SESSÃO (nunca do cliente) — a MESMA validação já gravada
+  // (sobrescrita/reenvio do DFD) mantém o carimbo original.
+  const assinaturas = carimbarValidacao(d.assinaturas, existente?.assinaturas ?? [], a.u.nome, new Date().toISOString());
   const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
   const r = await upsertDfdCabecalho({ ...d, assinaturas }, a.u.id, d.rows);
   await registrarAuditoria({

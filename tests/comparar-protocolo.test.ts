@@ -127,6 +127,30 @@ describe("compararDfd — situação e diferenças campo a campo", () => {
   });
 });
 
+describe("compararDfd — o que o reenvio NÃO pode pular como \"igual\"", () => {
+  it("validar/desfazer a assinatura pela equipe e um carimbo re-assinado (código novo) são diferenças", () => {
+    const base = { nome: "ANA SOUZA", data: "01/02/2026", fonte: "dropsigner", codigo: "AAAA" };
+    const g = dfd({ assinaturas: [base] });
+    assert.equal(compararDfd(g, dfd({ assinaturas: [base] })).situacao, "igual");
+    const validada = compararDfd(g, dfd({ assinaturas: [{ ...base, validacao: { por: "equipe", responsavel: "ANA SOUZA" } }] }));
+    assert.equal(validada.situacao, "alterado");
+    assert.match(validada.assinaturas?.depois ?? "", /validada pela equipe \(ANA SOUZA\)/);
+    assert.equal(compararDfd(g, dfd({ assinaturas: [{ ...base, codigo: "BBBB" }] })).situacao, "alterado");
+  });
+  it("item REMOVIDO com a lista renumerada: 1 removido + os seguintes só mudam de nº", () => {
+    const it = (item: number, codigo: string, descricao: string) => ({ item, codigo, descricao, unidade: "UN", quantidade: 1, valorUnitario: 1, valorTotal: 1 });
+    const c = compararDfd(
+      dfd({ itens: [it(1, "10", "A"), it(2, "20", "B"), it(3, "30", "C"), it(4, "40", "D")] }),
+      dfd({ itens: [it(1, "10", "A"), it(2, "30", "C"), it(3, "40", "D")] }),
+    );
+    const porTipo = (t: string) => c.itens.filter((x) => x.tipo === t);
+    assert.equal(porTipo("removido").length, 1);
+    assert.equal(porTipo("removido")[0].codigo, "20");
+    assert.equal(porTipo("novo").length, 0);
+    for (const x of porTipo("alterado")) assert.deepEqual(x.campos.map((d) => d.campo), ["item"]);
+  });
+});
+
 describe("linhasRelatorioReenvio", () => {
   it("capa, novos, alterados (com itens), iguais e removidos (excluir/manter)", () => {
     const alt = compararDfd(dfd(), dfd({ objeto: "Outro objeto" }));
@@ -156,6 +180,11 @@ describe("linhasRelatorioReenvio", () => {
   it("nada mudou ⇒ diz que é igual", () => {
     const l = linhasRelatorioReenvio({ numero: "1", idExterno: null, capa: [], dfds: [], removidos: [] });
     assert.match(l.join("\n"), /Nenhuma diferença/);
+  });
+  it("DFDs ainda não comparados aparecem (e não dá \"Nenhuma diferença\")", () => {
+    const l = linhasRelatorioReenvio({ numero: "1", idExterno: null, capa: [], dfds: [], removidos: [], pendentes: [{ numero: "900", planejamento: null }] }).join("\n");
+    assert.match(l, /Ainda NÃO comparados \(1\).*DFD 900/);
+    assert.doesNotMatch(l, /Nenhuma diferença/);
   });
 });
 
@@ -199,6 +228,20 @@ describe("herdarTratamentos — o que o PDF não traz e o gravado já tratou", (
     const r = herdarTratamentos(novo, gravado, 2027);
     assert.deepEqual(r.herdados, []);
     assert.equal(r.dfd, novo);
+  });
+  it("em PARTES: a validação da assinatura espera o OCR (tratamentos primeiro, assinaturas depois)", () => {
+    const validada = ass({ nome: "JOAO", fonte: "dropsigner", ocr: true, validacao: { por: "equipe" as const, responsavel: "JOAO" } });
+    const g = { ...gravado, assinaturas: [validada] };
+    // Antes do OCR: o PDF só tem o carimbo (sem nome) — nada de assinatura é herdado ainda.
+    const semNome: Assinatura[] = [ass({ nome: "", fonte: "dropsigner" })];
+    const antes = herdarTratamentos({ ...gravado, tipo: null, assinaturas: semNome }, g, 2027, { assinaturas: false });
+    assert.equal(antes.dfd.tipo, "DFD-R — Renovação");
+    assert.equal(antes.dfd.assinaturas, semNome);
+    assert.ok(!antes.herdados.includes("Validação da assinatura (equipe)"));
+    // Depois do OCR (mesmo assinante/data/formato): a validação da equipe é herdada.
+    const depois = herdarTratamentos({ ...antes.dfd, assinaturas: [ass({ nome: "JOAO", fonte: "dropsigner", ocr: true })] }, g, 2027, { tratamentos: false });
+    assert.equal(depois.dfd.assinaturas[0].validacao?.responsavel, "JOAO");
+    assert.deepEqual(depois.herdados, ["Validação da assinatura (equipe)"]);
   });
   it("assinatura manual (equipe) segue quando o PDF continua sem assinatura nomeada", () => {
     const manual = ass({ nome: "", fonte: "manual" as const, validacao: { por: "equipe" as const, responsavel: "ANA" } });

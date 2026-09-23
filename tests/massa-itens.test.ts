@@ -7,7 +7,6 @@ import {
   type ItemMassa,
   planejarMassaItens,
   resumirFalhasItens,
-  totaisAposPlano,
 } from "../src/lib/massa-itens.ts";
 
 const it1: ItemMassa = { id: 1, item: 1, codigo: "100", descricao: "CANETA AZUL", unidade: "UN", quantidade: 10, valorUnitario: 2, valorTotal: 20 };
@@ -60,16 +59,15 @@ describe("planejarMassaItens — mesmas travas da edição item a item", () => {
   });
 });
 
-describe("totaisAposPlano", () => {
-  it("Σ dos totais dos itens restantes (com os patches)", () => {
-    const p = planejarMassaItens(itens, new Set([1]), { campo: "quantidade", valor: 4 }, catalogo);
-    assert.deepEqual(totaisAposPlano(itens, p), { valorTotal: 165, totalItens: 3 });
-    const r = planejarMassaItens(itens, new Set([2]), { campo: "remover" }, catalogo);
-    assert.deepEqual(totaisAposPlano(itens, r), { valorTotal: 27, totalItens: 2 });
-  });
-  it("sem valores ⇒ total nulo (como o reescrever)", () => {
-    const semValor = [{ ...it1, valorTotal: null }];
-    assert.deepEqual(totaisAposPlano(semValor, { atualizar: [], remover: [], recusas: [] }), { valorTotal: null, totalItens: 1 });
+describe("planejarMassaItens — trava pela CONTAGEM do DFD (o servidor lê só os itens pedidos)", () => {
+  it("remover: recusa só quando os pedidos são TODOS os itens do DFD", () => {
+    const soPedidos = [it2];
+    // O DFD tem 3 itens e só o 2 foi pedido → remove.
+    assert.deepEqual(planejarMassaItens(soPedidos, new Set([2]), { campo: "remover" }, catalogo, 3).remover, [2]);
+    // O DFD tem só esse item → recusado (nunca fica sem itens).
+    const p = planejarMassaItens(soPedidos, new Set([2]), { campo: "remover" }, catalogo, 1);
+    assert.deepEqual(p.remover, []);
+    assert.equal(p.recusas[0].motivo, "o DFD ficaria sem itens");
   });
   it("descreverAcaoItem", () => {
     assert.equal(descreverAcaoItem({ campo: "unidade", valor: "UN" }), "unidade → UN");

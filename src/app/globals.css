@@ -323,37 +323,59 @@
   -webkit-appearance: none;
   appearance: none;
   pointer-events: auto;
-  width: 24px;
-  height: 24px;
-  margin-top: 10px;
+  /* ALVO de toque de 44px; o círculo VISÍVEL (24px, aro accent) é desenhado no centro por gradiente. */
+  width: 44px;
+  height: 44px;
+  border: 0;
   border-radius: 9999px;
-  border: 2px solid var(--accent);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  background: radial-gradient(
+    circle,
+    var(--surface) 0 10px,
+    var(--accent) 10.5px 12px,
+    color-mix(in srgb, var(--text) 12%, transparent) 12.5px 13.5px,
+    transparent 14px
+  );
   cursor: grab;
 }
 .faixa-dupla input[type="range"]::-moz-range-thumb {
   pointer-events: auto;
-  width: 20px;
-  height: 20px;
+  width: 44px;
+  height: 44px;
+  border: 0;
   border-radius: 9999px;
-  border: 2px solid var(--accent);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  background: radial-gradient(
+    circle,
+    var(--surface) 0 10px,
+    var(--accent) 10.5px 12px,
+    color-mix(in srgb, var(--text) 12%, transparent) 12.5px 13.5px,
+    transparent 14px
+  );
   cursor: grab;
 }
 .faixa-dupla input[type="range"]:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: radial-gradient(
+    circle,
+    var(--surface) 0 10px,
+    var(--accent) 10.5px 12px,
+    color-mix(in srgb, var(--accent) 30%, transparent) 12.5px 16px,
+    transparent 16.5px
+  );
 }
 .faixa-dupla input[type="range"]:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: radial-gradient(
+    circle,
+    var(--surface) 0 10px,
+    var(--accent) 10.5px 12px,
+    color-mix(in srgb, var(--accent) 30%, transparent) 12.5px 16px,
+    transparent 16.5px
+  );
 }
 .faixa-dupla input[type="range"]:disabled::-webkit-slider-thumb {
-  border-color: var(--border-2);
+  background: radial-gradient(circle, var(--surface) 0 10px, var(--border-2) 10.5px 12px, transparent 12.5px);
   cursor: default;
 }
 .faixa-dupla input[type="range"]:disabled::-moz-range-thumb {
-  border-color: var(--border-2);
+  background: radial-gradient(circle, var(--surface) 0 10px, var(--border-2) 10.5px 12px, transparent 12.5px);
   cursor: default;
 }
 

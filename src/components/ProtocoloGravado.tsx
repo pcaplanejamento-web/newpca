@@ -186,8 +186,11 @@ export function useProtocoloGravado({
     }
   }
 
+  // O protocolo que o host pede AGORA — a recarga pós-gravação só vale se ainda for o mesmo.
+  const pedidoRef = useRef(protocoloId);
   // biome-ignore lint/correctness/useExhaustiveDependencies: recarrega só ao trocar o protocolo/DFD inicial pedido pelo host.
   useEffect(() => {
+    pedidoRef.current = protocoloId;
     // Zera TODO o estado do banner anterior (rascunho, seleção, painéis) — fechar descarta o rascunho
     // e o aviso de "alterações não salvas" não fica ligado depois de fechar.
     cargaRef.current++;
@@ -401,6 +404,7 @@ export function useProtocoloGravado({
       setProgresso(null);
     }
     onAlterado();
+    if (pedidoRef.current !== proto.id) return; // o banner já mostra outro protocolo (ou fechou)
     await carregar(proto.id, abertoId, preservar);
     if (falhas.length > 0) setErro(`Não foi possível salvar: ${falhas.join(" · ")}`);
   }
@@ -719,8 +723,9 @@ export function useProtocoloGravado({
     sujo,
     proto,
     principal,
-    /** Painéis ao lado (DFD + direita) — só fora do modo empilhado e com DFDs. */
-    paineis: empilhado || ordem.length === 0 ? [] : [lateral, lateral2],
+    /** Painéis ao lado (DFD + direita) — só fora do modo empilhado; SEMPRE presentes (mesmo fechados, ou
+     * sem DFDs/carregando), para a largura do banner não mudar quando os DFDs chegam. */
+    paineis: empilhado ? [] : [lateral, lateral2],
     extra,
     fechar,
     podeDescartar,

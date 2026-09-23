@@ -385,42 +385,46 @@ export async function listarCamposMassa(ids: number[]): Promise<
 
 // ---- Edição EM MASSA de ITENS (lista "Itens" da Mesa) ----
 
-/** DFD de cada item pedido (agrupar a massa por DFD), em lotes de ids. */
-export async function dfdsDosItens(ids: number[]): Promise<Map<number, number>> {
+/** Os ITENS pedidos (com o DFD de cada um) — a massa lê só o que vai mudar, em lotes de ids. */
+export async function itensParaMassa(ids: number[]): Promise<(ItemMassa & { dfdId: number })[]> {
   const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n) && n > 0);
-  const out = new Map<number, number>();
+  const out: (ItemMassa & { dfdId: number })[] = [];
   for (let i = 0; i < uniq.length; i += LOTE_IDS) {
     const linhas = await getDb()
-      .select({ id: dfdItens.id, dfdId: dfdItens.dfdId })
+      .select({
+        id: dfdItens.id,
+        dfdId: dfdItens.dfdId,
+        item: dfdItens.item,
+        codigo: dfdItens.codigo,
+        descricao: dfdItens.descricao,
+        unidade: dfdItens.unidade,
+        quantidade: dfdItens.quantidade,
+        valorUnitario: dfdItens.valorUnitario,
+        valorTotal: dfdItens.valorTotal,
+      })
       .from(dfdItens)
-      .where(inArray(dfdItens.id, uniq.slice(i, i + LOTE_IDS)));
-    for (const l of linhas) out.set(l.id, l.dfdId);
+      .where(inArray(dfdItens.id, uniq.slice(i, i + LOTE_IDS)))
+      .orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial));
+    out.push(...linhas);
   }
   return out;
 }
 
-/** Os DFDs (nº, unidade) com TODOS os seus itens — para planejar a massa e recompor os totais. */
-export async function dfdsComItensMassa(dfdIds: number[]): Promise<{ id: number; numero: string; reparticaoId: number | null; itens: ItemMassa[] }[]> {
+/** Cabeçalho dos DFDs da massa (nº, unidade) + QUANTOS itens cada um tem (trava "nunca sem itens"). */
+export async function dfdsParaMassa(dfdIds: number[]): Promise<{ id: number; numero: string; reparticaoId: number | null; totalItens: number }[]> {
   const uniq = [...new Set(dfdIds)].filter((n) => Number.isInteger(n) && n > 0);
   if (uniq.length === 0) return [];
   const db = getDb();
-  const cab = await db.select({ id: dfds.id, numero: dfds.numero, reparticaoId: dfds.reparticaoId }).from(dfds).where(inArray(dfds.id, uniq));
-  const linhas = await db
-    .select({
-      id: dfdItens.id,
-      dfdId: dfdItens.dfdId,
-      item: dfdItens.item,
-      codigo: dfdItens.codigo,
-      descricao: dfdItens.descricao,
-      unidade: dfdItens.unidade,
-      quantidade: dfdItens.quantidade,
-      valorUnitario: dfdItens.valorUnitario,
-      valorTotal: dfdItens.valorTotal,
-    })
-    .from(dfdItens)
-    .where(inArray(dfdItens.dfdId, uniq))
-    .orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial));
-  return cab.map((c) => ({ ...c, itens: linhas.filter((l) => l.dfdId === c.id).map(({ dfdId: _d, ...it }) => it) }));
+  const [cab, contagens] = await Promise.all([
+    db.select({ id: dfds.id, numero: dfds.numero, reparticaoId: dfds.reparticaoId }).from(dfds).where(inArray(dfds.id, uniq)),
+    db
+      .select({ dfdId: dfdItens.dfdId, n: sql<number>`COUNT(*)` })
+      .from(dfdItens)
+      .where(inArray(dfdItens.dfdId, uniq))
+      .groupBy(dfdItens.dfdId),
+  ]);
+  const porDfd = new Map(contagens.map((c) => [c.dfdId, Number(c.n)]));
+  return cab.map((c) => ({ ...c, totalItens: porDfd.get(c.id) ?? 0 }));
 }
 
 /** Colunas do item que a massa altera (propriedade Drizzle → coluna SQL). */
@@ -435,13 +439,11 @@ const COL_ITEM: Record<keyof PatchItem, string> = {
 /**
  * Aplica o PLANO de massa de UM DFD num `db.batch` ATÔMICO: os patches viram `UPDATE … SET col = CASE
  * id WHEN ? THEN ? … END` em blocos que cabem nos 100 parâmetros do D1 (poucas consultas mesmo com
- * centenas de itens), as remoções um `DELETE … IN`, e os totais do DFD são regravados (Σ dos itens).
+ * centenas de itens), as remoções um `DELETE … IN` e os totais do DFD são RECALCULADOS NO BANCO (Σ dos
+ * itens, no mesmo lote) — nunca de um retrato lido antes: uma edição concorrente no mesmo DFD não deixa o
+ * total divergir dos itens. Cada DELETE só roda se, depois de TODAS as remoções, sobrar ≥ 1 item.
  */
-export async function aplicarPlanoItens(
-  dfdId: number,
-  plano: PlanoMassaItens,
-  totais: { valorTotal: number | null; totalItens: number },
-): Promise<void> {
+export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): Promise<void> {
   const db = getDb();
   const stmts: unknown[] = [];
   const campos = [...new Set(plano.atualizar.flatMap((a) => Object.keys(a.patch)))] as (keyof PatchItem)[];
@@ -465,12 +467,29 @@ export async function aplicarPlanoItens(
     }
   }
   for (let i = 0; i < plano.remover.length; i += LOTE_IDS) {
-    stmts.push(db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), inArray(dfdItens.id, plano.remover.slice(i, i + LOTE_IDS)))));
+    const restantes = plano.remover.length - i; // a remover deste lote em diante
+    stmts.push(
+      db
+        .delete(dfdItens)
+        .where(
+          and(
+            eq(dfdItens.dfdId, dfdId),
+            inArray(dfdItens.id, plano.remover.slice(i, i + LOTE_IDS)),
+            sql`(SELECT COUNT(*) FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfdId}) > ${restantes}`,
+          ),
+        ),
+    );
   }
+  // Mesma régua do `reescreverDfdItens`: Σ > 0 ⇒ o valor (2 casas); senão NULL.
+  const soma = sql`SUM(COALESCE(${dfdItens.valorTotal}, 0))`;
   stmts.push(
     db
       .update(dfds)
-      .set({ valorTotal: totais.valorTotal, totalItens: totais.totalItens, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .set({
+        totalItens: sql`(SELECT COUNT(*) FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfdId})`,
+        valorTotal: sql`(SELECT CASE WHEN ${soma} > 0 THEN ROUND(${soma}, 2) END FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfdId})`,
+        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      })
       .where(eq(dfds.id, dfdId)),
   );
   type Stmt = Parameters<typeof db.batch>[0][number];
@@ -643,13 +662,13 @@ export async function getDfdAssinaturas(
 }
 
 /** Repartição do DFD com esse `numero` (anti-sequestro no `start-dfd`); `null` se não existe. */
-export async function getReparticaoDfdNumero(numero: string): Promise<{ reparticaoId: number | null } | null> {
+export async function getReparticaoDfdNumero(numero: string): Promise<{ reparticaoId: number | null; assinaturas: Assinatura[] } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfds.reparticaoId })
+    .select({ reparticaoId: dfds.reparticaoId, assinaturas: dfds.assinaturas })
     .from(dfds)
     .where(eq(dfds.numero, numero))
     .limit(1);
-  return r ?? null;
+  return r ? { reparticaoId: r.reparticaoId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */

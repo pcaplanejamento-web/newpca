@@ -157,6 +157,16 @@ export async function iniciarProtocolo(
   return { id: row.id, numero: p.numero };
 }
 
+/** Protocolo de mesmo `numero` — anti-sequestro: protocolar SOBRESCREVE a capa do de mesmo nº. */
+export async function getProtocoloPorNumero(numero: string): Promise<{ id: number; reparticaoId: number | null } | null> {
+  const [r] = await getDb()
+    .select({ id: dfdProtocolos.id, reparticaoId: dfdProtocolos.reparticaoId })
+    .from(dfdProtocolos)
+    .where(eq(dfdProtocolos.numero, numero))
+    .limit(1);
+  return r ?? null;
+}
+
 /** Protocolo de mesmo `idExterno` (Id da capa) — para o anti-sequestro na protocolação. */
 export async function getProtocoloPorIdExterno(
   idExterno: string,

@@ -68,7 +68,10 @@ export type ResultadoFiltros = {
   anos: (number[] | null)[];
 };
 
-const cmpTexto = (a: string, b: string) => a.localeCompare(b, "pt-BR", { numeric: true });
+/** Texto pt-BR "natural" (números em ordem numérica) — UM `Intl.Collator` reutilizado: `localeCompare`
+ * com opções cria um collator por chamada (dezenas de vezes mais lento em listas grandes). */
+const COLLATOR = new Intl.Collator("pt-BR", { numeric: true });
+const cmpTexto = COLLATOR.compare;
 
 /**
  * Aplica os filtros e calcula as FACETAS de cada coluna numa única passada: uma linha que falha em
@@ -140,24 +143,29 @@ export function normalizarSelecao(sel: string[], opcoes: string[]): string[] | n
 }
 
 /**
- * Normaliza a faixa de um filtro `range` ao aplicar: sem limites, ou cobrindo o domínio INTEIRO
- * ("valor cheio") ⇒ `null` (= sem filtro); inverte mín/máx trocados.
+ * Normaliza a faixa de um filtro `range` ao aplicar: CADA lado no extremo do domínio (a alça não mexida)
+ * não vira limite — só o lado escolhido restringe (senão o extremo da faceta atual ficaria gravado e
+ * esconderia linhas quando os outros filtros saem); sem limite nenhum ("valor cheio") ⇒ `null`.
+ * Mín > máx (digitado) fica como está: faixa vazia (a tela mostra "0 valores").
  */
 export function normalizarFaixa(f: FaixaValor | null, dominio: number[]): FaixaValor | null {
   if (!f) return null;
   let { min, max } = f;
   if (min != null && Number.isNaN(min)) min = undefined;
   if (max != null && Number.isNaN(max)) max = undefined;
-  if (min != null && max != null && min > max) [min, max] = [max, min];
-  if (min == null && max == null) return null;
   if (dominio.length > 0) {
-    const lo = dominio[0];
-    const hi = dominio[dominio.length - 1];
-    const cobreMin = min == null || min <= lo + EPS;
-    const cobreMax = max == null || max >= hi - EPS;
-    if (cobreMin && cobreMax) return null;
+    if (min != null && min <= dominio[0] + EPS) min = undefined;
+    if (max != null && max >= dominio[dominio.length - 1] - EPS) max = undefined;
   }
+  if (min == null && max == null) return null;
   return { ...(min != null ? { min } : {}), ...(max != null ? { max } : {}) };
+}
+
+/** Quantos valores do domínio caem na faixa (a contagem do painel = o que o filtro vai mostrar). */
+export function contarNaFaixa(dominio: number[], min: number | undefined, max: number | undefined): number {
+  let n = 0;
+  for (const v of dominio) if ((min == null || v >= min - EPS) && (max == null || v <= max + EPS)) n++;
+  return n;
 }
 
 /** Índice da barra (domínio ordenado) para um limite: `min` → 1º ≥ min; `max` → último ≤ max. */
@@ -173,8 +181,10 @@ export function indiceNoDominio(dominio: number[], v: number | undefined, lado: 
   return 0;
 }
 
-/** Valor vazio para ordenação (nulo, "" ou NaN) — vai SEMPRE para o fim, nos dois sentidos. */
-const vazio = (v: string | number | null | undefined) => v == null || v === "" || (typeof v === "number" && Number.isNaN(v));
+/** Valor vazio para ordenação (nulo, "", só espaços, o traço "—" das células sem dado ou NaN) — vai
+ * SEMPRE para o fim, nos dois sentidos. */
+const vazio = (v: string | number | null | undefined) =>
+  v == null || (typeof v === "number" ? Number.isNaN(v) : v.trim() === "" || v.trim() === "—");
 
 /**
  * Ordena ÍNDICES de linha pela chave já extraída (`chaves[i]`, calculada UMA vez por linha): numérico

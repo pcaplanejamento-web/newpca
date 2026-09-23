@@ -41,7 +41,7 @@ import { num } from "@/lib/format";
 import { enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
-import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
   ocrAssinaturasEmPaginas,
@@ -247,24 +247,45 @@ export function ProtocoloUploadForm({
     setHerdados(new Map());
   }
 
-  // REENVIO: o botão do banner do gravado abre o lançador (só o PDF — sem criação manual).
+  // REENVIO: o botão do banner do gravado abre o lançador (só o PDF — sem criação manual). Só um clique
+  // NOVO abre: o contador vive no banner e sobrevive ao fechar/reabrir o protocolo (este form remonta).
+  const iniciarVisto = useRef(iniciar);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do banner.
   useEffect(() => {
-    if (!reenvio || iniciar <= 0) return;
+    if (!reenvio || iniciar <= 0 || iniciar === iniciarVisto.current) return;
+    iniciarVisto.current = iniciar;
     setErro(null);
     setStatus("idle");
     setRelatorio(null);
     setLauncher(true);
   }, [iniciar]);
 
-  /** Normaliza o DFD lido do PDF e, no REENVIO, herda do gravado o que o PDF não traz (tratamentos). */
+  /** Normaliza o DFD lido do PDF e, no REENVIO, herda do gravado o que o PDF não traz (tratamentos). A
+   * validação da ASSINATURA espera o OCR quando o DFD depende dele (`herdarAssinaturas`, após a leitura). */
   function prepararDfd(i: number, raw: DfdParseado, anoRef: number | null | undefined): { dfd: DfdParseado; auto: CampoTratavel[] } {
     const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoRef);
     const g = gravadoDe(dfd.numero);
     if (!g) return { dfd, auto };
-    const h = herdarTratamentos(dfd, g, anoRef);
-    if (h.herdados.length > 0) setHerdados((m) => new Map(m).set(i, h.herdados));
+    const h = herdarTratamentos(dfd, g, anoRef, { assinaturas: !precisaOcr(dfd.assinaturas) });
+    anotarHerdados(i, h.herdados);
     return { dfd: h.dfd, auto };
+  }
+  /** REENVIO: herda do gravado a validação da assinatura pela equipe — DEPOIS do OCR (a assinatura
+   * achatada só existe após a leitura). Puro: devolve o DFD + o que foi herdado. */
+  function herdarAssinaturas(d: DfdParseado): { dfd: DfdParseado; herdados: string[] } {
+    const g = gravadoDe(d.numero);
+    return g ? herdarTratamentos(d, g, null, { tratamentos: false }) : { dfd: d, herdados: [] };
+  }
+  /** Assinaturas lidas por OCR (ou nenhuma) + a validação herdada do gravado — o que vai para o cache. */
+  const comOcr = (d: DfdParseado, ocr: Assinatura[]) =>
+    herdarAssinaturas(ocr.length > 0 ? { ...d, assinaturas: mesclarAssinaturasOcr(d.assinaturas, ocr) } : d);
+  function anotarHerdados(i: number, lista: string[]) {
+    if (lista.length === 0) return;
+    setHerdados((m) => {
+      const cur = m.get(i) ?? [];
+      const novos = lista.filter((x) => !cur.includes(x));
+      return novos.length > 0 ? new Map(m).set(i, [...cur, ...novos]) : m;
+    });
   }
 
   function abrirVazio() {
@@ -431,13 +452,16 @@ export function ProtocoloUploadForm({
         ocrTentadoRef.current.add(i);
         const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
         if (docRef.current !== doc) return;
-        if (ocr.length > 0) {
+        // Lidas (ou não) — no REENVIO herda agora a validação da equipe do gravado.
+        const local = comOcr(dfd, ocr);
+        anotarHerdados(i, local.herdados);
+        if (local.dfd.assinaturas !== dfd.assinaturas) {
           setParsed((m) => {
             const cur = m.get(i);
-            return cur ? new Map(m).set(i, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
+            return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
           });
           // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
-          refinarUnidade(i, { ...dfd, assinaturas: mesclarAssinaturasOcr(dfd.assinaturas, ocr) });
+          refinarUnidade(i, local.dfd);
         }
       }
       setOcrPendente((s) => {
@@ -680,19 +704,24 @@ export function ProtocoloUploadForm({
         rotuloUnidade,
       )
     : [];
-  const relatorioDiffLinhas = reenvio
-    ? linhasRelatorioReenvio({
+  const relatorioDiffLinhas =
+    reenvio && relDiffAberto
+      ? linhasRelatorioReenvio({
         numero,
         idExterno: extra.idExterno,
         capa: capaDiffs,
-        dfds: ativos.flatMap((i) => {
-          const c = comparacaoDe(i);
-          const di = index?.dfds[i];
-          return c && di ? [{ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null, comparacao: c }] : [];
-        }),
-        removidos,
-      })
-    : [];
+          dfds: ativos.flatMap((i) => {
+            const c = comparacaoDe(i);
+            const di = index?.dfds[i];
+            return c && di ? [{ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null, comparacao: c }] : [];
+          }),
+          removidos,
+          pendentes: ativos.flatMap((i) => {
+            const di = index?.dfds[i];
+            return di && gravadoDe(di.numero) && !comparacaoDe(i) ? [{ numero: di.numero, planejamento: gravadoDe(di.numero)?.planejamento ?? null }] : [];
+          }),
+        })
+      : [];
 
   // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
   const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
@@ -744,12 +773,14 @@ export function ProtocoloUploadForm({
     if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
     const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
-    if (ocr.length > 0) {
+    const local = comOcr(d, ocr);
+    anotarHerdados(idx, local.herdados);
+    if (local.dfd.assinaturas !== d.assinaturas) {
       setParsed((m) => {
         const cur = m.get(idx);
-        return cur ? new Map(m).set(idx, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
+        return cur ? new Map(m).set(idx, comOcr(cur, ocr).dfd) : m;
       });
-      refinarUnidade(idx, { ...d, assinaturas: mesclarAssinaturasOcr(d.assinaturas, ocr) });
+      refinarUnidade(idx, local.dfd);
     }
     setOcrPendente((s) => {
       if (!s.has(idx)) return s;
@@ -860,8 +891,9 @@ export function ProtocoloUploadForm({
           mode: "start-protocolo",
           ...(reenvio ? { reenvio: { protocoloId: reenvio.protocolo.id, resumo: resumoReenvio.slice(0, 500) } } : {}),
           protocolo: {
-            numero,
-            idExterno: extra.idExterno,
+            // Reenvio: o nº EXATAMENTE como gravado e o Id gravado quando o PDF não traz (nunca apaga o Id).
+            numero: reenvio ? reenvio.protocolo.numero : numero,
+            idExterno: extra.idExterno || (reenvio?.protocolo.idExterno ?? null),
             anoPca,
             data: data || null,
             interessado: interessado || null,
@@ -905,16 +937,21 @@ export function ProtocoloUploadForm({
         if (precisaOcr(full.assinaturas) && !ocrTentadoRef.current.has(i) && doc) {
           ocrTentadoRef.current.add(i);
           setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
+          let ocr: Assinatura[] = [];
           try {
-            const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
-            if (ocr.length > 0) full = { ...full, assinaturas: mesclarAssinaturasOcr(full.assinaturas, ocr) };
+            ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
           } catch {
             /* OCR é auxiliar — segue sem assinatura (a conferência decide) */
           }
+          full = comOcr(full, ocr).dfd; // + a validação herdada do gravado (reenvio)
         }
         // REENVIO: DFD sem NENHUMA diferença em relação ao gravado não é regravado (fica como está).
         const gravado = gravadoDe(di.numero);
-        if (gravado && compararDfd(comparavelGravado(gravado), { ...full, reparticaoId: dfdRepIds[i] ?? null, anoPca }).situacao === "igual") {
+        if (
+          gravado &&
+          !editados.has(i) &&
+          compararDfd(comparavelGravado(gravado), { ...full, reparticaoId: dfdRepIds[i] ?? null, anoPca }).situacao === "igual"
+        ) {
           iguais++;
           setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length}) — sem diferença` });
           continue;
@@ -955,6 +992,8 @@ export function ProtocoloUploadForm({
               assinaturas: full.assinaturas,
             },
             full.itens,
+            undefined,
+            { existia: classificar(di.numero) !== "novo" },
           );
           importados++;
         } catch (e) {

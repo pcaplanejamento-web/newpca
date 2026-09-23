@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   aplicarFiltros,
   type ColunaDados,
+  contarNaFaixa,
   filtroAtivo,
   indiceNoDominio,
   normalizarFaixa,
@@ -88,13 +89,27 @@ describe("filtroAtivo / normalizações", () => {
     assert.equal(normalizarSelecao(["b", "a"], ["a", "b"]), null);
     assert.deepEqual(normalizarSelecao(["a", "a"], ["a", "b"]), ["a"]);
   });
-  it("normalizarFaixa: domínio inteiro (valor cheio) ⇒ sem filtro; inverte trocados", () => {
+  it("normalizarFaixa: domínio inteiro (valor cheio) ⇒ sem filtro; mín > máx digitado = faixa vazia", () => {
     const dom = [0, 100, 1500];
     assert.equal(normalizarFaixa({ min: 0, max: 1500 }, dom), null);
     assert.equal(normalizarFaixa({}, dom), null);
-    assert.deepEqual(normalizarFaixa({ min: 1500, max: 100 }, dom), { min: 100, max: 1500 });
+    assert.deepEqual(normalizarFaixa({ min: 1500, max: 100 }, dom), { min: 1500, max: 100 });
     assert.deepEqual(normalizarFaixa({ min: 100 }, dom), { min: 100 });
     assert.equal(normalizarFaixa(null, dom), null);
+  });
+  it("normalizarFaixa: o lado NÃO mexido (no extremo da faceta) não vira limite", () => {
+    // Faceta atual [100, 2500.5] (outro filtro ativo): arrastar só o MÁX não grava o mín 100 — sem o outro
+    // filtro, o valor 0 continua passando.
+    const dom = [100, 1500, 2500.5];
+    assert.deepEqual(normalizarFaixa({ min: 100, max: 1500 }, dom), { max: 1500 });
+    assert.deepEqual(normalizarFaixa({ min: 1500, max: 2500.5 }, dom), { min: 1500 });
+  });
+  it("contarNaFaixa: a contagem do painel = o que o filtro mostra (faixa vazia = 0)", () => {
+    const dom = [0, 100, 1500, 90000];
+    assert.equal(contarNaFaixa(dom, 200, 1000), 0);
+    assert.equal(contarNaFaixa(dom, 100, 1500), 2);
+    assert.equal(contarNaFaixa(dom, undefined, undefined), 4);
+    assert.equal(contarNaFaixa(dom, 100000, undefined), 0);
   });
   it("indiceNoDominio: posição da barra para mín/máx", () => {
     const dom = [0, 100, 1500, 90000];
@@ -113,5 +128,9 @@ describe("ordenarIndices", () => {
     assert.deepEqual(ordenarIndices([0, 1, 2, 3, 4, 5], chaves, "desc"), [3, 0, 1, 5, 2, 4]);
     assert.deepEqual(ordenarIndices([0, 1, 2], ["DFD 10", "DFD 9", "DFD 100"], "asc"), [1, 0, 2]);
     assert.deepEqual(ordenarIndices([0, 1, 2], [3.5, null, 1], "desc"), [0, 2, 1]);
+  });
+  it("o traço \"—\" (célula sem dado) e só-espaços também vão para o fim", () => {
+    assert.deepEqual(ordenarIndices([0, 1, 2, 3], ["—", "DFD-S", " ", "DFD-O"], "asc"), [3, 1, 0, 2]);
+    assert.deepEqual(ordenarIndices([0, 1, 2, 3], ["—", "DFD-S", " ", "DFD-O"], "desc"), [1, 3, 0, 2]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { IntervaloData } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { GatilhoFiltro } from "./GatilhoFiltro";
@@ -30,6 +30,10 @@ export function DateFilterHeader({
 }) {
   const ativo = !!(value?.de || value?.ate);
   const [periodo, setPeriodo] = useState<Periodo>({ preset: "todo" });
+  // Filtro limpo por fora (ex.: "Limpar filtros" da tabela) ⇒ o período volta a "todo".
+  useEffect(() => {
+    if (!ativo) setPeriodo({ preset: "todo" });
+  }, [ativo]);
   const btn =
     "flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold text-text-2 hover:bg-surface-2";
 

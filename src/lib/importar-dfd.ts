@@ -59,18 +59,25 @@ export async function enviarDfdEmLotes(
   meta: DfdMetaPayload,
   itens: DfdItemPayload[],
   onLote?: (enviados: number, total: number) => void,
+  /** `existia`: o DFD (mesmo nº) JÁ ESTAVA gravado — sobrescrita. Se um lote POSTERIOR falhar, NÃO apaga
+   * (apagar perderia também a versão anterior): a falha diz que a gravação ficou INCOMPLETA p/ reenviar. */
+  opcoes: { existia?: boolean } = {},
 ): Promise<{ dfdId: number }> {
   const total = itens.length;
   const j = await postDfd({ mode: "start-dfd", ...meta, totalItens: total, rows: itens.slice(0, LOTE) });
   const dfdId = Number(j.dfdId);
-  onLote?.(Math.min(LOTE, total), total);
+  let enviados = Math.min(LOTE, total);
+  onLote?.(enviados, total);
   try {
     for (let i = LOTE; i < total; i += LOTE) {
       await postDfd({ mode: "append-dfd-itens", dfdId, desde: i, rows: itens.slice(i, i + LOTE) });
-      onLote?.(Math.min(i + LOTE, total), total);
+      enviados = Math.min(i + LOTE, total);
+      onLote?.(enviados, total);
     }
   } catch (e) {
-    await apagarDfd(dfdId); // não deixa DFD parcial
+    const msg = e instanceof Error ? e.message : "Falha ao gravar o DFD.";
+    if (opcoes.existia) throw new Error(`${msg} — gravação INCOMPLETA (${enviados} de ${total} itens): reenvie para completar.`);
+    await apagarDfd(dfdId); // DFD novo: não deixa DFD parcial
     throw e;
   }
   return { dfdId };

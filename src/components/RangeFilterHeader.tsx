@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { brl } from "@/lib/format";
 import { parseNumberBR } from "@/lib/normalize";
-import { type FaixaValor, indiceNoDominio, normalizarFaixa } from "@/lib/tabela-filtros";
+import { contarNaFaixa, type FaixaValor, indiceNoDominio, normalizarFaixa } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { Checkbox } from "./Field";
 import { GatilhoFiltro } from "./GatilhoFiltro";
@@ -104,7 +104,9 @@ function PainelFaixa({
   const lo = indiceNoDominio(dominio, min, "min");
   const hi = Math.max(lo, indiceNoDominio(dominio, max, "max"));
   const pct = (i: number) => (n > 1 ? (i / (n - 1)) * 100 : 0);
-  const naFaixa = n === 0 ? 0 : hi - lo + 1;
+  const naFaixa = contarNaFaixa(dominio, min, max);
+  // Alça por cima quando se encostam: no fim da barra, a do mínimo (p/ voltar à esquerda); no começo, a do máximo.
+  const minPorCima = lo > (n - 1) / 2;
 
   /** Arrastar a barra: DESMARCA o "valor cheio" (a barra representa o mínimo/máximo inicial). */
   function arrastar(lado: "min" | "max", i: number) {
@@ -129,10 +131,11 @@ function PainelFaixa({
       setMaxTxt(txt(maior));
     }
   }
-  /** Limite digitado (confirma ao sair do campo/Enter). */
+  /** Limite digitado (confirma ao sair do campo/Enter). Só um valor NOVO desmarca o "valor cheio". */
   function digitar(lado: "min" | "max", s: string) {
     const v = parseNumberBR(s) ?? undefined;
-    setCheio(false);
+    const atual = lado === "min" ? min : max;
+    if (v !== atual) setCheio(false);
     if (lado === "min") {
       setMin(v);
       setMinTxt(txt(v));
@@ -168,19 +171,19 @@ function PainelFaixa({
       ) : (
         <div className="px-3 pb-2 pt-3">
           <div className="flex items-baseline justify-between gap-2 text-[12px] font-semibold tabular-nums text-text">
-            <span>{formatar(dominio[lo])}</span>
+            <span>{formatar(min ?? menor)}</span>
             <span className="text-faint">—</span>
-            <span>{formatar(dominio[hi])}</span>
+            <span>{formatar(max ?? maior)}</span>
           </div>
           {/* Barra de arrasto: trilho + trecho selecionado + duas alças (inputs range sobrepostos). */}
           <div className="faixa-dupla">
-            {/* O centro da alça anda de 12px a (100% − 12px): trilho e trecho seguem o mesmo recuo. */}
-            <div className="pointer-events-none absolute inset-x-3 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-track" />
+            {/* A alça tem 44px (alvo de toque): o centro anda de 22px a (100% − 22px) — trilho e trecho seguem. */}
+            <div className="pointer-events-none absolute inset-x-[22px] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-track" />
             <div
               className="pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
               style={{
-                left: `calc(12px + (100% - 24px) * ${pct(lo) / 100})`,
-                right: `calc(12px + (100% - 24px) * ${(100 - pct(hi)) / 100})`,
+                left: `calc(22px + (100% - 44px) * ${pct(lo) / 100})`,
+                right: `calc(22px + (100% - 44px) * ${(100 - pct(hi)) / 100})`,
                 background: cheio ? "var(--border-2)" : "var(--accent)",
               }}
             />
@@ -194,8 +197,7 @@ function PainelFaixa({
               value={lo}
               disabled={n < 2}
               onChange={(e) => arrastar("min", Number(e.target.value))}
-              // Alças encostadas no fim: a do mínimo fica por cima (senão não dá para puxá-la de volta).
-              style={{ zIndex: lo >= n - 1 || lo > (n - 1) / 2 ? 3 : 2 }}
+              style={{ zIndex: minPorCima ? 3 : 2 }}
             />
             <input
               type="range"
@@ -207,6 +209,7 @@ function PainelFaixa({
               value={hi}
               disabled={n < 2}
               onChange={(e) => arrastar("max", Number(e.target.value))}
+              style={{ zIndex: minPorCima ? 2 : 3 }}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">

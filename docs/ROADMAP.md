@@ -45,7 +45,14 @@ obrigatórias, referências, validação da assinatura), permite editar antes e,
 exclui (ou mantém, à escolha) os DFDs gravados que não vieram no PDF — com relatório de diferenças copiável e auditoria.
 Validado de ponta a ponta com o PDF real `pd101820` (import → alteração do gravado → reenvio → comparação → sobrescrita).
 **Compatibilidade:** o pdf.js passou ao build **legacy** oficial (com polyfills) — o build moderno exigia `Math.sumPrecise`
-e, em navegadores sem essa API, nenhum DFD era lido.
+e, em navegadores sem essa API, nenhum DFD era lido. **Auditoria independente (3 frentes) — todos os achados corrigidos:**
+ordenação 20–30× mais rápida (collator reutilizado); faixa grava só o lado mexido, contagem exata, alças de 44px e sem
+travar nas pontas; "—" no fim da ordenação; filtro de data zera com "Limpar filtros"; massa de itens com totais e trava
+"nunca sem itens" recalculados NO BANCO, leitura só dos itens pedidos e auditoria antes/depois; pilha de banners não troca/
+fecha durante a gravação e recarrega o item exibido; reenvio: validação da assinatura comparada e herdada após o OCR (quem/
+quando preservados), DFD editado nunca pulado, lançador só abre num clique novo, DFD existente não é apagado numa falha
+parcial, nº/Id do gravado preservados, anti-sequestro por Nº no `POST /api/protocolo`, pareamento de itens que entende
+renumeração e relatório com os ainda não comparados.
 
 ### Gravado = análise (mesmos componentes após protocolar) + capa conciliada + seções com cadeado + progresso real — entregue
 ✅ **Protocolo/DFD/Itens JÁ PROTOCOLADOS usam os MESMOS componentes da análise**: corpo único `ProtocoloView`, a mesma

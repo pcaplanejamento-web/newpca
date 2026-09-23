@@ -73,8 +73,11 @@ function Painel({
   onSort?: (dir: "asc" | "desc") => void;
 }) {
   // Abre com a seleção atual (restrita ao que a faceta oferece) ou, sem filtro, com tudo marcado.
-  const inicial = value.length ? value.filter((v) => options.includes(v)) : options;
-  const [sel, setSel] = useState<Set<string>>(new Set(inicial));
+  const [sel, setSel] = useState<Set<string>>(() => {
+    if (!value.length) return new Set(options);
+    const ofertadas = new Set(options);
+    return new Set(value.filter((v) => ofertadas.has(v)));
+  });
   const [q, setQ] = useState("");
 
   const visiveis = useMemo(() => {

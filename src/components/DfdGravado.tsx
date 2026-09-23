@@ -137,8 +137,11 @@ export function useDfdGravado({
     }
   }
 
+  // O DFD que a pilha pede AGORA — a recarga pós-gravação só vale se ainda for o mesmo.
+  const pedidoRef = useRef(dfdId);
   // biome-ignore lint/correctness/useExhaustiveDependencies: recarrega só ao trocar o DFD/item pedido pela pilha.
   useEffect(() => {
+    pedidoRef.current = dfdId;
     // Zera o banner anterior (rascunho/painéis): fechar descarta o rascunho e desliga o aviso de saída.
     cargaRef.current++;
     setOrig(null);
@@ -161,10 +164,13 @@ export function useDfdGravado({
   }, [item?.item, item?.codigo]);
 
   const sujo = editado || itensEditados;
+  /** Modo item: o item EXIBIDO (nº + código) — a recarga reencontra ELE (a posição pode ter mudado). */
+  const alvoAtual = (): ItemRef | null =>
+    modoItem && dfd && itemIdx != null ? { item: dfd.itens[itemIdx]?.item ?? null, codigo: dfd.itens[itemIdx]?.codigo ?? null } : null;
   // Recarga externa (outro banner da pilha gravou) — só sem rascunho (nunca perde edição).
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao sinal.
   useEffect(() => {
-    if (sinal > 0 && orig && !sujo && !salvando) void carregar(orig.id, null);
+    if (sinal > 0 && orig && !sujo && !salvando) void carregar(orig.id, alvoAtual());
   }, [sinal]);
 
   useEffect(() => {
@@ -212,7 +218,7 @@ export function useDfdGravado({
   function atualizar() {
     if (!orig) return;
     if (!podeDescartar("Descartar as alterações não salvas e recarregar os dados do banco?")) return;
-    void carregar(orig.id, null);
+    void carregar(orig.id, alvoAtual());
   }
   function verProtocolo() {
     if (!orig?.protocoloId || !onVerProtocolo) return;
@@ -239,9 +245,8 @@ export function useDfdGravado({
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? `Não foi possível salvar (HTTP ${r.status}).`);
       onAlterado();
-      // Recarrega mantendo o item do banner do item (o nº do item segue o mesmo).
-      const alvo = modoItem && itemIdx != null ? { item: dfd.itens[itemIdx]?.item ?? null, codigo: dfd.itens[itemIdx]?.codigo ?? null } : null;
-      await carregar(orig.id, alvo);
+      // Recarrega mantendo o item do banner do item — só se o banner ainda mostra ESTE DFD.
+      if (pedidoRef.current === orig.id) await carregar(orig.id, alvoAtual());
     } catch (e) {
       // `fetch` sem rede lança TypeError ("Failed to fetch") — mensagem em pt-BR.
       setErro(e instanceof TypeError ? "Sem conexão com o servidor — tente novamente." : e instanceof Error ? e.message : "Não foi possível salvar.");

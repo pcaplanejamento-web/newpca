@@ -536,7 +536,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de 200 com **barra de progresso** (`Progress`).
   `start-dfd` re-valida `faltasObrigatorias` (defeituoso nunca grava, 422); idempotente por `numero` (retomável).
 - **Gravação garantida (all-or-nothing por DFD):** `enviarDfdEmLotes` faz **retry** de falha transitória (rede/5xx;
-  4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. `appendDfdItens`
+  4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. **Exceção: DFD que
+  JÁ EXISTIA** (sobrescrita/reenvio, `opcoes.existia`) **não é apagado** (perderia também a versão anterior) — a falha diz
+  "gravação INCOMPLETA (n de N itens): reenvie para completar". `appendDfdItens`
   é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
   **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
 - **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
@@ -557,8 +559,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **repartição**, `numero`=Número Processo único; **`idExterno`** = "Id:" da capa, migração `0019`; sem `grupo_id`) +
   `dfds.protocoloId` nullable (FK `set null`). **Dedup/sobrescrita por Id:** não coexistem dois protocolos com o
   MESMO `idExterno` — protocolar **sobrescreve** o de mesmo Id (`iniciarProtocolo` apaga o de mesmo Id e número
-  diferente antes do upsert por `numero`; o `POST /api/protocolo` faz o **anti-sequestro por Id** — 403 se o Id já
-  existe em unidade inacessível). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
+  diferente antes do upsert por `numero`; o `POST /api/protocolo` faz o **anti-sequestro por Id E por Nº** — 403 se o Id
+  ou o número já existe em unidade inacessível: `getProtocoloPorIdExterno`/`getProtocoloPorNumero`). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
   `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
   **Excluir em CASCATA (regra do usuário):** `excluirProtocolo` (`protocolo.ts`) apaga os **DFDs vinculados**
   (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
@@ -743,10 +745,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`BarraEdicaoMassaProtocolos`** (unidade [se editável pelo ADM] / assunto (`opcoesAssunto`) / valor da capa = somatória
     dos DFDs → **`POST /api/protocolo/massa`**, ≤ 20 por requisição) e **`BarraEdicaoMassaItens`** (padronizar pelo
     catálogo / unidade / quantidade / valor unitário / remover → **`POST /api/dfd/itens/massa`**, ≤ 100 itens de ≤ 5 DFDs
-    por requisição — `fatiarItensPorDfd`; cada DFD grava num LOTE ATÔMICO `aplicarPlanoItens` (UPDATE … CASE por coluna,
-    ≤ 98 params) com os totais recomputados; núcleo puro **`massa-itens.ts`** (`planejarMassaItens`: unidade igual ao
-    catálogo travada, remover nunca zera o DFD)). Confirmação antes de gravar, progresso por fatia, falhas por alvo sem
-    derrubar o lote, auditoria por protocolo/DFD. No celular a barra pode ser **recolhida** (fica o resumo).
+    por requisição — `fatiarItensPorDfd`; o servidor lê SÓ os itens pedidos (`itensParaMassa`) + quantos itens cada DFD
+    tem (`dfdsParaMassa`) e grava num LOTE ATÔMICO `aplicarPlanoItens` (UPDATE … CASE por coluna, ≤ 98 params) com os
+    **totais RECALCULADOS NO BANCO** (subconsulta Σ/COUNT no mesmo lote — edição concorrente não desalinha o total) e o
+    DELETE só roda se sobrar ≥ 1 item; núcleo puro **`massa-itens.ts`** (`planejarMassaItens`: unidade igual ao catálogo
+    travada, remover nunca zera o DFD)). Confirmação antes de gravar, progresso por fatia, falhas por alvo sem derrubar o
+    lote, auditoria por protocolo/DFD (itens: **antes/depois** por item). No celular a barra pode ser **recolhida** (fica
+    o resumo). Enquanto um banner da pilha GRAVA, nada troca/fecha/empilha, e a recarga pós-gravação só vale se o banner
+    ainda mostra o mesmo DFD/protocolo (no modo item, reencontra o item EXIBIDO).
   - **Botão ATUALIZAR** (`IconRefresh`, ao lado do X) nos banners gravados: recarrega do banco (confirma se há rascunho).
   - **REENVIAR PROTOCOLO (sobrescrever com comparação)** — botão **"Reenviar protocolo"** no rodapé do protocolo gravado (`useProtocoloGravado`)
     (desabilitado com rascunho pendente) → o **MESMO `ProtocoloUploadForm`** em modo `reenvio` (`BaseReenvio` = protocolo +
@@ -764,7 +770,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (descarta o novo). O usuário **edita antes** (mesma conferência/edição em massa da análise). **Sobrescrever** confirma
     com o resumo, envia `start-protocolo` com `reenvio {protocoloId, resumo}` (o servidor confere escopo + identidade e
     audita "REENVIADO (sobrescrito)"), **regrava só os DFDs que mudaram** (os "igual" ficam como estão), exclui os fora do
-    PDF marcados "Excluir" (padrão) e recarrega o gravado.
+    PDF marcados "Excluir" (padrão) e recarrega o gravado. Garantias: o servidor grava no MESMO registro (**nº exatamente
+    como gravado** e **Id gravado** quando o PDF não traz — nunca apaga o Id); a comparação de assinaturas inclui formato,
+    código e a **validação da equipe** (validar/desfazer é diferença); DFD **editado** na análise nunca é pulado como
+    "igual"; a validação da assinatura é herdada **depois do OCR** (`herdarTratamentos(…, {assinaturas})` em partes — a
+    assinatura achatada só existe após a leitura) e o servidor mantém **quem/quando** da validação já gravada
+    (`carimbarValidacao` com as assinaturas do DFD existente); itens pareados por código+descrição → nº → código (remoção
+    com renumeração = 1 "removido"); o relatório lista os DFDs **ainda não comparados**; o lançador só abre num clique NOVO.
   - **"1 · Área requisitante da demanda" editável (cadeado por campo):** para editores, o `DfdConferir` mostra o bloco
     editável (âncora `anoPca`) no lugar da Seção 1 só-leitura (`ocultarSecao1`); identificadores (Nº DFD/Planejamento/Ano
     do PCA) seguem travados; o conteúdo flui por `onCamposChange` → `atualizarDfdCampos` (que agora também sincroniza o
@@ -977,8 +989,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), `Toast`/`Toaster`, `DataTable` (seleção+filtro no cabeçalho+clique na linha; `pageSize` **máx 20**;
   **filtros CONECTADOS (facetas)** — núcleo puro **`tabela-filtros.ts`** (`aplicarFiltros`: as opções/domínio de cada coluna
-  vêm das linhas que passam nos DEMAIS filtros; seleção vazia ou com todas as opções = sem filtro; `ordenarIndices` numérico
-  × texto natural pt-BR, vazios no fim); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
+  vêm das linhas que passam nos DEMAIS filtros; seleção vazia ou com todas as opções = sem filtro; `normalizarFaixa`: o lado
+  da faixa no extremo da faceta NÃO vira limite; `contarNaFaixa` = a contagem do painel; `ordenarIndices` numérico × texto
+  natural pt-BR com UM `Intl.Collator` reutilizado (performático com milhares), vazios e o traço "—" no fim); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
   **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
   **`reservaInferior`** = altura reservada no fim do display p/ algo fixo abaixo (a `BarraSelecao` da Mesa);

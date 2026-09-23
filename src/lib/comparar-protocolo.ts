@@ -100,8 +100,16 @@ export type DfdComparavel = {
   reparticaoId: number | null;
   valorTotal: number | null;
   secoes: { titulo: string; texto: string }[];
-  assinaturas: { nome: string; data?: string | null }[];
+  assinaturas: AssinaturaComparavel[];
   itens: ItemComparavel[];
+};
+/** O que conta numa assinatura: assinante/data, formato, código verificador e a validação pela equipe. */
+export type AssinaturaComparavel = {
+  nome: string;
+  data?: string | null;
+  fonte?: string;
+  codigo?: string;
+  validacao?: { por?: string; responsavel?: string } | null;
 };
 
 export type DiffItemDfd = {
@@ -139,35 +147,35 @@ const CAMPOS_DFD: [keyof DfdComparavel, string][] = [
   ["numeroLicitacao", "Nº da licitação"],
 ];
 
-/** Pareia os itens gravados com os do PDF: pelo Nº do item; os que sobram, por código + descrição e,
- * por fim, só pelo código. Devolve os pares e as sobras (novos / removidos). Puro. */
+/** Pareia os itens gravados com os do PDF, em 3 rodadas: o MESMO item (código + descrição), depois pelo
+ * Nº do item (descrição/código editados) e, por fim, só pelo código. Assim um item removido com a lista
+ * RENUMERADA vira 1 "removido" (e os seguintes só mudam de nº), não uma cascata de "alterados". Puro. */
 function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
   const livresG = new Set(g.map((_, i) => i));
   const pares: [ItemComparavel, ItemComparavel][] = [];
-  const novos: ItemComparavel[] = [];
-  const pendentes: ItemComparavel[] = [];
-  const porNumero = new Map<number, number>();
-  g.forEach((it, i) => {
-    if (it.item != null && !porNumero.has(it.item)) porNumero.set(it.item, i);
-  });
-  for (const it of p) {
-    const i = it.item != null ? porNumero.get(it.item) : undefined;
-    if (i != null && livresG.has(i)) {
-      livresG.delete(i);
-      pares.push([g[i], it]);
-    } else pendentes.push(it);
-  }
-  const achar = (pred: (x: ItemComparavel) => boolean) => [...livresG].find((i) => pred(g[i]));
-  for (const it of pendentes) {
-    const cod = txt(it.codigo);
-    let i = cod ? achar((x) => txt(x.codigo) === cod && norm(x.descricao) === norm(it.descricao)) : undefined;
-    if (i == null && cod) i = achar((x) => txt(x.codigo) === cod);
-    if (i != null) {
-      livresG.delete(i);
-      pares.push([g[i], it]);
-    } else novos.push(it);
-  }
-  return { pares, novos, removidos: [...livresG].map((i) => g[i]) };
+  let pendentes = p;
+  const rodada = (casa: (a: ItemComparavel, b: ItemComparavel) => boolean) => {
+    const sobra: ItemComparavel[] = [];
+    for (const it of pendentes) {
+      let achado: number | undefined;
+      for (const i of livresG) {
+        if (casa(g[i], it)) {
+          achado = i;
+          break;
+        }
+      }
+      if (achado == null) sobra.push(it);
+      else {
+        livresG.delete(achado);
+        pares.push([g[achado], it]);
+      }
+    }
+    pendentes = sobra;
+  };
+  rodada((a, b) => !!txt(b.codigo) && txt(a.codigo) === txt(b.codigo) && norm(a.descricao) === norm(b.descricao));
+  rodada((a, b) => b.item != null && a.item === b.item);
+  rodada((a, b) => !!txt(b.codigo) && txt(a.codigo) === txt(b.codigo));
+  return { pares, novos: pendentes, removidos: [...livresG].map((i) => g[i]) };
 }
 
 function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
@@ -182,10 +190,25 @@ function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
   return out;
 }
 
-/** Lista legível dos assinantes (ordenada — a ordem de leitura não é diferença). */
-const assinantes = (l: { nome: string; data?: string | null }[]) =>
+const ROTULO_FONTE: Record<string, string> = {
+  certificado: "certificado",
+  sistema: "sistema",
+  dropsigner: "Dropsigner",
+  adobe: "Adobe",
+  foxit: "Foxit",
+  manual: "equipe",
+};
+/** Lista legível dos assinantes (ordenada — a ordem de leitura não é diferença): assinante (data), formato,
+ * código verificador e a validação pela EQUIPE — validar/desfazer ou um carimbo re-assinado É diferença. */
+const assinantes = (l: AssinaturaComparavel[]) =>
   l
-    .map((a) => `${txt(a.nome) || "(sem nome)"}${a.data ? ` (${txt(a.data)})` : ""}`)
+    .map((a) => {
+      let s = `${txt(a.nome) || "(sem nome)"}${a.data ? ` (${txt(a.data)})` : ""}`;
+      if (a.fonte) s += ` · ${ROTULO_FONTE[a.fonte] ?? a.fonte}`;
+      if (txt(a.codigo)) s += ` · cód. ${txt(a.codigo)}`;
+      if (a.validacao?.por === "equipe") s += ` · validada pela equipe${a.validacao.responsavel ? ` (${txt(a.validacao.responsavel)})` : ""}`;
+      return s;
+    })
     .sort((x, y) => x.localeCompare(y, "pt-BR"))
     .join("; ");
 
@@ -265,6 +288,8 @@ export function linhasRelatorioReenvio(info: {
   capa: DiffCampo[];
   dfds: { numero: string; planejamento: string | null; comparacao: ComparacaoDfd }[];
   removidos: { numero: string; planejamento: string | null; excluir: boolean }[];
+  /** DFDs gravados que o PDF traz mas ainda não foram lidos/comparados (ex.: além do teto da análise). */
+  pendentes?: { numero: string; planejamento: string | null }[];
 }): string[] {
   const l: string[] = [`Reenvio do protocolo ${info.numero}${info.idExterno ? ` (Id ${info.idExterno})` : ""} — diferenças em relação ao gravado`, ""];
   const campo = (d: DiffCampo) => `  • ${d.rotulo}: ${curto(d.antes)} → ${curto(d.depois)}`;
@@ -293,11 +318,13 @@ export function linhasRelatorioReenvio(info: {
     l.push("");
   }
   if (iguais.length > 0) l.push(`Sem diferenças (${iguais.length}): ${iguais.map(ref).join(", ")}.`, "");
+  const pendentes = info.pendentes ?? [];
+  if (pendentes.length > 0) l.push(`Ainda NÃO comparados (${pendentes.length}) — abra-os ou aguarde a análise: ${pendentes.map(ref).join(", ")}.`, "");
   const excluir = info.removidos.filter((r) => r.excluir);
   const manter = info.removidos.filter((r) => !r.excluir);
   if (excluir.length > 0) l.push(`Gravados que NÃO vieram no PDF — serão EXCLUÍDOS (${excluir.length}): ${excluir.map(ref).join(", ")}.`);
   if (manter.length > 0) l.push(`Gravados que NÃO vieram no PDF — MANTIDOS (${manter.length}): ${manter.map(ref).join(", ")}.`);
-  if (info.capa.length === 0 && novos.length === 0 && alterados.length === 0 && info.removidos.length === 0)
+  if (info.capa.length === 0 && novos.length === 0 && alterados.length === 0 && info.removidos.length === 0 && pendentes.length === 0)
     l.push("Nenhuma diferença: o PDF reenviado é igual ao protocolo gravado.");
   return l;
 }
@@ -329,7 +356,31 @@ export type DfdTratavel = {
  * PDF segue sem assinatura nomeada). NUNCA sobrescreve um valor válido do PDF. Devolve o DFD + os rótulos
  * do que foi herdado (transparência na comparação). Puro.
  */
-export function herdarTratamentos<T extends DfdTratavel>(novo: T, gravado: DfdTratavel, anoPca?: number | null): { dfd: T; herdados: string[] } {
+export function herdarTratamentos<T extends DfdTratavel>(
+  novo: T,
+  gravado: DfdTratavel,
+  anoPca?: number | null,
+  /** Partes a herdar: a das ASSINATURAS é adiada enquanto o DFD aguarda o OCR (a assinatura achatada só
+   * existe depois da leitura — herdar antes perderia a validação e pularia o OCR). */
+  partes: { tratamentos?: boolean; assinaturas?: boolean } = {},
+): { dfd: T; herdados: string[] } {
+  const herdados: string[] = [];
+  let dfd = novo;
+  if (partes.tratamentos !== false) {
+    const t = herdarTratamentosTexto(dfd, gravado, anoPca);
+    dfd = t.dfd;
+    herdados.push(...t.herdados);
+  }
+  if (partes.assinaturas !== false) {
+    const a = herdarValidacaoAssinaturas(dfd, gravado);
+    dfd = a.dfd;
+    herdados.push(...a.herdados);
+  }
+  return { dfd, herdados };
+}
+
+/** Tipo, seções obrigatórias e referências de renovação (o que o PDF não traz e o gravado tratou). */
+function herdarTratamentosTexto<T extends DfdTratavel>(novo: T, gravado: DfdTratavel, anoPca?: number | null): { dfd: T; herdados: string[] } {
   const herdados: string[] = [];
   let dfd = novo;
   if (!tipoCurtoDfd(novo.tipo) && tipoCurtoDfd(gravado.tipo)) {
@@ -349,6 +400,13 @@ export function herdarTratamentos<T extends DfdTratavel>(novo: T, gravado: DfdTr
     dfd = { ...dfd, numeroContrato: gravado.numeroContrato, numeroAta: gravado.numeroAta, numeroLicitacao: gravado.numeroLicitacao };
     herdados.push("Referências de renovação");
   }
+  return { dfd, herdados };
+}
+
+/** Validação da assinatura pela EQUIPE herdada do gravado (mesmo assinante/data/formato; ou a "manual"). */
+function herdarValidacaoAssinaturas<T extends DfdTratavel>(novo: T, gravado: DfdTratavel): { dfd: T; herdados: string[] } {
+  const herdados: string[] = [];
+  let dfd = novo;
   // Validação da assinatura pela EQUIPE: a mesma assinatura (nome+data+formato) herda a validação; se o PDF
   // segue sem assinatura NOMEADA, a assinatura "manual" (equipe) do gravado continua valendo.
   const validadas = new Map(gravado.assinaturas.filter((a) => a.validacao?.por === "equipe").map((a) => [chaveAssinatura(a), a.validacao]));
