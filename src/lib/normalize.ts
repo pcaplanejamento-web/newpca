@@ -14,27 +14,46 @@ export function stripAccents(s: string): string {
 // Texto "comum" (ASCII imprimível + Latin-1 imprimível, sem o NBSP e o hífen suave) — o caso de quase todo trecho
 // lido do DFD: basta colapsar os espaços (atalho de desempenho — protocolos têm centenas de milhares de trechos).
 const RE_TEXTO_COMUM = /^[\x20-\x7E\u00A1-\u00AC\u00AE-\u00FF]*$/;
-// Brancos que o `\s` do JS NÃO cobre (NEL) ou que viram espaço antes de remover os controles.
-const RE_BRANCO = /[\s\u0085]/g;
 // Invisíveis que não são conteúdo: controles C0/C1, formatação Unicode (Cf: largura zero, hífen suave, marcas
 // bidi, BOM…), surrogates órfãos, caractere de substituição (U+FFFD) e não-caracteres.
 const RE_INVISIVEL = /[\p{Cc}\p{Cf}\p{Cs}\uFFFD\uFFFE\uFFFF]/gu;
+// C1 (U+0080–U+009F) no texto é quase sempre Windows-1252 lido como Latin-1 ("–" chega como U+0096): volta à
+// PONTUAÇÃO certa. As letras estrangeiras do 1252 (Š Ž Œ Ÿ ƒ…) e os códigos indefinidos NÃO voltam (em texto do DFD
+// são lixo, não conteúdo) — somem com os demais controles; o U+0085 (NEL) é quebra de linha ⇒ espaço.
+const CP1252: Record<string, string> = {
+  "\u0080": "\u20AC", "\u0082": "\u201A", "\u0084": "\u201E", "\u0086": "\u2020", "\u0087": "\u2021",
+  "\u0089": "\u2030", "\u008B": "\u2039", "\u0091": "\u2018", "\u0092": "\u2019", "\u0093": "\u201C", "\u0094": "\u201D",
+  "\u0095": "\u2022", "\u0096": "\u2013", "\u0097": "\u2014", "\u0099": "\u2122", "\u009B": "\u203A",
+};
+// Fonte Symbol/Wingdings SEM mapa Unicode: o PDF entrega o caractere no USO PRIVADO (U+F000 + o código da fonte) — e o
+// MESMO código é um símbolo na Symbol e um MARCADOR na Wingdings. Só voltam ao real os que não colidem com marcador de
+// lista (matemática e as letras gregas de especificação: ± ≥ ≤ ° × ÷ ≠ ≈ √ ′ ″ Δ Ω α β δ ε φ γ e as setas); o "µ" só
+// ANTES de uma unidade ("µm", "µF" — a Wingdings usa o mesmo código como marcador); o resto (U+F0B7 •, U+F0A7 ▪, U+F0D8
+// ➢, U+F0FC ✓, U+F076 ❖, U+F074 ⧫, U+F06C ●, U+F06E ■…) e os desconhecidos viram "•" (marcador).
+const SIMBOLO_PUA: Record<number, string> = {
+  0xf02d: "-", 0xf044: "\u0394", 0xf057: "\u03A9", 0xf061: "\u03B1", 0xf062: "\u03B2", 0xf064: "\u03B4", 0xf065: "\u03B5",
+  0xf066: "\u03C6", 0xf067: "\u03B3", 0xf0a2: "\u2032", 0xf0a3: "\u2264", 0xf0ac: "\u2190", 0xf0ad: "\u2191",
+  0xf0ae: "\u2192", 0xf0af: "\u2193", 0xf0b0: "\u00B0", 0xf0b1: "\u00B1", 0xf0b2: "\u2033", 0xf0b3: "\u2265",
+  0xf0b4: "\u00D7", 0xf0b8: "\u00F7", 0xf0b9: "\u2260", 0xf0bb: "\u2248", 0xf0d6: "\u221A",
+};
 
 /**
  * Texto CAPTURADO (PDF/planilha) limpo: sem caracteres invisíveis/de controle (largura zero, hífen suave, BOM,
  * marcas bidi, U+FFFD), com TAB/quebra/NBSP/espaços Unicode virando UM espaço, acentos compostos juntos (NFC —
- * "C" + cedilha combinante vira "Ç") e o caractere de USO PRIVADO (o marcador de lista do Word em fonte
- * Symbol/Wingdings, que o PDF entrega como U+F0B7 e a tela mostra como um quadrado) virando "•". Não mexe em nenhum
- * caractere visível (pontuação, "²", "®", "°"…). Puro.
+ * "C" + cedilha combinante vira "Ç"), o Windows-1252 mal decodificado consertado e o caractere de USO PRIVADO da
+ * fonte Symbol/Wingdings (que a tela mostrava como um quadrado) virando o símbolo real (±, ≥, µ…) ou "•" (marcador
+ * de lista). Não mexe em nenhum caractere visível (pontuação, "²", "®", "°"…). Idempotente. Puro.
  */
 export function limparTexto(v: unknown): string {
   const s = v == null ? "" : String(v);
   if (RE_TEXTO_COMUM.test(s)) return s.replace(/\s+/g, " ").trim();
   return s
     .replace(/\uFEFF/g, "") // BOM/ZWNBSP: largura zero (não é espaço)
-    .replace(RE_BRANCO, " ")
+    .replace(/[\u0080-\u009F]/g, (c) => CP1252[c] ?? c)
+    .replace(/[\s\u0085]/g, " ")
     .replace(RE_INVISIVEL, "")
-    .replace(/\p{Co}/gu, "•")
+    .replace(/\uF06D(?=[A-Za-z])/g, "\u00B5") // "µ" da Symbol só antes de uma unidade (µm, µF, µg…)
+    .replace(/\p{Co}/gu, (c) => SIMBOLO_PUA[c.codePointAt(0) ?? 0] ?? "\u2022")
     .normalize("NFC")
     .replace(/(^|\s)\p{M}+/gu, "$1") // acento órfão (sem letra)
     .replace(/\s+/g, " ")

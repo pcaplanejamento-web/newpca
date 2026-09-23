@@ -35,6 +35,14 @@ describe("normalize", () => {
     assert.equal(limparTexto("A\u0085B\u2028C\u3000D"), "A B C D"); // brancos Unicode
     assert.equal(limparTexto("DOTS/M² 40°C INTEL®"), "DOTS/M² 40°C INTEL®"); // visíveis intactos
     assert.equal(limparTexto(" \u0301ACENTO ÓRFÃO"), "ACENTO ÓRFÃO");
+    // Windows-1252 lido como Latin-1: a PONTUAÇÃO volta; letra estrangeira/indefinido some (lixo, não conteúdo).
+    assert.equal(limparTexto("10\u009620 \u0093OK\u0094 \u0092S\u0085FIM"), "10–20 “OK” ’S FIM");
+    assert.equal(limparTexto("A\u008AB\u009FC\u0081D"), "ABCD");
+    // Fonte Symbol sem mapa Unicode: o símbolo de ESPECIFICAÇÃO volta ao real; o código que também é marcador da
+    // Wingdings (⧫ ● ■ ❖ ➢ ✓ ▪…) vira "•"; o "µ" só antes de uma unidade.
+    assert.equal(limparTexto("220V \uF0B1 10% \uF0B3 1000W 40\uF0B0C \uF057 \uF044T"), "220V ± 10% ≥ 1000W 40°C Ω ΔT");
+    assert.equal(limparTexto("10 \uF06Dm 4,7\uF06DF"), "10 µm 4,7µF");
+    assert.equal(limparTexto("\uF074 A \uF06D B \uF076 C \uF0D8 D \uF0FC E \uF0A7 F"), "• A • B • C • D • E • F");
     assert.equal(limparTexto(null), "");
     assert.equal(limparTexto(123), "123");
   });

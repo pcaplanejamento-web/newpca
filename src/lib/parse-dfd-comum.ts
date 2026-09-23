@@ -245,64 +245,74 @@ export function txt(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }
 
-// Marcadores de LISTA/decorativos que o requisitante cola do Word no meio da descrição do item ("…SUSTENTAÇÃO;
-// • DIMENSÕES…", seta, visto, quadrado, losango…) — NÃO são conteúdo do item: • ‣ ⁃ ∙, Formas Geométricas
-// (U+25A0–25FF), estrelas/caixas de seleção, Dingbats (U+2700–2775 e U+2794–27BF) e os círculos/quadrados de
-// U+2981, U+29BE–29BF, U+2B1B–2B1C, U+2B24–2B2F. O marcador em fonte Symbol/Wingdings (uso privado, U+F0B7) já chega
-// como "•" por `limparTexto`. Ficam: setas (→), "§", "°", "²", "®" e os números circulados (U+2776–2793).
+// Marcadores de LISTA que o requisitante cola do Word no meio da descrição do item ("…SUSTENTAÇÃO; • DIMENSÕES…") —
+// NÃO são conteúdo do item: bolinhas, quadrados, losangos, triângulos-marcador, estrelas, caixas de seleção, visto,
+// xis de lista e setas-marcador (+ o seletor de variação/acento que venha colado). Os que TAMBÉM têm sentido NÃO
+// estão aqui (×, ✕, ✖, ➕, ➖, ➗, △, ▲, colchetes e aspas ornamentais); ○ ◦ ∘ ∙ · só saem SOLTOS (entre espaços =
+// marcador) — "90◦C" e "N∙m" ficam. O marcador em fonte Symbol/Wingdings (uso privado) já chega como "•".
 const RE_MARCADOR_LISTA =
-  /[\u2022\u2023\u2043\u2219\u25A0-\u25FF\u2605\u2606\u2610-\u2612\u26AA\u26AB\u2700-\u2775\u2794-\u27BF\u2981\u29BE\u29BF\u2B1B\u2B1C\u2B24-\u2B2F]/gu;
+  /[\u2022\u2023\u2043\u25A0\u25A1\u25AA\u25AB\u25B6\u25B8\u25B9\u25BA\u25BB\u25C6-\u25C9\u25CF\u25D8\u25D9\u25FB-\u25FE\u2605\u2606\u2610-\u2612\u26AA\u26AB\u2713\u2714\u2717\u2718\u2726\u2727\u2756\u2767\u2794\u2798-\u27AF\u27B1-\u27BE\u2981\u29BE\u29BF\u2B1B\u2B1C\u2B24-\u2B2F]\p{M}*/gu;
+const RE_MARCADOR_SOLTO = /(^|\s)[\u00B7\u2218\u2219\u25CB\u25E6]\p{M}*(?=\s|$)/gu;
 
 /**
- * DESCRIÇÃO do item como deve ser guardada: texto limpo (`limparTexto` — tabs, quebras, NBSP e invisíveis viram
- * um espaço; o marcador em fonte de símbolo vira "•") SEM os marcadores de lista (cada um vira um espaço) e
- * sem o "·" solto usado como marcador. Idempotente. Puro.
+ * DESCRIÇÃO do item como deve ser guardada: texto limpo (`limparTexto` — tabs, quebras, NBSP e invisíveis viram um
+ * espaço; o símbolo de fonte Symbol volta ao real) SEM os marcadores de lista (cada um vira um espaço). Idempotente.
+ * Puro.
  */
 export function limparDescricaoItem(v: unknown): string {
-  return limparTexto(v)
-    .replace(RE_MARCADOR_LISTA, " ")
-    .replace(/(^|\s)\u00B7(?=\s|$)/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+  return limparTexto(v).replace(RE_MARCADOR_LISTA, " ").replace(RE_MARCADOR_SOLTO, "$1").replace(/\s+/g, " ").trim();
 }
 
+/** Dígitos de largura total ("５２４") → ASCII. */
+const digitosAscii = (s: string) => s.replace(/[\uFF10-\uFF19]/g, (c) => String(c.charCodeAt(0) - 0xff10));
+// UM código: dígitos com espaço/quebra (o código quebrado em 2 linhas) ou um "."/"-" de formatação entre eles.
+const RE_CODIGO = /\d+(?:(?:\s+|[.-])\d+)*/;
+
 /**
- * CÓDIGO do item: só os DÍGITOS, na ordem (o código quebrado em 2 linhas — "524194727" ⏎ "0" — ou com
- * espaço/TAB/pontuação no meio vira "5241947270"); os ZEROS À ESQUERDA são preservados (é texto, nunca
- * número). Dígitos de largura total/sobrescritos viram ASCII (NFKC). Sem dígito ⇒ `null`. Puro.
+ * CÓDIGO do item: o PRIMEIRO código do texto, só com os DÍGITOS, na ordem — o código quebrado em 2 linhas
+ * ("524194727" ⏎ "0"), com TAB/espaço no meio ou formatado ("524.194.727-0") vira "5241947270"; os ZEROS À ESQUERDA
+ * ficam (é texto, nunca número). Dois códigos na célula ("… / …", "(ANTIGO …)") nunca se fundem: vale o 1º. Sem
+ * dígito ⇒ `null`. Puro.
  */
 export function codigoDoItem(v: unknown): string | null {
-  const d = limparTexto(v).normalize("NFKC").replace(/\D/g, "");
-  return d || null;
+  const m = digitosAscii(limparTexto(v)).match(RE_CODIGO);
+  return m ? m[0].replace(/\D/g, "") : null;
 }
 
 /**
- * Número de uma célula do DFD (quantidade/valores) em pt-BR — como `parseNumberBR`, mas sem o erro do
- * separador ÚNICO de milhar: "1.000"/"12.500.000" (só ponto, grupos de 3) é MILHAR (1000), não 1,0. Vírgula =
- * decimal ("12,0000"); com ponto E vírgula, o último separador é o decimal; várias vírgulas sem ponto = milhar
- * en-US. Número já numérico (célula da planilha) passa direto. Sem dígito ⇒ `null`. Puro.
+ * Número de uma célula do DFD (quantidade/valores) em pt-BR. A célula tem de trazer UM número só — texto em volta é
+ * aceito ("12,0000 MES" = 12, "R$ 1.234,56", "100 M3" = 100: dígito colado numa letra é parte de palavra); DOIS números
+ * ("100 200", "10-20", "Página 2 de 3") são AMBÍGUOS ⇒ `null` (pendência visível, nunca um valor inventado). Vírgula =
+ * decimal ("12,0000"); só ponto em grupos de 3 = MILHAR ("1.000" = mil); com ponto E vírgula, o último é o decimal e o
+ * outro separa grupos de 3; várias vírgulas = milhar en-US; espaço de milhar só com decimais ("1 234,56"). Forma
+ * incoerente ("1.2.3", "12.34,56") ⇒ `null`. Número já numérico passa direto. Puro.
  */
 export function numeroDfd(v: unknown): number | null {
   if (v == null || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  let s = limparTexto(v).normalize("NFKC").replace(/[^\d.,-]/g, "");
-  if (!/\d/.test(s)) return null;
-  const negativo = /^-/.test(s);
-  s = s.replace(/-/g, "");
+  const t = digitosAscii(limparTexto(v)).replace(/(?<![\d.,])\d{1,3}(?: \d{3})+,\d+/g, (m) => m.replace(/ /g, ""));
+  const tokens = [...t.matchAll(/(?<![\p{L}\d.,])(-\s*)?(\d[\d.,]*)/gu)];
+  if (tokens.length !== 1) return null;
+  const [, sinal, bruto] = tokens[0];
+  const s = bruto.replace(/[.,]+$/, "");
   const pontos = (s.match(/\./g) ?? []).length;
   const virgulas = (s.match(/,/g) ?? []).length;
+  let n: number;
   if (pontos > 0 && virgulas > 0) {
-    s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    const decimalVirgula = s.lastIndexOf(",") > s.lastIndexOf(".");
+    if (!(decimalVirgula ? /^\d{1,3}(?:\.\d{3})+,\d+$/ : /^\d{1,3}(?:,\d{3})+\.\d+$/).test(s)) return null;
+    n = Number(decimalVirgula ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, ""));
   } else if (virgulas > 0) {
-    s = virgulas > 1 ? s.replace(/,/g, "") : s.replace(",", ".");
-  } else if (pontos > 0 && /^[1-9]\d{0,2}(?:\.\d{3})+$/.test(s)) {
-    s = s.replace(/\./g, "");
-  } else if (pontos > 1) {
-    return null; // "1.2.3": ambíguo — nunca inventa um valor
-  }
-  const n = Number(s);
+    if (virgulas === 1) n = Number(s.replace(",", "."));
+    else if (/^\d{1,3}(?:,\d{3})+$/.test(s)) n = Number(s.replace(/,/g, ""));
+    else return null;
+  } else if (pontos > 0) {
+    if (/^[1-9]\d{0,2}(?:\.\d{3})+$/.test(s)) n = Number(s.replace(/\./g, ""));
+    else if (pontos === 1) n = Number(s);
+    else return null;
+  } else n = Number(s);
   if (!Number.isFinite(n)) return null;
-  return negativo ? -n : n;
+  return sinal ? -n : n;
 }
 
 /** Primeiro grupo capturado não-vazio ao aplicar `re` a alguma das linhas. */
@@ -323,9 +333,9 @@ export function ehRuido(s: string): boolean {
     // do rodapé — só o prefixo derrubava linhas legítimas ("CENTÍMETROS DE ALTURA", "PÁGINAS…", "EMITIDO EM
     // DUAS VIAS").
     /^CENTI\b/.test(n) ||
-    /^EMITIDO EM \d/.test(n) ||
-    /^EMITIDO POR [\w.@-]*[._@\d][\w.@-]*(?:\s|$)/.test(n) || // "Emitido por fernanda.mello" (usuário do sistema)
-    /^PAGINA \d+ (?:DE|\/) \d+/.test(n) ||
+    /^EMITIDO EM:?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/.test(n) || // "Emitido em[:] 30/06/2026 …" (com a DATA)
+    /^EMITIDO POR:?\s*(?:[\w.@-]*[._@\d][\w.@-]*(?:\s|$)|[\w.@-]+$)/.test(n) || // "Emitido por fernanda.mello …" / "… admin"
+    /^PAGINA \d+(?:\s*(?:DE|\/)\s*\d+)?$/.test(n) || // "Página 1 de 2" / "Página 1/2" / "Página 2" (a linha INTEIRA)
     n === "ESTADO DE GOIAS" ||
     n === "PREFEITURA MUNICIPAL DE RIO VERDE" ||
     n.startsWith("DOCUMENTO DE FORMALIZACAO") ||

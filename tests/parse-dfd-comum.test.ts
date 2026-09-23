@@ -50,6 +50,13 @@ describe("parse-dfd-comum (ehRuido — rodapé pela FORMA, não pelo prefixo)", 
     assert.equal(ehRuido("EMITIDO EM DUAS VIAS, COM RECIBO"), false);
     assert.equal(ehRuido("EMITIDO POR AUTORIDADE COMPETENTE"), false);
     assert.equal(ehRuido("PÁGINAS NUMERADAS SEQUENCIALMENTE"), false);
+    // Variantes do rodapé (com ":", "Página 1/2", "Página 2", usuário sem ponto) e linhas legítimas parecidas.
+    assert.equal(ehRuido("Emitido em: 30/06/2026 09:43"), true);
+    assert.equal(ehRuido("Emitido por admin"), true);
+    assert.equal(ehRuido("Página 1/2"), true);
+    assert.equal(ehRuido("Página 2"), true);
+    assert.equal(ehRuido("EMITIDO EM 2 VIAS"), false);
+    assert.equal(ehRuido("PÁGINA 3 DO MANUAL"), false);
   });
 });
 
@@ -63,6 +70,10 @@ describe("parse-dfd-comum (captura de item: descrição, código e números)", (
     assert.equal(limparDescricaoItem("DOTS/M² 40°C INTEL® § 1º ENTRADA → SAÍDA ±5%"), "DOTS/M² 40°C INTEL® § 1º ENTRADA → SAÍDA ±5%");
     assert.equal(limparDescricaoItem("· ITEM A · ITEM B"), "ITEM A ITEM B");
     assert.equal(limparDescricaoItem("•\t•  "), "");
+    // Marcador da Wingdings no uso privado (⧫ = U+F074) some; o símbolo de especificação da Symbol fica.
+    assert.equal(limparDescricaoItem("\uF074 CADEIRA GIRATÓRIA; \uF0B7 ASSENTO \uF0B3 50 CM"), "CADEIRA GIRATÓRIA; ASSENTO ≥ 50 CM");
+    // Símbolos com sentido ficam: ×, ✕, △, "90◦C", "N∙m".
+    assert.equal(limparDescricaoItem("CAIXA 30✕40 CM 2×3 △ 90◦C 10 N∙m"), "CAIXA 30✕40 CM 2×3 △ 90◦C 10 N∙m");
     // Idempotente.
     const uma = limparDescricaoItem("A;\t• B");
     assert.equal(limparDescricaoItem(uma), uma);
@@ -75,6 +86,8 @@ describe("parse-dfd-comum (captura de item: descrição, código e números)", (
     assert.equal(codigoDoItem(" 000123\n"), "000123");
     assert.equal(codigoDoItem("524.194.727-0"), "5241947270");
     assert.equal(codigoDoItem("５２４"), "524"); // dígitos de largura total
+    assert.equal(codigoDoItem("5241937263 / 5241937264"), "5241937263"); // dois códigos: vale o 1º, nunca fundidos
+    assert.equal(codigoDoItem("524194727 (ANTIGO 1234)"), "524194727");
     assert.equal(codigoDoItem("S/C"), null);
     assert.equal(codigoDoItem(""), null);
     assert.equal(codigoDoItem(null), null);
@@ -94,6 +107,14 @@ describe("parse-dfd-comum (captura de item: descrição, código e números)", (
     assert.equal(numeroDfd("-5,5"), -5.5);
     assert.equal(numeroDfd(" 12,0000\u00A0"), 12);
     assert.equal(numeroDfd(1000), 1000);
+    assert.equal(numeroDfd("1 234,56"), 1234.56); // espaço de milhar só com decimais
+    assert.equal(numeroDfd("12,0000 MES"), 12); // texto em volta
+    assert.equal(numeroDfd("100 M3"), 100); // dígito colado na letra é parte da palavra
+    assert.equal(numeroDfd("14.814.814,6944"), 14814814.6944); // valor quebrado em 2 linhas, já juntado
+    // DOIS números na célula = ambíguo ⇒ null (nunca "100200" nem "10")
+    assert.equal(numeroDfd("100 200"), null);
+    assert.equal(numeroDfd("10-20"), null);
+    assert.equal(numeroDfd("Página 2 de 3"), null);
     assert.equal(numeroDfd("1.2.3"), null);
     assert.equal(numeroDfd("abc"), null);
     assert.equal(numeroDfd(""), null);
