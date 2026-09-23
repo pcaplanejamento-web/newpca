@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
+import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
@@ -101,6 +102,8 @@ export type ItemDfdRow = {
   sigla: string | null; // código da unidade do DFD
   reparticaoId: number | null; // unidade do DFD (escopo de acesso da Mesa do PCA)
   protocoloNumero: string | null;
+  /** Tipo do DFD de origem (o catálogo restringe tipos por item). */
+  dfdTipo: string | null;
   item: number | null;
   codigo: string | null;
   descricao: string | null;
@@ -111,6 +114,8 @@ export type ItemDfdRow = {
   /** Nº do item no PCA (só na Mesa do PCA, item INCORPORADO) e se o nº está ativo (retirado = inativo). */
   pcaSequencial: number | null;
   pcaAtivo: boolean | null;
+  /** Conformidade com o CATÁLOGO (veredito compacto; `null` = sem veredito) — preenchida pela rota da visão Itens. */
+  catalogo?: ConferenciaCompacta | null;
 };
 
 export type DfdDetalhe = DfdResumo & {
@@ -241,6 +246,7 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Pr
       sigla: reparticoes.codigo,
       reparticaoId: dfds.reparticaoId,
       protocoloNumero: dfdProtocolos.numero,
+      dfdTipo: dfds.tipo,
       item: dfdItens.item,
       codigo: dfdItens.codigo,
       descricao: dfdItens.descricao,

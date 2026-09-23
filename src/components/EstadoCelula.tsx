@@ -1,4 +1,6 @@
-import type { ResumoEstado } from "@/lib/dfd-tratamento";
+import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
+import { type ConferenciaCompacta, rotulosDivergencia } from "@/lib/catalogo-conferencia";
+import { corVeredictoCatalogo, type ResumoEstado, rotuloVeredictoCatalogo, veredictoLinhaCatalogo } from "@/lib/dfd-tratamento";
 import { IconSpinner } from "./icons";
 
 /**
@@ -7,6 +9,8 @@ import { IconSpinner } from "./icons";
  *   "+N" (erros em vermelho, atenções em âmbar); o `title` traz a lista completa (tooltip nativo).
  * - `EstadoPonto`: ponto + rótulo simples (Regular/Editado/Leitura incompleta/Atenção…).
  * - `EstadoProcessando`: spinner + o que está acontecendo ("Conferindo…", "Lendo o DFD…", "Na fila").
+ * - `CelulaCatalogo`: a coluna "Catálogo" dos itens (Conforme / Fora do catálogo / Divergente / Tipo incompatível),
+ *   na cor do nível do ADM e com o detalhe específico no `title`; sem veredito = "—".
  * Sem quebra de linha (a coluna ganha a largura do conteúdo).
  */
 export function EstadoResumo({ res }: { res: ResumoEstado }) {
@@ -45,4 +49,12 @@ export function EstadoProcessando({ rotulo, fila = false }: { rotulo: string; fi
       {rotulo}
     </span>
   );
+}
+
+/** Célula "Catálogo" de um item — a MESMA na tabela de itens do DFD e na visão Itens da Mesa. */
+export function CelulaCatalogo({ conf, regras, dfdTipo }: { conf: ConferenciaCompacta | null | undefined; regras: RegrasAvaliacao; dfdTipo: string | null }) {
+  const v = veredictoLinhaCatalogo(conf, regras, dfdTipo);
+  if (!v || !conf) return <span className="text-muted">—</span>;
+  const espec = rotulosDivergencia(conf).join(" · ");
+  return <EstadoPonto cor={corVeredictoCatalogo(v.nivel)} rotulo={rotuloVeredictoCatalogo(v)} title={espec || undefined} />;
 }

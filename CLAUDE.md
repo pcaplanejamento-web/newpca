@@ -535,9 +535,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`passaFiltroMesa`/`opcoesAssuntoMesa`). Enquanto ativos, **travam** as colunas Responsável/Assunto da tabela de
     protocolos (`Column.travado` do `DataTable`: cadeado + o motivo; o filtro da coluna sai de uso) — a hierarquia manda.
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
-    Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
+    **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
-    invalidado quando os DFDs recarregam (após import/edição).
+    invalidado quando os DFDs recarregam (após import/edição). A coluna **Catálogo** vem do SERVIDOR na mesma resposta:
+    `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
+    o veredito COMPACTO (`ConferenciaCompacta` — sem a descrição do catálogo; catálogo vazio/sem código ⇒ `null`); a
+    célula é a **`CelulaCatalogo`** (`EstadoCelula.tsx`, a MESMA da tabela de itens do `DfdView`), na cor do nível do ADM.
   - **PILHA DE BANNERS da Mesa (`BannersMesa`) — ORDEM FIXA Protocolo (esquerda) | DFD (centro) | Item (direita), qualquer
     que seja o banner de entrada:** linha de **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD,
     com "Salvar alterações") — a coluna da direita; **"Ver DFD"** faz o DFD surgir À ESQUERDA dele; **"Ver protocolo"** traz
@@ -1115,7 +1118,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`item.naoCatalogado`/`item.divergenteCatalogo`/`item.tipoIncompativel`, **`comportamentoPadrao: avisa`** = ATENÇÃO, não
   bloqueia; o ADM põe numa importância que `bloqueia` ou baixa a `ignora` — aparecem sozinhos na aba **Item** de `AvaliacaoAdmin`). **Config
   vazia ⇒ igual a hoje** (invariante por teste). **Escalável (consulta o catálogo VIVO por DFD):** `conferirItensNoCatalogo(itens,
-  dfdTipo)` (`catalogo.ts`) busca só as entradas dos **códigos daquele DFD** (chunked `inArray`, guard "catálogo vazio ⇒ nada") e,
+  dfdTipo)` (`catalogo.ts`) busca só as entradas dos **códigos daquele DFD** (`entradasCatalogo` → `consultaEntradasCatalogo`,
+  `catalogo-sql.ts`: UMA consulta com os códigos num só parâmetro JSON — `IN (SELECT value FROM json_each(?))`, testada pelo
+  driver D1 real; guard "catálogo vazio ⇒ nada") e,
   p/ não catalogados, propõe semelhante via `LIKE` por token distintivo — NÃO baixa o catálogo. Rota **`POST /api/catalogo/conferir`**
   (`exigirUsuario`) devolve o veredito por código (Map serializado em entries); cliente único **`catalogo-conferir-cliente.ts`**
   (`conferirItensCliente`, silencioso em erro — conferência é auxiliar). **Threading via `ctx`** (mesmo padrão de

@@ -38,7 +38,7 @@ export const ROTULO_FALTA_CATALOGO: Record<FaltaCatalogoItem, string> = {
  * erro: descrição e/ou unidade diferentes, tipo incompatível, fora do catálogo. Fonte única
  * usada na coluna "Catálogo", no painel do item e nas mensagens. Vazio = conforme.
  */
-export function rotulosDivergencia(c: ConferenciaItem): string[] {
+export function rotulosDivergencia(c: ConferenciaCompacta): string[] {
   const r: string[] = [];
   if (c.faltas.includes("naoCatalogado")) r.push("Fora do catálogo");
   if (c.divergDescricao) r.push("Descrição diferente do catálogo");
@@ -72,6 +72,9 @@ export type ConferenciaItem = {
   divergUnidade: boolean;
   sugestao: SugestaoCatalogo | null;
 };
+
+/** O veredito SEM a referência (listas da Mesa: leve com milhares de itens — a descrição do catálogo não trafega). */
+export type ConferenciaCompacta = Pick<ConferenciaItem, "faltas" | "divergDescricao" | "divergUnidade">;
 
 /** Item do DFD — só o que é comparado. */
 export type ItemConferivel = { codigo: string | null; descricao: string | null; unidade: string | null };

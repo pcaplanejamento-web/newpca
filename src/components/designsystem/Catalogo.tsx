@@ -34,7 +34,8 @@ import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
-import { EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { regrasPadrao } from "@/lib/avaliacao-core";
 import type { PcaDetalhe } from "@/lib/dfd";
 import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
@@ -1911,6 +1912,13 @@ export function Catalogo() {
           <EstadoPonto cor="var(--danger)" rotulo="Leitura incompleta" title="Item sem número no PDF" />
           <EstadoProcessando rotulo="Conferindo…" />
           <EstadoProcessando rotulo="Na fila" fila />
+        </div>
+        <p className="mt-3 text-xs text-muted">CelulaCatalogo — a coluna "Catálogo" dos itens (nível do ADM; detalhe no tooltip):</p>
+        <div className="mt-1 flex flex-wrap items-center gap-4">
+          <CelulaCatalogo conf={{ faltas: [], divergDescricao: false, divergUnidade: false }} regras={regrasPadrao()} dfdTipo="DFD-S" />
+          <CelulaCatalogo conf={{ faltas: ["divergenteCatalogo"], divergDescricao: true, divergUnidade: false }} regras={regrasPadrao()} dfdTipo="DFD-S" />
+          <CelulaCatalogo conf={{ faltas: ["naoCatalogado"], divergDescricao: false, divergUnidade: false }} regras={regrasPadrao()} dfdTipo="DFD-S" />
+          <CelulaCatalogo conf={null} regras={regrasPadrao()} dfdTipo="DFD-S" />
         </div>
       </Secao>
 

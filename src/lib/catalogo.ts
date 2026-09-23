@@ -1,10 +1,12 @@
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import { catalogoItens, catalogos } from "@/db/schema";
-import { type CatalogoRef, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
+import { type CatalogoRef, type ConferenciaCompacta, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
+import { consultaEntradasCatalogo } from "./catalogo-sql";
 import { comCatalogo, resolverRemocao } from "./catalogo-membros";
 import { type CatalogoItemImport, normalizarTipos } from "./catalogo-validation";
 import { getDb } from "./db";
 import { normalizarCodigo } from "./parse-catalogo-comum";
+import { tipoCurtoDfd } from "./parse-dfd-comum";
 
 /**
  * Acesso a dados do CATÁLOGO de produtos. Base GLOBAL isolada (sem repartição/grupo,
@@ -495,16 +497,31 @@ function tokenBusca(descricao: string | null): string | null {
 export async function entradasCatalogo(codigos: string[]): Promise<Map<string, CatalogoRef>> {
   const index = new Map<string, CatalogoRef>();
   const lista = [...new Set(codigos.filter(Boolean))];
-  const db = getDb();
-  for (let i = 0; i < lista.length; i += IN_CHUNK) {
-    const linhas = await db
-      .select(COLS_REF)
-      .from(catalogoItens)
-      .innerJoin(catalogos, eq(catalogoItens.catalogoId, catalogos.id))
-      .where(inArray(catalogoItens.codigo, lista.slice(i, i + IN_CHUNK)));
-    for (const l of linhas) index.set(l.codigo, toRef(l));
-  }
+  if (lista.length === 0) return index;
+  // UMA consulta, qualquer que seja o nº de códigos (json_each — ver `catalogo-sql.ts`).
+  for (const l of await consultaEntradasCatalogo(getDb(), lista)) index.set(l.codigo, toRef(l));
   return index;
+}
+
+/**
+ * Conformidade com o catálogo de uma LISTA de itens de DFDs diferentes (a visão Itens da Mesa): o veredito COMPACTO
+ * por item (sem a referência — leve com milhares), na mesma ordem. Catálogo vazio ou item sem código ⇒ `null` (sem
+ * veredito — nunca "fora do catálogo" em massa). 2 consultas no total.
+ */
+export async function conformidadeDosItens(
+  itens: { codigo: string | null; descricao: string | null; unidade: string | null; dfdTipo: string | null }[],
+): Promise<(ConferenciaCompacta | null)[]> {
+  const codigos = [...new Set(itens.map((i) => normalizarCodigo(i.codigo)).filter(Boolean))];
+  if (codigos.length === 0) return itens.map(() => null);
+  const [tot] = await getDb().select({ n: sql<number>`count(*)` }).from(catalogoItens);
+  if (Number(tot?.n ?? 0) === 0) return itens.map(() => null);
+  const index = await entradasCatalogo(codigos);
+  return itens.map((it) => {
+    const c = normalizarCodigo(it.codigo);
+    if (!c) return null;
+    const r = conferirItem(it, index.get(c) ?? null, tipoCurtoDfd(it.dfdTipo), []);
+    return { faltas: r.faltas, divergDescricao: r.divergDescricao, divergUnidade: r.divergUnidade };
+  });
 }
 
 /**

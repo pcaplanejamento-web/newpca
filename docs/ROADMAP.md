@@ -45,6 +45,10 @@ posição; risquinho de carimbo no cabeçalho e desenho de anotação não viram
 completo, unidade só centrada sob o rótulo, linha em branco não corta o item; célula com DOIS números fica vazia para
 conferência (nunca "100200"); caracteres de fonte Symbol/Wingdings e Windows-1252 tratados sem inventar letras.
 
+### Coluna "Catálogo" na visão Itens da Mesa — entregue
+✅ A lista de TODOS os itens (Mesa e Mesa do PCA) mostra a conformidade de cada item com o catálogo — Conforme / Fora do
+catálogo / Divergente / Tipo incompatível — na cor do nível do ADM, com o detalhe no tooltip e filtro/ordem na coluna
+(inclusive com ":"). Conferido no servidor numa consulta só (milhares de itens), com o tipo do DFD de origem.
 ### DFD sem número de planejamento = ERRO apontado — entregue
 ✅ Novo ponto de avaliação **Nº de planejamento** (Configurações → Avaliação → DFD; padrão Fundamental = erro): o DFD sem o
 nº aparece com **"Sem planejamento"** na célula Estado, a mensagem no painel e a linha no relatório de devolução

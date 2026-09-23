@@ -17,6 +17,8 @@ import {
   mensagensItem,
   type ResumoEstado,
   resumoEstado,
+  rotuloVeredictoCatalogo,
+  veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
@@ -36,7 +38,7 @@ import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
-import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconFilter, IconLayers, IconTrash, IconUser } from "./icons";
 import { Modal } from "./Modal";
@@ -884,6 +886,14 @@ export function DfdsView({
     },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
     { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span> },
+    // Conformidade com o CATÁLOGO (veredito do servidor, na cor do nível do ADM; o tipo do DFD de origem conta).
+    {
+      key: "catalogo",
+      header: "Catálogo",
+      nowrap: true,
+      value: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—",
+      render: (r) => <CelulaCatalogo conf={r.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(r.dfdTipo)} />,
+    },
     {
       key: "descricao",
       header: "Descrição",

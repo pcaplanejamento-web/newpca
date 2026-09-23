@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { comportamentoDaFalta, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
-import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import {
   acharSecao,
-  corVeredictoCatalogo,
   ESTADO_ITEM_ROTULO,
   estadoItem,
   estadoItemCor,
@@ -14,6 +13,7 @@ import {
   resumoEstado,
   SECOES_OBRIGATORIAS,
   setTextoSecao,
+  rotuloVeredictoCatalogo,
   situacaoSecao,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
@@ -24,7 +24,7 @@ import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-res
 import { Badge } from "./Badge";
 import { AutoTextarea, CadeadoBotao } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
-import { EstadoPonto, EstadoResumo } from "./EstadoCelula";
+import { CelulaCatalogo, EstadoPonto, EstadoResumo } from "./EstadoCelula";
 import { IconFile, IconShield } from "./icons";
 import { LinkExterno } from "./LinkExterno";
 import { StatMini } from "./StatMini";
@@ -257,19 +257,9 @@ export function DfdView({
       key: "catalogo",
       header: "Catálogo",
       nowrap: true,
-      value: (r) => {
-        const v = veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo);
-        return v ? (v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme") : "";
-      },
-      render: (r) => {
-        const conf = conformidade.get(normalizarCodigo(r.codigo));
-        const v = veredictoLinhaCatalogo(conf, regras, dfdTipo);
-        if (!v) return <span className="text-muted">—</span>;
-        const cor = corVeredictoCatalogo(v.nivel);
-        // Detalhe ESPECÍFICO (descrição/unidade/tipo diferentes) no tooltip; o painel do item mostra por extenso.
-        const espec = conf ? rotulosDivergencia(conf).join(" · ") : "";
-        return <EstadoPonto cor={cor} rotulo={v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme"} title={espec || undefined} />;
-      },
+      value: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(conformidade.get(normalizarCodigo(r.codigo)), regras, dfdTipo)),
+      // Detalhe ESPECÍFICO (descrição/unidade/tipo diferentes) no tooltip; o painel do item mostra por extenso.
+      render: (r) => <CelulaCatalogo conf={conformidade.get(normalizarCodigo(r.codigo))} regras={regras} dfdTipo={dfdTipo} />,
     };
     const i = COLS.findIndex((c) => c.key === "codigo");
     return [...COLS.slice(0, i + 1), cat, ...COLS.slice(i + 1)];

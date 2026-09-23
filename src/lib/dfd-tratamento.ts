@@ -16,7 +16,7 @@ import {
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
 import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
-import { type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
+import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
   type DfdItemParseado,
@@ -523,7 +523,7 @@ export const CHAVE_FALTA_CATALOGO: Record<FaltaCatalogoItem, ChaveAvaliacao> = {
  * `null` = item sem código / sem veredito (nada a mostrar na coluna). Puro. */
 export type VeredictoLinhaCatalogo = { nivel: "conforme" | "atencao" | "erro"; falta: FaltaCatalogoItem | null };
 export function veredictoLinhaCatalogo(
-  c: ConferenciaItem | undefined,
+  c: ConferenciaCompacta | null | undefined,
   regras: RegrasAvaliacao,
   dfdTipo: string | null,
 ): VeredictoLinhaCatalogo | null {
@@ -533,6 +533,11 @@ export function veredictoLinhaCatalogo(
   const falta = piorFalta(ativas) as FaltaCatalogoItem;
   const nivel = comportamentoNo(regras, CHAVE_FALTA_CATALOGO[falta], { dfdTipo }) === "bloqueia" ? "erro" : "atencao";
   return { nivel, falta };
+}
+
+/** Rótulo da célula "Catálogo" (Conforme / Fora do catálogo / Divergente / Tipo incompatível); sem veredito = "". */
+export function rotuloVeredictoCatalogo(v: VeredictoLinhaCatalogo | null): string {
+  return v ? (v.falta ? ROTULO_FALTA_CATALOGO[v.falta] : "Conforme") : "";
 }
 
 /** Cor (token) do nível de um veredito de linha do catálogo. */
