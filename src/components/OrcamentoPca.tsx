@@ -35,7 +35,6 @@ export type DadosOrcamentoPca = {
   linhas: { unidadeId: number | null; valor: number }[];
   planejado: { unidadeId: number | null; itens: number; valor: number }[];
   unidades: UnidadeRef[];
-  camadaRotulo: string;
 };
 
 /** Barra de porcentagem do comparativo (verde < 90% · âmbar 90–100% · vermelho > 100%). */
@@ -54,7 +53,7 @@ function BarraPct({ l }: { l: LinhaComparativo }) {
 
 /**
  * Aba ORÇAMENTO do PCA: a dotação do CUBO do MESMO ano (filtrada pela visão escolhida na
- * Configuração) × o planejado no PCA (na camada vista), em KPIs e no COMPARATIVO por unidade. Os
+ * Configuração) × o planejado no PCA (os itens incorporados ativos), em KPIs e no COMPARATIVO por unidade. Os
  * lançamentos chegam à unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo".
  */
 export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
@@ -112,7 +111,7 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
               : "sem visão — orçamento inteiro"
           }
         />
-        <KpiStat label="Planejado no PCA" value={brlCompact(t.planejado)} cor="var(--info)" hint={`visão ${dados.camadaRotulo}`} />
+        <KpiStat label="Planejado no PCA" value={brlCompact(t.planejado)} cor="var(--info)" hint="itens ativos" />
         <KpiStat label="Saldo" value={brlCompact(t.saldo)} cor={t.saldo < 0 ? "var(--danger)" : "var(--ok)"} hint="dotação − planejado" />
         <KpiStat
           label="Comprometido"

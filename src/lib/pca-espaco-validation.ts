@@ -34,17 +34,21 @@ const acaoDfd = z.enum(["incorporar", "substituir", "excluir"]);
 const idsProtocolos = z.array(z.number().int().positive()).min(1, "Escolha ao menos um protocolo.").max(50);
 
 /**
- * Ações da Mesa do PCA sobre PROTOCOLOS: ENVIAR (da Mesa principal para a do PCA), DEVOLVER (à Mesa principal),
- * INCORPORAR (os DFDs entram no PCA — `acoes` = a ação por protocolo; sem ela, a sugerida pelo assunto) e
- * DESINCORPORAR.
+ * Ações da Mesa do PCA sobre PROTOCOLOS: ENVIAR (da Mesa principal para a do PCA), DEVOLVER (à Mesa principal) e
+ * INCORPORAR (PERMANENTE — os DFDs entram no PCA; `acoes` = a ação por protocolo; sem ela, a sugerida pelo assunto).
  */
 export const acaoProtocolosPcaSchema = z.discriminatedUnion("acao", [
   z.object({ acao: z.literal("enviar"), ids: idsProtocolos }),
   z.object({ acao: z.literal("devolver"), ids: idsProtocolos }),
   z.object({ acao: z.literal("incorporar"), ids: idsProtocolos, acoes: z.record(z.string().regex(/^\d+$/), acaoDfd).optional() }),
-  z.object({ acao: z.literal("desincorporar"), ids: idsProtocolos }),
 ]);
 export type AcaoProtocolosPca = z.infer<typeof acaoProtocolosPcaSchema>;
+
+/** Ações sobre ITENS numerados do PCA: RETIRAR (o número fica inativo — nunca reaproveitado). */
+export const acaoItensPcaSchema = z.object({
+  acao: z.literal("retirar"),
+  ids: z.array(z.number().int().positive()).min(1, "Escolha ao menos um item.").max(100),
+});
 
 const filtros = z
   .object(

@@ -15,14 +15,10 @@ import {
   previsaoDoDfd,
 } from "../src/lib/pca-core.ts";
 
-const base = { situacaoPermite: true, situacaoNome: "Aprovado", anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, fonteProtocolo: true, jaEmPca: null };
+const base = { anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, fonteProtocolo: true, jaEmPca: null };
 
 describe("pca-core — enviar ao PCA", () => {
   it("tudo certo ⇒ pode enviar", () => assert.deepEqual(motivosNaoEnviar(base), []));
-  it("sem situação / situação que não permite", () => {
-    assert.match(motivosNaoEnviar({ ...base, situacaoPermite: null }).join(), /sem situação/);
-    assert.match(motivosNaoEnviar({ ...base, situacaoPermite: false }).join(), /não permite/);
-  });
   it("ano divergente ou ausente", () => {
     assert.match(motivosNaoEnviar({ ...base, anoProtocolo: 2026 }).join(), /PCA 2026/);
     assert.match(motivosNaoEnviar({ ...base, anoProtocolo: null }).join(), /sem ano/);
@@ -45,7 +41,7 @@ describe("pca-core — incorporar, devolver e trava", () => {
   });
   it("devolver só o não incorporado deste PCA", () => {
     assert.equal(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: null }, 5), null);
-    assert.match(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, 5) ?? "", /desincorpore/);
+    assert.match(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, 5) ?? "", /permanente/);
     assert.match(motivoNaoDevolver({ pcaId: 6, pcaIncorporadoEm: null }, 5) ?? "", /não está/);
   });
   it("travado: só a gestão passa", () => {
@@ -70,11 +66,10 @@ describe("pca-core — ação sugerida pelo assunto", () => {
 });
 
 describe("pca-core — consolidação", () => {
-  const L = (dfdId: number, planejamento: string | null, acao: LinhaVinculo["acao"], ordem: string, camada: LinhaVinculo["camada"] = "publicado"): LinhaVinculo => ({ dfdId, planejamento, acao, ordem, camada });
+  const L = (dfdId: number, planejamento: string | null, acao: LinhaVinculo["acao"], ordem: string): LinhaVinculo => ({ dfdId, planejamento, acao, ordem });
   it("incorporar + substituir + excluir por planejamento", () => {
     const c = consolidarPca(
       [L(1, "640", "incorporar", "a"), L(2, "811", "incorporar", "a"), L(3, "640", "substituir", "b"), L(4, "811", "excluir", "c")],
-      "preview",
     );
     assert.deepEqual(c.vigentes.sort(), [3]);
     assert.equal(c.retirados.get(1), 3);
@@ -82,17 +77,15 @@ describe("pca-core — consolidação", () => {
     assert.equal(c.avisos.length, 0);
   });
   it("substituir/excluir sem par geram aviso", () => {
-    const c = consolidarPca([L(1, "1", "substituir", "a"), L(2, "2", "excluir", "a")], "preview");
+    const c = consolidarPca([L(1, "1", "substituir", "a"), L(2, "2", "excluir", "a")]);
     assert.deepEqual(c.vigentes, [1]);
     assert.equal(c.avisos.length, 2);
   });
-  it("camada publicada ignora DFDs em preview", () => {
-    const linhas = [L(1, "1", "incorporar", "a", "publicado"), L(2, "1", "substituir", "b", "preview")];
-    assert.deepEqual(consolidarPca(linhas, "publicado").vigentes, [1]);
-    assert.deepEqual(consolidarPca(linhas, "preview").vigentes, [2]);
+  it("a ordem cronológica decide (a situação/camada não interfere)", () => {
+    assert.deepEqual(consolidarPca([L(2, "1", "substituir", "b"), L(1, "1", "incorporar", "a")]).vigentes, [2]);
   });
   it("sem planejamento: cada DFD se representa", () => {
-    assert.equal(consolidarPca([L(1, null, "incorporar", "a"), L(2, "", "incorporar", "a")], "preview").vigentes.length, 2);
+    assert.equal(consolidarPca([L(1, null, "incorporar", "a"), L(2, "", "incorporar", "a")]).vigentes.length, 2);
   });
 });
 

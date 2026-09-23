@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
@@ -72,9 +73,12 @@ export function BarraSelecao({
     const ro = new ResizeObserver(medir);
     ro.observe(el);
     window.addEventListener("resize", medir);
+    // O morph das abas (escala) muda a faixa medida sem redimensionar nada — remede ao fim das animações.
+    document.addEventListener("animationend", medir);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", medir);
+      document.removeEventListener("animationend", medir);
     };
   }, [fixa]);
 
@@ -167,7 +171,9 @@ export function BarraSelecao({
     <>
       {/* Lugar no fluxo (o fim da página rola até acima da barra; + a área segura do celular). */}
       <div ref={lugarRef} aria-hidden style={{ height: `calc(${lugar}px + env(safe-area-inset-bottom))` }} />
-      {barra}
+      {/* Portal no body: `position: fixed` dentro de um ancestral com transform/filter (o morph das abas do
+          espaço do PCA) seria relativo a ELE — a barra saía deslocada e estourava a tela. */}
+      {typeof document === "undefined" ? barra : createPortal(barra, document.body)}
     </>
   );
 }

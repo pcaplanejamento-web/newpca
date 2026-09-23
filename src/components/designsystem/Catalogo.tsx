@@ -202,7 +202,6 @@ function PcaEspacoDemo() {
           visaoNome: "PCA",
           bruto: 1_610_000_000,
           filtrado: 1_160_000_000,
-          camadaRotulo: "Preview",
           unidades: [
             { id: 1, sigla: "AMAE", nome: "Agência de Água" },
             { id: 2, sigla: "FMAS", nome: "Fundo de Assistência" },

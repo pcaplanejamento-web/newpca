@@ -299,10 +299,8 @@ export const protocoloSituacoes = sqliteTable(
     nome: text("nome").notNull(),
     cor: text("cor").notNull().default("#64748b"),
     ordem: integer("ordem").notNull().default(0),
-    // Migração `0033`: se o protocolo nesta situação PODE ser movido para o PCA e em qual CAMADA
-    // (preview/publicado) os DFDs dele contam.
-    permiteMoverPca: integer("permite_mover_pca", { mode: "boolean" }).notNull().default(false),
-    camadaPca: text("camada_pca", { enum: ["preview", "publicado"] }).notNull().default("preview"),
+    // `permite_mover_pca`/`camada_pca` (0033) ficam DORMENTES no banco desde a `0035` (a situação não interfere
+    // mais no PCA) — sem código.
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
@@ -461,6 +459,9 @@ export const dfdItens = sqliteTable(
     valorUnitario: real("valor_unitario"),
     valorTotal: real("valor_total"),
     sequencial: integer("sequencial"), // ordem estável de exibição
+    // Migração `0035`: o SEQUENCIAL do item no PCA (registrado no próprio item ao incorporar; ver `pcaItens`).
+    pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "set null" }),
+    pcaSequencial: integer("pca_sequencial"),
   },
   (t) => [index("dfd_itens_dfd_idx").on(t.dfdId)],
 );
@@ -515,6 +516,31 @@ export const pcaDfds = sqliteTable(
     vinculadoEm: text("vinculado_em"),
   },
   (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId)],
+);
+
+/**
+ * SEQUENCIAL do ITEM no PCA (migração `0035`): ao INCORPORAR um protocolo (permanente), cada item ganha um número
+ * ÚNICO dentro do PCA (`pca_id` + `sequencial`). Retirar o item do PCA — ou o DFD deixar de ser vigente
+ * (substituído/excluído) — só INATIVA o número (`ativo=0`); ele nunca é reaproveitado.
+ */
+export const pcaItens = sqliteTable(
+  "pca_itens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    pcaId: integer("pca_id")
+      .notNull()
+      .references(() => pcas.id, { onDelete: "cascade" }),
+    sequencial: integer("sequencial").notNull(),
+    dfdItemId: integer("dfd_item_id").references(() => dfdItens.id, { onDelete: "set null" }),
+    dfdId: integer("dfd_id").references(() => dfds.id, { onDelete: "set null" }),
+    protocoloId: integer("protocolo_id").references(() => dfdProtocolos.id, { onDelete: "set null" }),
+    ativo: integer("ativo", { mode: "boolean" }).notNull().default(true),
+    inativadoEm: text("inativado_em"),
+    inativadoPor: integer("inativado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    motivo: text("motivo"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("pca_itens_pca_seq_uq").on(t.pcaId, t.sequencial), index("pca_itens_item_idx").on(t.dfdItemId)],
 );
 
 /**

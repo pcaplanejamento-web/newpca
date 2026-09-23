@@ -69,14 +69,12 @@ export function PcaConfiguracao({
   pca,
   podeEditar,
   temDados,
-  situacoesQueMovem,
   visoes,
 }: {
   pca: ConfigPca;
   podeEditar: boolean;
   /** Descrição dos dados que TRAVAM a troca de fonte (ex.: "3 planilha(s)"); `null` = livre. */
   temDados: string | null;
-  situacoesQueMovem: { nome: string; camada: "preview" | "publicado" }[];
   visoes: { id: number; nome: string; resumo: string }[];
 }) {
   const router = useRouter();
@@ -181,9 +179,7 @@ export function PcaConfiguracao({
             <h2 className="font-bold text-text">Publicar na tela inicial</h2>
             <p className="text-sm text-muted">
               {pca.status === "publicado"
-                ? pca.fonte === "protocolo"
-                  ? "Publicado. A tela inicial mostra só os DFDs de protocolos em situação de camada Publicado."
-                  : "Publicado. Disponível no seletor de PCA da tela inicial."
+                ? "Publicado. Disponível no seletor de PCA da tela inicial — com o MESMO Dashboard do painel."
                 : "Em Preview. Visível só no painel."}
             </p>
           </div>
@@ -199,19 +195,8 @@ export function PcaConfiguracao({
 
         {pca.fonte === "protocolo" && (
           <section className={CARTAO}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-bold text-text">Travas para mover protocolos</h2>
-              <Link href="/painel/configuracoes?aba=situacoes" className="text-sm font-semibold text-accent hover:underline">
-                Editar situações
-              </Link>
-            </div>
+            <h2 className="mb-3 font-bold text-text">Regras da Mesa do PCA</h2>
             <ul className="space-y-2 text-sm text-text-2">
-              <li className="flex gap-2">
-                <IconCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: situacoesQueMovem.length ? "var(--ok)" : "var(--warn)" }} />
-                {situacoesQueMovem.length
-                  ? `Situação permite mover: ${situacoesQueMovem.map((s) => `${s.nome} (${s.camada === "publicado" ? "Publicado" : "Preview"})`).join(", ")}`
-                  : "Nenhuma situação permite mover ainda — marque em Configurações → Situações."}
-              </li>
               <li className="flex gap-2">
                 <IconCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} />
                 Protocolo marcado com o ano do PCA = {pca.ano ?? "—"}
@@ -219,6 +204,10 @@ export function PcaConfiguracao({
               <li className="flex gap-2">
                 <IconCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} />
                 Um DFD pertence a um só PCA
+              </li>
+              <li className="flex gap-2">
+                <IconCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} />
+                Incorporar é permanente: cada item ganha um nº sequencial único no PCA (retirar o item só inativa o nº)
               </li>
             </ul>
           </section>

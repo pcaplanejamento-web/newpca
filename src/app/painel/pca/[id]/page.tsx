@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { Callout } from "@/components/Callout";
 import { MesaPca } from "@/components/MesaPca";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
@@ -12,7 +11,7 @@ import { getUsuarioAtual } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { carregarMesa } from "@/lib/mesa-dados";
 import { resumoVisao } from "@/lib/orcamento-visao";
-import type { AcaoDfdPca, CamadaPca } from "@/lib/pca-core";
+import type { AcaoDfdPca } from "@/lib/pca-core";
 import {
   dashboardDoPca,
   dfdsEmOutroPca,
@@ -24,7 +23,6 @@ import {
   vinculosDoPca,
 } from "@/lib/pca-espaco";
 import { getUnidades } from "@/lib/queries";
-import { listarSituacoes } from "@/lib/situacoes";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +34,7 @@ export default async function PcaEspacoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; camada?: string; unidade?: string }>;
+  searchParams: Promise<{ aba?: string; unidade?: string }>;
 }) {
   const id = Number((await params).id);
   const sp = await searchParams;
@@ -44,16 +42,14 @@ export default async function PcaEspacoPage({
   if (!pca) notFound();
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
-  const camada: CamadaPca = pca.fonte === "protocolo" && sp.camada === "publicado" ? "publicado" : "preview";
   const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
   const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
 
-  const rotuloCamada = camada === "publicado" ? "Publicado" : "Preview";
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
-  if (aba === "dashboard") conteudo = await abaDashboard(pca, camada, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
+  if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
   else if (aba === "orcamento") {
-    const orc = await orcamentoDoPca(pca, camada);
+    const orc = await orcamentoDoPca(pca);
     conteudo = (
       <OrcamentoPca
         dados={{
@@ -65,20 +61,18 @@ export default async function PcaEspacoPage({
           linhas: orc.linhas,
           planejado: orc.planejado,
           unidades: orc.unidades,
-          camadaRotulo: pca.fonte === "protocolo" ? rotuloCamada : "da lista",
         }}
       />
     );
   } else if (aba === "mesa") conteudo = await abaMesa(pca, u, podeEditar);
   else {
-    const [visoes, situacoes, dados] = await Promise.all([listarVisoesOrcamento(), listarSituacoes(), pcaTemDados(pca.id)]);
+    const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (
       <PcaConfiguracao
         pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId }}
         podeEditar={podeEditar}
         temDados={temDados}
-        situacoesQueMovem={situacoes.filter((s) => s.permiteMoverPca).map((s) => ({ nome: s.nome, camada: s.camadaPca }))}
         visoes={visoes.map((v) => ({ id: v.id, nome: v.nome, resumo: resumoVisao(v.filtros) }))}
       />
     );
@@ -87,7 +81,6 @@ export default async function PcaEspacoPage({
   return (
     <PcaEspacoView
       pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa }}
-      camada={camada}
       aba={aba}
     >
       {conteudo}
@@ -95,32 +88,19 @@ export default async function PcaEspacoPage({
   );
 }
 
-/** Aba DASHBOARD: os MESMOS KPIs/gráficos do público + o filtro por unidade + o aviso da camada Preview. */
-async function abaDashboard(pca: PcaEspaco, camada: CamadaPca, unidade?: number) {
-  const dash = await dashboardDoPca(pca, camada, unidade);
-  const aviso =
-    pca.fonte === "protocolo" && camada === "preview" && dash.protocolos.total > dash.protocolos.publicados ? (
-      <Callout kind="warn">
-        Visão Preview: {num(dash.protocolos.total)} protocolo(s) incorporado(s), {num(dash.protocolos.total - dash.protocolos.publicados)} ainda em
-        situação de camada Preview. {pca.status === "publicado" ? `O público vê só os ${num(dash.protocolos.publicados)} publicados.` : "O PCA ainda não está publicado."}
-      </Callout>
-    ) : null;
+/** Aba DASHBOARD: os MESMOS KPIs/gráficos do público (tudo o que foi incorporado) + o filtro por unidade. */
+async function abaDashboard(pca: PcaEspaco, unidade?: number) {
+  const dash = await dashboardDoPca(pca, unidade);
   if (dash.resumo.count === 0)
     return (
-      <div className="space-y-4">
-        {aviso}
-        <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
-          {pca.fonte === "lista"
-            ? "Nenhum item ainda — importe as planilhas na aba Importação."
-            : camada === "publicado"
-              ? "Nenhum DFD na camada Publicado — a camada vem da situação do protocolo."
-              : "Nenhum DFD ainda — envie protocolos pela Mesa principal e incorpore-os na aba Mesa."}
-        </p>
-      </div>
+      <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
+        {pca.fonte === "lista"
+          ? "Nenhum item ainda — importe as planilhas na aba Importação."
+          : "Nenhum item ainda — envie protocolos pela Mesa principal e incorpore-os na aba Mesa."}
+      </p>
     );
   return (
     <div className="space-y-[var(--gap-col)]">
-      {aviso}
       {dash.unidades.length > 1 && (
         <div className="w-full sm:ml-auto sm:w-80">
           <UnitFilter unidades={dash.unidades} current={dash.unidadeId} />
@@ -129,7 +109,7 @@ async function abaDashboard(pca: PcaEspaco, camada: CamadaPca, unidade?: number)
       <PainelPca
         dados={dash}
         unidadeFiltrada={dash.unidadeId != null}
-        hintItens={pca.fonte === "protocolo" ? `${num(camada === "publicado" ? dash.protocolos.publicados : dash.protocolos.total)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
+        hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
       />
     </div>
   );
