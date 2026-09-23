@@ -41,7 +41,9 @@ const HDR: Record<string, keyof ColMap> = {
   UNITARIO: "valorUnitario",
   "VALOR TOTAL": "valorTotal",
 };
-type ColMap = Partial<Record<keyof DfdItemParseado, number>>;
+/** Coluna da tabela de itens (os campos do item — sem a marca de origem da sobrescrita, que é só da tela). */
+type ColunaItem = Exclude<keyof DfdItemParseado, "ref">;
+type ColMap = Partial<Record<ColunaItem, number>>;
 
 /** Normaliza os trechos (colapsa espaços) e descarta os vazios. */
 export function normalizar(bruto: PdfItem[]): PdfItem[] {
@@ -594,7 +596,7 @@ export function parseDfdFromPdfItems(
       ["item", "codigo", "descricao", "unidade", "quantidade", "valorUnitario", "valorTotal"] as const
     )
       .map((key) => ({ key, x: anchors[key] }))
-      .filter((c): c is { key: keyof DfdItemParseado; x: number } => c.x != null);
+      .filter((c): c is { key: ColunaItem; x: number } => c.x != null);
     const [c0, c1] = cols;
     const itemBound = c0 && c1 ? (c0.x + c1.x) / 2 : 70;
     // INÍCIO REAL do texto da descrição: o conteúdo é alinhado à esquerda, bem à
@@ -614,14 +616,14 @@ export function parseDfdFromPdfItems(
     }
     if (minTexto < Number.POSITIVE_INFINITY) descStartX = Math.min(descStartX, minTexto);
 
-    const colOf = (x: number, str: string): keyof DfdItemParseado => {
+    const colOf = (x: number, str: string): ColunaItem => {
       let idx = 0;
       for (let i = 0; i < cols.length - 1; i++) {
         const a = cols[i];
         const b = cols[i + 1];
         if (a && b && x >= (a.x + b.x) / 2) idx = i + 1;
       }
-      let c: keyof DfdItemParseado = cols[idx]?.key ?? "descricao";
+      let c: ColunaItem = cols[idx]?.key ?? "descricao";
       // No vão código×descrição, dígitos puros = código; texto = descrição. Mas um
       // dígito na área da descrição (x ≥ início do texto) fica descrição — senão um
       // número no meio do texto vira "código" e o polui.

@@ -13,7 +13,7 @@ export type SituacaoCadastrada = {
   nome: string;
   cor: string;
   ordem: number;
-  /** O protocolo nesta situação pode ser movido para o PCA (migração `0032`). */
+  /** O protocolo nesta situação pode ser movido para o PCA (migração `0033`). */
   permiteMoverPca: boolean;
   /** Camada do PCA em que os DFDs do protocolo contam (`publicado` = aparecem na tela inicial). */
   camadaPca: "preview" | "publicado";

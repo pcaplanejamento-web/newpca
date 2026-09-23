@@ -1,9 +1,10 @@
-import { and, desc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { dfdProtocolos, dfds, reparticoes, usuarios } from "@/db/schema";
+import { dfdPassagens, dfdProtocolos, dfds, reparticoes, usuarios } from "@/db/schema";
 import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
+import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
@@ -38,11 +39,37 @@ export type ProtocoloResumo = {
   /** Última gravação de um DFD do protocolo — invalida o cache da conferência agregada (Estado). */
   dfdsAtualizadoEm: string | null;
   // GESTÃO na Mesa: pessoa designada (Responsável), situação (cadastrada pelo ADM) e quem protocolou
-  // (Distribuição = `criado_por`).
+  // (Distribuição = `criado_por`). A foto/apelido vêm do diretório de pessoas da Mesa (pelo id).
   responsavelId: number | null;
   responsavelNome: string | null;
   situacaoId: number | null;
+  distribuidorId: number | null;
   distribuidorNome: string | null;
+  /** DFDs que PASSARAM por aqui e foram sobrescritos por um DFD de OUTRO protocolo (o rastro cinza) — e a
+   * soma do valor deles NA ÉPOCA: a capa foi emitida com eles, então entram na conciliação da capa. */
+  sobrescritos: number;
+  valorSobrescritos: number;
+};
+
+/**
+ * DFD que PASSOU por um protocolo e foi SOBRESCRITO por um DFD de OUTRO protocolo (mesmo nº) — o rastro
+ * mostrado em cinza, separado, com o retrato da versão que o protocolo tinha. O protocolo ATUAL é SEMPRE o
+ * do DFD vivo de mesmo nº (o último da cadeia A → B → C: A e B apontam C). DFD excluído depois ⇒ sem ele.
+ */
+export type DfdSobrescrito = {
+  numero: string;
+  planejamento: string | null;
+  tipo: string | null;
+  sigla: string | null;
+  totalItens: number | null;
+  valorTotal: number | null;
+  sobrescritoEm: string | null;
+  /** O DFD vivo (mesmo nº) hoje — `null` = excluído depois. */
+  dfdId: number | null;
+  protocoloAtualId: number | null;
+  protocoloAtualNumero: string | null;
+  /** Quem vê pode abrir o protocolo atual (unidade no escopo) — senão o link fica desabilitado. */
+  acessivel?: boolean;
 };
 
 export type ProtocoloDetalhe = ProtocoloResumo & {
@@ -55,6 +82,11 @@ export type ProtocoloDetalhe = ProtocoloResumo & {
 
 // Valor de um DFD p/ somatório: soma dos itens (zero se sem valores; sem estimativa).
 const VALOR_DFD = sql<number>`COALESCE(${dfds.valorTotal}, 0)`;
+// Rastro dos DFDs sobrescritos (por protocolo): quantos e o valor deles na época (subconsultas pelo índice).
+const colunasSobrescritos = {
+  sobrescritos: sql<number>`(SELECT COUNT(*) FROM ${dfdPassagens} WHERE ${dfdPassagens.protocoloId} = ${dfdProtocolos.id})`,
+  valorSobrescritos: sql<number>`(SELECT COALESCE(SUM(${dfdPassagens.valorTotal}), 0) FROM ${dfdPassagens} WHERE ${dfdPassagens.protocoloId} = ${dfdProtocolos.id})`,
+};
 
 /** Protocolos (opcionalmente filtrados por repartição — Geral passa `undefined`),
  * com totais agregados ao vivo dos DFDs vinculados. */
@@ -76,6 +108,7 @@ const colunasGestao = {
   responsavelId: dfdProtocolos.responsavelId,
   responsavelNome: responsavel.nome,
   situacaoId: dfdProtocolos.situacaoId,
+  distribuidorId: dfdProtocolos.criadoPor,
   distribuidorNome: distribuidor.nome,
 };
 
@@ -95,6 +128,7 @@ function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
       ...colunasGestao,
+      ...colunasSobrescritos,
       totalDfds: sql<number>`COUNT(DISTINCT ${dfds.id})`,
       totalItens: sql<number>`COALESCE(SUM(${dfds.totalItens}), 0)`,
       valorTotal: sql<number>`COALESCE(SUM(${VALOR_DFD}), 0)`,
@@ -132,6 +166,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
       ...colunasGestao,
+      ...colunasSobrescritos,
     })
     .from(dfdProtocolos)
     .leftJoin(reparticoes, eq(dfdProtocolos.reparticaoId, reparticoes.id))
@@ -146,6 +181,32 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
   const valorTotal = dfdsList.reduce((s, d) => s + (d.valorTotal ?? 0), 0);
   const dfdsAtualizadoEm = dfdsList.reduce<string | null>((m, d) => (d.atualizadoEm && (!m || d.atualizadoEm > m) ? d.atualizadoEm : m), null);
   return { ...p, totalDfds: dfdsList.length, totalItens, valorTotal, dfdsAtualizadoEm, dfds: dfdsList };
+}
+
+/** Os DFDs SOBRESCRITOS de um protocolo (o rastro cinza), com o protocolo ATUAL de cada um (o do DFD vivo).
+ * `acessivel` (escopo por unidade de quem vê) marca se o protocolo atual pode ser aberto. */
+export async function listarSobrescritos(protocoloId: number, acessivel: (reparticaoId: number | null) => boolean = () => true): Promise<DfdSobrescrito[]> {
+  const atual = alias(dfdProtocolos, "atual");
+  const linhas = await getDb()
+    .select({
+      numero: dfdPassagens.dfdNumero,
+      planejamento: dfdPassagens.planejamento,
+      tipo: dfdPassagens.tipo,
+      sigla: dfdPassagens.sigla,
+      totalItens: dfdPassagens.totalItens,
+      valorTotal: dfdPassagens.valorTotal,
+      sobrescritoEm: dfdPassagens.criadoEm,
+      dfdId: dfds.id,
+      protocoloAtualId: dfds.protocoloId,
+      protocoloAtualNumero: atual.numero,
+      reparticaoAtual: atual.reparticaoId,
+    })
+    .from(dfdPassagens)
+    .leftJoin(dfds, eq(dfds.numero, dfdPassagens.dfdNumero))
+    .leftJoin(atual, eq(atual.id, dfds.protocoloId))
+    .where(eq(dfdPassagens.protocoloId, protocoloId))
+    .orderBy(asc(dfdPassagens.dfdNumero));
+  return linhas.map(({ reparticaoAtual, ...s }) => ({ ...s, acessivel: s.protocoloAtualId != null && acessivel(reparticaoAtual) }));
 }
 
 /**
@@ -288,12 +349,16 @@ export async function detalheEdicaoProtocolo(
   return { campos: out };
 }
 
-/** Vincula (ou desvincula, com `null`) um DFD a um protocolo — rule 4. */
-export async function vincularDfd(dfdId: number, protocoloId: number | null): Promise<void> {
-  await getDb()
-    .update(dfds)
-    .set({ protocoloId, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
-    .where(eq(dfds.id, dfdId));
+/** Vincula (ou desvincula, com `null`) um DFD a um protocolo — rule 4. Vinculado a um protocolo, o DFD
+ * volta a estar VIVO nele: um rastro antigo dele ali ("sobrescrito") sai no mesmo lote. */
+export async function vincularDfd(dfdId: number, protocoloId: number | null, numero: string): Promise<void> {
+  const db = getDb();
+  const vinculo = db.update(dfds).set({ protocoloId, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(dfds.id, dfdId));
+  if (protocoloId == null) {
+    await vinculo;
+    return;
+  }
+  await db.batch([vinculo, db.run(limparRastroDestino(sql, numero, protocoloId))]);
 }
 
 /** Repartição (+ nº, p/ o histórico) de um protocolo — o guard de acesso nas escritas; `null` se não existe. */

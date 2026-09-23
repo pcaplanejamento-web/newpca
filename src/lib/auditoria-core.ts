@@ -115,6 +115,7 @@ export function diffCampos<T extends Record<string, unknown>>(
 export type OrigemAuditoria =
   | "protocolacao" // protocolação do PDF do protocolo (DFDs gravados/sobrescritos por ela)
   | "reenvio" // reenvio do PDF corrigido (sobrescrita com comparação)
+  | "sobrescrita" // DFD sobrescrito por um arquivo novo com ESCOLHA por dado (banner do DFD / avulso)
   | "avulso" // DFD avulso importado
   | "banner" // edição no banner (protocolo/DFD gravado — "Salvar alterações")
   | "massa" // edição em massa na Mesa
@@ -125,6 +126,7 @@ export type OrigemAuditoria =
 export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   protocolacao: "Protocolação",
   reenvio: "Reenvio do protocolo",
+  sobrescrita: "Sobrescrita do DFD",
   avulso: "Importação avulsa",
   banner: "Edição no banner",
   massa: "Edição em massa",

@@ -118,6 +118,9 @@ export type DiffItemDfd = {
   codigo: string | null;
   descricao: string | null;
   campos: DiffCampo[];
+  /** Chave ESTÁVEL do pareamento (gravado × novo) — `a:<g>:<p>` alterado, `n:<p>` novo, `r:<g>` removido
+   * (índices nas listas comparadas): a ESCOLHA da sobrescrita (manter o gravado × usar o novo) usa ela. */
+  chave?: string;
 };
 export type SituacaoComparacao = "novo" | "alterado" | "igual";
 export type ComparacaoDfd = {
@@ -150,11 +153,12 @@ const CAMPOS_DFD: [keyof DfdComparavel, string][] = [
 
 /** Pareia os itens gravados com os do PDF, em 3 rodadas: o MESMO item (código + descrição), depois pelo
  * Nº do item (descrição/código editados) e, por fim, só pelo código. Assim um item removido com a lista
- * RENUMERADA vira 1 "removido" (e os seguintes só mudam de nº), não uma cascata de "alterados". Puro. */
-function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
+ * RENUMERADA vira 1 "removido" (e os seguintes só mudam de nº), não uma cascata de "alterados". Devolve
+ * ÍNDICES (gravado, novo) — a sobrescrita com escolha reusa o MESMO pareamento. Puro. */
+export function parearItens(g: ItemComparavel[], p: ItemComparavel[]): { pares: [number, number][]; novos: number[]; removidos: number[] } {
   const livresG = new Set(g.map((_, i) => i));
-  const pares: [ItemComparavel, ItemComparavel][] = [];
-  let pendentes = p;
+  const pares: [number, number][] = [];
+  let pendentes = p.map((_, j) => j);
   /** Uma rodada: cada pendente casa com o 1º item gravado LIVRE de mesma chave (`null` = não casa). Filas por
    * chave, na ordem dos gravados — LINEAR, mesmo com milhares de itens sem código ou de código repetido. */
   const rodada = (chave: (x: ItemComparavel) => string | null) => {
@@ -166,15 +170,15 @@ function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
       if (f) f.idx.push(i);
       else filas.set(k, { idx: [i], pos: 0 });
     }
-    const sobra: ItemComparavel[] = [];
-    for (const it of pendentes) {
-      const k = chave(it);
+    const sobra: number[] = [];
+    for (const j of pendentes) {
+      const k = chave(p[j]);
       const f = k == null ? undefined : filas.get(k);
       const i = f && f.pos < f.idx.length ? f.idx[f.pos++] : undefined;
-      if (i == null) sobra.push(it);
+      if (i == null) sobra.push(j);
       else {
         livresG.delete(i);
-        pares.push([g[i], it]);
+        pares.push([i, j]);
       }
     }
     pendentes = sobra;
@@ -182,7 +186,7 @@ function parearItens(g: ItemComparavel[], p: ItemComparavel[]) {
   rodada((x) => (txt(x.codigo) ? `${txt(x.codigo)}\u0001${norm(x.descricao)}` : null));
   rodada((x) => (x.item != null ? String(x.item) : null));
   rodada((x) => txt(x.codigo) || null);
-  return { pares, novos: pendentes, removidos: [...livresG].map((i) => g[i]) };
+  return { pares, novos: pendentes, removidos: [...livresG] };
 }
 
 /** Diferenças campo a campo entre dois estados do MESMO item (comparação do reenvio e histórico). */
@@ -198,6 +202,10 @@ export function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
   return out;
 }
 
+/** Chave de uma SEÇÃO para comparar: o título normalizado SEM a numeração (o nº varia entre modelos:
+ * "5 - …" × "6 - …"). Puro. */
+export const chaveSecao = (titulo: string) => norm(titulo).replace(/^\d+(\.\d+)*\s*[-–.)]?\s*/, "");
+
 const ROTULO_FONTE: Record<string, string> = {
   certificado: "certificado",
   sistema: "sistema",
@@ -208,7 +216,7 @@ const ROTULO_FONTE: Record<string, string> = {
 };
 /** Lista legível dos assinantes (ordenada — a ordem de leitura não é diferença): assinante (data), formato,
  * código verificador e a validação pela EQUIPE — validar/desfazer ou um carimbo re-assinado É diferença. */
-const assinantes = (l: AssinaturaComparavel[]) =>
+export const assinantes = (l: AssinaturaComparavel[]) =>
   l
     .map((a) => {
       let s = `${txt(a.nome) || "(sem nome)"}${a.data ? ` (${txt(a.data)})` : ""}`;
@@ -246,7 +254,7 @@ export function compararDfd(
   const mapa = (l: { titulo: string; texto: string }[]) => {
     const m = new Map<string, { titulo: string; texto: string }>();
     for (const s of l) {
-      const k = norm(s.titulo).replace(/^\d+(\.\d+)*\s*[-–.)]?\s*/, "");
+      const k = chaveSecao(s.titulo);
       const cur = m.get(k);
       m.set(k, cur ? { titulo: cur.titulo, texto: `${cur.texto} ${s.texto}` } : { titulo: s.titulo, texto: s.texto });
     }
@@ -266,12 +274,19 @@ export function compararDfd(
 
   const { pares, novos, removidos } = parearItens(g.itens, p.itens);
   const itens: DiffItemDfd[] = [];
-  for (const [a, b] of pares) {
+  for (const [i, j] of pares) {
+    const [a, b] = [g.itens[i], p.itens[j]];
     const d = diffItem(a, b);
-    if (d.length > 0) itens.push({ tipo: "alterado", item: b.item, codigo: b.codigo, descricao: b.descricao, campos: d });
+    if (d.length > 0) itens.push({ tipo: "alterado", item: b.item, codigo: b.codigo, descricao: b.descricao, campos: d, chave: `a:${i}:${j}` });
   }
-  for (const b of novos) itens.push({ tipo: "novo", item: b.item, codigo: b.codigo, descricao: b.descricao, campos: [] });
-  for (const a of removidos) itens.push({ tipo: "removido", item: a.item, codigo: a.codigo, descricao: a.descricao, campos: [] });
+  for (const j of novos) {
+    const b = p.itens[j];
+    itens.push({ tipo: "novo", item: b.item, codigo: b.codigo, descricao: b.descricao, campos: [], chave: `n:${j}` });
+  }
+  for (const i of removidos) {
+    const a = g.itens[i];
+    itens.push({ tipo: "removido", item: a.item, codigo: a.codigo, descricao: a.descricao, campos: [], chave: `r:${i}` });
+  }
   itens.sort((x, y) => (x.item ?? Number.MAX_SAFE_INTEGER) - (y.item ?? Number.MAX_SAFE_INTEGER));
 
   const total = campos.length + secoes.length + (assinaturas ? 1 : 0) + itens.length;

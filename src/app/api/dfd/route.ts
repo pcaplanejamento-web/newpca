@@ -13,6 +13,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { getProtocoloReparticao } from "@/lib/protocolo";
+import { listaCurta } from "@/lib/sobrescrita-dfd";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
@@ -89,8 +90,6 @@ export async function POST(req: Request) {
   // o "Protocolar", conferido no POST /api/protocolo; a trava de assunto também é de lá.)
   if (regras.gate?.exigirTipo && !tipoPermitido(ctxAv.dfdTipo, regras))
     return erro(`Tipo de DFD não permitido para protocolar: ${ctxAv.dfdTipo ?? "sem tipo"} (Configurações → Protocolação).`, 422);
-  if (d.protocoloId == null && !importarDfdHabilitado(regras))
-    return erro("A importação de DFD avulso está desabilitada nas Configurações.", 422);
   // Órgão não identificado / divergência órgão × unidade — portões à parte, só EXECUTAM (e só
   // bloqueiam) quando o ADM pôs o ponto numa importância que "bloqueia" (padrão avisa = atenção, não
   // bloqueia → sem custo). Mesma régua da conferência do cliente (`mensagensDoDfd`).
@@ -116,16 +115,20 @@ export async function POST(req: Request) {
   if (!acessivel(d.reparticaoId)) return erro("Unidade inválida ou sem acesso.", 403);
   // O PROTOCOLO de destino também tem de ser acessível — não se anexa DFD (nem histórico) ao processo de
   // outra unidade (mesma regra do vínculo no PATCH).
+  const destino = d.protocoloId != null ? await getProtocoloReparticao(d.protocoloId) : null;
   if (d.protocoloId != null) {
-    const proto = await getProtocoloReparticao(d.protocoloId);
-    if (!proto) return erro("Protocolo não encontrado.", 404);
-    if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
+    if (!destino) return erro("Protocolo não encontrado.", 404);
+    if (!acessivel(destino.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
   }
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
   const existente = await getReparticaoDfdNumero(d.numero);
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra unidade, sem acesso.", 403);
   }
+  // Importação AVULSA desligada pelo ADM: vale para o DFD que ficaria SEM protocolo — a sobrescrita de um DFD
+  // que já está num protocolo (banner / avulso de mesmo nº) o mantém lá, então não é "avulsa".
+  if (d.protocoloId == null && existente?.protocoloId == null && !importarDfdHabilitado(regras))
+    return erro("A importação de DFD avulso está desabilitada nas Configurações.", 422);
   // Conferência da ASSINATURA (garantia no servidor), respeitando o nível `dfd.assinatura`:
   // PDF sem assinatura, sem responsável cadastrado, ou assinante não autorizado → não grava.
   const res = validarAssinatura(d.assinaturas, await carregarResponsaveis(d.reparticaoId), {
@@ -138,11 +141,18 @@ export async function POST(req: Request) {
   // (sobrescrita/reenvio do DFD) mantém o carimbo original.
   const assinaturas = carimbarValidacao(d.assinaturas, existente?.assinaturas ?? [], a.u.nome, new Date().toISOString());
   const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
-  // Histórico: o DFD que JÁ existia (sobrescrita por protocolação/reenvio) é comparado com o novo — a
-  // MESMA régua da comparação do reenvio (cabeçalho, seções, assinaturas e itens).
+  // Histórico: o DFD que JÁ existia (sobrescrita por protocolação/reenvio/arquivo novo) é comparado com o
+  // novo — a MESMA régua da comparação do reenvio (cabeçalho, seções, assinaturas e itens).
   const antigo = existente ? await getDfd(existente.id) : null;
-  const r = await upsertDfdCabecalho({ ...d, assinaturas }, a.u.id, d.rows);
+  const { escolhas, ...dados } = d;
+  // RASTRO: o DFD estava em OUTRO protocolo e vai para este → o de origem guarda o retrato (cinza,
+  // "sobrescrito pelo protocolo X") — gravado no MESMO lote do cabeçalho (`upsertDfdCabecalho`). Sem
+  // `protocoloId` (avulso/banner) o DFD FICA no protocolo dele. `movido` só redige o histórico.
+  const movido = antigo?.protocoloId != null && d.protocoloId != null && antigo.protocoloId !== d.protocoloId;
+  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows);
   const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
+  // O protocolo por onde a gravação PASSOU (o histórico dele): o de destino, ou o que o DFD já tinha.
+  const protocoloHist = d.protocoloId ?? antigo?.protocoloId ?? null;
   const alvo = { numero: r.numero, planejamento: d.planejamento ?? null };
   const qtd = `${d.totalItens ?? d.rows.length} ${(d.totalItens ?? d.rows.length) === 1 ? "item" : "itens"}`;
   let detalhe: DetalheAuditoria = { alvo };
@@ -162,8 +172,10 @@ export async function POST(req: Request) {
     );
     const obs: string[] = [];
     if (!completo) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
-    const movido = antigo.protocoloId != null && antigo.protocoloId !== (d.protocoloId ?? null);
-    if (movido) obs.push(`Movido do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`}.`);
+    if (movido) obs.push(`Veio do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`} — lá ele fica como "sobrescrito".`);
+    // SOBRESCRITA com escolha por dado: o que o usuário MANTEVE do gravado e o que editou antes de gravar.
+    if (escolhas?.mantidos.length) obs.push(`Mantido do gravado (escolha): ${listaCurta(escolhas.mantidos, 12, escolhas.qtdMantidos)}.`);
+    if (escolhas?.editados.length) obs.push(`Editado antes de gravar: ${listaCurta(escolhas.editados, 12, escolhas.qtdEditados)}.`);
     detalhe = c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs } : { alvo, obs };
     const diferencas = !c ? "" : c.total === 0 ? " — sem diferenças" : ` — ${c.total} diferença(s)`;
     resumo = `DFD ${r.numero} sobrescrito (${ROTULO_ORIGEM[origem].toLowerCase()})${diferencas}`;
@@ -174,10 +186,10 @@ export async function POST(req: Request) {
         acao: "editar",
         entidade: "dfd",
         entidadeId: r.id,
-        resumo: `DFD ${r.numero} saiu deste protocolo (movido pela ${ROTULO_ORIGEM[origem].toLowerCase()} de outro protocolo)`,
+        resumo: `DFD ${r.numero} sobrescrito pelo protocolo ${destino?.numero ?? `#${d.protocoloId}`} — fica aqui como "sobrescrito"`,
         protocoloId: antigo.protocoloId,
         origem,
-        detalhe: { alvo, obs: ["Movido para outro protocolo."] },
+        detalhe: { alvo, obs: [`Sobrescrito pelo DFD do protocolo ${destino?.numero ?? `#${d.protocoloId}`}.`] },
       });
   }
   await registrarAuditoria({
@@ -187,7 +199,7 @@ export async function POST(req: Request) {
     entidadeId: r.id,
     resumo: `${resumo}${validadaEquipe ? " · assinatura validada pela equipe" : ""}`,
     depois: antigo ? null : { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
-    protocoloId: d.protocoloId ?? null,
+    protocoloId: protocoloHist,
     origem,
     detalhe,
   });

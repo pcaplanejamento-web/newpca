@@ -34,6 +34,7 @@ import {
   IconWallet,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
+import { nomeExibicao } from "@/lib/pessoa";
 
 type Role = UsuarioSessao["role"];
 
@@ -199,8 +200,9 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="min-w-0">
+          {/* O APELIDO (nome de exibição) — o nome completo no title. */}
           <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
-            {usuario.nome}
+            {nomeExibicao(usuario)}
           </div>
           <div className="text-[11px] text-muted">{ROLE_LABEL[usuario.role]}</div>
         </div>
@@ -491,7 +493,7 @@ export function AppShell({
       </div>
 
       {/* Navegação inferior (mobile) */}
-      <BottomNav />
+      <BottomNav abas={abasSet} />
     </div>
   );
 }

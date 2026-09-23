@@ -10,10 +10,13 @@ import {
   type GrupoAssinatura,
   type ResumoEstado,
 } from "@/lib/dfd-tratamento";
-import { brl, num } from "@/lib/format";
+import { brl, dataHoraBR, num } from "@/lib/format";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { IconArrowRight } from "./icons";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
 const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
@@ -249,7 +252,7 @@ export function PlanilhaDfds({
 
   const erro = linhas.filter((l) => l.estado === "erro");
   const atencao = linhas.filter((l) => l.estado === "atencao");
-  // DFDs duplicados descartados pelo usuário — fora da somatória e da protocolação (tabela cinza à parte).
+  // DFDs descartados pelo usuário (duplicado / mantido o já cadastrado) — não são gravados (tabela cinza à parte).
   const descartado = linhas.filter((l) => l.estado === "descartado");
   const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && l.estado !== "descartado");
   const mw = temProtocolo ? 1060 : 840;
@@ -310,11 +313,102 @@ export function PlanilhaDfds({
         <div className="opacity-60">
           <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--faint)" }}>
             <span className="h-2 w-2 rounded-full" style={{ background: "var(--faint)" }} />
-            DFDs excluídos ({num(descartado.length)}) — duplicados descartados, fora da somatória e da protocolação
+            DFDs descartados ({num(descartado.length)}) — não serão gravados (duplicado ou mantido o já cadastrado)
           </h4>
           <DataTable rows={descartado} pageSize={compacta ? 8 : 12} {...comum} selectable={false} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Sobrescrito pelo protocolo X" — o protocolo ATUAL do DFD (o último da cadeia); o DFD excluído depois ou
+ * hoje sem protocolo não tem para onde ir. */
+function destinoSobrescrito(s: DfdSobrescrito): string {
+  if (s.dfdId == null) return "DFD excluído depois";
+  return s.protocoloAtualNumero ? `Protocolo ${s.protocoloAtualNumero}` : "Hoje sem protocolo";
+}
+
+/**
+ * RASTRO dos DFDs SOBRESCRITOS por outro protocolo — tabela CINZA, separada, abaixo dos DFDs do protocolo:
+ * o retrato da versão que este protocolo tinha (planejamento/sigla/tipo/itens/valor NA ÉPOCA) e "Sobrescrito
+ * pelo" = o protocolo ATUAL do DFD (sempre o último da cadeia A → B → C) — o link leva a ele (as linhas não
+ * são clicáveis: sem acesso/DFD excluído não há destino). Os valores entram na conciliação da capa (a capa foi
+ * emitida com eles).
+ */
+export function TabelaSobrescritos({
+  sobrescritos,
+  onVerProtocolo,
+  compacta = false,
+}: {
+  sobrescritos: DfdSobrescrito[];
+  /** Abre o protocolo ATUAL do DFD (a pilha de banners troca para ele). */
+  onVerProtocolo?: (protocoloId: number) => void;
+  compacta?: boolean;
+}) {
+  if (sobrescritos.length === 0) return null;
+  const pode = (s: DfdSobrescrito) => !!onVerProtocolo && s.protocoloAtualId != null && s.acessivel !== false;
+  const cols: Column<DfdSobrescrito>[] = [
+    { key: "planejamento", header: "Nº Plan.", nowrap: true, value: (s) => s.planejamento ?? "", render: (s) => <span className="font-mono text-[12px]">{s.planejamento || "—"}</span> },
+    { key: "numero", header: "Nº DFD", nowrap: true, value: (s) => s.numero, render: (s) => <span className="font-mono text-[12px]">{s.numero}</span> },
+    { key: "sigla", header: "Sigla", nowrap: true, value: (s) => s.sigla ?? "—", render: (s) => <span className="font-mono text-[12px]">{s.sigla ?? "—"}</span> },
+    { key: "tipo", header: "Tipo", nowrap: true, value: (s) => tipoCurtoDfd(s.tipo) ?? "—", render: (s) => <span className="text-[12px]">{tipoCurtoDfd(s.tipo) ?? "—"}</span> },
+    {
+      key: "destino",
+      header: "Sobrescrito pelo",
+      nowrap: true,
+      value: (s) => destinoSobrescrito(s),
+      render: (s) =>
+        pode(s) ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (s.protocoloAtualId != null) onVerProtocolo?.(s.protocoloAtualId);
+            }}
+            className="inline-flex min-h-[44px] items-center gap-1 rounded-control px-1 text-[12px] font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            title="Abrir o protocolo onde este DFD está agora"
+          >
+            {destinoSobrescrito(s)} <IconArrowRight className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span className="text-[12px] text-muted" title={s.protocoloAtualId != null && s.acessivel === false ? "Protocolo de outra unidade (sem acesso)" : undefined}>
+            {destinoSobrescrito(s)}
+          </span>
+        ),
+    },
+    {
+      key: "em",
+      header: "Em",
+      filter: "none",
+      nowrap: true,
+      render: (s) => <span className="text-[12px] tabular-nums text-muted">{dataHoraBR(s.sobrescritoEm)}</span>,
+    },
+    { key: "itens", header: "Itens", align: "center", nowrap: true, value: (s) => String(s.totalItens ?? ""), render: (s) => num(s.totalItens ?? 0) },
+    {
+      key: "valor",
+      header: "Valor (na época)",
+      align: "right",
+      nowrap: true,
+      filter: "range",
+      numero: (s) => s.valorTotal ?? 0,
+      render: (s) => brl(s.valorTotal ?? 0),
+    },
+  ];
+  return (
+    <div className="opacity-70">
+      <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--faint)" }}>
+        <span className="h-2 w-2 rounded-full" style={{ background: "var(--faint)" }} />
+        DFDs sobrescritos por outro protocolo ({num(sobrescritos.length)}) — o retrato da versão deste processo
+      </h4>
+      <DataTable
+        rows={sobrescritos}
+        columns={cols}
+        getKey={(s) => s.numero}
+        minWidth={760}
+        pageSize={compacta ? 8 : 12}
+        resumo={(l) => `${l.length} DFD${l.length === 1 ? "" : "s"} sobrescrito${l.length === 1 ? "" : "s"} · ${brl(l.reduce((t, s) => t + (s.valorTotal ?? 0), 0))}`}
+      />
     </div>
   );
 }

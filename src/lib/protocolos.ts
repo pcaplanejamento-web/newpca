@@ -243,15 +243,15 @@ export async function listarProtocolos(opts: ProtocoloListaOpts) {
   if (opts.responsavel) conds.push(eq(protocolos.responsavel, opts.responsavel));
   if (opts.ano && /^\d{4}$/u.test(opts.ano))
     conds.push(like(protocolos.data, `${opts.ano}%`));
-  if (opts.q && opts.q.trim()) {
-    const term = `%${opts.q.trim().toLowerCase()}%`;
-    conds.push(
-      or(
-        like(sql`lower(${protocolos.numero})`, term),
-        like(sql`lower(${protocolos.orgao})`, term),
-        like(sql`lower(${protocolos.orgaoSigla})`, term),
-      ),
+  const busca = opts.q?.trim().toLowerCase();
+  if (busca) {
+    const term = `%${busca}%`;
+    const ou = or(
+      like(sql`lower(${protocolos.numero})`, term),
+      like(sql`lower(${protocolos.orgao})`, term),
+      like(sql`lower(${protocolos.orgaoSigla})`, term),
     );
+    if (ou) conds.push(ou);
   }
   const where = conds.length ? and(...conds) : undefined;
 

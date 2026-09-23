@@ -5,7 +5,10 @@ import {
   assinaturaPendenteValidacao,
   bloqueiaAssinatura,
   carimbarValidacao,
+  dataAssinaturaDeIso,
   dataAssinaturaISO,
+  dataAssinaturaValida,
+  definirDataAssinaturaEquipe,
   desfazerValidacaoEquipe,
   novoResponsavel,
   novoTemporario,
@@ -288,6 +291,55 @@ describe("validarAssinatura — origem auto/equipe", () => {
     assert.equal(validarAssinatura(v, padrao("EDILENE ALVES DA CRUZ"), { exigeAssinatura: true }).status, "ok");
     assert.equal(validarAssinatura(v, padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true }).status, "erro");
     assert.deepEqual(desfazerValidacaoEquipe(v), []);
+  });
+  it("ADICIONAR assinatura (nenhuma lida): a equipe informa a DATA — gravada dd/mm/aaaa na assinatura manual", () => {
+    const v = validarAssinaturaPelaEquipe([], "EDILENE ALVES DA CRUZ", "12/03/2026");
+    assert.equal(v[0].fonte, "manual");
+    assert.equal(v[0].data, "12/03/2026");
+    // A data pode ser corrigida depois — mas não apagada (é obrigatória na assinatura adicionada).
+    assert.equal(definirDataAssinaturaEquipe(v, "15/03/2026")[0].data, "15/03/2026");
+    assert.equal(definirDataAssinaturaEquipe(v, "")[0].data, "12/03/2026");
+  });
+  it("assinatura ADICIONADA pela equipe é sempre 'equipe' (nunca 'auto') — dá para desfazer e corrigir a data", () => {
+    const v = validarAssinaturaPelaEquipe([], "EDILENE ALVES DA CRUZ", "12/03/2026");
+    const r = validarAssinatura(v, padrao("EDILENE ALVES DA CRUZ"), { exigeAssinatura: true });
+    assert.equal(r.status === "ok" && r.origem, "equipe");
+  });
+  it("TEMPORÁRIO na assinatura ADICIONADA: a DATA informada tem de estar no período dele (sem data, vale como antes)", () => {
+    const temp = comTemporario("JOAO TEMP", "2026-03-01", "2026-03-31");
+    const dentro = validarAssinaturaPelaEquipe([], "JOAO TEMP", "15/03/2026");
+    const r1 = validarAssinatura(dentro, temp, { exigeAssinatura: true });
+    assert.equal(r1.status === "ok" && `${r1.origem}/${r1.tipo}`, "equipe/temporario");
+    const fora = validarAssinaturaPelaEquipe([], "JOAO TEMP", "15/04/2026");
+    assert.equal(validarAssinatura(fora, temp, { exigeAssinatura: true }).status, "erro");
+    const semData = validarAssinaturaPelaEquipe([], "JOAO TEMP");
+    assert.equal(validarAssinatura(semData, temp, { exigeAssinatura: true }).status, "ok");
+    // Assinatura LIDA fora do período: sozinha é erro; atestada pela equipe (que conferiu o PDF) vale — como
+    // sempre foi (o período não é reexigido na lida; DFDs já validados não mudam de estado).
+    const lida = mkAss("JOAO TEMP", "20/04/2026 10:00:00");
+    assert.equal(validarAssinatura([lida], temp, { exigeAssinatura: true }).status, "erro");
+    const lidaAtestada = validarAssinaturaPelaEquipe([lida], "JOAO TEMP");
+    const r2 = validarAssinatura(lidaAtestada, temp, { exigeAssinatura: true });
+    assert.equal(r2.status === "ok" && r2.origem, "equipe");
+  });
+  it("VALIDAR assinatura lida: o MESMO dia mantém a data/hora lida; outro dia grava a informada", () => {
+    const lida = mkAss("EDILENE ALVES DA CRUZ", "31/08/2026 16:20:00");
+    assert.equal(validarAssinaturaPelaEquipe([lida], "EDILENE ALVES DA CRUZ", "31/08/2026")[0].data, "31/08/2026 16:20:00");
+    assert.equal(validarAssinaturaPelaEquipe([lida], "EDILENE ALVES DA CRUZ", "01/09/2026")[0].data, "01/09/2026");
+    assert.equal(validarAssinaturaPelaEquipe([lida], "EDILENE ALVES DA CRUZ")[0].data, "31/08/2026 16:20:00");
+    // Limpar a data de uma assinatura LIDA não apaga a data do PDF.
+    const v = validarAssinaturaPelaEquipe([lida], "EDILENE ALVES DA CRUZ");
+    assert.equal(definirDataAssinaturaEquipe(v, "")[0].data, "31/08/2026 16:20:00");
+  });
+  it("data da assinatura: real, desde 2000 e nunca futura (campo de data → dd/mm/aaaa)", () => {
+    assert.equal(dataAssinaturaDeIso("2026-03-12", "2026-09-23"), "12/03/2026");
+    assert.equal(dataAssinaturaDeIso("2026-02-31", "2026-09-23"), null); // 31/02 não existe
+    assert.equal(dataAssinaturaDeIso("2027-01-10", "2026-09-23"), null); // futura
+    assert.equal(dataAssinaturaDeIso("1999-12-31", "2026-09-23"), null);
+    assert.equal(dataAssinaturaDeIso("12/03/2026", "2026-09-23"), null); // formato do campo é aaaa-mm-dd
+    assert.equal(dataAssinaturaValida("23/09/2026", "2026-09-23"), true);
+    assert.equal(dataAssinaturaValida("24/09/2026", "2026-09-23"), true); // folga de 1 dia (fuso)
+    assert.equal(dataAssinaturaValida("26/09/2026", "2026-09-23"), false);
   });
   it("carimbo de quem/quando vem do servidor; validação idêntica mantém o carimbo original", () => {
     const v = validarAssinaturaPelaEquipe([ocrNaoCasa], "EDILENE ALVES DA CRUZ");

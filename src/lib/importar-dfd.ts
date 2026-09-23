@@ -82,3 +82,36 @@ export async function enviarDfdEmLotes(
   }
   return { dfdId };
 }
+
+/** DFD JÁ cadastrado visto pela importação: da unidade acessível (com os dados) ou de outra unidade (só o nº). */
+export type ExistenteImport =
+  | {
+      acessivel: true;
+      id: number;
+      numero: string;
+      reparticaoId: number | null;
+      protocoloId: number | null;
+      protocoloNumero: string | null;
+      valorTotal: number | null;
+      totalItens: number | null;
+    }
+  | { acessivel: false; numero: string };
+
+/** Quais destes números JÁ existem (em qualquer unidade) — `POST /api/dfd/existentes`, em lotes. Falha de
+ * rede ⇒ lança (a importação avisa: sem saber o que sobrescreve, não segue às cegas). */
+export async function buscarExistentes(numeros: string[]): Promise<Map<string, ExistenteImport>> {
+  // Nº acima do teto do cadastro (50) nunca foi gravado — nem consulta (não derruba o lote).
+  const uniq = [...new Set(numeros.map((n) => n.trim()).filter((n) => n.length > 0 && n.length <= 50))];
+  const out = new Map<string, ExistenteImport>();
+  for (let i = 0; i < uniq.length; i += 2000) {
+    const res = await fetch("/api/dfd/existentes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numeros: uniq.slice(i, i + 2000) }),
+    });
+    const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; existentes?: ExistenteImport[] } | null;
+    if (!res.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível conferir os DFDs já cadastrados.");
+    for (const e of j.existentes ?? []) out.set(e.numero.trim(), e);
+  }
+  return out;
+}

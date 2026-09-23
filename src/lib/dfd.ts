@@ -2,6 +2,8 @@ import { and, asc, desc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcas, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import { limparRastroDestino, retratoRastro } from "./rastro-sql";
+import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
 import type {
   CadastrarPcaPayload,
@@ -22,7 +24,7 @@ import { type Assinatura, coerceFonte, coerceValidacao, juntarRefs } from "./par
 const ROWS_PER_STMT = 11;
 
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
-function insertsItens(db: ReturnType<typeof getDb>, dfdId: number, itens: DfdItemPayload[], seqBase = 0): any[] {
+function insertsItens(db: ReturnType<typeof getDb>, dfdId: number | SQL, itens: DfdItemPayload[], seqBase = 0): any[] {
   const stmts = [];
   for (let i = 0; i < itens.length; i += ROWS_PER_STMT) {
     stmts.push(
@@ -330,12 +332,6 @@ export async function listarDfdsCompletosDoProtocolo(protocoloId: number): Promi
 
 /** Tamanho do lote de ids por `IN (...)` — folga sob o limite de 100 parâmetros do D1. */
 const LOTE_IDS = 90;
-/** Ids em lotes de `LOTE_IDS` (cada lote cabe num `IN (...)`). */
-export function lotesDeIds(ids: number[]): number[][] {
-  const out: number[][] = [];
-  for (let i = 0; i < ids.length; i += LOTE_IDS) out.push(ids.slice(i, i + LOTE_IDS));
-  return out;
-}
 
 /**
  * DFDs (por id) COMPLETOS para a CONFERÊNCIA da lista da Mesa (`/api/dfd/conferencia`) — mesmo
@@ -558,10 +554,15 @@ export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): 
 }
 
 /**
- * `start-dfd`: cria (ou substitui, pelo `numero`) o CABEÇALHO do DFD, **apaga os
- * itens antigos** e grava o 1º lote — tudo num `db.batch` atômico. `totalItens`
- * é o total DECLARADO (o cliente envia os itens em lotes via `appendDfdItens`).
- * Retomável: reexecutar zera e regrava. Base do import de 1 DFD e do protocolo.
+ * `start-dfd`: cria (ou substitui, pelo `numero`) o CABEÇALHO do DFD, **apaga os itens antigos** e grava o
+ * 1º lote — TUDO num `db.batch` atômico (tudo ou nada: uma nova tentativa encontra o DFD como estava).
+ * `totalItens` é o total DECLARADO (o cliente envia os itens em lotes via `appendDfdItens`). Retomável:
+ * reexecutar zera e regrava. Base do import de 1 DFD e do protocolo.
+ * - `protocoloId` AUSENTE ou nulo (DFD avulso / sobrescrita pelo banner) MANTÉM o protocolo do DFD que já
+ *   existia — o `start-dfd` nunca desvincula (desvincular é o PATCH do vínculo).
+ * - RASTRO entre protocolos (`rastro-sql.ts`): o DFD estava vivo em OUTRO protocolo e vai para `protocoloId`
+ *   → o de origem guarda o retrato (cinza, "sobrescrito pelo protocolo X"), lido do banco no MESMO lote; e o
+ *   destino perde um rastro antigo desse DFD (ele volta a estar vivo lá).
  */
 export async function upsertDfdCabecalho(
   dados: DfdMetaPayload,
@@ -579,7 +580,8 @@ export async function upsertDfdCabecalho(
     reparticaoId: dados.reparticaoId ?? null,
     // Ponto 4: o DFD registra o ÓRGÃO — derivado da unidade escolhida (unidade ∈ órgão).
     orgaoId: dados.reparticaoId != null ? sql`(SELECT orgao_id FROM reparticoes WHERE id = ${dados.reparticaoId})` : null,
-    protocoloId: dados.protocoloId ?? null,
+    // Ausente/nulo = mantém o protocolo atual (avulso/sobrescrita não desvincula).
+    ...(dados.protocoloId != null ? { protocoloId: dados.protocoloId } : {}),
     responsavel: dados.responsavel ?? null,
     matricula: dados.matricula ?? null,
     email: dados.email ?? null,
@@ -596,18 +598,26 @@ export async function upsertDfdCabecalho(
     totalItens: dados.totalItens ?? primeiroLote.length,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
-  const [d] = await db
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  // RASTRO (antes do upsert: o retrato lê o protocolo em que o DFD ESTAVA) — só quando vai para um protocolo.
+  const rastro: Stmt[] =
+    dados.protocoloId != null
+      ? [db.run(retratoRastro(sql, dados.numero, dados.protocoloId, criadoPor)), db.run(limparRastroDestino(sql, dados.numero, dados.protocoloId))]
+      : [];
+  const upsert = db
     .insert(dfds)
-    .values({ numero: dados.numero, criadoPor: criadoPor ?? null, ...set })
+    .values({ numero: dados.numero, criadoPor: criadoPor ?? null, protocoloId: dados.protocoloId ?? null, ...set })
     .onConflictDoUpdate({ target: dfds.numero, set })
     .returning({ id: dfds.id });
-
-  const id = d.id;
-  const stmts = insertsItens(db, id, primeiroLote, 0);
-  await db.batch([
-    db.delete(dfdItens).where(eq(dfdItens.dfdId, id)),
-    ...stmts,
-  ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  // O id do DFD DENTRO do lote (a linha é criada/atualizada nele mesmo): pelo `numero` (único).
+  const idDoDfd = sql`(SELECT id FROM dfds WHERE numero = ${dados.numero})`;
+  const res = await db.batch([
+    ...rastro,
+    upsert,
+    db.delete(dfdItens).where(eq(dfdItens.dfdId, idDoDfd)),
+    ...insertsItens(db, idDoDfd, primeiroLote, 0),
+  ] as [Stmt, ...Stmt[]]);
+  const id = (res[rastro.length] as { id: number }[])[0].id;
   return { id, numero: dados.numero };
 }
 
@@ -723,16 +733,55 @@ export async function getDfdAssinaturas(
   return { nomeArquivo: r.nomeArquivo, assinaturas: parseAssinaturas(r.assinaturas) };
 }
 
+/** DFD JÁ CADASTRADO (mesmo nº) — o conflito de uma importação (sobrescrita): de qual protocolo é, a unidade
+ * (escopo) e os totais (a somatória quando ele prevalece). */
+export type DfdExistente = {
+  id: number;
+  numero: string;
+  reparticaoId: number | null;
+  protocoloId: number | null;
+  protocoloNumero: string | null;
+  valorTotal: number | null;
+  totalItens: number | null;
+};
+
+/** Os DFDs cadastrados com esses NÚMEROS (lotes de ≤ 90 no `IN`) — a importação sabe, ANTES de gravar, quem
+ * vai sobrescrever quem (em QUALQUER unidade — a lista da Mesa é filtrada pela unidade do cabeçalho). */
+export async function dfdsPorNumeros(numeros: string[]): Promise<DfdExistente[]> {
+  const uniq = [...new Set(numeros.map((n) => n.trim()).filter(Boolean))];
+  if (uniq.length === 0) return [];
+  const db = getDb();
+  const out: DfdExistente[] = [];
+  for (let i = 0; i < uniq.length; i += LOTE_IDS) {
+    out.push(
+      ...(await db
+        .select({
+          id: dfds.id,
+          numero: dfds.numero,
+          reparticaoId: dfds.reparticaoId,
+          protocoloId: dfds.protocoloId,
+          protocoloNumero: dfdProtocolos.numero,
+          valorTotal: dfds.valorTotal,
+          totalItens: dfds.totalItens,
+        })
+        .from(dfds)
+        .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
+        .where(inArray(dfds.numero, uniq.slice(i, i + LOTE_IDS)))),
+    );
+  }
+  return out;
+}
+
 /** O DFD com esse `numero` (anti-sequestro e histórico no `start-dfd`); `null` se não existe. */
 export async function getReparticaoDfdNumero(
   numero: string,
-): Promise<{ id: number; reparticaoId: number | null; assinaturas: Assinatura[] } | null> {
+): Promise<{ id: number; reparticaoId: number | null; protocoloId: number | null; assinaturas: Assinatura[] } | null> {
   const [r] = await getDb()
-    .select({ id: dfds.id, reparticaoId: dfds.reparticaoId, assinaturas: dfds.assinaturas })
+    .select({ id: dfds.id, reparticaoId: dfds.reparticaoId, protocoloId: dfds.protocoloId, assinaturas: dfds.assinaturas })
     .from(dfds)
     .where(eq(dfds.numero, numero))
     .limit(1);
-  return r ? { id: r.id, reparticaoId: r.reparticaoId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
+  return r ? { id: r.id, reparticaoId: r.reparticaoId, protocoloId: r.protocoloId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */
@@ -968,10 +1017,14 @@ export async function cadastrarPca(
 
 /** Renomeia/re-ano um PCA (registro ou edição); renova `atualizadoEm`. */
 export async function atualizarPca(id: number, dados: EditarPcaPayload): Promise<void> {
-  const campos: Partial<typeof pcas.$inferInsert> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
-  if (dados.nome !== undefined) campos.nome = dados.nome;
-  if (dados.ano !== undefined) campos.ano = dados.ano;
-  await getDb().update(pcas).set(campos).where(eq(pcas.id, id));
+  await getDb()
+    .update(pcas)
+    .set({
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+      ...(dados.ano !== undefined ? { ano: dados.ano } : {}),
+    })
+    .where(eq(pcas.id, id));
 }
 
 /** Marca UM PCA como o vigente (zera os demais numa transação — só 1 ativo). */

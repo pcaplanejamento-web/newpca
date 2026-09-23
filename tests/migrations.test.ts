@@ -302,7 +302,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(p?.situacao_id, null, "excluir a situação deveria limpar a do protocolo");
   });
 
-  it("0032 PCA como espaço: fonte/status/capa, planilha por PCA, ação do DFD, camada da situação e visões", () => {
+  it("0032 cria o apelido do usuário e as passagens (rastro do DFD sobrescrito) por protocolo", () => {
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('usuarios')").includes("apelido"), "coluna apelido ausente");
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('dfd_passagens')");
+    for (const c of ["protocolo_id", "dfd_numero", "planejamento", "tipo", "sigla", "total_itens", "valor_total", "usuario_id", "criado_em"])
+      assert.ok(cols.includes(c), `coluna ausente em dfd_passagens: ${c}`);
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["dfd_passagens_uq", "dfd_passagens_numero_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO dfd_protocolos (id, numero) VALUES (991, 'P-991/2026')");
+    db.exec("INSERT INTO dfd_passagens (protocolo_id, dfd_numero, valor_total) VALUES (991, '1525', 100)");
+    // Uma passagem por (protocolo, nº do DFD): a segunda do MESMO par é rejeitada (o código faz upsert).
+    assert.throws(() => db.exec("INSERT INTO dfd_passagens (protocolo_id, dfd_numero) VALUES (991, '1525')"));
+    // Excluir o protocolo apaga o rastro dele (cascade).
+    db.exec("DELETE FROM dfd_protocolos WHERE id = 991");
+    const n = db.prepare("SELECT COUNT(*) AS n FROM dfd_passagens WHERE protocolo_id = 991").get() as { n: number };
+    assert.equal(n.n, 0, "excluir o protocolo deveria apagar as passagens dele");
+  });
+
+  it("0033 PCA como espaço: fonte/status/capa, planilha por PCA, ação do DFD, camada da situação e visões", () => {
     const pcas = nomes(db, "SELECT name FROM pragma_table_info('pcas')");
     for (const c of ["fonte", "status", "capa", "publicado_em", "orcamento_visao_id"]) assert.ok(pcas.includes(c), `coluna ausente em pcas: ${c}`);
     assert.ok(nomes(db, "SELECT name FROM pragma_table_info('unidades')").includes("pca_id"));
@@ -317,16 +335,16 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.throws(() => db.exec("INSERT INTO unidades (codigo, municipio, pca_id) VALUES ('SEMED', 'RV', 991)"));
   });
 
-  it("0032 legado: planilhas viram um PCA 'lista' PUBLICADO e edições com DFDs viram fonte 'protocolo'", () => {
+  it("0033 legado: planilhas viram um PCA 'lista' PUBLICADO e edições com DFDs viram fonte 'protocolo'", () => {
     const d = new DatabaseSync(":memory:");
-    const i32 = arquivos.findIndex((f) => f.startsWith("0032"));
-    for (const arq of arquivos.slice(0, i32)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const i33 = arquivos.findIndex((f) => f.startsWith("0033"));
+    for (const arq of arquivos.slice(0, i33)) d.exec(readFileSync(join(DIR, arq), "utf8"));
     d.exec("INSERT INTO unidades (id, codigo, municipio) VALUES (1, 'SEMED', 'RV'), (2, 'SEMUS', 'RV')");
     d.exec("INSERT INTO itens (unidade_id, nome_produto, ano_desejado) VALUES (1, 'X', 2026)");
     d.exec("INSERT INTO pcas (id, nome, ano) VALUES (10, 'Edição', 2026)");
     d.exec("INSERT INTO dfds (id, numero) VALUES (50, 'DFD-50')");
     d.exec("INSERT INTO pca_dfds (pca_id, dfd_id) VALUES (10, 50)");
-    for (const arq of arquivos.slice(i32)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    for (const arq of arquivos.slice(i33)) d.exec(readFileSync(join(DIR, arq), "utf8"));
     const ed = d.prepare("SELECT fonte FROM pcas WHERE id = 10").get() as { fonte: string };
     assert.equal(ed.fonte, "protocolo");
     const pub = d.prepare("SELECT id, nome, ano, fonte, status FROM pcas WHERE fonte = 'lista' AND status = 'publicado'").all() as Array<{ id: number; nome: string; ano: number }>;

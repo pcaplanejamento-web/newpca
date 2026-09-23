@@ -157,6 +157,44 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Perfil → Protocolação", href: "/painel/perfil" },
   },
   {
+    id: "proto-pessoas",
+    dominio: "protocolo",
+    titulo: "Responsável só entre as pessoas do grupo; foto + apelido nas colunas",
+    descricao:
+      "O responsável de um protocolo é escolhido SÓ entre as pessoas ativas do GRUPO ATIVO de quem está na Mesa (sem grupo, todas as pessoas ativas) — na célula, na edição em massa e no responsável padrão do Perfil; o servidor recusa outra pessoa. Um responsável já gravado que hoje é de outro grupo continua aparecendo, mas não pode ser re-escolhido. As colunas Responsável e Distribuição mostram a FOTO e o APELIDO (nome completo no passar do mouse).",
+    fonte: "listarPessoasDoGrupo / pessoaDoGrupo (usuarios) + PessoaTag",
+    configuravelEm: { rotulo: "Grupos", href: "/painel/grupos" },
+  },
+  {
+    id: "proto-sobrescrita",
+    dominio: "protocolo",
+    titulo: "Sobrescrever um DFD: escolha dado a dado",
+    descricao:
+      "Não existem dois DFDs com o mesmo número: um DFD importado de novo SOBRESCREVE o cadastrado. Antes de gravar, o painel 'Diferenças' compara o gravado com o arquivo novo e, em CADA diferença (campo do cabeçalho, seção, assinaturas, item novo/alterado/removido), o usuário escolhe 'Manter gravado' ou 'Usar novo' (ou 'todos' por bloco); o DFD ao lado já mostra o resultado e pode ser editado. O botão 'Sobrescrever DFD' fica no banner do DFD gravado; o 'Importar DFD' de um número já cadastrado e a protocolação (ao abrir o DFD) oferecem a mesma escolha.",
+    detalhes: [
+      "Pelo banner do DFD (ou importação avulsa) o DFD continua no protocolo dele.",
+      "O histórico registra a sobrescrita (canal 'Sobrescrita do DFD'), as diferenças e o que foi mantido/editado.",
+      "DFD de mesmo número numa unidade sem acesso não pode ser sobrescrito (aparece como erro; mantenha o já cadastrado).",
+      "Na protocolação, o DFD que substitui/move um cadastrado fica na unidade dele (salvo escolha); a escolha espera a leitura da assinatura por OCR.",
+      "Enquanto a sobrescrita está em andamento, o banner do DFD fica só-leitura; fechar a conferência com escolhas feitas pede confirmação.",
+    ],
+    fonte: "sobrescrita-dfd / useSobrescrita / POST /api/dfd",
+  },
+  {
+    id: "proto-rastro",
+    dominio: "protocolo",
+    titulo: "Rastro do DFD sobrescrito por outro protocolo",
+    descricao:
+      "Quando um protocolo traz um DFD que estava em OUTRO protocolo, o DFD passa para o novo e o de origem guarda um RETRATO cinza, separado ('DFDs sobrescritos por outro protocolo'), com a versão que ele tinha (valor da época). 'Sobrescrito pelo' aponta SEMPRE o protocolo onde o DFD está agora — numa cadeia A → B → C, A e B apontam C — e o clique abre esse protocolo.",
+    detalhes: [
+      "Os valores do rastro entram na conciliação da capa do protocolo de origem (a capa foi emitida com eles).",
+      "O DFD que volta a um protocolo tira o rastro dele ali; excluir o protocolo apaga o rastro dele.",
+      "No reenvio, um DFD do PDF que outro protocolo sobrescreveu fica mantido lá ('Restaurar' traz de volta).",
+      "Mover um DFD à mão (vínculo) não deixa rastro — o rastro é da sobrescrita por outro protocolo.",
+    ],
+    fonte: "dfd_passagens (migração 0032) / listarSobrescritos / TabelaSobrescritos",
+  },
+  {
     id: "proto-filtros-mesa",
     dominio: "protocolo",
     titulo: "Filtros de hierarquia da Mesa: Responsável e Assunto",
@@ -271,6 +309,14 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Avaliação (dfd.assinatura)" },
   },
   {
+    id: "ass-data-equipe",
+    dominio: "assinatura",
+    titulo: "Assinatura adicionada pela equipe tem data",
+    descricao:
+      "Ao ADICIONAR a assinatura à mão (nenhuma lida no arquivo), a equipe informa a DATA da assinatura (obrigatória, não pode ser apagada depois — só corrigida); ao validar uma assinatura lida, vem a data lida (corrigível). A assinatura adicionada é sempre 'validada pela equipe' (dá para desfazer) e, nela, um responsável TEMPORÁRIO só vale se o período dele cobre a data informada. Na assinatura LIDA validada pela equipe, o período não é reexigido (a equipe conferiu o PDF). Data futura ou inválida é recusada (também no servidor).",
+    fonte: "validarAssinaturaPelaEquipe (reparticao-responsaveis) / DfdConferir",
+  },
+  {
     id: "ass-responsaveis",
     dominio: "assinatura",
     titulo: "Responsáveis por DFDs: padrões e temporários",
@@ -345,7 +391,16 @@ export const LOGICAS: LogicaRef[] = [
       "A identidade do site (nome, subtítulo e favicon) é definida pelo ADM e renderiza em toda a plataforma: aba do navegador, barra lateral e a tela pública. Sem definição, usa os textos padrão.",
     fonte: "getAparencia().identidade",
     configuravelEm: { rotulo: "Identidade" },
+  },  {
+    id: "id-apelido",
+    dominio: "identidade",
+    titulo: "Apelido e foto de cada pessoa",
+    descricao:
+      "No Perfil, cada pessoa cadastra um APELIDO (até 40 caracteres) — o nome de exibição no sistema: cabeçalho, colunas Responsável/Distribuição e seletores (a lista mostra 'apelido — nome completo'). Sem apelido, vale o nome. A foto é servida com cache e só é baixada de novo quando o perfil muda.",
+    fonte: "pessoa (nomeExibicao / urlFoto) + /api/usuarios/[id]/foto",
+    configuravelEm: { rotulo: "Perfil", href: "/painel/perfil" },
   },
+
   {
     id: "id-aparencia",
     dominio: "identidade",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RegrasAvaliacao } from "./avaliacao-core.ts";
 import { avaliarDfd, type CtxConformidade } from "./dfd-tratamento.ts";
+import { dataAssinaturaValida } from "./reparticao-responsaveis.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
@@ -83,7 +84,11 @@ const assinaturaSchema = z.object({
       em: z.string().trim().max(40).optional(),
     })
     .optional(),
-});
+}).refine(
+  // A assinatura ADICIONADA pela equipe só aceita uma data real "dd/mm/aaaa", não futura (ou nenhuma).
+  (a) => a.fonte !== "manual" || !a.data || dataAssinaturaValida(a.data, new Date().toISOString().slice(0, 10)),
+  { message: "Data da assinatura inválida (use dd/mm/aaaa, não futura).", path: ["data"] },
+);
 
 /**
  * Cabeçalho do DFD (SEM os itens — que vão em lotes `start-dfd`/`append-dfd-itens`
@@ -112,9 +117,21 @@ export const dfdMetaSchema = z.object({
   secoes: z.array(dfdSecaoSchema).max(50).optional().default([]),
   assinaturas: z.array(assinaturaSchema).max(50).optional().default([]),
   totalItens: z.number().int().nonnegative().max(MAX_ITENS_DFD).optional().nullable(),
-  /** Canal da gravação (histórico): protocolação, reenvio do protocolo ou DFD avulso. Ausente ⇒ o
-   * servidor deduz (com protocolo = protocolação; sem = avulso). */
-  origem: z.enum(["protocolacao", "reenvio", "avulso"]).optional(),
+  /** Canal da gravação (histórico): protocolação, reenvio do protocolo, DFD avulso ou a SOBRESCRITA de um
+   * DFD por um arquivo novo (banner do DFD). Ausente ⇒ o servidor deduz (com protocolo = protocolação;
+   * sem = avulso). */
+  origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita"]).optional(),
+  /** SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado e o que foi EDITADO à mão — os primeiros
+   * rótulos + as quantidades (`escolhasParaHistorico`) — só para o histórico (o DFD enviado já é o resultado
+   * das escolhas). */
+  escolhas: z
+    .object({
+      mantidos: z.array(z.string().trim().max(200)).max(50).default([]),
+      editados: z.array(z.string().trim().max(200)).max(50).default([]),
+      qtdMantidos: z.number().int().nonnegative().max(1_000_000).optional(),
+      qtdEditados: z.number().int().nonnegative().max(1_000_000).optional(),
+    })
+    .optional(),
 });
 
 /** `start-dfd`: cabeçalho + 1º lote de itens → cria/zera o DFD e devolve `dfdId`. */
@@ -256,6 +273,11 @@ export const editarDfdSchema = z
  * (o cliente limita também pelo nº de DFDs por fatia). */
 export const conferenciaProtocolosSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(50),
+});
+
+/** DFDs JÁ cadastrados pelos NÚMEROS (`POST /api/dfd/existentes`) — o conflito de uma importação. */
+export const existentesDfdSchema = z.object({
+  numeros: z.array(z.string().trim().min(1).max(50)).min(1).max(2000),
 });
 
 /** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */

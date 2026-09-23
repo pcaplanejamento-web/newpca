@@ -32,6 +32,8 @@ async function enviarPlanilha(file: File, pcaId: number, onProgresso: (p: number
   let unidadeId: number | null = null;
   for (let i = 0; i < parsed.rows.length; i += CHUNK) {
     const rows = parsed.rows.slice(i, i + CHUNK);
+    // Os lotes seguintes precisam do id devolvido pelo 1º (sem ele, não há onde acrescentar).
+    if (i > 0 && unidadeId == null) throw new Error("A importação não devolveu a planilha criada. Tente de novo.");
     const body =
       i === 0
         ? {

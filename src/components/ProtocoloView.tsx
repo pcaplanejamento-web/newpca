@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
@@ -11,7 +12,7 @@ import { Callout } from "./Callout";
 import { TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert } from "./icons";
-import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
+import { type LinhaDfd, PlanilhaDfds, TabelaSobrescritos } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
 
 /** Campos da CAPA do protocolo (a MESMA grade na importação e no gravado).
@@ -187,7 +188,9 @@ export function ProtocoloCabecalho({
  * somatória dos DFDs (com "Substituir pela somatória"), os dados da capa (`CapaCampos` — cadeado por
  * campo nos de conteúdo; identificadores sempre travados) + unidade/PCA e a planilha de DFDs
  * (`PlanilhaDfds`, com seleção para a edição em massa). Na análise os DFDs com erro/atenção ficam em
- * tabelas separadas; no gravado (`unica`) é UMA tabela só. Presentacional: o host é dono do estado.
+ * tabelas separadas; no gravado (`unica`) é UMA tabela só. Abaixo, em CINZA, o RASTRO dos DFDs que este
+ * processo teve e foram SOBRESCRITOS por outro protocolo (`sobrescritos` — clicar abre o protocolo atual).
+ * Presentacional: o host é dono do estado.
  */
 export function ProtocoloView({
   capa,
@@ -213,6 +216,8 @@ export function ProtocoloView({
   vazio,
   nota,
   topo,
+  sobrescritos = [],
+  onVerProtocolo,
 }: {
   capa: CapaValores;
   modoCapa?: ModoCapa;
@@ -233,7 +238,8 @@ export function ProtocoloView({
   };
   /** PCA do processo: o `PcaPicker` na análise; só-leitura no gravado (identificador). */
   pca: ReactNode;
-  totais: { dfds: number; itens: number; somatorio: number; dica?: string };
+  /** `sobrescritos` = o RASTRO (qtd + valor na época): entra na somatória da capa. */
+  totais: { dfds: number; itens: number; somatorio: number; dica?: string; sobrescritos?: { qtd: number; valor: number } };
   conciliacao: ConciliacaoCapa;
   /** Substitui o valor da capa pela somatória (um clique). Ausente = só aponta. */
   onSubstituir?: () => void;
@@ -253,22 +259,27 @@ export function ProtocoloView({
   nota?: ReactNode;
   /** Bloco no TOPO do corpo (ex.: a comparação do reenvio com o protocolo gravado). */
   topo?: ReactNode;
+  /** DFDs deste processo SOBRESCRITOS por outro protocolo (rastro cinza, abaixo da planilha). */
+  sobrescritos?: DfdSobrescrito[];
+  /** Abre o protocolo ATUAL de um DFD sobrescrito. */
+  onVerProtocolo?: (protocoloId: number) => void;
 }) {
   const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
   const c = conciliacao;
+  const sob = totais.sobrescritos && totais.sobrescritos.qtd > 0 ? totais.sobrescritos : null;
   return (
     <div className="space-y-5">
       {topo}
       {/* Head — mini banners (um por informação): DFDs · itens · somatória. 2-up no mobile. */}
-      {totais.dfds > 0 && (
+      {(totais.dfds > 0 || sob) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatMini label="Total de DFDs" value={num(totais.dfds)} />
+          <StatMini label="Total de DFDs" value={num(totais.dfds)} hint={sob ? `+${num(sob.qtd)} sobrescrito(s)` : undefined} />
           <StatMini label="Total de itens" value={num(totais.itens)} hint={totais.dica} />
           <StatMini
             label="Somatória dos DFDs"
             value={brl(c.somatorio || totais.somatorio)}
             tone={c.divergente ? (c.bloqueia ? "danger" : "warn") : "default"}
-            hint={totais.dica}
+            hint={totais.dica ?? (sob ? `inclui ${brl(sob.valor)} dos sobrescritos` : undefined)}
             className="col-span-2 sm:col-span-1"
           />
         </div>
@@ -354,7 +365,9 @@ export function ProtocoloView({
       {linhas.length === 0 ? (
         (vazio ?? (
           <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum DFD vinculado a este protocolo.
+            {sobrescritos.length > 0
+              ? "Os DFDs deste protocolo foram sobrescritos por outro protocolo — veja o rastro abaixo."
+              : "Nenhum DFD vinculado a este protocolo."}
           </p>
         ))
       ) : (
@@ -370,6 +383,8 @@ export function ProtocoloView({
           regras={regras}
         />
       )}
+
+      <TabelaSobrescritos sobrescritos={sobrescritos} onVerProtocolo={onVerProtocolo} compacta={compacta} />
 
       {nota}
     </div>

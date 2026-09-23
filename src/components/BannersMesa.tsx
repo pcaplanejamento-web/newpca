@@ -50,10 +50,12 @@ export function BannersMesa({
   orgaos,
   onAlterado,
   pcas = [],
-  dfdsExistentes = [],
+  onAbrir,
 }: {
   abrir: AberturaMesa | null;
   onFechar: () => void;
+  /** Troca a pilha por OUTRA abertura (ex.: o protocolo ATUAL de um DFD sobrescrito — o rastro cinza). */
+  onAbrir: (a: AberturaMesa) => void;
   podeEditar: boolean;
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
@@ -61,9 +63,8 @@ export function BannersMesa({
   orgaos: Orgao[];
   /** Algo foi gravado — a Mesa recarrega as listas. */
   onAlterado: () => void;
-  /** PCAs e DFDs cadastrados — usados pelo REENVIO do protocolo (mesmo fluxo da protocolação). */
+  /** PCAs cadastrados — o REENVIO do protocolo e a SOBRESCRITA do DFD (mesmo seletor de PCA). */
   pcas?: PcaOpcao[];
-  dfdsExistentes?: { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null }[];
 }) {
   // Estado da pilha (a raiz vem de `abrir`; os banners empilhados são internos).
   const [raiz, setRaiz] = useState<AberturaMesa["tipo"] | null>(null);
@@ -111,6 +112,15 @@ export function BannersMesa({
       timer.current = window.setTimeout(() => setProtoId(pid), duracaoMotionMs());
     } else setProtoId(pid);
   }
+  /** RASTRO: abre o protocolo ATUAL de um DFD sobrescrito — a pilha passa a ser a DELE (pergunta pelos
+   * rascunhos que seriam descartados). */
+  function abrirOutroProtocolo(id: number) {
+    if (gravando()) return;
+    const pendentes = [dfd.sujo ? "no DFD" : null, proto.sujo ? "no protocolo" : null].filter(Boolean);
+    if (pendentes.length > 0 && !confirm(`Há alterações não salvas ${pendentes.join(" e ")}. Abrir o outro protocolo e descartá-las?`)) return;
+    limparTimer();
+    onAbrir({ tipo: "protocolo", id });
+  }
   /** Protocolo empilhado: clicar numa linha TROCA o DFD da pilha (o item, de outro DFD, sai). */
   function trocarDfd(id: number) {
     if (id === dfdId || gravando()) return;
@@ -152,6 +162,7 @@ export function BannersMesa({
       setSinalProto((n) => n + 1);
     },
     sinal: sinalDfd,
+    pcas,
   });
   const proto = useProtocoloGravado({
     protocoloId: protoId,
@@ -168,7 +179,7 @@ export function BannersMesa({
     },
     sinal: sinalProto,
     pcas,
-    dfdsExistentes,
+    onAbrirProtocolo: abrirOutroProtocolo,
   });
 
   const bloqueado = dfd.bloqueado || proto.bloqueado;
@@ -218,6 +229,7 @@ export function BannersMesa({
     <>
       {modal}
       {proto.extra}
+      {dfd.extra}
     </>
   );
 }

@@ -1,9 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
+import { herdarTratamentos } from "@/lib/comparar-protocolo";
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import type { DfdDetalhe } from "@/lib/dfd";
+import { detalheParaParseado } from "@/lib/dfd-edicao";
 import {
   type CampoTratavel,
   editarItemDfd,
@@ -12,13 +15,14 @@ import {
   STATUS_MENSAGEM_COR,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
-import { enviarDfdEmLotes } from "@/lib/importar-dfd";
+import { buscarExistentes, enviarDfdEmLotes } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { type DfdParseado, parseDfd } from "@/lib/parse-dfd";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { parseDfdPdf } from "@/lib/parse-dfd-pdf";
 import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import { escolhasParaHistorico, marcarItensNovos, semMarcas } from "@/lib/sobrescrita-dfd";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
@@ -26,11 +30,12 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainel
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconUpload } from "./icons";
+import { IconRefresh, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
 import { useConformidade } from "./useConformidade";
+import { useSobrescrita } from "./useSobrescrita";
 
 type Rep = {
   id: number;
@@ -46,18 +51,32 @@ type Rep = {
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
 
+/**
+ * IMPORTAÇÃO DE DFD (arquivo .pdf/.xlsx) — lê no navegador, mostra o DFD para conferir/editar
+ * (`DfdConferir`) e só grava ao confirmar. Quando o nº JÁ EXISTE, vira a SOBRESCRITA com ESCOLHA POR DADO:
+ * o painel "Diferenças" lista cada diferença entre o gravado e o arquivo novo com "Manter gravado | Usar
+ * novo" (o DFD ao lado já mostra o resultado); o DFD continua no protocolo dele e o histórico registra o
+ * que foi mantido. Dois modos: o botão "Importar DFD" da Mesa (detecta o nº já cadastrado) e o banner do
+ * DFD GRAVADO ("Sobrescrever DFD" — `sobrescrever`, só aceita o MESMO nº).
+ */
 export function DfdUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
   pcas = [],
   regras = regrasPadrao(),
   orgaos = [],
+  sobrescrever = null,
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
+  /** Banner do DFD GRAVADO: sobrescrever ESTE DFD com um arquivo novo (o MESMO nº). `iniciar` abre o
+   * lançador a cada clique novo; `onConcluido` = o banner recarrega; `onOcupado` = a sobrescrita está em
+   * andamento (lançador/leitura/escolha/gravação) — o banner fica só-leitura até terminar. Sem ele: o
+   * botão "Importar DFD". */
+  sobrescrever?: { gravado: DfdDetalhe; iniciar: number; onConcluido: () => void; onOcupado?: (ocupado: boolean) => void } | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -79,7 +98,12 @@ export function DfdUploadForm({
     itens: number;
     repNome: string | null;
     foraDoHead: boolean;
+    sobrescrito: boolean;
   } | null>(null);
+  // SOBRESCRITA: o DFD GRAVADO (mesmo nº), o NOVO como veio do arquivo e o que foi herdado do gravado.
+  const [base, setBase] = useState<DfdDetalhe | null>(null);
+  const [arquivo, setArquivo] = useState<DfdParseado | null>(null);
+  const [herdados, setHerdados] = useState<string[]>([]);
 
   // Enquanto grava (lotes), avisa antes de fechar/atualizar a aba.
   useEffect(() => {
@@ -92,12 +116,52 @@ export function DfdUploadForm({
     return () => window.removeEventListener("beforeunload", h);
   }, [status]);
 
+  // Banner do DFD gravado: o botão de lá abre o lançador — só um clique NOVO abre (o contador vive no banner),
+  // e nunca no meio de uma sobrescrita (lendo/conferindo/gravando).
+  const iniciarVisto = useRef(sobrescrever?.iniciar ?? 0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do banner.
+  useEffect(() => {
+    if (!sobrescrever || sobrescrever.iniciar <= 0 || sobrescrever.iniciar === iniciarVisto.current) return;
+    iniciarVisto.current = sobrescrever.iniciar;
+    if (status === "parsing" || status === "ready" || status === "sending") return;
+    setErro(null);
+    setStatus("idle");
+    setResultado(null);
+    setLauncher(true);
+  }, [sobrescrever?.iniciar]);
+  // Sobrescrita em ANDAMENTO (do lançador até gravar/cancelar) → o banner do DFD fica só-leitura.
+  const ocupado = launcher || status === "parsing" || status === "ready" || status === "sending";
+  const onOcupado = sobrescrever?.onOcupado;
+  useEffect(() => {
+    onOcupado?.(ocupado);
+  }, [ocupado, onOcupado]);
+  useEffect(() => () => onOcupado?.(false), [onOcupado]);
+  // Só a leitura MAIS RECENTE vale (um arquivo novo solto no meio de outra leitura descarta a anterior).
+  const leituraRef = useRef(0);
+
   // Conformidade dos itens com o catálogo (veredito por código) — conferida no servidor (lazy).
   const conformidade = useConformidade(preview?.itens, preview?.tipo ?? null);
 
+  // O GRAVADO na forma editável (estável — base da escolha).
+  const gravadoP = useMemo(() => (base ? detalheParaParseado(base) : null), [base]);
+  const rotuloUnidade = (id: number | null) => (id == null ? "—" : (reparticoes.find((r) => r.id === id)?.codigo ?? base?.reparticaoCodigo ?? `#${id}`));
+  const sob = useSobrescrita({
+    gravado: gravadoP,
+    novo: arquivo,
+    trabalho: preview,
+    onTrabalho: (fn) => setPreview((p) => (p ? fn(p) : p)),
+    bloqueado: status === "sending",
+    unidade: base ? { gravado: base.reparticaoId, trabalho: repId, rotulo: rotuloUnidade } : undefined,
+    anoPca: base ? { gravado: base.anoPca ?? base.protocoloAnoPca, trabalho: anoPca } : undefined,
+  });
+
   async function handleFile(file: File) {
+    const minha = ++leituraRef.current;
+    const atual = () => minha === leituraRef.current;
     setErro(null);
     setResultado(null);
+    setPainel(null); // nada do DFD anterior (ex.: "Diferenças") sobra no painel da direita
+    setAncoraAlvo(null);
     const ehPdf = /\.pdf$/i.test(file.name);
     if (!ehPdf && !/\.xlsx?$/i.test(file.name)) {
       setStatus("error");
@@ -107,70 +171,146 @@ export function DfdUploadForm({
     setStatus("parsing");
     try {
       const parsed = ehPdf ? await parseDfdPdf(file) : await parseDfd(file);
-      const { dfd: d, auto } = normalizarSecoesDfd(parsed, regras); // padroniza (níveis/palavras-chave do ADM)
-      const matched = preverUnidadeDoDfd(d, orgaos, reparticoes);
-      setPreview(d);
+      if (!atual()) return;
+      // SOBRESCRITA pelo banner: só o MESMO DFD (mesmo nº) — outro número é outro DFD.
+      if (sobrescrever && parsed.numero.trim() !== sobrescrever.gravado.numero.trim()) {
+        setStatus("error");
+        setErro(`O arquivo é do DFD ${parsed.numero || "(sem número)"}, não do DFD ${sobrescrever.gravado.numero} — a sobrescrita só aceita o MESMO DFD.`);
+        return;
+      }
+      // Mesmo nº já cadastrado? (em qualquer unidade — a lista da Mesa é filtrada pela unidade do cabeçalho)
+      let gravado: DfdDetalhe | null = sobrescrever?.gravado ?? null;
+      if (!gravado) {
+        const ex = (await buscarExistentes([parsed.numero])).get(parsed.numero.trim());
+        if (!atual()) return;
+        if (ex && !ex.acessivel) {
+          setStatus("error");
+          setErro(`Já existe o DFD ${parsed.numero} numa unidade sem acesso para você — ele não pode ser sobrescrito daqui.`);
+          return;
+        }
+        if (ex?.acessivel) {
+          const r = await fetch(`/api/dfd/${ex.id}`);
+          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
+          if (!atual()) return;
+          if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível carregar o DFD já cadastrado para comparar.");
+          gravado = j.dfd;
+        }
+      }
+      const anoRef = gravado ? (gravado.anoPca ?? gravado.protocoloAnoPca ?? parsed.anoPca) : parsed.anoPca;
+      const { dfd: normalizado, auto } = normalizarSecoesDfd(parsed, regras, anoRef); // padroniza (níveis/palavras-chave do ADM)
+      const matched = preverUnidadeDoDfd(normalizado, orgaos, reparticoes);
       setAutoCampos(auto);
-      setRepId(matched);
-      setAutoMatch(matched != null);
-      // Adivinha o PCA pela descrição; pré-seleciona só se o ano existir cadastrado.
-      setAnoPcaDetectado(d.anoPca);
-      setAnoPca(d.anoPca != null && pcas.some((p) => p.ano === d.anoPca) ? d.anoPca : null);
+      setAnoPcaDetectado(normalizado.anoPca);
+      if (gravado) {
+        // SOBRESCRITA: o que o arquivo NÃO traz e o gravado já tratou é HERDADO (nunca sobre um valor
+        // válido do arquivo); a partir daí, cada diferença é uma ESCOLHA (começa tudo "novo").
+        const h = herdarTratamentos(normalizado, gravado, anoRef);
+        const novo = marcarItensNovos(h.dfd);
+        setBase(gravado);
+        setArquivo(novo);
+        setHerdados(h.herdados);
+        setPreview(novo);
+        // A unidade e o PCA do gravado prevalecem (são do cadastro/processo, não do arquivo).
+        setRepId(gravado.reparticaoId ?? matched);
+        setAutoMatch(gravado.reparticaoId == null && matched != null);
+        setAnoPca(anoRef != null && pcas.some((p) => p.ano === anoRef) ? anoRef : (gravado.anoPca ?? gravado.protocoloAnoPca ?? null));
+        setPainel({ tipo: "diferencas" }); // abre com as ESCOLHAS à vista
+      } else {
+        setBase(null);
+        setArquivo(null);
+        setHerdados([]);
+        setPreview(normalizado);
+        setRepId(matched);
+        setAutoMatch(matched != null);
+        // Adivinha o PCA pela descrição; pré-seleciona só se o ano existir cadastrado.
+        setAnoPca(normalizado.anoPca != null && pcas.some((p) => p.ano === normalizado.anoPca) ? normalizado.anoPca : null);
+      }
       setStatus("ready");
     } catch (e) {
+      if (!atual()) return;
       setStatus("error");
       setErro(e instanceof Error ? e.message : "Falha ao ler o DFD.");
     } finally {
-      void encerrarOcr(); // Formato E: libera o worker do OCR usado no parse do PDF (se houve)
+      // Formato E: libera o worker do OCR usado no parse do PDF — só a leitura vigente (outra pode estar usando).
+      if (atual()) void encerrarOcr();
     }
   }
 
   async function enviar() {
     if (!preview) return;
+    const resumo = sob?.resumo ?? null;
+    if (
+      base &&
+      !confirm(
+        `Sobrescrever o DFD ${base.numero}${base.protocoloNumero ? ` (protocolo ${base.protocoloNumero})` : ""}?\n\n` +
+          (resumo
+            ? `${resumo.novos} dado(s) do arquivo novo · ${resumo.mantidos.length} mantido(s) do gravado · ${resumo.editados.length} editado(s).\n`
+            : "") +
+          `${base.protocoloNumero ? `O DFD continua no protocolo ${base.protocoloNumero}; o` : "O"} histórico registra a sobrescrita.`,
+      )
+    )
+      return;
     setStatus("sending");
     setErro(null);
     setProgresso(0);
     try {
+      const final = semMarcas(preview); // a marca de origem dos itens é só da tela
+      const historico = base && resumo ? escolhasParaHistorico(resumo) : null; // o que foi mantido/editado
       // Grava em LOTES de itens (start-dfd + append) — escala a milhares de itens.
       await enviarDfdEmLotes(
         {
-          numero: preview.numero,
-          planejamento: preview.planejamento,
-          tipo: preview.tipo,
-          objeto: preview.objeto,
-          orgaoEntidade: preview.orgaoEntidade,
-          setorRequisitante: preview.setorRequisitante,
-          siglaSetor: preview.siglaSetor,
-          responsavel: preview.responsavel,
-          matricula: preview.matricula,
-          email: preview.email,
-          telefone: preview.telefone,
+          numero: final.numero,
+          planejamento: final.planejamento,
+          tipo: final.tipo,
+          objeto: final.objeto,
+          orgaoEntidade: final.orgaoEntidade,
+          setorRequisitante: final.setorRequisitante,
+          siglaSetor: final.siglaSetor,
+          responsavel: final.responsavel,
+          matricula: final.matricula,
+          email: final.email,
+          telefone: final.telefone,
           anoPca,
-          numeroContrato: preview.numeroContrato,
-          numeroAta: preview.numeroAta,
-          numeroLicitacao: preview.numeroLicitacao,
+          numeroContrato: final.numeroContrato,
+          numeroAta: final.numeroAta,
+          numeroLicitacao: final.numeroLicitacao,
           reparticaoId: repId,
-          valorTotal: preview.valorTotal,
-          nomeArquivo: preview.nomeArquivo,
-          secoes: preview.secoes,
-          assinaturas: preview.assinaturas,
-          origem: "avulso",
+          valorTotal: final.valorTotal,
+          nomeArquivo: final.nomeArquivo,
+          secoes: final.secoes,
+          assinaturas: final.assinaturas,
+          // Sem `protocoloId`: o DFD que já existe FICA no protocolo dele (o servidor mantém).
+          origem: base ? "sobrescrita" : "avulso",
+          ...(historico ? { escolhas: historico } : {}),
         },
-        preview.itens,
+        final.itens,
         (enviados, total) => setProgresso(Math.round((enviados / total) * 100)),
+        { existia: !!base },
       );
       setResultado({
-        numero: preview.numero,
-        itens: preview.itens.length,
+        numero: final.numero,
+        itens: final.itens.length,
         repNome: reparticoes.find((r) => r.id === repId)?.nome ?? null,
-        foraDoHead: repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId,
+        // A sobrescrita que MANTÉM a unidade do DFD não "sumiu da lista" — o aviso é só para a unidade trocada.
+        foraDoHead: repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId && repId !== (base?.reparticaoId ?? null),
+        sobrescrito: !!base,
       });
+      setPainel(null);
+      setAncoraAlvo(null);
       setStatus("done");
+      if (sobrescrever) sobrescrever.onConcluido();
       router.refresh();
     } catch (e) {
       setStatus("error");
       setErro(e instanceof Error ? e.message : "Erro ao importar o DFD.");
     }
+  }
+
+  /** Fechar a conferência: na SOBRESCRITA com escolhas feitas (mantidos/editados), confirma antes de descartar. */
+  function fecharConferencia() {
+    const r = sob?.resumo;
+    if (base && r && (r.mantidos.length > 0 || r.editados.length > 0) && !confirm("Descartar as escolhas e edições desta sobrescrita?")) return;
+    reset();
   }
 
   function reset() {
@@ -184,6 +324,9 @@ export function DfdUploadForm({
     setAncoraAlvo(null);
     setAutoMatch(false);
     setAutoCampos([]);
+    setBase(null);
+    setArquivo(null);
+    setHerdados([]);
   }
 
   // Avulso: sem protocolo → categoria nula; exceções por TIPO do DFD valem pelo `tipo`.
@@ -196,38 +339,51 @@ export function DfdUploadForm({
   // Rodapé = a MESMA régua do painel e das tabelas (`estadoDeMensagens`).
   const estadoPrev = estadoDeMensagens(mensagens, { auto: autoCampos.length > 0 });
   // Trava de protocolação do ADM (Configurações → Avaliação → Protocolação): importação de DFD
-  // avulso desligada, ou tipo não permitido (quando a trava de tipo está ligada). Servidor reconfere.
-  const importDesligado = !importarDfdHabilitado(regras);
+  // avulso desligada (a sobrescrita de um DFD que está num protocolo o mantém lá — não é avulsa), ou tipo
+  // não permitido (quando a trava de tipo está ligada). Servidor reconfere.
+  const importDesligado = !importarDfdHabilitado(regras) && base?.protocoloId == null;
   const tipoNaoPermitido = !!regras.gate?.exigirTipo && !tipoPermitido(ctxAv.dfdTipo, regras);
   const bloqueado = temErro || importDesligado || tipoNaoPermitido;
   const modalAberto = !!preview && (status === "ready" || status === "sending");
+  const totalDif = sob?.final.total ?? 0;
 
   return (
-    <div>
-      {/* Botão único de importação (à direita) — abre o lançador */}
-      <div className="flex justify-end">
-        <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-          Importar DFD
-        </Button>
-      </div>
+    <div className={sobrescrever ? "contents" : undefined}>
+      {/* Botão único de importação (à direita) — abre o lançador. Na sobrescrita pelo banner, o botão fica lá. */}
+      {!sobrescrever && (
+        <div className="flex justify-end">
+          <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+            Importar DFD
+          </Button>
+        </div>
+      )}
 
       {/* Lançador: soltar/escolher o DFD (.xlsx ou .pdf) */}
-      <Modal open={launcher} onClose={() => setLauncher(false)} titulo="Importar DFD" size="lg">
+      <Modal
+        open={launcher}
+        onClose={() => setLauncher(false)}
+        titulo={sobrescrever ? `Sobrescrever o DFD ${sobrescrever.gravado.numero}` : "Importar DFD"}
+        size="lg"
+      >
         <Dropzone
           accept=".xlsx,.xls,.pdf"
           onFile={(f) => {
             setLauncher(false);
             handleFile(f);
           }}
-          titulo="Soltar o DFD (.xlsx ou .pdf)"
-          icon={<IconUpload className="h-7 w-7" />}
-          dica="Lido no navegador e mostrado num banner para conferência — só grava ao confirmar. Reimportar o mesmo Número DFD substitui os itens."
+          titulo={sobrescrever ? "Soltar o arquivo novo do DFD (.pdf ou .xlsx)" : "Soltar o DFD (.xlsx ou .pdf)"}
+          icon={sobrescrever ? <IconRefresh className="h-7 w-7" /> : <IconUpload className="h-7 w-7" />}
+          dica={
+            sobrescrever
+              ? `Só o MESMO DFD (nº ${sobrescrever.gravado.numero}). Você compara com o gravado e escolhe, dado a dado, o que sobrescrever${sobrescrever.gravado.protocoloNumero ? ` — o DFD continua no protocolo ${sobrescrever.gravado.protocoloNumero}` : ""}.`
+              : "Lido no navegador e mostrado num banner para conferência — só grava ao confirmar. Se o nº já existe, você escolhe, dado a dado, o que sobrescrever."
+          }
         />
       </Modal>
 
       {/* Feedback da importação — AVISO FLUTUANTE (canto inferior): não deforma a linha do "Importar". */}
       {erro && status === "error" && (
-        <AvisoFlutuante kind="danger" titulo="Não foi possível importar" onClose={reset}>
+        <AvisoFlutuante kind="danger" titulo={sobrescrever ? "Não foi possível sobrescrever" : "Não foi possível importar"} onClose={reset}>
           {erro}
         </AvisoFlutuante>
       )}
@@ -235,7 +391,7 @@ export function DfdUploadForm({
       {status === "done" && resultado && (
         <AvisoFlutuante
           kind={resultado.foraDoHead ? "warn" : "ok"}
-          titulo={`DFD ${resultado.numero} importado!`}
+          titulo={`DFD ${resultado.numero} ${resultado.sobrescrito ? "sobrescrito" : "importado"}!`}
           onClose={reset}
           duracao={resultado.foraDoHead ? undefined : 8000}
         >
@@ -250,15 +406,15 @@ export function DfdUploadForm({
         </AvisoFlutuante>
       )}
 
-      {/* Banner flutuante: conferir o DFD completo e importar (só grava ao confirmar).
+      {/* Banner flutuante: conferir o DFD completo e importar/sobrescrever (só grava ao confirmar).
           Cabeçalho e botões ficam FIXOS (via Modal); o corpo rola. */}
       <Modal
         open={modalAberto}
-        onClose={() => reset()}
-        titulo={`Conferir e importar — DFD ${preview?.numero ?? ""}`}
+        onClose={fecharConferencia}
+        titulo={base ? `Sobrescrever — DFD ${preview?.numero ?? ""}` : `Conferir e importar — DFD ${preview?.numero ?? ""}`}
         cabecalho={
           preview ? (
-            <DfdCabecalho numero={preview.numero} tipo={preview.tipo} planejamento={preview.planejamento} />
+            <DfdCabecalho numero={preview.numero} tipo={preview.tipo} planejamento={preview.planejamento} sobrescrita={!!base} />
           ) : undefined
         }
         size="lg"
@@ -280,12 +436,15 @@ export function DfdUploadForm({
                     onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
                     conformidade={conformidade}
                     regras={regras}
-                    editavel
+                    editavel={status !== "sending"}
                     onEditarItem={(i, patch) => setPreview((p) => (p ? editarItemDfd(p, i, patch) : p))}
                     onRemoverItem={(i) => {
                       setPainel(null);
                       setPreview((p) => (p ? removerItemDfd(p, i) : p));
                     }}
+                    comparacao={sob?.comparacao ?? null}
+                    herdados={herdados}
+                    escolha={sob?.escolha ?? null}
                   />
                 ),
               }
@@ -301,21 +460,35 @@ export function DfdUploadForm({
               mensagens={mensagens}
               mensagensAbertas={painel?.tipo === "mensagens"}
               onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-              onFechar={reset}
+              onFechar={fecharConferencia}
               rotuloFechar="Cancelar"
               acoes={
-                (importDesligado || tipoNaoPermitido) && (
-                  <span className="text-[12px]" style={{ color: "var(--danger)" }}>
-                    {importDesligado
-                      ? "Importação de DFD avulso desabilitada nas Configurações"
-                      : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
-                  </span>
-                )
+                <>
+                  {/* SOBRESCRITA: as diferenças com a ESCOLHA por dado (manter o gravado × usar o novo). */}
+                  {base && (
+                    <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}>
+                      Diferenças ({num(totalDif)})
+                    </Button>
+                  )}
+                  {(importDesligado || tipoNaoPermitido) && (
+                    <span className="text-[12px]" style={{ color: "var(--danger)" }}>
+                      {importDesligado
+                        ? "Importação de DFD avulso desabilitada nas Configurações"
+                        : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
+                    </span>
+                  )}
+                </>
               }
               principal={
-                <Button onClick={enviar} disabled={bloqueado} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-                  Importar DFD
-                </Button>
+                base ? (
+                  <Button onClick={enviar} disabled={bloqueado} icon={<IconRefresh className="h-[18px] w-[18px]" />}>
+                    Sobrescrever DFD
+                  </Button>
+                ) : (
+                  <Button onClick={enviar} disabled={bloqueado} icon={<IconUpload className="h-[18px] w-[18px]" />}>
+                    Importar DFD
+                  </Button>
+                )
               }
             />
           )
@@ -323,9 +496,16 @@ export function DfdUploadForm({
       >
         {preview && (
           <div className="space-y-4">
-            {/* PCA do DFD (obrigatório) — adivinhado pela descrição, confirmável. */}
+            {/* PCA do DFD (obrigatório) — adivinhado pela descrição, confirmável. Na sobrescrita de um DFD de
+                protocolo, o ano é o do processo (identificador — só leitura). */}
             <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
-              <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
+              {base?.protocoloId != null && anoPca != null ? (
+                <p className="text-[13px] text-text-2">
+                  PCA <strong className="text-text">{anoPca}</strong> — o do protocolo {base.protocoloNumero ?? ""} (o DFD continua nele).
+                </p>
+              ) : (
+                <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
+              )}
             </section>
             <DfdConferir
               dfd={preview}
@@ -339,6 +519,7 @@ export function DfdUploadForm({
               orgaos={orgaos}
               conformidade={conformidade}
               ancoraAlvo={ancoraAlvo}
+              readOnly={status === "sending"}
               itemAtivo={painel?.tipo === "item" ? painel.idx : null}
               onItemClick={(idx) => setPainel({ tipo: "item", idx })}
               onRepChange={(id) => {

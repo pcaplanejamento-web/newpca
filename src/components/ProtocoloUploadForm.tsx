@@ -23,6 +23,7 @@ import {
 } from "@/lib/comparar-protocolo";
 import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
+import { detalheParaParseado } from "@/lib/dfd-edicao";
 import {
   type AcaoMassa,
   aplicarMassaDfd,
@@ -33,12 +34,14 @@ import {
   faltasCirurgicasDfd,
   gruposAssinatura,
   linhasRelatorioProtocolo,
+  type MensagemDfd,
   normalizarSecoesDfd,
   removerItemDfd,
+  resumoEstado,
   STATUS_MENSAGEM_COR,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
-import { enviarDfdEmLotes } from "@/lib/importar-dfd";
+import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -49,9 +52,11 @@ import {
   type PdfDoc,
   type ProtocoloIndex,
 } from "@/lib/parse-protocolo-pdf";
-import type { ProtocoloDetalhe } from "@/lib/protocolo";
+import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import type { UnidadeConferencia } from "@/lib/reparticoes";
+import { comparacaoEscolha, entradasEscolha, escolhasParaHistorico, marcarItensNovos, resumoEscolhas, semMarcas } from "@/lib/sobrescrita-dfd";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { BarraSelecaoDfds } from "./BarraSelecao";
@@ -71,6 +76,7 @@ import { Progress } from "./Progress";
 import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
 import { useConformidade } from "./useConformidade";
+import { useSobrescrita } from "./useSobrescrita";
 
 type Rep = {
   id: number;
@@ -84,27 +90,43 @@ type Rep = {
   responsaveis: Responsaveis;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
-/** DFD já cadastrado (conflito de número): de qual protocolo é + seus totais (p/ a somatória quando ele PREVALECE). */
-type DfdExistente = { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null };
+/** DFD já cadastrado (conflito de número): de qual protocolo é + seus totais (p/ a somatória quando ele
+ * PREVALECE); `acessivel: false` = de outra unidade (não pode ser sobrescrito daqui). */
+type DfdExistente = { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null; id?: number; acessivel: boolean };
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
-type Situacao = "novo" | "substitui" | "move";
+type Situacao = "novo" | "substitui" | "move" | "semAcesso";
 /** Progresso REAL da análise em background: 1ª passada (texto) e 2ª (assinaturas por OCR). */
 type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: number | null };
 
 const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
-const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move" };
+const SITUACAO: Record<Situacao, string> = { novo: "Novo", substitui: "Substitui", move: "Move", semAcesso: "Outra unidade (sem acesso)" };
 
-/** REENVIO: o protocolo GRAVADO (capa + DFDs completos) que o PDF reenviado vai SOBRESCREVER. */
-export type BaseReenvio = { protocolo: ProtocoloDetalhe; dfds: DfdDetalhe[] };
+/** REENVIO: o protocolo GRAVADO (capa + DFDs completos + o RASTRO dos DFDs dele sobrescritos por outro
+ * protocolo + as UNIDADES reais dos DFDs, inclusive as sem acesso — a conferência usa a unidade REAL, como no
+ * banner gravado) que o PDF reenviado vai SOBRESCREVER. */
+export type BaseReenvio = { protocolo: ProtocoloDetalhe; dfds: DfdDetalhe[]; sobrescritos?: DfdSobrescrito[]; unidades?: UnidadeConferencia[] };
 /** Nº do DFD comparável (o mesmo DFD no gravado e no PDF). */
 const chaveDfd = (n: string | null | undefined) => String(n ?? "").trim();
+/** DFD de mesmo nº numa unidade SEM ACESSO: o servidor recusa a sobrescrita (anti-sequestro) — é ERRO da linha
+ * desde a análise (tabela, painel e despacho), resolvido por "Manter o existente". */
+const MSG_SEM_ACESSO: MensagemDfd = {
+  chave: "dfd.semAcesso",
+  status: "erro",
+  ancora: "reparticao",
+  rotulo: "Unidade sem acesso",
+  texto: "Já existe um DFD com este número numa unidade sem acesso para você — ele não pode ser sobrescrito daqui. Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
+};
+/** A avaliação da linha + o erro de unidade sem acesso (a MESMA régua da célula, do painel e do rodapé). */
+function comSemAcesso(r: LinhaAvaliada): LinhaAvaliada {
+  const mensagens = [MSG_SEM_ACESSO, ...r.mensagens];
+  return { ...r, estado: "erro", mensagens, resumo: resumoEstado(mensagens) };
+}
 
 export function ProtocoloUploadForm({
   reparticoes,
   reparticaoAtivaId = null,
-  dfdsExistentes = [],
   pcas = [],
   regras = regrasPadrao(),
   orgaos = [],
@@ -114,7 +136,6 @@ export function ProtocoloUploadForm({
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
-  dfdsExistentes?: DfdExistente[];
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
@@ -209,6 +230,18 @@ export function ProtocoloUploadForm({
   const [removidosManter, setRemovidosManter] = useState<Set<number>>(new Set());
   const [herdados, setHerdados] = useState<Map<number, string[]>>(new Map());
   const [relDiffAberto, setRelDiffAberto] = useState(false);
+  // DFDs JÁ CADASTRADOS com os números do PDF — consultados no SERVIDOR (em qualquer unidade: a lista da Mesa é
+  // filtrada pela unidade do cabeçalho). `null` = consultando; falha ⇒ não protocola às cegas.
+  const [existentesSrv, setExistentesSrv] = useState<Map<string, ExistenteImport> | null>(null);
+  const [erroExistentes, setErroExistentes] = useState<string | null>(null);
+  // SOBRESCRITA com ESCOLHA POR DADO: o DFD GRAVADO de mesmo nº (carregado ao abrir o DFD) e o NOVO como veio
+  // do arquivo (a base estável das escolhas — o `parsed` é o DFD de TRABALHO, com as escolhas/edições).
+  const [gravadosSrv, setGravadosSrv] = useState<Map<string, DfdDetalhe>>(new Map());
+  const gravadoPedidoRef = useRef(new Set<string>()); // nºs cujo gravado já foi pedido (não repete)
+  const arquivosRef = useRef(new Map<number, DfdParseado>());
+  // REENVIO: DFDs do PDF que ESTE processo já teve e foram SOBRESCRITOS por outro protocolo (o rastro) —
+  // mantidos lá por padrão (não puxa de volta a versão antiga); "Restaurar" traz para cá.
+  const [fantasmas, setFantasmas] = useState<Set<number>>(new Set());
   const gravadosPorNumero = useMemo(() => new Map((reenvio?.dfds ?? []).map((d) => [chaveDfd(d.numero), d])), [reenvio]);
   const gravadoDe = (numero: string | null | undefined): DfdDetalhe | null => (reenvio ? (gravadosPorNumero.get(chaveDfd(numero)) ?? null) : null);
 
@@ -246,6 +279,11 @@ export function ProtocoloUploadForm({
     setAnalise(null);
     setRemovidosManter(new Set());
     setHerdados(new Map());
+    setGravadosSrv(new Map());
+    gravadoPedidoRef.current = new Set();
+    setFantasmas(new Set());
+    setErroExistentes(null);
+    arquivosRef.current = new Map();
   }
 
   // REENVIO: o botão do banner do gravado abre o lançador (só o PDF — sem criação manual). Só um clique
@@ -264,12 +302,23 @@ export function ProtocoloUploadForm({
   /** Normaliza o DFD lido do PDF e, no REENVIO, herda do gravado o que o PDF não traz (tratamentos). A
    * validação da ASSINATURA espera o OCR quando o DFD depende dele (`herdarAssinaturas`, após a leitura). */
   function prepararDfd(i: number, raw: DfdParseado, anoRef: number | null | undefined): { dfd: DfdParseado; auto: CampoTratavel[] } {
-    const { dfd, auto } = normalizarSecoesDfd(raw, regras, anoRef);
+    // Os itens marcam a ORIGEM (arquivo novo) — a escolha da sobrescrita os reencontra depois de editados.
+    const { dfd: normal, auto } = normalizarSecoesDfd(raw, regras, anoRef);
+    const dfd = marcarItensNovos(normal);
     const g = gravadoDe(dfd.numero);
     if (!g) return { dfd, auto };
     const h = herdarTratamentos(dfd, g, anoRef, { assinaturas: !precisaOcr(dfd.assinaturas) });
     anotarHerdados(i, h.herdados);
     return { dfd: h.dfd, auto };
+  }
+  /** Guarda o DFD NOVO como veio do arquivo (a base da escolha) — só o 1º (as edições ficam no `parsed`). */
+  function guardarArquivo(i: number, d: DfdParseado) {
+    if (!arquivosRef.current.has(i)) arquivosRef.current.set(i, d);
+  }
+  /** A assinatura lida por OCR também é do ARQUIVO (a base da escolha acompanha a leitura). */
+  function lerOcrNoArquivo(i: number, ocr: Assinatura[]) {
+    const arq = arquivosRef.current.get(i);
+    if (arq) arquivosRef.current.set(i, comOcr(arq, ocr).dfd);
   }
   /** REENVIO: herda do gravado a validação da assinatura pela equipe — DEPOIS do OCR (a assinatura
    * achatada só existe após a leitura). Puro: devolve o DFD + o que foi herdado. */
@@ -308,6 +357,7 @@ export function ProtocoloUploadForm({
     setIndex({ protocolo: { numero: null, idExterno: null, anoPca: null, data: null, interessado: null, documento: null, assunto: null, valorCapa: null, observacao: null, localReparticao: null, nomeArquivo: null }, dfds: [] });
     setDfdRepIds([]);
     setAutoRepIds([]);
+    setExistentesSrv(new Map()); // sem PDF: nenhum DFD a conferir
     setAberto(true);
   }
 
@@ -383,12 +433,50 @@ export function ProtocoloUploadForm({
       setLeitura(null);
       setLauncher(false);
       setAberto(true);
+      setExistentesSrv(null);
+      void carregarExistentes(idx, doc, autos); // quem SOBRESCREVE quem (no servidor, em qualquer unidade)
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
     } catch (e) {
       setStatus("error");
       setLeitura(null);
       setErro(e instanceof Error ? e.message : "Falha ao ler o protocolo.");
       limparDoc();
+    }
+  }
+
+  /**
+   * Quais DFDs do PDF JÁ EXISTEM (em qualquer unidade) — consultado no SERVIDOR: a situação Novo/Substitui/Move
+   * e a sobrescrita com escolha saem daqui. No REENVIO, os DFDs que ESTE processo teve e que um protocolo
+   * POSTERIOR sobrescreveu (o rastro) ficam MANTIDOS lá por padrão — reenviar não puxa de volta a versão
+   * antiga ("Restaurar" traz, se for o caso).
+   */
+  async function carregarExistentes(idx0: ProtocoloIndex, doc: PdfDoc, previstos: (number | null)[]) {
+    try {
+      const m = await buscarExistentes(idx0.dfds.map((d) => d.numero));
+      if (docRef.current !== doc) return;
+      setExistentesSrv(m);
+      // O DFD que SOBRESCREVE um já cadastrado fica na UNIDADE dele (cadastro/tratamento da equipe — como no
+      // reenvio e na sobrescrita pelo banner), salvo se o usuário já escolheu outra.
+      setDfdRepIds((arr) =>
+        arr.map((x, i) => {
+          const e = m.get(chaveDfd(idx0.dfds[i]?.numero));
+          return e?.acessivel && e.reparticaoId != null && (x == null || x === previstos[i]) ? e.reparticaoId : x;
+        }),
+      );
+      const rastro = new Set((reenvio?.sobrescritos ?? []).map((s) => chaveDfd(s.numero)));
+      if (!reenvio || rastro.size === 0) return;
+      const f = new Set<number>();
+      idx0.dfds.forEach((d, i) => {
+        const e = m.get(chaveDfd(d.numero));
+        if (rastro.has(chaveDfd(d.numero)) && e?.acessivel && e.protocoloId != null && e.protocoloId !== reenvio.protocolo.id) f.add(i);
+      });
+      if (f.size === 0) return;
+      setFantasmas(f);
+      setDescartados((s) => new Set([...s, ...f]));
+      setMantidosExistentes((s) => new Set([...s, ...f]));
+    } catch (e) {
+      if (docRef.current !== doc) return;
+      setErroExistentes(e instanceof Error ? e.message : "Não foi possível conferir os DFDs já cadastrados.");
     }
   }
 
@@ -426,6 +514,7 @@ export function ProtocoloUploadForm({
           viaCache(i, abertoNoMeio);
           continue;
         }
+        guardarArquivo(i, dfd);
         setParsed((m) => (m.has(i) ? m : new Map(m).set(i, dfd)));
         if (auto.length) setAutoMap((m) => (m.has(i) ? m : new Map(m).set(i, auto)));
         // Refina a UNIDADE com as assinaturas do PARSE COMPLETO (inclui Dropsigner/Adobe inline). Só
@@ -457,6 +546,7 @@ export function ProtocoloUploadForm({
         const local = comOcr(dfd, ocr);
         anotarHerdados(i, local.herdados);
         if (local.dfd.assinaturas !== dfd.assinaturas) {
+          lerOcrNoArquivo(i, ocr);
           setParsed((m) => {
             const cur = m.get(i);
             return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
@@ -493,23 +583,59 @@ export function ProtocoloUploadForm({
 
   const nomeArq = extra.nomeArquivo ?? "protocolo.pdf";
 
-  // Já cadastrados: os da Mesa + (reenvio) os DFDs do protocolo GRAVADO — são deste mesmo processo.
-  const existentes: DfdExistente[] = reenvio
-    ? [
-        ...reenvio.dfds.map((d) => ({ numero: d.numero, protocoloNumero: reenvio.protocolo.numero, valorTotal: d.valorTotal, totalItens: d.totalItens })),
-        ...dfdsExistentes.filter((x) => !gravadosPorNumero.has(chaveDfd(x.numero))),
-      ]
-    : dfdsExistentes;
+  /** O DFD JÁ cadastrado com esse nº: no reenvio, os do protocolo gravado; senão o que o SERVIDOR achou (em
+   * qualquer unidade — o de unidade sem acesso vem só como `acessivel: false`). */
+  const existenteDe = (dfdNumero: string | null | undefined): DfdExistente | null => {
+    const g = gravadoDe(dfdNumero);
+    const e = existentesSrv?.get(chaveDfd(dfdNumero));
+    // Reenvio: o DFD do protocolo gravado (os valores dele) — de unidade SEM ACESSO, fica só leitura (o servidor
+    // recusaria regravá-lo).
+    if (g)
+      return {
+        id: g.id,
+        numero: g.numero,
+        protocoloNumero: reenvio?.protocolo.numero ?? null,
+        valorTotal: g.valorTotal,
+        totalItens: g.totalItens,
+        acessivel: e?.acessivel !== false,
+      };
+    if (!e) return null;
+    return e.acessivel
+      ? { id: e.id, numero: e.numero, protocoloNumero: e.protocoloNumero, valorTotal: e.valorTotal, totalItens: e.totalItens, acessivel: true }
+      : { numero: e.numero, protocoloNumero: null, acessivel: false };
+  };
   const classificar = (dfdNumero: string): Situacao => {
-    const ex = existentes.find((x) => x.numero.trim() === dfdNumero.trim());
+    const ex = existenteDe(dfdNumero);
     if (!ex) return "novo";
+    if (!ex.acessivel) return "semAcesso";
     if (ex.protocoloNumero && ex.protocoloNumero.trim() !== numero.trim()) return "move";
     return "substitui";
+  };
+  /** O DFD GRAVADO (completo) que este DFD do PDF sobrescreve — a base da ESCOLHA POR DADO: no reenvio, o do
+   * protocolo; senão o carregado ao abrir o DFD. */
+  const gravadoBase = (dfdNumero: string | null | undefined): DfdDetalhe | null =>
+    gravadoDe(dfdNumero) ?? gravadosSrv.get(chaveDfd(dfdNumero)) ?? null;
+  /** Este DFD do PDF tem o mesmo nº de um DFD de unidade SEM ACESSO (não pode ser sobrescrito daqui)? No
+   * REENVIO, o gravado SEM diferença (não editado) não é regravado — então não é erro (fica como está). */
+  const semAcessoDe = (idx: number): boolean => {
+    const n = index?.dfds[idx]?.numero;
+    if (n == null || classificar(n) !== "semAcesso") return false;
+    return !(gravadoDe(n) && !editados.has(idx) && comparacaoDe(idx)?.situacao === "igual");
+  };
+  /** O DFD JÁ cadastrado é deste MESMO processo (o do reenvio, ou de um protocolo com este nº)? — o que
+   * "Manter o existente" mantém NO processo (entra na somatória/contagem da capa). */
+  const existenteNoProcesso = (dfdNumero: string): boolean => {
+    if (gravadoDe(dfdNumero)) return true;
+    const ex = existenteDe(dfdNumero);
+    return !!ex?.protocoloNumero && ex.protocoloNumero.trim() === numero.trim();
   };
 
   // Categoria do protocolo (classifica o assunto livre) → aplica as exceções por categoria.
   const categoria = classificarAssunto(assunto);
-  const repDe = (id: number | null | undefined): Rep | null => (id != null ? (reparticoes.find((r) => r.id === id) ?? null) : null);
+  // A unidade da lista do usuário; no REENVIO, também a REAL de um DFD gravado de unidade sem acesso (conferido como no
+  // banner gravado — nunca "sem unidade" por falta de acesso).
+  const repDe = (id: number | null | undefined): Rep | null =>
+    id != null ? (reparticoes.find((r) => r.id === id) ?? reenvio?.unidades?.find((u) => u.id === id) ?? null) : null;
 
   // ---- DFDs DUPLICADOS (mesmo nº de DFD ou de planejamento) — ponto configurável `protocolo.dfdDuplicado`.
   const dupComp = comportamentoNo(regras, "protocolo.dfdDuplicado", { categoria });
@@ -543,6 +669,7 @@ export function ProtocoloUploadForm({
     };
     setDescartados(tirar);
     setMantidosExistentes(tirar);
+    setFantasmas(tirar); // o DFD do rastro volta a este processo (a Situação passa a "Move")
   };
   /** Este DFD substitui/move um já CADASTRADO (conflito com o banco)? */
   const conflitaComExistente = (idx: number): boolean => {
@@ -604,6 +731,8 @@ export function ProtocoloUploadForm({
     return c;
   };
   const situacaoDe = (idx: number, numeroDfd: string): string => {
+    // REENVIO: DFD que este processo teve e um protocolo POSTERIOR sobrescreveu (o rastro) — hoje está lá.
+    if (fantasmas.has(idx)) return `Sobrescrito — está no ${existenteDe(numeroDfd)?.protocoloNumero ? `protocolo ${existenteDe(numeroDfd)?.protocoloNumero}` : "outro protocolo"}`;
     if (!reenvio || !gravadoDe(numeroDfd)) return SITUACAO[classificar(numeroDfd)];
     const c = comparacaoDe(idx);
     return c ? rotuloSituacaoReenvio(c) : "A comparar";
@@ -633,7 +762,7 @@ export function ProtocoloUploadForm({
     const motivo = errosParse.get(idx);
     if (motivo) return { ...base, estado: "erro", estadoMotivo: motivo };
     if (!d || ocrPendente.has(idx)) return { ...base, estado: "pendente" };
-    const r = avaliarLinha(idx, d);
+    const r = semAcessoDe(idx) ? comSemAcesso(avaliarLinha(idx, d)) : avaliarLinha(idx, d);
     avaliacoes.set(idx, r);
     return { ...base, estado: r.estado, resumo: r.resumo, validacao: r.validacao };
   });
@@ -652,10 +781,10 @@ export function ProtocoloUploadForm({
   const ativos = linhasDfd.filter((l) => l.estado !== "descartado").map((l) => l.key);
   // "Manter o existente" de um DFD deste MESMO protocolo (re-importação): o cadastrado continua no
   // processo → entra na somatória/contagem da capa (o de outro protocolo sai — segue lá).
-  const existentesMantidos = [...mantidosExistentes]
-    .map((i) => index?.dfds[i]?.numero)
-    .filter((n): n is string => n != null && classificar(n) === "substitui")
-    .map((n) => existentes.find((x) => x.numero.trim() === n.trim()))
+  const existentesMantidos = [
+    ...new Set([...mantidosExistentes].map((i) => chaveDfd(index?.dfds[i]?.numero)).filter((n) => n && existenteNoProcesso(n))),
+  ]
+    .map((n) => existenteDe(n))
     .filter((x): x is DfdExistente => !!x);
   // REENVIO: DFDs GRAVADOS que não vieram no PDF — excluídos ao sobrescrever, salvo os que o usuário MANTÉM
   // (esses continuam no processo → entram na somatória/contagem da capa).
@@ -664,13 +793,21 @@ export function ProtocoloUploadForm({
     .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
     .map((g) => ({ id: g.id, numero: g.numero, planejamento: g.planejamento, valorTotal: g.valorTotal, totalItens: g.totalItens, excluir: !removidosManter.has(g.id) }));
   const removidosMantidos = removidos.filter((r) => !r.excluir);
+  // REENVIO: o RASTRO dos DFDs deste processo sobrescritos por outro protocolo segue na conciliação (a capa foi
+  // emitida com eles, pelo valor da época) — menos os que o PDF traz de volta para cá (esses entram como ativos).
+  const numerosAtivos = new Set(ativos.map((i) => chaveDfd(index?.dfds[i]?.numero)));
+  const rastroMantido = (reenvio?.sobrescritos ?? []).filter((s) => !numerosAtivos.has(chaveDfd(s.numero)));
+  const valorRastro = rastroMantido.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
   const somatorioDfds =
     ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0) +
-    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.valorTotal ?? 0), 0);
+    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.valorTotal ?? 0), 0) +
+    valorRastro;
+  // Itens = só os DFDs VIVOS do processo (o rastro é o retrato da época — fica no "+N sobrescrito(s)").
   const itensDfds =
     ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0) +
     [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.totalItens ?? 0), 0);
-  const totalConsiderados = ativos.length + existentesMantidos.length + removidosMantidos.length;
+  const totalVivos = ativos.length + existentesMantidos.length + removidosMantidos.length;
+  const totalConsiderados = totalVivos + rastroMantido.length;
   // Somatória COMPLETA = todos os DFDs do processo LIDOS (um DFD ilegível somaria 0 → falsa divergência).
   const lidos = ativos.filter((i) => parsed.has(i)).length;
   const completo = !analisando && lidos === ativos.length;
@@ -735,16 +872,71 @@ export function ProtocoloUploadForm({
   const protocolarDesligado = !protocolarHabilitado(regras);
   const bloqueadoPorRegra =
     repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
-  const podeProtocolar = numero.trim().length > 0 && !importando && !analisando && ocrPendente.size === 0 && !bloqueadoPorRegra;
+  // Sem saber quem SOBRESCREVE quem (consulta dos já cadastrados), não protocola às cegas.
+  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null);
+  const podeProtocolar =
+    numero.trim().length > 0 && !importando && !analisando && ocrPendente.size === 0 && !bloqueadoPorRegra && !existentesPendentes;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
 
   // ---- DFD aberto ao lado.
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
   const repAberto = abertoIdx >= 0 ? repDe(dfdRepIds[abertoIdx]) : null;
+  const numeroAberto = abertoIdx >= 0 ? (index?.dfds[abertoIdx]?.numero ?? null) : null;
   // Conformidade do DFD ABERTO com o catálogo (lazy — só o DFD aberto; a lista fica leve).
   const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
   // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
-  const mensagensAberto = dfdAberto ? mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade) : [];
+  const mensagensAberto = dfdAberto
+    ? [...(semAcessoDe(abertoIdx) ? [MSG_SEM_ACESSO] : []), ...mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade)]
+    : [];
+
+  // SOBRESCRITA com ESCOLHA POR DADO: ao abrir um DFD que substitui/move um já cadastrado (acessível), carrega o
+  // GRAVADO completo (sob demanda — só o aberto; no reenvio ele já veio com o protocolo).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage ao DFD aberto e à consulta dos já cadastrados (o resto é lido na hora).
+  useEffect(() => {
+    if (numeroAberto == null || existentesSrv == null) return;
+    const chave = chaveDfd(numeroAberto);
+    const ex = existentesSrv.get(chave);
+    if (gravadoDe(numeroAberto) || !ex?.acessivel || gravadoPedidoRef.current.has(chave)) return;
+    gravadoPedidoRef.current.add(chave);
+    const doc = docRef.current;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/dfd/${ex.id}`);
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
+        if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? `HTTP ${r.status}`);
+        const g = j.dfd;
+        if (docRef.current === doc) setGravadosSrv((m) => new Map(m).set(chave, g));
+      } catch {
+        if (docRef.current !== doc) return;
+        gravadoPedidoRef.current.delete(chave); // tenta de novo ao reabrir
+        setErro(`Não foi possível carregar o DFD ${numeroAberto} já cadastrado para comparar — sem a comparação, ao protocolar vale o novo.`);
+      }
+    })();
+  }, [numeroAberto, existentesSrv]);
+  const gravadoAberto = numeroAberto != null ? gravadoBase(numeroAberto) : null;
+  const gravadoAbertoP = useMemo(() => (gravadoAberto ? detalheParaParseado(gravadoAberto) : null), [gravadoAberto]);
+  // Descartado ("Manter o existente"/duplicado), de unidade sem acesso ou com a assinatura em leitura (OCR): a
+  // comparação fica só para leitura.
+  const sob = useSobrescrita({
+    gravado: gravadoAbertoP,
+    novo: abertoIdx >= 0 ? (arquivosRef.current.get(abertoIdx) ?? null) : null,
+    trabalho: dfdAberto,
+    // A escolha vai ao DFD de TRABALHO (não o marca "editado": manter o gravado não é edição à mão).
+    onTrabalho: (fn) =>
+      setParsed((m) => {
+        const d = m.get(abertoIdx);
+        return d ? new Map(m).set(abertoIdx, fn(d)) : m;
+      }),
+    // …e enquanto a assinatura dele ainda é lida por OCR (a leitura mescla nas assinaturas de trabalho).
+    bloqueado: importando || descartados.has(abertoIdx) || semAcessoDe(abertoIdx) || ocrPendente.has(abertoIdx),
+    unidade: gravadoAberto ? { gravado: gravadoAberto.reparticaoId, trabalho: dfdRepIds[abertoIdx] ?? null, rotulo: rotuloUnidade } : undefined,
+    anoPca: gravadoAberto
+      ? { gravado: gravadoAberto.anoPca ?? gravadoAberto.protocoloAnoPca ?? (gravadoDe(numeroAberto) ? (reenvio?.protocolo.anoPca ?? null) : null), trabalho: anoPca }
+      : undefined,
+  });
+  // Nº de diferenças do DFD aberto (o que muda ao sobrescrever) — o botão "Diferenças (N)".
+  const difAberto = sob ? sob.final.total : reenvio && gravadoDe(numeroAberto) ? (comparacaoDe(abertoIdx)?.total ?? 0) : null;
+  const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && numeroAberto != null && ["substitui", "move"].includes(classificar(numeroAberto));
 
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
@@ -760,6 +952,7 @@ export function ProtocoloUploadForm({
     if (cached) return cached;
     const raw = await parseDfdDoProtocolo(doc, di, nomeArq);
     const { dfd, auto } = prepararDfd(idx, raw, anoPca);
+    guardarArquivo(idx, dfd);
     setParsed((m) => new Map(m).set(idx, dfd));
     setAutoMap((m) => new Map(m).set(idx, auto));
     refinarUnidade(idx, dfd); // prevê a unidade pela assinatura (só preenche se vazia)
@@ -774,9 +967,11 @@ export function ProtocoloUploadForm({
     if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
     const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
+    if (docRef.current !== doc) return; // outro PDF foi aberto no meio da leitura — o resultado não é dele
     const local = comOcr(d, ocr);
     anotarHerdados(idx, local.herdados);
     if (local.dfd.assinaturas !== d.assinaturas) {
+      lerOcrNoArquivo(idx, ocr);
       setParsed((m) => {
         const cur = m.get(idx);
         return cur ? new Map(m).set(idx, comOcr(cur, ocr).dfd) : m;
@@ -922,6 +1117,12 @@ export function ProtocoloUploadForm({
       for (let i = 0; i < dfds.length; i++) {
         if (descartados.has(i)) continue; // DFD descartado (duplicado / "manter o existente") — não protocola
         const di = dfds[i];
+        // Mesmo nº numa unidade SEM ACESSO: o servidor recusaria (anti-sequestro) — nem lê (no REENVIO, o
+        // gravado sem diferença é pulado abaixo, como os demais).
+        if (classificar(di.numero) === "semAcesso" && !gravadoDe(di.numero)) {
+          bloqueados.push({ numero: di.numero, motivo: MSG_SEM_ACESSO.texto });
+          continue;
+        }
         setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
         // Usa a cópia EDITADA do cache; senão parseia local (streaming, sem acumular).
         let full = parsed.get(i) ?? null;
@@ -944,6 +1145,7 @@ export function ProtocoloUploadForm({
           } catch {
             /* OCR é auxiliar — segue sem assinatura (a conferência decide) */
           }
+          lerOcrNoArquivo(i, ocr); // a base da escolha acompanha a leitura (o histórico não acusa "Assinaturas")
           full = comOcr(full, ocr).dfd; // + a validação herdada do gravado (reenvio)
         }
         // REENVIO: DFD sem NENHUMA diferença em relação ao gravado não é regravado (fica como está).
@@ -957,6 +1159,11 @@ export function ProtocoloUploadForm({
           setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length}) — sem diferença` });
           continue;
         }
+        // REENVIO: o gravado de unidade SEM ACESSO que mudou não pode ser regravado daqui.
+        if (classificar(di.numero) === "semAcesso") {
+          bloqueados.push({ numero: di.numero, motivo: MSG_SEM_ACESSO.texto });
+          continue;
+        }
         // MESMA conferência da tabela (fonte única): DFD com erro nunca é protocolado.
         const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos });
         if (conf.estado === "erro") {
@@ -965,6 +1172,14 @@ export function ProtocoloUploadForm({
             motivo: conf.mensagens.filter((m) => m.status === "erro").map((m) => m.texto).join(" "),
           });
           continue;
+        }
+        // SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado / EDITADO antes de gravar → histórico.
+        const gB = gravadoBase(di.numero);
+        const arq = arquivosRef.current.get(i);
+        let escolhas: ReturnType<typeof escolhasParaHistorico> = null;
+        if (gB && arq) {
+          const gP = detalheParaParseado(gB);
+          escolhas = escolhasParaHistorico(resumoEscolhas(entradasEscolha(comparacaoEscolha(gP, arq)), full, gP, arq));
         }
         try {
           await enviarDfdEmLotes(
@@ -992,8 +1207,9 @@ export function ProtocoloUploadForm({
               secoes: full.secoes,
               assinaturas: full.assinaturas,
               origem: reenvio ? "reenvio" : "protocolacao", // histórico: por onde o DFD foi gravado
+              ...(escolhas ? { escolhas } : {}),
             },
-            full.itens,
+            semMarcas(full).itens, // a marca de origem dos itens é só da tela
             undefined,
             { existia: classificar(di.numero) !== "novo" },
           );
@@ -1029,7 +1245,7 @@ export function ProtocoloUploadForm({
   }
 
   // ---- Relatório de erros do protocolo em DESPACHO (copiável): pendências CIRÚRGICAS por DFD + capa.
-  const ERRO_EXTRA = new Set(["protocolo.dfdDuplicado", "dfd.orgao", "dfd.orgaoUnidadeDivergente"]);
+  const ERRO_EXTRA = new Set(["protocolo.dfdDuplicado", "dfd.orgao", "dfd.orgaoUnidadeDivergente", MSG_SEM_ACESSO.chave]);
   const faltasDoDfd = (idx: number): string[] => {
     const parseErr = errosParse.get(idx);
     if (parseErr) return [`Leitura incompleta da tabela de itens (${parseErr}). Reenviar o DFD com a tabela completa.`];
@@ -1065,25 +1281,21 @@ export function ProtocoloUploadForm({
   });
 
   // Texto de estado do rodapé (o PROGRESSO real da análise tem precedência, com barra).
-  const statusTexto = protocolarDesligado
-    ? "Protocolação desabilitada nas Configurações"
-    : !numero.trim()
-      ? "Informe o número do processo para protocolar"
-      : !gateTrava.ok
-        ? gateTrava.motivos.join(" ")
-        : anoPcaBloqueia
-          ? "Defina o PCA do processo para protocolar"
-          : repBloqueia
-            ? "Defina a unidade do processo para protocolar"
-            : !temDfds
-              ? "Sem DFDs — cria só o protocolo."
-              : semErroBloqueia
-                ? `${dfdsComErro} DFD(s) com erro`
-                : conc.bloqueia
-                  ? "Valor da capa diverge da somatória — substitua para liberar"
-                  : dupBloqueia
-                    ? "DFD duplicado — escolha qual manter"
-                    : `${totalDfds} DFD(s) · ${semRep} sem unidade · ${dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo"}`;
+  const statusTexto = (() => {
+    if (erroExistentes) return `${erroExistentes} Feche e abra o PDF de novo.`;
+    if (existentesPendentes) return "Conferindo os DFDs já cadastrados…";
+    if (protocolarDesligado) return "Protocolação desabilitada nas Configurações";
+    if (!numero.trim()) return "Informe o número do processo para protocolar";
+    if (!gateTrava.ok) return gateTrava.motivos.join(" ");
+    if (anoPcaBloqueia) return "Defina o PCA do processo para protocolar";
+    if (repBloqueia) return "Defina a unidade do processo para protocolar";
+    if (!temDfds) return "Sem DFDs — cria só o protocolo.";
+    if (semErroBloqueia) return `${dfdsComErro} DFD(s) com erro`;
+    if (conc.bloqueia) return "Valor da capa diverge da somatória — substitua para liberar";
+    if (dupBloqueia) return "DFD duplicado — escolha qual manter";
+    const situacao = dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
+    return `${totalDfds} DFD(s) · ${semRep} sem unidade · ${situacao}`;
+  })();
   const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
   const numeroAtual = analise?.atual != null ? (index?.dfds[analise.atual]?.numero ?? "") : "";
   const rotuloAnalise = !analise
@@ -1280,7 +1492,12 @@ export function ProtocoloUploadForm({
                 titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
                 cabecalho:
                   abertoIdx >= 0 ? (
-                    <DfdCabecalho numero={index?.dfds[abertoIdx]?.numero ?? ""} tipo={dfdAberto?.tipo ?? null} planejamento={dfdAberto?.planejamento ?? null} />
+                    <DfdCabecalho
+                      numero={index?.dfds[abertoIdx]?.numero ?? ""}
+                      tipo={dfdAberto?.tipo ?? null}
+                      planejamento={dfdAberto?.planejamento ?? null}
+                      sobrescrita={sobrescreveAberto}
+                    />
                   ) : undefined,
                 onClose: fecharDfdLateral,
                 rodape:
@@ -1312,13 +1529,14 @@ export function ProtocoloUploadForm({
                               {gravadoDe(index?.dfds[abertoIdx]?.numero) ? "Manter o gravado" : "Manter o existente"}
                             </Button>
                           )}
-                          {/* REENVIO: as diferenças deste DFD em relação ao gravado (painel da direita). */}
-                          {reenvio && gravadoDe(index?.dfds[abertoIdx]?.numero) && (
+                          {/* SOBRESCRITA (reenvio ou DFD já cadastrado): as diferenças em relação ao gravado, com a
+                              ESCOLHA por dado (manter o gravado × usar o novo) no painel da direita. */}
+                          {difAberto != null && (
                             <Button
                               variant="secondary"
                               onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
                             >
-                              Diferenças ({num(comparacaoDe(abertoIdx)?.total ?? 0)})
+                              Diferenças ({num(difAberto)})
                             </Button>
                           )}
                         </>
@@ -1382,8 +1600,9 @@ export function ProtocoloUploadForm({
                       setPainel(null);
                       editarAberto((d) => removerItemDfd(d, i));
                     }}
-                    comparacao={abertoIdx >= 0 ? comparacaoDe(abertoIdx) : null}
+                    comparacao={sob?.comparacao ?? (abertoIdx >= 0 ? comparacaoDe(abertoIdx) : null)}
                     herdados={abertoIdx >= 0 ? herdados.get(abertoIdx) : undefined}
+                    escolha={sob?.escolha ?? null}
                   />
                 ),
               }
@@ -1417,7 +1636,7 @@ export function ProtocoloUploadForm({
                   <Progress value={pctAnalise} label={rotuloAnalise} />
                 </div>
               ) : (
-                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || !numero.trim() ? "var(--danger)" : "var(--muted)" }}>
+                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || !numero.trim() || erroExistentes ? "var(--danger)" : "var(--muted)" }}>
                   {statusTexto}
                 </span>
               )}
@@ -1480,10 +1699,11 @@ export function ProtocoloUploadForm({
           unidade={{ id: protoRepId, opcoes: reparticoes, onChange: setProtoRepId, rotulo: "Unidade do protocolo (pelo Interessado)", obrigatoria: true }}
           pca={<PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />}
           totais={{
-            dfds: totalConsiderados,
+            dfds: totalVivos,
             itens: itensDfds,
             somatorio: somatorioDfds,
             dica: analisando ? "analisando…" : !completo ? `parcial — ${num(lidos)} de ${num(ativos.length)} DFDs lidos` : undefined,
+            sobrescritos: rastroMantido.length > 0 ? { qtd: rastroMantido.length, valor: valorRastro } : undefined,
           }}
           conciliacao={conc}
           onSubstituir={() => setExtra((x) => ({ ...x, valorCapa: conc.somatorio }))}
@@ -1495,6 +1715,7 @@ export function ProtocoloUploadForm({
           dfdAtivo={abertoIdx >= 0 ? abertoIdx : null}
           compacta={compacta}
           regras={regras}
+          sobrescritos={rastroMantido}
           vazio={
             <Callout kind="info">
               Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule existentes.

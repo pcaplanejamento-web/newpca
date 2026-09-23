@@ -42,6 +42,7 @@ const COR_ACAO: Record<string, string> = {
 const TOM_ORIGEM: Record<OrigemAuditoria, Tone> = {
   protocolacao: "emerald",
   reenvio: "violet",
+  sobrescrita: "violet",
   avulso: "cyan",
   banner: "blue",
   massa: "orange",

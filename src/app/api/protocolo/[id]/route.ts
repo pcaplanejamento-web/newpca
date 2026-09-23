@@ -2,12 +2,12 @@ import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
+import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
-import { pessoaAtiva } from "@/lib/usuarios";
+import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     return erro("Sem acesso a este protocolo.", 403);
   }
   if (new URL(req.url).searchParams.get("completo") !== "1") return ok({ protocolo });
-  const dfds = await listarDfdsCompletosDoProtocolo(id);
+  const [dfds, sobrescritos] = await Promise.all([
+    listarDfdsCompletosDoProtocolo(id),
+    // O RASTRO dos DFDs sobrescritos por outro protocolo (cinza) — com o protocolo ATUAL de cada um.
+    listarSobrescritos(id, (rid) => rid == null || lista.some((r) => r.id === rid)),
+  ]);
   const unidades = await unidadesConferencia(dfds.map((d) => d.reparticaoId));
-  return ok({ protocolo, dfds, unidades });
+  return ok({ protocolo, dfds, unidades, sobrescritos });
 }
 
 /** Edita um protocolo já gravado — o banner (capa/unidade) ou a célula da Mesa (responsável/situação).
- * Escopo por unidade; o responsável tem de ser um usuário ATIVO e a situação, uma cadastrada pelo ADM. */
+ * Escopo por unidade; o responsável tem de ser uma pessoa ATIVA do grupo e a situação, uma cadastrada pelo ADM. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
@@ -50,7 +54,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
     return erro("Sem acesso à unidade de destino.", 403);
   }
-  if (campos.responsavelId != null && !(await pessoaAtiva(campos.responsavelId))) return erro("Escolha um usuário ativo como responsável.", 422);
+  // Responsável: só uma pessoa ATIVA do GRUPO ativo de quem edita (manter o atual nunca é recusado).
+  if (campos.responsavelId != null && campos.responsavelId !== proto.responsavelId && !(await pessoaDoGrupo(campos.responsavelId, await getGrupoAtivoId(a.u))))
+    return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
   await atualizarProtocolo(id, campos);

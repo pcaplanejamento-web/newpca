@@ -165,15 +165,23 @@ export function DfdCabecalho({
   numero,
   tipo,
   planejamento,
+  sobrescrita = false,
 }: {
   numero: string;
   tipo: string | null;
   planejamento: string | null;
+  /** Banner da SOBRESCRITA (arquivo novo × DFD gravado) — selo "Sobrescrita" ao lado do nº. */
+  sobrescrita?: boolean;
 }) {
   const cod = tipoCurtoDfd(tipo);
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span className="shrink-0 text-base font-bold text-text">DFD {numero}</span>
+      {sobrescrita && (
+        <Badge tone="violet" className="shrink-0">
+          Sobrescrita
+        </Badge>
+      )}
       {cod && (
         <span className="shrink-0 rounded-control bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
           {cod}

@@ -318,9 +318,14 @@ export function ProtocolosView({
       if (f.ano) sp.set("ano", f.ano);
       sp.set("page", String(pg));
       const res = await fetch(`/api/protocolos?${sp.toString()}`, { signal: ac.signal });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Erro");
-      setPagina({ rows: json.rows, total: json.total, page: json.page, pageSize: json.pageSize, pages: json.pages });
+      const json = (await res.json()) as Partial<Pagina> & {
+        ok?: boolean;
+        error?: string;
+        resumo?: typeof resumoInicial;
+        opcoes?: typeof opcoesInicial;
+      };
+      if (!res.ok || !json.ok || !json.rows || !json.resumo || !json.opcoes) throw new Error(json.error ?? "Erro");
+      setPagina({ rows: json.rows, total: json.total ?? 0, page: json.page ?? pg, pageSize: json.pageSize ?? 25, pages: json.pages ?? 1 });
       setResumo(json.resumo);
       setOpcoes(json.opcoes);
     } catch (e) {

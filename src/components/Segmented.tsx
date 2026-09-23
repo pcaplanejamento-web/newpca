@@ -8,6 +8,7 @@ export function Segmented<T extends string>({
   onChange,
   className = "",
   disabled = false,
+  ariaLabel,
 }: {
   value: T;
   options: { value: T; label: string }[];
@@ -15,10 +16,13 @@ export function Segmented<T extends string>({
   className?: string;
   /** Desabilita a interação (ex.: banner de edição travado). */
   disabled?: boolean;
+  /** Nome acessível do grupo (ex.: a escolha de QUAL dado — "Escolha: Objeto"). */
+  ariaLabel?: string;
 }) {
   return (
     <div
       role="tablist"
+      aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
       className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment border border-border bg-surface-2 p-[3px] ${className}`}
     >

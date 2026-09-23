@@ -20,7 +20,9 @@ export default async function MesaPage() {
       regras={m.regras}
       orgaos={m.orgaos}
       pessoas={m.pessoas}
+      outrasPessoas={m.outrasPessoas}
       situacoes={m.situacoes}
+      usuarioId={m.usuarioId}
     />
   );
 }

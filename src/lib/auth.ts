@@ -2,6 +2,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "./db";
 import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
+import { urlFoto } from "./pessoa";
 import { sessoes, usuarios } from "@/db/schema";
 
 /**
@@ -19,7 +20,10 @@ export type UsuarioSessao = {
   id: number;
   email: string;
   nome: string;
+  /** Apelido (perfil) — o nome de exibição no sistema (`nomeExibicao`). */
+  apelido: string | null;
   matricula: string | null;
+  /** URL da foto (rota com cache — `urlFoto`), nunca o data-URL: a sessão é lida em TODA requisição. */
   foto: string | null;
   role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
@@ -92,8 +96,11 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       id: usuarios.id,
       email: usuarios.email,
       nome: usuarios.nome,
+      apelido: usuarios.apelido,
       matricula: usuarios.matricula,
-      foto: usuarios.foto,
+      // A FOTO não é lida aqui (pode ter centenas de KB): só se existe + a versão da URL com cache.
+      temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
+      versao: usuarios.atualizadoEm,
       role: usuarios.role,
       status: usuarios.status,
     })
@@ -106,8 +113,9 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       ),
     )
     .limit(1);
-  if (!row || row.status !== "ativo") return null;
-  return row as UsuarioSessao;
+  if (row?.status !== "ativo") return null;
+  const { temFoto, versao, ...u } = row;
+  return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao) };
 }
 
 /** Quantos usuários existem (para o bootstrap do primeiro admin). */

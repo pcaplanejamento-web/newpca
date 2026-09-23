@@ -21,7 +21,7 @@ export default async function ProtocolosPage({
   const sp = await searchParams;
   const q = sp.q?.trim() || "";
   // Só aceita situações válidas (evita filtro inválido vindo da URL).
-  const situacao = SITUACOES.some((s) => s.valor === sp.situacao) ? sp.situacao! : "";
+  const situacao = SITUACOES.find((s) => s.valor === sp.situacao)?.valor ?? "";
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
 

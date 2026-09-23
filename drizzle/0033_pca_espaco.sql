@@ -1,4 +1,4 @@
--- 0032 — PCA como ESPAÇO próprio (card 4×5 → Dashboard · Orçamento · Mesa/Importação · Configuração).
+-- 0033 — PCA como ESPAÇO próprio (card 4×5 → Dashboard · Orçamento · Mesa/Importação · Configuração).
 -- 1) `pcas`: FONTE dos dados (`lista` = planilhas importadas | `protocolo` = DFDs vinculados via
 --    protocolos), STATUS (`preview` | `publicado` — publicado aparece na tela inicial), CAPA do card
 --    (data-URL WebP 4:5), data da publicação e a VISÃO do orçamento usada no comparativo.

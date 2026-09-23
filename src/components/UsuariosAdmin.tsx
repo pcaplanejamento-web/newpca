@@ -17,6 +17,7 @@ type Status = "ativo" | "pendente" | "inativo";
 type U = {
   id: number;
   nome: string;
+  apelido: string | null;
   email: string;
   matricula: string | null;
   foto: string | null;
@@ -131,7 +132,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       header: "Usuário",
       minWidth: 240,
       filter: "none",
-      value: (u) => u.nome,
+      value: (u) => `${u.nome}${u.apelido ? ` ${u.apelido}` : ""}`,
       render: (u) => (
         <div className="flex items-center gap-2.5">
           <Avatar nome={u.nome} foto={u.foto} />
@@ -139,6 +140,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             <div className="font-medium text-text">
               {u.nome} {u.id === meuId && <span className="text-faint">(você)</span>}
             </div>
+            {u.apelido && <div className="text-[11px] text-text-2">Apelido: {u.apelido}</div>}
             <div className="text-xs text-muted">{u.email}</div>
             {u.matricula && <div className="text-[11px] text-faint">Matrícula {u.matricula}</div>}
             {u.criadoEm && <div className="text-[11px] text-faint">desde {dataBR(u.criadoEm)}</div>}

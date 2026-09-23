@@ -72,7 +72,7 @@ export async function parsePlanilha(file: File): Promise<PlanilhaParseada> {
     throw new Error("Não consegui ler o arquivo. Confirme que é um .xlsx válido.");
   }
 
-  const ws = wb.Sheets["Pca"] ?? wb.Sheets[wb.SheetNames[0]];
+  const ws = wb.Sheets.Pca ?? wb.Sheets[wb.SheetNames[0]];
   if (!ws) throw new Error("A planilha está vazia ou sem abas.");
 
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {

@@ -31,7 +31,7 @@ export const unidades = sqliteTable(
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
     totalItens: integer("total_itens").default(0),
     valorTotal: real("valor_total").default(0),
-    // PCA (fonte "lista pronta") a que a planilha pertence — migração `0032`. O código é único POR PCA.
+    // PCA (fonte "lista pronta") a que a planilha pertence — migração `0033`. O código é único POR PCA.
     pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "cascade" }),
   },
   (t) => [
@@ -83,6 +83,8 @@ export const usuarios = sqliteTable(
     senhaHash: text("senha_hash").notNull(),
     matricula: text("matricula"),
     foto: text("foto"), // data-URL base64 (avatar redimensionado no cliente)
+    // Apelido (perfil) — o nome de EXIBIÇÃO no sistema (Mesa, seletores, cabeçalho); sem ele, o nome.
+    apelido: text("apelido"),
     role: text("role", { enum: ["admin", "gestor", "membro"] })
       .notNull()
       .default("membro"),
@@ -297,7 +299,7 @@ export const protocoloSituacoes = sqliteTable(
     nome: text("nome").notNull(),
     cor: text("cor").notNull().default("#64748b"),
     ordem: integer("ordem").notNull().default(0),
-    // Migração `0032`: se o protocolo nesta situação PODE ser movido para o PCA e em qual CAMADA
+    // Migração `0033`: se o protocolo nesta situação PODE ser movido para o PCA e em qual CAMADA
     // (preview/publicado) os DFDs dele contam.
     permiteMoverPca: integer("permite_mover_pca", { mode: "boolean" }).notNull().default(false),
     camadaPca: text("camada_pca", { enum: ["preview", "publicado"] }).notNull().default("preview"),
@@ -410,6 +412,32 @@ export const dfds = sqliteTable(
   ],
 );
 
+/**
+ * RASTRO do DFD SOBRESCRITO entre protocolos (migração 0032): quando um DFD é sobrescrito por um DFD de
+ * OUTRO protocolo (mesmo número), o protocolo de onde ele SAIU guarda um retrato leve da versão que tinha
+ * (planejamento/tipo/sigla/itens/valor) — exibido em cinza, separado, apontando o protocolo ATUAL do DFD
+ * (sempre o último da cadeia: o `dfds.protocolo_id` do DFD vivo de mesmo número). Um por (protocolo, nº);
+ * sai quando o DFD volta a esse protocolo; excluir o protocolo apaga o rastro dele.
+ */
+export const dfdPassagens = sqliteTable(
+  "dfd_passagens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    protocoloId: integer("protocolo_id")
+      .notNull()
+      .references(() => dfdProtocolos.id, { onDelete: "cascade" }),
+    dfdNumero: text("dfd_numero").notNull(),
+    planejamento: text("planejamento"),
+    tipo: text("tipo"),
+    sigla: text("sigla"),
+    totalItens: integer("total_itens"),
+    valorTotal: real("valor_total"),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("dfd_passagens_uq").on(t.protocoloId, t.dfdNumero), index("dfd_passagens_numero_idx").on(t.dfdNumero)],
+);
+
 /** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */
 export const dfdItens = sqliteTable(
   "dfd_itens",
@@ -446,7 +474,7 @@ export const pcas = sqliteTable("pcas", {
   totalDfds: integer("total_dfds").default(0),
   totalItens: integer("total_itens").default(0),
   valorEstimado: real("valor_estimado").default(0), // total do PCA = soma dos valores (Σ itens) dos DFDs
-  // PCA como ESPAÇO (migração `0032`): fonte dos dados, status de publicação, capa do card 4:5 e a
+  // PCA como ESPAÇO (migração `0033`): fonte dos dados, status de publicação, capa do card 4:5 e a
   // visão do orçamento usada no comparativo.
   fonte: text("fonte", { enum: ["lista", "protocolo"] }).notNull().default("lista"),
   status: text("status", { enum: ["preview", "publicado"] }).notNull().default("preview"),
@@ -472,7 +500,7 @@ export const pcaDfds = sqliteTable(
     dfdId: integer("dfd_id")
       .notNull()
       .references(() => dfds.id, { onDelete: "cascade" }),
-    // Migração `0032`: a AÇÃO do DFD no PCA (incorporar/substituir/excluir), o DFD que ele substitui
+    // Migração `0033`: a AÇÃO do DFD no PCA (incorporar/substituir/excluir), o DFD que ele substitui
     // e quem/quando vinculou.
     acao: text("acao", { enum: ["incorporar", "substituir", "excluir"] }).notNull().default("incorporar"),
     substituiDfdId: integer("substitui_dfd_id"),
@@ -663,7 +691,7 @@ export type OrcamentoItem = typeof orcamentoItens.$inferSelect;
 export type NovoOrcamentoItem = typeof orcamentoItens.$inferInsert;
 
 /**
- * VISÕES SALVAS do orçamento (migração `0032`): nome + `filtros` (JSON `{dimensão: valores[]}` —
+ * VISÕES SALVAS do orçamento (migração `0033`): nome + `filtros` (JSON `{dimensão: valores[]}` —
  * vazio = "Todos"). Dentro da dimensão = OU; entre dimensões = E. Usadas pelo PCA (orçamento para o
  * PCA) e pela tela do Orçamento. Núcleo puro em `src/lib/orcamento-visao.ts`.
  */

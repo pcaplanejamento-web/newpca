@@ -1,13 +1,13 @@
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
-import { getReparticaoContexto, getReparticaoFiltro } from "./grupos";
+import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { listarOrgaos } from "./orgaos";
 import { listarProtocolos } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "./reparticoes";
 import { listarSituacoes } from "./situacoes";
-import { listarPessoas } from "./usuarios";
+import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
 /**
  * Dados da MESA (Protocolos · DFDs · Itens) — o MESMO carregamento da tela `/painel/mesa` e da aba
@@ -23,9 +23,17 @@ export async function carregarMesa(u: UsuarioSessao | null) {
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
-    listarPessoas(),
+    // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
+    // situações cadastradas pelo ADM.
+    getGrupoAtivoId(u).then(listarPessoasDoGrupo),
     listarSituacoes(),
   ]);
+  // Diretório de EXIBIÇÃO (foto + apelido): quem aparece nas colunas Responsável/Distribuição e não é do
+  // grupo (outro grupo, inativo) — só para mostrar, nunca como opção.
+  const doGrupo = new Set(pessoas.map((p) => p.id));
+  const outrasPessoas = await pessoasPorIds(
+    protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]).filter((id) => id != null && !doGrupo.has(id)),
+  );
   const ids = repCtx.lista.map((r) => r.id);
   const [respMap, matchMap] = await Promise.all([responsaveisPorReparticao(ids), dadosMatchPorReparticao(ids)]);
   const reparticoes = repCtx.lista.map((r) => ({
@@ -47,7 +55,9 @@ export async function carregarMesa(u: UsuarioSessao | null) {
     regras,
     orgaos,
     pessoas,
+    outrasPessoas,
     situacoes,
+    usuarioId: u?.id ?? null,
     podeEditar: u?.role === "admin" || u?.role === "gestor",
   };
 }

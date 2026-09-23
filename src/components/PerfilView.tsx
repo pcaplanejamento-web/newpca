@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
-import type { Pessoa } from "@/lib/usuarios";
+import { APELIDO_MAX, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -63,17 +63,21 @@ export function PerfilView({
   protocolacao = null,
 }: {
   usuario: UsuarioSessao;
-  /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente. */
-  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null } | null;
+  /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
+   * PESSOAS DO GRUPO ativo (`foraDoGrupo` = nome do padrão gravado que não é mais do grupo). */
+  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: string | null } | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Dados do perfil
   const [nome, setNome] = useState(usuario.nome);
+  const [apelido, setApelido] = useState(usuario.apelido ?? "");
   const [email, setEmail] = useState(usuario.email);
   const [matricula, setMatricula] = useState(usuario.matricula ?? "");
+  // Foto exibida (a URL da atual ou o data-URL recém-escolhido) + se MUDOU: só a alteração vai ao servidor.
   const [foto, setFoto] = useState<string | null>(usuario.foto ?? null);
+  const [fotoAlterada, setFotoAlterada] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [msgPerfil, setMsgPerfil] = useState<Msg>(null);
 
@@ -125,6 +129,7 @@ export function PerfilView({
     }
     try {
       setFoto(await redimensionarFoto(file));
+      setFotoAlterada(true);
       setMsgPerfil(null);
     } catch (err) {
       setMsgPerfil({ tipo: "erro", texto: err instanceof Error ? err.message : "Falha na imagem." });
@@ -139,10 +144,11 @@ export function PerfilView({
       const res = await fetch("/api/perfil", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, email, matricula, foto: foto ?? "" }),
+        body: JSON.stringify({ nome, apelido, email, matricula, ...(fotoAlterada ? { foto: foto ?? "" } : {}) }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+      setFotoAlterada(false);
       setMsgPerfil({ tipo: "ok", texto: "Perfil atualizado." });
       router.refresh(); // reflete a foto/nome no menu
     } catch (err) {
@@ -207,7 +213,10 @@ export function PerfilView({
             {foto && (
               <button
                 type="button"
-                onClick={() => setFoto(null)}
+                onClick={() => {
+                  setFoto(null);
+                  setFotoAlterada(true);
+                }}
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-faint transition hover:text-[var(--danger)]"
               >
                 <IconTrash className="h-3 w-3" /> Remover
@@ -220,6 +229,19 @@ export function PerfilView({
             <div>
               <label className={labelCls} htmlFor="p-nome">Nome completo</label>
               <input id="p-nome" className={inputCls} value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" required />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="p-apelido">Apelido</label>
+              <input
+                id="p-apelido"
+                className={inputCls}
+                value={apelido}
+                onChange={(e) => setApelido(e.target.value)}
+                maxLength={APELIDO_MAX}
+                placeholder={`Opcional — ex.: ${nome.trim().split(/\s+/u)[0] || "Ana"}`}
+                autoComplete="nickname"
+              />
+              <p className="mt-1 text-[11px] text-faint">Como você aparece no sistema (Responsável, Distribuição, menus). Vazio = o nome.</p>
             </div>
             <div>
               <label className={labelCls} htmlFor="p-email">E-mail</label>
@@ -279,16 +301,21 @@ export function PerfilView({
               onChange={(e) => setRespPadrao(e.target.value ? Number(e.target.value) : null)}
             >
               <option value="">— Nenhum (definir na Mesa) —</option>
+              {/* O padrão gravado que deixou de ser do grupo continua visível (só pode ser trocado/removido). */}
+              {respPadrao != null && !protocolacao.pessoas.some((p) => p.id === respPadrao) && (
+                <option value={respPadrao} disabled>
+                  {protocolacao.foraDoGrupo ?? `#${respPadrao}`} (fora do grupo)
+                </option>
+              )}
               {protocolacao.pessoas.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.nome}
-                  {p.id === usuario.id ? " (eu)" : ""}
+                  {rotuloOpcaoPessoa(p, usuario.id)}
                 </option>
               ))}
             </select>
             <p className="mt-1.5 text-[12px] text-muted">
               Todo protocolo novo que você protocolar já sai com este responsável — dá para trocar depois na coluna Responsável
-              da Mesa.
+              da Mesa. Só as pessoas do seu grupo ativo podem ser escolhidas.
             </p>
           </div>
           <Aviso msg={msgPref} />

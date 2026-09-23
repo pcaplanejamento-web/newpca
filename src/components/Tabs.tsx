@@ -18,6 +18,7 @@ export function Tabs({ tabs, className = "", inicial }: { tabs: Tab[]; className
   idxRef.current = idx;
 
   // Mede a aba ativa (posição do sublinhado) ao trocar e no resize.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tabs.length` é gatilho INTENCIONAL — abas novas/removidas mudam a posição do sublinhado.
   useLayoutEffect(() => {
     const el = btnRefs.current[idx];
     if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth });

@@ -548,7 +548,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           open
           onClose={() => setEditImp(null)}
           titulo={editImp.builtin ? `Editar ${editImp.nome}` : importancias.some((x) => x.id === editImp.id) ? "Editar importância" : "Nova importância"}
-          size="sm"
+          size="md"
           rodape={
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setEditImp(null)}>

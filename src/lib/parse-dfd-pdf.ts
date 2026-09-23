@@ -50,7 +50,7 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
   }
 
   // O `destroy` fica na LOADING TASK (não no PDFDocumentProxy) — guardamos a task.
-  const task = pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false });
+  const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
   let doc: Awaited<typeof task.promise>;
   try {
     doc = await task.promise;

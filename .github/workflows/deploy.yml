@@ -14,9 +14,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -24,23 +24,20 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # cloudflare-env.d.ts é gerado (não versionado) — só o type-check (informativo)
-      # depende dele; não pode bloquear o deploy.
+      # cloudflare-env.d.ts é gerado (não versionado) — o type-check depende dele.
       - name: Gerar tipos do Cloudflare
         run: npm run cf-typegen
-        continue-on-error: true
 
-      # Portão de qualidade: lint e testes BLOQUEIAM o deploy. O type-check é
-      # informativo (o build usa ignoreBuildErrors por divergências workerd×DOM);
-      # torná-lo bloqueante quando o baseline de tipos estiver 100% limpo.
-      - name: Type-check (informativo)
+      # Portão de qualidade: type-check, lint e testes BLOQUEIAM o deploy (baseline de tipos
+      # limpo — um erro de tipos novo não chega ao ar; o build segue com ignoreBuildErrors
+      # porque o type-check já foi feito aqui).
+      - name: Type-check
         run: npm run typecheck
-        continue-on-error: true
 
       - name: Lint (Biome)
         run: npm run lint
 
-      - name: Testes (Vitest)
+      - name: Testes (node:test)
         run: npm test
 
       - name: Build + Deploy (Cloudflare Workers + D1)
