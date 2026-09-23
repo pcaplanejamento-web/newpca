@@ -373,7 +373,7 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null, num
     await vinculo;
     return;
   }
-  await db.batch([vinculo, db.run(limparRastroDestino(sql, numero, protocoloId))]);
+  await db.batch([vinculo, limparRastroDestino(db, numero, protocoloId)]);
 }
 
 /** Repartição (+ nº, p/ o histórico) de um protocolo — o guard de acesso nas escritas; `null` se não existe. */

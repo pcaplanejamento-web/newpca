@@ -25,6 +25,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Correção: protocolação e "mover DFD de protocolo" (lote do D1) — entregue
+✅ O rastro entre protocolos rodava `db.run(sql…)` COM parâmetros dentro de `db.batch` — no driver D1 do Drizzle isso quebra
+("reading 'bind'") e derrubava o `start-dfd` com protocolo (a protocolação) e o vínculo manual do DFD a outro protocolo.
+`rastro-sql.ts` passou a BUILDERS (`insert().select()` + `onConflictDoUpdate`, `delete`), testados pelo driver
+`drizzle-orm/d1` REAL dentro de `db.batch` (`tests/fixtures/d1-sqlite.ts`). Regra no CLAUDE.md: nada de comando cru
+parametrizado em lote.
 ### Pessoas (apelido + foto), responsável do grupo, data da assinatura, SOBRESCRITA com escolha e RASTRO entre protocolos — entregue
 ✅ **Apelido** no Perfil (migração `0032`, aditiva): o nome de exibição no sistema — cabeçalho, colunas e seletores (a lista
 mostra "apelido — nome completo"). **Foto + apelido** nas colunas **Responsável** e **Distribuição** da Mesa (`PessoaTag`); a
