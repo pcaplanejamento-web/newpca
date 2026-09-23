@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -91,9 +92,8 @@ export function GruposAdmin() {
     });
 
   const usuariosFiltrados = useMemo(() => {
-    const t = busca.trim().toLowerCase();
-    if (!t) return users;
-    return users.filter((u) => u.nome.toLowerCase().includes(t) || u.email.toLowerCase().includes(t));
+    const casa = predicadoBusca(busca); // vários de uma vez com ":"
+    return casa ? users.filter((u) => casa([u.nome, u.email])) : users;
   }, [users, busca]);
 
   async function salvar(e: FormEvent) {

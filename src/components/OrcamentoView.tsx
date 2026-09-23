@@ -9,6 +9,7 @@ import { type AlvoVinculo, alvoDoTexto, chaveVinculo, linhasVinculo, mapaVinculo
 import type { OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { exportarOrcamentoPdf, exportarOrcamentoXlsx } from "@/lib/exportar-orcamento";
+import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -208,13 +209,8 @@ export function OrcamentoView({
 
   // Filtro por busca (texto) — reusado nas duas visões.
   const filtroPredicado = useMemo(() => {
-    const t = busca.trim().toLowerCase();
-    return (r: OrcamentoItemRow) =>
-      !t ||
-      (r.orgao ?? "").toLowerCase().includes(t) ||
-      (r.unidade ?? "").toLowerCase().includes(t) ||
-      (r.nomeElemento ?? "").toLowerCase().includes(t) ||
-      (r.codigoElemento ?? "").toLowerCase().includes(t);
+    const casa = predicadoBusca(busca); // vários termos de uma vez com ":"
+    return (r: OrcamentoItemRow) => !casa || casa([r.orgao, r.unidade, r.nomeElemento, r.codigoElemento]);
   }, [busca]);
   const itensAbertoFiltrados = useMemo(() => itensAberto.filter(filtroPredicado), [itensAberto, filtroPredicado]);
   const itensListaFiltrados = useMemo(() => itens.filter(filtroPredicado), [itens, filtroPredicado]);

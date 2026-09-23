@@ -37,7 +37,7 @@ import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
-import { inputCls, labelCls } from "./formStyles";
+import { labelCls } from "./formStyles";
 import { IconFilter, IconLayers, IconTrash, IconUser } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
@@ -45,6 +45,7 @@ import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
+import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { toast } from "./Toast";
@@ -159,9 +160,24 @@ export function DfdsView({
   const [erro, setErro] = useState<string | null>(null);
   // Banners do GRAVADO — os MESMOS componentes da análise (protocolo / DFD solto).
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
-  const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string } | null>(null);
+  const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string; protocoloId: number | null } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
   const [salvandoVinc, setSalvandoVinc] = useState(false);
+  // Opções do vínculo (seleção com BUSCA — com muitos protocolos o <select> era inviável): nº + Id · assunto ·
+  // interessado · unidade, o protocolo ATUAL do DFD marcado.
+  const opcoesVinculo = useMemo<OpcaoBusca[]>(
+    () => [
+      { valor: "", rotulo: "— Nenhum (desvincular) —", detalhe: vincAlvo?.protocoloId == null ? "atual" : "tira o DFD do protocolo" },
+      ...protocolos.map((p) => ({
+        valor: String(p.id),
+        rotulo: p.numero,
+        detalhe: [p.id === vincAlvo?.protocoloId ? "atual" : null, p.idExterno ? `Id ${p.idExterno}` : null, p.assunto, p.interessado, p.reparticaoCodigo]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    ],
+    [protocolos, vincAlvo?.protocoloId],
+  );
   // Seleção + edição EM MASSA nas três visões (a barra fica FIXA no rodapé do display; grava no banco).
   const [selDfds, setSelDfds] = useState<Sel>(new Set());
   const [selProtos, setSelProtos] = useState<Sel>(new Set());
@@ -461,7 +477,7 @@ export function DfdsView({
 
   function abrirVincular(d: DfdResumo) {
     setErro(null);
-    setVincAlvo({ id: d.id, numero: d.numero });
+    setVincAlvo({ id: d.id, numero: d.numero, protocoloId: d.protocoloId });
     setVincSel(d.protocoloId);
   }
 
@@ -475,8 +491,9 @@ export function DfdsView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ protocoloId: vincSel }),
       });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível vincular.");
+      // Resposta sem JSON (falha do servidor) não vira mensagem crua: vale a do servidor quando há (ex.: 423 da trava).
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !j?.ok) throw new Error(j?.error ?? `Não foi possível vincular (erro ${res.status}).`);
       setVincAlvo(null);
       router.refresh();
     } catch (e) {
@@ -1159,18 +1176,15 @@ export function DfdsView({
         }
       >
         <div className="space-y-3">
-          <label className={labelCls} htmlFor="vinc-proto">
-            Protocolo
-          </label>
-          <select id="vinc-proto" className={inputCls} value={vincSel ?? ""} onChange={(e) => setVincSel(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Nenhum (desvincular) —</option>
-            {protocolos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.numero}
-                {p.interessado ? ` · ${p.interessado}` : ""}
-              </option>
-            ))}
-          </select>
+          <span className={labelCls}>Protocolo</span>
+          <SeletorBusca
+            ariaLabel="Protocolo de destino"
+            placeholder="Pesquisar nº, Id, assunto, interessado ou unidade…"
+            opcoes={opcoesVinculo}
+            valor={vincSel == null ? "" : String(vincSel)}
+            onChange={(v) => setVincSel(v ? Number(v) : null)}
+            disabled={salvandoVinc}
+          />
           <p className="text-xs text-faint">
             {protocolos.length === 0
               ? "Nenhum protocolo cadastrado ainda — crie um na aba Protocolos."

@@ -8,6 +8,8 @@ import {
   indiceNoDominio,
   normalizarFaixa,
   normalizarSelecao,
+  opcoesDaBusca,
+  predicadoBusca,
   ordenarIndices,
 } from "../src/lib/tabela-filtros.ts";
 
@@ -118,6 +120,41 @@ describe("filtroAtivo / normalizações", () => {
     assert.equal(indiceNoDominio(dom, 50, "min"), 1);
     assert.equal(indiceNoDominio(dom, 2000, "max"), 2);
     assert.equal(indiceNoDominio([], 5, "min"), 0);
+  });
+});
+
+describe("opcoesDaBusca — busca dos filtros múltiplos (vários de uma vez com \":\")", () => {
+  const nums = ["1168", "168", "170", "1700", "174", "2"];
+  it("\"168:170:174\" marca EXATAMENTE esses (igual vence o contém), na ordem das opções", () => {
+    assert.deepEqual(opcoesDaBusca(nums, "168:170:174"), ["168", "170", "174"]);
+    assert.deepEqual(opcoesDaBusca(nums, "174 : 168"), ["168", "174"]);
+  });
+  it("termo sem igual cai no CONTÉM; \":\" sobrando e termos vazios são ignorados", () => {
+    assert.deepEqual(opcoesDaBusca(["Sem tipo", "Sem prioridade", "Regular"], "regular:sem"), ["Sem tipo", "Sem prioridade", "Regular"]);
+    assert.deepEqual(opcoesDaBusca(nums, "168:"), ["168"]);
+    assert.deepEqual(opcoesDaBusca(nums, "::170::"), ["170"]);
+  });
+  it("um termo só = CONTÉM, sem acento e sem caixa; o texto inteiro com \":\" que existe numa opção vale inteiro", () => {
+    assert.deepEqual(opcoesDaBusca(["SAÚDE", "EDUCAÇÃO", "Saudável"], "saude"), ["SAÚDE"]);
+    assert.deepEqual(opcoesDaBusca(["12/09/2026 10:30", "12/09/2026 11:00"], "10:30"), ["12/09/2026 10:30"]);
+    assert.deepEqual(opcoesDaBusca(nums, "16"), ["1168", "168"]);
+  });
+  it("busca vazia devolve TODAS; nada casa ⇒ vazio", () => {
+    assert.deepEqual(opcoesDaBusca(nums, "  "), nums);
+    assert.deepEqual(opcoesDaBusca(nums, "999:888"), []);
+  });
+});
+
+describe("predicadoBusca — busca de linhas (vários de uma vez com \":\")", () => {
+  it("contém sem acento/caixa; com \":\" casa QUALQUER termo; vazia = sem filtro", () => {
+    const p = predicadoBusca("5241947270:cadeira");
+    assert.ok(p);
+    assert.equal(p(["5241947270", "PAINEL"]), true);
+    assert.equal(p(["1111", "CADEIRA GIRATÓRIA"]), true);
+    assert.equal(p(["2222", "MESA"]), false);
+    assert.equal(predicadoBusca("saude")?.(["SECRETARIA DE SAÚDE"]), true);
+    assert.equal(predicadoBusca("  "), null);
+    assert.equal(predicadoBusca("10:30")?.(["12/09 10:30"]), true);
   });
 });
 

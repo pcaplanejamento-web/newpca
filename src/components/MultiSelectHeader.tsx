@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { GatilhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
@@ -8,6 +9,8 @@ import { IconArrowDown, IconArrowUp } from "./icons";
 // Filtro de cabeçalho de tabela (spec do usuário): ordenar (crescente/decrescente)
 // + busca + "Selecionar todos" + checkboxes + Aplicar/Cancelar/Remover. "Remover" (ou nada/tudo
 // marcado) = sem filtro. Na tabela as OPÇÕES já vêm facetadas pelos demais filtros (conectados).
+// BUSCA como no Excel: vários valores de uma vez com ":" ("168:170:174" — `opcoesDaBusca`); os resultados
+// começam TODOS marcados e "Aplicar" (ou Enter) aplica SÓ os resultados marcados.
 type Dir = "asc" | "desc" | null;
 
 export function MultiSelectHeader({
@@ -79,29 +82,34 @@ function Painel({
     return new Set(value.filter((v) => ofertadas.has(v)));
   });
   const [q, setQ] = useState("");
-
-  const visiveis = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return t ? options.filter((o) => o.toLowerCase().includes(t)) : options;
-  }, [q, options]);
-
-  const todosMarcados = visiveis.length > 0 && visiveis.every((o) => sel.has(o));
+  const visiveis = useMemo(() => opcoesDaBusca(options, q), [q, options]);
+  const buscando = q.trim() !== "";
+  // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
+  const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
+  const marcadas = useMemo(
+    () => (!buscando ? sel : selBusca && selBusca.q === q ? selBusca.set : new Set(visiveis)),
+    [buscando, sel, selBusca, q, visiveis],
+  );
+  const todosMarcados = visiveis.length > 0 && visiveis.every((o) => marcadas.has(o));
+  const aplicaveis = buscando ? visiveis.filter((o) => marcadas.has(o)) : null;
+  const podeAplicar = aplicaveis == null || aplicaveis.length > 0;
 
   function alternar(o: string) {
-    setSel((prev) => {
-      const n = new Set(prev);
-      if (n.has(o)) n.delete(o);
-      else n.add(o);
-      return n;
-    });
+    const n = new Set(marcadas);
+    if (n.has(o)) n.delete(o);
+    else n.add(o);
+    if (buscando) setSelBusca({ q, set: n });
+    else setSel(n);
   }
   function alternarTodos() {
-    setSel((prev) => {
-      const n = new Set(prev);
-      if (todosMarcados) for (const o of visiveis) n.delete(o);
-      else for (const o of visiveis) n.add(o);
-      return n;
-    });
+    const n = new Set(marcadas);
+    if (todosMarcados) for (const o of visiveis) n.delete(o);
+    else for (const o of visiveis) n.add(o);
+    if (buscando) setSelBusca({ q, set: n });
+    else setSel(n);
+  }
+  function aplicar() {
+    if (podeAplicar) onApply(aplicaveis ?? [...sel]);
   }
 
   const btn = "flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold";
@@ -122,7 +130,14 @@ function Painel({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Filtro"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              aplicar();
+            }
+          }}
+          aria-label="Buscar valores (use : para vários)"
+          placeholder="Filtrar (use : para vários)"
           className="h-[var(--h-control-sm)] w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </div>
@@ -133,7 +148,7 @@ function Painel({
           onChange={alternarTodos}
           className="h-4 w-4 accent-[var(--accent)]"
         />
-        Selecionar todos
+        {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {visiveis.map((o) => (
@@ -143,7 +158,7 @@ function Painel({
           >
             <input
               type="checkbox"
-              checked={sel.has(o)}
+              checked={marcadas.has(o)}
               onChange={() => alternar(o)}
               className="h-4 w-4 shrink-0 accent-[var(--accent)]"
             />
@@ -157,8 +172,9 @@ function Painel({
       <div className="flex gap-2 border-t border-border p-2">
         <button
           type="button"
-          onClick={() => onApply([...sel])}
-          className="flex-1 rounded-control bg-accent px-2 py-1.5 text-[12px] font-semibold text-white hover:opacity-90"
+          onClick={aplicar}
+          disabled={!podeAplicar}
+          className="flex-1 rounded-control bg-accent px-2 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
         >
           Aplicar
         </button>

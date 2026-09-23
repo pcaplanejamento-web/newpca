@@ -781,7 +781,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Barra de **progresso** + **relatório final** (importados / bloqueados com motivo); **defeituoso nunca é
   protocolado**. `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
   `protocolo.ts` (`iniciarProtocolo` = `POST /api/protocolo` `start-protocolo`; totais **ao vivo**), `GET`/`DELETE
-  /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular). UI na **aba Protocolos** de `DfdsView`
+  /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular — na Mesa pelo `SeletorBusca`, com pesquisa). UI na **aba Protocolos** de `DfdsView`
   (`ProtocoloUploadForm` → banner: metadados + **repartição do protocolo pelo Interessado** + tabela dos DFDs (sempre
   cheia) + **seleção/edição em massa** [repartição/prioridade/previsão/fundamentação nos N selecionados] + **estado
   por DFD**. **Clicar numa linha abre o DFD (`DfdConferir`) como um banner AO LADO** — o `Modal` **mestre-detalhe**
@@ -1322,7 +1322,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **filtros CONECTADOS (facetas)** — núcleo puro **`tabela-filtros.ts`** (`aplicarFiltros`: as opções/domínio de cada coluna
   vêm das linhas que passam nos DEMAIS filtros; seleção vazia ou com todas as opções = sem filtro; `normalizarFaixa`: o lado
   da faixa no extremo da faceta NÃO vira limite; `contarNaFaixa` = a contagem do painel; `ordenarIndices` numérico × texto
-  natural pt-BR com UM `Intl.Collator` reutilizado (performático com milhares), vazios e o traço "—" no fim); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
+  natural pt-BR com UM `Intl.Collator` reutilizado (performático com milhares), vazios e o traço "—" no fim; **BUSCA dos
+  filtros múltiplos com ":"** — `opcoesDaBusca` (opções: "168:170:174" marca EXATAMENTE esses — o termo igual vence o
+  "contém"; o mesmo formato do "Copiar planejamentos") e `predicadoBusca` (buscas de LINHAS: catálogo, orçamento, membros
+  do grupo, itens do painel — QUALQUER termo; sem acento/caixa, com cache); no `MultiSelectHeader` a busca segue o
+  EXCEL: os resultados começam marcados e "Aplicar"/Enter aplica SÓ os resultados marcados; no `SeletorMultiplo`, Enter
+  marca os encontrados); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
   **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
   **`reservaInferior`** = altura reservada no fim do display p/ algo fixo abaixo (a `BarraSelecao` da Mesa);
@@ -1365,7 +1370,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`TabelaSobrescritos`** (o RASTRO cinza dos DFDs sobrescritos por outro protocolo, com o link ao protocolo atual),
   `Segmented` com **`ariaLabel`** (nome acessível do grupo — ex.: "Escolha: Objeto" na sobrescrita), **`SeletorFiltro`** (filtro de
   HIERARQUIA acima das tabelas — chip com ícone/rótulo/valor, accent quando ativo, largura total no celular),
-  **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"),
+  **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"), **`SeletorBusca`** (seleção ÚNICA com
+  BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
+  vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox/**`CampoLista`** [lista em chips — várias referências da

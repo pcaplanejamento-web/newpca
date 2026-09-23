@@ -45,6 +45,13 @@ posição; risquinho de carimbo no cabeçalho e desenho de anotação não viram
 completo, unidade só centrada sob o rótulo, linha em branco não corta o item; célula com DOIS números fica vazia para
 conferência (nunca "100200"); caracteres de fonte Symbol/Wingdings e Windows-1252 tratados sem inventar letras.
 
+### Filtros com ":" (vários de uma vez) + busca no seletor de protocolo — entregue
+✅ Em TODO filtro múltiplo — o de cada coluna das tabelas e o das Visões do orçamento — e nas buscas de linhas (catálogo,
+orçamento, membros do grupo, itens do painel), `168:170:174` seleciona vários de uma vez (o mesmo formato do "Copiar
+planejamentos"; o valor IGUAL vence o "contém": 168 não traz 1168). No filtro da coluna vale a lógica do Excel: os
+resultados começam marcados e "Aplicar" (ou Enter) filtra só por eles. ✅ Mover/vincular um DFD a outro protocolo: o
+seletor ganhou **pesquisa** (nº, Id, assunto, interessado, unidade; o protocolo atual marcado) — `SeletorBusca`, no
+design system — e a falha do servidor deixou de aparecer como mensagem crua.
 ### Correção: protocolação e "mover DFD de protocolo" (lote do D1) — entregue
 ✅ O rastro entre protocolos rodava `db.run(sql…)` COM parâmetros dentro de `db.batch` — no driver D1 do Drizzle isso quebra
 ("reading 'bind'") e derrubava o `start-dfd` com protocolo (a protocolação) e o vínculo manual do DFD a outro protocolo.

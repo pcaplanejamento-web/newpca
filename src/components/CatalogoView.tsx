@@ -10,6 +10,7 @@ import { dataBR } from "@/lib/format";
 import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
+import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -430,9 +431,9 @@ export function CatalogoView({
 
   // Filtro (busca + tipo) — memoizado e reusado nas duas visões.
   const filtroPredicado = useMemo(() => {
-    const t = busca.trim().toLowerCase();
+    const casa = predicadoBusca(busca); // vários códigos/termos de uma vez com ":"
     return (r: CatalogoItemRow) => {
-      const okTexto = !t || r.codigo.toLowerCase().includes(t) || r.descricao.toLowerCase().includes(t);
+      const okTexto = !casa || casa([r.codigo, r.descricao]);
       const okTipo = tipoFiltro.length === 0 || tipoFiltro.some((tp) => r.tipos.includes(tp));
       return okTexto && okTipo;
     };

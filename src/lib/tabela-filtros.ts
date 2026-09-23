@@ -8,6 +8,8 @@
  * nos DEMAIS filtros — filtrar uma coluna restringe o que as outras oferecem.
  */
 
+import { stripAccents } from "./normalize.ts";
+
 export type TipoFiltro = "values" | "date" | "range" | "none";
 export type IntervaloData = { de?: string; ate?: string };
 export type FaixaValor = { min?: number; max?: number };
@@ -140,6 +142,63 @@ export function normalizarSelecao(sel: string[], opcoes: string[]): string[] | n
   if (s.length === 0) return null;
   const set = new Set(s);
   return opcoes.length > 0 && opcoes.every((o) => set.has(o)) ? null : s;
+}
+
+/** Chave de BUSCA: sem acento e sem caixa, espaços colapsados — com cache (a busca roda a cada tecla sobre milhares). */
+const CACHE_BUSCA = new Map<string, string>();
+function chaveBusca(s: string): string {
+  let k = CACHE_BUSCA.get(s);
+  if (k === undefined) {
+    k = stripAccents(s).toLowerCase().replace(/\s+/g, " ").trim();
+    if (CACHE_BUSCA.size > 20_000) CACHE_BUSCA.clear();
+    CACHE_BUSCA.set(s, k);
+  }
+  return k;
+}
+
+/**
+ * Predicado da BUSCA de LINHAS (o campo de busca acima de uma tabela/lista): sem acento/caixa, a linha casa se algum
+ * campo CONTÉM o texto — ou, com ":" (vários de uma vez, ex.: "5241947270:5241937263"), QUALQUER um dos termos (o
+ * texto inteiro também vale: "10:30"). Busca vazia ⇒ `null` (sem filtro).
+ */
+export function predicadoBusca(busca: string): ((campos: (string | null | undefined)[]) => boolean) | null {
+  const inteiro = chaveBusca(busca);
+  if (!inteiro) return null;
+  const termos = inteiro.includes(":") ? [inteiro, ...new Set(inteiro.split(":").map((t) => t.trim()).filter(Boolean))] : [inteiro];
+  return (campos) =>
+    campos.some((c) => {
+      const k = chaveBusca(c ?? "");
+      return termos.some((t) => k.includes(t));
+    });
+}
+
+/**
+ * Opções que casam a BUSCA de um filtro MÚLTIPLO. Um termo = as que o CONTÊM (sem acento/caixa). VÁRIOS de uma vez
+ * com ":" (ex.: "168:170:174" — o mesmo formato do "Copiar planejamentos"): cada termo casa as opções IGUAIS a ele
+ * ou, se nenhuma é igual, as que o contêm; o resultado é a união, na ordem das opções. O texto inteiro contido numa
+ * opção (ex.: a hora "10:30") vale como um termo só; ":" sobrando (ex.: "168:") é ignorado. Busca vazia = todas.
+ */
+export function opcoesDaBusca(opcoes: string[], busca: string): string[] {
+  const inteiro = chaveBusca(busca);
+  if (!inteiro) return opcoes;
+  const chaves = opcoes.map(chaveBusca);
+  if (!inteiro.includes(":") || chaves.some((c) => c.includes(inteiro))) return opcoes.filter((_, i) => chaves[i].includes(inteiro));
+  const exatas = new Map<string, number[]>();
+  chaves.forEach((c, i) => {
+    const l = exatas.get(c);
+    if (l) l.push(i);
+    else exatas.set(c, [i]);
+  });
+  const casa = new Array<boolean>(opcoes.length).fill(false);
+  for (const termo of new Set(inteiro.split(":").map((t) => t.trim()))) {
+    if (!termo) continue;
+    const iguais = exatas.get(termo);
+    if (iguais) for (const i of iguais) casa[i] = true;
+    else chaves.forEach((c, i) => {
+      if (c.includes(termo)) casa[i] = true;
+    });
+  }
+  return opcoes.filter((_, i) => casa[i]);
 }
 
 /**

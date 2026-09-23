@@ -5,6 +5,7 @@ import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
+import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
@@ -144,6 +145,7 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 // Orçamento × Contratações. ("Enviar ao PCA" = `EnviarAoPca`, na barra de seleção de protocolos da Mesa.)
 function PcaEspacoDemo() {
   const [sel, setSel] = useState<string[]>(["MATERIAL DE CONSUMO"]);
+  const [protoDemo, setProtoDemo] = useState("11");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [capa, setCapa] = useState<string | null>(null);
   return (
@@ -182,6 +184,20 @@ function PcaEspacoDemo() {
           setArquivo(null);
         }}
       />
+      <div className="max-w-xl">
+        <SeletorBusca
+          ariaLabel="Protocolo de destino"
+          placeholder="Pesquisar nº, Id, assunto, interessado ou unidade…"
+          opcoes={[
+            { valor: "", rotulo: "— Nenhum (desvincular) —", detalhe: "tira o DFD do protocolo" },
+            { valor: "11", rotulo: "12345/2026", detalhe: "atual · Id 98765 · INCLUSÃO · SECRETARIA DE SAÚDE · SMS" },
+            { valor: "12", rotulo: "12399/2026", detalhe: "Id 98801 · ALTERAÇÃO · SECRETARIA DE EDUCAÇÃO · SME" },
+            { valor: "13", rotulo: "12411/2026", detalhe: "Id 98830 · EXCLUSÃO · FUNDO MUNICIPAL DE ASSISTÊNCIA · FMAS" },
+          ]}
+          valor={protoDemo}
+          onChange={setProtoDemo}
+        />
+      </div>
       <div className="max-w-xl">
         <SeletorMultiplo
           rotulo="Elemento de despesa"

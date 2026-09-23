@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { num } from "@/lib/format";
+import { opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Checkbox, SearchField } from "./Field";
 import { IconChevronDown } from "./icons";
 
@@ -12,8 +13,9 @@ const MAX_VISIVEIS = 300;
 
 /**
  * Linha RECOLHÍVEL de seleção MÚLTIPLA (padrão das "Visões salvas" do orçamento): rótulo à esquerda e,
- * à direita, "Todos" ou "N selecionados" (accent). Aberta: busca + marcar/limpar os filtrados + a lista
- * de valores com a contagem. Nenhum marcado = "Todos" (sem filtro).
+ * à direita, "Todos" ou "N selecionados" (accent). Aberta: busca (vários de uma vez com ":" — `opcoesDaBusca`;
+ * Enter marca os encontrados) + marcar/limpar os filtrados + a lista de valores com a contagem. Nenhum marcado =
+ * "Todos" (sem filtro).
  */
 export function SeletorMultiplo({
   rotulo,
@@ -32,9 +34,10 @@ export function SeletorMultiplo({
   const [busca, setBusca] = useState("");
   const sel = useMemo(() => new Set(selecionados), [selecionados]);
   const filtradas = useMemo(() => {
-    const t = busca.trim().toLowerCase();
-    return t ? opcoes.filter((o) => o.valor.toLowerCase().includes(t)) : opcoes;
+    const casam = new Set(opcoesDaBusca(opcoes.map((o) => o.valor), busca));
+    return casam.size === opcoes.length ? opcoes : opcoes.filter((o) => casam.has(o.valor));
   }, [opcoes, busca]);
+  const marcarFiltradas = () => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])]);
   // Selecionados que sumiram das opções (facetas) continuam valendo — listados no topo.
   const orfaos = selecionados.filter((v) => !opcoes.some((o) => o.valor === v));
   const n = selecionados.length;
@@ -56,13 +59,25 @@ export function SeletorMultiplo({
       </button>
       {aberto && (
         <div className="space-y-3 border-t border-border p-3">
-          <SearchField value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder={`Buscar ${rotulo.toLowerCase()}…`} />
+          <SearchField
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onClear={() => setBusca("")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && busca.trim() && !disabled) {
+                e.preventDefault();
+                marcarFiltradas();
+              }
+            }}
+            aria-label={`Buscar ${rotulo.toLowerCase()} (use : para vários)`}
+            placeholder={`Buscar ${rotulo.toLowerCase()} (use : para vários)…`}
+          />
           <div className="flex flex-wrap gap-3 text-xs">
             <button
               type="button"
               className="font-semibold text-accent hover:underline disabled:opacity-50"
               disabled={disabled}
-              onClick={() => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])])}
+              onClick={marcarFiltradas}
             >
               Marcar {busca ? "os filtrados" : "todos"} ({num(filtradas.length)})
             </button>

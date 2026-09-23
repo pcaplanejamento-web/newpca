@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ItemRow } from "@/lib/queries";
 import { brl, dataBR, dec } from "@/lib/format";
+import { predicadoBusca } from "@/lib/tabela-filtros";
 import { type Column, DataTable } from "./DataTable";
 import { SearchField } from "./Field";
 
@@ -13,9 +14,8 @@ export function ItemTable({ rows, showUnidade }: { rows: ItemRow[]; showUnidade:
   const [q, setQ] = useState("");
 
   const filtradas = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return rows;
-    return rows.filter((r) => (r.nomeProduto ?? "").toLowerCase().includes(t));
+    const casa = predicadoBusca(q); // vários produtos de uma vez com ":"
+    return casa ? rows.filter((r) => casa([r.nomeProduto])) : rows;
   }, [rows, q]);
 
   const colunas = useMemo<Column<ItemRow>[]>(() => {
