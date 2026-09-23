@@ -614,7 +614,7 @@ export function mensagensDfd(
   if (d.assinatura && comportamentoDe(regras, idAssin) !== "ignora") {
     if (d.assinatura.status === "ok") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" });
     else if (d.assinatura.status === "dropsigner") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida via Dropsigner (Lacuna).", ancora: "assinatura" });
-    else if (d.assinatura.status === "ocr") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura ICP-Brasil reconhecida por OCR (Foxit) — confira no PDF assinado original.", ancora: "assinatura" });
+    else if (d.assinatura.status === "ocr") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Assinatura reconhecida por OCR (carimbo achatado no PDF) — confira no PDF assinado original.", ancora: "assinatura" });
     else if (d.assinatura.status === "sem-assinatura") out.push({ chave: "dfd.assinatura", status: "acerto", texto: "Documento sem assinatura digital (.xlsx) — não exigida.", ancora: "assinatura" });
     else out.push({
       chave: "dfd.assinatura",

@@ -24,7 +24,9 @@ import {
  * Sem pdf.js/D1 aqui → testável no Node com trechos sintéticos.
  */
 
-export type PdfItem = { page: number; x: number; y: number; str: string };
+/** Trecho de texto posicionado. Opcionais (vindos do pdf.js, ausentes nos fixtures antigos): `rot` = texto
+ * NÃO horizontal (marca d'água vertical); `w` = largura; `h` = altura da fonte (pt). */
+export type PdfItem = { page: number; x: number; y: number; str: string; rot?: boolean; w?: number; h?: number };
 export type PdfLine = { page: number; y: number; items: PdfItem[] };
 
 const HDR: Record<string, keyof ColMap> = {
@@ -318,24 +320,6 @@ export function assinaturasFoxitDeTexto(textos: string | string[]): Assinatura[]
   return out;
 }
 
-/** Metadados de uma página usados para decidir se vale rodar OCR (calculados no navegador, a partir do
- * `getOperatorList`). Mantidos fora do parse de texto (o núcleo não faz I/O de imagem). */
-export type MetaPaginaOcr = {
-  /** A página desenha uma IMAGEM (`paintImageXObject`) — o carimbo Foxit vem achatado; e o cabeçalho do
-   * DFD (logo do órgão) já garante isso por página, então serve de sinal barato de "página de DFD". */
-  temImagem: boolean;
-};
-
-/**
- * Decide se vale rodar OCR num DFD: SÓ quando o parse de texto NÃO achou assinatura E a página tem uma
- * IMAGEM — sinal do carimbo Foxit/ICP-Brasil achatado (e do cabeçalho do DFD). **Conservador**: um
- * falso-candidato só gasta OCR à toa (nunca trava nada), então erramos para TENTAR. Puro/testável.
- */
-export function ehCandidatoOcr(temAssinatura: boolean, meta: MetaPaginaOcr): boolean {
-  if (temAssinatura) return false;
-  return meta.temImagem;
-}
-
 // Marcadores INEQUÍVOCOS da APARÊNCIA de uma assinatura Adobe/ICP-Brasil FLATTEN (achatada no
 // conteúdo da página — por isso aparece no `getTextContent` e VAZA para o texto das seções, ao
 // contrário do Dropsigner, que fica só no render). Usados só para LOCALIZAR a região e removê-la.
@@ -347,6 +331,9 @@ const RE_APARENCIA_SIG = [
 // Vão máximo (pt) entre trechos CONTÍGUOS da mesma aparência. Maior que a entrelinha do bloco
 // (~7pt), menor que o respiro até a legenda de cargo/nome que fica ABAIXO da linha de assinatura.
 const GAP_APARENCIA = 11;
+// Âncora ESTRITA (o trecho COMEÇA com o marcador) — p/ a assinatura SOBRE o texto, onde não há coluna
+// separada: prosa que CITA o marcador no meio da frase nunca casa.
+const RE_APARENCIA_ESTRITA = /^(?:assinado\s+de\s+forma\s+digital|(?:dados|data)\s*:\s*\d{4}\.\d{2}\.\d{2}|\d{1,2}:\d{2}:\d{2}\s*[-+]\d{2}'\d{2}'?$)/i;
 
 /**
  * Remove a APARÊNCIA de assinatura (bloco Adobe FLATTEN) dos trechos, para NÃO vazar no texto das
@@ -374,17 +361,38 @@ export function removerAparenciaAssinatura(items: PdfItem[]): PdfItem[] {
     const doPage = items.filter((i) => i.page === page);
     const margemEsq = Math.min(...doPage.map((i) => i.x)); // margem esquerda do texto da página
     const ancoraMinX = Math.min(...ancs.map((a) => a.x));
-    // Só remove se houver separação clara entre a margem (seção) e a âncora (aparência) — senão
-    // deixa como está (erra para PRESERVAR o texto, nunca corromper).
-    if (ancoraMinX - margemEsq < 60) continue;
-    const corte = (margemEsq + ancoraMinX) / 2;
-    const anchorYs = new Set(ancs.map((a) => a.y));
+    let corte = (margemEsq + ancoraMinX) / 2;
+    let anchorYs = new Set(ancs.map((a) => a.y));
+    let sobreTexto = false;
+    // Sem separação clara margem×âncora (≥ 60pt) = a assinatura foi posta SOBRE o texto (ou é prosa que cita
+    // o marcador). Só age se houver âncora ESTRITA (o trecho COMEÇA com o marcador — prosa não começa) e
+    // corta rente à âncora: o texto que começa na margem é preservado.
+    if (ancoraMinX - margemEsq < 60) {
+      const estritas = ancs.filter((a) => RE_APARENCIA_ESTRITA.test(a.str.trim()));
+      if (estritas.length === 0) continue;
+      corte = Math.min(...estritas.map((a) => a.x)) - 2;
+      anchorYs = new Set(estritas.map((a) => a.y));
+      sobreTexto = true;
+    }
     // Coluna DIREITA (aparência), do topo para a base. Fatia em clusters contíguos (vão ≤ GAP);
     // remove só os clusters que contêm uma âncora (o bloco da assinatura), preservando o resto.
     const direita = doPage.filter((i) => i.x >= corte).sort((p, q) => q.y - p.y);
     let run: PdfItem[] = [];
+    // Altura "de corpo" da página: o NOME GRANDE da aparência (à esquerda das âncoras, sobre o texto) é
+    // reconhecido pela fonte bem maior; o pedaço "NOME:CPF"/cauda do CPF, pelo formato.
+    const hs = doPage.map((i) => i.h ?? 0).filter((h) => h > 0).sort((a, b) => a - b);
+    const hCorpo = hs[Math.floor(hs.length / 2)] ?? 0;
     const fechar = () => {
-      if (run.some((i) => anchorYs.has(i.y))) for (const i of run) remover.add(i);
+      if (run.some((i) => anchorYs.has(i.y))) {
+        for (const i of run) remover.add(i);
+        if (sobreTexto) {
+          const topo = run[0].y + GAP_APARENCIA;
+          const base = run[run.length - 1].y - GAP_APARENCIA;
+          for (const i of doPage)
+            if (i.x < corte && i.y <= topo && i.y >= base && (/:\s?\d{4,11}$|^\d{3,6}$/.test(i.str.trim()) || (hCorpo > 0 && (i.h ?? 0) >= hCorpo * 1.3)))
+              remover.add(i);
+        }
+      }
       run = [];
     };
     for (const i of direita) {
@@ -394,6 +402,97 @@ export function removerAparenciaAssinatura(items: PdfItem[]): PdfItem[] {
     fechar();
   }
   return remover.size === 0 ? items : items.filter((i) => !remover.has(i));
+}
+
+// Segmento que É a aparência de uma assinatura inline (Adobe/Foxit/Dropsigner) na camada de texto —
+// casado no INÍCIO do segmento (prosa que cita "assinado de forma digital" no meio da frase é preservada).
+const RE_SEGMENTO_ASSINATURA = [
+  /^assinado\s+de\s+forma\s+digital\b/i, // Adobe
+  /^(?:assinad[oa]\s+(?:digital|eletronica)mente\s+por|digitally\s+signed\s+by)\s*:/i, // Dropsigner (PT/EN, com ":")
+  /^assinado\s+digitalmente\s+por\s+[^,]+:\s?\d{11}\b/i, // Foxit ("NOME:CPF"; o Formato B usa ", portador")
+  /^(?:dados|data|date)\s*:\s*\d{4}\.\d{2}\.\d{2}/i, // data ISO do Adobe/Foxit
+  /^\d{1,2}:\d{2}:\d{2}\s*[-+]\d{2}'\d{2}'?$/, // hora do Adobe
+  /^[\p{L} .'-]{3,}:\s?\d{11}$/u, // CN do e-CPF ("NOME:CPF")
+  /^(?:nd|cn)\s*:\s*c\s*=\s*br\b|\bo\s*=\s*icp-brasil\b/i, // ND/CN do certificado ICP-Brasil
+  /^foxit\s+pdf\b/i,
+  /documento\s+assinado\s+no\s+dropsigner|dropsigner\.com\/validate\//i, // marca d'água Dropsigner
+];
+// Linhas do BLOCO Dropsigner abaixo do "Assinado … por:" (alinhadas a ele): CPF/Data.
+const RE_LINHA_BLOCO = /^(?:cpf|data|date)\s*:/i;
+const GAP_SEGMENTO = 12; // vão horizontal (pt) que separa dois blocos na mesma linha
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "");
+export function ehSegmentoAssinatura(texto: string): boolean {
+  const t = semAcento(texto.trim());
+  return RE_SEGMENTO_ASSINATURA.some((re) => re.test(t));
+}
+
+/** Segmentos de uma linha: trechos contíguos em `x` (vão ≤ `GAP_SEGMENTO`). Sem largura, estima. */
+function segmentosDaLinha(l: PdfLine): PdfItem[][] {
+  const segs: PdfItem[][] = [];
+  let fim = Number.NEGATIVE_INFINITY;
+  for (const it of [...l.items].sort((a, b) => a.x - b.x)) {
+    if (segs.length === 0 || it.x - fim > GAP_SEGMENTO) segs.push([it]);
+    else segs[segs.length - 1].push(it);
+    fim = Math.max(fim, it.x + (it.w ?? it.str.length * (it.h ?? 10) * 0.5));
+  }
+  return segs;
+}
+
+/**
+ * Tira da camada de texto TUDO o que é assinatura e NADA do texto do DFD — para a assinatura posta em
+ * QUALQUER lugar (margem, sobre o texto, qualquer página) não vazar para as seções/itens e, ao contrário do
+ * antigo corte por LINHA inteira, não apagar o texto legítimo que divide a mesma linha com ela:
+ *  1) texto ROTACIONADO (marca d'água vertical) — nunca é conteúdo do DFD (só se for minoria na página);
+ *  2) a aparência Adobe FLATTEN por geometria (`removerAparenciaAssinatura`, inclusive sobre o texto);
+ *  3) por SEGMENTO (trechos contíguos da linha): remove só o segmento que É assinatura
+ *     (`ehSegmentoAssinatura`) + as linhas CPF/Data/nome do bloco Dropsigner alinhadas logo abaixo.
+ * A assinatura em si é extraída À PARTE (texto bruto/renderizado/OCR), então nada se perde. Puro.
+ */
+export function limparAssinaturasDoTexto(items: PdfItem[]): PdfItem[] {
+  // 1) rotacionados (por página, só se forem minoria — página inteira girada fica intacta)
+  const porPag = new Map<number, { tot: number; rot: number }>();
+  for (const i of items) {
+    const c = porPag.get(i.page) ?? { tot: 0, rot: 0 };
+    c.tot++;
+    if (i.rot) c.rot++;
+    porPag.set(i.page, c);
+  }
+  let out = items.some((i) => i.rot)
+    ? items.filter((i) => {
+        if (!i.rot) return true;
+        const c = porPag.get(i.page);
+        return !c || c.rot / c.tot > 0.3;
+      })
+    : items;
+  // 2) aparência Adobe (coluna / sobre o texto)
+  out = removerAparenciaAssinatura(out);
+  // 3) segmentos de assinatura
+  const linhas = agruparLinhas(out);
+  const remover = new Set<PdfItem>();
+  for (let k = 0; k < linhas.length; k++) {
+    for (const seg of segmentosDaLinha(linhas[k])) {
+      const texto = seg.map((i) => i.str).join(" ");
+      if (!ehSegmentoAssinatura(texto)) continue;
+      for (const i of seg) remover.add(i);
+      // Bloco Dropsigner: "…por:" ⏎ NOME ⏎ CPF: … ⏎ Data: … — alinhado à esquerda com a âncora.
+      if (!/por\s*:|by\s*:?$/i.test(semAcento(texto))) continue;
+      const x0 = seg[0].x;
+      let yAnt = linhas[k].y;
+      for (let j = k + 1, n = 0; j < linhas.length && n < 4 && linhas[j].page === linhas[k].page; j++) {
+        if (yAnt - linhas[j].y > 16) break;
+        const alinhado = segmentosDaLinha(linhas[j]).find((sg) => Math.abs(sg[0].x - x0) <= 8);
+        if (!alinhado) break;
+        const t = semAcento(alinhado.map((i) => i.str).join(" ").trim());
+        // 1ª linha = o NOME (curto, sem dígitos); depois, só CPF/Data — texto do DFD alinhado ali fica.
+        if (n === 0 ? /\d/.test(t) || t.split(/\s+/).length > 8 : !RE_LINHA_BLOCO.test(t)) break;
+        for (const i of alinhado) remover.add(i);
+        yAnt = linhas[j].y;
+        n++;
+      }
+    }
+  }
+  return remover.size === 0 ? out : out.filter((i) => !remover.has(i));
 }
 
 /**
@@ -453,9 +552,13 @@ export function parseDfdFromPdfItems(
   // Remove a APARÊNCIA da assinatura (Adobe flatten) ANTES de reconstruir as linhas — senão o bloco
   // "Assinado de forma digital por NOME:CPF Dados: …" vaza para o texto das seções (Seção 9/10). A
   // assinatura já é extraída à parte (texto renderizado), então nada se perde.
-  const items = removerAparenciaAssinatura(normalizar(bruto));
+  // Tira a assinatura (em QUALQUER lugar: coluna, sobre o texto, marca d'água) da camada de texto ANTES de
+  // reconstruir as linhas — senão vaza p/ as seções/itens. As assinaturas A/B são lidas das linhas BRUTAS.
+  const normalizados = normalizar(bruto);
+  const items = limparAssinaturasDoTexto(normalizados);
   const linhas = agruparLinhas(items);
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
+  const lineTextsBrutos = items.length === normalizados.length ? lineTexts : linhasDeTexto(normalizados);
 
   const cab = extrairCabecalho(lineTexts);
 
@@ -807,7 +910,7 @@ export function parseDfdFromPdfItems(
     // Formatos A/B (páginas de assinatura, texto normal) + C Dropsigner + D Adobe/ICP-Brasil (ambos
     // do texto RENDERIZADO por página, que inclui a aparência das anotações de assinatura).
     assinaturas: [
-      ...extrairAssinaturas(lineTexts),
+      ...extrairAssinaturas(lineTextsBrutos),
       ...assinaturasDropsignerDeTexto(textosRender),
       ...assinaturasAdobeDeTexto(textosRender),
     ],

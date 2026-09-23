@@ -142,6 +142,7 @@ export function parseAssinaturas(json: string | null): Assinatura[] {
         codigo: S(a.codigo),
         url: S(a.url),
         fonte: coerceFonte(a.fonte),
+        ...(a.ocr === true ? { ocr: true } : {}),
       }));
   } catch {
     return [];

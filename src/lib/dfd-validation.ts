@@ -69,6 +69,8 @@ const assinaturaSchema = z.object({
   codigo: z.string().trim().max(120).default(""),
   url: z.string().trim().max(500).default(""),
   fonte: z.enum(["certificado", "sistema", "dropsigner", "adobe", "foxit"]).default("certificado"),
+  /** Lida por OCR da aparência ACHATADA (sem camada de texto) — conferência não bloqueante. */
+  ocr: z.boolean().optional(),
 });
 
 /**

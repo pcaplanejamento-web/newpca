@@ -214,3 +214,36 @@ describe("validarAssinatura — Formato E Foxit/OCR (reconhece sem travar)", () 
     assert.equal(r.status, "ok");
   });
 });
+
+// Dropsigner/Adobe ACHATADOS lidos por OCR (`ocr:true`) — mesma regra do Foxit: reconhece sem travar.
+describe("validarAssinatura — qualquer assinatura lida por OCR (ocr:true)", () => {
+  const dropOcr = (nome: string): Assinatura => ({
+    nome,
+    eCpf: "***.413.331-**",
+    usuario: "",
+    local: "",
+    data: "30/06/2026 19:47:21 -03:00",
+    ip: "",
+    codigo: "",
+    url: "",
+    fonte: "dropsigner",
+    ocr: true,
+  });
+
+  it("Dropsigner por OCR que casa → ok", () => {
+    const r = validarAssinatura([dropOcr("Hérica Cristina Rodrigues Ribeiro")], padrao("HERICA CRISTINA RODRIGUES RIBEIRO"), { exigeAssinatura: true });
+    assert.equal(r.status, "ok");
+  });
+
+  it("Dropsigner por OCR que não casa → ocr (não bloqueia)", () => {
+    const r = validarAssinatura([dropOcr("Hérica Cristina Rodrigues Ribeiro")], padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true });
+    assert.equal(r.status, "ocr");
+    assert.equal(bloqueiaAssinatura(r), false);
+  });
+
+  it("a mesma Dropsigner lida do TEXTO (sem ocr) que não casa → erro (leitura limpa bloqueia)", () => {
+    const { ocr: _o, ...limpa } = dropOcr("Hérica Cristina Rodrigues Ribeiro");
+    const r = validarAssinatura([limpa], padrao("OUTRO RESPONSAVEL"), { exigeAssinatura: true });
+    assert.equal(r.status, "erro");
+  });
+});

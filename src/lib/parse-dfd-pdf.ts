@@ -1,5 +1,6 @@
+import { type Caixa, caixasImagensDaOpList, mesclarAssinaturasOcr, precisaOcr } from "./ocr-assinatura-core.ts";
 import type { Assinatura, DfdParseado } from "./parse-dfd-comum.ts";
-import { ehCandidatoOcr, type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
+import { type PdfItem, parseDfdFromPdfItems } from "./parse-dfd-pdf-core.ts";
 import { classificarPdf, paginasDeItens } from "./parse-protocolo-pdf-core.ts";
 
 /**
@@ -23,10 +24,10 @@ export type PdfDoc = {
    * assinatura (widgets `Sig`), que o `getTextContent` (pageItems) NÃO traz. Usado só para
    * capturar a assinatura Dropsigner; mais caro, então chame só quando precisar (por DFD). */
   pageRenderText: (page: number) => Promise<string>;
-  /** `true` se a página desenha alguma IMAGEM (`paintImageXObject`) — sinal (com o carimbo achatado)
-   * de que vale rodar OCR (ver `ehCandidatoOcr`). Só navegador; usado para o Formato E (Foxit). */
-  temImagem: (page: number) => Promise<boolean>;
-  /** Rasteriza a página num `<canvas>` na escala dada (p/ o OCR do carimbo Foxit). Só navegador. */
+  /** Caixas (0..1, topo-esquerdo) das IMAGENS da página — apontam o carimbo achatado (logo do Dropsigner,
+   * rubrica) p/ o OCR ler só aquela região. Só navegador. */
+  imagensPagina: (page: number) => Promise<Caixa[]>;
+  /** Rasteriza a página num `<canvas>` na escala dada (p/ o OCR de assinaturas achatadas). Só navegador. */
   renderPagina: (page: number, scale: number) => Promise<HTMLCanvasElement>;
   destroy: () => Promise<void>;
 };
@@ -64,7 +65,9 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       const items: PdfItem[] = [];
       for (const it of tc.items) {
         if ("str" in it && it.str?.trim()) {
-          items.push({ page: p, x: it.transform[4], y: it.transform[5], str: it.str });
+          const [a, b, c, d, e, f] = it.transform;
+          // `rot` = texto não horizontal (marca d'água vertical); `h` = corpo da fonte; `w` = largura.
+          items.push({ page: p, x: e, y: f, str: it.str, rot: Math.abs(b) > Math.abs(a) * 0.1, w: it.width, h: Math.hypot(c, d) });
         }
       }
       page.cleanup(); // libera os recursos da página (streaming)
@@ -89,18 +92,12 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       page.cleanup();
       return texto.replace(/\s+/g, " ");
     },
-    async temImagem(p: number) {
+    async imagensPagina(p: number) {
       const page = await doc.getPage(p);
+      const vp = page.getViewport({ scale: 1 });
       const opList = await page.getOperatorList();
-      let tem = false;
-      for (const fn of opList.fnArray) {
-        if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
-          tem = true;
-          break;
-        }
-      }
       page.cleanup();
-      return tem;
+      return caixasImagensDaOpList(opList.fnArray, opList.argsArray, OPS, { largura: vp.width, altura: vp.height });
     },
     async renderPagina(p: number, scale: number) {
       const page = await doc.getPage(p);
@@ -119,38 +116,18 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
 }
 
 /**
- * OCR do carimbo **Foxit/ICP-Brasil** (Formato E) nas páginas dadas — só quando o parse de texto NÃO
- * achou assinatura (o chamador garante isso). Percorre as páginas de trás p/ frente (a assinatura fica
- * na seção final do DFD), pula as que não são candidatas (`ehCandidatoOcr`) e devolve a 1ª leitura.
- * Best-effort: qualquer erro é engolido pelo `ocrAssinaturasDoCanvas` (o OCR é auxiliar). Só navegador.
+ * OCR das assinaturas **achatadas** (Dropsigner/Foxit/Adobe virados imagem/vetor) nas páginas de UM DFD —
+ * em QUALQUER página, em ordem de prioridade (ver `lerAssinaturasPorOcr`). O chamador só aciona quando não
+ * há assinatura NOMEADA de texto (`precisaOcr`). Best-effort garantido AQUI para todos os chamadores: falha
+ * ao carregar o chunk do OCR (ChunkLoadError — rede instável) ou ao rodá-lo → `[]`. Só navegador.
  */
-export async function ocrFoxitEmPaginas(
-  doc: PdfDoc,
-  pages: number[],
-  scale = 4,
-  maxPaginas = 2,
-): Promise<Assinatura[]> {
-  // O import do chunk do OCR pode FALHAR (ChunkLoadError — rede instável), então fica no try: qualquer
-  // falha (carregar o chunk OU rodar o OCR) devolve [] e NUNCA quebra o import (best-effort, garantido
-  // aqui p/ TODOS os chamadores — parseDfdPdf/abrir não têm catch próprio no caminho do OCR).
-  let ocrAssinaturasDoCanvas: (canvas: HTMLCanvasElement, escala: number) => Promise<Assinatura[]>;
+export async function ocrAssinaturasEmPaginas(doc: PdfDoc, pages: number[]): Promise<Assinatura[]> {
   try {
-    ({ ocrAssinaturasDoCanvas } = await import("./ocr-assinatura.ts"));
+    const { lerAssinaturasOcr } = await import("./ocr-assinatura.ts");
+    return await lerAssinaturasOcr(doc, pages);
   } catch {
     return [];
   }
-  const ordem = [...pages].reverse().slice(0, maxPaginas); // últimas páginas primeiro
-  for (const p of ordem) {
-    try {
-      if (!ehCandidatoOcr(false, { temImagem: await doc.temImagem(p) })) continue;
-      const canvas = await doc.renderPagina(p, scale);
-      const ass = await ocrAssinaturasDoCanvas(canvas, scale);
-      if (ass.length > 0) return ass;
-    } catch {
-      /* best-effort — o OCR nunca quebra o import */
-    }
-  }
-  return [];
 }
 
 /**
@@ -186,11 +163,11 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
     const render: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) render.push(await doc.pageRenderText(p));
     const parsed = parseDfdFromPdfItems(items, file.name, render);
-    // Formato E — Foxit/ICP-Brasil ACHATADO: sem assinatura de texto → tenta OCR do carimbo (lazy).
-    if (parsed.assinaturas.length === 0) {
+    // Assinatura ACHATADA (sem camada de texto): nenhuma assinatura NOMEADA de texto → OCR (lazy).
+    if (precisaOcr(parsed.assinaturas)) {
       const paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);
-      const ocr = await ocrFoxitEmPaginas(doc, paginas);
-      if (ocr.length > 0) return { ...parsed, assinaturas: ocr };
+      const ocr = await ocrAssinaturasEmPaginas(doc, paginas);
+      return { ...parsed, assinaturas: mesclarAssinaturasOcr(parsed.assinaturas, ocr) };
     }
     return parsed;
   } finally {

@@ -473,6 +473,7 @@ export function DfdView({
                     ) : (
                       <Badge tone={drop ? "blue" : "emerald"}>{drop ? "Dropsigner" : "Certificado"}</Badge>
                     )}
+                    {a.ocr && !foxit && <Badge tone="amber">OCR</Badge>}
                   </div>
                   <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     <Campo label="Assinante" valor={a.nome || "—"} span />
@@ -484,7 +485,8 @@ export function DfdView({
                   <div className="mt-3">
                     {/* Adobe/Foxit não têm código/URL público de verificação (só a aparência é lida) →
                         sem botão de verificação; a validação é feita no PDF assinado original. */}
-                    {!semCodigo && (
+                    {/* Dropsigner lida por OCR sem código legível → sem link (não há URL a verificar). */}
+                    {!semCodigo && !(drop && !a.url) && (
                       <LinkExterno
                         href={drop && a.url ? a.url : URL_VERIFICACAO}
                         icon={<IconShield className="h-4 w-4" style={{ color: cor }} />}
@@ -492,7 +494,7 @@ export function DfdView({
                         Verificar autenticidade{drop ? " (Dropsigner)" : ""}
                       </LinkExterno>
                     )}
-                    <p className={`text-xs text-muted ${semCodigo ? "" : "mt-1.5"}`}>
+                    <p className={`text-xs text-muted ${semCodigo || (drop && !a.url) ? "" : "mt-1.5"}`}>
                       {adobe ? (
                         <>
                           Assinatura digital embutida no PDF (Adobe). A autenticidade deve ser conferida no{" "}
@@ -507,6 +509,12 @@ export function DfdView({
                         <>
                           Validação oficial no Dropsigner (Lacuna) pelo código{" "}
                           <span className="font-mono">{a.codigo || "—"}</span>.
+                          {a.ocr && (
+                            <>
+                              {" "}
+                              Lida por <strong>OCR</strong> do carimbo achatado — confirme o assinante no PDF original.
+                            </>
+                          )}
                         </>
                       ) : (
                         <>

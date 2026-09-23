@@ -6,6 +6,7 @@ import { classificarAssunto, comportamentoNo, gateProtocolo, protocolarHabilitad
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
+import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import {
   avaliarDfd,
   type CampoTratavel,
@@ -34,7 +35,7 @@ import { MESES, type Prioridade, valoresBatem } from "@/lib/normalize";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
-  ocrFoxitEmPaginas,
+  ocrAssinaturasEmPaginas,
   parseDfdDoProtocolo,
   type PdfDoc,
   type ProtocoloIndex,
@@ -171,7 +172,7 @@ export function ProtocoloUploadForm({
 
   useEffect(() => () => {
     void docRef.current?.destroy();
-    void encerrarOcr(); // libera o worker do OCR (Formato E) ao desmontar
+    void encerrarOcr(); // libera o worker do OCR ao desmontar
   }, []);
   useEffect(() => {
     if (!importando) return;
@@ -451,21 +452,21 @@ export function ProtocoloUploadForm({
     return dfd;
   }
 
-  /** Formato E — se o DFD ficou SEM assinatura de texto (A/B/Dropsigner/Adobe), tenta o OCR do carimbo
-   * Foxit UMA vez e MESCLA a assinatura achada no parse cacheado (preserva edições). Lazy/best-effort:
-   * roda só ao abrir/protocolar (nunca no background) e nunca trava o import. */
+  /** Assinatura ACHATADA (Dropsigner/Foxit/Adobe sem camada de texto) — se o DFD ficou sem assinatura
+   * NOMEADA de texto (`precisaOcr`), tenta o OCR UMA vez e MESCLA no parse cacheado (preserva edições).
+   * Lazy/best-effort: roda só ao abrir/protocolar (nunca no background) e nunca trava o import. */
   async function mesclarOcrSePreciso(idx: number, d: DfdParseado | null): Promise<void> {
     const doc = docRef.current;
     const di = index?.dfds[idx];
     // `d` vem do `garantirParse` (o `parsed` do closure ainda não reflete o `setParsed` recém-agendado,
     // então DFD não-cacheado — idx ≥ CAP_ANALISE ou antes do background — leria `undefined` aqui).
-    if (!doc || !di || !d || d.assinaturas.length > 0 || ocrTentadoRef.current.has(idx)) return;
+    if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
     ocrTentadoRef.current.add(idx);
-    const ass = await ocrFoxitEmPaginas(doc, di.pages);
-    if (ass.length > 0)
+    const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
+    if (ocr.length > 0)
       setParsed((m) => {
         const cur = m.get(idx);
-        return cur ? new Map(m).set(idx, { ...cur, assinaturas: ass }) : m;
+        return cur ? new Map(m).set(idx, { ...cur, assinaturas: mesclarAssinaturasOcr(cur.assinaturas, ocr) }) : m;
       });
   }
 
@@ -476,7 +477,7 @@ export function ProtocoloUploadForm({
     setAncoraAlvo(null);
     try {
       const d = await garantirParse(idx);
-      await mesclarOcrSePreciso(idx, d); // Formato E: lê o carimbo Foxit por OCR se faltou assinatura de texto
+      await mesclarOcrSePreciso(idx, d); // assinatura achatada: OCR se faltou assinatura nomeada de texto
       setAbertoIdx(idx);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível ler este DFD.");
@@ -610,14 +611,14 @@ export function ProtocoloUploadForm({
             continue;
           }
         }
-        // Formato E — DFD sem assinatura de texto: tenta OCR do carimbo Foxit e mescla (uma vez). O
-        // carimbo entra no `full` → é conferido (gate de assinatura) e GRAVADO com o DFD.
-        if (full.assinaturas.length === 0 && !ocrTentadoRef.current.has(i) && doc) {
+        // Assinatura achatada — DFD sem assinatura NOMEADA de texto: tenta o OCR e mescla (uma vez). A
+        // assinatura lida entra no `full` → é conferida (gate de assinatura) e GRAVADA com o DFD.
+        if (precisaOcr(full.assinaturas) && !ocrTentadoRef.current.has(i) && doc) {
           ocrTentadoRef.current.add(i);
           setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
           try {
-            const ass = await ocrFoxitEmPaginas(doc, di.pages);
-            if (ass.length > 0) full = { ...full, assinaturas: ass };
+            const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
+            if (ocr.length > 0) full = { ...full, assinaturas: mesclarAssinaturasOcr(full.assinaturas, ocr) };
           } catch {
             /* OCR é auxiliar — segue sem assinatura (o gate decide) */
           }

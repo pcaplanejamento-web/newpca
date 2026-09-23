@@ -265,10 +265,10 @@ export type ResultadoAssinatura =
  * - com assinatura mas sem responsável cadastrado → `erro`; assinante não autorizado → `erro`;
  * - **exceção estreita:** a Dropsigner "só carimbo" (marca d'água sem bloco visível → nome vazio)
  *   é reconhecida SEM match (verificável pela URL) → `dropsigner` (não bloqueia).
- * - **fallback OCR (Formato E — Foxit/ICP-Brasil achatado como imagem, lido por OCR):** o OCR é
- *   imperfeito, então uma assinatura `foxit` que não casou um responsável **não bloqueia** → `ocr`
- *   (reconhecida; confira no PDF original). Exceto se houver uma assinatura de leitura LIMPA
- *   (certificado/sistema/dropsigner/adobe) com nome que também falhou — essa bloqueia como sempre.
+ * - **fallback OCR (assinatura ACHATADA — Foxit/Dropsigner/Adobe sem camada de texto, lida por OCR):** o
+ *   OCR é imperfeito, então uma assinatura lida por OCR (`ocr:true`, ou `foxit`) que não casou um
+ *   responsável **não bloqueia** → `ocr` (reconhecida; confira no PDF original). Exceto se houver uma
+ *   assinatura de leitura LIMPA (texto) com nome que também falhou — essa bloqueia como sempre.
  */
 export function validarAssinatura(
   assinaturas: Assinatura[],
@@ -299,12 +299,13 @@ export function validarAssinatura(
   // Exceção estreita: Dropsigner "só carimbo" (sem bloco visível, nome vazio) → reconhecida.
   const carimbo = assinaturas.find((a) => a.fonte === "dropsigner" && !a.nome.trim());
   if (carimbo) return { status: "dropsigner", assinatura: carimbo };
-  // Fallback OCR (Formato E): uma assinatura `foxit` (lida por OCR, imperfeita) que não casou NÃO
-  // bloqueia → `ocr`. Exceção: se há uma assinatura de leitura LIMPA (não-foxit) COM nome, que
-  // também falhou, o fluxo cai no erro normal (a leitura limpa é confiável e deve bloquear).
-  const foxitOcr = assinaturas.find((a) => a.fonte === "foxit");
-  const limpaComNome = assinaturas.some((a) => a.fonte !== "foxit" && a.nome.trim());
-  if (foxitOcr && !limpaComNome) return { status: "ocr", assinatura: foxitOcr };
+  // Fallback OCR: uma assinatura lida por OCR (imperfeita) que não casou NÃO bloqueia → `ocr`. Exceção:
+  // se há uma assinatura de leitura LIMPA (texto) COM nome, que também falhou, o fluxo cai no erro
+  // normal (a leitura limpa é confiável e deve bloquear).
+  const porOcr = (a: Assinatura) => a.ocr === true || a.fonte === "foxit";
+  const lidaOcr = assinaturas.find((a) => porOcr(a) && a.nome.trim()) ?? assinaturas.find(porOcr);
+  const limpaComNome = assinaturas.some((a) => !porOcr(a) && a.nome.trim());
+  if (lidaOcr && !limpaComNome) return { status: "ocr", assinatura: lidaOcr };
   // Senão: fluxo idêntico ao de sempre (sem responsável cadastrado, ou assinante não autorizado).
   if (!temResponsavel) {
     return {

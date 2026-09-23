@@ -222,7 +222,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
   puro) lê nome/e-CPF/usuário/data/**código verificador** (o `ehRuido` descarta essas linhas das seções). Há
   **CINCO formatos** (campo `fonte`; **A** certificado, **B** sistema, **C** dropsigner, **D** adobe, **E** foxit —
-  o Formato E é lido por OCR, descrito no fim desta seção): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
+  o Formato E e qualquer assinatura ACHATADA são lidos por OCR, descrito no fim desta seção): **certificado** (acima) e **sistema** ("Assinaturas Eletrônicas (Sistema)":
   `Assinado digitalmente por NOME, portador do CPF: … utilizando o código: <código>`); e o **Formato C — `dropsigner`**
   (Dropsigner/Lacuna Software): o bloco visível é, na maioria dos DFDs, a **APARÊNCIA de uma ANOTAÇÃO de assinatura**
   (widget `Sig`) — que o **`getTextContent` NÃO extrai** (só o render/aparência traz). Por isso o Dropsigner é lido do
@@ -252,38 +252,48 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Adobe às vezes vem "flatten", sem widget `/Sig`). Por isso a UI **NÃO afirma ICP-Brasil/gov nem redireciona a validador
   oficial**: o card diz que a assinatura está embutida no PDF e a autenticidade se confere no **PDF assinado original**.
   Validado no DFD 1483 real (RHAFAEL PEREIRA BARROS).
-  - **Formato E — Foxit/ICP-Brasil ACHATADO, lido por OCR (`fonte:"foxit"`):** alguns protocolos vêm com a assinatura
-    Foxit e-CPF/ICP-Brasil ("Assinado digitalmente por NOME:CPF ND: C=BR, O=ICP-Brasil … CN=NOME:CPF … Data: AAAA.MM.DD
-    -03'00' Foxit PDF Reader…") **achatada como imagem/vetor** — SEM camada de texto e SEM `/Sig` cripto (comprovado no
-    DFD 140 de `pd101820`: `getTextContent`/`getOperatorList` não trazem o carimbo; `getAnnotations`=0). **Nenhum parser
-    de texto o lê** → é obtido por **OCR** (só no navegador, **lazy**). **`ocr-assinatura.ts`** (browser-only) importa o
-    **tesseract.js** DINAMICAMENTE (fora do bundle do Worker; `next.config` transpila e o alias `canvas:false` cobre a dep
-    nativa opcional) e roda 2 passes: (1) OCR da página inteira com bboxes p/ **localizar** a caixa de detalhe do carimbo
-    (o nome grande sobreposto corrompe a 1ª linha); (2) OCR do **recorte** ampliado da caixa. O parse é o núcleo PURO
-    **`assinaturasFoxitDeTexto`** (`parse-dfd-pdf-core.ts`): ancorado na **DATA ISO** (`AAAA.MM.DD`, sai confiável no OCR)
-    + MARCA "Foxit"/"digitalmente por", extrai o nome do **`CN=`** (subject do e-CPF — sai limpo mesmo com a sobreposição)
-    com fallback p/ "Assinado digitalmente por"; distinção do Formato B (usa "em dd/mm/aaaa", sem data ISO) e do Adobe (usa
-    "de forma digital"). Tolerante a OCR (colapsa espaços; corrige dígitos só no CPF); emite `fonte:"foxit"`. **Assets
-    self-hosted** em `/public/tesseract` (worker + core WASM **SIMD-LSTM** base64 + `por.traineddata.gz` standard, ~11MB —
-    sem CDN externa; a rede da Prefeitura pode bloqueá-la). **Detector** puro `ehCandidatoOcr` (só roda OCR quando NÃO há
-    assinatura de texto e a página tem imagem). **Escala:** o OCR é LAZY — no protocolo NÃO roda na análise em background
-    (até 300 DFDs travaria); roda só ao **abrir** e ao **protocolar** um DFD sem assinatura de texto (`ocrFoxitEmPaginas`
-    + `ProtocoloUploadForm.mesclarOcrSePreciso`, mesclando no cache sem perder edições; `ocrTentadoRef` evita repetir); no
-    avulso, `parseDfdPdf` roda inline (1 DFD). Worker reutilizado e liberado (`encerrarOcr`) ao fechar/reimportar.
-    **Best-effort:** qualquer erro (sem SIMD, asset ausente, leitura ruim) → sem assinatura (= comportamento anterior).
-    **Conferência (`validarAssinatura`):** como o OCR é imperfeito, uma `foxit` que **não casa** um responsável é
-    reconhecida **SEM bloquear** (status `"ocr"`) — exceto se houver uma assinatura de leitura LIMPA (não-foxit) com nome
-    que também falhou (essa bloqueia normal). Uma `foxit` que **casa** o responsável → `ok` (igual aos demais). Card no
-    `DfdView` em **ÂMBAR** (`--warn`, `Badge` "Foxit"), sem código/link (confere-se no PDF assinado original). Validado por
-    harness contra o `pd101820` real: DFD 140 → BRUNO BOTELHO SALEH + CPF + data. Setup em `docs/OCR-ASSINATURA.md`.
-  - **A aparência Adobe FLATTEN vaza para o texto das seções** (fica no `getTextContent`, ao contrário do Dropsigner) →
-    **`removerAparenciaAssinatura(items)`** a retira ANTES de reconstruir as linhas, **por GEOMETRIA** (acha as âncoras da
-    aparência, computa o CORTE `x` entre a coluna do TEXTO DA SEÇÃO — à esquerda, na margem — e a da APARÊNCIA — à direita —
-    e, na coluna direita, remove só o **CLUSTER CONTÍGUO em `y`** que contém as âncoras (vãos ≤ 11pt); assim uma **legenda
-    logo abaixo** — ex.: "ORDENADOR", separada por um respiro — é PRESERVADA). **Não usa o NOME** (para nunca apagar um nome
-    DIGITADO legítimo numa seção); só age com separação clara margem×âncora (`≥60pt`, erra para PRESERVAR) e quando há âncora
-    (zero efeito nos demais DFDs). Independe de ONDE a assinatura esteja. Validado no DFD 1483 real:
-    §9 = "Autorizo o início da formalização da demanda. ORDENADOR" (sem o bloco da assinatura).
+  - **Assinatura ACHATADA (sem camada de texto) — OCR multi-formato em QUALQUER página (`ocr:true`):** Foxit e-CPF/
+    ICP-Brasil (**Formato E**, `fonte:"foxit"`), **Dropsigner** e Adobe podem vir **achatados como imagem/vetor** — SEM
+    texto e SEM `/Sig` (no `pd101820` real, **13 de 15 DFDs**: 12 Dropsigner + 1 Foxit; antes ficavam "sem assinatura" e
+    bloqueados). São lidos por **OCR** (só no navegador, **lazy**). Arquitetura: núcleo PURO **`ocr-assinatura-core.ts`**
+    (sem DOM/tesseract; o render/OCR entra por um **`MotorOcr` INJETADO** → a MESMA orquestração roda em produção e no
+    harness contra o PDF real) + adaptador de navegador **`ocr-assinatura.ts`** (pdf.js + `<canvas>` + **tesseract.js**
+    importado DINAMICAMENTE, fora do bundle do Worker). Estratégia: (1) **qualquer página** do DFD, em ordem de prioridade
+    (`prioridadePaginasOcr`: imagem fora do cabeçalho → rótulo de assinatura → última); (2) atalho pelas **imagens** da
+    página (`caixasImagensDaOpList` rastreia a CTM do operator list, incl. Form XObject → `regioesDeImagens`), página
+    inteira como fallback; (3) **localiza** o bloco pelas palavras-âncora (`localizarBlocosAssinatura`), recorta ampliado e
+    **binarizado** (some a régua cinza e o nome grande claro) e lê em 2 modos; (4) parse **por LINHAS** multi-formato
+    (`assinaturasDeOcr`: `dropsignerDeOcr` + `assinaturasFoxitDeTexto` + `assinaturasAdobeDeTexto`), **nome corrigido pela
+    camada de texto** (`corrigirNomePelaCamada` — o signatário costuma estar impresso no DFD), leituras AGRUPADAS com
+    data/CPF por maioria, e o **código Dropsigner** lido da marca d'água vertical em 4 variantes por **CONSENSO**
+    (`votarCodigoDropsigner`, alfabeto sem O/0/I/1 — sem consenso ⇒ sem link, **nunca um link errado**). Gatilho
+    `precisaOcr` (nenhuma assinatura NOMEADA de texto — vazio ou só o carimbo); `mesclarAssinaturasOcr` troca o carimbo de
+    texto pela nomeada do OCR herdando o **código EXATO** do texto. **Assets self-hosted** em `/public/tesseract` (worker +
+    core WASM **SIMD-LSTM** base64 + `por.traineddata.gz`, ~11MB — sem CDN externa). **Escala:** no protocolo o OCR NÃO
+    roda na análise em background — só ao **abrir** e ao **protocolar** um DFD que precisa (`ocrAssinaturasEmPaginas` +
+    `ProtocoloUploadForm.mesclarOcrSePreciso`, no cache sem perder edições; `ocrTentadoRef` evita repetir); no avulso,
+    `parseDfdPdf` roda inline. Worker liberado por `encerrarOcr`. **Best-effort:** qualquer erro → sem assinatura (= antes).
+    **Conferência (`validarAssinatura`):** uma assinatura lida por OCR (`ocr:true` ou `foxit`) que **não casa** um
+    responsável é reconhecida **SEM bloquear** (status `"ocr"`) — exceto se houver uma de leitura LIMPA (texto) com nome
+    que também falhou (essa bloqueia). Casou → `ok`. `ocr` é persistido (`assinaturaSchema`/`parseAssinaturas`). UI: Foxit
+    em **ÂMBAR** (`Badge` "Foxit"); as demais mantêm a cor do formato + `Badge` "OCR" e a nota "confirme no PDF original"
+    (Dropsigner sem código legível ⇒ sem link). **Validado por harness** (`pd101820`): 13/13 nomes, datas e CPFs corretos;
+    códigos 8 corretos / 5 sem consenso / **0 errados**. Setup em `docs/OCR-ASSINATURA.md`.
+  - **A assinatura NÃO se confunde com o texto (em QUALQUER lugar do DFD):** `limparAssinaturasDoTexto(items)`
+    (`parse-dfd-pdf-core.ts`, puro) tira da camada de texto SÓ o que é assinatura, ANTES de reconstruir as linhas
+    (seções/itens/cabeçalho), e **por trecho/segmento — nunca a linha inteira** (o antigo corte por linha apagava o texto
+    legítimo que dividia a linha com a assinatura): (1) texto **ROTACIONADO** (marca d'água vertical; `PdfItem.rot`, só se
+    for minoria na página); (2) a aparência **Adobe FLATTEN** por geometria — **`removerAparenciaAssinatura`**: acha as
+    âncoras, o CORTE `x` entre a coluna do TEXTO (margem) e a da APARÊNCIA e remove só o **CLUSTER CONTÍGUO em `y`** das
+    âncoras (vãos ≤ 11pt; a legenda "ORDENADOR" abaixo é PRESERVADA); **assinada SOBRE o texto** (sem os 60pt de
+    separação) usa só âncoras ESTRITAS (o trecho COMEÇA com o marcador — prosa não começa), corta rente à âncora e tira
+    também o "NOME:CPF"/cauda do CPF e o **nome grande** (fonte ≥1,3× o corpo, `PdfItem.h`); (3) por **SEGMENTO** da linha
+    (`ehSegmentoAssinatura`: Adobe/Dropsigner PT-EN/Foxit/ICP-Brasil/data ISO/CN "NOME:CPF"/marca Dropsigner — **ancorados
+    no início do segmento**) + as linhas nome/CPF/Data do bloco Dropsigner alinhadas logo abaixo. **Não usa o NOME** (nunca
+    apaga um nome DIGITADO). As A/B são extraídas das linhas BRUTAS; as demais, do render/OCR — nada se perde. O `ehRuido`
+    de linha só casa "Assinado de forma digital" no **início** (prosa que cita a expressão fica). `pageItems` passa `rot`/
+    `w`/`h`. Validado: `pd101820` = 0 diferenças × versão anterior e 0 vazamentos; DFD 1483 real: §9 = "Autorizo o início
+    da formalização da demanda. ORDENADOR".
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do

@@ -25,6 +25,21 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Assinatura ACHATADA em qualquer página (OCR multi-formato) + assinatura não se confunde com o texto — entregue
+✅ O OCR deixou de ser só do Foxit: **Dropsigner, Foxit e Adobe achatados** (sem camada de texto) são lidos em
+**qualquer página** do DFD (prioridade: imagem fora do cabeçalho → rótulo de assinatura → última). Núcleo puro
+`ocr-assinatura-core.ts` com `MotorOcr` injetado (produção e harness rodam o MESMO código): localização por âncoras,
+recorte binarizado, parse por linhas, **nome corrigido pela camada de texto**, leituras agrupadas por maioria e o
+**código Dropsigner por consenso** da marca d'água (nunca um link errado). Assinaturas lidas por OCR têm `ocr:true`
+(persistido) e **não bloqueiam** quando não casam (status `"ocr"`); `Badge` "OCR" no card. No `pd101820` real, **13 de
+15 DFDs** estavam achatados (antes: bloqueados "sem assinatura") → **13/13** nomes/datas/CPFs corretos; códigos 8
+corretos, 5 sem consenso, 0 errados. **Camada de texto:** `limparAssinaturasDoTexto` tira a assinatura (em qualquer
+lugar — coluna, **sobre o texto**, marca d'água rotacionada) **por trecho/segmento**, não mais a linha inteira: o texto
+legítimo que divide a linha com a assinatura é preservado, e a prosa que CITA "assinado de forma digital" também.
+Validado: `pd101820` = 0 diferenças × versão anterior, 0 vazamentos. Testes: `ocr-assinatura-core.test.ts` (textos
+REAIS do OCR + motor falso), `parse-dfd-pdf.test.ts` (assinatura sobre o texto/mesma linha/bloco Dropsigner/rotacionado),
+`validar-assinatura.test.ts` (`ocr:true`).
+
 ### Assinatura Foxit/ICP-Brasil por OCR (Formato E) — entregue
 ✅ 5º formato de assinatura, o **Foxit/ICP-Brasil ACHATADO** (`fonte:"foxit"`): o carimbo vem sem texto e sem `/Sig`
 (nenhum parser de texto o lê), então é obtido por **OCR** no navegador (**tesseract.js** WASM, idioma `por`),

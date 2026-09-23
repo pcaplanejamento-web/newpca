@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buracosSequencia } from "../src/lib/parse-dfd-comum.ts";
-import { assinaturasAdobeDeTexto, assinaturasDropsignerDeTexto, type PdfItem, parseDfdFromPdfItems, removerAparenciaAssinatura } from "../src/lib/parse-dfd-pdf-core.ts";
+import {
+  assinaturasAdobeDeTexto,
+  assinaturasDropsignerDeTexto,
+  limparAssinaturasDoTexto,
+  type PdfItem,
+  parseDfdFromPdfItems,
+  removerAparenciaAssinatura,
+} from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Fixture = trechos de texto com posição (como o pdf.js entrega), modelados nas
 // coordenadas reais de DFD PDF.pdf: rótulo e valor em trechos separados, número
@@ -618,5 +625,61 @@ describe("removerAparenciaAssinatura (aparência Adobe não vaza p/ as seções)
     for (const t of ["FULANO:11111111111", "BELTRANO:22222222222", "Dados: 2026.01.02", "Dados: 2026.01.03"])
       assert.ok(!textos.includes(t), `remover: ${t}`);
     assert.ok(!textos.includes("Assinado de forma digital"), "ambos os blocos removidos");
+  });
+});
+
+// Assinatura em QUALQUER lugar do DFD (margem, sobre o texto, marca d'água): `limparAssinaturasDoTexto`
+// tira da camada de texto SÓ o que é assinatura — por trecho/segmento, nunca a linha inteira.
+describe("limparAssinaturasDoTexto (assinatura não se confunde com o texto)", () => {
+  const P = (x: number, y: number, str: string, extra: Partial<PdfItem> = {}): PdfItem => ({ page: 1, x, y, str, w: str.length * 4.5, h: 9, ...extra });
+  const textos = (its: PdfItem[]) => limparAssinaturasDoTexto(its).map((i) => i.str);
+
+  it("mesma LINHA: remove o segmento da assinatura e preserva o texto do DFD ao lado", () => {
+    const t = textos([P(38, 500, "Autorizo o início da formalização."), P(320, 500, "Assinado de forma digital por FULANO DE TAL")]);
+    assert.deepEqual(t, ["Autorizo o início da formalização."]);
+  });
+
+  it("prosa que CITA o marcador no meio da frase é preservada", () => {
+    const its = [P(38, 500, "O contrato foi assinado de forma digital pelas partes."), P(38, 486, "Conforme dados: 2026.05.10 do cronograma.")];
+    assert.deepEqual(textos(its), its.map((i) => i.str));
+  });
+
+  it("Adobe SOBRE o texto (sem coluna separada): tira âncoras, NOME:CPF e nome grande; o texto fica", () => {
+    const t = textos([
+      P(38, 520, "9 - AUTORIZAÇÃO DEMANDA"),
+      P(60, 503, "Assinado de forma digital"),
+      P(38, 499, "Autorizo o início da formalização da demanda."),
+      P(40, 498, "RHAFAEL PEREIRA", { h: 16 }),
+      P(60, 497, "por RHAFAEL PEREIRA"),
+      P(60, 490, "BARROS:01851626140"),
+      P(60, 484, "Dados: 2026.09.01"),
+      P(60, 477, "14:58:52 -03'00'"),
+      P(38, 450, "ORDENADOR DE DESPESAS"),
+    ]);
+    assert.deepEqual(t, ["9 - AUTORIZAÇÃO DEMANDA", "Autorizo o início da formalização da demanda.", "ORDENADOR DE DESPESAS"]);
+  });
+
+  it("bloco Dropsigner na camada de texto (qualquer página): tira âncora, nome, CPF e Data — só eles", () => {
+    const t = textos([
+      P(38, 600, "Justificativa da demanda."),
+      P(300, 560, "Assinado eletronicamente por:"),
+      P(300, 550, "Hérica Cristina Rodrigues Ribeiro"),
+      P(300, 540, "CPF: ***.413.331-**"),
+      P(300, 530, "Data: 30/06/2026 19:47:21 -03:00"),
+      P(300, 520, "Observação do DFD alinhada ali."),
+    ]);
+    assert.deepEqual(t, ["Justificativa da demanda.", "Observação do DFD alinhada ali."]);
+  });
+
+  it("marca d'água ROTACIONADA some; página toda girada fica intacta", () => {
+    const pagina = [P(38, 700, "Texto 1"), P(38, 690, "Texto 2"), P(38, 680, "Texto 3"), P(580, 400, "Documento assinado no Dropsigner. Para validar", { rot: true })];
+    assert.deepEqual(textos(pagina), ["Texto 1", "Texto 2", "Texto 3"]);
+    const girada = [P(38, 700, "Texto 1", { rot: true }), P(38, 690, "Texto 2", { rot: true })];
+    assert.deepEqual(textos(girada), ["Texto 1", "Texto 2"]);
+  });
+
+  it("sem assinatura → itens inalterados (mesma referência)", () => {
+    const its = [P(38, 700, "3 - JUSTIFICATIVA"), P(38, 690, "MARIA DA SILVA responsável.")];
+    assert.equal(limparAssinaturasDoTexto(its), its);
   });
 });

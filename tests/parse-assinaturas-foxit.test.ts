@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coerceFonte } from "../src/lib/parse-dfd-comum.ts";
-import {
-  assinaturasAdobeDeTexto,
-  assinaturasFoxitDeTexto,
-  ehCandidatoOcr,
-} from "../src/lib/parse-dfd-pdf-core.ts";
+import { assinaturasAdobeDeTexto, assinaturasFoxitDeTexto } from "../src/lib/parse-dfd-pdf-core.ts";
 
 // Texto REAL do carimbo Foxit/ICP-Brasil (Formato E) como o OCR o entrega — colapsado numa linha
 // (DFD 140 do pd101820, signatário BRUNO BOTELHO SALEH). O carimbo vem achatado como IMAGEM no PDF,
@@ -97,18 +93,6 @@ describe("assinaturasAdobeDeTexto (Formato D) — sem regressão", () => {
 
   it("Adobe NÃO casa o carimbo Foxit ('digitalmente por')", () => {
     assert.deepEqual(assinaturasAdobeDeTexto(CARIMBO_BRUNO), []);
-  });
-});
-
-describe("ehCandidatoOcr (detector de candidato)", () => {
-  it("candidato quando NÃO há assinatura e a página tem imagem", () => {
-    assert.equal(ehCandidatoOcr(false, { temImagem: true }), true);
-  });
-  it("NÃO é candidato se já há assinatura (nunca gasta OCR à toa)", () => {
-    assert.equal(ehCandidatoOcr(true, { temImagem: true }), false);
-  });
-  it("NÃO é candidato sem imagem", () => {
-    assert.equal(ehCandidatoOcr(false, { temImagem: false }), false);
   });
 });
 

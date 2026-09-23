@@ -110,6 +110,9 @@ export type Assinatura = {
   codigo: string;
   url: string;
   fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit";
+  /** `true` quando a assinatura foi LIDA POR OCR (carimbo achatado, sem camada de texto) — imperfeita,
+   * então não bloqueia quando o nome não casa (`validarAssinatura`) e o card avisa. Ausente = texto. */
+  ocr?: boolean;
 };
 
 /** As `fonte`s de assinatura válidas (fonte única — reusada pela coerção ao LER o JSON do banco). */
@@ -213,8 +216,10 @@ export function ehRuido(s: string): boolean {
     n.startsWith("ASSINADO DIGITALMENTE") ||
     n.startsWith("ASSINADO ELETRONICAMENTE") ||
     // Aparência da assinatura Adobe/ICP-Brasil ("Assinado de forma digital por …") — capturada por
-    // `assinaturasAdobeDeTexto`; não deve vazar para o texto das seções.
-    n.includes("ASSINADO DE FORMA DIGITAL") ||
+    // `assinaturasAdobeDeTexto`; não deve vazar para o texto das seções. Só no INÍCIO da linha: prosa que
+    // cita "assinado de forma digital" no meio da frase é texto do DFD (a aparência sobre o texto é
+    // retirada por trecho antes, em `limparAssinaturasDoTexto`).
+    n.startsWith("ASSINADO DE FORMA DIGITAL") ||
     n.includes("E-ASSINATURA") ||
     n.includes("UTILIZANDO O CODIGO") ||
     n.includes("AUTENTICACAORELATORIOS") ||
