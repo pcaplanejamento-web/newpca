@@ -568,6 +568,11 @@ escolhendo o **órgão de destino** (cria a unidade sob ele e exclui o órgão; 
 A identidade só transita entre as tabelas (create+delete de 1 linha; nada de FK reapontado). Núcleo puro/testável
 `orgao-unidade-ops.ts` (mapa dos campos + permissões). Ações no modal de edição (aba "Estrutura"), badges "Também
 unidade"/"Próprio órgão". Testes puros + migração `0029`. Sem quebrar nada, sem código morto.
+✅ **Promover/rebaixar COM vínculo** (sem migração): DFD/protocolo/itens vinculados **não travam mais**. Promover uma
+unidade vinculada a **preserva** como a unidade própria do novo órgão (mesmo id — nada reapontado nem perdido; só o
+`orgao_id` dos DFDs segue o novo órgão). Rebaixar um órgão vinculado: a unidade própria (se dual) desce para o destino,
+ou uma unidade nova recebe os vínculos diretos do órgão (DFDs/protocolos realinhados no mesmo batch atômico). Só as
+unidades-filhas continuam barrando o rebaixamento. Validado no SQL das migrações (`foreign_key_check` limpo).
 
 ### Catálogo de produtos (referência p/ padronização) — entregue
 ✅ Novo **módulo Catálogo** (aba `catalogo`, `/painel/catalogo`): sobe **catálogos de produtos em PDF**, extrai os itens

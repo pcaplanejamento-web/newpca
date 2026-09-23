@@ -171,7 +171,12 @@ export function ReparticoesAdmin({
 
   /** Requisito 1: PROMOVER esta unidade a órgão (ela deixa este órgão e vira um órgão novo). */
   async function promover(r: Rep) {
-    if (!confirm(`Promover a unidade "${r.nome}" a órgão? Ela deixa de ser unidade de “${orgaoNome}” e passa a ser um órgão próprio.`)) return;
+    if (
+      !confirm(
+        `Promover a unidade "${r.nome}" a órgão? Ela deixa de ser unidade de “${orgaoNome}” e passa a ser um órgão próprio. Se tiver DFDs, protocolos ou itens vinculados, eles são preservados: a unidade continua existindo como a unidade própria do novo órgão.`,
+      )
+    )
+      return;
     setEstruturando(true);
     setErro(null);
     try {

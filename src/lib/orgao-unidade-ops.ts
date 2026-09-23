@@ -3,8 +3,10 @@
  * UNIDADE (unidade "própria"). Sem `getDb`/JSX → testável no Node. As travas de vínculo/
  * contagem vêm do servidor (queries em `orgaos.ts`/`reparticoes.ts`); aqui ficam (a) o MAPA
  * dos campos que "seguem" na transformação e (b) os predicados de permissão sobre os fatos
- * já apurados. Promover/rebaixar movem a identidade entre `reparticoes`⇄`orgaos` (create+delete
- * de UMA linha) — nada de FK é reapontado, então valem as mesmas travas do ponto 8.
+ * já apurados. Promover/rebaixar movem a identidade entre `reparticoes`⇄`orgaos`. SEM vínculo, é
+ * create+delete de UMA linha. COM vínculo (DFD/protocolo/itens), a UNIDADE que carrega os vínculos
+ * é PRESERVADA (mesmo `reparticoes.id` ⇒ DFDs/itens/protocolos/acesso por grupo intactos) e só o
+ * `orgao_id` dos DFDs/protocolos é realinhado — nada se perde e nada é excluído com vínculo.
  */
 
 type FonteUnidade = {
@@ -27,7 +29,8 @@ export type Permissao = { ok: true } | { ok: false; motivo: string };
 /**
  * PROMOVER — campos do novo ÓRGÃO a partir da unidade. `orgaoEntidade` fica `null` (o match
  * por nome/sigla já cobre; o ADM configura depois) e a assinatura nasce "por unidade". O nº do
- * interessado e os responsáveis SEGUEM (a unidade será excluída — sem duplicidade).
+ * interessado e os responsáveis SEGUEM (sem vínculo, a unidade é excluída — sem duplicidade; com
+ * vínculo, os responsáveis ficam na unidade preservada — ver `unidadePreservadaNoPromover`).
  */
 export function orgaoDeUnidade(u: FonteUnidade) {
   return {
@@ -44,7 +47,8 @@ export function orgaoDeUnidade(u: FonteUnidade) {
 /**
  * REBAIXAR — campos da nova UNIDADE a partir do órgão, já sob o órgão `destinoId`.
  * `setorRequisitante` fica `null` (match por nome/sigla; ADM configura). Nº do interessado e
- * responsáveis SEGUEM (o órgão será excluído).
+ * responsáveis SEGUEM (o órgão será excluído). Órgão DUAL não usa isto — a própria desce
+ * (`propriaRebaixada`).
  */
 export function unidadeDeOrgao(o: FonteOrgao, destinoId: number) {
   return {
@@ -77,21 +81,60 @@ export function unidadePropriaDeOrgao(o: { sigla: string; nome: string; oculto: 
   };
 }
 
-/** Promover: só uma unidade COMUM e SEM vínculo (seria excluída — ponto 8). */
-export function podePromoverUnidade(f: { orgaoProprio: boolean; temVinculo: boolean }): Permissao {
+/**
+ * PROMOVER COM VÍNCULO — a unidade NÃO é excluída: vira a UNIDADE PRÓPRIA do novo órgão (dual),
+ * mantendo o mesmo id (DFDs/protocolos/itens seguem nela). O nº do interessado SOBE p/ o órgão
+ * (único global — mesma convenção do "também unidade"). Os responsáveis FICAM na unidade (é ela que
+ * confere a assinatura dos DFDs); se ela não tinha os seus e o órgão de origem era de assinatura
+ * ÚNICA, herda os do órgão de origem — a conferência dos DFDs já gravados não muda. O `orgao_id`
+ * (o órgão recém-criado) é aplicado pela rota no MESMO batch.
+ */
+export function unidadePreservadaNoPromover(
+  u: { responsavelDfd: string | null },
+  origem: { assinaturaUnica: boolean; responsavelDfd: string | null } | null,
+) {
+  const herdaOrigem = !u.responsavelDfd && origem?.assinaturaUnica ? origem.responsavelDfd : null;
+  return {
+    orgaoProprio: true,
+    numeroInteressado: null as string | null,
+    responsavelDfd: u.responsavelDfd ?? herdaOrigem,
+  };
+}
+
+/**
+ * REBAIXAR ÓRGÃO DUAL — a unidade PRÓPRIA (que já carrega os vínculos) desce para o destino como
+ * unidade COMUM, preservando o id. Recebe do órgão o nº do interessado (se não tinha) e, se o órgão
+ * era de assinatura ÚNICA, os responsáveis do órgão (eram os efetivos) — senão mantém os seus. Fica
+ * oculta se qualquer um dos dois estava oculto.
+ */
+export function propriaRebaixada(
+  o: { numeroInteressado: string | null; assinaturaUnica: boolean; responsavelDfd: string | null; oculto: boolean },
+  u: { numeroInteressado: string | null; responsavelDfd: string | null; oculto: boolean },
+  destinoId: number,
+) {
+  return {
+    orgaoId: destinoId,
+    orgaoProprio: false,
+    numeroInteressado: u.numeroInteressado ?? o.numeroInteressado,
+    responsavelDfd: o.assinaturaUnica && o.responsavelDfd ? o.responsavelDfd : (u.responsavelDfd ?? o.responsavelDfd),
+    oculto: o.oculto || u.oculto,
+  };
+}
+
+/** Promover: qualquer unidade COMUM (com ou sem vínculo — com vínculo ela é PRESERVADA). */
+export function podePromoverUnidade(f: { orgaoProprio: boolean }): Permissao {
   if (f.orgaoProprio)
     return { ok: false, motivo: "Esta é a unidade própria de um órgão que já funciona como unidade — não pode ser promovida." };
-  if (f.temVinculo)
-    return { ok: false, motivo: "Esta unidade tem DFD/protocolo vinculado — não pode ser promovida (ela seria excluída). Oculte-a ou promova uma unidade sem vínculo." };
   return { ok: true };
 }
 
-/** Rebaixar: só um órgão SEM unidades (filhas ou própria) e SEM vínculo direto. */
-export function podeRebaixarOrgao(f: { temUnidades: boolean; temVinculo: boolean }): Permissao {
-  if (f.temUnidades)
+/**
+ * Rebaixar: qualquer órgão SEM unidades-FILHAS comuns (com ou sem vínculo; a unidade própria do
+ * órgão dual desce junto). As filhas precisariam de outro órgão — o ADM as move/promove antes.
+ */
+export function podeRebaixarOrgao(f: { temUnidadesFilhas: boolean }): Permissao {
+  if (f.temUnidadesFilhas)
     return { ok: false, motivo: "Este órgão tem unidades — mova/promova as unidades antes de rebaixá-lo." };
-  if (f.temVinculo)
-    return { ok: false, motivo: "Este órgão tem DFD/protocolo vinculado — não pode ser rebaixado (ele seria excluído). Oculte-o." };
   return { ok: true };
 }
 

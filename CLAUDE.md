@@ -167,15 +167,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`OrgaosAdmin`/`ReparticoesAdmin`: ação ocultar/reexibir + badge). Ocultos **somem do uso futuro** (matchers e
     seletores de documento novo filtram), mas o **histórico é preservado**.
 - **Promover / rebaixar / órgão que TAMBÉM é unidade (migração `0029`):** a identidade transita entre as tabelas
-  `reparticoes`⇄`orgaos` (create+delete de UMA linha; **nada de FK é reapontado** ⇒ valem as mesmas travas do ponto 8).
+  `reparticoes`⇄`orgaos`. **Sem vínculo** = create+delete de UMA linha. **Com vínculo (DFD/protocolo/itens) também é
+  permitido:** a UNIDADE que carrega os vínculos é **PRESERVADA** (mesmo `reparticoes.id` ⇒ DFDs, itens, protocolos e
+  acesso por grupo intactos) e só o `orgao_id` de DFDs/protocolos é realinhado no MESMO `db.batch` (atômico; o id
+  recém-criado é o `(SELECT MAX(id) …)` — o batch do D1 é uma transação sequencial). Nada é excluído com vínculo.
   Núcleo PURO/testável **`orgao-unidade-ops.ts`** (o MAPA dos campos que "seguem" na transformação + os predicados de
   permissão sobre os fatos apurados no servidor). Travas de contagem em `orgaos.ts` (`contarUnidadesDoOrgao`,
   `estruturaPorOrgao`). Ações no **modal de edição** (aba "Estrutura"), não como ícones de linha (mobile-friendly).
   - **Promover unidade→órgão (req. 1):** `POST /api/admin/reparticoes/[id]/promover` cria o órgão com a identidade da
-    unidade e a **EXCLUI**. Barrado se a unidade tiver vínculo (seria excluída — ponto 8) ou for a unidade própria.
+    unidade. Sem vínculo, a unidade é **EXCLUÍDA**; **com vínculo**, ela vira a **UNIDADE PRÓPRIA** do novo órgão (dual —
+    `unidadePreservadaNoPromover`: nº do interessado sobe p/ o órgão; responsáveis ficam na unidade, herdando os do órgão
+    de origem de assinatura única se ela não tinha os seus) e `dfds.orgao_id` passa ao novo órgão. Barrado só p/ a
+    unidade própria de um órgão dual. Devolve `{id, preservada}`.
     (`ReparticoesAdmin` → Estrutura → "Promover a órgão"; ao concluir vai para `/painel/orgaos`.)
   - **Rebaixar órgão→unidade (req. 2):** `POST /api/admin/orgaos/[id]/rebaixar` `{orgaoDestino}` cria a unidade **sob o
-    destino escolhido** e **EXCLUI** o órgão. Barrado se o órgão tiver unidades (filhas ou própria) ou vínculo direto.
+    destino escolhido** e **EXCLUI** o órgão — com ou sem vínculo. Órgão **dual**: a unidade própria **desce** como unidade
+    comum do destino (`propriaRebaixada`, mesmo id, vínculos junto; recebe o nº do órgão e, se assinatura única, os
+    responsáveis do órgão). Órgão sem própria: cria a unidade nova (`unidadeDeOrgao`). Antes do delete, DFDs com
+    `orgao_id`=órgão (sem unidade → ganham a unidade nova) e protocolos em nome do órgão (`orgao_id`→`NULL`, unidade
+    preenchida se vazia) são realinhados. Barrado só se o órgão tiver unidades-**FILHAS** comuns.
     (`OrgaosAdmin` → Estrutura → seletor de destino + "Rebaixar".)
   - **Órgão que TAMBÉM é unidade (req. 3 — dual):** `reparticoes.orgao_proprio=1` = a **unidade PRÓPRIA** que representa
     o órgão. Um órgão é dual ⟺ tem a unidade própria (**só permitido p/ órgão SEM unidades-filhas**). `POST

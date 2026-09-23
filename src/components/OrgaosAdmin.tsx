@@ -120,7 +120,12 @@ export function OrgaosAdmin() {
     const destino = Number(destinoRebaixar);
     if (!destino) return;
     const nomeDestino = lista?.find((x) => x.id === destino)?.nome ?? "";
-    if (!confirm(`Rebaixar o órgão “${o.nome}” a unidade de “${nomeDestino}”? O órgão deixa de existir e vira uma unidade.`)) return;
+    if (
+      !confirm(
+        `Rebaixar o órgão “${o.nome}” a unidade de “${nomeDestino}”? O órgão deixa de existir e vira uma unidade — DFDs, protocolos e itens vinculados são preservados e passam para essa unidade.`,
+      )
+    )
+      return;
     setEstruturando(true);
     setErro(null);
     try {
@@ -396,8 +401,8 @@ export function OrgaosAdmin() {
             )}
 
             {/* Requisito 2 — rebaixar a unidade de outro órgão */}
-            {emEdicao.tambemUnidade || emEdicao.temUnidades ? (
-              <Callout kind="info">Para rebaixar o órgão a unidade, ele não pode ter unidades.</Callout>
+            {emEdicao.temUnidades ? (
+              <Callout kind="info">Para rebaixar o órgão a unidade, ele não pode ter unidades-filhas.</Callout>
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <label className="min-w-0 flex-1">
