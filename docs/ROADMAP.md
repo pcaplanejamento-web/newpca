@@ -36,8 +36,8 @@ animação padrão; no celular, um por vez (o último aberto); "Ver protocolo" s
 ✅ **Protocolo — novas colunas**: **Responsável** (dropdown na célula; o **responsável padrão** de quem protocola é escolhido
 no Perfil → Protocolação), **Distribuição** (quem protocolou), **Situação** (só as cadastradas pelo ADM em Configurações →
 Situações — nome, cor, ordem; a lógica antiga Vazio/Com DFDs foi excluída) e **Data** = data da protocolação. Migração
-`0030` (aditiva). Também pela edição em massa de protocolos.
-✅ **Histórico conectado** (migração `0030`: `auditoria.protocolo_id`/`origem`/`detalhe`): cada alteração guarda o CANAL
+`0031` (aditiva). Também pela edição em massa de protocolos.
+✅ **Histórico conectado** (migração `0031`: `auditoria.protocolo_id`/`origem`/`detalhe`): cada alteração guarda o CANAL
 (protocolação, reenvio, banner, massa, tabela, vínculo, exclusão), o PROTOCOLO por onde passou e o antes → depois de cada
 campo, seção, assinatura e ITEM. Protocolo = modal com eventos agrupados + filtro Capa/DFDs/Itens; DFD = painel da direita;
 **Item** = seção "Histórico do item"; ADM = tela Auditoria. Lê também o formato legado.
@@ -152,7 +152,7 @@ real (DFD 140 → BRUNO BOTELHO SALEH + CPF + data). Testes puros em `parse-assi
   botão **"Manter o existente"** descarta o incoming (o cadastrado prevalece); sem descartar, o novo prevalece.
 - **Histórico CONECTADO do DFD:** o banner "Histórico" agora mescla as alterações do DFD **e do seu protocolo**
   (`historicoConectadoDfd` + `mesclarHistorico` puro/testável; a `entidade` de cada linha marca a origem). *Substituído
-  depois pelo histórico conectado protocolo › DFD › item (migração `0030`, `historicoDfd`/`historicoProtocolo`).*
+  depois pelo histórico conectado protocolo › DFD › item (migração `0031`, `historicoDfd`/`historicoProtocolo`).*
 - **Tabelas da Mesa com SCROLL INTERNO + seletor de linhas (30/50/100/200)** — `DataTable scrollInterno` (opt-in): a
   tabela preenche a tela e o corpo rola por dentro (thead fixo), sem scroll do navegador; nº de linhas escolhido na
   própria tabela (limita as linhas em DOM → performático com milhares).
@@ -467,7 +467,7 @@ mostra **Id + Assunto** ao lado do nº; o **valor da capa faltando/zerado** é a
 somatória), **Situação** (tem DFDs?), **Id protocolo** e **Assunto**, e perdeu **Interessado** (redundante com
 Repartição). Lógica pura/testável (`tipoCurtoDfd`, `itemComErro`/`estadoItem`, `estadoProtocolo`/`situacaoProtocolo`,
 `linhasRelatorioDfd`/`linhasRelatorioProtocolo`); novo componente **`RelatorioErros`** catalogado. *Depois: o Estado
-virou o AGREGADO (`avaliarProtocolo`) e a Situação, as cadastradas pelo ADM (migração `0030`).*
+virou o AGREGADO (`avaliarProtocolo`) e a Situação, as cadastradas pelo ADM (migração `0031`).*
 
 ### Cabeçalho FIXO dos banners + rodapés só-somatório + relatório em DESPACHO — entregue
 ✅ **Head no lugar certo:** o nº/tipo/planejamento do DFD e o nº/Id/Assunto do protocolo passaram para o **cabeçalho

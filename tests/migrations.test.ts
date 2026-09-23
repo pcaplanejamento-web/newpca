@@ -266,7 +266,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(u?.orgao_proprio, 0, "unidade legada deve começar como filha comum (0)");
   });
 
-  it("0030 cria situações do protocolo, responsável/situação, responsável padrão e o histórico conectado", () => {
+  it("0031 cria situações do protocolo, responsável/situação, responsável padrão e o histórico conectado", () => {
     const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
     assert.ok(tabelas.includes("protocolo_situacoes"), "tabela protocolo_situacoes ausente");
     const prot = nomes(db, "SELECT name FROM pragma_table_info('dfd_protocolos')");

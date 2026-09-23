@@ -325,7 +325,7 @@ export const dfdProtocolos = sqliteTable(
     }),
     localReparticao: text("local_reparticao"), // texto cru da capa (informativo)
     nomeArquivo: text("nome_arquivo"),
-    // GESTÃO na Mesa (migração 0030): pessoa designada para cuidar do protocolo e a situação
+    // GESTÃO na Mesa (migração 0031): pessoa designada para cuidar do protocolo e a situação
     // (só as cadastradas pelo ADM). A DISTRIBUIÇÃO (quem protocolou) é o `criadoPor`.
     responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
     situacaoId: integer("situacao_id").references(() => protocoloSituacoes.id, { onDelete: "set null" }),
@@ -523,7 +523,7 @@ export const auditoria = sqliteTable(
     resumo: text("resumo"), // texto legível ("Item 2: quantidade 20 → 35")
     antes: text("antes"), // JSON dos campos antes (edição/exclusão)
     depois: text("depois"), // JSON dos campos depois (criação/edição)
-    // Histórico CONECTADO (migração 0030): o protocolo por onde a alteração passou (liga DFD/itens ao
+    // Histórico CONECTADO (migração 0031): o protocolo por onde a alteração passou (liga DFD/itens ao
     // histórico do protocolo), o canal (`origem`) e o DETALHE estruturado (campos/seções/itens).
     protocoloId: integer("protocolo_id"),
     origem: text("origem"),

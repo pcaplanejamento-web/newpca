@@ -1,4 +1,4 @@
--- 0030 — Gestão do PROTOCOLO na Mesa + HISTÓRICO conectado (protocolo › DFD › item).
+-- 0031 — Gestão do PROTOCOLO na Mesa + HISTÓRICO conectado (protocolo › DFD › item).
 -- 1) SITUAÇÕES do protocolo: SÓ as cadastradas pelo ADM (Configurações → Situações) — nome, cor e
 --    ordem. Excluir uma situação limpa a dos protocolos que a usavam (FK set null).
 -- 2) RESPONSÁVEL (pessoa designada para cuidar do protocolo) e SITUAÇÃO em `dfd_protocolos`. A
