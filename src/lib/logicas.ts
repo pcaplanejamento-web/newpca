@@ -152,9 +152,22 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Não protocola com DFD defeituoso",
     descricao:
-      "O botão 'Protocolar' fica desabilitado enquanto algum DFD estiver com erro (ou ainda em análise). O relatório de devolução sai em formato de DESPACHO, pronto para devolver o processo para correção.",
+      "O botão 'Protocolar' fica desabilitado enquanto algum DFD estiver com erro (ou ainda em análise). Se o ADM permitir protocolar assim, uma confirmação lista ANTES os DFDs que não serão protocolados. O relatório de devolução sai em formato de DESPACHO, pronto para devolver o processo para correção.",
     fonte: "ProtocoloUploadForm / linhasRelatorioProtocolo",
     configuravelEm: { rotulo: "Avaliação (protocolo.semDfdEmErro)" },
+  },
+  {
+    id: "proto-duplicados",
+    dominio: "protocolo",
+    titulo: "DFDs duplicados no PDF: comparar e escolher",
+    descricao:
+      "Dois ou mais DFDs do mesmo PDF com o mesmo nº de DFD ou de planejamento ficam 'DFD duplicado'. O botão 'Duplicados' no banner do DFD compara o aberto com cada duplicado, campo a campo (com as páginas do PDF, itens e valor), e 'Manter este' escolhe o que segue: os que conflitam com ele são descartados (fora da somatória e da protocolação; dá para trocar ou restaurar) e o erro some antes de protocolar.",
+    detalhes: [
+      "A escolha descarta só quem conflita DIRETAMENTE com o escolhido (um DFD ligado apenas a um descartado continua).",
+      "Sem a escolha e com o ponto sem bloquear, do mesmo nº de DFD só um é gravado — o outro é relatado, nunca sobrescreve em silêncio.",
+    ],
+    fonte: "duplicadosDfds / compararDuplicados / ComparacaoDuplicados",
+    configuravelEm: { rotulo: "Avaliação (protocolo.dfdDuplicado)" },
   },
   {
     id: "proto-vias",
@@ -252,8 +265,11 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "avaliacao",
     titulo: "Mesma regra no navegador e no servidor",
     descricao:
-      "A avaliação é fonte única: o navegador trava o botão e o servidor reconfere no envio (rejeita por garantia). Com os níveis no padrão de fábrica, o comportamento é idêntico ao histórico do sistema.",
-    fonte: "faltasObrigatorias → avaliarDfd; POST /api/dfd, /api/protocolo",
+      "A avaliação é fonte única: o navegador trava o botão e o servidor reconfere no envio (rejeita por garantia) com a MESMA régua — tipo do DFD e categoria do protocolo, em todos os lotes de itens. Assim nada que a análise liberou é barrado só no fim da protocolação. Com os níveis no padrão de fábrica, o comportamento é idêntico ao histórico do sistema.",
+    detalhes: [
+      "Catálogo bloqueante: quando o ADM faz um ponto de catálogo bloquear, a análise do protocolo confere os itens de todos os DFDs antes de liberar o 'Protocolar'.",
+    ],
+    fonte: "faltasObrigatorias → avaliarDfd; categoriaDoProtocolo; POST /api/dfd, /api/protocolo",
   },
 
   // ---- Estados & Situações (narrativo; enums vêm DERIVADOS) ----
@@ -270,8 +286,12 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "estados",
     titulo: "Estado por item da tabela",
     descricao:
-      "Cada item da Seção 4 aponta a falta (valor unitário ou quantidade) na coluna Estado. Na análise, os itens com pendência aparecem numa tabela separada, acima dos regulares; depois de protocolado a tabela é única (o filtro da coluna Estado separa).",
-    fonte: "estadoItem / faltasDoItem",
+      "Cada item da Seção 4 aponta a falta (valor unitário ou quantidade, em vermelho) e o item REPETIDO (mesmo código, descrição e unidade de outro item — 'Item duplicado', em âmbar, nunca bloqueia) na coluna Estado. Na análise, os itens com pendência aparecem numa tabela separada, acima dos regulares; depois de protocolado a tabela é única (o filtro da coluna Estado separa).",
+    detalhes: [
+      "O detalhe do item repetido mostra os iguais lado a lado, 'Ver item', 'Unificar neste item' (soma as quantidades — só com o mesmo valor unitário) e 'Remover item'.",
+    ],
+    fonte: "estadoItem / faltasDoItem / mensagensItem / unificarItensDfd",
+    configuravelEm: { rotulo: "Avaliação (item.duplicado: Avisa ou Ignora)" },
   },
   {
     id: "est-protocolo",

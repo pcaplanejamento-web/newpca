@@ -293,6 +293,22 @@ export function compararDfd(
   return { situacao: total === 0 ? "igual" : "alterado", campos, secoes, assinaturas, itens, total };
 }
 
+/**
+ * DFDs DUPLICADOS no MESMO processo (mesmo nº de DFD ou de planejamento): as diferenças do DFD ABERTO (`a`, lado
+ * "antes") para OUTRO (`b`) — a mesma régua do reenvio (cabeçalho, seções, assinaturas e itens pareados) + o
+ * Nº DFD quando difere (duplicado pelo planejamento). Sem diferença nenhuma = "igual" (qualquer um serve). Puro.
+ */
+export function compararDuplicados(
+  a: DfdComparavel,
+  b: DfdComparavel,
+  rotuloUnidade?: (id: number | null) => string,
+): ComparacaoDfd {
+  const c = compararDfd(a, b, rotuloUnidade);
+  if (txt(a.numero) === txt(b.numero)) return c;
+  const numero: DiffCampo = { campo: "numero", rotulo: "Nº DFD", antes: ver(a.numero), depois: ver(b.numero) };
+  return { ...c, situacao: "alterado", campos: [numero, ...c.campos], total: c.total + 1 };
+}
+
 /** Rótulo curto da situação do DFD no reenvio (coluna "Situação"). */
 export function rotuloSituacaoReenvio(c: ComparacaoDfd): string {
   if (c.situacao === "novo") return "Novo";

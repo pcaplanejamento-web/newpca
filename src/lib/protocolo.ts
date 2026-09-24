@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, type SQL, sql } from "drizzle-
 import { alias } from "drizzle-orm/sqlite-core";
 import { dfdPassagens, dfdProtocolos, dfds, pcas, reparticoes, usuarios } from "@/db/schema";
 import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
+import { classificarAssunto } from "./avaliacao-core";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
 import { limparRastroDestino } from "./rastro-sql";
@@ -376,14 +377,24 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null, num
   await db.batch([vinculo, limparRastroDestino(db, numero, protocoloId)]);
 }
 
-/** Repartição (+ nº, p/ o histórico) de um protocolo — o guard de acesso nas escritas; `null` se não existe. */
-export async function getProtocoloReparticao(id: number): Promise<{ reparticaoId: number | null; numero: string } | null> {
+/** Repartição (+ nº, p/ o histórico, e o assunto — a CATEGORIA das exceções do ADM) de um protocolo — o guard de
+ * acesso nas escritas; `null` se não existe. */
+export async function getProtocoloReparticao(
+  id: number,
+): Promise<{ reparticaoId: number | null; numero: string; assunto: string | null } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfdProtocolos.reparticaoId, numero: dfdProtocolos.numero })
+    .select({ reparticaoId: dfdProtocolos.reparticaoId, numero: dfdProtocolos.numero, assunto: dfdProtocolos.assunto })
     .from(dfdProtocolos)
     .where(eq(dfdProtocolos.id, id))
     .limit(1);
   return r ?? null;
+}
+
+/** CATEGORIA (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA) do protocolo pelo assunto — o servidor aplica as exceções do
+ * ADM por categoria como a análise (senão barraria na gravação o que a análise liberou); sem protocolo = `null`. */
+export async function categoriaDoProtocolo(id: number | null | undefined): Promise<string | null> {
+  if (id == null) return null;
+  return classificarAssunto((await getProtocoloReparticao(id))?.assunto ?? null);
 }
 
 /**

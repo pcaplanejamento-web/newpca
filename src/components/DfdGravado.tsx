@@ -5,7 +5,7 @@ import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao } from 
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
-import { editarItemDfd, removerItemDfd, STATUS_MENSAGEM_COR } from "@/lib/dfd-tratamento";
+import { editarItemDfd, indiceAposRemover, removerItemDfd, STATUS_MENSAGEM_COR, unificarItensDfd } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -13,7 +13,7 @@ import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
-import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
+import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
@@ -209,6 +209,8 @@ export function useDfdGravado({
   // Ano do PCA: o do DFD; DFD antigo sem ele herda o do protocolo de origem (completa a previsão).
   const anoPca = dfd?.anoPca ?? orig?.protocoloAnoPca ?? null;
   const conformidade = useConformidade(dfd?.itens, dfd?.tipo ?? null);
+  // Banner SÓ do item (visão Itens): os OUTROS itens iguais ao item exibido (mesmo código, descrição e unidade).
+  const repetidosItem = useRepetidosDoItem(dfd, modoItem ? itemIdx : null, regras, categoria);
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagens = dfd
     ? mensagensDoDfd(dfd, rep, anoPca, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
@@ -415,6 +417,9 @@ export function useDfdGravado({
           setPainel(null);
           editar((d) => removerItemDfd(d, i), true);
         }}
+        onUnificarItens={(k, outros) => editar((d) => unificarItensDfd(d, k, outros), true)}
+        onPainel={setPainel}
+        categoria={categoria}
         dfdId={orig?.id ?? null}
       />
     ),
@@ -466,6 +471,17 @@ export function useDfdGravado({
               ? () => {
                   editar((d) => removerItemDfd(d, itemIdx), true);
                   setItemIdx(null);
+                }
+              : undefined
+          }
+          repetidos={repetidosItem}
+          onVerItem={setItemIdx}
+          onUnificar={
+            editavel && !travado
+              ? () => {
+                  const outros = repetidosItem.map((r) => r.idx);
+                  editar((d) => unificarItensDfd(d, itemIdx, outros), true);
+                  setItemIdx(indiceAposRemover(itemIdx, outros));
                 }
               : undefined
           }

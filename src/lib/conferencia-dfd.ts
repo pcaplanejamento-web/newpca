@@ -134,14 +134,14 @@ export function estadoDeMensagens(
 }
 
 /** Mensagem do DFD DUPLICADO no protocolo (mesmo nº de DFD ou de planejamento) — ponto do protocolo. */
-export const MSG_DFD_DUPLICADO = "DFD duplicado (mesmo nº ou planejamento) — escolha um para manter.";
+export const MSG_DFD_DUPLICADO = "DFD duplicado no processo (mesmo nº de DFD ou de planejamento de outro DFD) — compare e escolha qual fica.";
 
 /**
  * Conferência de UMA LINHA de DFD para as tabelas (`PlanilhaDfds`). O ESTADO é DERIVADO das mesmas
  * mensagens do painel: algum erro ⇒ `erro`; senão alguma atenção ⇒ `atencao`; senão o ciclo
  * (editado › regularizado › regular). Fora da linha fica só o **ano do PCA** (portão do protocolo,
- * resolvido uma vez no PcaPicker) e o catálogo (conferido ao abrir o DFD — a lista fica leve). O
- * `duplicado` (definido pelo host) entra como a 1ª mensagem. Puro.
+ * resolvido uma vez no PcaPicker) e o catálogo (conferido ao abrir o DFD — a lista fica leve; entra na linha só
+ * com `conformidade`). O `duplicado` (definido pelo host) entra como a 1ª mensagem. Puro.
  */
 export function avaliarLinhaDfd(
   d: DfdConferivel,
@@ -157,14 +157,17 @@ export function avaliarLinhaDfd(
     editado?: boolean;
     /** DFD duplicado ainda não resolvido no protocolo: severidade do ponto `protocolo.dfdDuplicado`. */
     duplicado?: "erro" | "atencao" | null;
+    /** Conformidade dos itens com o catálogo, quando o chamador já conferiu (ex.: a análise do protocolo com um ponto
+     * de catálogo BLOQUEANTE — o servidor barraria na gravação). Ausente = o catálogo fica fora da linha. */
+    conformidade?: Map<string, ConferenciaItem>;
   } = {},
 ): LinhaAvaliada {
   const regras = opts.regras ?? regrasPadrao();
   const res = conferirAssinaturaDfd(d, rep);
-  const msgs = mensagensComAssinatura(d, rep, res, opts.anoPca, regras, opts.categoria ?? null, opts.orgaos ?? []).filter(
+  const msgs = mensagensComAssinatura(d, rep, res, opts.anoPca, regras, opts.categoria ?? null, opts.orgaos ?? [], opts.conformidade).filter(
     (m) => m.chave !== "dfd.anoPca",
   );
-  if (opts.duplicado) msgs.unshift({ status: opts.duplicado, chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "" });
+  if (opts.duplicado) msgs.unshift({ status: opts.duplicado, chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "duplicados" });
   const problemas = msgs.filter((m) => m.status !== "acerto");
   return {
     estado: estadoDeMensagens(problemas, opts),

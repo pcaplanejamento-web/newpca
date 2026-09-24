@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { comportamentoDaFalta, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { comportamentoDaFalta, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import {
   acharSecao,
@@ -9,6 +9,7 @@ import {
   estadoItem,
   estadoItemCor,
   itemComErro,
+  mapaItensDuplicados,
   mensagensItem,
   resumoEstado,
   SECOES_OBRIGATORIAS,
@@ -88,7 +89,8 @@ export type DfdVisual = {
   };
 };
 
-type ItemK = DfdVisualItem & { _k: number };
+/** Linha da tabela de itens: o item + o índice + (item REPETIDO) o Nº dos outros iguais e a cor da importância. */
+type ItemK = DfdVisualItem & { _k: number; _rep?: { iguais: (number | null)[]; cor: string } };
 
 // Colunas da tabela de itens (Seção 4) — com ESTADO por item e filtro/ordenação em
 // todas (via `value`), igual às demais tabelas do sistema.
@@ -97,15 +99,15 @@ const COLS: Column<ItemK>[] = [
     key: "estado",
     header: "Estado",
     nowrap: true,
-    value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
-    // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
+    value: (r) => resumoEstado(mensagensItem(r, r._rep)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+    // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N") — "Item duplicado" junta os repetidos.
     valores: (r) => {
-      const res = resumoEstado(mensagensItem(r));
+      const res = resumoEstado(mensagensItem(r, r._rep));
       return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
     },
     render: (r) => {
-      // Com erro: aponta a falta ESPECÍFICA (valor/quantidade) + "+N" + tooltip; senão "Regular".
-      const res = resumoEstado(mensagensItem(r));
+      // Aponta a falta ESPECÍFICA (valor/quantidade = erro; repetido = atenção) + "+N" + tooltip; senão "Regular".
+      const res = resumoEstado(mensagensItem(r, r._rep));
       if (res.rotulo) return <EstadoResumo res={res} />;
       const e = estadoItem(r);
       return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
@@ -246,11 +248,22 @@ export function DfdView({
     dfd.reparticaoCodigo || dfd.reparticaoNome
       ? `${dfd.reparticaoCodigo ?? ""}${dfd.reparticaoNome ? ` · ${dfd.reparticaoNome}` : ""}`
       : "Sem unidade";
-  const rows: ItemK[] = dfd.itens.map((it, i) => ({ ...it, _k: i }));
+  const dfdTipo = tipoCurtoDfd(dfd.tipo);
+  // Itens REPETIDOS (mesmo código, descrição e unidade — ponto `item.duplicado`, nunca bloqueia): cada um é
+  // marcado em ATENÇÃO com o Nº dos iguais (a célula Estado e o filtro juntam os repetidos).
+  const rows = useMemo<ItemK[]>(() => {
+    const ctxDup = { dfdTipo, categoria };
+    const dupAtivo = comportamentoNo(regras, "item.duplicado", ctxDup) !== "ignora";
+    const reps = dupAtivo ? mapaItensDuplicados(dfd.itens) : new Map<number, number[]>();
+    const cor = corImportancia(regras, nivelDe(regras, "item.duplicado", ctxDup));
+    return dfd.itens.map((it, i) => {
+      const outros = reps.get(i);
+      return outros ? { ...it, _k: i, _rep: { iguais: outros.map((j) => dfd.itens[j]?.item ?? j + 1), cor } } : { ...it, _k: i };
+    });
+  }, [dfd.itens, regras, dfdTipo, categoria]);
   // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A
   // coluna é INFORMATIVA (o bloqueio, quando o ADM eleva a fundamental, é do nível do DFD);
   // por isso não altera a divisão erro/regular por item (que segue valor/quantidade).
-  const dfdTipo = tipoCurtoDfd(dfd.tipo);
   const columns = useMemo<Column<ItemK>[]>(() => {
     if (!conformidade) return COLS;
     const cat: Column<ItemK> = {
@@ -264,10 +277,12 @@ export function DfdView({
     const i = COLS.findIndex((c) => c.key === "codigo");
     return [...COLS.slice(0, i + 1), cat, ...COLS.slice(i + 1)];
   }, [conformidade, regras, dfdTipo]);
-  // Itens com pendência (falta valor/quantidade) numa tabela SEPARADA na análise; depois de
-  // protocolado (`unica`) é UMA tabela só (o filtro da coluna Estado separa).
-  const rowsErro = unica ? [] : rows.filter((r) => itemComErro(r));
-  const rowsOk = unica ? rows : rows.filter((r) => !itemComErro(r));
+  // Itens com pendência (falta valor/quantidade = erro; repetido = atenção — os iguais ficam juntos para comparar)
+  // numa tabela SEPARADA na análise; depois de protocolado (`unica`) é UMA tabela só (o filtro da coluna Estado separa).
+  const pendente = (r: ItemK) => itemComErro(r) || !!r._rep;
+  const rowsErro = unica ? [] : rows.filter(pendente);
+  const rowsOk = unica ? rows : rows.filter((r) => !pendente(r));
+  const corPendencia = rowsErro.some((r) => itemComErro(r)) ? "var(--danger)" : "var(--warn)";
   // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4). As OBRIGATÓRIAS
   // ausentes aparecem como espaço "não preenchida" (aponta a falta e permite preencher com o cadeado).
   const idxApoio = dfd.secoes.findIndex((s) => s.numero === 4);
@@ -376,11 +391,8 @@ export function DfdView({
         </h3>
         {rowsErro.length > 0 && (
           <div className="mb-4">
-            <h4
-              className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold"
-              style={{ color: "var(--danger)" }}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ background: "var(--danger)" }} />
+            <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: corPendencia }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: corPendencia }} />
               Itens com pendência ({num(rowsErro.length)})
             </h4>
             <DataTable

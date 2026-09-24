@@ -143,7 +143,8 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.divergenteCatalogo", sujeito: "item", rotulo: "Divergente do catálogo", descricao: "Código existe no catálogo, mas a descrição e/ou a unidade de medida diferem do valor canônico.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
   { chave: "item.tipoIncompativel", sujeito: "item", rotulo: "Tipo de DFD incompatível", descricao: "O tipo do DFD (DFD-S/R/O/E) não está entre os tipos permitidos do item no catálogo. (Item sem tipos definidos vale para qualquer tipo.)", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
-  { chave: "item.duplicado", sujeito: "item", rotulo: "Item duplicado", descricao: "Dois ou mais itens do MESMO DFD com o mesmo código E a mesma descrição (o mesmo código com descrição diferente — ex.: outro local — é legítimo). Tratamento: abrir o item e 'Remover item' (sai do valor total).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
+  // Item repetido NUNCA bloqueia (regra do usuário): só aponta — o ponto não aceita importância que bloqueia.
+  { chave: "item.duplicado", sujeito: "item", rotulo: "Item duplicado", descricao: "Dois ou mais itens do MESMO DFD com o mesmo código, a mesma descrição E a mesma unidade (o mesmo código com descrição diferente — ex.: outro local — é legítimo). Nunca bloqueia: aponta (atenção) e, no detalhe do item, mostra os repetidos lado a lado para tratar — remover ou unificar as quantidades.", comportamentosPermitidos: ["avisa", "ignora"], comportamentoPadrao: "avisa" },
 ];
 
 const POR_CHAVE = new Map<ChaveAvaliacao, PontoAvaliacao>(CATALOGO_AVALIACAO.map((p) => [p.chave, p]));
@@ -386,14 +387,16 @@ export function classificarAssunto(assunto: string | null | undefined): string |
   return null;
 }
 
-/** Coage um blob solto (JSON do D1) para `RegrasAvaliacao`, tolerante e com defaults. */
+/** Coage um blob solto (JSON do D1) para `RegrasAvaliacao`, tolerante e com defaults. Os níveis gravados que não
+ * valem mais (importância inexistente, ou com um comportamento que o ponto deixou de aceitar — ex.: `item.duplicado`
+ * não bloqueia mais) SAEM: o ponto volta ao padrão e o ADM salva a configuração sem erro. */
 export function coerceRegras(bruto: unknown): RegrasAvaliacao {
   const obj = (bruto && typeof bruto === "object" ? bruto : {}) as Record<string, unknown>;
   const rec = (v: unknown) => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
   const out: RegrasAvaliacao = {
-    pontos: rec(obj.pontos) as RegrasAvaliacao["pontos"],
-    exProtocolo: rec(obj.exProtocolo) as RegrasAvaliacao["exProtocolo"],
-    exDfd: rec(obj.exDfd) as RegrasAvaliacao["exDfd"],
+    pontos: {},
+    exProtocolo: {},
+    exDfd: {},
     editaveis: rec(obj.editaveis) as RegrasAvaliacao["editaveis"],
     sinonimos: rec(obj.sinonimos) as RegrasAvaliacao["sinonimos"],
   };
@@ -403,6 +406,24 @@ export function coerceRegras(bruto: unknown): RegrasAvaliacao {
   if (Array.isArray(obj.assuntos)) out.assuntos = obj.assuntos as AssuntoPermitido[];
   if (Array.isArray(obj.tiposProtocolo)) out.tiposProtocolo = obj.tiposProtocolo as string[];
   if (obj.gate && typeof obj.gate === "object") out.gate = obj.gate as GateProtocolacao;
+  const comp = new Map(importanciasDe(out).map((i) => [i.id, i.comportamento]));
+  const validos = (m: unknown): Partial<Record<ChaveAvaliacao, Nivel>> => {
+    const r: Partial<Record<ChaveAvaliacao, Nivel>> = {};
+    for (const [k, id] of Object.entries(rec(m))) {
+      const c = typeof id === "string" ? comp.get(id) : undefined;
+      if (c && POR_CHAVE.get(k as ChaveAvaliacao)?.comportamentosPermitidos.includes(c)) r[k as ChaveAvaliacao] = id as string;
+    }
+    return r;
+  };
+  const porContexto = (m: unknown): Record<string, Partial<Record<ChaveAvaliacao, Nivel>>> =>
+    Object.fromEntries(
+      Object.entries(rec(m))
+        .map(([ctx, v]) => [ctx, validos(v)] as const)
+        .filter(([, v]) => Object.keys(v).length > 0),
+    );
+  out.pontos = validos(obj.pontos);
+  out.exProtocolo = porContexto(obj.exProtocolo);
+  out.exDfd = porContexto(obj.exDfd);
   return out;
 }
 

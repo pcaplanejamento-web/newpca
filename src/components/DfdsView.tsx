@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { classificarAssunto, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import {
@@ -15,6 +15,7 @@ import {
   estadoItemCor,
   estadoProtocoloCor,
   mensagensItem,
+  repetidosPorDfd,
   type ResumoEstado,
   resumoEstado,
   rotuloVeredictoCatalogo,
@@ -849,6 +850,17 @@ export function DfdsView({
     },
   ];
 
+  // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
+  // tabela de itens do DFD; o filtro da coluna Estado junta todos os repetidos para conferir.
+  const repetidosItens = useMemo(() => (itens ? repetidosPorDfd(itens) : new Map<number, (number | null)[]>()), [itens]);
+  const repDoItem = (r: ItemDfdRow) => {
+    const iguais = repetidosItens.get(r.id);
+    if (!iguais) return null;
+    const ctx = { dfdTipo: tipoCurtoDfd(r.dfdTipo) };
+    if (comportamentoNo(regras, "item.duplicado", ctx) === "ignora") return null;
+    return { iguais, cor: corImportancia(regras, nivelDe(regras, "item.duplicado", ctx)) };
+  };
+
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
   const colsItens: Column<ItemDfdRow>[] = [
@@ -856,14 +868,14 @@ export function DfdsView({
       key: "estado",
       header: "Estado",
       nowrap: true,
-      value: (r) => resumoEstado(mensagensItem(r)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+      value: (r) => resumoEstado(mensagensItem(r, repDoItem(r))).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
       // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
       valores: (r) => {
-        const res = resumoEstado(mensagensItem(r));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
         return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
       },
       render: (r) => {
-        const res = resumoEstado(mensagensItem(r));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
         if (res.rotulo) return <EstadoResumo res={res} />;
         const e = estadoItem(r);
         return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;

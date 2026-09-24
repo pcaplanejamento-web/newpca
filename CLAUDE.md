@@ -591,9 +591,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     corrigir no Centi e reenviar"); o servidor recusa no `start-dfd` (422) pela mesma `avaliarDfd`. O campo é
     OBRIGATÓRIO nos tipos de entrada (`EntradaAvaliacaoDfd`/`DfdConferencia`/`DfdConferivel`/`faltasCirurgicasDfd`) — o
     TypeScript obriga todo chamador a informá-lo (nunca falso positivo por campo omitido).
-  - **Item duplicado (`item.duplicado`, antes só no catálogo — nunca avaliado):** mesmo código **E** mesma descrição
-    (`itensDuplicados`; o mesmo código com descrição diferente — outro local — é legítimo, DFD 136 real). Tratamento:
-    **"Remover item"** no `ItemDetalhe` (`removerItemDfd`, recomputa o total; no gravado grava os itens no D1).
+  - **Item REPETIDO (`item.duplicado`) — NUNCA bloqueia (regra do usuário):** mesmo código, mesma descrição **E** mesma
+    unidade (`itensDuplicados`, chave código só-dígitos + `norm` da descrição + `normUnidadeMedida`; o mesmo código com
+    descrição diferente — outro local, DFD 136 real — ou em outra unidade — UN × CX — é legítimo). O ponto só aceita
+    `avisa`/`ignora` (padrão `avisa` = ATENÇÃO); um nível antigo "fundamental" gravado sai na leitura (`coerceRegras`
+    descarta níveis cujo comportamento o ponto não aceita — o ADM salva sem erro). **Verificar:** a mensagem aponta os
+    pares ("Itens repetidos: 7 = 114; 12 = 151"); a tabela de itens do DFD marca CADA repetido ("Item duplicado", âmbar,
+    tooltip "mesmo código, descrição e unidade do item N" — `mensagensItem(it, repetido)`) e o põe na tabela de
+    pendências junto do par; a visão **Itens da Mesa** marca igual (`repetidosPorDfd`, por DFD) — o filtro da coluna
+    Estado junta todos. **Tratar:** o `ItemDetalhe` ganha o bloco **"Item repetido"** (os iguais lado a lado — qtd./
+    unidade/valores —, "Ver item" e **"Unificar neste item"**: `unificarItensDfd` soma quantidades e totais no item e
+    tira os outros; só com a quantidade e o MESMO valor unitário em todos — `motivoNaoUnificar`, senão diz por quê) +
+    **"Remover item"** (`removerItemDfd`). O índice do item depois de remover outros: `indiceAposRemover`. Hosts: o
+    `DfdPainelDireito` (análise avulso/protocolo, DFD gravado, protocolo gravado — `onUnificarItens` + `onPainel`) e o
+    banner só do item (`useDfdGravado`, `useRepetidosDoItem`).
+  - **Valor unitário AUSENTE = `semValorUnitario`** (vazio, zero, negativo ou NÃO numérico — NaN viraria `null` no JSON):
+    a MESMA régua no cliente e no servidor.
   - **Conferência por LINHA única (`avaliarLinhaDfd`, `src/lib/conferencia-dfd.ts`, puro):** o ESTADO de cada DFD nas
     tabelas é DERIVADO das MESMAS mensagens do painel (`mensagensDoDfd`, agora no lib): algum erro ⇒ `erro`; senão alguma
     atenção ⇒ `atencao`; senão o ciclo (editado › regularizado › regular). Fora da linha só o **ano do PCA** (portão do
@@ -602,6 +615,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`POST /api/dfd/conferencia`, em fatias de 150 ids, DFD completo + a unidade REAL com os responsáveis). O
     `protocolar()` também usa a mesma função por DFD (não protocola DFD em erro) e o "Importar DFD" avulso bloqueia se as
     mensagens têm erro — célula, painel e botões nunca se contradizem. (O antigo `apontamentosGravado` foi removido.)
+  - **Análise = gravação (nada é barrado só no fim):** o SERVIDOR usa a MESMA régua da análise — tipo do DFD **e a
+    CATEGORIA do protocolo** (`categoriaDoProtocolo`, `protocolo.ts`: o de destino no `start-dfd`; sem ele, o do DFD
+    existente; nos lotes seguintes e no `PATCH`, o do DFD) em `faltasObrigatorias`, ano do PCA, órgão, catálogo e
+    assinatura; o **valor unitário nos lotes seguintes** (`append-dfd-itens`) e no `PATCH` de itens segue o nível do ADM
+    (antes era fixo e derrubava na protocolação um DFD de 200+ itens que a análise liberara — "Todos os itens precisam de
+    valor unitário"). O avulso usa a categoria do protocolo do DFD sobrescrito (`base.protocoloAssunto`). **Catálogo
+    BLOQUEANTE** (o ADM pôs um ponto de catálogo em "bloqueia"): a análise do protocolo confere os itens de TODO DFD no
+    catálogo (fila `conferirItensCliente`, um DFD por vez; linha "Conferindo…", o Protocolar espera) e a linha/despacho
+    usam o veredito (`avaliarLinhaDfd(..., { conformidade })`); no padrão (avisa) segue lazy, só no DFD aberto.
+    **Protocolar com DFD em erro** (quando o ADM deixa — `protocolo.semDfdEmErro` não bloqueia): uma CONFIRMAÇÃO lista
+    antes quais DFDs NÃO serão protocolados (e os duplicados sem escolha); rodapé "N com erro — não serão protocolados".
   - **Protocolo:** assunto por **seleção** (`opcoesAssunto` = atual + categorias fixas + assuntos cadastrados; primitivo
     `CampoSelecao` com cadeado) e, se a capa do PDF veio **sem número**, o número pode ser informado (`numeroEditavel`).
 - **Avaliação CONFIGURÁVEL pelo ADM — IMPORTÂNCIAS gerenciáveis (`avaliacao-core.ts` puro + `avaliacao.ts` loader):**
@@ -726,8 +750,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a protocolação não segue às cegas) — e o botão **"Manter o existente"** (no banner do DFD) descarta o incoming
   (`descartarDfd` → `descartados`; `protocolar` já pula descartados) → o **já cadastrado prevalece** (não é
   sobrescrito); sem descartar, o **novo prevalece** (sobrescreve por `numero` + reatribui `protocoloId`), com a
-  **escolha POR DADO** ao abrir o DFD (ver "Sobrescrita de DFD" abaixo). Antes só havia a escolha p/ duplicatas do
-  próprio arquivo (`manterDfd`).
+  **escolha POR DADO** ao abrir o DFD (ver "Sobrescrita de DFD" abaixo).
+  **DFDs DUPLICADOS no PRÓPRIO PDF (`protocolo.dfdDuplicado`, padrão bloqueia) — COMPARAR e ESCOLHER:** mesmo nº de DFD
+  **ou** de planejamento, em relação DIRETA (`duplicadosDfds`: cada DFD conhece os que conflitam com ELE — "manter este"
+  descarta SÓ esses; A~B pelo nº e B~C pelo planejamento: manter A tira B e C continua — a antiga união transitiva
+  descartava C à toa). No banner do DFD: botão **"Duplicados (N)"** (e a mensagem do painel) abre, à direita, o
+  **`ComparacaoDuplicados`** — o aberto × CADA duplicado campo a campo (`compararDuplicados` = a régua do reenvio + o Nº
+  DFD quando difere; itens "Só neste"/"Só no outro"/"Diferente"; "Idênticos" quando não há diferença), com onde está no
+  PDF (págs.), itens e valor, **"Manter este"** em cada um (troca a escolha a qualquer momento) e "Abrir". Escolher
+  descarta os conflitantes (cinza, fora da somatória e da protocolação; "Restaurar" volta) e o ERRO SOME antes de
+  protocolar. Um nº mantido por "Manter o existente" que um DFD ATIVO ainda grava não conta duas vezes na somatória.
+  Rede de segurança no `protocolar()`: com o ponto sem bloquear e o duplicado sem escolha, do MESMO nº só o 1º gravável
+  segue — o 2º é relatado, nunca sobrescreve o 1º em silêncio.
   **Sobrescrita de DFD com ESCOLHA POR DADO (não existem dois DFDs com o mesmo nº):** um DFD importado de novo SOBRESCREVE
   o cadastrado, e cada DIFERENÇA gravado × arquivo novo é uma escolha **"Manter gravado | Usar novo"** (+ "todos" por
   bloco). Núcleo PURO **`sobrescrita-dfd.ts`** (testado): `comparacaoEscolha` (a MESMA régua do reenvio — `compararDfd`;
@@ -1375,7 +1409,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   recolhido; `acao`/`escolhido` = a escolha da sobrescrita —, `DiffItem`, `BlocoDiff` (`acoes`), `ComparacaoDfdView`
   (`escolha` = **Manter gravado | Usar novo** por diferença + "todos" por bloco + "Outras alterações"; hook
   **`useSobrescrita`**), `ComparacaoProtocolo` — o reenvio do protocolo; `DiffLinha`/`DiffItem`/`BlocoDiff` também servem o
-  `Historico`), **`Historico`** (timeline por evento — escopos global/protocolo/dfd/item; `HistoricoDoItem` recolhível;
+  `Historico`; `DiffItem.rotulosTipo` renomeia o selo), **`ComparacaoDuplicados`** (DFDs duplicados no protocolo: o
+  aberto × cada duplicado campo a campo + "Manter este"/"Abrir"), **`Historico`** (timeline por evento — escopos global/protocolo/dfd/item; `HistoricoDoItem` recolhível;
   hook `useHistorico`), **`SeletorCelula`** (dropdown DENTRO da célula — `<select>` nativo transparente, ponto de cor OU
   **foto + apelido** (`pessoa`), spinner ao salvar, só texto sem permissão; `atual` = valor fora das opções),
   **`PessoaTag`** (FOTO + APELIDO de uma pessoa — colunas Responsável/Distribuição; nome completo no `title`),
@@ -1398,7 +1433,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
   clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
-  linha; mesmo lugar do painel de mensagens), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
+  linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
+import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
 import { herdarTratamentos } from "@/lib/comparar-protocolo";
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
@@ -13,6 +13,7 @@ import {
   normalizarSecoesDfd,
   removerItemDfd,
   STATUS_MENSAGEM_COR,
+  unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
 import { buscarExistentes, enviarDfdEmLotes } from "@/lib/importar-dfd";
@@ -329,12 +330,14 @@ export function DfdUploadForm({
     setHerdados([]);
   }
 
-  // Avulso: sem protocolo → categoria nula; exceções por TIPO do DFD valem pelo `tipo`.
-  const ctxAv = { dfdTipo: preview ? tipoCurtoDfd(preview.tipo) : null };
+  // Categoria do protocolo em que o DFD fica (exceções do ADM): avulso NOVO = nenhuma; a SOBRESCRITA mantém o DFD no
+  // protocolo dele → a categoria dele (a MESMA régua do servidor). Exceções por TIPO do DFD valem pelo `tipo`.
+  const categoria = classificarAssunto(base?.protocoloAssunto ?? null);
+  const ctxAv = { dfdTipo: preview ? tipoCurtoDfd(preview.tipo) : null, categoria };
   const repSel = preview ? (reparticoes.find((r) => r.id === repId) ?? null) : null;
   // Mensagens (erro/atenção/acerto) — FONTE ÚNICA: o botão/painel e o bloqueio do "Importar" saem daqui
   // (inclui ano do PCA, assinatura, órgão e catálogo, cada um no nível do ADM).
-  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, null, orgaos, conformidade) : [];
+  const mensagens = preview ? mensagensDoDfd(preview, repSel, anoPca, regras, categoria, orgaos, conformidade) : [];
   const temErro = mensagens.some((m) => m.status === "erro");
   // Rodapé = a MESMA régua do painel e das tabelas (`estadoDeMensagens`).
   const estadoPrev = estadoDeMensagens(mensagens, { auto: autoCampos.length > 0 });
@@ -442,6 +445,9 @@ export function DfdUploadForm({
                       setPainel(null);
                       setPreview((p) => (p ? removerItemDfd(p, i) : p));
                     }}
+                    onUnificarItens={(k, outros) => setPreview((p) => (p ? unificarItensDfd(p, k, outros) : p))}
+                    onPainel={setPainel}
+                    categoria={categoria}
                     comparacao={sob?.comparacao ?? null}
                     herdados={herdados}
                     escolha={sob?.escolha ?? null}
@@ -513,6 +519,7 @@ export function DfdUploadForm({
               reparticaoAtivaId={reparticaoAtivaId}
               repId={repId}
               anoPca={anoPca}
+              categoria={categoria}
               autoMatch={autoMatch}
               autoCampos={autoCampos}
               regras={regras}

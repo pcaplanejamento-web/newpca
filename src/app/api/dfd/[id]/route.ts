@@ -4,11 +4,12 @@ import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { comportamentoNo } from "@/lib/avaliacao-core";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
+import { semValorUnitario } from "@/lib/dfd-tratamento";
 import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
+import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
 import { respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
@@ -84,11 +85,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const trava = [...travas.values()][0];
   if (trava) return respostaTravado(trava);
   // Itens validados ANTES de qualquer escrita (o banner envia campos + itens juntos: nada é gravado
-  // pela metade). Mesma regra do import: ao menos um item e todo item com valor unitário (> 0).
+  // pela metade). Mesma régua do import: ao menos um item e — quando o ADM mantém o valor unitário
+  // BLOQUEANTE (padrão) — todo item com valor unitário (> 0).
   if (p.data.itens !== undefined) {
     if (p.data.itens.length === 0) return erro("O DFD precisa ter ao menos um item.", 422);
-    if (!p.data.itens.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
-      return erro("Todos os itens precisam de valor unitário.", 422);
+    if (p.data.itens.some((r) => semValorUnitario(r.valorUnitario))) {
+      // A MESMA régua do banner: tipo do DFD + a categoria do protocolo em que ele está (exceções do ADM).
+      const ctxItens = { dfdTipo: tipoCurtoDfd(p.data.tipo !== undefined ? p.data.tipo : dfd.tipo), categoria: await categoriaDoProtocolo(dfd.protocoloId) };
+      if (comportamentoNo(await getRegrasAvaliacao(), "item.valorUnitario", ctxItens) === "bloqueia")
+        return erro("Todos os itens precisam de valor unitário.", 422);
     }
   }
 
@@ -170,11 +175,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const res = validarAssinatura(assinaturas ?? ass?.assinaturas ?? [], await carregarResponsaveis(repAlvo), {
         exigeAssinatura: pdfExigeAssinatura(ass?.nomeArquivo),
       });
-      // Respeita o nível `dfd.assinatura` do ADM COM a exceção por tipo de DFD (igual ao cliente
-      // e ao POST) — o tipo novo (se editado) ou o gravado (`antes`).
-      const regras = await getRegrasAvaliacao();
-      if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(p.data.tipo !== undefined ? p.data.tipo : antes?.tipo) })))
-        return erro(res.motivo, 422);
+      // Respeita o nível `dfd.assinatura` do ADM COM as exceções por tipo de DFD e por categoria do protocolo (igual
+      // ao banner e ao POST) — o tipo novo (se editado) ou o gravado (`antes`).
+      if (res.status === "erro") {
+        const ctxAss = { dfdTipo: tipoCurtoDfd(p.data.tipo !== undefined ? p.data.tipo : antes?.tipo), categoria: await categoriaDoProtocolo(dfd.protocoloId) };
+        if (bloqueiaAssinatura(res, comportamentoNo(await getRegrasAvaliacao(), "dfd.assinatura", ctxAss))) return erro(res.motivo, 422);
+      }
     }
     await atualizarDfdCampos(id, {
       reparticaoId: p.data.reparticaoId,

@@ -25,6 +25,19 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+### Protocolação sem bloqueio surpresa: item repetido tratável, DFDs duplicados comparáveis — entregue
+✅ **Item repetido NUNCA bloqueia** (mesmo código, descrição E unidade — UN × CX é outra compra): vira ATENÇÃO, a tabela de
+itens marca cada repetido ("Item duplicado", junto do par nas pendências; também na visão Itens da Mesa) e o detalhe do
+item mostra os iguais lado a lado com **"Ver item"**, **"Unificar neste item"** (soma as quantidades; só com o mesmo valor
+unitário) e **"Remover item"**. Um nível antigo "Fundamental" gravado para o ponto deixa de valer (a configuração salva
+sem erro). ✅ **DFDs duplicados no PDF** (mesmo nº de DFD ou de planejamento): botão **"Duplicados (N)"** no banner do DFD
+abre a comparação campo a campo (o aberto × cada duplicado, com as páginas do PDF, itens e valor) e **"Manter este"** em
+cada um — o erro some na hora, dá para trocar/restaurar; a escolha descarta só quem conflita com o escolhido (não um DFD
+ligado só por tabela). ✅ **Nada é barrado só no fim da protocolação**: o servidor aplica a mesma régua da análise
+(exceções do ADM por categoria do protocolo; valor unitário nos lotes de 200+ itens pelo nível do ADM — era fixo e
+derrubava o DFD, como o "DFD 175: Todos os itens precisam de valor unitário"); com o catálogo bloqueante, a análise
+confere os itens de todos os DFDs antes; protocolar com DFD em erro (quando o ADM permite) pede confirmação listando o
+que não segue; dois DFDs de mesmo nº sem escolha nunca se sobrescrevem em silêncio.
 ### Captura dos ITENS do DFD pelo padrão definitivo (grade desenhada) + texto limpo — entregue
 ✅ **Leitura exata da tabela de itens pela GRADE**: o PDF do Centi desenha cada célula (borda + zebra); o sistema lê
 esses traços (`grade-pdf.ts`, no mesmo passe do texto renderizado) e põe cada trecho na **célula certa** — código,

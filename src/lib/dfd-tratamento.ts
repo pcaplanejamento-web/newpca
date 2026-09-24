@@ -15,7 +15,7 @@ import {
   TIPO_DFD_ROTULO,
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
-import { normPrevisao, normPrioridade, valoresBatem } from "./normalize.ts";
+import { normPrevisao, normPrioridade, normUnidadeMedida, valoresBatem } from "./normalize.ts";
 import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
@@ -308,10 +308,14 @@ export function estadoProtocoloCor(e: EstadoProtocolo, regras?: RegrasAvaliacao)
 // ---- Estado por ITEM da tabela (mesma ideia do estado por DFD) ----
 export type EstadoItem = "erro" | "regular";
 
+/** Valor unitário AUSENTE — vazio, zero, negativo ou não numérico (NaN viraria `null` no JSON e o servidor
+ * recusaria): a MESMA régua em toda conferência, no cliente e no servidor. */
+export const semValorUnitario = (v: number | null | undefined): boolean => v == null || !Number.isFinite(v) || v <= 0;
+
 /** Faltas de um item da Seção 4 (o que impede o DFD de ser importado). */
 export function faltasDoItem(it: DfdItemParseado): string[] {
   const faltas: string[] = [];
-  if (it.valorUnitario == null || it.valorUnitario <= 0) faltas.push("valor unitário");
+  if (semValorUnitario(it.valorUnitario)) faltas.push("valor unitário");
   if (it.quantidade == null) faltas.push("quantidade");
   return faltas;
 }
@@ -348,58 +352,56 @@ export function editarItemDfd<
 // ---- Detecção de DUPLICATAS (DFDs num protocolo / itens num DFD) ----
 
 /**
- * Grupos de DFDs DUPLICADOS num protocolo: DFDs que compartilham o MESMO nº de DFD **ou** o
- * MESMO nº de planejamento (relação TRANSITIVA por união — cada DFD entra em UM único grupo,
- * evitando decisões conflitantes). Cada grupo devolve os ÍNDICES (2+), em ordem crescente;
- * lista vazia = sem duplicatas. `numero`/`planejamento` vazios NÃO ligam DFDs. Puro/testável.
+ * DFDs DUPLICADOS num protocolo — relação DIRETA (não transitiva): para cada DFD, os ÍNDICES dos OUTROS que têm o
+ * MESMO nº de DFD **ou** o MESMO nº de planejamento (em ordem crescente; vazio = sem duplicata). A escolha "manter
+ * este" descarta só quem conflita com ELE — um DFD ligado apenas a um descartado (A~B pelo nº, B~C pelo
+ * planejamento: manter A tira B e C continua) nunca é descartado à toa. `numero`/`planejamento` vazios NÃO ligam
+ * DFDs. Puro/testável.
  */
-export function dfdsDuplicados(lista: { numero: string; planejamento: string | null }[]): number[][] {
-  const n = lista.length;
-  const pai = Array.from({ length: n }, (_, i) => i);
-  const raiz = (x: number): number => {
-    let r = x;
-    while (pai[r] !== r) {
-      pai[r] = pai[pai[r]];
-      r = pai[r];
-    }
-    return r;
-  };
-  const unir = (a: number, b: number) => {
-    const ra = raiz(a);
-    const rb = raiz(b);
-    if (ra !== rb) pai[ra] = rb;
-  };
-  const ligarPor = (mapa: Map<string, number>, chave: string, i: number) => {
-    const j = mapa.get(chave);
-    if (j !== undefined) unir(i, j);
-    else mapa.set(chave, i);
-  };
-  const porNumero = new Map<string, number>();
-  const porPlan = new Map<string, number>();
-  lista.forEach((d, i) => {
-    const num = (d.numero ?? "").trim();
-    if (num) ligarPor(porNumero, num, i);
-    const plan = (d.planejamento ?? "").trim();
-    if (plan) ligarPor(porPlan, plan, i);
-  });
-  const grupos = new Map<number, number[]>();
-  for (let i = 0; i < n; i++) {
-    const r = raiz(i);
-    const g = grupos.get(r);
+export function duplicadosDfds(lista: { numero: string | null; planejamento: string | null }[]): number[][] {
+  const chave = (v: string | null | undefined) => (v ?? "").trim();
+  const porNumero = new Map<string, number[]>();
+  const porPlan = new Map<string, number[]>();
+  const juntar = (m: Map<string, number[]>, k: string, i: number) => {
+    if (!k) return;
+    const g = m.get(k);
     if (g) g.push(i);
-    else grupos.set(r, [i]);
-  }
-  return [...grupos.values()].filter((g) => g.length > 1);
+    else m.set(k, [i]);
+  };
+  lista.forEach((d, i) => {
+    juntar(porNumero, chave(d.numero), i);
+    juntar(porPlan, chave(d.planejamento), i);
+  });
+  return lista.map((d, i) => {
+    const outros = new Set<number>();
+    for (const j of porNumero.get(chave(d.numero)) ?? []) if (j !== i) outros.add(j);
+    for (const j of porPlan.get(chave(d.planejamento)) ?? []) if (j !== i) outros.add(j);
+    return [...outros].sort((a, b) => a - b);
+  });
 }
 
-/** Chave de deduplicação de um item: código (só dígitos) + descrição normalizada. O MESMO código com
- * descrição DIFERENTE é legítimo (ex.: o mesmo serviço em locais diferentes — DFD 136 real, itens 3 e
- * 4) e NÃO é duplicata. `null` quando não há código nem descrição. */
-function chaveDupItem(it: { codigo?: string | null; descricao?: string | null }): string | null {
+/** Por que dois DFDs do processo são duplicados (a comparação mostra): mesmo nº de DFD, de planejamento ou os dois. */
+export function motivoDuplicidade(
+  a: { numero: string | null; planejamento: string | null },
+  b: { numero: string | null; planejamento: string | null },
+): string {
+  const igual = (x: string | null, y: string | null) => !!(x ?? "").trim() && (x ?? "").trim() === (y ?? "").trim();
+  const num = igual(a.numero, b.numero);
+  const plan = igual(a.planejamento, b.planejamento);
+  return num && plan ? "mesmo nº de DFD e de planejamento" : num ? "mesmo nº de DFD" : "mesmo nº de planejamento";
+}
+
+type ItemDup = { codigo?: string | null; descricao?: string | null; unidade?: string | null };
+
+/** Chave de deduplicação de um item: código (só dígitos) + descrição normalizada + UNIDADE normalizada. O MESMO
+ * código com descrição DIFERENTE é legítimo (ex.: o mesmo serviço em locais diferentes — DFD 136 real, itens 3 e
+ * 4), e a mesma descrição em OUTRA unidade (UN × CX) é outra compra — nenhum dos dois é duplicata. `null` quando
+ * não há código nem descrição. */
+function chaveDupItem(it: ItemDup): string | null {
   const cod = normalizarCodigo(it.codigo ?? "");
   const desc = norm(it.descricao ?? "");
   if (!cod && !desc) return null;
-  return `${cod}|${desc}`;
+  return `${cod}|${desc}|${normUnidadeMedida(it.unidade)}`;
 }
 
 /** Remove UM item (tratamento do item duplicado) e recomputa o `valorTotal` do DFD. Puro. */
@@ -413,10 +415,10 @@ export function removerItemDfd<
 }
 
 /**
- * Grupos de ITENS DUPLICADOS num DFD: itens com a MESMA chave (código + descrição). Cada grupo devolve os ÍNDICES (2+), em ordem; lista vazia = sem duplicatas.
- * Puro/testável.
+ * Grupos de ITENS REPETIDOS num DFD: itens com a MESMA chave (código + descrição + unidade). Cada grupo devolve os
+ * ÍNDICES (2+), em ordem; lista vazia = sem repetição. Puro/testável.
  */
-export function itensDuplicados(itens: { codigo?: string | null; descricao?: string | null }[]): number[][] {
+export function itensDuplicados(itens: ItemDup[]): number[][] {
   const grupos = new Map<string, number[]>();
   itens.forEach((it, i) => {
     const k = chaveDupItem(it);
@@ -426,6 +428,74 @@ export function itensDuplicados(itens: { codigo?: string | null; descricao?: str
     else grupos.set(k, [i]);
   });
   return [...grupos.values()].filter((g) => g.length > 1);
+}
+
+/** Para cada item REPETIDO, os ÍNDICES dos OUTROS do grupo — a tabela de itens marca "Item duplicado" e o detalhe
+ * do item mostra os repetidos lado a lado. Item sem repetição não entra. Linear. Puro. */
+export function mapaItensDuplicados(itens: ItemDup[]): Map<number, number[]> {
+  const m = new Map<number, number[]>();
+  for (const g of itensDuplicados(itens)) for (const i of g) m.set(i, g.filter((j) => j !== i));
+  return m;
+}
+
+/** Lista PLANA de itens de VÁRIOS DFDs (visão Itens da Mesa): para cada item repetido NO SEU DFD, o Nº dos outros
+ * iguais (chave = `id` da linha). Agrupa por DFD e reusa `mapaItensDuplicados` — linear. Puro. */
+export function repetidosPorDfd(
+  itens: (ItemDup & { id: number; dfdId: number; item: number | null })[],
+): Map<number, (number | null)[]> {
+  const porDfd = new Map<number, typeof itens>();
+  for (const it of itens) {
+    const g = porDfd.get(it.dfdId);
+    if (g) g.push(it);
+    else porDfd.set(it.dfdId, [it]);
+  }
+  const out = new Map<number, (number | null)[]>();
+  for (const grupo of porDfd.values()) {
+    for (const [i, outros] of mapaItensDuplicados(grupo)) out.set(grupo[i].id, outros.map((j) => grupo[j].item));
+  }
+  return out;
+}
+
+/** Os itens de um grupo de repetidos podem ser UNIFICADOS (as quantidades somadas num só)? Exige a quantidade em
+ * todos e o MESMO valor unitário (> 0) — senão o valor do item unificado seria inventado. `null` = pode; senão, o
+ * motivo (a tela mostra). Puro. */
+export function motivoNaoUnificar(itens: { quantidade: number | null; valorUnitario: number | null }[]): string | null {
+  if (itens.length < 2) return "Não há item repetido para unificar.";
+  if (itens.some((it) => it.quantidade == null || !Number.isFinite(it.quantidade) || it.quantidade <= 0))
+    return "Há item sem quantidade — informe a quantidade antes de unificar.";
+  if (itens.some((it) => semValorUnitario(it.valorUnitario))) return "Há item sem valor unitário — informe o valor antes de unificar.";
+  const vu = itens[0].valorUnitario as number;
+  if (itens.some((it) => Math.abs((it.valorUnitario as number) - vu) >= 0.005))
+    return "Valores unitários diferentes — iguale o valor (cadeado) ou remova o item repetido.";
+  return null;
+}
+
+/**
+ * UNIFICA itens repetidos (tratamento do item duplicado): o item `manter` recebe a SOMA das quantidades e dos valores
+ * totais do grupo, os `outros` saem do DFD e o total do DFD é recomputado (a soma não muda). Só age quando
+ * `motivoNaoUnificar` é `null`; índice inválido ⇒ o DFD volta igual. Puro.
+ */
+export function unificarItensDfd<
+  I extends { quantidade: number | null; valorUnitario: number | null; valorTotal: number | null },
+  T extends { itens: I[]; valorTotal: number | null },
+>(d: T, manter: number, outros: number[]): T {
+  const alvo = d.itens[manter];
+  const tira = new Set(outros.filter((j) => j !== manter && j >= 0 && j < d.itens.length));
+  if (!alvo || tira.size === 0) return d;
+  const grupo = [alvo, ...[...tira].map((j) => d.itens[j])];
+  if (motivoNaoUnificar(grupo)) return d;
+  const quantidade = Math.round(grupo.reduce((s, it) => s + (it.quantidade as number), 0) * 1e6) / 1e6;
+  const totais = grupo.every((it) => it.valorTotal != null && Number.isFinite(it.valorTotal));
+  const soma = totais ? grupo.reduce((s, it) => s + (it.valorTotal as number), 0) : quantidade * (alvo.valorUnitario as number);
+  const valorTotal = Math.round(soma * 100) / 100;
+  const itens = d.itens.flatMap((it, i) => (tira.has(i) ? [] : i === manter ? [{ ...it, quantidade, valorTotal }] : [it]));
+  const total = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
+  return { ...d, itens, valorTotal: total > 0 ? Math.round(total * 100) / 100 : null };
+}
+
+/** Índice de um item depois de REMOVER outros da lista (os removidos antes dele o deslocam). Puro. */
+export function indiceAposRemover(idx: number, removidos: number[]): number {
+  return idx - removidos.filter((j) => j < idx).length;
 }
 
 // ---- Faltas CIRÚRGICAS + relatório em formato de DESPACHO (copiável) ----
@@ -477,10 +547,10 @@ function listaItens(nums: number[]): string {
   return nums.length > 30 ? `${s} … (+${nums.length - 30})` : s;
 }
 
-/** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
 /** O DFD tem nº de planejamento (não vazio)? */
 export const temPlanejamento = (p: string | null | undefined): boolean => (p ?? "").trim() !== "";
 
+/** Dados de um DFD para avaliação (subconjunto de `DfdParseado`, + tipo/refs). */
 export type EntradaAvaliacaoDfd = {
   /** Nº de planejamento (identificador do Centi) — OBRIGATÓRIO no tipo: todo chamador informa (vazio = falta). */
   planejamento: string | null;
@@ -492,6 +562,7 @@ export type EntradaAvaliacaoDfd = {
     quantidade?: number | null;
     codigo?: string | null;
     descricao?: string | null;
+    unidade?: string | null;
     item?: number | null;
   }[];
   secoes: { titulo: string; texto: string }[];
@@ -501,9 +572,15 @@ export type EntradaAvaliacaoDfd = {
   numeroLicitacao?: string | null;
 };
 
-/** Nºs dos itens REPETIDOS (os que sobram além do 1º de cada grupo de duplicatas). */
-function itensRepetidos(itens: EntradaAvaliacaoDfd["itens"]): number[] {
-  return itensDuplicados(itens).flatMap((g) => g.slice(1).map((i) => itens[i].item ?? i + 1));
+/** Os itens REPETIDOS por grupo, pelo Nº do item (na ordem da tabela) — as mensagens apontam "7 = 114". */
+function gruposItensRepetidos(itens: EntradaAvaliacaoDfd["itens"]): number[][] {
+  return itensDuplicados(itens).map((g) => g.map((i) => itens[i].item ?? i + 1));
+}
+
+/** "7 = 114; 12 = 151 = 160" (trunca se for enorme). */
+function listaGruposItens(grupos: number[][]): string {
+  const s = grupos.slice(0, 12).map((g) => g.join(" = ")).join("; ");
+  return grupos.length > 12 ? `${s} … (+${grupos.length - 12} grupos)` : s;
 }
 
 export type AvaliacaoDfd = { bloqueantes: string[]; atencoes: string[] };
@@ -609,12 +686,13 @@ export function avaliarDfd(
     // "ignora": não entra em lugar nenhum.
   };
   // Ordem preserva a de `faltasObrigatorias` (valor unitário → repartição → seções).
-  const semVU = d.itens.length === 0 || !d.itens.every((i) => i.valorUnitario != null && i.valorUnitario > 0);
+  const semVU = d.itens.length === 0 || d.itens.some((i) => semValorUnitario(i.valorUnitario));
   add("item.valorUnitario", semVU, "valor unitário em todos os itens");
   // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
   add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
-  add("item.duplicado", itensRepetidos(d.itens).length > 0, "itens duplicados (mesmo código e descrição)");
+  // Item REPETIDO nunca bloqueia (só aponta — o ponto não aceita "bloqueia"): confira e trate no detalhe do item.
+  add("item.duplicado", itensDuplicados(d.itens).length > 0, "itens repetidos (mesmo código, descrição e unidade)");
   add("dfd.planejamento", !temPlanejamento(d.planejamento), "número de planejamento");
   add("dfd.reparticao", d.reparticaoId == null, "unidade vinculada");
   add("dfd.tipo", c.dfdTipo == null, "tipo do DFD (DFD-S/R/O/E)");
@@ -757,17 +835,19 @@ export function mensagensDfd(
 
   // Itens (Seção 4)
   const total = d.itens.length;
-  const semVU = d.itens.filter((i) => i.valorUnitario == null || i.valorUnitario <= 0).length;
+  const semVU = d.itens.filter((i) => semValorUnitario(i.valorUnitario)).length;
   add("item.valorUnitario", "itens", total > 0 && semVU === 0,
     total === 0 ? "Nenhum item na tabela (Seção 4)." : `Falta valor unitário em ${semVU} de ${total} ${plural(total)} (Seção 4).`,
     `Valor unitário informado nos ${total} ${plural(total)} (Seção 4).`);
   const semQtd = d.itens.filter((i) => i.quantidade === null).length;
   add("item.quantidade", "itens", semQtd === 0,
     `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
-  const repetidos = itensRepetidos(d.itens);
+  // Itens REPETIDOS (mesmo código, descrição e unidade) — só APONTA, nunca bloqueia: a tabela de itens marca cada um
+  // ("Item duplicado") e o detalhe do item mostra os repetidos lado a lado para remover ou unificar.
+  const repetidos = gruposItensRepetidos(d.itens);
   add("item.duplicado", "itens", repetidos.length === 0,
-    `Item(ns) duplicado(s) — mesmo código e descrição: ${listaItens(repetidos)}. Abra o item e use "Remover item".`,
-    "Sem itens duplicados (Seção 4).");
+    `Itens repetidos (mesmo código, descrição e unidade): ${listaGruposItens(repetidos)}. Abra o item para comparar e tratar (remover ou unificar).`,
+    "Sem itens repetidos (Seção 4).");
 
   // Conformidade com o catálogo (itens) — só APONTA problemas (como órgão×unidade); um acerto
   // único quando tudo confere. Veredito pré-computado no ctx (sem catálogo ⇒ nada).
@@ -914,13 +994,24 @@ export function resumoEstado(
   };
 }
 
-/** Mensagens (erro) das faltas PRÓPRIAS de um item da Seção 4 (valor unitário/quantidade) — para o
- * resumo da célula "Estado" da tabela de itens. A conformidade com o catálogo é coluna à parte. */
-export function mensagensItem(it: DfdItemParseado): { status: StatusMensagem; chave: string; texto: string }[] {
-  const out: { status: StatusMensagem; chave: string; texto: string }[] = [];
-  if (it.valorUnitario == null || it.valorUnitario <= 0)
-    out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
+/** Mensagens das faltas PRÓPRIAS de um item da Seção 4 (valor unitário/quantidade = erro) e do item REPETIDO
+ * (atenção) — para o resumo da célula "Estado" da tabela de itens. A conformidade com o catálogo é coluna à parte. */
+export function mensagensItem(
+  it: DfdItemParseado,
+  /** Item REPETIDO: Nº dos OUTROS itens com o mesmo código, descrição e unidade (+ a cor da importância do ADM). */
+  repetido?: { iguais: (number | null)[]; cor?: string } | null,
+): { status: StatusMensagem; chave: string; texto: string; cor?: string }[] {
+  const out: { status: StatusMensagem; chave: string; texto: string; cor?: string }[] = [];
+  if (semValorUnitario(it.valorUnitario)) out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
   if (it.quantidade == null) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." });
+  // Repetido = ATENÇÃO (nunca erro): confira no detalhe do item e remova/unifique o que for duplicado.
+  if (repetido && repetido.iguais.length > 0)
+    out.push({
+      status: "atencao",
+      chave: "item.duplicado",
+      texto: `Item repetido — mesmo código, descrição e unidade do item ${repetido.iguais.map((n) => n ?? "—").join(", ")}.`,
+      ...(repetido.cor ? { cor: repetido.cor } : {}),
+    });
   return out;
 }
 
@@ -990,13 +1081,13 @@ export function faltasCirurgicasDfd(
   const linhas: string[] = [];
   const nums = (its: DfdItemParseado[]) =>
     its.map((i) => i.item).filter((n): n is number => n != null);
-  const semVU = d.itens.filter((i) => i.valorUnitario == null || i.valorUnitario <= 0);
+  const semVU = d.itens.filter((i) => semValorUnitario(i.valorUnitario));
   const semQtd = d.itens.filter((i) => i.quantidade == null);
   if (ativo("item.valorUnitario") && semVU.length > 0)
     linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
-  const repetidos = ativo("item.duplicado") ? itensRepetidos(d.itens) : [];
+  const repetidos = ativo("item.duplicado") ? gruposItensRepetidos(d.itens) : [];
   if (repetidos.length > 0)
-    linhas.push(`Remover ${repetidos.length === 1 ? "o item duplicado" : "os itens duplicados"} ${listaItens(repetidos)} (mesmo código e descrição de outro item — Seção 4).`);
+    linhas.push(`Conferir os itens REPETIDOS ${listaGruposItens(repetidos)} (mesmo código, descrição e unidade — Seção 4): remover ou unificar o que estiver duplicado.`);
   if (ativo("item.quantidade") && semQtd.length > 0)
     linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
   if (ativo("dfd.planejamento") && !temPlanejamento(d.planejamento))

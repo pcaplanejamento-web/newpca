@@ -23,6 +23,7 @@ import {
   EyeOff,
   FileText,
   Filter,
+  GitCompareArrows,
   GripVertical,
   Image as ImageIcon,
   Inbox,
@@ -39,6 +40,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Merge,
   Moon,
   Package,
   Palette,
@@ -123,6 +125,10 @@ export const IconPlug = Plug;
 export const IconInfo = Info;
 export const IconLink = Link2;
 export const IconScale = Scale;
+/** Unificar (juntar itens repetidos num só). */
+export const IconMerge = Merge;
+/** Comparar lado a lado (DFDs duplicados). */
+export const IconCompare = GitCompareArrows;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

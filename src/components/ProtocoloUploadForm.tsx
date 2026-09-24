@@ -15,30 +15,43 @@ import {
   type ComparacaoDfd,
   compararCapa,
   compararDfd,
+  compararDuplicados,
   type DfdComparavel,
   herdarTratamentos,
   identidadeReenvio,
   linhasRelatorioReenvio,
   rotuloSituacaoReenvio,
 } from "@/lib/comparar-protocolo";
-import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import {
+  avaliarLinhaDfd,
+  conferirAssinaturaDfd,
+  estadoDeMensagens,
+  type LinhaAvaliada,
+  MSG_DFD_DUPLICADO,
+  mensagensDoDfd,
+} from "@/lib/conferencia-dfd";
+import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
+import { conferirItensCliente } from "@/lib/catalogo-conferir-cliente";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado } from "@/lib/dfd-edicao";
 import {
   type AcaoMassa,
+  algumCatalogoFundamental,
   aplicarMassaDfd,
   type CampoTratavel,
   conciliacaoCapa,
-  dfdsDuplicados,
+  duplicadosDfds,
   editarItemDfd,
   faltasCirurgicasDfd,
   gruposAssinatura,
   linhasRelatorioProtocolo,
   type MensagemDfd,
+  motivoDuplicidade,
   normalizarSecoesDfd,
   removerItemDfd,
   resumoEstado,
   STATUS_MENSAGEM_COR,
+  unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
 import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/importar-dfd";
@@ -62,13 +75,14 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { BarraSelecaoDfds } from "./BarraSelecao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { ComparacaoDuplicados } from "./ComparacaoDuplicados";
 import { ComparacaoProtocolo } from "./ComparacaoReenvio";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconClipboard, IconFile, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconCheck, IconClipboard, IconCompare, IconFile, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
@@ -98,6 +112,8 @@ type Extra = { idExterno: string | null; documento: string | null; localRepartic
 type Situacao = "novo" | "substitui" | "move" | "semAcesso";
 /** Progresso REAL da análise em background: 1ª passada (texto) e 2ª (assinaturas por OCR). */
 type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: number | null };
+/** Conferência dos itens de um DFD com o catálogo, com os ITENS e o TIPO conferidos (outros = reconferir). */
+type ConfCat = { itens: DfdParseado["itens"]; tipo: string | null; conf: Map<string, ConferenciaItem> | undefined };
 
 const EXTRA_VAZIO: Extra = { idExterno: null, documento: null, localReparticao: null, valorCapa: null, nomeArquivo: null };
 const CAP_ANALISE = 300; // teto de DFDs analisados na abertura (escala): além disto, "pendente" até abrir/protocolar
@@ -205,6 +221,10 @@ export function ProtocoloUploadForm({
   // DFDs cuja assinatura ACHATADA ainda será lida por OCR — ficam "pendente" (não apontam "sem
   // assinatura" antes da leitura) e a protocolação espera.
   const [ocrPendente, setOcrPendente] = useState<Set<number>>(new Set());
+  // CATÁLOGO BLOQUEANTE (o ADM pôs um ponto de catálogo em "bloqueia"): o servidor confere os itens de TODO DFD ao
+  // gravar — a análise confere também, DFD a DFD (fila), guardando COM os itens conferidos (editar reconfere).
+  const [confCat, setConfCat] = useState<Map<number, ConfCat>>(new Map());
+  const catEmCursoRef = useRef<number | null>(null);
 
   // Split-view (DFD aberto) + seleção/edição em massa.
   const [abertoIdx, setAbertoIdx] = useState(-1);
@@ -266,6 +286,8 @@ export function ProtocoloUploadForm({
     void encerrarOcr(); // libera o worker do OCR entre protocolos
   }
   function resetCache() {
+    setConfCat(new Map());
+    catEmCursoRef.current = null;
     setParsed(new Map());
     setAutoMap(new Map());
     setEditados(new Set());
@@ -637,27 +659,33 @@ export function ProtocoloUploadForm({
   const repDe = (id: number | null | undefined): Rep | null =>
     id != null ? (reparticoes.find((r) => r.id === id) ?? reenvio?.unidades?.find((u) => u.id === id) ?? null) : null;
 
-  // ---- DFDs DUPLICADOS (mesmo nº de DFD ou de planejamento) — ponto configurável `protocolo.dfdDuplicado`.
+  // ---- DFDs DUPLICADOS (mesmo nº de DFD ou de planejamento) — ponto configurável `protocolo.dfdDuplicado`. Relação
+  // DIRETA (`duplicadosDfds`): cada DFD conhece os que conflitam com ELE — "manter este" descarta só esses (um DFD que
+  // só se liga a um descartado não sai à toa). O planejamento entra quando o DFD é lido (análise).
   const dupComp = comportamentoNo(regras, "protocolo.dfdDuplicado", { categoria });
-  const gruposDup =
+  const dups =
     dupComp === "ignora"
       ? []
-      : dfdsDuplicados((index?.dfds ?? []).map((di, i) => ({ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null })));
-  const grupoDupDe = (idx: number): number[] | undefined => gruposDup.find((g) => g.includes(idx));
-  /** Duplicata AINDA não resolvida: o grupo tem 2+ DFDs não-descartados (falta escolher um). */
-  const dupPendente = (idx: number): boolean => {
-    const g = grupoDupDe(idx);
-    return !!g && g.filter((i) => !descartados.has(i)).length > 1;
-  };
-  /** "Manter este DFD": descarta os OUTROS do grupo (o escolhido continua). */
+      : duplicadosDfds((index?.dfds ?? []).map((di, i) => ({ numero: di.numero, planejamento: parsed.get(i)?.planejamento ?? null })));
+  const dupDe = (idx: number): number[] => dups[idx] ?? [];
+  /** Duplicata AINDA não resolvida: este DFD (não descartado) conflita com outro também não descartado. */
+  const dupPendente = (idx: number): boolean => !descartados.has(idx) && dupDe(idx).some((j) => !descartados.has(j));
+  /** "Manter este DFD": descarta os que conflitam com ELE; se ele estava descartado, volta ao processo (troca). */
   const manterDfd = (idx: number) => {
-    const g = grupoDupDe(idx);
-    if (!g) return;
-    setDescartados((prev) => {
+    const outros = dupDe(idx);
+    if (outros.length === 0) return;
+    const semEle = (prev: Set<number>) => {
       const s = new Set(prev);
-      for (const j of g) if (j !== idx) s.add(j);
+      s.delete(idx);
+      return s;
+    };
+    setDescartados((prev) => {
+      const s = semEle(prev);
+      for (const j of outros) s.add(j);
       return s;
     });
+    setMantidosExistentes(semEle);
+    setFantasmas(semEle);
     setSel(new Set());
   };
   /** Reincluir um DFD descartado (o grupo volta a "pendente"). */
@@ -686,17 +714,42 @@ export function ProtocoloUploadForm({
   // ---- Conferência por LINHA — a MESMA do protocolo gravado (`avaliarLinhaDfd`). Cache por objeto
   // de DFD (só o DFD editado é reavaliado a cada tecla); zera quando as regras/cadastros mudam.
   // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (regras/cadastros novos ⇒ reconferir tudo).
-  const cacheLinha = useMemo(() => new WeakMap<DfdParseado, { k: string; r: LinhaAvaliada }>(), [regras, orgaos, reparticoes]);
-  const avaliarLinha = (idx: number, d: DfdParseado): LinhaAvaliada => {
+  const cacheLinha = useMemo(
+    () => new WeakMap<DfdParseado, { k: string; conf?: Map<string, ConferenciaItem>; r: LinhaAvaliada }>(),
+    [regras, orgaos, reparticoes],
+  );
+  // CATÁLOGO na linha só quando BLOQUEIA (padrão: avisa → conferido ao abrir o DFD, a lista fica leve).
+  const catBloqueia = (d: DfdParseado) => algumCatalogoFundamental(regras, { categoria, dfdTipo: tipoCurtoDfd(d.tipo) });
+  /** A conformidade do DFD com o catálogo para a linha: `pronto` = conferida para ESTES itens/tipo (ou não precisa). */
+  const confDe = (idx: number, d: DfdParseado): { pronto: boolean; conf?: Map<string, ConferenciaItem> } => {
+    if (!catBloqueia(d)) return { pronto: true };
+    const c = confCat.get(idx);
+    return c && c.itens === d.itens && c.tipo === d.tipo ? { pronto: true, conf: c.conf } : { pronto: false };
+  };
+  // Fila da conferência do catálogo (um DFD por vez): após cada resposta o estado muda e o próximo é pedido.
+  useEffect(() => {
+    if (!aberto || catEmCursoRef.current != null) return; // banner fechado: nada a conferir
+    const prox = [...parsed.entries()].find(([i, d]) => !descartados.has(i) && !errosParse.has(i) && !confDe(i, d).pronto);
+    if (!prox) return;
+    const [i, d] = prox;
+    const doc = docRef.current;
+    catEmCursoRef.current = i;
+    void conferirItensCliente(d.itens, d.tipo).then((conf) => {
+      if (docRef.current !== doc) return;
+      catEmCursoRef.current = null;
+      setConfCat((m) => new Map(m).set(i, { itens: d.itens, tipo: d.tipo, conf }));
+    });
+  });
+  const avaliarLinha = (idx: number, d: DfdParseado, conformidade?: Map<string, ConferenciaItem>): LinhaAvaliada => {
     const repId = dfdRepIds[idx] ?? null;
     const dup = dupComp !== "ignora" && dupPendente(idx) ? (dupComp === "bloqueia" ? "erro" : "atencao") : null;
     const auto = (autoMap.get(idx)?.length ?? 0) > 0;
     const editado = editados.has(idx);
     const k = `${repId}|${anoPca}|${categoria}|${auto}|${editado}|${dup}`;
     const c = cacheLinha.get(d);
-    if (c && c.k === k) return c.r;
-    const r = avaliarLinhaDfd(d, repDe(repId), { anoPca, regras, categoria, orgaos, auto, editado, duplicado: dup });
-    cacheLinha.set(d, { k, r });
+    if (c && c.k === k && c.conf === conformidade) return c.r;
+    const r = avaliarLinhaDfd(d, repDe(repId), { anoPca, regras, categoria, orgaos, auto, editado, duplicado: dup, conformidade });
+    cacheLinha.set(d, { k, conf: conformidade, r });
     return r;
   };
   /** O que está acontecendo com a linha AGORA (feedback real da análise). */
@@ -708,6 +761,8 @@ export function ProtocoloUploadForm({
       return null; // além do teto: analisado ao abrir/protocolar
     }
     if (ocrPendente.has(idx)) return analise?.fase === "ocr" && analise.atual === idx ? "ocr" : "fila";
+    const d = parsed.get(idx);
+    if (d && !confDe(idx, d).pronto) return "conferindo"; // itens sendo conferidos no catálogo (ponto bloqueante)
     return null;
   };
 
@@ -761,8 +816,9 @@ export function ProtocoloUploadForm({
     if (descartados.has(idx)) return { ...base, estado: "descartado" };
     const motivo = errosParse.get(idx);
     if (motivo) return { ...base, estado: "erro", estadoMotivo: motivo };
-    if (!d || ocrPendente.has(idx)) return { ...base, estado: "pendente" };
-    const r = semAcessoDe(idx) ? comSemAcesso(avaliarLinha(idx, d)) : avaliarLinha(idx, d);
+    const cat = d ? confDe(idx, d) : null;
+    if (!d || !cat?.pronto || ocrPendente.has(idx)) return { ...base, estado: "pendente" };
+    const r = semAcessoDe(idx) ? comSemAcesso(avaliarLinha(idx, d, cat.conf)) : avaliarLinha(idx, d, cat.conf);
     avaliacoes.set(idx, r);
     return { ...base, estado: r.estado, resumo: r.resumo, validacao: r.validacao };
   });
@@ -779,10 +835,14 @@ export function ProtocoloUploadForm({
   // ---- Conciliação do VALOR DA CAPA × somatória (mesma régua do gravado). A somatória IGNORA os
   // descartados; só é conferida com a análise COMPLETA — e NÃO depende de os DFDs estarem sem erro.
   const ativos = linhasDfd.filter((l) => l.estado !== "descartado").map((l) => l.key);
+  const numerosAtivos = new Set(ativos.map((i) => chaveDfd(index?.dfds[i]?.numero)));
   // "Manter o existente" de um DFD deste MESMO protocolo (re-importação): o cadastrado continua no
-  // processo → entra na somatória/contagem da capa (o de outro protocolo sai — segue lá).
+  // processo → entra na somatória/contagem da capa (o de outro protocolo sai — segue lá). Um nº que um DFD ATIVO do
+  // PDF ainda grava (ex.: o duplicado escolhido) não conta duas vezes — o ativo sobrescreve o cadastrado.
   const existentesMantidos = [
-    ...new Set([...mantidosExistentes].map((i) => chaveDfd(index?.dfds[i]?.numero)).filter((n) => n && existenteNoProcesso(n))),
+    ...new Set(
+      [...mantidosExistentes].map((i) => chaveDfd(index?.dfds[i]?.numero)).filter((n) => n && existenteNoProcesso(n) && !numerosAtivos.has(n)),
+    ),
   ]
     .map((n) => existenteDe(n))
     .filter((x): x is DfdExistente => !!x);
@@ -795,7 +855,6 @@ export function ProtocoloUploadForm({
   const removidosMantidos = removidos.filter((r) => !r.excluir);
   // REENVIO: o RASTRO dos DFDs deste processo sobrescritos por outro protocolo segue na conciliação (a capa foi
   // emitida com eles, pelo valor da época) — menos os que o PDF traz de volta para cá (esses entram como ativos).
-  const numerosAtivos = new Set(ativos.map((i) => chaveDfd(index?.dfds[i]?.numero)));
   const rastroMantido = (reenvio?.sobrescritos ?? []).filter((s) => !numerosAtivos.has(chaveDfd(s.numero)));
   const valorRastro = rastroMantido.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
   const somatorioDfds =
@@ -874,8 +933,19 @@ export function ProtocoloUploadForm({
     repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
   // Sem saber quem SOBRESCREVE quem (consulta dos já cadastrados), não protocola às cegas.
   const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null);
+  // DFDs cujos itens ainda estão sendo conferidos no catálogo (ponto bloqueante) — a protocolação espera.
+  const catPendentes = ativos.filter((i) => {
+    const d = parsed.get(i);
+    return !!d && !confDe(i, d).pronto;
+  }).length;
   const podeProtocolar =
-    numero.trim().length > 0 && !importando && !analisando && ocrPendente.size === 0 && !bloqueadoPorRegra && !existentesPendentes;
+    numero.trim().length > 0 &&
+    !importando &&
+    !analisando &&
+    ocrPendente.size === 0 &&
+    catPendentes === 0 &&
+    !bloqueadoPorRegra &&
+    !existentesPendentes;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
 
   // ---- DFD aberto ao lado.
@@ -885,8 +955,18 @@ export function ProtocoloUploadForm({
   // Conformidade do DFD ABERTO com o catálogo (lazy — só o DFD aberto; a lista fica leve).
   const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
   // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
+  // O DUPLICADO pendente entra no painel também (clicar nele abre a comparação dos duplicados) — a MESMA régua da
+  // célula Estado e do rodapé.
+  const msgDupAberto: MensagemDfd | null =
+    abertoIdx >= 0 && dupComp !== "ignora" && dupPendente(abertoIdx)
+      ? { status: dupComp === "bloqueia" ? "erro" : "atencao", chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "duplicados" }
+      : null;
   const mensagensAberto = dfdAberto
-    ? [...(semAcessoDe(abertoIdx) ? [MSG_SEM_ACESSO] : []), ...mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade)]
+    ? [
+        ...(msgDupAberto ? [msgDupAberto] : []),
+        ...(semAcessoDe(abertoIdx) ? [MSG_SEM_ACESSO] : []),
+        ...mensagensDoDfd(dfdAberto, repAberto, anoPca, regras, categoria, orgaos, conformidade),
+      ]
     : [];
 
   // SOBRESCRITA com ESCOLHA POR DADO: ao abrir um DFD que substitui/move um já cadastrado (acessível), carrega o
@@ -937,6 +1017,78 @@ export function ProtocoloUploadForm({
   // Nº de diferenças do DFD aberto (o que muda ao sobrescrever) — o botão "Diferenças (N)".
   const difAberto = sob ? sob.final.total : reenvio && gravadoDe(numeroAberto) ? (comparacaoDe(abertoIdx)?.total ?? 0) : null;
   const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && numeroAberto != null && ["substitui", "move"].includes(classificar(numeroAberto));
+
+  // ---- DUPLICADOS do DFD aberto: a comparação lado a lado (aberto × cada duplicado, a régua do reenvio) e a
+  // ESCOLHA de qual fica. O duplicado ainda não lido (além do teto da análise) é lido ao abrir a comparação.
+  const dupsAberto = abertoIdx >= 0 ? dupDe(abertoIdx) : [];
+  const verDuplicados = painel?.tipo === "duplicados" && abertoIdx >= 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage à abertura da comparação (o resto é lido na hora).
+  useEffect(() => {
+    if (!verDuplicados) return;
+    for (const j of dupsAberto) {
+      // A análise em andamento chega nele (não lê duas vezes); além do teto, lê agora.
+      if (parsed.has(j) || errosParse.has(j) || (analise?.fase === "texto" && j < CAP_ANALISE)) continue;
+      garantirParse(j).catch((e) => setErrosParse((m) => new Map(m).set(j, e instanceof Error ? e.message : "Falha ao ler o DFD.")));
+    }
+  }, [verDuplicados, abertoIdx, dupsAberto.join(",")]);
+  const paginasDe = (i: number): string | null => {
+    const pgs = index?.dfds[i]?.pages ?? [];
+    if (pgs.length === 0) return null;
+    const [a, b] = [Math.min(...pgs), Math.max(...pgs)];
+    return a === b ? `pág. ${a} do PDF` : `págs. ${a}–${b} do PDF`;
+  };
+  const resumoDup = (i: number) => {
+    const d = parsed.get(i);
+    const plan = d?.planejamento ?? null;
+    return {
+      rotulo: `DFD ${index?.dfds[i]?.numero ?? ""}${plan ? ` · Planej. ${plan}` : ""}`,
+      local: paginasDe(i),
+      itens: d ? d.itens.length : null,
+      valor: d ? (d.valorTotal ?? 0) : null,
+      descartado: descartados.has(i),
+    };
+  };
+  // Comparação do aberto × cada duplicado — cache por PAR de DFDs (objetos do cache de parse): recalculada só quando
+  // um dos dois muda (edição), a unidade ou o ano — não a cada atualização da análise.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (cadastros novos ⇒ recomparar).
+  const cacheDup = useMemo(() => new WeakMap<DfdParseado, WeakMap<DfdParseado, { k: string; c: ComparacaoDfd }>>(), [reparticoes]);
+  const comparacaoDup = (i: number, j: number): ComparacaoDfd | null => {
+    const a = parsed.get(i);
+    const b = parsed.get(j);
+    if (!a || !b) return null;
+    const k = `${dfdRepIds[i] ?? ""}|${dfdRepIds[j] ?? ""}|${anoPca}`;
+    let porB = cacheDup.get(a);
+    if (!porB) {
+      porB = new WeakMap();
+      cacheDup.set(a, porB);
+    }
+    const hit = porB.get(b);
+    if (hit && hit.k === k) return hit.c;
+    const c = compararDuplicados({ ...a, reparticaoId: dfdRepIds[i] ?? null, anoPca }, { ...b, reparticaoId: dfdRepIds[j] ?? null, anoPca }, rotuloUnidade);
+    porB.set(b, { k, c });
+    return c;
+  };
+  const painelDuplicados =
+    verDuplicados && dupsAberto.length > 0 ? (
+      <ComparacaoDuplicados
+        key={abertoIdx}
+        atual={resumoDup(abertoIdx)}
+        outros={dupsAberto.map((j) => ({
+          ...resumoDup(j),
+          key: j,
+          motivo: motivoDuplicidade(
+            { numero: index?.dfds[abertoIdx]?.numero ?? null, planejamento: parsed.get(abertoIdx)?.planejamento ?? null },
+            { numero: index?.dfds[j]?.numero ?? null, planejamento: parsed.get(j)?.planejamento ?? null },
+          ),
+          comparacao: comparacaoDup(abertoIdx, j),
+          erro: errosParse.get(j) ?? null,
+        }))}
+        pendente={dupPendente(abertoIdx)}
+        onManter={(k) => manterDfd(k ?? abertoIdx)}
+        onAbrir={(k) => void abrir(k).then(() => setPainel({ tipo: "duplicados" }))}
+        bloqueado={importando}
+      />
+    ) : null;
 
   function setRepDfd(idx: number, id: number | null) {
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
@@ -1010,6 +1162,8 @@ export function ProtocoloUploadForm({
   }
   /** Clique numa mensagem: rola/destaca a âncora no DFD (que segue ao lado) na cor do status. */
   function irParaMensagem(m: { ancora: string; status: "erro" | "atencao" | "acerto" }) {
+    // O DFD duplicado não tem lugar no DFD: a mensagem abre a comparação dos duplicados.
+    if (m.ancora === "duplicados") return setPainel({ tipo: "duplicados" });
     setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
   }
 
@@ -1068,14 +1222,29 @@ export function ProtocoloUploadForm({
         `${capaDiffs.length > 0 ? `, ${capaDiffs.length} campo(s) da capa` : ""}` +
         `${removidos.length > 0 ? `; fora do PDF: ${aExcluir.length} excluído(s), ${removidos.length - aExcluir.length} mantido(s)` : ""}`
       : "";
+    // O que NÃO segue (o ADM deixou protocolar assim) — quem protocola vê a lista ANTES e decide: DFDs com erro (não
+    // são gravados) e duplicados sem escolha (do mesmo nº de DFD só o 1º gravável segue).
+    const nums = (l: LinhaDfd[]) => {
+      const ns = l.map((x) => x.numero);
+      return ns.length > 12 ? `${ns.slice(0, 12).join(", ")} e mais ${ns.length - 12}` : ns.join(", ");
+    };
+    const dupSemEscolha = linhasDfd.filter((l) => dupPendente(l.key));
+    const avisos = [
+      linhasErro.length > 0 ? `${linhasErro.length} DFD(s) com erro NÃO serão protocolados: ${nums(linhasErro)}.` : "",
+      dupSemEscolha.length > 0 ? `${dupSemEscolha.length} DFD(s) duplicado(s) sem escolha (${nums(dupSemEscolha)}) — do mesmo nº de DFD só um é gravado.` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     if (
       reenvio &&
       !confirm(
         `Sobrescrever o protocolo ${numero} com o PDF reenviado?\n\n${resumoReenvio}.\n\n` +
-          `${aExcluir.length > 0 ? `ATENÇÃO: ${aExcluir.length} DFD(s) gravado(s) serão EXCLUÍDOS (com os itens).\n` : ""}Esta ação regrava os dados no banco.`,
+          `${aExcluir.length > 0 ? `ATENÇÃO: ${aExcluir.length} DFD(s) gravado(s) serão EXCLUÍDOS (com os itens).\n` : ""}` +
+          `${avisos ? `${avisos}\n` : ""}Esta ação regrava os dados no banco.`,
       )
     )
       return;
+    if (!reenvio && avisos && !confirm(`${avisos}\n\nProtocolar os demais DFDs?`)) return;
     setImportando(true);
     setErro(null);
     setRelatorio(null);
@@ -1114,9 +1283,19 @@ export function ProtocoloUploadForm({
       let importados = 0;
       let iguais = 0;
       let excluidos = 0;
+      // Nºs de DFD já GRAVADOS (ou mantidos sem diferença) nesta protocolação: um 2º DFD com o MESMO nº (duplicado sem
+      // escolha — o ADM não bloqueia) nunca sobrescreve o 1º em silêncio.
+      const numerosGravados = new Set<string>();
       for (let i = 0; i < dfds.length; i++) {
         if (descartados.has(i)) continue; // DFD descartado (duplicado / "manter o existente") — não protocola
         const di = dfds[i];
+        if (numerosGravados.has(chaveDfd(di.numero))) {
+          bloqueados.push({
+            numero: di.numero,
+            motivo: "Outro DFD com o MESMO nº já foi gravado nesta protocolação (duplicado no processo, sem escolha) — compare os duplicados e escolha qual fica.",
+          });
+          continue;
+        }
         // Mesmo nº numa unidade SEM ACESSO: o servidor recusaria (anti-sequestro) — nem lê (no REENVIO, o
         // gravado sem diferença é pulado abaixo, como os demais).
         if (classificar(di.numero) === "semAcesso" && !gravadoDe(di.numero)) {
@@ -1156,6 +1335,7 @@ export function ProtocoloUploadForm({
           compararDfd(comparavelGravado(gravado), { ...full, reparticaoId: dfdRepIds[i] ?? null, anoPca }).situacao === "igual"
         ) {
           iguais++;
+          numerosGravados.add(chaveDfd(di.numero));
           setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length}) — sem diferença` });
           continue;
         }
@@ -1164,8 +1344,8 @@ export function ProtocoloUploadForm({
           bloqueados.push({ numero: di.numero, motivo: MSG_SEM_ACESSO.texto });
           continue;
         }
-        // MESMA conferência da tabela (fonte única): DFD com erro nunca é protocolado.
-        const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos });
+        // MESMA conferência da tabela (fonte única, com o catálogo quando ele bloqueia): DFD com erro nunca é protocolado.
+        const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos, conformidade: confDe(i, full).conf });
         if (conf.estado === "erro") {
           bloqueados.push({
             numero: di.numero,
@@ -1214,6 +1394,7 @@ export function ProtocoloUploadForm({
             { existia: classificar(di.numero) !== "novo" },
           );
           importados++;
+          numerosGravados.add(chaveDfd(di.numero));
         } catch (e) {
           bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
         }
@@ -1255,7 +1436,7 @@ export function ProtocoloUploadForm({
     const cirurgicas = faltasCirurgicasDfd(
       { planejamento: d.planejamento, itens: d.itens, secoes: d.secoes, reparticaoId: dfdRepIds[idx], assinaturaMotivo: resAss.status === "erro" ? resAss.motivo : null, tipo: d.tipo, anoPca },
       regras,
-      { categoria },
+      { categoria, conformidade: confDe(idx, d).conf },
     );
     // Erros que não são faltas do formulário (duplicado, órgão) também vão ao despacho.
     const extras = (avaliacoes.get(idx)?.mensagens ?? []).filter((m) => m.status === "erro" && ERRO_EXTRA.has(m.chave)).map((m) => m.texto);
@@ -1284,6 +1465,7 @@ export function ProtocoloUploadForm({
   const statusTexto = (() => {
     if (erroExistentes) return `${erroExistentes} Feche e abra o PDF de novo.`;
     if (existentesPendentes) return "Conferindo os DFDs já cadastrados…";
+    if (catPendentes > 0) return `Conferindo os itens no catálogo — ${catPendentes} DFD(s)…`;
     if (protocolarDesligado) return "Protocolação desabilitada nas Configurações";
     if (!numero.trim()) return "Informe o número do processo para protocolar";
     if (!gateTrava.ok) return gateTrava.motivos.join(" ");
@@ -1292,8 +1474,9 @@ export function ProtocoloUploadForm({
     if (!temDfds) return "Sem DFDs — cria só o protocolo.";
     if (semErroBloqueia) return `${dfdsComErro} DFD(s) com erro`;
     if (conc.bloqueia) return "Valor da capa diverge da somatória — substitua para liberar";
-    if (dupBloqueia) return "DFD duplicado — escolha qual manter";
-    const situacao = dfdsComErro > 0 ? `${dfdsComErro} com erro (não bloqueia)` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
+    if (dupBloqueia) return 'DFD duplicado — abra o DFD e use "Duplicados" para comparar e escolher qual fica';
+    const situacao =
+      dfdsComErro > 0 ? `${dfdsComErro} com erro — não serão protocolados` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
     return `${totalDfds} DFD(s) · ${semRep} sem unidade · ${situacao}`;
   })();
   const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
@@ -1303,17 +1486,14 @@ export function ProtocoloUploadForm({
     : analise.fase === "texto"
       ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`
       : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`;
-  // Estado do DFD ABERTO no rodapé = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo
-  // e ano do PCA) + o duplicado pendente; descartado segue "Descartado".
+  // Estado do DFD ABERTO no rodapé = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo, ano do
+  // PCA e o duplicado pendente); descartado segue "Descartado".
   const estadoAberto =
     abertoIdx < 0 || !dfdAberto
       ? null
       : descartados.has(abertoIdx)
         ? "descartado"
-        : estadoDeMensagens(
-            [...(avaliacoes.get(abertoIdx)?.mensagens.filter((m) => m.chave === "protocolo.dfdDuplicado") ?? []), ...mensagensAberto],
-            { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) },
-          );
+        : estadoDeMensagens(mensagensAberto, { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) });
 
   // Leitura do PDF (índice), falha e resultado: na IMPORTAÇÃO viram AVISOS FLUTUANTES (canto inferior — não
   // deformam a linha do "Importar"); no REENVIO ficam dentro do próprio lançador/modal.
@@ -1512,19 +1692,29 @@ export function ProtocoloUploadForm({
                       bloqueado={importando}
                       acoes={
                         <>
-                          {/* DFD duplicado: manter ESTE (descarta os demais do grupo) ou restaurar o descartado. */}
+                          {/* DFD duplicado: COMPARAR com os duplicados (painel da direita) e manter ESTE (descarta os que
+                              conflitam com ele) — ou restaurar o descartado. */}
                           {descartados.has(abertoIdx) && (
                             <Button variant="secondary" onClick={() => restaurarDfd(abertoIdx)} disabled={importando}>
                               Restaurar
                             </Button>
                           )}
-                          {!descartados.has(abertoIdx) && dupComp !== "ignora" && dupPendente(abertoIdx) && (
+                          {dupsAberto.length > 0 && (
+                            <Button
+                              variant="secondary"
+                              icon={<IconCompare className="h-4 w-4" />}
+                              onClick={() => setPainel((p) => (p?.tipo === "duplicados" ? null : { tipo: "duplicados" }))}
+                            >
+                              Duplicados ({num(dupsAberto.length)})
+                            </Button>
+                          )}
+                          {dupPendente(abertoIdx) && (
                             <Button onClick={() => manterDfd(abertoIdx)} disabled={importando}>
                               Manter este DFD
                             </Button>
                           )}
                           {/* Conflito com um DFD já cadastrado: manter o EXISTENTE = descartar este do envio. */}
-                          {!descartados.has(abertoIdx) && !(dupComp !== "ignora" && dupPendente(abertoIdx)) && conflitaComExistente(abertoIdx) && (
+                          {!descartados.has(abertoIdx) && !dupPendente(abertoIdx) && conflitaComExistente(abertoIdx) && (
                             <Button variant="secondary" onClick={() => descartarDfd(abertoIdx)} disabled={importando}>
                               {gravadoDe(index?.dfds[abertoIdx]?.numero) ? "Manter o gravado" : "Manter o existente"}
                             </Button>
@@ -1600,9 +1790,13 @@ export function ProtocoloUploadForm({
                       setPainel(null);
                       editarAberto((d) => removerItemDfd(d, i));
                     }}
+                    onUnificarItens={(k, outros) => editarAberto((d) => unificarItensDfd(d, k, outros))}
+                    onPainel={setPainel}
+                    categoria={categoria}
                     comparacao={sob?.comparacao ?? (abertoIdx >= 0 ? comparacaoDe(abertoIdx) : null)}
                     herdados={abertoIdx >= 0 ? herdados.get(abertoIdx) : undefined}
                     escolha={sob?.escolha ?? null}
+                    duplicados={painelDuplicados}
                   />
                 ),
               }

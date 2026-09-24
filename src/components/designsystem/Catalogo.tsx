@@ -37,13 +37,14 @@ import { DfdRodape } from "@/components/DfdRodape";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
 import { regrasPadrao } from "@/lib/avaliacao-core";
 import type { PcaDetalhe } from "@/lib/dfd";
-import { conciliacaoCapa, resumoEstado } from "@/lib/dfd-tratamento";
+import { conciliacaoCapa, indiceAposRemover, mapaItensDuplicados, removerItemDfd, resumoEstado, unificarItensDfd } from "@/lib/dfd-tratamento";
+import { ComparacaoDuplicados } from "@/components/ComparacaoDuplicados";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
 import { useSobrescrita } from "@/components/useSobrescrita";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
-import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
+import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl } from "@/lib/format";
 import { EmConstrucao } from "@/components/EmConstrucao";
 import { CampoLista, Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
@@ -259,6 +260,85 @@ function ItemDetalheEditDemo() {
       tipo="DFD-S"
       conformidade={DEMO_ITEM_CONFORMIDADE}
       onChange={(patch) => setItem((it) => ({ ...it, ...patch }))}
+    />
+  );
+}
+
+/** Item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado, "Ver item", remover e UNIFICAR. */
+function ItemRepetidoDemo() {
+  const inicial = {
+    valorTotal: 460,
+    itens: [
+      { item: 7, codigo: "524194727", descricao: "LOCAÇÃO DE GUINDASTE — DIÁRIA", unidade: "DIAS", quantidade: 10, valorUnitario: 30, valorTotal: 300 },
+      { item: 8, codigo: "524194730", descricao: "LOCAÇÃO DE CAMINHÃO MUNCK — DIÁRIA", unidade: "DIAS", quantidade: 2, valorUnitario: 50, valorTotal: 100 },
+      { item: 114, codigo: "524194727", descricao: "LOCAÇÃO DE GUINDASTE — DIÁRIA", unidade: "DIAS", quantidade: 2, valorUnitario: 30, valorTotal: 60 },
+    ] as DfdVisualItem[],
+  };
+  const [dfd, setDfd] = useState(inicial);
+  const [idx, setIdx] = useState(0);
+  const mapa = mapaItensDuplicados(dfd.itens);
+  const it = dfd.itens[idx];
+  if (!it)
+    return (
+      <Button
+        variant="secondary"
+        onClick={() => {
+          setDfd(inicial);
+          setIdx(0);
+        }}
+      >
+        Recomeçar a demo
+      </Button>
+    );
+  const repetidos = (mapa.get(idx) ?? []).map((j) => ({ idx: j, item: dfd.itens[j] }));
+  return (
+    <ItemDetalhe
+      key={idx}
+      item={it}
+      editavel
+      tipo="DFD-S"
+      onChange={() => undefined}
+      repetidos={repetidos}
+      onVerItem={setIdx}
+      onRemover={() => {
+        setDfd((d) => removerItemDfd(d, idx));
+        setIdx(-1);
+      }}
+      onUnificar={() => {
+        const outros = repetidos.map((r) => r.idx);
+        setDfd((d) => unificarItensDfd(d, idx, outros));
+        setIdx(indiceAposRemover(idx, outros));
+      }}
+    />
+  );
+}
+
+/** DFDs DUPLICADOS no processo: o aberto × o duplicado, campo a campo, e a escolha de qual fica. */
+function DuplicadosDemo() {
+  const outro: DfdComparavel = {
+    ...REENVIO_GRAVADO,
+    valorTotal: 169,
+    itens: [...REENVIO_GRAVADO.itens.slice(0, 1), { item: 2, codigo: "300", descricao: "CLIPS Nº 2", unidade: "CX", quantidade: 13, valorUnitario: 9, valorTotal: 117 }],
+  };
+  const [fica, setFica] = useState<number | null | undefined>(undefined); // undefined = sem escolha
+  return (
+    <ComparacaoDuplicados
+      atual={{ rotulo: "DFD 531 · Planej. 600", local: "págs. 3–7 do PDF", itens: 2, valor: 150, descartado: fica !== undefined && fica !== null }}
+      outros={[
+        {
+          key: 1,
+          rotulo: "DFD 531 · Planej. 600",
+          local: "págs. 12–16 do PDF",
+          itens: 2,
+          valor: 169,
+          motivo: "mesmo nº de DFD e de planejamento",
+          descartado: fica === null,
+          comparacao: compararDuplicados(REENVIO_GRAVADO, outro),
+        },
+      ]}
+      pendente={fica === undefined}
+      onManter={setFica}
+      onAbrir={() => toast("Abre o outro DFD ao lado")}
     />
   );
 }
@@ -2137,6 +2217,18 @@ export function Catalogo() {
       <Secao titulo="ItemDetalhe EDITÁVEL (importação, ou gravado com o cadeado aberto) — campos do item viram inputs">
         <div className="max-w-md">
           <ItemDetalheEditDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="ItemDetalhe — item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado, Ver item, remover ou UNIFICAR (não bloqueia)">
+        <div className="max-w-md">
+          <ItemRepetidoDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="ComparacaoDuplicados (DFDs duplicados no protocolo — o aberto × cada duplicado, campo a campo, e Manter este)">
+        <div className="max-w-xl">
+          <DuplicadosDemo />
         </div>
       </Secao>
 

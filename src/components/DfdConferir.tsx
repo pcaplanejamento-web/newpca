@@ -58,8 +58,9 @@ type CampoCabK = keyof CamposCabecalhoDfd;
 /** No-op para campos só-leitura (identificadores) do bloco editável. */
 const naoOp = () => {};
 
-/** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens OU o detalhe de um item. */
-export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" } | { tipo: "diferencas" };
+/** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens, o detalhe de um item, o histórico, as diferenças
+ * (reenvio/sobrescrita) ou os DFDs duplicados do processo (protocolação). */
+export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" } | { tipo: "diferencas" } | { tipo: "duplicados" };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição

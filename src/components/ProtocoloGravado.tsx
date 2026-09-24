@@ -15,6 +15,7 @@ import {
   linhasRelatorioProtocolo,
   removerItemDfd,
   STATUS_MENSAGEM_COR,
+  unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { dataBR } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -712,6 +713,9 @@ export function useProtocoloGravado({
           setPainel(null);
           editarAberto((d) => removerItemDfd(d, i), true);
         }}
+        onUnificarItens={(k, outros) => editarAberto((d) => unificarItensDfd(d, k, outros), true)}
+        onPainel={setPainel}
+        categoria={categoria}
         dfdId={abertoId}
       />
     ),

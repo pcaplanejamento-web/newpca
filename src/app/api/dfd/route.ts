@@ -2,17 +2,17 @@ import { exigirEditor } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
-import { algumCatalogoFundamental, bloqueantesCatalogo } from "@/lib/dfd-tratamento";
+import { algumCatalogoFundamental, bloqueantesCatalogo, semValorUnitario } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { getProtocoloReparticao } from "@/lib/protocolo";
+import { categoriaDoProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
 import { listaCurta } from "@/lib/sobrescrita-dfd";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
@@ -46,13 +46,16 @@ export async function POST(req: Request) {
     if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à unidade deste DFD.", 403);
     const travaLote = await travaDoDfd(d.dfdId);
     if (travaLote) return respostaTravado(travaLote);
-    if (!d.rows.every((r) => r.valorUnitario != null && r.valorUnitario > 0)) {
+    // Os LOTES seguintes seguem a MESMA régua do `start-dfd` e da análise (o nível do ADM): o valor unitário só
+    // barra quando o ponto BLOQUEIA — antes era fixo aqui e derrubava, na protocolação, um DFD de 200+ itens que
+    // a análise tinha liberado ("Todos os itens precisam de valor unitário").
+    const regrasLote = await getRegrasAvaliacao();
+    // O DFD já está no protocolo de destino (gravado no `start-dfd`): a categoria dele vale nas exceções do ADM.
+    const ctxLote = { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria: await categoriaDoProtocolo(dfd.protocoloId) };
+    if (comportamentoNo(regrasLote, "item.valorUnitario", ctxLote) === "bloqueia" && d.rows.some((r) => semValorUnitario(r.valorUnitario)))
       return erro("Todos os itens precisam de valor unitário.", 422);
-    }
     // Portão do catálogo nos LOTES seguintes (o `start-dfd` só viu os primeiros itens): só
     // consulta/bloqueia quando o ADM elevou algum ponto item.* a "fundamental".
-    const regrasLote = await getRegrasAvaliacao();
-    const ctxLote = { dfdTipo: tipoCurtoDfd(dfd.tipo) };
     if (algumCatalogoFundamental(regrasLote, ctxLote)) {
       const conf = await conferirItensNoCatalogo(
         d.rows.map((r) => ({ codigo: r.codigo ?? null, descricao: r.descricao ?? null, unidade: r.unidade ?? null })),
@@ -65,11 +68,15 @@ export async function POST(req: Request) {
     return ok({ inserted: r.inserted });
   }
 
-  // start-dfd — regra CONFIGURÁVEL (mesma do cliente) sobre cabeçalho + 1º lote.
-  // Níveis do ADM + exceções por TIPO de DFD (o `tipo` vem no corpo). A categoria do
-  // protocolo é aplicada no cliente; o servidor mantém global + por-tipo como garantia.
+  // start-dfd — regra CONFIGURÁVEL (a MESMA da análise) sobre cabeçalho + 1º lote: níveis do ADM + exceções por
+  // TIPO de DFD (o `tipo` vem no corpo) e por CATEGORIA do protocolo em que o DFD fica (o de destino; sem ele, o que
+  // o DFD já tem) — antes a categoria só valia no cliente e a gravação barrava o que a análise tinha liberado.
   const regras = await getRegrasAvaliacao();
-  const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo) };
+  const destino = d.protocoloId != null ? await getProtocoloReparticao(d.protocoloId) : null;
+  const existente = await getReparticaoDfdNumero(d.numero);
+  const categoria =
+    d.protocoloId != null ? classificarAssunto(destino?.assunto ?? null) : await categoriaDoProtocolo(existente?.protocoloId);
+  const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo), categoria };
   const faltas = faltasObrigatorias(
     {
       planejamento: d.planejamento ?? null,
@@ -83,6 +90,7 @@ export async function POST(req: Request) {
       numeroLicitacao: d.numeroLicitacao,
     },
     regras,
+    { categoria },
   );
   if (faltas.length > 0) return erro(`Não é possível importar: falta ${faltas.join(", ")}.`, 422);
   // Portão do PCA (configurável): se `dfd.anoPca` for fundamental, todo DFD grava com o
@@ -119,13 +127,11 @@ export async function POST(req: Request) {
   if (!acessivel(d.reparticaoId)) return erro("Unidade inválida ou sem acesso.", 403);
   // O PROTOCOLO de destino também tem de ser acessível — não se anexa DFD (nem histórico) ao processo de
   // outra unidade (mesma regra do vínculo no PATCH).
-  const destino = d.protocoloId != null ? await getProtocoloReparticao(d.protocoloId) : null;
   if (d.protocoloId != null) {
     if (!destino) return erro("Protocolo não encontrado.", 404);
     if (!acessivel(destino.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
   }
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
-  const existente = await getReparticaoDfdNumero(d.numero);
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra unidade, sem acesso.", 403);
   }

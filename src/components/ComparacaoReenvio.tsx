@@ -124,24 +124,27 @@ export function BlocoDiff({ titulo, qtd, acoes, children }: { titulo: string; qt
 }
 
 /** A diferença de UM item do DFD (novo / removido / alterado campo a campo) — reenvio e histórico. `acao`/
- * `escolhido` = a ESCOLHA da sobrescrita (manter o gravado × usar o novo). */
+ * `escolhido` = a ESCOLHA da sobrescrita (manter o gravado × usar o novo); `rotulosTipo` renomeia o selo (ex.: nos
+ * DFDs duplicados: "Só no outro" / "Só neste"). */
 export function DiffItem({
   it,
   rotulos,
   compacto = false,
   acao,
   escolhido,
+  rotulosTipo,
 }: {
   it: DiffItemDfd;
   rotulos?: readonly [string, string];
   compacto?: boolean;
   acao?: ReactNode;
   escolhido?: EstadoEscolha | null;
+  rotulosTipo?: Partial<Record<DiffItemDfd["tipo"], string>>;
 }) {
   return (
     <div className="rounded-control border border-border p-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={TOM_ITEM[it.tipo]}>{ROTULO_ITEM[it.tipo]}</Badge>
+        <Badge tone={TOM_ITEM[it.tipo]}>{rotulosTipo?.[it.tipo] ?? ROTULO_ITEM[it.tipo]}</Badge>
         <span className="text-[12.5px] font-semibold text-text">Item {it.item ?? "—"}</span>
         {it.codigo && <span className="font-mono text-[12px] text-muted">{it.codigo}</span>}
         {acao && <span className="ml-auto">{acao}</span>}

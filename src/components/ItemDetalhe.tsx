@@ -9,8 +9,10 @@ import {
   estadoItem,
   estadoItemCor,
   faltasDoItem,
+  motivoNaoUnificar,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
+import { brl, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { Badge } from "./Badge";
@@ -19,7 +21,7 @@ import { CampoNumero, CampoTexto } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
 import { HistoricoDoItem } from "./Historico";
-import { IconAlert, IconTrash } from "./icons";
+import { IconAlert, IconArrowRight, IconMerge, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
 /** Campos do item que têm cadeado próprio. */
@@ -31,8 +33,10 @@ type CampoK = "codigo" | "unidade" | "descricao" | "quantidade" | "valorUnitario
  * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo. Quando `editavel`,
  * cada campo tem um **cadeado próprio**: destravar para editar; um campo **igual ao catálogo**
  * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). No DFD GRAVADO
- * (`historicoDfdId`), a seção recolhível "Histórico do item" mostra o que mudou nele. Só
- * tokens/componentes do design-system.
+ * (`historicoDfdId`), a seção recolhível "Histórico do item" mostra o que mudou nele. Item REPETIDO
+ * (`repetidos`: mesmo código, descrição e unidade de outro item do DFD) ganha o bloco de conferência — os iguais
+ * lado a lado (qtd./unidade/valores), "Ver item" e o tratamento: remover este ou UNIFICAR as quantidades nele.
+ * Só tokens/componentes do design-system.
  */
 export function ItemDetalhe({
   item,
@@ -42,6 +46,9 @@ export function ItemDetalhe({
   editavel = false,
   onChange,
   onRemover,
+  repetidos = [],
+  onVerItem,
+  onUnificar,
   historicoDfdId = null,
 }: {
   item: DfdVisualItem;
@@ -56,13 +63,23 @@ export function ItemDetalhe({
   onChange?: (patch: Partial<DfdVisualItem>) => void;
   /** Remove este item do DFD (tratamento do ITEM DUPLICADO). Ausente = sem o botão. */
   onRemover?: () => void;
+  /** Os OUTROS itens do DFD com o mesmo código, descrição e unidade (índice + dados) — vazio = não é repetido. */
+  repetidos?: { idx: number; item: DfdVisualItem }[];
+  /** Abre outro item no painel (ex.: o repetido, para conferir). */
+  onVerItem?: (idx: number) => void;
+  /** Unifica os repetidos NESTE item (soma as quantidades; os outros saem do DFD). Ausente = sem o botão. */
+  onUnificar?: () => void;
   /** DFD GRAVADO (id) — habilita a seção "Histórico do item" (carregada só ao abrir). */
   historicoDfdId?: number | null;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
-  const cor = estadoItemCor(est);
+  const repetido = repetidos.length > 0;
+  // Repetido sem erro = ATENÇÃO (âmbar) — nunca bloqueia; erro (valor/quantidade) segue na frente.
+  const cor = est === "regular" && repetido ? "var(--warn)" : estadoItemCor(est);
+  const rotuloEstado = est === "regular" && repetido ? "Item repetido" : ESTADO_ITEM_ROTULO[est];
   const editavelUI = editavel && !!onChange; // cadeados por campo só com handler
+  const semUnificar = repetido ? motivoNaoUnificar([item, ...repetidos.map((r) => r.item)]) : null;
 
   // Conformidade com o catálogo (só quando o veredito foi carregado e o item tem código).
   const conf = conformidade?.get(normalizarCodigo(item.codigo));
@@ -107,7 +124,7 @@ export function ItemDetalhe({
         <span className="text-base font-bold text-text">Item {item.item ?? "—"}</span>
         <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: cor }}>
           <span className="h-2 w-2 rounded-full" style={{ background: cor }} />
-          {ESTADO_ITEM_ROTULO[est]}
+          {rotuloEstado}
         </span>
       </div>
 
@@ -133,6 +150,68 @@ export function ItemDetalhe({
         <CampoNumero label="Valor unitário" valor={item.valorUnitario} moeda {...props("valorUnitario")} onChange={(v) => onChange?.({ valorUnitario: v })} />
         <CampoNumero label="Valor total" valor={item.valorTotal} moeda span forte {...props("valorTotal")} onChange={(v) => onChange?.({ valorTotal: v })} />
       </dl>
+
+      {/* Item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado + tratamento. Não bloqueia. */}
+      {repetido && (
+        <section className="rounded-card border p-4" style={{ borderColor: "color-mix(in srgb, var(--warn) 35%, var(--border))" }} data-ancora="repetidos">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h4 className="text-[13px] font-bold text-text">Item repetido</h4>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--warn)" }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
+              {repetidos.length + 1} iguais
+            </span>
+          </div>
+          <p className="text-xs text-muted">
+            Mesmo código, descrição e unidade de {repetidos.length === 1 ? "outro item" : `${repetidos.length} outros itens`} deste DFD.
+            Se for o mesmo pedido lançado de novo, remova o que sobra ou unifique as quantidades num item só. Se for legítimo (ex.:
+            entregas separadas), pode manter — não bloqueia.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {[{ idx: -1, item }, ...repetidos].map((r) => (
+              <li
+                key={r.idx}
+                className={`flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-1 rounded-control border px-3 py-2 ${r.idx < 0 ? "border-accent/40 bg-accent-soft" : "border-border bg-surface"}`}
+              >
+                <span className="text-[13px] font-semibold text-text">
+                  Item {r.item.item ?? "—"}
+                  {r.idx < 0 && <span className="ml-1 text-xs font-medium text-accent">(este)</span>}
+                </span>
+                <span className="min-w-0 flex-1 text-xs text-text-2">
+                  {r.item.quantidade != null ? num(r.item.quantidade) : "—"} {r.item.unidade ?? ""} ·{" "}
+                  {r.item.valorUnitario != null ? brl(r.item.valorUnitario) : "sem valor"} · total{" "}
+                  <span className="font-semibold text-text">{r.item.valorTotal != null ? brl(r.item.valorTotal) : "—"}</span>
+                </span>
+                {r.idx >= 0 && onVerItem && (
+                  <Button variant="ghost" onClick={() => onVerItem(r.idx)} icon={<IconArrowRight className="h-4 w-4" />}>
+                    Ver item
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {editavelUI && onUnificar && (
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              {semUnificar && <p className="mr-auto text-xs text-muted">{semUnificar}</p>}
+              <Button
+                variant="secondary"
+                icon={<IconMerge className="h-4 w-4" />}
+                disabled={!!semUnificar}
+                title={semUnificar ?? undefined}
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Unificar no item ${item.item ?? ""}? As quantidades dos ${repetidos.length + 1} itens iguais são somadas nele e os outros saem do DFD (o valor total não muda).`,
+                    )
+                  )
+                    onUnificar();
+                }}
+              >
+                Unificar neste item
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Conformidade com o catálogo (referência) — status + sugestão (display-only) */}
       {veredicto && (
