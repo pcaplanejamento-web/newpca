@@ -794,7 +794,7 @@ faixas numéricas, linha compacta, busca múltipla). No painel (PCA de fonte pro
 
 ### Consulta PÚBLICA do PCA: Protocolos | DFDs | Itens com banners discretos — entregue
 A consulta vale no painel **e na tela inicial pública**. Três visões (**Protocolos · DFDs · Itens**) e uma pilha de banners
-própria da consulta (protocolo | DFD | item) com **campos congelados** (cadeado fechado "Somente consulta"), **sem nenhuma
+própria da consulta (protocolo | DFD | item) com **campos congelados** (aparência de campo, sem cadeado), **sem nenhuma
 mensagem de erro/aviso**, sem o aviso de incorporado e sem informações redundantes. O banner do item traz o **nº do DFD +
 planejamento**. Das assinaturas fica só o **Responsável pela solicitação** (nome, função, ato). O histórico mostra **só o que
 passou por protocolos incorporados**, **sem o autor**. Os dados são **higienizados no servidor**: sem CPF/e-CPF/CNPJ, e-mail,

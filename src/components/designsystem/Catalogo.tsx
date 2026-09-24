@@ -305,11 +305,7 @@ function CampoCadeadoDemo() {
         {...props("assunto")}
         onChange={setAssunto}
       />
-      {/* CONGELADO — consulta pública do PCA: aparência de campo + cadeado fechado sem clique ("Somente consulta"). */}
-      <div className="flex items-center gap-2 sm:col-span-2">
-        <CadeadoBotao rotulo="exemplo" aberto={false} congelado />
-        <span className="text-xs text-muted">CadeadoBotao congelado — somente consulta</span>
-      </div>
+      {/* CONGELADO — consulta pública do PCA: aparência de campo, sem cadeado. */}
       <CampoCongelado label="Nº DFD (consulta)" valor="531" mono />
       <CampoCongelado label="Valor (consulta)" valor="R$ 50,00" forte />
       <CampoCongelado label="Objeto (consulta)" valor="AQUISIÇÃO DE MATERIAL DE EXPEDIENTE" span />

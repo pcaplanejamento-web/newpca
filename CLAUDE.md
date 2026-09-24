@@ -1195,7 +1195,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
   erro/aviso. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
   do `BannersMesa` (`LARGURA` exportado) com `ProtocoloView modoCapa="consulta"`, `DfdView consulta` e `ItemDetalhe consulta`
-  (campos **`CampoCongelado`** + `CadeadoBotao congelado` — cadeado fechado "Somente consulta"; sem estado, pendências, catálogo,
+  (campos **`CampoCongelado`** — a caixa do campo, SEM cadeado; seções idem; sem estado, pendências, catálogo,
   conciliação, sobrescritos, aviso de incorporado; das assinaturas só o bloco **"Responsável pela solicitação"**); o cabeçalho do
   item traz o **nº do DFD + planejamento**; o histórico é `Historico anonimo` (sem autor; `HistoricoDoItem` recebe a `url`).
   **Dados higienizados NO SERVIDOR** (núcleo puro `pca-publico-core.ts`, testado): `dfdPublico` (sem matrícula/e-mail/telefone/

@@ -713,11 +713,7 @@ function SecaoCard({
             </span>
           )}
         </h3>
-        {congelado ? (
-          <CadeadoBotao rotulo={titulo} aberto={false} congelado />
-        ) : (
-          editavel && <CadeadoBotao rotulo={titulo} aberto={aberto} onClick={() => setAberto((v) => !v)} />
-        )}
+        {!congelado && editavel && <CadeadoBotao rotulo={titulo} aberto={aberto} onClick={() => setAberto((v) => !v)} />}
       </div>
       {congelado ? (
         <p className="whitespace-pre-line break-words rounded-control border border-border bg-surface-2 px-3 py-2 text-[13.5px] leading-relaxed text-text-2">
