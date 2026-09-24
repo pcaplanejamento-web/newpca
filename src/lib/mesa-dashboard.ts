@@ -16,6 +16,10 @@ export const ESTADOS_PAINEL: readonly EstadoPainel[] = ["regular", "atencao", "e
 /** Protocolo como o Dashboard o vê (a GESTÃO — responsável/situação — já com a edição otimista da célula). */
 export type ProtocoloPainel = {
   id: number;
+  /** Identificação p/ a ORIGEM dos dados (a lista do recorte clicado). */
+  numero?: string;
+  assunto?: string | null;
+  sigla?: string | null;
   /** Data da PROTOCOLAÇÃO (timestamp UTC do banco). */
   criadoEm: string | null;
   /** Σ dos DFDs do protocolo. */
@@ -26,7 +30,17 @@ export type ProtocoloPainel = {
 };
 /** DFD como o Dashboard o vê: a unidade requisitante (id + sigla + nome — a sigla pode repetir entre órgãos) e os
  * totais. */
-export type DfdPainel = { unidadeId: number | null; unidade: string | null; unidadeNome: string | null; valor: number | null; itens: number | null };
+export type DfdPainel = {
+  unidadeId: number | null;
+  unidade: string | null;
+  unidadeNome: string | null;
+  valor: number | null;
+  itens: number | null;
+  /** Identificação p/ a ORIGEM dos dados (a lista do recorte clicado). */
+  id?: number;
+  numero?: string;
+  planejamento?: string | null;
+};
 
 /** Quantidade + valor (R$) de um recorte. */
 export type Fatia = { n: number; valor: number };
@@ -188,7 +202,7 @@ export function painelMesa(
     const v = valorSeguro(d.valor);
     itens += valorSeguro(d.itens);
     valorDfds += v;
-    const chave = d.unidadeId != null ? String(d.unidadeId) : "sem";
+    const chave = chaveUnidadePainel(d);
     const u = porUnidade.get(chave) ?? { chave, sigla: d.unidadeId != null ? (d.unidade ?? "").trim() : "", nome: null, dfds: 0, valor: 0 };
     u.nome ??= d.unidadeNome?.trim() || null;
     u.dfds++;
@@ -222,4 +236,51 @@ export function painelMesa(
         ? null
         : { unidades: outras.length, dfds: outras.reduce((s, u) => s + u.dfds, 0), valor: outras.reduce((s, u) => s + u.valor, 0) },
   };
+}
+
+// ---------------------------------------------------------------------------
+// ORIGEM dos dados — os protocolos/DFDs de um recorte clicado, pelas MESMAS chaves de `painelMesa`.
+// ---------------------------------------------------------------------------
+
+export type RecorteMesa =
+  | { dim: "estado"; estado: EstadoPainel }
+  /** `id: null` = "Sem situação" (inclui situação apagada/desconhecida, como no agregado). */
+  | { dim: "situacao"; id: number | null }
+  /** Índice em `FAIXAS_IDADE`. */
+  | { dim: "idade"; faixa: number }
+  /** Início (AAAA-MM-DD) da semana da série de entrada. */
+  | { dim: "semana"; inicio: string };
+
+/** Protocolos que formam um recorte do Dashboard da Mesa (`situacoes` = as cadastradas; `agora` injetado). */
+export function protocolosDoRecorte<P extends ProtocoloPainel>(
+  protocolos: readonly P[],
+  r: RecorteMesa,
+  situacoes: readonly number[],
+  agora: Date,
+): P[] {
+  if (r.dim === "estado") return protocolos.filter((p) => p.estado === r.estado);
+  if (r.dim === "situacao") {
+    const conhecidas = new Set(situacoes);
+    return protocolos.filter((p) => (p.situacaoId != null && conhecidas.has(p.situacaoId) ? p.situacaoId : null) === r.id);
+  }
+  const hoje = diaBrasilia(agora.toISOString()) ?? Math.floor(agora.getTime() / DIA_MS);
+  if (r.dim === "idade")
+    return protocolos.filter((p) => {
+      const dia = diaBrasilia(p.criadoEm);
+      return dia != null && FAIXAS_IDADE.findIndex((f) => Math.max(0, hoje - dia) <= f.ate) === r.faixa;
+    });
+  const alvo = diaDaData(r.inicio);
+  return protocolos.filter((p) => {
+    const dia = diaBrasilia(p.criadoEm);
+    return dia != null && alvo != null && inicioSemana(Math.min(dia, hoje)) === alvo;
+  });
+}
+
+/** Chave da UNIDADE de um DFD no Dashboard (a MESMA do agregado: o id, ou "sem"). */
+export const chaveUnidadePainel = (d: DfdPainel) => (d.unidadeId != null ? String(d.unidadeId) : "sem");
+
+/** DFDs das unidades `chaves` — ou, com `fora`, dos que NÃO estão nelas (a linha "Outras N unidades"). */
+export function dfdsDoRecorte<D extends DfdPainel>(dfds: readonly D[], chaves: readonly string[], fora = false): D[] {
+  const set = new Set(chaves);
+  return dfds.filter((d) => set.has(chaveUnidadePainel(d)) !== fora);
 }

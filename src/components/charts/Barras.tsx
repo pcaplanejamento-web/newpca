@@ -61,8 +61,10 @@ export type LinhaBarra = {
   valor: ReactNode;
   /** A 2ª informação (ex.: o R$), esmaecida. */
   detalhe?: ReactNode;
-  /** Linha de agregado ("Outras…", "Sem …"): esmaecida e nunca clicável. */
+  /** Linha de agregado ("Outras…", "Sem …"): esmaecida e — salvo `clicavel` — não clicável. */
   apagada?: boolean;
+  /** Clicável mesmo `apagada` (ex.: abrir a ORIGEM dos dados de "Sem situação"/"Outras unidades"). */
+  clicavel?: boolean;
 };
 
 /**
@@ -76,12 +78,15 @@ export function BarrasH({
   max,
   ativa = null,
   onEscolher,
+  acao = "filtrar a Mesa",
 }: {
   linhas: LinhaBarra[];
   ariaLabel: string;
   max?: number;
   ativa?: string | number | null;
   onEscolher?: (chave: string | number) => void;
+  /** O que o toque faz (nome acessível do botão da linha). */
+  acao?: string;
 }) {
   const escala = max ?? Math.max(0, ...linhas.map((l) => l.segmentos.reduce((t, s) => t + s.valor, 0)));
   const grade = "grid w-full grid-cols-[minmax(0,40%)_minmax(2.5rem,1fr)_auto] items-center gap-x-2.5";
@@ -101,11 +106,11 @@ export function BarrasH({
         const marcada = ativa != null && l.chave === ativa;
         return (
           <li key={l.chave} title={l.titulo}>
-            {onEscolher && !l.apagada ? (
+            {onEscolher && (!l.apagada || l.clicavel) ? (
               <button
                 type="button"
                 aria-pressed={marcada}
-                aria-label={`${l.titulo}${marcada ? " (filtro ativo — toque para limpar)" : " — filtrar a Mesa"}`}
+                aria-label={`${l.titulo}${marcada ? " (filtro ativo — toque para limpar)" : ` — ${acao}`}`}
                 onClick={() => onEscolher(l.chave)}
                 className={`${grade} min-h-11 rounded-control px-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-9 ${
                   marcada ? "bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]" : ""
@@ -155,6 +160,7 @@ export function Colunas({
   cor = "var(--accent)",
   formatar = num,
   rotularTodas = false,
+  onEscolher,
 }: {
   colunas: Coluna[];
   ariaLabel: string;
@@ -162,6 +168,8 @@ export function Colunas({
   cor?: string;
   formatar?: (v: number) => string;
   rotularTodas?: boolean;
+  /** Tocar/clicar numa coluna abre a ORIGEM dos dados dela (a dica segue no passar do mouse/foco). */
+  onEscolher?: (chave: string) => void;
 }) {
   const [aberta, setAberta] = useState<string | null>(null);
   const maior = Math.max(0, ...colunas.map((c) => c.valor));
@@ -189,8 +197,8 @@ export function Colunas({
             <li key={c.chave} className="relative flex h-full min-w-0 flex-1 items-end justify-center">
               <button
                 type="button"
-                aria-label={`${c.dica.rotulo}: ${c.dica.valor}`}
-                onClick={() => setAberta((a) => (a === c.chave ? null : c.chave))}
+                aria-label={`${c.dica.rotulo}: ${c.dica.valor}${onEscolher ? " — ver a origem dos dados" : ""}`}
+                onClick={() => (onEscolher ? onEscolher(c.chave) : setAberta((a) => (a === c.chave ? null : c.chave)))}
                 onBlur={() => setAberta((a) => (a === c.chave ? null : a))}
                 className="group flex h-full w-full items-end justify-center focus-visible:outline-none"
               >

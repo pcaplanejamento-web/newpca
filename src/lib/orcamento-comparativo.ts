@@ -35,6 +35,27 @@ export type UnidadeRef = { id: number; sigla: string; nome: string };
 export const SEM_VINCULO = "Sem vínculo";
 
 /**
+ * A CHAVE da linha do comparativo: a unidade (quando existe no cadastro) ou "sem" (sem vínculo / unidade fora do
+ * cadastro). Fonte ÚNICA da agregação e do detalhe da linha (`origemDaLinha`) — os dois nunca divergem.
+ */
+export function chaveUnidadeComparativo(unidadeId: number | null, unidades: ReadonlySet<number>): string {
+  return unidadeId != null && unidades.has(unidadeId) ? `u${unidadeId}` : "sem";
+}
+
+/** ORIGEM de uma linha do comparativo: os lançamentos do orçamento e o planejado que formam aqueles números. */
+export function origemDaLinha<P extends { unidadeId: number | null }, O extends { unidadeId: number | null }>(
+  unidadeId: number | null,
+  planejado: P[],
+  orc: O[],
+  unidades: UnidadeRef[],
+): { planejado: P[]; orcamento: O[] } {
+  const ids = new Set(unidades.map((u) => u.id));
+  const alvo = chaveUnidadeComparativo(unidadeId, ids);
+  const casa = (x: { unidadeId: number | null }) => chaveUnidadeComparativo(x.unidadeId, ids) === alvo;
+  return { planejado: planejado.filter(casa), orcamento: orc.filter(casa) };
+}
+
+/**
  * Monta as linhas do comparativo. `planejado`: por unidade (id ou null) o nº de itens e o Σ; `orc`:
  * cada lançamento com a unidade vinculada (ou null) e o valor.
  */
@@ -45,7 +66,8 @@ export function comparativoPorUnidade(
 ): LinhaComparativo[] {
   const porId = new Map(unidades.map((u) => [u.id, u]));
   const acc = new Map<string, { unidadeId: number | null; contratacoes: number; planejado: number; orcamento: number }>();
-  const k = (id: number | null) => (id != null && porId.has(id) ? `u${id}` : "sem");
+  const ids = new Set(porId.keys());
+  const k = (id: number | null) => chaveUnidadeComparativo(id, ids);
   const pega = (id: number | null) => {
     const key = k(id);
     const cur = acc.get(key) ?? { unidadeId: key === "sem" ? null : id, contratacoes: 0, planejado: 0, orcamento: 0 };

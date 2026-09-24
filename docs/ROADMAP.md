@@ -925,6 +925,15 @@ mensagem de erro/aviso**, sem o aviso de incorporado e sem informações redunda
 planejamento**. Das assinaturas fica só o **Responsável pela solicitação** (nome, função, ato). O histórico mostra **só o que
 passou por protocolos incorporados**, **sem o autor**. Os dados são **higienizados no servidor**: sem CPF/e-CPF/CNPJ, e-mail,
 telefone e matrícula (inclusive mascarados no texto livre das seções, da capa e do histórico).
+
+### Origem dos dados: linhas do Orçamento do PCA e todos os gráficos dos dashboards — entregue
+Clicar numa **linha do comparativo do Orçamento do PCA** abre o banner **"Origem dos dados"**, com os **lançamentos do CUBO**
+daquela unidade (Órgão · Unidade no CUBO · Elemento · Código · Dotação — orçamento/ano, visão e Vínculos informados) e as
+**contratações do PCA** (os itens incorporados, que abrem o banner do item; ou as planilhas, na fonte lista). O MESMO banner
+abre ao clicar numa **fatia/barra** dos gráficos do Dashboard do PCA (painel e tela inicial — os itens daquele recorte, pela
+mesma chave do gráfico; itens ANUAIS com 1/12 no cronograma), nos quadros do **Dashboard de governança da Mesa** (os
+protocolos de cada estado/situação/faixa de tempo/semana e os DFDs de cada unidade — abrem os banners da Mesa) e nas
+**métricas das Integrações** (o dia e a fonte Cloudflare). A soma do detalhe é sempre a do número clicado (testado).
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar

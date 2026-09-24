@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import {
   type DfdPainel,
   DIAS_ALERTA,
+  dfdsDoRecorte,
+  ESTADOS_PAINEL,
+  FAIXAS_IDADE,
+  protocolosDoRecorte,
   type EstadoPainel,
   MAX_RESPONSAVEIS,
   MAX_UNIDADES,
@@ -235,5 +239,34 @@ describe("painelMesa — Dashboard de governança da Mesa (puro)", () => {
   it("valores não numéricos nos protocolos não viram NaN", () => {
     const r = painelMesa({ ...vazio, protocolos: [P(1, null, { valor: Number.NaN }), P(2, null, { valor: 5 })] }, AGORA);
     assert.equal(r.saude.regular.valor, 5);
+  });
+});
+
+describe("origem dos dados do Dashboard da Mesa (a MESMA chave do agregado)", () => {
+  const protos: ProtocoloPainel[] = [
+    P(1, "2026-09-24T12:00:00Z", { estado: "erro", situacaoId: 5 }),
+    P(2, "2026-09-10T12:00:00Z", { estado: "regular", situacaoId: 9 }), // situação apagada → Sem situação
+    P(3, "2026-07-01T12:00:00Z", { estado: "atencao" }),
+    P(4, null, { estado: "conferindo", situacaoId: 5 }),
+    P(5, "2026-09-21T02:00:00Z", { estado: "regular" }), // dia 20/09 em Brasília (domingo)
+  ];
+  const sit = [5, 6];
+  const p = painelMesa({ protocolos: protos, dfds: [], situacoes: sit }, AGORA);
+  it("cada fatia soma exatamente o que o agregado conta", () => {
+    for (const e of ESTADOS_PAINEL) assert.equal(protocolosDoRecorte(protos, { dim: "estado", estado: e }, sit, AGORA).length, p.saude[e].n);
+    for (const s of p.situacoes) assert.equal(protocolosDoRecorte(protos, { dim: "situacao", id: s.id }, sit, AGORA).length, s.n);
+    for (let i = 0; i < FAIXAS_IDADE.length; i++)
+      assert.equal(protocolosDoRecorte(protos, { dim: "idade", faixa: i }, sit, AGORA).length, p.faixasIdade[i].n);
+    for (const w of p.semanas) assert.equal(protocolosDoRecorte(protos, { dim: "semana", inicio: w.inicio }, sit, AGORA).length, w.n);
+  });
+  it("Sem situação inclui a situação apagada; sem data fica fora do tempo/semana", () => {
+    assert.deepEqual(protocolosDoRecorte(protos, { dim: "situacao", id: null }, sit, AGORA).map((x) => x.id), [2, 3, 5]);
+    assert.ok(!protocolosDoRecorte(protos, { dim: "idade", faixa: 0 }, sit, AGORA).some((x) => x.id === 4));
+  });
+  it("unidades: pelas chaves, e a linha 'Outras' = fora das chaves", () => {
+    const ds = [D("SMS", 10), D("SME", 20), D(null, 5)];
+    const q = painelMesa({ protocolos: [], dfds: ds, situacoes: [] }, AGORA);
+    for (const u of q.unidades) assert.equal(dfdsDoRecorte(ds, [u.chave]).length, u.dfds);
+    assert.equal(dfdsDoRecorte(ds, [q.unidades[0].chave], true).length, 2);
   });
 });

@@ -11,9 +11,11 @@ import {
 } from "recharts";
 import type { PontoMensal } from "@/lib/queries";
 import { brl, brlCompact, mesLabel, num } from "@/lib/format";
+import type { RecorteDash } from "@/lib/origem-dash";
 import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
-export function MensalChart({ data }: { data: PontoMensal[] }) {
+/** `onSelecionar` (opcional): clicar numa barra abre a ORIGEM dos dados daquele mês. */
+export function MensalChart({ data, onSelecionar }: { data: PontoMensal[]; onSelecionar?: (r: RecorteDash, rotulo: string) => void }) {
   const tk = useChartTokens();
   const rows = data.map((d) => ({
     label: mesLabel(d.mes, d.ano),
@@ -56,7 +58,14 @@ export function MensalChart({ data }: { data: PontoMensal[] }) {
               );
             }}
           />
-          <Bar dataKey="total" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} maxBarSize={46} />
+          <Bar
+            dataKey="total"
+            fill={CHART_COLORS[0]}
+            radius={[6, 6, 0, 0]}
+            maxBarSize={46}
+            onClick={onSelecionar ? (_, i) => onSelecionar({ dim: "mes", ano: data[i].ano, mes: data[i].mes }, rows[i].label) : undefined}
+            className={onSelecionar ? "cursor-pointer" : undefined}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

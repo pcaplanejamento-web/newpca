@@ -1,12 +1,6 @@
-import type { ReactNode } from "react";
 import { brl, brlCompact, num } from "@/lib/format";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries";
-import { ChartCard } from "./ChartCard";
-import { ClassificacaoChart } from "./charts/ClassificacaoChart";
-import { MensalChart } from "./charts/MensalChart";
-import { TopItensChart } from "./charts/TopItensChart";
-import { UnidadeChart } from "./charts/UnidadeChart";
-import { ItemTable } from "./ItemTable";
+import { type ConsultaDashboard, DashboardPcaCliente } from "./DashboardPcaCliente";
 import { KpiStat } from "./KpiStat";
 
 export type DadosPainelPca = {
@@ -21,7 +15,7 @@ export type DadosPainelPca = {
 /**
  * DASHBOARD do PCA — os MESMOS KPIs e gráficos da tela inicial pública, no painel (aba Dashboard do
  * PCA) e na própria tela inicial. `hintItens` troca o complemento do KPI de itens (ex.: "5
- * protocolo(s) · 68 DFDs" na fonte protocolo).
+ * protocolo(s) · 68 DFDs" na fonte protocolo). Gráficos + consulta = `DashboardPcaCliente` (clique → origem dos dados).
  */
 export function PainelPca({
   dados,
@@ -32,12 +26,12 @@ export function PainelPca({
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
   hintItens?: string;
-  /** Substitui a tabela padrão da "Consulta de Itens" (painel: `ConsultaPca` — Itens | DFDs + banners). */
-  consulta?: ReactNode;
+  /** PCA de fonte protocolo: a consulta Protocolos · DFDs · Itens + banners discretos (`ConsultaPca`). */
+  consulta?: ConsultaDashboard;
 }) {
   const { resumo } = dados;
   return (
-    <div className="space-y-[var(--gap-block)]">
+    <div className="space-y-[var(--gap-col)]">
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat label="Total Planejado" value={brlCompact(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
         <KpiStat
@@ -50,24 +44,16 @@ export function PainelPca({
         <KpiStat label="Maior Item" value={brlCompact(resumo.maiorValor)} cor="var(--sit-devolvido)" hint={resumo.maiorNome ?? "—"} />
       </div>
 
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
-        <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
-          <ClassificacaoChart data={dados.porClassificacao} />
-        </ChartCard>
-        <ChartCard title="Cronograma Mensal" subtitle="Valor planejado por mês desejado">
-          <MensalChart data={dados.porMes} />
-        </ChartCard>
-        <ChartCard title="Top 10 Itens por Valor" subtitle="Maiores contratações planejadas">
-          <TopItensChart data={dados.top} />
-        </ChartCard>
-        <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
-          <UnidadeChart data={dados.porUnidadeMedida} />
-        </ChartCard>
-      </div>
-
-      <ChartCard title="Consulta de Itens" subtitle={consulta ? "Itens e DFDs do PCA — clique numa linha para ver o detalhe" : "Busque, filtre e ordene os itens do PCA"}>
-        {consulta ?? <ItemTable rows={dados.itens} showUnidade={!unidadeFiltrada} />}
-      </ChartCard>
+      <DashboardPcaCliente
+        porClassificacao={dados.porClassificacao}
+        porMes={dados.porMes}
+        porUnidadeMedida={dados.porUnidadeMedida}
+        top={dados.top}
+        itens={dados.itens}
+        totalItens={resumo.count}
+        showUnidade={!unidadeFiltrada}
+        consulta={consulta}
+      />
     </div>
   );
 }

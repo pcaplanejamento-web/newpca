@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { Metricas } from "@/lib/cloudflare-core";
+import type { Metricas, PontoMetrica } from "@/lib/cloudflare-core";
 import { CATALOGO_INTEGRACOES, type IntegracoesView } from "@/lib/integracoes-core";
 import { num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
@@ -10,10 +10,18 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ChartCard } from "./ChartCard";
 import { MetricasChart } from "./charts/MetricasChart";
+import { type Column, DataTable } from "./DataTable";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconActivity, IconAlert, IconKey, IconPlug, IconRefresh, IconShield } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { OrigemDados } from "./OrigemDados";
 import { toast } from "./Toast";
+
+const COLS_DIA: Column<PontoMetrica>[] = [
+  { key: "data", header: "Dia", nowrap: true, value: (p) => p.data, render: (p) => <span className="tabular-nums">{p.data.split("-").reverse().join("/")}</span> },
+  { key: "req", header: "Requisições", nowrap: true, filter: "range", numero: (p) => p.requests, render: (p) => num(p.requests) },
+  { key: "err", header: "Erros", nowrap: true, filter: "range", numero: (p) => p.errors, render: (p) => num(p.errors) },
+];
 
 // Tela de Integrações do ADM (admin-only). Escopo atual: Cloudflare (Turnstile + monitoramento).
 // Segredos são write-only: o secret do Turnstile é cifrado no servidor e nunca reexibido; o
@@ -64,6 +72,8 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
   const [siteKey, setSiteKey] = useState(integracoes.turnstile.siteKey);
   const [secret, setSecret] = useState(""); // sempre começa vazio (write-only)
   const [monAtivo, setMonAtivo] = useState(integracoes.monitoramento.ativo);
+  const [dia, setDia] = useState<PontoMetrica | null>(null);
+  const [diaMostrado, setDiaMostrado] = useState<PontoMetrica | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState<"turnstile" | "monitoramento" | null>(null);
 
@@ -234,9 +244,36 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
                     <KpiStat label="Taxa de erro" value={`${metricas.erroPct}%`} cor={metricas.erroPct >= 1 ? "var(--danger)" : "var(--ok)"} />
                     <KpiStat label="CPU p99" value={metricas.cpuP99 != null ? `${num(metricas.cpuP99)} µs` : "—"} />
                   </div>
-                  <ChartCard title="Requisições por dia" subtitle="Últimos 7 dias">
-                    <MetricasChart data={metricas.dias} />
+                  <ChartCard title="Requisições por dia" subtitle="Últimos 7 dias — clique numa barra para ver a origem">
+                    <MetricasChart
+                      data={metricas.dias}
+                      onSelecionar={(p) => {
+                        setDia(p);
+                        setDiaMostrado(p);
+                      }}
+                    />
                   </ChartCard>
+                  <OrigemDados
+                    aberto={dia != null}
+                    onClose={() => setDia(null)}
+                    titulo="Requisições por dia"
+                    recorte={diaMostrado ? diaMostrado.data.split("-").reverse().join("/") : ""}
+                    resumo={[
+                      { label: "Requisições", value: num(diaMostrado?.requests ?? 0) },
+                      { label: "Erros", value: num(diaMostrado?.errors ?? 0) },
+                    ]}
+                    fonte="Cloudflare Workers Analytics (API GraphQL) da conta configurada nas Integrações — somatório diário do Worker, com cache de 60 s."
+                  >
+                    <DataTable
+                      columns={COLS_DIA}
+                      rows={metricas.dias}
+                      getKey={(p) => p.data}
+                      activeKey={diaMostrado?.data ?? null}
+                      pageSize={20}
+                      minWidth={360}
+                      resumo={(ps) => `${num(ps.length)} dia(s) · ${num(ps.reduce((s, p) => s + p.requests, 0))} requisições · ${num(ps.reduce((s, p) => s + p.errors, 0))} erros`}
+                    />
+                  </OrigemDados>
                 </>
               ) : (
                 <p className="text-[13px] text-muted">{carregandoMetricas ? "Carregando métricas…" : "Sem métricas."}</p>
