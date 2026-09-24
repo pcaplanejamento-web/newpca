@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getAparencia } from "@/lib/aparencia";
 import { num } from "@/lib/format";
-import { dashboardDoPca, getPcaEspaco, listarPcasPublicados } from "@/lib/pca-espaco";
+import { dashboardDoPca, getPcaEspaco, itemPublico, listarPcasPublicados } from "@/lib/pca-espaco";
 import type { Aparencia } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -105,7 +105,7 @@ export default async function HomePage({
           </div>
         </div>
         <PainelPca
-          dados={dados}
+          dados={{ ...dados, itens: dados.itens.map(itemPublico) }}
           unidadeFiltrada={dados.unidadeId != null}
           hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
         />

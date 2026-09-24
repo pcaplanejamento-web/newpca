@@ -374,6 +374,18 @@ export async function retirarItensDoPca(pcaId: number, dfdItemIds: number[], usu
 // Dashboard (as MESMAS formas do público)
 // ---------------------------------------------------------------------------
 
+/** Um DFD vigente do PCA (visão "DFDs" da consulta do Dashboard). */
+export type DfdDoPca = {
+  id: number;
+  numero: string;
+  planejamento: string | null;
+  tipo: string | null;
+  sigla: string | null;
+  protocoloNumero: string | null;
+  itens: number;
+  valor: number;
+};
+
 export type DashboardPca = {
   resumo: Resumo;
   porClassificacao: Fatia[];
@@ -387,6 +399,8 @@ export type DashboardPca = {
   /** Protocolos incorporados ao PCA (só fonte protocolo). */
   protocolos: number;
   dfds: number;
+  /** DFDs VIGENTES do PCA com os totais dos itens ATIVOS (só fonte protocolo — a visão "DFDs" do painel). */
+  dfdsLista: DfdDoPca[];
 };
 
 const vazioDash = (): DashboardPca => ({
@@ -399,6 +413,7 @@ const vazioDash = (): DashboardPca => ({
   unidades: [],
   protocolos: 0,
   dfds: 0,
+  dfdsLista: [],
 });
 
 /**
@@ -413,22 +428,37 @@ export async function itensConsolidados(pca: PcaEspaco) {
   ]);
   const cons = consolidarPca(vs);
   const numero = new Map(numeros.filter((n) => n.dfdItemId != null).map((n) => [n.dfdItemId as number, n]));
-  const meta = new Map<number, { numero: string; tipo: string | null; secoes: string | null; anoPca: number | null; reparticaoId: number | null; sigla: string | null }>();
-  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null })[] = [];
+  const meta = new Map<
+    number,
+    {
+      numero: string;
+      planejamento: string | null;
+      tipo: string | null;
+      secoes: string | null;
+      anoPca: number | null;
+      reparticaoId: number | null;
+      sigla: string | null;
+      protocoloNumero: string | null;
+    }
+  >();
+  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null })[] = [];
   for (const lote of lotesDeIds(cons.vigentes)) {
     const [ds, its] = await Promise.all([
       db
         .select({
           id: dfds.id,
           numero: dfds.numero,
+          planejamento: dfds.planejamento,
           tipo: dfds.tipo,
           secoes: dfds.secoes,
           anoPca: dfds.anoPca,
           reparticaoId: dfds.reparticaoId,
           sigla: reparticoes.codigo,
+          protocoloNumero: dfdProtocolos.numero,
         })
         .from(dfds)
         .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+        .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
         .where(inArray(dfds.id, lote)),
       db.select().from(dfdItens).where(inArray(dfdItens.dfdId, lote)).orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial)),
     ]);
@@ -447,6 +477,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
       itens.push({
         id: it.id,
         dfdId: it.dfdId,
+        itemNumero: it.item,
         reparticaoId: d?.reparticaoId ?? null,
         codigoProduto: it.codigo,
         sequencial: n?.sequencial ?? it.item ?? it.sequencial,
@@ -463,7 +494,13 @@ export async function itensConsolidados(pca: PcaEspaco) {
     }
   }
   const protocolos = new Set(vs.map((v) => v.protocoloId).filter((x): x is number => x != null));
-  return { itens, vinculos: vs, consolidacao: cons, protocolos: protocolos.size };
+  return { itens, meta, vinculos: vs, consolidacao: cons, protocolos: protocolos.size };
+}
+
+/** Item do dashboard SEM a origem no DFD (tela inicial pública: sem banners, nada além do necessário vai ao navegador). */
+export function itemPublico(r: ItemRow): ItemRow {
+  const { dfdId: _d, dfdNumero: _n, protocoloNumero: _p, itemNumero: _i, ...publico } = r;
+  return publico;
 }
 
 /** Dados do dashboard do PCA — o MESMO no painel e na tela inicial. */
@@ -480,7 +517,7 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
       getTopItens(unidadeId, 10, pca.id),
       getItensTodos(unidadeId, 5000, pca.id),
     ]);
-    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0 };
+    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [] };
   }
   const c = await itensConsolidados(pca);
   const reps = new Map<number, string>();
@@ -505,10 +542,35 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
       dataDesejada: i.previsao && !("anual" in i.previsao) ? `${i.previsao.ano}-${String(i.previsao.mes).padStart(2, "0")}-01` : null,
       codigo: i.unidade,
       municipio: i.origem,
+      dfdId: i.dfdId,
+      dfdNumero: c.meta.get(i.dfdId)?.numero ?? null,
+      protocoloNumero: c.meta.get(i.dfdId)?.protocoloNumero ?? null,
+      itemNumero: i.itemNumero,
     }));
+  // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
+  const porDfd = new Map<number, DfdDoPca>();
+  for (const i of lista) {
+    const m = c.meta.get(i.dfdId);
+    const d =
+      porDfd.get(i.dfdId) ??
+      ({
+        id: i.dfdId,
+        numero: m?.numero ?? String(i.dfdId),
+        planejamento: m?.planejamento ?? null,
+        tipo: m?.tipo ?? null,
+        sigla: m?.sigla ?? null,
+        protocoloNumero: m?.protocoloNumero ?? null,
+        itens: 0,
+        valor: 0,
+      } satisfies DfdDoPca);
+    d.itens += 1;
+    d.valor += i.valorTotal;
+    porDfd.set(i.dfdId, d);
+  }
   return {
     ...ag,
     itens,
+    dfdsLista: [...porDfd.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
     protocolos: c.protocolos,

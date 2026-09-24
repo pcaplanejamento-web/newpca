@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { brl, brlCompact, num } from "@/lib/format";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries";
 import { ChartCard } from "./ChartCard";
@@ -26,10 +27,13 @@ export function PainelPca({
   dados,
   unidadeFiltrada = false,
   hintItens,
+  consulta,
 }: {
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
   hintItens?: string;
+  /** Substitui a tabela padrão da "Consulta de Itens" (painel: `ConsultaPca` — Itens | DFDs + banners). */
+  consulta?: ReactNode;
 }) {
   const { resumo } = dados;
   return (
@@ -61,8 +65,8 @@ export function PainelPca({
         </ChartCard>
       </div>
 
-      <ChartCard title="Consulta de Itens" subtitle="Busque, filtre e ordene os itens do PCA">
-        <ItemTable rows={dados.itens} showUnidade={!unidadeFiltrada} />
+      <ChartCard title="Consulta de Itens" subtitle={consulta ? "Itens e DFDs do PCA — clique numa linha para ver o detalhe" : "Busque, filtre e ordene os itens do PCA"}>
+        {consulta ?? <ItemTable rows={dados.itens} showUnidade={!unidadeFiltrada} />}
       </ChartCard>
     </div>
   );

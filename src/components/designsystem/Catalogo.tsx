@@ -91,6 +91,7 @@ import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
+import { ItemTable } from "@/components/ItemTable";
 import { PlanilhaDfds, TabelaSobrescritos } from "@/components/PlanilhaDfds";
 import { RelatorioErros } from "@/components/RelatorioErros";
 import { Segmented } from "@/components/Segmented";
@@ -1887,6 +1888,28 @@ export function Catalogo() {
             { key: 1, numero: "531", planejamento: "600", sigla: "FMS", tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", protocolo: "144756/2026", assinaturas: ["centi"], validacao: "auto" },
             { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", protocolo: "144756/2026", resumo: resumoEstado([{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: "DFD-R sem referência." }]) },
             { key: 8, numero: "900", planejamento: "950", sigla: "SMS", tipo: null, itens: 3, valor: 900, estado: "pendente", processando: "conferindo", protocolo: null },
+          ]}
+        />
+      </Secao>
+
+      <Secao titulo="PlanilhaDfds semEstado (Dashboard do PCA — só dados, nenhum erro/atenção apontado)">
+        <PlanilhaDfds
+          semEstado
+          linhas={[
+            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", protocolo: "144756/2026" },
+            { key: 2, numero: "712", planejamento: "798", sigla: "SMS", tipo: "DFD-S", itens: 44, valor: 812340.5, estado: "regular", protocolo: "130356/2026" },
+          ]}
+        />
+      </Secao>
+
+      <Secao titulo="ItemTable (Consulta de Itens do Dashboard — todas as colunas filtráveis; com origem, a linha abre o banner do item)">
+        <ItemTable
+          origem
+          showUnidade
+          onRowClick={(r) => toast(`Abrir o banner do item ${r.sequencial}`)}
+          rows={[
+            { id: 1, sequencial: 1, idProduto: "1001", nomeProduto: "CANETA ESFEROGRÁFICA AZUL", unidadeMedida: "UN", quantidade: 200, valorReferencia: 1.5, valorTotal: 300, classificacao: "Solução", dataDesejada: "2027-03-01", codigo: "SMS", municipio: "DFD 531", dfdId: 1, dfdNumero: "531", protocoloNumero: "144756/2026", itemNumero: 1 },
+            { id: 2, sequencial: 2, idProduto: "2044", nomeProduto: "PAPEL A4 75G", unidadeMedida: "RESMA", quantidade: 80, valorReferencia: 28, valorTotal: 2240, classificacao: "Solução", dataDesejada: null, codigo: "SMS", municipio: "DFD 531", dfdId: 1, dfdNumero: "531", protocoloNumero: "144756/2026", itemNumero: 2 },
           ]}
         />
       </Secao>

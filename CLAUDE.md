@@ -1177,6 +1177,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
   scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha).
+- **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
+  `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
+  `density="compact"`, busca por produto/código (vários com ":"). No PAINEL, PCA de fonte protocolo, o cartão recebe a
+  **`ConsultaPca`** (`PainelPca.consulta`): `Segmented` **Itens | DFDs** (morph) — itens com a ORIGEM (Protocolo · Nº DFD,
+  `ItemRow.dfdId/dfdNumero/protocoloNumero/itemNumero`) e a `PlanilhaDfds` **`semEstado`** (sem a coluna Estado, tabela
+  única; `DashboardPca.dfdsLista` = DFDs vigentes com os totais dos itens ATIVOS) — e a MESMA pilha **`BannersMesa`**: a linha
+  de item abre o banner do ITEM ("Ver DFD"/"Ver protocolo" empilham), a de DFD o banner do DFD; gravar recarrega. O contexto
+  dos banners vem de **`contextoBanners(u)`** (`mesa-dados.ts`, reusado por `carregarMesa`), carregado só nessa aba/fonte. A
+  tela inicial pública NÃO tem clique e recebe os itens sem a origem (`itemPublico`).
 - **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
   qualquer que seja a situação).
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por

@@ -83,6 +83,7 @@ export function PlanilhaDfds({
   unica = false,
   regras,
   reservaInferior = 0,
+  semEstado = false,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -103,11 +104,15 @@ export function PlanilhaDfds({
   regras?: RegrasAvaliacao;
   /** Altura reservada no fim do display (barra de seleção fixa) — repassada ao `DataTable`. */
   reservaInferior?: number;
+  /** Só DADOS (ex.: Dashboard do PCA): sem a coluna Estado — nenhum erro/atenção apontado; tabela única. */
+  semEstado?: boolean;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
 
-  const cols: Column<LinhaDfd>[] = [
+  const colEstado: Column<LinhaDfd>[] = semEstado
+    ? []
+    : [
     {
       key: "estado",
       header: "Estado",
@@ -138,6 +143,9 @@ export function PlanilhaDfds({
         return <EstadoPonto cor={estadoCor(r.estado, regras)} rotulo={estadoRotulo(r.estado, regras)} />;
       },
     },
+      ];
+  const cols: Column<LinhaDfd>[] = [
+    ...colEstado,
     ...(temSituacao
       ? [
           {
@@ -270,7 +278,7 @@ export function PlanilhaDfds({
   } as const;
 
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
-  if (unica) {
+  if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...comum} />;
     if (fillHeight) return <DataTable rows={linhas} fillHeight pageSize={12} {...comum} />;
     return <DataTable rows={linhas} pageSize={compacta ? 12 : 20} {...comum} />;
