@@ -100,6 +100,7 @@ export function Historico({
   escopo = "global",
   protocoloId = null,
   item = null,
+  anonimo = false,
 }: {
   entradas: LinhaHistorico[];
   vazio?: string;
@@ -110,6 +111,8 @@ export function Historico({
   protocoloId?: number | null;
   /** (escopo item) o item: nº no DFD + código. */
   item?: { item: number | null; codigo: string | null } | null;
+  /** Consulta pública: sem o autor das alterações. */
+  anonimo?: boolean;
 }) {
   const [filtro, setFiltro] = useState<FiltroHistorico>("tudo");
   const linhas = useMemo<Linha[]>(() => entradas.map((l) => ({ ...l, alt: interpretarAlteracao(l) })), [entradas]);
@@ -136,7 +139,7 @@ export function Historico({
       <ul className="space-y-2">
         {doItem.map(({ linha, alteracao, item: dif }) => (
           <li key={linha.id} className="rounded-card border border-border bg-surface p-3 shadow-ring">
-            <Meta l={linha} escopo="item" protocoloId={null} />
+            <Meta l={linha} escopo="item" protocoloId={null} anonimo={anonimo} />
             <div className="mt-2 space-y-1.5">
               {dif ? (
                 <DiffItem it={dif} rotulos={ROTULOS_HISTORICO} compacto />
@@ -180,7 +183,7 @@ export function Historico({
       ) : (
         <ul className="space-y-2">
           {eventos.map((g) => (
-            <CartaoEvento key={g[0].id} linhas={g} escopo={escopo} protocoloId={protocoloId} />
+            <CartaoEvento key={g[0].id} linhas={g} escopo={escopo} protocoloId={protocoloId} anonimo={anonimo} />
           ))}
         </ul>
       )}
@@ -197,7 +200,7 @@ function viaProtocolo(l: LinhaHistorico, escopo: EscopoHistorico, protocoloId: n
 }
 
 /** Cabeçalho do cartão: canal (origem), protocolo, autor e data/hora (Brasília). */
-function Meta({ l, escopo, protocoloId }: { l: LinhaHistorico; escopo: EscopoHistorico; protocoloId: number | null }) {
+function Meta({ l, escopo, protocoloId, anonimo }: { l: LinhaHistorico; escopo: EscopoHistorico; protocoloId: number | null; anonimo: boolean }) {
   const origem = l.origem && l.origem in ROTULO_ORIGEM ? (l.origem as OrigemAuditoria) : null;
   const via = viaProtocolo(l, escopo, protocoloId);
   return (
@@ -209,10 +212,12 @@ function Meta({ l, escopo, protocoloId }: { l: LinhaHistorico; escopo: EscopoHis
           {via}
         </span>
       )}
-      <span className="inline-flex min-w-0 items-center gap-1">
-        <IconUser className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{l.usuarioNome ?? "Sistema"}</span>
-      </span>
+      {!anonimo && (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <IconUser className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{l.usuarioNome ?? "Sistema"}</span>
+        </span>
+      )}
       <span className="inline-flex items-center gap-1 sm:ml-auto">
         <IconClock className="h-3.5 w-3.5 shrink-0" />
         {dataHoraBR(l.criadoEm)}
@@ -222,7 +227,17 @@ function Meta({ l, escopo, protocoloId }: { l: LinhaHistorico; escopo: EscopoHis
 }
 
 /** UM evento (uma ou mais alterações feitas juntas) — cada alteração numa linha recolhível. */
-function CartaoEvento({ linhas, escopo, protocoloId }: { linhas: Linha[]; escopo: EscopoHistorico; protocoloId: number | null }) {
+function CartaoEvento({
+  linhas,
+  escopo,
+  protocoloId,
+  anonimo,
+}: {
+  linhas: Linha[];
+  escopo: EscopoHistorico;
+  protocoloId: number | null;
+  anonimo: boolean;
+}) {
   const [todas, setTodas] = useState(false);
   const unica = linhas.length === 1;
   // A capa do protocolo abre o evento (na protocolação ela é gravada ANTES dos DFDs — viria por último).
@@ -230,7 +245,7 @@ function CartaoEvento({ linhas, escopo, protocoloId }: { linhas: Linha[]; escopo
   const vis = todas ? ordem : ordem.slice(0, VISIVEIS);
   return (
     <li className="rounded-card border border-border bg-surface p-3 shadow-ring">
-      <Meta l={linhas[0]} escopo={escopo} protocoloId={protocoloId} />
+      <Meta l={linhas[0]} escopo={escopo} protocoloId={protocoloId} anonimo={anonimo} />
       {!unica && <p className="mt-1.5 text-[12px] font-semibold text-muted">{num(linhas.length)} alterações neste evento</p>}
       <ul className="mt-1 divide-y divide-border">
         {vis.map((l) => (
@@ -355,17 +370,21 @@ function DetalheAlteracao({ a }: { a: AlteracaoHistorico }) {
  * só ao abrir e mostra o que tocou este item — com o canal e o protocolo de cada alteração.
  */
 export function HistoricoDoItem({
-  dfdId,
+  url,
   item,
   entradas,
+  anonimo = false,
 }: {
-  dfdId: number;
+  /** Rota do histórico do DFD (a do painel ou a PÚBLICA da consulta do PCA). */
+  url: string;
   item: { item: number | null; codigo: string | null };
   /** Histórico do DFD já carregado pelo host (sem ele, carrega ao abrir). */
   entradas?: LinhaHistorico[];
+  /** Consulta pública: sem o autor. */
+  anonimo?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
-  const remoto = useHistorico(aberto && !entradas ? `/api/dfd/${dfdId}/historico` : null);
+  const remoto = useHistorico(aberto && !entradas ? url : null);
   const linhas = entradas ?? remoto.linhas;
   const erro = entradas ? null : remoto.erro;
   return (
@@ -388,6 +407,7 @@ export function HistoricoDoItem({
             erro={erro}
             escopo="item"
             item={item}
+            anonimo={anonimo}
             vazio="Nenhuma alteração registrada neste item."
           />
         </div>

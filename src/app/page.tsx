@@ -1,5 +1,6 @@
 import { Button } from "@/components/Button";
 import { IconInbox } from "@/components/icons";
+import { ConsultaPca } from "@/components/ConsultaPca";
 import { PainelPca } from "@/components/PainelPca";
 import { PcaSeletor } from "@/components/PcaSeletor";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -108,6 +109,12 @@ export default async function HomePage({
           dados={dados}
           unidadeFiltrada={dados.unidadeId != null}
           hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
+          consulta={
+            // A MESMA consulta do painel (Protocolos · DFDs · Itens + banners discretos, dados públicos higienizados).
+            pca.fonte === "protocolo" ? (
+              <ConsultaPca pcaId={pca.id} protocolos={dados.protocolosLista} dfds={dados.dfdsLista} itens={dados.itens} showUnidade={dados.unidadeId == null} />
+            ) : undefined
+          }
         />
       </main>
     </div>

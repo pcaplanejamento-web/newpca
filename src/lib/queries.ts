@@ -210,6 +210,12 @@ export type ItemRow = {
   dataDesejada: string | null;
   codigo: string | null;
   municipio: string | null;
+  /** Origem no DFD (só PCA de fonte protocolo): abre o banner do item/DFD no painel. */
+  dfdId?: number;
+  dfdNumero?: string | null;
+  protocoloNumero?: string | null;
+  /** Nº do item na tabela do DFD (a chave do banner do item, com o código). */
+  itemNumero?: number | null;
 };
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena

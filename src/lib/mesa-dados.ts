@@ -22,15 +22,38 @@ export function acessivelNaLista(lista: { id: number }[]) {
  * PCA é independente da unidade ativa). Mais as unidades enriquecidas com os RESPONSÁVEIS (conferência da
  * assinatura) e os campos de MATCH.
  */
-export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
-  const [rep, repCtx] = await Promise.all([getReparticaoFiltro(u), getReparticaoContexto(u)]);
-  const acessivel = acessivelNaLista(repCtx.lista);
-  const [dfdsBrutos, protocolosBrutos, pcas, regras, orgaos, pessoas, situacoes] = await Promise.all([
-    pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id),
-    pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id),
+/**
+ * O que os BANNERS gravados (`BannersMesa`: protocolo · DFD · item) precisam: as unidades ACESSÍVEIS enriquecidas com os
+ * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e se edita.
+ */
+async function contextoBanners(u: UsuarioSessao | null) {
+  const repCtx = await getReparticaoContexto(u);
+  const ids = repCtx.lista.map((r) => r.id);
+  const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
+    responsaveisPorReparticao(ids),
+    dadosMatchPorReparticao(ids),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
+  ]);
+  const reparticoes = repCtx.lista.map((r) => ({
+    ...r,
+    responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
+    numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
+    setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
+    orgaoId: matchMap[r.id]?.orgaoId ?? null,
+    orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
+    oculto: matchMap[r.id]?.oculto ?? false,
+  }));
+  return { lista: repCtx.lista, reparticoes, pcas, regras, orgaos, podeEditar: u?.role === "admin" || u?.role === "gestor" };
+}
+
+export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
+  const [rep, ctx] = await Promise.all([getReparticaoFiltro(u), contextoBanners(u)]);
+  const acessivel = acessivelNaLista(ctx.lista);
+  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes] = await Promise.all([
+    pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id),
+    pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
     getGrupoAtivoId(u).then(listarPessoasDoGrupo),
@@ -44,30 +67,19 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const outrasPessoas = await pessoasPorIds(
     protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]).filter((id) => id != null && !doGrupo.has(id)),
   );
-  const ids = repCtx.lista.map((r) => r.id);
-  const [respMap, matchMap] = await Promise.all([responsaveisPorReparticao(ids), dadosMatchPorReparticao(ids)]);
-  const reparticoes = repCtx.lista.map((r) => ({
-    ...r,
-    responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
-    numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
-    setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
-    orgaoId: matchMap[r.id]?.orgaoId ?? null,
-    orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
-    oculto: matchMap[r.id]?.oculto ?? false,
-  }));
   return {
     dfds,
     protocolos,
-    reparticoes,
+    reparticoes: ctx.reparticoes,
     // Em "Geral" (rep=null) não há unidade ativa específica — Geral comporta qualquer unidade.
     reparticaoAtivaId: rep?.id ?? null,
-    pcas,
-    regras,
-    orgaos,
+    pcas: ctx.pcas,
+    regras: ctx.regras,
+    orgaos: ctx.orgaos,
     pessoas,
     outrasPessoas,
     situacoes,
     usuarioId: u?.id ?? null,
-    podeEditar: u?.role === "admin" || u?.role === "gestor",
+    podeEditar: ctx.podeEditar,
   };
 }

@@ -818,6 +818,19 @@ inativa o número, que nunca é reaproveitado (coluna "Seq. PCA" na Mesa do PCA;
 Orçamento são os **mesmos** no painel e na tela inicial (sem Preview/Publicado por situação) e a **situação não interfere** no
 envio ao PCA. A barra de seleção fixa passou a ser renderizada por portal (alinhada em qualquer tela). Migração `0035`.
 
+
+### Consulta do Dashboard do PCA: Itens | DFDs + banners — entregue
+A tabela "Consulta de Itens" do Dashboard ganhou todas as melhorias das tabelas do sistema (filtros em todas as colunas,
+faixas numéricas, linha compacta, busca múltipla). No painel (PCA de fonte protocolo) ela alterna **Itens | DFDs**, abre o
+**banner do item** (e dele o DFD/protocolo) ou o do DFD — os mesmos banners da Mesa — sem apontar nenhum erro nas tabelas.
+
+### Consulta PÚBLICA do PCA: Protocolos | DFDs | Itens com banners discretos — entregue
+A consulta vale no painel **e na tela inicial pública**. Três visões (**Protocolos · DFDs · Itens**) e uma pilha de banners
+própria da consulta (protocolo | DFD | item) com **campos congelados** (aparência de campo, sem cadeado), **sem nenhuma
+mensagem de erro/aviso**, sem o aviso de incorporado e sem informações redundantes. O banner do item traz o **nº do DFD +
+planejamento**. Das assinaturas fica só o **Responsável pela solicitação** (nome, função, ato). O histórico mostra **só o que
+passou por protocolos incorporados**, **sem o autor**. Os dados são **higienizados no servidor**: sem CPF/e-CPF/CNPJ, e-mail,
+telefone e matrícula (inclusive mascarados no texto livre das seções, da capa e do histórico).
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar

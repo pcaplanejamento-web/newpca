@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { ConsultaPca } from "@/components/ConsultaPca";
 import { MesaPca } from "@/components/MesaPca";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
@@ -110,6 +111,11 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
         dados={dash}
         unidadeFiltrada={dash.unidadeId != null}
         hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
+        consulta={
+          pca.fonte === "protocolo" ? (
+            <ConsultaPca pcaId={pca.id} protocolos={dash.protocolosLista} dfds={dash.dfdsLista} itens={dash.itens} showUnidade={dash.unidadeId == null} />
+          ) : undefined
+        }
       />
     </div>
   );

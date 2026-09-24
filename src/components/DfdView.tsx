@@ -24,7 +24,7 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
-import { AutoTextarea, CadeadoBotao } from "./CampoCadeado";
+import { AutoTextarea, CadeadoBotao, CampoCongelado } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
 import { CelulaCatalogo, EstadoPonto, EstadoResumo } from "./EstadoCelula";
 import { IconFile, IconShield } from "./icons";
@@ -222,6 +222,7 @@ export function DfdView({
   onSecoesChange,
   secaoEditavel,
   categoria = null,
+  consulta = false,
 }: {
   dfd: DfdVisual;
   regras?: RegrasAvaliacao;
@@ -244,6 +245,9 @@ export function DfdView({
   secaoEditavel?: (s: { titulo: string; obrig?: string }) => boolean;
   /** Categoria do protocolo (assunto) — as exceções do ADM por categoria valem na pendência das seções. */
   categoria?: string | null;
+  /** CONSULTA (Dashboard do PCA, público): campos CONGELADOS, sem estado/pendências/avisos, sem matrícula/e-mail/
+   * telefone e sem assinaturas — só o Responsável pela solicitação. Tabela única de itens. */
+  consulta?: boolean;
 }) {
   const rep =
     dfd.reparticaoCodigo || dfd.reparticaoNome
@@ -251,21 +255,23 @@ export function DfdView({
       : "Sem unidade";
   const dfdTipo = tipoCurtoDfd(dfd.tipo);
   // Itens REPETIDOS (mesmo código, descrição e unidade — ponto `item.duplicado`, nunca bloqueia): cada um é
-  // marcado em ATENÇÃO com o Nº dos iguais (a célula Estado e o filtro juntam os repetidos).
+  // marcado em ATENÇÃO com o Nº dos iguais (a célula Estado e o filtro juntam os repetidos). Na CONSULTA não há
+  // coluna Estado nem pendências — não se calcula.
   const rows = useMemo<ItemK[]>(() => {
     const ctxDup = { dfdTipo, categoria };
-    const dupAtivo = comportamentoNo(regras, "item.duplicado", ctxDup) !== "ignora";
+    const dupAtivo = !consulta && comportamentoNo(regras, "item.duplicado", ctxDup) !== "ignora";
     const reps = dupAtivo ? repetidosDoDfd(dfd.itens) : null;
     const cor = corImportancia(regras, nivelDe(regras, "item.duplicado", ctxDup));
     return dfd.itens.map((it, i) => {
       const rep = reps?.get(i);
       return rep ? { ...it, _k: i, _rep: { ...rep, cor } } : { ...it, _k: i };
     });
-  }, [dfd.itens, regras, dfdTipo, categoria]);
+  }, [dfd.itens, regras, dfdTipo, categoria, consulta]);
   // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A
   // coluna é INFORMATIVA (o bloqueio, quando o ADM eleva a fundamental, é do nível do DFD);
   // por isso não altera a divisão erro/regular por item (que segue valor/quantidade).
   const columns = useMemo<Column<ItemK>[]>(() => {
+    if (consulta) return COLS.filter((c) => c.key !== "estado");
     if (!conformidade) return COLS;
     const cat: Column<ItemK> = {
       key: "catalogo",
@@ -277,12 +283,14 @@ export function DfdView({
     };
     const i = COLS.findIndex((c) => c.key === "codigo");
     return [...COLS.slice(0, i + 1), cat, ...COLS.slice(i + 1)];
-  }, [conformidade, regras, dfdTipo]);
+  }, [conformidade, regras, dfdTipo, consulta]);
   // Itens com pendência (falta valor/quantidade = erro; repetido = atenção — os iguais ficam juntos para comparar)
-  // numa tabela SEPARADA na análise; depois de protocolado (`unica`) é UMA tabela só (o filtro da coluna Estado separa).
+  // numa tabela SEPARADA na análise; depois de protocolado (`unica`) ou na CONSULTA é UMA tabela só (o filtro da
+  // coluna Estado separa).
+  const tabelaUnica = unica || consulta;
   const pendente = (r: ItemK) => itemComErro(r) || !!r._rep;
-  const rowsErro = unica ? [] : rows.filter(pendente);
-  const rowsOk = unica ? rows : rows.filter((r) => !pendente(r));
+  const rowsErro = tabelaUnica ? [] : rows.filter(pendente);
+  const rowsOk = tabelaUnica ? rows : rows.filter((r) => !pendente(r));
   const corPendencia = rowsErro.some((r) => itemComErro(r)) ? "var(--danger)" : "var(--warn)";
   // Texto de apoio da Seção 4 (abaixo da tabela) e as demais seções (sem a 4). As OBRIGATÓRIAS
   // ausentes aparecem como espaço "não preenchida" (aponta a falta e permite preencher com o cadeado).
@@ -306,9 +314,10 @@ export function DfdView({
         const o = obrigPorIdx.get(i);
         return { chave: o ? `obr:${o.kw}` : `s:${i}`, idx: i, numero: s.numero, titulo: s.titulo, texto: s.texto, obrig: o };
       });
-    // Ordem do documento pelo nº da seção (estável: seções de mesmo nº mantêm a ordem lida).
-    return [...reais, ...faltando].sort((a, b) => a.numero - b.numero);
-  }, [dfd.secoes]);
+    // Ordem do documento pelo nº da seção (estável: seções de mesmo nº mantêm a ordem lida). Na consulta, a
+    // obrigatória ausente não aparece (não se aponta falta).
+    return [...reais, ...(consulta ? [] : faltando)].sort((a, b) => a.numero - b.numero);
+  }, [dfd.secoes, consulta]);
   const dfdTipoCtx = { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria };
   /** Grava o texto de UMA seção (a real pelo índice; a obrigatória ausente é CRIADA). */
   const gravarSecao = (sx: SecaoExib, texto: string) => {
@@ -320,7 +329,7 @@ export function DfdView({
     !!onSecoesChange && (secaoEditavel ? secaoEditavel({ titulo: sx.titulo, obrig: sx.obrig?.chave }) : true);
   /** Pendência de uma seção OBRIGATÓRIA (mesma régua dos erros): rótulo + cor pela importância do ADM. */
   const pendenciaSecao = (sx: SecaoExib): { txt: string; cor: string } | null => {
-    if (!sx.obrig) return null;
+    if (!sx.obrig || consulta) return null;
     const sit = situacaoSecao(dfd.secoes, sx.obrig.kw, dfd.anoPca);
     if (sit === "ok") return null;
     // Mesma régua dos erros: a FALTA segue a importância da falta (Automático não rebaixa a Prioridade).
@@ -348,7 +357,21 @@ export function DfdView({
 
       {/* Seção 1 — Área requisitante (só-leitura). Oculta quando o `DfdConferir` mostra a versão
           EDITÁVEL acima (evita duplicar a seção). */}
-      {!ocultarSecao1 && (
+      {consulta ? (
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+          <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
+          <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+            <CampoCongelado label="Nº DFD" valor={dfd.numero} mono />
+            <CampoCongelado label="Planejamento" valor={dfd.planejamento} mono />
+            <CampoCongelado label="Ano do PCA" valor={dfd.anoPca != null ? String(dfd.anoPca) : null} />
+            <CampoCongelado label="Unidade" valor={rep} />
+            <CampoCongelado label="Objeto" valor={dfd.objeto} span />
+            <CampoCongelado label="Órgão/Entidade" valor={dfd.orgaoEntidade} span />
+            <CampoCongelado label="Setor Requisitante" valor={dfd.setorRequisitante} span />
+            <CampoCongelado label="Responsável" valor={dfd.responsavel} span />
+          </div>
+        </section>
+      ) : !ocultarSecao1 && (
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="anoPca">
           <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
@@ -371,12 +394,20 @@ export function DfdView({
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
           <h3 className="mb-4 text-sm font-bold text-text">Referências da renovação</h3>
           {/* Cada referência pode ter VÁRIOS nºs ("a; b") — exibidos lado a lado. */}
-          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
-            <Campo label="Nº do contrato" valor={listaRefs(dfd.numeroContrato).join(" · ") || "—"} />
-            <Campo label="Nº da ARP" valor={listaRefs(dfd.numeroAta).join(" · ") || "—"} />
-            <Campo label="Nº da licitação" valor={listaRefs(dfd.numeroLicitacao).join(" · ") || "—"} />
-          </dl>
-          {!dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
+          {consulta ? (
+            <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
+              <CampoCongelado label="Nº do contrato" valor={listaRefs(dfd.numeroContrato).join(" · ")} />
+              <CampoCongelado label="Nº da ARP" valor={listaRefs(dfd.numeroAta).join(" · ")} />
+              <CampoCongelado label="Nº da licitação" valor={listaRefs(dfd.numeroLicitacao).join(" · ")} />
+            </div>
+          ) : (
+            <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
+              <Campo label="Nº do contrato" valor={listaRefs(dfd.numeroContrato).join(" · ") || "—"} />
+              <Campo label="Nº da ARP" valor={listaRefs(dfd.numeroAta).join(" · ") || "—"} />
+              <Campo label="Nº da licitação" valor={listaRefs(dfd.numeroLicitacao).join(" · ") || "—"} />
+            </dl>
+          )}
+          {!consulta && !dfd.numeroContrato && !dfd.numeroAta && !dfd.numeroLicitacao && (
             <p className="mt-3 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--warn)" }}>
               <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
               Atenção: DFD-R sem referência de contrato, ARP ou licitação.
@@ -439,9 +470,10 @@ export function DfdView({
             editavel={podeEditarSecao(apoio)}
             onChange={(t) => gravarSecao(apoio, t)}
             apoio
+            congelado={consulta}
           />
         )}
-        {buracos.length > 0 && (
+        {!consulta && buracos.length > 0 && (
           <p className="mt-2 text-xs text-muted">
             Sequência interna com números pulados (normal — itens removidos/fracassados): faltam nº{" "}
             {buracos.slice(0, 40).join(", ")}
@@ -463,13 +495,35 @@ export function DfdView({
               onChange={(t) => gravarSecao(sx, t)}
               ancora={sx.obrig ? sx.obrig.chave.replace(/^dfd\./, "") : undefined}
               pendencia={pendenciaSecao(sx)}
+              congelado={consulta}
             />
           ))}
         </section>
       )}
 
+      {/* CONSULTA: das assinaturas, só o Responsável pela solicitação (nome, função, ato) — campos congelados. */}
+      {consulta && dfd.assinaturas.solicitante && (
+        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+          <h3 className="mb-4 text-sm font-bold text-text">
+            Responsável pela solicitação{dfd.assinaturas.solicitante.tipo === "temporario" ? " (temporário)" : ""}
+          </h3>
+          <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+            <CampoCongelado label="Nome" valor={dfd.assinaturas.solicitante.nome} span />
+            <CampoCongelado label="Função" valor={dfd.assinaturas.solicitante.funcao} />
+            {dfd.assinaturas.solicitante.nomeacao.tipo && <CampoCongelado label="Ato de nomeação" valor={atoTexto(dfd.assinaturas.solicitante.nomeacao)} />}
+          </div>
+          {dfd.assinaturas.solicitante.nomeacao.link && (
+            <div className="mt-3">
+              <LinkExterno href={dfd.assinaturas.solicitante.nomeacao.link} icon={<IconFile className="h-4 w-4" />}>
+                Ver {rotuloAto(dfd.assinaturas.solicitante.nomeacao)}
+              </LinkExterno>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Assinaturas Digitais (certificado/sistema, Dropsigner, Adobe) */}
-      {dfd.assinaturas.lista.length > 0 && (
+      {!consulta && dfd.assinaturas.lista.length > 0 && (
         <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="assinatura">
           <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais</h3>
           <p className="mb-4 text-xs text-muted">
@@ -645,6 +699,7 @@ function SecaoCard({
   ancora,
   pendencia = null,
   apoio = false,
+  congelado = false,
 }: {
   titulo: string;
   texto: string;
@@ -654,6 +709,8 @@ function SecaoCard({
   pendencia?: { txt: string; cor: string } | null;
   /** Texto de apoio da Seção 4 (abaixo da tabela de itens) — estilo discreto. */
   apoio?: boolean;
+  /** Consulta: cadeado fechado (indicação) e o texto na caixa do campo. */
+  congelado?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const editando = editavel && aberto;
@@ -671,9 +728,13 @@ function SecaoCard({
             </span>
           )}
         </h3>
-        {editavel && <CadeadoBotao rotulo={titulo} aberto={aberto} onClick={() => setAberto((v) => !v)} />}
+        {!congelado && editavel && <CadeadoBotao rotulo={titulo} aberto={aberto} onClick={() => setAberto((v) => !v)} />}
       </div>
-      {editando ? (
+      {congelado ? (
+        <p className="whitespace-pre-line break-words rounded-control border border-border bg-surface-2 px-3 py-2 text-[13.5px] leading-relaxed text-text-2">
+          {texto || "—"}
+        </p>
+      ) : editando ? (
         <AutoTextarea value={texto} onChange={onChange} />
       ) : texto ? (
         <p className="whitespace-pre-line break-words text-[13.5px] leading-relaxed text-text-2">{texto}</p>

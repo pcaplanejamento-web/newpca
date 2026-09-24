@@ -17,7 +17,7 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { CampoNumero, CampoTexto } from "./CampoCadeado";
+import { CampoCongelado, CampoNumero, CampoTexto } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
 import { HistoricoDoItem } from "./Historico";
@@ -53,6 +53,7 @@ export function ItemDetalhe({
   onVerItem,
   onUnificar,
   historicoDfdId = null,
+  consulta = null,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -76,6 +77,9 @@ export function ItemDetalhe({
   onUnificar?: () => void;
   /** DFD GRAVADO (id) — habilita a seção "Histórico do item" (carregada só ao abrir). */
   historicoDfdId?: number | null;
+  /** CONSULTA (Dashboard do PCA, público): campos CONGELADOS, sem estado/faltas/catálogo; o histórico vem da
+   * rota PÚBLICA (`urlHistorico` — só protocolos incorporados, sem autor). */
+  consulta?: { urlHistorico: string } | null;
 }) {
   const est = estadoItem(item);
   const faltas = faltasDoItem(item);
@@ -121,6 +125,21 @@ export function ItemDetalhe({
     bloqueado: bloqueado(campo),
     onLock: () => alternarCadeado(campo),
   });
+
+  if (consulta)
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <CampoCongelado label="Código" valor={item.codigo} mono />
+          <CampoCongelado label="Unidade" valor={item.unidade} />
+          <CampoCongelado label="Descrição" valor={item.descricao} span />
+          <CampoCongelado label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : null} />
+          <CampoCongelado label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : null} />
+          <CampoCongelado label="Valor total" valor={item.valorTotal != null ? brl(item.valorTotal) : null} span forte />
+        </div>
+        <HistoricoDoItem url={consulta.urlHistorico} anonimo item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />
+      </div>
+    );
 
   return (
     <div className="space-y-4">
@@ -281,7 +300,7 @@ export function ItemDetalhe({
       )}
 
       {/* Histórico do item (DFD gravado): o que mudou nele, por qual canal e por qual protocolo. */}
-      {historicoDfdId != null && <HistoricoDoItem dfdId={historicoDfdId} item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}
+      {historicoDfdId != null && <HistoricoDoItem url={`/api/dfd/${historicoDfdId}/historico`} item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}
 
       {/* Tratamento do item DUPLICADO (ou lançado por engano): remove do DFD e do valor total. */}
       {editavelUI && onRemover && (

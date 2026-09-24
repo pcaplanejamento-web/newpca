@@ -7,7 +7,7 @@ import { brl, num } from "@/lib/format";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
+import { CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
@@ -21,11 +21,12 @@ import { StatMini } from "./StatMini";
  *   (interessado/assunto/observação/CPF-CNPJ/valor/local) têm **cadeado por campo** (mesma
  *   lógica dos itens); os **IDENTIFICADORES** (número/Id/data) ficam SEMPRE só-leitura.
  * - **modo `"leitura"`** (gravado travado / catálogo): tudo só-leitura.
+ * - **modo `"consulta"`** (Dashboard do PCA, público): campos CONGELADOS (caixa + cadeado fechado), sem CPF/CNPJ.
  * O controle de repartição/PCA entra por `children`. */
 export type CampoCapa = "numero" | "data" | "documento" | "interessado" | "assunto" | "observacao" | "localReparticao";
 /** Campos de CONTEÚDO (editáveis com cadeado); os identificadores nunca entram aqui. */
 export type CampoCapaEditavel = "numero" | "documento" | "interessado" | "assunto" | "observacao" | "valorCapa" | "localReparticao";
-export type ModoCapa = "leitura" | "criar" | "cadeado";
+export type ModoCapa = "leitura" | "criar" | "cadeado" | "consulta";
 const naoOp = () => {};
 export function CapaCampos({
   numero,
@@ -70,6 +71,22 @@ export function CapaCampos({
     bloqueado: false,
     onLock: () => alternar(campo),
   });
+
+  // Modo CONSULTA (público): tudo congelado, sem o documento (CPF/CNPJ) do interessado.
+  if (modo === "consulta")
+    return (
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        <CampoCongelado label="Número do processo" valor={numero} mono />
+        <CampoCongelado label="Id do processo" valor={idExterno} mono />
+        <CampoCongelado label="Data/Hora" valor={data} />
+        <CampoCongelado label="Valor (capa)" valor={valorCapa != null ? brl(valorCapa) : null} />
+        <CampoCongelado label="Interessado" valor={interessado} span />
+        <CampoCongelado label="Assunto" valor={assunto} span />
+        <CampoCongelado label="Observação" valor={observacao} span />
+        <CampoCongelado label="Local (capa)" valor={localReparticao} span />
+        {children}
+      </div>
+    );
 
   // Modo CRIAR (protocolo manual): campos de texto viram inputs simples (como antes).
   if (modo === "criar") {
@@ -265,6 +282,8 @@ export function ProtocoloView({
   onVerProtocolo?: (protocoloId: number) => void;
 }) {
   const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
+  // CONSULTA (público): sem conciliação/estado/rastro — só os dados, congelados.
+  const consulta = modoCapa === "consulta";
   const c = conciliacao;
   const sob = totais.sobrescritos && totais.sobrescritos.qtd > 0 ? totais.sobrescritos : null;
   return (
@@ -278,7 +297,7 @@ export function ProtocoloView({
           <StatMini
             label="Somatória dos DFDs"
             value={brl(c.somatorio || totais.somatorio)}
-            tone={c.divergente ? (c.bloqueia ? "danger" : "warn") : "default"}
+            tone={c.divergente && !consulta ? (c.bloqueia ? "danger" : "warn") : "default"}
             hint={totais.dica ?? (sob ? `inclui ${brl(sob.valor)} dos sobrescritos` : undefined)}
             className="col-span-2 sm:col-span-1"
           />
@@ -286,7 +305,7 @@ export function ProtocoloView({
       )}
 
       {/* Conciliação do VALOR DA CAPA × somatória (mesma régua da análise e do gravado). */}
-      {c.divergente && (
+      {c.divergente && !consulta && (
         <Callout kind={c.bloqueia ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
           <p className="font-semibold">
             {c.zerada ? "O valor da capa está ausente/zerado" : "O valor da capa diverge da somatória dos DFDs"}
@@ -327,7 +346,9 @@ export function ProtocoloView({
           onChangeValorCapa={onValorCapaChange}
         >
           <div className="sm:col-span-2">
-            {unidade.onChange ? (
+            {consulta ? (
+              <CampoCongelado label={unidade.rotulo ?? "Unidade"} valor={repSel ? `${repSel.codigo} · ${repSel.nome}` : unidade.textoLeitura} />
+            ) : unidade.onChange ? (
               <>
                 <label className={labelCls} htmlFor="proto-unidade">
                   {unidade.rotulo ?? "Unidade"} {unidade.obrigatoria && <span style={{ color: "var(--danger)" }}>*</span>}
@@ -373,6 +394,7 @@ export function ProtocoloView({
       ) : (
         <PlanilhaDfds
           linhas={linhas}
+          semEstado={consulta}
           unica={unica}
           selecionavel={selecionavel}
           selected={selected}
@@ -384,7 +406,7 @@ export function ProtocoloView({
         />
       )}
 
-      <TabelaSobrescritos sobrescritos={sobrescritos} onVerProtocolo={onVerProtocolo} compacta={compacta} />
+      {!consulta && <TabelaSobrescritos sobrescritos={sobrescritos} onVerProtocolo={onVerProtocolo} compacta={compacta} />}
 
       {nota}
     </div>

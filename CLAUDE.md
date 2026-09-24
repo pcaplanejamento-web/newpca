@@ -1229,6 +1229,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
   scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha).
+- **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
+  `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
+  `density="compact"`, busca por produto/código (vários com ":"); com `origem` mostra Protocolo · Nº DFD
+  (`ItemRow.dfdId/dfdNumero/protocoloNumero/itemNumero`). Em PCA de fonte protocolo, o cartão recebe a `ConsultaPca`
+  (ver "CONSULTA PÚBLICA" abaixo — a mesma no painel e na tela inicial).
 - **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
   qualquer que seja a situação).
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por
@@ -1238,6 +1243,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/orcamento/visoes/[id]` (auditoria `orcamento_visao`).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
+- **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
+  Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
+  erro/aviso. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
+  do `BannersMesa` (`LARGURA` exportado) com `ProtocoloView modoCapa="consulta"`, `DfdView consulta` e `ItemDetalhe consulta`
+  (campos **`CampoCongelado`** — a caixa do campo, SEM cadeado; seções idem; sem estado, pendências, catálogo,
+  conciliação, sobrescritos, aviso de incorporado; das assinaturas só o bloco **"Responsável pela solicitação"**); o cabeçalho do
+  item traz o **nº do DFD + planejamento**; o histórico é `Historico anonimo` (sem autor; `HistoricoDoItem` recebe a `url`).
+  **Dados higienizados NO SERVIDOR** (núcleo puro `pca-publico-core.ts`, testado): `dfdPublico` (sem matrícula/e-mail/telefone/
+  assinaturas; só itens ATIVOS no PCA, totais recomputados), `solicitantePublico` (sem matrícula/código/data da assinatura),
+  `historicoPublico` (só linhas de protocolos INCORPORADOS ao PCA, sem autor, sem chaves pessoais nem assinaturas no diff) e
+  `mascararTexto` (CPF/CNPJ/e-mail/telefone/matrícula em TEXTO LIVRE — seções, capa, diff). Rotas GET **públicas**
+  `/api/pca/[id]/consulta/dfd/[dfdId]`, `/consulta/protocolo/[protocoloId]` (capa sem CPF/CNPJ) e `/consulta/historico?dfd=|protocolo=`
+  → `consultaDfd`/`consultaProtocolo`/`consultaHistorico` (`pca-espaco.ts`): só PCA de fonte protocolo **publicado** (ou
+  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404).
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
   capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar), `POST /api/pca/[id]/itens` (retirar), `GET /api/pca/[id]/capa`
   (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.
