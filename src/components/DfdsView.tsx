@@ -27,7 +27,7 @@ import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } f
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
-import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { estaTravado } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
@@ -54,7 +54,7 @@ import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, colunaPlanejamento, colunaTipoDfd, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -982,7 +982,8 @@ export function DfdsView({
       protocolo: { valor: (r) => r.protocoloNumero ?? "—" },
       pca: { valor: (r) => String(anoPcaDoDfd(dfdPorId.get(r.dfdId)) ?? "—") },
       dfd: { valor: (r) => r.dfdNumero },
-      planejamento: { valor: (r) => r.dfdPlanejamento?.trim() || "—" },
+      // O MESMO valor das colunas `colunaPlanejamento`/`colunaTipoDfd` (vazio/fora do padrão = "—").
+      planejamento: { valor: (r) => planejamentoDfd(r.dfdPlanejamento) ?? "—" },
       sigla: { valor: (r) => r.sigla ?? "—" },
       tipo: { valor: (r) => tipoCurtoDfd(r.dfdTipo) ?? "—" },
       prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
@@ -997,8 +998,8 @@ export function DfdsView({
 
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
-  // Filtros de ATRIBUTO da Consolidada (Estado, Código, Catálogo, Descrição, Unidade, Nº DFD, Protocolo, Sigla, PCA,
-  // Prioridade, Seq. PCA) — no nível do ITEM, ANTES de consolidar: a linha soma só os itens que passam e as opções de cada
+  // Filtros de ATRIBUTO da Consolidada (Estado, Código, Catálogo, Descrição, Unidade, Nº Plan., Nº DFD, Protocolo, Sigla,
+  // Tipo, PCA, Prioridade, Seq. PCA) — no nível do ITEM, ANTES de consolidar: a linha soma só os itens que passam e as opções de cada
   // filtro vêm dos itens que passam nos DEMAIS (conectados). Os numéricos (Qtd. total, médio, variação, total, itens) ficam
   // na tabela e valem para a linha. Zeram ao sair da visão.
   const [filtrosItem, setFiltrosItem] = useState<Record<string, string[]>>({});
@@ -1068,13 +1069,15 @@ export function DfdsView({
           {
             estado: resumoEstado(e.mensagens),
             rotulosEstado: e.rotulos,
-            protocolos: distintos(l.itens, (it) => it.protocoloNumero),
-            pcas: distintos(l.itens, (it) => anoPcaDoDfd(dfdPorId.get(it.dfdId))),
-            dfds: distintos(l.itens, (it) => it.dfdNumero),
-            planejamentos: distintos(l.itens, (it) => it.dfdPlanejamento),
-            siglas: distintos(l.itens, (it) => it.sigla),
-            tipos: distintos(l.itens, (it) => tipoCurtoDfd(it.dfdTipo)),
-            prioridades: distintos(l.itens, (it) => dfdPorId.get(it.dfdId)?.prioridade),
+            // Os MESMOS valores das opções dos filtros (`atributoItem`): "—" = algum item sem o dado (ex.: o DFD sem
+            // planejamento, que é erro, aparece na célula — não some atrás dos que têm).
+            protocolos: distintos(l.itens, atributoItem.protocolo.valor),
+            pcas: distintos(l.itens, atributoItem.pca.valor),
+            dfds: distintos(l.itens, atributoItem.dfd.valor),
+            planejamentos: distintos(l.itens, atributoItem.planejamento.valor),
+            siglas: distintos(l.itens, atributoItem.sigla.valor),
+            tipos: distintos(l.itens, atributoItem.tipo.valor),
+            prioridades: distintos(l.itens, atributoItem.prioridade.valor),
             seqsPca: l.itens
               .filter((it) => it.pcaSequencial != null)
               .sort((a, b) => (a.pcaSequencial ?? 0) - (b.pcaSequencial ?? 0))
@@ -1085,7 +1088,7 @@ export function DfdsView({
         ] as const;
       }),
     );
-  }, [consolidados, repDoItem, dfdPorId, regras]);
+  }, [consolidados, repDoItem, regras, atributoItem]);
   // Detalhe (COMPOSIÇÃO) da linha consolidada aberta. Recarregando os itens (depois de gravar no banner do item), segue a
   // MESMA linha (pelo código) com os dados novos; enquanto ela não reaparece, mostra a última — nada pisca.
   const [composicao, setComposicao] = useState<string | null>(null);
@@ -1139,13 +1142,7 @@ export function DfdsView({
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
-    {
-      key: "planejamento",
-      header: "Nº Plan.",
-      nowrap: true,
-      value: atributoItem.planejamento.valor,
-      render: (r) => <span className="font-mono text-[12px]">{atributoItem.planejamento.valor(r)}</span>,
-    },
+    colunaPlanejamento((r: ItemDfdRow) => r.dfdPlanejamento),
     { key: "dfd", header: "Nº DFD", nowrap: true, value: atributoItem.dfd.valor, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
     {
       key: "sigla",
@@ -1154,7 +1151,7 @@ export function DfdsView({
       value: atributoItem.sigla.valor,
       render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
     },
-    { key: "tipo", header: "Tipo", nowrap: true, value: atributoItem.tipo.valor, render: (r) => <span className="text-[12px]">{atributoItem.tipo.valor(r)}</span> },
+    colunaTipoDfd((r: ItemDfdRow) => r.dfdTipo),
     {
       key: "prioridade",
       header: "Prioridade",
@@ -1397,7 +1394,9 @@ export function DfdsView({
             nowrap: true,
             value: (l: Cons) => infoDe(l).pcas.join(" · ") || "—",
             filtroExterno: filtroExterno("pca"),
-            render: (l: Cons) => <CelulaLista valores={infoDe(l).pcas} dica={dicaLista(infoDe(l).pcas, (a) => pcaDe(Number(a))?.nome ?? a)} />,
+            render: (l: Cons) => (
+              <CelulaLista valores={infoDe(l).pcas} dica={dicaLista(infoDe(l).pcas, (a) => (a === "—" ? "Sem PCA" : (pcaDe(Number(a))?.nome ?? a)))} />
+            ),
           },
         ]),
     {

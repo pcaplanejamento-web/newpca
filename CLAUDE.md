@@ -614,7 +614,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Estado · Protocolo · [PCA] · **Nº Plan.** · Nº
     DFD · Sigla · **Tipo** · Prioridade · Item · Código · **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total — o nº
     de planejamento e o tipo são os do DFD de origem, na MESMA ordem da planilha de DFDs: `ItemDfdRow.dfdPlanejamento`, lido
-    na mesma consulta, e `dfdTipo` → `tipoCurtoDfd`), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
+    na mesma consulta, e `dfdTipo` — as MESMAS colunas `colunaPlanejamento`/`colunaTipoDfd` de `PlanilhaDfds.tsx`, vazio ou
+    fora do padrão = "—" filtrável, via `planejamentoDfd`/`tipoCurtoDfd`; o banner do ITEM mostra no cabeçalho o
+    **`ItemCabecalho`** = "Item N" + `DfdCabecalho` com tipo e planejamento, o MESMO da consulta pública), carregada
+    **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
     invalidado quando os DFDs recarregam (após import/edição). A coluna **Catálogo** vem do SERVIDOR na mesma resposta:
     `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
@@ -637,7 +640,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     que o preço de um item se compara — a da unidade dele quando mistas), `estadoConsolidado` (os problemas dos itens
     AGRUPADOS com a contagem — "Item sem valor (2)" —, erros primeiro), `distintos`, `varianteDescricao` (D1, D2…),
     `desvioDaMedia`/`desvioTexto`, `participacaoTexto` ("< 0,1%") e `textoResumoConsolidado` ("Copiar resumo", com a linha
-    "Por unidade" quando mistas; cada DFD pelo nº + planejamento — "1209 (Planej. 1509)", a referência dos despachos). **Filtros:** os de ATRIBUTO (Estado, Código, Catálogo, Descrição, Unidade, Nº Plan., Nº
+    "Por unidade" quando mistas; o detalhe passa cada DFD pelo nº + planejamento — **`refDfd`**, `parse-dfd-comum.ts`, a
+    MESMA referência dos despachos e relatórios: "1209 (Planej. 1509)"). **Filtros:** os de ATRIBUTO (Estado, Código, Catálogo, Descrição, Unidade, Nº Plan., Nº
     DFD, Protocolo, Sigla, Tipo, PCA, Prioridade, Seq. PCA) valem no nível do **ITEM, ANTES de consolidar** — `aplicarFiltros` sobre os
     itens com as MESMAS funções de valor da visão Normal (`atributoItem`, fonte única das duas visões; o código
     normalizado) —, então a linha soma só os itens que passam e **o total bate com o da Normal com os mesmos filtros**; as
@@ -647,7 +651,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     MAIS grave dos itens) · Descrição (+N — `MaisN`) · Unidade (mistas = ÂMBAR + ícone) · Qtd. total · Vlr. unit. médio
     (mistas = âmbar + ícone) · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) · Itens · Nº Plan. · Nº
     DFD · Protocolo · Sigla · Tipo (os 4 à vista) · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N"; dica até 30 por
-    `dicaLista`; Seq. PCA inativo riscado). O que as células mostram é calculado UMA vez por lista (`infoConsolidados`,
+    `dicaLista`; Seq. PCA inativo riscado) com os MESMOS valores das opções dos filtros (`atributoItem`) — "—" (esmaecido) =
+    algum item sem o dado, ex.: um DFD sem planejamento, que é erro, não some atrás dos que têm). O que as células mostram é calculado UMA vez por lista (`infoConsolidados`,
     inclusive o rótulo do catálogo usado na ordenação). Rodapé = N códigos · M sem código · itens · total. SÓ leitura (sem
     seleção/massa — a edição é item a item; a seleção da Normal fica guardada). Tocar numa linha abre o
     **`ComposicaoItem`** (`Modal` full): 6 `StatMini` (quantidade, médio, menor e maior preço, variação, total + ABC),
@@ -1613,7 +1618,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   HIERARQUIA na linha das visões — SÓ O ÍCONE num quadrado na altura padrão, accent quando ativo; quem usa troca o ícone pelo
   que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; `<select>` nativo por cima),
   **`CelulaPca`**/**`CelulaPrioridade`** (`PlanilhaDfds.tsx` — as células PCA e Prioridade, as MESMAS nas tabelas de protocolos,
-  DFDs e itens), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista na dica — até 30,
+  DFDs e itens) + as fábricas de coluna **`colunaPlanejamento`**/**`colunaTipoDfd`** (as MESMAS "Nº Plan."/"Tipo" na planilha de
+  DFDs, no rastro, na tabela de itens e no detalhe da Consolidada), **`ItemCabecalho`** (`DfdView.tsx` — o cabeçalho do banner
+  de UM item: "Item N" + `DfdCabecalho`; Mesa e consulta pública), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista na dica — até 30,
   `dicaLista` —, valor inativo riscado; a visão Consolidada dos itens) + **`MaisN`** (o chip "+N"),
   **`CelulaVariacao`**/**`SeloAbc`**/**`ComposicaoItem`** (`ComposicaoItem.tsx` — a variação dos preços na cor da faixa
   [`nota` na dica], o selo da curva ABC e o detalhe da linha consolidada: KPIs + avisos + a quebra por unidade + as

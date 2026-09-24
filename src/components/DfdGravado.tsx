@@ -16,7 +16,7 @@ import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
-import { DfdCabecalho } from "./DfdView";
+import { DfdCabecalho, ItemCabecalho } from "./DfdView";
 import { IconAlert, IconClock, IconLayers, IconLock, IconRefresh, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
@@ -442,6 +442,10 @@ export function useDfdGravado({
       onClose: acoes.onFechar,
       topo: false,
       titulo: it ? `Item ${it.item ?? (itemIdx ?? 0) + 1} — DFD ${numero}` : `Item — DFD ${numero}`,
+      // "Item N" + o DFD de origem com o TIPO e o PLANEJAMENTO (o mesmo cabeçalho da consulta pública).
+      cabecalho: dfd ? (
+        <ItemCabecalho item={it ? (it.item ?? (itemIdx ?? 0) + 1) : null} numero={dfd.numero} tipo={dfd.tipo} planejamento={dfd.planejamento} />
+      ) : undefined,
       acoesCabecalho: botaoAtualizar,
       rodape: dfd ? (
         <div>

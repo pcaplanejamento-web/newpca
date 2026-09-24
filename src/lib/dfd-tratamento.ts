@@ -24,6 +24,7 @@ import {
   type DfdSecao,
   listaRefs,
   norm,
+  refDfd,
   tipoCurtoDfd,
 } from "./parse-dfd-comum.ts";
 
@@ -1203,9 +1204,7 @@ export function linhasRelatorioProtocolo(info: {
     else grupos.set(chave, { dfds: [{ numero: d.numero, planejamento: d.planejamento }], faltas: d.faltas });
   }
   for (const g of grupos.values()) {
-    const refs = g.dfds
-      .map((d) => `${d.numero}${d.planejamento ? ` (Planej. ${d.planejamento})` : ""}`)
-      .join(", ");
+    const refs = g.dfds.map((d) => refDfd(d.numero, d.planejamento)).join(", ");
     L.push(`${n}. ${g.dfds.length === 1 ? "DFD" : "DFDs"} ${refs}:`);
     for (const f of g.faltas) L.push(`   - ${f}`);
     n++;

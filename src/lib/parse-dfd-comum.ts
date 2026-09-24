@@ -30,6 +30,17 @@ export const TITULO_SECAO_ITENS = "QUANTIDADE DE MATERIAL/SERVIÇOS A SER CONTRA
  * completo do tipo (ex.: "DFD-S — Solução / com ETP" → "DFD-S"). `null` se não casar.
  * É uma das informações mais importantes do DFD (mostrada no cabeçalho).
  */
+/** Nº de PLANEJAMENTO do DFD (o identificador do Centi) — vazio ou só espaços = `null` (DFD sem planejamento). */
+export function planejamentoDfd(planejamento: string | null | undefined): string | null {
+  return (planejamento ?? "").trim() || null;
+}
+
+/** Referência de um DFD nos despachos e resumos: "1209 (Planej. 1509)"; sem planejamento, só o nº. */
+export function refDfd(numero: string, planejamento: string | null | undefined): string {
+  const p = planejamentoDfd(planejamento);
+  return p ? `${numero} (Planej. ${p})` : numero;
+}
+
 export function tipoCurtoDfd(tipo: string | null | undefined): string | null {
   const m = String(tipo ?? "").match(/DFD-([SROE])\b/i);
   return m ? `DFD-${m[1].toUpperCase()}` : null;

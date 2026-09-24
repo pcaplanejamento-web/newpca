@@ -11,7 +11,7 @@ import {
   type ResumoEstado,
 } from "@/lib/dfd-tratamento";
 import { brl, dataHoraBR, num } from "@/lib/format";
-import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
@@ -66,6 +66,21 @@ export type LinhaDfd = {
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
 export type PcaDaLinha = { ano: number; nome: string };
+
+/**
+ * Coluna "Nº Plan." — o nº de PLANEJAMENTO do DFD (vazio ou só espaços = "—", filtrável: o DFD sem planejamento é erro e
+ * se acha pelo filtro). A MESMA na planilha de DFDs, no rastro, na tabela de itens da Mesa e no detalhe da Consolidada.
+ */
+export function colunaPlanejamento<R>(planejamento: (r: R) => string | null | undefined): Column<R> {
+  const valor = (r: R) => planejamentoDfd(planejamento(r)) ?? "—";
+  return { key: "planejamento", header: "Nº Plan.", nowrap: true, value: valor, render: (r) => <span className="font-mono text-[12px]">{valor(r)}</span> };
+}
+
+/** Coluna "Tipo" — o tipo CURTO do DFD (DFD-S/R/O/E; fora do padrão = "—"). A MESMA no rastro, na tabela de itens e no detalhe. */
+export function colunaTipoDfd<R>(tipo: (r: R) => string | null | undefined): Column<R> {
+  const valor = (r: R) => tipoCurtoDfd(tipo(r)) ?? "—";
+  return { key: "tipo", header: "Tipo", nowrap: true, value: valor, render: (r) => <span className="text-[12px]">{valor(r)}</span> };
+}
 
 /** Célula "PCA" — a MESMA nas tabelas de protocolos, DFDs e itens: o ano, com o nome do PCA na dica. */
 export function CelulaPca({ pca }: { pca: PcaDaLinha | null | undefined }) {
@@ -191,13 +206,7 @@ export function PlanilhaDfds({
         ]
       : []),
     // Nº de PLANEJAMENTO primeiro, depois o Nº do DFD.
-    {
-      key: "planejamento",
-      header: "Nº Plan.",
-      nowrap: true,
-      value: (r) => r.planejamento ?? "",
-      render: (r) => <span className="font-mono text-[12px]">{r.planejamento || "—"}</span>,
-    },
+    colunaPlanejamento((r: LinhaDfd) => r.planejamento),
     {
       key: "numero",
       header: "Nº DFD",
@@ -417,10 +426,10 @@ export function TabelaSobrescritos({
   if (sobrescritos.length === 0) return null;
   const pode = (s: DfdSobrescrito) => !!onVerProtocolo && s.protocoloAtualId != null && s.acessivel !== false;
   const cols: Column<DfdSobrescrito>[] = [
-    { key: "planejamento", header: "Nº Plan.", nowrap: true, value: (s) => s.planejamento ?? "", render: (s) => <span className="font-mono text-[12px]">{s.planejamento || "—"}</span> },
+    colunaPlanejamento((s: DfdSobrescrito) => s.planejamento),
     { key: "numero", header: "Nº DFD", nowrap: true, value: (s) => s.numero, render: (s) => <span className="font-mono text-[12px]">{s.numero}</span> },
     { key: "sigla", header: "Sigla", nowrap: true, value: (s) => s.sigla ?? "—", render: (s) => <span className="font-mono text-[12px]">{s.sigla ?? "—"}</span> },
-    { key: "tipo", header: "Tipo", nowrap: true, value: (s) => tipoCurtoDfd(s.tipo) ?? "—", render: (s) => <span className="text-[12px]">{tipoCurtoDfd(s.tipo) ?? "—"}</span> },
+    colunaTipoDfd((s: DfdSobrescrito) => s.tipo),
     {
       key: "destino",
       header: "Sobrescrito pelo",

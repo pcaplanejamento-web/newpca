@@ -9,7 +9,7 @@ import { Button } from "./Button";
 import { CampoCongelado } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { RodapePainelItem } from "./DfdPainelDireito";
-import { DfdCabecalho, DfdView } from "./DfdView";
+import { DfdCabecalho, DfdView, ItemCabecalho } from "./DfdView";
 import { Historico, useHistorico } from "./Historico";
 import { IconAlert, IconClock, IconLayers } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
@@ -234,13 +234,8 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
     const d = dfd.dado;
     return {
       titulo: `Item ${item?.item ?? "—"}${d ? ` — DFD ${d.numero}` : ""}`,
-      // O nº do DFD vem com o PLANEJAMENTO no cabeçalho do banner do item.
-      cabecalho: d ? (
-        <div className="min-w-0 space-y-0.5">
-          <span className="block text-[12px] font-semibold uppercase tracking-wide text-muted">Item {item?.item ?? "—"}</span>
-          <DfdCabecalho numero={d.numero} tipo={d.tipo} planejamento={d.planejamento} />
-        </div>
-      ) : undefined,
+      // O nº do DFD vem com o TIPO e o PLANEJAMENTO no cabeçalho do banner do item.
+      cabecalho: d ? <ItemCabecalho item={item?.item} numero={d.numero} tipo={d.tipo} planejamento={d.planejamento} /> : undefined,
       rodape: (
         <RodapePainelItem
           onVerDfd={raiz === "item" && !verDfd ? () => setVerDfd(true) : undefined}

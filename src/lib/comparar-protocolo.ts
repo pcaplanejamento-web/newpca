@@ -1,6 +1,6 @@
 import { SECOES_OBRIGATORIAS, setTextoSecao, situacaoSecao, textoSecao } from "./dfd-tratamento.ts";
 import { brl, num } from "./format.ts";
-import { type Assinatura, type DfdSecao, listaRefs, norm, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, type DfdSecao, listaRefs, norm, refDfd, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
 /**
  * REENVIO de um protocolo (sobrescrever com o MESMO PDF, corrigido) — núcleo PURO/testável da
@@ -342,7 +342,7 @@ export function linhasRelatorioReenvio(info: {
   const novos = info.dfds.filter((d) => d.comparacao.situacao === "novo");
   const alterados = info.dfds.filter((d) => d.comparacao.situacao === "alterado");
   const iguais = info.dfds.filter((d) => d.comparacao.situacao === "igual");
-  const ref = (d: { numero: string; planejamento: string | null }) => `DFD ${d.numero}${d.planejamento ? ` (Planej. ${d.planejamento})` : ""}`;
+  const ref = (d: { numero: string; planejamento: string | null }) => `DFD ${refDfd(d.numero, d.planejamento)}`;
   if (novos.length > 0) l.push(`Novos (${novos.length}): ${novos.map(ref).join(", ")}.`, "");
   for (const d of alterados) {
     const c = d.comparacao;

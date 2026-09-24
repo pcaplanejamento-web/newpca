@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { codigoDoItem, ehRodapeCentiNorm, ehRuido, extrairCabecalho, limparDescricaoItem, norm, numeroDfd } from "../src/lib/parse-dfd-comum.ts";
+import {
+  codigoDoItem,
+  ehRodapeCentiNorm,
+  ehRuido,
+  extrairCabecalho,
+  limparDescricaoItem,
+  norm,
+  numeroDfd,
+  planejamentoDfd,
+  refDfd,
+} from "../src/lib/parse-dfd-comum.ts";
 
 // Lógica de cabeçalho compartilhada entre .xlsx e .pdf (e entre o import de DFD e
 // o de PROTOCOLO). Foco: extração dos campos do cabeçalho a partir das "linhas".
@@ -129,5 +139,22 @@ describe("parse-dfd-comum (captura de item: descrição, código e números)", (
     assert.equal(numeroDfd(""), null);
     assert.equal(numeroDfd(null), null);
     assert.equal(numeroDfd(Number.NaN), null);
+  });
+});
+
+describe("parse-dfd-comum (nº de planejamento e referência do DFD)", () => {
+  it("planejamentoDfd: vazio, nulo ou só espaços = null (DFD sem planejamento); o resto sem espaços nas pontas", () => {
+    assert.equal(planejamentoDfd(" 1509 "), "1509");
+    assert.equal(planejamentoDfd(""), null);
+    assert.equal(planejamentoDfd("   "), null);
+    assert.equal(planejamentoDfd(null), null);
+    assert.equal(planejamentoDfd(undefined), null);
+  });
+
+  it("refDfd: a referência dos despachos — nº + (Planej. X); sem planejamento, só o nº", () => {
+    assert.equal(refDfd("1209", "1509"), "1209 (Planej. 1509)");
+    assert.equal(refDfd("1209", " 1509 "), "1209 (Planej. 1509)");
+    assert.equal(refDfd("1209", null), "1209");
+    assert.equal(refDfd("1209", "  "), "1209");
   });
 });

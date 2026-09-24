@@ -106,7 +106,7 @@ export type ItemDfdRow = {
   id: number; // dfd_itens.id
   dfdId: number;
   dfdNumero: string;
-  /** Nº de planejamento do DFD de origem (o identificador do Centi — `null` = DFD sem planejamento). */
+  /** Nº de planejamento do DFD de origem (o identificador do Centi — `null`/vazio = DFD sem planejamento; `planejamentoDfd`). */
   dfdPlanejamento: string | null;
   sigla: string | null; // código da unidade do DFD
   reparticaoId: number | null; // unidade do DFD (escopo de acesso da Mesa do PCA)

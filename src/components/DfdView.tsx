@@ -164,6 +164,17 @@ const COLS: Column<ItemK>[] = [
  * as infos mais importantes ao lado — **tipo** (badge DFD-S/R/O/E) e **nº de
  * planejamento**. Uma linha só (o planejamento trunca no mobile).
  */
+/** Cabeçalho do banner de UM ITEM: "Item N" + o `DfdCabecalho` do DFD de origem (nº, tipo e planejamento) — o MESMO na
+ * Mesa e na consulta pública. */
+export function ItemCabecalho({ item, ...dfd }: { item: number | null | undefined; numero: string; tipo: string | null; planejamento: string | null }) {
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <span className="block text-[12px] font-semibold uppercase tracking-wide text-muted">Item {item ?? "—"}</span>
+      <DfdCabecalho {...dfd} />
+    </div>
+  );
+}
+
 export function DfdCabecalho({
   numero,
   tipo,

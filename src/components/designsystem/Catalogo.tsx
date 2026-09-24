@@ -24,7 +24,7 @@ import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
-import { DfdCabecalho, DfdView, type DfdVisualItem } from "@/components/DfdView";
+import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
@@ -2525,6 +2525,10 @@ export function Catalogo() {
           {/* Sobrescrita por um arquivo novo (escolha por dado) — o selo no cabeçalho do banner. */}
           <div className="mt-2">
             <DfdCabecalho numero={DFD_DEMO.numero} tipo={DFD_DEMO.tipo} planejamento={DFD_DEMO.planejamento} sobrescrita />
+          </div>
+          {/* Banner de UM ITEM (Mesa e consulta pública): "Item N" + o DFD de origem com tipo e planejamento. */}
+          <div className="mt-2">
+            <ItemCabecalho item={3} numero={DFD_DEMO.numero} tipo={DFD_DEMO.tipo} planejamento={DFD_DEMO.planejamento} />
           </div>
         </div>
         <DfdView dfd={DFD_DEMO} />

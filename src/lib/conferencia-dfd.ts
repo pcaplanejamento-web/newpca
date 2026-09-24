@@ -11,7 +11,7 @@ import {
   type ResumoEstado,
   resumoEstado,
 } from "./dfd-tratamento.ts";
-import type { Assinatura, DfdItemParseado } from "./parse-dfd-comum.ts";
+import { type Assinatura, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
 import { casarOrgao, type OrgaoMatch, orgaoDivergeDaUnidade } from "./reparticao-match.ts";
 import {
   pdfExigeAssinatura,
@@ -244,7 +244,7 @@ export function avaliarProtocolo(
     const probs = d.mensagens.filter((m): m is ProblemaDfd & { status: "erro" | "atencao" } => m.status !== "acerto");
     if (probs.some((m) => m.status === "erro")) dfdsComErro++;
     else if (probs.length > 0) dfdsEmAtencao++;
-    const ref = d.planejamento ? `${d.numero} (Planej. ${d.planejamento})` : d.numero;
+    const ref = refDfd(d.numero, d.planejamento);
     const vistos = new Set<string>();
     for (const m of probs) {
       const rotulo = m.rotulo ?? ROTULO_CURTO[m.chave] ?? m.texto;

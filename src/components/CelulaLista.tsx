@@ -6,7 +6,7 @@ export function MaisN({ n }: { n: number }) {
   return <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] font-semibold tabular-nums text-muted">+{n}</span>;
 }
 
-/** Um valor da lista: texto simples ou com marca de INATIVO (riscado — ex.: nº retirado do PCA). */
+/** Um valor da lista: texto simples ou com marca de INATIVO (riscado — ex.: nº retirado do PCA); "—" = algum sem o dado. */
 export type ValorLista = string | { texto: string; riscado?: boolean };
 
 /**
@@ -44,7 +44,7 @@ export function CelulaLista({
         {vistos.map((v, i) => (
           <Fragment key={`${v.texto}-${i}`}>
             {i > 0 && <span className="text-faint"> · </span>}
-            <span className={v.riscado ? "text-faint line-through" : undefined}>{v.texto}</span>
+            <span className={v.riscado ? "text-faint line-through" : v.texto === "—" ? "font-normal text-faint" : undefined}>{v.texto}</span>
           </Fragment>
         ))}
       </span>

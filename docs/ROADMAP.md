@@ -31,7 +31,12 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
 composição** ganharam as colunas **Nº Plan.** (antes do Nº DFD) e **Tipo** (DFD-S/R/O/E, depois da Sigla) — a mesma ordem da
 planilha de DFDs. Na Consolidada aparecem todos os planejamentos e tipos do código (os 4 tipos sempre à vista) e filtrar por
 eles escolhe os itens da soma (o total bate com o da Normal). O "Copiar resumo" do detalhe cita cada DFD pelo nº +
-planejamento ("1209 (Planej. 1509)"). O nº de planejamento vem na mesma consulta dos itens (sem consulta nova).
+planejamento ("1209 (Planej. 1509)"). O banner do item (aberto pela tabela) mostra no cabeçalho o DFD de origem com o tipo
+e o planejamento (o mesmo cabeçalho da consulta pública). O nº de planejamento vem na mesma consulta dos itens (sem consulta
+nova). ✅ **Auditoria:** na Consolidada, um DFD sem planejamento (ou sem tipo, unidade, protocolo, prioridade) aparece como
+"—" na célula, junto dos demais — antes sumia atrás dos que tinham o dado; o "Nº Plan." da planilha de DFDs também passou a
+ter a opção "—" no filtro (achar os DFDs sem planejamento); a referência "nº (Planej. X)" é uma só em todo o sistema
+(despachos, relatórios e o resumo do detalhe).
 
 ### Mesa → Itens: visão CONSOLIDADA por código (quantidade somada, valor médio ponderado, variação e curva ABC) — entregue
 ✅ Na visão **Itens** da Mesa (principal e do PCA), um seletor ao lado de Protocolos · DFDs · Itens alterna **Normal** (um
