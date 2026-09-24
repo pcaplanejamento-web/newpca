@@ -48,7 +48,10 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   linha com `Button size="xs"`; colunas **PCA** (ano, nome na dica) e **Prioridade**; nos Itens (e no detalhe da Consolidada),
   **Nº Plan.** e **Tipo** do DFD de origem na ordem da planilha de DFDs (Nº Plan. · Nº DFD · Sigla · Tipo) — as mesmas
   colunas (`colunaPlanejamento`/`colunaTipoDfd`); o banner do item traz o **`ItemCabecalho`** ("Item N" + DFD, tipo e
-  planejamento). Nas listas da Consolidada, "—" esmaecido = algum item sem o dado.
+  planejamento). Nas listas da Consolidada, "—" esmaecido = algum item sem o dado. Com o cadastro da padronização
+  (Catálogo → Unidades de medida | Classificações), a **Classificação** (`CelulaClassificacao`: ponto na cor da
+  classificação, o motivo na dica; "Não classificado" esmaecido) e a **Unid. cadastrada** (`CelulaUnidadeCadastrada`: a
+  sigla em negrito; "Não cadastrada" em âmbar com ícone) — só quando o cadastro correspondente existe.
 - **PCA no cabeçalho:** seletor à esquerda do topo (no celular só o ano), em accent quando há um PCA escolhido — filtra a
   Mesa, os cards do PCA e o Orçamento.
 - **Itens Normal | Consolidada:** só na visão Itens, um 2º `Segmented` ao lado do das visões (mesma altura; no celular desce
@@ -71,6 +74,16 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   (`charts/Barras`: `BarrasH`, `Colunas`, `BarraSegmentada`): marcas finas, 2px de respiro entre segmentos, texto sempre em
   tokens de texto (a cor fica na marca), legenda quando há ≥ 2 séries, números visíveis e dica no hover/foco/toque. Estados
   nas cores das importâncias do ADM; situações nas cores cadastradas pelo ADM; tempo na Mesa em rampa ordinal do accent.
+
+## Catálogo → Padronização (Unidades de medida | Classificações)
+- Duas visões no `Segmented` do Catálogo (o trilho rola na horizontal no celular — nada estoura a página), carregadas só
+  quando abertas (esqueleto na mesma moldura de cartão). Cada uma: **4 `StatMini` no topo** (2 colunas no celular, 4 no
+  desktop) e seções em cartão (`rounded-card` + `--pad-card`) com título, descrição curta (largura limitada — a ação fica à
+  direita no desktop e desce no celular) e a tabela (`DataTable`, rola no próprio contêiner).
+- Estados da comparação por `Badge`: **Cadastrada** verde · **Sugestão** azul (info) · **Não cadastrada** âmbar; a sugestão
+  em accent com o botão "Adicionar a UN". Ações de linha do cadastro = **`AcoesCadastro`** (↑/↓/editar/excluir,
+  `size="xs"`: 44px no celular). Editores em `Modal md` com os campos do DS (`TextField`, `CampoLista`, **`SelectField`**,
+  `ColorField`) + uma caixa de **prévia** neutra (`surface-2`) e o conflito em `Callout warn` (o botão principal travado).
 
 ## Modais / formulários
 - **Bottom-sheet** no mobile, **modal central** no desktop: `fixed inset-0 flex items-end justify-center sm:items-center` + painel `rounded-t-2xl sm:rounded-2xl`, `max-h-[92vh]` com corpo rolável. Ex.: `Modal` (portal, cabeçalho e rodapé fixos).

@@ -26,6 +26,21 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
+✅ O Catálogo ganhou duas visões (Catálogo · Lista de Itens · **Unidades de medida** · **Classificações**), carregadas só
+quando abertas. **Unidades de medida:** o cadastro (sigla, nome, sinônimos — as outras grafias aceitas — e a classificação
+que a unidade indica; ↑/↓ = ordem) e a **comparação de TODAS as unidades dos itens** (DFDs e catálogo) com ele: cada grafia
+("Und." = "UND" = "und") aparece uma vez com quantos itens a usam e fica **Cadastrada**, **Sugestão** (a regra do sistema ou o
+plural apontam uma unidade: "Adicionar a UN", uma a uma ou todas) ou **Não cadastrada** ("Adicionar a…" uma unidade, ou
+"Cadastrar" com a proposta pronta a partir das grafias dos itens). **Classificações:** o cadastro (nome, cor, palavras-chave)
+e a **classificação automática de todos os itens** — vence a palavra-chave que aparece primeiro na descrição, depois a mais
+longa, depois a ordem; sem palavra-chave, vale a classificação da unidade de medida; sem nenhuma, "Não classificado". A
+tabela "Classificação dos itens" mostra cada descrição com a classificação e o motivo (filtrar "Não classificado" acha as
+palavras-chave que faltam) e o editor mostra **ao vivo**, antes de gravar, quantos itens a classificação passa a ter. Uma
+grafia pertence a uma unidade só e uma palavra-chave a uma classificação só (o sistema avisa e não grava). Na **Mesa →
+Itens** (Normal, Consolidada e o detalhe) entram as colunas **Classificação** e **Unid. cadastrada** — só quando o cadastro
+existe (sem ele, nada muda). Migração `0038` aditiva (tabelas novas e vazias); auditoria de toda gravação.
+
 ### Mesa → Itens: nº de planejamento e tipo do DFD em cada item — entregue
 ✅ A tabela de itens da Mesa (visões **Normal** e **Consolidada**, na Mesa principal e na do PCA) e o **detalhe da
 composição** ganharam as colunas **Nº Plan.** (antes do Nº DFD) e **Tipo** (DFD-S/R/O/E, depois da Sigla) — a mesma ordem da

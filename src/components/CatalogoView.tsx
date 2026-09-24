@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
@@ -22,9 +23,28 @@ import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconPlus, I
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
+import { SkeletonLinhas } from "./Skeleton";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 
-type Vista = "catalogo" | "lista";
+type Vista = "catalogo" | "lista" | "unidades" | "classificacoes";
+
+/** Esqueleto das visões da PADRONIZAÇÃO enquanto o código delas chega (a mesma moldura de cartão). */
+function EsqueletoPadronizacao() {
+  return (
+    <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <SkeletonLinhas linhas={6} />
+    </div>
+  );
+}
+// As visões da PADRONIZAÇÃO (Unidades de medida | Classificações) só são baixadas quando abertas.
+const UnidadesMedidaView = dynamic(() => import("./UnidadesMedidaView").then((m) => m.UnidadesMedidaView), {
+  ssr: false,
+  loading: EsqueletoPadronizacao,
+});
+const ClassificacoesView = dynamic(() => import("./ClassificacoesView").then((m) => m.ClassificacoesView), {
+  ssr: false,
+  loading: EsqueletoPadronizacao,
+});
 /** Decisão de um conflito divergente (mesmo código, dados diferentes). */
 type Resolucao = "manter" | "substituir" | "compartilhar";
 /** Edição, no preview, dos dados de um conflito divergente (para igualar e liberar "Compartilhar"). */
@@ -51,9 +71,11 @@ const selectCls =
   "h-[46px] w-full rounded-control border border-border-2 bg-surface-2 px-3 text-[15px] text-text outline-none transition focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20";
 
 /**
- * Módulo CATÁLOGO. Duas visões (Segmented, com transição suave): **Catálogo** (cards
- * por catálogo; abrir mostra os itens num banner) e **Lista de Itens** (todos os itens
- * numa tabela única). Importa PDF **ou** XLSX (parse no cliente + pré-checagem de
+ * Módulo CATÁLOGO. Quatro visões (Segmented, com transição suave): **Catálogo** (cards
+ * por catálogo; abrir mostra os itens num banner), **Lista de Itens** (todos os itens
+ * numa tabela única) e a PADRONIZAÇÃO — **Unidades de medida** (cadastro + comparação das
+ * unidades dos itens) e **Classificações** (cadastro + classificação automática dos itens),
+ * carregadas sob demanda. Importa PDF **ou** XLSX (parse no cliente + pré-checagem de
  * conflito), exporta XLSX/PDF, edita o catálogo (nome/tipos padrão) e os itens
  * (descrição/unidade/tipos). Só editor gerencia; demais consultam. 100% design-system.
  */
@@ -83,6 +105,8 @@ export function CatalogoView({
   const nomePorCatalogo = useMemo(() => new Map(catalogos.map((c) => [c.id, c.nome])), [catalogos]);
 
   const [vista, setVista] = useState<Vista>("catalogo");
+  // Unidades de medida | Classificações: as visões da PADRONIZAÇÃO (sem os controles de catálogo — exportar modelo, importar).
+  const padronizacao = vista === "unidades" || vista === "classificacoes";
   const [abertoId, setAbertoId] = useState<number | null>(null);
   const catalogoAberto = catalogos.find((c) => c.id === abertoId) ?? null;
   const itensAberto = abertoId != null ? (itensPorCatalogo.get(abertoId) ?? []) : [];
@@ -604,16 +628,19 @@ export function CatalogoView({
             {catalogos.length} {catalogos.length === 1 ? "catálogo" : "catálogos"} · {itens.length} {itens.length === 1 ? "item" : "itens"} · para padronização e consulta
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
           <Segmented
             value={vista}
             onChange={trocarVista}
+            ariaLabel="Visões do catálogo"
             options={[
               { value: "catalogo", label: "Catálogo" },
               { value: "lista", label: "Lista de Itens" },
+              { value: "unidades", label: "Unidades de medida" },
+              { value: "classificacoes", label: "Classificações" },
             ]}
           />
-          {podeEditar && (
+          {podeEditar && !padronizacao && (
             <Button
               variant="secondary"
               icon={<IconDownload className="h-[18px] w-[18px]" />}
@@ -626,13 +653,17 @@ export function CatalogoView({
         </div>
       </div>
 
-      {erroImport && !preview && (
+      {erroImport && !preview && !padronizacao && (
         <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
           {erroImport}
         </Callout>
       )}
 
-      {catalogos.length === 0 ? (
+      {padronizacao ? (
+        <div key={vista} className="animate-cat-morph">
+          {vista === "unidades" ? <UnidadesMedidaView podeEditar={podeEditar} /> : <ClassificacoesView podeEditar={podeEditar} />}
+        </div>
+      ) : catalogos.length === 0 ? (
         podeEditar ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{addCard}</div>
         ) : (

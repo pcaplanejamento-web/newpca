@@ -62,7 +62,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ROTULO_ACAO`/`ROTULO_ENTIDADE`/`ROTULO_ORIGEM`); acesso ao D1 em **`auditoria.ts`** (`registrarAuditoria` **BEST-EFFORT — nunca
   lança**; `historicoDfd`/`historicoProtocolo`/`listarAuditoria`). **Instrumentado em TODOS os pontos de escrita**, no nível da ROTA (onde o ator
   `exigirX().u` é conhecido): DFD (import/edição de campos/**itens**/exclusão/vínculo), protocolo, catálogo (+itens/tipos),
-  PCA, planilha (`/api/upload`), admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
+  padronização (unidades de medida/classificações + sinônimos + ordem), PCA, planilha (`/api/upload`), admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
   **usuários** (papel/status = alto valor), config (aparência/avaliação/integrações — só o FATO, **nunca** segredos/senha)
   e auth (login/logout/cadastro/perfil/senha). Nas edições, o "antes" vem dos `get*` já usados na rota (diff por campo).
   - **Histórico CONECTADO protocolo › DFD › item (migração `0031`, aditiva):** cada linha ganhou **`protocolo_id`** (o
@@ -623,6 +623,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
     o veredito COMPACTO (`ConferenciaCompacta` — sem a descrição do catálogo; catálogo vazio/sem código ⇒ `null`); a
     célula é a **`CelulaCatalogo`** (`EstadoCelula.tsx`, a MESMA da tabela de itens do `DfdView`), na cor do nível do ADM.
+    Com o cadastro da **PADRONIZAÇÃO** (Catálogo → Unidades de medida | Classificações — ver a seção própria), mais duas
+    colunas, só quando o cadastro correspondente existe: **Classificação** (depois de Catálogo — a automática) e **Unid.
+    cadastrada** (depois de Unidade — a unidade cadastrada que a do item representa, ou "Não cadastrada").
   - **Itens NORMAL | CONSOLIDADA (sem consulta nova ao banco):** só na visão Itens, um 2º `Segmented` (`modoItens`,
     ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
     linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
@@ -1309,6 +1312,63 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   → 422. Os DFDs do protocolo passam por `/api/dfd` (o `POST /api/protocolo` só cria a capa) → cobertos. Testes:
   `catalogo-conferencia.test.ts` + os pontos de catálogo em `dfd-tratamento.test.ts` (veredito por linha, portão, invariante).
 
+### Padronização: UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item — migração `0038`
+- **O que é:** duas visões novas no `Segmented` do Catálogo — **Catálogo · Lista de Itens · Unidades de medida ·
+  Classificações** —, carregadas SOB DEMANDA (`next/dynamic`, `ssr:false`, esqueleto; cada uma busca os próprios dados só
+  quando aberta — a 1ª carga do Catálogo não muda). Editores (admin/gestor) gerenciam; os demais consultam. "Exportar
+  modelo" (cabeçalho) só aparece nas visões do catálogo.
+- **Modelo (aditivo — tabelas novas e vazias: nada muda até o 1º cadastro):** `item_classificacoes` (nome + cor +
+  `palavras` JSON `string[]` + ordem) e `unidades_medida` (sigla + nome + `sinonimos` JSON `string[]` + ordem +
+  `classificacao_id` FK **set null** — a classificação que a unidade indica). Núcleo PURO **`padronizacao-core.ts`**
+  (testado); D1 em **`padronizacao.ts`**; Zod em **`padronizacao-validation.ts`**; limites únicos `LIMITES_PADRONIZACAO`
+  (sigla 20, nome 60, grafia 60, 100 sinônimos, palavra 60, 300 palavras-chave).
+- **1) COMPARAÇÃO das unidades dos itens com o cadastro:** a grafia é comparada pela **`chaveUnidade`** (sem caixa/acento/
+  pontuação/espaço; ²/³ = 2/3 — "Und." = "UND"); é **cadastrada** quando é a sigla, o nome ou um sinônimo de UMA unidade
+  (`resolverUnidades`); senão, **não cadastrada** — com **SUGESTÃO** (`comparadorUnidades().sugerir`) quando a regra
+  embutida (`normUnidadeMedida`: UN/UND/UNID = UNIDADE…) a põe no mesmo canônico de UMA cadastrada (duas ⇒ nenhuma: nunca
+  adivinha) ou quando é o plural de uma grafia cadastrada ("CAIXAS" → CAIXA). **Uma grafia pertence a UMA unidade**
+  (`conflitoUnidade` → 409). `compararUnidades` junta as escritas equivalentes numa linha (a mais usada à frente), com
+  quantos itens de DFD e do catálogo a usam (sem unidade vai à parte); ordem: não cadastradas › sugestões › cadastradas,
+  depois o mais usado. Tela (`UnidadesMedidaView` = contêiner): 4 KPIs (`StatMini`: cadastradas · % dos itens com unidade
+  cadastrada · grafias não cadastradas/sugestões · itens sem unidade) + **Unidades cadastradas** (`DataTable` +
+  **`AcoesCadastro`** ↑/↓/editar/excluir) + **Comparação com os itens** (**`ComparacaoUnidades`**, apresentacional): na
+  sugestão, "Adicionar a UN" (uma a uma ou **"Adicionar N sugestões"**); na não cadastrada, "Adicionar a…" (`select` das
+  cadastradas) ou **"Cadastrar"** com a PROPOSTA pronta (`propostaUnidade`: nome = o canônico do sistema, sigla = a escrita
+  mais curta do grupo, sinônimos = as demais grafias não cadastradas do mesmo canônico). Editor **`EditorUnidadeMedida`**:
+  sigla, nome, sinônimos (`CampoLista`), a classificação indicada (**`SelectField`**) e a PRÉVIA das grafias dos itens que a
+  unidade passa a cobrir; conflito ⇒ aviso e "Salvar" travado.
+- **2) CLASSIFICAÇÃO AUTOMÁTICA dos itens (`criarClassificador`):** pela descrição — vence a palavra-chave que aparece
+  **PRIMEIRO** (o produto vem no início: "SERVIÇO DE MANUTENÇÃO EM CADEIRAS" = serviço); na mesma posição, a mais **LONGA**
+  ("MATERIAL DE LIMPEZA" vence "MATERIAL"); depois, a **ordem** do cadastro (↑/↓). Cada palavra da palavra-chave casa o
+  **INÍCIO** da palavra da descrição (CADEIRA acha CADEIRAS) — as de até **3 letras, só inteiras** (AR não acha ARMÁRIO; DE
+  não acha DESCARTÁVEL) —, sem acento/caixa/pontuação dos dois lados (`palavrasDe`). Sem palavra-chave, vale a classificação
+  que a **UNIDADE cadastrada** do item indica; sem nenhuma, **"Não classificado"**. Índices montados uma vez (1ª palavra:
+  exata ou prefixo); cada chamada para na 1ª posição que casa (20 mil descrições no teste de escala). **Uma palavra-chave
+  pertence a UMA classificação** e o nome é único (`conflitoPalavra`/`nomeEmUso` → 409). Tela (`ClassificacoesView` =
+  contêiner): 4 KPIs (classificações · % dos itens classificados · não classificados · % do valor) + **Classificações
+  cadastradas** (palavras-chave, as unidades que a indicam, itens, valor dos DFDs, ↑/↓) + **Classificação dos itens**
+  (**`ClassificacaoDosItens`**: cada descrição DISTINTA dos itens dos DFDs e do catálogo com a classificação, o motivo — a
+  palavra-chave ou a unidade —, a unidade, os itens e o valor; o filtro "Não classificado" acha as palavras que faltam),
+  classificada NO NAVEGADOR sobre as descrições carregadas uma vez por abertura. Editor **`EditorClassificacao`**: nome, cor
+  (`ColorField`), palavras-chave e a **PRÉVIA AO VIVO** (quantos itens a classificação passa a ter, quantos vêm de outra e
+  quantos saem, com exemplos) antes de gravar.
+- **Escopo:** os itens de DFD seguem a unidade ativa do cabeçalho (`getReparticaoFiltro`; "Geral" = todos — como a Mesa); os
+  do catálogo são globais; o cadastro é global.
+- **Mesa → Itens:** `carregarMesa` carrega o cadastro (`listarPadronizacao` — FAIL-SAFE: falhou ⇒ vazio, a Mesa segue) →
+  `DfdsView.padronizacao` (Mesa principal e Mesa do PCA). Com unidades cadastradas, a coluna **"Unid. cadastrada"**
+  (**`CelulaUnidadeCadastrada`**: a sigla, ou "Não cadastrada" em âmbar; sem unidade = "—"); com classificações, a coluna
+  **"Classificação"** (**`CelulaClassificacao`**: ponto na cor da classificação, o motivo na dica). As MESMAS nas visões
+  Normal, **Consolidada** (listas + filtros no nível do ITEM — `atributoItem.classificacao`/`unidCad`) e no detalhe
+  (`ComposicaoItem`). Sem cadastro, as colunas nem existem. A classificação é memorizada por item (`WeakMap`).
+- **Rotas** (envelope `http.ts`; leitura `exigirUsuario`, escrita `exigirEditor` + auditoria `unidade_medida`/
+  `classificacao_item`): `GET`/`POST /api/catalogo/unidades-medida` (GET = cadastro + classificações + o USO das grafias),
+  `PATCH`/`DELETE /api/catalogo/unidades-medida/[id]`, `PATCH /api/catalogo/unidades-medida/ordem`, `POST
+  /api/catalogo/unidades-medida/sinonimos` (`{itens ≤ 200}` → as grafias viram sinônimos num lote atômico; grafia de OUTRA
+  unidade, repetida no lote ou além do teto vira `falhas`), `GET`/`POST /api/catalogo/classificacoes`, `PATCH`/`DELETE
+  /api/catalogo/classificacoes/[id]` (excluir zera a classificação das unidades no mesmo lote), `PATCH
+  /api/catalogo/classificacoes/ordem` e `GET /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no
+  banco). Cliente único `padronizacao-cliente.ts` (`chamarPadronizacao`).
+
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
@@ -1493,6 +1553,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`), `POST /api/dfd` `start-dfd` com
   `origem:"sobrescrita"` + `escolhas {mantidos, editados}` (histórico) e SEM `protocoloId` = mantém o protocolo do DFD, e
   `GET /api/protocolo/[id]?completo=1` também com **`sobrescritos`** (o rastro, com o protocolo atual de cada um).
+- Padronização (migração `0038`): `/api/catalogo/unidades-medida*` e `/api/catalogo/classificacoes*` — ver "Padronização:
+  UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item".
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
 - **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
@@ -1632,7 +1694,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox/**`CampoLista`** [lista em chips — várias referências da
-  renovação] — ícone + foco accent), `Callout` (feedback
+  renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
+  indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
+  **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
+  cadastrada do item na Mesa → Itens), **`ComparacaoUnidades`**/**`EditorUnidadeMedida`** (`UnidadesMedidaView.tsx`) e
+  **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),

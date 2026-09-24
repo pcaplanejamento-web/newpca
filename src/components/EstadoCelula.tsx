@@ -1,7 +1,8 @@
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { type ConferenciaCompacta, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import { corVeredictoCatalogo, type ResumoEstado, rotuloVeredictoCatalogo, veredictoLinhaCatalogo } from "@/lib/dfd-tratamento";
-import { IconSpinner } from "./icons";
+import { chaveUnidade, motivoClassificacao, NAO_CADASTRADA, NAO_CLASSIFICADO, type ResultadoClassificacao, type UnidadeMedida } from "@/lib/padronizacao-core";
+import { IconAlert, IconSpinner } from "./icons";
 
 /**
  * Célula "Estado" das tabelas (DFDs, itens, protocolos) — UM componente para todas:
@@ -11,6 +12,9 @@ import { IconSpinner } from "./icons";
  * - `EstadoProcessando`: spinner + o que está acontecendo ("Conferindo…", "Lendo o DFD…", "Na fila").
  * - `CelulaCatalogo`: a coluna "Catálogo" dos itens (Conforme / Fora do catálogo / Divergente / Tipo incompatível),
  *   na cor do nível do ADM e com o detalhe específico no `title`; sem veredito = "—".
+ * - `CelulaClassificacao`: a classificação AUTOMÁTICA do item (ponto na cor da classificação; o motivo no `title`).
+ * - `CelulaUnidadeCadastrada`: a unidade de medida CADASTRADA que a unidade do item representa (a sigla) ou
+ *   "Não cadastrada" em âmbar; item sem unidade = "—".
  * Sem quebra de linha (a coluna ganha a largura do conteúdo).
  */
 export function EstadoResumo({ res }: { res: ResumoEstado }) {
@@ -57,4 +61,29 @@ export function CelulaCatalogo({ conf, regras, dfdTipo }: { conf: ConferenciaCom
   if (!v || !conf) return <span className="text-muted">—</span>;
   const espec = rotulosDivergencia(conf).join(" · ");
   return <EstadoPonto cor={corVeredictoCatalogo(v.nivel)} rotulo={rotuloVeredictoCatalogo(v)} title={espec || undefined} />;
+}
+
+export function CelulaClassificacao({ resultado }: { resultado: ResultadoClassificacao | null }) {
+  if (!resultado) return <span className="whitespace-nowrap text-[12px] text-faint" title={motivoClassificacao(null)}>{NAO_CLASSIFICADO}</span>;
+  return <EstadoPonto cor={resultado.classificacao.cor} rotulo={resultado.classificacao.nome} title={motivoClassificacao(resultado)} />;
+}
+
+export function CelulaUnidadeCadastrada({ texto, unidade }: { texto: string | null | undefined; unidade: UnidadeMedida | null }) {
+  if (!chaveUnidade(texto)) return <span className="text-faint">—</span>;
+  if (!unidade)
+    return (
+      <span
+        className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium"
+        style={{ color: "var(--warn)" }}
+        title={`A unidade “${texto}” não está cadastrada (Catálogo → Unidades de medida).`}
+      >
+        <IconAlert className="h-3.5 w-3.5 shrink-0" />
+        {NAO_CADASTRADA}
+      </span>
+    );
+  return (
+    <span className="font-mono text-[12px] font-semibold text-text" title={`${unidade.sigla} — ${unidade.nome}`}>
+      {unidade.sigla}
+    </span>
+  );
 }

@@ -22,6 +22,7 @@ export default async function MesaPage() {
       pessoas={m.pessoas}
       outrasPessoas={m.outrasPessoas}
       situacoes={m.situacoes}
+      padronizacao={m.padronizacao}
       usuarioId={m.usuarioId}
       filtroInicial={m.filtroInicial}
       pcaFiltro={m.pcaFiltro}

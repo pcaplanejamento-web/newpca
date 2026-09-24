@@ -35,6 +35,8 @@ export type EntidadeAuditoria =
   | "orcamento"
   | "orcamento_visao"
   | "situacao_protocolo"
+  | "unidade_medida"
+  | "classificacao_item"
   | "sessao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
@@ -69,6 +71,8 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   orcamento: "Orçamento",
   orcamento_visao: "Visão do orçamento",
   situacao_protocolo: "Situação de protocolo",
+  unidade_medida: "Unidade de medida",
+  classificacao_item: "Classificação de item",
   sessao: "Sessão",
 };
 

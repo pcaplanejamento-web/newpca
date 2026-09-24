@@ -27,6 +27,15 @@ import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } f
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
+import {
+  chaveUnidade,
+  criarClassificador,
+  NAO_CADASTRADA,
+  NAO_CLASSIFICADO,
+  type Padronizacao,
+  type ResultadoClassificacao,
+  resolverUnidades,
+} from "@/lib/padronizacao-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { estaTravado } from "@/lib/pca-core";
@@ -49,7 +58,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
-import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
 import { Modal } from "./Modal";
@@ -131,6 +140,8 @@ const SEM_INFO = {
   prioridades: [] as string[],
   planejamentos: [] as string[],
   tipos: [] as string[],
+  classificacoes: [] as string[],
+  unidadesCad: [] as string[],
   seqsPca: [] as { texto: string; riscado: boolean }[],
   catalogoPior: null as ItemDfdRow | null,
   catalogoRotulo: "—",
@@ -171,6 +182,7 @@ export function DfdsView({
   pessoas = [],
   outrasPessoas = [],
   situacoes = [],
+  padronizacao,
   usuarioId = null,
   filtroInicial = FILTRO_MESA_TODOS,
   pcaFiltro = null,
@@ -192,6 +204,9 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
+  /** Catálogo → Unidades de medida | Classificações: a unidade CADASTRADA de cada item e a classificação AUTOMÁTICA
+   * (visão Itens — as colunas só existem com o cadastro feito). */
+  padronizacao?: Padronizacao;
   /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
   filtroInicial?: FiltroMesa;
   /** O PCA do CABEÇALHO que filtra a Mesa principal (as listas já chegam filtradas — e os itens, lazy, vêm pelo MESMO
@@ -964,6 +979,24 @@ export function DfdsView({
     [repetidosItens, regras],
   );
 
+  // PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações): a unidade CADASTRADA que a unidade do item representa e
+  // a classificação AUTOMÁTICA pela descrição — cada uma só existe com o seu cadastro feito (sem ele, nada muda). A
+  // classificação é memorizada por item (colunas, filtros e a Consolidada leem a mesma lista).
+  const unidadeDoItem = useMemo(() => (padronizacao?.unidades.length ? resolverUnidades(padronizacao.unidades) : null), [padronizacao]);
+  const classeDoItem = useMemo(() => {
+    if (!padronizacao?.classificacoes.length) return null;
+    const classificar = criarClassificador(padronizacao.classificacoes, padronizacao.unidades);
+    const memo = new WeakMap<ItemDfdRow, ResultadoClassificacao | null>();
+    return (r: ItemDfdRow) => {
+      let v = memo.get(r);
+      if (v === undefined) {
+        v = classificar(r.descricao, r.unidade);
+        memo.set(r, v);
+      }
+      return v;
+    };
+  }, [padronizacao]);
+
   // ATRIBUTOS de um item (valor p/ ordenar e filtrar; `valores` = vários — os problemas do Estado): a MESMA régua nas
   // colunas da visão Normal e nos filtros da Consolidada, que filtram os ITENS antes de agrupar — o total da Consolidada
   // bate com o da Normal com os mesmos filtros.
@@ -990,11 +1023,14 @@ export function DfdsView({
       catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
       descricao: { valor: (r) => r.descricao ?? "" },
       unidade: { valor: (r) => r.unidade ?? "" },
+      // Só com o cadastro (senão as colunas nem existem): a sigla da unidade cadastrada e a classificação automática.
+      unidCad: { valor: (r) => (chaveUnidade(r.unidade) ? (unidadeDoItem?.(r.unidade)?.sigla ?? NAO_CADASTRADA) : "—") },
+      classificacao: { valor: (r) => classeDoItem?.(r)?.classificacao.nome ?? NAO_CLASSIFICADO },
       // Só na Consolidada: o código NORMALIZADO (o da linha) e o nº do item no PCA (a coluna da Mesa do PCA).
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
       pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
     } satisfies Record<string, Atributo>;
-  }, [repDoItem, dfdPorId, regras]);
+  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem]);
 
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
@@ -1014,8 +1050,10 @@ export function DfdsView({
       "estado",
       "codigo",
       "catalogo",
+      ...(classeDoItem ? (["classificacao"] as const) : []),
       "descricao",
       "unidade",
+      ...(unidadeDoItem ? (["unidCad"] as const) : []),
       "planejamento",
       "dfd",
       "protocolo",
@@ -1037,7 +1075,7 @@ export function DfdsView({
       itens: res.passam.length === lista.length ? lista : res.passam.map((i) => lista[i]),
       opcoes: new Map<string, string[]>(chaves.map((k, j) => [k, res.opcoes[j] ?? []])),
     };
-  }, [consolidada, itensF, atributoItem, filtrosItem, emPca]);
+  }, [consolidada, itensF, atributoItem, filtrosItem, emPca, classeDoItem, unidadeDoItem]);
   const consolidados = useMemo(() => (filtroItens ? consolidarItens(filtroItens.itens) : null), [filtroItens]);
   /** O filtro de ATRIBUTO da coluna `k` da Consolidada (controlado aqui — `Column.filtroExterno`). */
   const filtroExterno = (k: string) => ({
@@ -1078,6 +1116,8 @@ export function DfdsView({
             siglas: distintos(l.itens, atributoItem.sigla.valor),
             tipos: distintos(l.itens, atributoItem.tipo.valor),
             prioridades: distintos(l.itens, atributoItem.prioridade.valor),
+            classificacoes: classeDoItem ? distintos(l.itens, atributoItem.classificacao.valor) : [],
+            unidadesCad: unidadeDoItem ? distintos(l.itens, atributoItem.unidCad.valor) : [],
             seqsPca: l.itens
               .filter((it) => it.pcaSequencial != null)
               .sort((a, b) => (a.pcaSequencial ?? 0) - (b.pcaSequencial ?? 0))
@@ -1088,7 +1128,7 @@ export function DfdsView({
         ] as const;
       }),
     );
-  }, [consolidados, repDoItem, regras, atributoItem]);
+  }, [consolidados, repDoItem, regras, atributoItem, classeDoItem, unidadeDoItem]);
   // Detalhe (COMPOSIÇÃO) da linha consolidada aberta. Recarregando os itens (depois de gravar no banner do item), segue a
   // MESMA linha (pelo código) com os dados novos; enquanto ela não reaparece, mostra a última — nada pisca.
   const [composicao, setComposicao] = useState<string | null>(null);
@@ -1170,6 +1210,18 @@ export function DfdsView({
       value: atributoItem.catalogo.valor,
       render: (r) => <CelulaCatalogo conf={r.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(r.dfdTipo)} />,
     },
+    // Classificação AUTOMÁTICA (Catálogo → Classificações): pela palavra-chave da descrição ou pela unidade — o motivo na dica.
+    ...(classeDoItem
+      ? [
+          {
+            key: "classificacao",
+            header: "Classificação",
+            nowrap: true,
+            value: atributoItem.classificacao.valor,
+            render: (r: ItemDfdRow) => <CelulaClassificacao resultado={classeDoItem(r)} />,
+          },
+        ]
+      : []),
     {
       key: "descricao",
       header: "Descrição",
@@ -1183,6 +1235,18 @@ export function DfdsView({
       ),
     },
     { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
+    // A unidade do item COMPARADA com o cadastro (Catálogo → Unidades de medida): a sigla cadastrada ou "Não cadastrada".
+    ...(unidadeDoItem
+      ? [
+          {
+            key: "unidCad",
+            header: "Unid. cadastrada",
+            nowrap: true,
+            value: atributoItem.unidCad.valor,
+            render: (r: ItemDfdRow) => <CelulaUnidadeCadastrada texto={r.unidade} unidade={unidadeDoItem(r.unidade)} />,
+          },
+        ]
+      : []),
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
     { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
@@ -1240,6 +1304,18 @@ export function DfdsView({
         return <CelulaCatalogo conf={pior?.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(pior?.dfdTipo ?? null)} />;
       },
     },
+    ...(classeDoItem
+      ? [
+          {
+            key: "classificacao",
+            header: "Classificação",
+            nowrap: true,
+            value: (l: Cons) => infoDe(l).classificacoes.join(" · ") || "—",
+            filtroExterno: filtroExterno("classificacao"),
+            render: (l: Cons) => <CelulaLista valores={infoDe(l).classificacoes} />,
+          },
+        ]
+      : []),
     {
       key: "descricao",
       header: "Descrição",
@@ -1275,6 +1351,18 @@ export function DfdsView({
           (l.unidades[0]?.texto ?? "—")
         ),
     },
+    ...(unidadeDoItem
+      ? [
+          {
+            key: "unidCad",
+            header: "Unid. cadastrada",
+            nowrap: true,
+            value: (l: Cons) => infoDe(l).unidadesCad.join(" · ") || "—",
+            filtroExterno: filtroExterno("unidCad"),
+            render: (l: Cons) => <CelulaLista valores={infoDe(l).unidadesCad} />,
+          },
+        ]
+      : []),
     {
       key: "qtd",
       header: "Qtd. total",
@@ -1479,6 +1567,8 @@ export function DfdsView({
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
   );
+  // As colunas da padronização (só com o cadastro) alargam as tabelas de itens.
+  const larguraPadronizacao = (classeDoItem ? 150 : 0) + (unidadeDoItem ? 130 : 0);
   const tabelaItens = (
     <DataTable
       columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
@@ -1491,7 +1581,7 @@ export function DfdsView({
       activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={modoPca ? 1280 : 1460}
+      minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
@@ -1509,7 +1599,7 @@ export function DfdsView({
       activeKey={composicao}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={modoPca ? 1640 : 1720}
+      minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
       vazio={
         carregandoItens || itensF === null
@@ -1750,7 +1840,7 @@ export function DfdsView({
         onFechar={() => setComposicao(null)}
         onAbrirItem={(it) => setAberto({ tipo: "item", dfdId: it.dfdId, itemId: it.id, item: { item: it.item, codigo: it.codigo } })}
         colunasAntes={colunasComposicao(["pcaSeq", "estado"])}
-        colunasDepois={colunasComposicao(["catalogo", "pca", "prioridade"])}
+        colunasDepois={colunasComposicao(["catalogo", "classificacao", "unidCad", "pca", "prioridade"])}
       />
 
       {/* PILHA DE BANNERS do GRAVADO — os MESMOS componentes/conferência da análise, em ORDEM FIXA

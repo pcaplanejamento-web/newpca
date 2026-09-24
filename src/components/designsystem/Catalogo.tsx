@@ -38,7 +38,19 @@ import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
-import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { AcoesCadastro } from "@/components/AcoesCadastro";
+import { ClassificacaoDosItens, EditorClassificacao, type RascunhoClassificacao } from "@/components/ClassificacoesView";
+import { ComparacaoUnidades, EditorUnidadeMedida, type RascunhoUnidade } from "@/components/UnidadesMedidaView";
+import {
+  type ClassificacaoItem,
+  classificarDescricoes,
+  compararUnidades,
+  criarClassificador,
+  type DescricaoItem,
+  propostaUnidade,
+  type UnidadeMedida,
+} from "@/lib/padronizacao-core";
 import { CelulaLista, MaisN } from "@/components/CelulaLista";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
@@ -53,7 +65,7 @@ import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl } from "@/lib/format";
-import { CampoLista, Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
+import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
@@ -708,6 +720,106 @@ function GraficosGovernancaDemo() {
           colunas={[3, 5, 2, 8, 6, 9, 4].map((n, i) => ({ chave: String(i), rotulo: `S${i + 1}`, valor: n, dica: { valor: `${n} protocolos`, rotulo: `Semana ${i + 1}` } }))}
         />
       </ChartCard>
+    </div>
+  );
+}
+
+/** Cadastro de exemplo da PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações). */
+const CLASSIFICACOES_DEMO: ClassificacaoItem[] = [
+  { id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"], ordem: 0 },
+  { id: 2, nome: "MATERIAL PERMANENTE", cor: "#7c3aed", palavras: ["Cadeira", "Armário", "Ar condicionado"], ordem: 1 },
+  { id: 3, nome: "MATERIAL DE CONSUMO", cor: "#059669", palavras: ["Papel", "Caneta", "Material de limpeza"], ordem: 2 },
+];
+const UNIDADES_DEMO: UnidadeMedida[] = [
+  { id: 1, sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."], classificacaoId: null, ordem: 0 },
+  { id: 2, sigla: "CX", nome: "CAIXA", sinonimos: [], classificacaoId: null, ordem: 1 },
+  { id: 3, sigla: "SV", nome: "SERVIÇO", sinonimos: ["MÊS"], classificacaoId: 1, ordem: 2 },
+];
+const COMPARACAO_DEMO = compararUnidades(
+  [
+    { texto: "UND", dfd: 42, catalogo: 8 },
+    { texto: "Und.", dfd: 5, catalogo: 0 },
+    { texto: "CAIXAS", dfd: 12, catalogo: 1 },
+    { texto: "UNIDADES", dfd: 3, catalogo: 0 },
+    { texto: "PACOTE", dfd: 9, catalogo: 14 },
+    { texto: "SV", dfd: 7, catalogo: 0 },
+    { texto: "", dfd: 2, catalogo: 0 },
+  ],
+  UNIDADES_DEMO,
+);
+const DESCRICOES_DEMO: DescricaoItem[] = [
+  { descricao: "SERVIÇO DE MANUTENÇÃO PREVENTIVA EM CADEIRAS DE ESCRITÓRIO", unidade: "SV", dfd: 3, catalogo: 0, valor: 18000 },
+  { descricao: "CADEIRA GIRATÓRIA COM BRAÇOS E REGULAGEM DE ALTURA", unidade: "UN", dfd: 12, catalogo: 1, valor: 9600 },
+  { descricao: "PAPEL A4 75G/M², RESMA COM 500 FOLHAS", unidade: "RESMA", dfd: 20, catalogo: 1, valor: 5200 },
+  { descricao: "LOCAÇÃO DE VEÍCULO COM MOTORISTA", unidade: "MÊS", dfd: 2, catalogo: 0, valor: 96000 },
+  { descricao: "PNEU ARO 15", unidade: "UN", dfd: 8, catalogo: 0, valor: 3200 },
+];
+const CLASSIFICADOR_DEMO = criarClassificador(CLASSIFICACOES_DEMO, UNIDADES_DEMO);
+const CLASSIFICADAS_DEMO = classificarDescricoes(DESCRICOES_DEMO, CLASSIFICADOR_DEMO);
+
+/** A PADRONIZAÇÃO: as células da Mesa → Itens, as ações de linha do cadastro, a comparação das unidades, a
+ * classificação dos itens e os dois editores (com a prévia ao vivo). */
+function PadronizacaoDemo() {
+  const [rascUnid, setRascUnid] = useState<RascunhoUnidade | null>(null);
+  const [rascClass, setRascClass] = useState<RascunhoClassificacao | null>(null);
+  const linhas = COMPARACAO_DEMO.linhas;
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <span className="text-xs text-muted">Unid. cadastrada:</span>
+        <CelulaUnidadeCadastrada texto="Und." unidade={UNIDADES_DEMO[0]} />
+        <CelulaUnidadeCadastrada texto="PACOTE" unidade={null} />
+        <CelulaUnidadeCadastrada texto="" unidade={null} />
+        <span className="text-xs text-muted">Classificação:</span>
+        <CelulaClassificacao resultado={CLASSIFICADOR_DEMO("Manutenção de ar condicionado", "SV")} />
+        <CelulaClassificacao resultado={CLASSIFICADOR_DEMO("Locação de veículo", "MÊS")} />
+        <CelulaClassificacao resultado={null} />
+        <span className="text-xs text-muted">Ações do cadastro:</span>
+        <AcoesCadastro nome="UN" primeira ultima={false} onMover={() => toast.info("Mover")} onEditar={() => toast.info("Editar")} onExcluir={() => toast.info("Excluir")} />
+      </div>
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <ComparacaoUnidades
+          linhas={linhas}
+          unidades={UNIDADES_DEMO}
+          podeEditar
+          onAdicionar={(itens) => toast.success(`${itens.length} grafia(s) adicionada(s) (exemplo).`)}
+          onCadastrar={(l) => setRascUnid({ id: null, ...propostaUnidade(l, linhas), classificacaoId: null })}
+        />
+      </div>
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <ClassificacaoDosItens linhas={CLASSIFICADAS_DEMO} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => setRascUnid({ id: 1, sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."], classificacaoId: null })}>
+          Editor de unidade de medida
+        </Button>
+        <Button variant="secondary" onClick={() => setRascClass({ id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"] })}>
+          Editor de classificação
+        </Button>
+      </div>
+      {rascUnid && (
+        <EditorUnidadeMedida
+          rascunho={rascUnid}
+          unidades={UNIDADES_DEMO}
+          classificacoes={CLASSIFICACOES_DEMO}
+          linhas={linhas}
+          salvando={false}
+          onChange={setRascUnid}
+          onFechar={() => setRascUnid(null)}
+          onSalvar={() => setRascUnid(null)}
+        />
+      )}
+      {rascClass && (
+        <EditorClassificacao
+          rascunho={rascClass}
+          cadastro={{ unidades: UNIDADES_DEMO, classificacoes: CLASSIFICACOES_DEMO }}
+          linhas={CLASSIFICADAS_DEMO}
+          salvando={false}
+          onChange={setRascClass}
+          onFechar={() => setRascClass(null)}
+          onSalvar={() => setRascClass(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1558,6 +1670,13 @@ export function Catalogo() {
         </div>
         <div className="mt-4 max-w-md">
           <TextArea label="Descrição (multi-linha)" placeholder="Digite uma descrição…" rows={3} />
+        </div>
+        <div className="mt-4 max-w-md">
+          <SelectField label="Seleção (SelectField — o mesmo visual do campo)" defaultValue="" hint="Ex.: a classificação que a unidade de medida indica.">
+            <option value="">Nenhuma</option>
+            <option value="1">SERVIÇO</option>
+            <option value="2">MATERIAL DE CONSUMO</option>
+          </SelectField>
         </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />
@@ -2470,6 +2589,10 @@ export function Catalogo() {
             podeEditar
           />
         </div>
+      </Secao>
+
+      <Secao titulo="Padronização (Catálogo → Unidades de medida | Classificações) — comparação das unidades dos itens, classificação automática, editores e as células da Mesa → Itens">
+        <PadronizacaoDemo />
       </Secao>
 
       <Secao titulo="OrcamentoItemDetalhe (painel lateral do lançamento do orçamento — só leitura)">

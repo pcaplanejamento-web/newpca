@@ -398,6 +398,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(nomes(db, "SELECT name FROM pragma_table_info('usuarios')").includes("mesa_responsavel"));
   });
 
+  it("0038 padronização: classificações e unidades de medida (excluir a classificação zera a da unidade)", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["item_classificacoes", "unidades_medida"]) assert.ok(tabelas.includes(t), `tabela ausente: ${t}`);
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["item_classificacoes_ordem_idx", "unidades_medida_ordem_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO item_classificacoes (id, nome, palavras) VALUES (981, 'SERVIÇO', '[\"MANUTENCAO\"]')");
+    db.exec("INSERT INTO unidades_medida (id, sigla, nome, classificacao_id) VALUES (982, 'SV', 'SERVIÇO', 981)");
+    const u = db.prepare("SELECT sinonimos, ordem FROM unidades_medida WHERE id = 982").get() as { sinonimos: string; ordem: number };
+    assert.equal(u.sinonimos, "[]");
+    assert.equal(u.ordem, 0);
+    db.exec("DELETE FROM item_classificacoes WHERE id = 981");
+    const depois = db.prepare("SELECT classificacao_id FROM unidades_medida WHERE id = 982").get() as { classificacao_id: number | null };
+    assert.equal(depois.classificacao_id, null, "excluir a classificação deveria zerar a da unidade (set null)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -540,6 +540,44 @@ export const catalogoItens = sqliteTable(
   ],
 );
 
+/**
+ * PADRONIZAÇÃO dos itens (Catálogo → Classificações, migração `0038`): cada CLASSIFICAÇÃO tem nome + cor + ordem +
+ * PALAVRAS-CHAVE (JSON string[]) — a classificação AUTOMÁTICA dos itens pela descrição (`padronizacao-core`).
+ */
+export const itemClassificacoes = sqliteTable(
+  "item_classificacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull().default("#64748b"),
+    palavras: text("palavras").notNull().default("[]"),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("item_classificacoes_ordem_idx").on(t.ordem)],
+);
+
+/**
+ * UNIDADES DE MEDIDA cadastradas (Catálogo → Unidades de medida, migração `0038`): sigla + nome + SINÔNIMOS (JSON
+ * string[] — as outras grafias aceitas: "UND", "UNID.") + ordem e a CLASSIFICAÇÃO que a unidade indica (usada quando a
+ * descrição do item não tem palavra-chave). As unidades dos itens são COMPARADAS com este cadastro.
+ */
+export const unidadesMedida = sqliteTable(
+  "unidades_medida",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sigla: text("sigla").notNull(),
+    nome: text("nome").notNull(),
+    sinonimos: text("sinonimos").notNull().default("[]"),
+    classificacaoId: integer("classificacao_id").references(() => itemClassificacoes.id, { onDelete: "set null" }),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("unidades_medida_ordem_idx").on(t.ordem)],
+);
+
 // Auditoria / histórico de alterações (APPEND-ONLY): quem (usuario_id + snapshot
 // nome/email), o quê (acao/entidade/entidade_id + diff antes/depois JSON), quando.
 export const auditoria = sqliteTable(

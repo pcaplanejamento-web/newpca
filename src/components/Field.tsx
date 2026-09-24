@@ -1,6 +1,6 @@
 "use client";
 
-import { type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes, useId, useState } from "react";
+import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId, useState } from "react";
 import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconSearch } from "./icons";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
@@ -40,6 +40,34 @@ export function TextField({ label, icon, trailing, hint, error, id, ...rest }: C
       ) : hint ? (
         <p className="mt-1.5 text-[12px] text-muted">{hint}</p>
       ) : null}
+    </div>
+  );
+}
+
+/** Seleção no MESMO visual do `TextField` (rótulo forte + caixa de 54px, foco accent): um `<select>` nativo — no celular
+ * abre o seletor do próprio aparelho. As opções vêm como `children`. */
+export function SelectField({
+  label,
+  hint,
+  id,
+  children,
+  ...rest
+}: { label?: string; hint?: ReactNode; children: ReactNode } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
+  const auto = useId();
+  const fid = id ?? auto;
+  return (
+    <div>
+      {label && (
+        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+          {label}
+        </label>
+      )}
+      <div className={`${WRAP} h-[54px] border-border-2`}>
+        <select id={fid} className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`} {...rest}>
+          {children}
+        </select>
+      </div>
+      {hint && <p className="mt-1.5 text-[12px] text-muted">{hint}</p>}
     </div>
   );
 }
