@@ -129,6 +129,8 @@ const SEM_INFO = {
   dfds: [] as string[],
   siglas: [] as string[],
   prioridades: [] as string[],
+  planejamentos: [] as string[],
+  tipos: [] as string[],
   seqsPca: [] as { texto: string; riscado: boolean }[],
   catalogoPior: null as ItemDfdRow | null,
   catalogoRotulo: "—",
@@ -980,7 +982,9 @@ export function DfdsView({
       protocolo: { valor: (r) => r.protocoloNumero ?? "—" },
       pca: { valor: (r) => String(anoPcaDoDfd(dfdPorId.get(r.dfdId)) ?? "—") },
       dfd: { valor: (r) => r.dfdNumero },
+      planejamento: { valor: (r) => r.dfdPlanejamento?.trim() || "—" },
       sigla: { valor: (r) => r.sigla ?? "—" },
+      tipo: { valor: (r) => tipoCurtoDfd(r.dfdTipo) ?? "—" },
       prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
       catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
       descricao: { valor: (r) => r.descricao ?? "" },
@@ -1011,9 +1015,11 @@ export function DfdsView({
       "catalogo",
       "descricao",
       "unidade",
+      "planejamento",
       "dfd",
       "protocolo",
       "sigla",
+      "tipo",
       ...(emPca ? [] : (["pca"] as const)),
       "prioridade",
     ];
@@ -1065,7 +1071,9 @@ export function DfdsView({
             protocolos: distintos(l.itens, (it) => it.protocoloNumero),
             pcas: distintos(l.itens, (it) => anoPcaDoDfd(dfdPorId.get(it.dfdId))),
             dfds: distintos(l.itens, (it) => it.dfdNumero),
+            planejamentos: distintos(l.itens, (it) => it.dfdPlanejamento),
             siglas: distintos(l.itens, (it) => it.sigla),
+            tipos: distintos(l.itens, (it) => tipoCurtoDfd(it.dfdTipo)),
             prioridades: distintos(l.itens, (it) => dfdPorId.get(it.dfdId)?.prioridade),
             seqsPca: l.itens
               .filter((it) => it.pcaSequencial != null)
@@ -1131,6 +1139,13 @@ export function DfdsView({
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
+    {
+      key: "planejamento",
+      header: "Nº Plan.",
+      nowrap: true,
+      value: atributoItem.planejamento.valor,
+      render: (r) => <span className="font-mono text-[12px]">{atributoItem.planejamento.valor(r)}</span>,
+    },
     { key: "dfd", header: "Nº DFD", nowrap: true, value: atributoItem.dfd.valor, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
     {
       key: "sigla",
@@ -1139,6 +1154,7 @@ export function DfdsView({
       value: atributoItem.sigla.valor,
       render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
     },
+    { key: "tipo", header: "Tipo", nowrap: true, value: atributoItem.tipo.valor, render: (r) => <span className="text-[12px]">{atributoItem.tipo.valor(r)}</span> },
     {
       key: "prioridade",
       header: "Prioridade",
@@ -1331,6 +1347,14 @@ export function DfdsView({
       ),
     },
     {
+      key: "planejamento",
+      header: "Nº Plan.",
+      nowrap: true,
+      value: (l) => infoDe(l).planejamentos.join(" · ") || "—",
+      filtroExterno: filtroExterno("planejamento"),
+      render: (l) => <CelulaLista valores={infoDe(l).planejamentos} mono />,
+    },
+    {
       key: "dfd",
       header: "Nº DFD",
       nowrap: true,
@@ -1353,6 +1377,15 @@ export function DfdsView({
       value: (l) => infoDe(l).siglas.join(" · ") || "—",
       filtroExterno: filtroExterno("sigla"),
       render: (l) => <CelulaLista valores={infoDe(l).siglas} mono destaque />,
+    },
+    // Os tipos são 4 (S/R/O/E): todos à vista, sem "+N".
+    {
+      key: "tipo",
+      header: "Tipo",
+      nowrap: true,
+      value: (l) => infoDe(l).tipos.join(" · ") || "—",
+      filtroExterno: filtroExterno("tipo"),
+      render: (l) => <CelulaLista valores={infoDe(l).tipos} max={4} />,
     },
     ...(modoPca
       ? []
@@ -1459,7 +1492,7 @@ export function DfdsView({
       activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={modoPca ? 1120 : 1300}
+      minWidth={modoPca ? 1280 : 1460}
       density="compact"
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
@@ -1477,7 +1510,7 @@ export function DfdsView({
       activeKey={composicao}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={modoPca ? 1480 : 1560}
+      minWidth={modoPca ? 1640 : 1720}
       density="compact"
       vazio={
         carregandoItens || itensF === null

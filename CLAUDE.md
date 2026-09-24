@@ -611,8 +611,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (em curso) e "não conferido" (falhou — recarregue) aparecem separados, e o progresso conta só os PRONTOS ("Conferindo 5
     de 10… · 2 não conferidos" — a mesma régua do "de N conferidos" da conformidade). O valor por unidade agrupa pelo ID da unidade (a
     sigla pode repetir entre órgãos).
-  - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
-    **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
+  - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Estado · Protocolo · [PCA] · **Nº Plan.** · Nº
+    DFD · Sigla · **Tipo** · Prioridade · Item · Código · **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total — o nº
+    de planejamento e o tipo são os do DFD de origem, na MESMA ordem da planilha de DFDs: `ItemDfdRow.dfdPlanejamento`, lido
+    na mesma consulta, e `dfdTipo` → `tipoCurtoDfd`), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
     invalidado quando os DFDs recarregam (após import/edição). A coluna **Catálogo** vem do SERVIDOR na mesma resposta:
     `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
@@ -635,16 +637,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     que o preço de um item se compara — a da unidade dele quando mistas), `estadoConsolidado` (os problemas dos itens
     AGRUPADOS com a contagem — "Item sem valor (2)" —, erros primeiro), `distintos`, `varianteDescricao` (D1, D2…),
     `desvioDaMedia`/`desvioTexto`, `participacaoTexto` ("< 0,1%") e `textoResumoConsolidado` ("Copiar resumo", com a linha
-    "Por unidade" quando mistas). **Filtros:** os de ATRIBUTO (Estado, Código, Catálogo, Descrição, Unidade, Nº DFD,
-    Protocolo, Sigla, PCA, Prioridade, Seq. PCA) valem no nível do **ITEM, ANTES de consolidar** — `aplicarFiltros` sobre os
+    "Por unidade" quando mistas; cada DFD pelo nº + planejamento — "1209 (Planej. 1509)", a referência dos despachos). **Filtros:** os de ATRIBUTO (Estado, Código, Catálogo, Descrição, Unidade, Nº Plan., Nº
+    DFD, Protocolo, Sigla, Tipo, PCA, Prioridade, Seq. PCA) valem no nível do **ITEM, ANTES de consolidar** — `aplicarFiltros` sobre os
     itens com as MESMAS funções de valor da visão Normal (`atributoItem`, fonte única das duas visões; o código
     normalizado) —, então a linha soma só os itens que passam e **o total bate com o da Normal com os mesmos filtros**; as
     opções de cada um vêm dos itens que passam nos DEMAIS (conectados, sem ciclo) e chegam à tabela por
     **`Column.filtroExterno`**; os NUMÉRICOS (Qtd. total, médio, variação, total, itens) ficam na tabela e valem para a
     linha. Zeram ao sair da visão. Colunas (as da Normal, agregadas): [Seq. PCA] · Estado · Código · Catálogo (o veredito
     MAIS grave dos itens) · Descrição (+N — `MaisN`) · Unidade (mistas = ÂMBAR + ícone) · Qtd. total · Vlr. unit. médio
-    (mistas = âmbar + ícone) · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) · Itens · Nº DFD ·
-    Protocolo · Sigla · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N"; dica até 30 por
+    (mistas = âmbar + ícone) · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) · Itens · Nº Plan. · Nº
+    DFD · Protocolo · Sigla · Tipo (os 4 à vista) · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N"; dica até 30 por
     `dicaLista`; Seq. PCA inativo riscado). O que as células mostram é calculado UMA vez por lista (`infoConsolidados`,
     inclusive o rótulo do catálogo usado na ordenação). Rodapé = N códigos · M sem código · itens · total. SÓ leitura (sem
     seleção/massa — a edição é item a item; a seleção da Normal fica guardada). Tocar numa linha abre o
@@ -652,7 +654,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `Callout`s (unidades diferentes; itens fora da média), a quebra **"Por unidade de medida"** (qtd., médio, faixa e
     variação de cada uma), as descrições diferentes numeradas (D1…) e a TABELA das ocorrências com TUDO o que a linha
     resume — as colunas da Normal vindas da Mesa (`colunasAntes`: Seq. PCA, Estado; `colunasDepois`: Catálogo, PCA,
-    Prioridade) + Protocolo · Nº DFD · Sigla · Item · Unidade · Qtd. · "Vlr. unit. · Δ média" (o valor + o desvio dele da
+    Prioridade) + Protocolo · Nº Plan. · Nº DFD · Sigla · Tipo · Item · Unidade · Qtd. · "Vlr. unit. · Δ média" (o valor + o desvio dele da
     média — a da MESMA unidade quando mistas —, na cor da faixa; uma coluna só) · Vlr. total · [Descrição D1/D2 — só com
     descrições diferentes]; tocar numa ocorrência abre o banner do ITEM por cima (`setAberto` — a pilha da Mesa; Esc fecha o
     do topo primeiro). Recarregando os itens (após salvar), o detalhe segue a MESMA linha (pelo código) com os dados novos;

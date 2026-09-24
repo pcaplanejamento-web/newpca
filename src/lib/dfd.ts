@@ -106,6 +106,8 @@ export type ItemDfdRow = {
   id: number; // dfd_itens.id
   dfdId: number;
   dfdNumero: string;
+  /** Nº de planejamento do DFD de origem (o identificador do Centi — `null` = DFD sem planejamento). */
+  dfdPlanejamento: string | null;
   sigla: string | null; // código da unidade do DFD
   reparticaoId: number | null; // unidade do DFD (escopo de acesso da Mesa do PCA)
   protocoloNumero: string | null;
@@ -257,6 +259,7 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number, ano
       id: dfdItens.id,
       dfdId: dfds.id,
       dfdNumero: dfds.numero,
+      dfdPlanejamento: dfds.planejamento,
       sigla: reparticoes.codigo,
       reparticaoId: dfds.reparticaoId,
       protocoloNumero: dfdProtocolos.numero,

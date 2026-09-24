@@ -714,10 +714,10 @@ function GraficosGovernancaDemo() {
 
 /** Itens de exemplo da visão CONSOLIDADA — o MESMO código em 3 DFDs (preços e unidades diferentes) + outro código. */
 const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
-  { id: 1, codigo: "5241947270", descricao: "PAPEL A4 75G/M² — RESMA COM 500 FOLHAS", unidade: "RESMA", quantidade: 120, valorUnitario: 24.9, valorTotal: 2988, dfdNumero: "1201", protocoloNumero: "97600/2026", sigla: "SME", item: 3 },
-  { id: 2, codigo: "524.194.727-0", descricao: "Papel A4 75g/m² — resma com 500 folhas", unidade: "RESMA", quantidade: 80, valorUnitario: 27.5, valorTotal: 2200, dfdNumero: "1243", protocoloNumero: "97611/2026", sigla: "SMS", item: 7 },
-  { id: 3, codigo: "5241947270", descricao: "PAPEL SULFITE A4 BRANCO", unidade: "CX", quantidade: 10, valorUnitario: 139, valorTotal: 1390, dfdNumero: "1300", protocoloNumero: "97611/2026", sigla: "SMS", item: 12 },
-  { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
+  { id: 1, codigo: "5241947270", descricao: "PAPEL A4 75G/M² — RESMA COM 500 FOLHAS", unidade: "RESMA", quantidade: 120, valorUnitario: 24.9, valorTotal: 2988, dfdNumero: "1201", dfdPlanejamento: "1525", dfdTipo: "DFD-S", protocoloNumero: "97600/2026", sigla: "SME", item: 3 },
+  { id: 2, codigo: "524.194.727-0", descricao: "Papel A4 75g/m² — resma com 500 folhas", unidade: "RESMA", quantidade: 80, valorUnitario: 27.5, valorTotal: 2200, dfdNumero: "1243", dfdPlanejamento: "1549", dfdTipo: "DFD-R", protocoloNumero: "97611/2026", sigla: "SMS", item: 7 },
+  { id: 3, codigo: "5241947270", descricao: "PAPEL SULFITE A4 BRANCO", unidade: "CX", quantidade: 10, valorUnitario: 139, valorTotal: 1390, dfdNumero: "1300", dfdPlanejamento: "1554", dfdTipo: "DFD-S", protocoloNumero: "97611/2026", sigla: "SMS", item: 12 },
+  { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", dfdPlanejamento: "1525", dfdTipo: "DFD-S", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
 ];
 
 function ConsolidadosDemo() {

@@ -45,7 +45,8 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   Itens`; à direita os filtros de hierarquia SÓ COM O ÍCONE (a foto da pessoa escolhida no de Responsável). Tudo na altura
   padrão dos controles (`--h-control-sm`) no desktop; no celular alvos ≥ 44px.
 - **Tabelas compactas:** Protocolos, DFDs e Itens com a MESMA altura de linha (a dos controles) e o cabeçalho baixo; ações na
-  linha com `Button size="xs"`; colunas **PCA** (ano, nome na dica) e **Prioridade**.
+  linha com `Button size="xs"`; colunas **PCA** (ano, nome na dica) e **Prioridade**; nos Itens (e no detalhe da Consolidada),
+  **Nº Plan.** e **Tipo** do DFD de origem na ordem da planilha de DFDs (Nº Plan. · Nº DFD · Sigla · Tipo).
 - **PCA no cabeçalho:** seletor à esquerda do topo (no celular só o ano), em accent quando há um PCA escolhido — filtra a
   Mesa, os cards do PCA e o Orçamento.
 - **Itens Normal | Consolidada:** só na visão Itens, um 2º `Segmented` ao lado do das visões (mesma altura; no celular desce

@@ -26,6 +26,13 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Mesa → Itens: nº de planejamento e tipo do DFD em cada item — entregue
+✅ A tabela de itens da Mesa (visões **Normal** e **Consolidada**, na Mesa principal e na do PCA) e o **detalhe da
+composição** ganharam as colunas **Nº Plan.** (antes do Nº DFD) e **Tipo** (DFD-S/R/O/E, depois da Sigla) — a mesma ordem da
+planilha de DFDs. Na Consolidada aparecem todos os planejamentos e tipos do código (os 4 tipos sempre à vista) e filtrar por
+eles escolhe os itens da soma (o total bate com o da Normal). O "Copiar resumo" do detalhe cita cada DFD pelo nº +
+planejamento ("1209 (Planej. 1509)"). O nº de planejamento vem na mesma consulta dos itens (sem consulta nova).
+
 ### Mesa → Itens: visão CONSOLIDADA por código (quantidade somada, valor médio ponderado, variação e curva ABC) — entregue
 ✅ Na visão **Itens** da Mesa (principal e do PCA), um seletor ao lado de Protocolos · DFDs · Itens alterna **Normal** (um
 item por linha, como antes) e **Consolidada**: os itens de **mesmo código** viram **uma linha** — **quantidade somada**,

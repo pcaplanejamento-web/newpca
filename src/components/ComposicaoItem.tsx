@@ -15,6 +15,7 @@ import {
   textoResumoConsolidado,
   varianteDescricao,
 } from "@/lib/itens-consolidados";
+import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -69,7 +70,15 @@ function ChipVariante({ n, titulo }: { n: number; titulo?: string }) {
 }
 
 /** O que o detalhe mostra de cada item de origem (a linha da visão Itens da Mesa tem estes campos). */
-export type ItemComposicao = ItemConsolidavel & { dfdNumero: string; protocoloNumero: string | null; sigla: string | null; item: number | null };
+export type ItemComposicao = ItemConsolidavel & {
+  dfdNumero: string;
+  /** Nº de planejamento e tipo do DFD de origem. */
+  dfdPlanejamento: string | null;
+  dfdTipo: string | null;
+  protocoloNumero: string | null;
+  sigla: string | null;
+  item: number | null;
+};
 
 const NIVEL_TEXTO = { ok: "homogêneos", atencao: "atenção — pouco homogêneos", alerta: "alerta — muito dispersos" } as const;
 const itens = (n: number) => `${num(n)} ${n === 1 ? "item" : "itens"}`;
@@ -99,7 +108,9 @@ export function ComposicaoItem<T extends ItemComposicao>({
   colunasDepois?: Column<T>[];
 }) {
   const l = linha;
-  const dfds = l ? distintos(l.itens, (it) => it.dfdNumero) : [];
+  // Cada DFD pelo nº + nº de planejamento (a referência dos despachos do sistema — "1201 (Planej. 1501)").
+  const planejamentoDe = (it: T) => it.dfdPlanejamento?.trim() || null;
+  const dfds = l ? distintos(l.itens, (it) => (planejamentoDe(it) ? `${it.dfdNumero} (Planej. ${planejamentoDe(it)})` : it.dfdNumero)) : [];
   const protocolos = l ? distintos(l.itens, (it) => it.protocoloNumero) : [];
   const precos = l ? l.itens.length - l.semValor : 0;
   const nivel = l ? nivelVariacao(l.variacao) : null;
@@ -110,8 +121,22 @@ export function ComposicaoItem<T extends ItemComposicao>({
   const colunas: Column<T>[] = [
     ...colunasAntes,
     { key: "protocolo", header: "Protocolo", nowrap: true, value: (it) => it.protocoloNumero ?? "—", render: (it) => <CelulaLista valores={it.protocoloNumero ? [it.protocoloNumero] : []} mono /> },
+    {
+      key: "planejamento",
+      header: "Nº Plan.",
+      nowrap: true,
+      value: (it) => planejamentoDe(it) ?? "—",
+      render: (it) => <span className="font-mono text-[12px]">{planejamentoDe(it) ?? "—"}</span>,
+    },
     { key: "dfd", header: "Nº DFD", nowrap: true, value: (it) => it.dfdNumero, render: (it) => <span className="font-mono text-[12px]">{it.dfdNumero}</span> },
     { key: "sigla", header: "Sigla", nowrap: true, value: (it) => it.sigla ?? "—", render: (it) => <CelulaLista valores={it.sigla ? [it.sigla] : []} mono destaque /> },
+    {
+      key: "tipo",
+      header: "Tipo",
+      nowrap: true,
+      value: (it) => tipoCurtoDfd(it.dfdTipo) ?? "—",
+      render: (it) => <span className="text-[12px]">{tipoCurtoDfd(it.dfdTipo) ?? "—"}</span>,
+    },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (it) => String(it.item ?? ""), render: (it) => it.item ?? "—" },
     { key: "unidade", header: "Unidade", nowrap: true, value: (it) => it.unidade ?? "", render: (it) => it.unidade ?? "—" },
     {

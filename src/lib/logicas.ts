@@ -278,6 +278,7 @@ export const LOGICAS: LogicaRef[] = [
       "Curva ABC pelo valor: A = os códigos que somam os primeiros 80% do valor, B = até 95%, C = o resto; a lista vem do maior valor para o menor.",
       "Tocar numa linha abre o detalhe: indicadores, avisos, a quebra por unidade, as descrições diferentes numeradas (D1, D2…) e cada item de origem (com estado, catálogo, PCA e prioridade) com o desvio do preço em relação à média da unidade; tocar num item abre o banner dele por cima. \"Copiar resumo\" gera o texto para um despacho.",
       "O Estado junta os problemas dos itens (\"Item sem valor (2)\"). A edição segue item a item (visão Normal ou banner do item).",
+      "Nas duas visões e no detalhe, cada item mostra o nº de PLANEJAMENTO e o TIPO do DFD de origem (na Consolidada, todos os do código); filtrar por eles também escolhe os itens da soma.",
     ],
     fonte: "consolidarItens (itens-consolidados) + ComposicaoItem",
   },
