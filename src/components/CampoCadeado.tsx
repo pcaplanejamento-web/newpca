@@ -226,9 +226,15 @@ export function CampoNumero({
   );
 }
 
-/** Input numérico com RASCUNHO local (aceita "8.000,50" enquanto digita) → número parseado. */
+/** Input numérico com RASCUNHO local (aceita "8.000,50" enquanto digita) → número parseado. Se o valor muda DE FORA
+ * (ex.: itens unificados), o rascunho acompanha; o que o próprio rascunho produziu não o reformata no meio da digitação. */
 export function NumInput({ valor, onChange }: { valor: number | null | undefined; onChange: (v: number | null) => void }) {
   const [raw, setRaw] = useState(() => fmtNumEdit(valor));
+  const [base, setBase] = useState(valor);
+  if (valor !== base) {
+    setBase(valor);
+    if (parseNumberBR(raw) !== (valor ?? null)) setRaw(fmtNumEdit(valor));
+  }
   return (
     <input
       // biome-ignore lint/a11y/noAutofocus: foca ao destravar o campo (ação deliberada do usuário).

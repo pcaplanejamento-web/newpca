@@ -430,29 +430,50 @@ export function itensDuplicados(itens: ItemDup[]): number[][] {
   return [...grupos.values()].filter((g) => g.length > 1);
 }
 
-/** Para cada item REPETIDO, os ÍNDICES dos OUTROS do grupo — a tabela de itens marca "Item duplicado" e o detalhe
- * do item mostra os repetidos lado a lado. Item sem repetição não entra. Linear. Puro. */
+/** Para cada item REPETIDO, o GRUPO inteiro de iguais (índices em ordem, INCLUSIVE ele) — o MESMO array para todos os
+ * membros (linear, mesmo com milhares de itens iguais). Item sem repetição não entra. Puro. */
 export function mapaItensDuplicados(itens: ItemDup[]): Map<number, number[]> {
   const m = new Map<number, number[]>();
-  for (const g of itensDuplicados(itens)) for (const i of g) m.set(i, g.filter((j) => j !== i));
+  for (const g of itensDuplicados(itens)) for (const i of g) m.set(i, g);
   return m;
 }
 
-/** Lista PLANA de itens de VÁRIOS DFDs (visão Itens da Mesa): para cada item repetido NO SEU DFD, o Nº dos outros
- * iguais (chave = `id` da linha). Agrupa por DFD e reusa `mapaItensDuplicados` — linear. Puro. */
-export function repetidosPorDfd(
-  itens: (ItemDup & { id: number; dfdId: number; item: number | null })[],
-): Map<number, (number | null)[]> {
+/** Os OUTROS índices do grupo de `i` (sem ele), no máximo `max` — as listas exibidas não crescem com o grupo. */
+export function outrosDoGrupo(grupo: number[], i: number, max = Number.POSITIVE_INFINITY): number[] {
+  const out: number[] = [];
+  for (const j of grupo) {
+    if (out.length >= max) break;
+    if (j !== i) out.push(j);
+  }
+  return out;
+}
+
+/** Item REPETIDO para a célula/mensagem: o Nº de até 10 iguais + quantos são ao todo (a lista não cresce com o grupo). */
+export type RepeticaoItem = { iguais: (number | null)[]; total: number };
+const MAX_IGUAIS = 10;
+
+/** Lista PLANA de itens de VÁRIOS DFDs (visão Itens da Mesa): para cada item repetido NO SEU DFD, os iguais (chave =
+ * `id` da linha). Agrupa por DFD e reusa `mapaItensDuplicados` — linear. Puro. */
+export function repetidosPorDfd(itens: (ItemDup & { id: number; dfdId: number; item: number | null })[]): Map<number, RepeticaoItem> {
   const porDfd = new Map<number, typeof itens>();
   for (const it of itens) {
     const g = porDfd.get(it.dfdId);
     if (g) g.push(it);
     else porDfd.set(it.dfdId, [it]);
   }
-  const out = new Map<number, (number | null)[]>();
-  for (const grupo of porDfd.values()) {
-    for (const [i, outros] of mapaItensDuplicados(grupo)) out.set(grupo[i].id, outros.map((j) => grupo[j].item));
+  const out = new Map<number, RepeticaoItem>();
+  for (const lista of porDfd.values()) {
+    for (const [i, grupo] of mapaItensDuplicados(lista))
+      out.set(lista[i].id, { iguais: outrosDoGrupo(grupo, i, MAX_IGUAIS).map((j) => lista[j].item), total: grupo.length - 1 });
   }
+  return out;
+}
+
+/** O mesmo para os itens de UM DFD (tabela de itens do banner): índice → os iguais. */
+export function repetidosDoDfd(itens: (ItemDup & { item?: number | null })[]): Map<number, RepeticaoItem> {
+  const out = new Map<number, RepeticaoItem>();
+  for (const [i, grupo] of mapaItensDuplicados(itens))
+    out.set(i, { iguais: outrosDoGrupo(grupo, i, MAX_IGUAIS).map((j) => itens[j].item ?? j + 1), total: grupo.length - 1 });
   return out;
 }
 
@@ -577,9 +598,10 @@ function gruposItensRepetidos(itens: EntradaAvaliacaoDfd["itens"]): number[][] {
   return itensDuplicados(itens).map((g) => g.map((i) => itens[i].item ?? i + 1));
 }
 
-/** "7 = 114; 12 = 151 = 160" (trunca se for enorme). */
+/** "7 = 114; 12 = 151 = 160" (trunca se for enorme: grupo grande e muitos grupos). */
 function listaGruposItens(grupos: number[][]): string {
-  const s = grupos.slice(0, 12).map((g) => g.join(" = ")).join("; ");
+  const um = (g: number[]) => (g.length > 6 ? `${g.slice(0, 6).join(" = ")} = … (${g.length} iguais)` : g.join(" = "));
+  const s = grupos.slice(0, 12).map(um).join("; ");
   return grupos.length > 12 ? `${s} … (+${grupos.length - 12} grupos)` : s;
 }
 
@@ -998,20 +1020,22 @@ export function resumoEstado(
  * (atenção) — para o resumo da célula "Estado" da tabela de itens. A conformidade com o catálogo é coluna à parte. */
 export function mensagensItem(
   it: DfdItemParseado,
-  /** Item REPETIDO: Nº dos OUTROS itens com o mesmo código, descrição e unidade (+ a cor da importância do ADM). */
-  repetido?: { iguais: (number | null)[]; cor?: string } | null,
+  /** Item REPETIDO: Nº de outros itens com o mesmo código, descrição e unidade (+ o total e a cor da importância do ADM). */
+  repetido?: (RepeticaoItem & { cor?: string }) | null,
 ): { status: StatusMensagem; chave: string; texto: string; cor?: string }[] {
   const out: { status: StatusMensagem; chave: string; texto: string; cor?: string }[] = [];
   if (semValorUnitario(it.valorUnitario)) out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
   if (it.quantidade == null) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." });
   // Repetido = ATENÇÃO (nunca erro): confira no detalhe do item e remova/unifique o que for duplicado.
-  if (repetido && repetido.iguais.length > 0)
+  if (repetido && repetido.total > 0) {
+    const mais = repetido.total - repetido.iguais.length;
     out.push({
       status: "atencao",
       chave: "item.duplicado",
-      texto: `Item repetido — mesmo código, descrição e unidade do item ${repetido.iguais.map((n) => n ?? "—").join(", ")}.`,
+      texto: `Item repetido — mesmo código, descrição e unidade do item ${repetido.iguais.map((n) => n ?? "—").join(", ")}${mais > 0 ? ` (+${mais})` : ""}.`,
       ...(repetido.cor ? { cor: repetido.cor } : {}),
     });
+  }
   return out;
 }
 

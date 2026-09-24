@@ -37,7 +37,7 @@ import { DfdRodape } from "@/components/DfdRodape";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
 import { regrasPadrao } from "@/lib/avaliacao-core";
 import type { PcaDetalhe } from "@/lib/dfd";
-import { conciliacaoCapa, indiceAposRemover, mapaItensDuplicados, removerItemDfd, resumoEstado, unificarItensDfd } from "@/lib/dfd-tratamento";
+import { conciliacaoCapa, indiceAposRemover, mapaItensDuplicados, outrosDoGrupo, removerItemDfd, resumoEstado, unificarItensDfd } from "@/lib/dfd-tratamento";
 import { ComparacaoDuplicados } from "@/components/ComparacaoDuplicados";
 import { ComparacaoDfdView, ComparacaoProtocolo, DiffLinha, type RemovidoReenvio } from "@/components/ComparacaoReenvio";
 import { useSobrescrita } from "@/components/useSobrescrita";
@@ -290,7 +290,7 @@ function ItemRepetidoDemo() {
         Recomeçar a demo
       </Button>
     );
-  const repetidos = (mapa.get(idx) ?? []).map((j) => ({ idx: j, item: dfd.itens[j] }));
+  const repetidos = outrosDoGrupo(mapa.get(idx) ?? [], idx).map((j) => ({ idx: j, item: dfd.itens[j] }));
   return (
     <ItemDetalhe
       key={idx}
@@ -332,6 +332,7 @@ function DuplicadosDemo() {
           itens: 2,
           valor: 169,
           motivo: "mesmo nº de DFD e de planejamento",
+          pendente: fica === undefined,
           descartado: fica === null,
           comparacao: compararDuplicados(REENVIO_GRAVADO, outro),
         },

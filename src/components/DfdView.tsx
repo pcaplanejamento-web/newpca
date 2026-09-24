@@ -9,8 +9,9 @@ import {
   estadoItem,
   estadoItemCor,
   itemComErro,
-  mapaItensDuplicados,
   mensagensItem,
+  type RepeticaoItem,
+  repetidosDoDfd,
   resumoEstado,
   SECOES_OBRIGATORIAS,
   setTextoSecao,
@@ -90,7 +91,7 @@ export type DfdVisual = {
 };
 
 /** Linha da tabela de itens: o item + o índice + (item REPETIDO) o Nº dos outros iguais e a cor da importância. */
-type ItemK = DfdVisualItem & { _k: number; _rep?: { iguais: (number | null)[]; cor: string } };
+type ItemK = DfdVisualItem & { _k: number; _rep?: RepeticaoItem & { cor: string } };
 
 // Colunas da tabela de itens (Seção 4) — com ESTADO por item e filtro/ordenação em
 // todas (via `value`), igual às demais tabelas do sistema.
@@ -254,11 +255,11 @@ export function DfdView({
   const rows = useMemo<ItemK[]>(() => {
     const ctxDup = { dfdTipo, categoria };
     const dupAtivo = comportamentoNo(regras, "item.duplicado", ctxDup) !== "ignora";
-    const reps = dupAtivo ? mapaItensDuplicados(dfd.itens) : new Map<number, number[]>();
+    const reps = dupAtivo ? repetidosDoDfd(dfd.itens) : null;
     const cor = corImportancia(regras, nivelDe(regras, "item.duplicado", ctxDup));
     return dfd.itens.map((it, i) => {
-      const outros = reps.get(i);
-      return outros ? { ...it, _k: i, _rep: { iguais: outros.map((j) => dfd.itens[j]?.item ?? j + 1), cor } } : { ...it, _k: i };
+      const rep = reps?.get(i);
+      return rep ? { ...it, _k: i, _rep: { ...rep, cor } } : { ...it, _k: i };
     });
   }, [dfd.itens, regras, dfdTipo, categoria]);
   // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A

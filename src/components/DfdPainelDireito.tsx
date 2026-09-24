@@ -1,10 +1,10 @@
 "use client";
 
 import { type ReactNode, useMemo } from "react";
-import { comportamentoNo, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
-import { indiceAposRemover, mapaItensDuplicados, type MensagemDfd } from "@/lib/dfd-tratamento";
+import { indiceAposRemover, mapaItensDuplicados, type MensagemDfd, outrosDoGrupo } from "@/lib/dfd-tratamento";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { Button } from "./Button";
 import { ComparacaoDfdView, type EscolhaSobrescritaProps } from "./ComparacaoReenvio";
@@ -68,19 +68,21 @@ export function RodapePainelItem({
   );
 }
 
-/** Os OUTROS itens iguais (mesmo código, descrição e unidade) ao item `idx` — vazio quando não se repete ou o ADM
- * pôs o ponto `item.duplicado` em "ignorar". Linear (o mapa sai de uma passada pelos itens). */
+/** Os OUTROS itens iguais (mesmo código, descrição e unidade) ao item `idx` + a cor da importância do ADM — lista
+ * vazia quando não se repete ou o ADM pôs o ponto `item.duplicado` em "ignorar". Linear (o mapa sai de uma passada). */
 export function useRepetidosDoItem(
   dfd: DfdParseado | null,
   idx: number | null,
   regras: RegrasAvaliacao = regrasPadrao(),
   categoria: string | null = null,
-): { idx: number; item: DfdParseado["itens"][number] }[] {
+): { lista: { idx: number; item: DfdParseado["itens"][number] }[]; cor: string } {
   const itens = dfd?.itens;
-  const ativo = comportamentoNo(regras, "item.duplicado", { dfdTipo: tipoCurtoDfd(dfd?.tipo ?? null), categoria }) !== "ignora";
+  const ctx = { dfdTipo: tipoCurtoDfd(dfd?.tipo ?? null), categoria };
+  const ativo = comportamentoNo(regras, "item.duplicado", ctx) !== "ignora";
+  const cor = corImportancia(regras, nivelDe(regras, "item.duplicado", ctx));
   const mapa = useMemo(() => (itens && ativo ? mapaItensDuplicados(itens) : null), [itens, ativo]);
-  if (!itens || idx == null || !mapa) return [];
-  return (mapa.get(idx) ?? []).map((j) => ({ idx: j, item: itens[j] }));
+  const grupo = itens && idx != null ? mapa?.get(idx) : undefined;
+  return { lista: grupo && itens && idx != null ? outrosDoGrupo(grupo, idx).map((j) => ({ idx: j, item: itens[j] })) : [], cor };
 }
 
 /**
@@ -166,12 +168,13 @@ export function DfdPainelDireito({
         editavel={editavel}
         onChange={editavel && onEditarItem ? (patch) => onEditarItem(idx, patch) : undefined}
         onRemover={editavel && onRemoverItem ? () => onRemoverItem(idx) : undefined}
-        repetidos={repetidos}
+        repetidos={repetidos.lista}
+        corRepetido={repetidos.cor}
         onVerItem={onPainel ? (j) => onPainel({ tipo: "item", idx: j }) : undefined}
         onUnificar={
           editavel && onUnificarItens
             ? () => {
-                const outros = repetidos.map((r) => r.idx);
+                const outros = repetidos.lista.map((r) => r.idx);
                 onUnificarItens(idx, outros);
                 onPainel?.({ tipo: "item", idx: indiceAposRemover(idx, outros) });
               }

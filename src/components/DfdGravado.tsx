@@ -474,12 +474,13 @@ export function useDfdGravado({
                 }
               : undefined
           }
-          repetidos={repetidosItem}
+          repetidos={repetidosItem.lista}
+          corRepetido={repetidosItem.cor}
           onVerItem={setItemIdx}
           onUnificar={
             editavel && !travado
               ? () => {
-                  const outros = repetidosItem.map((r) => r.idx);
+                  const outros = repetidosItem.lista.map((r) => r.idx);
                   editar((d) => unificarItensDfd(d, itemIdx, outros), true);
                   setItemIdx(indiceAposRemover(itemIdx, outros));
                 }

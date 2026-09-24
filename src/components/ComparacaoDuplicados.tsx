@@ -18,14 +18,22 @@ export type DfdDuplicadoResumo = {
   descartado: boolean;
 };
 
-/** OUTRO DFD duplicado do aberto: + o motivo (mesmo nº/planejamento) e a comparação aberto × ele (`null` = lendo). */
+/** OUTRO DFD duplicado do aberto: + o motivo (mesmo nº/planejamento), se ELE ainda conflita com alguém (`pendente`) e a
+ * comparação aberto × ele (`null` = lendo). */
 export type DfdDuplicadoOutro = DfdDuplicadoResumo & {
   key: number;
   motivo: string;
+  pendente: boolean;
   comparacao: ComparacaoDfd | null;
   /** Falha ao ler o outro DFD (não dá para comparar). */
   erro?: string | null;
 };
+
+/** Selo de situação de um DFD na comparação: descartado / ainda sem escolha / segue no processo. */
+function Situacao({ r, pendente }: { r: DfdDuplicadoResumo; pendente: boolean }) {
+  if (r.descartado) return <Badge tone="slate">Descartado</Badge>;
+  return pendente ? <Badge tone="amber">Sem escolha</Badge> : <Badge tone="emerald">Segue</Badge>;
+}
 
 const ROTULOS: readonly [string, string] = ["Este (aberto)", "O outro"];
 const ROTULOS_ITEM = { novo: "Só no outro", removido: "Só neste", alterado: "Diferente" } as const;
@@ -93,7 +101,7 @@ function Diferencas({ c, erro }: { c: ComparacaoDfd | null; erro?: string | null
  * DFDs DUPLICADOS no processo (mesmo nº de DFD ou de planejamento) — painel da direita do DFD aberto na protocolação:
  * o aberto × CADA duplicado dele, campo a campo (a régua do reenvio), e a ESCOLHA de qual fica — "Manter este"
  * descarta os que conflitam com o escolhido (saem da protocolação e da somatória; dá para trocar/restaurar). O erro
- * "DFD duplicado" some assim que sobra um. Alvos ≥ 44px, empilha no celular.
+ * "DFD duplicado" some assim que sobra um. Botões do DS (altura do controle do ADM), empilha no celular.
  */
 export function ComparacaoDuplicados({
   atual,
@@ -137,7 +145,9 @@ export function ComparacaoDuplicados({
         </Callout>
       ) : atual.descartado ? (
         <Callout kind="info" icon={<IconCompare className="h-5 w-5" />}>
-          Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.
+          {outros.some((o) => !o.descartado)
+            ? 'Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.'
+            : 'Este DFD está descartado (fora da protocolação e da somatória). Para trazê-lo de volta, use "Manter este" aqui em cima.'}
         </Callout>
       ) : (
         <Callout kind="ok" icon={<IconCheck className="h-5 w-5" />}>
@@ -154,9 +164,14 @@ export function ComparacaoDuplicados({
             </p>
             <p className="text-xs text-muted">{totais(atual)}</p>
           </div>
-          {atual.descartado ? <Badge tone="slate">Descartado</Badge> : !pendente ? <Badge tone="emerald">Segue</Badge> : null}
+          <Situacao r={atual} pendente={pendente} />
           {(pendente || atual.descartado) && (
-            <Button onClick={() => onManter(null)} disabled={bloqueado} icon={<IconCheck className="h-4 w-4" />}>
+            <Button
+              onClick={() => onManter(null)}
+              disabled={bloqueado}
+              icon={<IconCheck className="h-4 w-4" />}
+              aria-label={`Manter este: ${atual.rotulo} (aberto)`}
+            >
               Manter este
             </Button>
           )}
@@ -172,17 +187,29 @@ export function ComparacaoDuplicados({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13.5px] font-bold text-text">{o.rotulo}</span>
               <Badge tone="amber">{o.motivo}</Badge>
-              {o.descartado ? <Badge tone="slate">Descartado</Badge> : !pendente ? <Badge tone="emerald">Segue</Badge> : null}
+              <Situacao r={o} pendente={o.pendente} />
             </div>
             <p className="mt-0.5 text-xs text-muted">{totais(o)}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {(pendente || o.descartado) && (
-                <Button variant="secondary" onClick={() => onManter(o.key)} disabled={bloqueado} icon={<IconCheck className="h-4 w-4" />}>
+                <Button
+                  variant="secondary"
+                  onClick={() => onManter(o.key)}
+                  disabled={bloqueado}
+                  icon={<IconCheck className="h-4 w-4" />}
+                  aria-label={`Manter este: ${o.rotulo}${o.local ? ` (${o.local})` : ""}`}
+                >
                   Manter este
                 </Button>
               )}
               {onAbrir && (
-                <Button variant="ghost" onClick={() => onAbrir(o.key)} disabled={bloqueado} icon={<IconFile className="h-4 w-4" />}>
+                <Button
+                  variant="ghost"
+                  onClick={() => onAbrir(o.key)}
+                  disabled={bloqueado}
+                  icon={<IconFile className="h-4 w-4" />}
+                  aria-label={`Abrir ${o.rotulo}${o.local ? ` (${o.local})` : ""}`}
+                >
                   Abrir
                 </Button>
               )}
@@ -190,6 +217,7 @@ export function ComparacaoDuplicados({
                 variant="ghost"
                 onClick={() => alternar(o.key)}
                 aria-expanded={aberto}
+                aria-label={`${aberto ? "Ocultar" : "Ver"} as diferenças com ${o.rotulo}`}
                 icon={<IconChevronDown className={`h-4 w-4 transition-transform ${aberto ? "rotate-180" : ""}`} />}
               >
                 {aberto ? "Ocultar diferenças" : `Ver diferenças${total != null ? ` (${num(total)})` : ""}`}

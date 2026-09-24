@@ -10,6 +10,7 @@ import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import { categoriaDoProtocolo } from "@/lib/protocolo";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
 import { mensagemTravaPca } from "@/lib/pca-core";
@@ -58,6 +59,13 @@ export async function POST(req: Request) {
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
+  // Categoria do protocolo de cada DFD (exceções do ADM, a MESMA régua do banner) — só consultada quando a assinatura
+  // não confere, com cache por protocolo (poucas consultas por lote).
+  const categorias = new Map<number | null, string | null>();
+  const categoriaDe = async (pid: number | null) => {
+    if (!categorias.has(pid)) categorias.set(pid, await categoriaDoProtocolo(pid));
+    return categorias.get(pid) ?? null;
+  };
   for (const d of dfds) {
     try {
       if (!acessivel(d.reparticaoId)) {
@@ -72,7 +80,10 @@ export async function POST(req: Request) {
       if (acao.campo === "reparticao") {
         if (d.reparticaoId === acao.reparticaoId || !respDestino || !rotulo) continue; // já está nessa unidade
         const res = validarAssinatura(d.assinaturas, respDestino, { exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo) });
-        if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo) }))) {
+        if (
+          res.status === "erro" &&
+          bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", { dfdTipo: tipoCurtoDfd(d.tipo), categoria: await categoriaDe(d.protocoloId) }))
+        ) {
           falhas.push({ id: d.id, numero: d.numero, motivo: res.motivo });
           continue;
         }

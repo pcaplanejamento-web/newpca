@@ -14,7 +14,9 @@ import {
   mensagensItem,
   motivoDuplicidade,
   motivoNaoUnificar,
+  outrosDoGrupo,
   removerItemDfd,
+  repetidosDoDfd,
   repetidosPorDfd,
   semValorUnitario,
   unificarItensDfd,
@@ -97,13 +99,27 @@ describe("itensDuplicados (mesmo código, descrição E unidade)", () => {
     assert.deepEqual(itensDuplicados([it_(null, null), it_(null, "")]), []);
   });
 
-  it("três iguais ⇒ um grupo; o mapa aponta, para cada um, os OUTROS do grupo", () => {
+  it("três iguais ⇒ um grupo; o mapa dá a cada um o MESMO grupo (linear) e outrosDoGrupo tira ele", () => {
     const itens = [it_("9", "a"), it_("1", "b"), it_("9", "A"), it_("9", "á")];
     assert.deepEqual(itensDuplicados(itens), [[0, 2, 3]]);
     const m = mapaItensDuplicados(itens);
-    assert.deepEqual(m.get(0), [2, 3]);
-    assert.deepEqual(m.get(2), [0, 3]);
+    assert.equal(m.get(0), m.get(2)); // o mesmo array compartilhado
+    assert.deepEqual(outrosDoGrupo(m.get(0) ?? [], 0), [2, 3]);
+    assert.deepEqual(outrosDoGrupo(m.get(2) ?? [], 2), [0, 3]);
+    assert.deepEqual(outrosDoGrupo(m.get(3) ?? [], 3, 1), [0]);
     assert.equal(m.has(1), false);
+  });
+
+  it("grupo ENORME de iguais: listas limitadas a 10 + o total (nada cresce com o grupo)", () => {
+    const itens = Array.from({ length: 3000 }, (_, k) => ({ item: k + 1, codigo: "9", descricao: "A", unidade: "UN" }));
+    const r = repetidosDoDfd(itens);
+    assert.equal(r.size, 3000);
+    assert.deepEqual(r.get(0), { iguais: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11], total: 2999 });
+    const msg = mensagensItem({ ...itens[0], quantidade: 1, valorUnitario: 1, valorTotal: 1 }, r.get(0));
+    assert.match(msg[0].texto, /2, 3, 4, 5, 6, 7, 8, 9, 10, 11 \(\+2989\)/);
+    const mesa = repetidosPorDfd(itens.map((x, k) => ({ ...x, id: k, dfdId: 1 })));
+    assert.equal(mesa.get(5)?.iguais.length, 10);
+    assert.equal(mesa.get(5)?.total, 2999);
   });
 });
 
@@ -117,8 +133,8 @@ describe("repetidosPorDfd (visão Itens da Mesa: itens de VÁRIOS DFDs)", () => 
     ];
     const m = repetidosPorDfd(l);
     assert.deepEqual([...m.entries()], [
-      [10, [114]],
-      [12, [7]],
+      [10, { iguais: [114], total: 1 }],
+      [12, { iguais: [7], total: 1 }],
     ]);
   });
 });
@@ -179,14 +195,14 @@ describe("item REPETIDO — nunca bloqueia; aponta e trata (remover / unificar)"
   });
 
   it("célula do item: 'Item repetido' em atenção com os iguais; faltas próprias seguem erro", () => {
-    const m = mensagensItem(itens[0], { iguais: [114], cor: "#ca8a04" });
+    const m = mensagensItem(itens[0], { iguais: [114], total: 1, cor: "#ca8a04" });
     assert.deepEqual(
       m.map((x) => [x.status, x.chave]),
       [["atencao", "item.duplicado"]],
     );
     assert.ok(m[0].texto.includes("114"));
     assert.equal(m[0].cor, "#ca8a04");
-    const semValor = mensagensItem({ ...itens[0], valorUnitario: null }, { iguais: [114] });
+    const semValor = mensagensItem({ ...itens[0], valorUnitario: null }, { iguais: [114], total: 1 });
     assert.deepEqual(
       semValor.map((x) => x.status),
       ["erro", "atencao"],

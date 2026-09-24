@@ -852,13 +852,14 @@ export function DfdsView({
 
   // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
   // tabela de itens do DFD; o filtro da coluna Estado junta todos os repetidos para conferir.
-  const repetidosItens = useMemo(() => (itens ? repetidosPorDfd(itens) : new Map<number, (number | null)[]>()), [itens]);
+  const repetidosItens = useMemo(() => (itens ? repetidosPorDfd(itens) : null), [itens]);
   const repDoItem = (r: ItemDfdRow) => {
-    const iguais = repetidosItens.get(r.id);
-    if (!iguais) return null;
-    const ctx = { dfdTipo: tipoCurtoDfd(r.dfdTipo) };
+    const rep = repetidosItens?.get(r.id);
+    if (!rep) return null;
+    // A MESMA régua do banner do DFD: tipo do DFD + a categoria do protocolo de origem (exceções do ADM).
+    const ctx = { dfdTipo: tipoCurtoDfd(r.dfdTipo), categoria: classificarAssunto(r.protocoloAssunto) };
     if (comportamentoNo(regras, "item.duplicado", ctx) === "ignora") return null;
-    return { iguais, cor: corImportancia(regras, nivelDe(regras, "item.duplicado", ctx)) };
+    return { ...rep, cor: corImportancia(regras, nivelDe(regras, "item.duplicado", ctx)) };
   };
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item

@@ -26,6 +26,8 @@ import { toast } from "./Toast";
 
 /** Campos do item que têm cadeado próprio. */
 type CampoK = "codigo" | "unidade" | "descricao" | "quantidade" | "valorUnitario" | "valorTotal";
+/** Iguais listados no bloco "Item repetido" (o resto é contado — a lista não cresce com o grupo). */
+const MAX_REPETIDOS_LISTA = 20;
 
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
@@ -47,6 +49,7 @@ export function ItemDetalhe({
   onChange,
   onRemover,
   repetidos = [],
+  corRepetido = "var(--warn)",
   onVerItem,
   onUnificar,
   historicoDfdId = null,
@@ -65,6 +68,8 @@ export function ItemDetalhe({
   onRemover?: () => void;
   /** Os OUTROS itens do DFD com o mesmo código, descrição e unidade (índice + dados) — vazio = não é repetido. */
   repetidos?: { idx: number; item: DfdVisualItem }[];
+  /** Cor da importância do ADM para o item repetido (a MESMA da célula Estado da tabela). */
+  corRepetido?: string;
   /** Abre outro item no painel (ex.: o repetido, para conferir). */
   onVerItem?: (idx: number) => void;
   /** Unifica os repetidos NESTE item (soma as quantidades; os outros saem do DFD). Ausente = sem o botão. */
@@ -76,7 +81,7 @@ export function ItemDetalhe({
   const faltas = faltasDoItem(item);
   const repetido = repetidos.length > 0;
   // Repetido sem erro = ATENÇÃO (âmbar) — nunca bloqueia; erro (valor/quantidade) segue na frente.
-  const cor = est === "regular" && repetido ? "var(--warn)" : estadoItemCor(est);
+  const cor = est === "regular" && repetido ? corRepetido : estadoItemCor(est);
   const rotuloEstado = est === "regular" && repetido ? "Item repetido" : ESTADO_ITEM_ROTULO[est];
   const editavelUI = editavel && !!onChange; // cadeados por campo só com handler
   const semUnificar = repetido ? motivoNaoUnificar([item, ...repetidos.map((r) => r.item)]) : null;
@@ -153,11 +158,11 @@ export function ItemDetalhe({
 
       {/* Item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado + tratamento. Não bloqueia. */}
       {repetido && (
-        <section className="rounded-card border p-4" style={{ borderColor: "color-mix(in srgb, var(--warn) 35%, var(--border))" }} data-ancora="repetidos">
+        <section className="rounded-card border p-4" style={{ borderColor: `color-mix(in srgb, ${corRepetido} 35%, var(--border))` }} data-ancora="repetidos">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h4 className="text-[13px] font-bold text-text">Item repetido</h4>
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--warn)" }}>
-              <span className="h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: corRepetido }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: corRepetido }} />
               {repetidos.length + 1} iguais
             </span>
           </div>
@@ -167,7 +172,7 @@ export function ItemDetalhe({
             entregas separadas), pode manter — não bloqueia.
           </p>
           <ul className="mt-3 space-y-2">
-            {[{ idx: -1, item }, ...repetidos].map((r) => (
+            {[{ idx: -1, item }, ...repetidos.slice(0, MAX_REPETIDOS_LISTA)].map((r) => (
               <li
                 key={r.idx}
                 className={`flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-1 rounded-control border px-3 py-2 ${r.idx < 0 ? "border-accent/40 bg-accent-soft" : "border-border bg-surface"}`}
@@ -189,6 +194,9 @@ export function ItemDetalhe({
               </li>
             ))}
           </ul>
+          {repetidos.length > MAX_REPETIDOS_LISTA && (
+            <p className="mt-2 text-xs text-muted">e mais {num(repetidos.length - MAX_REPETIDOS_LISTA)} iguais (a tabela de itens mostra todos).</p>
+          )}
           {editavelUI && onUnificar && (
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
               {semUnificar && <p className="mr-auto text-xs text-muted">{semUnificar}</p>}

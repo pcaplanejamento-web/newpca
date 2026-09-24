@@ -102,6 +102,8 @@ export type ItemDfdRow = {
   sigla: string | null; // código da unidade do DFD
   reparticaoId: number | null; // unidade do DFD (escopo de acesso da Mesa do PCA)
   protocoloNumero: string | null;
+  /** Assunto do protocolo de origem — a CATEGORIA das exceções do ADM (ex.: o ponto `item.duplicado`). */
+  protocoloAssunto: string | null;
   /** Tipo do DFD de origem (o catálogo restringe tipos por item). */
   dfdTipo: string | null;
   item: number | null;
@@ -246,6 +248,7 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Pr
       sigla: reparticoes.codigo,
       reparticaoId: dfds.reparticaoId,
       protocoloNumero: dfdProtocolos.numero,
+      protocoloAssunto: dfdProtocolos.assunto,
       dfdTipo: dfds.tipo,
       item: dfdItens.item,
       codigo: dfdItens.codigo,
