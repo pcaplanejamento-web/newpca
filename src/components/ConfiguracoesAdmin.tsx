@@ -251,7 +251,7 @@ export function ConfiguracoesAdmin({
   ];
 
   const abaIdentidade = (
-    <div className="max-w-xl space-y-5">
+    <div className="max-w-xl space-y-[var(--gap-block)]">
       <Callout kind="info">
         O nome, o subtítulo e o favicon valem para toda a plataforma — barra lateral, aba do
         navegador e a tela pública.
@@ -319,7 +319,7 @@ export function ConfiguracoesAdmin({
   );
 
   const abaPcas = (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           Cadastre os PCAs por nome e ano. Marque um como o <strong className="text-text-2">vigente</strong>.
@@ -393,7 +393,7 @@ export function ConfiguracoesAdmin({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <h1 className="text-xl font-bold text-text">Configurações</h1>
         <p className="mt-1 text-sm text-muted">
@@ -401,7 +401,7 @@ export function ConfiguracoesAdmin({
         </p>
       </div>
 
-      <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <Tabs
           inicial={abaInicial}
           tabs={[
@@ -435,7 +435,7 @@ export function ConfiguracoesAdmin({
           </div>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <TextField
             label="Nome do PCA"
             value={pcaNome}

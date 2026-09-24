@@ -154,7 +154,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   }
 
   const abaCores = (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
           value={tema}
@@ -184,7 +184,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   );
 
   const abaLayout = (
-    <div className="max-w-md space-y-5">
+    <div className="max-w-md space-y-[var(--gap-block)]">
       <div>
         <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">
           Raio dos cards · {radius}px
@@ -249,7 +249,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   );
 
   const abaIcones = (
-    <div className="max-w-md space-y-5">
+    <div className="max-w-md space-y-[var(--gap-block)]">
       <div>
         <span className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-muted">
           Espessura do traço · {iconStroke.toFixed(2)}
@@ -316,7 +316,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Personalize a identidade visual — vale para toda a plataforma.</p>
         <div className="flex items-center gap-2">
@@ -332,7 +332,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
         </div>
       </div>
 
-      <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <Tabs
           tabs={[
             { key: "cores", label: "Cores", content: abaCores },

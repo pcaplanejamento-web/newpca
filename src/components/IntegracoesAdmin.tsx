@@ -42,7 +42,7 @@ function Cartao({
   children?: ReactNode;
 }) {
   return (
-    <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
+    <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">{icon}</div>
@@ -147,7 +147,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
   const emBreve = CATALOGO_INTEGRACOES.filter((c) => c.status === "em-breve");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
@@ -179,7 +179,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         icon={<IconShield className="h-5 w-5" />}
         status={<StatusBadge tone={tsStatus[0]}>{tsStatus[1]}</StatusBadge>}
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <Checkbox label="Ativar captcha no login e no cadastro" checked={tsAtivo} onChange={(e) => setTsAtivo(e.target.checked)} />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <TextField
@@ -215,7 +215,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         icon={<IconActivity className="h-5 w-5" />}
         status={<StatusBadge tone={monAtivo ? "emerald" : "slate"}>{monAtivo ? "Ativado" : "Desativado"}</StatusBadge>}
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <Checkbox label="Mostrar métricas do Worker (requisições, erros, CPU)" checked={monAtivo} onChange={(e) => setMonAtivo(e.target.checked)} />
           <p className="text-[12px] text-muted">
             Usa os secrets <span className="font-mono">CF_ANALYTICS_TOKEN</span> e{" "}

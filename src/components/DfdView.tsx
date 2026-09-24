@@ -343,7 +343,7 @@ export function DfdView({
   const ehRenovacao = tipoCurtoDfd(dfd.tipo) === "DFD-R";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       {/* O nº/tipo/planejamento do DFD ficam no cabeçalho FIXO do banner (`DfdCabecalho`),
           não aqui. Nas telas soltas (catálogo) o `DfdCabecalho` é renderizado acima. */}
 
@@ -358,8 +358,8 @@ export function DfdView({
       {/* Seção 1 — Área requisitante (só-leitura). Oculta quando o `DfdConferir` mostra a versão
           EDITÁVEL acima (evita duplicar a seção). */}
       {consulta ? (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-          <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+          <h3 className="mb-3 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
             <CampoCongelado label="Nº DFD" valor={dfd.numero} mono />
             <CampoCongelado label="Planejamento" valor={dfd.planejamento} mono />
@@ -372,8 +372,8 @@ export function DfdView({
           </div>
         </section>
       ) : !ocultarSecao1 && (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="anoPca">
-          <h3 className="mb-4 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="anoPca">
+          <h3 className="mb-3 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
             <Campo label="Nº DFD" valor={dfd.numero} />
             <Campo label="Planejamento" valor={dfd.planejamento ?? "—"} />
@@ -391,8 +391,8 @@ export function DfdView({
 
       {/* Referências da renovação (DFD-R): contrato/ata/licitação */}
       {ehRenovacao && (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-          <h3 className="mb-4 text-sm font-bold text-text">Referências da renovação</h3>
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+          <h3 className="mb-3 text-sm font-bold text-text">Referências da renovação</h3>
           {/* Cada referência pode ter VÁRIOS nºs ("a; b") — exibidos lado a lado. */}
           {consulta ? (
             <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-3">
@@ -503,8 +503,8 @@ export function DfdView({
 
       {/* CONSULTA: das assinaturas, só o Responsável pela solicitação (nome, função, ato) — campos congelados. */}
       {consulta && dfd.assinaturas.solicitante && (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-          <h3 className="mb-4 text-sm font-bold text-text">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+          <h3 className="mb-3 text-sm font-bold text-text">
             Responsável pela solicitação{dfd.assinaturas.solicitante.tipo === "temporario" ? " (temporário)" : ""}
           </h3>
           <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
@@ -524,7 +524,7 @@ export function DfdView({
 
       {/* Assinaturas Digitais (certificado/sistema, Dropsigner, Adobe) */}
       {!consulta && dfd.assinaturas.lista.length > 0 && (
-        <section className="rounded-card border border-border bg-surface p-5 shadow-ring" data-ancora="assinatura">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="assinatura">
           <h3 className="mb-1.5 text-sm font-bold text-text">Assinaturas Digitais</h3>
           <p className="mb-4 text-xs text-muted">
             Quem assina é o responsável que solicitou a consolidação do DFD no PCA. A autenticidade pode ser
@@ -716,7 +716,7 @@ function SecaoCard({
   const editando = editavel && aberto;
   return (
     <div
-      className={apoio ? "mt-3 rounded-card border border-border-2 bg-surface-2 p-4" : "rounded-card border border-border bg-surface p-5 shadow-ring"}
+      className={apoio ? "mt-3 rounded-card border border-border-2 bg-surface-2 p-4" : "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring"}
       data-ancora={ancora}
     >
       <div className="mb-1.5 flex items-start justify-between gap-2">

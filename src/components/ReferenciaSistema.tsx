@@ -254,7 +254,7 @@ export function ReferenciaSistema({
   const domsVisiveis = DOMINIOS.filter((d) => !dominio || d.key === dominio);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <h1 className="text-xl font-bold text-text">Referência do sistema</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
@@ -292,7 +292,7 @@ export function ReferenciaSistema({
             </div>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {cards.map((l) => (
-                <div key={l.id} className="rounded-card border border-border bg-surface p-4 shadow-ring">
+                <div key={l.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-text">{l.titulo}</span>
                     {l.tecnico && <Badge tone="slate">Técnico</Badge>}

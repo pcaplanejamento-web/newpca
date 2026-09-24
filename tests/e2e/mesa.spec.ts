@@ -25,3 +25,15 @@ test("/painel redireciona para /painel/mesa", async ({ page }) => {
   await page.goto("/painel");
   await expect(page).toHaveURL(/\/painel\/mesa/);
 });
+
+// A barra da Mesa: o ícone do Dashboard (à esquerda das visões) abre o Dashboard de governança (carregado sob demanda) e
+// o "Importar protocolo" fica no RODAPÉ da tabela (o usuário de teste é admin — editor).
+test("Mesa: ícone do Dashboard abre a governança e a importação fica no rodapé da tabela", async ({ page }) => {
+  await page.goto("/painel/mesa");
+  await expect(page.getByRole("button", { name: "Importar protocolo" })).toBeVisible();
+  await page.getByRole("tab", { name: "Dashboard de governança" }).click();
+  await expect(page.getByText("Saúde dos protocolos", { exact: true })).toBeVisible();
+  await expect(page.getByText("Carga por responsável", { exact: true })).toBeVisible();
+  // O Dashboard não tem tabela nem botão de importação.
+  await expect(page.getByRole("button", { name: "Importar protocolo" })).toHaveCount(0);
+});

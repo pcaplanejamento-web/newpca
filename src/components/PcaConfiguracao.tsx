@@ -23,7 +23,7 @@ export type ConfigPca = {
   orcamentoVisaoId: number | null;
 };
 
-const CARTAO = "rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5";
+const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
 /** Cartão-rádio da FONTE dos dados. */
 function OpcaoFonte({
@@ -124,7 +124,7 @@ export function PcaConfiguracao({
     <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
       <div className="space-y-[var(--gap-block)]">
         <section className={CARTAO}>
-          <h2 className="mb-4 font-bold text-text">Identificação</h2>
+          <h2 className="mb-3 font-bold text-text">Identificação</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px]">
             <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} disabled={ro} />
             <TextField
@@ -150,7 +150,7 @@ export function PcaConfiguracao({
         </section>
 
         <section className={CARTAO}>
-          <h2 className="mb-4 font-bold text-text">Fonte dos dados</h2>
+          <h2 className="mb-3 font-bold text-text">Fonte dos dados</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpcaoFonte
               ativo={pca.fonte === "lista"}

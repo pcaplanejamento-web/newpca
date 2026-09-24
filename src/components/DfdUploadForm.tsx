@@ -57,8 +57,9 @@ type Status = "idle" | "parsing" | "ready" | "sending" | "done" | "error";
  * (`DfdConferir`) e só grava ao confirmar. Quando o nº JÁ EXISTE, vira a SOBRESCRITA com ESCOLHA POR DADO:
  * o painel "Diferenças" lista cada diferença entre o gravado e o arquivo novo com "Manter gravado | Usar
  * novo" (o DFD ao lado já mostra o resultado); o DFD continua no protocolo dele e o histórico registra o
- * que foi mantido. Dois modos: o botão "Importar DFD" da Mesa (detecta o nº já cadastrado) e o banner do
- * DFD GRAVADO ("Sobrescrever DFD" — `sobrescrever`, só aceita o MESMO nº).
+ * que foi mantido. Dois modos: o botão "Importar DFD" da Mesa (no rodapé da tabela de DFDs — detecta o nº já
+ * cadastrado) e o banner do DFD GRAVADO ("Sobrescrever DFD" — `sobrescrever`, só aceita o MESMO nº). O BOTÃO fica
+ * sempre no host: cada clique novo incrementa `iniciar`, que abre o lançador.
  */
 export function DfdUploadForm({
   reparticoes,
@@ -66,6 +67,7 @@ export function DfdUploadForm({
   pcas = [],
   regras = regrasPadrao(),
   orgaos = [],
+  iniciar = 0,
   sobrescrever = null,
 }: {
   reparticoes: Rep[];
@@ -73,11 +75,13 @@ export function DfdUploadForm({
   pcas?: PcaOpcao[];
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
-  /** Banner do DFD GRAVADO: sobrescrever ESTE DFD com um arquivo novo (o MESMO nº). `iniciar` abre o
-   * lançador a cada clique novo; `onConcluido` = o banner recarrega; `onOcupado` = a sobrescrita está em
-   * andamento (lançador/leitura/escolha/gravação) — o banner fica só-leitura até terminar. Sem ele: o
-   * botão "Importar DFD". */
-  sobrescrever?: { gravado: DfdDetalhe; iniciar: number; onConcluido: () => void; onOcupado?: (ocupado: boolean) => void } | null;
+  /** Contador do BOTÃO do host ("Importar DFD" no rodapé da tabela da Mesa; "Sobrescrever DFD" no banner):
+   * cada valor NOVO abre o lançador. */
+  iniciar?: number;
+  /** Banner do DFD GRAVADO: sobrescrever ESTE DFD com um arquivo novo (o MESMO nº). `onConcluido` = o banner
+   * recarrega; `onOcupado` = a sobrescrita está em andamento (lançador/leitura/escolha/gravação) — o banner fica
+   * só-leitura até terminar. Sem ele: a importação avulsa da Mesa. */
+  sobrescrever?: { gravado: DfdDetalhe; onConcluido: () => void; onOcupado?: (ocupado: boolean) => void } | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -117,19 +121,19 @@ export function DfdUploadForm({
     return () => window.removeEventListener("beforeunload", h);
   }, [status]);
 
-  // Banner do DFD gravado: o botão de lá abre o lançador — só um clique NOVO abre (o contador vive no banner),
-  // e nunca no meio de uma sobrescrita (lendo/conferindo/gravando).
-  const iniciarVisto = useRef(sobrescrever?.iniciar ?? 0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do banner.
+  // O botão do HOST abre o lançador — só um clique NOVO abre (o contador vive no host e sobrevive a este form
+  // remontar), e nunca no meio de uma importação/sobrescrita (lendo/conferindo/gravando).
+  const iniciarVisto = useRef(iniciar);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do host.
   useEffect(() => {
-    if (!sobrescrever || sobrescrever.iniciar <= 0 || sobrescrever.iniciar === iniciarVisto.current) return;
-    iniciarVisto.current = sobrescrever.iniciar;
+    if (iniciar <= 0 || iniciar === iniciarVisto.current) return;
+    iniciarVisto.current = iniciar;
     if (status === "parsing" || status === "ready" || status === "sending") return;
     setErro(null);
     setStatus("idle");
     setResultado(null);
     setLauncher(true);
-  }, [sobrescrever?.iniciar]);
+  }, [iniciar]);
   // Sobrescrita em ANDAMENTO (do lançador até gravar/cancelar) → o banner do DFD fica só-leitura.
   const ocupado = launcher || status === "parsing" || status === "ready" || status === "sending";
   const onOcupado = sobrescrever?.onOcupado;
@@ -350,17 +354,9 @@ export function DfdUploadForm({
   const modalAberto = !!preview && (status === "ready" || status === "sending");
   const totalDif = sob?.final.total ?? 0;
 
+  // Nada no fluxo da página: lançador, conferência e avisos são modais/avisos flutuantes (o botão fica no host).
   return (
-    <div className={sobrescrever ? "contents" : undefined}>
-      {/* Botão único de importação (à direita) — abre o lançador. Na sobrescrita pelo banner, o botão fica lá. */}
-      {!sobrescrever && (
-        <div className="flex justify-end">
-          <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-            Importar DFD
-          </Button>
-        </div>
-      )}
-
+    <>
       {/* Lançador: soltar/escolher o DFD (.xlsx ou .pdf) */}
       <Modal
         open={launcher}
@@ -384,7 +380,7 @@ export function DfdUploadForm({
         />
       </Modal>
 
-      {/* Feedback da importação — AVISO FLUTUANTE (canto inferior): não deforma a linha do "Importar". */}
+      {/* Feedback da importação — AVISO FLUTUANTE (canto inferior): não deforma a tabela nem o rodapé dela. */}
       {erro && status === "error" && (
         <AvisoFlutuante kind="danger" titulo={sobrescrever ? "Não foi possível sobrescrever" : "Não foi possível importar"} onClose={reset}>
           {erro}
@@ -501,10 +497,10 @@ export function DfdUploadForm({
         }
       >
         {preview && (
-          <div className="space-y-4">
+          <div className="space-y-[var(--gap-block)]">
             {/* PCA do DFD (obrigatório) — adivinhado pela descrição, confirmável. Na sobrescrita de um DFD de
                 protocolo, o ano é o do processo (identificador — só leitura). */}
-            <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
+            <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               {base?.protocoloId != null && anoPca != null ? (
                 <p className="text-[13px] text-text-2">
                   PCA <strong className="text-text">{anoPca}</strong> — o do protocolo {base.protocoloNumero ?? ""} (o DFD continua nele).
@@ -542,6 +538,6 @@ export function DfdUploadForm({
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }

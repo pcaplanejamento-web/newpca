@@ -19,7 +19,7 @@ function Topo({ identidade }: { identidade?: Aparencia["identidade"] }) {
   const favicon = identidade?.favicon?.trim();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+      <div className="flex h-[var(--h-header)] items-center gap-3 px-[var(--pad-canvas)]">
         <div className="flex items-center gap-2.5">
           {favicon ? (
             // biome-ignore lint/performance/noImgElement: favicon é data-URL base64 definida pelo ADM; next/image não otimiza data-URL.
@@ -64,9 +64,9 @@ export default async function HomePage({
     return (
       <div className="min-h-dvh bg-bg text-text">
         <Topo identidade={identidade} />
-        <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <main className="p-[var(--pad-canvas)]">
           {publicados.length > 1 && pca && (
-            <div className="mb-6 flex justify-end">
+            <div className="mb-[var(--gap-block)] flex justify-end">
               <div className="w-full sm:w-72">
                 <PcaSeletor pcas={publicados} current={pca.id} />
               </div>
@@ -89,7 +89,7 @@ export default async function HomePage({
   return (
     <div className="min-h-dvh bg-bg text-text">
       <Topo identidade={identidade} />
-      <main className="mx-auto max-w-7xl space-y-[var(--gap-col)] px-4 py-6 sm:px-6">
+      <main className="space-y-[var(--gap-block)] p-[var(--pad-canvas)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-bold text-text">{pca.nome}</h1>
           <div className="flex flex-col gap-2 sm:flex-row">

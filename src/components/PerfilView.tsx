@@ -56,7 +56,7 @@ function Aviso({ msg }: { msg: Msg }) {
   );
 }
 
-const cardCls = "rounded-card border border-border bg-surface p-5 shadow-ring";
+const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
 export function PerfilView({
   usuario,
@@ -200,7 +200,7 @@ export function PerfilView({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+    <div className="grid gap-[var(--gap-block)] lg:grid-cols-2 lg:items-start">
       {semModulos && (
         <Callout kind="info" icon={<IconInfo className="h-4 w-4" />} className="lg:col-span-2">
           Nenhum módulo liberado para o seu grupo ativo. Se você tem outro grupo, troque no cabeçalho; senão, peça ao

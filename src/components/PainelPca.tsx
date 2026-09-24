@@ -37,7 +37,7 @@ export function PainelPca({
 }) {
   const { resumo } = dados;
   return (
-    <div className="space-y-[var(--gap-col)]">
+    <div className="space-y-[var(--gap-block)]">
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat label="Total Planejado" value={brlCompact(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
         <KpiStat

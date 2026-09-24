@@ -12,7 +12,7 @@ export default async function PcaEdicaoPage({ params }: { params: Promise<{ id: 
   if (!pca) notFound();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <Link
         href="/painel/pca"
         className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-text-2"

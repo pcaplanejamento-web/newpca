@@ -13,6 +13,7 @@ import {
   ordenarIndices,
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
+import { tokenPx } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -53,6 +54,12 @@ export type Column<R> = {
 
 type Key = string | number;
 
+/** Folga (px) além do respiro do `<main>` na medida da altura — arredondamento de subpixel sem rolar a página. */
+const FOLGA = 4;
+/** Distância (px) do fim da tabela à borda inferior do display: o respiro do `<main>` (o token `--pad-canvas` — o
+ * MESMO das classes) + a folga + o que fica FIXO abaixo (ex.: a barra de seleção da Mesa). */
+const reservaAteORodape = (reservaInferior: number) => tokenPx("--pad-canvas", 16) + FOLGA + reservaInferior;
+
 export function DataTable<R>({
   columns,
   rows,
@@ -71,6 +78,8 @@ export function DataTable<R>({
   linhasPadrao,
   density,
   reservaInferior = 0,
+  acoesRodape,
+  vazio,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -112,6 +121,11 @@ export function DataTable<R>({
   /** Altura (px) RESERVADA no fim do display para algo fixo abaixo da tabela (ex.: a barra de
    * seleção da Mesa) — `scrollInterno`/`fillHeight` descontam, então nada fica por baixo dela. */
   reservaInferior?: number;
+  /** Ações no RODAPÉ da tabela, à esquerda do seletor de linhas (ex.: "Importar protocolo" da Mesa). */
+  acoesRodape?: ReactNode;
+  /** Mensagem do corpo quando NÃO há linhas (sem dados) — com linhas escondidas pelos filtros das colunas,
+   * vale a mensagem padrão dos filtros. */
+  vazio?: ReactNode;
 }) {
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
@@ -122,11 +136,12 @@ export function DataTable<R>({
 
   // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Rodapé (resumo/ações/linhas/pager) — a altura REAL entra na medida (muda com as ações e no celular).
+  const rodapeRef = useRef<HTMLDivElement>(null);
   const [autoRows, setAutoRows] = useState<number | null>(null);
   const [maxH, setMaxH] = useState<number | null>(null); // altura do corpo rolável (scrollInterno)
   useEffect(() => {
     if (!fillHeight) return;
-    const RESERVA = 32 + reservaInferior; // respiro até a borda inferior (padding do main + folga + barra fixa)
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
@@ -141,8 +156,8 @@ export function DataTable<R>({
       // Mede as alturas REAIS (linha varia com o conteúdo — ex.: botões de ação).
       const altLinha = el.querySelector("tbody tr")?.getBoundingClientRect().height || 48;
       const altCabecalho = el.querySelector("thead")?.getBoundingClientRect().height || 44;
-      const altRodape = 48; // barra do rodapé/pager
-      const corpo = window.innerHeight - top - RESERVA - altCabecalho - altRodape;
+      const altRodape = rodapeRef.current?.getBoundingClientRect().height || 48;
+      const corpo = window.innerHeight - top - reservaAteORodape(reservaInferior) - altCabecalho - altRodape;
       const n = Math.floor(corpo / Math.max(altLinha, 30));
       setAutoRows(Math.max(4, Math.min(n, 60)));
     };
@@ -163,7 +178,6 @@ export function DataTable<R>({
   // scrollInterno: mede a altura disponível até o fim da viewport p/ o corpo rolável (desktop).
   useEffect(() => {
     if (!scrollInterno) return;
-    const RESERVA = 32 + reservaInferior;
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
@@ -174,8 +188,8 @@ export function DataTable<R>({
       // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
       const top = el.getBoundingClientRect().top + window.scrollY;
       if (top <= 0) return;
-      const altRodape = 48; // barra do rodapé/seletor/pager
-      setMaxH(Math.max(200, window.innerHeight - top - RESERVA - altRodape));
+      const altRodape = rodapeRef.current?.getBoundingClientRect().height || 48;
+      setMaxH(Math.max(200, window.innerHeight - top - reservaAteORodape(reservaInferior) - altRodape));
     };
     calc();
     window.addEventListener("resize", calc);
@@ -408,25 +422,25 @@ export function DataTable<R>({
                 </tr>
               );
             })}
-            {visiveis.length === 0 && (
-              <tr>
-                <td
-                  colSpan={columns.length + (selectable ? 1 : 0)}
-                  className="px-4 py-12 text-center text-[13px] text-faint"
-                >
-                  Nenhum registro com os filtros atuais.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
+      {/* Sem linhas: a mensagem fica FORA da área que rola na horizontal — centrada no que se vê (no celular a tabela
+          é mais larga que a tela e o texto sumia à direita). */}
+      {visiveis.length === 0 && (
+        <p className="px-4 py-12 text-center text-[13px] text-faint">
+          {rows.length === 0 && vazio != null ? vazio : "Nenhum registro com os filtros atuais."}
+        </p>
+      )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted">
+      <div
+        ref={rodapeRef}
+        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted"
+      >
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {ativos.length > 0 && (
             <button
               type="button"
@@ -435,11 +449,12 @@ export function DataTable<R>({
                 setPage(1);
               }}
               title={`Filtros ativos: ${ativos.map((c) => c.header).join(", ")}`}
-              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-chip px-2 text-[12px] font-semibold text-accent hover:bg-accent-soft"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-chip px-2 text-[12px] font-semibold text-accent hover:bg-accent-soft lg:min-h-8"
             >
               <IconFilter className="h-3.5 w-3.5" /> Limpar filtros ({ativos.length})
             </button>
           )}
+          {acoesRodape}
           {scrollInterno && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span>Linhas</span>
@@ -450,7 +465,7 @@ export function DataTable<R>({
                   setLimite(Number(e.target.value));
                   setPage(1);
                 }}
-                className="rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none"
+                className="min-h-11 rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:min-h-0"
               >
                 {OPCOES_LINHAS.map((n) => (
                   <option key={n} value={n}>

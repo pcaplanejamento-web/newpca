@@ -45,7 +45,7 @@ export function PcaEspacoView({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <Link href="/painel/pca" className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-text-2">
         <IconChevronLeft className="h-4 w-4" /> PCA
       </Link>
@@ -83,7 +83,7 @@ export function PcaEspacoView({
           {children}
         </div>
       ) : (
-        <div className="space-y-4" aria-busy="true">
+        <div className="space-y-[var(--gap-block)]" aria-busy="true">
           <Skeleton className="h-24 w-full" />
           <SkeletonLinhas linhas={8} />
         </div>

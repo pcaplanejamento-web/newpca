@@ -162,10 +162,11 @@ export function ProtocoloUploadForm({
    * REENVIO (sobrescrever o protocolo GRAVADO com o mesmo PDF corrigido): só aceita o MESMO protocolo
    * (nº e Id); compara capa/DFDs/itens com o gravado, herda os tratamentos que o PDF não traz, deixa
    * editar tudo e, ao confirmar, regrava só o que mudou e exclui (ou mantém) os DFDs que não vieram.
-   * Sem ele: importação normal (botão "Importar protocolo").
+   * Sem ele: importação normal ("Importar protocolo", no rodapé da tabela de protocolos da Mesa).
    */
   reenvio?: BaseReenvio | null;
-  /** (reenvio) abre o lançador a cada mudança (o botão fica no banner do protocolo gravado). */
+  /** Contador do BOTÃO do host (rodapé da tabela de protocolos da Mesa; no reenvio, o banner do protocolo
+   * gravado): cada valor NOVO abre o lançador. */
   iniciar?: number;
   /** (reenvio) sobrescrita concluída — o banner do gravado recarrega. */
   onConcluido?: () => void;
@@ -315,13 +316,15 @@ export function ProtocoloUploadForm({
     arquivosRef.current = new Map();
   }
 
-  // REENVIO: o botão do banner do gravado abre o lançador (só o PDF — sem criação manual). Só um clique
-  // NOVO abre: o contador vive no banner e sobrevive ao fechar/reabrir o protocolo (este form remonta).
+  // O botão do HOST abre o lançador (no reenvio, só o PDF — sem criação manual). Só um clique NOVO abre: o
+  // contador vive no host e sobrevive a este form remontar (ex.: fechar/reabrir o protocolo); com a leitura de
+  // um PDF em andamento, o clique espera (o aviso flutuante mostra o progresso).
   const iniciarVisto = useRef(iniciar);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do banner.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do host.
   useEffect(() => {
-    if (!reenvio || iniciar <= 0 || iniciar === iniciarVisto.current) return;
+    if (iniciar <= 0 || iniciar === iniciarVisto.current) return;
     iniciarVisto.current = iniciar;
+    if (status === "parsing") return;
     setErro(null);
     setStatus("idle");
     setRelatorio(null);
@@ -1566,7 +1569,7 @@ export function ProtocoloUploadForm({
         : estadoDeMensagens(mensagensAberto, { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) });
 
   // Leitura do PDF (índice), falha e resultado: na IMPORTAÇÃO viram AVISOS FLUTUANTES (canto inferior — não
-  // deformam a linha do "Importar"); no REENVIO ficam dentro do próprio lançador/modal.
+  // deformam a tabela da Mesa); no REENVIO ficam dentro do próprio lançador/modal.
   const progressoLeitura = leitura && (
     <div className="mt-2">
       <Progress value={(leitura.pagina / Math.max(1, leitura.total)) * 100} label={`Página ${num(leitura.pagina)} de ${num(leitura.total)}`} />
@@ -1651,17 +1654,12 @@ export function ProtocoloUploadForm({
       </AvisoFlutuante>
     ));
 
+  // Nada no fluxo da página: o BOTÃO fica no host; lançador, análise e avisos são modais/avisos flutuantes.
   return (
-    <div className={reenvio ? "contents" : undefined}>
-      {/* Botão único de importação (à direita) — abre o lançador. No REENVIO o botão fica no banner do
-          protocolo gravado (e a leitura/erro aparecem no próprio lançador). */}
+    <>
+      {/* IMPORTAÇÃO: leitura/erro/resultado em avisos flutuantes. No REENVIO aparecem no próprio lançador. */}
       {!reenvio && (
         <>
-          <div className="flex justify-end">
-            <Button onClick={() => setLauncher(true)} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-              Importar protocolo
-            </Button>
-          </div>
           {avisoLeitura}
           {resultado}
         </>
@@ -2033,6 +2031,6 @@ export function ProtocoloUploadForm({
             : undefined
         }
       />
-    </div>
+    </>
   );
 }

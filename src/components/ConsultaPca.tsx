@@ -61,7 +61,7 @@ export function ConsultaPca({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <Segmented<Visao>
         value={visao}
         onChange={setVisao}

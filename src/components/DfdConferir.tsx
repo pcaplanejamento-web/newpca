@@ -300,7 +300,7 @@ export function DfdConferir({
   };
 
   return (
-    <div className="space-y-4" ref={bodyRef}>
+    <div className="space-y-[var(--gap-block)]" ref={bodyRef}>
       {/* Ponto 4: Órgão identificado (Órgão/Entidade) + Unidade escolhida DENTRO do órgão */}
       <div data-ancora="reparticao">
         {orgaos.length > 0 && (
@@ -370,7 +370,7 @@ export function DfdConferir({
           (import / gravado destravado); os IDENTIFICADORES (número/planejamento/tipo) são imutáveis.
           O DfdView abaixo reflete tudo em só-leitura. */}
       {cabEditavel && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="anoPca">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="anoPca">
           <h3 className="mb-1 text-sm font-bold text-text">1 · Área requisitante da demanda</h3>
           <p className="mb-3 text-[12px] text-muted">
             Destrave um campo para corrigir. Número e planejamento do DFD são imutáveis (o tipo é escolhido acima).
@@ -392,7 +392,7 @@ export function DfdConferir({
       )}
 
       {/* Tratamento das seções tratáveis */}
-      <section className="rounded-card border border-border bg-surface p-4 shadow-ring">
+      <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <h3 className="mb-3 text-sm font-bold text-text">Tratamento</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* PRIORIDADE */}
@@ -486,7 +486,7 @@ export function DfdConferir({
       {/* VALIDAÇÃO DA ASSINATURA — "auto" quando o sistema confere o assinante com o responsável da
           unidade; senão a EQUIPE confere o PDF e valida (escolhendo o responsável) ou desfaz. */}
       {resAss.status !== "sem-assinatura" && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="assinatura">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="assinatura">
           <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-text">
             <IconShield className="h-4 w-4 text-accent" /> Validação da assinatura
           </h3>
@@ -585,7 +585,7 @@ export function DfdConferir({
       {/* Referências da RENOVAÇÃO (DFD-R) — contrato/ata/licitação. Aponta a ausência
           (não trava) e permite preencher à mão. Só aparece para DFD-R. */}
       {ehRenovacao && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="referenciaRenovacao">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="referenciaRenovacao">
           <h3 className="mb-1 text-sm font-bold text-text">Referências da renovação</h3>
           <p className="mb-3 text-xs text-muted">
             Todo DFD-R deve mencionar ao menos um nº de contrato, ARP ou licitação — pode haver VÁRIOS de cada.

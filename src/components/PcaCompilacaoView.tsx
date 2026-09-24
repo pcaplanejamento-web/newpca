@@ -62,7 +62,7 @@ const COLS: Column<LinhaComp>[] = [
 
 export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <h2 className="text-lg font-bold text-text">{pca.nome}</h2>
         <p className="mt-0.5 text-sm text-muted">

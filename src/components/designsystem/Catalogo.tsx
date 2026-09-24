@@ -18,6 +18,9 @@ import { MensalChart } from "@/components/charts/MensalChart";
 import { MetricasChart } from "@/components/charts/MetricasChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
+import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
+import { DashboardMesa } from "@/components/DashboardMesa";
+import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView, type DfdVisualItem } from "@/components/DfdView";
@@ -59,6 +62,7 @@ import {
   IconCheck,
   IconClipboard,
   IconClock,
+  IconDashboard,
   IconFile,
   IconFilter,
   IconLayers,
@@ -131,11 +135,11 @@ const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
-    <section className="mt-8">
-      <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">
+    <section className="mt-6">
+      <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">
         {titulo}
       </h2>
-      <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">{children}</div>
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">{children}</div>
     </section>
   );
 }
@@ -625,36 +629,133 @@ const SITUACOES_DEMO = [
   { id: 4, nome: "Concluído", cor: "#16a34a" },
 ];
 
+// Dashboard de governança da Mesa — dados de exemplo RELATIVOS a hoje (a série semanal e o tempo na Mesa sempre
+// preenchidos); montados só no navegador (as datas dependem do relógio).
+const SITUACOES_DASH = SITUACOES_DEMO.map((x, i) => ({ ...x, ordem: i + 1 }));
+const PESSOAS_DASH = new Map(PESSOAS_DEMO.map((x) => [x.id, x.pessoa]));
+const ESTADOS_DASH: EstadoPainel[] = ["regular", "regular", "regular", "atencao", "erro", "regular", "atencao", "conferindo"];
+function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[] } {
+  const agora = Date.now();
+  const protocolos = Array.from({ length: 36 }, (_, i): ProtocoloPainel => ({
+    id: i + 1,
+    criadoEm: new Date(agora - ((i * 37) % 97) * 864e5).toISOString().replace("T", " ").slice(0, 19),
+    valor: 20_000 + ((i * 7919) % 600_000),
+    responsavelId: i % 9 === 0 ? null : PESSOAS_DEMO[i % PESSOAS_DEMO.length].id,
+    situacaoId: i % 11 === 0 ? null : SITUACOES_DEMO[i % SITUACOES_DEMO.length].id,
+    estado: ESTADOS_DASH[i % ESTADOS_DASH.length],
+  }));
+  const siglas = ["FMS", "SME", "SMA", "SMO", "SEMAS", "SMF", "GAB", "PROC", "SMC"];
+  const dfds = Array.from({ length: 90 }, (_, i): DfdPainel => ({ unidade: siglas[(i * i) % siglas.length], unidadeNome: null, valor: 5_000 + ((i * 104_729) % 350_000), itens: 1 + (i % 25) }));
+  return { protocolos, dfds };
+}
+
+/** Demo do DASHBOARD de governança da Mesa (tocar numa pessoa filtra — aqui, os próprios dados do exemplo). */
+function DashboardMesaDemo() {
+  const [dados, setDados] = useState<ReturnType<typeof dadosDashDemo> | null>(null);
+  const [resp, setResp] = useState<"todos" | "sem" | number>("todos");
+  useEffect(() => setDados(dadosDashDemo()), []);
+  if (!dados) return <Skeleton className="h-72 w-full rounded-card" />;
+  const protocolos = resp === "todos" ? dados.protocolos : dados.protocolos.filter((x) => (resp === "sem" ? x.responsavelId == null : x.responsavelId === resp));
+  return (
+    <DashboardMesa
+      protocolos={protocolos}
+      dfds={dados.dfds}
+      situacoes={SITUACOES_DASH}
+      pessoas={PESSOAS_DASH}
+      regras={regrasPadrao()}
+      responsavel={resp}
+      onResponsavel={setResp}
+    />
+  );
+}
+
+/** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
+function GraficosGovernancaDemo() {
+  const [ativa, setAtiva] = useState<string | number | null>(null);
+  const seg = (chave: string, valor: number, cor: string, rotulo: string) => ({ chave, valor, cor, rotulo });
+  return (
+    <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-3">
+      <ChartCard title="BarraSegmentada" subtitle="Medidor de 100% (trilho): segmentos com 2px de respiro">
+        <BarraSegmentada
+          trilho
+          altura={12}
+          segmentos={[seg("r", 21, "var(--ok)", "Regular"), seg("a", 9, "var(--warn)", "Atenção"), seg("e", 10, "var(--danger)", "Com erro"), seg("c", 6, "var(--border-2)", "Conferindo…")]}
+        />
+      </ChartCard>
+      <ChartCard title="BarrasH" subtitle="Rótulo | barra | valor — a linha clicável marca a ativa">
+        <BarrasH
+          ariaLabel="Exemplo de barras horizontais"
+          ativa={ativa}
+          onEscolher={(k) => setAtiva((a) => (a === k ? null : k))}
+          linhas={[
+            { chave: 1, rotulo: "Ana", titulo: "Ana: 12 protocolos", segmentos: [seg("r", 8, "var(--ok)", "Regular"), seg("a", 3, "var(--warn)", "Atenção"), seg("e", 1, "var(--danger)", "Com erro")], valor: "12", detalhe: "R$ 4,1 mi" },
+            { chave: 2, rotulo: "Carlão", titulo: "Carlão: 7 protocolos", segmentos: [seg("r", 6, "var(--ok)", "Regular"), seg("e", 1, "var(--danger)", "Com erro")], valor: "7", detalhe: "R$ 2,2 mi" },
+            { chave: "outros", rotulo: "Outras 3 pessoas", titulo: "Outras 3 pessoas: 4 protocolos", segmentos: [seg("r", 4, "var(--ok)", "Regular")], valor: "4", detalhe: "R$ 800 mil", apagada: true },
+          ]}
+        />
+      </ChartCard>
+      <ChartCard title="Colunas" subtitle="Série no tempo / faixas — dica ao passar o mouse, focar ou tocar">
+        <Colunas
+          ariaLabel="Exemplo de colunas"
+          colunas={[3, 5, 2, 8, 6, 9, 4].map((n, i) => ({ chave: String(i), rotulo: `S${i + 1}`, valor: n, dica: { valor: `${n} protocolos`, rotulo: `Semana ${i + 1}` } }))}
+        />
+      </ChartCard>
+    </div>
+  );
+}
+
 /** Demo dos filtros de HIERARQUIA (acima das tabelas da Mesa) e do dropdown DENTRO da célula. */
 function SeletoresDemo() {
   const [resp, setResp] = useState("todos");
   const [assunto, setAssunto] = useState("todos");
   const [situacao, setSituacao] = useState<number | null>(2);
   const [pessoa, setPessoa] = useState<number | null>(null);
+  const [vista, setVista] = useState("protocolos");
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <SeletorFiltro
-          icone={<IconUser className="h-4 w-4" />}
-          rotulo="Responsável"
-          valor={resp}
-          onChange={setResp}
-          ativo={resp !== "todos"}
-          opcoes={[{ valor: "todos", rotulo: "Todos" }, { valor: "sem", rotulo: "Sem responsável" }, ...PESSOAS_DEMO.map((p) => ({ valor: String(p.id), rotulo: p.nome }))]}
-        />
-        <SeletorFiltro
-          icone={<IconFilter className="h-4 w-4" />}
-          rotulo="Assunto"
-          valor={assunto}
-          onChange={setAssunto}
-          ativo={assunto !== "todos"}
-          opcoes={[
-            { valor: "todos", rotulo: "Todos" },
-            { valor: "INCLUSÃO - PCA 2027", rotulo: "INCLUSÃO - PCA 2027" },
-            { valor: "EXCLUSÃO - PCA 2027", rotulo: "EXCLUSÃO - PCA 2027" },
-            { valor: "", rotulo: "Sem assunto" },
-          ]}
-        />
+      {/* A BARRA DA MESA: o Dashboard (item SÓ-ÍCONE do Segmented) + as visões à esquerda; os filtros à direita. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex max-w-full items-center gap-1.5">
+          <Segmented
+            value={vista}
+            onChange={setVista}
+            ariaLabel="Dashboard da Mesa"
+            options={[{ value: "dashboard", label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]}
+          />
+          <Segmented
+            value={vista}
+            onChange={setVista}
+            ariaLabel="Visões da Mesa"
+            options={[
+              { value: "protocolos", label: "Protocolos" },
+              { value: "dfds", label: "DFDs" },
+              { value: "itens", label: "Itens" },
+            ]}
+          />
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
+          <SeletorFiltro
+            icone={<IconUser className="h-4 w-4" />}
+            rotulo="Responsável"
+            valor={resp}
+            onChange={setResp}
+            ativo={resp !== "todos"}
+            opcoes={[{ valor: "todos", rotulo: "Todos" }, { valor: "sem", rotulo: "Sem responsável" }, ...PESSOAS_DEMO.map((p) => ({ valor: String(p.id), rotulo: p.nome }))]}
+          />
+          <SeletorFiltro
+            icone={<IconFilter className="h-4 w-4" />}
+            rotulo="Assunto"
+            valor={assunto}
+            onChange={setAssunto}
+            ativo={assunto !== "todos"}
+            opcoes={[
+              { valor: "todos", rotulo: "Todos" },
+              { valor: "INCLUSÃO - PCA 2027", rotulo: "INCLUSÃO - PCA 2027" },
+              { valor: "EXCLUSÃO - PCA 2027", rotulo: "EXCLUSÃO - PCA 2027" },
+              { valor: "", rotulo: "Sem assunto" },
+            ]}
+          />
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-border p-2">
         <SeletorCelula ariaLabel="Situação do protocolo" valor={situacao} opcoes={SITUACOES_DEMO} onChange={setSituacao} vazio="Sem situação" />
@@ -1361,6 +1462,15 @@ export function Catalogo() {
           <Button loading>Carregando</Button>
           <Button disabled>Desativado</Button>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <span className="text-[12px] text-faint">size=&quot;sm&quot; (rodapés de tabela; 44px no celular):</span>
+          <Button size="sm" icon={<IconUpload className="h-4 w-4" />}>
+            Importar protocolo
+          </Button>
+          <Button size="sm" variant="secondary">
+            Compacto
+          </Button>
+        </div>
       </Secao>
 
       <Secao titulo="Campos de formulário (ícone + foco accent)">
@@ -1472,6 +1582,14 @@ export function Catalogo() {
             <UnidadeChart data={G_UNID} />
           </ChartCard>
         </div>
+      </Secao>
+
+      <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
+        <GraficosGovernancaDemo />
+      </Secao>
+
+      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens)">
+        <DashboardMesaDemo />
       </Secao>
 
       <Secao titulo="Avatares">
@@ -1900,6 +2018,22 @@ export function Catalogo() {
         />
       </Secao>
 
+      <Secao titulo="Tabela — sem linhas (mensagem própria) + ações no RODAPÉ (à esquerda do seletor de linhas/paginação)">
+        <DataTable
+          columns={COLUNAS}
+          rows={[]}
+          getKey={(r) => r.id}
+          selectable
+          vazio="Nenhum protocolo nesta visão. Use “Importar protocolo” no rodapé."
+          acoesRodape={
+            <Button size="sm" icon={<IconUpload className="h-4 w-4" />}>
+              Importar protocolo
+            </Button>
+          }
+          resumo={(l) => `${l.length} protocolos`}
+        />
+      </Secao>
+
       <Secao titulo="Tabela — densidade por visão (comfortable · default · compact)">
         <p className="mb-3 text-[13px] text-muted">
           A prop <span className="font-mono text-text-2">density</span> ajusta a altura da linha SÓ daquela tabela
@@ -2000,7 +2134,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Seletores — filtro de HIERARQUIA (acima das tabelas) e dropdown DENTRO da célula (Situação · Responsável)">
+      <Secao titulo="Barra da Mesa — Dashboard (só ícone) + visões + filtros de HIERARQUIA à direita; dropdown DENTRO da célula (Situação · Responsável)">
         <SeletoresDemo />
       </Secao>
 
@@ -2353,8 +2487,8 @@ export function Catalogo() {
 
   return (
     <div className="min-h-dvh bg-bg text-text">
-      <div className="mx-auto max-w-6xl px-4 py-[var(--pad-canvas)] sm:px-6">
-        <header className="mb-6">
+      <div className="mx-auto max-w-6xl p-[var(--pad-canvas)]">
+        <header className="mb-4">
           <h1 className="text-[27px] font-bold tracking-[-0.02em] text-text">Design System</h1>
           <p className="mt-1 text-[13.5px] text-muted">
             Plataforma PCA · biblioteca única de componentes (tokens, claro/escuro, toque, responsivo)

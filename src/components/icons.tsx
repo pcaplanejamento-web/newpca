@@ -31,6 +31,7 @@ import {
   KeyRound,
   Landmark,
   Layers,
+  LayoutDashboard,
   Link2,
   Scale,
   Loader2,
@@ -127,6 +128,8 @@ export const IconScale = Scale;
 export const IconMerge = Merge;
 /** Comparar lado a lado (DFDs duplicados). */
 export const IconCompare = GitCompareArrows;
+/** Dashboard de governança da Mesa. */
+export const IconDashboard = LayoutDashboard;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

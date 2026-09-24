@@ -105,7 +105,7 @@ export function ArmazenamentoAdmin() {
 
   if (dados === null) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-[var(--gap-block)]">
         {cabecalho}
         {erro ? (
           <Callout kind="danger">{erro}</Callout>
@@ -182,7 +182,7 @@ export function ArmazenamentoAdmin() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       {cabecalho}
       {erro && <Callout kind="danger">{erro}</Callout>}
 
@@ -275,7 +275,7 @@ export function ArmazenamentoAdmin() {
       <section className="space-y-3">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Manutenção</h2>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface p-4 shadow-ring">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
           <div className="min-w-0">
             <div className="font-semibold text-text">Sessões</div>
             <div className="text-sm text-muted">

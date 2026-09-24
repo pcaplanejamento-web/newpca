@@ -319,7 +319,7 @@ export function ReparticoesAdmin({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <Button variant="ghost" onClick={() => router.push("/painel/orgaos")} icon={<IconChevronLeft className="h-4 w-4" />}>
           Órgãos
@@ -362,7 +362,7 @@ export function ReparticoesAdmin({
       )}
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? `Nova unidade · ${orgaoNome}` : "Editar unidade"}>
-        <form onSubmit={salvar} className="space-y-4">
+        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
           <TextField label="Sigla (código)" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ex.: AMAE" required />
           <TextField label="Nome da unidade" value={nome} onChange={(e) => setNome(e.target.value)} required />
           <TextField

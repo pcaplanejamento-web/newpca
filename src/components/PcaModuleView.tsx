@@ -48,7 +48,7 @@ export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas:
   const anoValido = /^\d{4}$/.test(ano) && Number(ano) >= 2000 && Number(ano) <= 2100;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <h1 className="text-xl font-bold text-text">PCA</h1>
         <p className="text-sm text-muted">
@@ -62,7 +62,7 @@ export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas:
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}
@@ -95,7 +95,7 @@ export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas:
           </div>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px]">
             <TextField label="Nome" placeholder={`PCA ${ano || ""}`} value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} />
             <TextField

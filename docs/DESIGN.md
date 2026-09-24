@@ -37,13 +37,31 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 
 ## Filtros
 - No cabeçalho de cada coluna (`DataTable`: `MultiSelectHeader` / `RangeFilterHeader` / `DateFilterHeader`), **conectados**
-  entre si; acima da tabela, os filtros de **hierarquia** (`SeletorFiltro` — ex.: Responsável e Assunto na Mesa).
+  entre si; na linha das visões, à direita, os filtros de **hierarquia** (`SeletorFiltro` — ex.: Responsável e Assunto na
+  Mesa; no celular descem para a linha de baixo, lado a lado, só ícone + valor).
+
+## Barra da Mesa e Dashboard de governança
+- **Uma linha:** à esquerda o **Dashboard** (item só-ícone do `Segmented`, `soIcone`) + `Protocolos · DFDs · Itens`; à
+  direita os filtros de hierarquia. Controles com 40px no desktop e 44px no celular.
+- **Importar na tabela:** "Importar protocolo"/"Importar DFD" ficam no **rodapé da tabela**, à esquerda do seletor de linhas
+  (`DataTable.acoesRodape`, `Button size="sm"`); a tabela aparece sempre (sem linhas, `vazio` explica).
+- **Dashboard (`DashboardMesa`):** KPIs no topo + 6 quadros em grade (1 → 2 → 3 colunas). Gráficos em HTML por token
+  (`charts/Barras`: `BarrasH`, `Colunas`, `BarraSegmentada`): marcas finas, 2px de respiro entre segmentos, texto sempre em
+  tokens de texto (a cor fica na marca), legenda quando há ≥ 2 séries, números visíveis e dica no hover/foco/toque. Estados
+  nas cores das importâncias do ADM; situações nas cores cadastradas pelo ADM; tempo na Mesa em rampa ordinal do accent.
 
 ## Modais / formulários
 - **Bottom-sheet** no mobile, **modal central** no desktop: `fixed inset-0 flex items-end justify-center sm:items-center` + painel `rounded-t-2xl sm:rounded-2xl`, `max-h-[92vh]` com corpo rolável. Ex.: `Modal` (portal, cabeçalho e rodapé fixos).
 
-## Layout
-- Conteúdo com `pb-24 lg:pb-8` para não ficar sob a bottom-nav.
+## Layout e espaçamento (UMA régua de tokens)
+- **`--pad-canvas`** — margem do conteúdo, IGUAL no topo, nas laterais e na base (a mesma distância do cabeçalho, do menu
+  e da borda do display): 16px; 12px no celular. O cabeçalho usa a mesma nas laterais; no celular a base do `<main>` soma a
+  bottom-nav (4rem) + a área segura.
+- **`--gap-block`** — espaço ENTRE componentes: raiz das telas (`space-y-[var(--gap-block)]`), grades de cartões/KPIs e o vão
+  entre banners lado a lado (12px).
+- **`--pad-card`** — respiro interno de cartões, quadros e banners (`ChartCard`, KPIs, seções, `Modal`) (14px).
+- **`--h-header`** — altura do cabeçalho (56px); a faixa da marca na sidebar tem a mesma altura (bordas alinhadas).
+- A **densidade** do ADM (Aparência) muda todos juntos (compacta / padrão / confortável).
 - Grades responsivas: stats `grid-cols-2/3 → lg:grid-cols-5`; listas `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`.
 - Conteúdo largo (tabelas) rola dentro do próprio container; o `body` nunca rola na horizontal.
 

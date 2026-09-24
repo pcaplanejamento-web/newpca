@@ -359,7 +359,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   // Painel "Importâncias" (CRUD) + estados de ciclo.
   function painelImportancias(): ReactNode {
     return (
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-block)]">
         <p className="text-[12px] text-muted">
           As importâncias definem o rigor de cada ponto: o nome, a <strong>cor</strong> e o comportamento —{" "}
           <strong>bloqueia</strong> (trava) ou <strong>avisa</strong>/<strong>automático</strong>/<strong>ignora</strong>{" "}
@@ -420,7 +420,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   function painelProtocolacao(): ReactNode {
     const setG = (patch: Partial<GateProtocolacao>) => setGate((v) => ({ ...v, ...patch }));
     return (
-      <div className="space-y-6">
+      <div className="space-y-[var(--gap-block)]">
         <p className="text-[13px] text-muted">
           Controle o que pode ser protocolado. Só é permitido protocolar quando o Assunto do protocolo
           está cadastrado e todos os DFDs têm um tipo permitido — quando as travas abaixo estão ligadas.
@@ -505,7 +505,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Avaliação</h1>
@@ -531,7 +531,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         <strong>tipos de DFD</strong> (DFD-S/R/O/E) são fixos.
       </Callout>
 
-      <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <Tabs
           tabs={[
             { key: "importancias", label: "Importâncias", content: painelImportancias() },
@@ -558,7 +558,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
             </div>
           }
         >
-          <div className="space-y-4">
+          <div className="space-y-[var(--gap-block)]">
             <TextField label="Nome" value={editImp.nome} onChange={(e) => setEditImp({ ...editImp, nome: e.target.value })} placeholder="Ex.: Crítico" />
             <ColorField label="Cor" value={editImp.cor} onChange={(cor) => setEditImp({ ...editImp, cor })} />
             <div>

@@ -159,7 +159,7 @@ export function OrcamentoVinculos({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           Vincule cada Órgão/Unidade do relatório ao cadastro do sistema. O vínculo vale para todos os orçamentos, inclusive os próximos anos.

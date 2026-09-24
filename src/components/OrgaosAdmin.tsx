@@ -316,7 +316,7 @@ export function OrgaosAdmin() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Clique num órgão para gerenciar suas unidades. O “Órgão/Entidade” identifica de qual órgão é o DFD. Use ↑/↓ para ordenar.</p>
         <div className="flex items-center gap-2">
@@ -334,7 +334,7 @@ export function OrgaosAdmin() {
       <DataTable columns={colunas} rows={lista} getKey={(o) => o.id} minWidth={900} onRowClick={(o) => router.push(`/painel/orgaos/${o.id}`)} />
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo órgão" : "Editar órgão"}>
-        <form onSubmit={salvar} className="space-y-4">
+        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
           <TextField label="Sigla" value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="Ex.: PMRV" required />
           <TextField label="Nome do órgão" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Prefeitura Municipal de Rio Verde" required />
           <TextField

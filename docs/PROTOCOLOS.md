@@ -7,8 +7,14 @@ protocolos (`/painel`) foram **removidos**; `/painel` agora leva direto à Mesa 
 ver; sem nenhum, ao Perfil).
 
 ## Na Mesa
-- **Importar / criar:** botão "Importar" da visão Protocolos → soltar o PDF do protocolo (capa + DFDs, lido no
-  navegador) **ou** criar o protocolo manualmente. A análise confere cada DFD pelas regras do ADM antes de protocolar.
+- **Barra da Mesa (uma linha):** à esquerda, o ícone do **Dashboard de governança** + Protocolos · DFDs · Itens; à
+  direita, os filtros de **Responsável** e **Assunto** (valem para todas as visões e para o Dashboard).
+- **Importar / criar:** botão **"Importar protocolo"** no rodapé da tabela de protocolos (à esquerda do seletor de linhas)
+  → soltar o PDF do protocolo (capa + DFDs, lido no navegador) **ou** criar o protocolo manualmente. A análise confere
+  cada DFD pelas regras do ADM antes de protocolar.
+- **Dashboard de governança:** saúde dos protocolos (estado agregado nas cores do ADM), situação, tempo na Mesa, entrada
+  semanal, carga por responsável (tocar numa pessoa filtra a Mesa) e valor por unidade, com KPIs de conformidade,
+  responsável e tempo médio — sobre os mesmos dados da Mesa.
 - **Tabela de protocolos:** Estado (agregado: capa + DFDs + itens) · Situação · Responsável · Distribuição · Data ·
   Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor — filtros conectados em todas as colunas, seleção com
   somatório e edição em massa (barra fixa no rodapé do display).

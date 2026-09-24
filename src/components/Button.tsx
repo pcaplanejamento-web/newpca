@@ -20,6 +20,8 @@ const VARIANT: Record<Variant, string> = {
 
 type Props = {
   variant?: Variant;
+  /** `sm` = compacto (rodapés de tabela): 34px no desktop, 44px no celular (alvo de toque). */
+  size?: "md" | "sm";
   loading?: boolean;
   icon?: ReactNode;
   href?: string;
@@ -29,6 +31,7 @@ type Props = {
 
 export function Button({
   variant = "primary",
+  size = "md",
   loading = false,
   icon,
   href,
@@ -38,9 +41,11 @@ export function Button({
   ...rest
 }: Props) {
   const isIcon = variant === "icon";
-  const cls = `inline-flex h-[var(--h-control)] shrink-0 items-center justify-center gap-2 rounded-control text-[13.5px] font-semibold transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${
-    isIcon ? "w-[var(--h-control)]" : "px-4"
-  } ${VARIANT[variant]} ${className}`;
+  const tamanho =
+    size === "sm"
+      ? `h-11 text-[12.5px] lg:h-[var(--h-control-sm)] ${isIcon ? "w-11 lg:w-[var(--h-control-sm)]" : "px-3"}`
+      : `h-[var(--h-control)] text-[13.5px] ${isIcon ? "w-[var(--h-control)]" : "px-4"}`;
+  const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
   const inner = loading ? (
     <IconSpinner className="h-[18px] w-[18px]" />
   ) : (

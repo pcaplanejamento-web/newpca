@@ -101,7 +101,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
       </p>
     );
   return (
-    <div className="space-y-[var(--gap-col)]">
+    <div className="space-y-[var(--gap-block)]">
       {dash.unidades.length > 1 && (
         <div className="w-full sm:ml-auto sm:w-80">
           <UnitFilter unidades={dash.unidades} current={dash.unidadeId} />

@@ -753,9 +753,9 @@ export function useProtocoloGravado({
       )}
       {podeEditar && proto && gravadoAberto && editavelAberto && (
         <DfdUploadForm
+          iniciar={sobrescreverDfd}
           sobrescrever={{
             gravado: gravadoAberto,
-            iniciar: sobrescreverDfd,
             onConcluido: () => {
               onAlterado();
               if (pedidoRef.current === proto.id) void carregar(proto.id, abertoId);

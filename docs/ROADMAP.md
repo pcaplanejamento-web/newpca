@@ -26,6 +26,21 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Mesa: Dashboard de governança, barra única e importação na tabela + espaçamento do sistema inteiro — entregue
+✅ **Dashboard de governança** (ícone à esquerda de Protocolos · DFDs · Itens): 5 KPIs (protocolos na Mesa com a
+tendência semanal, valor, **conformidade**, **com responsável**, **tempo médio na Mesa**) e 6 quadros — **saúde** (o estado
+agregado capa + DFDs + itens, nas cores das importâncias do ADM), **situação** (as do ADM, com as cores dele), **tempo na
+Mesa** (faixas de dias desde a protocolação), **entrada semanal** (12 semanas), **carga por responsável** (por estado; tocar
+numa pessoa filtra a Mesa) e **valor por unidade** (com a participação). Sobre os MESMOS dados da Mesa e os filtros do topo
+— nenhuma consulta nova ao banco; o código só é baixado quando o ícone é aberto. ✅ **Barra única:** os filtros de
+Responsável e Assunto na MESMA linha das visões, à direita (no celular, lado a lado na linha de baixo). ✅ **Importar na
+tabela:** "Importar protocolo"/"Importar DFD" no rodapé da tabela, à esquerda do seletor de linhas; a tabela aparece
+sempre (sem linhas, diz por quê) e a importação em curso nunca se perde quando a lista recarrega. ✅ **Espaçamento** com
+UMA régua de tokens no sistema inteiro: a margem do conteúdo é igual no topo e nas laterais (a mesma distância do
+cabeçalho, do menu e da borda do display), menor entre os componentes e dentro dos cartões/banners, cabeçalho e faixa da
+marca na mesma altura — tudo seguindo a densidade escolhida pelo ADM. Alvos de 44px no celular (visões, filtros,
+paginação, linhas por página).
+
 ### Tudo na Mesa: Dashboard e Protocolos legados removidos — entregue
 ✅ Saíram da navegação e do código o antigo **Dashboard** (`/painel`, contagens do módulo legado) e a tela **Protocolos**
 legada (`/painel/protocolos`, `/api/protocolos*`, `lib/protocolos.ts` e os componentes `ProtocolosView`/`ProtocoloCard`/

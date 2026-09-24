@@ -95,7 +95,7 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
 
   return (
-    <div className="space-y-[var(--gap-col)]">
+    <div className="space-y-[var(--gap-block)]">
       {!dados.orcamento && (
         <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
           Nenhum orçamento de {dados.ano} importado — importe o CUBO em Orçamento para comparar.
@@ -121,7 +121,7 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
         />
       </div>
 
-      <section className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+      <section className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
             <IconScale className="h-5 w-5" />

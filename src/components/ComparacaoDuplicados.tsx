@@ -66,7 +66,7 @@ function Diferencas({ c, erro }: { c: ComparacaoDfd | null; erro?: string | null
       </Callout>
     );
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {c.campos.length > 0 && (
         <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length}>
           {c.campos.map((d) => (
@@ -134,7 +134,7 @@ export function ComparacaoDuplicados({
   const motivos = [...new Set(outros.map((o) => o.motivo))].join(" / ");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {pendente ? (
         <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
           <p className="font-semibold">DFD duplicado no processo — escolha qual fica</p>

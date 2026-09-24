@@ -128,7 +128,7 @@ export function ItemDetalhe({
 
   if (consulta)
     return (
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-block)]">
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <CampoCongelado label="Código" valor={item.codigo} mono />
           <CampoCongelado label="Unidade" valor={item.unidade} />
@@ -142,7 +142,7 @@ export function ItemDetalhe({
     );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {/* Cabeçalho: nº do item + estado */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-base font-bold text-text">Item {item.item ?? "—"}</span>
@@ -242,7 +242,7 @@ export function ItemDetalhe({
 
       {/* Conformidade com o catálogo (referência) — status + sugestão (display-only) */}
       {veredicto && (
-        <section className="rounded-card border border-border bg-surface p-4 shadow-ring" data-ancora="catalogo">
+        <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="catalogo">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-[13px] font-bold text-text">Conformidade com o catálogo</h4>
             <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: corCat }}>

@@ -107,7 +107,7 @@ export function EnviarAoPca({
           </div>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <div>
             <label className={labelCls} htmlFor="enviar-pca">
               PCA de destino

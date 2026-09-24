@@ -18,7 +18,7 @@ export function OrcamentoItemDetalhe({
   vinculo?: { orgao: string | null; unidade: string | null };
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div>
         <p className="text-xs text-muted">Elemento de despesa</p>
         <p className="mt-0.5 font-semibold leading-snug text-text">{item.nomeElemento || "—"}</p>

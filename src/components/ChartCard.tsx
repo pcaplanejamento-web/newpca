@@ -11,9 +11,9 @@ type Props = {
 export function ChartCard({ title, subtitle, children, className, action }: Props) {
   return (
     <div
-      className={`rounded-card border border-border bg-surface p-5 shadow-ring ${className ?? ""}`}
+      className={`rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring ${className ?? ""}`}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-text">{title}</h3>
           {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}

@@ -596,7 +596,7 @@ export function CatalogoView({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Catálogo</h1>
@@ -648,7 +648,7 @@ export function CatalogoView({
               {catalogos.map((c) => (
                 <div
                   key={c.id}
-                  className="flex flex-col rounded-card border border-border bg-surface p-4 shadow-ring transition-colors hover:border-accent/40"
+                  className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring transition-colors hover:border-accent/40"
                 >
                   <div className="flex items-start gap-3">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
@@ -712,7 +712,7 @@ export function CatalogoView({
               {podeEditar && addCard}
             </div>
           ) : (
-            <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+            <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               {barraTipoBusca}
               <DataTable
                 columns={colLista}
@@ -762,7 +762,7 @@ export function CatalogoView({
           ) : undefined
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <Segmented<"manual" | "importar">
             value={novoModo}
             onChange={(v) => setNovoModo(v)}
@@ -826,7 +826,7 @@ export function CatalogoView({
         }
       >
         {preview && (
-          <div className="space-y-4">
+          <div className="space-y-[var(--gap-block)]">
             <TextField label="Nome do catálogo" value={nomeCat} onChange={(e) => setNomeCat(e.target.value)} disabled={enviando} hint={`Origem: ${preview.fonte.toUpperCase()}`} />
             <div>
               <label className="mb-2 block text-[13.5px] font-bold text-text" htmlFor="cat-alvo">
@@ -988,7 +988,7 @@ export function CatalogoView({
           </div>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <TextField label="Nome do catálogo" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={salvandoCat} />
           <div>
             <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
@@ -1047,7 +1047,7 @@ export function CatalogoView({
           ) : undefined
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <div className="flex flex-wrap items-center justify-end gap-2">
             {podeEditar && (
               <Button

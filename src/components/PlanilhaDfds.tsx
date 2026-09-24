@@ -84,6 +84,8 @@ export function PlanilhaDfds({
   regras,
   reservaInferior = 0,
   semEstado = false,
+  acoesRodape,
+  vazio,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -106,6 +108,10 @@ export function PlanilhaDfds({
   reservaInferior?: number;
   /** Só DADOS (ex.: Dashboard do PCA): sem a coluna Estado — nenhum erro/atenção apontado; tabela única. */
   semEstado?: boolean;
+  /** Ações no rodapé da tabela PRINCIPAL, à esquerda do seletor de linhas (ex.: "Importar DFD" da Mesa). */
+  acoesRodape?: ReactNode;
+  /** Mensagem do corpo da tabela principal sem nenhuma linha (repassada ao `DataTable`). */
+  vazio?: ReactNode;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -277,18 +283,20 @@ export function PlanilhaDfds({
     reservaInferior,
   } as const;
 
+  // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
+  const principal = { ...comum, acoesRodape, vazio } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
-    if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...comum} />;
-    if (fillHeight) return <DataTable rows={linhas} fillHeight pageSize={12} {...comum} />;
-    return <DataTable rows={linhas} pageSize={compacta ? 12 : 20} {...comum} />;
+    if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;
+    if (fillHeight) return <DataTable rows={linhas} fillHeight pageSize={12} {...principal} />;
+    return <DataTable rows={linhas} pageSize={compacta ? 12 : 20} {...principal} />;
   }
 
   // Só há tabelas "extras" (erro/atenção) quando há linhas nesse estado → o título
   // "DFDs regulares" só aparece para separá-las de fato.
   const temExtras = erro.length > 0 || atencao.length > 0 || descartado.length > 0;
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {erro.length > 0 && (
         <div>
           <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--danger)" }}>
@@ -310,11 +318,11 @@ export function PlanilhaDfds({
       <div>
         {temExtras && <h4 className="mb-1.5 text-[13px] font-bold text-text">DFDs regulares ({num(ok.length)})</h4>}
         {scrollInterno && !temExtras ? (
-          <DataTable rows={ok} scrollInterno {...comum} />
+          <DataTable rows={ok} scrollInterno {...principal} />
         ) : fillHeight && !temExtras ? (
-          <DataTable rows={ok} fillHeight pageSize={12} {...comum} />
+          <DataTable rows={ok} fillHeight pageSize={12} {...principal} />
         ) : (
-          <DataTable rows={ok} pageSize={compacta ? 12 : 20} {...comum} />
+          <DataTable rows={ok} pageSize={compacta ? 12 : 20} {...principal} />
         )}
       </div>
       {descartado.length > 0 && (

@@ -216,7 +216,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {pendentes > 0 && (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
           {pendentes} cadastro(s) aguardando sua aprovação.

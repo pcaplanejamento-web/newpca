@@ -76,14 +76,18 @@
   --radius-segment: 11px;
   --radius-pill: 20px;
 
-  /* Espaçamento / alturas (§5) — densidade padrão */
-  --pad-canvas: 18px;
-  --gap-block: 14px;
-  --gap-col: 16px;
-  --pad-card: 16px;
+  /* Espaçamento / alturas (§5) — densidade padrão. UMA régua para o sistema inteiro (a densidade do ADM muda
+     todos juntos):
+     --pad-canvas = margem do conteúdo — topo = laterais = base: a MESMA distância do cabeçalho, do menu e da
+                    borda do display (o cabeçalho usa a mesma nas laterais; 12px no celular);
+     --gap-block  = espaço ENTRE os componentes (blocos da página, grades de cartões, painéis lado a lado);
+     --pad-card   = respiro interno de cartões, quadros e banners. */
+  --pad-canvas: 16px;
+  --gap-block: 12px;
+  --pad-card: 14px;
   --cell-py: 13px;
   --cell-px: 12px;
-  --h-header: 60px;
+  --h-header: 56px;
   --h-control: 38px;
   --h-control-sm: 34px;
 
@@ -125,18 +129,26 @@
 
 /* Densidade (§39.7) — attr no <html> */
 [data-density="compact"] {
+  --pad-canvas: 12px;
+  --gap-block: 8px;
   --pad-card: 12px;
-  --gap-col: 12px;
   --cell-py: 9px;
   --h-control: 34px;
   --h-control-sm: 31px;
 }
 [data-density="comfortable"] {
+  --pad-canvas: 24px;
+  --gap-block: 16px;
   --pad-card: 20px;
-  --gap-col: 20px;
   --cell-py: 16px;
   --h-control: 42px;
   --h-control-sm: 38px;
+}
+/* Celular: a margem do conteúdo encolhe (em qualquer densidade) — sobra largura para as tabelas e cartões. */
+@media (max-width: 639px) {
+  :root {
+    --pad-canvas: 12px;
+  }
 }
 
 /* Motion (§39.15) — attr no <html>; acessibilidade tem prioridade */

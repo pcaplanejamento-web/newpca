@@ -147,7 +147,7 @@ export function SituacoesAdmin() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Situações" onClose={() => setErro(null)}>
           {erro}
@@ -186,7 +186,7 @@ export function SituacoesAdmin() {
           </div>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Em análise" maxLength={60} />
           <ColorField label="Cor" value={cor} onChange={setCor} />
           <div className="rounded-card border border-border bg-surface-2 p-3">

@@ -102,7 +102,7 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--gap-block)]">
       {podeEditar &&
         (fila ? (
           <div className="rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-8">
@@ -135,7 +135,7 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {planilhas.map((p) => (
-              <div key={p.id} className="flex flex-col rounded-card border border-border bg-surface p-4 shadow-ring">
+              <div key={p.id} className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
                 <div className="flex items-start gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
                     <IconFile className="h-5 w-5" />

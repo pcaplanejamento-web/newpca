@@ -123,10 +123,10 @@ function NavLinks({
 }) {
   const pathname = usePathname();
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {secoesVisiveis(role, abas).map((secao) => (
         <div key={secao.titulo}>
-          <p className="mb-2 px-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
+          <p className="mb-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
           </p>
           <nav className="flex flex-col gap-0.5">
@@ -138,7 +138,7 @@ function NavLinks({
                   key={item.href}
                   href={item.href}
                   onClick={onNavigate}
-                  className={`flex items-center gap-[11px] rounded-chip border px-3 py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
+                  className={`flex items-center gap-[11px] rounded-chip border px-2 py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
                     active
                       ? "border-border-2 bg-sb-active font-semibold text-text"
                       : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
@@ -377,14 +377,15 @@ export function AppShell({
   return (
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-5 lg:flex lg:sticky lg:top-0 lg:h-dvh">
-        <div className="px-1">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface lg:flex lg:sticky lg:top-0 lg:h-dvh">
+        {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
+        <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-4">
           <Brand identidade={identidade} />
         </div>
-        <div className="mt-7 flex-1 overflow-y-auto px-1">
+        <div className="flex-1 overflow-y-auto px-2 py-4">
           <NavLinks role={usuario.role} abas={abasSet} />
         </div>
-        <div className="pt-6">
+        <div className="p-2 pt-0">
           <UserMenu usuario={usuario} />
         </div>
       </aside>
@@ -393,8 +394,8 @@ export function AppShell({
       {menuAberto && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface px-4 py-5 shadow-soft">
-            <div className="flex items-center justify-between px-1">
+          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
+            <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
               <Brand identidade={identidade} />
               <button
                 type="button"
@@ -406,15 +407,15 @@ export function AppShell({
               </button>
             </div>
             {(reparticoes.length > 0 || grupos.length > 0) && (
-              <div className="mt-5 flex flex-wrap gap-2 px-1 sm:hidden">
+              <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
                 <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
                 <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
               </div>
             )}
-            <div className="mt-5 flex-1 overflow-y-auto px-1">
+            <div className="flex-1 overflow-y-auto px-2 py-4">
               <NavLinks role={usuario.role} abas={abasSet} onNavigate={fecharMenu} />
             </div>
-            <div className="pt-6">
+            <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
             </div>
           </aside>
@@ -423,7 +424,7 @@ export function AppShell({
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border bg-surface/85 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface/85 px-[var(--pad-canvas)] backdrop-blur-md">
           <button
             type="button"
             aria-label="Abrir menu"
@@ -449,7 +450,11 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">{children}</main>
+        {/* A MESMA margem (--pad-canvas) do cabeçalho, do menu e da borda do display; no celular, a base soma a
+            navegação inferior (4rem + área segura). */}
+        <main className="flex-1 p-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas)]">
+          {children}
+        </main>
       </div>
 
       {/* Navegação inferior (mobile) */}

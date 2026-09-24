@@ -73,7 +73,7 @@ function Painel({
       aria-label={titulo}
       className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-[var(--pad-card)] py-3">
         {cabecalho ? (
           <div className="min-w-0 flex-1">{cabecalho}</div>
         ) : (
@@ -88,8 +88,8 @@ function Painel({
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-      {rodape && <div className="shrink-0 border-t border-border bg-surface px-5 py-3">{rodape}</div>}
+      <div className="min-h-0 flex-1 overflow-y-auto p-[var(--pad-card)]">{children}</div>
+      {rodape && <div className="shrink-0 border-t border-border bg-surface px-[var(--pad-card)] py-2.5">{rodape}</div>}
     </div>
   );
 }
@@ -273,7 +273,7 @@ export function Modal({
   // Modo simples (1 banner) — comportamento original, inalterado.
   if (pilha.length === 0) {
     return createPortal(
-      <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
         {scrim}
         <Painel
           titulo={titulo}
@@ -301,9 +301,10 @@ export function Modal({
     c.largura ?? (c.id === PRINCIPAL ? (visiveis.size > 1 ? 44 : 64) : 40);
   // Mesma ESTRUTURA de trilha aberta/fechada (minmax(0, Nfr)) — o navegador interpola a largura.
   const cols = colunas.map((c) => `minmax(0,${visiveis.has(c.id) ? largura(c) : 0}fr)`).join(" ");
+  // Soma das colunas visíveis + os vãos entre elas (o token `--gap-block`, o MESMO do `gap` do grid).
   const maxW = !isDesktop
     ? "100%"
-    : `${colunas.filter((c) => visiveis.has(c.id)).reduce((t, c) => t + largura(c), 0) + (visiveis.size - 1)}rem`;
+    : `calc(${colunas.filter((c) => visiveis.has(c.id)).reduce((t, c) => t + largura(c), 0)}rem + ${visiveis.size - 1} * var(--gap-block))`;
   /** A coluna de UM painel da pilha (montada enquanto aberta ou fechando — fecha animado). */
   const colunaPainel = (p: ModalPainel) => {
     const conteudo = p.aberto ? p : cache.current.get(p.id);
@@ -327,10 +328,10 @@ export function Modal({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
       {scrim}
       <div
-        className="grid w-full items-end gap-0 sm:items-start sm:gap-4"
+        className="grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]"
         style={{
           maxWidth: maxW,
           gridTemplateColumns: cols,

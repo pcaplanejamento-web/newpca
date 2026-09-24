@@ -277,7 +277,7 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
   };
   const todos = (bloco: BlocoEscolha) => (escolha ? <AcoesTodos onTodos={escolha.onTodos} bloco={bloco} bloqueado={escolha.bloqueado} /> : undefined);
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       {escolha ? (
         <div className="space-y-2">
           <p className="text-[12.5px] text-muted">

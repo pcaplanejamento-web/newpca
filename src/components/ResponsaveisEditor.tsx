@@ -104,7 +104,7 @@ export function ResponsaveisEditor({
   const remTemp = (i: number) => onChange({ ...valor, temporarios: valor.temporarios.filter((_, j) => j !== i) });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {/* Responsáveis PADRÃO (podem ser vários) */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">

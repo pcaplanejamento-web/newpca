@@ -500,9 +500,9 @@ export function useDfdGravado({
   const extra =
     editavel && orig ? (
       <DfdUploadForm
+        iniciar={sobrescrever}
         sobrescrever={{
           gravado: orig,
-          iniciar: sobrescrever,
           onConcluido: () => {
             onAlterado();
             if (pedidoRef.current === orig.id) void carregar(orig.id, alvoAtual());

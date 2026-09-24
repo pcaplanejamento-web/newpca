@@ -57,7 +57,7 @@ export function CatalogoItemDetalhe({
   // ---- Modo CRIAR ----
   if (criar) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-block)]">
         <TextField
           label="Código"
           value={codigo}
@@ -93,7 +93,7 @@ export function CatalogoItemDetalhe({
   if (!item) return <div />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="rounded-chip bg-surface-2 px-2.5 py-1 font-mono text-[13px] font-bold text-text">
           {item.codigoRaw ?? item.codigo}

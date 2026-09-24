@@ -96,7 +96,7 @@ export function AuthForm({
         <p className="text-xs text-muted">PCA — Prefeitura de Rio Verde</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-block)]">
         {isCad && (
           <TextField
             label="Nome completo"

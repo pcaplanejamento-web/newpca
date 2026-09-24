@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
@@ -22,6 +23,7 @@ import {
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
+import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { estaTravado } from "@/lib/pca-core";
@@ -39,9 +41,10 @@ import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
+import { tokenPx } from "./espacamento";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
-import { IconFilter, IconLayers, IconTrash, IconUser } from "./icons";
+import { IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
@@ -51,7 +54,31 @@ import { Segmented } from "./Segmented";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
+import { Skeleton } from "./Skeleton";
 import { toast } from "./Toast";
+
+/** Esqueleto do Dashboard (a MESMA grade: 5 KPIs + 6 quadros) enquanto o código dele carrega. */
+function EsqueletoDashboard() {
+  return (
+    <div aria-busy className="space-y-[var(--gap-block)]">
+      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className={`h-[104px] rounded-card ${i === 0 ? "col-span-2 lg:col-span-1" : ""}`} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-72 rounded-card" />
+        ))}
+      </div>
+    </div>
+  );
+}
+/** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa). */
+const DashboardMesa = dynamic(() => import("./DashboardMesa").then((m) => m.DashboardMesa), {
+  ssr: false,
+  loading: EsqueletoDashboard,
+});
 
 type Rep = {
   id: number;
@@ -72,8 +99,8 @@ type ConfProto = { id: number; estado: EstadoProtocolo; resumo: ResumoEstado | n
 /** Campos de GESTÃO editados na célula (valem na hora, até a lista recarregar do servidor). */
 type Gestao = { responsavelId?: number | null; situacaoId?: number | null };
 
-/** Visão da tela Mesa: o MESMO espaço mostra Protocolos, DFDs ou a lista plana de Itens. */
-type Vista = "protocolos" | "dfds" | "itens";
+/** Visão da tela Mesa: o MESMO espaço mostra o Dashboard de governança, Protocolos, DFDs ou a lista plana de Itens. */
+type Vista = "dashboard" | "protocolos" | "dfds" | "itens";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
 const FATIA_CONFERENCIA = 150;
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
@@ -81,8 +108,6 @@ const FATIA_MASSA = 20;
 /** Itens por requisição da edição em massa: ≤ 100 itens de ≤ 5 DFDs (cada DFD grava num lote atômico). */
 const FATIA_ITENS = 100;
 const FATIA_ITENS_DFDS = 5;
-/** Espaço (px) entre a tabela e a barra de seleção fixa (o `space-y-4` da tela). */
-const GAP_BARRA = 16;
 type Sel = Set<string | number>;
 
 /**
@@ -186,9 +211,12 @@ export function DfdsView({
   const [selProtos, setSelProtos] = useState<Sel>(new Set());
   const [selItens, setSelItens] = useState<Sel>(new Set());
   const [aplicandoMassa, setAplicandoMassa] = useState<{ feito: number; total: number; rotulo: string } | null>(null);
-  // Altura da barra de seleção fixa — as tabelas (scroll interno) reservam esse espaço.
+  // IMPORTAÇÃO: cada clique no botão do rodapé da tabela abre o lançador do formulário (montado FORA da tabela).
+  const [abrirImport, setAbrirImport] = useState(0);
+  // Altura da barra de seleção fixa — as tabelas (scroll interno) reservam esse espaço (+ o espaço entre os blocos
+  // da tela, o token `--gap-block` das classes).
   const [alturaBarra, setAlturaBarra] = useState(0);
-  const reserva = alturaBarra > 0 ? alturaBarra + GAP_BARRA : 0;
+  const reserva = alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0;
 
   // FILTROS DE HIERARQUIA (acima das três visões): responsável e assunto do PROTOCOLO — o DFD e o item
   // seguem o do protocolo de origem; as colunas correspondentes da tabela de protocolos ficam travadas.
@@ -326,15 +354,16 @@ export function DfdsView({
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
   // ESTADO AGREGADO dos PROTOCOLOS (capa + TODOS os problemas dos DFDs/itens de cada um) — calculado no
-  // servidor com a MESMA conferência por linha; lazy (só com a visão Protocolos), em fatias limitadas
+  // servidor com a MESMA conferência por linha; lazy (só com a visão Protocolos ou o Dashboard, que mostra a
+  // SAÚDE com este mesmo cache), em fatias limitadas
   // também pelo nº de DFDs, com cache pela chave do protocolo (`chaveProto`: capa ou qualquer DFD
   // gravado ⇒ reconfere só ele). Até chegar, a célula gira ("Conferindo…"); a fatia que FALHA marca os seus
   // protocolos como "Não conferido" (nunca um "Regular" falso) e as demais seguem — nova tentativa quando a
   // lista recarrega ou a visão reabre.
   const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
-  const [, setConfProtoVersao] = useState(0);
+  const [confProtoVersao, setConfProtoVersao] = useState(0);
   useEffect(() => {
-    if (vista !== "protocolos") return;
+    if (vista !== "protocolos" && vista !== "dashboard") return;
     if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
     const alvo = confProtoRef.current;
     alvo.falhos.clear();
@@ -684,6 +713,23 @@ export function DfdsView({
     const id = valorGestao(gestao, r.id, "responsavelId", r.responsavelId);
     return pessoaDe(id, id === r.responsavelId ? r.responsavelNome : null);
   };
+  // DASHBOARD de governança: as MESMAS listas filtradas da Mesa, com a GESTÃO otimista (responsável/situação) e o
+  // estado agregado da conferência (o cache da coluna Estado) — só montado com o Dashboard aberto.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: estadoDoProtocolo/responsavelDe/situacaoDe leem o cache (confProtoVersao/ctxConf), a gestão e o diretório listados.
+  const dash = useMemo(() => {
+    if (vista !== "dashboard") return null;
+    const pessoasDash = new Map<number, Pessoa>();
+    const protocolosDash = protocolosF.map((p): ProtocoloPainel => {
+      const resp = responsavelDe(p);
+      if (resp) pessoasDash.set(resp.id, resp);
+      const { conf, pendente, naoConferido } = estadoDoProtocolo(p);
+      const estado: EstadoPainel = pendente ? "conferindo" : naoConferido ? "naoConferido" : conf.estado;
+      return { id: p.id, criadoEm: p.criadoEm, valor: p.valorTotal, responsavelId: resp?.id ?? null, situacaoId: situacaoDe(p), estado };
+    });
+    const dfdsDash = dfdsF.map((d): DfdPainel => ({ unidade: d.reparticaoCodigo, unidadeNome: d.reparticaoNome, valor: d.valorTotal, itens: d.totalItens }));
+    return { protocolos: protocolosDash, dfds: dfdsDash, pessoas: pessoasDash };
+  }, [vista, protocolosF, dfdsF, gestao, dirPessoas, confProtoVersao, ctxConf, regras]);
+
   const travaResp = filtro.responsavel !== "todos" ? "Filtrado pelo seletor de responsável acima da tabela" : undefined;
   const travaAssunto = filtro.assunto != null ? "Filtrado pelo seletor de assunto acima da tabela" : undefined;
   const colsProto: Column<ProtocoloResumo>[] = [
@@ -920,76 +966,79 @@ export function DfdsView({
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
   ];
 
-  // Corpo de cada visão. Alturas de linha DIFERENTES por visão: protocolo alta · DFD média · item fina.
-  const vazio = (texto: string) => <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">{texto}</p>;
+  // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). Alturas de linha DIFERENTES por visão:
+  // protocolo alta · DFD média · item fina. A IMPORTAÇÃO (Mesa principal, editores) fica no RODAPÉ da tabela, à
+  // esquerda do seletor de linhas; o formulário é montado FORA dela (a lista recarregar nunca perde uma importação).
   const filtrado = filtroMesaAtivo(filtro);
   const semResultado = "Nada com o responsável/assunto escolhido acima — ajuste ou limpe o filtro.";
-  const tabelaProtocolos =
-    protocolosF.length === 0 ? (
-      vazio(filtrado && protocolos.length > 0 ? semResultado : `Nenhum protocolo nesta visão. ${podeEditar ? "Importe um protocolo pelo botão acima." : ""}`)
-    ) : (
-      <DataTable
-        columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
-        rows={protocolosF}
-        getKey={(r) => r.id}
-        selectable={podeEditar}
-        selected={selProtos}
-        onSelected={setSelProtos}
-        onRowClick={(r) => setAberto({ tipo: "protocolo", id: r.id })}
-        activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}
-        scrollInterno
-        reservaInferior={reserva}
-        minWidth={1380}
-        density="comfortable"
-        resumo={(linhas) =>
-          modoPca?.rodapeProtocolos
-            ? modoPca.rodapeProtocolos(linhas)
-            : `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
-                linhas.reduce((s, p) => s + p.valorTotal, 0),
-              )}`
-        }
-      />
-    );
-  const tabelaDfds =
-    dfdsF.length === 0 ? (
-      vazio(filtrado && dfds.length > 0 ? semResultado : `Nenhum DFD nesta visão. ${podeEditar ? "Importe um DFD pelo botão acima." : ""}`)
-    ) : (
-      <PlanilhaDfds
-        linhas={linhasDfdTab}
-        unica
-        scrollInterno
-        reservaInferior={reserva}
-        selecionavel={podeEditar}
-        selected={selDfds}
-        onSelected={setSelDfds}
-        onRowClick={(id) => setAberto({ tipo: "dfd", id })}
-        ativa={aberto?.tipo === "dfd" ? aberto.id : null}
-        acoes={acoesDfd}
-        regras={regras}
-      />
-    );
-  const tabelaItens =
-    carregandoItens || itensF === null ? (
-      vazio("Carregando itens…")
-    ) : itensF.length === 0 ? (
-      vazio(filtrado && (itens?.length ?? 0) > 0 ? semResultado : "Nenhum item nesta visão.")
-    ) : (
-      <DataTable
-        columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
-        rows={itensF}
-        getKey={(r) => r.id}
-        selectable={podeEditar}
-        selected={selItens}
-        onSelected={setSelItens}
-        onRowClick={(r) => setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.item, codigo: r.codigo } })}
-        activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
-        scrollInterno
-        reservaInferior={reserva}
-        minWidth={1120}
-        density="compact"
-        resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
-      />
-    );
+  const importa = podeEditar && !modoPca && (vista === "protocolos" || vista === "dfds");
+  const rotuloImportar = vista === "protocolos" ? "Importar protocolo" : "Importar DFD";
+  const botaoImportar = importa ? (
+    <Button size="sm" onClick={() => setAbrirImport((n) => n + 1)} icon={<IconUpload className="h-4 w-4" />}>
+      {rotuloImportar}
+    </Button>
+  ) : null;
+  const semDados = (oQue: string) => `Nenhum ${oQue} nesta visão.${importa ? ` Use “${rotuloImportar}” no rodapé.` : ""}`;
+  const tabelaProtocolos = (
+    <DataTable
+      columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
+      rows={protocolosF}
+      getKey={(r) => r.id}
+      selectable={podeEditar}
+      selected={selProtos}
+      onSelected={setSelProtos}
+      onRowClick={(r) => setAberto({ tipo: "protocolo", id: r.id })}
+      activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}
+      scrollInterno
+      reservaInferior={reserva}
+      minWidth={1380}
+      density="comfortable"
+      acoesRodape={botaoImportar}
+      vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
+      resumo={(linhas) =>
+        modoPca?.rodapeProtocolos
+          ? modoPca.rodapeProtocolos(linhas)
+          : `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
+              linhas.reduce((s, p) => s + p.valorTotal, 0),
+            )}`
+      }
+    />
+  );
+  const tabelaDfds = (
+    <PlanilhaDfds
+      linhas={linhasDfdTab}
+      unica
+      scrollInterno
+      reservaInferior={reserva}
+      selecionavel={podeEditar}
+      selected={selDfds}
+      onSelected={setSelDfds}
+      onRowClick={(id) => setAberto({ tipo: "dfd", id })}
+      ativa={aberto?.tipo === "dfd" ? aberto.id : null}
+      acoes={acoesDfd}
+      regras={regras}
+      acoesRodape={botaoImportar}
+      vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
+    />
+  );
+  const tabelaItens = (
+    <DataTable
+      columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
+      rows={itensF ?? []}
+      getKey={(r) => r.id}
+      selectable={podeEditar}
+      selected={selItens}
+      onSelected={setSelItens}
+      onRowClick={(r) => setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.item, codigo: r.codigo } })}
+      activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
+      scrollInterno
+      reservaInferior={reserva}
+      minWidth={1120}
+      density="compact"
+      vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : "Nenhum item nesta visão."}
+      resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
+    />
+  );
 
   // Barra de SELEÇÃO FIXA no rodapé do display (visão atual): registro das seleções (chips removíveis) +
   // somatório R$ + o editor de massa da visão. Só para editores.
@@ -1086,7 +1135,7 @@ export function DfdsView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       {/* Falha de uma ação da Mesa (excluir, edição em massa…) — AVISO FLUTUANTE: não empurra as tabelas. */}
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Não foi possível concluir" onClose={() => setErro(null)}>
@@ -1094,75 +1143,99 @@ export function DfdsView({
         </AvisoFlutuante>
       )}
 
-      {/* FILTROS DE HIERARQUIA (antes de Protocolos · DFDs · Itens): responsável e assunto do protocolo —
-          valem para as três visões e travam as colunas correspondentes da tabela de protocolos. */}
+      {/* BARRA DA MESA (uma linha): à esquerda, o DASHBOARD (só o ícone) + as visões Protocolos · DFDs · Itens (+ a
+          ferramenta do PCA); à direita, os FILTROS DE HIERARQUIA — responsável e assunto do protocolo, que valem para
+          todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de protocolos. */}
       <div className="flex flex-wrap items-center gap-2">
-        <SeletorFiltro
-          icone={<IconUser className="h-4 w-4" />}
-          rotulo="Responsável"
-          valor={String(filtro.responsavel)}
-          ativo={filtro.responsavel !== "todos"}
-          onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
-          opcoes={[
-            { valor: "todos", rotulo: "Todos" },
-            { valor: "sem", rotulo: "Sem responsável" },
-            ...opcoesResponsavel.map((x) => ({ valor: String(x.id), rotulo: rotuloOpcaoPessoa(x, usuarioId) })),
-          ]}
-        />
-        <SeletorFiltro
-          icone={<IconFilter className="h-4 w-4" />}
-          rotulo="Assunto"
-          valor={filtro.assunto == null ? "__todos" : filtro.assunto}
-          ativo={filtro.assunto != null}
-          onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
-          opcoes={[
-            { valor: "__todos", rotulo: "Todos" },
-            ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
-          ]}
-        />
-        {filtrado && (
-          <Button variant="ghost" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
-            Limpar filtros
-          </Button>
-        )}
+        <div className="flex max-w-full items-center gap-1.5">
+          {!modoPca && (
+            <Segmented<Vista>
+              value={vista}
+              onChange={setVista}
+              ariaLabel="Dashboard da Mesa"
+              options={[{ value: "dashboard", label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]}
+            />
+          )}
+          <Segmented<Vista>
+            value={vista}
+            onChange={setVista}
+            ariaLabel="Visões da Mesa"
+            options={[
+              { value: "protocolos", label: "Protocolos" },
+              { value: "dfds", label: "DFDs" },
+              { value: "itens", label: "Itens" },
+            ]}
+          />
+        </div>
+        {modoPca?.ferramenta}
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
+          <SeletorFiltro
+            icone={<IconUser className="h-4 w-4" />}
+            rotulo="Responsável"
+            valor={String(filtro.responsavel)}
+            ativo={filtro.responsavel !== "todos"}
+            onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
+            opcoes={[
+              { valor: "todos", rotulo: "Todos" },
+              { valor: "sem", rotulo: "Sem responsável" },
+              ...opcoesResponsavel.map((x) => ({ valor: String(x.id), rotulo: rotuloOpcaoPessoa(x, usuarioId) })),
+            ]}
+          />
+          <SeletorFiltro
+            icone={<IconFilter className="h-4 w-4" />}
+            rotulo="Assunto"
+            valor={filtro.assunto == null ? "__todos" : filtro.assunto}
+            ativo={filtro.assunto != null}
+            onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
+            opcoes={[
+              { valor: "__todos", rotulo: "Todos" },
+              ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
+            ]}
+          />
+          {filtrado && (
+            <Button variant="ghost" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
+              Limpar filtros
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Segmento de VISÃO (Protocolos/DFDs/Itens) na MESMA linha do "Importar" (lançador contextual). */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented<Vista>
-          className="shrink-0"
-          value={vista}
-          onChange={setVista}
-          options={[
-            { value: "protocolos", label: "Protocolos" },
-            { value: "dfds", label: "DFDs" },
-            { value: "itens", label: "Itens" },
-          ]}
-        />
-        {modoPca?.ferramenta && <div className="ml-auto">{modoPca.ferramenta}</div>}
-        {podeEditar && !modoPca && (vista === "protocolos" || vista === "dfds") && (
-          // Largura do PRÓPRIO botão (não `flex-1`): sem espaço na linha, ele quebra para baixo — nunca
-          // transborda por cima das abas.
-          <div className="ml-auto">
-            {vista === "protocolos" ? (
-              <ProtocoloUploadForm
-                reparticoes={reparticoes}
-                reparticaoAtivaId={reparticaoAtivaId}
-                pcas={pcas}
-                regras={regras}
-                orgaos={orgaos}
-              />
-            ) : (
-              <DfdUploadForm reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* MESMO espaço para as 3 visões — `key={vista}` remonta e replaya o morph (fade+escala). */}
+      {/* MESMO espaço para as visões — `key={vista}` remonta e replaya o morph (fade+escala). */}
       <div key={vista} className="animate-cat-morph">
-        {vista === "protocolos" ? tabelaProtocolos : vista === "dfds" ? tabelaDfds : tabelaItens}
+        {vista === "dashboard" && dash ? (
+          <DashboardMesa
+            protocolos={dash.protocolos}
+            dfds={dash.dfds}
+            pessoas={dash.pessoas}
+            situacoes={situacoes}
+            regras={regras}
+            responsavel={filtro.responsavel}
+            onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
+          />
+        ) : vista === "protocolos" ? (
+          tabelaProtocolos
+        ) : vista === "dfds" ? (
+          tabelaDfds
+        ) : (
+          tabelaItens
+        )}
       </div>
+
+      {/* Formulários de IMPORTAÇÃO (Mesa principal, editores): o botão fica no rodapé da tabela; aqui, fora dela, só
+          lançador, análise e avisos (modais/avisos flutuantes — nada no fluxo da página). */}
+      {importa &&
+        (vista === "protocolos" ? (
+          <ProtocoloUploadForm
+            iniciar={abrirImport}
+            reparticoes={reparticoes}
+            reparticaoAtivaId={reparticaoAtivaId}
+            pcas={pcas}
+            regras={regras}
+            orgaos={orgaos}
+          />
+        ) : (
+          <DfdUploadForm iniciar={abrirImport} reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
+        ))}
 
       {barraSelecao}
 

@@ -6,6 +6,7 @@ import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
+import { tokenPx } from "./espacamento";
 import { IconChevronDown, IconClose } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
@@ -13,9 +14,9 @@ export type RegistroSelecao = { key: string | number; rotulo: string };
 
 /** Chips renderizados (acima disso, um "+N" — a seleção em si segue completa). */
 const MAX_CHIPS = 80;
-/** Respiro inferior do `<main>` além da navegação (2rem — `lg:pb-8`; no celular `pb-24` = nav 4rem + 2rem):
- * a barra FIXA cobre esse respiro, então só o EXCEDENTE da altura dela ocupa lugar no fluxo. */
-const RESPIRO_MAIN = 32;
+/** Respiro inferior do `<main>` além da navegação (o token `--pad-canvas` — a margem do conteúdo): a barra FIXA
+ * cobre esse respiro, então só o EXCEDENTE da altura dela ocupa lugar no fluxo. */
+const respiroMain = () => tokenPx("--pad-canvas", 16);
 
 /**
  * Barra de SELEÇÃO — a MESMA em toda tabela com seleção (DFDs, Protocolos e Itens da Mesa; DFDs dos
@@ -90,7 +91,7 @@ export function BarraSelecao({
     const raiz = document.documentElement.style;
     const medir = () => {
       const alt = Math.ceil(el.getBoundingClientRect().height);
-      const px = Math.max(0, alt - RESPIRO_MAIN);
+      const px = Math.max(0, alt - respiroMain());
       setLugar(px);
       onAltura?.(px);
       // Os avisos flutuantes (canto inferior) sobem acima da barra enquanto ela existe.
@@ -113,8 +114,9 @@ export function BarraSelecao({
       aria-label="Seleção"
       className={
         fixa
-          ? // Acima da navegação inferior no celular (≈4rem + área segura); rente ao rodapé no desktop.
-            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-3"
+          ? // Acima da navegação inferior no celular (≈4rem + área segura); no desktop, rente ao rodapé com a MESMA
+            // margem do conteúdo (--pad-canvas) até a borda do display.
+            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas)]"
           : "mb-3"
       }
       style={fixa ? (faixa ? { left: faixa.left, width: faixa.width } : { visibility: "hidden" }) : undefined}
@@ -169,8 +171,9 @@ export function BarraSelecao({
   if (!fixa) return barra;
   return (
     <>
-      {/* Lugar no fluxo (o fim da página rola até acima da barra; + a área segura do celular). */}
-      <div ref={lugarRef} aria-hidden style={{ height: `calc(${lugar}px + env(safe-area-inset-bottom))` }} />
+      {/* Lugar no fluxo (o fim da página rola até acima da barra — a área segura do celular já está no respiro
+          inferior do <main>). */}
+      <div ref={lugarRef} aria-hidden style={{ height: lugar }} />
       {/* Portal no body: `position: fixed` dentro de um ancestral com transform/filter (o morph das abas do
           espaço do PCA) seria relativo a ELE — a barra saía deslocada e estourava a tela. */}
       {typeof document === "undefined" ? barra : createPortal(barra, document.body)}

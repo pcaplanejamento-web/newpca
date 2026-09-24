@@ -133,7 +133,7 @@ export function GruposAdmin() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           Crie grupos, escolha a permissão e vincule pessoas. Membros do grupo compartilham permissão e dados.
@@ -152,7 +152,7 @@ export function GruposAdmin() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {grupos.map((g) => (
-            <div key={g.id} className="rounded-card border border-border bg-surface p-4 shadow-ring">
+            <div key={g.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               <div className="flex items-center gap-2.5">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">
                   <IconUsers className="h-5 w-5" />
@@ -177,7 +177,7 @@ export function GruposAdmin() {
       )}
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"} size="lg">
-        <form onSubmit={salvar} className="space-y-4">
+        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
           <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} required />
           <div>
             <span className="mb-2 block text-[13.5px] font-bold text-text">Permissão do grupo</span>

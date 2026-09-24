@@ -157,7 +157,7 @@ export function RecorteImagem({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-block)]">
         {erro ? (
           <p className="rounded-control bg-surface-2 p-4 text-sm" style={{ color: "var(--danger)" }}>
             {erro}

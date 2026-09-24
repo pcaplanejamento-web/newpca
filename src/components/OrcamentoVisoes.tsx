@@ -97,7 +97,7 @@ export function OrcamentoVisoes({ itens, podeEditar }: { itens: Linha[]; podeEdi
   }
 
   return (
-    <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+    <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <div className="border-b border-border pb-3">
         <h2 className="font-bold text-text">Visões salvas do orçamento</h2>
         <p className="mt-1 text-sm text-muted">
@@ -105,7 +105,7 @@ export function OrcamentoVisoes({ itens, podeEditar }: { itens: Linha[]; podeEdi
           Configuração como o orçamento para o PCA.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <div className="space-y-3">
           {!editando ? (
             podeEditar ? (

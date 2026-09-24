@@ -18,7 +18,7 @@ export function LinkCard({
   return (
     <Link
       href={href}
-      className="group flex items-start gap-4 rounded-card border border-border bg-surface p-5 shadow-ring transition hover:border-border-2 hover:shadow-soft"
+      className="group flex items-start gap-4 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring transition hover:border-border-2 hover:shadow-soft"
     >
       {icon && (
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-white">

@@ -93,7 +93,7 @@ export function TokenEditor() {
   }
 
   return (
-    <div className="rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+    <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">

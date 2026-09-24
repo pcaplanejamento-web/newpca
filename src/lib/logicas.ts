@@ -229,8 +229,23 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Filtros de hierarquia da Mesa: Responsável e Assunto",
     descricao:
-      "Acima de Protocolos · DFDs · Itens, dois seletores filtram as TRÊS visões pelo responsável e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda.",
+      "Na MESMA linha de Protocolos · DFDs · Itens, à direita, dois seletores filtram as visões — e o Dashboard — pelo responsável e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda.",
     fonte: "passaFiltroMesa (mesa-filtros)",
+  },
+  {
+    id: "proto-dashboard-mesa",
+    dominio: "protocolo",
+    titulo: "Dashboard de governança da Mesa",
+    descricao:
+      "O ícone à esquerda de Protocolos · DFDs · Itens abre o Dashboard da Mesa, calculado sobre os MESMOS protocolos e DFDs da Mesa (com os filtros de Responsável/Assunto do topo): KPIs (protocolos, valor, conformidade, com responsável, tempo médio na Mesa) e seis quadros — saúde (o estado agregado da conferência: capa + DFDs + itens, nas cores das importâncias do ADM), situação (as cadastradas pelo ADM, com as cores dele), tempo na Mesa (dias desde a protocolação), entrada semanal (últimas 12 semanas), carga por responsável (tocar numa pessoa filtra a Mesa) e valor por unidade requisitante.",
+    detalhes: [
+      "Nenhuma consulta nova ao banco: usa as listas já carregadas e o MESMO cache da coluna Estado.",
+      "Datas em dias de calendário de Brasília; o KPI de tempo alerta os protocolos há mais de 30 dias na Mesa.",
+      "O código do Dashboard só é baixado quando o ícone é aberto (a Mesa não carrega gráficos à toa).",
+      "Na Mesa do PCA não há Dashboard (o espaço do PCA tem o dele).",
+    ],
+    fonte: "painelMesa (mesa-dashboard) + DashboardMesa",
+    configuravelEm: { rotulo: "Configurações → Situações / Avaliação", href: "/painel/configuracoes" },
   },
   {
     id: "proto-historico",

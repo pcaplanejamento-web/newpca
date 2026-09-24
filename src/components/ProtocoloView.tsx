@@ -287,7 +287,7 @@ export function ProtocoloView({
   const c = conciliacao;
   const sob = totais.sobrescritos && totais.sobrescritos.qtd > 0 ? totais.sobrescritos : null;
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       {topo}
       {/* Head — mini banners (um por informação): DFDs · itens · somatória. 2-up no mobile. */}
       {(totais.dfds > 0 || sob) && (
@@ -327,8 +327,8 @@ export function ProtocoloView({
 
       {/* Dados da capa — MESMA grade (`CapaCampos`); identificadores sempre travados; conteúdo com
           cadeado por campo (análise do PDF / gravado editável) ou inputs simples (criação manual). */}
-      <section className="rounded-card border border-border bg-surface p-5 shadow-ring">
-        <h3 className="mb-4 text-sm font-bold text-text">Dados do processo</h3>
+      <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+        <h3 className="mb-3 text-sm font-bold text-text">Dados do processo</h3>
         <CapaCampos
           numero={capa.numero}
           idExterno={capa.idExterno}

@@ -30,7 +30,7 @@ export function StatMini({
   className?: string;
 }) {
   return (
-    <div className={`min-w-0 rounded-card border border-border bg-surface p-4 shadow-ring ${className}`}>
+    <div className={`min-w-0 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring ${className}`}>
       <div className="truncate text-xs text-muted">{label}</div>
       <div
         className="mt-0.5 truncate text-lg font-bold leading-tight tabular-nums"

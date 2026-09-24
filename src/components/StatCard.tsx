@@ -31,7 +31,7 @@ export function StatCard({
   return (
     <Comp
       {...(clickable ? { type: "button" as const, onClick } : {})}
-      className={`flex items-center gap-3 rounded-card border bg-surface p-4 text-left shadow-ring transition-colors ${
+      className={`flex items-center gap-3 rounded-card border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-colors ${
         active ? "border-accent ring-1 ring-accent/40" : "border-border"
       } ${clickable ? "hover:border-border-2" : ""}`}
     >

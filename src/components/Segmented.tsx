@@ -1,7 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 // Controle segmentado (abas) — spec §6.5. Trilho --surface-2, item ativo em
 // --surface com sombra leve. Rola horizontalmente se faltar espaço (mobile).
+// Altura FIXA do item (32px; 36px no celular — o controle inteiro fica com 44px, alvo de toque), então um
+// item SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) tem a MESMA altura dos de texto.
 export function Segmented<T extends string>({
   value,
   options,
@@ -11,7 +15,7 @@ export function Segmented<T extends string>({
   ariaLabel,
 }: {
   value: T;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; icone?: ReactNode; soIcone?: boolean }[];
   onChange: (v: T) => void;
   className?: string;
   /** Desabilita a interação (ex.: banner de edição travado). */
@@ -34,15 +38,16 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={o.soIcone ? o.label : undefined}
+            title={o.soIcone ? o.label : undefined}
             disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`whitespace-nowrap rounded-chip px-3 py-1.5 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 ${
-              active
-                ? "bg-surface text-text shadow-sm"
-                : "text-muted hover:text-text-2"
-            }`}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-8 ${
+              o.soIcone ? "w-9 lg:w-8" : "px-3"
+            } ${active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text-2"}`}
           >
-            {o.label}
+            {o.icone}
+            {!o.soIcone && o.label}
           </button>
         );
       })}

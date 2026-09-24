@@ -349,7 +349,7 @@ export function OrcamentoView({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Orçamento</h1>
@@ -389,7 +389,7 @@ export function OrcamentoView({
           {vista === "orcamentos" ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {orcamentos.map((o) => (
-                <div key={o.id} className="flex flex-col rounded-card border border-border bg-surface p-4 shadow-ring transition-colors hover:border-accent/40">
+                <div key={o.id} className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring transition-colors hover:border-accent/40">
                   <div className="flex items-start gap-3">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
                       <IconWallet className="h-5 w-5" />
@@ -430,7 +430,7 @@ export function OrcamentoView({
           ) : vista === "visoes" ? (
             <OrcamentoVisoes itens={itens} podeEditar={podeEditar} />
           ) : vista === "vinculos" ? (
-            <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+            <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               {erroVinc && (
                 <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
                   {erroVinc}
@@ -439,7 +439,7 @@ export function OrcamentoView({
               <OrcamentoVinculos linhas={linhasVinc} alvos={alvos} podeEditar={podeEditar} salvando={salvandoVinc} onVincular={salvarVinculos} />
             </div>
           ) : (
-            <div className="space-y-4 rounded-card border border-border bg-surface p-4 shadow-ring sm:p-5">
+            <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               {barraBusca}
               <DataTable
                 columns={colLista}
@@ -495,7 +495,7 @@ export function OrcamentoView({
         }
       >
         {preview && (
-          <div className="space-y-4">
+          <div className="space-y-[var(--gap-block)]">
             <div className="grid gap-4 sm:grid-cols-[1fr_150px]">
               <TextField label="Nome do orçamento" value={nome} onChange={(e) => setNome(e.target.value)} disabled={enviando} placeholder="Ex.: Orçamento anual" />
               <TextField
@@ -540,7 +540,7 @@ export function OrcamentoView({
           children: abertoId != null && painelItem ? detalheItem(painelItem) : <div />,
         }}
       >
-        <div className="space-y-4">
+        <div className="space-y-[var(--gap-block)]">
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => orcamentoAberto && exportarOrcamentoXlsx(`${orcamentoAberto.nome}-${orcamentoAberto.ano}`, itensAberto)}>
               XLSX

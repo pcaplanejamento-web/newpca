@@ -89,7 +89,7 @@ export function PermissoesAdmin() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Defina quais abas cada permissão libera. Os grupos apontam para uma permissão.</p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
@@ -106,7 +106,7 @@ export function PermissoesAdmin() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {lista.map((p) => (
-            <div key={p.id} className="rounded-card border border-border bg-surface p-4 shadow-ring">
+            <div key={p.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="min-w-0 truncate font-bold text-text">{p.nome}</h3>
                 <span className="shrink-0 text-[11px] text-faint">{p.grupos} grupo(s)</span>
@@ -136,7 +136,7 @@ export function PermissoesAdmin() {
       )}
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Nova permissão" : "Editar permissão"}>
-        <form onSubmit={salvar} className="space-y-4">
+        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
           <TextField label="Nome da permissão" value={nome} onChange={(e) => setNome(e.target.value)} required />
           <div>
             <span className="mb-2 block text-[13.5px] font-bold text-text">Abas disponíveis</span>
