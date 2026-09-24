@@ -31,7 +31,7 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   quebra por unidade e o desvio de cada preço). Em toda tabela, um ícone discreto **copia** o nº do protocolo (sem o
   ano), o Id, o nº do DFD, o planejamento, o código e a descrição do item (vários valores saem unidos por ":"). Na análise
   do PDF do protocolo, **"Excluir do protocolo"** (no DFD ou em massa) tira DFDs do envio antes de protocolar ("Restaurar"
-  desfaz); protocolo que está em um PCA não é excluído (o enviado volta pela "Devolver à Mesa"). O responsável é escolhido entre as
+  desfaz); protocolo que está em um PCA — e os DFDs dele — não é excluído (o enviado volta pela "Devolver à Mesa"). O responsável é escolhido entre as
   pessoas do grupo e aparece com **foto + apelido** (apelido definido no Perfil). Um DFD importado de novo
   **sobrescreve** o cadastrado com **escolha dado a dado** (manter o gravado × usar o novo — botão "Sobrescrever DFD"
   no banner do DFD), registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link

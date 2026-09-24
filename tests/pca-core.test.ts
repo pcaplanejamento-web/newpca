@@ -10,7 +10,9 @@ import {
   estaTravado,
   mensagemTravaPca,
   motivoNaoDevolver,
+  motivoNaoExcluirDfd,
   motivoNaoExcluirProtocolo,
+  criadoHaPouco,
   motivosNaoEnviar,
   motivosNaoIncorporar,
   previsaoDoDfd,
@@ -53,6 +55,28 @@ describe("pca-core — incorporar, devolver e trava", () => {
     assert.match(enviado, /devolva-o à Mesa principal/);
     assert.equal(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, "PCA 2027"), mensagemTravaPca("PCA 2027"));
     assert.match(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: null }) ?? "", /Mesa do PCA —/); // sem nome: "PCA"
+  });
+  it("DFD de protocolo em um PCA NÃO é excluído — salvo o DESFAZER da importação (DFD novo do próprio usuário, enviado)", () => {
+    const agora = Date.UTC(2026, 8, 24, 20, 0, 0);
+    const enviado = { pcaId: 5, pcaIncorporadoEm: null };
+    assert.equal(motivoNaoExcluirDfd({ pcaId: null, pcaIncorporadoEm: null }), null);
+    assert.match(motivoNaoExcluirDfd(enviado, "PCA 2027") ?? "", /DFD em um PCA não é excluído/);
+    const desf = { criadoPor: 7, criadoEm: "2026-09-24 19:55:00", usuarioId: 7, agora };
+    assert.equal(motivoNaoExcluirDfd(enviado, "PCA 2027", desf), null); // 5 min, o mesmo usuário
+    assert.notEqual(motivoNaoExcluirDfd(enviado, "PCA 2027", { ...desf, usuarioId: 8 }), null); // outro usuário
+    assert.notEqual(motivoNaoExcluirDfd(enviado, "PCA 2027", { ...desf, criadoEm: "2026-09-24 19:40:00" }), null); // 20 min
+    assert.notEqual(motivoNaoExcluirDfd(enviado, "PCA 2027", { ...desf, criadoPor: null }), null);
+    // Incorporado: nunca (a trava), nem o desfazer.
+    assert.equal(motivoNaoExcluirDfd({ pcaId: 5, pcaIncorporadoEm: "2026-09-01" }, "PCA 2027", desf), mensagemTravaPca("PCA 2027"));
+  });
+  it("criadoHaPouco: 'AAAA-MM-DD HH:MM:SS' em UTC, dentro da janela; inválido ou futuro = não", () => {
+    const agora = Date.UTC(2026, 8, 24, 20, 0, 0);
+    assert.equal(criadoHaPouco("2026-09-24 19:45:00", agora), true); // 15 min exatos
+    assert.equal(criadoHaPouco("2026-09-24 19:44:59", agora), false);
+    assert.equal(criadoHaPouco("2026-09-24T20:00:30", agora), true); // relógio adiantado até 1 min
+    assert.equal(criadoHaPouco("2026-09-24 20:02:00", agora), false);
+    assert.equal(criadoHaPouco(null, agora), false);
+    assert.equal(criadoHaPouco("ontem", agora), false);
   });
   it("travado: só a gestão passa", () => {
     assert.equal(edicaoPermitidaTravado({ situacaoId: 3, origem: "celula" }), true);

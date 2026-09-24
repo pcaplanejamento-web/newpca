@@ -9,10 +9,11 @@ import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { motivoNaoExcluirDfd } from "@/lib/pca-core";
 import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
-import { respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
+import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 
 export const dynamic = "force-dynamic";
 
@@ -42,18 +43,25 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
     return erro("Sem acesso a este DFD.", 403);
   }
-  const travaEx = (await travaDeProtocolos([dfd.protocoloId])).get(dfd.protocoloId ?? 0);
-  if (travaEx) return respostaTravado(travaEx);
+  // DFD de protocolo em um PCA (enviado ou incorporado) NÃO é excluído — salvo o DESFAZER da importação que acabou de
+  // falhar (o DFD novo deste usuário, num protocolo enviado): 423 incorporado, 409 enviado.
+  const origem = new URL(req.url).searchParams.get("origem");
+  const noPca = (await pcaDeProtocolos([dfd.protocoloId])).get(dfd.protocoloId ?? 0);
+  if (noPca) {
+    const desfazer = origem === "desfazer" ? { criadoPor: dfd.criadoPor, criadoEm: dfd.criadoEm, usuarioId: a.u.id, agora: Date.now() } : null;
+    const motivo = motivoNaoExcluirDfd(noPca, noPca.nome, desfazer);
+    if (motivo) return erro(motivo, noPca.pcaIncorporadoEm ? 423 : 409);
+  }
   const alvo = await getDfd(id); // snapshot p/ o log antes de apagar
   const r = await excluirDfd(id);
   if (!r.ok) return erro(r.erro, 409);
-  const reenvio = new URL(req.url).searchParams.get("origem") === "reenvio";
+  const reenvio = origem === "reenvio";
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",
     entidade: "dfd",
     entidadeId: id,
-    resumo: `DFD ${alvo?.numero ?? id} excluído${reenvio ? " (não veio no PDF reenviado)" : ""}`,
+    resumo: `DFD ${alvo?.numero ?? id} excluído${reenvio ? " (fora do envio do PDF reenviado)" : origem === "desfazer" ? " (gravação desfeita após falha)" : ""}`,
     antes: alvo ? { numero: alvo.numero, tipo: alvo.tipo, valorTotal: alvo.valorTotal, totalItens: alvo.itens.length } : null,
     protocoloId: dfd.protocoloId,
     origem: reenvio ? "reenvio" : "exclusao",

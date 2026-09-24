@@ -38,8 +38,8 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 ## Copiar o valor da célula
 - **`CelulaCopiavel`** (em `BotaoCopiar.tsx`): ícone `IconCopy` de 14px, cor `--faint` (accent no hover), ao lado do valor
   nas colunas nº do protocolo (copia SEM o ano), Id do protocolo, nº do DFD, nº de planejamento, código e descrição do item
-  — em TODA tabela. Sem ruído: no computador só aparece com o mouse na LINHA (`group/linha` do `DataTable`) ou no foco do
-  teclado; no toque (sem hover) fica sempre visível. Toque: vão de 12px do valor e área de toque de 44px de altura só para
+  — em TODA tabela. SEMPRE à vista e discreto (`--faint`), mais forte com o mouse na LINHA (`group/linha` do `DataTable`) e
+  accent sobre o ícone. Toque: vão de 12px do valor e área de toque de 44px de altura (32px de `lg` para cima) só para
   cima/baixo/direita — tocar no valor abre a linha, tocar no ícone copia (o navegador "puxa" o toque para o controle mais
   próximo). Confirma com ✓ e o aviso flutuante "Copiado: …". Vários valores (Consolidada) = unidos por ":" (plural no rótulo).
 - **Fora do envio (análise do protocolo):** DFD excluído pelo usuário = estado "Excluído" (cinza, `--faint`), na tabela cinza

@@ -1075,7 +1075,7 @@ const ITENS_COPIA = [
   { id: 3, protocolo: null, idExterno: null, dfd: "1211", planejamento: "1511", codigo: null, descricao: null },
 ];
 
-/** Demo da CÉLULA COPIÁVEL: no computador o ícone aparece ao passar o mouse na linha; no toque, sempre. */
+/** Demo da CÉLULA COPIÁVEL: o ícone fica sempre à vista, discreto — mais forte com o mouse na linha. */
 function CelulaCopiavelDemo() {
   type L = (typeof ITENS_COPIA)[number];
   const mono = (t: string | null) => <span className="font-mono text-[12px]">{t ?? "—"}</span>;
@@ -1106,7 +1106,7 @@ function CelulaCopiavelDemo() {
   const planejamentos = ITENS_COPIA.map((r) => r.planejamento ?? "—");
   return (
     <div className="space-y-3">
-      <DataTable columns={colunas} rows={ITENS_COPIA} getKey={(r) => r.id} onRowClick={() => toast.info("A linha abriu (o ícone de copiar não abre a linha).")} footer="Passe o mouse numa linha (no toque, o ícone fica sempre à vista)." />
+      <DataTable columns={colunas} rows={ITENS_COPIA} getKey={(r) => r.id} onRowClick={() => toast.info("A linha abriu (o ícone de copiar não abre a linha).")} footer="O ícone fica sempre à vista, discreto (mais forte com o mouse na linha); tocar no valor abre a linha." />
       <p className="text-[12.5px] text-muted">
         Vários valores numa célula (visão Consolidada) saem unidos por ":":{" "}
         <CelulaCopiavel copiar={juntarParaCopiar(planejamentos)} rotulo="nº de planejamento" plural="nºs de planejamento">

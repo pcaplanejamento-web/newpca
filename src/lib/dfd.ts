@@ -760,9 +760,25 @@ export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[])
 /** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
 export async function getDfdReparticao(
   id: number,
-): Promise<{ reparticaoId: number | null; tipo: string | null; protocoloId: number | null; numero: string; planejamento: string | null } | null> {
+): Promise<{
+  reparticaoId: number | null;
+  tipo: string | null;
+  protocoloId: number | null;
+  numero: string;
+  planejamento: string | null;
+  criadoPor: number | null;
+  criadoEm: string | null;
+} | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfds.reparticaoId, tipo: dfds.tipo, protocoloId: dfds.protocoloId, numero: dfds.numero, planejamento: dfds.planejamento })
+    .select({
+      reparticaoId: dfds.reparticaoId,
+      tipo: dfds.tipo,
+      protocoloId: dfds.protocoloId,
+      numero: dfds.numero,
+      planejamento: dfds.planejamento,
+      criadoPor: dfds.criadoPor,
+      criadoEm: dfds.criadoEm,
+    })
     .from(dfds)
     .where(eq(dfds.id, id))
     .limit(1);

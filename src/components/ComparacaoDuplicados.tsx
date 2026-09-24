@@ -16,6 +16,8 @@ export type DfdDuplicadoResumo = {
   itens: number | null;
   valor: number | null;
   descartado: boolean;
+  /** Fora do envio por EXCLUSÃO do usuário ("Excluir do protocolo") — o selo diz "Excluído". */
+  excluido?: boolean;
 };
 
 /** OUTRO DFD duplicado do aberto: + o motivo (mesmo nº/planejamento), se ELE ainda conflita com alguém (`pendente`) e a
@@ -31,6 +33,7 @@ export type DfdDuplicadoOutro = DfdDuplicadoResumo & {
 
 /** Selo de situação de um DFD na comparação: descartado / ainda sem escolha / segue no processo. */
 function Situacao({ r, pendente }: { r: DfdDuplicadoResumo; pendente: boolean }) {
+  if (r.excluido) return <Badge tone="slate">Excluído</Badge>;
   if (r.descartado) return <Badge tone="slate">Descartado</Badge>;
   return pendente ? <Badge tone="amber">Sem escolha</Badge> : <Badge tone="emerald">Segue</Badge>;
 }
@@ -145,9 +148,11 @@ export function ComparacaoDuplicados({
         </Callout>
       ) : atual.descartado ? (
         <Callout kind="info" icon={<IconCompare className="h-5 w-5" />}>
-          {outros.some((o) => !o.descartado)
-            ? 'Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.'
-            : 'Este DFD está descartado (fora da protocolação e da somatória). Para trazê-lo de volta, use "Manter este" aqui em cima.'}
+          {atual.excluido
+            ? 'Este DFD foi excluído do protocolo (fora da protocolação e da somatória). Para trazê-lo de volta, use "Restaurar" no rodapé ou "Manter este" aqui em cima.'
+            : outros.some((o) => !o.descartado)
+              ? 'Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.'
+              : 'Este DFD está descartado (fora da protocolação e da somatória). Para trazê-lo de volta, use "Manter este" aqui em cima.'}
         </Callout>
       ) : (
         <Callout kind="ok" icon={<IconCheck className="h-5 w-5" />}>

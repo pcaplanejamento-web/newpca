@@ -906,10 +906,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   somatória/contagem da capa, dos erros e do despacho, e deixa de bloquear (erro, tipo não permitido, duplicado — excluir um
   dos duplicados resolve o par). Estado `excluidosDoProtocolo` = subconjunto de `descartados` (a MESMA régua de
   `protocolar()`/somatória); **na importação nada é apagado do banco**: o DFD já cadastrado de mesmo nº (se houver) continua
-  como está — e segue na somatória quando é deste processo (entra em `mantidosExistentes`, como "Manter o existente"). **No
-  REENVIO**, excluir tira o DFD do processo: o GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão —
-  ou Manter, como o que não veio no PDF; a confirmação do reenvio avisa quantos gravados serão EXCLUÍDOS). Um DFD já fora do
-  envio por outro motivo não muda. Desfazer: **"Restaurar"** no rodapé do DFD ou **"Restaurar excluídos (N)"** no título da
+  como está — e segue na somatória quando é deste processo (todo excluído não-gravado entra em `mantidosExistentes` no clique;
+  a régua da somatória decide quando a consulta dos já cadastrados chega). **No REENVIO**, excluir tira o DFD do processo: o
+  GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão — ou Manter, como o que não veio no PDF; a
+  confirmação avisa quantos gravados serão EXCLUÍDOS) — em protocolo que está em um PCA, só "Mantido" (DFD em PCA não é
+  excluído; `ComparacaoProtocolo.excluirBloqueado`). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
+  do envio depois (Manter o existente, a escolha do duplicado, o rastro do reenvio), ele deixa de ser "Excluído" e vira
+  "Descartado" — o "Restaurar excluídos" não o traz. O DFD fora do envio não entra na fila do OCR nem segura a protocolação
+  (`ocrPendenteNoEnvio`); ao voltar (Restaurar), a assinatura achatada é lida (`lerOcrAoVoltar`). Desfazer: **"Restaurar"** no rodapé do DFD ou **"Restaurar excluídos (N)"** no título da
   tabela cinza "DFDs fora do envio" (`PlanilhaDfds.acaoDescartados`, via `ProtocoloView`). Aviso flutuante confirma; o rodapé
   conta "N excluído(s)" e o resultado da protocolação informa os excluídos na análise. Validado ponta a ponta com o PDF real
   (`pd101820`, 15 DFDs): excluir 2 → 13 DFDs e a somatória menos os dois; protocolar com 1 excluído → 14 gravados.
@@ -1539,6 +1543,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `DELETE /api/protocolo/[id]` recusa — **409** o enviado ("Na Mesa do PCA X — devolva-o à Mesa principal para excluir"),
   **423** o incorporado (a mensagem da trava) — e o `POST /api/protocolo` recusa (409) a re-importação que SUBSTITUIRIA
   (apagaria) um protocolo de MESMO Id e nº diferente que está em um PCA.
+- **DFD de protocolo em um PCA também NÃO é excluído (regra do usuário):** na Mesa do PCA a lixeira do DFD some (o "Vincular a
+  protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
+  `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
+  importação que acabou de falhar (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — o DFD criado por ESTE
+  usuário há ≤ 15 min (`criadoHaPouco`, `MINUTOS_DESFAZER_DFD`) sai de um protocolo ENVIADO; do incorporado, nunca.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).
@@ -1777,11 +1786,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Normal e Consolidada), planilha de DFDs (análise, gravado, rastro), itens do DFD, detalhe da Consolidada, Dashboard/consulta
   do PCA, compilação do PCA, Catálogo (+ prévia) e Classificações; célula com VÁRIOS valores copia unidos por ":" —
   `juntarParaCopiar`, o formato da busca dos filtros —, com o rótulo no plural (`plural`); o texto copiado pode diferir do
-  exibido (`copiar`); vazio/"—" = sem ícone. No computador aparece ao passar o mouse na LINHA (`group/linha` do `DataTable`) ou
-  no foco do teclado (`[@media(hover:hover)]:opacity-0`); no TOQUE fica sempre visível, com um vão de 12px do valor e a área
-  de toque ampliada (44px de altura) só para cima/baixo/direita (`pointer-coarse:`) — o navegador "puxa" o toque para o
-  controle mais próximo: colado ao valor, tocar no número copiaria em vez de abrir a linha. O clique é do botão (não abre a
-  linha); ✓ por 1,5 s + aviso "Copiado: …"), **`SeletorBusca`** (seleção ÚNICA com
+  exibido (`copiar`); vazio/"—" = sem ícone. SEMPRE VISÍVEL e discreto (`--faint`), mais forte com o mouse na LINHA
+  (`group/linha` do `DataTable`) e em accent sobre o ícone; no TOQUE (`pointer-coarse:`) fica a 12px do valor e com a área de
+  toque ampliada (44px de altura; 32px de `lg` para cima, onde a linha é baixa) só para cima/baixo/direita — o navegador
+  "puxa" o toque para o controle mais próximo: colado ao valor, tocar no número copiaria em vez de abrir a linha. O clique é
+  do botão (não abre a linha); ✓ por 1,5 s + aviso "Copiado: …"), **`SeletorBusca`** (seleção ÚNICA com
   BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
   vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;

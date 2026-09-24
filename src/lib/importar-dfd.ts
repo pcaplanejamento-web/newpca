@@ -49,7 +49,8 @@ async function postDfd(body: unknown): Promise<{ dfdId?: number }> {
 /** Apaga um DFD parcial (best-effort) — usado no rollback do all-or-nothing. */
 async function apagarDfd(dfdId: number): Promise<void> {
   try {
-    await fetch(`/api/dfd/${dfdId}`, { method: "DELETE" });
+    // `desfazer`: a gravação que acabou de falhar — o servidor deixa desfazer o DFD novo mesmo num protocolo ENVIADO a um PCA.
+    await fetch(`/api/dfd/${dfdId}?origem=desfazer`, { method: "DELETE" });
   } catch {
     // best-effort: se falhar, a re-importação (idempotente) resolve depois.
   }

@@ -356,6 +356,7 @@ export function ComparacaoProtocolo({
   onTodosRemovidos,
   onRelatorio,
   bloqueado = false,
+  excluirBloqueado = null,
 }: {
   contagem: { novos: number; alterados: number; iguais: number; analisando: number };
   capa: DiffCampo[];
@@ -364,6 +365,8 @@ export function ComparacaoProtocolo({
   onTodosRemovidos: (excluir: boolean) => void;
   onRelatorio: () => void;
   bloqueado?: boolean;
+  /** Os gravados fora do envio NÃO podem ser excluídos (ex.: protocolo em um PCA) — ficam mantidos; o motivo é mostrado. */
+  excluirBloqueado?: string | null;
 }) {
   const excluir = removidos.filter((r) => r.excluir).length;
   return (
@@ -406,14 +409,16 @@ export function ComparacaoProtocolo({
             <h4 className="text-[12px] font-bold uppercase tracking-wide text-muted">
               DFDs gravados fora do envio — não vieram no PDF ou foram excluídos na análise ({num(removidos.length)})
             </h4>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => onTodosRemovidos(true)} disabled={bloqueado}>
-                Excluir todos
-              </Button>
-              <Button variant="ghost" onClick={() => onTodosRemovidos(false)} disabled={bloqueado}>
-                Manter todos
-              </Button>
-            </div>
+            {!excluirBloqueado && (
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => onTodosRemovidos(true)} disabled={bloqueado}>
+                  Excluir todos
+                </Button>
+                <Button variant="ghost" onClick={() => onTodosRemovidos(false)} disabled={bloqueado}>
+                  Manter todos
+                </Button>
+              </div>
+            )}
           </div>
           <ul className="space-y-2">
             {removidos.map((r) => (
@@ -423,22 +428,30 @@ export function ComparacaoProtocolo({
                   {r.planejamento ? <span className="text-muted"> · Planej. {r.planejamento}</span> : null}
                   <span className="text-muted"> · {brl(r.valorTotal ?? 0)}</span>
                 </span>
-                <Segmented<"excluir" | "manter">
-                  value={r.excluir ? "excluir" : "manter"}
-                  disabled={bloqueado}
-                  options={[
-                    { value: "excluir", label: "Excluir" },
-                    { value: "manter", label: "Manter" },
-                  ]}
-                  onChange={(v) => onRemovidoChange(r.id, v === "excluir")}
-                />
+                {excluirBloqueado ? (
+                  <Badge tone="slate">Mantido</Badge>
+                ) : (
+                  <Segmented<"excluir" | "manter">
+                    value={r.excluir ? "excluir" : "manter"}
+                    disabled={bloqueado}
+                    options={[
+                      { value: "excluir", label: "Excluir" },
+                      { value: "manter", label: "Manter" },
+                    ]}
+                    onChange={(v) => onRemovidoChange(r.id, v === "excluir")}
+                  />
+                )}
               </li>
             ))}
           </ul>
-          {excluir > 0 && (
-            <p className="mt-2 text-[12px]" style={{ color: "var(--danger)" }}>
-              {num(excluir)} DFD(s) gravado(s) serão EXCLUÍDOS ao sobrescrever (com os itens).
-            </p>
+          {excluirBloqueado ? (
+            <p className="mt-2 text-[12px] text-muted">{excluirBloqueado} Eles ficam mantidos no protocolo.</p>
+          ) : (
+            excluir > 0 && (
+              <p className="mt-2 text-[12px]" style={{ color: "var(--danger)" }}>
+                {num(excluir)} DFD(s) gravado(s) serão EXCLUÍDOS ao sobrescrever (com os itens).
+              </p>
+            )
           )}
         </div>
       )}

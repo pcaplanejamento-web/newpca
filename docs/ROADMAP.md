@@ -31,14 +31,16 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
 "144756/2026" → "144756"), **Id do protocolo**, **nº do DFD**, **nº de planejamento**, **código** e **descrição do item**:
 Mesa (Protocolos, Itens Normal e Consolidada — várias células unidas por ":", o formato da busca dos filtros), planilha de
 DFDs (análise, gravado, rastro), itens do DFD, detalhe da Consolidada, Dashboard/consulta pública do PCA, compilação do PCA,
-Catálogo (+ prévia da importação) e Classificações. Discreto: no computador aparece com o mouse na linha; no toque fica
-sempre visível, afastado do valor (tocar no valor abre a linha; no ícone, copia). · ✅ **Excluir DFDs na importação do
+Catálogo (+ prévia da importação) e Classificações. Sempre à vista e discreto (mais forte com o mouse na linha); no toque,
+afastado do valor (tocar no valor abre a linha; no ícone, copia). · ✅ **Excluir DFDs na importação do
 protocolo** (antes de protocolar): "Excluir do protocolo" no banner do DFD e em massa na seleção; o excluído (estado
 "Excluído", cinza, na tabela "DFDs fora do envio") não é gravado nem soma; "Restaurar"/"Restaurar excluídos" desfaz; na
 importação nada é apagado do banco (no reenvio, o gravado de mesmo nº vai para a lista "fora do envio": Excluir ou Manter). Validado ponta a ponta com o PDF real (15 DFDs → excluir 2 = 13 e a somatória menos os dois; protocolar
 com 1 excluído = 14 gravados). · ✅ **Protocolo em um PCA não é excluído** (enviado ou incorporado): a Mesa do PCA não tem a
 lixeira; o servidor recusa (409 enviado — devolva à Mesa principal; 423 incorporado) e também a re-importação que
-substituiria um protocolo de mesmo Id que está em um PCA.
+substituiria um protocolo de mesmo Id que está em um PCA. · ✅ **DFD de protocolo em um PCA não é excluído** (sem lixeira na
+Mesa do PCA; o servidor recusa; o reenvio de protocolo em PCA mantém os gravados) — só o desfazer automático da importação que
+falhou remove o DFD recém-criado pelo próprio usuário (tudo-ou-nada).
 
 ### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
 ✅ O Catálogo ganhou duas visões (Catálogo · Lista de Itens · **Unidades de medida** · **Classificações**), carregadas só

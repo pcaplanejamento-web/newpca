@@ -39,7 +39,7 @@ import {
 } from "@/lib/padronizacao-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
-import { estaTravado, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
+import { estaTravado, motivoNaoExcluirDfd, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { ProtocoloResumo } from "@/lib/protocolo";
@@ -724,19 +724,23 @@ export function DfdsView({
   });
   const acoesDfd = (l: LinhaDfd) => {
     const d = dfdPorId.get(l.key);
+    const noPca = d ? { pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm } : null;
     // DFD de protocolo INCORPORADO a um PCA: travado (sem vincular/excluir — o servidor recusa também).
-    if (!podeEditar || !d || estaTravado({ pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm })) return null;
+    if (!podeEditar || !d || !noPca || estaTravado(noPca)) return null;
     return (
       <div className="flex justify-end gap-1">
         <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
-        <Button
-          variant="ghost"
-          size="xs"
-          aria-label="Excluir DFD"
-          onClick={() => excluirDfd(d.id, d.numero)}
-          icon={<IconTrash className="h-4 w-4" />}
-          style={{ color: "var(--danger)" }}
-        />
+        {/* DFD de protocolo em um PCA (enviado) não é excluído — o servidor recusa também. */}
+        {motivoNaoExcluirDfd(noPca) == null && (
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-label="Excluir DFD"
+            onClick={() => excluirDfd(d.id, d.numero)}
+            icon={<IconTrash className="h-4 w-4" />}
+            style={{ color: "var(--danger)" }}
+          />
+        )}
       </div>
     );
   };

@@ -59,6 +59,7 @@ import { num } from "@/lib/format";
 import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
+import { motivoNaoExcluirDfd } from "@/lib/pca-core";
 import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
@@ -223,6 +224,9 @@ export function ProtocoloUploadForm({
   // EXCLUÍDOS do protocolo pelo usuário na análise (subconjunto de `descartados`): não são gravados nem entram na
   // somatória; nada é apagado (o DFD já cadastrado de mesmo nº, se houver, continua como está). "Restaurar" desfaz.
   const [excluidosDoProtocolo, setExcluidosDoProtocolo] = useState<Set<number>>(new Set());
+  // Espelho p/ a análise em background (closure antiga): o DFD fora do envio não entra na fila do OCR.
+  const descartadosRef = useRef(descartados);
+  descartadosRef.current = descartados;
   // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta) → estado "erro".
   const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
   // Análise em background com progresso REAL (fase, n/N e o DFD atual).
@@ -531,6 +535,7 @@ export function ProtocoloUploadForm({
       setFantasmas(f);
       setDescartados((s) => new Set([...s, ...f]));
       setMantidosExistentes((s) => new Set([...s, ...f]));
+      setExcluidosDoProtocolo((s) => new Set([...s].filter((j) => !f.has(j)))); // agora "Sobrescrito" (não volta no "Restaurar excluídos")
     } catch (e) {
       if (docRef.current !== doc) return;
       setErroExistentes(e instanceof Error ? e.message : "Não foi possível conferir os DFDs já cadastrados.");
@@ -594,31 +599,42 @@ export function ProtocoloUploadForm({
     for (let k = 0; k < paraOcr.length; k++) {
       const { i, dfd } = paraOcr[k];
       if (docRef.current !== doc) return;
-      setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i });
-      if (!ocrTentadoRef.current.has(i)) {
-        ocrTentadoRef.current.add(i);
-        const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
-        if (docRef.current !== doc) return;
-        // Lidas (ou não) — no REENVIO herda agora a validação da equipe do gravado.
-        const local = comOcr(dfd, ocr);
-        anotarHerdados(i, local.herdados);
-        if (local.dfd.assinaturas !== dfd.assinaturas) {
-          lerOcrNoArquivo(i, ocr);
-          setParsed((m) => {
-            const cur = m.get(i);
-            return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
-          });
-          // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
-          refinarUnidade(i, local.dfd);
-        }
+      // Fora do envio (excluído/descartado): não lê agora — "Restaurar" lê depois.
+      if (descartadosRef.current.has(i)) {
+        tirarDaEsperaOcr(i);
+        continue;
       }
-      setOcrPendente((s) => {
-        const n = new Set(s);
-        n.delete(i);
-        return n;
-      });
+      // Já lido (ou em leitura) por outro caminho (abrir o DFD / restaurar): quem lê tira da espera.
+      if (ocrTentadoRef.current.has(i)) continue;
+      setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i });
+      ocrTentadoRef.current.add(i);
+      const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
+      if (docRef.current !== doc) return;
+      // Lidas (ou não) — no REENVIO herda agora a validação da equipe do gravado.
+      const local = comOcr(dfd, ocr);
+      anotarHerdados(i, local.herdados);
+      if (local.dfd.assinaturas !== dfd.assinaturas) {
+        lerOcrNoArquivo(i, ocr);
+        setParsed((m) => {
+          const cur = m.get(i);
+          return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
+        });
+        // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
+        refinarUnidade(i, local.dfd);
+      }
+      tirarDaEsperaOcr(i);
     }
     if (docRef.current === doc) setAnalise(null);
+  }
+
+  /** O DFD deixa de esperar a leitura da assinatura por OCR. */
+  function tirarDaEsperaOcr(i: number) {
+    setOcrPendente((s) => {
+      if (!s.has(i)) return s;
+      const n = new Set(s);
+      n.delete(i);
+      return n;
+    });
   }
 
   /** Prevê a UNIDADE do DFD pela ASSINATURA (lógica única `preverUnidadeDoDfd`, todas as formas —
@@ -729,7 +745,12 @@ export function ProtocoloUploadForm({
       return s;
     });
     setFantasmas(semEle);
-    setExcluidosDoProtocolo(semEle);
+    // Ele volta; os que conflitam com ele ficam "Descartado" (a escolha do duplicado) — não voltam no "Restaurar excluídos".
+    setExcluidosDoProtocolo((prev) => {
+      const s = semEle(prev);
+      for (const j of outros) s.delete(j);
+      return s;
+    });
     setSel(new Set());
   };
   /** Reincluir um DFD descartado ou excluído (o grupo de duplicados volta a "pendente"). */
@@ -743,7 +764,17 @@ export function ProtocoloUploadForm({
     setMantidosExistentes(tirar);
     setFantasmas(tirar); // o DFD do rastro volta a este processo (a Situação passa a "Move")
     setExcluidosDoProtocolo(tirar);
+    lerOcrAoVoltar([idx]);
   };
+  /** DFDs que VOLTAM ao envio (restaurar): a assinatura achatada que a análise pulou é lida agora (esperando, como na análise). */
+  function lerOcrAoVoltar(idxs: number[]) {
+    for (const i of idxs) {
+      const d = parsedRef.current.get(i);
+      if (!d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(i)) continue;
+      setOcrPendente((s) => new Set(s).add(i));
+      void mesclarOcrSePreciso(i, d).finally(() => tirarDaEsperaOcr(i));
+    }
+  }
   /** Este DFD substitui/move um já CADASTRADO (conflito com o banco)? */
   const conflitaComExistente = (idx: number): boolean => {
     const n = index?.dfds[idx]?.numero;
@@ -760,6 +791,7 @@ export function ProtocoloUploadForm({
     };
     setDescartados(com);
     setMantidosExistentes(com);
+    setExcluidosDoProtocolo((prev) => new Set([...prev].filter((j) => !copias.includes(j)))); // agora "mantido o existente"
     setSel(new Set());
   };
   /** "Excluir do protocolo" — o DFD aberto (rodapé do banner) ou os SELECIONADOS: fica FORA do envio (não é gravado nem
@@ -777,8 +809,9 @@ export function ProtocoloUploadForm({
     };
     setDescartados(com(novos));
     setExcluidosDoProtocolo(com(novos));
-    // O gravado do reenvio NÃO: o destino dele é a lista "fora do envio" (Excluir/Manter) — senão contaria duas vezes.
-    setMantidosExistentes(com(novos.filter((i) => conflitaComExistente(i) && !gravadoDe(index?.dfds[i]?.numero))));
+    // Todos (menos o gravado do reenvio — o destino dele é a lista "fora do envio", senão contaria duas vezes): a consulta
+    // dos já cadastrados pode chegar DEPOIS do clique, e a somatória só conta o existente DESTE processo (`existentesMantidos`).
+    setMantidosExistentes(com(novos.filter((i) => !gravadoDe(index?.dfds[i]?.numero))));
     setSel(new Set());
     toast.info(
       novos.length === 1
@@ -792,6 +825,7 @@ export function ProtocoloUploadForm({
     setDescartados(tirar);
     setMantidosExistentes(tirar);
     setExcluidosDoProtocolo(new Set());
+    lerOcrAoVoltar([...excluidosDoProtocolo]);
   };
 
   // ---- Conferência por LINHA — a MESMA do protocolo gravado (`avaliarLinhaDfd`). Cache por objeto
@@ -950,9 +984,20 @@ export function ProtocoloUploadForm({
   // protocolo" tira o DFD do processo também no reenvio) — são excluídos ao sobrescrever, salvo os que o usuário MANTÉM
   // (esses continuam no processo → entram na somatória/contagem da capa).
   const numerosPdf = new Set((index?.dfds ?? []).filter((_, i) => !excluidosDoProtocolo.has(i)).map((d) => chaveDfd(d.numero)));
+  // Protocolo em um PCA (enviado): DFD não é excluído — os gravados fora do envio ficam MANTIDOS (o servidor recusaria).
+  const semExcluirGravados = reenvio
+    ? motivoNaoExcluirDfd({ pcaId: reenvio.protocolo.pcaId, pcaIncorporadoEm: reenvio.protocolo.pcaIncorporadoEm }, reenvio.protocolo.pcaNome)
+    : null;
   const removidos = (reenvio?.dfds ?? [])
     .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
-    .map((g) => ({ id: g.id, numero: g.numero, planejamento: g.planejamento, valorTotal: g.valorTotal, totalItens: g.totalItens, excluir: !removidosManter.has(g.id) }));
+    .map((g) => ({
+      id: g.id,
+      numero: g.numero,
+      planejamento: g.planejamento,
+      valorTotal: g.valorTotal,
+      totalItens: g.totalItens,
+      excluir: !semExcluirGravados && !removidosManter.has(g.id),
+    }));
   const removidosMantidos = removidos.filter((r) => !r.excluir);
   // REENVIO: o RASTRO dos DFDs deste processo sobrescritos por outro protocolo segue na conciliação (a capa foi
   // emitida com eles, pelo valor da época) — menos os que o PDF traz de volta para cá (esses entram como ativos).
@@ -1044,11 +1089,13 @@ export function ProtocoloUploadForm({
     const d = parsed.get(i);
     return !!d && !!confDe(i, d).falhou;
   }).length;
+  // Leitura da assinatura por OCR pendente em algum DFD que VAI no envio (o fora do envio não segura a protocolação).
+  const ocrPendenteNoEnvio = [...ocrPendente].some((i) => !descartados.has(i));
   const podeProtocolar =
     numero.trim().length > 0 &&
     !importando &&
     !analisando &&
-    ocrPendente.size === 0 &&
+    !ocrPendenteNoEnvio &&
     catPendentes === 0 &&
     !bloqueadoPorRegra &&
     !existentesPendentes;
@@ -1152,6 +1199,7 @@ export function ProtocoloUploadForm({
       itens: d ? d.itens.length : null,
       valor: d ? (d.valorTotal ?? 0) : null,
       descartado: descartados.has(i),
+      excluido: excluidosDoProtocolo.has(i),
     };
   };
   // Comparação do aberto × cada duplicado — cache por PAR de DFDs (objetos do cache de parse): recalculada só quando
@@ -2083,6 +2131,7 @@ export function ProtocoloUploadForm({
                 contagem={contagemReenvio}
                 capa={capaDiffs}
                 removidos={removidos}
+                excluirBloqueado={semExcluirGravados}
                 bloqueado={importando}
                 onRemovidoChange={(id, excluir) =>
                   setRemovidosManter((s) => {
