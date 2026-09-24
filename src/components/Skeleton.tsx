@@ -17,3 +17,12 @@ export function SkeletonLinhas({ linhas = 6 }: { linhas?: number }) {
     </div>
   );
 }
+
+/** Moldura de CARTÃO com linhas-skeleton — a espera de uma seção/visão inteira (a mesma moldura do conteúdo). */
+export function SkeletonCartao({ linhas = 6 }: { linhas?: number }) {
+  return (
+    <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <SkeletonLinhas linhas={linhas} />
+    </div>
+  );
+}

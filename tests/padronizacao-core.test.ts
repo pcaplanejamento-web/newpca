@@ -76,6 +76,33 @@ describe("resolverUnidades / comparadorUnidades", () => {
     assert.equal(sugerir("XPTO"), null);
     assert.equal(sugerir(""), null);
   });
+  it("a sugestão vale por QUALQUER escrita da grafia, inclusive pela chave (U.N.D = UND = UNIDADE)", () => {
+    const so = [un(1, "UN", "UNIDADE")];
+    const { sugerir } = comparadorUnidades(so);
+    assert.equal(sugerir("U.N.D")?.id, 1, "a chave UND cai no canônico UNIDADE");
+    assert.equal(sugerir(["U N D", "UND"])?.id, 1);
+    // A linha {UND ×1, U.N.D ×3}: a escrita mais usada é "U.N.D" — continua sugestão (antes dependia da escrita).
+    const { linhas } = compararUnidades(
+      [
+        { texto: "UND", dfd: 1, catalogo: 0 },
+        { texto: "U.N.D", dfd: 3, catalogo: 0 },
+      ],
+      so,
+    );
+    assert.equal(linhas.length, 1);
+    assert.equal(linhas[0].texto, "U.N.D");
+    assert.equal(linhas[0].estado, "sugestao");
+    assert.equal(linhas[0].sugestaoId, 1);
+  });
+  it("a regra do sistema e o plural SOMAM candidatas: duas unidades possíveis = nenhuma sugestão", () => {
+    const { sugerir } = comparadorUnidades([un(1, "UN", "UNIDADE"), un(2, "UND", "UNIDADE AVULSA")]);
+    // "UNIDADES": o plural aponta a 1, mas a regra do sistema põe UNIDADES em UNIDADE — onde caem as DUAS.
+    assert.equal(sugerir("UNIDADES"), null);
+    // "UNIDADE AVULSAS": só o plural do nome da 2 (a regra do sistema não a conhece) ⇒ a 2.
+    assert.equal(sugerir("UNIDADE AVULSAS")?.id, 2);
+    // A grafia CADASTRADA (a chave manda) nunca vira sugestão.
+    assert.equal(sugerir("U.N."), null);
+  });
   it("não adivinha entre duas unidades que caem no mesmo canônico", () => {
     const { sugerir } = comparadorUnidades([un(1, "UN", "UNIDADE"), un(2, "UND", "UNIDADE AVULSA")]);
     // "UNID" = UNIDADE pela regra do sistema, mas "UND" (sigla da 2ª) também — ambíguo ⇒ sem sugestão.
@@ -152,6 +179,35 @@ describe("propostaUnidade", () => {
     assert.ok(und);
     assert.deepEqual(propostaUnidade(und, linhas), { sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."] });
   });
+  it("o grupo da proposta nunca inclui grafias JÁ cadastradas (canônico ambíguo)", () => {
+    // UN/UNIDADE e UND/UNIDADE AVULSA caem no canônico UNIDADE ⇒ "UNID" não tem sugestão (ambíguo) e fica não cadastrada.
+    const { linhas } = compararUnidades(
+      [
+        { texto: "UNID", dfd: 5, catalogo: 0 },
+        { texto: "UN", dfd: 9, catalogo: 0 },
+        { texto: "UND", dfd: 4, catalogo: 0 },
+      ],
+      [un(1, "UN", "UNIDADE"), un(2, "UND", "UNIDADE AVULSA")],
+    );
+    const unid = linhas.find((l) => l.chave === "UNID");
+    assert.ok(unid);
+    assert.equal(unid.estado, "nao_cadastrada");
+    const p = propostaUnidade(unid, linhas);
+    assert.deepEqual(p, { sigla: "UNID", nome: "UNIDADE", sinonimos: [] }, "UN e UND (cadastradas) ficam fora do grupo");
+  });
+  it("o nome canônico sai da CHAVE quando a escrita tem pontuação no meio (U.N.D → UNIDADE)", () => {
+    const { linhas } = compararUnidades([{ texto: "U.N.D", dfd: 2, catalogo: 0 }], []);
+    assert.deepEqual(propostaUnidade(linhas[0], linhas), { sigla: "U.N.D", nome: "UNIDADE", sinonimos: [] });
+  });
+  it("grafia longa demais: sigla/nome cortados e a grafia inteira fica como sinônimo (a unidade a cobre)", () => {
+    const longa = "UNIDADE COMERCIAL EMBALADA EM CAIXA COM DOZE FRASCOS DE QUINHENTOS MILILITROS CADA";
+    const { linhas } = compararUnidades([{ texto: longa, dfd: 1, catalogo: 0 }], []);
+    const p = propostaUnidade(linhas[0], linhas);
+    assert.equal(p.sigla.length, 20);
+    assert.equal(p.nome.length, 60);
+    assert.deepEqual(p.sinonimos, [longa]);
+    assert.equal(resolverUnidades([un(1, p.sigla, p.nome, p.sinonimos)])(longa)?.id, 1);
+  });
   it("grafia sem regra do sistema: ela mesma, em maiúsculas", () => {
     const { linhas } = compararUnidades([{ texto: "Bombona", dfd: 1, catalogo: 0 }], []);
     assert.deepEqual(propostaUnidade(linhas[0], linhas), { sigla: "BOMBONA", nome: "BOMBONA", sinonimos: [] });
@@ -212,12 +268,28 @@ describe("criarClassificador", () => {
     assert.equal(nome("ARROZ TIPO 1"), null, "AR (curta) não casa ARROZ");
     assert.equal(nome("AR-CONDICIONADO SPLIT 12.000 BTUS"), "MATERIAL PERMANENTE");
   });
+  it("palavra-chave CURTA sozinha: só a palavra inteira ou o plural (AR ≠ ARROZ; KIT = KITS; GÁS = GASES ≠ GASOLINA)", () => {
+    const c = criarClassificador([cl(1, "CLIMA", ["Ar"]), cl(2, "KITS", ["Kit"]), cl(3, "GAS", ["Gás"]), cl(4, "PNEU", ["Pneu"])]);
+    const n = (d: string) => c(d)?.classificacao.nome ?? null;
+    assert.equal(n("ARROZ TIPO 1"), null);
+    assert.equal(n("ARMÁRIO DE AÇO"), null);
+    assert.equal(n("AR PARA COMPRESSOR"), "CLIMA");
+    assert.equal(n("KITS ESCOLARES"), "KITS");
+    assert.equal(n("KITCHENETTE"), null);
+    assert.equal(n("GASES MEDICINAIS"), "GAS");
+    assert.equal(n("GASOLINA COMUM"), null);
+    // Fronteira: 4 letras já casam o início (PNEU acha PNEUS e PNEUMÁTICO).
+    assert.equal(n("PNEUS ARO 15"), "PNEU");
+    assert.equal(n("PNEUMÁTICO"), "PNEU");
+  });
   it("palavra curta no meio da palavra-chave também é inteira (DE ≠ DESCARTÁVEL)", () => {
     assert.equal(nome("MATERIAL DESCARTÁVEL DE LIMPEZA"), "MATERIAL DE CONSUMO");
   });
   it("na mesma posição vence a mais LONGA (mais específica)", () => {
     assert.equal(nome("MATERIAL DE LIMPEZA — DETERGENTE"), "LIMPEZA");
     assert.equal(nome("PRESTAÇÃO DE SERVIÇOS GRÁFICOS"), "SERVIÇO");
+    // A palavra-chave de várias palavras venceu (as demais palavras casam pelo início: SERVIÇO acha SERVIÇOS).
+    assert.equal(classificar("PRESTAÇÃO DE SERVIÇOS GRÁFICOS")?.termo, "Prestação de serviço");
   });
   it("mesma posição e mesmo tamanho: vale a ordem do cadastro", () => {
     const c = criarClassificador([cl(1, "B", ["Kit"], 2), cl(2, "A", ["Kit escolar"], 5), cl(3, "C", ["Kit"], 1)]);
@@ -235,6 +307,7 @@ describe("criarClassificador", () => {
     assert.equal(r?.por, "unidade");
     assert.equal(r?.termo, "SV");
     assert.equal(classificar("LOCAÇÃO DE VEÍCULO", "CX"), null, "a unidade sem classificação não classifica");
+    assert.equal(classificar("LOCAÇÃO DE VEÍCULO", "SVS"), null, "só a unidade CADASTRADA indica (o plural sugerido não)");
     assert.equal(classificar("", "SV")?.por, "unidade");
   });
   it("sem palavra-chave nem unidade que indique: não classificado", () => {

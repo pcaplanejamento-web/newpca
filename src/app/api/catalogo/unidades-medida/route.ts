@@ -10,12 +10,18 @@ export const dynamic = "force-dynamic";
 /**
  * Catálogo → Unidades de medida: as unidades CADASTRADAS, as classificações (a que cada unidade indica) e o USO de cada
  * grafia de unidade nos itens (DFDs no escopo da unidade ativa — "Geral" = todos — e o catálogo) — a comparação.
+ * `?uso=0` = só o cadastro (a tela recarrega depois de gravar: o uso dos itens não muda com o cadastro).
  */
-export async function GET() {
+export async function GET(req: Request) {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
-  const rep = await getReparticaoFiltro(g.u);
-  const [unidades, classificacoes, uso] = await Promise.all([listarUnidadesMedida(), listarClassificacoes(), usoDasUnidades(rep?.id)]);
+  const comUso = new URL(req.url).searchParams.get("uso") !== "0";
+  const rep = comUso ? await getReparticaoFiltro(g.u) : null;
+  const [unidades, classificacoes, uso] = await Promise.all([
+    listarUnidadesMedida(),
+    listarClassificacoes(),
+    comUso ? usoDasUnidades(rep?.id) : Promise.resolve(undefined),
+  ]);
   return ok({ unidades, classificacoes, uso });
 }
 

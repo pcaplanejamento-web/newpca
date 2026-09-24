@@ -34,7 +34,8 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   no banner do DFD), registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link
   para o protocolo onde ele está agora.
 - **Padronização (Catálogo)**: cadastro de **Unidades de medida** (sigla, nome, sinônimos) com a **comparação de todas as
-  unidades dos itens** (DFDs e catálogo) — cadastrada, sugestão ou não cadastrada, com aceitar/cadastrar em um toque — e de
+  unidades dos itens** (DFDs e catálogo) — cadastrada, sugestão ou não cadastrada; escolher a unidade na linha e confirmar
+  em "Adicionar", ou cadastrar a partir da proposta — e de
   **Classificações** (nome, cor, palavras-chave) com a **classificação automática de todos os itens** pela descrição (e pela
   unidade), prévia ao vivo antes de gravar. Na Mesa → Itens aparecem as colunas **Classificação** e **Unid. cadastrada**.
 - **PCA no cabeçalho**: um seletor à esquerda do topo escolhe o PCA e filtra a Mesa, os cards do PCA e o Orçamento

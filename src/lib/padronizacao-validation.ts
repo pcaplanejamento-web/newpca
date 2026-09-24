@@ -37,7 +37,7 @@ export const classificacaoItemSchema = z.object({
     .string()
     .trim()
     .min(1, "Informe o nome da classificação.")
-    .max(60, "O nome tem no máximo 60 caracteres.")
+    .max(L.nome, `O nome tem no máximo ${L.nome} caracteres.`)
     .refine((s) => chavePalavra(s) !== "", "O nome precisa ter letras ou números."),
   cor: z.string().trim().regex(HEX_COR, "Cor inválida (use #RRGGBB)."),
   palavras: z
@@ -53,9 +53,18 @@ export const sinonimosUnidadesSchema = z.object({
     .array(
       z.object({
         unidadeId: z.number().int().positive(),
-        texto: z.string().trim().min(1, "Grafia vazia.").max(L.grafia),
+        texto: z.string().trim().min(1, "Grafia vazia.").max(L.grafia, `A grafia tem no máximo ${L.grafia} caracteres.`),
       }),
     )
     .min(1, "Nada a adicionar.")
-    .max(200, "No máximo 200 por vez."),
+    .max(L.lote, `No máximo ${L.lote} por vez.`),
+});
+
+/** Nova ordem de um cadastro da padronização (índice = posição) — com teto (a lista inteira vira um lote de UPDATEs). */
+export const ordemPadronizacaoSchema = z.object({
+  ids: z
+    .array(z.number().int().positive())
+    .min(1, "Lista vazia.")
+    .max(L.ordem, `No máximo ${L.ordem} por vez.`)
+    .refine((ids) => new Set(ids).size === ids.length, "Ids repetidos."),
 });

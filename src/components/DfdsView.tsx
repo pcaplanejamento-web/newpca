@@ -35,6 +35,7 @@ import {
   type Padronizacao,
   type ResultadoClassificacao,
   resolverUnidades,
+  type UnidadeMedida,
 } from "@/lib/padronizacao-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
@@ -182,7 +183,6 @@ export function DfdsView({
   pessoas = [],
   outrasPessoas = [],
   situacoes = [],
-  padronizacao,
   usuarioId = null,
   filtroInicial = FILTRO_MESA_TODOS,
   pcaFiltro = null,
@@ -204,9 +204,6 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
-  /** Catálogo → Unidades de medida | Classificações: a unidade CADASTRADA de cada item e a classificação AUTOMÁTICA
-   * (visão Itens — as colunas só existem com o cadastro feito). */
-  padronizacao?: Padronizacao;
   /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
   filtroInicial?: FiltroMesa;
   /** O PCA do CABEÇALHO que filtra a Mesa principal (as listas já chegam filtradas — e os itens, lazy, vêm pelo MESMO
@@ -300,6 +297,9 @@ export function DfdsView({
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
   const [carregandoItens, setCarregandoItens] = useState(false);
+  // Catálogo → Unidades de medida | Classificações: o cadastro vem JUNTO com os itens (só com a visão Itens aberta) — a
+  // unidade CADASTRADA de cada item e a classificação AUTOMÁTICA (as colunas só existem com o cadastro feito).
+  const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
   useEffect(() => {
     setItens(null);
@@ -313,9 +313,11 @@ export function DfdsView({
     const ac = new AbortController();
     setCarregandoItens(true);
     fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
-      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[] }>)
+      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null }>)
       .then((j) => {
-        if (!ac.signal.aborted) setItens(j.ok ? (j.itens ?? []) : []);
+        if (ac.signal.aborted) return;
+        setItens(j.ok ? (j.itens ?? []) : []);
+        if (j.ok) setPadronizacao(j.padronizacao ?? null);
       })
       .catch(() => {
         if (!ac.signal.aborted) setItens([]);
@@ -981,8 +983,23 @@ export function DfdsView({
 
   // PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações): a unidade CADASTRADA que a unidade do item representa e
   // a classificação AUTOMÁTICA pela descrição — cada uma só existe com o seu cadastro feito (sem ele, nada muda). A
-  // classificação é memorizada por item (colunas, filtros e a Consolidada leem a mesma lista).
-  const unidadeDoItem = useMemo(() => (padronizacao?.unidades.length ? resolverUnidades(padronizacao.unidades) : null), [padronizacao]);
+  // unidade é memorizada pela GRAFIA (poucas distintas entre milhares de itens) e a classificação por item (colunas,
+  // filtros e a Consolidada leem a mesma lista).
+  const unidadeDoItem = useMemo(() => {
+    if (!padronizacao?.unidades.length) return null;
+    const resolver = resolverUnidades(padronizacao.unidades);
+    const memo = new Map<string, { unidade: UnidadeMedida | null; rotulo: string }>();
+    return (texto: string | null) => {
+      const t = texto ?? "";
+      let v = memo.get(t);
+      if (!v) {
+        const unidade = resolver(t);
+        v = { unidade, rotulo: chaveUnidade(t) ? (unidade?.sigla ?? NAO_CADASTRADA) : "—" };
+        memo.set(t, v);
+      }
+      return v;
+    };
+  }, [padronizacao]);
   const classeDoItem = useMemo(() => {
     if (!padronizacao?.classificacoes.length) return null;
     const classificar = criarClassificador(padronizacao.classificacoes, padronizacao.unidades);
@@ -1024,7 +1041,7 @@ export function DfdsView({
       descricao: { valor: (r) => r.descricao ?? "" },
       unidade: { valor: (r) => r.unidade ?? "" },
       // Só com o cadastro (senão as colunas nem existem): a sigla da unidade cadastrada e a classificação automática.
-      unidCad: { valor: (r) => (chaveUnidade(r.unidade) ? (unidadeDoItem?.(r.unidade)?.sigla ?? NAO_CADASTRADA) : "—") },
+      unidCad: { valor: (r) => unidadeDoItem?.(r.unidade).rotulo ?? "—" },
       classificacao: { valor: (r) => classeDoItem?.(r)?.classificacao.nome ?? NAO_CLASSIFICADO },
       // Só na Consolidada: o código NORMALIZADO (o da linha) e o nº do item no PCA (a coluna da Mesa do PCA).
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
@@ -1243,7 +1260,7 @@ export function DfdsView({
             header: "Unid. cadastrada",
             nowrap: true,
             value: atributoItem.unidCad.valor,
-            render: (r: ItemDfdRow) => <CelulaUnidadeCadastrada texto={r.unidade} unidade={unidadeDoItem(r.unidade)} />,
+            render: (r: ItemDfdRow) => <CelulaUnidadeCadastrada texto={r.unidade} unidade={unidadeDoItem(r.unidade).unidade} />,
           },
         ]
       : []),

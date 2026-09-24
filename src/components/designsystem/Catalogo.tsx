@@ -42,6 +42,7 @@ import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPon
 import { AcoesCadastro } from "@/components/AcoesCadastro";
 import { ClassificacaoDosItens, EditorClassificacao, type RascunhoClassificacao } from "@/components/ClassificacoesView";
 import { ComparacaoUnidades, EditorUnidadeMedida, type RascunhoUnidade } from "@/components/UnidadesMedidaView";
+import { ErroCarga } from "@/components/ErroCarga";
 import {
   type ClassificacaoItem,
   classificarDescricoes,
@@ -68,7 +69,7 @@ import { brl } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
-import { Skeleton, SkeletonLinhas } from "@/components/Skeleton";
+import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import {
@@ -758,11 +759,22 @@ const CLASSIFICADOR_DEMO = criarClassificador(CLASSIFICACOES_DEMO, UNIDADES_DEMO
 const CLASSIFICADAS_DEMO = classificarDescricoes(DESCRICOES_DEMO, CLASSIFICADOR_DEMO);
 
 /** A PADRONIZAÇÃO: as células da Mesa → Itens, as ações de linha do cadastro, a comparação das unidades, a
- * classificação dos itens e os dois editores (com a prévia ao vivo). */
+ * classificação dos itens e os dois editores (com a prévia ao vivo; `somenteLeitura` = a consulta). */
 function PadronizacaoDemo() {
   const [rascUnid, setRascUnid] = useState<RascunhoUnidade | null>(null);
   const [rascClass, setRascClass] = useState<RascunhoClassificacao | null>(null);
+  const [consulta, setConsulta] = useState(false);
   const linhas = COMPARACAO_DEMO.linhas;
+  const abrirUnid = (r: RascunhoUnidade, leitura = false) => {
+    setConsulta(leitura);
+    setRascUnid(r);
+  };
+  const abrirClass = (r: RascunhoClassificacao, leitura = false) => {
+    setConsulta(leitura);
+    setRascClass(r);
+  };
+  const unidDemo: RascunhoUnidade = { id: 1, sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."], classificacaoId: null };
+  const classDemo: RascunhoClassificacao = { id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"] };
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-border bg-surface p-[var(--pad-card)]">
@@ -783,41 +795,55 @@ function PadronizacaoDemo() {
           unidades={UNIDADES_DEMO}
           podeEditar
           onAdicionar={(itens) => toast.success(`${itens.length} grafia(s) adicionada(s) (exemplo).`)}
-          onCadastrar={(l) => setRascUnid({ id: null, ...propostaUnidade(l, linhas), classificacaoId: null })}
+          onCadastrar={(l) => abrirUnid({ id: null, ...propostaUnidade(l, linhas), classificacaoId: null })}
         />
       </div>
       <div className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
         <ClassificacaoDosItens linhas={CLASSIFICADAS_DEMO} />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={() => setRascUnid({ id: 1, sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."], classificacaoId: null })}>
+        <Button variant="secondary" onClick={() => abrirUnid(unidDemo)}>
           Editor de unidade de medida
         </Button>
-        <Button variant="secondary" onClick={() => setRascClass({ id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"] })}>
+        <Button variant="secondary" onClick={() => abrirClass(classDemo)}>
           Editor de classificação
         </Button>
+        <Button variant="ghost" onClick={() => abrirUnid(unidDemo, true)}>
+          Unidade (consulta)
+        </Button>
+        <Button variant="ghost" onClick={() => abrirClass(classDemo, true)}>
+          Classificação (consulta)
+        </Button>
       </div>
+      <ErroCarga msg="Erro ao carregar as classificações." onTentar={() => toast.info("Tentar de novo")} />
+      <ErroCarga kind="warn" msg="A lista pode estar desatualizada — Sem conexão com o servidor." onTentar={() => toast.info("Tentar de novo")} />
       {rascUnid && (
         <EditorUnidadeMedida
-          rascunho={rascUnid}
+          inicial={rascUnid}
           unidades={UNIDADES_DEMO}
           classificacoes={CLASSIFICACOES_DEMO}
           linhas={linhas}
           salvando={false}
-          onChange={setRascUnid}
+          somenteLeitura={consulta}
           onFechar={() => setRascUnid(null)}
-          onSalvar={() => setRascUnid(null)}
+          onSalvar={(r) => {
+            toast.success(`Unidade ${r.sigla} gravada (exemplo).`);
+            setRascUnid(null);
+          }}
         />
       )}
       {rascClass && (
         <EditorClassificacao
-          rascunho={rascClass}
+          inicial={rascClass}
           cadastro={{ unidades: UNIDADES_DEMO, classificacoes: CLASSIFICACOES_DEMO }}
           linhas={CLASSIFICADAS_DEMO}
           salvando={false}
-          onChange={setRascClass}
+          somenteLeitura={consulta}
           onFechar={() => setRascClass(null)}
-          onSalvar={() => setRascClass(null)}
+          onSalvar={(r) => {
+            toast.success(`Classificação ${r.nome} gravada (exemplo).`);
+            setRascClass(null);
+          }}
         />
       )}
     </div>
@@ -1834,6 +1860,20 @@ export function Catalogo() {
           <FilterChip label="Assunto" />
           <FilterChip label="Órgão" active />
         </div>
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs text-muted">Com rótulo CURTO nos telefones (`curto` — o inteiro segue como nome acessível):</p>
+          <Segmented
+            value="unidades"
+            onChange={() => {}}
+            ariaLabel="Exemplo de rótulos curtos"
+            options={[
+              { value: "catalogo", label: "Catálogo" },
+              { value: "lista", label: "Lista de Itens", curto: "Itens" },
+              { value: "unidades", label: "Unidades de medida", curto: "Unid. medida" },
+              { value: "classificacoes", label: "Classificações", curto: "Classif." },
+            ]}
+          />
+        </div>
       </Secao>
 
       <Secao titulo="Filtro de cabeçalho & Período">
@@ -1910,6 +1950,9 @@ export function Catalogo() {
             <Skeleton className="h-8 w-full rounded-control" />
             <div className="mt-3">
               <SkeletonLinhas linhas={3} />
+            </div>
+            <div className="mt-3">
+              <SkeletonCartao linhas={2} />
             </div>
           </div>
           <div className="flex items-center justify-center gap-3 rounded-card border border-border bg-surface p-4">
@@ -2591,7 +2634,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Padronização (Catálogo → Unidades de medida | Classificações) — comparação das unidades dos itens, classificação automática, editores e as células da Mesa → Itens">
+      <Secao titulo="Padronização (Catálogo → Unidades de medida | Classificações) — comparação das unidades dos itens, classificação automática, editores (edição e consulta), ErroCarga (falha de carga + Tentar de novo) e as células da Mesa → Itens">
         <PadronizacaoDemo />
       </Secao>
 

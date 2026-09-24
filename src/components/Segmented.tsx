@@ -7,7 +7,8 @@ import type { ReactNode } from "react";
 // ALTURA PADRÃO dos controles: o trilho inteiro mede `--h-control-sm` no desktop (a MESMA do `SeletorFiltro`, do
 // `Button size="sm"` e da linha das tabelas compactas — segue a densidade do ADM) e 44px no celular, onde a área de toque
 // de cada item cobre também o respiro do trilho (44px). O contorno é um anel INTERNO (não ocupa altura). Um item
-// SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) é quadrado, na mesma altura dos de texto.
+// SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) é quadrado, na mesma altura dos de texto. `curto` = o
+// rótulo nos telefones (abaixo de `sm`) quando o inteiro não cabe — o inteiro segue como nome acessível.
 export function Segmented<T extends string>({
   value,
   options,
@@ -17,7 +18,7 @@ export function Segmented<T extends string>({
   ariaLabel,
 }: {
   value: T;
-  options: { value: T; label: string; icone?: ReactNode; soIcone?: boolean }[];
+  options: { value: T; label: string; icone?: ReactNode; soIcone?: boolean; curto?: string }[];
   onChange: (v: T) => void;
   className?: string;
   /** Desabilita a interação (ex.: banner de edição travado). */
@@ -40,7 +41,7 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            aria-label={o.soIcone ? o.label : undefined}
+            aria-label={o.soIcone || o.curto ? o.label : undefined}
             title={o.soIcone ? o.label : undefined}
             disabled={disabled}
             onClick={() => onChange(o.value)}
@@ -49,7 +50,15 @@ export function Segmented<T extends string>({
             } ${active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text-2"}`}
           >
             {o.icone}
-            {!o.soIcone && o.label}
+            {!o.soIcone &&
+              (o.curto ? (
+                <>
+                  <span className="sm:hidden">{o.curto}</span>
+                  <span className="hidden sm:inline">{o.label}</span>
+                </>
+              ) : (
+                o.label
+              ))}
           </button>
         );
       })}

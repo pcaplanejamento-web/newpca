@@ -31,15 +31,22 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
 quando abertas. **Unidades de medida:** o cadastro (sigla, nome, sinônimos — as outras grafias aceitas — e a classificação
 que a unidade indica; ↑/↓ = ordem) e a **comparação de TODAS as unidades dos itens** (DFDs e catálogo) com ele: cada grafia
 ("Und." = "UND" = "und") aparece uma vez com quantos itens a usam e fica **Cadastrada**, **Sugestão** (a regra do sistema ou o
-plural apontam uma unidade: "Adicionar a UN", uma a uma ou todas) ou **Não cadastrada** ("Adicionar a…" uma unidade, ou
-"Cadastrar" com a proposta pronta a partir das grafias dos itens). **Classificações:** o cadastro (nome, cor, palavras-chave)
+plural apontam UMA unidade, por qualquer escrita da grafia) ou **Não cadastrada**: escolhe-se a unidade na linha (a sugestão
+já vem escolhida) e confirma-se em **"Adicionar"** — uma a uma ou "Adicionar N sugestões" —, ou "Cadastrar" com a proposta
+pronta a partir das grafias dos itens. **Classificações:** o cadastro (nome, cor, palavras-chave)
 e a **classificação automática de todos os itens** — vence a palavra-chave que aparece primeiro na descrição, depois a mais
 longa, depois a ordem; sem palavra-chave, vale a classificação da unidade de medida; sem nenhuma, "Não classificado". A
 tabela "Classificação dos itens" mostra cada descrição com a classificação e o motivo (filtrar "Não classificado" acha as
 palavras-chave que faltam) e o editor mostra **ao vivo**, antes de gravar, quantos itens a classificação passa a ter. Uma
 grafia pertence a uma unidade só e uma palavra-chave a uma classificação só (o sistema avisa e não grava). Na **Mesa →
 Itens** (Normal, Consolidada e o detalhe) entram as colunas **Classificação** e **Unid. cadastrada** — só quando o cadastro
-existe (sem ele, nada muda). Migração `0038` aditiva (tabelas novas e vazias); auditoria de toda gravação.
+existe (sem ele, nada muda; o cadastro chega junto com os itens, só com a visão Itens aberta). Migração `0038` aditiva
+(tabelas novas e vazias); auditoria de toda gravação.
+✅ **Auditoria da entrega:** uma gravação por vez (clique duplo não duplica), falha parcial avisada com as duas contas (os
+sinônimos em lote são gravados só se a unidade não mudou no meio — nada sobrescreve outra pessoa), recarga só do cadastro
+depois de gravar, aviso "lista desatualizada" quando a recarga falha, itens que não carregam avisados (sem "…" eterno),
+editores com rascunho próprio (digitar não pesa a tela), consulta para quem não edita (tocar na linha abre os dados), detalhe
+do item ao tocar (descrição inteira no celular) e as abas do Catálogo com rótulos curtos em telas de 360px.
 
 ### Mesa → Itens: nº de planejamento e tipo do DFD em cada item — entregue
 ✅ A tabela de itens da Mesa (visões **Normal** e **Consolidada**, na Mesa principal e na do PCA) e o **detalhe da

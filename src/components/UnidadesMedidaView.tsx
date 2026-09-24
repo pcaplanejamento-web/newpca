@@ -23,83 +23,71 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaLista, MaisN } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
+import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { CampoLista, SelectField, TextField } from "./Field";
 import { selectCls } from "./formStyles";
-import { IconCheck, IconPlus, IconRefresh } from "./icons";
+import { IconCheck, IconPlus } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonLinhas } from "./Skeleton";
+import { SkeletonCartao } from "./Skeleton";
 import { StatMini } from "./StatMini";
-import { toast } from "./Toast";
+import { useGravacaoCadastro } from "./useGravacaoCadastro";
 
-type Dados = { unidades: UnidadeMedida[]; classificacoes: ClassificacaoItem[]; uso: UsoUnidade[] };
+type Cadastro = { unidades: UnidadeMedida[]; classificacoes: ClassificacaoItem[] };
+type Dados = Cadastro & { uso: UsoUnidade[] };
 /** O que o editor de unidade edita (`id` = a editada; `null` = nova). */
 export type RascunhoUnidade = { id: number | null; sigla: string; nome: string; sinonimos: string[]; classificacaoId: number | null };
 /** Uma grafia dos itens que vira sinônimo de uma unidade cadastrada. */
 export type GrafiaParaUnidade = { unidadeId: number; texto: string };
 type Falha = { texto: string; motivo: string };
 
+const URL_UNIDADES = "/api/catalogo/unidades-medida";
 const TOM_ESTADO: Record<LinhaUnidade["estado"], Tone> = { cadastrada: "emerald", sugestao: "blue", nao_cadastrada: "amber" };
 const rotuloUnidade = (u: UnidadeMedida) => `${u.sigla} — ${u.nome}`;
-/** Máximo de grafias por chamada (o teto da rota). */
-const LOTE_SINONIMOS = 200;
+/** A 1ª recusa (e quantas mais) — o motivo que o aviso mostra. */
+const resumoFalhas = (f: Falha[]) => `${f[0].texto}: ${f[0].motivo}${f.length > 1 ? ` (e mais ${num(f.length - 1)})` : ""}`;
 const SECAO = "space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
 /**
  * Catálogo → UNIDADES DE MEDIDA (contêiner com dados): o CADASTRO (sigla + nome + sinônimos + a classificação que a
  * unidade indica; ↑/↓ = a ordem) e a COMPARAÇÃO de TODAS as grafias de unidade dos itens (DFDs no escopo da unidade
- * ativa e catálogo) com ele (`ComparacaoUnidades`). Carrega sob demanda (só com a visão aberta) e recarrega a cada
- * gravação (a comparação acompanha o cadastro). Editores (admin/gestor) gerenciam; os demais consultam.
+ * ativa e catálogo) com ele (`ComparacaoUnidades`). Carrega sob demanda (só com a visão aberta): o cadastro + o uso das
+ * grafias; depois de cada gravação recarrega SÓ o cadastro (o uso dos itens não muda com ele — a comparação acompanha).
+ * Editores (admin/gestor) gerenciam; os demais consultam.
  */
 export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
   const [dados, setDados] = useState<Dados | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
-  const [rascunho, setRascunho] = useState<RascunhoUnidade | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  const [editando, setEditando] = useState<RascunhoUnidade | null>(null);
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (comUso: boolean) => {
     try {
-      const j = await chamarPadronizacao<Dados>("/api/catalogo/unidades-medida");
-      setDados({ unidades: j.unidades, classificacoes: j.classificacoes, uso: j.uso });
+      const j = await chamarPadronizacao<Cadastro & { uso?: UsoUnidade[] }>(comUso ? URL_UNIDADES : `${URL_UNIDADES}?uso=0`);
+      setDados((d) => ({ unidades: j.unidades, classificacoes: j.classificacoes, uso: j.uso ?? d?.uso ?? [] }));
       setErroCarga(null);
     } catch (e) {
       setErroCarga(e instanceof Error ? e.message : "Erro ao carregar as unidades de medida.");
     }
   }, []);
   useEffect(() => {
-    void carregar();
+    void carregar(true);
   }, [carregar]);
+  const recarregarCadastro = useCallback(() => carregar(false), [carregar]);
+  const { salvando, executar } = useGravacaoCadastro(recarregarCadastro);
 
   const comparacao = useMemo(() => (dados ? compararUnidades(dados.uso, dados.unidades) : null), [dados]);
   const usoPorUnidade = useMemo(() => (comparacao ? itensPorUnidade(comparacao.linhas) : new Map<number, { dfd: number; catalogo: number }>()), [comparacao]);
   const unidadePorId = useMemo(() => new Map((dados?.unidades ?? []).map((u) => [u.id, u])), [dados]);
   const classPorId = useMemo(() => new Map((dados?.classificacoes ?? []).map((c) => [c.id, c])), [dados]);
 
-  /** Executa uma gravação, avisa e recarrega. */
-  async function executar(acao: () => Promise<unknown>, sucesso: string): Promise<boolean> {
-    setSalvando(true);
-    try {
-      await acao();
-      toast.success(sucesso);
-      await carregar();
-      return true;
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível gravar.");
-      return false;
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function salvar() {
-    if (!rascunho) return;
-    const nova = rascunho.id == null;
-    const corpo = { sigla: rascunho.sigla, nome: rascunho.nome, sinonimos: rascunho.sinonimos, classificacaoId: rascunho.classificacaoId };
-    const ok = await executar(
-      () => chamarPadronizacao(nova ? "/api/catalogo/unidades-medida" : `/api/catalogo/unidades-medida/${rascunho.id}`, nova ? "POST" : "PATCH", corpo),
-      nova ? "Unidade de medida cadastrada." : "Unidade de medida atualizada.",
-    );
-    if (ok) setRascunho(null);
+  async function salvar(r: RascunhoUnidade) {
+    const nova = r.id == null;
+    const corpo = { sigla: r.sigla, nome: r.nome, sinonimos: r.sinonimos, classificacaoId: r.classificacaoId };
+    const gravou = await executar(async () => {
+      await chamarPadronizacao(nova ? URL_UNIDADES : `${URL_UNIDADES}/${r.id}`, nova ? "POST" : "PATCH", corpo);
+      return { msg: nova ? "Unidade de medida cadastrada." : "Unidade de medida atualizada." };
+    });
+    if (gravou) setEditando(null);
   }
 
   function excluir(u: UnidadeMedida) {
@@ -110,59 +98,59 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
         ? `Excluir a unidade ${rotuloUnidade(u)}? ${num(itens)} item(ns) usam as grafias dela e passarão a "não cadastrada".`
         : `Excluir a unidade ${rotuloUnidade(u)}?`;
     if (!confirm(aviso)) return;
-    void executar(() => chamarPadronizacao(`/api/catalogo/unidades-medida/${u.id}`, "DELETE"), "Unidade de medida excluída.");
+    void executar(async () => {
+      await chamarPadronizacao(`${URL_UNIDADES}/${u.id}`, "DELETE");
+      return { msg: "Unidade de medida excluída." };
+    });
   }
 
-  async function mover(id: number, dir: -1 | 1) {
-    if (!dados || salvando) return;
+  function mover(id: number, dir: -1 | 1) {
+    if (!dados) return;
     const i = dados.unidades.findIndex((x) => x.id === id);
     const alvo = i + dir;
     if (i < 0 || alvo < 0 || alvo >= dados.unidades.length) return;
     const nova = [...dados.unidades];
     [nova[i], nova[alvo]] = [nova[alvo], nova[i]];
-    setDados({ ...dados, unidades: nova.map((u, ordem) => ({ ...u, ordem })) });
-    // Uma gravação de ordem por vez (as ações ficam travadas até o servidor confirmar — nada de ordens concorrentes).
-    setSalvando(true);
-    try {
-      await chamarPadronizacao("/api/catalogo/unidades-medida/ordem", "PATCH", { ids: nova.map((x) => x.id) });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível salvar a nova ordem.");
-      await carregar();
-    } finally {
-      setSalvando(false);
-    }
+    // A lista já mostra a nova ordem (otimista); uma gravação de ordem por vez — recarrega só se falhar.
+    void executar(async () => {
+      setDados((d) => d && { ...d, unidades: nova.map((u, ordem) => ({ ...u, ordem })) });
+      await chamarPadronizacao(`${URL_UNIDADES}/ordem`, "PATCH", { ids: nova.map((x) => x.id) });
+      return null;
+    }, false);
   }
 
-  /** Grafias dos itens → sinônimos de unidades cadastradas (em lotes do teto da rota); as recusadas são avisadas. */
-  function adicionarSinonimos(itens: GrafiaParaUnidade[]) {
-    const um = itens.length === 1 ? itens[0] : null;
-    const sigla = um ? unidadePorId.get(um.unidadeId)?.sigla : null;
-    const sucesso = um ? `"${um.texto}" agora é grafia de ${sigla ?? "a unidade"}.` : `${num(itens.length)} grafias adicionadas às unidades.`;
-    void executar(async () => {
+  /** Grafias dos itens → sinônimos de unidades cadastradas, em lotes do teto da rota: soma o que entrou e avisa as
+   * recusadas (aviso âmbar quando só parte entrou; erro quando nenhuma). */
+  function adicionarSinonimos(itens: GrafiaParaUnidade[]): Promise<boolean> {
+    return executar(async () => {
+      let adicionados = 0;
       const falhas: Falha[] = [];
-      for (let i = 0; i < itens.length; i += LOTE_SINONIMOS) {
-        const r = await chamarPadronizacao<{ falhas: Falha[] }>("/api/catalogo/unidades-medida/sinonimos", "POST", { itens: itens.slice(i, i + LOTE_SINONIMOS) });
-        falhas.push(...r.falhas);
+      for (let i = 0; i < itens.length; i += LIMITES_PADRONIZACAO.lote) {
+        const lote = itens.slice(i, i + LIMITES_PADRONIZACAO.lote);
+        try {
+          const r = await chamarPadronizacao<{ adicionados: number; falhas: Falha[] }>(`${URL_UNIDADES}/sinonimos`, "POST", { itens: lote });
+          adicionados += r.adicionados;
+          falhas.push(...r.falhas);
+        } catch (e) {
+          // O lote inteiro recusado (nenhuma grafia dele entrou): cada uma conta como recusada, com o motivo do servidor.
+          const motivo = e instanceof Error ? e.message : "Não foi possível gravar.";
+          for (const x of lote) falhas.push({ texto: x.texto, motivo });
+        }
       }
-      if (falhas.length) toast.error(`${num(falhas.length)} grafia(s) não adicionada(s) — ${falhas[0].texto}: ${falhas[0].motivo}`);
-    }, sucesso);
+      if (adicionados === 0) {
+        if (falhas.length) throw new Error(itens.length === 1 ? falhas[0].motivo : `Nenhuma grafia adicionada — ${resumoFalhas(falhas)}`);
+        return { msg: "As grafias já eram dessas unidades — a lista foi atualizada.", parcial: true };
+      }
+      if (falhas.length) return { msg: `${num(adicionados)} grafia(s) adicionada(s); ${num(falhas.length)} não — ${resumoFalhas(falhas)}`, parcial: true };
+      const um = itens.length === 1 ? itens[0] : null;
+      return {
+        msg: um ? `"${um.texto}" agora é grafia de ${unidadePorId.get(um.unidadeId)?.sigla ?? "a unidade"}.` : `${num(adicionados)} grafias adicionadas às unidades.`,
+      };
+    });
   }
 
   if (!dados || !comparacao) {
-    return erroCarga ? (
-      <Callout kind="danger">
-        <span className="flex flex-wrap items-center justify-between gap-2">
-          {erroCarga}
-          <Button size="sm" variant="secondary" icon={<IconRefresh className="h-4 w-4" />} onClick={() => void carregar()}>
-            Tentar de novo
-          </Button>
-        </span>
-      </Callout>
-    ) : (
-      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-        <SkeletonLinhas linhas={6} />
-      </div>
-    );
+    return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar(true)} /> : <SkeletonCartao />;
   }
 
   const { linhas, semUnidade } = comparacao;
@@ -172,22 +160,17 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
   const nSugestoes = linhas.filter((l) => l.estado === "sugestao").length;
   const pos = new Map(dados.unidades.map((u, i) => [u.id, i]));
 
+  // O cadastro é uma lista ORDENADA (↑/↓): sem ordenação/filtro nas colunas — a posição é a da ordem gravada.
   const colsCadastro: Column<UnidadeMedida>[] = [
     { key: "pos", header: "#", filter: "none", nowrap: true, render: (u) => <span className="tabular-nums text-faint">{(pos.get(u.id) ?? 0) + 1}</span> },
-    { key: "sigla", header: "Sigla", nowrap: true, value: (u) => u.sigla, render: (u) => <span className="font-mono text-[12.5px] font-semibold text-text">{u.sigla}</span> },
-    { key: "nome", header: "Nome", align: "left", minWidth: 160, value: (u) => u.nome, render: (u) => <span className="text-text">{u.nome}</span> },
-    {
-      key: "sinonimos",
-      header: "Sinônimos",
-      nowrap: true,
-      value: (u) => u.sinonimos.join(" · ") || "—",
-      render: (u) => <CelulaLista valores={u.sinonimos} max={3} mono />,
-    },
+    { key: "sigla", header: "Sigla", filter: "none", nowrap: true, render: (u) => <span className="font-mono text-[12.5px] font-semibold text-text">{u.sigla}</span> },
+    { key: "nome", header: "Nome", filter: "none", align: "left", minWidth: 160, render: (u) => <span className="text-text">{u.nome}</span> },
+    { key: "sinonimos", header: "Sinônimos", filter: "none", nowrap: true, render: (u) => <CelulaLista valores={u.sinonimos} max={3} mono /> },
     {
       key: "classificacao",
       header: "Classificação",
+      filter: "none",
       nowrap: true,
-      value: (u) => (u.classificacaoId != null ? (classPorId.get(u.classificacaoId)?.nome ?? "—") : "—"),
       render: (u) => {
         const c = u.classificacaoId != null ? classPorId.get(u.classificacaoId) : undefined;
         return c ? (
@@ -200,14 +183,9 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
     {
       key: "itens",
       header: "Itens",
+      filter: "none",
       align: "center",
       nowrap: true,
-      filter: "range",
-      formatarFaixa: num,
-      numero: (u) => {
-        const n = usoPorUnidade.get(u.id);
-        return (n?.dfd ?? 0) + (n?.catalogo ?? 0);
-      },
       render: (u) => {
         const n = usoPorUnidade.get(u.id);
         return (
@@ -231,8 +209,8 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
                 primeira={(pos.get(u.id) ?? 0) === 0}
                 ultima={(pos.get(u.id) ?? 0) === dados.unidades.length - 1}
                 disabled={salvando}
-                onMover={(d) => void mover(u.id, d)}
-                onEditar={() => setRascunho({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId })}
+                onMover={(d) => mover(u.id, d)}
+                onEditar={() => setEditando({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId })}
                 onExcluir={() => excluir(u)}
               />
             ),
@@ -243,6 +221,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
+      {erroCarga && <ErroCarga kind="warn" msg={`A lista pode estar desatualizada — ${erroCarga}`} onTentar={() => void carregar(false)} />}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
         <StatMini label="Unidades cadastradas" value={num(dados.unidades.length)} hint="sigla, nome e sinônimos" />
         <StatMini
@@ -270,7 +249,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
             <Button
               icon={<IconPlus className="h-4 w-4" />}
               disabled={salvando}
-              onClick={() => setRascunho({ id: null, sigla: "", nome: "", sinonimos: [], classificacaoId: null })}
+              onClick={() => setEditando({ id: null, sigla: "", nome: "", sinonimos: [], classificacaoId: null })}
             >
               Nova unidade
             </Button>
@@ -288,6 +267,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
             getKey={(u) => u.id}
             pageSize={20}
             minWidth={podeEditar ? 820 : 640}
+            onRowClick={(u) => setEditando({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId })}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "unidade" : "unidades"}`}
           />
         )}
@@ -300,31 +280,36 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
           podeEditar={podeEditar}
           salvando={salvando}
           onAdicionar={adicionarSinonimos}
-          onCadastrar={(l) => setRascunho({ id: null, ...propostaUnidade(l, linhas), classificacaoId: null })}
+          onCadastrar={(l) => setEditando({ id: null, ...propostaUnidade(l, linhas), classificacaoId: null })}
         />
       </section>
 
-      {rascunho && (
+      {editando && (
         <EditorUnidadeMedida
-          rascunho={rascunho}
+          key={editando.id ?? "nova"}
+          inicial={editando}
           unidades={dados.unidades}
           classificacoes={dados.classificacoes}
           linhas={linhas}
           salvando={salvando}
-          onChange={setRascunho}
-          onFechar={() => setRascunho(null)}
-          onSalvar={() => void salvar()}
+          somenteLeitura={!podeEditar}
+          onFechar={() => setEditando(null)}
+          onSalvar={(r) => void salvar(r)}
         />
       )}
     </div>
   );
 }
 
+/** Chave do "Adicionar N sugestões" no andamento (nunca é a chave de uma grafia — só letras maiúsculas e números). */
+const LOTE = "\u0000lote";
+
 /**
  * COMPARAÇÃO das grafias de unidade dos itens com o cadastro (apresentacional): estado (Cadastrada · Sugestão · Não
- * cadastrada) · a grafia (as escritas equivalentes na dica) · a unidade cadastrada — na SUGESTÃO, "Adicionar a UN"; NÃO
- * cadastrada, "Adicionar a…" (uma cadastrada) ou "Cadastrar" (a proposta pronta) · itens de DFD · itens do catálogo; e
- * "Adicionar N sugestões" de uma vez. Grava via `onAdicionar`/`onCadastrar`; sem permissão, só consulta.
+ * cadastrada) · as grafias (as escritas equivalentes juntas; quantos itens cada uma na dica) · a unidade cadastrada —
+ * nas não cadastradas, ESCOLHER a unidade (a sugestão vem escolhida) e confirmar em "Adicionar", ou "Cadastrar" (a
+ * proposta pronta) · itens de DFD · itens do catálogo; e "Adicionar N sugestões" de uma vez (cada uma na unidade
+ * escolhida na linha). Grava via `onAdicionar`/`onCadastrar`; sem permissão, só consulta.
  */
 export function ComparacaoUnidades({
   linhas,
@@ -338,15 +323,27 @@ export function ComparacaoUnidades({
   unidades: UnidadeMedida[];
   podeEditar: boolean;
   salvando?: boolean;
-  onAdicionar: (itens: GrafiaParaUnidade[]) => void;
+  /** Grava as grafias como sinônimos (devolvendo a promessa da gravação, o botão acionado mostra o andamento). */
+  onAdicionar: (itens: GrafiaParaUnidade[]) => unknown;
   onCadastrar: (linha: LinhaUnidade) => void;
 }) {
   const porId = useMemo(() => new Map(unidades.map((u) => [u.id, u])), [unidades]);
-  const alvo = (l: LinhaUnidade) => {
-    const id = l.unidadeId ?? l.sugestaoId;
+  // A unidade ESCOLHIDA em cada linha não cadastrada (sem escolha = a sugestão; `null` = nenhuma) — grava só no "Adicionar".
+  const [escolhas, setEscolhas] = useState<Record<string, number | null>>({});
+  // O que está gravando (a linha ou o lote) — o andamento no botão certo.
+  const [emCurso, setEmCurso] = useState<string | null>(null);
+  const escolhida = (l: LinhaUnidade) => {
+    const id = l.chave in escolhas ? escolhas[l.chave] : l.sugestaoId;
     return id != null ? porId.get(id) : undefined;
   };
-  const sugestoes = linhas.filter((l) => l.estado === "sugestao" && l.sugestaoId != null && porId.has(l.sugestaoId));
+  const acionar = (chave: string, itens: GrafiaParaUnidade[]) => {
+    setEmCurso(chave);
+    void Promise.resolve(onAdicionar(itens)).finally(() => setEmCurso(null));
+  };
+  const lote = linhas.flatMap((l) => {
+    const u = l.estado === "sugestao" ? escolhida(l) : undefined;
+    return u ? [{ unidadeId: u.id, texto: l.texto }] : [];
+  });
 
   const colunas: Column<LinhaUnidade>[] = [
     {
@@ -361,11 +358,15 @@ export function ComparacaoUnidades({
       header: "Grafia nos itens",
       nowrap: true,
       value: (l) => l.texto,
+      // O filtro acha a linha por QUALQUER escrita dela ("Und." acha a linha do "UND").
+      valores: (l) => l.grafias.map((g) => g.texto),
       render: (l) => (
-        <span className="inline-flex items-center gap-1" title={dicaLista(l.grafias, (g) => `${g.texto} — ${num(g.n)} ${g.n === 1 ? "item" : "itens"}`)}>
-          <span className="font-mono text-[12.5px] font-semibold text-text">{l.texto}</span>
-          {l.grafias.length > 1 && <MaisN n={l.grafias.length - 1} />}
-        </span>
+        <CelulaLista
+          valores={l.grafias.map((g) => g.texto)}
+          max={2}
+          mono
+          dica={dicaLista(l.grafias, (g) => `${g.texto} — ${num(g.n)} ${g.n === 1 ? "item" : "itens"}`)}
+        />
       ),
     },
     {
@@ -374,52 +375,61 @@ export function ComparacaoUnidades({
       align: "left",
       minWidth: 280,
       value: (l) => {
-        const u = alvo(l);
-        return u ? (l.estado === "sugestao" ? `Sugestão: ${rotuloUnidade(u)}` : rotuloUnidade(u)) : "—";
+        const u = l.unidadeId != null ? porId.get(l.unidadeId) : undefined;
+        if (u) return rotuloUnidade(u);
+        const s = l.sugestaoId != null ? porId.get(l.sugestaoId) : undefined;
+        return s ? `Sugestão: ${rotuloUnidade(s)}` : "—";
       },
       render: (l) => {
-        const u = alvo(l);
-        if (l.estado === "cadastrada") return <span className="text-text-2">{u ? rotuloUnidade(u) : "—"}</span>;
-        if (!podeEditar) return <span className="text-faint">{u ? `Sugestão: ${rotuloUnidade(u)}` : "—"}</span>;
-        if (l.estado === "sugestao" && u)
-          return (
-            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="truncate text-accent" title="Sugerida pela regra do sistema (mesma unidade) ou pelo plural">
-                {rotuloUnidade(u)}
-              </span>
-              <Button
-                variant="secondary"
-                size="xs"
-                disabled={salvando}
-                icon={<IconCheck className="h-3.5 w-3.5" />}
-                onClick={() => onAdicionar([{ unidadeId: u.id, texto: l.texto }])}
-              >
-                Adicionar a {u.sigla}
-              </Button>
-            </span>
-          );
+        if (l.estado === "cadastrada") {
+          const u = l.unidadeId != null ? porId.get(l.unidadeId) : undefined;
+          return <span className="text-text-2">{u ? rotuloUnidade(u) : "—"}</span>;
+        }
+        if (!podeEditar) {
+          const s = l.sugestaoId != null ? porId.get(l.sugestaoId) : undefined;
+          return <span className="text-faint">{s ? `Sugestão: ${rotuloUnidade(s)}` : "—"}</span>;
+        }
+        const alvo = escolhida(l);
         return (
           <span className="flex min-w-0 flex-wrap items-center gap-1.5">
             {unidades.length > 0 && (
-              <select
-                aria-label={`Adicionar ${l.texto} como grafia de uma unidade cadastrada`}
-                className={`${selectCls} min-h-[44px] max-w-[220px] lg:min-h-0`}
-                value=""
-                disabled={salvando}
-                onChange={(e) => {
-                  const u2 = porId.get(Number(e.target.value));
-                  if (u2) onAdicionar([{ unidadeId: u2.id, texto: l.texto }]);
-                }}
-              >
-                <option value="">Adicionar a…</option>
-                {unidades.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {rotuloUnidade(x)}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  aria-label={`Unidade cadastrada da grafia ${l.texto}`}
+                  className={`${selectCls} min-h-[44px] max-w-[220px] lg:min-h-0`}
+                  value={alvo?.id ?? ""}
+                  disabled={salvando}
+                  onChange={(e) => setEscolhas((s) => ({ ...s, [l.chave]: e.target.value ? Number(e.target.value) : null }))}
+                >
+                  <option value="">Escolha a unidade…</option>
+                  {unidades.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {rotuloUnidade(x)}
+                      {x.id === l.sugestaoId ? " (sugestão)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={salvando || !alvo}
+                  loading={emCurso === l.chave}
+                  icon={<IconCheck className="h-3.5 w-3.5" />}
+                  aria-label={alvo ? `Adicionar ${l.texto} à unidade ${alvo.sigla}` : `Adicionar ${l.texto} (escolha a unidade)`}
+                  onClick={() => alvo && acionar(l.chave, [{ unidadeId: alvo.id, texto: l.texto }])}
+                >
+                  Adicionar
+                </Button>
+              </>
             )}
-            <Button variant="ghost" size="xs" disabled={salvando} icon={<IconPlus className="h-3.5 w-3.5" />} onClick={() => onCadastrar(l)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={salvando}
+              icon={<IconPlus className="h-3.5 w-3.5" />}
+              aria-label={`Cadastrar uma unidade nova a partir de ${l.texto}`}
+              onClick={() => onCadastrar(l)}
+            >
               Cadastrar
             </Button>
           </span>
@@ -458,14 +468,9 @@ export function ComparacaoUnidades({
             cadastrada que ela representa.
           </p>
         </div>
-        {podeEditar && sugestoes.length > 0 && (
-          <Button
-            variant="secondary"
-            icon={<IconCheck className="h-4 w-4" />}
-            loading={salvando}
-            onClick={() => onAdicionar(sugestoes.map((l) => ({ unidadeId: l.sugestaoId as number, texto: l.texto })))}
-          >
-            Adicionar {num(sugestoes.length)} {sugestoes.length === 1 ? "sugestão" : "sugestões"}
+        {podeEditar && lote.length > 0 && (
+          <Button variant="secondary" icon={<IconCheck className="h-4 w-4" />} disabled={salvando} loading={emCurso === LOTE} onClick={() => acionar(LOTE, lote)}>
+            Adicionar {num(lote.length)} {lote.length === 1 ? "sugestão" : "sugestões"}
           </Button>
         )}
       </div>
@@ -477,7 +482,7 @@ export function ComparacaoUnidades({
           rows={linhas}
           getKey={(l) => l.chave}
           pageSize={20}
-          minWidth={880}
+          minWidth={podeEditar ? 960 : 720}
           resumo={(l) => (
             <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
               <span>
@@ -497,52 +502,63 @@ export function ComparacaoUnidades({
 /**
  * Editor (banner) de UMA unidade de medida (apresentacional): sigla, nome, sinônimos e a classificação que ela indica —
  * com a PRÉVIA das grafias dos itens que ela passa a cobrir e o CONFLITO com outra unidade (uma grafia pertence a uma
- * unidade só), antes de gravar.
+ * unidade só), antes de gravar. O rascunho é do PRÓPRIO editor (digitar não re-renderiza a tela de trás); `onSalvar`
+ * recebe o rascunho. `somenteLeitura` = a consulta (sem permissão de editar): os dados e as grafias cobertas.
  */
 export function EditorUnidadeMedida({
-  rascunho,
+  inicial,
   unidades,
   classificacoes,
   linhas,
   salvando,
-  onChange,
+  somenteLeitura = false,
   onFechar,
   onSalvar,
 }: {
-  rascunho: RascunhoUnidade;
+  /** O que abre no editor (`id` = a editada; `null` = nova — em branco ou a proposta da comparação). */
+  inicial: RascunhoUnidade;
   unidades: UnidadeMedida[];
   classificacoes: ClassificacaoItem[];
   linhas: LinhaUnidade[];
   salvando: boolean;
-  onChange: (r: RascunhoUnidade) => void;
+  somenteLeitura?: boolean;
   onFechar: () => void;
-  onSalvar: () => void;
+  onSalvar: (rascunho: RascunhoUnidade) => void;
 }) {
-  const nova = rascunho.id == null;
-  const sinonimos = limparSinonimos(rascunho.sigla, rascunho.nome, rascunho.sinonimos);
-  const dados = { sigla: rascunho.sigla.trim(), nome: rascunho.nome.trim(), sinonimos };
-  const conflito = dados.sigla || dados.nome ? conflitoUnidade(dados, unidades, rascunho.id) : null;
-  // As grafias dos itens que o RASCUNHO cobre (centenas de linhas no máximo — direto, a cada digitação).
-  const desta = resolverUnidades([{ id: -1, ...dados, classificacaoId: null, ordem: 0 }]);
-  const cobertas = linhas.filter((l) => desta(l.texto));
+  const [rascunho, setRascunho] = useState(inicial);
+  const nova = inicial.id == null;
+  const sigla = rascunho.sigla.trim();
+  const nome = rascunho.nome.trim();
+  const sinonimos = useMemo(() => limparSinonimos(sigla, nome, rascunho.sinonimos), [sigla, nome, rascunho.sinonimos]);
+  const conflito = useMemo(
+    () => (!somenteLeitura && (sigla || nome) ? conflitoUnidade({ sigla, nome, sinonimos }, unidades, inicial.id) : null),
+    [somenteLeitura, sigla, nome, sinonimos, unidades, inicial.id],
+  );
+  // As grafias dos itens que o RASCUNHO cobre.
+  const cobertas = useMemo(() => {
+    const desta = resolverUnidades([{ id: -1, sigla, nome, sinonimos, classificacaoId: null, ordem: 0 }]);
+    return linhas.filter((l) => desta(l.texto));
+  }, [sigla, nome, sinonimos, linhas]);
   const itensCobertos = cobertas.reduce((s, l) => s + l.total, 0);
-  const pode = !!dados.sigla && !!dados.nome && !conflito && !salvando;
+  const pode = !!sigla && !!nome && !conflito && !salvando;
 
   return (
     <Modal
       open
       onClose={onFechar}
       bloqueado={salvando}
-      titulo={nova ? "Nova unidade de medida" : `Editar unidade ${rascunho.sigla}`}
+      titulo={nova ? "Nova unidade de medida" : `${somenteLeitura ? "Unidade" : "Editar unidade"} ${inicial.sigla}`}
       size="md"
       rodape={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onFechar} disabled={salvando}>
-            Cancelar
+            {somenteLeitura ? "Fechar" : "Cancelar"}
           </Button>
-          <Button onClick={onSalvar} loading={salvando} disabled={!pode}>
-            {nova ? "Cadastrar" : "Salvar"}
-          </Button>
+          {!somenteLeitura && (
+            <Button onClick={() => onSalvar(rascunho)} loading={salvando} disabled={!pode}>
+              {nova ? "Cadastrar" : "Salvar"}
+            </Button>
+          )}
         </div>
       }
     >
@@ -551,14 +567,16 @@ export function EditorUnidadeMedida({
           <TextField
             label="Sigla"
             value={rascunho.sigla}
-            onChange={(e) => onChange({ ...rascunho, sigla: e.target.value })}
+            readOnly={somenteLeitura}
+            onChange={(e) => setRascunho((r) => ({ ...r, sigla: e.target.value }))}
             placeholder="UN"
             maxLength={LIMITES_PADRONIZACAO.sigla}
           />
           <TextField
             label="Nome"
             value={rascunho.nome}
-            onChange={(e) => onChange({ ...rascunho, nome: e.target.value })}
+            readOnly={somenteLeitura}
+            onChange={(e) => setRascunho((r) => ({ ...r, nome: e.target.value }))}
             placeholder="UNIDADE"
             maxLength={LIMITES_PADRONIZACAO.nome}
           />
@@ -566,14 +584,19 @@ export function EditorUnidadeMedida({
         <CampoLista
           label="Sinônimos (outras grafias aceitas)"
           valores={rascunho.sinonimos}
-          onChange={(v) => onChange({ ...rascunho, sinonimos: v.slice(0, LIMITES_PADRONIZACAO.sinonimos) })}
+          disabled={somenteLeitura}
+          onChange={(v) => setRascunho((r) => ({ ...r, sinonimos: v.slice(0, LIMITES_PADRONIZACAO.sinonimos) }))}
           placeholder="UND, UNID. — Enter ou vírgula para acrescentar"
           maxItem={LIMITES_PADRONIZACAO.grafia}
         />
         <SelectField
           label="Classificação que a unidade indica"
           value={rascunho.classificacaoId ?? ""}
-          onChange={(e) => onChange({ ...rascunho, classificacaoId: e.target.value ? Number(e.target.value) : null })}
+          disabled={somenteLeitura}
+          onChange={(e) => {
+            const v = e.target.value;
+            setRascunho((r) => ({ ...r, classificacaoId: v ? Number(v) : null }));
+          }}
           hint="Vale para os itens com esta unidade cuja descrição não tem nenhuma palavra-chave de classificação."
         >
           <option value="">Nenhuma</option>
@@ -595,7 +618,11 @@ export function EditorUnidadeMedida({
             {cobertas.length > 0 ? (
               <p className="mt-1.5 flex flex-wrap gap-1.5">
                 {cobertas.slice(0, 12).map((l) => (
-                  <span key={l.chave} className="rounded-chip border border-border-2 bg-surface px-2 py-0.5 font-mono text-[12px] text-text" title={`${num(l.total)} itens`}>
+                  <span
+                    key={l.chave}
+                    className="rounded-chip border border-border-2 bg-surface px-2 py-0.5 font-mono text-[12px] text-text"
+                    title={`${num(l.total)} ${l.total === 1 ? "item" : "itens"}`}
+                  >
                     {l.texto}
                   </span>
                 ))}

@@ -23,27 +23,20 @@ import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconPlus, I
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
-import { SkeletonLinhas } from "./Skeleton";
+import { SkeletonCartao } from "./Skeleton";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 
 type Vista = "catalogo" | "lista" | "unidades" | "classificacoes";
 
-/** Esqueleto das visões da PADRONIZAÇÃO enquanto o código delas chega (a mesma moldura de cartão). */
-function EsqueletoPadronizacao() {
-  return (
-    <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-      <SkeletonLinhas linhas={6} />
-    </div>
-  );
-}
-// As visões da PADRONIZAÇÃO (Unidades de medida | Classificações) só são baixadas quando abertas.
+// As visões da PADRONIZAÇÃO (Unidades de medida | Classificações) só são baixadas quando abertas (esqueleto na mesma
+// moldura de cartão enquanto o código chega).
 const UnidadesMedidaView = dynamic(() => import("./UnidadesMedidaView").then((m) => m.UnidadesMedidaView), {
   ssr: false,
-  loading: EsqueletoPadronizacao,
+  loading: () => <SkeletonCartao />,
 });
 const ClassificacoesView = dynamic(() => import("./ClassificacoesView").then((m) => m.ClassificacoesView), {
   ssr: false,
-  loading: EsqueletoPadronizacao,
+  loading: () => <SkeletonCartao />,
 });
 /** Decisão de um conflito divergente (mesmo código, dados diferentes). */
 type Resolucao = "manter" | "substituir" | "compartilhar";
@@ -628,18 +621,8 @@ export function CatalogoView({
             {catalogos.length} {catalogos.length === 1 ? "catálogo" : "catálogos"} · {itens.length} {itens.length === 1 ? "item" : "itens"} · para padronização e consulta
           </p>
         </div>
+        {/* "Exportar modelo" ANTES do Segmented: sem ele (nas visões da padronização), as visões não saem do lugar. */}
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-          <Segmented
-            value={vista}
-            onChange={trocarVista}
-            ariaLabel="Visões do catálogo"
-            options={[
-              { value: "catalogo", label: "Catálogo" },
-              { value: "lista", label: "Lista de Itens" },
-              { value: "unidades", label: "Unidades de medida" },
-              { value: "classificacoes", label: "Classificações" },
-            ]}
-          />
           {podeEditar && !padronizacao && (
             <Button
               variant="secondary"
@@ -650,6 +633,17 @@ export function CatalogoView({
               Exportar modelo
             </Button>
           )}
+          <Segmented
+            value={vista}
+            onChange={trocarVista}
+            ariaLabel="Visões do catálogo"
+            options={[
+              { value: "catalogo", label: "Catálogo" },
+              { value: "lista", label: "Lista de Itens", curto: "Itens" },
+              { value: "unidades", label: "Unidades de medida", curto: "Unid. medida" },
+              { value: "classificacoes", label: "Classificações", curto: "Classif." },
+            ]}
+          />
         </div>
       </div>
 

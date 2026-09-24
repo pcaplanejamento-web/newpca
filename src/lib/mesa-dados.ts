@@ -4,7 +4,6 @@ import { listarDfds, listarPcas } from "./dfd";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { FILTRO_MESA_TODOS, filtroInicialMesa } from "./mesa-filtros";
 import { listarOrgaos } from "./orgaos";
-import { listarPadronizacao } from "./padronizacao";
 import { getPcaFiltro, pcasDoFiltro } from "./pca-filtro";
 import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
@@ -62,19 +61,13 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   const pcaFiltro = pcaId ? null : await getPcaFiltro(await pcasDoFiltro(ctx.pcas));
   const ano = pcaFiltro?.ano ?? null;
-  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, padronizacao] = await Promise.all([
+  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes] = await Promise.all([
     pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id, undefined, ano),
     pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id, ano),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
     getGrupoAtivoId(u).then(listarPessoasDoGrupo),
     listarSituacoes(),
-    // Catálogo → Unidades de medida | Classificações: a unidade comparada e a classificação de cada item (visão Itens).
-    // Auxiliar: uma falha aqui nunca derruba a Mesa (as colunas da padronização só não aparecem).
-    listarPadronizacao().catch((e) => {
-      console.error("[mesa] padronização indisponível:", e);
-      return { unidades: [], classificacoes: [] };
-    }),
   ]);
   const protocolos = pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos;
   const dfds = pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos;
@@ -97,7 +90,6 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     pessoas,
     outrasPessoas,
     situacoes,
-    padronizacao,
     usuarioId: u?.id ?? null,
     podeEditar: ctx.podeEditar,
     /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA, todos). */

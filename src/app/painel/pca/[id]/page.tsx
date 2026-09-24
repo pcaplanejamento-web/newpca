@@ -155,7 +155,6 @@ async function abaMesa(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsuarioAt
       pessoas={m.pessoas}
       outrasPessoas={m.outrasPessoas}
       situacoes={m.situacoes}
-      padronizacao={m.padronizacao}
       usuarioId={m.usuarioId}
     />
   );

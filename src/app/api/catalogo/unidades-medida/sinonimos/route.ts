@@ -7,10 +7,14 @@ import { sinonimosUnidadesSchema } from "@/lib/padronizacao-validation";
 
 export const dynamic = "force-dynamic";
 
+type Falha = { texto: string; motivo: string };
+
 /**
- * Grafias dos itens viram SINÔNIMOS de unidades cadastradas (a comparação: "Adicionar a UN", "Aceitar as sugestões").
- * Num lote atômico; por grafia, a recusa não derruba as demais: a unidade que não existe mais e a grafia que já é de
- * OUTRA unidade viram `falhas` (a que já é da própria unidade é ignorada — nada muda).
+ * Grafias dos itens viram SINÔNIMOS de unidades cadastradas (a comparação: "Adicionar a UN", "Adicionar N sugestões").
+ * Num lote atômico e CONDICIONAL (cada unidade só é gravada se a lista dela não mudou desde a leitura — nada de
+ * sobrescrever outra pessoa); por grafia, a recusa não derruba as demais: vira `falhas` a unidade que não existe mais, a
+ * grafia sem letras/números, a que já é de OUTRA unidade, a mesma grafia pedida para duas unidades, o excesso além do
+ * teto e a unidade alterada no meio. A grafia que já é da própria unidade é ignorada (nada muda).
  */
 export async function POST(req: Request) {
   const g = await exigirEditor();
@@ -22,7 +26,7 @@ export async function POST(req: Request) {
   const dono = resolverUnidades(unidades);
   const novos = new Map<number, string[]>();
   const noLote = new Map<string, number>(); // grafia → a unidade que a recebe NESTE lote (uma grafia, uma unidade)
-  const falhas: { texto: string; motivo: string }[] = [];
+  const falhas: Falha[] = [];
   for (const { unidadeId, texto } of p.data.itens) {
     const u = porId.get(unidadeId);
     if (!u) {
@@ -30,12 +34,16 @@ export async function POST(req: Request) {
       continue;
     }
     const chave = chaveUnidade(texto);
+    if (!chave) {
+      falhas.push({ texto, motivo: "A grafia precisa ter letras ou números." });
+      continue;
+    }
     const atual = dono(texto);
     if (atual && atual.id !== unidadeId) {
       falhas.push({ texto, motivo: `Já é uma grafia da unidade ${atual.sigla}.` });
       continue;
     }
-    if (atual || !chave) continue;
+    if (atual) continue;
     const outra = noLote.get(chave);
     if (outra != null && outra !== unidadeId) {
       falhas.push({ texto, motivo: "A mesma grafia foi pedida para duas unidades." });
@@ -47,8 +55,8 @@ export async function POST(req: Request) {
     novos.set(unidadeId, l);
   }
   // A lista final de cada unidade (os atuais + os novos, sem repetir a mesma grafia — nem entre os do lote).
-  const gravar = new Map<number, string[]>();
-  const adicionados: { unidadeId: number; textos: string[] }[] = [];
+  const gravar = new Map<number, { lidos: string[]; novos: string[] }>();
+  const adicionados = new Map<number, string[]>();
   for (const [id, textos] of novos) {
     const u = porId.get(id);
     if (!u) continue;
@@ -59,22 +67,29 @@ export async function POST(req: Request) {
     const antigas = new Set(u.sinonimos.map(chaveUnidade));
     const novas = lista.filter((t) => !antigas.has(chaveUnidade(t)));
     if (novas.length === 0) continue;
-    gravar.set(id, lista);
-    adicionados.push({ unidadeId: id, textos: novas });
+    gravar.set(id, { lidos: u.sinonimos, novos: lista });
+    adicionados.set(id, novas);
   }
   if (gravar.size === 0 && falhas.length > 0) return erro(falhas[0].motivo, 409);
-  await gravarSinonimos(gravar);
-  for (const a of adicionados) {
-    const u = porId.get(a.unidadeId);
+  const gravados = await gravarSinonimos(gravar);
+  let total = 0;
+  for (const [id, textos] of adicionados) {
+    const u = porId.get(id);
+    if (!gravados.has(id)) {
+      for (const t of textos) falhas.push({ texto: t, motivo: `A unidade ${u?.sigla ?? id} foi alterada enquanto isso — tente de novo.` });
+      continue;
+    }
+    total += textos.length;
     await registrarAuditoria({
       usuario: g.u,
       acao: "editar",
       entidade: "unidade_medida",
-      entidadeId: a.unidadeId,
-      resumo: `Unidade de medida ${u?.sigla ?? a.unidadeId}: sinônimos adicionados (${a.textos.join(", ")})`,
+      entidadeId: id,
+      resumo: `Unidade de medida ${u?.sigla ?? id}: sinônimos adicionados (${textos.join(", ")})`,
       antes: { sinonimos: u?.sinonimos ?? [] },
-      depois: { sinonimos: gravar.get(a.unidadeId) ?? [] },
+      depois: { sinonimos: gravar.get(id)?.novos ?? [] },
     });
   }
-  return ok({ adicionados: adicionados.reduce((s, a) => s + a.textos.length, 0), falhas });
+  if (total === 0 && falhas.length > 0) return erro(falhas[0].motivo, 409);
+  return ok({ adicionados: total, falhas });
 }

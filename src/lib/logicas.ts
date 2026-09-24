@@ -378,8 +378,9 @@ export const LOGICAS: LogicaRef[] = [
       "Catálogo → Unidades de medida: cada unidade tem sigla, nome e sinônimos (as outras grafias aceitas). Toda grafia de unidade dos itens (DFDs e catálogo) é comparada com o cadastro e aparece como Cadastrada, Sugestão ou Não cadastrada, com quantos itens a usam.",
     detalhes: [
       "\"Und.\", \"UND\" e \"und\" são a MESMA grafia (sem caixa, acento, pontuação e espaço; m² = M2).",
-      "Sugestão: a regra do sistema põe a grafia na mesma unidade de UMA cadastrada (UND = UNIDADE) ou ela é o plural de uma grafia cadastrada (CAIXAS → CAIXA). Com duas possíveis, não sugere.",
-      "\"Adicionar a UN\" (uma a uma ou todas as sugestões) ou \"Adicionar a…\" torna a grafia um sinônimo; \"Cadastrar\" abre a unidade nova já proposta a partir das grafias dos itens.",
+      "Sugestão: por QUALQUER escrita da grafia, a regra do sistema a põe na mesma unidade de UMA cadastrada (UND e U.N.D = UNIDADE) ou ela é o plural de uma grafia cadastrada (CAIXAS → CAIXA). Com duas possíveis, não sugere.",
+      "Escolha a unidade na linha (a sugestão já vem escolhida) e confirme em \"Adicionar\" — a grafia vira um sinônimo; \"Adicionar N sugestões\" grava todas de uma vez, cada uma na unidade escolhida; \"Cadastrar\" abre a unidade nova já proposta a partir das grafias dos itens.",
+      "Se só parte das grafias entrar (outra pessoa alterou a unidade no meio, por exemplo), o aviso diz quantas entraram e o motivo das demais — nada é sobrescrito.",
       "Uma grafia pertence a UMA unidade só — repetir a de outra é recusado. Excluir uma unidade não mexe nos itens: as grafias dela voltam a \"não cadastrada\".",
       "Na Mesa → Itens, a coluna \"Unid. cadastrada\" mostra a sigla cadastrada de cada item (ou \"Não cadastrada\"). Os itens de DFD seguem a unidade ativa do cabeçalho.",
     ],
@@ -393,9 +394,9 @@ export const LOGICAS: LogicaRef[] = [
       "Cada classificação tem nome, cor e palavras-chave. Todo item é classificado automaticamente pela DESCRIÇÃO: vence a palavra-chave que aparece primeiro; na mesma posição, a mais longa; depois, a ordem da lista. Sem palavra-chave, vale a classificação que a unidade de medida cadastrada indica; sem nenhuma, \"Não classificado\".",
     detalhes: [
       "\"SERVIÇO DE MANUTENÇÃO EM CADEIRAS\" é serviço (SERVIÇO aparece antes de CADEIRA); \"MATERIAL DE LIMPEZA\" vence \"MATERIAL\" na mesma posição.",
-      "A palavra-chave casa o início das palavras da descrição (CADEIRA acha CADEIRAS); as de até 3 letras só inteiras (AR não acha ARMÁRIO). Sem acento, caixa ou pontuação.",
+      "A palavra-chave casa o início das palavras da descrição (CADEIRA acha CADEIRAS); as de até 3 letras só inteiras ou no plural (KIT acha KITS; AR não acha ARMÁRIO). Sem acento, caixa ou pontuação.",
       "Uma palavra-chave pertence a UMA classificação e o nome é único — o sistema avisa antes de gravar.",
-      "O editor mostra ao vivo quantos itens a classificação passa a ter (e quantos vêm de outra) antes de gravar; a tabela \"Classificação dos itens\" mostra o motivo de cada uma — filtrar \"Não classificado\" acha as palavras que faltam.",
+      "O editor mostra ao vivo quantos itens a classificação passa a ter (e quantos vêm de outra) antes de gravar; a tabela \"Classificação dos itens\" mostra o motivo de cada uma — filtrar \"Não classificado\" acha as palavras que faltam; tocar numa linha abre a descrição inteira.",
       "Na Mesa → Itens (Normal, Consolidada e o detalhe) a coluna \"Classificação\" mostra a de cada item, com o motivo na dica. Sem classificação cadastrada, a coluna não aparece.",
     ],
     fonte: "criarClassificador (padronizacao-core) + ClassificacoesView",

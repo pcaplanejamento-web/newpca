@@ -80,10 +80,17 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   quando abertas (esqueleto na mesma moldura de cartão). Cada uma: **4 `StatMini` no topo** (2 colunas no celular, 4 no
   desktop) e seções em cartão (`rounded-card` + `--pad-card`) com título, descrição curta (largura limitada — a ação fica à
   direita no desktop e desce no celular) e a tabela (`DataTable`, rola no próprio contêiner).
-- Estados da comparação por `Badge`: **Cadastrada** verde · **Sugestão** azul (info) · **Não cadastrada** âmbar; a sugestão
-  em accent com o botão "Adicionar a UN". Ações de linha do cadastro = **`AcoesCadastro`** (↑/↓/editar/excluir,
-  `size="xs"`: 44px no celular). Editores em `Modal md` com os campos do DS (`TextField`, `CampoLista`, **`SelectField`**,
-  `ColorField`) + uma caixa de **prévia** neutra (`surface-2`) e o conflito em `Callout warn` (o botão principal travado).
+- Abas do Catálogo com rótulos CURTOS no celular (`Segmented.curto`: Itens · Unid. medida · Classif. — cabem em 360px); o
+  nome acessível segue o inteiro.
+- Estados da comparação por `Badge`: **Cadastrada** verde · **Sugestão** azul (info) · **Não cadastrada** âmbar. Na linha não
+  cadastrada: `select` da unidade (a sugestão pré-escolhida, marcada "(sugestão)") + **"Adicionar"** (`Button xs`
+  secondary — desabilitado sem escolha; o andamento no próprio botão) + "Cadastrar" (ghost). Ações de linha do cadastro =
+  **`AcoesCadastro`** (↑/↓/editar/excluir, `size="xs"`: 44px no celular); as colunas do cadastro não filtram/ordenam (a
+  ordem é a gravada). Editores em `Modal md` com os campos do DS (`TextField`, `CampoLista`, **`SelectField`**,
+  `ColorField`) + uma caixa de **prévia** neutra (`surface-2`) e o conflito em `Callout warn` (o botão principal travado);
+  em CONSULTA (sem permissão) os mesmos campos só leitura e só "Fechar". Falha ao carregar = **`ErroCarga`** (vermelho sem
+  dados; âmbar no topo quando a tela segue com a lista anterior). Tocar numa linha da "Classificação dos itens" abre o
+  detalhe (`Modal md`, pares rótulo/valor) — a descrição inteira sem depender de dica.
 
 ## Modais / formulários
 - **Bottom-sheet** no mobile, **modal central** no desktop: `fixed inset-0 flex items-end justify-center sm:items-center` + painel `rounded-t-2xl sm:rounded-2xl`, `max-h-[92vh]` com corpo rolável. Ex.: `Modal` (portal, cabeçalho e rodapé fixos).

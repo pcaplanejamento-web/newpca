@@ -35,11 +35,22 @@ export type Padronizacao = { unidades: UnidadeMedida[]; classificacoes: Classifi
 export const NAO_CADASTRADA = "Não cadastrada";
 export const NAO_CLASSIFICADO = "Não classificado";
 
-/** Limites do cadastro (os MESMOS no Zod e na proposta de cadastro). */
-export const LIMITES_PADRONIZACAO = { sigla: 20, nome: 60, grafia: 60, sinonimos: 100, palavra: 60, palavras: 300 } as const;
+/** Limites do cadastro (os MESMOS no Zod, nas rotas, na tela e na proposta de cadastro). A grafia cabe a maior unidade
+ * que um item aceita (100 no DFD); `lote` = grafias por chamada de "adicionar sinônimos"; `ordem` = ids numa reordenação. */
+export const LIMITES_PADRONIZACAO = {
+  sigla: 20,
+  nome: 60,
+  grafia: 100,
+  sinonimos: 100,
+  palavra: 60,
+  palavras: 300,
+  lote: 200,
+  ordem: 300,
+} as const;
 
 const porOrdem = <T extends { id: number; ordem: number }>(l: readonly T[]): T[] => [...l].sort((a, b) => a.ordem - b.ordem || a.id - b.id);
-const espacos = (s: string) => s.replace(/\s+/g, " ").trim();
+/** Espaços colapsados e pontas aparadas. */
+export const limparEspacos = (s: string) => s.replace(/\s+/g, " ").trim();
 
 // ---------------------------------------------------------------------------
 // Unidades de medida
@@ -52,7 +63,7 @@ export function chaveUnidade(texto: string | null | undefined): string {
 }
 
 /** Todas as grafias de uma unidade (sigla, nome e sinônimos). */
-export function grafiasDaUnidade(u: Pick<UnidadeMedida, "sigla" | "nome" | "sinonimos">): string[] {
+function grafiasDaUnidade(u: Pick<UnidadeMedida, "sigla" | "nome" | "sinonimos">): string[] {
   return [u.sigla, u.nome, ...u.sinonimos];
 }
 
@@ -74,38 +85,65 @@ export function resolverUnidades(unidades: readonly UnidadeMedida[]): ResolverUn
   return (texto) => m.get(chaveUnidade(texto)) ?? null;
 }
 
-/** Canônico da regra EMBUTIDA do sistema (`normUnidadeMedida`: UN/UND/UNID = UNIDADE, QUILO = KG…), como chave. */
-function canonicoUnidade(texto: string | null | undefined): string {
-  if (!chaveUnidade(texto)) return "";
-  const c = normUnidadeMedida(texto);
-  return c === "—" ? "" : chaveUnidade(c);
+/**
+ * Os CANÔNICOS da regra EMBUTIDA do sistema para uma grafia (`normUnidadeMedida`: UN/UND/UNID = UNIDADE, QUILO = KG…),
+ * como chaves: o do texto como escrito (casa "METRO QUADRADO" → M²) e o da CHAVE (casa "U.N.D" → UND → UNIDADE).
+ */
+function canonicosUnidade(texto: string | null | undefined): string[] {
+  const k = chaveUnidade(texto);
+  if (!k) return [];
+  const out = new Set<string>();
+  for (const t of [String(texto), k]) {
+    const c = normUnidadeMedida(t);
+    const kc = c === "—" ? "" : chaveUnidade(c);
+    if (kc) out.add(kc);
+  }
+  return [...out];
 }
 
-/** Resolve a grafia no cadastro e, quando não cadastrada, SUGERE a unidade (nunca adivinha entre duas). */
-export type ComparadorUnidades = { resolver: ResolverUnidade; sugerir: ResolverUnidade };
+/** O nome CANÔNICO que a regra do sistema dá a uma das grafias (UND → UNIDADE; "METRO QUADRADO" → M²), ou `null` quando
+ * nenhuma é conhecida por ela. */
+function nomeCanonico(textos: readonly string[]): string | null {
+  for (const t of textos)
+    for (const v of [t, chaveUnidade(t)]) {
+      const c = normUnidadeMedida(v);
+      if (c !== "—" && chaveUnidade(c) !== chaveUnidade(v)) return c;
+    }
+  return null;
+}
+
+/** Resolve a grafia no cadastro e, quando não cadastrada, SUGERE a unidade pelas escritas dela (nunca adivinha entre
+ * duas). */
+export type ComparadorUnidades = {
+  resolver: ResolverUnidade;
+  /** As escritas equivalentes de UMA grafia (a mesma chave): todas contam para a sugestão. */
+  sugerir: (textos: string | readonly string[]) => UnidadeMedida | null;
+};
 
 export function comparadorUnidades(unidades: readonly UnidadeMedida[]): ComparadorUnidades {
   const chaves = mapaDeChaves(unidades);
-  // Canônico do sistema → as unidades cadastradas que caem nele (uma só = sugestão segura; duas ou mais = ambíguo).
+  // Canônico do sistema → as unidades cadastradas que caem nele.
   const porCanonico = new Map<string, Set<number>>();
   const porId = new Map(unidades.map((u) => [u.id, u]));
   for (const u of unidades)
-    for (const g of grafiasDaUnidade(u)) {
-      const c = canonicoUnidade(g);
-      if (!c) continue;
-      const s = porCanonico.get(c) ?? new Set<number>();
-      s.add(u.id);
-      porCanonico.set(c, s);
-    }
+    for (const g of grafiasDaUnidade(u))
+      for (const c of canonicosUnidade(g)) {
+        const s = porCanonico.get(c) ?? new Set<number>();
+        s.add(u.id);
+        porCanonico.set(c, s);
+      }
   const resolver: ResolverUnidade = (texto) => chaves.get(chaveUnidade(texto)) ?? null;
-  const sugerir: ResolverUnidade = (texto) => {
-    const k = chaveUnidade(texto);
+  const sugerir = (textos: string | readonly string[]) => {
+    const lista = typeof textos === "string" ? [textos] : textos;
+    const k = chaveUnidade(lista[0]);
     if (!k || chaves.has(k)) return null;
-    const mesmas = porCanonico.get(canonicoUnidade(texto));
-    if (mesmas?.size === 1) return porId.get([...mesmas][0]) ?? null;
-    // O plural de uma grafia cadastrada ("CAIXAS" → "CAIXA").
-    if (k.length > 2 && k.endsWith("S")) return chaves.get(k.slice(0, -1)) ?? null;
-    return null;
+    // As unidades que a regra do sistema (por qualquer escrita) ou o PLURAL de uma grafia cadastrada ("CAIXAS" → CAIXA)
+    // apontam — UMA só é sugestão; duas ou mais, nenhuma.
+    const candidatas = new Set<number>();
+    for (const t of lista) for (const c of canonicosUnidade(t)) for (const id of porCanonico.get(c) ?? []) candidatas.add(id);
+    const doPlural = k.length > 2 && k.endsWith("S") ? chaves.get(k.slice(0, -1)) : undefined;
+    if (doPlural) candidatas.add(doPlural.id);
+    return candidatas.size === 1 ? (porId.get([...candidatas][0]) ?? null) : null;
   };
   return { resolver, sugerir };
 }
@@ -152,7 +190,7 @@ export function compararUnidades(
   for (const u of uso) {
     const dfd = Math.max(0, Number(u.dfd) || 0);
     const catalogo = Math.max(0, Number(u.catalogo) || 0);
-    const texto = espacos(String(u.texto ?? ""));
+    const texto = limparEspacos(String(u.texto ?? ""));
     const chave = chaveUnidade(texto);
     if (!chave) {
       semUnidade.dfd += dfd;
@@ -170,7 +208,7 @@ export function compararUnidades(
     const grafias = [...a.grafias].map(([texto, n]) => ({ texto, n })).sort((x, y) => y.n - x.n || x.texto.localeCompare(y.texto, "pt-BR"));
     const texto = grafias[0].texto;
     const unidade = cmp.resolver(texto);
-    const sugestao = unidade ? null : cmp.sugerir(texto);
+    const sugestao = unidade ? null : cmp.sugerir(grafias.map((g) => g.texto));
     linhas.push({
       chave,
       texto,
@@ -201,18 +239,19 @@ export function itensPorUnidade(linhas: readonly LinhaUnidade[]): Map<number, { 
 }
 
 /**
- * PROPOSTA de cadastro para uma grafia NÃO cadastrada (o ADM confere antes de gravar): o nome é o canônico da regra do
- * sistema (UND → UNIDADE); a sigla, a escrita mais curta do grupo; os sinônimos, as demais grafias ainda não cadastradas
- * dos itens que caem no MESMO canônico ("UN", "UND", "Unid." → UN · UNIDADE · [UND, UNID.]).
+ * PROPOSTA de cadastro para uma grafia NÃO cadastrada (o ADM confere antes de gravar): o grupo = ela + as demais grafias
+ * AINDA NÃO cadastradas que a regra do sistema põe no MESMO canônico; o nome é o canônico (UND → UNIDADE), a sigla a
+ * escrita mais curta do grupo e os sinônimos as demais ("UN", "UND", "Unid." → UN · UNIDADE · [UND, UNID.]). Sigla/nome
+ * longos demais são cortados no limite — a grafia inteira fica como sinônimo (a unidade cobre o texto original).
  */
 export function propostaUnidade(linha: LinhaUnidade, linhas: readonly LinhaUnidade[]): { sigla: string; nome: string; sinonimos: string[] } {
-  const c = canonicoUnidade(linha.texto);
-  const grupo = c ? linhas.filter((l) => l.estado !== "cadastrada" && canonicoUnidade(l.texto) === c) : [linha];
+  const canon = (l: LinhaUnidade) => new Set(l.grafias.flatMap((g) => canonicosUnidade(g.texto)));
+  const alvo = canon(linha);
+  const grupo = linhas.filter((l) => l === linha || (l.estado !== "cadastrada" && [...canon(l)].some((c) => alvo.has(c))));
   if (!grupo.includes(linha)) grupo.push(linha);
   const textos = grupo.map((l) => l.texto.toUpperCase());
   const sigla = [...textos].sort((a, b) => a.length - b.length || a.localeCompare(b, "pt-BR"))[0].slice(0, LIMITES_PADRONIZACAO.sigla);
-  const canonico = normUnidadeMedida(linha.texto);
-  const nome = (canonico === "—" ? linha.texto.toUpperCase() : canonico).slice(0, LIMITES_PADRONIZACAO.nome);
+  const nome = (nomeCanonico(grupo.flatMap((l) => l.grafias.map((g) => g.texto))) ?? linha.texto.toUpperCase()).slice(0, LIMITES_PADRONIZACAO.nome);
   return { sigla, nome, sinonimos: limparSinonimos(sigla, nome, textos) };
 }
 
@@ -221,7 +260,7 @@ export function limparSinonimos(sigla: string, nome: string, sinonimos: readonly
   const vistas = new Set([chaveUnidade(sigla), chaveUnidade(nome)]);
   const out: string[] = [];
   for (const s of sinonimos) {
-    const t = espacos(s).slice(0, LIMITES_PADRONIZACAO.grafia);
+    const t = limparEspacos(s).slice(0, LIMITES_PADRONIZACAO.grafia);
     const k = chaveUnidade(t);
     if (!k || vistas.has(k)) continue;
     vistas.add(k);
@@ -264,7 +303,7 @@ export function limparPalavras(palavras: readonly string[]): string[] {
   const vistas = new Set<string>();
   const out: string[] = [];
   for (const p of palavras) {
-    const t = espacos(p).slice(0, LIMITES_PADRONIZACAO.palavra);
+    const t = limparEspacos(p).slice(0, LIMITES_PADRONIZACAO.palavra);
     const k = chavePalavra(t);
     if (k.replace(/ /g, "").length < 2 || vistas.has(k)) continue;
     vistas.add(k);
@@ -302,10 +341,20 @@ export function nomeEmUso(nome: string, classificacoes: readonly ClassificacaoIt
   return classificacoes.find((c) => c.id !== id && chavePalavra(c.nome) === k) ?? null;
 }
 
-/** Palavra da descrição × palavra da palavra-chave: curta (até 3 letras) = a palavra INTEIRA; longa = o INÍCIO dela
- * (CADEIRA acha CADEIRAS; AR não acha ARMÁRIO; DE não acha DESCARTÁVEL). */
+/** Palavra da descrição × palavra da palavra-chave: longa = o INÍCIO dela (CADEIRA acha CADEIRAS); curta (até 3 letras)
+ * = a palavra INTEIRA ou o plural (KIT acha KITS; GÁS acha GASES; AR não acha ARMÁRIO; DE não acha DESCARTÁVEL). */
 function casaPalavra(daDescricao: string, daChave: string): boolean {
-  return daChave.length <= 3 ? daDescricao === daChave : daDescricao.startsWith(daChave);
+  if (daChave.length > 3) return daDescricao.startsWith(daChave);
+  return daDescricao === daChave || daDescricao === `${daChave}S` || daDescricao === `${daChave}ES`;
+}
+
+/** As palavras-chave CURTAS (até 3 letras) que uma palavra da descrição pode ser: ela mesma ou o singular do plural. */
+function basesCurtas(w: string): string[] {
+  const out: string[] = [];
+  if (w.length <= 3) out.push(w);
+  if (w.endsWith("S") && w.length - 1 <= 3 && w.length > 1) out.push(w.slice(0, -1));
+  if (w.endsWith("ES") && w.length - 2 <= 3 && w.length > 2) out.push(w.slice(0, -2));
+  return out;
 }
 
 /** Por que o item ficou na classificação: a palavra-chave (como cadastrada) ou a sigla da unidade. */
@@ -327,7 +376,7 @@ export function criarClassificador(classificacoes: readonly ClassificacaoItem[],
     for (const termo of cls.palavras) {
       const palavras = palavrasDe(termo);
       if (palavras.join("").length < 2) continue;
-      const regra: Regra = { cls, termo: espacos(termo), palavras, tamanho: palavras.join(" ").length, prioridade };
+      const regra: Regra = { cls, termo: limparEspacos(termo), palavras, tamanho: palavras.join(" ").length, prioridade };
       const indice = palavras[0].length <= 3 ? exatas : prefixos;
       const l = indice.get(palavras[0]) ?? [];
       l.push(regra);
@@ -344,10 +393,10 @@ export function criarClassificador(classificacoes: readonly ClassificacaoItem[],
       let melhor: Regra | null = null;
       const considerar = (r: Regra) => {
         if (i + r.palavras.length > ws.length) return;
-        for (let j = 1; j < r.palavras.length; j++) if (!casaPalavra(ws[i + j], r.palavras[j])) return;
+        for (let j = 0; j < r.palavras.length; j++) if (!casaPalavra(ws[i + j], r.palavras[j])) return;
         if (!melhor || r.tamanho > melhor.tamanho || (r.tamanho === melhor.tamanho && r.prioridade < melhor.prioridade)) melhor = r;
       };
-      for (const r of exatas.get(w) ?? []) considerar(r);
+      for (const b of basesCurtas(w)) for (const r of exatas.get(b) ?? []) considerar(r);
       for (const t of tamanhos) {
         if (t > w.length) break;
         for (const r of prefixos.get(w.slice(0, t)) ?? []) considerar(r);

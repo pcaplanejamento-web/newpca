@@ -623,9 +623,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
     o veredito COMPACTO (`ConferenciaCompacta` — sem a descrição do catálogo; catálogo vazio/sem código ⇒ `null`); a
     célula é a **`CelulaCatalogo`** (`EstadoCelula.tsx`, a MESMA da tabela de itens do `DfdView`), na cor do nível do ADM.
-    Com o cadastro da **PADRONIZAÇÃO** (Catálogo → Unidades de medida | Classificações — ver a seção própria), mais duas
-    colunas, só quando o cadastro correspondente existe: **Classificação** (depois de Catálogo — a automática) e **Unid.
-    cadastrada** (depois de Unidade — a unidade cadastrada que a do item representa, ou "Não cadastrada").
+    Com o cadastro da **PADRONIZAÇÃO** (Catálogo → Unidades de medida | Classificações — ver a seção própria; vem na MESMA
+    resposta dos itens, `padronizacao`), mais duas colunas, só quando o cadastro correspondente existe: **Classificação**
+    (depois de Catálogo — a automática) e **Unid. cadastrada** (depois de Unidade — a unidade cadastrada que a do item
+    representa, ou "Não cadastrada").
   - **Itens NORMAL | CONSOLIDADA (sem consulta nova ao banco):** só na visão Itens, um 2º `Segmented` (`modoItens`,
     ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
     linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
@@ -1314,60 +1315,86 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 
 ### Padronização: UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item — migração `0038`
 - **O que é:** duas visões novas no `Segmented` do Catálogo — **Catálogo · Lista de Itens · Unidades de medida ·
-  Classificações** —, carregadas SOB DEMANDA (`next/dynamic`, `ssr:false`, esqueleto; cada uma busca os próprios dados só
-  quando aberta — a 1ª carga do Catálogo não muda). Editores (admin/gestor) gerenciam; os demais consultam. "Exportar
-  modelo" (cabeçalho) só aparece nas visões do catálogo.
+  Classificações** (no celular, rótulos curtos pelo `Segmented.curto`: Itens · Unid. medida · Classif.) —, carregadas SOB
+  DEMANDA (`next/dynamic`, `ssr:false`, esqueleto **`SkeletonCartao`**; cada uma busca os próprios dados só quando aberta —
+  a 1ª carga do Catálogo não muda). Editores (admin/gestor) gerenciam; os demais CONSULTAM (tocar numa linha do cadastro
+  abre o editor em modo **`somenteLeitura`**: os dados e a prévia, só "Fechar"). "Exportar modelo" (cabeçalho, ANTES do
+  `Segmented` — as abas não saem do lugar) só aparece nas visões do catálogo.
 - **Modelo (aditivo — tabelas novas e vazias: nada muda até o 1º cadastro):** `item_classificacoes` (nome + cor +
   `palavras` JSON `string[]` + ordem) e `unidades_medida` (sigla + nome + `sinonimos` JSON `string[]` + ordem +
   `classificacao_id` FK **set null** — a classificação que a unidade indica). Núcleo PURO **`padronizacao-core.ts`**
   (testado); D1 em **`padronizacao.ts`**; Zod em **`padronizacao-validation.ts`**; limites únicos `LIMITES_PADRONIZACAO`
-  (sigla 20, nome 60, grafia 60, 100 sinônimos, palavra 60, 300 palavras-chave).
+  (sigla 20, nome 60, grafia 100 — a maior unidade que um item aceita —, 100 sinônimos, palavra 60, 300 palavras-chave,
+  200 grafias por chamada de sinônimos, 300 ids por reordenação — `ordemPadronizacaoSchema`, sem repetir).
 - **1) COMPARAÇÃO das unidades dos itens com o cadastro:** a grafia é comparada pela **`chaveUnidade`** (sem caixa/acento/
   pontuação/espaço; ²/³ = 2/3 — "Und." = "UND"); é **cadastrada** quando é a sigla, o nome ou um sinônimo de UMA unidade
-  (`resolverUnidades`); senão, **não cadastrada** — com **SUGESTÃO** (`comparadorUnidades().sugerir`) quando a regra
-  embutida (`normUnidadeMedida`: UN/UND/UNID = UNIDADE…) a põe no mesmo canônico de UMA cadastrada (duas ⇒ nenhuma: nunca
-  adivinha) ou quando é o plural de uma grafia cadastrada ("CAIXAS" → CAIXA). **Uma grafia pertence a UMA unidade**
+  (`resolverUnidades`); senão, **não cadastrada** — com **SUGESTÃO** (`comparadorUnidades().sugerir`) pela UNIÃO dos
+  candidatos de TODAS as escritas da linha: os canônicos da regra embutida (`normUnidadeMedida`: UN/UND/UNID = UNIDADE…) do
+  texto como escrito E da chave ("U.N.D" → UND → UNIDADE) e o plural de uma grafia cadastrada ("CAIXAS" → CAIXA) — UMA
+  unidade candidata é a sugestão; duas ou mais, nenhuma (nunca adivinha). **Uma grafia pertence a UMA unidade**
   (`conflitoUnidade` → 409). `compararUnidades` junta as escritas equivalentes numa linha (a mais usada à frente), com
   quantos itens de DFD e do catálogo a usam (sem unidade vai à parte); ordem: não cadastradas › sugestões › cadastradas,
   depois o mais usado. Tela (`UnidadesMedidaView` = contêiner): 4 KPIs (`StatMini`: cadastradas · % dos itens com unidade
-  cadastrada · grafias não cadastradas/sugestões · itens sem unidade) + **Unidades cadastradas** (`DataTable` +
-  **`AcoesCadastro`** ↑/↓/editar/excluir) + **Comparação com os itens** (**`ComparacaoUnidades`**, apresentacional): na
-  sugestão, "Adicionar a UN" (uma a uma ou **"Adicionar N sugestões"**); na não cadastrada, "Adicionar a…" (`select` das
-  cadastradas) ou **"Cadastrar"** com a PROPOSTA pronta (`propostaUnidade`: nome = o canônico do sistema, sigla = a escrita
-  mais curta do grupo, sinônimos = as demais grafias não cadastradas do mesmo canônico). Editor **`EditorUnidadeMedida`**:
-  sigla, nome, sinônimos (`CampoLista`), a classificação indicada (**`SelectField`**) e a PRÉVIA das grafias dos itens que a
-  unidade passa a cobrir; conflito ⇒ aviso e "Salvar" travado.
+  cadastrada · grafias não cadastradas/sugestões · itens sem unidade) + **Unidades cadastradas** (`DataTable` — lista
+  ORDENADA: colunas `filter:"none"`, a posição é a da ordem gravada — + **`AcoesCadastro`** ↑/↓/editar/excluir; tocar na
+  linha abre o editor) + **Comparação com os itens** (**`ComparacaoUnidades`**, apresentacional): as escritas da linha na
+  **`CelulaLista`** (quantos itens cada uma na dica; o filtro acha a linha por QUALQUER escrita); na não cadastrada, ESCOLHER
+  a unidade num `select` (a sugestão vem escolhida e marcada "(sugestão)") e CONFIRMAR em **"Adicionar"** (desabilitado sem
+  escolha; escolher não grava) ou **"Cadastrar"** com a PROPOSTA pronta (`propostaUnidade`: o grupo = a linha + as demais
+  NÃO cadastradas que compartilham um canônico com ela; nome = o canônico do sistema, sigla = a escrita mais curta,
+  sinônimos = as demais); **"Adicionar N sugestões"** grava cada sugestão na unidade escolhida na linha (em lotes de 200).
+  O botão acionado mostra o andamento e TODAS as ações travam até o fim. Editor **`EditorUnidadeMedida`**: sigla, nome,
+  sinônimos (`CampoLista`), a classificação indicada (**`SelectField`**) e a PRÉVIA das grafias dos itens que a unidade
+  passa a cobrir; conflito ⇒ aviso e "Salvar" travado.
 - **2) CLASSIFICAÇÃO AUTOMÁTICA dos itens (`criarClassificador`):** pela descrição — vence a palavra-chave que aparece
   **PRIMEIRO** (o produto vem no início: "SERVIÇO DE MANUTENÇÃO EM CADEIRAS" = serviço); na mesma posição, a mais **LONGA**
   ("MATERIAL DE LIMPEZA" vence "MATERIAL"); depois, a **ordem** do cadastro (↑/↓). Cada palavra da palavra-chave casa o
-  **INÍCIO** da palavra da descrição (CADEIRA acha CADEIRAS) — as de até **3 letras, só inteiras** (AR não acha ARMÁRIO; DE
-  não acha DESCARTÁVEL) —, sem acento/caixa/pontuação dos dois lados (`palavrasDe`). Sem palavra-chave, vale a classificação
+  **INÍCIO** da palavra da descrição (CADEIRA acha CADEIRAS) — as de até **3 letras, só inteiras ou no plural** (KIT acha
+  KITS, GÁS acha GASES; AR não acha ARMÁRIO; DE não acha DESCARTÁVEL — `casaPalavra`/`basesCurtas`) —, sem acento/caixa/
+  pontuação dos dois lados (`palavrasDe`). Sem palavra-chave, vale a classificação
   que a **UNIDADE cadastrada** do item indica; sem nenhuma, **"Não classificado"**. Índices montados uma vez (1ª palavra:
   exata ou prefixo); cada chamada para na 1ª posição que casa (20 mil descrições no teste de escala). **Uma palavra-chave
   pertence a UMA classificação** e o nome é único (`conflitoPalavra`/`nomeEmUso` → 409). Tela (`ClassificacoesView` =
-  contêiner): 4 KPIs (classificações · % dos itens classificados · não classificados · % do valor) + **Classificações
-  cadastradas** (palavras-chave, as unidades que a indicam, itens, valor dos DFDs, ↑/↓) + **Classificação dos itens**
-  (**`ClassificacaoDosItens`**: cada descrição DISTINTA dos itens dos DFDs e do catálogo com a classificação, o motivo — a
-  palavra-chave ou a unidade —, a unidade, os itens e o valor; o filtro "Não classificado" acha as palavras que faltam),
-  classificada NO NAVEGADOR sobre as descrições carregadas uma vez por abertura. Editor **`EditorClassificacao`**: nome, cor
-  (`ColorField`), palavras-chave e a **PRÉVIA AO VIVO** (quantos itens a classificação passa a ter, quantos vêm de outra e
-  quantos saem, com exemplos) antes de gravar.
+  contêiner): 4 KPIs (classificações · % dos itens classificados · não classificados · % do valor — "…" enquanto os itens
+  chegam, "—" + "itens indisponíveis" se não carregarem) + **Classificações cadastradas** (lista ORDENADA, colunas
+  `filter:"none"`: palavras-chave, as unidades que a indicam, itens, valor dos DFDs, ↑/↓; tocar na linha abre o editor) +
+  **Classificação dos itens** (**`ClassificacaoDosItens`**, memorizada: cada descrição DISTINTA dos itens dos DFDs e do
+  catálogo — inclusive o item SEM descrição, classificado só pela unidade — com a classificação, o motivo, a unidade, os
+  itens e o valor; o filtro "Não classificado" acha as palavras que faltam; tocar na linha abre o detalhe inteiro — a
+  descrição completa, sem depender da dica no celular), classificada NO NAVEGADOR sobre as descrições carregadas UMA vez por
+  abertura (não mudam com o cadastro). Editor **`EditorClassificacao`**: nome, cor (`ColorField`), palavras-chave e a
+  **PRÉVIA AO VIVO** (quantos itens a classificação passa a ter, quantos vêm de outra e quantos saem, com exemplos — cada um
+  com a unidade) antes de gravar.
+- **Gravação (as duas telas):** os editores têm o PRÓPRIO rascunho (`inicial` → `onSalvar(rascunho)`; digitar não
+  re-renderiza a tela de trás; o título vem do `inicial`). Hook **`useGravacaoCadastro`** (`src/components/`): UMA gravação
+  por vez (trava por ref — dois toques no mesmo quadro não passam), o desfecho no aviso flutuante (`Desfecho`: sucesso; só
+  EM PARTE ⇒ aviso âmbar com as duas contas — "N adicionada(s); M não — motivo"; nada entrou ⇒ erro com o motivo do
+  servidor) e o cadastro RECARREGADO depois — também na falha (outra pessoa pode ter mudado algo); reordenar é otimista e só
+  recarrega se falhar. Depois de gravar recarrega SÓ o cadastro (`GET /api/catalogo/unidades-medida?uso=0`; as descrições
+  e o uso das grafias ficam — não mudam com o cadastro). Recarga que falha com a tela já montada ⇒ **`ErroCarga`** âmbar no
+  topo ("A lista pode estar desatualizada" + "Tentar de novo"); a 1ª carga que falha ⇒ `ErroCarga` vermelho.
 - **Escopo:** os itens de DFD seguem a unidade ativa do cabeçalho (`getReparticaoFiltro`; "Geral" = todos — como a Mesa); os
   do catálogo são globais; o cadastro é global.
-- **Mesa → Itens:** `carregarMesa` carrega o cadastro (`listarPadronizacao` — FAIL-SAFE: falhou ⇒ vazio, a Mesa segue) →
-  `DfdsView.padronizacao` (Mesa principal e Mesa do PCA). Com unidades cadastradas, a coluna **"Unid. cadastrada"**
+- **Mesa → Itens:** o cadastro chega JUNTO com os itens — `GET /api/dfd/itens` devolve `padronizacao` (`listarPadronizacao`,
+  FAIL-SAFE: falhou ⇒ `null`, a lista segue) —, então só é buscado com a visão Itens aberta (a Mesa não carrega nada a mais)
+  e acompanha a recarga dos itens (Mesa principal e Mesa do PCA). Com unidades cadastradas, a coluna **"Unid. cadastrada"**
   (**`CelulaUnidadeCadastrada`**: a sigla, ou "Não cadastrada" em âmbar; sem unidade = "—"); com classificações, a coluna
   **"Classificação"** (**`CelulaClassificacao`**: ponto na cor da classificação, o motivo na dica). As MESMAS nas visões
   Normal, **Consolidada** (listas + filtros no nível do ITEM — `atributoItem.classificacao`/`unidCad`) e no detalhe
-  (`ComposicaoItem`). Sem cadastro, as colunas nem existem. A classificação é memorizada por item (`WeakMap`).
+  (`ComposicaoItem`). Sem cadastro, as colunas nem existem. A unidade é memorizada pela GRAFIA (poucas distintas entre
+  milhares de itens) e a classificação por item (`WeakMap`).
 - **Rotas** (envelope `http.ts`; leitura `exigirUsuario`, escrita `exigirEditor` + auditoria `unidade_medida`/
-  `classificacao_item`): `GET`/`POST /api/catalogo/unidades-medida` (GET = cadastro + classificações + o USO das grafias),
-  `PATCH`/`DELETE /api/catalogo/unidades-medida/[id]`, `PATCH /api/catalogo/unidades-medida/ordem`, `POST
-  /api/catalogo/unidades-medida/sinonimos` (`{itens ≤ 200}` → as grafias viram sinônimos num lote atômico; grafia de OUTRA
-  unidade, repetida no lote ou além do teto vira `falhas`), `GET`/`POST /api/catalogo/classificacoes`, `PATCH`/`DELETE
-  /api/catalogo/classificacoes/[id]` (excluir zera a classificação das unidades no mesmo lote), `PATCH
-  /api/catalogo/classificacoes/ordem` e `GET /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no
-  banco). Cliente único `padronizacao-cliente.ts` (`chamarPadronizacao`).
+  `classificacao_item`): `GET`/`POST /api/catalogo/unidades-medida` (GET = cadastro + classificações + o USO das grafias;
+  `?uso=0` = só o cadastro), `PATCH`/`DELETE /api/catalogo/unidades-medida/[id]`, `PATCH /api/catalogo/unidades-medida/ordem`,
+  `POST /api/catalogo/unidades-medida/sinonimos` (`{itens ≤ 200}` → as grafias viram sinônimos num lote atômico e
+  CONDICIONAL — compare-and-set: cada unidade só é gravada se a lista dela ainda é a lida, `gravarSinonimosSeIgual` em
+  **`padronizacao-sql.ts`**, testado pelo driver D1 REAL dentro de `db.batch`; a unidade que não existe mais, a grafia sem
+  letras/números, a de OUTRA unidade, a mesma grafia pedida para duas, o excesso além do teto e a unidade alterada no meio
+  viram `falhas`; nada entrou ⇒ 409 com o motivo; auditoria só das unidades gravadas), `GET`/`POST
+  /api/catalogo/classificacoes`, `PATCH`/`DELETE /api/catalogo/classificacoes/[id]` (excluir zera a classificação das
+  unidades no mesmo lote e registra no histórico CADA unidade afetada), `PATCH /api/catalogo/classificacoes/ordem` e `GET
+  /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no banco). Cliente único `padronizacao-cliente.ts`
+  (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
@@ -1592,7 +1619,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
   desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4), `Segmented` (o trilho inteiro na altura padrão — anel
   INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
-  ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa),
+  ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa; **`curto`** = o rótulo abaixo de `sm` quando o
+  inteiro não cabe, o inteiro segue como nome acessível — ex.: as visões do Catálogo),
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
   — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
@@ -1698,7 +1726,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
   cadastrada do item na Mesa → Itens), **`ComparacaoUnidades`**/**`EditorUnidadeMedida`** (`UnidadesMedidaView.tsx`) e
-  **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo), `Callout` (feedback
+  **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo; os editores
+  com `somenteLeitura` = a consulta), **`ErroCarga`** (falha ao CARREGAR dados: a mensagem + "Tentar de novo" — `danger` sem
+  nada a mostrar, `warn` com a tela seguindo nos dados anteriores), `Callout` (feedback
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
@@ -1759,7 +1789,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
   **fixa** (`lg:sticky lg:top-0 lg:h-dvh`) com **scroll interno** na navegação (a lista rola se houver muitas abas).
 - **Render correto desde o início** (sem flash/CLS): shim `__name` + `<style>` de tokens antes do
-  `ThemeProvider` em `layout.tsx`. Skeleton/shimmer (`Skeleton.tsx`) só onde há espera real.
+  `ThemeProvider` em `layout.tsx`. Skeleton/shimmer (`Skeleton.tsx`: `Skeleton`, `SkeletonLinhas`, **`SkeletonCartao`** =
+  a moldura de cartão com linhas — a espera de uma visão inteira) só onde há espera real.
 - Erros: `src/app/error.tsx` (boundary, export `ErrorBoundary`) e `not-found.tsx`.
 - **Verificação (sandbox):** dev server local é lentíssimo → verificar no **site publicado** via
   Browser pane, claro/escuro + mobile (360/390/768); `/design-system` é a superfície de validação.

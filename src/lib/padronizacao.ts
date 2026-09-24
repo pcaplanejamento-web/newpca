@@ -6,6 +6,7 @@ import {
   conflitoPalavra,
   conflitoUnidade,
   type DescricaoItem,
+  limparEspacos,
   limparPalavras,
   limparSinonimos,
   nomeEmUso,
@@ -13,6 +14,7 @@ import {
   type UnidadeMedida,
   type UsoUnidade,
 } from "./padronizacao-core";
+import { gravarSinonimosSeIgual } from "./padronizacao-sql";
 import type { DadosClassificacaoItem, DadosUnidadeMedida } from "./padronizacao-validation";
 
 /**
@@ -80,7 +82,6 @@ export async function getClassificacao(id: number): Promise<ClassificacaoItem | 
 type DadosUnidade = { sigla: string; nome: string; sinonimos: string[]; classificacaoId: number | null };
 type DadosClassificacao = { nome: string; cor: string; palavras: string[] };
 type Recusa = { erro: string; status: number };
-const espacos = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /**
  * Unidade PRONTA para gravar (`id` = a editada; `null` = nova): sinônimos limpos (sem repetir a mesma grafia nem a
@@ -93,8 +94,8 @@ export async function prepararUnidade(d: DadosUnidadeMedida, id: number | null):
     d.classificacaoId != null ? getClassificacao(d.classificacaoId) : Promise.resolve(null),
   ]);
   if (d.classificacaoId != null && !classificacao) return { erro: "A classificação escolhida não existe mais.", status: 422 };
-  const sigla = espacos(d.sigla);
-  const nome = espacos(d.nome);
+  const sigla = limparEspacos(d.sigla);
+  const nome = limparEspacos(d.nome);
   const dados = { sigla, nome, sinonimos: limparSinonimos(sigla, nome, d.sinonimos), classificacaoId: d.classificacaoId };
   const c = conflitoUnidade(dados, unidades, id);
   if (c) return { erro: `"${c.grafia}" já é uma grafia da unidade ${c.unidade.sigla} (${c.unidade.nome}).`, status: 409 };
@@ -104,7 +105,7 @@ export async function prepararUnidade(d: DadosUnidadeMedida, id: number | null):
 /** Classificação PRONTA para gravar: palavras-chave limpas — ou a RECUSA (nome repetido; palavra-chave de OUTRA). */
 export async function prepararClassificacao(d: DadosClassificacaoItem, id: number | null): Promise<{ dados: DadosClassificacao } | Recusa> {
   const classificacoes = await listarClassificacoes();
-  const nome = espacos(d.nome);
+  const nome = limparEspacos(d.nome);
   const mesmoNome = nomeEmUso(nome, classificacoes, id);
   if (mesmoNome) return { erro: `Já existe a classificação "${mesmoNome.nome}".`, status: 409 };
   const palavras = limparPalavras(d.palavras);
@@ -135,14 +136,17 @@ export async function excluirUnidadeMedida(id: number): Promise<void> {
   await getDb().delete(unidadesMedida).where(eq(unidadesMedida.id, id));
 }
 
-/** Grava os SINÔNIMOS de várias unidades num lote atômico (a lista inteira de cada uma — já mesclada pela rota). */
-export async function gravarSinonimos(porUnidade: Map<number, string[]>): Promise<void> {
+/**
+ * Grava os SINÔNIMOS de várias unidades num lote atômico — a lista inteira de cada uma (já mesclada pela rota), cada
+ * uma SÓ se a gravada ainda é a `lidos` (compare-and-set, `gravarSinonimosSeIgual`): devolve os ids GRAVADOS — o que
+ * ficou de fora mudou no meio (outra pessoa) e não é sobrescrito.
+ */
+export async function gravarSinonimos(porUnidade: Map<number, { lidos: string[]; novos: string[] }>): Promise<Set<number>> {
   const db = getDb();
-  const stmts = [...porUnidade].map(([id, sinonimos]) =>
-    db.update(unidadesMedida).set({ sinonimos: JSON.stringify(sinonimos), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(unidadesMedida.id, id)),
-  );
-  if (stmts.length === 0) return;
-  await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  const stmts = [...porUnidade].map(([id, v]) => gravarSinonimosSeIgual(db, id, v.lidos, v.novos));
+  if (stmts.length === 0) return new Set();
+  const res = await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  return new Set(res.flat().map((r) => r.id));
 }
 
 /** Nova ordem (índice = posição na lista). */
@@ -169,6 +173,11 @@ export async function atualizarClassificacao(id: number, d: DadosClassificacao):
     .update(itemClassificacoes)
     .set({ nome: d.nome, cor: d.cor, palavras: JSON.stringify(d.palavras), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(itemClassificacoes.id, id));
+}
+
+/** As unidades que INDICAM a classificação (a exclusão as deixa sem classificação — a rota registra cada uma). */
+export async function unidadesDaClassificacao(id: number): Promise<{ id: number; sigla: string }[]> {
+  return getDb().select({ id: unidadesMedida.id, sigla: unidadesMedida.sigla }).from(unidadesMedida).where(eq(unidadesMedida.classificacaoId, id));
 }
 
 /** Exclui a classificação e LIMPA a das unidades que a indicavam — num lote atômico (além da FK `set null`). */
@@ -212,7 +221,8 @@ export async function usoDasUnidades(reparticaoId?: number): Promise<UsoUnidade[
 /**
  * DESCRIÇÕES DISTINTAS dos itens (descrição + unidade) com quantos itens as usam e o valor dos de DFD — a prévia da
  * classificação automática. Mesmo escopo de `usoDasUnidades`. Agregado no banco (a mesma descrição repetida em N DFDs
- * vem uma vez só).
+ * vem uma vez só). O item SEM descrição também conta (vem com descrição vazia — a unidade ainda o classifica): os
+ * totais da tela batem com os itens da Mesa.
  */
 export async function descricoesDosItens(reparticaoId?: number): Promise<DescricaoItem[]> {
   const db = getDb();
@@ -236,7 +246,6 @@ export async function descricoesDosItens(reparticaoId?: number): Promise<Descric
   const porChave = new Map<string, DescricaoItem>();
   const somar = (descricao: string | null, unidade: string | null, dfd: number, catalogo: number, valor: number) => {
     const d = (descricao ?? "").trim();
-    if (!d) return;
     const k = `${d}\u0000${unidade ?? ""}`;
     const a = porChave.get(k) ?? { descricao: d, unidade: unidade ?? null, dfd: 0, catalogo: 0, valor: 0 };
     a.dfd += dfd;

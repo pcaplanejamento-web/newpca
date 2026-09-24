@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { classificacaoItemSchema, sinonimosUnidadesSchema, unidadeMedidaSchema } from "../src/lib/padronizacao-validation.ts";
+import { classificacaoItemSchema, ordemPadronizacaoSchema, sinonimosUnidadesSchema, unidadeMedidaSchema } from "../src/lib/padronizacao-validation.ts";
 
 describe("unidadeMedidaSchema", () => {
   it("aceita sigla + nome e completa os opcionais", () => {
@@ -17,7 +17,9 @@ describe("unidadeMedidaSchema", () => {
   });
   it("limita os sinônimos (quantidade e tamanho)", () => {
     assert.equal(unidadeMedidaSchema.safeParse({ sigla: "UN", nome: "UNIDADE", sinonimos: Array.from({ length: 101 }, (_, i) => `U${i}`) }).success, false);
-    assert.equal(unidadeMedidaSchema.safeParse({ sigla: "UN", nome: "UNIDADE", sinonimos: ["X".repeat(61)] }).success, false);
+    // A grafia cabe a maior unidade que um item aceita (100 no DFD).
+    assert.equal(unidadeMedidaSchema.safeParse({ sigla: "UN", nome: "UNIDADE", sinonimos: ["X".repeat(100)] }).success, true);
+    assert.equal(unidadeMedidaSchema.safeParse({ sigla: "UN", nome: "UNIDADE", sinonimos: ["X".repeat(101)] }).success, false);
   });
 });
 
@@ -40,5 +42,17 @@ describe("sinonimosUnidadesSchema", () => {
     assert.equal(sinonimosUnidadesSchema.safeParse({ itens: [{ unidadeId: 1, texto: "UND" }] }).success, true);
     assert.equal(sinonimosUnidadesSchema.safeParse({ itens: Array.from({ length: 201 }, () => ({ unidadeId: 1, texto: "UND" })) }).success, false);
     assert.equal(sinonimosUnidadesSchema.safeParse({ itens: [{ unidadeId: 1, texto: "  " }] }).success, false);
+    const longa = sinonimosUnidadesSchema.safeParse({ itens: [{ unidadeId: 1, texto: "X".repeat(101) }] });
+    assert.equal(longa.success, false);
+    assert.match(longa.error?.issues[0]?.message ?? "", /no máximo 100 caracteres/, "mensagem em pt-BR");
+  });
+});
+
+describe("ordemPadronizacaoSchema", () => {
+  it("exige ids, sem repetir, até o teto", () => {
+    assert.equal(ordemPadronizacaoSchema.safeParse({ ids: [] }).success, false);
+    assert.equal(ordemPadronizacaoSchema.safeParse({ ids: [3, 1, 2] }).success, true);
+    assert.equal(ordemPadronizacaoSchema.safeParse({ ids: [1, 1] }).success, false);
+    assert.equal(ordemPadronizacaoSchema.safeParse({ ids: Array.from({ length: 301 }, (_, i) => i + 1) }).success, false);
   });
 });
