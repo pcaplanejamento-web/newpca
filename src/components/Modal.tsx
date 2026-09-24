@@ -37,6 +37,20 @@ const MAX_VISIVEIS = 3;
 const modaisAbertos: number[] = [];
 let seqModal = 0;
 
+/** Trava do scroll da página COMPARTILHADA por todos os modais: trava no 1º aberto e solta só quando o ÚLTIMO fecha — um
+ * modal que fecha fora de ordem (o de baixo antes do de cima) nunca destrava a página sob outro nem a deixa travada. */
+let travasScroll = 0;
+let overflowAntes = "";
+function travarScroll(): () => void {
+  if (travasScroll++ === 0) {
+    overflowAntes = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  return () => {
+    if (travasScroll > 0 && --travasScroll === 0) document.body.style.overflow = overflowAntes;
+  };
+}
+
 /** Duração do token de motion (ms) — 0 com "reduzir movimento"/motion desligado. */
 export function duracaoMotionMs(): number {
   if (typeof window === "undefined") return 0;
@@ -181,15 +195,8 @@ export function Modal({
     return () => mq.removeEventListener("change", on);
   }, []);
 
-  // Trava o scroll da página enquanto o modal está aberto (nada interage por trás).
-  useEffect(() => {
-    if (!open) return;
-    const anterior = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = anterior;
-    };
-  }, [open]);
+  // Trava o scroll da página enquanto o modal está aberto (nada interage por trás) — contagem compartilhada.
+  useEffect(() => (open ? travarScroll() : undefined), [open]);
 
   // Painéis efetivos: à direita (`paineis` ou os legados `lateral`/`lateral2`) + os da `esquerda`.
   const direita: ModalPainel[] =
@@ -249,7 +256,7 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || bloqueado) return;
+      if (e.key !== "Escape" || bloqueado || e.defaultPrevented) return; // consumido (ex.: fechou um filtro aberto)
       if (modaisAbertos[modaisAbertos.length - 1] !== idModal.current) return; // há outro modal por cima
       if (escRef.current.principalNoTopo) return escRef.current.onClose(); // o principal está por cima
       const idUltimo = ordemRef.current[ordemRef.current.length - 1];

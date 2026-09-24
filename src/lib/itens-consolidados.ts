@@ -6,11 +6,14 @@ import { norm } from "./parse-dfd-comum.ts";
 
 /**
  * Visão CONSOLIDADA dos itens da Mesa — PURA (testável). Os itens de MESMO CÓDIGO (só os dígitos — a chave do catálogo)
- * viram UMA linha: quantidade SOMADA, valor unitário MÉDIO PONDERADO pela quantidade (Σ qtd×vu ÷ Σ qtd — a linha fecha:
- * qtd × médio = o total dos itens com preço) e os demais dados (protocolos, DFDs, unidades, descrições…) juntos. Item
- * SEM código não consolida (fica numa linha própria). Roda sobre a lista JÁ filtrada pela hierarquia da Mesa.
+ * viram UMA linha: quantidade SOMADA, valor unitário MÉDIO PONDERADO pela quantidade (Σ qtd×vu ÷ Σ qtd dos itens com
+ * quantidade E preço — entre eles, quantidade × médio = o valor deles) e os demais dados (protocolos, DFDs, unidades,
+ * descrições…) juntos. Item SEM código não consolida (fica numa linha própria). Roda sobre os itens JÁ filtrados (a
+ * hierarquia da Mesa e os filtros de atributo das colunas).
  * Extras de planejamento: a VARIAÇÃO dos preços (coeficiente de variação — acima de 25% a amostra deixa de ser
- * homogênea) e a CURVA ABC pelo valor (A = os que somam os primeiros 80% do valor, B = até 95%, C = o resto).
+ * homogênea; com UNIDADES diferentes, a maior DENTRO de uma mesma unidade — o preço da caixa não se compara com o da
+ * unidade), as estatísticas POR UNIDADE e a CURVA ABC pelo valor (A = os que somam os primeiros 80% do valor positivo,
+ * B = até 95%, C = o resto).
  */
 
 /** O que a consolidação lê de cada item (a linha da visão Itens da Mesa tem estes campos). */
@@ -35,7 +38,29 @@ export const FAIXAS_VARIACAO = { atencao: 0.25, alerta: 0.5 } as const;
 /** Um valor distinto de uma lista (a descrição ou a unidade) e em quantos itens ele aparece. */
 export type Ocorrencia = { texto: string; n: number };
 
-export type ItemConsolidado<T extends ItemConsolidavel> = {
+/** Estatísticas de quantidade e preço de um conjunto de itens (a linha inteira ou uma unidade dela). */
+export type Estatisticas = {
+  /** Σ das quantidades informadas (`null` = nenhum item tem quantidade). */
+  quantidade: number | null;
+  /** Itens sem quantidade VÁLIDA (vazia, zero ou negativa) / sem valor unitário válido — ficam fora da média. */
+  semQuantidade: number;
+  semValor: number;
+  /** Itens FORA da média ponderada (sem quantidade válida OU sem preço — cada item conta uma vez). */
+  foraDaMedia: number;
+  /** Σ dos valores totais dos itens (sem valor = 0) — o MESMO somatório da visão normal. */
+  valorTotal: number;
+  /** Média PONDERADA pela quantidade dos itens com quantidade E valor unitário (`null` = nenhum). */
+  valorMedio: number | null;
+  valorMin: number | null;
+  valorMax: number | null;
+  /** Coeficiente de variação (desvio-padrão amostral ÷ média simples) dos valores unitários — 2+ preços. */
+  variacao: number | null;
+};
+
+/** Uma UNIDADE de medida da linha (a chave normalizada — UN = UNIDADE…) com as estatísticas só dos itens dela. */
+export type ResumoUnidade = Estatisticas & { chave: string; texto: string; n: number };
+
+export type ItemConsolidado<T extends ItemConsolidavel> = Estatisticas & {
   /** Chave estável da linha: `c:<código>` — ou `i:<id>` do item SEM código (que não consolida). */
   chave: string;
   /** O código (só dígitos); `null` = item sem código. */
@@ -44,24 +69,15 @@ export type ItemConsolidado<T extends ItemConsolidavel> = {
   itens: T[];
   /** Descrições distintas (sem diferença de caixa/acento/espaço), a mais frequente primeiro. */
   descricoes: Ocorrencia[];
-  /** Unidades de medida distintas (UN = UNIDADE…), a mais frequente primeiro. Mais de uma = a soma mistura unidades. */
+  /** Unidades de medida distintas (UN = UNIDADE…), a mais frequente primeiro. */
   unidades: Ocorrencia[];
-  /** Σ das quantidades informadas (`null` = nenhum item tem quantidade). */
-  quantidade: number | null;
-  /** Itens sem quantidade / sem valor unitário válido (ficam fora da média). */
-  semQuantidade: number;
-  semValor: number;
-  /** Σ dos valores totais dos itens (sem valor = 0) — o MESMO somatório da visão normal. */
-  valorTotal: number;
-  /** Média PONDERADA pela quantidade dos itens com quantidade e valor unitário (`null` = nenhum). */
-  valorMedio: number | null;
-  valorMin: number | null;
-  valorMax: number | null;
-  /** Coeficiente de variação (desvio-padrão amostral ÷ média simples) dos valores unitários — 2+ preços. */
-  variacao: number | null;
-  /** Participação no valor total da lista (0..1). */
+  /** Mais de uma unidade: a quantidade e o valor médio da linha MISTURAM unidades; a `variacao` é a maior por unidade. */
+  unidadesMistas: boolean;
+  /** As estatísticas POR UNIDADE, na ordem de `unidades` (só as unidades informadas). */
+  porUnidade: ResumoUnidade[];
+  /** Participação no valor POSITIVO total da lista (0..1). */
   participacao: number;
-  /** Classe da curva ABC (`null` = sem valor). */
+  /** Classe da curva ABC (`null` = sem valor positivo). */
   abc: ClasseAbc | null;
 };
 
@@ -79,18 +95,18 @@ export function distintos<T>(itens: readonly T[], valor: (it: T) => string | num
   return [...vistos];
 }
 
-/** Agrupa textos por uma chave normalizada (o 1º texto de cada grupo representa-o), mais frequentes primeiro. */
-function ocorrencias(textos: (string | null)[], chave: (t: string) => string): Ocorrencia[] {
-  const grupos = new Map<string, Ocorrencia & { ordem: number }>();
-  for (const t of textos) {
-    const s = (t ?? "").trim();
+/** Agrupa os itens por uma chave normalizada do texto (o 1º texto de cada grupo representa-o), mais frequentes primeiro. */
+function agrupar<T>(itens: readonly T[], texto: (it: T) => string | null, chave: (t: string) => string): { chave: string; texto: string; itens: T[] }[] {
+  const grupos = new Map<string, { chave: string; texto: string; itens: T[]; ordem: number }>();
+  for (const it of itens) {
+    const s = (texto(it) ?? "").trim();
     if (!s) continue;
     const k = chave(s);
     const g = grupos.get(k);
-    if (g) g.n++;
-    else grupos.set(k, { texto: s, n: 1, ordem: grupos.size });
+    if (g) g.itens.push(it);
+    else grupos.set(k, { chave: k, texto: s, itens: [it], ordem: grupos.size });
   }
-  return [...grupos.values()].sort((a, b) => b.n - a.n || a.ordem - b.ordem).map(({ texto, n }) => ({ texto, n }));
+  return [...grupos.values()].sort((a, b) => b.itens.length - a.itens.length || a.ordem - b.ordem);
 }
 
 /**
@@ -114,6 +130,51 @@ function coeficienteVariacao(precos: number[]): number | null {
   return Math.sqrt(variancia) / media;
 }
 
+/** Estatísticas de um conjunto de itens — uma passada, sem `NaN` (valores ausentes/inválidos contam à parte). */
+function estatisticas(itens: readonly ItemConsolidavel[]): Estatisticas {
+  let quantidade: number | null = null;
+  let semQuantidade = 0;
+  let semValor = 0;
+  let foraDaMedia = 0;
+  let valorTotal = 0;
+  let somaPonderada = 0;
+  let somaQtd = 0;
+  let valorMin: number | null = null;
+  let valorMax: number | null = null;
+  const precos: number[] = [];
+  for (const it of itens) {
+    const q = it.quantidade;
+    if (q != null && Number.isFinite(q)) quantidade = (quantidade ?? 0) + q;
+    const temQtd = qtdValida(q);
+    if (!temQtd) semQuantidade++;
+    if (preco(it.valorUnitario)) {
+      precos.push(it.valorUnitario);
+      // Mín./máx. no próprio laço (nada de `Math.min(...precos)` — o espalhamento estoura com muitos preços).
+      if (valorMin == null || it.valorUnitario < valorMin) valorMin = it.valorUnitario;
+      if (valorMax == null || it.valorUnitario > valorMax) valorMax = it.valorUnitario;
+      if (temQtd) {
+        somaPonderada += q * it.valorUnitario;
+        somaQtd += q;
+      } else foraDaMedia++;
+    } else {
+      semValor++;
+      foraDaMedia++;
+    }
+    if (it.valorTotal != null && Number.isFinite(it.valorTotal)) valorTotal += it.valorTotal;
+  }
+  return {
+    quantidade,
+    semQuantidade,
+    semValor,
+    foraDaMedia,
+    valorTotal,
+    valorMedio: somaQtd > 0 ? somaPonderada / somaQtd : null,
+    valorMin,
+    valorMax,
+    variacao: coeficienteVariacao(precos),
+  };
+}
+
 /**
  * Consolida os itens por CÓDIGO — uma linha por código (item sem código = linha própria), na ordem do VALOR (maior
  * primeiro — a leitura da curva ABC), empate pelo código. Linear no nº de itens.
@@ -129,70 +190,63 @@ export function consolidarItens<T extends ItemConsolidavel>(itens: readonly T[])
   }
 
   const linhas: ItemConsolidado<T>[] = [];
-  let totalGeral = 0;
+  // Base da curva ABC = só os valores POSITIVOS (um total negativo não "devolve" participação às demais linhas).
+  let totalPositivo = 0;
   for (const [chave, g] of grupos) {
-    let quantidade: number | null = null;
-    let semQuantidade = 0;
-    let semValor = 0;
-    let valorTotal = 0;
-    let somaPonderada = 0;
-    let somaQtdPonderada = 0;
-    let valorMin: number | null = null;
-    let valorMax: number | null = null;
-    const precos: number[] = [];
-    for (const it of g.itens) {
-      if (it.quantidade != null && Number.isFinite(it.quantidade)) quantidade = (quantidade ?? 0) + it.quantidade;
-      else semQuantidade++;
-      if (preco(it.valorUnitario)) {
-        precos.push(it.valorUnitario);
-        // Mín./máx. no próprio laço (nada de `Math.min(...precos)` — o espalhamento estoura com muitos preços).
-        if (valorMin == null || it.valorUnitario < valorMin) valorMin = it.valorUnitario;
-        if (valorMax == null || it.valorUnitario > valorMax) valorMax = it.valorUnitario;
-        if (qtdValida(it.quantidade)) {
-          somaPonderada += it.quantidade * it.valorUnitario;
-          somaQtdPonderada += it.quantidade;
-        }
-      } else semValor++;
-      if (it.valorTotal != null && Number.isFinite(it.valorTotal)) valorTotal += it.valorTotal;
+    const geral = estatisticas(g.itens);
+    // Por UNIDADE (UN = UNIDADE…): as estatísticas só dos itens de cada uma — preços de unidades diferentes não se comparam.
+    const porUnidade: ResumoUnidade[] = agrupar(g.itens, (it) => it.unidade, normUnidadeMedida).map((u) => ({
+      chave: u.chave,
+      texto: u.texto,
+      n: u.itens.length,
+      ...estatisticas(u.itens),
+    }));
+    const unidadesMistas = porUnidade.length > 1;
+    let variacao = geral.variacao;
+    if (unidadesMistas) {
+      variacao = null;
+      for (const u of porUnidade) if (u.variacao != null && (variacao == null || u.variacao > variacao)) variacao = u.variacao;
     }
-    totalGeral += valorTotal;
+    totalPositivo += Math.max(0, geral.valorTotal);
     linhas.push({
+      ...geral,
+      variacao,
       chave,
       codigo: g.codigo,
       itens: g.itens,
-      descricoes: ocorrencias(
-        g.itens.map((it) => it.descricao),
-        (t) => norm(t),
-      ),
-      unidades: ocorrencias(
-        g.itens.map((it) => it.unidade),
-        (t) => normUnidadeMedida(t),
-      ),
-      quantidade,
-      semQuantidade,
-      semValor,
-      valorTotal,
-      valorMedio: somaQtdPonderada > 0 ? somaPonderada / somaQtdPonderada : null,
-      valorMin,
-      valorMax,
-      variacao: coeficienteVariacao(precos),
+      descricoes: agrupar(g.itens, (it) => it.descricao, norm).map((d) => ({ texto: d.texto, n: d.itens.length })),
+      unidades: porUnidade.map((u) => ({ texto: u.texto, n: u.n })),
+      unidadesMistas,
+      porUnidade,
       participacao: 0,
       abc: null,
     });
   }
 
-  linhas.sort((a, b) => b.valorTotal - a.valorTotal || (a.codigo ?? "￿").localeCompare(b.codigo ?? "￿") || a.chave.localeCompare(b.chave));
+  linhas.sort((a, b) => b.valorTotal - a.valorTotal || (a.codigo ?? "\uffff").localeCompare(b.codigo ?? "\uffff") || a.chave.localeCompare(b.chave));
   // Curva ABC: a participação ACUMULADA ANTES da linha decide a classe (a linha que cruza os 80% ainda é A — o maior
-  // valor é sempre A). Sem valor = sem classe.
+  // valor é sempre A). Sem valor positivo = sem classe.
   let acumulado = 0;
   for (const l of linhas) {
-    if (totalGeral <= 0 || l.valorTotal <= 0) continue;
-    const antes = acumulado / totalGeral;
-    l.participacao = l.valorTotal / totalGeral;
+    if (totalPositivo <= 0 || l.valorTotal <= 0) continue;
+    const antes = acumulado / totalPositivo;
+    l.participacao = l.valorTotal / totalPositivo;
     l.abc = antes < LIMITES_ABC.A ? "A" : antes < LIMITES_ABC.B ? "B" : "C";
     acumulado += l.valorTotal;
   }
   return linhas;
+}
+
+/**
+ * Média com que o preço de UM item se compara (o desvio do detalhe): a da UNIDADE dele quando a linha mistura unidades
+ * (sem unidade informada, nenhuma — `null`); senão, a da linha.
+ */
+export function mediaDeReferencia(l: Pick<ItemConsolidado<ItemConsolidavel>, "unidadesMistas" | "porUnidade" | "valorMedio">, unidade: string | null): number | null {
+  if (!l.unidadesMistas) return l.valorMedio;
+  const s = (unidade ?? "").trim();
+  if (!s) return null;
+  const chave = normUnidadeMedida(s);
+  return l.porUnidade.find((u) => u.chave === chave)?.valorMedio ?? null;
 }
 
 /** Nível da variação dos preços (`null` = menos de 2 preços). */
@@ -257,16 +311,17 @@ export function estadoConsolidado(porItem: readonly (readonly MensagemEstado[])[
 /** Resumo em TEXTO de uma linha consolidada (o "Copiar resumo" do detalhe) — pronto para colar num despacho/relatório. */
 export function textoResumoConsolidado(l: ItemConsolidado<ItemConsolidavel>, origem: { dfds: readonly string[]; protocolos: readonly string[] }): string {
   const unidades = l.unidades.map((u) => u.texto);
+  const qtd = (q: number | null) => (q != null ? num(q) : "—");
+  const medio = (v: number | null) => (v != null ? brl(v) : "—");
   const linhas = [
     `${l.codigo ? `Código ${l.codigo}` : "Item sem código"} — ${l.descricoes[0]?.texto ?? "sem descrição"}${
       l.descricoes.length > 1 ? ` (+${l.descricoes.length - 1} descrição(ões) diferente(s))` : ""
     }`,
-    `Quantidade total: ${l.quantidade != null ? num(l.quantidade) : "—"}${unidades.length ? ` ${unidades.join(" + ")}` : ""}${
-      unidades.length > 1 ? " (unidades diferentes)" : ""
-    }`,
-    `Valor unitário médio (ponderado): ${l.valorMedio != null ? brl(l.valorMedio) : "—"}${
+    `Quantidade total: ${qtd(l.quantidade)}${unidades.length ? ` ${unidades.join(" + ")}` : ""}${l.unidadesMistas ? " (unidades diferentes)" : ""}`,
+    ...(l.unidadesMistas ? [`Por unidade: ${l.porUnidade.map((u) => `${u.texto} ${qtd(u.quantidade)} · médio ${medio(u.valorMedio)}`).join("; ")}`] : []),
+    `Valor unitário médio (ponderado${l.unidadesMistas ? ", mistura unidades" : ""}): ${medio(l.valorMedio)}${
       l.valorMin != null && l.valorMax != null && l.valorMin !== l.valorMax ? ` · faixa ${brl(l.valorMin)} a ${brl(l.valorMax)}` : ""
-    }${l.variacao != null ? ` · variação ${pct(l.variacao, 1)}` : ""}`,
+    }${l.variacao != null ? ` · variação ${pct(l.variacao, 1)}${l.unidadesMistas ? " (a maior numa mesma unidade)" : ""}` : ""}`,
     `Valor total: ${brl(l.valorTotal)}${l.abc ? ` (${participacaoTexto(l.participacao)} do total · curva ABC: ${l.abc})` : ""}`,
     `Itens: ${num(l.itens.length)} em ${num(origem.dfds.length)} DFD(s)${origem.dfds.length ? ` — ${origem.dfds.join(", ")}` : ""}${
       origem.protocolos.length ? ` · protocolo(s) ${origem.protocolos.join(", ")}` : ""

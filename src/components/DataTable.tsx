@@ -52,6 +52,12 @@ export type Column<R> = {
   /** Filtro TRAVADO por um filtro de hierarquia acima da tabela (ex.: o seletor de assunto da Mesa): o
    * cabeçalho mostra o cadeado com o motivo (tooltip) e o filtro da coluna fica desligado. */
   travado?: string;
+  /** Filtro (multi-seleção) CONTROLADO DE FORA: as opções, a seleção e a mudança vêm de quem usa a tabela — a coluna não
+   * filtra as linhas por dentro (ex.: a visão Consolidada dos itens filtra os ITENS antes de agrupar). Marca o tópico e
+   * conta no "Limpar filtros" como os demais. */
+  filtroExterno?: { opcoes: string[]; valor: string[]; onChange: (v: string[] | null) => void };
+  /** Formato dos números no filtro de FAIXA (padrão = R$) — ex.: quantidades e percentuais. */
+  formatarFaixa?: (n: number) => string;
 };
 
 type Key = string | number;
@@ -251,6 +257,7 @@ export function DataTable<R>({
     () =>
       columns.map((c): ColunaDados => {
         const tipo = c.filter ?? "values";
+        if (c.filtroExterno) return { tipo: "none" }; // filtrado FORA da tabela
         if (tipo === "values") {
           const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
           return { tipo, vals, ordem: c.filterOptions };
@@ -265,7 +272,7 @@ export function DataTable<R>({
   // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada. Coluna
   // TRAVADA (hierarquia acima da tabela) não filtra.
   const facetas = useMemo(
-    () => aplicarFiltros(rows.length, dados, columns.map((c) => (c.travado ? undefined : filters[c.key]))),
+    () => aplicarFiltros(rows.length, dados, columns.map((c) => (c.travado || c.filtroExterno ? undefined : filters[c.key]))),
     [rows.length, dados, columns, filters],
   );
 
@@ -288,7 +295,9 @@ export function DataTable<R>({
   const todos = total > 0 && marcadas === total;
   const parcial = marcadas > 0 && !todos;
   // Colunas com filtro ATIVO (tópico marcado) — e o "Limpar filtros" do rodapé.
-  const ativos = columns.filter((c) => !c.travado && filtroAtivo(c.filter ?? "values", filters[c.key]));
+  const ativos = columns.filter((c) =>
+    c.filtroExterno ? c.filtroExterno.valor.length > 0 : !c.travado && filtroAtivo(c.filter ?? "values", filters[c.key]),
+  );
 
   /** Grava (ou remove, com `null`) o filtro de uma coluna e volta à 1ª página. */
   function aplicarFiltro(key: string, v: FiltroValor | null) {
@@ -361,12 +370,13 @@ export function DataTable<R>({
               )}
               {columns.map((c, j) => {
                 const tipo = c.filter ?? "values";
-                const marcado = !c.travado && filtroAtivo(tipo, filters[c.key]);
+                const externo = c.filtroExterno;
+                const marcado = externo ? externo.valor.length > 0 : !c.travado && filtroAtivo(tipo, filters[c.key]);
                 // Texto do cabeçalho: right→direita, left→esquerda, padrão→CENTRO (como as células).
                 const alinhaTexto = c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center";
                 // Popover do filtro abre alinhado ao início, exceto colunas à direita.
                 const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
-                const opcoes = facetas.opcoes[j] ?? [];
+                const opcoes = externo ? externo.opcoes : (facetas.opcoes[j] ?? []);
                 return (
                   <th
                     key={c.key}
@@ -380,6 +390,24 @@ export function DataTable<R>({
                         <IconLock className="h-3 w-3 shrink-0" aria-hidden />
                         {c.header}
                       </span>
+                    ) : externo ? (
+                      opcoes.length > 0 || marcado ? (
+                        <MultiSelectHeader
+                          label={c.header}
+                          options={opcoes}
+                          value={externo.valor}
+                          onApply={(v) => {
+                            externo.onChange(normalizarSelecao(v, opcoes));
+                            setPage(1);
+                          }}
+                          onSort={(d) => setSort({ key: c.key, dir: d })}
+                          sortDir={sortDe(c.key)}
+                          align={alinha}
+                          marcado={marcado}
+                        />
+                      ) : (
+                        <span>{c.header}</span>
+                      )
                     ) : tipo === "date" ? (
                       <DateFilterHeader
                         label={c.header}
@@ -400,6 +428,7 @@ export function DataTable<R>({
                         sortDir={sortDe(c.key)}
                         align={alinha}
                         marcado={marcado}
+                        formatar={c.formatarFaixa}
                       />
                     ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
                       <MultiSelectHeader
@@ -501,6 +530,7 @@ export function DataTable<R>({
               type="button"
               onClick={() => {
                 setFilters({});
+                for (const c of ativos) c.filtroExterno?.onChange(null);
                 setPage(1);
               }}
               title={`Filtros ativos: ${ativos.map((c) => c.header).join(", ")}`}

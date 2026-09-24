@@ -22,11 +22,13 @@ import {
   rotuloVeredictoCatalogo,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
-import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, num } from "@/lib/format";
+import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, num, pct } from "@/lib/format";
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
+import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { estaTravado } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
@@ -40,7 +42,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
-import { CelulaLista } from "./CelulaLista";
+import { CelulaLista, MaisN } from "./CelulaLista";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
@@ -129,7 +131,7 @@ const SEM_INFO = {
   prioridades: [] as string[],
   seqsPca: [] as { texto: string; riscado: boolean }[],
   catalogoPior: null as ItemDfdRow | null,
-  catalogo: [] as string[],
+  catalogoRotulo: "—",
 };
 /** O PCA (ano) de um DFD na Mesa: o do protocolo de origem; sem ele, o do próprio DFD (o item segue o DFD). */
 const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
@@ -960,9 +962,88 @@ export function DfdsView({
     [repetidosItens, regras],
   );
 
+  // ATRIBUTOS de um item (valor p/ ordenar e filtrar; `valores` = vários — os problemas do Estado): a MESMA régua nas
+  // colunas da visão Normal e nos filtros da Consolidada, que filtram os ITENS antes de agrupar — o total da Consolidada
+  // bate com o da Normal com os mesmos filtros.
+  type Atributo = { valor: (r: ItemDfdRow) => string; valores?: (r: ItemDfdRow) => string[] };
+  const atributoItem = useMemo(() => {
+    const estado = (r: ItemDfdRow) => resumoEstado(mensagensItem(r, repDoItem(r)));
+    return {
+      estado: {
+        valor: (r) => estado(r).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+        // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
+        valores: (r) => {
+          const res = estado(r);
+          return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
+        },
+      },
+      protocolo: { valor: (r) => r.protocoloNumero ?? "—" },
+      pca: { valor: (r) => String(anoPcaDoDfd(dfdPorId.get(r.dfdId)) ?? "—") },
+      dfd: { valor: (r) => r.dfdNumero },
+      sigla: { valor: (r) => r.sigla ?? "—" },
+      prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
+      catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
+      descricao: { valor: (r) => r.descricao ?? "" },
+      unidade: { valor: (r) => r.unidade ?? "" },
+      // Só na Consolidada: o código NORMALIZADO (o da linha) e o nº do item no PCA (a coluna da Mesa do PCA).
+      codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
+      pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
+    } satisfies Record<string, Atributo>;
+  }, [repDoItem, dfdPorId, regras]);
+
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
-  const consolidados = useMemo(() => (consolidada ? consolidarItens(itensF ?? []) : null), [consolidada, itensF]);
+  // Filtros de ATRIBUTO da Consolidada (Estado, Código, Catálogo, Descrição, Unidade, Nº DFD, Protocolo, Sigla, PCA,
+  // Prioridade, Seq. PCA) — no nível do ITEM, ANTES de consolidar: a linha soma só os itens que passam e as opções de cada
+  // filtro vêm dos itens que passam nos DEMAIS (conectados). Os numéricos (Qtd. total, médio, variação, total, itens) ficam
+  // na tabela e valem para a linha. Zeram ao sair da visão.
+  const [filtrosItem, setFiltrosItem] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (!consolidada) setFiltrosItem({});
+  }, [consolidada]);
+  const filtroItens = useMemo(() => {
+    if (!consolidada) return null;
+    const lista = itensF ?? [];
+    const chaves: (keyof typeof atributoItem)[] = [
+      ...(emPca ? (["pcaSeq"] as const) : []),
+      "estado",
+      "codigo",
+      "catalogo",
+      "descricao",
+      "unidade",
+      "dfd",
+      "protocolo",
+      "sigla",
+      ...(emPca ? [] : (["pca"] as const)),
+      "prioridade",
+    ];
+    const cols = chaves.map((k): ColunaDados => {
+      const a: Atributo = atributoItem[k];
+      return { tipo: "values", vals: lista.map((r) => (a.valores ? a.valores(r) : [a.valor(r)])) };
+    });
+    const res = aplicarFiltros(
+      lista.length,
+      cols,
+      chaves.map((k) => filtrosItem[k]),
+    );
+    return {
+      itens: res.passam.length === lista.length ? lista : res.passam.map((i) => lista[i]),
+      opcoes: new Map<string, string[]>(chaves.map((k, j) => [k, res.opcoes[j] ?? []])),
+    };
+  }, [consolidada, itensF, atributoItem, filtrosItem, emPca]);
+  const consolidados = useMemo(() => (filtroItens ? consolidarItens(filtroItens.itens) : null), [filtroItens]);
+  /** O filtro de ATRIBUTO da coluna `k` da Consolidada (controlado aqui — `Column.filtroExterno`). */
+  const filtroExterno = (k: string) => ({
+    opcoes: filtroItens?.opcoes.get(k) ?? [],
+    valor: filtrosItem[k] ?? [],
+    onChange: (v: string[] | null) =>
+      setFiltrosItem((f) => {
+        const n = { ...f };
+        if (v?.length) n[k] = v;
+        else delete n[k];
+        return n;
+      }),
+  });
   // Tudo o que as células de cada linha consolidada mostram — calculado UMA vez por lista (não por célula nem por
   // renderização): o ESTADO (os problemas dos itens de origem agrupados), as listas "todos juntos" e o veredito do
   // catálogo MAIS grave entre os itens (o tipo do DFD de origem conta).
@@ -971,13 +1052,10 @@ export function DfdsView({
     return new Map(
       (consolidados ?? []).map((l) => {
         const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it))));
-        let pior: { it: ItemDfdRow; peso: number } | null = null;
-        const catalogo = new Set<string>();
+        let pior: { it: ItemDfdRow; peso: number; rotulo: string } | null = null;
         for (const it of l.itens) {
           const v = veredictoLinhaCatalogo(it.catalogo, regras, tipoCurtoDfd(it.dfdTipo));
-          if (!v) continue;
-          catalogo.add(rotuloVeredictoCatalogo(v));
-          if (!pior || peso[v.nivel] > pior.peso) pior = { it, peso: peso[v.nivel] };
+          if (v && (!pior || peso[v.nivel] > pior.peso)) pior = { it, peso: peso[v.nivel], rotulo: rotuloVeredictoCatalogo(v) };
         }
         return [
           l.chave,
@@ -994,14 +1072,14 @@ export function DfdsView({
               .sort((a, b) => (a.pcaSequencial ?? 0) - (b.pcaSequencial ?? 0))
               .map((it) => ({ texto: String(it.pcaSequencial), riscado: !it.pcaAtivo })),
             catalogoPior: pior?.it ?? null,
-            catalogo: Array.from(catalogo),
+            catalogoRotulo: pior?.rotulo || "—",
           },
         ] as const;
       }),
     );
   }, [consolidados, repDoItem, dfdPorId, regras]);
-  // Detalhe (COMPOSIÇÃO) da linha consolidada aberta. Recarregando os itens (depois de gravar no banner do item),
-  // segue a última — o detalhe não pisca nem troca de lugar na pilha de banners.
+  // Detalhe (COMPOSIÇÃO) da linha consolidada aberta. Recarregando os itens (depois de gravar no banner do item), segue a
+  // MESMA linha (pelo código) com os dados novos; enquanto ela não reaparece, mostra a última — nada pisca.
   const [composicao, setComposicao] = useState<string | null>(null);
   const achadaComposicao = useMemo(
     () => (composicao ? (consolidados?.find((l) => l.chave === composicao) ?? null) : null),
@@ -1010,11 +1088,13 @@ export function DfdsView({
   const ultimaComposicao = useRef<ItemConsolidado<ItemDfdRow> | null>(null);
   if (!composicao) ultimaComposicao.current = null;
   else if (achadaComposicao) ultimaComposicao.current = achadaComposicao;
-  const linhaComposicao = achadaComposicao ?? (composicao && itensF === null ? ultimaComposicao.current : null);
-  // Fora da visão consolidada — ou o código sumiu da lista recarregada —, o detalhe fecha.
+  const linhaComposicao = composicao ? (achadaComposicao ?? ultimaComposicao.current) : null;
+  // Fora da visão consolidada — ou a linha sumiu da lista recarregada (o código mudou; a linha SEM código é o próprio
+  // item, que regravado ganha outro id) —, o detalhe fecha. Nunca POR BAIXO de um banner aberto por cima dele: só ao
+  // voltar à Mesa (os modais fecham na ordem natural, de cima para baixo).
   useEffect(() => {
-    if (composicao && (!consolidada || (itensF !== null && !achadaComposicao))) setComposicao(null);
-  }, [composicao, consolidada, itensF, achadaComposicao]);
+    if (composicao && !aberto && (!consolidada || (itensF !== null && !achadaComposicao))) setComposicao(null);
+  }, [composicao, aberto, consolidada, itensF, achadaComposicao]);
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
@@ -1023,12 +1103,8 @@ export function DfdsView({
       key: "estado",
       header: "Estado",
       nowrap: true,
-      value: (r) => resumoEstado(mensagensItem(r, repDoItem(r))).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
-      // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N").
-      valores: (r) => {
-        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
-        return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
-      },
+      value: atributoItem.estado.valor,
+      valores: atributoItem.estado.valores,
       render: (r) => {
         const res = resumoEstado(mensagensItem(r, repDoItem(r)));
         if (res.rotulo) return <EstadoResumo res={res} />;
@@ -1040,7 +1116,7 @@ export function DfdsView({
       key: "protocolo",
       header: "Protocolo",
       nowrap: true,
-      value: (r) => r.protocoloNumero ?? "—",
+      value: atributoItem.protocolo.valor,
       render: (r) => (r.protocoloNumero ? <span className="font-mono text-[12px]">{r.protocoloNumero}</span> : <span className="text-faint">—</span>),
     },
     ...(modoPca
@@ -1051,16 +1127,16 @@ export function DfdsView({
             header: "PCA",
             align: "center" as const,
             nowrap: true,
-            value: (r: ItemDfdRow) => String(anoPcaDoDfd(dfdPorId.get(r.dfdId)) ?? "—"),
+            value: atributoItem.pca.valor,
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
-    { key: "dfd", header: "Nº DFD", nowrap: true, value: (r) => r.dfdNumero, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
+    { key: "dfd", header: "Nº DFD", nowrap: true, value: atributoItem.dfd.valor, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
     {
       key: "sigla",
       header: "Sigla",
       nowrap: true,
-      value: (r) => r.sigla ?? "—",
+      value: atributoItem.sigla.valor,
       render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
     },
     {
@@ -1068,7 +1144,7 @@ export function DfdsView({
       header: "Prioridade",
       align: "center",
       nowrap: true,
-      value: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—",
+      value: atributoItem.prioridade.valor,
       render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
@@ -1078,14 +1154,14 @@ export function DfdsView({
       key: "catalogo",
       header: "Catálogo",
       nowrap: true,
-      value: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—",
+      value: atributoItem.catalogo.valor,
       render: (r) => <CelulaCatalogo conf={r.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(r.dfdTipo)} />,
     },
     {
       key: "descricao",
       header: "Descrição",
       minWidth: 260,
-      value: (r) => r.descricao ?? "",
+      value: atributoItem.descricao.valor,
       // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica e no banner do item.
       render: (r) => (
         <span className="line-clamp-1" title={r.descricao ?? undefined}>
@@ -1093,19 +1169,19 @@ export function DfdsView({
         </span>
       ),
     },
-    { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
+    { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
     { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
   ];
 
-  // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados de todos os itens do código JUNTOS na
-  // célula (listas com "+N"; a lista inteira na dica e no detalhe) e os números agregados: quantidade somada, valor
-  // unitário MÉDIO ponderado (+ a variação dos preços) e o total — mais a curva ABC do valor. Os filtros de lista acham
-  // a linha por QUALQUER valor dela (ex.: um protocolo).
+  // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados dos itens do código JUNTOS na célula (listas
+  // com "+N"; até 30 na dica e TODOS no detalhe) e os números agregados: quantidade somada, valor unitário MÉDIO ponderado
+  // (+ a variação dos preços) e o total — mais a curva ABC do valor. Os filtros das colunas de ATRIBUTO filtram os ITENS
+  // antes de agrupar (`filtroExterno`); os numéricos filtram as linhas.
   type Cons = ItemConsolidado<ItemDfdRow>;
-  const lista = (vs: string[]) => (vs.length ? vs : ["—"]);
   const infoDe = (l: Cons) => infoConsolidados.get(l.chave) ?? SEM_INFO;
+  const MISTAS = "Unidades diferentes — a quantidade e a média misturam unidades; compare por unidade no detalhe.";
   // Ordem da visão consolidada: o PRODUTO e os números primeiro (código, descrição, quantidade, médio, total, ABC); as
   // listas de origem (DFDs, protocolos, unidades…) depois.
   const colsConsolidados: Column<Cons>[] = [
@@ -1116,7 +1192,7 @@ export function DfdsView({
             header: "Seq. PCA",
             nowrap: true,
             value: (l: Cons) => infoDe(l).seqsPca[0]?.texto ?? "",
-            valores: (l: Cons) => infoDe(l).seqsPca.map((x) => x.texto),
+            filtroExterno: filtroExterno("pcaSeq"),
             render: (l: Cons) => <CelulaLista valores={infoDe(l).seqsPca} />,
           },
         ]
@@ -1126,7 +1202,7 @@ export function DfdsView({
       header: "Estado",
       nowrap: true,
       value: (l) => infoDe(l).estado.rotulo || ESTADO_ITEM_ROTULO.regular,
-      valores: (l) => (infoDe(l).rotulosEstado.length ? infoDe(l).rotulosEstado : [ESTADO_ITEM_ROTULO.regular]),
+      filtroExterno: filtroExterno("estado"),
       render: (l) => {
         const e = infoDe(l).estado;
         return e.rotulo ? <EstadoResumo res={e} /> : <EstadoPonto cor={estadoItemCor("regular")} rotulo={ESTADO_ITEM_ROTULO.regular} />;
@@ -1137,17 +1213,15 @@ export function DfdsView({
       header: "Código",
       nowrap: true,
       value: (l) => l.codigo ?? "Sem código",
+      filtroExterno: filtroExterno("codigo"),
       render: (l) => (l.codigo ? <span className="font-mono text-[12px]">{l.codigo}</span> : <span className="text-faint">Sem código</span>),
     },
     {
       key: "catalogo",
       header: "Catálogo",
       nowrap: true,
-      value: (l) => {
-        const pior = infoDe(l).catalogoPior;
-        return pior ? rotuloVeredictoCatalogo(veredictoLinhaCatalogo(pior.catalogo, regras, tipoCurtoDfd(pior.dfdTipo))) : "—";
-      },
-      valores: (l) => lista(infoDe(l).catalogo),
+      value: (l) => infoDe(l).catalogoRotulo,
+      filtroExterno: filtroExterno("catalogo"),
       render: (l) => {
         const pior = infoDe(l).catalogoPior;
         return <CelulaCatalogo conf={pior?.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(pior?.dfdTipo ?? null)} />;
@@ -1158,14 +1232,12 @@ export function DfdsView({
       header: "Descrição",
       minWidth: 260,
       value: (l) => l.descricoes[0]?.texto ?? "",
-      valores: (l) => (l.descricoes.length ? l.descricoes.map((d) => d.texto) : [""]),
-      // A mais frequente numa linha só; "+N" = descrições diferentes (todas na dica e no detalhe).
+      filtroExterno: filtroExterno("descricao"),
+      // A mais frequente numa linha só; "+N" = descrições diferentes (na dica e, numeradas, no detalhe).
       render: (l) => (
-        <span className="flex min-w-0 items-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
+        <span className="flex min-w-0 items-center justify-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
           <span className="line-clamp-1 min-w-0">{l.descricoes[0]?.texto ?? "—"}</span>
-          {l.descricoes.length > 1 && (
-            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] font-semibold tabular-nums text-muted">+{l.descricoes.length - 1}</span>
-          )}
+          {l.descricoes.length > 1 && <MaisN n={l.descricoes.length - 1} />}
         </span>
       ),
     },
@@ -1175,13 +1247,13 @@ export function DfdsView({
       header: "Unidade",
       nowrap: true,
       value: (l) => l.unidades.map((u) => u.texto).join(" · "),
-      valores: (l) => (l.unidades.length ? l.unidades.map((u) => u.texto) : [""]),
+      filtroExterno: filtroExterno("unidade"),
       render: (l) =>
-        l.unidades.length > 1 ? (
+        l.unidadesMistas ? (
           <span
             className="inline-flex items-center gap-1 whitespace-nowrap font-medium"
             style={{ color: "var(--warn)" }}
-            title={`Unidades diferentes — a quantidade soma unidades distintas:\n${dicaLista(l.unidades, (u) => `${u.texto} (${u.n} ${u.n === 1 ? "item" : "itens"})`)}`}
+            title={`${MISTAS}\n${dicaLista(l.unidades, (u) => `${u.texto} (${u.n} ${u.n === 1 ? "item" : "itens"})`)}`}
           >
             <IconAlert className="h-3.5 w-3.5 shrink-0" />
             {l.unidades.map((u) => u.texto).join(" · ")}
@@ -1190,7 +1262,16 @@ export function DfdsView({
           (l.unidades[0]?.texto ?? "—")
         ),
     },
-    { key: "qtd", header: "Qtd. total", align: "center", filter: "range", nowrap: true, numero: (l) => l.quantidade, render: (l) => (l.quantidade != null ? num(l.quantidade) : "—") },
+    {
+      key: "qtd",
+      header: "Qtd. total",
+      align: "center",
+      filter: "range",
+      formatarFaixa: num,
+      nowrap: true,
+      numero: (l) => l.quantidade,
+      render: (l) => (l.quantidade != null ? num(l.quantidade) : "—"),
+    },
     {
       key: "vmedio",
       header: "Vlr. unit. médio",
@@ -1198,18 +1279,32 @@ export function DfdsView({
       filter: "range",
       nowrap: true,
       numero: (l) => l.valorMedio,
-      render: (l) => (
-        <span title="Média ponderada pela quantidade (Σ qtd × valor ÷ Σ qtd)">{l.valorMedio != null ? brl(l.valorMedio) : "—"}</span>
-      ),
+      render: (l) =>
+        l.valorMedio == null ? (
+          "—"
+        ) : l.unidadesMistas ? (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium" style={{ color: "var(--warn)" }} title={MISTAS}>
+            <IconAlert className="h-3.5 w-3.5 shrink-0" />
+            {brl(l.valorMedio)}
+          </span>
+        ) : (
+          <span title="Média ponderada pela quantidade (Σ qtd × valor ÷ Σ qtd)">{brl(l.valorMedio)}</span>
+        ),
     },
     {
       key: "variacao",
       header: "Variação",
       align: "center",
       filter: "range",
+      formatarFaixa: (n) => pct(n, 100),
       nowrap: true,
       numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
-      render: (l) => <CelulaVariacao cv={l.variacao} min={l.valorMin} max={l.valorMax} n={l.itens.length - l.semValor} />,
+      render: (l) =>
+        l.unidadesMistas ? (
+          <CelulaVariacao cv={l.variacao} nota="Unidades diferentes: a maior variação dentro de uma mesma unidade." />
+        ) : (
+          <CelulaVariacao cv={l.variacao} min={l.valorMin} max={l.valorMax} n={l.itens.length - l.semValor} />
+        ),
     },
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (l) => l.valorTotal, render: (l) => brl(l.valorTotal) },
     {
@@ -1227,6 +1322,7 @@ export function DfdsView({
       align: "center",
       nowrap: true,
       filter: "range",
+      formatarFaixa: num,
       numero: (l) => l.itens.length,
       render: (l) => (
         <span className="tabular-nums" title={dicaLista(l.itens, (it) => `DFD ${it.dfdNumero} · item ${it.item ?? "—"}`)}>
@@ -1239,7 +1335,7 @@ export function DfdsView({
       header: "Nº DFD",
       nowrap: true,
       value: (l) => infoDe(l).dfds.join(" · "),
-      valores: (l) => infoDe(l).dfds,
+      filtroExterno: filtroExterno("dfd"),
       render: (l) => <CelulaLista valores={infoDe(l).dfds} mono />,
     },
     {
@@ -1247,7 +1343,7 @@ export function DfdsView({
       header: "Protocolo",
       nowrap: true,
       value: (l) => infoDe(l).protocolos.join(" · ") || "—",
-      valores: (l) => lista(infoDe(l).protocolos),
+      filtroExterno: filtroExterno("protocolo"),
       render: (l) => <CelulaLista valores={infoDe(l).protocolos} mono />,
     },
     {
@@ -1255,7 +1351,7 @@ export function DfdsView({
       header: "Sigla",
       nowrap: true,
       value: (l) => infoDe(l).siglas.join(" · ") || "—",
-      valores: (l) => lista(infoDe(l).siglas),
+      filtroExterno: filtroExterno("sigla"),
       render: (l) => <CelulaLista valores={infoDe(l).siglas} mono destaque />,
     },
     ...(modoPca
@@ -1267,7 +1363,7 @@ export function DfdsView({
             align: "center" as const,
             nowrap: true,
             value: (l: Cons) => infoDe(l).pcas.join(" · ") || "—",
-            valores: (l: Cons) => lista(infoDe(l).pcas),
+            filtroExterno: filtroExterno("pca"),
             render: (l: Cons) => <CelulaLista valores={infoDe(l).pcas} dica={dicaLista(infoDe(l).pcas, (a) => pcaDe(Number(a))?.nome ?? a)} />,
           },
         ]),
@@ -1277,10 +1373,14 @@ export function DfdsView({
       align: "center",
       nowrap: true,
       value: (l) => infoDe(l).prioridades.join(" · ") || "—",
-      valores: (l) => lista(infoDe(l).prioridades),
+      filtroExterno: filtroExterno("prioridade"),
       render: (l) => <CelulaLista valores={infoDe(l).prioridades} max={3} />,
     },
   ];
+  // O detalhe mostra TUDO o que a linha resume: as colunas da visão Normal de cada ocorrência (Seq. PCA e Estado antes;
+  // Catálogo, PCA e Prioridade depois).
+  const colunaNormal = (k: string) => [...(modoPca?.colunasItens ?? []), ...colsItens].find((c) => c.key === k);
+  const colunasComposicao = (ks: string[]) => ks.map(colunaNormal).filter((c): c is Column<ItemDfdRow> => !!c);
 
   // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). A MESMA altura de linha nas três visões (densidade
   // compacta — a dos controles). A IMPORTAÇÃO (Mesa principal, editores) fica no RODAPÉ da tabela, à
@@ -1366,7 +1466,8 @@ export function DfdsView({
     />
   );
   // Visão CONSOLIDADA: uma linha por código (na ordem do valor — a curva ABC), SÓ leitura (a edição é item a item);
-  // tocar numa linha abre o detalhe da composição. O rodapé soma o MESMO total da visão normal.
+  // tocar numa linha abre o detalhe da composição. O rodapé soma os itens das linhas à vista — sem filtro de número, o MESMO
+  // total da visão Normal com os mesmos filtros de dado.
   const tabelaConsolidada = (
     <DataTable
       columns={colsConsolidados}
@@ -1378,7 +1479,15 @@ export function DfdsView({
       reservaInferior={reserva}
       minWidth={modoPca ? 1480 : 1560}
       density="compact"
-      vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
+      vazio={
+        carregandoItens || itensF === null
+          ? "Carregando itens…"
+          : Object.keys(filtrosItem).length > 0
+            ? "Nenhum item com os filtros das colunas — ajuste-os ou use “Limpar filtros”."
+            : filtrado && (itens?.length ?? 0) > 0
+              ? semResultado
+              : semDados("item", false)
+      }
       resumo={(linhas) => {
         const semCodigo = linhas.filter((l) => l.codigo == null).length;
         const nItens = linhas.reduce((s, l) => s + l.itens.length, 0);
@@ -1608,6 +1717,8 @@ export function DfdsView({
         linha={linhaComposicao}
         onFechar={() => setComposicao(null)}
         onAbrirItem={(it) => setAberto({ tipo: "item", dfdId: it.dfdId, itemId: it.id, item: { item: it.item, codigo: it.codigo } })}
+        colunasAntes={colunasComposicao(["pcaSeq", "estado"])}
+        colunasDepois={colunasComposicao(["catalogo", "pca", "prioridade"])}
       />
 
       {/* PILHA DE BANNERS do GRAVADO — os MESMOS componentes/conferência da análise, em ORDEM FIXA

@@ -17,8 +17,8 @@ const COLS_PROTOCOLO: Column<ProtocoloDoPca>[] = [
   { key: "numero", header: "Nº processo", nowrap: true, value: (p) => p.numero, render: (p) => <span className="font-mono text-[12px] font-semibold">{p.numero}</span> },
   { key: "assunto", header: "Assunto", align: "left", minWidth: 220, value: (p) => p.assunto ?? "—", render: (p) => <span className="line-clamp-2">{p.assunto ?? "—"}</span> },
   { key: "sigla", header: "Unidade", nowrap: true, value: (p) => p.sigla ?? "—", render: (p) => <span className="font-mono text-[12px] font-semibold text-text-2">{p.sigla ?? "—"}</span> },
-  { key: "dfds", header: "DFDs", nowrap: true, filter: "range", numero: (p) => p.dfds, render: (p) => num(p.dfds) },
-  { key: "itens", header: "Itens", nowrap: true, filter: "range", numero: (p) => p.itens, render: (p) => num(p.itens) },
+  { key: "dfds", header: "DFDs", nowrap: true, filter: "range", formatarFaixa: num, numero: (p) => p.dfds, render: (p) => num(p.dfds) },
+  { key: "itens", header: "Itens", nowrap: true, filter: "range", formatarFaixa: num, numero: (p) => p.itens, render: (p) => num(p.itens) },
   { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (p) => p.valor, render: (p) => <span className="font-semibold tabular-nums">{brl(p.valor)}</span> },
 ];
 

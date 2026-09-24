@@ -39,7 +39,7 @@ import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
-import { CelulaLista } from "@/components/CelulaLista";
+import { CelulaLista, MaisN } from "@/components/CelulaLista";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
@@ -730,6 +730,7 @@ function ConsolidadosDemo() {
         <CelulaLista valores={["SME", "SMS"]} mono destaque />
         <CelulaLista valores={[{ texto: "12" }, { texto: "45", riscado: true }]} />
         <CelulaLista valores={[]} />
+        <MaisN n={3} />
       </div>
       <div className="flex flex-wrap items-center gap-4">
         <CelulaVariacao cv={0.12} min={10} max={12.5} n={3} />
@@ -752,7 +753,8 @@ function ConsolidadosDemo() {
       <p className="text-[12px] text-faint">
         Os itens de MESMO código viram uma linha: quantidade somada, valor unitário médio PONDERADO pela quantidade,
         variação dos preços (até 25% homogêneo · até 50% atenção · acima, alerta) e a curva ABC do valor. Unidades
-        diferentes no mesmo código ficam em âmbar (a soma mistura unidades).
+        diferentes no mesmo código ficam em âmbar (a soma mistura unidades) e o detalhe compara POR UNIDADE (a variação e
+        o desvio de cada item usam a média da unidade dele).
       </p>
     </div>
   );

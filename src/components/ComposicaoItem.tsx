@@ -9,6 +9,7 @@ import {
   FAIXAS_VARIACAO,
   type ItemConsolidado,
   type ItemConsolidavel,
+  mediaDeReferencia,
   nivelVariacao,
   participacaoTexto,
   textoResumoConsolidado,
@@ -29,12 +30,19 @@ const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--d
 const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
 const REGUA_VARIACAO = `Até ${pct(FAIXAS_VARIACAO.atencao, 1)} = preços homogêneos · até ${pct(FAIXAS_VARIACAO.alerta, 1)} = atenção · acima = alerta.`;
 
-/** Célula "Variação" (coeficiente de variação dos valores unitários de um código): o % na cor da faixa. */
-export function CelulaVariacao({ cv, min, max, n }: { cv: number | null; min?: number | null; max?: number | null; n?: number }) {
+/** Célula "Variação" (coeficiente de variação dos valores unitários de um código): o % na cor da faixa. `nota` completa a
+ * dica (ex.: unidades diferentes — a maior variação dentro de uma mesma unidade). */
+export function CelulaVariacao({ cv, min, max, n, nota }: { cv: number | null; min?: number | null; max?: number | null; n?: number; nota?: string }) {
   const nivel = nivelVariacao(cv);
-  if (nivel == null || cv == null) return <span className="text-faint" title="Menos de 2 preços — sem variação">—</span>;
+  if (nivel == null || cv == null) return <span className="text-faint" title={`Menos de 2 preços — sem variação${nota ? `\n${nota}` : ""}`}>—</span>;
   const faixa = min != null && max != null ? `\nMín. ${brl(min)} · máx. ${brl(max)}${n ? ` (${num(n)} preços)` : ""}` : "";
-  return <EstadoPonto cor={COR_VARIACAO[nivel]} rotulo={pct(cv, 1)} title={`Variação dos valores unitários (coeficiente de variação).${faixa}\n${REGUA_VARIACAO}`} />;
+  return (
+    <EstadoPonto
+      cor={COR_VARIACAO[nivel]}
+      rotulo={pct(cv, 1)}
+      title={`Variação dos valores unitários (coeficiente de variação).${faixa}${nota ? `\n${nota}` : ""}\n${REGUA_VARIACAO}`}
+    />
+  );
 }
 
 /** Selo da CURVA ABC (A = os que somam os primeiros 80% do valor · B = até 95% · C = o resto) — sem valor = "—". */
@@ -63,40 +71,61 @@ function ChipVariante({ n, titulo }: { n: number; titulo?: string }) {
 /** O que o detalhe mostra de cada item de origem (a linha da visão Itens da Mesa tem estes campos). */
 export type ItemComposicao = ItemConsolidavel & { dfdNumero: string; protocoloNumero: string | null; sigla: string | null; item: number | null };
 
+const NIVEL_TEXTO = { ok: "homogêneos", atencao: "atenção — pouco homogêneos", alerta: "alerta — muito dispersos" } as const;
+const itens = (n: number) => `${num(n)} ${n === 1 ? "item" : "itens"}`;
+
 /**
  * Detalhe de uma linha da visão CONSOLIDADA dos itens (Mesa → Itens → Consolidada): os indicadores do código
  * (quantidade total, valor unitário médio PONDERADO, menor e maior preço, variação dos preços, valor total e a curva
- * ABC), os avisos (unidades diferentes — a soma mistura unidades; itens fora da média; descrições diferentes) e a
- * TABELA das ocorrências — cada item de origem com o DESVIO do seu valor unitário em relação à média. Tocar numa
- * ocorrência abre o item na pilha da Mesa (por cima deste banner). "Copiar resumo" = o texto para um despacho.
+ * ABC), os avisos (unidades diferentes — com a quebra POR UNIDADE; itens fora da média; descrições diferentes) e a
+ * TABELA das ocorrências — cada item de origem com o DESVIO do seu preço em relação à média (a da unidade dele, se a
+ * linha mistura unidades). Quem usa acrescenta colunas próprias (`colunasAntes`/`colunasDepois` — na Mesa: Estado,
+ * Catálogo, PCA, Prioridade, Seq. PCA), então o detalhe mostra TUDO o que a linha resume. Tocar numa ocorrência abre o
+ * item na pilha da Mesa (por cima deste banner). "Copiar resumo" = o texto para um despacho.
  */
 export function ComposicaoItem<T extends ItemComposicao>({
   linha,
   onFechar,
   onAbrirItem,
+  colunasAntes = [],
+  colunasDepois = [],
 }: {
   linha: ItemConsolidado<T> | null;
   onFechar: () => void;
   /** Abre o item de origem (a pilha de banners da Mesa). */
   onAbrirItem?: (item: T) => void;
+  /** Colunas do host antes / depois das da composição (ex.: Estado; Catálogo, PCA, Prioridade). */
+  colunasAntes?: Column<T>[];
+  colunasDepois?: Column<T>[];
 }) {
   const l = linha;
   const dfds = l ? distintos(l.itens, (it) => it.dfdNumero) : [];
   const protocolos = l ? distintos(l.itens, (it) => it.protocoloNumero) : [];
-  const precos = l ? l.itens.filter((it) => it.valorUnitario != null && it.valorUnitario > 0).length : 0;
+  const precos = l ? l.itens.length - l.semValor : 0;
   const nivel = l ? nivelVariacao(l.variacao) : null;
-  const unidades = l?.unidades ?? [];
+  const mistas = !!l?.unidadesMistas;
   const variante = l && l.descricoes.length > 1 ? varianteDescricao(l.descricoes) : null;
+  const tituloDesvio = `Desvio em relação à média ponderada ${mistas ? "da MESMA unidade" : "do código"} (${REGUA_VARIACAO.toLowerCase()})`;
 
   const colunas: Column<T>[] = [
+    ...colunasAntes,
     { key: "protocolo", header: "Protocolo", nowrap: true, value: (it) => it.protocoloNumero ?? "—", render: (it) => <CelulaLista valores={it.protocoloNumero ? [it.protocoloNumero] : []} mono /> },
     { key: "dfd", header: "Nº DFD", nowrap: true, value: (it) => it.dfdNumero, render: (it) => <span className="font-mono text-[12px]">{it.dfdNumero}</span> },
     { key: "sigla", header: "Sigla", nowrap: true, value: (it) => it.sigla ?? "—", render: (it) => <CelulaLista valores={it.sigla ? [it.sigla] : []} mono destaque /> },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (it) => String(it.item ?? ""), render: (it) => it.item ?? "—" },
     { key: "unidade", header: "Unidade", nowrap: true, value: (it) => it.unidade ?? "", render: (it) => it.unidade ?? "—" },
-    { key: "qtd", header: "Qtd.", align: "center", nowrap: true, filter: "range", numero: (it) => it.quantidade, render: (it) => (it.quantidade != null ? num(it.quantidade) : "—") },
-    // O valor unitário e, ao lado, o DESVIO dele em relação à média ponderada do código (na cor da faixa) — ordenar ou
-    // filtrar pelo valor é o mesmo que pelo desvio (a média é uma só).
+    {
+      key: "qtd",
+      header: "Qtd.",
+      align: "center",
+      nowrap: true,
+      filter: "range",
+      formatarFaixa: num,
+      numero: (it) => it.quantidade,
+      render: (it) => (it.quantidade != null ? num(it.quantidade) : "—"),
+    },
+    // O valor unitário e, ao lado, o DESVIO dele em relação à média (na cor da faixa) — ordenar ou filtrar pelo valor é o
+    // mesmo que pelo desvio dentro de cada unidade.
     {
       key: "vunit",
       header: "Vlr. unit. · Δ média",
@@ -106,7 +135,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
       numero: (it) => it.valorUnitario,
       render: (it) => {
         if (it.valorUnitario == null) return "—";
-        const d = desvioDaMedia(it.valorUnitario, l?.valorMedio ?? null);
+        const d = l ? desvioDaMedia(it.valorUnitario, mediaDeReferencia(l, it.unidade)) : null;
         const n = d == null ? null : nivelVariacao(Math.abs(d));
         return (
           <span className="inline-flex items-baseline justify-end gap-1.5 whitespace-nowrap">
@@ -114,7 +143,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
             <span
               className="min-w-11 text-right text-[11.5px] font-medium tabular-nums"
               style={{ color: n && n !== "ok" ? COR_VARIACAO[n] : "var(--muted)" }}
-              title={d == null ? undefined : `Desvio em relação à média ponderada do código (${REGUA_VARIACAO.toLowerCase()})`}
+              title={d == null ? undefined : tituloDesvio}
             >
               {d == null ? "—" : desvioTexto(d)}
             </span>
@@ -140,6 +169,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
           },
         ]
       : []),
+    ...colunasDepois,
   ];
 
   return (
@@ -155,7 +185,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
               <span className="font-mono text-[15px] font-bold text-text">{l.codigo ?? "Sem código"}</span>
               <SeloAbc classe={l.abc} participacao={l.participacao} />
               <span className="text-[12px] text-muted">
-                {num(l.itens.length)} {l.itens.length === 1 ? "item" : "itens"} · {num(dfds.length)} DFD{dfds.length === 1 ? "" : "s"} · {num(protocolos.length)}{" "}
+                {itens(l.itens.length)} · {num(dfds.length)} DFD{dfds.length === 1 ? "" : "s"} · {num(protocolos.length)}{" "}
                 {protocolos.length === 1 ? "protocolo" : "protocolos"}
               </span>
             </div>
@@ -182,41 +212,70 @@ export function ComposicaoItem<T extends ItemComposicao>({
             <StatMini
               label="Quantidade total"
               value={l.quantidade != null ? num(l.quantidade) : "—"}
-              hint={unidades.length ? unidades.map((u) => u.texto).join(" + ") : "sem unidade"}
-              tone={unidades.length > 1 ? "warn" : "default"}
+              hint={l.unidades.length ? l.unidades.map((u) => u.texto).join(" + ") : "sem unidade"}
+              tone={mistas ? "warn" : "default"}
             />
-            <StatMini label="Valor unitário médio" value={l.valorMedio != null ? brl(l.valorMedio) : "—"} hint="média ponderada" tone="accent" />
+            <StatMini
+              label="Valor unitário médio"
+              value={l.valorMedio != null ? brl(l.valorMedio) : "—"}
+              hint={mistas ? "mistura unidades" : "média ponderada"}
+              tone={mistas ? "warn" : "accent"}
+            />
             <StatMini label="Menor preço" value={l.valorMin != null ? brl(l.valorMin) : "—"} hint={`${num(precos)} ${precos === 1 ? "preço" : "preços"}`} />
             <StatMini label="Maior preço" value={l.valorMax != null ? brl(l.valorMax) : "—"} hint={l.valorMin != null && l.valorMax != null ? `diferença ${brl(l.valorMax - l.valorMin)}` : undefined} />
             <StatMini
               label="Variação dos preços"
               value={l.variacao != null ? pct(l.variacao, 1) : "—"}
-              hint={nivel === "alerta" ? "alerta — muito dispersos" : nivel === "atencao" ? "atenção — pouco homogêneos" : nivel === "ok" ? "homogêneos" : "menos de 2 preços"}
+              hint={mistas ? "a maior por unidade" : nivel ? NIVEL_TEXTO[nivel] : "menos de 2 preços"}
               tone={nivel ? TOM_VARIACAO[nivel] : "default"}
             />
-            <StatMini
-              label="Valor total"
-              value={brl(l.valorTotal)}
-              hint={l.abc ? `${participacaoTexto(l.participacao)} do total · curva ${l.abc}` : "sem valor"}
-            />
+            <StatMini label="Valor total" value={brl(l.valorTotal)} hint={l.abc ? `${participacaoTexto(l.participacao)} do total · curva ${l.abc}` : "sem valor"} />
           </div>
 
-          {unidades.length > 1 && (
+          {mistas && (
             <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
-              <b>Unidades diferentes neste código</b> — a quantidade total soma unidades distintas:{" "}
-              {unidades.map((u) => `${u.texto} (${num(u.n)} ${u.n === 1 ? "item" : "itens"})`).join(", ")}. Confira nos DFDs de origem.
+              <b>Unidades diferentes neste código</b> — a quantidade total e o valor médio misturam unidades distintas. Compare
+              por unidade (abaixo); o desvio de cada item usa a média da unidade dele. Confira nos DFDs de origem.
             </Callout>
           )}
-          {(l.semQuantidade > 0 || l.semValor > 0) && (
+          {l.foraDaMedia > 0 && (
             <Callout kind="info">
+              {itens(l.foraDaMedia)} fora da média ponderada —{" "}
               {[
-                l.semQuantidade > 0 ? `${num(l.semQuantidade)} ${l.semQuantidade === 1 ? "item sem quantidade" : "itens sem quantidade"}` : "",
-                l.semValor > 0 ? `${num(l.semValor)} ${l.semValor === 1 ? "item sem valor unitário" : "itens sem valor unitário"}` : "",
+                l.semQuantidade > 0 ? `${num(l.semQuantidade)} sem quantidade (vazia ou zerada)` : "",
+                l.semValor > 0 ? `${num(l.semValor)} sem valor unitário` : "",
               ]
                 .filter(Boolean)
-                .join(" e ")}{" "}
-              — fora da média ponderada.
+                .join(" e ")}
+              .
             </Callout>
+          )}
+          {mistas && (
+            <section className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
+              <h3 className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+                Por unidade de medida ({num(l.porUnidade.length)}) — só os itens de cada uma
+              </h3>
+              <ul className="mt-1 divide-y divide-border">
+                {l.porUnidade.map((u) => (
+                  <li key={u.chave} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 text-[13px] text-text-2">
+                    <span className="min-w-14 font-semibold text-text">{u.texto}</span>
+                    <span className="text-muted">{itens(u.n)}</span>
+                    <span>
+                      Qtd. <b className="tabular-nums text-text">{u.quantidade != null ? num(u.quantidade) : "—"}</b>
+                    </span>
+                    <span>
+                      Médio <b className="tabular-nums text-text">{u.valorMedio != null ? brl(u.valorMedio) : "—"}</b>
+                    </span>
+                    {u.valorMin != null && u.valorMax != null && u.valorMin !== u.valorMax && (
+                      <span className="tabular-nums text-muted">
+                        {brl(u.valorMin)} a {brl(u.valorMax)}
+                      </span>
+                    )}
+                    <CelulaVariacao cv={u.variacao} min={u.valorMin} max={u.valorMax} n={u.n - u.semValor} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {l.descricoes.length > 1 && (
             <section className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
@@ -228,7 +287,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
                   <li key={d.texto} className="flex items-start gap-2 text-[13px] text-text-2">
                     <ChipVariante n={i + 1} />
                     <span className="min-w-0">
-                      {d.texto} <span className="whitespace-nowrap text-[12px] text-muted">· {num(d.n)} {d.n === 1 ? "item" : "itens"}</span>
+                      {d.texto} <span className="whitespace-nowrap text-[12px] text-muted">· {itens(d.n)}</span>
                     </span>
                   </li>
                 ))}
@@ -244,7 +303,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
             minWidth={1000}
             pageSize={20}
             density="compact"
-            resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, it) => s + (it.valorTotal ?? 0), 0))}`}
+            resumo={(linhas) => `${itens(linhas.length)} · ${brl(linhas.reduce((s, it) => s + (it.valorTotal ?? 0), 0))}`}
           />
         </div>
       )}

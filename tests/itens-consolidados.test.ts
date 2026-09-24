@@ -7,6 +7,7 @@ import {
   distintos,
   estadoConsolidado,
   type ItemConsolidavel,
+  mediaDeReferencia,
   nivelVariacao,
   participacaoTexto,
   textoResumoConsolidado,
@@ -62,10 +63,55 @@ describe("consolidarItens — um item por código", () => {
     assert.equal(l.quantidade, 11);
     assert.equal(l.semQuantidade, 1);
     assert.equal(l.semValor, 2);
+    assert.equal(l.foraDaMedia, 3); // cada item fora da média conta UMA vez (sem qtd, sem preço, preço zero)
     assert.equal(l.valorTotal, 15);
     assert.equal(l.valorMedio, 3); // só o item com quantidade E preço entra na média ponderada
     assert.equal(l.valorMin, 3);
     assert.equal(l.valorMax, 7); // o preço sem quantidade ainda conta na faixa
+  });
+
+  it("quantidade ZERADA ou negativa não é quantidade válida: fora da média e contada (nunca some calada)", () => {
+    const [l] = consolidarItens([item({ quantidade: 0, valorUnitario: 10, valorTotal: 0 }), item({ quantidade: -2, valorUnitario: 12, valorTotal: 0 })]);
+    assert.equal(l.semQuantidade, 2);
+    assert.equal(l.foraDaMedia, 2);
+    assert.equal(l.valorMedio, null);
+    assert.equal(l.valorMin, 10);
+    assert.equal(l.valorMax, 12);
+  });
+
+  it("unidades DIFERENTES: estatísticas por unidade, variação = a maior DENTRO de uma unidade, média de referência da unidade", () => {
+    const [l] = consolidarItens([
+      item({ unidade: "RESMA", quantidade: 120, valorUnitario: 24.9, valorTotal: 2988 }),
+      item({ unidade: "resma", quantidade: 80, valorUnitario: 27.5, valorTotal: 2200 }),
+      item({ unidade: "CX", quantidade: 10, valorUnitario: 139, valorTotal: 1390 }),
+    ]);
+    assert.equal(l.unidadesMistas, true);
+    assert.deepEqual(
+      l.porUnidade.map((u) => [u.texto, u.n, u.quantidade, u.valorMin, u.valorMax]),
+      [
+        ["RESMA", 2, 200, 24.9, 27.5],
+        ["CX", 1, 10, 139, 139],
+      ],
+    );
+    assert.ok(Math.abs((l.porUnidade[0].valorMedio ?? 0) - 25.94) < 1e-9);
+    assert.equal(l.porUnidade[1].variacao, null);
+    // A variação da linha NÃO mistura a caixa com a resma: é a da resma (≈ 7%), não a de 24,90 × 139 (> 100%).
+    assert.ok(Math.abs((l.variacao ?? 0) - (l.porUnidade[0].variacao ?? -1)) < 1e-12);
+    assert.ok((l.variacao ?? 1) < 0.1);
+    assert.equal(mediaDeReferencia(l, " cx "), 139);
+    assert.ok(Math.abs((mediaDeReferencia(l, "Resma") ?? 0) - 25.94) < 1e-9);
+    assert.equal(mediaDeReferencia(l, null), null);
+    assert.deepEqual(
+      l.unidades.map((u) => [u.texto, u.n]),
+      [
+        ["RESMA", 2],
+        ["CX", 1],
+      ],
+    );
+    // Uma unidade só (UN = UNIDADE): não mistura — a referência é a média da linha.
+    const [u] = consolidarItens([item({ unidade: "UN" }), item({ unidade: "unidade", valorUnitario: 20, valorTotal: 20 })]);
+    assert.equal(u.unidadesMistas, false);
+    assert.equal(mediaDeReferencia(u, "UN"), u.valorMedio);
   });
 
   it("nenhuma quantidade nem preço: tudo nulo, nunca NaN", () => {
@@ -136,6 +182,24 @@ describe("consolidarItens — um item por código", () => {
     );
     assert.equal(linhas[0].participacao, 0.7);
     assert.ok(Math.abs(linhas.reduce((s, l) => s + l.participacao, 0) - 1) < 1e-12);
+  });
+
+  it("total NEGATIVO fica fora da base da curva ABC (as participações somam 100%)", () => {
+    const linhas = consolidarItens([
+      item({ codigo: "1", valorTotal: 700 }),
+      item({ codigo: "2", valorTotal: 200 }),
+      item({ codigo: "3", valorTotal: 100 }),
+      item({ codigo: "4", valorTotal: -200 }),
+    ]);
+    assert.deepEqual(
+      linhas.map((l) => [l.codigo, l.abc, l.participacao]),
+      [
+        ["1", "A", 0.7],
+        ["2", "A", 0.2],
+        ["3", "B", 0.1],
+        ["4", null, 0],
+      ],
+    );
   });
 
   it("empate de valor: pelo código; o sem código depois", () => {
@@ -216,9 +280,19 @@ describe("apoios da visão consolidada", () => {
     assert.deepEqual(t.split("\n"), [
       "Código 77 — Toner",
       "Quantidade total: 40 UN + CX (unidades diferentes)",
-      "Valor unitário médio (ponderado): R$ 8,00 · faixa R$ 5,00 a R$ 9,00 · variação 40,4%",
+      "Por unidade: UN 10 · médio R$ 5,00; CX 30 · médio R$ 9,00",
+      "Valor unitário médio (ponderado, mistura unidades): R$ 8,00 · faixa R$ 5,00 a R$ 9,00",
       "Valor total: R$ 320,00 (100% do total · curva ABC: A)",
       "Itens: 2 em 2 DFD(s) — 1201, 1243 · protocolo(s) P-1",
+    ]);
+    // Uma unidade só: sem a linha "Por unidade" e com a variação.
+    const [u] = consolidarItens([
+      item({ codigo: "78", descricao: "Toner", quantidade: 10, valorUnitario: 5, valorTotal: 50 }),
+      item({ codigo: "78", descricao: "Toner", quantidade: 30, valorUnitario: 9, valorTotal: 270 }),
+    ]);
+    assert.deepEqual(textoResumoConsolidado(u, { dfds: ["1201"], protocolos: [] }).replace(/\u00a0/g, " ").split("\n").slice(1, 3), [
+      "Quantidade total: 40 UN",
+      "Valor unitário médio (ponderado): R$ 8,00 · faixa R$ 5,00 a R$ 9,00 · variação 40,4%",
     ]);
   });
 

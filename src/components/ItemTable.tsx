@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { brl, dataBR, dec } from "@/lib/format";
+import { brl, dataBR, dec, num } from "@/lib/format";
 import type { ItemRow } from "@/lib/queries";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { type Column, DataTable } from "./DataTable";
@@ -43,6 +43,7 @@ export function ItemTable({
         header: "Seq.",
         nowrap: true,
         filter: "range",
+        formatarFaixa: num,
         numero: (r) => r.sequencial,
         render: (r) => <span className="tabular-nums text-faint">{r.sequencial ?? "—"}</span>,
       },
@@ -113,6 +114,7 @@ export function ItemTable({
         header: "Qtd.",
         nowrap: true,
         filter: "range",
+        formatarFaixa: dec,
         numero: (r) => r.quantidade,
         render: (r) => <span className="tabular-nums text-text-2">{r.quantidade != null ? dec(r.quantidade) : "—"}</span>,
       },

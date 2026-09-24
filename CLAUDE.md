@@ -622,28 +622,42 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
     linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
     é UMA linha por **CÓDIGO** (só os dígitos — `normalizarCodigo`; item SEM código não consolida, fica numa linha
-    própria), calculada no cliente sobre os itens JÁ filtrados pela hierarquia (`itensF`) e SÓ com ela aberta, pelo núcleo
-    PURO **`itens-consolidados.ts`** (testado, linear — 20 mil itens): `consolidarItens` (quantidade SOMADA; **valor
-    unitário MÉDIO PONDERADO** pela quantidade = Σ qtd×vu ÷ Σ qtd dos itens com qtd E preço > 0 — a linha fecha; sem
-    qtd/preço contam à parte, nunca NaN; menor/maior preço; **variação** = coeficiente de variação amostral dos preços,
-    faixas `FAIXAS_VARIACAO` ≤ 25% ok · ≤ 50% atenção · acima alerta; **curva ABC** pela participação acumulada ANTES da
-    linha — `LIMITES_ABC` 80%/95%; ordem pelo valor, empate pelo código, sem código no fim; descrições/unidades distintas
-    sem caixa/acento/espaço, a mais frequente primeiro), `estadoConsolidado` (os problemas dos itens de origem AGRUPADOS
-    com a contagem — "Item sem valor (2)" —, erros primeiro; o filtro recebe os rótulos SEM contagem), `distintos`,
-    `varianteDescricao` (D1, D2…), `desvioDaMedia`/`desvioTexto`, `participacaoTexto` ("< 0,1%") e
-    `textoResumoConsolidado` ("Copiar resumo"). Colunas (as da visão Normal, agregadas): [Seq. PCA] · Estado · Código ·
-    Catálogo (o veredito MAIS grave dos itens) · Descrição (+N) · Unidade (unidades diferentes = ÂMBAR + ícone — a soma
-    mistura unidades) · Qtd. total · Vlr. unit. médio · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) ·
-    Itens · Nº DFD · Protocolo · Sigla · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N", a lista
-    inteira na dica; Seq. PCA inativo riscado) e os filtros multi-valor acham a linha por QUALQUER valor. Tudo o que as
-    células mostram é calculado UMA vez por lista (`infoConsolidados`), não por célula. Rodapé = N códigos · M sem código
-    · itens · o MESMO total da visão Normal. SÓ leitura (sem seleção/massa — a edição é item a item; a seleção da Normal
-    fica guardada). Tocar numa linha abre o **`ComposicaoItem`** (`Modal` full): 6 `StatMini` (quantidade total, valor
-    unitário médio, menor e maior preço, variação, valor total + ABC), avisos (`Callout` unidades diferentes / itens fora
-    da média), as descrições diferentes numeradas (D1…) e a TABELA das ocorrências (Protocolo · Nº DFD · Sigla · Item ·
-    Unidade · Qtd. · "Vlr. unit. · Δ média" [o valor + o desvio dele da média, na cor da faixa — uma coluna só: ordenar
-    pelo valor = pelo desvio] · Vlr. total · [Descrição D1/D2 — só com descrições diferentes]); tocar numa ocorrência abre o banner do ITEM por cima (`setAberto` — a pilha da Mesa; Esc fecha o do topo
-    primeiro); recarregando os itens (após salvar), o detalhe segue a última composição e fecha se o código sumir.
+    própria), calculada no cliente SÓ com ela aberta, pelo núcleo PURO **`itens-consolidados.ts`** (testado, linear — 20
+    mil itens; um código com 300 mil preços sem estourar a pilha): `consolidarItens` (quantidade SOMADA; **valor unitário
+    MÉDIO PONDERADO** pela quantidade = Σ qtd×vu ÷ Σ qtd dos itens com quantidade E preço > 0 — entre eles, qtd × médio = o
+    valor deles; quantidade vazia, ZERADA ou negativa e preço vazio/zero ficam FORA da média e são contados —
+    `semQuantidade`/`semValor`/`foraDaMedia`, nunca NaN; menor/maior preço; **variação** = coeficiente de variação
+    amostral, faixas `FAIXAS_VARIACAO` ≤ 25% ok · ≤ 50% atenção · acima alerta; **por UNIDADE** (`porUnidade`, UN = UNIDADE
+    por `normUnidadeMedida`): com unidades diferentes (`unidadesMistas`) a variação da linha é a MAIOR dentro de uma mesma
+    unidade — preço de caixa não se compara com o de unidade; **curva ABC** pela participação acumulada ANTES da linha
+    sobre a soma dos totais POSITIVOS — `LIMITES_ABC` 80%/95%; ordem pelo valor, empate pelo código, sem código no fim;
+    descrições/unidades distintas sem caixa/acento/espaço, a mais frequente primeiro), `mediaDeReferencia` (a média com
+    que o preço de um item se compara — a da unidade dele quando mistas), `estadoConsolidado` (os problemas dos itens
+    AGRUPADOS com a contagem — "Item sem valor (2)" —, erros primeiro), `distintos`, `varianteDescricao` (D1, D2…),
+    `desvioDaMedia`/`desvioTexto`, `participacaoTexto` ("< 0,1%") e `textoResumoConsolidado` ("Copiar resumo", com a linha
+    "Por unidade" quando mistas). **Filtros:** os de ATRIBUTO (Estado, Código, Catálogo, Descrição, Unidade, Nº DFD,
+    Protocolo, Sigla, PCA, Prioridade, Seq. PCA) valem no nível do **ITEM, ANTES de consolidar** — `aplicarFiltros` sobre os
+    itens com as MESMAS funções de valor da visão Normal (`atributoItem`, fonte única das duas visões; o código
+    normalizado) —, então a linha soma só os itens que passam e **o total bate com o da Normal com os mesmos filtros**; as
+    opções de cada um vêm dos itens que passam nos DEMAIS (conectados, sem ciclo) e chegam à tabela por
+    **`Column.filtroExterno`**; os NUMÉRICOS (Qtd. total, médio, variação, total, itens) ficam na tabela e valem para a
+    linha. Zeram ao sair da visão. Colunas (as da Normal, agregadas): [Seq. PCA] · Estado · Código · Catálogo (o veredito
+    MAIS grave dos itens) · Descrição (+N — `MaisN`) · Unidade (mistas = ÂMBAR + ícone) · Qtd. total · Vlr. unit. médio
+    (mistas = âmbar + ícone) · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) · Itens · Nº DFD ·
+    Protocolo · Sigla · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N"; dica até 30 por
+    `dicaLista`; Seq. PCA inativo riscado). O que as células mostram é calculado UMA vez por lista (`infoConsolidados`,
+    inclusive o rótulo do catálogo usado na ordenação). Rodapé = N códigos · M sem código · itens · total. SÓ leitura (sem
+    seleção/massa — a edição é item a item; a seleção da Normal fica guardada). Tocar numa linha abre o
+    **`ComposicaoItem`** (`Modal` full): 6 `StatMini` (quantidade, médio, menor e maior preço, variação, total + ABC),
+    `Callout`s (unidades diferentes; itens fora da média), a quebra **"Por unidade de medida"** (qtd., médio, faixa e
+    variação de cada uma), as descrições diferentes numeradas (D1…) e a TABELA das ocorrências com TUDO o que a linha
+    resume — as colunas da Normal vindas da Mesa (`colunasAntes`: Seq. PCA, Estado; `colunasDepois`: Catálogo, PCA,
+    Prioridade) + Protocolo · Nº DFD · Sigla · Item · Unidade · Qtd. · "Vlr. unit. · Δ média" (o valor + o desvio dele da
+    média — a da MESMA unidade quando mistas —, na cor da faixa; uma coluna só) · Vlr. total · [Descrição D1/D2 — só com
+    descrições diferentes]; tocar numa ocorrência abre o banner do ITEM por cima (`setAberto` — a pilha da Mesa; Esc fecha o
+    do topo primeiro). Recarregando os itens (após salvar), o detalhe segue a MESMA linha (pelo código) com os dados novos;
+    se ela sumiu (o código mudou; a linha SEM código é o próprio item, que regravado ganha outro id), fecha — nunca por
+    baixo de um banner aberto: só ao voltar à Mesa.
   - **PILHA DE BANNERS da Mesa (`BannersMesa`) — ORDEM FIXA Protocolo (esquerda) | DFD (centro) | Item (direita), qualquer
     que seja o banner de entrada:** linha de **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD,
     com "Salvar alterações") — a coluna da direita; **"Ver DFD"** faz o DFD surgir À ESQUERDA dele; **"Ver protocolo"** traz
@@ -1522,7 +1536,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sozinho) + `Toast`/`Toaster` (renderiza o MESMO `AvisoFlutuante`), `DataTable` (seleção+filtro no cabeçalho+clique na
   linha; **"selecionar todos" marca TODAS as linhas FILTRADAS, não só a página** (estado indeterminado quando parcial);
   **`Column.travado`** = filtro da coluna TRAVADO por um filtro de hierarquia acima da tabela (cadeado + o motivo no
-  `title`); `pageSize` **máx 20**;
+  `title`); **`Column.filtroExterno`** = filtro multi-seleção CONTROLADO DE FORA (opções/seleção/mudança do host — a coluna
+  não filtra as linhas por dentro; marca o tópico e entra no "Limpar filtros" — ex.: a Consolidada filtra os ITENS antes de
+  agrupar); **`Column.formatarFaixa`** = formato dos números no filtro de faixa (padrão R$ — quantidades/contagens usam
+  `num`, a variação `%`); `pageSize` **máx 20**;
   **filtros CONECTADOS (facetas)** — núcleo puro **`tabela-filtros.ts`** (`aplicarFiltros`: as opções/domínio de cada coluna
   vêm das linhas que passam nos DEMAIS filtros; seleção vazia ou com todas as opções = sem filtro; `normalizarFaixa`: o lado
   da faixa no extremo da faceta NÃO vira limite; `contarNaFaixa` = a contagem do painel; `ordenarIndices` numérico × texto
@@ -1569,7 +1586,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Item, qualquer que seja o banner de entrada) com **`larguraPrincipal`** — trilhas `minmax(0,Nfr)` animadas, **máx. 3
   visíveis no desktop / 1 no celular** (os ABERTOS POR ÚLTIMO — `ordemRef`), painel fechado fica montado até o
   `transitionend` (fechar animado), colunas ocultas `inert`, Esc fecha o último aberto e só o Modal do TOPO responde ao Esc
-  (pilha `modaisAbertos`); `duracaoMotionMs()` = duração do motion p/ sequenciar entradas),
+  (pilha `modaisAbertos`; um Esc já consumido — ex.: fechou o painel de um filtro, que o trata na CAPTURA — não fecha o
+  modal); a trava do scroll da página é UMA contagem compartilhada (trava no 1º modal aberto, solta quando o ÚLTIMO fecha
+  — fechar fora de ordem nunca deixa a página travada); `duracaoMotionMs()` = duração do motion p/ sequenciar entradas),
   **`GatilhoFiltro`** (o gatilho de TODO filtro de cabeçalho: rótulo + seta de ordenação, ou chip accent + funil quando
   filtrado), **`RangeFilterHeader`** (filtro de FAIXA p/ colunas R$: Crescente/Decrescente, **"Valor cheio"** [marcar limpa a
   barra; arrastar desmarca], **barra de arrasto DUPLA** mín.–máx. sobre os valores VISÍVEIS (`.faixa-dupla` em `globals.css`,
@@ -1592,11 +1611,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   HIERARQUIA na linha das visões — SÓ O ÍCONE num quadrado na altura padrão, accent quando ativo; quem usa troca o ícone pelo
   que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; `<select>` nativo por cima),
   **`CelulaPca`**/**`CelulaPrioridade`** (`PlanilhaDfds.tsx` — as células PCA e Prioridade, as MESMAS nas tabelas de protocolos,
-  DFDs e itens), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista inteira na dica, valor
-  inativo riscado; a visão Consolidada dos itens), **`CelulaVariacao`**/**`SeloAbc`**/**`ComposicaoItem`**
-  (`ComposicaoItem.tsx` — a variação dos preços na cor da faixa, o selo da curva ABC e o detalhe da linha consolidada: KPIs +
-  avisos + as ocorrências com o desvio da média; "Copiar resumo"), **`ConfigTabelas`** (contexto: as linhas por página
-  iniciais do ADM para as tabelas),
+  DFDs e itens), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista na dica — até 30,
+  `dicaLista` —, valor inativo riscado; a visão Consolidada dos itens) + **`MaisN`** (o chip "+N"),
+  **`CelulaVariacao`**/**`SeloAbc`**/**`ComposicaoItem`** (`ComposicaoItem.tsx` — a variação dos preços na cor da faixa
+  [`nota` na dica], o selo da curva ABC e o detalhe da linha consolidada: KPIs + avisos + a quebra por unidade + as
+  ocorrências com o desvio da média e as colunas do host; "Copiar resumo"), **`ConfigTabelas`** (contexto: as linhas por
+  página iniciais do ADM para as tabelas),
   **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"), **`SeletorBusca`** (seleção ÚNICA com
   BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
   vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),

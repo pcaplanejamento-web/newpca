@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { brl } from "@/lib/format";
+import { brl, num } from "@/lib/format";
 import type { AlvoVinculo, LinhaVinculo, TipoVinculo } from "@/lib/orcamento-vinculo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -144,6 +144,7 @@ export function OrcamentoVinculos({
       header: "Lançamentos",
       nowrap: true,
       filter: "range",
+      formatarFaixa: num,
       numero: (l) => l.lancamentos,
       render: (l) => <span className="tabular-nums text-text-2">{l.lancamentos}</span>,
     },

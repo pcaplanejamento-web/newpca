@@ -50,12 +50,15 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   Mesa, os cards do PCA e o Orçamento.
 - **Itens Normal | Consolidada:** só na visão Itens, um 2º `Segmented` ao lado do das visões (mesma altura; no celular desce
   com os filtros, 44px). Na Consolidada (uma linha por código) as células com VÁRIOS valores usam a **`CelulaLista`** (os
-  primeiros + chip "+N"; a lista inteira na dica; inativo riscado), a variação dos preços o **`CelulaVariacao`** (ponto +
-  % na cor da faixa: verde ≤ 25% · âmbar ≤ 50% · vermelho acima), a curva ABC o **`SeloAbc`** (A = accent cheio · B = accent
-  suave · C = neutro) e unidades diferentes no mesmo código ficam em âmbar com ícone. Tocar na linha abre o
-  **`ComposicaoItem`** (`Modal` full): 6 `StatMini` (2 → 3 → 6 colunas), `Callout`s de aviso, as descrições diferentes com a
-  marca **D1/D2…** (a mesma na coluna Descrição da tabela) e a tabela das ocorrências com o desvio da média ao lado do valor
-  (texto na cor da faixa) — cabe sem rolagem lateral a partir de 1280px; tocar numa ocorrência empilha o banner do item.
+  primeiros + chip **`MaisN`** "+N"; a lista na dica, até 30; inativo riscado), a variação dos preços o **`CelulaVariacao`**
+  (ponto + % na cor da faixa: verde ≤ 25% · âmbar ≤ 50% · vermelho acima), a curva ABC o **`SeloAbc`** (A = accent cheio · B =
+  accent suave · C = neutro) e unidades diferentes no mesmo código ficam em âmbar com ícone (na Unidade e no valor médio). Os
+  filtros de dado das colunas escolhem os itens da soma (o cabeçalho é o mesmo `MultiSelectHeader`); os de faixa mostram o
+  número no formato da coluna (quantidade, %, R$). Tocar na linha abre o **`ComposicaoItem`** (`Modal` full): 6 `StatMini`
+  (2 → 3 → 6 colunas, dicas curtas), `Callout`s de aviso, a quebra **por unidade de medida** (lista em seção neutra), as
+  descrições diferentes com a marca **D1/D2…** (a mesma na coluna Descrição da tabela) e a tabela das ocorrências com o
+  desvio da média ao lado do valor (texto na cor da faixa) + as colunas da Mesa (Estado, Catálogo, PCA, Prioridade — a
+  tabela rola na horizontal no próprio contêiner); tocar numa ocorrência empilha o banner do item.
 - **Importar na tabela:** "Importar protocolo"/"Importar DFD" ficam no **rodapé da tabela**, à esquerda do seletor de linhas
   (`DataTable.acoesRodape`, `Button size="sm"`; "Importar" no celular); a tabela aparece sempre (sem linhas, `vazio`
   explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior; os
