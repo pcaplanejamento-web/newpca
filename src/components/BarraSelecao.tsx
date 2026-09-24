@@ -187,12 +187,14 @@ export type DfdSelecionado = { key: string | number; numero: string; planejament
 /**
  * Barra de seleção da PLANILHA DE DFDs — a MESMA na Mesa, no protocolo gravado e na análise: chips "DFD
  * nº", contagem + Σ R$ + itens e o botão "Copiar planejamentos" ("1525:1549:1554" — separados por ":"
- * sem espaço). O editor de massa de cada tela vem em `children`.
+ * sem espaço), seguido das ações da tela (`acoes` — ex.: "Excluir do protocolo" na análise). O editor de massa
+ * de cada tela vem em `children`.
  */
 export function BarraSelecaoDfds({
   dfds,
+  acoes,
   ...props
-}: { dfds: DfdSelecionado[] } & Omit<Parameters<typeof BarraSelecao>[0], "registros" | "resumo" | "acoes">) {
+}: { dfds: DfdSelecionado[] } & Omit<Parameters<typeof BarraSelecao>[0], "registros" | "resumo">) {
   const planejamentos = textoPlanejamentos(dfds.map((d) => d.planejamento));
   return (
     <BarraSelecao
@@ -208,11 +210,14 @@ export function BarraSelecaoDfds({
         />
       }
       acoes={
-        <BotaoCopiar
-          texto={planejamentos}
-          rotulo="Copiar planejamentos"
-          titulo={planejamentos ? `Copia: ${planejamentos}` : "Os DFDs selecionados não têm nº de planejamento"}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <BotaoCopiar
+            texto={planejamentos}
+            rotulo="Copiar planejamentos"
+            titulo={planejamentos ? `Copia: ${planejamentos}` : "Os DFDs selecionados não têm nº de planejamento"}
+          />
+          {acoes}
+        </div>
       }
     />
   );

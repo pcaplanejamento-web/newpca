@@ -89,6 +89,29 @@ export function dicaLista<T>(itens: readonly T[], texto: (it: T) => string, max 
   return itens.length > max ? `${linhas}\n… e mais ${num(itens.length - max)}` : linhas;
 }
 
+/**
+ * Nº do PROTOCOLO sem o ANO — "144756/2026" → "144756" (o que se cola na busca dos sistemas de protocolo). Só um "/AAAA"
+ * no FIM sai (ano de 4 dígitos, 19xx/20xx — nada que não seja ano é cortado); sem ele, o texto como está (aparado).
+ */
+export function numeroSemAno(numero?: string | null): string {
+  return String(numero ?? "")
+    .trim()
+    .replace(/\s*\/\s*(?:19|20)\d{2}$/, "");
+}
+
+/**
+ * VÁRIOS identificadores para COPIAR numa linha só, separados por ":" SEM espaço ("1525:1549:1554" — o formato que a
+ * busca dos filtros aceita): cada valor sem espaços, sem vazios e sem o traço "—" (dado ausente), sem repetição, na ordem.
+ */
+export function juntarParaCopiar(valores: readonly (string | null | undefined)[]): string {
+  const vistos = new Set<string>();
+  for (const v of valores) {
+    const t = String(v ?? "").replace(/\s+/g, "");
+    if (t && t !== "—") vistos.add(t);
+  }
+  return [...vistos].join(":");
+}
+
 /** Tamanho em bytes → texto curto pt-BR (base 1024): 1,5 MB, 820 KB, 512 B. */
 export function formatBytes(n?: number | null): string {
   const v = Number(n ?? 0);

@@ -321,7 +321,7 @@ const curto = (s: string, n = 140) => (s.length > n ? `${s.slice(0, n - 1)}…` 
 
 /**
  * RELATÓRIO DE DIFERENÇAS do reenvio (copiável): capa, DFDs novos/alterados (campo a campo, itens) e os
- * gravados que não vieram no PDF (excluídos ou mantidos). Puro.
+ * gravados fora do envio — não vieram no PDF ou excluídos na análise — (excluídos ou mantidos). Puro.
  */
 export function linhasRelatorioReenvio(info: {
   numero: string;
@@ -363,8 +363,9 @@ export function linhasRelatorioReenvio(info: {
   if (pendentes.length > 0) l.push(`Ainda NÃO comparados (${pendentes.length}) — abra-os ou aguarde a análise: ${pendentes.map(ref).join(", ")}.`, "");
   const excluir = info.removidos.filter((r) => r.excluir);
   const manter = info.removidos.filter((r) => !r.excluir);
-  if (excluir.length > 0) l.push(`Gravados que NÃO vieram no PDF — serão EXCLUÍDOS (${excluir.length}): ${excluir.map(ref).join(", ")}.`);
-  if (manter.length > 0) l.push(`Gravados que NÃO vieram no PDF — MANTIDOS (${manter.length}): ${manter.map(ref).join(", ")}.`);
+  // Fora do envio = não vieram no PDF ou o DFD do PDF foi excluído na análise.
+  if (excluir.length > 0) l.push(`Gravados fora do envio (não vieram no PDF ou excluídos na análise) — serão EXCLUÍDOS (${excluir.length}): ${excluir.map(ref).join(", ")}.`);
+  if (manter.length > 0) l.push(`Gravados fora do envio (não vieram no PDF ou excluídos na análise) — MANTIDOS (${manter.length}): ${manter.map(ref).join(", ")}.`);
   if (info.capa.length === 0 && novos.length === 0 && alterados.length === 0 && info.removidos.length === 0 && pendentes.length === 0)
     l.push("Nenhuma diferença: o PDF reenviado é igual ao protocolo gravado.");
   return l;

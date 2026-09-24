@@ -7,7 +7,7 @@ import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
-import { respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
+import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 import { responsavelPadraoDe } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +71,12 @@ export async function POST(req: Request) {
   const travas = await travaDeProtocolos([gravado?.id, mesmoNumero?.id, mesmoId?.id]);
   const trava = [...travas.values()][0];
   if (trava) return respostaTravado(trava);
+  // O de MESMO Id e nº DIFERENTE seria EXCLUÍDO para dar lugar ao novo — e protocolo em um PCA não é excluído (enviado:
+  // devolva à Mesa principal antes; incorporado: a trava acima).
+  if (mesmoId && mesmoId.numero !== protocolo.numero) {
+    const noPca = (await pcaDeProtocolos([mesmoId.id])).get(mesmoId.id);
+    if (noPca) return erro(`O protocolo ${mesmoId.numero} (mesmo Id) seria substituído, mas está no ${noPca.nome} — devolva-o à Mesa principal antes de importar de novo.`, 409);
+  }
 
   // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação), se ainda for do grupo — só preenche um protocolo ainda sem
   // responsável (a sobrescrita/reenvio mantém o já designado).

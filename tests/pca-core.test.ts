@@ -10,6 +10,7 @@ import {
   estaTravado,
   mensagemTravaPca,
   motivoNaoDevolver,
+  motivoNaoExcluirProtocolo,
   motivosNaoEnviar,
   motivosNaoIncorporar,
   previsaoDoDfd,
@@ -43,6 +44,15 @@ describe("pca-core — incorporar, devolver e trava", () => {
     assert.equal(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: null }, 5), null);
     assert.match(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, 5) ?? "", /permanente/);
     assert.match(motivoNaoDevolver({ pcaId: 6, pcaIncorporadoEm: null }, 5) ?? "", /não está/);
+  });
+  it("protocolo em um PCA (enviado ou incorporado) NÃO é excluído; fora de PCA, pode", () => {
+    assert.equal(motivoNaoExcluirProtocolo({ pcaId: null, pcaIncorporadoEm: null }), null);
+    assert.equal(motivoNaoExcluirProtocolo({ pcaId: undefined, pcaIncorporadoEm: undefined }), null);
+    const enviado = motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: null }, "PCA 2027") ?? "";
+    assert.match(enviado, /Mesa do PCA 2027/);
+    assert.match(enviado, /devolva-o à Mesa principal/);
+    assert.equal(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, "PCA 2027"), mensagemTravaPca("PCA 2027"));
+    assert.match(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: null }) ?? "", /Mesa do PCA —/); // sem nome: "PCA"
   });
   it("travado: só a gestão passa", () => {
     assert.equal(edicaoPermitidaTravado({ situacaoId: 3, origem: "celula" }), true);

@@ -900,6 +900,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Manter o existente" descarta também as cópias de mesmo nº; a confirmação separa mesmo nº (só um é gravado) × mesmo
   planejamento (vão todos). Selo por DFD na comparação: **Descartado / Sem escolha / Segue**; "Abrir" não reabre a
   comparação por cima (celular).
+  **EXCLUIR DFDs do protocolo NA ANÁLISE (antes de protocolar):** botão **"Excluir do protocolo"** no rodapé do banner do DFD
+  (`DfdRodape.acoes`) e EM MASSA na seleção (`BarraSelecaoDfds.acoes`). O DFD excluído fica FORA DO ENVIO — estado
+  **`excluido`** ("Excluído", cinza; `foraDoEnvio` em `dfd-tratamento`, junto do `descartado`): não é gravado, sai da
+  somatória/contagem da capa, dos erros e do despacho, e deixa de bloquear (erro, tipo não permitido, duplicado — excluir um
+  dos duplicados resolve o par). Estado `excluidosDoProtocolo` = subconjunto de `descartados` (a MESMA régua de
+  `protocolar()`/somatória); **na importação nada é apagado do banco**: o DFD já cadastrado de mesmo nº (se houver) continua
+  como está — e segue na somatória quando é deste processo (entra em `mantidosExistentes`, como "Manter o existente"). **No
+  REENVIO**, excluir tira o DFD do processo: o GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão —
+  ou Manter, como o que não veio no PDF; a confirmação do reenvio avisa quantos gravados serão EXCLUÍDOS). Um DFD já fora do
+  envio por outro motivo não muda. Desfazer: **"Restaurar"** no rodapé do DFD ou **"Restaurar excluídos (N)"** no título da
+  tabela cinza "DFDs fora do envio" (`PlanilhaDfds.acaoDescartados`, via `ProtocoloView`). Aviso flutuante confirma; o rodapé
+  conta "N excluído(s)" e o resultado da protocolação informa os excluídos na análise. Validado ponta a ponta com o PDF real
+  (`pd101820`, 15 DFDs): excluir 2 → 13 DFDs e a somatória menos os dois; protocolar com 1 excluído → 14 gravados.
   **Sobrescrita de DFD com ESCOLHA POR DADO (não existem dois DFDs com o mesmo nº):** um DFD importado de novo SOBRESCREVE
   o cadastrado, e cada DIFERENÇA gravado × arquivo novo é uma escolha **"Manter gravado | Usar novo"** (+ "todos" por
   bloco). Núcleo PURO **`sobrescrita-dfd.ts`** (testado): `comparacaoEscolha` (a MESMA régua do reenvio — `compararDfd`;
@@ -1011,7 +1024,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   opcionais só aparecem quando há dado), **todas filtráveis/ordenáveis** e **sem quebra de linha** (`Column.nowrap` do
   `DataTable`: a coluna ganha a largura do CONTEÚDO — ex.: os badges da Assinatura + "(auto)" numa linha só; a tabela
   rola no eixo x do próprio container). Na **ANÁLISE** os **DFDs com erro/atenção ficam em tabelas SEPARADAS** acima das
-  regulares; **depois de protocolado** (`unica`) é **UMA tabela só** (o filtro da coluna Estado separa) — a única
+  regulares e os FORA DO ENVIO (Excluído/Descartado — `foraDoEnvio`) numa tabela CINZA abaixo, "DFDs fora do envio (N)", com
+  a ação opcional `acaoDescartados` no título (ex.: "Restaurar excluídos"); **depois de protocolado** (`unica`) é **UMA tabela só** (o filtro da coluna Estado separa) — a única
   diferença entre análise e gravado. `LinhaDfd.processando` mostra spinner + o que está acontecendo ("Lendo o DFD…",
   "Lendo assinatura (OCR)…", "Na fila", "Conferindo…"). A célula Estado é o componente `EstadoCelula`
   (`EstadoResumo`/`EstadoPonto`, o MESMO nas tabelas de DFDs, itens e protocolos); **rodapé = só os agregados** (nº · itens · somatória). A repartição é a coluna **Sigla** (atribuição
@@ -1117,8 +1131,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     barra de progresso; por DFD: escopo por unidade, campo travado pelo ADM recusado, troca de unidade reconfere a
     assinatura contra o destino, falha de um DFD vira `falhas` (não derruba o lote); auditoria por DFD.
     **Mesa → Itens:** coluna **Estado** do item (mesma célula `EstadoCelula`). **Mesa → Protocolos:** Estado AGREGADO
-    (`avaliarProtocolo` — capa + DFDs + itens, ver acima). Excluir protocolo avisa que os DFDs vinculados (e itens) são
-    excluídos junto (cascata).
+    (`avaliarProtocolo` — capa + DFDs + itens, ver acima). Excluir protocolo (lixeira da linha — SÓ na Mesa principal;
+    protocolo em um PCA não é excluído, ver "Mesa do PCA") avisa que os DFDs vinculados (e itens) são excluídos junto
+    (cascata).
   - **Seleção + edição em massa nas TRÊS visões da Mesa — `BarraSelecao` FIXA no rodapé do DISPLAY:** DFDs, Protocolos e
     Itens têm seleção (só editores). A barra fica **`position: fixed`** rente ao rodapé do display (acima da navegação
     inferior no celular) **mesmo com a tabela curta**, alinhada à coluna de conteúdo (medida pelo LUGAR que reserva no
@@ -1146,8 +1161,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `linhasRelatorioReenvio` (relatório copiável) e **`herdarTratamentos`** (o que o PDF NÃO traz e o gravado já tratou —
     tipo, seções obrigatórias ausentes/fora do padrão, referências de renovação, validação da assinatura pela equipe — é
     herdado, nunca sobrescrevendo valor válido do PDF; listado como "Herdado do gravado"). UI (`ComparacaoReenvio.tsx`):
-    **`ComparacaoProtocolo`** no topo do banner (`ProtocoloView.topo`: contagens Novos/Alterados/Sem diferença/Fora do PDF,
-    diferenças da CAPA, DFDs gravados que não vieram no PDF com **Excluir/Manter** um a um ou todos, "Relatório de
+    **`ComparacaoProtocolo`** no topo do banner (`ProtocoloView.topo`: contagens Novos/Alterados/Sem diferença/Fora do envio,
+    diferenças da CAPA, DFDs gravados FORA DO ENVIO — não vieram no PDF ou o DFD do PDF foi excluído na análise — com
+    **Excluir/Manter** um a um ou todos, "Relatório de
     diferenças"), coluna Situação "Novo/Igual/Alterado (N)" e, por DFD, o botão **"Diferenças (N)"** → painel da direita
     (`DfdPainelDireito` `{tipo:"diferencas"}` → **`ComparacaoDfdView`** + `DiffLinha` gravado × novo) e **"Manter o gravado"**
     (descarta o novo). O usuário **edita antes** (mesma conferência/edição em massa da análise). **Sobrescrever** confirma
@@ -1494,6 +1510,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/dfd/massa` e `POST /api/dfd/itens/massa` (por alvo → `falhas`); `POST /api/dfd/existentes` devolve o travado como
   `{acessivel:false}` (a importação o mostra como "Não sobrescrevível"). Tela: `useProtocoloGravado`/`useDfdGravado` dobram a
   trava em `podeEditar`/`editavel` + `Callout` âmbar com cadeado; a `DfdsView` esconde vincular/excluir do travado.
+- **Protocolo em um PCA NÃO é excluído (regra do usuário) — ENVIADO ou INCORPORADO:** a Mesa do PCA não tem a lixeira (nem a
+  coluna de ações); o enviado sai pela **"Devolver à Mesa"** e só então pode ser excluído na Mesa principal. Regra pura
+  **`motivoNaoExcluirProtocolo`** (`pca-core`, testada) + consulta **`pcaDeProtocolos`** (`trava-pca`, lotes ≤ 90):
+  `DELETE /api/protocolo/[id]` recusa — **409** o enviado ("Na Mesa do PCA X — devolva-o à Mesa principal para excluir"),
+  **423** o incorporado (a mensagem da trava) — e o `POST /api/protocolo` recusa (409) a re-importação que SUBSTITUIRIA
+  (apagaria) um protocolo de MESMO Id e nº diferente que está em um PCA.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).
@@ -1638,7 +1660,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
   `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular, da `BarraSelecao`
   fixa via `--reserva-rodape` e do rodapé da tabela da Mesa via `--rodape-tabela`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
-  sozinho) + `Toast`/`Toaster` (renderiza o MESMO `AvisoFlutuante`), `DataTable` (seleção+filtro no cabeçalho+clique na
+  sozinho) + `Toast`/`Toaster` (renderiza o MESMO `AvisoFlutuante`), `DataTable` (cada linha é `group/linha` — os ícones da
+  `CelulaCopiavel` aparecem com o mouse na linha; seleção+filtro no cabeçalho+clique na
   linha; **"selecionar todos" marca TODAS as linhas FILTRADAS, não só a página** (estado indeterminado quando parcial);
   **`Column.travado`** = filtro da coluna TRAVADO por um filtro de hierarquia acima da tabela (cadeado + o motivo no
   `title`); **`Column.filtroExterno`** = filtro multi-seleção CONTROLADO DE FORA (opções/seleção/mudança do host — a coluna
@@ -1700,7 +1723,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   alças de 24px p/ toque, teclado ←/→) + campos Mín./Máx.), **`BarraSelecao`** (+ `ResumoSelecao`; registro das seleções em
   chips removíveis + somatório R$ + editor + `acoes` na linha do resumo; `fixa` = rodapé do display, publica
   `--reserva-rodape`) + **`BarraSelecaoDfds`** (a da PLANILHA DE DFDs — chips "DFD nº" + Σ + itens + **`BotaoCopiar`**
-  "Copiar planejamentos") com os editores **`BarraEdicaoMassa`** (DFDs) /
+  "Copiar planejamentos" + `acoes` da tela — ex.: "Excluir do protocolo" na análise) com os editores **`BarraEdicaoMassa`** (DFDs) /
   **`BarraEdicaoMassaProtocolos`** / **`BarraEdicaoMassaItens`** (`BarraEdicaoMassa.tsx`), **`ComparacaoReenvio`**
   (`DiffLinha` antes × depois — `rotulos` Gravado/Novo ou Antes/Depois, `compacto` = valor curto numa linha e texto longo
   recolhido; `acao`/`escolhido` = a escolha da sobrescrita —, `DiffItem`, `BlocoDiff` (`acoes`), `ComparacaoDfdView`
@@ -1724,7 +1747,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   [`nota` na dica], o selo da curva ABC e o detalhe da linha consolidada: KPIs + avisos + a quebra por unidade + as
   ocorrências com o desvio da média e as colunas do host; "Copiar resumo"), **`ConfigTabelas`** (contexto: as linhas por
   página iniciais do ADM para as tabelas),
-  **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"), **`SeletorBusca`** (seleção ÚNICA com
+  **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!") + **`CelulaCopiavel`** (o MESMO arquivo —
+  ícone DISCRETO de copiar ao lado do valor da célula, `IconCopy`, em TODA tabela nas colunas **nº do protocolo** [copia SEM
+  o ano — `numeroSemAno`, `format.ts`: "144756/2026" → "144756"], **Id do protocolo**, **nº do DFD**, **nº de
+  planejamento** [a fábrica `colunaPlanejamento` já traz], **código** e **descrição do item** — Mesa (Protocolos, Itens
+  Normal e Consolidada), planilha de DFDs (análise, gravado, rastro), itens do DFD, detalhe da Consolidada, Dashboard/consulta
+  do PCA, compilação do PCA, Catálogo (+ prévia) e Classificações; célula com VÁRIOS valores copia unidos por ":" —
+  `juntarParaCopiar`, o formato da busca dos filtros —, com o rótulo no plural (`plural`); o texto copiado pode diferir do
+  exibido (`copiar`); vazio/"—" = sem ícone. No computador aparece ao passar o mouse na LINHA (`group/linha` do `DataTable`) ou
+  no foco do teclado (`[@media(hover:hover)]:opacity-0`); no TOQUE fica sempre visível, com um vão de 12px do valor e a área
+  de toque ampliada (44px de altura) só para cima/baixo/direita (`pointer-coarse:`) — o navegador "puxa" o toque para o
+  controle mais próximo: colado ao valor, tocar no número copiaria em vez de abrir a linha. O clique é do botão (não abre a
+  linha); ✓ por 1,5 s + aviso "Copiado: …"), **`SeletorBusca`** (seleção ÚNICA com
   BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
   vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;

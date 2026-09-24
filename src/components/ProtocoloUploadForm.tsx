@@ -84,13 +84,14 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainel
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconClipboard, IconCompare, IconFile, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconCheck, IconClipboard, IconCompare, IconFile, IconRefresh, IconSpinner, IconTrash, IconUndo, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
+import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
 import { useSobrescrita } from "./useSobrescrita";
 
@@ -219,6 +220,9 @@ export function ProtocoloUploadForm({
   // Descartados por "Manter o existente" (subconjunto de `descartados`): o DFD já cadastrado PREVALECE —
   // se ele é deste MESMO protocolo, continua no processo e entra na somatória da capa.
   const [mantidosExistentes, setMantidosExistentes] = useState<Set<number>>(new Set());
+  // EXCLUÍDOS do protocolo pelo usuário na análise (subconjunto de `descartados`): não são gravados nem entram na
+  // somatória; nada é apagado (o DFD já cadastrado de mesmo nº, se houver, continua como está). "Restaurar" desfaz.
+  const [excluidosDoProtocolo, setExcluidosDoProtocolo] = useState<Set<number>>(new Set());
   // Motivo de falha na LEITURA de um DFD (ex.: tabela de itens incompleta) → estado "erro".
   const [errosParse, setErrosParse] = useState<Map<number, string>>(new Map());
   // Análise em background com progresso REAL (fase, n/N e o DFD atual).
@@ -252,6 +256,8 @@ export function ProtocoloUploadForm({
     /** (reenvio) DFDs sem diferença (não regravados) e gravados excluídos por não virem no PDF. */
     iguais?: number;
     excluidos?: number;
+    /** DFDs do PDF que o usuário EXCLUIU do protocolo na análise (não gravados). */
+    excluidosDoProtocolo?: number;
   } | null>(null);
   // REENVIO: DFDs gravados que NÃO vieram no PDF e o usuário decidiu MANTER (o padrão é excluir) +
   // tratamentos herdados do gravado por DFD (transparência) + relatório de diferenças.
@@ -310,6 +316,7 @@ export function ProtocoloUploadForm({
     setEditados(new Set());
     setDescartados(new Set());
     setMantidosExistentes(new Set());
+    setExcluidosDoProtocolo(new Set());
     setErrosParse(new Map());
     setSel(new Set());
     setAbertoIdx(-1);
@@ -722,9 +729,10 @@ export function ProtocoloUploadForm({
       return s;
     });
     setFantasmas(semEle);
+    setExcluidosDoProtocolo(semEle);
     setSel(new Set());
   };
-  /** Reincluir um DFD descartado (o grupo volta a "pendente"). */
+  /** Reincluir um DFD descartado ou excluído (o grupo de duplicados volta a "pendente"). */
   const restaurarDfd = (idx: number) => {
     const tirar = (prev: Set<number>) => {
       const s = new Set(prev);
@@ -734,6 +742,7 @@ export function ProtocoloUploadForm({
     setDescartados(tirar);
     setMantidosExistentes(tirar);
     setFantasmas(tirar); // o DFD do rastro volta a este processo (a Situação passa a "Move")
+    setExcluidosDoProtocolo(tirar);
   };
   /** Este DFD substitui/move um já CADASTRADO (conflito com o banco)? */
   const conflitaComExistente = (idx: number): boolean => {
@@ -752,6 +761,37 @@ export function ProtocoloUploadForm({
     setDescartados(com);
     setMantidosExistentes(com);
     setSel(new Set());
+  };
+  /** "Excluir do protocolo" — o DFD aberto (rodapé do banner) ou os SELECIONADOS: fica FORA do envio (não é gravado nem
+   * entra na somatória; na tabela, "Excluído"). Na importação nada é apagado: o DFD já cadastrado de mesmo nº (se houver)
+   * continua como está — e segue na somatória da capa quando é deste processo, como em "Manter o existente". No REENVIO, o
+   * GRAVADO de mesmo nº vai para a lista "fora do envio" do topo (Excluir — padrão — ou Manter), como o que não veio no PDF.
+   * Um DFD duplicado excluído resolve o par (o outro segue). "Restaurar" desfaz (um a um ou "Restaurar excluídos"). */
+  const excluirDfds = (idxs: number[]) => {
+    const novos = idxs.filter((i) => !descartados.has(i)); // já fora do envio por outro motivo: fica como está
+    if (novos.length === 0) return;
+    const com = (lista: number[]) => (prev: Set<number>) => {
+      const s = new Set(prev);
+      for (const j of lista) s.add(j);
+      return s;
+    };
+    setDescartados(com(novos));
+    setExcluidosDoProtocolo(com(novos));
+    // O gravado do reenvio NÃO: o destino dele é a lista "fora do envio" (Excluir/Manter) — senão contaria duas vezes.
+    setMantidosExistentes(com(novos.filter((i) => conflitaComExistente(i) && !gravadoDe(index?.dfds[i]?.numero))));
+    setSel(new Set());
+    toast.info(
+      novos.length === 1
+        ? `DFD ${index?.dfds[novos[0]]?.numero ?? ""} excluído do protocolo — não será gravado ("Restaurar" desfaz).`
+        : `${num(novos.length)} DFDs excluídos do protocolo — não serão gravados ("Restaurar excluídos" desfaz).`,
+    );
+  };
+  /** Traz de volta TODOS os excluídos do protocolo (os descartados por duplicidade/"manter o existente" seguem fora). */
+  const restaurarExcluidos = () => {
+    const tirar = (prev: Set<number>) => new Set([...prev].filter((j) => !excluidosDoProtocolo.has(j)));
+    setDescartados(tirar);
+    setMantidosExistentes(tirar);
+    setExcluidosDoProtocolo(new Set());
   };
 
   // ---- Conferência por LINHA — a MESMA do protocolo gravado (`avaliarLinhaDfd`). Cache por objeto
@@ -873,7 +913,7 @@ export function ProtocoloUploadForm({
       situacao: situacaoDe(idx, di.numero),
       processando: processandoDe(idx),
     };
-    if (descartados.has(idx)) return { ...base, estado: "descartado" };
+    if (descartados.has(idx)) return { ...base, estado: excluidosDoProtocolo.has(idx) ? "excluido" : "descartado" };
     const motivo = errosParse.get(idx);
     if (motivo) return { ...base, estado: "erro", estadoMotivo: motivo };
     const cat = d ? confDe(idx, d) : null;
@@ -890,11 +930,11 @@ export function ProtocoloUploadForm({
   const totalDfds = index?.dfds.length ?? 0;
   const temDfds = totalDfds > 0;
   const analisando = analise != null;
-  const semRep = linhasDfd.filter((l) => l.estado !== "descartado" && dfdRepIds[l.key] == null).length;
+  const semRep = linhasDfd.filter((l) => !descartados.has(l.key) && dfdRepIds[l.key] == null).length;
 
   // ---- Conciliação do VALOR DA CAPA × somatória (mesma régua do gravado). A somatória IGNORA os
   // descartados; só é conferida com a análise COMPLETA — e NÃO depende de os DFDs estarem sem erro.
-  const ativos = linhasDfd.filter((l) => l.estado !== "descartado").map((l) => l.key);
+  const ativos = linhasDfd.filter((l) => !descartados.has(l.key)).map((l) => l.key);
   const numerosAtivos = new Set(ativos.map((i) => chaveDfd(index?.dfds[i]?.numero)));
   // "Manter o existente" de um DFD deste MESMO protocolo (re-importação): o cadastrado continua no
   // processo → entra na somatória/contagem da capa (o de outro protocolo sai — segue lá). Um nº que um DFD ATIVO do
@@ -906,9 +946,10 @@ export function ProtocoloUploadForm({
   ]
     .map((n) => existenteDe(n))
     .filter((x): x is DfdExistente => !!x);
-  // REENVIO: DFDs GRAVADOS que não vieram no PDF — excluídos ao sobrescrever, salvo os que o usuário MANTÉM
+  // REENVIO: DFDs GRAVADOS fora do envio — que não vieram no PDF ou cujo DFD do PDF foi EXCLUÍDO na análise ("Excluir do
+  // protocolo" tira o DFD do processo também no reenvio) — são excluídos ao sobrescrever, salvo os que o usuário MANTÉM
   // (esses continuam no processo → entram na somatória/contagem da capa).
-  const numerosPdf = new Set((index?.dfds ?? []).map((d) => chaveDfd(d.numero)));
+  const numerosPdf = new Set((index?.dfds ?? []).filter((_, i) => !excluidosDoProtocolo.has(i)).map((d) => chaveDfd(d.numero)));
   const removidos = (reenvio?.dfds ?? [])
     .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
     .map((g) => ({ id: g.id, numero: g.numero, planejamento: g.planejamento, valorTotal: g.valorTotal, totalItens: g.totalItens, excluir: !removidosManter.has(g.id) }));
@@ -1306,7 +1347,7 @@ export function ProtocoloUploadForm({
       ? `${contagemReenvio.novos} novo(s), ${contagemReenvio.alterados} alterado(s), ${contagemReenvio.iguais} sem diferença` +
         `${contagemReenvio.analisando > 0 ? `, ${contagemReenvio.analisando} ainda a comparar` : ""}` +
         `${capaDiffs.length > 0 ? `, ${capaDiffs.length} campo(s) da capa` : ""}` +
-        `${removidos.length > 0 ? `; fora do PDF: ${aExcluir.length} excluído(s), ${removidos.length - aExcluir.length} mantido(s)` : ""}`
+        `${removidos.length > 0 ? `; fora do envio: ${aExcluir.length} excluído(s), ${removidos.length - aExcluir.length} mantido(s)` : ""}`
       : "";
     // O que NÃO segue (o ADM deixou protocolar assim) — quem protocola vê a lista ANTES e decide: DFDs com erro (não
     // são gravados) e duplicados sem escolha (do mesmo nº de DFD só o 1º gravável segue).
@@ -1493,7 +1534,7 @@ export function ProtocoloUploadForm({
         }
         setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
       }
-      // REENVIO: exclui os DFDs gravados que não vieram no PDF (os que o usuário não decidiu manter).
+      // REENVIO: exclui os DFDs gravados fora do envio — não vieram no PDF ou excluídos na análise (os que o usuário não manteve).
       for (let k = 0; k < aExcluir.length; k++) {
         const r = aExcluir[k];
         setProgresso({ feito: k, total: aExcluir.length, label: `excluindo DFD ${r.numero} (${k + 1}/${aExcluir.length})` });
@@ -1506,7 +1547,7 @@ export function ProtocoloUploadForm({
           bloqueados.push({ numero: r.numero, motivo: `não foi possível excluir (${e instanceof Error ? e.message : "falha"})` });
         }
       }
-      setRelatorio({ numero, importados, bloqueados, ...(reenvio ? { iguais, excluidos } : {}) });
+      setRelatorio({ numero, importados, bloqueados, excluidosDoProtocolo: excluidosDoProtocolo.size, ...(reenvio ? { iguais, excluidos } : {}) });
       fechar();
       router.refresh();
       onConcluido?.();
@@ -1571,7 +1612,8 @@ export function ProtocoloUploadForm({
     const situacao =
       dfdsComErro > 0 ? `${dfdsComErro} com erro — não serão protocolados` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
     const cat = catFalhas > 0 ? ` · catálogo não conferido em ${catFalhas} (rede) — o servidor confere ao gravar` : "";
-    return `${totalDfds} DFD(s) · ${semRep} sem unidade · ${situacao}${cat}`;
+    const fora = excluidosDoProtocolo.size > 0 ? ` · ${num(excluidosDoProtocolo.size)} excluído(s)` : "";
+    return `${totalDfds} DFD(s)${fora} · ${semRep} sem unidade · ${situacao}${cat}`;
   })();
   const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
   const numeroAtual = analise?.atual != null ? (index?.dfds[analise.atual]?.numero ?? "") : "";
@@ -1581,12 +1623,14 @@ export function ProtocoloUploadForm({
       ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`
       : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`;
   // Estado do DFD ABERTO no rodapé = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo, ano do
-  // PCA e o duplicado pendente); descartado segue "Descartado".
+  // PCA e o duplicado pendente); fora do envio segue "Excluído"/"Descartado".
   const estadoAberto =
     abertoIdx < 0 || !dfdAberto
       ? null
       : descartados.has(abertoIdx)
-        ? "descartado"
+        ? excluidosDoProtocolo.has(abertoIdx)
+          ? "excluido"
+          : "descartado"
         : estadoDeMensagens(mensagensAberto, { auto: (autoMap.get(abertoIdx)?.length ?? 0) > 0, editado: editados.has(abertoIdx) });
 
   // Leitura do PDF (índice), falha e resultado: na IMPORTAÇÃO viram AVISOS FLUTUANTES (canto inferior — não
@@ -1642,8 +1686,9 @@ export function ProtocoloUploadForm({
       <p>
         {num(relatorio.importados)} DFD{relatorio.importados === 1 ? "" : "s"} {reenvio ? "regravado" : "protocolado"}
         {relatorio.importados === 1 ? "" : "s"}
+        {relatorio.excluidosDoProtocolo ? ` · ${num(relatorio.excluidosDoProtocolo)} excluído(s) na análise (não gravado${relatorio.excluidosDoProtocolo === 1 ? "" : "s"})` : ""}
         {relatorio.iguais != null ? ` · ${num(relatorio.iguais)} sem diferença (mantido${relatorio.iguais === 1 ? "" : "s"})` : ""}
-        {relatorio.excluidos != null && relatorio.excluidos > 0 ? ` · ${num(relatorio.excluidos)} excluído(s) (fora do PDF)` : ""}
+        {relatorio.excluidos != null && relatorio.excluidos > 0 ? ` · ${num(relatorio.excluidos)} gravado(s) excluído(s) (fora do envio)` : ""}
         {relatorio.bloqueados.length > 0 ? ` · ${relatorio.bloqueados.length} bloqueado(s)` : ""}.
       </p>
       {relatorio.bloqueados.length > 0 && (
@@ -1781,8 +1826,19 @@ export function ProtocoloUploadForm({
                       bloqueado={importando}
                       acoes={
                         <>
+                          {/* Excluir ESTE DFD do protocolo (fora do envio: não é gravado nem soma; "Restaurar" desfaz). */}
+                          {!descartados.has(abertoIdx) && (
+                            <Button
+                              variant="secondary"
+                              icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                              onClick={() => excluirDfds([abertoIdx])}
+                              disabled={importando}
+                            >
+                              Excluir do protocolo
+                            </Button>
+                          )}
                           {/* DFD duplicado: COMPARAR com os duplicados (painel da direita) e manter ESTE (descarta os que
-                              conflitam com ele) — ou restaurar o descartado. */}
+                              conflitam com ele) — ou restaurar o descartado/excluído. */}
                           {descartados.has(abertoIdx) && (
                             <Button variant="secondary" onClick={() => restaurarDfd(abertoIdx)} disabled={importando}>
                               Restaurar
@@ -1905,6 +1961,16 @@ export function ProtocoloUploadForm({
                 onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
                 onLimpar={() => setSel(new Set())}
                 bloqueada={aplicandoMassa}
+                acoes={
+                  <Button
+                    variant="secondary"
+                    icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                    onClick={() => excluirDfds(linhasSel.map((l) => l.key))}
+                    disabled={aplicandoMassa}
+                  >
+                    Excluir do protocolo
+                  </Button>
+                }
               >
                 <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={anoPca} regras={regras} aplicando={aplicandoMassa} onAplicar={aplicarMassa} />
               </BarraSelecaoDfds>
@@ -1999,6 +2065,13 @@ export function ProtocoloUploadForm({
           compacta={compacta}
           regras={regras}
           sobrescritos={rastroMantido}
+          acaoDescartados={
+            excluidosDoProtocolo.size > 0 && !importando ? (
+              <Button size="sm" variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={restaurarExcluidos}>
+                Restaurar excluídos ({num(excluidosDoProtocolo.size)})
+              </Button>
+            ) : undefined
+          }
           vazio={
             <Callout kind="info">
               Nenhum DFD detectado. O protocolo será criado vazio — adicione DFDs depois (aba DFDs) ou vincule existentes.

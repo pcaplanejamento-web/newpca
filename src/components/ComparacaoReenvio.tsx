@@ -17,7 +17,7 @@ import { StatMini } from "./StatMini";
  * com título e contagem) — os três reusados pelo `Historico` —, `ComparacaoDfdView` (as diferenças de UM
  * DFD: cabeçalho, seções, assinaturas e itens — com a ESCOLHA por dado na sobrescrita: manter o gravado ×
  * usar o novo) e `ComparacaoProtocolo` (o bloco do topo do reenvio: contagens, diferenças da capa,
- * gravados que não vieram no PDF com Excluir/Manter e o relatório).
+ * gravados fora do envio — não vieram no PDF ou excluídos na análise — com Excluir/Manter e o relatório).
  */
 
 const tinta = (cor: string) => ({ background: `color-mix(in srgb, ${cor} 9%, var(--surface))`, borderColor: `color-mix(in srgb, ${cor} 28%, var(--border))` });
@@ -338,12 +338,14 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
   );
 }
 
-/** DFD gravado que NÃO veio no PDF — o usuário decide: excluir (padrão da sobrescrita) ou manter. */
+/** DFD gravado FORA DO ENVIO — não veio no PDF ou o DFD do PDF foi excluído na análise: o usuário decide excluir (padrão da
+ * sobrescrita) ou manter. */
 export type RemovidoReenvio = { id: number; numero: string; planejamento: string | null; valorTotal: number | null; excluir: boolean };
 
 /**
- * Bloco do TOPO do banner no REENVIO: contagens (novos / alterados / sem diferença / fora do PDF), as
- * diferenças da CAPA, os DFDs gravados que não vieram no PDF (Excluir/Manter, um a um ou todos) e o
+ * Bloco do TOPO do banner no REENVIO: contagens (novos / alterados / sem diferença / fora do envio), as
+ * diferenças da CAPA, os DFDs gravados fora do envio — não vieram no PDF ou foram excluídos na análise (Excluir/Manter, um
+ * a um ou todos) — e o
  * "Relatório de diferenças" (copiável).
  */
 export function ComparacaoProtocolo({
@@ -378,7 +380,7 @@ export function ComparacaoProtocolo({
         <StatMini label="Novos" value={num(contagem.novos)} />
         <StatMini label="Alterados" value={num(contagem.alterados)} tone={contagem.alterados > 0 ? "warn" : "default"} />
         <StatMini label="Sem diferença" value={num(contagem.iguais)} hint={contagem.analisando > 0 ? `${num(contagem.analisando)} em análise` : undefined} />
-        <StatMini label="Fora do PDF" value={num(removidos.length)} tone={excluir > 0 ? "danger" : "default"} />
+        <StatMini label="Fora do envio" value={num(removidos.length)} tone={excluir > 0 ? "danger" : "default"} />
       </div>
       <p className="mt-3 text-[12px] text-muted">
         Só é regravado o que mudou (os DFDs "sem diferença" ficam como estão). Abra um DFD e use "Diferenças" para ver campo a campo;
@@ -401,7 +403,9 @@ export function ComparacaoProtocolo({
       {removidos.length > 0 && (
         <div className="mt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-[12px] font-bold uppercase tracking-wide text-muted">DFDs gravados que não vieram no PDF ({num(removidos.length)})</h4>
+            <h4 className="text-[12px] font-bold uppercase tracking-wide text-muted">
+              DFDs gravados fora do envio — não vieram no PDF ou foram excluídos na análise ({num(removidos.length)})
+            </h4>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => onTodosRemovidos(true)} disabled={bloqueado}>
                 Excluir todos

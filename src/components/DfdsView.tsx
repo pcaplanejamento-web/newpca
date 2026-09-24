@@ -22,7 +22,7 @@ import {
   rotuloVeredictoCatalogo,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
-import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, num, pct } from "@/lib/format";
+import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, juntarParaCopiar, num, numeroSemAno, pct } from "@/lib/format";
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
@@ -39,7 +39,7 @@ import {
 } from "@/lib/padronizacao-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
-import { estaTravado } from "@/lib/pca-core";
+import { estaTravado, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { ProtocoloResumo } from "@/lib/protocolo";
@@ -51,6 +51,7 @@ import { Avatar } from "./Avatar";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { CelulaLista, MaisN } from "./CelulaLista";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
@@ -885,13 +886,28 @@ export function DfdsView({
       value: (r) => dataIsoBrasilia(r.criadoEm),
       render: (r) => <span className="text-[12px] tabular-nums text-muted">{dataHoraBR(r.criadoEm)}</span>,
     },
-    { key: "numero", header: "Nº processo", nowrap: true, value: (r) => r.numero, render: (r) => <span className="font-mono text-[12px]">{r.numero}</span> },
+    {
+      key: "numero",
+      header: "Nº processo",
+      nowrap: true,
+      value: (r) => r.numero,
+      // Copia o nº SEM o ano ("144756/2026" → "144756").
+      render: (r) => (
+        <CelulaCopiavel copiar={numeroSemAno(r.numero)} rotulo="nº do protocolo">
+          <span className="font-mono text-[12px]">{r.numero}</span>
+        </CelulaCopiavel>
+      ),
+    },
     {
       key: "idExterno",
       header: "Id protocolo",
       nowrap: true,
       value: (r) => r.idExterno ?? "—",
-      render: (r) => <span className="font-mono text-[12px]">{r.idExterno ?? "—"}</span>,
+      render: (r) => (
+        <CelulaCopiavel copiar={r.idExterno} rotulo="Id do protocolo">
+          <span className="font-mono text-[12px]">{r.idExterno ?? "—"}</span>
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "assunto",
@@ -945,25 +961,31 @@ export function DfdsView({
     },
     { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens) },
     { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal, nowrap: true, render: (r) => brl(r.valorTotal) },
-    {
-      key: "acoes",
-      header: "",
-      filter: "none",
-      nowrap: true,
-      render: (r) =>
-        podeEditar && !estaTravado(r) ? (
-          <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="xs"
-              aria-label="Excluir protocolo"
-              onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds)}
-              icon={<IconTrash className="h-4 w-4" />}
-              style={{ color: "var(--danger)" }}
-            />
-          </div>
-        ) : null,
-    },
+    // Excluir: só na Mesa principal — protocolo em um PCA (enviado ou incorporado) NÃO é excluído (o enviado volta pela
+    // "Devolver à Mesa"); o servidor recusa também.
+    ...(modoPca
+      ? []
+      : [
+          {
+            key: "acoes",
+            header: "",
+            filter: "none" as const,
+            nowrap: true,
+            render: (r: ProtocoloResumo) =>
+              podeEditar && motivoNaoExcluirProtocolo(r) == null ? (
+                <div className="flex justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    aria-label="Excluir protocolo"
+                    onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds)}
+                    icon={<IconTrash className="h-4 w-4" />}
+                    style={{ color: "var(--danger)" }}
+                  />
+                </div>
+              ) : null,
+          },
+        ]),
   ];
 
   // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
@@ -1185,7 +1207,14 @@ export function DfdsView({
       header: "Protocolo",
       nowrap: true,
       value: atributoItem.protocolo.valor,
-      render: (r) => (r.protocoloNumero ? <span className="font-mono text-[12px]">{r.protocoloNumero}</span> : <span className="text-faint">—</span>),
+      render: (r) =>
+        r.protocoloNumero ? (
+          <CelulaCopiavel copiar={numeroSemAno(r.protocoloNumero)} rotulo="nº do protocolo">
+            <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
+          </CelulaCopiavel>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
     },
     ...(modoPca
       ? []
@@ -1200,7 +1229,17 @@ export function DfdsView({
           },
         ]),
     colunaPlanejamento((r: ItemDfdRow) => r.dfdPlanejamento),
-    { key: "dfd", header: "Nº DFD", nowrap: true, value: atributoItem.dfd.valor, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
+    {
+      key: "dfd",
+      header: "Nº DFD",
+      nowrap: true,
+      value: atributoItem.dfd.valor,
+      render: (r) => (
+        <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
+          <span className="font-mono text-[12px]">{r.dfdNumero}</span>
+        </CelulaCopiavel>
+      ),
+    },
     {
       key: "sigla",
       header: "Sigla",
@@ -1218,7 +1257,17 @@ export function DfdsView({
       render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
-    { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span> },
+    {
+      key: "codigo",
+      header: "Código",
+      nowrap: true,
+      value: (r) => r.codigo ?? "",
+      render: (r) => (
+        <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
+          <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
+        </CelulaCopiavel>
+      ),
+    },
     // Conformidade com o CATÁLOGO (veredito do servidor, na cor do nível do ADM; o tipo do DFD de origem conta).
     {
       key: "catalogo",
@@ -1246,9 +1295,11 @@ export function DfdsView({
       value: atributoItem.descricao.valor,
       // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica e no banner do item.
       render: (r) => (
-        <span className="line-clamp-1" title={r.descricao ?? undefined}>
-          {r.descricao ?? "—"}
-        </span>
+        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+          <span className="line-clamp-1" title={r.descricao ?? undefined}>
+            {r.descricao ?? "—"}
+          </span>
+        </CelulaCopiavel>
       ),
     },
     { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
@@ -1308,7 +1359,14 @@ export function DfdsView({
       nowrap: true,
       value: (l) => l.codigo ?? "Sem código",
       filtroExterno: filtroExterno("codigo"),
-      render: (l) => (l.codigo ? <span className="font-mono text-[12px]">{l.codigo}</span> : <span className="text-faint">Sem código</span>),
+      render: (l) =>
+        l.codigo ? (
+          <CelulaCopiavel copiar={l.codigo} rotulo="código do item">
+            <span className="font-mono text-[12px]">{l.codigo}</span>
+          </CelulaCopiavel>
+        ) : (
+          <span className="text-faint">Sem código</span>
+        ),
     },
     {
       key: "catalogo",
@@ -1341,10 +1399,12 @@ export function DfdsView({
       filtroExterno: filtroExterno("descricao"),
       // A mais frequente numa linha só; "+N" = descrições diferentes (na dica e, numeradas, no detalhe).
       render: (l) => (
-        <span className="flex min-w-0 items-center justify-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
-          <span className="line-clamp-1 min-w-0">{l.descricoes[0]?.texto ?? "—"}</span>
-          {l.descricoes.length > 1 && <MaisN n={l.descricoes.length - 1} />}
-        </span>
+        <CelulaCopiavel copiar={l.descricoes[0]?.texto} rotulo="descrição do item">
+          <span className="flex min-w-0 items-center justify-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
+            <span className="line-clamp-1 min-w-0">{l.descricoes[0]?.texto ?? "—"}</span>
+            {l.descricoes.length > 1 && <MaisN n={l.descricoes.length - 1} />}
+          </span>
+        </CelulaCopiavel>
       ),
     },
     // Unidades diferentes no mesmo código = a quantidade soma unidades distintas → âmbar (atenção).
@@ -1454,7 +1514,11 @@ export function DfdsView({
       nowrap: true,
       value: (l) => infoDe(l).planejamentos.join(" · ") || "—",
       filtroExterno: filtroExterno("planejamento"),
-      render: (l) => <CelulaLista valores={infoDe(l).planejamentos} mono />,
+      render: (l) => (
+        <CelulaCopiavel copiar={juntarParaCopiar(infoDe(l).planejamentos)} rotulo="nº de planejamento" plural="nºs de planejamento">
+          <CelulaLista valores={infoDe(l).planejamentos} mono />
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "dfd",
@@ -1462,7 +1526,11 @@ export function DfdsView({
       nowrap: true,
       value: (l) => infoDe(l).dfds.join(" · "),
       filtroExterno: filtroExterno("dfd"),
-      render: (l) => <CelulaLista valores={infoDe(l).dfds} mono />,
+      render: (l) => (
+        <CelulaCopiavel copiar={juntarParaCopiar(infoDe(l).dfds)} rotulo="nº do DFD" plural="nºs dos DFDs">
+          <CelulaLista valores={infoDe(l).dfds} mono />
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "protocolo",
@@ -1470,7 +1538,12 @@ export function DfdsView({
       nowrap: true,
       value: (l) => infoDe(l).protocolos.join(" · ") || "—",
       filtroExterno: filtroExterno("protocolo"),
-      render: (l) => <CelulaLista valores={infoDe(l).protocolos} mono />,
+      // Os nºs SEM o ano, unidos por ":".
+      render: (l) => (
+        <CelulaCopiavel copiar={juntarParaCopiar(infoDe(l).protocolos.map(numeroSemAno))} rotulo="nº do protocolo" plural="nºs dos protocolos">
+          <CelulaLista valores={infoDe(l).protocolos} mono />
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "sigla",

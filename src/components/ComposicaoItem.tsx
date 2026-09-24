@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { brl, num, pct } from "@/lib/format";
+import { brl, num, numeroSemAno, pct } from "@/lib/format";
 import {
   type ClasseAbc,
   desvioDaMedia,
@@ -17,7 +17,7 @@ import {
   varianteDescricao,
 } from "@/lib/itens-consolidados";
 import { refDfd } from "@/lib/parse-dfd-comum";
-import { BotaoCopiar } from "./BotaoCopiar";
+import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaLista } from "./CelulaLista";
@@ -126,10 +126,30 @@ export function ComposicaoItem<T extends ItemComposicao>({
 
   const colunas: Column<T>[] = [
     ...colunasAntes,
-    { key: "protocolo", header: "Protocolo", nowrap: true, value: (it) => it.protocoloNumero ?? "—", render: (it) => <CelulaLista valores={it.protocoloNumero ? [it.protocoloNumero] : []} mono /> },
+    {
+      key: "protocolo",
+      header: "Protocolo",
+      nowrap: true,
+      value: (it) => it.protocoloNumero ?? "—",
+      render: (it) => (
+        <CelulaCopiavel copiar={numeroSemAno(it.protocoloNumero)} rotulo="nº do protocolo">
+          <CelulaLista valores={it.protocoloNumero ? [it.protocoloNumero] : []} mono />
+        </CelulaCopiavel>
+      ),
+    },
     // Nº de planejamento e tipo do DFD de origem — as MESMAS colunas da tabela de itens e da planilha de DFDs.
     colunaPlanejamento((it: T) => it.dfdPlanejamento),
-    { key: "dfd", header: "Nº DFD", nowrap: true, value: (it) => it.dfdNumero, render: (it) => <span className="font-mono text-[12px]">{it.dfdNumero}</span> },
+    {
+      key: "dfd",
+      header: "Nº DFD",
+      nowrap: true,
+      value: (it) => it.dfdNumero,
+      render: (it) => (
+        <CelulaCopiavel copiar={it.dfdNumero} rotulo="nº do DFD">
+          <span className="font-mono text-[12px]">{it.dfdNumero}</span>
+        </CelulaCopiavel>
+      ),
+    },
     { key: "sigla", header: "Sigla", nowrap: true, value: (it) => it.sigla ?? "—", render: (it) => <CelulaLista valores={it.sigla ? [it.sigla] : []} mono destaque /> },
     colunaTipoDfd((it: T) => it.dfdTipo),
     { key: "item", header: "Item", align: "center", nowrap: true, value: (it) => String(it.item ?? ""), render: (it) => it.item ?? "—" },
@@ -184,7 +204,14 @@ export function ComposicaoItem<T extends ItemComposicao>({
             value: (it: T) => (variante(it.descricao) ? `D${variante(it.descricao)}` : "—"),
             render: (it: T) => {
               const n = variante(it.descricao);
-              return n ? <ChipVariante n={n} titulo={it.descricao ?? undefined} /> : <span className="text-faint">—</span>;
+              // O ícone copia a descrição INTEIRA da ocorrência (o chip mostra só a variante).
+              return n ? (
+                <CelulaCopiavel copiar={it.descricao} rotulo="descrição do item">
+                  <ChipVariante n={n} titulo={it.descricao ?? undefined} />
+                </CelulaCopiavel>
+              ) : (
+                <span className="text-faint">—</span>
+              );
             },
           },
         ]

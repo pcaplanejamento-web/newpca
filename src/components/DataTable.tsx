@@ -476,7 +476,7 @@ export function DataTable<R>({
                   }
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
-                  className={`border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
+                  className={`group/linha border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
                     onRowClick ? "cursor-pointer" : ""
                   } ${ativa ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : ""}`}
                 >

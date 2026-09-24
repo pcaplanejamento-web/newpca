@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { brl, dataBR, dec, num } from "@/lib/format";
+import { brl, dataBR, dec, num, numeroSemAno } from "@/lib/format";
 import type { ItemRow } from "@/lib/queries";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable } from "./DataTable";
 import { SearchField } from "./Field";
 
@@ -55,14 +56,25 @@ export function ItemTable({
           header: "Protocolo",
           nowrap: true,
           value: (r) => r.protocoloNumero ?? "—",
-          render: (r) => (r.protocoloNumero ? <span className="font-mono text-[12px]">{r.protocoloNumero}</span> : <span className="text-faint">—</span>),
+          render: (r) =>
+            r.protocoloNumero ? (
+              <CelulaCopiavel copiar={numeroSemAno(r.protocoloNumero)} rotulo="nº do protocolo">
+                <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
+              </CelulaCopiavel>
+            ) : (
+              <span className="text-faint">—</span>
+            ),
         },
         {
           key: "dfd",
           header: "Nº DFD",
           nowrap: true,
           value: (r) => r.dfdNumero ?? "—",
-          render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero ?? "—"}</span>,
+          render: (r) => (
+            <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
+              <span className="font-mono text-[12px]">{r.dfdNumero ?? "—"}</span>
+            </CelulaCopiavel>
+          ),
         },
       );
     cols.push(
@@ -71,7 +83,11 @@ export function ItemTable({
         header: "Código",
         nowrap: true,
         value: (r) => r.idProduto ?? "",
-        render: (r) => <span className="font-mono text-[12px]">{r.idProduto ?? "—"}</span>,
+        render: (r) => (
+          <CelulaCopiavel copiar={r.idProduto} rotulo="código do item">
+            <span className="font-mono text-[12px]">{r.idProduto ?? "—"}</span>
+          </CelulaCopiavel>
+        ),
       },
       {
         key: "nome",
@@ -80,9 +96,11 @@ export function ItemTable({
         minWidth: 260,
         value: (r) => r.nomeProduto ?? "",
         render: (r) => (
-          <span className="line-clamp-2 font-medium text-text" title={r.nomeProduto ?? ""}>
-            {r.nomeProduto ?? "—"}
-          </span>
+          <CelulaCopiavel copiar={r.nomeProduto} rotulo="descrição do item">
+            <span className="line-clamp-2 font-medium text-text" title={r.nomeProduto ?? ""}>
+              {r.nomeProduto ?? "—"}
+            </span>
+          </CelulaCopiavel>
         ),
       },
       {

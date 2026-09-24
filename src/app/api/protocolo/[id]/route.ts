@@ -7,8 +7,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
-import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca } from "@/lib/pca-core";
-import { respostaTravado, travaDoProtocolo } from "@/lib/trava-pca";
+import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
+import { pcaDeProtocolos } from "@/lib/trava-pca";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -91,8 +91,10 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (proto.reparticaoId != null && !lista.some((r) => r.id === proto.reparticaoId)) {
     return erro("Sem acesso a este protocolo.", 403);
   }
-  const trava = await travaDoProtocolo(id);
-  if (trava) return respostaTravado(trava);
+  // Protocolo em um PCA (enviado ou incorporado) NÃO é excluído: o enviado volta pela "Devolver à Mesa" (e então sai
+  // da Mesa principal); o incorporado é permanente (423, a trava).
+  const noPca = (await pcaDeProtocolos([id])).get(id);
+  if (noPca) return erro(motivoNaoExcluirProtocolo(noPca, noPca.nome) ?? "Protocolo em um PCA não é excluído.", noPca.pcaIncorporadoEm ? 423 : 409);
   await excluirProtocolo(id);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído (com os DFDs vinculados)`, protocoloId: id, origem: "exclusao" });
   return ok();

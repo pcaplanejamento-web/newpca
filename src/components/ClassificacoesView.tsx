@@ -19,6 +19,7 @@ import {
 } from "@/lib/padronizacao-core";
 import { chamarPadronizacao } from "@/lib/padronizacao-cliente";
 import { AcoesCadastro } from "./AcoesCadastro";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaLista } from "./CelulaLista";
@@ -333,9 +334,11 @@ const COLUNAS_ITENS: Column<LinhaClassificada>[] = [
     // Uma linha só (linhas da mesma altura, como na Mesa); o texto inteiro na dica e ao tocar na linha.
     render: (l) =>
       l.descricao ? (
-        <span className="line-clamp-1" title={l.descricao}>
-          {l.descricao}
-        </span>
+        <CelulaCopiavel copiar={l.descricao} rotulo="descrição do item">
+          <span className="line-clamp-1" title={l.descricao}>
+            {l.descricao}
+          </span>
+        </CelulaCopiavel>
       ) : (
         <span className="text-faint">—</span>
       ),

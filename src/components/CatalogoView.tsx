@@ -13,6 +13,7 @@ import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Badge } from "./Badge";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CatalogoItemDetalhe } from "./CatalogoItemDetalhe";
@@ -484,7 +485,11 @@ export function CatalogoView({
       minWidth: 130,
       filter: "none",
       value: (r) => r.codigo,
-      render: (r) => <span className="font-mono text-[13px] text-text-2">{r.codigoRaw ?? r.codigo}</span>,
+      render: (r) => (
+        <CelulaCopiavel copiar={r.codigoRaw ?? r.codigo} rotulo="código do item">
+          <span className="font-mono text-[13px] text-text-2">{r.codigoRaw ?? r.codigo}</span>
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "descricao",
@@ -493,9 +498,11 @@ export function CatalogoView({
       filter: "none",
       value: (r) => r.descricao,
       render: (r) => (
-        <span className="block max-w-[520px] truncate text-text" title={r.descricao}>
-          {r.descricao}
-        </span>
+        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+          <span className="block max-w-[520px] truncate text-text" title={r.descricao}>
+            {r.descricao}
+          </span>
+        </CelulaCopiavel>
       ),
     },
     { key: "unidade", header: "Unidade", minWidth: 110, value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
@@ -533,7 +540,9 @@ export function CatalogoView({
       value: (r) => r.codigo,
       render: (r) => (
         <span className="flex items-center gap-1.5">
-          <span className="font-mono text-[13px] text-text-2">{r.codigoRaw ?? r.codigo}</span>
+          <CelulaCopiavel copiar={r.codigoRaw ?? r.codigo} rotulo="código do item">
+            <span className="font-mono text-[13px] text-text-2">{r.codigoRaw ?? r.codigo}</span>
+          </CelulaCopiavel>
           {identSet.has(r.codigo) && <Badge tone="blue">idêntico</Badge>}
           {divSet.has(r.codigo) && <Badge tone="amber">divergente</Badge>}
           {!identSet.has(r.codigo) && !divSet.has(r.codigo) && dupSet.has(r.codigo) && <Badge tone="amber">repetido</Badge>}
@@ -547,9 +556,11 @@ export function CatalogoView({
       filter: "none",
       value: (r) => r.descricao,
       render: (r) => (
-        <span className="block max-w-[520px] truncate text-text" title={r.descricao}>
-          {r.descricao}
-        </span>
+        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+          <span className="block max-w-[520px] truncate text-text" title={r.descricao}>
+            {r.descricao}
+          </span>
+        </CelulaCopiavel>
       ),
     },
     { key: "unidade", header: "Unidade", minWidth: 100, filter: "none", value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },

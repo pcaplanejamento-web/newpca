@@ -24,6 +24,7 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { AutoTextarea, CadeadoBotao, CampoCongelado } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
 import { CelulaCatalogo, EstadoPonto, EstadoResumo } from "./EstadoCelula";
@@ -120,14 +121,22 @@ const COLS: Column<ItemK>[] = [
     header: "Código",
     nowrap: true,
     value: (r) => r.codigo ?? "",
-    render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
+    render: (r) => (
+      <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
+        <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
+      </CelulaCopiavel>
+    ),
   },
   {
     key: "descricao",
     header: "Descrição",
     minWidth: 260,
     value: (r) => r.descricao ?? "",
-    render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
+    render: (r) => (
+      <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+        <span className="line-clamp-2">{r.descricao ?? "—"}</span>
+      </CelulaCopiavel>
+    ),
   },
   { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
   {

@@ -124,6 +124,20 @@ export function mensagemTravaPca(nomePca: string | null | undefined): string {
   return `Incorporado ao ${nomePca?.trim() || "PCA"} — somente leitura (a incorporação é permanente).`;
 }
 
+/**
+ * Protocolo que está em um PCA — ENVIADO à Mesa do PCA ou INCORPORADO — NÃO é excluído (regra do usuário): nem pela
+ * lixeira nem pela re-importação que substitui o de mesmo Id. O enviado sai do PCA por "Devolver à Mesa" (e então pode
+ * ser excluído na Mesa principal); o incorporado é permanente. Devolve o motivo, ou `null` = pode excluir.
+ */
+export function motivoNaoExcluirProtocolo(
+  p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined },
+  nomePca?: string | null,
+): string | null {
+  if (p.pcaId == null) return null;
+  if (p.pcaIncorporadoEm) return mensagemTravaPca(nomePca);
+  return `Na Mesa do ${nomePca?.trim() || "PCA"} — protocolo em um PCA não é excluído (devolva-o à Mesa principal para excluir).`;
+}
+
 // ---------------------------------------------------------------------------
 // Consolidação
 // ---------------------------------------------------------------------------

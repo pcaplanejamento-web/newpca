@@ -15,6 +15,7 @@ import {
   TIPO_DFD_ROTULO,
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
+import { juntarParaCopiar } from "./format.ts";
 import { normPrevisao, normPrioridade, normUnidadeMedida, type Prioridade, valoresBatem } from "./normalize.ts";
 import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
@@ -170,9 +171,13 @@ export function normalizarSecoesDfd(
 }
 
 // ---- Estado por DFD (para a tabela do protocolo) ----
-// `descartado` = DFD duplicado que o usuário optou por NÃO manter — cinza, fora de tudo
-// (somatória, protocolação). É definido pelo host (não passa por `estadoDfd`).
-export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "atencao" | "erro" | "descartado";
+// `descartado` = DFD que o usuário optou por NÃO manter (duplicado / mantido o já cadastrado) e `excluido` = DFD que o
+// usuário EXCLUIU do protocolo na análise — ambos cinza, fora de tudo (somatória, protocolação). Definidos pelo host
+// (não passam por `estadoDfd`).
+export type EstadoDfd = "pendente" | "regular" | "regularizado" | "editado" | "atencao" | "erro" | "descartado" | "excluido";
+
+/** O DFD está FORA do envio (descartado ou excluído na análise): não é gravado nem entra na somatória. */
+export const foraDoEnvio = (e: EstadoDfd): boolean => e === "descartado" || e === "excluido";
 
 /**
  * Precedência: erro (faltas) > atenção (DFD-R sem referência) > editado > regularizado
@@ -195,6 +200,7 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
   atencao: "Atenção",
   erro: "Com erro",
   descartado: "Descartado",
+  excluido: "Excluído",
 };
 
 /**
@@ -203,7 +209,7 @@ export const ESTADO_ROTULO: Record<EstadoDfd, string> = {
  * base do comportamento; ciclo (editado/regularizado/regular/pendente) puxa de `estadosCiclo`.
  */
 export function estadoCor(e: EstadoDfd, regras?: RegrasAvaliacao): string {
-  if (e === "descartado") return "var(--faint)"; // cinza — DFD duplicado descartado
+  if (foraDoEnvio(e)) return "var(--faint)"; // cinza — DFD descartado/excluído (fora do envio)
   if (!regras) {
     if (e === "erro") return "var(--danger)";
     if (e === "atencao") return "var(--warn)";
@@ -224,7 +230,7 @@ export function estadoCor(e: EstadoDfd, regras?: RegrasAvaliacao): string {
  * estados de CICLO seguem os nomes editáveis do ADM (`estadosCiclo`); severidade fica fixa.
  */
 export function estadoRotulo(e: EstadoDfd, regras?: RegrasAvaliacao): string {
-  if (e === "descartado") return ESTADO_ROTULO.descartado;
+  if (foraDoEnvio(e)) return ESTADO_ROTULO[e];
   if (!regras) return ESTADO_ROTULO[e];
   if (e === "editado") return estadoCicloCfg(regras, "editado").nome;
   if (e === "regularizado") return estadoCicloCfg(regras, "regularizado").nome;
@@ -1078,12 +1084,7 @@ export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinat
  * SEM espaço nenhum (ex.: "1525:1549:1554"), na ordem recebida, sem vazios nem repetidos. Puro.
  */
 export function textoPlanejamentos(planejamentos: (string | null | undefined)[]): string {
-  const vistos = new Set<string>();
-  for (const p of planejamentos) {
-    const v = String(p ?? "").replace(/\s+/g, "");
-    if (v && v !== "—") vistos.add(v);
-  }
-  return [...vistos].join(":");
+  return juntarParaCopiar(planejamentos);
 }
 
 /**

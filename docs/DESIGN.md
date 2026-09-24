@@ -35,6 +35,16 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - `KpiCard` — tile colorido em gradiente (dashboard do PCA). Distinto do `StatCard` (plano).
 - `Skeleton` / `SkeletonCard` / `SkeletonLinhas` — placeholders com **shimmer** (`.animate-shimmer`, keyframe em `globals.css`). Usados no **skeleton de rota** (`src/app/painel/loading.tsx`, aparece na navegação) e nas listas enquanto carregam (Usuários, Tabelas, Itens). Padrão completo (skeleton/shimmer/otimista/offline): pendências = optimistic UI e offline/PWA.
 
+## Copiar o valor da célula
+- **`CelulaCopiavel`** (em `BotaoCopiar.tsx`): ícone `IconCopy` de 14px, cor `--faint` (accent no hover), ao lado do valor
+  nas colunas nº do protocolo (copia SEM o ano), Id do protocolo, nº do DFD, nº de planejamento, código e descrição do item
+  — em TODA tabela. Sem ruído: no computador só aparece com o mouse na LINHA (`group/linha` do `DataTable`) ou no foco do
+  teclado; no toque (sem hover) fica sempre visível. Toque: vão de 12px do valor e área de toque de 44px de altura só para
+  cima/baixo/direita — tocar no valor abre a linha, tocar no ícone copia (o navegador "puxa" o toque para o controle mais
+  próximo). Confirma com ✓ e o aviso flutuante "Copiado: …". Vários valores (Consolidada) = unidos por ":" (plural no rótulo).
+- **Fora do envio (análise do protocolo):** DFD excluído pelo usuário = estado "Excluído" (cinza, `--faint`), na tabela cinza
+  "DFDs fora do envio" com o botão "Restaurar excluídos (N)" no título (sem esmaecer o botão).
+
 ## Filtros
 - No cabeçalho de cada coluna (`DataTable`: `MultiSelectHeader` / `RangeFilterHeader` / `DateFilterHeader`), **conectados**
   entre si; na linha das visões, à direita, os filtros de **hierarquia** (`SeletorFiltro` — ex.: Responsável e Assunto na

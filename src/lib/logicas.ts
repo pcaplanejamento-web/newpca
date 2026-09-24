@@ -170,6 +170,30 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Avaliação (protocolo.dfdDuplicado)" },
   },
   {
+    id: "proto-excluir-dfd",
+    dominio: "protocolo",
+    titulo: "Excluir DFDs do protocolo antes de protocolar",
+    descricao:
+      "Na análise do PDF do protocolo, 'Excluir do protocolo' (no rodapé do DFD ou em massa na seleção) tira o DFD do envio: fica 'Excluído' (cinza, na tabela 'DFDs fora do envio'), não é gravado, sai da somatória da capa e deixa de bloquear a protocolação. 'Restaurar' (no DFD) ou 'Restaurar excluídos' traz de volta.",
+    detalhes: [
+      "Na importação nada é apagado do banco: o DFD já cadastrado de mesmo nº continua como está — e segue na somatória quando é deste processo.",
+      "No reenvio (sobrescrever o protocolo gravado), excluir tira o DFD do processo: o gravado de mesmo nº vai para a lista 'fora do envio' do topo (Excluir, padrão, ou Manter).",
+      "Excluir um dos DFDs duplicados resolve o par (o outro segue).",
+    ],
+    fonte: "ProtocoloUploadForm (excluirDfds / restaurarExcluidos) · foraDoEnvio",
+  },
+  {
+    id: "proto-copiar-celula",
+    dominio: "protocolo",
+    titulo: "Copiar o valor da célula (nº do protocolo sem o ano)",
+    descricao:
+      "Em toda tabela, um ícone discreto ao lado do valor copia o nº do protocolo SEM o ano (\"144756/2026\" → \"144756\"), o Id do protocolo, o nº do DFD, o nº de planejamento, o código e a descrição do item. Na visão Consolidada, as células com vários valores copiam todos unidos por \":\" (o formato que a busca dos filtros aceita).",
+    detalhes: [
+      "No computador o ícone aparece ao passar o mouse na linha; no celular fica sempre visível, afastado do valor — tocar no valor abre a linha, tocar no ícone copia.",
+    ],
+    fonte: "CelulaCopiavel · numeroSemAno / juntarParaCopiar (format)",
+  },
+  {
     id: "proto-vias",
     dominio: "protocolo",
     titulo: "Separação das vias (protocolo × DFD avulso)",
@@ -470,6 +494,15 @@ export const LOGICAS: LogicaRef[] = [
       "O ano do PCA é adivinhado pela descrição e confirmado no seletor. Não se protocola nem se importa DFD avulso sem o PCA definido (nível padrão). No protocolo, todos os DFDs herdam o ano do PCA do processo.",
     fonte: "anoPcaDoTexto / PcaPicker",
     configuravelEm: { rotulo: "Avaliação (dfd.anoPca / protocolo.anoPca)" },
+  },
+  {
+    id: "pca-protocolo-nao-exclui",
+    dominio: "pca",
+    titulo: "Protocolo em um PCA não é excluído",
+    descricao:
+      "Um protocolo ENVIADO à Mesa de um PCA ou INCORPORADO a ele não pode ser excluído: a Mesa do PCA não tem a lixeira e o servidor recusa. O enviado sai do PCA por 'Devolver à Mesa' (e então pode ser excluído na Mesa principal); o incorporado é permanente.",
+    detalhes: ["A re-importação que substituiria (apagaria) um protocolo de mesmo Id que está em um PCA também é recusada."],
+    fonte: "motivoNaoExcluirProtocolo (pca-core) · pcaDeProtocolos (trava-pca)",
   },
 
   // ---- Acesso & RBAC ----

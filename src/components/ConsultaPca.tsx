@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { brl, num } from "@/lib/format";
+import { brl, num, numeroSemAno } from "@/lib/format";
 import type { DfdDoPca, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { ItemRow } from "@/lib/queries";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable } from "./DataTable";
 import { ItemTable } from "./ItemTable";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
@@ -14,7 +15,18 @@ import { Segmented } from "./Segmented";
 type Visao = "protocolos" | "dfds" | "itens";
 
 const COLS_PROTOCOLO: Column<ProtocoloDoPca>[] = [
-  { key: "numero", header: "Nº processo", nowrap: true, value: (p) => p.numero, render: (p) => <span className="font-mono text-[12px] font-semibold">{p.numero}</span> },
+  {
+    key: "numero",
+    header: "Nº processo",
+    nowrap: true,
+    value: (p) => p.numero,
+    // Copia o nº SEM o ano ("144756/2026" → "144756").
+    render: (p) => (
+      <CelulaCopiavel copiar={numeroSemAno(p.numero)} rotulo="nº do protocolo">
+        <span className="font-mono text-[12px] font-semibold">{p.numero}</span>
+      </CelulaCopiavel>
+    ),
+  },
   { key: "assunto", header: "Assunto", align: "left", minWidth: 220, value: (p) => p.assunto ?? "—", render: (p) => <span className="line-clamp-2">{p.assunto ?? "—"}</span> },
   { key: "sigla", header: "Unidade", nowrap: true, value: (p) => p.sigla ?? "—", render: (p) => <span className="font-mono text-[12px] font-semibold text-text-2">{p.sigla ?? "—"}</span> },
   { key: "dfds", header: "DFDs", nowrap: true, filter: "range", formatarFaixa: num, numero: (p) => p.dfds, render: (p) => num(p.dfds) },

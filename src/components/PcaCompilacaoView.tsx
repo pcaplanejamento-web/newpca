@@ -2,6 +2,7 @@
 
 import type { PcaDetalhe } from "@/lib/dfd";
 import { brl, dataBR, num } from "@/lib/format";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable } from "./DataTable";
 import { KpiStat } from "./KpiStat";
 
@@ -18,19 +19,36 @@ type LinhaComp = {
 };
 
 const COLS: Column<LinhaComp>[] = [
-  { key: "dfd", header: "DFD", nowrap: true, render: (r) => <span className="font-mono text-[12px] text-accent">{r.dfdNumero}</span> },
+  {
+    key: "dfd",
+    header: "DFD",
+    nowrap: true,
+    render: (r) => (
+      <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
+        <span className="font-mono text-[12px] text-accent">{r.dfdNumero}</span>
+      </CelulaCopiavel>
+    ),
+  },
   { key: "item", header: "Item", align: "center", nowrap: true, render: (r) => r.item ?? "—" },
   {
     key: "codigo",
     header: "Código",
     nowrap: true,
-    render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>,
+    render: (r) => (
+      <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
+        <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
+      </CelulaCopiavel>
+    ),
   },
   {
     key: "descricao",
     header: "Descrição",
     minWidth: 300,
-    render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
+    render: (r) => (
+      <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+        <span className="line-clamp-2">{r.descricao ?? "—"}</span>
+      </CelulaCopiavel>
+    ),
   },
   { key: "unidade", header: "Unidade", nowrap: true, render: (r) => r.unidade ?? "—" },
   {

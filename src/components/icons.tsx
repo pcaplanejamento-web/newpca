@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Copy,
   Database,
   Download,
   Eye,
@@ -132,6 +133,8 @@ export const IconMerge = Merge;
 export const IconCompare = GitCompareArrows;
 /** Dashboard de governança da Mesa. */
 export const IconDashboard = LayoutDashboard;
+/** Copiar o texto de uma célula (nº do protocolo, DFD, código, descrição…). */
+export const IconCopy = Copy;
 
 /** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
 export function IconSpinner({ className, ...props }: LucideProps) {

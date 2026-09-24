@@ -25,7 +25,7 @@ import {
   tipoPermitido,
 } from "../src/lib/avaliacao-core.ts";
 import { avaliacaoSchema } from "../src/lib/avaliacao-validation.ts";
-import { avaliarDfd, estadoCor, mensagensDfd, normalizarSecoesDfd, resumoEstado } from "../src/lib/dfd-tratamento.ts";
+import { avaliarDfd, estadoCor, estadoRotulo, foraDoEnvio, mensagensDfd, normalizarSecoesDfd, resumoEstado } from "../src/lib/dfd-tratamento.ts";
 import { faltasObrigatorias } from "../src/lib/dfd-validation.ts";
 
 // Monta uma conferência de DFD completa (nada falta); os testes removem 1 coisa.
@@ -133,6 +133,17 @@ describe("importâncias configuráveis (modelo unificado)", () => {
     assert.equal(corImportancia(r, "fundamental"), "#123456");
     assert.equal(estadoCor("erro", r), "#123456"); // erro puxa a cor da importância base "bloqueia"
     assert.equal(estadoCor("erro"), "var(--danger)"); // sem regras = token de hoje
+  });
+  it("fora do envio (excluído do protocolo / descartado): cinza e rótulo fixo, com ou sem regras do ADM", () => {
+    const r = regrasPadrao();
+    for (const e of ["excluido", "descartado"] as const) {
+      assert.equal(foraDoEnvio(e), true);
+      assert.equal(estadoCor(e), "var(--faint)");
+      assert.equal(estadoCor(e, r), "var(--faint)");
+    }
+    assert.equal(estadoRotulo("excluido", r), "Excluído");
+    assert.equal(estadoRotulo("descartado", r), "Descartado");
+    for (const e of ["pendente", "regular", "regularizado", "editado", "atencao", "erro"] as const) assert.equal(foraDoEnvio(e), false);
   });
 });
 

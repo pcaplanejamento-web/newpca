@@ -1,11 +1,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brl, brlCompact, dataBR, dec, dicaLista, formatBytes, mesLabel, num, pct } from "../src/lib/format.ts";
+import { brl, brlCompact, dataBR, dec, dicaLista, formatBytes, juntarParaCopiar, mesLabel, num, numeroSemAno, pct } from "../src/lib/format.ts";
 
 // Intl insere espaços não-quebráveis (NBSP/narrow) no pt-BR; normalizamos.
 const sp = (s: string) => s.replace(/\s/g, " ");
 
 describe("format (pt-BR)", () => {
+  it("numeroSemAno: tira só o '/AAAA' do fim do nº do protocolo (zeros à esquerda ficam)", () => {
+    assert.equal(numeroSemAno("144756/2026"), "144756");
+    assert.equal(numeroSemAno(" 000123 / 2025 "), "000123");
+    assert.equal(numeroSemAno("144756/1999"), "144756");
+    // Sem ano de 4 dígitos no fim: o texto como está (aparado) — nada que não seja ano é cortado.
+    assert.equal(numeroSemAno("144756"), "144756");
+    assert.equal(numeroSemAno("144756/26"), "144756/26");
+    assert.equal(numeroSemAno("144756/3026"), "144756/3026");
+    assert.equal(numeroSemAno("2026/144756"), "2026/144756");
+    assert.equal(numeroSemAno("12/2026/2027"), "12/2026");
+    assert.equal(numeroSemAno(null), "");
+    assert.equal(numeroSemAno(undefined), "");
+    assert.equal(numeroSemAno("—"), "—");
+  });
+  it("juntarParaCopiar: ':' sem espaço, sem vazios/'—'/repetidos, na ordem", () => {
+    assert.equal(juntarParaCopiar(["1525", "1549", "1554"]), "1525:1549:1554");
+    assert.equal(juntarParaCopiar([" 1525 ", null, "", "—", "15 49", "1525", undefined, "1554"]), "1525:1549:1554");
+    assert.equal(juntarParaCopiar([null, "", "  ", "—"]), "");
+    assert.equal(juntarParaCopiar([]), "");
+  });
   it("dicaLista: um por linha, só os primeiros `max` (o resto = '… e mais N'); formata só os exibidos", () => {
     assert.equal(dicaLista([], String), "");
     assert.equal(dicaLista([1, 2, 3], (n) => `DFD ${n}`), "DFD 1\nDFD 2\nDFD 3");

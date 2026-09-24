@@ -235,6 +235,7 @@ export function ProtocoloView({
   topo,
   sobrescritos = [],
   onVerProtocolo,
+  acaoDescartados,
 }: {
   capa: CapaValores;
   modoCapa?: ModoCapa;
@@ -280,6 +281,8 @@ export function ProtocoloView({
   sobrescritos?: DfdSobrescrito[];
   /** Abre o protocolo ATUAL de um DFD sobrescrito. */
   onVerProtocolo?: (protocoloId: number) => void;
+  /** (análise) Ação da tabela dos DFDs FORA do envio — ex.: "Restaurar excluídos". */
+  acaoDescartados?: ReactNode;
 }) {
   const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
   // CONSULTA (público): sem conciliação/estado/rastro — só os dados, congelados.
@@ -403,6 +406,7 @@ export function ProtocoloView({
           ativa={dfdAtivo}
           compacta={compacta}
           regras={regras}
+          acaoDescartados={acaoDescartados}
         />
       )}
 

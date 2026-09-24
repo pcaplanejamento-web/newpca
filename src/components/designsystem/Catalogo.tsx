@@ -65,7 +65,7 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
-import { brl } from "@/lib/format";
+import { brl, juntarParaCopiar, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
@@ -87,6 +87,7 @@ import {
   IconMail,
   IconPlus,
   IconTrash,
+  IconUndo,
   IconUpload,
   IconUser,
   IconUserX,
@@ -99,7 +100,7 @@ import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
-import { BotaoCopiar } from "@/components/BotaoCopiar";
+import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
@@ -1017,6 +1018,55 @@ function TabelaHierarquiaDemo() {
         pageSize={3}
         footer={`${sel.size} de ${linhas.length} selecionada(s) — o "selecionar todos" marca todas as filtradas, não só a página`}
       />
+    </div>
+  );
+}
+
+/** Itens de exemplo para a CÉLULA COPIÁVEL (as colunas copiáveis das tabelas do sistema). */
+const ITENS_COPIA = [
+  { id: 1, protocolo: "144756/2026", idExterno: "8812345", dfd: "1209", planejamento: "1509", codigo: "5241947270", descricao: "CADEIRA GIRATÓRIA COM BRAÇOS, ESTOFADA EM TECIDO, BASE CROMADA E RODÍZIOS" },
+  { id: 2, protocolo: "144757/2026", idExterno: null, dfd: "1210", planejamento: null, codigo: "000123", descricao: "PAPEL A4 75 G/M², CAIXA COM 10 RESMAS" },
+  { id: 3, protocolo: null, idExterno: null, dfd: "1211", planejamento: "1511", codigo: null, descricao: null },
+];
+
+/** Demo da CÉLULA COPIÁVEL: no computador o ícone aparece ao passar o mouse na linha; no toque, sempre. */
+function CelulaCopiavelDemo() {
+  type L = (typeof ITENS_COPIA)[number];
+  const mono = (t: string | null) => <span className="font-mono text-[12px]">{t ?? "—"}</span>;
+  const colunas: Column<L>[] = [
+    {
+      key: "protocolo",
+      header: "Nº processo",
+      nowrap: true,
+      render: (r) => (r.protocolo ? <CelulaCopiavel copiar={numeroSemAno(r.protocolo)} rotulo="nº do protocolo">{mono(r.protocolo)}</CelulaCopiavel> : mono(null)),
+    },
+    { key: "id", header: "Id protocolo", nowrap: true, render: (r) => <CelulaCopiavel copiar={r.idExterno} rotulo="Id do protocolo">{mono(r.idExterno)}</CelulaCopiavel> },
+    { key: "plan", header: "Nº Plan.", nowrap: true, render: (r) => <CelulaCopiavel copiar={r.planejamento} rotulo="nº de planejamento">{mono(r.planejamento)}</CelulaCopiavel> },
+    { key: "dfd", header: "Nº DFD", nowrap: true, render: (r) => <CelulaCopiavel copiar={r.dfd} rotulo="nº do DFD">{mono(r.dfd)}</CelulaCopiavel> },
+    { key: "codigo", header: "Código", nowrap: true, render: (r) => <CelulaCopiavel copiar={r.codigo} rotulo="código do item">{mono(r.codigo)}</CelulaCopiavel> },
+    {
+      key: "descricao",
+      header: "Descrição",
+      minWidth: 240,
+      render: (r) => (
+        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
+          <span className="line-clamp-1" title={r.descricao ?? undefined}>
+            {r.descricao ?? "—"}
+          </span>
+        </CelulaCopiavel>
+      ),
+    },
+  ];
+  const planejamentos = ITENS_COPIA.map((r) => r.planejamento ?? "—");
+  return (
+    <div className="space-y-3">
+      <DataTable columns={colunas} rows={ITENS_COPIA} getKey={(r) => r.id} onRowClick={() => toast.info("A linha abriu (o ícone de copiar não abre a linha).")} footer="Passe o mouse numa linha (no toque, o ícone fica sempre à vista)." />
+      <p className="text-[12.5px] text-muted">
+        Vários valores numa célula (visão Consolidada) saem unidos por ":":{" "}
+        <CelulaCopiavel copiar={juntarParaCopiar(planejamentos)} rotulo="nº de planejamento" plural="nºs de planejamento">
+          <CelulaLista valores={planejamentos} mono max={3} />
+        </CelulaCopiavel>
+      </p>
     </div>
   );
 }
@@ -2292,8 +2342,13 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="PlanilhaDfds (planilha de DFDs — análise: erro/atenção separados; colunas na largura do conteúdo)">
+      <Secao titulo="PlanilhaDfds (planilha de DFDs — análise: erro/atenção separados; fora do envio — Excluído/Descartado — em cinza, com “Restaurar excluídos”; colunas na largura do conteúdo)">
         <PlanilhaDfds
+          acaoDescartados={
+            <Button size="sm" variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => toast("Restaurar os excluídos (demo)")}>
+              Restaurar excluídos (1)
+            </Button>
+          }
           linhas={[
             { key: 1, numero: "531", planejamento: "600", sigla: "FMS", auto: true, tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", situacao: "Novo", assinaturas: ["dropsigner"], validacao: "auto" },
             { key: 2, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "regular", situacao: "Substitui", assinaturas: ["centi"], validacao: "equipe" },
@@ -2303,6 +2358,9 @@ export function Catalogo() {
             { key: 5, numero: "1100", planejamento: null, sigla: "FMS", tipo: null, itens: null, valor: null, estado: "pendente", processando: "texto", situacao: "Novo" },
             { key: 6, numero: "1101", planejamento: "1190", sigla: "FMS", tipo: "DFD-S", itens: 12, valor: 4200, estado: "pendente", processando: "ocr", situacao: "Novo" },
             { key: 7, numero: "1102", planejamento: null, sigla: "FMS", tipo: null, itens: null, valor: null, estado: "pendente", processando: "fila", situacao: "Novo" },
+            // Fora do envio: EXCLUÍDO do protocolo pelo usuário / DESCARTADO (duplicado ou mantido o já cadastrado).
+            { key: 9, numero: "1210", planejamento: "1510", sigla: "SMS", tipo: "DFD-S", itens: 8, valor: 15200, estado: "excluido", situacao: "Novo" },
+            { key: 10, numero: "389", planejamento: "410", sigla: "FMS", tipo: "DFD-S", itens: 281, valor: 1284902.1, estado: "descartado", situacao: "Substitui" },
           ]}
         />
       </Secao>
@@ -2390,6 +2448,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="CelulaCopiavel (ícone de copiar na célula — nº do protocolo SEM o ano, Id, DFD, planejamento, código e descrição do item)">
+        <CelulaCopiavelDemo />
+      </Secao>
+
       <Secao titulo="CampoLista (lista em chips — várias referências da renovação por DFD)">
         <CampoListaDemo />
       </Secao>
@@ -2432,6 +2494,11 @@ export function Catalogo() {
               }))}
               onRemover={(k) => setSelDemo((l) => l.filter((r) => r.key !== k))}
               onLimpar={() => setSelDemo([])}
+              acoes={
+                <Button variant="secondary" icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />} onClick={() => toast("Excluir do protocolo (demo — análise da importação)")}>
+                  Excluir do protocolo
+                </Button>
+              }
             >
               <BarraEdicaoMassa
                 reparticoes={[

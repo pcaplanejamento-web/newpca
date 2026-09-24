@@ -7,13 +7,15 @@ import {
   type EstadoDfd,
   estadoCor,
   estadoRotulo,
+  foraDoEnvio,
   type GrupoAssinatura,
   type ResumoEstado,
 } from "@/lib/dfd-tratamento";
-import { brl, dataHoraBR, num } from "@/lib/format";
+import { brl, dataHoraBR, num, numeroSemAno } from "@/lib/format";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
@@ -73,7 +75,17 @@ export type PcaDaLinha = { ano: number; nome: string };
  */
 export function colunaPlanejamento<R>(planejamento: (r: R) => string | null | undefined): Column<R> {
   const valor = (r: R) => planejamentoDfd(planejamento(r)) ?? "—";
-  return { key: "planejamento", header: "Nº Plan.", nowrap: true, value: valor, render: (r) => <span className="font-mono text-[12px]">{valor(r)}</span> };
+  return {
+    key: "planejamento",
+    header: "Nº Plan.",
+    nowrap: true,
+    value: valor,
+    render: (r) => (
+      <CelulaCopiavel copiar={valor(r)} rotulo="nº de planejamento">
+        <span className="font-mono text-[12px]">{valor(r)}</span>
+      </CelulaCopiavel>
+    ),
+  };
 }
 
 /** Coluna "Tipo" — o tipo CURTO do DFD (DFD-S/R/O/E; fora do padrão = "—"). A MESMA no rastro, na tabela de itens e no detalhe. */
@@ -124,6 +136,7 @@ export function PlanilhaDfds({
   semEstado = false,
   acoesRodape,
   vazio,
+  acaoDescartados,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -150,6 +163,8 @@ export function PlanilhaDfds({
   acoesRodape?: ReactNode;
   /** Mensagem do corpo da tabela principal sem nenhuma linha (repassada ao `DataTable`). */
   vazio?: ReactNode;
+  /** Ação ao lado do título da tabela dos DFDs FORA do envio (ex.: "Restaurar excluídos" da análise). */
+  acaoDescartados?: ReactNode;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -212,7 +227,11 @@ export function PlanilhaDfds({
       header: "Nº DFD",
       nowrap: true,
       value: (r) => r.numero,
-      render: (r) => <span className="font-mono text-[12px]">{r.numero}</span>,
+      render: (r) => (
+        <CelulaCopiavel copiar={r.numero} rotulo="nº do DFD">
+          <span className="font-mono text-[12px]">{r.numero}</span>
+        </CelulaCopiavel>
+      ),
     },
     {
       key: "sigla",
@@ -274,9 +293,12 @@ export function PlanilhaDfds({
             header: "Protocolo",
             nowrap: true,
             value: (r: LinhaDfd) => r.protocolo ?? "—",
+            // Copia o nº SEM o ano ("144756/2026" → "144756").
             render: (r: LinhaDfd) =>
               r.protocolo ? (
-                <span className="font-mono text-[12px]">{r.protocolo}</span>
+                <CelulaCopiavel copiar={numeroSemAno(r.protocolo)} rotulo="nº do protocolo">
+                  <span className="font-mono text-[12px]">{r.protocolo}</span>
+                </CelulaCopiavel>
               ) : (
                 <span className="text-faint">—</span>
               ),
@@ -325,9 +347,10 @@ export function PlanilhaDfds({
 
   const erro = linhas.filter((l) => l.estado === "erro");
   const atencao = linhas.filter((l) => l.estado === "atencao");
-  // DFDs descartados pelo usuário (duplicado / mantido o já cadastrado) — não são gravados (tabela cinza à parte).
-  const descartado = linhas.filter((l) => l.estado === "descartado");
-  const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && l.estado !== "descartado");
+  // DFDs FORA do envio — excluídos pelo usuário ou descartados (duplicado / mantido o já cadastrado): não são gravados
+  // (tabela cinza à parte).
+  const descartado = linhas.filter((l) => foraDoEnvio(l.estado));
+  const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && !foraDoEnvio(l.estado));
   const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0);
   // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
@@ -387,12 +410,17 @@ export function PlanilhaDfds({
         )}
       </div>
       {descartado.length > 0 && (
-        <div className="opacity-60">
-          <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-bold" style={{ color: "var(--faint)" }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: "var(--faint)" }} />
-            DFDs descartados ({num(descartado.length)}) — não serão gravados (duplicado ou mantido o já cadastrado)
-          </h4>
-          <DataTable rows={descartado} pageSize={compacta ? 8 : 12} {...comum} selectable={false} />
+        <div>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="flex items-center gap-1.5 text-[13px] font-bold opacity-60" style={{ color: "var(--faint)" }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--faint)" }} />
+              DFDs fora do envio ({num(descartado.length)}) — não serão gravados (excluídos, duplicados ou mantido o já cadastrado)
+            </h4>
+            {acaoDescartados}
+          </div>
+          <div className="opacity-60">
+            <DataTable rows={descartado} pageSize={compacta ? 8 : 12} {...comum} selectable={false} />
+          </div>
         </div>
       )}
     </div>
@@ -427,7 +455,17 @@ export function TabelaSobrescritos({
   const pode = (s: DfdSobrescrito) => !!onVerProtocolo && s.protocoloAtualId != null && s.acessivel !== false;
   const cols: Column<DfdSobrescrito>[] = [
     colunaPlanejamento((s: DfdSobrescrito) => s.planejamento),
-    { key: "numero", header: "Nº DFD", nowrap: true, value: (s) => s.numero, render: (s) => <span className="font-mono text-[12px]">{s.numero}</span> },
+    {
+      key: "numero",
+      header: "Nº DFD",
+      nowrap: true,
+      value: (s) => s.numero,
+      render: (s) => (
+        <CelulaCopiavel copiar={s.numero} rotulo="nº do DFD">
+          <span className="font-mono text-[12px]">{s.numero}</span>
+        </CelulaCopiavel>
+      ),
+    },
     { key: "sigla", header: "Sigla", nowrap: true, value: (s) => s.sigla ?? "—", render: (s) => <span className="font-mono text-[12px]">{s.sigla ?? "—"}</span> },
     colunaTipoDfd((s: DfdSobrescrito) => s.tipo),
     {
