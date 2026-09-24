@@ -229,8 +229,22 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Filtros de hierarquia da Mesa: Responsável e Assunto",
     descricao:
-      "Na MESMA linha de Protocolos · DFDs · Itens, à direita, dois seletores filtram as visões — e o Dashboard — pelo responsável e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda.",
-    fonte: "passaFiltroMesa (mesa-filtros)",
+      "Na MESMA linha de Protocolos · DFDs · Itens, à direita, dois seletores SÓ COM O ÍCONE filtram as visões — e o Dashboard — pelo responsável (escolhida uma pessoa, o ícone vira a foto dela) e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda. A Mesa ABRE com o responsável escolhido no Perfil → Mesa: só os protocolos do próprio usuário (o padrão), todos ou os sem responsável.",
+    fonte: "passaFiltroMesa / filtroInicialMesa (mesa-filtros)",
+    configuravelEm: { rotulo: "Perfil → Mesa", href: "/painel/perfil" },
+  },
+  {
+    id: "pca-filtro-cabecalho",
+    dominio: "pca",
+    titulo: "PCA no cabeçalho: o filtro de todo o sistema",
+    descricao:
+      "O seletor à esquerda do topo escolhe um PCA (ou \"Todos os PCAs\"): a Mesa passa a mostrar só os protocolos daquele PCA (e os DFDs e itens deles — o DFD segue o PCA do protocolo de origem), o módulo PCA só o card dele e o Orçamento só os orçamentos do ano dele. A escolha fica guardada no navegador, como a unidade e o grupo ativos.",
+    detalhes: [
+      "Casa pelo ANO do PCA (o protocolo e o DFD guardam o ano) — só entram no seletor os PCAs cadastrados com ano.",
+      "Não filtra a Mesa de um PCA (já é daquele PCA), o Catálogo, a Administração nem a tela pública; dentro do espaço de um PCA, escolher outro leva ao espaço do escolhido.",
+      "As tabelas da Mesa ganharam as colunas PCA (protocolos, DFDs e itens) e Prioridade (DFDs e itens).",
+    ],
+    fonte: "pca-filtro (cookie pca_filtro) + filtroAnoPcaDfd (dfd-sql)",
   },
   {
     id: "proto-dashboard-mesa",

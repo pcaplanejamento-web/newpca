@@ -44,6 +44,9 @@ export const acaoProtocolosPcaSchema = z.discriminatedUnion("acao", [
 ]);
 export type AcaoProtocolosPca = z.infer<typeof acaoProtocolosPcaSchema>;
 
+/** PCA do CABEÇALHO (o filtro global — `pca-filtro.ts`): um PCA cadastrado ou `null` = todos os PCAs. */
+export const filtroPcaSchema = z.object({ pcaId: z.number().int().positive().nullable() });
+
 /** Ações sobre ITENS numerados do PCA: RETIRAR (o número fica inativo — nunca reaproveitado). */
 export const acaoItensPcaSchema = z.object({
   acao: z.literal("retirar"),

@@ -42,7 +42,12 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 
 ## Barra da Mesa e Dashboard de governança
 - **Uma linha:** à esquerda UM `Segmented` com o **Dashboard** primeiro (item só-ícone, `soIcone`) e `Protocolos · DFDs ·
-  Itens`; à direita os filtros de hierarquia. 40px no desktop; no celular alvos ≥ 44px.
+  Itens`; à direita os filtros de hierarquia SÓ COM O ÍCONE (a foto da pessoa escolhida no de Responsável). Tudo na altura
+  padrão dos controles (`--h-control-sm`) no desktop; no celular alvos ≥ 44px.
+- **Tabelas compactas:** Protocolos, DFDs e Itens com a MESMA altura de linha (a dos controles) e o cabeçalho baixo; ações na
+  linha com `Button size="xs"`; colunas **PCA** (ano, nome na dica) e **Prioridade**.
+- **PCA no cabeçalho:** seletor à esquerda do topo (no celular só o ano), em accent quando há um PCA escolhido — filtra a
+  Mesa, os cards do PCA e o Orçamento.
 - **Importar na tabela:** "Importar protocolo"/"Importar DFD" ficam no **rodapé da tabela**, à esquerda do seletor de linhas
   (`DataTable.acoesRodape`, `Button size="sm"`; "Importar" no celular); a tabela aparece sempre (sem linhas, `vazio`
   explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior; os
@@ -64,7 +69,10 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   entre banners lado a lado (12px).
 - **`--pad-card`** — respiro interno de cartões, quadros e banners (`ChartCard`, KPIs, seções, `Modal`) (14px).
 - **`--h-header`** — altura do cabeçalho (56px); a faixa da marca na sidebar tem a mesma altura (bordas alinhadas).
-- A **densidade** do ADM (Aparência) muda todos juntos (compacta / padrão / confortável).
+- A **densidade** do ADM (Aparência) muda todos juntos (compacta / padrão / confortável) — e também a altura padrão dos
+  controles (`--h-control-sm`), que é a da linha das tabelas compactas.
+- **Tabelas de rolagem interna** ocupam o espaço até o fim do display desde o primeiro quadro (rodapé rente ao fim) e abrem
+  com as linhas por página escolhidas pelo ADM (Configurações → Tabelas).
 - **Cortes** = os do Tailwind (`sm` 40rem · `lg` 64rem) também no CSS próprio e nas medidas em JS (`ehDesktop`) — com a
   fonte do navegador ampliada, JS e CSS continuam no mesmo layout.
 - Grades responsivas: stats `grid-cols-2/3 → lg:grid-cols-5`; listas `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`.

@@ -5,7 +5,7 @@ import { type ReactNode, useRef, useState } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { PcaResumo } from "@/lib/dfd";
 import { dataBR, num } from "@/lib/format";
-import type { Aparencia } from "@/lib/theme";
+import { type Aparencia, LINHAS_TABELA, type LinhasTabela } from "@/lib/theme";
 import { AvaliacaoAdmin } from "./AvaliacaoAdmin";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -29,6 +29,7 @@ import {
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
 import { ReferenciaSistema } from "./ReferenciaSistema";
+import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
@@ -69,6 +70,7 @@ function lerFavicon(file: File): Promise<string> {
 
 export function ConfiguracoesAdmin({
   identidade,
+  linhasTabela,
   pcas,
   regras,
   abaInicial,
@@ -76,10 +78,34 @@ export function ConfiguracoesAdmin({
   /** Aba aberta de início (`?aba=` — ex.: "situacoes", atalho da Configuração do PCA). */
   abaInicial?: string;
   identidade?: Aparencia["identidade"];
+  /** Linhas por página com que as tabelas de rolagem interna abrem (a escolha atual do ADM). */
+  linhasTabela: LinhasTabela;
   pcas: PcaResumo[];
   regras: RegrasAvaliacao;
 }) {
   const router = useRouter();
+
+  // ---- Tabelas: linhas por página iniciais ----
+  const [linhas, setLinhas] = useState<LinhasTabela>(linhasTabela);
+  const [salvandoLinhas, setSalvandoLinhas] = useState(false);
+  async function salvarTabelas() {
+    setSalvandoLinhas(true);
+    try {
+      const res = await fetch("/api/admin/aparencia", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tabelas: { linhas } }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+      toast.success(`As tabelas abrem com ${linhas} linhas — já vale para todos.`);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setSalvandoLinhas(false);
+    }
+  }
 
   // ---- Identidade do site ----
   const [nome, setNome] = useState(identidade?.nome ?? "");
@@ -318,6 +344,29 @@ export function ConfiguracoesAdmin({
     </div>
   );
 
+  const abaTabelas = (
+    <div className="max-w-xl space-y-[var(--gap-block)]">
+      <Callout kind="info">
+        Quantas linhas as tabelas da Mesa (protocolos, DFDs e itens — também na Mesa de cada PCA) mostram ao abrir. Cada
+        pessoa ainda pode trocar no seletor "Linhas" do rodapé da tabela.
+      </Callout>
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-text-2">Linhas por página ao abrir</p>
+        <Segmented<string>
+          value={String(linhas)}
+          onChange={(v) => setLinhas(Number(v) as LinhasTabela)}
+          ariaLabel="Linhas por página ao abrir as tabelas"
+          options={LINHAS_TABELA.map((n) => ({ value: String(n), label: String(n) }))}
+        />
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={salvarTabelas} loading={salvandoLinhas} disabled={linhas === linhasTabela}>
+          Salvar
+        </Button>
+      </div>
+    </div>
+  );
+
   const abaPcas = (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -397,7 +446,7 @@ export function ConfiguracoesAdmin({
       <div>
         <h1 className="text-xl font-bold text-text">Configurações</h1>
         <p className="mt-1 text-sm text-muted">
-          Identidade do site, PCAs, situações do protocolo, avaliação e atalhos de administração.
+          Identidade do site, tabelas, PCAs, situações do protocolo, avaliação e atalhos de administração.
         </p>
       </div>
 
@@ -406,6 +455,7 @@ export function ConfiguracoesAdmin({
           inicial={abaInicial}
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
+            { key: "tabelas", label: "Tabelas", content: abaTabelas },
             { key: "pcas", label: "PCAs", content: abaPcas },
             { key: "situacoes", label: "Situações", content: <SituacoesAdmin /> },
             { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },

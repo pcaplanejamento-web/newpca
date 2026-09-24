@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LINHAS_TABELA, type LinhasTabela } from "./theme.ts";
 
 // Validação da aparência enviada pelo ADM (PATCH). Cores só aceitam hex; raio,
 // densidade e motion são clampados/enumerados; favicon é data-URL com limite.
@@ -35,6 +36,10 @@ export const aparenciaSchema = z.object({
         )
         .optional(),
     })
+    .optional(),
+  // Tabelas (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna abrem.
+  tabelas: z
+    .object({ linhas: z.custom<LinhasTabela>((v) => LINHAS_TABELA.includes(v as LinhasTabela), "Quantidade de linhas inválida.") })
     .optional(),
 });
 

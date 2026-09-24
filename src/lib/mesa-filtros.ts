@@ -9,6 +9,22 @@ export type FiltroMesa = { responsavel: "todos" | "sem" | number; assunto: strin
 
 export const FILTRO_MESA_TODOS: FiltroMesa = { responsavel: "todos", assunto: null };
 
+/** Com que RESPONSÁVEL a Mesa abre (preferência do Perfil): "eu" (só os protocolos do usuário — o PADRÃO), "todos"
+ * (geral) ou "sem" (os sem responsável). */
+export type MesaResponsavel = "eu" | "todos" | "sem";
+export const MESA_RESPONSAVEL: readonly MesaResponsavel[] = ["eu", "todos", "sem"];
+export const ROTULO_MESA_RESPONSAVEL: Record<MesaResponsavel, string> = { eu: "Só os meus", todos: "Geral (todos)", sem: "Sem responsável" };
+
+/** Lê a preferência gravada com tolerância (ausente/desconhecida = "eu", o padrão). */
+export const coerceMesaResponsavel = (v: unknown): MesaResponsavel =>
+  MESA_RESPONSAVEL.includes(v as MesaResponsavel) ? (v as MesaResponsavel) : "eu";
+
+/** O filtro com que a Mesa ABRE para o usuário (a preferência do Perfil; "eu" sem usuário = todos). */
+export function filtroInicialMesa(pref: MesaResponsavel, usuarioId: number | null): FiltroMesa {
+  const responsavel = pref === "sem" ? "sem" : pref === "eu" && usuarioId != null ? usuarioId : "todos";
+  return { ...FILTRO_MESA_TODOS, responsavel };
+}
+
 /** Assunto comparável (espaços colapsados; vazio = ""). */
 export const chaveAssunto = (a: string | null | undefined) => String(a ?? "").replace(/\s+/g, " ").trim();
 

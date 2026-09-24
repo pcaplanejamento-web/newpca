@@ -4,6 +4,7 @@ import { getAparencia } from "@/lib/aparencia";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { getUsuarioAtual } from "@/lib/auth";
 import { listarPcas } from "@/lib/dfd";
+import { linhasTabela } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +16,13 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
   }
 
   const [aparencia, pcas, regras] = await Promise.all([getAparencia(), listarPcas(), getRegrasAvaliacao()]);
-  return <ConfiguracoesAdmin identidade={aparencia.identidade} pcas={pcas} regras={regras} abaInicial={aba} />;
+  return (
+    <ConfiguracoesAdmin
+      identidade={aparencia.identidade}
+      linhasTabela={linhasTabela(aparencia)}
+      pcas={pcas}
+      regras={regras}
+      abaInicial={aba}
+    />
+  );
 }

@@ -3,7 +3,7 @@ import { PerfilView } from "@/components/PerfilView";
 import { getUsuarioAtual, type UsuarioSessao } from "@/lib/auth";
 import { abasPermitidas, getGrupoAtivo } from "@/lib/grupos";
 import { nomeExibicao } from "@/lib/pessoa";
-import { listarPessoasDoGrupo, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
+import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,19 @@ export default async function PerfilPage() {
   if (!u) redirect("/login");
   const grupo = await getGrupoAtivo(u);
   const editor = u.role === "admin" || u.role === "gestor";
-  const [abas, protocolacao] = await Promise.all([abasPermitidas(u, grupo), editor ? protocolacaoDe(u, grupo?.id ?? null) : null]);
-  // Sem nenhum módulo liberado no grupo ativo, o `/painel` traz para cá — o Perfil diz o que fazer.
-  return <PerfilView usuario={u} protocolacao={protocolacao} semModulos={abas.size === 0} />;
+  const [abas, protocolacao, mesaResponsavel] = await Promise.all([
+    abasPermitidas(u, grupo),
+    editor ? protocolacaoDe(u, grupo?.id ?? null) : null,
+    mesaResponsavelGravado(u.id),
+  ]);
+  // Sem nenhum módulo liberado no grupo ativo, o `/painel` traz para cá — o Perfil diz o que fazer. A preferência da Mesa
+  // (com que responsável ela abre) só para quem vê a Mesa.
+  return (
+    <PerfilView
+      usuario={u}
+      protocolacao={protocolacao}
+      mesaResponsavel={abas.has("dfd") ? mesaResponsavel : null}
+      semModulos={abas.size === 0}
+    />
+  );
 }

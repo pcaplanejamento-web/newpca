@@ -16,7 +16,16 @@ import { Segmented } from "./Segmented";
  * "Novo PCA". Clicar num card entra no ESPAÇO do PCA (`/painel/pca/[id]`: Dashboard · Orçamento ·
  * Mesa/Importação · Configuração).
  */
-export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas: PcaCardDados[] }) {
+export function PcaModuleView({
+  podeEditar,
+  pcas,
+  filtro = null,
+}: {
+  podeEditar: boolean;
+  pcas: PcaCardDados[];
+  /** Nome do PCA escolhido no CABEÇALHO (filtro global) — só o card dele aparece. */
+  filtro?: string | null;
+}) {
   const router = useRouter();
   const [novo, setNovo] = useState(false);
   const [nome, setNome] = useState("");
@@ -52,7 +61,9 @@ export function PcaModuleView({ podeEditar, pcas }: { podeEditar: boolean; pcas:
       <div>
         <h1 className="text-xl font-bold text-text">PCA</h1>
         <p className="text-sm text-muted">
-          {pcas.length} {pcas.length === 1 ? "plano" : "planos"} · {publicados} publicado(s) na tela inicial
+          {filtro
+            ? `Só o ${filtro} — o PCA escolhido no cabeçalho (escolha "Todos os PCAs" lá para ver os demais)`
+            : `${pcas.length} ${pcas.length === 1 ? "plano" : "planos"} · ${publicados} publicado(s) na tela inicial`}
         </p>
       </div>
 

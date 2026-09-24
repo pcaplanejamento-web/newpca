@@ -2,7 +2,9 @@ import { and, asc, desc, eq, gt, inArray, isNull, type SQL, sql } from "drizzle-
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
 import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
+import { filtroAnoPcaDfd, prioridadeTextoSql } from "./dfd-sql";
 import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import { normPrioridade, type Prioridade } from "./normalize";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
@@ -67,6 +69,10 @@ export type DfdResumo = {
   protocoloAssunto: string | null;
   /** Ano do PCA do protocolo de origem (o DFD herda; referência p/ DFDs antigos sem o próprio ano). */
   protocoloAnoPca: number | null;
+  /** Ano do PCA do PRÓPRIO DFD (na Mesa prevalece o do protocolo — `anoPcaDfdSql`, `dfd-sql.ts`). */
+  anoPca: number | null;
+  /** Prioridade da seção PRIORIDADE, normalizada (ALTA/MÉDIA/BAIXA; `null` = ausente ou fora do padrão) — coluna da Mesa. */
+  prioridade: Prioridade | null;
   /** Responsável do protocolo de origem — o filtro de responsável da Mesa vale também para DFDs/itens. */
   protocoloResponsavelId: number | null;
   /** Mesa do PCA (migração `0034`): o PCA para onde o protocolo de origem foi enviado e quando foi
@@ -125,7 +131,6 @@ export type DfdDetalhe = DfdResumo & {
   matricula: string | null;
   email: string | null;
   telefone: string | null;
-  anoPca: number | null;
   nomeArquivo: string | null;
   secoes: DfdSecaoRow[];
   assinaturas: Assinatura[];
@@ -192,6 +197,8 @@ const colunasDfd = {
   protocoloNumero: dfdProtocolos.numero,
   protocoloAssunto: dfdProtocolos.assunto,
   protocoloAnoPca: dfdProtocolos.anoPca,
+  anoPca: dfds.anoPca,
+  prioridadeTexto: prioridadeTextoSql,
   protocoloResponsavelId: dfdProtocolos.responsavelId,
   numeroContrato: dfds.numeroContrato,
   numeroAta: dfds.numeroAta,
@@ -203,21 +210,25 @@ const colunasDfd = {
 /** Escopo da Mesa: a PRINCIPAL (DFDs fora de protocolo enviado a um PCA) ou a de um PCA (`pcaId`). */
 const escopoMesa = (pcaId?: number) => (pcaId ? eq(dfdProtocolos.pcaId, pcaId) : isNull(dfdProtocolos.pcaId));
 
-/** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe/Foxit) derivados do JSON. `colunasDfd` NÃO traz
- * as assinaturas (peso) → seleciona só aqui e mapeia para os grupos (leve). */
-function comGrupos(r: Omit<DfdResumo, "assinaturaGrupos"> & { assinaturas: string | null }): DfdResumo {
-  const { assinaturas, ...resto } = r;
-  return { ...resto, assinaturaGrupos: gruposAssinatura(parseAssinaturas(assinaturas)) };
+/** Linha crua de `colunasDfd` (a prioridade ainda como TEXTO da seção, os grupos de assinatura ainda por derivar). */
+type DfdResumoCru = Omit<DfdResumo, "assinaturaGrupos" | "prioridade"> & { prioridadeTexto: string | null };
+
+/** Resumo + grupos de assinatura (Centi/Dropsigner/Adobe/Foxit) derivados do JSON + a prioridade normalizada.
+ * `colunasDfd` NÃO traz as assinaturas (peso) → seleciona só aqui e mapeia para os grupos (leve). */
+function comGrupos(r: DfdResumoCru & { assinaturas: string | null }): DfdResumo {
+  const { assinaturas, prioridadeTexto, ...resto } = r;
+  return { ...resto, prioridade: normPrioridade(prioridadeTexto).valor, assinaturaGrupos: gruposAssinatura(parseAssinaturas(assinaturas)) };
 }
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
-export async function listarDfds(reparticaoId?: number, pcaId?: number): Promise<DfdResumo[]> {
+/** `anoPca` = o PCA escolhido no CABEÇALHO (Mesa principal; `null` = todos os PCAs). */
+export async function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null): Promise<DfdResumo[]> {
   const rows = await getDb()
     .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
-    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined))
+    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
   return rows.map(comGrupos);
 }
@@ -239,7 +250,7 @@ export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdRes
  * enriquecido com o DFD/unidade/protocolo de origem. Escopado por unidade como `listarDfds`
  * (Geral ⇒ `undefined` = todos). Carregado sob demanda (lazy) só ao abrir a visão Itens.
  */
-export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Promise<ItemDfdRow[]> {
+export async function listarItensDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null): Promise<ItemDfdRow[]> {
   return getDb()
     .select({
       id: dfdItens.id,
@@ -266,7 +277,7 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number): Pr
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     // O nº do item NESTE PCA (Mesa do PCA); na Mesa principal não casa nada (−1).
     .leftJoin(pcaItens, and(eq(pcaItens.dfdItemId, dfdItens.id), eq(pcaItens.pcaId, pcaId ?? -1)))
-    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined))
+    .where(and(escopoMesa(pcaId), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
 
@@ -277,7 +288,6 @@ const colunasDetalhe = {
   matricula: dfds.matricula,
   email: dfds.email,
   telefone: dfds.telefone,
-  anoPca: dfds.anoPca,
   nomeArquivo: dfds.nomeArquivo,
   secoes: dfds.secoes,
   assinaturas: dfds.assinaturas,
@@ -296,20 +306,27 @@ const colunasItem = {
 
 /** Linha crua do detalhe → `DfdDetalhe` (JSON de seções/assinaturas lido com tolerância). */
 function paraDetalhe(
-  d: Omit<DfdResumo, "assinaturaGrupos"> & {
+  d: DfdResumoCru & {
     orgaoEntidade: string | null;
     matricula: string | null;
     email: string | null;
     telefone: string | null;
-    anoPca: number | null;
     nomeArquivo: string | null;
     secoes: string | null;
     assinaturas: string | null;
   },
   itens: DfdItemRow[],
 ): DfdDetalhe {
+  const { prioridadeTexto, ...resto } = d;
   const assinaturas = parseAssinaturas(d.assinaturas);
-  return { ...d, secoes: parseSecoes(d.secoes), assinaturas, assinaturaGrupos: gruposAssinatura(assinaturas), itens };
+  return {
+    ...resto,
+    prioridade: normPrioridade(prioridadeTexto).valor,
+    secoes: parseSecoes(d.secoes),
+    assinaturas,
+    assinaturaGrupos: gruposAssinatura(assinaturas),
+    itens,
+  };
 }
 
 export async function getDfd(id: number): Promise<DfdDetalhe | null> {

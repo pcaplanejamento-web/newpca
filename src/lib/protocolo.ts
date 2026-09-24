@@ -94,10 +94,16 @@ const colunasSobrescritos = {
   valorSobrescritos: sql<number>`(SELECT COALESCE(SUM(${dfdPassagens.valorTotal}), 0) FROM ${dfdPassagens} WHERE ${dfdPassagens.protocoloId} = ${dfdProtocolos.id})`,
 };
 
-/** Protocolos da MESA PRINCIPAL (os não enviados a um PCA) — opcionalmente filtrados por repartição (Geral
- * passa `undefined`), com totais agregados ao vivo dos DFDs vinculados. */
-export async function listarProtocolos(reparticaoId?: number): Promise<ProtocoloResumo[]> {
-  return consultaProtocolos(and(isNull(dfdProtocolos.pcaId), reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined));
+/** Protocolos da MESA PRINCIPAL (os não enviados a um PCA) — opcionalmente filtrados por repartição (Geral passa
+ * `undefined`) e pelo PCA do CABEÇALHO (`anoPca`; `null` = todos os PCAs), com totais agregados ao vivo dos DFDs. */
+export async function listarProtocolos(reparticaoId?: number, anoPca?: number | null): Promise<ProtocoloResumo[]> {
+  return consultaProtocolos(
+    and(
+      isNull(dfdProtocolos.pcaId),
+      reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
+      anoPca != null ? eq(dfdProtocolos.anoPca, anoPca) : undefined,
+    ),
+  );
 }
 
 /** Protocolos da MESA DO PCA (os enviados a ele), com os mesmos totais ao vivo. */

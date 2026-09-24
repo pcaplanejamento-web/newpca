@@ -33,6 +33,7 @@ const gravado = (): DfdDetalhe => ({
   email: null,
   telefone: null,
   anoPca: 2027,
+  prioridade: null,
   nomeArquivo: "p.pdf",
   secoes: [{ numero: 3, titulo: "JUSTIFICATIVA", texto: "x" }],
   assinaturas: [],

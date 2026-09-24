@@ -26,6 +26,18 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Mesa compacta + PCA no cabeçalho (filtro de todo o sistema) + preferências — entregue
+✅ **Alturas padronizadas e menores:** a barra da Mesa (visões + filtros) na altura padrão dos controles; os filtros de
+Responsável e Assunto só com o ícone (escolhida uma pessoa, o ícone vira a foto dela); as tabelas de Protocolos, DFDs e Itens
+com a MESMA altura de linha, menor, e o cabeçalho baixo — mais informação na tela. ✅ **Colunas novas:** **PCA** (o ano do PCA
+do protocolo — nos protocolos, DFDs e itens) e **Prioridade** (ALTA/MÉDIA/BAIXA da seção do DFD — nos DFDs e itens, também nos
+banners do protocolo). ✅ **PCA no cabeçalho:** um seletor à esquerda do topo escolhe o PCA e filtra a Mesa, os cards do PCA
+e o Orçamento ("Todos os PCAs" = como antes). ✅ **Perfil → Mesa:** a Mesa abre só com os protocolos do próprio usuário (o
+padrão), com todos ou com os sem responsável — escolha de cada um. ✅ **Tabelas:** ocupam todo o espaço desde o primeiro
+quadro (o rodapé fica rente ao fim, com poucas ou muitas linhas; sem "pulo" ao carregar) e abrem com a quantidade de linhas
+escolhida pelo ADM em **Configurações → Tabelas**. ✅ Corrigido: o "Restaurar padrão" da Aparência apagava junto as regras de
+Avaliação e as Integrações — agora zera só a aparência.
+
 ### Mesa: Dashboard de governança, barra única e importação na tabela + espaçamento do sistema inteiro — entregue
 ✅ **Dashboard de governança** (ícone à esquerda de Protocolos · DFDs · Itens): 5 KPIs (protocolos na Mesa com a
 tendência semanal, valor, **conformidade**, **com responsável**, **tempo médio na Mesa**) e 6 quadros — **saúde** (o estado

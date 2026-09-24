@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { chaveAssunto, FILTRO_MESA_TODOS, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "../src/lib/mesa-filtros.ts";
+import {
+  chaveAssunto,
+  coerceMesaResponsavel,
+  FILTRO_MESA_TODOS,
+  filtroInicialMesa,
+  filtroMesaAtivo,
+  opcoesAssuntoMesa,
+  passaFiltroMesa,
+} from "../src/lib/mesa-filtros.ts";
 
 describe("filtros de hierarquia da Mesa (responsável + assunto)", () => {
   const p = (responsavelId: number | null, assunto: string | null) => ({ responsavelId, assunto });
@@ -25,5 +33,24 @@ describe("filtros de hierarquia da Mesa (responsável + assunto)", () => {
   it("opções de assunto: distintas, ordem natural, 'sem assunto' por último", () => {
     assert.deepEqual(opcoesAssuntoMesa([p(1, "b"), p(1, " A "), p(1, null), p(1, "A"), p(1, "c 10"), p(1, "c 9")]), ["A", "b", "c 9", "c 10", ""]);
     assert.equal(chaveAssunto(null), "");
+  });
+});
+
+// Perfil → Mesa: o filtro com que a Mesa ABRE (o padrão é "só os meus").
+describe("responsável inicial da Mesa (preferência do Perfil)", () => {
+  it("'eu' (o padrão) abre filtrada pelo próprio usuário; 'todos' = geral; 'sem' = sem responsável", () => {
+    assert.deepEqual(filtroInicialMesa("eu", 42), { responsavel: 42, assunto: null });
+    assert.deepEqual(filtroInicialMesa("todos", 42), FILTRO_MESA_TODOS);
+    assert.deepEqual(filtroInicialMesa("sem", 42), { responsavel: "sem", assunto: null });
+  });
+  it("sem usuário, 'eu' vira geral (nunca um filtro vazio)", () => {
+    assert.deepEqual(filtroInicialMesa("eu", null), FILTRO_MESA_TODOS);
+  });
+  it("preferência gravada: ausente ou desconhecida = 'eu'", () => {
+    assert.equal(coerceMesaResponsavel(null), "eu");
+    assert.equal(coerceMesaResponsavel(undefined), "eu");
+    assert.equal(coerceMesaResponsavel("qualquer"), "eu");
+    assert.equal(coerceMesaResponsavel("todos"), "todos");
+    assert.equal(coerceMesaResponsavel("sem"), "sem");
   });
 });

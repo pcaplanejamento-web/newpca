@@ -6,14 +6,17 @@ import {
   editarPcaEspacoSchema,
   acaoItensPcaSchema,
   acaoProtocolosPcaSchema,
+  filtroPcaSchema,
   visaoOrcamentoSchema,
 } from "../src/lib/pca-espaco-validation.ts";
 import {
   adminUsuarioSchema,
   cadastroSchema,
   perfilSchema,
+  preferenciasPerfilSchema,
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
+import { aparenciaSchema } from "../src/lib/theme-validation.ts";
 import {
   cadastrarPcaSchema,
   dfdOpSchema,
@@ -374,5 +377,25 @@ describe("pca-espaco-validation", () => {
     const r = visaoOrcamentoSchema.parse({ nome: "PCA", filtros: { nomeElemento: ["MATERIAL"], lixo: ["x"] } });
     assert.deepEqual(r.filtros, { nomeElemento: ["MATERIAL"] });
     assert.equal(visaoOrcamentoSchema.safeParse({ nome: "", filtros: {} }).success, false);
+  });
+});
+
+describe("filtro global do PCA, preferências do Perfil e tabelas do ADM", () => {
+  it("PCA do cabeçalho: um id positivo ou null (todos os PCAs)", () => {
+    assert.equal(filtroPcaSchema.safeParse({ pcaId: 3 }).success, true);
+    assert.equal(filtroPcaSchema.safeParse({ pcaId: null }).success, true);
+    assert.equal(filtroPcaSchema.safeParse({ pcaId: 0 }).success, false);
+    assert.equal(filtroPcaSchema.safeParse({}).success, false);
+  });
+  it("preferências: cada card salva a sua (responsável padrão OU a Mesa); vazio é recusado", () => {
+    assert.equal(preferenciasPerfilSchema.safeParse({ responsavelPadraoId: null }).success, true);
+    assert.equal(preferenciasPerfilSchema.safeParse({ mesaResponsavel: "todos" }).success, true);
+    assert.equal(preferenciasPerfilSchema.safeParse({ mesaResponsavel: "outro" }).success, false);
+    assert.equal(preferenciasPerfilSchema.safeParse({}).success, false);
+  });
+  it("tabelas: só as opções do seletor (30/50/100/200)", () => {
+    assert.equal(aparenciaSchema.safeParse({ tabelas: { linhas: 50 } }).success, true);
+    assert.equal(aparenciaSchema.safeParse({ tabelas: { linhas: 45 } }).success, false);
+    assert.equal(aparenciaSchema.safeParse({ tabelas: { linhas: "50" } }).success, false);
   });
 });

@@ -1,14 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { IconChevronDown } from "./icons";
 
 /**
- * SELETOR DE FILTRO de hierarquia (acima das tabelas — ex.: Responsável e Assunto da Mesa): um chip com
- * ícone, rótulo e o valor escolhido; ATIVO (fora do "todos") fica em accent. É um `<select>` nativo
- * transparente sobre o visual — acessível, com o seletor do próprio celular e alvo de toque de 44px (40px no
- * desktop, a altura do `Segmented` ao lado). No celular divide a linha com os vizinhos (`flex-1`) e mostra só o
- * ícone + o valor (o rótulo segue no nome acessível e na dica). Só tokens do design-system.
+ * SELETOR DE FILTRO de hierarquia (na linha das visões da Mesa — Responsável e Assunto): SÓ O ÍCONE, num quadrado na
+ * ALTURA PADRÃO dos controles (`--h-control-sm` no desktop — a do `Segmented` ao lado; 44px no celular, o alvo de toque).
+ * ATIVO (fora do "todos") fica em accent, e quem usa pode trocar o ícone pelo que representa a escolha (ex.: a FOTO da
+ * pessoa). É um `<select>` nativo transparente sobre o visual — acessível (o nome diz o filtro e o valor escolhido), com o
+ * seletor do próprio celular; a dica mostra o valor. Só tokens do design-system.
  */
 export function SeletorFiltro({
   icone,
@@ -18,6 +17,7 @@ export function SeletorFiltro({
   onChange,
   ativo,
 }: {
+  /** O que aparece no quadrado (ícone, ou a foto da pessoa escolhida). */
   icone: ReactNode;
   rotulo: string;
   valor: string;
@@ -31,16 +31,13 @@ export function SeletorFiltro({
   const atual = lista.find((o) => o.valor === valor)?.rotulo ?? "";
   return (
     <span
-      className={`relative inline-flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control border px-3 text-[13px] transition-colors focus-within:ring-2 focus-within:ring-accent/40 sm:flex-none lg:min-h-10 ${
-        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
+      className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-within:ring-2 focus-within:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
       }`}
     >
-      <span className={`shrink-0 ${ativo ? "text-accent" : "text-muted"}`}>{icone}</span>
-      <span className="hidden shrink-0 font-semibold sm:inline">{rotulo}:</span>
-      <span className="min-w-0 flex-1 truncate sm:max-w-[16rem]">{atual}</span>
-      <IconChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+      {icone}
       <select
-        aria-label={`Filtro: ${rotulo}`}
+        aria-label={`Filtro: ${rotulo} — ${atual}`}
         title={`${rotulo}: ${atual}`}
         value={valor}
         onChange={(e) => onChange(e.target.value)}

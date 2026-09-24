@@ -58,12 +58,35 @@ export type LinhaDfd = {
   processando?: ProcessandoDfd | null;
   situacao?: string | null; // Novo/Substitui/Move (só na importação)
   protocolo?: string | null; // nº do processo (só na aba DFDs)
+  /** PCA do DFD (o do protocolo de origem) — coluna "PCA" (só na Mesa principal; ausente = sem a coluna). */
+  pca?: PcaDaLinha | null;
+  /** Prioridade da seção do DFD (ALTA/MÉDIA/BAIXA; `null` = ausente/fora do padrão; ausente = sem a coluna). */
+  prioridade?: string | null;
 };
+
+/** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
+export type PcaDaLinha = { ano: number; nome: string };
+
+/** Célula "PCA" — a MESMA nas tabelas de protocolos, DFDs e itens: o ano, com o nome do PCA na dica. */
+export function CelulaPca({ pca }: { pca: PcaDaLinha | null | undefined }) {
+  return pca ? (
+    <span className="tabular-nums" title={pca.nome}>
+      {pca.ano}
+    </span>
+  ) : (
+    <span className="text-faint">—</span>
+  );
+}
+
+/** Célula "Prioridade" — a MESMA nas tabelas de DFDs e itens (o item herda a do DFD). */
+export function CelulaPrioridade({ prioridade }: { prioridade: string | null | undefined }) {
+  return prioridade ? <span className="text-[12px] font-medium">{prioridade}</span> : <span className="text-faint">—</span>;
+}
 
 /**
  * Planilha de DFDs REUTILIZÁVEL — colunas (nessa ordem): [seleção] · Estado ·
- * [Situação] · Nº Plan. · Nº DFD · Sigla · Tipo · Assinatura · [Protocolo] · Itens · Valor total ·
- * [ações]. Todas filtráveis/ordenáveis e SEM quebra de linha (a coluna ganha a largura do
+ * [Situação] · Nº Plan. · Nº DFD · Sigla · Tipo · [Prioridade] · Assinatura · [Protocolo] · [PCA] · Itens · Valor total ·
+ * [ações], na densidade COMPACTA (a mesma altura de linha das tabelas de protocolos e itens). Todas filtráveis/ordenáveis e SEM quebra de linha (a coluna ganha a largura do
  * conteúdo; a tabela rola no eixo x do próprio container). Na ANÁLISE (importação) os **DFDs com
  * erro/atenção** ficam em **tabelas separadas** acima das regulares; depois de protocolado
  * (`unica`) é UMA tabela só (o filtro da coluna Estado separa). Rodapé = só os agregados das
@@ -115,6 +138,9 @@ export function PlanilhaDfds({
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
+  // PCA e Prioridade: a coluna aparece quando a tela as informa (mesmo que vazias em alguma linha).
+  const temPca = linhas.some((l) => l.pca !== undefined);
+  const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -195,6 +221,18 @@ export function PlanilhaDfds({
       ),
     },
     { key: "tipo", header: "Tipo", nowrap: true, value: (r) => r.tipo ?? "—", render: (r) => <span className="text-[12px]">{r.tipo ?? "—"}</span> },
+    ...(temPrioridade
+      ? [
+          {
+            key: "prioridade",
+            header: "Prioridade",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => r.prioridade ?? "—",
+            render: (r: LinhaDfd) => <CelulaPrioridade prioridade={r.prioridade} />,
+          },
+        ]
+      : []),
     {
       key: "assinatura",
       header: "Assinatura",
@@ -236,6 +274,18 @@ export function PlanilhaDfds({
           },
         ]
       : []),
+    ...(temPca
+      ? [
+          {
+            key: "pca",
+            header: "PCA",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => (r.pca ? String(r.pca.ano) : "—"),
+            render: (r: LinhaDfd) => <CelulaPca pca={r.pca} />,
+          },
+        ]
+      : []),
     {
       key: "itens",
       header: "Itens",
@@ -269,7 +319,8 @@ export function PlanilhaDfds({
   // DFDs descartados pelo usuário (duplicado / mantido o já cadastrado) — não são gravados (tabela cinza à parte).
   const descartado = linhas.filter((l) => l.estado === "descartado");
   const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && l.estado !== "descartado");
-  const mw = temProtocolo ? 1060 : 840;
+  const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0);
+  // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
     columns: cols,
     getKey: (r: LinhaDfd) => r.key,
@@ -281,6 +332,7 @@ export function PlanilhaDfds({
     minWidth: mw,
     resumo,
     reservaInferior,
+    density: "compact",
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.

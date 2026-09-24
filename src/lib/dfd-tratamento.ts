@@ -15,7 +15,7 @@ import {
   TIPO_DFD_ROTULO,
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
-import { normPrevisao, normPrioridade, normUnidadeMedida, valoresBatem } from "./normalize.ts";
+import { normPrevisao, normPrioridade, normUnidadeMedida, type Prioridade, valoresBatem } from "./normalize.ts";
 import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
@@ -49,6 +49,10 @@ export function textoSecao(secoes: DfdSecao[], kw: string): string {
   const i = acharSecao(secoes, kw);
   return i >= 0 ? secoes[i].texto : "";
 }
+
+/** PRIORIDADE do DFD pela seção (ALTA/MÉDIA/BAIXA; `null` = ausente ou fora do padrão) — a coluna das tabelas de DFDs e
+ * itens (a lista da Mesa lê a MESMA seção no banco: `prioridadeTextoSql`). */
+export const prioridadeDoDfd = (secoes: DfdSecao[]): Prioridade | null => normPrioridade(textoSecao(secoes, "PRIORIDADE")).valor;
 
 /** Grava (ou cria, se faltava) o texto de uma seção — mantendo a ordem. */
 export function setTextoSecao(

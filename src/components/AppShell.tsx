@@ -8,8 +8,10 @@ import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { NAV_MODULOS } from "./navModulos";
 import { ThemeToggle } from "./ThemeToggle";
+import { toast } from "./Toast";
 import {
   IconBell,
+  IconBox,
   IconBuilding,
   IconLandmark,
   IconCheck,
@@ -286,6 +288,81 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
   );
 }
 
+type PcaNav = { id: number; nome: string; ano: number };
+
+/**
+ * PCA do CABEÇALHO — o filtro GLOBAL (cookie, como a unidade e o grupo): a Mesa, os cards do módulo PCA e o Orçamento
+ * mostram só o PCA escolhido; "Todos os PCAs" = sem filtro. Dentro do espaço de um PCA, escolher outro leva ao espaço
+ * dele (na mesma aba). No celular o gatilho mostra só o ANO (o nome inteiro na lista).
+ */
+function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [trocando, setTrocando] = useState(false);
+  if (pcas.length === 0) return null;
+  const ativo = pcas.find((p) => p.id === ativoId) ?? null;
+
+  async function trocar(id: number | null, close: () => void) {
+    close();
+    if (id === (ativo?.id ?? null)) return;
+    setTrocando(true);
+    try {
+      const res = await fetch("/api/pca/filtro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pcaId: id }),
+      });
+      if (!res.ok) throw new Error();
+      if (id != null && /^\/painel\/pca\/\d+/.test(pathname)) router.push(`/painel/pca/${id}${window.location.search}`);
+      else router.refresh();
+    } catch {
+      toast.error("Não foi possível trocar o PCA — tente de novo.");
+    } finally {
+      setTrocando(false);
+    }
+  }
+
+  const opcao = (sel: boolean) =>
+    `flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
+      sel ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+    }`;
+  return (
+    <Dropdown
+      align="start"
+      ariaLabel="PCA (filtra todo o sistema)"
+      triggerClassName={`gap-1.5 rounded-chip border px-3 h-11 text-[13px] font-medium sm:h-[var(--h-control-sm)] ${
+        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
+      }`}
+      width={260}
+      trigger={
+        <>
+          {trocando ? <IconSpinner className="h-3.5 w-3.5" /> : <IconBox className="h-3.5 w-3.5 opacity-70" />}
+          <span className="max-w-[5rem] truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
+          <span className="hidden max-w-[12rem] truncate sm:inline">{ativo ? ativo.nome : "Todos os PCAs"}</span>
+          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </>
+      }
+    >
+      {(close) => (
+        <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
+          <button type="button" onClick={() => trocar(null, close)} className={opcao(ativo == null)}>
+            <IconBox className="h-4 w-4 shrink-0 opacity-70" />
+            <span className="min-w-0 truncate">Todos os PCAs</span>
+            {ativo == null && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+          </button>
+          {pcas.map((p) => (
+            <button key={p.id} type="button" onClick={() => trocar(p.id, close)} className={opcao(p.id === ativo?.id)}>
+              <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
+              <span className="min-w-0 truncate">{p.nome}</span>
+              {p.id === ativo?.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
 type ReparticaoNav = { id: number; codigo: string; nome: string };
 
 /** Seletor de repartição ativa no cabeçalho (entre as do grupo ativo). */
@@ -359,6 +436,8 @@ export function AppShell({
   abas,
   reparticoes,
   reparticaoAtivaId,
+  pcas = [],
+  pcaFiltroId = null,
   identidade,
 }: {
   children: ReactNode;
@@ -368,6 +447,9 @@ export function AppShell({
   abas: string[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
+  /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
+  pcas?: PcaNav[];
+  pcaFiltroId?: number | null;
   identidade?: Identidade;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
@@ -436,6 +518,8 @@ export function AppShell({
           <div className="lg:hidden">
             <Brand compact identidade={identidade} />
           </div>
+          {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA. */}
+          <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
 
           <div className="ml-auto flex items-center gap-1.5">
             <div className="hidden items-center gap-1.5 sm:flex">

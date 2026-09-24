@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 
 // Controle segmentado (abas) — spec §6.5. Trilho --surface-2, item ativo em
 // --surface com sombra leve. Rola horizontalmente se faltar espaço (mobile).
-// Altura FIXA do item (32px no desktop; 40px no celular, e a área de toque cobre também o respiro do trilho —
-// 46px), então um item SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica; 44px de largura no celular)
-// tem a MESMA altura dos de texto.
+// ALTURA PADRÃO dos controles: o trilho inteiro mede `--h-control-sm` no desktop (a MESMA do `SeletorFiltro`, do
+// `Button size="sm"` e da linha das tabelas compactas — segue a densidade do ADM) e 44px no celular, onde a área de toque
+// de cada item cobre também o respiro do trilho (44px). O contorno é um anel INTERNO (não ocupa altura). Um item
+// SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) é quadrado, na mesma altura dos de texto.
 export function Segmented<T extends string>({
   value,
   options,
@@ -29,7 +30,7 @@ export function Segmented<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
-      className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment border border-border bg-surface-2 p-[3px] ${className}`}
+      className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment bg-surface-2 p-[3px] shadow-[inset_0_0_0_1px_var(--border)] ${className}`}
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -43,8 +44,8 @@ export function Segmented<T extends string>({
             title={o.soIcone ? o.label : undefined}
             disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`relative inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-8 ${
-              o.soIcone ? "w-11 lg:w-8" : "px-3"
+            className={`relative inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-[calc(var(--h-control-sm)-6px)] ${
+              o.soIcone ? "w-11 lg:w-[calc(var(--h-control-sm)-6px)]" : "px-3"
             } ${active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text-2"}`}
           >
             {o.icone}

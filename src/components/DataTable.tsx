@@ -1,6 +1,7 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
   type ColunaDados,
@@ -13,6 +14,7 @@ import {
   ordenarIndices,
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
+import { useLinhasTabela } from "./ConfigTabelas";
 import { ehDesktop, tokenPx } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
@@ -60,6 +62,15 @@ const FOLGA = 4;
  * MESMO das classes) + a folga + o que fica FIXO abaixo (ex.: a barra de seleção da Mesa). */
 const reservaAteORodape = (reservaInferior: number) => tokenPx("--pad-canvas", 16) + FOLGA + reservaInferior;
 
+/** Topo do elemento NO DOCUMENTO pela cadeia de `offsetTop` — ignora `transform` (o morph das visões anima escala e
+ * deslocamento ao montar: o `getBoundingClientRect` no meio da animação mediria alguns px errado e a tabela "pularia" no
+ * fim dela). Para tabelas da PÁGINA (não dentro de um contêiner fixo). */
+function topoNoDocumento(el: HTMLElement): number {
+  let y = 0;
+  for (let n: HTMLElement | null = el; n; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
+  return y;
+}
+
 export function DataTable<R>({
   columns,
   rows,
@@ -75,7 +86,6 @@ export function DataTable<R>({
   activeKey = null,
   fillHeight = false,
   scrollInterno = false,
-  linhasPadrao,
   density,
   reservaInferior = 0,
   acoesRodape,
@@ -103,19 +113,17 @@ export function DataTable<R>({
    */
   fillHeight?: boolean;
   /**
-   * Scroll INTERNO: a tabela preenche a altura até o rodapé do display e o CORPO rola por
-   * dentro (thead fixo, `sticky`), sem scroll vertical do navegador. Um seletor de "linhas
-   * por página" (30/50/100/200) fica no rodapé — limita as linhas em DOM (performático mesmo
-   * com milhares). Só no desktop; no mobile rola normal (paginado). Opt-in (não afeta as
-   * demais tabelas). Exclui o `fillHeight` (têm o mesmo objetivo por caminhos diferentes).
+   * Scroll INTERNO: no desktop a tabela OCUPA a altura até o rodapé do display desde o primeiro quadro (o rodapé
+   * fica rente ao fim, com poucas ou muitas linhas) e o CORPO rola por dentro (thead fixo, `sticky`), sem scroll
+   * vertical do navegador. Um seletor de "linhas por página" (30/50/100/200 — começa na escolha do ADM, Configurações
+   * → Tabelas, via `ConfigTabelas`) fica no rodapé — limita as linhas em DOM (performático mesmo com milhares). No
+   * mobile rola normal (paginado). Opt-in (não afeta as demais tabelas). Exclui o `fillHeight`.
    */
   scrollInterno?: boolean;
-  /** Linhas por página INICIAL do seletor de `scrollInterno` (o padrão do ADM); default 30. */
-  linhasPadrao?: number;
   /**
-   * Densidade da linha (altura via `--cell-py` LOCAL, sem afetar as outras tabelas):
-   * `comfortable` = mais alta, `compact` = mais fina, `default`/omitido = respeita o token global.
-   * Usado para diferenciar visualmente visões que compartilham o mesmo espaço.
+   * Densidade da linha (LOCAL, sem afetar as outras tabelas): `compact` = a das tabelas de PROTOCOLOS, DFDs e ITENS —
+   * TODA linha com a MESMA altura (a dos controles, `--h-control-sm`) e o cabeçalho baixo; `comfortable` = mais alta;
+   * `default`/omitido = respeita o token global (`--cell-py`).
    */
   density?: "compact" | "default" | "comfortable";
   /** Altura (px) RESERVADA no fim do display para algo fixo abaixo da tabela (ex.: a barra de
@@ -130,17 +138,18 @@ export function DataTable<R>({
   const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
   const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
   const [page, setPage] = useState(1);
-  // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM).
-  const OPCOES_LINHAS = [30, 50, 100, 200] as const;
-  const [limite, setLimite] = useState<number>(linhasPadrao ?? 30);
+  // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
+  const linhasAdm = useLinhasTabela();
+  const [limite, setLimite] = useState<number>(linhasAdm);
 
   // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
   const wrapRef = useRef<HTMLDivElement>(null);
   // Rodapé (resumo/ações/linhas/pager) — a altura REAL entra na medida (muda com as ações e no celular).
   const rodapeRef = useRef<HTMLDivElement>(null);
   const [autoRows, setAutoRows] = useState<number | null>(null);
-  const [maxH, setMaxH] = useState<number | null>(null); // altura do corpo rolável (scrollInterno)
-  useEffect(() => {
+  const [altura, setAltura] = useState<number | null>(null); // altura TOTAL da tabela no desktop (scrollInterno)
+  // Medidas ANTES da pintura (`useLayoutEffect`): a tabela já aparece no tamanho certo, sem um quadro "solto" antes.
+  useLayoutEffect(() => {
     if (!fillHeight) return;
     const calc = () => {
       const el = wrapRef.current;
@@ -151,7 +160,7 @@ export function DataTable<R>({
         return;
       }
       // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const top = topoNoDocumento(el);
       if (top <= 0) return; // ainda não posicionada — mantém o fallback
       // Mede as alturas REAIS (linha varia com o conteúdo — ex.: botões de ação).
       const altLinha = el.querySelector("tbody tr")?.getBoundingClientRect().height || 48;
@@ -166,40 +175,34 @@ export function DataTable<R>({
     // Recalcula quando o layout acima da tabela muda (callouts, etc.).
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
-    // Remede ao fim das animações de entrada (morph/escala das abas mudam o `top` medido no meio delas).
-    document.addEventListener("animationend", calc);
     return () => {
       window.removeEventListener("resize", calc);
-      document.removeEventListener("animationend", calc);
       ro.disconnect();
     };
   }, [fillHeight, reservaInferior]);
 
-  // scrollInterno: mede a altura disponível até o fim da viewport p/ o corpo rolável (desktop).
-  useEffect(() => {
+  // scrollInterno: a ALTURA TOTAL da tabela = do topo dela até o fim do display (menos o que fica fixo abaixo) — o
+  // cartão ocupa o espaço inteiro e o corpo (flex) rola por dentro; o rodapé fica rente ao fim, com qualquer nº de linhas.
+  useLayoutEffect(() => {
     if (!scrollInterno) return;
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
       if (!ehDesktop()) {
-        setMaxH(null); // mobile: rola normal (paginado)
+        setAltura(null); // mobile: rola normal (paginado)
         return;
       }
       // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const top = topoNoDocumento(el);
       if (top <= 0) return;
-      const altRodape = rodapeRef.current?.getBoundingClientRect().height || 48;
-      setMaxH(Math.max(200, window.innerHeight - top - reservaAteORodape(reservaInferior) - altRodape));
+      setAltura(Math.max(240, Math.floor(window.innerHeight - top - reservaAteORodape(reservaInferior))));
     };
     calc();
     window.addEventListener("resize", calc);
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
-    // Remede ao fim das animações de entrada (morph/escala das abas mudam o `top` medido no meio delas).
-    document.addEventListener("animationend", calc);
     return () => {
       window.removeEventListener("resize", calc);
-      document.removeEventListener("animationend", calc);
       ro.disconnect();
     };
   }, [scrollInterno, reservaInferior]);
@@ -291,29 +294,36 @@ export function DataTable<R>({
     onSelected?.(n);
   }
 
+  const compacta = density === "compact";
   const cell = "px-[var(--cell-px)] py-[var(--cell-py)] align-middle";
-  const head = "px-[var(--cell-px)] py-3 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint";
+  // Cabeçalho ("tópicos"): baixo na densidade compacta (a mesma régua das linhas).
+  const headPy = compacta ? "py-0" : "py-3";
+  const head = `px-[var(--cell-px)] ${headPy} text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint`;
   const sortDe = (k: string) => (sort.key === k ? sort.dir : null);
-  // Densidade LOCAL (só desta tabela): sobrepõe o `--cell-py` no container, sem afetar as demais.
-  const densPy = density === "comfortable" ? "18px" : density === "compact" ? "7px" : undefined;
+  // Densidade LOCAL (só desta tabela): sobrepõe o `--cell-py` no container, sem afetar as demais. Na COMPACTA a altura
+  // da linha é FIXA (a dos controles, `--h-control-sm` — segue a densidade do ADM) e o respiro vertical mínimo: toda
+  // linha de protocolo, DFD e item tem a mesma altura, com ou sem controle na célula.
+  const densPy = density === "comfortable" ? "18px" : compacta ? "3px" : undefined;
+  const alturaLinha = compacta ? "var(--h-control-sm)" : undefined;
+  // Desktop (scrollInterno): o cartão tem a ALTURA do espaço e é uma coluna flex — o corpo ocupa o que sobra e rola.
+  const cheia = scrollInterno && altura != null;
 
   return (
     <div
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
-      style={densPy ? ({ "--cell-py": densPy } as CSSProperties) : undefined}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
+      style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
     >
       <div
-        className={`overflow-x-auto ${scrollInterno ? "overflow-y-auto" : ""}`}
-        style={scrollInterno && maxH != null ? { maxHeight: maxH } : undefined}
+        className={`overflow-x-auto ${scrollInterno ? "overflow-y-auto" : ""} ${cheia ? (visiveis.length > 0 ? "min-h-0 flex-1" : "flex-none") : ""}`}
       >
         <table className="w-full border-collapse text-sm" style={{ minWidth }}>
           <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
             <tr>
               {selectable && (
-                <th className="w-10 px-3 py-3">
+                <th className={`w-10 px-3 ${headPy}`}>
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -414,7 +424,7 @@ export function DataTable<R>({
                       : undefined
                   }
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
-                  style={ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : undefined}
+                  style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
                   className={`border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
                     onRowClick ? "cursor-pointer" : ""
                   } ${ativa ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : ""}`}
@@ -445,9 +455,9 @@ export function DataTable<R>({
         </table>
       </div>
       {/* Sem linhas: a mensagem fica FORA da área que rola na horizontal — centrada no que se vê (no celular a tabela
-          é mais larga que a tela e o texto sumia à direita). */}
+          é mais larga que a tela e o texto sumia à direita); na tabela de altura cheia, no meio do espaço vazio. */}
       {visiveis.length === 0 && (
-        <p className="px-4 py-12 text-center text-[13px] text-faint">
+        <p className={`px-4 py-12 text-center text-[13px] text-faint ${cheia ? "grid min-h-0 flex-1 place-items-center" : ""}`}>
           {rows.length === 0 && vazio != null ? vazio : "Nenhum registro com os filtros atuais."}
         </p>
       )}
@@ -490,7 +500,7 @@ export function DataTable<R>({
                 }}
                 className="min-h-11 rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:min-h-0"
               >
-                {OPCOES_LINHAS.map((n) => (
+                {LINHAS_TABELA.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>

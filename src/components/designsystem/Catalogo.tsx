@@ -73,6 +73,7 @@ import {
   IconTrash,
   IconUpload,
   IconUser,
+  IconUserX,
   IconWallet,
 } from "@/components/icons";
 import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
@@ -731,9 +732,12 @@ function SeletoresDemo() {
             { value: "itens", label: "Itens" },
           ]}
         />
-        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
+        <div className="ml-auto flex items-center gap-2">
           <SeletorFiltro
-            icone={<IconUser className="h-4 w-4" />}
+            icone={(() => {
+              const p = PESSOAS_DEMO.find((x) => String(x.id) === resp)?.pessoa;
+              return p ? <Avatar nome={p.nome} foto={p.foto} size="xs" /> : resp === "sem" ? <IconUserX className="h-4 w-4" /> : <IconUser className="h-4 w-4" />;
+            })()}
             rotulo="Responsável"
             valor={resp}
             onChange={setResp}
@@ -1469,6 +1473,11 @@ export function Catalogo() {
             Compacto
           </Button>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <span className="text-[12px] text-faint">size=&quot;xs&quot; (ação DENTRO da linha da tabela compacta; 44px no celular):</span>
+          <Button size="xs" variant="ghost" aria-label="Vincular a protocolo" icon={<IconLayers className="h-4 w-4" />} />
+          <Button size="xs" variant="ghost" aria-label="Excluir" icon={<IconTrash className="h-4 w-4" />} style={{ color: "var(--danger)" }} />
+        </div>
       </Secao>
 
       <Secao titulo="Campos de formulário (ícone + foco accent)">
@@ -2036,11 +2045,12 @@ export function Catalogo() {
         />
       </Secao>
 
-      <Secao titulo="Tabela — densidade por visão (comfortable · default · compact)">
+      <Secao titulo="Tabela — densidade (comfortable · default · compact)">
         <p className="mb-3 text-[13px] text-muted">
-          A prop <span className="font-mono text-text-2">density</span> ajusta a altura da linha SÓ daquela tabela
-          (via <span className="font-mono text-text-2">--cell-py</span> local), para diferenciar visões que dividem o
-          mesmo espaço — ex.: na tela DFD, Protocolos (alta) · DFDs (média) · Itens (fina).
+          A prop <span className="font-mono text-text-2">density</span> ajusta a altura da linha SÓ daquela tabela. A{" "}
+          <span className="font-mono text-text-2">compact</span> é a das tabelas de protocolos, DFDs e itens: TODA linha na
+          mesma altura (a dos controles, <span className="font-mono text-text-2">--h-control-sm</span> — segue a densidade do
+          ADM) e o cabeçalho baixo; ações na linha com <span className="font-mono text-text-2">Button size=&quot;xs&quot;</span>.
         </p>
         <div className="space-y-4">
           {(["comfortable", "default", "compact"] as const).map((d) => (
@@ -2072,13 +2082,13 @@ export function Catalogo() {
         />
       </Secao>
 
-      <Secao titulo="PlanilhaDfds ÚNICA (depois de protocolado — uma tabela só; o filtro de Estado separa)">
+      <Secao titulo="PlanilhaDfds ÚNICA (depois de protocolado — uma tabela só; o filtro de Estado separa; colunas PCA e Prioridade da Mesa)">
         <PlanilhaDfds
           unica
           linhas={[
-            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", protocolo: "144756/2026", assinaturas: ["centi"], validacao: "auto" },
-            { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", protocolo: "144756/2026", resumo: resumoEstado([{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: "DFD-R sem referência." }]) },
-            { key: 8, numero: "900", planejamento: "950", sigla: "SMS", tipo: null, itens: 3, valor: 900, estado: "pendente", processando: "conferindo", protocolo: null },
+            { key: 1, numero: "531", planejamento: "600", sigla: "FMS", tipo: "DFD-R", itens: 692, valor: 269705678.89, estado: "regular", protocolo: "144756/2026", assinaturas: ["centi"], validacao: "auto", prioridade: "ALTA", pca: { ano: 2027, nome: "PCA 2027" } },
+            { key: 4, numero: "712", planejamento: "798", sigla: "FMS", tipo: "DFD-R", itens: 44, valor: 812340.5, estado: "atencao", protocolo: "144756/2026", resumo: resumoEstado([{ status: "atencao", chave: "dfd.referenciaRenovacao", texto: "DFD-R sem referência." }]), prioridade: "MÉDIA", pca: { ano: 2027, nome: "PCA 2027" } },
+            { key: 8, numero: "900", planejamento: "950", sigla: "SMS", tipo: null, itens: 3, valor: 900, estado: "pendente", processando: "conferindo", protocolo: null, prioridade: null, pca: null },
           ]}
         />
       </Secao>

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { usuarioGrupos, usuarios } from "@/db/schema";
 import { getDb } from "./db";
+import { coerceMesaResponsavel, type MesaResponsavel } from "./mesa-filtros";
 import { type Pessoa, urlFoto } from "./pessoa";
 import { lotesDeIds } from "./reparticoes";
 
@@ -8,7 +9,8 @@ import { lotesDeIds } from "./reparticoes";
  * PESSOAS da plataforma para a gestão do protocolo na Mesa (nada sensível: id, nome, apelido e a URL da
  * foto): as PESSOAS DO GRUPO ativo — as únicas que podem ser designadas RESPONSÁVEL (célula, edição em
  * massa, perfil) — e o diretório de exibição (foto + apelido) de quem aparece nas colunas Responsável/
- * Distribuição. Também a preferência de cada um: o RESPONSÁVEL PADRÃO escolhido ao protocolar.
+ * Distribuição. Também as preferências de cada um: o RESPONSÁVEL PADRÃO escolhido ao protocolar e o responsável com que a
+ * MESA abre.
  */
 
 // Colunas de exibição: a FOTO não é lida (só se existe + a versão para a URL com cache).
@@ -85,4 +87,15 @@ export async function responsavelPadraoGravado(usuarioId: number): Promise<numbe
 
 export async function definirResponsavelPadrao(usuarioId: number, alvo: number | null): Promise<void> {
   await getDb().update(usuarios).set({ responsavelPadraoId: alvo }).where(eq(usuarios.id, usuarioId));
+}
+
+/** Com que responsável a MESA abre para o usuário (Perfil) — sem preferência gravada = "eu" (o padrão). */
+export async function mesaResponsavelGravado(usuarioId: number | null | undefined): Promise<MesaResponsavel> {
+  if (usuarioId == null) return "todos";
+  const [r] = await getDb().select({ v: usuarios.mesaResponsavel }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1);
+  return coerceMesaResponsavel(r?.v);
+}
+
+export async function definirMesaResponsavel(usuarioId: number, v: MesaResponsavel): Promise<void> {
+  await getDb().update(usuarios).set({ mesaResponsavel: v }).where(eq(usuarios.id, usuarioId));
 }

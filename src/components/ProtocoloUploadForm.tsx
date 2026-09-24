@@ -49,6 +49,7 @@ import {
   type MensagemDfd,
   motivoDuplicidade,
   normalizarSecoesDfd,
+  prioridadeDoDfd,
   removerItemDfd,
   resumoEstado,
   STATUS_MENSAGEM_COR,
@@ -867,6 +868,8 @@ export function ProtocoloUploadForm({
       valor: d ? (d.valorTotal ?? 0) : null,
       // Tipos de assinatura (Centi/Dropsigner/Adobe/Foxit). Antes do parse completo, as A/B do índice.
       assinaturas: gruposAssinatura(d?.assinaturas ?? di.assinaturas),
+      // Antes do parse completo a seção ainda não foi lida ("—").
+      prioridade: d ? prioridadeDoDfd(d.secoes) : null,
       situacao: situacaoDe(idx, di.numero),
       processando: processandoDe(idx),
     };

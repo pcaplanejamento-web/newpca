@@ -60,6 +60,7 @@ import {
   Upload,
   User,
   Users,
+  UserX,
   Wallet,
   Wrench,
   X,
@@ -93,6 +94,7 @@ export const IconShield = Shield;
 export const IconSettings = Settings;
 export const IconBell = Bell;
 export const IconUser = User;
+export const IconUserX = UserX;
 export const IconTool = Wrench;
 export const IconClipboard = ClipboardList;
 export const IconDownload = Download;

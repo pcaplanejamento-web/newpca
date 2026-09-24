@@ -13,6 +13,7 @@ import {
   faltasCirurgicasDfd,
   gruposAssinatura,
   linhasRelatorioProtocolo,
+  prioridadeDoDfd,
   removerItemDfd,
   STATUS_MENSAGEM_COR,
   unificarItensDfd,
@@ -290,6 +291,7 @@ export function useProtocoloGravado({
         resumo: r.resumo,
         validacao: r.validacao,
         assinaturas: gruposAssinatura(d.assinaturas),
+        prioridade: prioridadeDoDfd(d.secoes),
       },
     ];
   });

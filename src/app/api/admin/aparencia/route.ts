@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { configuracoes } from "@/db/schema";
 import { ok, parseCorpo } from "@/lib/http";
 import { invalidarAparencia } from "@/lib/aparencia";
-import { type Aparencia, parseAparencia } from "@/lib/theme";
+import { type Aparencia, parseAparencia, semChavesVisuais } from "@/lib/theme";
 import { aparenciaSchema } from "@/lib/theme-validation";
 
 export const dynamic = "force-dynamic";
@@ -53,14 +53,17 @@ export async function PATCH(req: Request) {
   return ok({ aparencia: novo });
 }
 
+/** "Restaurar padrão" da tela Aparência: zera só as chaves VISUAIS — a identidade, as tabelas e os blocos irmãos do
+ * MESMO registro (avaliação, integrações) ficam (antes o registro inteiro virava "{}" e levava junto as regras do ADM). */
 export async function DELETE() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
+  const novo = semChavesVisuais(await lerDados());
   await getDb()
     .update(configuracoes)
-    .set({ dados: "{}", atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .set({ dados: JSON.stringify(novo), atualizadoPor: g.u.id, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(configuracoes.id, 1));
   invalidarAparencia();
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Aparência restaurada ao padrão" });
-  return ok({ aparencia: {} });
+  return ok({ aparencia: novo });
 }

@@ -3,13 +3,15 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
+import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
 import { APELIDO_MAX, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
+import { Segmented } from "./Segmented";
 import { ThemeToggle } from "./ThemeToggle";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
@@ -61,12 +63,15 @@ const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)
 export function PerfilView({
   usuario,
   protocolacao = null,
+  mesaResponsavel = null,
   semModulos = false,
 }: {
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
    * PESSOAS DO GRUPO ativo (`foraDoGrupo` = nome do padrão gravado que não é mais do grupo). */
   protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: string | null } | null;
+  /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa; `null` = sem o card). */
+  mesaResponsavel?: MesaResponsavel | null;
   /** O grupo ativo não libera nenhum módulo (Mesa, PCA, Catálogo, Orçamento): avisa o que fazer. */
   semModulos?: boolean;
 }) {
@@ -98,23 +103,47 @@ export function PerfilView({
   const [salvandoPref, setSalvandoPref] = useState(false);
   const [msgPref, setMsgPref] = useState<Msg>(null);
 
+  // Mesa: com que responsável ela abre (o padrão = só os do próprio usuário)
+  const [mesaResp, setMesaResp] = useState<MesaResponsavel>(mesaResponsavel ?? "eu");
+  const [salvandoMesa, setSalvandoMesa] = useState(false);
+  const [msgMesa, setMsgMesa] = useState<Msg>(null);
+
+  /** Grava UMA preferência (cada card salva a sua) — mesma rota, mesmo tratamento de erro. */
+  async function gravarPreferencia(corpo: Record<string, unknown>): Promise<void> {
+    const res = await fetch("/api/perfil/preferencias", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+    const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+  }
+
   async function salvarPreferencia(e: FormEvent) {
     e.preventDefault();
     setSalvandoPref(true);
     setMsgPref(null);
     try {
-      const res = await fetch("/api/perfil/preferencias", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responsavelPadraoId: respPadrao }),
-      });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+      await gravarPreferencia({ responsavelPadraoId: respPadrao });
       setMsgPref({ tipo: "ok", texto: "Preferência salva — vale para os próximos protocolos." });
     } catch (err) {
       setMsgPref({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
     } finally {
       setSalvandoPref(false);
+    }
+  }
+
+  async function salvarMesa(e: FormEvent) {
+    e.preventDefault();
+    setSalvandoMesa(true);
+    setMsgMesa(null);
+    try {
+      await gravarPreferencia({ mesaResponsavel: mesaResp });
+      setMsgMesa({ tipo: "ok", texto: "Preferência salva — vale da próxima vez que a Mesa abrir." });
+    } catch (err) {
+      setMsgMesa({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
+    } finally {
+      setSalvandoMesa(false);
     }
   }
 
@@ -292,6 +321,38 @@ export function PerfilView({
           </Button>
         </div>
       </form>
+
+      {/* Mesa: com que RESPONSÁVEL ela abre — só os do usuário (o padrão), geral ou os sem responsável. */}
+      {mesaResponsavel != null && (
+        <form onSubmit={salvarMesa} className={`lg:col-span-2 ${cardCls}`}>
+          <h3 className="flex items-center gap-2 text-sm font-bold text-text">
+            <IconClipboard className="h-4 w-4" /> Mesa
+          </h3>
+          <div className="mt-4 max-w-xl">
+            <p className={labelCls}>Ao abrir a Mesa, mostrar</p>
+            <Segmented<MesaResponsavel>
+              value={mesaResp}
+              onChange={setMesaResp}
+              ariaLabel="Responsável com que a Mesa abre"
+              options={MESA_RESPONSAVEL.map((v) => ({ value: v, label: ROTULO_MESA_RESPONSAVEL[v] }))}
+            />
+            <p className="mt-1.5 text-[12px] text-muted">
+              {mesaResp === "eu"
+                ? "A Mesa abre só com os protocolos em que você é o responsável (e os DFDs e itens deles)."
+                : mesaResp === "todos"
+                  ? "A Mesa abre com todos os protocolos, de todos os responsáveis."
+                  : "A Mesa abre só com os protocolos ainda sem responsável — bom para quem distribui."}{" "}
+              Dá para trocar a qualquer momento no filtro de Responsável da própria Mesa.
+            </p>
+          </div>
+          <Aviso msg={msgMesa} />
+          <div className="mt-4 flex justify-end">
+            <Button type="submit" loading={salvandoMesa} icon={<IconSave className="h-[18px] w-[18px]" />}>
+              Salvar preferência
+            </Button>
+          </div>
+        </form>
+      )}
 
       {/* Protocolação (editores): responsável padrão escolhido automaticamente ao protocolar */}
       {protocolacao && (

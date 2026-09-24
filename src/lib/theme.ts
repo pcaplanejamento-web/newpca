@@ -43,7 +43,31 @@ export type Aparencia = {
     anim?: "none" | "hover";
   };
   identidade?: { nome?: string; subtitulo?: string; favicon?: string };
+  /** TABELAS (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna (a Mesa) abrem. */
+  tabelas?: { linhas?: LinhasTabela };
 };
+
+/** Linhas por página das tabelas de rolagem interna (o seletor do rodapé) e o padrão de fábrica. */
+export const LINHAS_TABELA = [30, 50, 100, 200] as const;
+export type LinhasTabela = (typeof LINHAS_TABELA)[number];
+export const LINHAS_TABELA_PADRAO: LinhasTabela = 30;
+
+/** As linhas iniciais das tabelas definidas pelo ADM (valor fora das opções = o padrão de fábrica). */
+export function linhasTabela(a: Aparencia): LinhasTabela {
+  const v = a.tabelas?.linhas;
+  return LINHAS_TABELA.includes(v as LinhasTabela) ? (v as LinhasTabela) : LINHAS_TABELA_PADRAO;
+}
+
+/** Chaves VISUAIS da aparência (o "Restaurar padrão" da tela Aparência zera só estas — identidade, tabelas e os blocos
+ * irmãos do mesmo registro, como a avaliação e as integrações, ficam). */
+export const CHAVES_VISUAIS = ["cores", "radius", "density", "motion", "elevation", "kpi", "icones"] as const;
+
+/** A configuração SEM as chaves visuais (o que sobrevive ao "Restaurar padrão" da Aparência). */
+export function semChavesVisuais<T extends Record<string, unknown>>(dados: T): Partial<T> {
+  const resto: Record<string, unknown> = { ...dados };
+  for (const k of CHAVES_VISUAIS) delete resto[k];
+  return resto as Partial<T>;
+}
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const PERMITIDAS = new Set<string>(TOKENS_COR);

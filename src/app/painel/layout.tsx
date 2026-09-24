@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ConfigTabelas } from "@/components/ConfigTabelas";
 import { getAparencia } from "@/lib/aparencia";
 import { getUsuarioAtual } from "@/lib/auth";
 import { abasPermitidas, getGrupoAtivo, getReparticaoContexto, gruposDoUsuario } from "@/lib/grupos";
+import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
+import { linhasTabela } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +17,16 @@ export default async function PainelLayout({
   const usuario = await getUsuarioAtual();
   if (!usuario) redirect("/login");
 
-  const [grupos, ativo, aparencia] = await Promise.all([
+  const [grupos, ativo, aparencia, pcas] = await Promise.all([
     gruposDoUsuario(usuario.id),
     getGrupoAtivo(usuario),
     getAparencia(),
+    pcasDoFiltro(),
   ]);
-  const [abas, contexto] = await Promise.all([
+  const [abas, contexto, pcaFiltro] = await Promise.all([
     abasPermitidas(usuario, ativo).then((s) => [...s]),
     getReparticaoContexto(usuario, ativo),
+    getPcaFiltro(pcas),
   ]);
 
   return (
@@ -32,9 +37,12 @@ export default async function PainelLayout({
       abas={abas}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
+      pcas={pcas}
+      pcaFiltroId={pcaFiltro?.id ?? null}
       identidade={aparencia.identidade}
     >
-      {children}
+      {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
+      <ConfigTabelas linhas={linhasTabela(aparencia)}>{children}</ConfigTabelas>
     </AppShell>
   );
 }

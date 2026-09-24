@@ -47,12 +47,15 @@ export function OrcamentoView({
   vinculos,
   alvos,
   podeEditar,
+  filtro = null,
 }: {
   orcamentos: OrcamentoResumo[];
   itens: OrcamentoItemRow[];
   vinculos: VinculoOrcamento[];
   alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
   podeEditar: boolean;
+  /** PCA escolhido no CABEÇALHO (filtro global) — só os orçamentos do ano dele vieram. */
+  filtro?: string | null;
 }) {
   const router = useRouter();
   const itensPorOrcamento = useMemo(() => {
@@ -354,7 +357,8 @@ export function OrcamentoView({
         <div>
           <h1 className="text-xl font-bold text-text">Orçamento</h1>
           <p className="text-sm text-muted">
-            {orcamentos.length} {orcamentos.length === 1 ? "orçamento" : "orçamentos"} · {itens.length} {itens.length === 1 ? "lançamento" : "lançamentos"} · dotação por Órgão/Unidade/Elemento
+            {orcamentos.length} {orcamentos.length === 1 ? "orçamento" : "orçamentos"} · {itens.length} {itens.length === 1 ? "lançamento" : "lançamentos"} ·{" "}
+            {filtro ? `do ano do ${filtro}, o PCA escolhido no cabeçalho` : "dotação por Órgão/Unidade/Elemento"}
           </p>
         </div>
         <Segmented
@@ -381,7 +385,7 @@ export function OrcamentoView({
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
             <IconInbox className="h-10 w-10 text-faint" />
-            <p className="text-sm text-muted">Nenhum orçamento ainda.</p>
+            <p className="text-sm text-muted">{filtro ? `Nenhum orçamento do ano do ${filtro}.` : "Nenhum orçamento ainda."}</p>
           </div>
         )
       ) : (

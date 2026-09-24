@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MESA_RESPONSAVEL, type MesaResponsavel } from "./mesa-filtros.ts";
 import { APELIDO_MAX } from "./pessoa.ts";
 
 export const cadastroSchema = z.object({
@@ -34,11 +35,14 @@ export const perfilSchema = z.object({
   foto: fotoSchema.optional(),
 });
 
-/** Preferências do próprio usuário (Perfil → Protocolação): o RESPONSÁVEL PADRÃO escolhido
- * automaticamente ao protocolar (`null` = nenhum). */
-export const preferenciasPerfilSchema = z.object({
-  responsavelPadraoId: z.number().int().positive().nullable(),
-});
+/** Preferências do próprio usuário (Perfil): o RESPONSÁVEL PADRÃO escolhido automaticamente ao protocolar (`null` =
+ * nenhum) e/ou o responsável com que a MESA abre ("eu" · "todos" · "sem") — cada card salva o seu. */
+export const preferenciasPerfilSchema = z
+  .object({
+    responsavelPadraoId: z.number().int().positive().nullable().optional(),
+    mesaResponsavel: z.enum(MESA_RESPONSAVEL as [MesaResponsavel, ...MesaResponsavel[]]).optional(),
+  })
+  .refine((p) => p.responsavelPadraoId !== undefined || p.mesaResponsavel !== undefined, "Nada a salvar.");
 
 /** Troca de senha do próprio usuário. */
 export const trocarSenhaSchema = z.object({

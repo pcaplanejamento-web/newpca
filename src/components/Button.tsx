@@ -20,8 +20,10 @@ const VARIANT: Record<Variant, string> = {
 
 type Props = {
   variant?: Variant;
-  /** `sm` = compacto (rodapés de tabela): 34px no desktop, 44px no celular (alvo de toque). */
-  size?: "md" | "sm";
+  /** `sm` = compacto (rodapés de tabela): `--h-control-sm` no desktop, 44px no celular (alvo de toque). `xs` = AÇÃO DE
+   * LINHA (dentro da célula de uma tabela compacta): `--h-control-sm` − 6px no desktop (cabe na linha), 44px no celular;
+   * só com ícone = quadrado. */
+  size?: "md" | "sm" | "xs";
   loading?: boolean;
   icon?: ReactNode;
   href?: string;
@@ -42,9 +44,13 @@ export function Button({
 }: Props) {
   const isIcon = variant === "icon";
   const tamanho =
-    size === "sm"
-      ? `h-11 text-[12.5px] lg:h-[var(--h-control-sm)] ${isIcon ? "w-11 lg:w-[var(--h-control-sm)]" : "px-3"}`
-      : `h-[var(--h-control)] text-[13.5px] ${isIcon ? "w-[var(--h-control)]" : "px-4"}`;
+    size === "xs"
+      ? `h-11 text-[12px] lg:h-[calc(var(--h-control-sm)-6px)] ${
+          isIcon || children == null ? "w-11 lg:w-[calc(var(--h-control-sm)-6px)]" : "px-2.5"
+        }`
+      : size === "sm"
+        ? `h-11 text-[12.5px] lg:h-[var(--h-control-sm)] ${isIcon ? "w-11 lg:w-[var(--h-control-sm)]" : "px-3"}`
+        : `h-[var(--h-control)] text-[13.5px] ${isIcon ? "w-[var(--h-control)]" : "px-4"}`;
   const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
   const inner = loading ? (
     <IconSpinner className="h-[18px] w-[18px]" />

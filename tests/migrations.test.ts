@@ -394,6 +394,10 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual(abas(904), ["dashboard"]);
   });
 
+  it("0037 responsável inicial da Mesa: usuarios.mesa_responsavel (NULL = 'eu')", () => {
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('usuarios')").includes("mesa_responsavel"));
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

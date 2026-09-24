@@ -48,7 +48,7 @@ export function SeletorCelula({
     );
   if (!onChange) return visual;
   return (
-    <span className="relative inline-flex min-h-[44px] items-center gap-1 rounded-control px-2 transition-colors hover:bg-surface-2 focus-within:ring-2 focus-within:ring-accent/40">
+    <span className="relative inline-flex min-h-11 items-center gap-1 rounded-control px-2 transition-colors hover:bg-surface-2 focus-within:ring-2 focus-within:ring-accent/40 lg:min-h-[calc(var(--h-control-sm)-6px)]">
       {visual}
       {salvando ? <IconSpinner className="h-3.5 w-3.5 shrink-0 text-accent" /> : <IconChevronDown className="h-3.5 w-3.5 shrink-0 text-faint" />}
       <select

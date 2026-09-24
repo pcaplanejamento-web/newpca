@@ -34,6 +34,7 @@ import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { nomeExibicao, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "./BarraEdicaoMassa";
+import { Avatar } from "./Avatar";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
@@ -45,10 +46,10 @@ import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
-import { IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser } from "./icons";
+import { IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -147,6 +148,8 @@ export function DfdsView({
   outrasPessoas = [],
   situacoes = [],
   usuarioId = null,
+  filtroInicial = FILTRO_MESA_TODOS,
+  pcaFiltro = null,
   modoPca,
 }: {
   podeEditar: boolean;
@@ -165,6 +168,10 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
+  /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
+  filtroInicial?: FiltroMesa;
+  /** O PCA do CABEÇALHO que filtra a Mesa principal (as listas já chegam filtradas; `null` = todos os PCAs). */
+  pcaFiltro?: { nome: string } | null;
   /** Mesa dentro do PCA (sem importação; ações de incorporar/devolver e retirar item). */
   modoPca?: ModoPcaMesa;
 }) {
@@ -206,7 +213,7 @@ export function DfdsView({
 
   // FILTROS DE HIERARQUIA (acima das três visões): responsável e assunto do PROTOCOLO — o DFD e o item
   // seguem o do protocolo de origem; as colunas correspondentes da tabela de protocolos ficam travadas.
-  const [filtro, setFiltro] = useState<FiltroMesa>(FILTRO_MESA_TODOS);
+  const [filtro, setFiltro] = useState<FiltroMesa>(filtroInicial);
   // GESTÃO na célula (responsável/situação): vale na hora; a lista recarregada do servidor a substitui.
   const [gestao, setGestao] = useState<Map<number, Gestao>>(new Map());
   const [salvandoGestao, setSalvandoGestao] = useState<Set<string>>(new Set());
@@ -641,6 +648,15 @@ export function DfdsView({
 
   // ---- Planilha ÚNICA de DFDs (a MESMA dos banners) para a aba DFDs — conferência real por linha. ----
   const dfdPorId = new Map(dfds.map((d) => [d.id, d]));
+  // PCA (ano) das linhas — coluna "PCA" dos protocolos, DFDs e itens (o nome do PCA cadastrado na dica). Só na Mesa
+  // PRINCIPAL: a do PCA é de um PCA só. O DFD segue o PCA do protocolo de origem; o item, o do DFD.
+  const nomePcaPorAno = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const p of pcas) if (p.ano != null && !m.has(p.ano)) m.set(p.ano, p.nome);
+    return m;
+  }, [pcas]);
+  const pcaDe = (ano: number | null | undefined): PcaDaLinha | null => (ano != null ? { ano, nome: nomePcaPorAno.get(ano) ?? `PCA ${ano}` } : null);
+  const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -657,6 +673,8 @@ export function DfdsView({
       processando: c || confFalhou ? null : "conferindo",
       assinaturas: d.assinaturaGrupos,
       protocolo: d.protocoloNumero,
+      prioridade: d.prioridade,
+      ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });
   const acoesDfd = (l: LinhaDfd) => {
@@ -665,9 +683,10 @@ export function DfdsView({
     if (!podeEditar || !d || estaTravado({ pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm })) return null;
     return (
       <div className="flex justify-end gap-1">
-        <Button variant="ghost" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
+        <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
         <Button
           variant="ghost"
+          size="xs"
           aria-label="Excluir DFD"
           onClick={() => excluirDfd(d.id, d.numero)}
           icon={<IconTrash className="h-4 w-4" />}
@@ -850,6 +869,18 @@ export function DfdsView({
           <span className="text-faint">—</span>
         ),
     },
+    ...(modoPca
+      ? []
+      : [
+          {
+            key: "pca",
+            header: "PCA",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: ProtocoloResumo) => (r.anoPca != null ? String(r.anoPca) : "—"),
+            render: (r: ProtocoloResumo) => <CelulaPca pca={pcaDe(r.anoPca)} />,
+          },
+        ]),
     {
       key: "dfds",
       header: "DFDs",
@@ -880,6 +911,7 @@ export function DfdsView({
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
+              size="xs"
               aria-label="Excluir protocolo"
               onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds)}
               icon={<IconTrash className="h-4 w-4" />}
@@ -929,6 +961,18 @@ export function DfdsView({
       value: (r) => r.protocoloNumero ?? "—",
       render: (r) => (r.protocoloNumero ? <span className="font-mono text-[12px]">{r.protocoloNumero}</span> : <span className="text-faint">—</span>),
     },
+    ...(modoPca
+      ? []
+      : [
+          {
+            key: "pca",
+            header: "PCA",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: ItemDfdRow) => String(anoPcaDoDfd(dfdPorId.get(r.dfdId)) ?? "—"),
+            render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
+          },
+        ]),
     { key: "dfd", header: "Nº DFD", nowrap: true, value: (r) => r.dfdNumero, render: (r) => <span className="font-mono text-[12px]">{r.dfdNumero}</span> },
     {
       key: "sigla",
@@ -936,6 +980,14 @@ export function DfdsView({
       nowrap: true,
       value: (r) => r.sigla ?? "—",
       render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
+    },
+    {
+      key: "prioridade",
+      header: "Prioridade",
+      align: "center",
+      nowrap: true,
+      value: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—",
+      render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
     { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
     { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span> },
@@ -952,7 +1004,12 @@ export function DfdsView({
       header: "Descrição",
       minWidth: 260,
       value: (r) => r.descricao ?? "",
-      render: (r) => <span className="line-clamp-2">{r.descricao ?? "—"}</span>,
+      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica e no banner do item.
+      render: (r) => (
+        <span className="line-clamp-1" title={r.descricao ?? undefined}>
+          {r.descricao ?? "—"}
+        </span>
+      ),
     },
     { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
@@ -960,8 +1017,8 @@ export function DfdsView({
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
   ];
 
-  // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). Alturas de linha DIFERENTES por visão:
-  // protocolo alta · DFD média · item fina. A IMPORTAÇÃO (Mesa principal, editores) fica no RODAPÉ da tabela, à
+  // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). A MESMA altura de linha nas três visões (densidade
+  // compacta — a dos controles). A IMPORTAÇÃO (Mesa principal, editores) fica no RODAPÉ da tabela, à
   // esquerda do seletor de linhas; os formulários ficam montados FORA dela, em qualquer visão (recarregar a lista,
   // trocar de visão ou abrir o Dashboard nunca perde uma importação em curso).
   const filtrado = filtroMesaAtivo(filtro);
@@ -981,7 +1038,8 @@ export function DfdsView({
       Importar<span className="hidden sm:inline"> {oQueImporta}</span>
     </Button>
   ) : null;
-  const semDados = (oQue: string) => `Nenhum ${oQue} nesta visão.${importa ? " Use “Importar” no rodapé da tabela." : ""}`;
+  const semDados = (oQue: string) =>
+    `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${importa ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
       columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
@@ -994,8 +1052,8 @@ export function DfdsView({
       activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={1380}
-      density="comfortable"
+      minWidth={modoPca ? 1380 : 1450}
+      density="compact"
       acoesRodape={botaoImportar}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
@@ -1036,7 +1094,7 @@ export function DfdsView({
       activeKey={aberto?.tipo === "item" ? aberto.itemId : null}
       scrollInterno
       reservaInferior={reserva}
-      minWidth={1120}
+      minWidth={modoPca ? 1120 : 1300}
       density="compact"
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : "Nenhum item nesta visão."}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
@@ -1163,9 +1221,17 @@ export function DfdsView({
           ]}
         />
         {modoPca?.ferramenta}
-        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
+        <div className="ml-auto flex items-center gap-2">
           <SeletorFiltro
-            icone={<IconUser className="h-4 w-4" />}
+            icone={
+              typeof filtro.responsavel === "number" ? (
+                <Avatar nome={pessoaDe(filtro.responsavel)?.nome ?? "?"} foto={pessoaDe(filtro.responsavel)?.foto} size="xs" />
+              ) : filtro.responsavel === "sem" ? (
+                <IconUserX className="h-4 w-4" />
+              ) : (
+                <IconUser className="h-4 w-4" />
+              )
+            }
             rotulo="Responsável"
             valor={String(filtro.responsavel)}
             ativo={filtro.responsavel !== "todos"}

@@ -95,6 +95,8 @@ export const usuarios = sqliteTable(
     responsavelPadraoId: integer("responsavel_padrao_id").references((): AnySQLiteColumn => usuarios.id, {
       onDelete: "set null",
     }),
+    // Responsável com que a MESA abre (perfil, migração `0037`): "eu" (o padrão — NULL), "todos" (geral) ou "sem".
+    mesaResponsavel: text("mesa_responsavel", { enum: ["eu", "todos", "sem"] }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

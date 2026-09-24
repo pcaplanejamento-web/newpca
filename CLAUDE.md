@@ -235,6 +235,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `unidade` (planilha) recebe `reparticao_id` da unidade ativa no
   import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
   `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
+- **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
+  celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
+  `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**
+  `{pcaId|null}` com `filtroPcaSchema`, `exigirUsuario`, 404 p/ PCA inexistente). "Todos os PCAs" (sem cookie) = sem filtro.
+  Casa pelo ANO (o protocolo/DFD guarda `ano_pca`): a **Mesa principal** (protocolos por `dfd_protocolos.ano_pca`; DFDs e a
+  lista lazy de itens — `/api/dfd/itens` — pelo PCA do protocolo de origem, senão o do DFD: `filtroAnoPcaDfd`/`anoPcaDfdSql`,
+  `dfd-sql.ts`; o Dashboard segue as listas), os **cards do módulo PCA** (só o card do escolhido; o subtítulo avisa) e o
+  **Orçamento** (os orçamentos/lançamentos do ano — `listarOrcamentos(ano)`/`getOrcamentoItens(_, ano)`). NÃO filtra a Mesa do
+  PCA (já é de um PCA), o espaço de um PCA (dentro dele, escolher outro PCA leva ao espaço do escolhido, na mesma aba), o
+  Catálogo, a Administração nem a tela pública. A Mesa vazia diz qual PCA está filtrando.
 - Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
   o grupo/repartição **"Geral"** e migram os dados/usuários existentes para lá — por isso o uso atual não muda.
 
@@ -520,15 +530,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     rodapé da tabela" / o filtro de hierarquia / "Carregando itens…") — o botão nunca some; no CELULAR o rodapé das tabelas
     da Mesa GRUDA acima da navegação inferior (e da barra de seleção) — o "Importar" e a paginação ficam sempre ao alcance
     (e os avisos flutuantes sobem acima desse rodapé — `--rodape-tabela` — no celular e no desktop).
-    Cada visão tem **altura de linha própria** (prop
-    `density` do `DataTable`): Protocolos **comfortable** (alta) · DFDs **default** (média, `PlanilhaDfds`) · Itens
-    **compact** (fina). Sem os cabeçalhos redundantes "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé
-    `resumo`). Tabela de **Protocolos**: **Estado** (AGREGADO — abaixo) · **Situação** (dropdown na célula) · **Responsável**
-    (dropdown na célula) · **Distribuição** (quem protocolou) · **Data** (data/hora da PROTOCOLAÇÃO — `criado_em` em Brasília,
-    `dataHoraBR`/`dataIsoBrasilia`) · Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor. No celular, os filtros
-    descem para a linha de baixo, lado a lado (só ícone + valor; o rótulo segue no nome acessível) — o `Segmented` não
-    encolhe (a aba "Itens" nunca fica cortada); no celular todos os alvos da barra têm ≥ 44px (itens do `Segmented` com a
-    área de toque cobrindo o trilho, filtros de 44px, "Limpar filtros" `size="sm"`).
+    **ALTURAS PADRONIZADAS (mais informação na tela):** a barra inteira — o `Segmented` das visões e os filtros — mede
+    `--h-control-sm` no desktop (segue a densidade do ADM; 44px no celular) e as TRÊS visões usam a MESMA densidade
+    **compacta** (`DataTable density="compact"`: TODA linha na altura dos controles, com ou sem controle na célula —
+    `SeletorCelula` e as ações de linha `Button size="xs"` cabem nela no desktop e têm 44px no celular — e o cabeçalho
+    ("tópicos") baixo; a descrição do item em UMA linha, o texto inteiro na dica). Sem os cabeçalhos redundantes
+    "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé `resumo`). Tabela de **Protocolos**: **Estado**
+    (AGREGADO — abaixo) · **Situação** (dropdown na célula) · **Responsável** (dropdown na célula) · **Distribuição** (quem
+    protocolou) · **Data** (data/hora da PROTOCOLAÇÃO — `criado_em` em Brasília, `dataHoraBR`/`dataIsoBrasilia`) · Nº processo
+    · Id · Assunto · Unidade · **PCA** · DFDs · Itens · Valor; **DFDs** (`PlanilhaDfds`) ganham **Prioridade** e **PCA**; **Itens**,
+    **PCA** (depois do Protocolo) e **Prioridade** (depois da Sigla). **PCA** = o ANO do PCA (o nome do PCA cadastrado na dica —
+    `CelulaPca`), o do PROTOCOLO de origem (sem ele, o do próprio DFD; o item segue o DFD) — só na Mesa principal (a do PCA é de
+    um PCA só). **Prioridade** = a seção PRIORIDADE normalizada (ALTA/MÉDIA/BAIXA — `CelulaPrioridade`; "—" = ausente ou fora do
+    padrão), lida NO BANCO só a seção (`prioridadeTextoSql`, `dfd-sql.ts`: `json_each` sobre `secoes` com `json_valid` — JSON
+    inválido não derruba a lista) → `DfdResumo.prioridade`; o item herda a do DFD (junção no cliente por `dfdId`); os banners
+    do protocolo (análise e gravado) mostram a MESMA coluna (`prioridadeDoDfd(secoes)`). No celular os filtros (só ícone)
+    cabem na linha das visões (descem juntos quando não cabem); todos os alvos da barra têm ≥ 44px.
   - **Gestão do protocolo (migração `0031`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
@@ -557,9 +574,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     por nº + planejamento). Calculado no servidor (`POST /api/protocolo/conferencia`, fatias de ≤ 50 protocolos / ~150
     DFDs, com os DFDs COMPLETOS e as unidades reais), lazy com "Conferindo…" e CACHE pela chave `chaveProto` (gravar a capa
     ou qualquer DFD muda a chave). A coluna é multi-valor (o filtro acha QUALQUER problema do protocolo).
-  - **Filtros de HIERARQUIA da Mesa (na MESMA linha de Protocolos · DFDs · Itens, à direita):** dois **`SeletorFiltro`** —
+  - **Filtros de HIERARQUIA da Mesa (na MESMA linha de Protocolos · DFDs · Itens, à direita):** dois **`SeletorFiltro`** SÓ
+    COM O ÍCONE (quadrado na altura da barra; ativo = accent; escolhida uma PESSOA, o ícone vira a FOTO dela — `Avatar`; "sem
+    responsável" = `IconUserX`; o valor na dica e no nome acessível) —
     **Responsável** (todos / sem responsável / uma pessoa) e **Assunto** (assuntos distintos dos protocolos) — filtram as
-    TRÊS visões e o Dashboard (o DFD e o item herdam os do protocolo de origem; `DfdResumo.protocoloResponsavelId`), núcleo
+    TRÊS visões e o Dashboard (o DFD e o item herdam os do protocolo de origem; `DfdResumo.protocoloResponsavelId`). A Mesa
+    ABRE com o responsável escolhido no **Perfil → Mesa** (`usuarios.mesa_responsavel`, migração **`0037`**, aditiva: `eu` =
+    só os protocolos do usuário — o PADRÃO, NULL —, `todos` = geral, `sem` = os sem responsável; `filtroInicialMesa`/
+    `coerceMesaResponsavel`; o usuário entra sempre no diretório de fotos da Mesa; na Mesa do PCA abre com todos), núcleo
     puro **`mesa-filtros.ts`**
     (`passaFiltroMesa`/`opcoesAssuntoMesa`). Enquanto ativos, **travam** as colunas Responsável/Assunto da tabela de
     protocolos (`Column.travado` do `DataTable`: cadeado + o motivo; o filtro da coluna sai de uso) — a hierarquia manda.
@@ -1446,9 +1468,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
+- **ALTURA PADRÃO dos controles = `--h-control-sm`** (34px; 31/38 nas densidades compacta/confortável do ADM) no desktop e
+  **44px no celular**: o trilho do `Segmented`, o `SeletorFiltro`, o `Button size="sm"`, os seletores do cabeçalho e a
+  LINHA das tabelas compactas. Dentro da linha, os controles medem `--h-control-sm` − 6px no desktop (`Button size="xs"`,
+  `SeletorCelula`) e 44px no celular.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; **`size="sm"`** = compacto p/ rodapés de
-  tabela — 34px no desktop, 44px no celular), `KpiStat` (§6.4), `Segmented` (altura fixa — itens de 40px no celular com a área de
-  toque cobrindo o trilho; item **`soIcone`** = só o ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa),
+  tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
+  desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4), `Segmented` (o trilho inteiro na altura padrão — anel
+  INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
+  ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa),
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
   — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
@@ -1482,11 +1510,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
-  **`scrollInterno`** = a tabela preenche a altura até o rodapé e o CORPO rola por dentro (`thead` fixo `sticky`),
-  sem scroll do navegador, com um **seletor de linhas por página (30/50/100/200)** no rodapé (`linhasPadrao` = default do
-  ADM; limita as linhas em DOM — performático com milhares); só desktop, opt-in, exclui `fillHeight` — usado na **Mesa**;
+  **`scrollInterno`** = no desktop a tabela OCUPA o espaço até o fim do display DESDE O PRIMEIRO QUADRO (altura TOTAL fixa,
+  coluna flex: o CORPO rola por dentro com o `thead` `sticky`, o rodapé fica rente ao fim com qualquer nº de linhas; sem
+  linhas, a mensagem fica no meio do espaço) — medida em `useLayoutEffect` (antes da pintura) com o topo pela cadeia de
+  `offsetTop` (`topoNoDocumento`: ignora o `transform` do morph das visões), sem scroll do navegador; um **seletor de linhas
+  por página (30/50/100/200)** no rodapé começa na escolha do ADM (**Configurações → Tabelas**, `aparencia.tabelas.linhas`,
+  entregue pelo contexto **`ConfigTabelas`** do layout da área logada — `useLinhasTabela`; sem provedor = 30) e limita as
+  linhas em DOM (performático com milhares); no celular rola normal; opt-in, exclui `fillHeight` — usado na **Mesa**;
   **alinhamento das células = CENTRO por padrão** (horizontal + vertical `align-middle`), `align:"right"` **só p/ valores monetários (R$)** e `align:"left"` em exceções — o `Column.align` é `"left"|"center"|"right"`;
-  **`density`** (`compact`/`default`/`comfortable`) ajusta a altura da linha SÓ daquela tabela (via `--cell-py` LOCAL) — usada p/ diferenciar visões que dividem o mesmo espaço;
+  **`density`** (`compact`/`default`/`comfortable`) ajusta a altura da linha SÓ daquela tabela — **`compact`** = a das tabelas
+  de protocolos, DFDs e itens: TODA linha na MESMA altura (`--h-control-sm`) e o cabeçalho baixo;
   **`Column.nowrap`** = sem quebra de linha, a coluna ganha a LARGURA DO CONTEÚDO (dados curtos: nº, sigla, badges,
   valores) — usado em todas as tabelas de protocolo/DFD/itens/PCA; textos longos seguem com `minWidth` + `line-clamp`),
   `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
@@ -1520,8 +1553,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`PessoaTag`** (FOTO + APELIDO de uma pessoa — colunas Responsável/Distribuição; nome completo no `title`),
   **`TabelaSobrescritos`** (o RASTRO cinza dos DFDs sobrescritos por outro protocolo, com o link ao protocolo atual),
   `Segmented` com **`ariaLabel`** (nome acessível do grupo — ex.: "Escolha: Objeto" na sobrescrita), **`SeletorFiltro`** (filtro de
-  HIERARQUIA na linha das visões — chip com ícone/rótulo/valor, accent quando ativo, 40px no desktop / 44px no celular,
-  onde divide a linha com o vizinho e mostra só ícone + valor),
+  HIERARQUIA na linha das visões — SÓ O ÍCONE num quadrado na altura padrão, accent quando ativo; quem usa troca o ícone pelo
+  que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; `<select>` nativo por cima),
+  **`CelulaPca`**/**`CelulaPrioridade`** (`PlanilhaDfds.tsx` — as células PCA e Prioridade, as MESMAS nas tabelas de protocolos,
+  DFDs e itens), **`ConfigTabelas`** (contexto: as linhas por página iniciais do ADM para as tabelas),
   **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"), **`SeletorBusca`** (seleção ÚNICA com
   BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
   vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),
@@ -1556,10 +1591,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +
-  `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`.
+  `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`. O **"Restaurar padrão"** (`DELETE
+  /api/admin/aparencia`) zera SÓ as chaves VISUAIS (`CHAVES_VISUAIS`/`semChavesVisuais`) — a identidade, as tabelas e os
+  blocos irmãos do MESMO registro (`avaliacao`, `integracoes`) ficam (antes o registro inteiro virava "{}").
 - **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
-  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **PCAs** (cadastrar/editar/ativar/excluir
+  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Tabelas** (as LINHAS POR PÁGINA com que as
+  tabelas da Mesa abrem — 30/50/100/200; slot `tabelas` do mesmo `aparenciaSchema`, `linhasTabela`), **PCAs** (cadastrar/editar/ativar/excluir
   via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
   de DFD e categoria de protocolo; ver "Avaliação configurável"), **Situações** (`SituacoesAdmin` — as situações do
   protocolo: nome + cor + ordem; ver "Gestão do protocolo") e **Mais** (`LinkCard` →

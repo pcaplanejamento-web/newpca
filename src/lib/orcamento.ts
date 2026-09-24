@@ -25,7 +25,8 @@ export type OrcamentoResumo = {
 };
 
 /** Lista os orçamentos (sem lançamentos) — o ano mais recente primeiro. */
-export async function listarOrcamentos(): Promise<OrcamentoResumo[]> {
+/** `ano` = o do PCA escolhido no CABEÇALHO (filtro global; `null` = todos os anos). */
+export async function listarOrcamentos(ano?: number | null): Promise<OrcamentoResumo[]> {
   return getDb()
     .select({
       id: orcamentos.id,
@@ -36,6 +37,7 @@ export async function listarOrcamentos(): Promise<OrcamentoResumo[]> {
       atualizadoEm: orcamentos.atualizadoEm,
     })
     .from(orcamentos)
+    .where(ano != null ? eq(orcamentos.ano, ano) : undefined)
     .orderBy(desc(orcamentos.ano), desc(orcamentos.id));
 }
 
@@ -73,18 +75,27 @@ const COLS = {
 
 /** Lançamentos na ordem do arquivo (`sequencial`). Sem `orcamentoId` = de TODOS os
  * orçamentos (a tela carrega tudo e agrupa no cliente). */
-export async function getOrcamentoItens(orcamentoId?: number): Promise<OrcamentoItemRow[]> {
+/** Lançamentos de UM orçamento ou de todos — `ano` restringe aos orçamentos do ano do PCA do CABEÇALHO. */
+export async function getOrcamentoItens(orcamentoId?: number, ano?: number | null): Promise<OrcamentoItemRow[]> {
   const db = getDb();
-  return orcamentoId != null
+  if (orcamentoId != null)
+    return db
+      .select(COLS)
+      .from(orcamentoItens)
+      .where(eq(orcamentoItens.orcamentoId, orcamentoId))
+      .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id));
+  const ordem = [asc(orcamentoItens.orcamentoId), asc(orcamentoItens.sequencial), asc(orcamentoItens.id)] as const;
+  return ano != null
     ? db
         .select(COLS)
         .from(orcamentoItens)
-        .where(eq(orcamentoItens.orcamentoId, orcamentoId))
-        .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id))
+        .innerJoin(orcamentos, eq(orcamentoItens.orcamentoId, orcamentos.id))
+        .where(eq(orcamentos.ano, ano))
+        .orderBy(...ordem)
     : db
         .select(COLS)
         .from(orcamentoItens)
-        .orderBy(asc(orcamentoItens.orcamentoId), asc(orcamentoItens.sequencial), asc(orcamentoItens.id));
+        .orderBy(...ordem);
 }
 
 /** Um orçamento pelo id (`{id,nome,ano}`) — para validar o alvo de uma operação. `null` se não existe. */
