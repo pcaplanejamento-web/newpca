@@ -524,6 +524,35 @@ export async function itensConsolidados(pca: PcaEspaco) {
   return { itens, meta, vinculos: vs, consolidacao: cons, protocolos: protocolos.size };
 }
 
+type Consolidados = Awaited<ReturnType<typeof itensConsolidados>>;
+
+/** Item consolidado → a linha da tabela de itens (Dashboard e origem do Orçamento), com a ORIGEM (protocolo/DFD/mês). */
+function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"]): ItemRow {
+  const p = i.previsao;
+  const anual = !!p && "anual" in p;
+  return {
+    id: i.id,
+    idProduto: i.codigoProduto,
+    sequencial: i.sequencial,
+    nomeProduto: i.nome,
+    unidadeMedida: i.unidadeMedida,
+    quantidade: i.quantidade,
+    valorReferencia: i.valorUnitario,
+    valorTotal: i.valorTotal,
+    classificacao: i.classificacao,
+    dataDesejada: p && !("anual" in p) ? `${p.ano}-${String(p.mes).padStart(2, "0")}-01` : null,
+    codigo: i.unidade,
+    municipio: i.origem,
+    dfdId: i.dfdId,
+    dfdNumero: meta.get(i.dfdId)?.numero ?? null,
+    protocoloNumero: meta.get(i.dfdId)?.protocoloNumero ?? null,
+    itemNumero: i.itemNumero,
+    ano: p?.ano ?? null,
+    mes: p && !("anual" in p) ? p.mes : null,
+    anual,
+  };
+}
+
 /** Dados do dashboard do PCA — o MESMO no painel e na tela inicial. */
 export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
@@ -550,24 +579,7 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
     .slice(0, 5000)
-    .map((i) => ({
-      id: i.id,
-      idProduto: i.codigoProduto,
-      sequencial: i.sequencial,
-      nomeProduto: i.nome,
-      unidadeMedida: i.unidadeMedida,
-      quantidade: i.quantidade,
-      valorReferencia: i.valorUnitario,
-      valorTotal: i.valorTotal,
-      classificacao: i.classificacao,
-      dataDesejada: i.previsao && !("anual" in i.previsao) ? `${i.previsao.ano}-${String(i.previsao.mes).padStart(2, "0")}-01` : null,
-      codigo: i.unidade,
-      municipio: i.origem,
-      dfdId: i.dfdId,
-      dfdNumero: c.meta.get(i.dfdId)?.numero ?? null,
-      protocoloNumero: c.meta.get(i.dfdId)?.protocoloNumero ?? null,
-      itemNumero: i.itemNumero,
-    }));
+    .map((i) => itemRowConsolidado(i, c.meta));
   // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
   const porDfd = new Map<number, DfdDoPca>();
   for (const i of lista) {
@@ -774,15 +786,32 @@ export async function excluirVisaoOrcamento(id: number): Promise<void> {
   await getDb().delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id));
 }
 
+export type LancamentoOrcamentoPca = {
+  id: number;
+  orgao: string | null;
+  unidade: string | null;
+  nomeElemento: string | null;
+  codigoElemento: string | null;
+  unidadeId: number | null;
+  valor: number;
+};
+export type PlanejadoOrcamentoPca = {
+  unidadeId: number | null;
+  itens: number;
+  valor: number;
+  item?: ItemRow;
+  planilha?: { id: number; codigo: string; nome: string | null };
+};
+
 export type OrcamentoDoPca = {
   orcamento: { id: number; nome: string; ano: number } | null;
   visao: VisaoOrcamento | null;
   bruto: number;
   filtrado: number;
-  /** Lançamentos filtrados com a unidade do sistema (vínculo) — base do comparativo. */
-  linhas: { unidadeId: number | null; valor: number }[];
-  /** Planejado do PCA por unidade (itens ativos). */
-  planejado: { unidadeId: number | null; itens: number; valor: number }[];
+  /** Lançamentos filtrados (com a ORIGEM no CUBO) e a unidade do sistema (vínculo) — base do comparativo. */
+  linhas: LancamentoOrcamentoPca[];
+  /** Planejado do PCA POR ORIGEM: um por item (fonte protocolo) ou por planilha (fonte lista). */
+  planejado: PlanejadoOrcamentoPca[];
   unidades: { id: number; sigla: string; nome: string }[];
 };
 
@@ -808,40 +837,39 @@ export async function orcamentoDoPca(pca: PcaEspaco): Promise<OrcamentoDoPca> {
   let linhas: OrcamentoDoPca["linhas"] = [];
   if (orc) {
     const itens = await db
-      .select({ orgao: orcamentoItens.orgao, unidade: orcamentoItens.unidade, nomeElemento: orcamentoItens.nomeElemento, codigoElemento: orcamentoItens.codigoElemento, valor: orcamentoItens.valorInicial })
+      .select({ id: orcamentoItens.id, orgao: orcamentoItens.orgao, unidade: orcamentoItens.unidade, nomeElemento: orcamentoItens.nomeElemento, codigoElemento: orcamentoItens.codigoElemento, valor: orcamentoItens.valorInicial })
       .from(orcamentoItens)
       .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     const f = aplicarVisao(itens, visao?.filtros);
     filtrado = f.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     const mapa = mapaVinculos(vincs);
-    linhas = f.map((i) => ({ unidadeId: alvoDoTexto(mapa, "unidade", i.unidade), valor: Number(i.valor ?? 0) }));
+    linhas = f.map((i) => ({
+      id: i.id,
+      orgao: i.orgao,
+      unidade: i.unidade,
+      nomeElemento: i.nomeElemento,
+      codigoElemento: i.codigoElemento,
+      unidadeId: alvoDoTexto(mapa, "unidade", i.unidade),
+      valor: Number(i.valor ?? 0),
+    }));
   }
 
-  // Planejado por unidade.
-  const acc = new Map<number | null, { itens: number; valor: number }>();
-  const soma = (id: number | null, n: number, v: number) => {
-    const a = acc.get(id) ?? { itens: 0, valor: 0 };
-    a.itens += n;
-    a.valor += v;
-    acc.set(id, a);
-  };
+  // Planejado POR ORIGEM (o comparativo soma por unidade; o detalhe da linha lista a origem).
+  let planejado: PlanejadoOrcamentoPca[];
   if (pca.fonte === "lista") {
     const porSigla = new Map(reps.map((r) => [r.sigla.trim().toUpperCase(), r.id]));
-    for (const u of await getUnidades(undefined, pca.id))
-      soma(u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null, Number(u.totalItens ?? 0), Number(u.valorTotal ?? 0));
+    planejado = (await getUnidades(undefined, pca.id)).map((u) => ({
+      unidadeId: u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null,
+      itens: Number(u.totalItens ?? 0),
+      valor: Number(u.valorTotal ?? 0),
+      planilha: { id: u.id, codigo: u.codigo, nome: u.municipio ?? u.nomeArquivo },
+    }));
   } else {
-    for (const i of (await itensConsolidados(pca)).itens) soma(i.reparticaoId, 1, i.valorTotal);
+    const c = await itensConsolidados(pca);
+    planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
   }
-  return {
-    orcamento: orc ?? null,
-    visao,
-    bruto,
-    filtrado,
-    linhas,
-    planejado: [...acc].map(([unidadeId, a]) => ({ unidadeId, ...a })),
-    unidades: reps,
-  };
+  return { orcamento: orc ?? null, visao, bruto, filtrado, linhas, planejado, unidades: reps };
 }
 
 /** DFDs (id + protocolo) dos protocolos dados. */

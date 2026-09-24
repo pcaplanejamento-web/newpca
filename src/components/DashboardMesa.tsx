@@ -1,27 +1,34 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { ESTADO_PROTOCOLO_ROTULO, estadoProtocoloCor } from "@/lib/dfd-tratamento";
 import { brl, brlCompact, num, pct } from "@/lib/format";
 import {
   DIAS_ALERTA,
   type DfdPainel,
+  dfdsDoRecorte,
   ESTADOS_PAINEL,
   type EstadoPainel,
+  FAIXAS_IDADE,
   painelMesa,
   type ProtocoloPainel,
+  protocolosDoRecorte,
+  type RecorteMesa,
   SEMANAS_PAINEL,
 } from "@/lib/mesa-dashboard";
 import type { FiltroMesa } from "@/lib/mesa-filtros";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { Avatar } from "./Avatar";
+import type { AberturaMesa } from "./BannersMesa";
 import { ChartCard } from "./ChartCard";
 import { BarraSegmentada, BarrasH, Colunas, type LinhaBarra } from "./charts/Barras";
 import { ChartEmpty } from "./charts/shared";
+import { type Column, DataTable } from "./DataTable";
 import { IconUser } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { OrigemDados } from "./OrigemDados";
 
 const ROTULO_ESTADO: Record<EstadoPainel, string> = {
   regular: ESTADO_PROTOCOLO_ROTULO.regular,
@@ -33,6 +40,19 @@ const ROTULO_ESTADO: Record<EstadoPainel, string> = {
 /** Rampa ORDINAL do tempo na Mesa: o accent do ADM, do mais claro (recente) ao cheio (mais antigo). */
 const RAMPA_IDADE = [45, 56, 67, 78, 89, 100].map((p) => `color-mix(in srgb, var(--accent) ${p}%, var(--surface))`);
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
+
+/** A ORIGEM aberta: o quadro clicado + os protocolos (ou DFDs) que formam aquele número. */
+type Origem =
+  | { quadro: string; rotulo: string; tipo: "protocolos"; lista: ProtocoloPainel[] }
+  | { quadro: string; rotulo: string; tipo: "dfds"; lista: DfdPainel[] };
+
+const COLS_DFD: Column<DfdPainel>[] = [
+  { key: "plan", header: "Nº Plan.", nowrap: true, value: (d) => d.planejamento ?? "—", render: (d) => <span className="font-mono text-[12px]">{d.planejamento ?? "—"}</span> },
+  { key: "dfd", header: "Nº DFD", nowrap: true, value: (d) => d.numero ?? "—", render: (d) => <span className="font-mono text-[12px] font-semibold">{d.numero ?? "—"}</span> },
+  { key: "sigla", header: "Unidade", nowrap: true, value: (d) => d.unidade ?? "—", render: (d) => <span className="font-mono text-[12px] text-text-2">{d.unidade ?? "—"}</span> },
+  { key: "itens", header: "Itens", nowrap: true, filter: "range", numero: (d) => d.itens, render: (d) => num(d.itens ?? 0) },
+  { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (d) => d.valor, render: (d) => <span className="font-semibold tabular-nums">{brl(d.valor ?? 0)}</span> },
+];
 
 /**
  * DASHBOARD DE GOVERNANÇA da Mesa (o ícone à esquerda de Protocolos · DFDs · Itens): KPIs + seis quadros sobre
@@ -49,6 +69,7 @@ export function DashboardMesa({
   regras,
   responsavel,
   onResponsavel,
+  onAbrir,
 }: {
   protocolos: ProtocoloPainel[];
   dfds: DfdPainel[];
@@ -60,7 +81,15 @@ export function DashboardMesa({
   /** O filtro de Responsável do topo (a linha dele fica marcada). */
   responsavel: FiltroMesa["responsavel"];
   onResponsavel: (v: FiltroMesa["responsavel"]) => void;
+  /** Abre o banner do protocolo/DFD de uma linha da ORIGEM dos dados (a pilha da Mesa). */
+  onAbrir?: (a: AberturaMesa) => void;
 }) {
+  const [origem, setOrigem] = useState<Origem | null>(null);
+  const [mostrada, setMostrada] = useState<Origem | null>(null); // fica exibida enquanto o banner fecha
+  const abrirOrigem = (o: Origem) => {
+    setOrigem(o);
+    setMostrada(o);
+  };
   const p = useMemo(() => painelMesa({ protocolos, dfds, situacoes: situacoes.map((s) => s.id) }, new Date()), [protocolos, dfds, situacoes]);
   const cores = useMemo<Record<EstadoPainel, string>>(
     () => ({
@@ -73,6 +102,21 @@ export function DashboardMesa({
     [regras],
   );
   const situacaoPorId = useMemo(() => new Map(situacoes.map((s) => [s.id, s])), [situacoes]);
+  const origemProtocolos = (quadro: string, rotulo: string, r: RecorteMesa) =>
+    abrirOrigem({ quadro, rotulo, tipo: "protocolos", lista: protocolosDoRecorte(protocolos, r, situacoes.map((s) => s.id), new Date()) });
+  const colsProto: Column<ProtocoloPainel>[] = [
+    { key: "estado", header: "Estado", nowrap: true, value: (x) => ROTULO_ESTADO[x.estado], render: (x) => (
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] text-text-2">
+          <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: cores[x.estado] }} />
+          {ROTULO_ESTADO[x.estado]}
+        </span>
+      ) },
+    { key: "numero", header: "Nº processo", nowrap: true, value: (x) => x.numero ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold">{x.numero ?? "—"}</span> },
+    { key: "assunto", header: "Assunto", align: "left", minWidth: 200, value: (x) => x.assunto ?? "—", render: (x) => <span className="line-clamp-2">{x.assunto ?? "—"}</span> },
+    { key: "sigla", header: "Unidade", nowrap: true, value: (x) => x.sigla ?? "—", render: (x) => <span className="font-mono text-[12px] text-text-2">{x.sigla ?? "—"}</span> },
+    { key: "situacao", header: "Situação", nowrap: true, value: (x) => (x.situacaoId != null ? (situacaoPorId.get(x.situacaoId)?.nome ?? "Sem situação") : "Sem situação") },
+    { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (x) => x.valor, render: (x) => <span className="font-semibold tabular-nums">{brl(x.valor)}</span> },
+  ];
 
   const total = p.protocolos;
   // Ainda em conferência × conferência que FALHOU (não se repete sozinha — a tabela diz "Não conferido").
@@ -100,6 +144,7 @@ export function DashboardMesa({
       valor: num(s.n),
       detalhe: brlCompact(s.valor),
       apagada: s.id == null,
+      clicavel: true,
     };
   });
   const linhasResp: LinhaBarra[] = p.responsaveis.map((r) => {
@@ -146,6 +191,7 @@ export function DashboardMesa({
     valor: brlCompact(u.valor),
     detalhe: pct(u.valor, p.valor),
     apagada: !u.sigla,
+    clicavel: true,
   }));
   if (p.outrasUnidades) {
     const o = p.outrasUnidades;
@@ -158,6 +204,7 @@ export function DashboardMesa({
       valor: brlCompact(o.valor),
       detalhe: pct(o.valor, p.valor),
       apagada: true,
+      clicavel: true,
     });
   }
   const ativaResp = responsavel === "todos" ? null : responsavel;
@@ -228,14 +275,22 @@ export function DashboardMesa({
               <BarraSegmentada trilho altura={12} segmentos={segmentosDe((e) => p.saude[e].n)} />
               <ul aria-label="Protocolos por estado" className="space-y-1">
                 {ESTADOS_PAINEL.filter((e) => (e !== "conferindo" && e !== "naoConferido") || p.saude[e].n > 0).map((e) => (
-                  <li key={e} className="grid grid-cols-[minmax(0,1fr)_auto_3.5rem_4.5rem] items-center gap-x-3 text-[12.5px]">
-                    <span className="inline-flex min-w-0 items-center gap-2 text-text-2">
-                      <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cores[e] }} />
-                      <span className="truncate">{ROTULO_ESTADO[e]}</span>
-                    </span>
-                    <span className="text-right font-semibold text-text tabular-nums">{num(p.saude[e].n)}</span>
-                    <span className="text-right text-muted tabular-nums">{pct(p.saude[e].n, total)}</span>
-                    <span className="text-right text-muted tabular-nums">{brlCompact(p.saude[e].valor)}</span>
+                  <li key={e}>
+                    {/* Tocar no estado abre a ORIGEM dos dados (os protocolos dele) — alvo ≥ 44px no toque. */}
+                    <button
+                      type="button"
+                      onClick={() => origemProtocolos("Saúde dos protocolos", ROTULO_ESTADO[e], { dim: "estado", estado: e })}
+                      aria-label={`${ROTULO_ESTADO[e]}: ${plural(p.saude[e].n, "protocolo", "protocolos")} — ver a origem dos dados`}
+                      className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_3.5rem_4.5rem] items-center gap-x-3 rounded-control px-1.5 text-[12.5px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8"
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-2 text-text-2">
+                        <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cores[e] }} />
+                        <span className="truncate">{ROTULO_ESTADO[e]}</span>
+                      </span>
+                      <span className="text-right font-semibold text-text tabular-nums">{num(p.saude[e].n)}</span>
+                      <span className="text-right text-muted tabular-nums">{pct(p.saude[e].n, total)}</span>
+                      <span className="text-right text-muted tabular-nums">{brlCompact(p.saude[e].valor)}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -249,7 +304,16 @@ export function DashboardMesa({
           ) : vazio ? (
             <ChartEmpty label="Nenhum protocolo na Mesa" />
           ) : (
-            <BarrasH ariaLabel="Protocolos por situação" linhas={linhasSituacao} />
+            <BarrasH
+              ariaLabel="Protocolos por situação"
+              linhas={linhasSituacao}
+              acao="ver a origem dos dados"
+              onEscolher={(k) => {
+                const id = k === "sem" ? null : Number(k);
+                const nome = id != null ? (situacaoPorId.get(id)?.nome ?? "Sem situação") : "Sem situação";
+                origemProtocolos("Situação", nome, { dim: "situacao", id });
+              }}
+            />
           )}
         </ChartCard>
 
@@ -263,6 +327,10 @@ export function DashboardMesa({
             <Colunas
               ariaLabel="Protocolos por tempo na Mesa"
               rotularTodas
+              onEscolher={(k) => {
+                const faixa = FAIXAS_IDADE.findIndex((f) => f.curto === k);
+                if (faixa >= 0) origemProtocolos("Tempo na Mesa", FAIXAS_IDADE[faixa].rotulo, { dim: "idade", faixa });
+              }}
               colunas={p.faixasIdade.map((f, i) => ({
                 chave: f.curto,
                 rotulo: f.curto,
@@ -281,6 +349,10 @@ export function DashboardMesa({
         >
           <Colunas
             ariaLabel="Protocolações por semana"
+            onEscolher={(inicio) => {
+              const w = p.semanas.find((s) => s.inicio === inicio);
+              if (w) origemProtocolos("Entrada de protocolos", `Semana de ${w.rotulo}${w.atual ? " (atual)" : ""}`, { dim: "semana", inicio });
+            }}
             colunas={p.semanas.map((s) => ({
               chave: s.inicio,
               rotulo: s.rotulo,
@@ -314,9 +386,65 @@ export function DashboardMesa({
         </ChartCard>
 
         <ChartCard title="Valor por unidade" subtitle="Somatória dos DFDs por unidade requisitante (participação no total)">
-          {p.dfds === 0 ? <ChartEmpty label="Nenhum DFD na Mesa" /> : <BarrasH ariaLabel="Valor dos DFDs por unidade" linhas={linhasUnidade} />}
+          {p.dfds === 0 ? (
+            <ChartEmpty label="Nenhum DFD na Mesa" />
+          ) : (
+            <BarrasH
+              ariaLabel="Valor dos DFDs por unidade"
+              linhas={linhasUnidade}
+              acao="ver a origem dos dados"
+              onEscolher={(k) => {
+                const outras = k === "outras";
+                const u = p.unidades.find((x) => x.chave === k);
+                abrirOrigem({
+                  quadro: "Valor por unidade",
+                  rotulo: outras ? plural(p.outrasUnidades?.unidades ?? 0, "outra unidade", "outras unidades") : u?.sigla || "Sem unidade",
+                  tipo: "dfds",
+                  lista: outras ? dfdsDoRecorte(dfds, p.unidades.map((x) => x.chave), true) : dfdsDoRecorte(dfds, [String(k)]),
+                });
+              }}
+            />
+          )}
         </ChartCard>
       </div>
+
+      <OrigemDados
+        aberto={origem != null}
+        onClose={() => setOrigem(null)}
+        titulo={mostrada?.quadro ?? ""}
+        recorte={mostrada?.rotulo ?? ""}
+        resumo={[
+          { label: mostrada?.tipo === "dfds" ? "DFDs" : "Protocolos", value: num(mostrada?.lista.length ?? 0) },
+          { label: "Valor", value: brl(mostrada?.lista.reduce((t, x) => t + (x.valor ?? 0), 0) ?? 0) },
+        ]}
+        fonte={
+          mostrada?.tipo === "dfds"
+            ? "Os DFDs em escopo na Mesa (já filtrados pelo Responsável/Assunto do topo), pela unidade requisitante — a mesma lista da visão DFDs."
+            : "Os protocolos em escopo na Mesa (já filtrados pelo Responsável/Assunto do topo), com o estado AGREGADO da conferência pelas regras do ADM — a mesma lista da visão Protocolos."
+        }
+      >
+        {mostrada?.tipo === "dfds" ? (
+          <DataTable
+            columns={COLS_DFD}
+            rows={mostrada.lista}
+            getKey={(d) => d.id ?? `${d.numero}`}
+            pageSize={20}
+            minWidth={560}
+            onRowClick={onAbrir ? (d) => d.id != null && onAbrir({ tipo: "dfd", id: d.id }) : undefined}
+            resumo={(ls) => `${plural(ls.length, "DFD", "DFDs")} · ${brl(ls.reduce((t, d) => t + (d.valor ?? 0), 0))}`}
+          />
+        ) : (
+          <DataTable
+            columns={colsProto}
+            rows={mostrada?.lista ?? []}
+            getKey={(x) => x.id}
+            pageSize={20}
+            minWidth={760}
+            onRowClick={onAbrir ? (x) => onAbrir({ tipo: "protocolo", id: x.id }) : undefined}
+            resumo={(ls) => `${plural(ls.length, "protocolo", "protocolos")} · ${brl(ls.reduce((t, x) => t + x.valor, 0))}`}
+          />
+        )}
+      </OrigemDados>
     </div>
   );
 }

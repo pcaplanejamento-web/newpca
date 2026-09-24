@@ -11,13 +11,16 @@ import {
 } from "recharts";
 import type { TopItem } from "@/lib/queries";
 import { brl, brlCompact, dec } from "@/lib/format";
+import type { RecorteDash } from "@/lib/origem-dash";
 import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
-export function TopItensChart({ data }: { data: TopItem[] }) {
+/** `onSelecionar` (opcional): clicar numa barra abre a ORIGEM daquele item. */
+export function TopItensChart({ data, onSelecionar }: { data: TopItem[]; onSelecionar?: (r: RecorteDash, rotulo: string) => void }) {
   const tk = useChartTokens();
   const rows = data
     .filter((d) => d.valor > 0)
     .map((d) => ({
+      id: d.id,
       label: d.nome ?? "—",
       valor: d.valor,
       quantidade: d.quantidade,
@@ -76,7 +79,14 @@ export function TopItensChart({ data }: { data: TopItem[] }) {
               );
             }}
           />
-          <Bar dataKey="valor" fill={CHART_COLORS[3]} radius={[0, 6, 6, 0]} maxBarSize={22} />
+          <Bar
+            dataKey="valor"
+            fill={CHART_COLORS[3]}
+            radius={[0, 6, 6, 0]}
+            maxBarSize={22}
+            onClick={onSelecionar ? (_, i) => onSelecionar({ dim: "item", id: rows[i].id }, rows[i].label) : undefined}
+            className={onSelecionar ? "cursor-pointer" : undefined}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

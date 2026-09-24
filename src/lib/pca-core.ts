@@ -260,6 +260,7 @@ export type ResumoDash = {
 export type FatiaDash = { label: string; total: number; count: number };
 export type PontoDash = { ano: number; mes: number; total: number; count: number };
 export type TopDash = {
+  id: number;
   nome: string | null;
   valor: number;
   quantidade: number | null;
@@ -316,7 +317,7 @@ export function agregarDashboard(itens: ItemDashboard[], topN = 10) {
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
     .slice(0, topN)
-    .map((i) => ({ nome: i.nome, valor: i.valorTotal, quantidade: i.quantidade, unidadeMedida: i.unidadeMedida, codigo: i.unidade }));
+    .map((i) => ({ id: i.id, nome: i.nome, valor: i.valorTotal, quantidade: i.quantidade, unidadeMedida: i.unidadeMedida, codigo: i.unidade }));
   return {
     resumo,
     porClassificacao: fatias(itens, (i) => i.classificacao, "total"),

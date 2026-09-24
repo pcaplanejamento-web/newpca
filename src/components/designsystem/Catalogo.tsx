@@ -65,7 +65,7 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
-import { brl, juntarParaCopiar, numeroSemAno } from "@/lib/format";
+import { brl, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
@@ -102,6 +102,7 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
+import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -237,6 +238,7 @@ function PcaEspacoDemo() {
       </div>
       <OrcamentoPca
         dados={{
+          pcaId: 1,
           ano: 2027,
           orcamento: { id: 1, nome: "CUBO 2027", ano: 2027 },
           visaoNome: "PCA",
@@ -247,15 +249,17 @@ function PcaEspacoDemo() {
             { id: 2, sigla: "FMAS", nome: "Fundo de Assistência" },
             { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros" },
           ],
+          // Fonte LISTA: o planejado vem das planilhas (clique numa linha → Origem dos dados).
           planejado: [
-            { unidadeId: 1, itens: 390, valor: 906_738.7 },
-            { unidadeId: 2, itens: 2354, valor: 18_978_323.74 },
-            { unidadeId: 3, itens: 569, valor: 3_701_579.8 },
+            { unidadeId: 1, itens: 390, valor: 906_738.7, planilha: { id: 1, codigo: "AMAE", nome: "Planilha AMAE" } },
+            { unidadeId: 2, itens: 2354, valor: 18_978_323.74, planilha: { id: 2, codigo: "FMAS", nome: "Planilha FMAS" } },
+            { unidadeId: 3, itens: 569, valor: 3_701_579.8, planilha: { id: 3, codigo: "FEMBOM", nome: "Planilha FEMBOM" } },
           ],
           linhas: [
-            { unidadeId: 1, valor: 1_390_566.98 },
-            { unidadeId: 2, valor: 14_441_470.23 },
-            { unidadeId: 3, valor: 4_021_478.05 },
+            { id: 1, orgao: "AGÊNCIA DE ÁGUA", unidade: "1 - AMAE", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 1, valor: 1_390_566.98 },
+            { id: 2, orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", nomeElemento: "SERVIÇOS DE TERCEIROS - PJ", codigoElemento: "339039", unidadeId: 2, valor: 14_441_470.23 },
+            { id: 3, orgao: "FUNDO DOS BOMBEIROS", unidade: "3 - FEMBOM", nomeElemento: "EQUIPAMENTOS", codigoElemento: "449052", unidadeId: 3, valor: 4_021_478.05 },
+            { id: 4, orgao: "GABINETE", unidade: "9 - GAB", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: null, valor: 120_000 },
           ],
         }}
       />
@@ -692,6 +696,48 @@ function DashboardMesaDemo() {
 }
 
 /** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
+/** Clique numa fatia → ORIGEM DOS DADOS (o mesmo banner do Orçamento do PCA, dos gráficos do Dashboard e da Mesa). */
+function OrigemDadosDemo() {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const [rotulo, setRotulo] = useState("");
+  const linhas = G_CLASS.filter((f) => f.label === rotulo);
+  return (
+    <>
+      <ChartCard title="Classificação dos Itens" subtitle="Clique numa fatia ou na legenda para ver a origem">
+        <ClassificacaoChart
+          data={G_CLASS}
+          onSelecionar={(_, r) => {
+            setAberta(r);
+            setRotulo(r);
+          }}
+        />
+      </ChartCard>
+      <OrigemDados
+        aberto={aberta != null}
+        onClose={() => setAberta(null)}
+        titulo="Classificação dos Itens"
+        recorte={rotulo}
+        resumo={[
+          { label: "Valor no gráfico", value: brl(linhas.reduce((s, l) => s + l.total, 0)) },
+          { label: "Itens", value: num(linhas.reduce((s, l) => s + l.count, 0)) },
+        ]}
+        fonte="Os itens do PCA (a mesma lista da Consulta de Itens), agrupados pela mesma chave do gráfico."
+        avisos={["Exemplo: no sistema, a tabela abaixo lista os itens do recorte."]}
+      >
+        <DataTable
+          columns={[
+            { key: "label", header: "Classificação", align: "left", value: (f: (typeof G_CLASS)[number]) => f.label },
+            { key: "count", header: "Itens", nowrap: true, value: (f: (typeof G_CLASS)[number]) => num(f.count) },
+            { key: "total", header: "Valor", align: "right", nowrap: true, value: (f: (typeof G_CLASS)[number]) => brl(f.total) },
+          ]}
+          rows={linhas}
+          getKey={(f) => f.label}
+        />
+      </OrigemDados>
+    </>
+  );
+}
+
 function GraficosGovernancaDemo() {
   const [ativa, setAtiva] = useState<string | number | null>(null);
   const seg = (chave: string, valor: number, cor: string, rotulo: string) => ({ chave, valor, cor, rotulo });
@@ -1356,11 +1402,11 @@ const G_MES = [
   { ano: 2027, mes: 7, total: 11_800_000, count: 62 },
 ];
 const G_TOP = [
-  { nome: "Energia elétrica", valor: 11_800_000, quantidade: 12, unidadeMedida: "MWh", codigo: "0001" },
-  { nome: "Auxiliar de serviços gerais", valor: 8_400_000, quantidade: 40, unidadeMedida: "posto", codigo: "0002" },
-  { nome: "Fornecimento e instalação de equipamentos", valor: 6_100_000, quantidade: 8, unidadeMedida: "un", codigo: "0003" },
-  { nome: "Reforma da rodoviária", valor: 4_900_000, quantidade: 1, unidadeMedida: "obra", codigo: "0004" },
-  { nome: "Reforma de ecoponto", valor: 4_200_000, quantidade: 1, unidadeMedida: "obra", codigo: "0005" },
+  { id: 1, nome: "Energia elétrica", valor: 11_800_000, quantidade: 12, unidadeMedida: "MWh", codigo: "0001" },
+  { id: 2, nome: "Auxiliar de serviços gerais", valor: 8_400_000, quantidade: 40, unidadeMedida: "posto", codigo: "0002" },
+  { id: 3, nome: "Fornecimento e instalação de equipamentos", valor: 6_100_000, quantidade: 8, unidadeMedida: "un", codigo: "0003" },
+  { id: 4, nome: "Reforma da rodoviária", valor: 4_900_000, quantidade: 1, unidadeMedida: "obra", codigo: "0004" },
+  { id: 5, nome: "Reforma de ecoponto", valor: 4_200_000, quantidade: 1, unidadeMedida: "obra", codigo: "0005" },
 ];
 const G_UNID = [
   { label: "Unidade", total: 60_000_000, count: 520 },
@@ -1846,6 +1892,12 @@ export function Catalogo() {
           <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
             <UnidadeChart data={G_UNID} />
           </ChartCard>
+        </div>
+      </Secao>
+
+      <Secao titulo="OrigemDados (clique numa linha/fatia/barra → de onde vêm os dados)">
+        <div className="max-w-2xl">
+          <OrigemDadosDemo />
         </div>
       </Secao>
 

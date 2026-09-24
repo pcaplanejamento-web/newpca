@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { brl, num, numeroSemAno } from "@/lib/format";
 import type { DfdDoPca, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { ItemRow } from "@/lib/queries";
-import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable } from "./DataTable";
@@ -37,24 +36,25 @@ const COLS_PROTOCOLO: Column<ProtocoloDoPca>[] = [
 /**
  * CONSULTA do Dashboard do PCA (fonte protocolo — tela inicial e painel): `Segmented` **Protocolos | DFDs | Itens**
  * no MESMO espaço (morph), com as tabelas do sistema SEM apontar erros (`DataTable` · `PlanilhaDfds` `semEstado` ·
- * `ItemTable` com a origem) e a pilha de banners DISCRETA da consulta (`BannersConsulta`: protocolo | DFD | item,
- * campos congelados, dados públicos higienizados).
+ * `ItemTable` com a origem). A linha abre a pilha de banners DISCRETA da consulta (`BannersConsulta`, renderizada UMA vez
+ * pelo `DashboardPcaCliente` — também a usa a origem dos gráficos): `aberto`/`onAbrir` controlados.
  */
 export function ConsultaPca({
-  pcaId,
   protocolos,
   dfds,
   itens,
   showUnidade,
+  aberto,
+  onAbrir: setAberto,
 }: {
-  pcaId: number;
   protocolos: ProtocoloDoPca[];
   dfds: DfdDoPca[];
   itens: ItemRow[];
   showUnidade: boolean;
+  aberto: AberturaMesa | null;
+  onAbrir: (a: AberturaMesa) => void;
 }) {
   const [visao, setVisao] = useState<Visao>("itens");
-  const [aberto, setAberto] = useState<AberturaMesa | null>(null);
 
   const linhas = useMemo<LinhaDfd[]>(
     () =>
@@ -110,7 +110,6 @@ export function ConsultaPca({
           />
         )}
       </div>
-      <BannersConsulta pcaId={pcaId} abrir={aberto} onFechar={() => setAberto(null)} />
     </div>
   );
 }

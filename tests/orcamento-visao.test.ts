@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { aplicarVisao, coerceFiltros, opcoesDaDimensao, resumoVisao } from "../src/lib/orcamento-visao.ts";
-import { comparativoPorUnidade, faixaComprometimento, linhaAcima, totaisComparativo } from "../src/lib/orcamento-comparativo.ts";
+import { comparativoPorUnidade, faixaComprometimento, linhaAcima, origemDaLinha, totaisComparativo } from "../src/lib/orcamento-comparativo.ts";
 
 const L = [
   { orgao: "FME", unidade: "SEMED", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030" },
@@ -64,5 +64,32 @@ describe("orcamento-comparativo", () => {
     assert.equal(t.orcamento, 1050);
     assert.equal(t.planejado, 1110);
     assert.equal(t.acima, 1); // AMAE (planejado sem orçamento)
+  });
+  it("origem da linha = exatamente o que a linha soma (inclui o Sem vínculo)", () => {
+    const planejado = [
+      { unidadeId: 1, itens: 3, valor: 900 },
+      { unidadeId: 2, itens: 1, valor: 200 },
+      { unidadeId: 99, itens: 1, valor: 10 },
+      { unidadeId: null, itens: 2, valor: 5 },
+    ];
+    const orc = [
+      { unidadeId: 1, valor: 1000 },
+      { unidadeId: null, valor: 50 },
+      { unidadeId: 77, valor: 7 },
+    ];
+    const unidades = [
+      { id: 1, sigla: "SEMUS", nome: "Saúde" },
+      { id: 2, sigla: "AMAE", nome: "Água" },
+    ];
+    const linhas = comparativoPorUnidade(planejado, orc, unidades);
+    for (const l of linhas) {
+      const o = origemDaLinha(l.unidadeId, planejado, orc, unidades);
+      assert.equal(o.planejado.reduce((s, p) => s + p.valor, 0), l.planejado);
+      assert.equal(o.planejado.reduce((s, p) => s + p.itens, 0), l.contratacoes);
+      assert.equal(o.orcamento.reduce((s, x) => s + x.valor, 0), l.orcamento);
+    }
+    const sem = origemDaLinha(null, planejado, orc, unidades);
+    assert.deepEqual(sem.planejado.map((p) => p.unidadeId), [99, null]);
+    assert.deepEqual(sem.orcamento.map((x) => x.unidadeId), [null, 77]);
   });
 });

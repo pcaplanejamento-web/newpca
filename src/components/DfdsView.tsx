@@ -780,10 +780,29 @@ export function DfdsView({
       if (resp) pessoasDash.set(resp.id, resp);
       const { conf, pendente, naoConferido } = estadoDoProtocolo(p);
       const estado: EstadoPainel = pendente ? "conferindo" : naoConferido ? "naoConferido" : conf.estado;
-      return { id: p.id, criadoEm: p.criadoEm, valor: p.valorTotal, responsavelId: resp?.id ?? null, situacaoId: situacaoDe(p), estado };
+      return {
+        id: p.id,
+        numero: p.numero,
+        assunto: p.assunto,
+        sigla: p.reparticaoCodigo,
+        criadoEm: p.criadoEm,
+        valor: p.valorTotal,
+        responsavelId: resp?.id ?? null,
+        situacaoId: situacaoDe(p),
+        estado,
+      };
     });
     const dfdsDash = dfdsF.map(
-      (d): DfdPainel => ({ unidadeId: d.reparticaoId, unidade: d.reparticaoCodigo, unidadeNome: d.reparticaoNome, valor: d.valorTotal, itens: d.totalItens }),
+      (d): DfdPainel => ({
+        id: d.id,
+        numero: d.numero,
+        planejamento: d.planejamento,
+        unidadeId: d.reparticaoId,
+        unidade: d.reparticaoCodigo,
+        unidadeNome: d.reparticaoNome,
+        valor: d.valorTotal,
+        itens: d.totalItens,
+      }),
     );
     return { protocolos: protocolosDash, dfds: dfdsDash, pessoas: pessoasDash };
   }, [vista, protocolosF, dfdsF, gestao, dirPessoas, confProtoVersao, ctxConf, regras]);
@@ -1894,6 +1913,7 @@ export function DfdsView({
             regras={regras}
             responsavel={filtro.responsavel}
             onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
+            onAbrir={setAberto}
           />
         ) : vista === "protocolos" ? (
           tabelaProtocolos

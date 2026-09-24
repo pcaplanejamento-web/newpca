@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { ConsultaPca } from "@/components/ConsultaPca";
 import { MesaPca } from "@/components/MesaPca";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
@@ -54,6 +53,7 @@ export default async function PcaEspacoPage({
     conteudo = (
       <OrcamentoPca
         dados={{
+          pcaId: pca.id,
           ano: pca.ano,
           orcamento: orc.orcamento,
           visaoNome: orc.visao?.nome ?? null,
@@ -111,11 +111,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
         dados={dash}
         unidadeFiltrada={dash.unidadeId != null}
         hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
-        consulta={
-          pca.fonte === "protocolo" ? (
-            <ConsultaPca pcaId={pca.id} protocolos={dash.protocolosLista} dfds={dash.dfdsLista} itens={dash.itens} showUnidade={dash.unidadeId == null} />
-          ) : undefined
-        }
+        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista } : undefined}
       />
     </div>
   );

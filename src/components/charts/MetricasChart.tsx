@@ -5,8 +5,9 @@ import type { PontoMetrica } from "@/lib/cloudflare-core";
 import { num } from "@/lib/format";
 import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
-// Requisições por dia do Worker (monitoramento Cloudflare). Mesmo padrão do MensalChart.
-export function MetricasChart({ data }: { data: PontoMetrica[] }) {
+// Requisições por dia do Worker (monitoramento Cloudflare). Mesmo padrão do MensalChart; `onSelecionar` (opcional)
+// = clicar numa barra abre a ORIGEM dos dados daquele dia.
+export function MetricasChart({ data, onSelecionar }: { data: PontoMetrica[]; onSelecionar?: (p: PontoMetrica) => void }) {
   const tk = useChartTokens();
   const rows = data.map((d) => ({ label: d.data.slice(5), requests: d.requests, errors: d.errors }));
   if (!rows.length) return <ChartEmpty label="Sem dados no período" />;
@@ -45,7 +46,14 @@ export function MetricasChart({ data }: { data: PontoMetrica[] }) {
               );
             }}
           />
-          <Bar dataKey="requests" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} maxBarSize={40} />
+          <Bar
+            dataKey="requests"
+            fill={CHART_COLORS[0]}
+            radius={[6, 6, 0, 0]}
+            maxBarSize={40}
+            onClick={onSelecionar ? (_, i) => onSelecionar(data[i]) : undefined}
+            className={onSelecionar ? "cursor-pointer" : undefined}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

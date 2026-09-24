@@ -11,9 +11,11 @@ import {
 } from "recharts";
 import type { Fatia } from "@/lib/queries";
 import { brl, num } from "@/lib/format";
+import type { RecorteDash } from "@/lib/origem-dash";
 import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
-export function UnidadeChart({ data }: { data: Fatia[] }) {
+/** `onSelecionar` (opcional): clicar numa barra abre a ORIGEM dos dados daquela unidade de medida. */
+export function UnidadeChart({ data, onSelecionar }: { data: Fatia[]; onSelecionar?: (r: RecorteDash, rotulo: string) => void }) {
   const tk = useChartTokens();
   const rows = [...data]
     .sort((a, b) => b.count - a.count)
@@ -59,7 +61,14 @@ export function UnidadeChart({ data }: { data: Fatia[] }) {
               );
             }}
           />
-          <Bar dataKey="count" fill={CHART_COLORS[1]} radius={[0, 6, 6, 0]} maxBarSize={22} />
+          <Bar
+            dataKey="count"
+            fill={CHART_COLORS[1]}
+            radius={[0, 6, 6, 0]}
+            maxBarSize={22}
+            onClick={onSelecionar ? (_, i) => onSelecionar({ dim: "unidadeMedida", labels: [rows[i].label] }, rows[i].label) : undefined}
+            className={onSelecionar ? "cursor-pointer" : undefined}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

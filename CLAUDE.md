@@ -1483,6 +1483,29 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/api/pca/[id]/consulta/dfd/[dfdId]`, `/consulta/protocolo/[protocoloId]` (capa sem CPF/CNPJ) e `/consulta/historico?dfd=|protocolo=`
   → `consultaDfd`/`consultaProtocolo`/`consultaHistorico` (`pca-espaco.ts`): só PCA de fonte protocolo **publicado** (ou
   usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404).
+  Os gráficos + a consulta são UM cliente, **`DashboardPcaCliente`** (os `itens` trafegam uma vez; `PainelPca` segue server
+  com os KPIs e recebe `consulta` como DADOS `{pcaId, protocolos, dfds}`); a `ConsultaPca` é CONTROLADA (`aberto`/`onAbrir`) e
+  há UM `BannersConsulta`, compartilhado com a origem dos gráficos.
+- **ORIGEM DOS DADOS (padrão de TODO gráfico/linha de comparativo) — componente `OrigemDados`** (`Modal` xl: o recorte
+  clicado em `StatMini`s + a FONTE num `Callout` + avisos + a tabela das linhas que formam o número). **Soma do detalhe =
+  número clicado** (as funções de recorte usam a MESMA chave da agregação, testadas):
+  - **Orçamento do PCA** (`OrcamentoPca`, `onRowClick` + `activeKey`): `Segmented` **Orçamento** (os lançamentos do CUBO da
+    unidade — `DataTable` Órgão/Unidade no CUBO/Elemento/Código/Dotação) | **Contratações do PCA** (`ItemTable origem` → o item
+    abre o `BannersConsulta`; na fonte lista, as planilhas). `orcamentoDoPca` devolve `linhas` com o lançamento
+    (`LancamentoOrcamentoPca`) e `planejado` POR ORIGEM (`PlanejadoOrcamentoPca`: um por item — `itemRowConsolidado`, o MESMO
+    mapeamento do Dashboard — ou por planilha); `origemDaLinha`/`chaveUnidadeComparativo` (`orcamento-comparativo.ts`) = a
+    regra do "Sem vínculo" da agregação.
+  - **Gráficos do Dashboard do PCA** (`ClassificacaoChart`/`MensalChart`/`TopItensChart`/`UnidadeChart`, prop OPCIONAL
+    `onSelecionar(recorte, rótulo)` — sem ela, iguais a antes; a legenda da pizza vira botões ≥44px): `itensDoRecorte`
+    (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
+    com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou
+    `ano`/`mes`/`anual`. Aviso quando a lista (teto 5.000) não traz todos os itens do KPI.
+  - **Dashboard de governança da Mesa** (`DashboardMesa`, prop `onAbrir` → a pilha `BannersMesa`): Saúde (linhas = botões),
+    Situação e Valor por unidade (`BarrasH` com `acao` + `LinhaBarra.clicavel` p/ "Sem situação"/"Outras unidades"), Tempo na
+    Mesa e Entrada (`Colunas.onEscolher`) → `protocolosDoRecorte`/`dfdsDoRecorte` (`mesa-dashboard.ts`, as MESMAS chaves de
+    `painelMesa`; `ProtocoloPainel`/`DfdPainel` ganharam nº/assunto/sigla/planejamento). A **Carga por responsável** segue
+    filtrando a Mesa (inalterada).
+  - **Métricas das Integrações** (`MetricasChart.onSelecionar`): o dia + a tabela dos 7 dias + a fonte (Cloudflare GraphQL).
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
   capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar), `POST /api/pca/[id]/itens` (retirar), `GET /api/pca/[id]/capa`
   (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.

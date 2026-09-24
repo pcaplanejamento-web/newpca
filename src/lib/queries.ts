@@ -162,6 +162,8 @@ export async function getPorMes(unidadeId?: number, pcaId?: number): Promise<Pon
 }
 
 export type TopItem = {
+  /** O item (a barra abre a origem dele). */
+  id: number;
   nome: string | null;
   valor: number;
   quantidade: number | null;
@@ -177,6 +179,7 @@ export async function getTopItens(
   const db = getDb();
   const rows = await db
     .select({
+      id: itens.id,
       nome: itens.nomeProduto,
       valor: itens.valorTotal,
       quantidade: itens.quantidade,
@@ -189,6 +192,7 @@ export async function getTopItens(
     .orderBy(desc(itens.valorTotal))
     .limit(limit);
   return rows.map((r) => ({
+    id: r.id,
     nome: r.nome,
     valor: Number(r.valor ?? 0),
     quantidade: r.quantidade == null ? null : Number(r.quantidade),
@@ -216,6 +220,11 @@ export type ItemRow = {
   protocoloNumero?: string | null;
   /** Nº do item na tabela do DFD (a chave do banner do item, com o código). */
   itemNumero?: number | null;
+  /** Mês/ano do cronograma (a mesma chave do gráfico mensal) — a origem de cada barra. */
+  ano?: number | null;
+  mes?: number | null;
+  /** Previsão ANUAL (fonte protocolo): entra com 1/12 em cada mês do cronograma. */
+  anual?: boolean;
 };
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
@@ -236,6 +245,8 @@ export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: n
       dataDesejada: itens.dataDesejada,
       codigo: unidades.codigo,
       municipio: unidades.municipio,
+      ano: itens.anoDesejado,
+      mes: itens.mesDesejado,
     })
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
