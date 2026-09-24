@@ -209,7 +209,7 @@ function SinoNotificacoes() {
     <Dropdown
       align="end"
       ariaLabel="Notificações"
-      triggerClassName="rounded-control p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text-2"
+      triggerClassName="h-11 w-11 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 lg:h-9 lg:w-9"
       trigger={<IconBell className="h-5 w-5" />}
       width={256}
     >
@@ -400,7 +400,7 @@ export function AppShell({
                 type="button"
                 aria-label="Fechar menu"
                 onClick={fecharMenu}
-                className="rounded-control p-1.5 text-muted transition-colors hover:bg-surface-2"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2"
               >
                 <IconClose className="h-5 w-5" />
               </button>
@@ -443,7 +443,7 @@ export function AppShell({
             </div>
             <SinoNotificacoes />
             <ThemeToggle />
-            <Link href="/painel/perfil" aria-label="Meu perfil" className="lg:hidden">
+            <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
               <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
             </Link>
           </div>

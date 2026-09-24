@@ -397,7 +397,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "acesso",
     titulo: "Grupo ativo define as abas e as repartições",
     descricao:
-      "Um usuário pertence a vários grupos e escolhe o grupo ativo no cabeçalho. Cada grupo tem 1 permissão (quais módulos vê: Mesa, PCA, Catálogo, Orçamento — a mesma lista na barra lateral e na barra inferior do celular) e acessa um conjunto de repartições. Ao entrar no painel, o sistema abre a Mesa — onde ficam os protocolos, os DFDs e os itens — ou o 1º módulo liberado; sem nenhum, o Perfil. Permissões antigas que citavam telas removidas (o Dashboard e os Protocolos legados) seguem valendo sem essas telas.",
+      "Um usuário pertence a vários grupos e escolhe o grupo ativo no cabeçalho. Cada grupo tem 1 permissão (quais módulos vê: Mesa, PCA, Catálogo, Orçamento — a mesma lista na barra lateral e na barra inferior do celular) e acessa um conjunto de repartições. Ao entrar no painel, o sistema abre a Mesa — onde ficam os protocolos, os DFDs e os itens — ou o 1º módulo liberado; sem nenhum, o Perfil. Quem tinha a aba Protocolos (tela legada, removida) passou a ter a Mesa; o Dashboard antigo também saiu — o do PCA segue na tela inicial. Sem nenhum módulo, o Perfil avisa para trocar de grupo ou pedir acesso ao administrador.",
     fonte: "grupos / permissoes / abas (abasConhecidas, rotaInicial)",
     configuravelEm: { rotulo: "Grupos", href: "/painel/grupos" },
   },

@@ -375,6 +375,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     for (const c of ["pca_id", "pca_sequencial"]) assert.ok(cols.includes(c), `coluna ausente em dfd_itens: ${c}`);
   });
 
+  it("0036 tudo na Mesa: quem tinha a aba 'protocolos' ganha a Mesa ('dfd'); idempotente, sem mexer nas demais", () => {
+    const d = new DatabaseSync(":memory:");
+    const i36 = arquivos.findIndex((f) => f.startsWith("0036"));
+    assert.ok(i36 > 0, "migração 0036 ausente");
+    for (const arq of arquivos.slice(0, i36)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(
+      `INSERT INTO permissoes (id, nome, abas) VALUES (901, 'Protocolos', '["dashboard","protocolos"]'), (902, 'Protocolos + Mesa', '["protocolos","dfd"]'), (903, 'Só PCA', '["pca"]'), (904, 'Só Dashboard', '["dashboard"]')`,
+    );
+    const sql = readFileSync(join(DIR, arquivos[i36]), "utf8");
+    d.exec(sql);
+    d.exec(sql); // idempotente: rodar de novo não duplica a aba
+    for (const arq of arquivos.slice(i36 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const abas = (id: number) => JSON.parse((d.prepare("SELECT abas FROM permissoes WHERE id = ?").get(id) as { abas: string }).abas);
+    assert.deepEqual(abas(901), ["dashboard", "protocolos", "dfd"]);
+    assert.deepEqual(abas(902), ["protocolos", "dfd"]);
+    assert.deepEqual(abas(903), ["pca"]);
+    assert.deepEqual(abas(904), ["dashboard"]);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

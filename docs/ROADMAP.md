@@ -33,7 +33,9 @@ legada (`/painel/protocolos`, `/api/protocolos*`, `lib/protocolos.ts` e os compo
 **Protocolos, DFDs e itens vivem na Mesa.** ✅ `/painel` virou só a porta de entrada: leva à **Mesa** (ou ao 1º módulo
 que o grupo ativo pode ver; sem nenhum, ao Perfil). ✅ Os módulos (Mesa · PCA · Catálogo · Orçamento) saem de UMA fonte
 na barra lateral e na barra inferior do celular (alvos ≥ 44px; o Catálogo e o Orçamento passaram a aparecer também no
-celular). ✅ Permissões antigas com as abas removidas seguem valendo (as chaves somem na leitura; o ADM salva sem erro).
+celular; sino, avatar e fechar do menu com alvo de 44px). ✅ Ninguém perde acesso: quem tinha a aba Protocolos passou a
+ter a Mesa (migração `0036`), as chaves antigas somem na leitura (o ADM salva sem erro), o link antigo
+`/painel/protocolos` leva à Mesa e, sem nenhum módulo liberado, o Perfil avisa o que fazer.
 ✅ Dados preservados: as tabelas `protocolos`/`protocolo_opcoes` ficam no banco, dormentes (sinalizadas "legado" em
 Armazenamento), e o histórico "Protocolo (legado)" da Auditoria segue legível. O Dashboard do **PCA** (tela inicial `/` e
 aba do espaço do PCA) não muda.

@@ -9,7 +9,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
@@ -61,11 +61,14 @@ const cardCls = "rounded-card border border-border bg-surface p-5 shadow-ring";
 export function PerfilView({
   usuario,
   protocolacao = null,
+  semModulos = false,
 }: {
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
    * PESSOAS DO GRUPO ativo (`foraDoGrupo` = nome do padrão gravado que não é mais do grupo). */
   protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: string | null } | null;
+  /** O grupo ativo não libera nenhum módulo (Mesa, PCA, Catálogo, Orçamento): avisa o que fazer. */
+  semModulos?: boolean;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -198,6 +201,12 @@ export function PerfilView({
 
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      {semModulos && (
+        <Callout kind="info" icon={<IconInfo className="h-4 w-4" />} className="lg:col-span-2">
+          Nenhum módulo liberado para o seu grupo ativo. Se você tem outro grupo, troque no cabeçalho; senão, peça ao
+          administrador para liberar o acesso.
+        </Callout>
+      )}
       {/* Dados do perfil */}
       <form onSubmit={salvarPerfil} className={cardCls}>
         <h3 className="text-sm font-bold text-text">Dados do perfil</h3>

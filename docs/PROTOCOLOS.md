@@ -24,8 +24,10 @@ ver; sem nenhum, ao Perfil).
 - **Legado (dormente):** as tabelas `protocolos` e `protocolo_opcoes` (migração `0006`, do antigo módulo) continuam no
   banco com os dados preservados, mas sem código — fora do `schema.ts` e sem migração de DROP; aparecem como "legado"
   na tela Armazenamento (ADM). O histórico dessas alterações segue legível na Auditoria ("Protocolo (legado)").
-- **Permissões antigas** que liberavam as abas `dashboard`/`protocolos` continuam válidas: essas chaves são ignoradas
-  na leitura (`abasConhecidas`) e o ADM salva a permissão normalmente.
+- **Permissões antigas:** quem tinha a aba `protocolos` passou a ter a **Mesa** (migração `0036`, aditiva — como a
+  `0015` fez com `pca` → `dfd`). As chaves `dashboard`/`protocolos` ficam no JSON e são ignoradas na leitura
+  (`abasConhecidas`); o ADM salva a permissão normalmente. Quem só tinha o Dashboard continua vendo o Dashboard do PCA
+  na tela inicial (`/`, pública). O link antigo `/painel/protocolos` redireciona para a Mesa.
 
 ## Referências
 - Regras de engenharia e detalhes: [CLAUDE.md](../CLAUDE.md).

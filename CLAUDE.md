@@ -115,9 +115,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas`.
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
   `/api/protocolos*`, `lib/protocolos.ts`) foram REMOVIDOS — `/painel` é só a PORTA DE ENTRADA (redirect no servidor
-  para `rotaInicial`: a 1ª aba liberada — a Mesa; sem nenhuma, o Perfil). Permissão antiga com as chaves removidas
-  (`dashboard`/`protocolos`) segue valendo: **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
-  /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). As tabelas
+  para `rotaInicial`: a 1ª aba liberada — a Mesa; sem nenhuma, o Perfil, que AVISA — `PerfilView.semModulos`) e o link
+  antigo `/painel/protocolos` redireciona à Mesa (como `/painel/dfds`). Ninguém perde acesso: a migração **`0036`**
+  (aditiva, idempotente — espelho da `0015`) dá a Mesa (`dfd`) a toda permissão que tinha `protocolos`; as chaves antigas
+  (`dashboard`/`protocolos`) ficam no JSON e **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
+  /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A permissão é
+  gate de NAVEGAÇÃO (as páginas/rotas dos módulos não conferem a aba — como sempre foi). As tabelas
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
   migração de DROP).
 - **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
@@ -1335,7 +1338,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`
   (valida Zod e devolve 422 pronto). **Rotas novas/editadas devem usá-los** + as guardas
   `exigir*` e `intId` de `api-auth`.
-- Validação de entrada sempre com **Zod** (`src/lib/*-validation` / schemas em `protocolos`/`tabelas`).
+- Validação de entrada sempre com **Zod** (`src/lib/*-validation`).
 - DFD/protocolo (além das já citadas): `GET /api/protocolo/[id]?completo=1` (protocolo + DFDs COMPLETOS + unidades com
   responsáveis — banner gravado), `GET /api/dfd/[id]` (DFD + `unidade`), `POST /api/dfd/conferencia` (`{ids ≤ 200}` →
   estado/resumo/validação por DFD, `exigirUsuario`), `POST /api/dfd/massa` (`{ids ≤ 500, acao}` → edição em massa,

@@ -91,6 +91,6 @@ Passe para tornar o DS de fato a fonte única (sem cor **neutra** hardcoded; tod
   mas botões→`Button`, busca→`SearchField`, paginação→`Pager`, chips→`Badge`, avisos→`Callout`, tudo por token;
   ambas removidas depois — o `ProtocolosView` saiu com a tela Protocolos legada: tudo na Mesa).
 - **Pendente (próxima fatia):** `ItemTable` (troca do motor por `DataTable` client-side depende de rever o
-  teto de 200 linhas do `getItens` na home pública), `PerfilView`/`UploadForm` (botões/inputs), `AppShell`
-  (busca→`SearchField`, notificações→`Dropdown`), app-pages (`ferramentas` card inline→`LinkCard`), glyphs
+  teto de 200 linhas do `getItens` na home pública), `PerfilView`/`UploadForm` (botões/inputs), app-pages
+  (`ferramentas` card inline→`LinkCard`), glyphs
   `▲▼↑↓`→`Icon*`, remoção do `Badge` legado quando ninguém usar `Tone`.

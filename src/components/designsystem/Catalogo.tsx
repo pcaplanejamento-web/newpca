@@ -1515,7 +1515,7 @@ export function Catalogo() {
               { value: "sem", label: "Sem responsável" },
             ]}
           />
-          <FilterChip label="Natureza" />
+          <FilterChip label="Assunto" />
           <FilterChip label="Órgão" active />
         </div>
       </Secao>

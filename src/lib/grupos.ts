@@ -7,9 +7,9 @@ import { getDb } from "./db";
 
 /**
  * RBAC por grupo. Um usuário pode estar em vários grupos e escolhe o ativo no
- * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais abas)
- * e o ESCOPO DOS DADOS (protocolos/opções carregam `grupo_id`). Admin ignora a
- * permissão de abas (vê todas), mas os dados seguem o grupo ativo.
+ * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais abas de
+ * módulo) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam os dados da
+ * Mesa e do PCA. Admin ignora a permissão de abas e acessa todas as unidades.
  */
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
@@ -119,7 +119,7 @@ export async function getReparticaoContexto(
 /**
  * Repartição de FILTRO ativa: `{id, codigo}` quando é uma específica; `null` quando
  * é "Geral" (código GERAL) ou não há — Geral = todas as permitidas (sem filtro por
- * repartição). Usada para escopar protocolos (por órgão) e PCA (por unidade).
+ * repartição). Usada para escopar a Mesa (protocolos/DFDs/itens) e o PCA por unidade.
  */
 export async function getReparticaoFiltro(
   usuario?: UsuarioSessao | null,
