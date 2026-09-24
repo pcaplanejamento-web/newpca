@@ -81,14 +81,15 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   desktop) e seções em cartão (`rounded-card` + `--pad-card`) com título, descrição curta (largura limitada — a ação fica à
   direita no desktop e desce no celular) e a tabela (`DataTable`, rola no próprio contêiner).
 - Abas do Catálogo com rótulos CURTOS no celular (`Segmented.curto`: Itens · Unid. medida · Classif. — cabem em 360px); o
-  nome acessível segue o inteiro.
+  nome acessível é o texto à vista (o curto no celular, o inteiro no resto).
 - Estados da comparação por `Badge`: **Cadastrada** verde · **Sugestão** azul (info) · **Não cadastrada** âmbar. Na linha não
   cadastrada: `select` da unidade (a sugestão pré-escolhida, marcada "(sugestão)") + **"Adicionar"** (`Button xs`
   secondary — desabilitado sem escolha; o andamento no próprio botão) + "Cadastrar" (ghost). Ações de linha do cadastro =
   **`AcoesCadastro`** (↑/↓/editar/excluir, `size="xs"`: 44px no celular); as colunas do cadastro não filtram/ordenam (a
   ordem é a gravada). Editores em `Modal md` com os campos do DS (`TextField`, `CampoLista`, **`SelectField`**,
   `ColorField`) + uma caixa de **prévia** neutra (`surface-2`) e o conflito em `Callout warn` (o botão principal travado);
-  em CONSULTA (sem permissão) os mesmos campos só leitura e só "Fechar". Falha ao carregar = **`ErroCarga`** (vermelho sem
+  em CONSULTA (sem permissão) tocar na linha abre o editor com os campos só leitura (a cor aparece na prévia, sem o seletor)
+  e só "Fechar" — quem edita usa o lápis da linha. Falha ao carregar = **`ErroCarga`** (vermelho sem
   dados; âmbar no topo quando a tela segue com a lista anterior). Tocar numa linha da "Classificação dos itens" abre o
   detalhe (`Modal md`, pares rótulo/valor) — a descrição inteira sem depender de dica.
 

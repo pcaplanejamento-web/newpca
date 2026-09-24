@@ -36,7 +36,8 @@ export const NAO_CADASTRADA = "Não cadastrada";
 export const NAO_CLASSIFICADO = "Não classificado";
 
 /** Limites do cadastro (os MESMOS no Zod, nas rotas, na tela e na proposta de cadastro). A grafia cabe a maior unidade
- * que um item aceita (100 no DFD); `lote` = grafias por chamada de "adicionar sinônimos"; `ordem` = ids numa reordenação. */
+ * que um item aceita (100 no DFD); `lote` = grafias por chamada de "adicionar sinônimos"; `ordem` = entradas de CADA
+ * cadastro (a reordenação manda a lista inteira — criar além dele é recusado, senão a lista não se reordenaria mais). */
 export const LIMITES_PADRONIZACAO = {
   sigla: 20,
   nome: 60,

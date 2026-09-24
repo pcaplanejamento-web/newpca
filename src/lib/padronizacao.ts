@@ -6,6 +6,7 @@ import {
   conflitoPalavra,
   conflitoUnidade,
   type DescricaoItem,
+  LIMITES_PADRONIZACAO,
   limparEspacos,
   limparPalavras,
   limparSinonimos,
@@ -83,16 +84,22 @@ type DadosUnidade = { sigla: string; nome: string; sinonimos: string[]; classifi
 type DadosClassificacao = { nome: string; cor: string; palavras: string[] };
 type Recusa = { erro: string; status: number };
 
+/** O cadastro chegou ao limite (`LIMITES_PADRONIZACAO.ordem` — a reordenação manda a lista inteira). */
+const cheio = (n: number, id: number | null, oque: string): Recusa | null =>
+  id == null && n >= LIMITES_PADRONIZACAO.ordem ? { erro: `O cadastro chegou ao limite de ${LIMITES_PADRONIZACAO.ordem} ${oque}.`, status: 409 } : null;
+
 /**
  * Unidade PRONTA para gravar (`id` = a editada; `null` = nova): sinônimos limpos (sem repetir a mesma grafia nem a
- * sigla/nome) — ou a RECUSA: uma grafia que já é de OUTRA unidade (409; uma grafia pertence a uma unidade só) ou a
- * classificação indicada que não existe (422).
+ * sigla/nome) — ou a RECUSA: o cadastro no limite (409), uma grafia que já é de OUTRA unidade (409; uma grafia pertence a
+ * uma unidade só) ou a classificação indicada que não existe (422).
  */
 export async function prepararUnidade(d: DadosUnidadeMedida, id: number | null): Promise<{ dados: DadosUnidade } | Recusa> {
   const [unidades, classificacao] = await Promise.all([
     listarUnidadesMedida(),
     d.classificacaoId != null ? getClassificacao(d.classificacaoId) : Promise.resolve(null),
   ]);
+  const limite = cheio(unidades.length, id, "unidades");
+  if (limite) return limite;
   if (d.classificacaoId != null && !classificacao) return { erro: "A classificação escolhida não existe mais.", status: 422 };
   const sigla = limparEspacos(d.sigla);
   const nome = limparEspacos(d.nome);
@@ -102,9 +109,12 @@ export async function prepararUnidade(d: DadosUnidadeMedida, id: number | null):
   return { dados };
 }
 
-/** Classificação PRONTA para gravar: palavras-chave limpas — ou a RECUSA (nome repetido; palavra-chave de OUTRA). */
+/** Classificação PRONTA para gravar: palavras-chave limpas — ou a RECUSA (cadastro no limite; nome repetido; palavra-chave
+ * de OUTRA). */
 export async function prepararClassificacao(d: DadosClassificacaoItem, id: number | null): Promise<{ dados: DadosClassificacao } | Recusa> {
   const classificacoes = await listarClassificacoes();
+  const limite = cheio(classificacoes.length, id, "classificações");
+  if (limite) return limite;
   const nome = limparEspacos(d.nome);
   const mesmoNome = nomeEmUso(nome, classificacoes, id);
   if (mesmoNome) return { erro: `Já existe a classificação "${mesmoNome.nome}".`, status: 409 };

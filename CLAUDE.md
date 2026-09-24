@@ -1325,7 +1325,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `classificacao_id` FK **set null** — a classificação que a unidade indica). Núcleo PURO **`padronizacao-core.ts`**
   (testado); D1 em **`padronizacao.ts`**; Zod em **`padronizacao-validation.ts`**; limites únicos `LIMITES_PADRONIZACAO`
   (sigla 20, nome 60, grafia 100 — a maior unidade que um item aceita —, 100 sinônimos, palavra 60, 300 palavras-chave,
-  200 grafias por chamada de sinônimos, 300 ids por reordenação — `ordemPadronizacaoSchema`, sem repetir).
+  200 grafias por chamada de sinônimos, 300 entradas por CADASTRO — a reordenação manda a lista inteira
+  (`ordemPadronizacaoSchema`, sem repetir), então criar além disso é recusado com 409).
 - **1) COMPARAÇÃO das unidades dos itens com o cadastro:** a grafia é comparada pela **`chaveUnidade`** (sem caixa/acento/
   pontuação/espaço; ²/³ = 2/3 — "Und." = "UND"); é **cadastrada** quando é a sigla, o nome ou um sinônimo de UMA unidade
   (`resolverUnidades`); senão, **não cadastrada** — com **SUGESTÃO** (`comparadorUnidades().sugerir`) pela UNIÃO dos
@@ -1336,8 +1337,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   quantos itens de DFD e do catálogo a usam (sem unidade vai à parte); ordem: não cadastradas › sugestões › cadastradas,
   depois o mais usado. Tela (`UnidadesMedidaView` = contêiner): 4 KPIs (`StatMini`: cadastradas · % dos itens com unidade
   cadastrada · grafias não cadastradas/sugestões · itens sem unidade) + **Unidades cadastradas** (`DataTable` — lista
-  ORDENADA: colunas `filter:"none"`, a posição é a da ordem gravada — + **`AcoesCadastro`** ↑/↓/editar/excluir; tocar na
-  linha abre o editor) + **Comparação com os itens** (**`ComparacaoUnidades`**, apresentacional): as escritas da linha na
+  ORDENADA: colunas `filter:"none"`, a posição é a da ordem gravada — + **`AcoesCadastro`** ↑/↓/editar/excluir; na
+  CONSULTA tocar na linha abre os dados — quem edita usa o lápis: sem linha-botão com botões dentro) + **Comparação com os
+  itens** (**`ComparacaoUnidades`**, apresentacional): as escritas da linha na
   **`CelulaLista`** (quantos itens cada uma na dica; o filtro acha a linha por QUALQUER escrita); na não cadastrada, ESCOLHER
   a unidade num `select` (a sugestão vem escolhida e marcada "(sugestão)") e CONFIRMAR em **"Adicionar"** (desabilitado sem
   escolha; escolher não grava) ou **"Cadastrar"** com a PROPOSTA pronta (`propostaUnidade`: o grupo = a linha + as demais
@@ -1357,7 +1359,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   pertence a UMA classificação** e o nome é único (`conflitoPalavra`/`nomeEmUso` → 409). Tela (`ClassificacoesView` =
   contêiner): 4 KPIs (classificações · % dos itens classificados · não classificados · % do valor — "…" enquanto os itens
   chegam, "—" + "itens indisponíveis" se não carregarem) + **Classificações cadastradas** (lista ORDENADA, colunas
-  `filter:"none"`: palavras-chave, as unidades que a indicam, itens, valor dos DFDs, ↑/↓; tocar na linha abre o editor) +
+  `filter:"none"`: palavras-chave, as unidades que a indicam, itens, valor dos DFDs, ↑/↓; na consulta tocar na linha abre
+  os dados) +
   **Classificação dos itens** (**`ClassificacaoDosItens`**, memorizada: cada descrição DISTINTA dos itens dos DFDs e do
   catálogo — inclusive o item SEM descrição, classificado só pela unidade — com a classificação, o motivo, a unidade, os
   itens e o valor; o filtro "Não classificado" acha as palavras que faltam; tocar na linha abre o detalhe inteiro — a
@@ -1367,12 +1370,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com a unidade) antes de gravar.
 - **Gravação (as duas telas):** os editores têm o PRÓPRIO rascunho (`inicial` → `onSalvar(rascunho)`; digitar não
   re-renderiza a tela de trás; o título vem do `inicial`). Hook **`useGravacaoCadastro`** (`src/components/`): UMA gravação
-  por vez (trava por ref — dois toques no mesmo quadro não passam), o desfecho no aviso flutuante (`Desfecho`: sucesso; só
-  EM PARTE ⇒ aviso âmbar com as duas contas — "N adicionada(s); M não — motivo"; nada entrou ⇒ erro com o motivo do
-  servidor) e o cadastro RECARREGADO depois — também na falha (outra pessoa pode ter mudado algo); reordenar é otimista e só
-  recarrega se falhar. Depois de gravar recarrega SÓ o cadastro (`GET /api/catalogo/unidades-medida?uso=0`; as descrições
-  e o uso das grafias ficam — não mudam com o cadastro). Recarga que falha com a tela já montada ⇒ **`ErroCarga`** âmbar no
-  topo ("A lista pode estar desatualizada" + "Tentar de novo"); a 1ª carga que falha ⇒ `ErroCarga` vermelho.
+  por vez (trava por ref — dois toques no mesmo quadro não passam) numa FILA única de módulo (trocar de visão no meio de uma
+  gravação remonta a tela, e a próxima gravação espera a anterior — nunca correm juntas no servidor), o desfecho no aviso
+  flutuante (sucesso; só EM PARTE ⇒ aviso âmbar com as duas contas — "N adicionada(s); M não — grafia: motivo"; nada entrou
+  ⇒ erro com o motivo) e o cadastro RECARREGADO depois — também na falha (outra pessoa pode ter mudado algo); reordenar é
+  otimista e só recarrega se falhar. Depois de gravar recarrega SÓ o cadastro (`GET /api/catalogo/unidades-medida?uso=0`; as
+  descrições e o uso das grafias ficam — não mudam com o cadastro). Recarga que falha com a tela já montada ⇒ **`ErroCarga`**
+  âmbar no topo ("A lista pode estar desatualizada" + "Tentar de novo", que recarrega PELA MESMA trava — nunca chega fora de
+  ordem com uma gravação); a 1ª carga que falha ⇒ `ErroCarga` vermelho. Na comparação, a escolha de uma unidade que deixou
+  de existir volta à sugestão.
 - **Escopo:** os itens de DFD seguem a unidade ativa do cabeçalho (`getReparticaoFiltro`; "Geral" = todos — como a Mesa); os
   do catálogo são globais; o cadastro é global.
 - **Mesa → Itens:** o cadastro chega JUNTO com os itens — `GET /api/dfd/itens` devolve `padronizacao` (`listarPadronizacao`,
@@ -1390,7 +1396,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CONDICIONAL — compare-and-set: cada unidade só é gravada se a lista dela ainda é a lida, `gravarSinonimosSeIgual` em
   **`padronizacao-sql.ts`**, testado pelo driver D1 REAL dentro de `db.batch`; a unidade que não existe mais, a grafia sem
   letras/números, a de OUTRA unidade, a mesma grafia pedida para duas, o excesso além do teto e a unidade alterada no meio
-  viram `falhas`; nada entrou ⇒ 409 com o motivo; auditoria só das unidades gravadas), `GET`/`POST
+  viram `falhas`, cada uma com a grafia e o motivo DELA; devolve SEMPRE o relatório `{adicionados, falhas}` — também quando
+  nada entrou; auditoria só das unidades gravadas), `GET`/`POST
   /api/catalogo/classificacoes`, `PATCH`/`DELETE /api/catalogo/classificacoes/[id]` (excluir zera a classificação das
   unidades no mesmo lote e registra no histórico CADA unidade afetada), `PATCH /api/catalogo/classificacoes/ordem` e `GET
   /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no banco). Cliente único `padronizacao-cliente.ts`
@@ -1620,7 +1627,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4), `Segmented` (o trilho inteiro na altura padrão — anel
   INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
   ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa; **`curto`** = o rótulo abaixo de `sm` quando o
-  inteiro não cabe, o inteiro segue como nome acessível — ex.: as visões do Catálogo),
+  inteiro não cabe — o nome acessível é sempre o texto À VISTA (quem usa comando de voz diz o que lê) — ex.: as visões do
+  Catálogo),
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
   — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e

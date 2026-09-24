@@ -47,7 +47,8 @@ export const classificacaoItemSchema = z.object({
 });
 export type DadosClassificacaoItem = z.infer<typeof classificacaoItemSchema>;
 
-/** Várias grafias dos itens viram SINÔNIMOS de unidades cadastradas de uma vez ("Aceitar as sugestões"). */
+/** Grafias dos itens viram SINÔNIMOS de unidades cadastradas (a comparação: "Adicionar" na linha e "Adicionar N
+ * sugestões"). */
 export const sinonimosUnidadesSchema = z.object({
   itens: z
     .array(
@@ -60,7 +61,8 @@ export const sinonimosUnidadesSchema = z.object({
     .max(L.lote, `No máximo ${L.lote} por vez.`),
 });
 
-/** Nova ordem de um cadastro da padronização (índice = posição) — com teto (a lista inteira vira um lote de UPDATEs). */
+/** Nova ordem de um cadastro da padronização (índice = posição) — a lista INTEIRA (vira um lote de UPDATEs), até o
+ * limite de entradas do cadastro (a criação não passa dele). */
 export const ordemPadronizacaoSchema = z.object({
   ids: z
     .array(z.number().int().positive())

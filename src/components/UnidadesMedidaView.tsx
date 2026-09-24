@@ -132,7 +132,8 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
           adicionados += r.adicionados;
           falhas.push(...r.falhas);
         } catch (e) {
-          // O lote inteiro recusado (nenhuma grafia dele entrou): cada uma conta como recusada, com o motivo do servidor.
+          // A CHAMADA falhou (rede, servidor, validação): o lote não foi confirmado — cada grafia dele conta como não
+          // adicionada, com o motivo (a recarga a seguir mostra o que de fato ficou gravado).
           const motivo = e instanceof Error ? e.message : "Não foi possível gravar.";
           for (const x of lote) falhas.push({ texto: x.texto, motivo });
         }
@@ -221,7 +222,9 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {erroCarga && <ErroCarga kind="warn" msg={`A lista pode estar desatualizada — ${erroCarga}`} onTentar={() => void carregar(false)} />}
+      {erroCarga && (
+        <ErroCarga kind="warn" msg={`A lista pode estar desatualizada — ${erroCarga}`} onTentar={() => void executar(async () => null)} />
+      )}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
         <StatMini label="Unidades cadastradas" value={num(dados.unidades.length)} hint="sigla, nome e sinônimos" />
         <StatMini
@@ -267,7 +270,9 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
             getKey={(u) => u.id}
             pageSize={20}
             minWidth={podeEditar ? 820 : 640}
-            onRowClick={(u) => setEditando({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId })}
+            // Consulta (sem permissão): tocar na linha abre os dados. Quem edita usa o lápis da linha (sem linha-botão com
+            // botões dentro — e um toque num botão desabilitado nunca abre o editor no meio de uma gravação).
+            onRowClick={podeEditar ? undefined : (u) => setEditando({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId })}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "unidade" : "unidades"}`}
           />
         )}
@@ -333,8 +338,10 @@ export function ComparacaoUnidades({
   // O que está gravando (a linha ou o lote) — o andamento no botão certo.
   const [emCurso, setEmCurso] = useState<string | null>(null);
   const escolhida = (l: LinhaUnidade) => {
-    const id = l.chave in escolhas ? escolhas[l.chave] : l.sugestaoId;
-    return id != null ? porId.get(id) : undefined;
+    const e = escolhas[l.chave];
+    if (e === null) return undefined;
+    // Escolha de uma unidade que não existe mais (excluída) volta à sugestão.
+    return (e != null ? porId.get(e) : undefined) ?? (l.sugestaoId != null ? porId.get(l.sugestaoId) : undefined);
   };
   const acionar = (chave: string, itens: GrafiaParaUnidade[]) => {
     setEmCurso(chave);

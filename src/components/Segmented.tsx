@@ -8,7 +8,8 @@ import type { ReactNode } from "react";
 // `Button size="sm"` e da linha das tabelas compactas — segue a densidade do ADM) e 44px no celular, onde a área de toque
 // de cada item cobre também o respiro do trilho (44px). O contorno é um anel INTERNO (não ocupa altura). Um item
 // SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) é quadrado, na mesma altura dos de texto. `curto` = o
-// rótulo nos telefones (abaixo de `sm`) quando o inteiro não cabe — o inteiro segue como nome acessível.
+// rótulo nos telefones (abaixo de `sm`) quando o inteiro não cabe — o nome acessível é sempre o texto À VISTA (o curto no
+// telefone, o inteiro no resto: quem usa comando de voz diz o que lê).
 export function Segmented<T extends string>({
   value,
   options,
@@ -41,7 +42,7 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            aria-label={o.soIcone || o.curto ? o.label : undefined}
+            aria-label={o.soIcone ? o.label : undefined}
             title={o.soIcone ? o.label : undefined}
             disabled={disabled}
             onClick={() => onChange(o.value)}

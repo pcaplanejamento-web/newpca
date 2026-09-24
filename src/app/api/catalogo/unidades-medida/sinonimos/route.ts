@@ -1,6 +1,6 @@
 import { exigirEditor } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { erro, ok, parseCorpo } from "@/lib/http";
+import { ok, parseCorpo } from "@/lib/http";
 import { gravarSinonimos, listarUnidadesMedida } from "@/lib/padronizacao";
 import { chaveUnidade, LIMITES_PADRONIZACAO, limparSinonimos, resolverUnidades } from "@/lib/padronizacao-core";
 import { sinonimosUnidadesSchema } from "@/lib/padronizacao-validation";
@@ -10,11 +10,13 @@ export const dynamic = "force-dynamic";
 type Falha = { texto: string; motivo: string };
 
 /**
- * Grafias dos itens viram SINÔNIMOS de unidades cadastradas (a comparação: "Adicionar a UN", "Adicionar N sugestões").
- * Num lote atômico e CONDICIONAL (cada unidade só é gravada se a lista dela não mudou desde a leitura — nada de
- * sobrescrever outra pessoa); por grafia, a recusa não derruba as demais: vira `falhas` a unidade que não existe mais, a
- * grafia sem letras/números, a que já é de OUTRA unidade, a mesma grafia pedida para duas unidades, o excesso além do
- * teto e a unidade alterada no meio. A grafia que já é da própria unidade é ignorada (nada muda).
+ * Grafias dos itens viram SINÔNIMOS de unidades cadastradas (a comparação: "Adicionar" na linha, "Adicionar N
+ * sugestões"). Num lote atômico e CONDICIONAL (cada unidade só é gravada se a lista dela não mudou desde a leitura — nada
+ * de sobrescrever outra pessoa); por grafia, a recusa não derruba as demais: vira `falhas` (com a grafia e o motivo
+ * DELA) a unidade que não existe mais, a grafia sem letras/números, a que já é de OUTRA unidade, a mesma grafia pedida
+ * para duas unidades, o excesso além do teto e a unidade alterada no meio. A grafia que já é da própria unidade é
+ * ignorada (nada muda). Devolve SEMPRE o relatório `{adicionados, falhas}` — também quando nada entrou (quem chama
+ * atribui cada recusa à grafia certa).
  */
 export async function POST(req: Request) {
   const g = await exigirEditor();
@@ -70,7 +72,6 @@ export async function POST(req: Request) {
     gravar.set(id, { lidos: u.sinonimos, novos: lista });
     adicionados.set(id, novas);
   }
-  if (gravar.size === 0 && falhas.length > 0) return erro(falhas[0].motivo, 409);
   const gravados = await gravarSinonimos(gravar);
   let total = 0;
   for (const [id, textos] of adicionados) {
@@ -90,6 +91,5 @@ export async function POST(req: Request) {
       depois: { sinonimos: gravar.get(id)?.novos ?? [] },
     });
   }
-  if (total === 0 && falhas.length > 0) return erro(falhas[0].motivo, 409);
   return ok({ adicionados: total, falhas });
 }

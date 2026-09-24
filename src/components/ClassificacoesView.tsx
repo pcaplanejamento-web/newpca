@@ -208,7 +208,9 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {erroCarga && <ErroCarga kind="warn" msg={`A lista pode estar desatualizada — ${erroCarga}`} onTentar={() => void carregarCadastro()} />}
+      {erroCarga && (
+        <ErroCarga kind="warn" msg={`A lista pode estar desatualizada — ${erroCarga}`} onTentar={() => void executar(async () => null)} />
+      )}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
         <StatMini label="Classificações" value={num(cad.classificacoes.length)} hint={`${num(palavrasTotal)} palavras-chave`} />
         <StatMini
@@ -257,7 +259,9 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
             getKey={(c) => c.id}
             pageSize={20}
             minWidth={podeEditar ? 900 : 720}
-            onRowClick={(c) => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras })}
+            // Consulta (sem permissão): tocar na linha abre os dados. Quem edita usa o lápis da linha (sem linha-botão com
+            // botões dentro — e um toque num botão desabilitado nunca abre o editor no meio de uma gravação).
+            onRowClick={podeEditar ? undefined : (c) => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras })}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "classificação" : "classificações"}`}
           />
         )}
