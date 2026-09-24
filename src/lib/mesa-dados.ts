@@ -24,10 +24,9 @@ export function acessivelNaLista(lista: { id: number }[]) {
  */
 /**
  * O que os BANNERS gravados (`BannersMesa`: protocolo · DFD · item) precisam: as unidades ACESSÍVEIS enriquecidas com os
- * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e se edita. Usado
- * pela Mesa (`carregarMesa`) e pela consulta do Dashboard do PCA.
+ * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e se edita.
  */
-export async function contextoBanners(u: UsuarioSessao | null) {
+async function contextoBanners(u: UsuarioSessao | null) {
   const repCtx = await getReparticaoContexto(u);
   const ids = repCtx.lista.map((r) => r.id);
   const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([

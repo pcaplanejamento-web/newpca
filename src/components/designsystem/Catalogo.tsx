@@ -70,7 +70,7 @@ import {
   IconUser,
   IconWallet,
 } from "@/components/icons";
-import { CadeadoBotao, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
+import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
@@ -305,6 +305,14 @@ function CampoCadeadoDemo() {
         {...props("assunto")}
         onChange={setAssunto}
       />
+      {/* CONGELADO — consulta pública do PCA: aparência de campo + cadeado fechado sem clique ("Somente consulta"). */}
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <CadeadoBotao rotulo="exemplo" aberto={false} congelado />
+        <span className="text-xs text-muted">CadeadoBotao congelado — somente consulta</span>
+      </div>
+      <CampoCongelado label="Nº DFD (consulta)" valor="531" mono />
+      <CampoCongelado label="Valor (consulta)" valor="R$ 50,00" forte />
+      <CampoCongelado label="Objeto (consulta)" valor="AQUISIÇÃO DE MATERIAL DE EXPEDIENTE" span />
     </dl>
   );
 }
@@ -479,7 +487,7 @@ function HistoricoDemo() {
         <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
           HistoricoDoItem — a seção recolhível no detalhe do item (DFD gravado)
         </span>
-        <HistoricoDoItem dfdId={87} item={{ item: 2, codigo: "5241937264" }} entradas={DEMO_HISTORICO.filter((l) => l.entidade === "dfd")} />
+        <HistoricoDoItem url="/api/dfd/87/historico" item={{ item: 2, codigo: "5241937264" }} entradas={DEMO_HISTORICO.filter((l) => l.entidade === "dfd")} />
       </div>
     </div>
   );

@@ -11,8 +11,9 @@ import { toast } from "./Toast";
  * Primitivos de CAMPO COM CADEADO (POR CAMPO) — a mesma lógica dos itens (`ItemDetalhe`),
  * reusada na capa do protocolo (`CapaCampos`) e no cabeçalho do DFD (`DfdConferir`).
  * Cada campo começa só-leitura; um cadeado próprio o destrava para edição. Um campo
- * pode ser **bloqueado** (identificador/igual ao catálogo) — o cadeado avisa e não abre.
- * Só tokens/componentes do design-system.
+ * pode ser **bloqueado** (identificador/igual ao catálogo) — o cadeado avisa e não abre. Na CONSULTA
+ * (Dashboard do PCA, público) os campos ficam **congelados** (`CampoCongelado`): a caixa do campo com o
+ * cadeado fechado, sem destravar. Só tokens/componentes do design-system.
  */
 
 /** Número → string editável em pt-BR (vírgula decimal, sem separador de milhar). */
@@ -47,13 +48,22 @@ export function CadeadoBotao({
   rotulo,
   aberto,
   bloqueado = false,
+  congelado = false,
   onClick,
 }: {
   rotulo: string;
   aberto: boolean;
   bloqueado?: boolean;
-  onClick: () => void;
+  /** Consulta: cadeado FECHADO só como indicação (não é botão, não destrava). */
+  congelado?: boolean;
+  onClick?: () => void;
 }) {
+  if (congelado)
+    return (
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-faint" title="Somente consulta" role="img" aria-label={`${rotulo}: somente consulta`}>
+        <IconLock className="h-3.5 w-3.5" />
+      </span>
+    );
   return (
     <button
       type="button"
@@ -66,6 +76,40 @@ export function CadeadoBotao({
     >
       {aberto && !bloqueado ? <IconLockOpen className="h-3.5 w-3.5 text-accent" /> : <IconLock className="h-3.5 w-3.5" />}
     </button>
+  );
+}
+
+/**
+ * Campo CONGELADO (consulta): rótulo + cadeado fechado (indicação) + o valor na CAIXA do campo — a mesma
+ * aparência de um campo de edição, travado. Usado pela consulta do PCA (capa, DFD, item).
+ */
+export function CampoCongelado({
+  label,
+  valor,
+  span,
+  mono,
+  forte,
+}: {
+  label: string;
+  valor: string | null | undefined;
+  span?: boolean;
+  mono?: boolean;
+  forte?: boolean;
+}) {
+  return (
+    <div className={span ? "sm:col-span-2" : ""}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted">{label}</span>
+        <CadeadoBotao rotulo={label} aberto={false} congelado />
+      </div>
+      <div
+        className={`min-h-[40px] whitespace-pre-line break-words rounded-control border border-border bg-surface-2 px-3 py-2 leading-snug text-text ${
+          mono ? "font-mono text-[13px]" : "text-sm"
+        } ${forte ? "font-bold" : "font-medium"}`}
+      >
+        {valor || "—"}
+      </div>
+    </div>
   );
 }
 

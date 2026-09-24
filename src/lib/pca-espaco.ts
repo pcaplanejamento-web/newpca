@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import {
   dfdItens,
   dfdProtocolos,
@@ -12,8 +12,11 @@ import {
   reparticoes,
   unidades,
 } from "@/db/schema";
+import { historicoDfd, historicoProtocolo } from "./auditoria";
+import type { LinhaHistorico } from "./auditoria-core";
 import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
 import { getDb } from "./db";
+import { getDfd } from "./dfd";
 import { normUnidadeMedida } from "./normalize";
 import { aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento } from "./orcamento-visao";
 import { alvoDoTexto, mapaVinculos } from "./orcamento-vinculo";
@@ -33,9 +36,12 @@ import {
   type StatusPca,
 } from "./pca-core";
 import { gravarSequencialNosItens, numerarItensDoProtocolo } from "./pca-itens-sql";
+import { type DfdConsulta, dfdPublico, historicoPublico, mascararTexto } from "./pca-publico-core";
+import { getProtocolo } from "./protocolo";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "./queries";
 import { getItensTodos, getPorClassificacao, getPorMes, getPorUnidadeMedida, getResumo, getTopItens, getUnidades } from "./queries";
-import { lotesDeIds } from "./reparticoes";
+import { solicitanteDeResultado, validarAssinatura } from "./reparticao-responsaveis";
+import { carregarResponsaveis, lotesDeIds } from "./reparticoes";
 
 /**
  * Acesso a dados do PCA como ESPAÇO (card 4×5 → Dashboard · Orçamento · Mesa/Importação ·
@@ -377,11 +383,23 @@ export async function retirarItensDoPca(pcaId: number, dfdItemIds: number[], usu
 /** Um DFD vigente do PCA (visão "DFDs" da consulta do Dashboard). */
 export type DfdDoPca = {
   id: number;
+  protocoloId: number | null;
   numero: string;
   planejamento: string | null;
   tipo: string | null;
   sigla: string | null;
   protocoloNumero: string | null;
+  itens: number;
+  valor: number;
+};
+
+/** Um protocolo INCORPORADO ao PCA (visão "Protocolos" da consulta) — os totais dos itens ATIVOS. */
+export type ProtocoloDoPca = {
+  id: number;
+  numero: string;
+  assunto: string | null;
+  sigla: string | null;
+  dfds: number;
   itens: number;
   valor: number;
 };
@@ -401,6 +419,8 @@ export type DashboardPca = {
   dfds: number;
   /** DFDs VIGENTES do PCA com os totais dos itens ATIVOS (só fonte protocolo — a visão "DFDs" do painel). */
   dfdsLista: DfdDoPca[];
+  /** Protocolos incorporados (visão "Protocolos" da consulta; só fonte protocolo). */
+  protocolosLista: ProtocoloDoPca[];
 };
 
 const vazioDash = (): DashboardPca => ({
@@ -414,6 +434,7 @@ const vazioDash = (): DashboardPca => ({
   protocolos: 0,
   dfds: 0,
   dfdsLista: [],
+  protocolosLista: [],
 });
 
 /**
@@ -438,7 +459,10 @@ export async function itensConsolidados(pca: PcaEspaco) {
       anoPca: number | null;
       reparticaoId: number | null;
       sigla: string | null;
+      protocoloId: number | null;
       protocoloNumero: string | null;
+      protocoloAssunto: string | null;
+      protocoloSigla: string | null;
     }
   >();
   const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null })[] = [];
@@ -454,7 +478,10 @@ export async function itensConsolidados(pca: PcaEspaco) {
           anoPca: dfds.anoPca,
           reparticaoId: dfds.reparticaoId,
           sigla: reparticoes.codigo,
+          protocoloId: dfds.protocoloId,
           protocoloNumero: dfdProtocolos.numero,
+          protocoloAssunto: dfdProtocolos.assunto,
+          protocoloSigla: sql<string | null>`(SELECT r.codigo FROM reparticoes r WHERE r.id = ${dfdProtocolos.reparticaoId})`,
         })
         .from(dfds)
         .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
@@ -497,12 +524,6 @@ export async function itensConsolidados(pca: PcaEspaco) {
   return { itens, meta, vinculos: vs, consolidacao: cons, protocolos: protocolos.size };
 }
 
-/** Item do dashboard SEM a origem no DFD (tela inicial pública: sem banners, nada além do necessário vai ao navegador). */
-export function itemPublico(r: ItemRow): ItemRow {
-  const { dfdId: _d, dfdNumero: _n, protocoloNumero: _p, itemNumero: _i, ...publico } = r;
-  return publico;
-}
-
 /** Dados do dashboard do PCA — o MESMO no painel e na tela inicial. */
 export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
@@ -517,7 +538,7 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
       getTopItens(unidadeId, 10, pca.id),
       getItensTodos(unidadeId, 5000, pca.id),
     ]);
-    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [] };
+    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [] };
   }
   const c = await itensConsolidados(pca);
   const reps = new Map<number, string>();
@@ -555,6 +576,7 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
       porDfd.get(i.dfdId) ??
       ({
         id: i.dfdId,
+        protocoloId: m?.protocoloId ?? null,
         numero: m?.numero ?? String(i.dfdId),
         planejamento: m?.planejamento ?? null,
         tipo: m?.tipo ?? null,
@@ -567,15 +589,150 @@ export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): 
     d.valor += i.valorTotal;
     porDfd.set(i.dfdId, d);
   }
+  const dfdsLista = [...porDfd.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true }));
+  // Protocolos incorporados (agregado dos DFDs vigentes) — a visão "Protocolos" da consulta.
+  const porProto = new Map<number, ProtocoloDoPca>();
+  for (const d of dfdsLista) {
+    if (d.protocoloId == null) continue;
+    const m = c.meta.get(d.id);
+    const pr = porProto.get(d.protocoloId) ?? { id: d.protocoloId, numero: m?.protocoloNumero ?? String(d.protocoloId), assunto: m?.protocoloAssunto ?? null, sigla: m?.protocoloSigla ?? null, dfds: 0, itens: 0, valor: 0 };
+    pr.dfds += 1;
+    pr.itens += d.itens;
+    pr.valor += d.valor;
+    porProto.set(d.protocoloId, pr);
+  }
   return {
     ...ag,
     itens,
-    dfdsLista: [...porDfd.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
+    dfdsLista,
+    protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
     protocolos: c.protocolos,
     dfds: new Set(lista.map((i) => i.dfdId)).size,
   };
+}
+
+// ---------------------------------------------------------------------------
+// CONSULTA PÚBLICA (banners do Dashboard — tela inicial e painel): só o que está INCORPORADO ao PCA, HIGIENIZADO
+// (`pca-publico-core.ts`). PCA em Preview só para quem está logado.
+// ---------------------------------------------------------------------------
+
+/** Protocolo da consulta: a capa (sem CPF/CNPJ) + os DFDs dele que contam no PCA. */
+export type ProtocoloConsulta = {
+  id: number;
+  numero: string;
+  idExterno: string | null;
+  data: string | null;
+  interessado: string | null;
+  assunto: string | null;
+  observacao: string | null;
+  valorCapa: number | null;
+  localReparticao: string | null;
+  anoPca: number | null;
+  unidade: string | null;
+  dfds: DfdDoPca[];
+};
+
+async function pcaConsultavel(pcaId: number, logado: boolean): Promise<PcaEspaco | null> {
+  const pca = await getPcaEspaco(pcaId);
+  return pca && pca.fonte === "protocolo" && (logado || pca.status === "publicado") ? pca : null;
+}
+
+/** Protocolos INCORPORADOS ao PCA. */
+async function incorporadosDoPca(pcaId: number): Promise<Set<number>> {
+  const rows = await getDb()
+    .select({ id: dfdProtocolos.id })
+    .from(dfdProtocolos)
+    .where(and(eq(dfdProtocolos.pcaId, pcaId), isNotNull(dfdProtocolos.pcaIncorporadoEm)));
+  return new Set(rows.map((r) => r.id));
+}
+
+/** O DFD está no PCA (vínculo) por um protocolo INCORPORADO? */
+async function dfdNoPca(pcaId: number, dfdId: number, incorporados: Set<number>): Promise<boolean> {
+  const [v] = await getDb()
+    .select({ protocoloId: dfds.protocoloId })
+    .from(pcaDfds)
+    .innerJoin(dfds, eq(pcaDfds.dfdId, dfds.id))
+    .where(and(eq(pcaDfds.pcaId, pcaId), eq(pcaDfds.dfdId, dfdId)))
+    .limit(1);
+  return !!v && v.protocoloId != null && incorporados.has(v.protocoloId);
+}
+
+/** DFD da consulta (itens ATIVOS no PCA; o solicitante pela conferência com os responsáveis da unidade). */
+export async function consultaDfd(pcaId: number, dfdId: number, logado: boolean): Promise<DfdConsulta | null> {
+  if (!(await pcaConsultavel(pcaId, logado))) return null;
+  const incorporados = await incorporadosDoPca(pcaId);
+  if (!(await dfdNoPca(pcaId, dfdId, incorporados))) return null;
+  const [d, inativos] = await Promise.all([
+    getDfd(dfdId),
+    getDb()
+      .select({ id: pcaItens.dfdItemId })
+      .from(pcaItens)
+      .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.dfdId, dfdId), eq(pcaItens.ativo, false))),
+  ]);
+  if (!d) return null;
+  const fora = new Set(inativos.map((r) => r.id));
+  const responsaveis = await carregarResponsaveis(d.reparticaoId);
+  const solicitante = solicitanteDeResultado(validarAssinatura(d.assinaturas, responsaveis, { exigeAssinatura: false }));
+  return dfdPublico(d, solicitante, (id) => !fora.has(id));
+}
+
+/** Protocolo da consulta (só INCORPORADO a este PCA). */
+export async function consultaProtocolo(pcaId: number, protocoloId: number, logado: boolean): Promise<ProtocoloConsulta | null> {
+  if (!(await pcaConsultavel(pcaId, logado))) return null;
+  const p = await getProtocolo(protocoloId);
+  if (!p || p.pcaId !== pcaId || !p.pcaIncorporadoEm) return null;
+  const [vinc, inativos] = await Promise.all([
+    getDb().select({ dfdId: pcaDfds.dfdId }).from(pcaDfds).where(eq(pcaDfds.pcaId, pcaId)),
+    inativosPorDfd(),
+  ]);
+  const noPca = new Set(vinc.map((v) => v.dfdId));
+  return {
+    id: p.id,
+    numero: p.numero,
+    idExterno: p.idExterno,
+    data: p.data,
+    interessado: mascararTexto(p.interessado),
+    assunto: p.assunto,
+    observacao: mascararTexto(p.observacao),
+    valorCapa: p.valorCapa,
+    localReparticao: p.localReparticao,
+    anoPca: p.anoPca,
+    unidade: p.reparticaoCodigo ? `${p.reparticaoCodigo}${p.reparticaoNome ? ` · ${p.reparticaoNome}` : ""}` : null,
+    dfds: p.dfds
+      .filter((d) => noPca.has(d.id))
+      .map((d) => {
+        const fora = inativos.get(`${pcaId}:${d.id}`) ?? { n: 0, valor: 0 };
+        return {
+          id: d.id,
+          protocoloId: p.id,
+          numero: d.numero,
+          planejamento: d.planejamento,
+          tipo: d.tipo,
+          sigla: d.reparticaoCodigo,
+          protocoloNumero: p.numero,
+          itens: (d.totalItens ?? 0) - fora.n,
+          valor: (d.valorTotal ?? 0) - fora.valor,
+        };
+      }),
+  };
+}
+
+/** Histórico PÚBLICO de um DFD ou protocolo do PCA — só o que passou por protocolos INCORPORADOS, sem o autor. */
+export async function consultaHistorico(
+  pcaId: number,
+  alvo: { dfd: number } | { protocolo: number },
+  logado: boolean,
+): Promise<LinhaHistorico[] | null> {
+  if (!(await pcaConsultavel(pcaId, logado))) return null;
+  const incorporados = await incorporadosDoPca(pcaId);
+  if ("dfd" in alvo) {
+    if (!(await dfdNoPca(pcaId, alvo.dfd, incorporados))) return null;
+    return historicoPublico(await historicoDfd(alvo.dfd), incorporados);
+  }
+  if (!incorporados.has(alvo.protocolo)) return null;
+  return historicoPublico(await historicoProtocolo(alvo.protocolo), incorporados);
 }
 
 // ---------------------------------------------------------------------------

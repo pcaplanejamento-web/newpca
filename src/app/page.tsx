@@ -1,12 +1,13 @@
 import { Button } from "@/components/Button";
 import { IconInbox } from "@/components/icons";
+import { ConsultaPca } from "@/components/ConsultaPca";
 import { PainelPca } from "@/components/PainelPca";
 import { PcaSeletor } from "@/components/PcaSeletor";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getAparencia } from "@/lib/aparencia";
 import { num } from "@/lib/format";
-import { dashboardDoPca, getPcaEspaco, itemPublico, listarPcasPublicados } from "@/lib/pca-espaco";
+import { dashboardDoPca, getPcaEspaco, listarPcasPublicados } from "@/lib/pca-espaco";
 import type { Aparencia } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -105,9 +106,15 @@ export default async function HomePage({
           </div>
         </div>
         <PainelPca
-          dados={{ ...dados, itens: dados.itens.map(itemPublico) }}
+          dados={dados}
           unidadeFiltrada={dados.unidadeId != null}
           hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
+          consulta={
+            // A MESMA consulta do painel (Protocolos · DFDs · Itens + banners discretos, dados públicos higienizados).
+            pca.fonte === "protocolo" ? (
+              <ConsultaPca pcaId={pca.id} protocolos={dados.protocolosLista} dfds={dados.dfdsLista} itens={dados.itens} showUnidade={dados.unidadeId == null} />
+            ) : undefined
+          }
         />
       </main>
     </div>

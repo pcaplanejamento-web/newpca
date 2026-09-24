@@ -1,35 +1,46 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { type ComponentProps, useMemo, useState } from "react";
-import type { DfdDoPca } from "@/lib/pca-espaco";
+import { useMemo, useState } from "react";
+import { brl, num } from "@/lib/format";
+import type { DfdDoPca, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { ItemRow } from "@/lib/queries";
-import { type AberturaMesa, BannersMesa } from "./BannersMesa";
+import { BannersConsulta } from "./BannersConsulta";
+import type { AberturaMesa } from "./BannersMesa";
+import { type Column, DataTable } from "./DataTable";
 import { ItemTable } from "./ItemTable";
 import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Segmented } from "./Segmented";
 
-type Visao = "itens" | "dfds";
-type ContextoBanners = Omit<ComponentProps<typeof BannersMesa>, "abrir" | "onFechar" | "onAbrir" | "onAlterado" | "reparticaoAtivaId">;
+type Visao = "protocolos" | "dfds" | "itens";
+
+const COLS_PROTOCOLO: Column<ProtocoloDoPca>[] = [
+  { key: "numero", header: "Nº processo", nowrap: true, value: (p) => p.numero, render: (p) => <span className="font-mono text-[12px] font-semibold">{p.numero}</span> },
+  { key: "assunto", header: "Assunto", align: "left", minWidth: 220, value: (p) => p.assunto ?? "—", render: (p) => <span className="line-clamp-2">{p.assunto ?? "—"}</span> },
+  { key: "sigla", header: "Unidade", nowrap: true, value: (p) => p.sigla ?? "—", render: (p) => <span className="font-mono text-[12px] font-semibold text-text-2">{p.sigla ?? "—"}</span> },
+  { key: "dfds", header: "DFDs", nowrap: true, filter: "range", numero: (p) => p.dfds, render: (p) => num(p.dfds) },
+  { key: "itens", header: "Itens", nowrap: true, filter: "range", numero: (p) => p.itens, render: (p) => num(p.itens) },
+  { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (p) => p.valor, render: (p) => <span className="font-semibold tabular-nums">{brl(p.valor)}</span> },
+];
 
 /**
- * CONSULTA do Dashboard do PCA (painel, fonte protocolo): `Segmented` **Itens | DFDs** no MESMO espaço (morph) com as
- * tabelas do sistema SEM apontar erros (`ItemTable` com a origem · `PlanilhaDfds` `semEstado`) e a MESMA pilha de
- * banners da Mesa (`BannersMesa`): a linha de item abre o banner do ITEM ("Ver DFD" traz o DFD ao lado; "Ver
- * protocolo" também) e a de DFD abre o banner do DFD. Gravar num banner recarrega o Dashboard.
+ * CONSULTA do Dashboard do PCA (fonte protocolo — tela inicial e painel): `Segmented` **Protocolos | DFDs | Itens**
+ * no MESMO espaço (morph), com as tabelas do sistema SEM apontar erros (`DataTable` · `PlanilhaDfds` `semEstado` ·
+ * `ItemTable` com a origem) e a pilha de banners DISCRETA da consulta (`BannersConsulta`: protocolo | DFD | item,
+ * campos congelados, dados públicos higienizados).
  */
 export function ConsultaPca({
-  itens,
+  pcaId,
+  protocolos,
   dfds,
+  itens,
   showUnidade,
-  banners,
 }: {
-  itens: ItemRow[];
+  pcaId: number;
+  protocolos: ProtocoloDoPca[];
   dfds: DfdDoPca[];
+  itens: ItemRow[];
   showUnidade: boolean;
-  banners: ContextoBanners;
 }) {
-  const router = useRouter();
   const [visao, setVisao] = useState<Visao>("itens");
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
 
@@ -56,8 +67,9 @@ export function ConsultaPca({
         onChange={setVisao}
         ariaLabel="Visão da consulta"
         options={[
-          { value: "itens", label: `Itens (${itens.length})` },
+          { value: "protocolos", label: `Protocolos (${protocolos.length})` },
           { value: "dfds", label: `DFDs (${dfds.length})` },
+          { value: "itens", label: `Itens (${itens.length})` },
         ]}
       />
       <div key={visao} className="animate-cat-morph">
@@ -69,18 +81,24 @@ export function ConsultaPca({
             onRowClick={(r) => r.dfdId != null && setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })}
             ativo={aberto?.tipo === "item" ? aberto.itemId : null}
           />
-        ) : (
+        ) : visao === "dfds" ? (
           <PlanilhaDfds linhas={linhas} semEstado onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
+        ) : (
+          <DataTable
+            columns={COLS_PROTOCOLO}
+            rows={protocolos}
+            getKey={(p) => p.id}
+            pageSize={20}
+            minWidth={760}
+            onRowClick={(p) => setAberto({ tipo: "protocolo", id: p.id })}
+            activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}
+            resumo={(l) =>
+              `${l.length} protocolo${l.length === 1 ? "" : "s"} · ${num(l.reduce((s, p) => s + p.dfds, 0))} DFDs · ${brl(l.reduce((s, p) => s + p.valor, 0))}`
+            }
+          />
         )}
       </div>
-      <BannersMesa
-        {...banners}
-        abrir={aberto}
-        onFechar={() => setAberto(null)}
-        onAbrir={setAberto}
-        onAlterado={() => router.refresh()}
-        reparticaoAtivaId={null}
-      />
+      <BannersConsulta pcaId={pcaId} abrir={aberto} onFechar={() => setAberto(null)} />
     </div>
   );
 }

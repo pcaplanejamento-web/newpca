@@ -25,7 +25,7 @@ type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | 
 export type AberturaMesa = { tipo: "protocolo"; id: number } | { tipo: "dfd"; id: number } | { tipo: "item"; dfdId: number; itemId: number; item: ItemRef };
 
 /** Larguras preferidas (rem) de cada banner na pilha (também o peso quando dividem a tela). */
-const LARGURA = { item: 34, dfd: 52, protocolo: 50 } as const;
+export const LARGURA = { item: 34, dfd: 52, protocolo: 50 } as const;
 
 /**
  * PILHA DE BANNERS da Mesa — um único `Modal` em ORDEM FIXA: **Protocolo (esquerda) | DFD (centro) | Item

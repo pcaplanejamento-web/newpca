@@ -1195,6 +1195,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/orcamento/visoes/[id]` (auditoria `orcamento_visao`).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
+- **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
+  Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
+  erro/aviso. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
+  do `BannersMesa` (`LARGURA` exportado) com `ProtocoloView modoCapa="consulta"`, `DfdView consulta` e `ItemDetalhe consulta`
+  (campos **`CampoCongelado`** + `CadeadoBotao congelado` — cadeado fechado "Somente consulta"; sem estado, pendências, catálogo,
+  conciliação, sobrescritos, aviso de incorporado; das assinaturas só o bloco **"Responsável pela solicitação"**); o cabeçalho do
+  item traz o **nº do DFD + planejamento**; o histórico é `Historico anonimo` (sem autor; `HistoricoDoItem` recebe a `url`).
+  **Dados higienizados NO SERVIDOR** (núcleo puro `pca-publico-core.ts`, testado): `dfdPublico` (sem matrícula/e-mail/telefone/
+  assinaturas; só itens ATIVOS no PCA, totais recomputados), `solicitantePublico` (sem matrícula/código/data da assinatura),
+  `historicoPublico` (só linhas de protocolos INCORPORADOS ao PCA, sem autor, sem chaves pessoais nem assinaturas no diff) e
+  `mascararTexto` (CPF/CNPJ/e-mail/telefone/matrícula em TEXTO LIVRE — seções, capa, diff). Rotas GET **públicas**
+  `/api/pca/[id]/consulta/dfd/[dfdId]`, `/consulta/protocolo/[protocoloId]` (capa sem CPF/CNPJ) e `/consulta/historico?dfd=|protocolo=`
+  → `consultaDfd`/`consultaProtocolo`/`consultaHistorico` (`pca-espaco.ts`): só PCA de fonte protocolo **publicado** (ou
+  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404).
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
   capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar), `POST /api/pca/[id]/itens` (retirar), `GET /api/pca/[id]/capa`
   (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.

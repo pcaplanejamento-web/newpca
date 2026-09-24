@@ -10,7 +10,7 @@ import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getUsuarioAtual } from "@/lib/auth";
 import { num } from "@/lib/format";
-import { carregarMesa, contextoBanners } from "@/lib/mesa-dados";
+import { carregarMesa } from "@/lib/mesa-dados";
 import { resumoVisao } from "@/lib/orcamento-visao";
 import type { AcaoDfdPca } from "@/lib/pca-core";
 import {
@@ -48,7 +48,7 @@ export default async function PcaEspacoPage({
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
-  if (aba === "dashboard") conteudo = await abaDashboard(pca, u, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
+  if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
   else if (aba === "orcamento") {
     const orc = await orcamentoDoPca(pca);
     conteudo = (
@@ -90,9 +90,8 @@ export default async function PcaEspacoPage({
 }
 
 /** Aba DASHBOARD: os MESMOS KPIs/gráficos do público (tudo o que foi incorporado) + o filtro por unidade. */
-async function abaDashboard(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsuarioAtual>>, unidade?: number) {
-  // Os banners (item/DFD/protocolo) só existem na fonte protocolo — só então carrega o contexto deles.
-  const [dash, ctx] = await Promise.all([dashboardDoPca(pca, unidade), pca.fonte === "protocolo" ? contextoBanners(u) : Promise.resolve(null)]);
+async function abaDashboard(pca: PcaEspaco, unidade?: number) {
+  const dash = await dashboardDoPca(pca, unidade);
   if (dash.resumo.count === 0)
     return (
       <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
@@ -113,13 +112,8 @@ async function abaDashboard(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsua
         unidadeFiltrada={dash.unidadeId != null}
         hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
         consulta={
-          ctx ? (
-            <ConsultaPca
-              itens={dash.itens}
-              dfds={dash.dfdsLista}
-              showUnidade={dash.unidadeId == null}
-              banners={{ reparticoes: ctx.reparticoes, regras: ctx.regras, orgaos: ctx.orgaos, pcas: ctx.pcas, podeEditar: ctx.podeEditar }}
-            />
+          pca.fonte === "protocolo" ? (
+            <ConsultaPca pcaId={pca.id} protocolos={dash.protocolosLista} dfds={dash.dfdsLista} itens={dash.itens} showUnidade={dash.unidadeId == null} />
           ) : undefined
         }
       />
