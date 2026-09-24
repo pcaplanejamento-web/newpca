@@ -80,6 +80,15 @@ export function pct(part: number, whole: number): string {
   })}%`;
 }
 
+/**
+ * Dica (`title`) de uma LISTA — um por linha, só os `max` primeiros (o resto vira "… e mais N"): uma dica de milhares de
+ * linhas não serve para ler e pesa na página. Só os exibidos são formatados.
+ */
+export function dicaLista<T>(itens: readonly T[], texto: (it: T) => string, max = 30): string {
+  const linhas = itens.slice(0, max).map(texto).join("\n");
+  return itens.length > max ? `${linhas}\n… e mais ${num(itens.length - max)}` : linhas;
+}
+
 /** Tamanho em bytes → texto curto pt-BR (base 1024): 1,5 MB, 820 KB, 512 B. */
 export function formatBytes(n?: number | null): string {
   const v = Number(n ?? 0);

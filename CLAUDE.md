@@ -618,6 +618,32 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `conformidadeDosItens` (`catalogo.ts`) confere cada item com o tipo do DFD de origem (`ItemDfdRow.dfdTipo`) e devolve
     o veredito COMPACTO (`ConferenciaCompacta` — sem a descrição do catálogo; catálogo vazio/sem código ⇒ `null`); a
     célula é a **`CelulaCatalogo`** (`EstadoCelula.tsx`, a MESMA da tabela de itens do `DfdView`), na cor do nível do ADM.
+  - **Itens NORMAL | CONSOLIDADA (sem consulta nova ao banco):** só na visão Itens, um 2º `Segmented` (`modoItens`,
+    ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
+    linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
+    é UMA linha por **CÓDIGO** (só os dígitos — `normalizarCodigo`; item SEM código não consolida, fica numa linha
+    própria), calculada no cliente sobre os itens JÁ filtrados pela hierarquia (`itensF`) e SÓ com ela aberta, pelo núcleo
+    PURO **`itens-consolidados.ts`** (testado, linear — 20 mil itens): `consolidarItens` (quantidade SOMADA; **valor
+    unitário MÉDIO PONDERADO** pela quantidade = Σ qtd×vu ÷ Σ qtd dos itens com qtd E preço > 0 — a linha fecha; sem
+    qtd/preço contam à parte, nunca NaN; menor/maior preço; **variação** = coeficiente de variação amostral dos preços,
+    faixas `FAIXAS_VARIACAO` ≤ 25% ok · ≤ 50% atenção · acima alerta; **curva ABC** pela participação acumulada ANTES da
+    linha — `LIMITES_ABC` 80%/95%; ordem pelo valor, empate pelo código, sem código no fim; descrições/unidades distintas
+    sem caixa/acento/espaço, a mais frequente primeiro), `estadoConsolidado` (os problemas dos itens de origem AGRUPADOS
+    com a contagem — "Item sem valor (2)" —, erros primeiro; o filtro recebe os rótulos SEM contagem), `distintos`,
+    `varianteDescricao` (D1, D2…), `desvioDaMedia`/`desvioTexto`, `participacaoTexto` ("< 0,1%") e
+    `textoResumoConsolidado` ("Copiar resumo"). Colunas (as da visão Normal, agregadas): [Seq. PCA] · Estado · Código ·
+    Catálogo (o veredito MAIS grave dos itens) · Descrição (+N) · Unidade (unidades diferentes = ÂMBAR + ícone — a soma
+    mistura unidades) · Qtd. total · Vlr. unit. médio · **Variação** (`CelulaVariacao`) · Vlr. total · **ABC** (`SeloAbc`) ·
+    Itens · Nº DFD · Protocolo · Sigla · [PCA] · Prioridade — as listas pela **`CelulaLista`** (primeiros + "+N", a lista
+    inteira na dica; Seq. PCA inativo riscado) e os filtros multi-valor acham a linha por QUALQUER valor. Tudo o que as
+    células mostram é calculado UMA vez por lista (`infoConsolidados`), não por célula. Rodapé = N códigos · M sem código
+    · itens · o MESMO total da visão Normal. SÓ leitura (sem seleção/massa — a edição é item a item; a seleção da Normal
+    fica guardada). Tocar numa linha abre o **`ComposicaoItem`** (`Modal` full): 6 `StatMini` (quantidade total, valor
+    unitário médio, menor e maior preço, variação, valor total + ABC), avisos (`Callout` unidades diferentes / itens fora
+    da média), as descrições diferentes numeradas (D1…) e a TABELA das ocorrências (Protocolo · Nº DFD · Sigla · Item ·
+    Unidade · Qtd. · "Vlr. unit. · Δ média" [o valor + o desvio dele da média, na cor da faixa — uma coluna só: ordenar
+    pelo valor = pelo desvio] · Vlr. total · [Descrição D1/D2 — só com descrições diferentes]); tocar numa ocorrência abre o banner do ITEM por cima (`setAberto` — a pilha da Mesa; Esc fecha o do topo
+    primeiro); recarregando os itens (após salvar), o detalhe segue a última composição e fecha se o código sumir.
   - **PILHA DE BANNERS da Mesa (`BannersMesa`) — ORDEM FIXA Protocolo (esquerda) | DFD (centro) | Item (direita), qualquer
     que seja o banner de entrada:** linha de **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD,
     com "Salvar alterações") — a coluna da direita; **"Ver DFD"** faz o DFD surgir À ESQUERDA dele; **"Ver protocolo"** traz
@@ -1566,7 +1592,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   HIERARQUIA na linha das visões — SÓ O ÍCONE num quadrado na altura padrão, accent quando ativo; quem usa troca o ícone pelo
   que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; `<select>` nativo por cima),
   **`CelulaPca`**/**`CelulaPrioridade`** (`PlanilhaDfds.tsx` — as células PCA e Prioridade, as MESMAS nas tabelas de protocolos,
-  DFDs e itens), **`ConfigTabelas`** (contexto: as linhas por página iniciais do ADM para as tabelas),
+  DFDs e itens), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista inteira na dica, valor
+  inativo riscado; a visão Consolidada dos itens), **`CelulaVariacao`**/**`SeloAbc`**/**`ComposicaoItem`**
+  (`ComposicaoItem.tsx` — a variação dos preços na cor da faixa, o selo da curva ABC e o detalhe da linha consolidada: KPIs +
+  avisos + as ocorrências com o desvio da média; "Copiar resumo"), **`ConfigTabelas`** (contexto: as linhas por página
+  iniciais do ADM para as tabelas),
   **`BotaoCopiar`** (copia um texto pronto; fallback `execCommand`; "Copiado!"), **`SeletorBusca`** (seleção ÚNICA com
   BUSCA — lista rolável rótulo + detalhe, ↑/↓/Enter, alvos ≥44px, até 200 renderizadas; ex.: o protocolo de destino ao
   vincular/mover um DFD na Mesa, com nº · Id · assunto · interessado · unidade e o "atual" marcado),

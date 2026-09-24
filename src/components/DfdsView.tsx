@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
@@ -22,7 +22,8 @@ import {
   rotuloVeredictoCatalogo,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
-import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
+import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, num } from "@/lib/format";
+import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -39,6 +40,8 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
+import { CelulaLista } from "./CelulaLista";
+import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
@@ -46,7 +49,7 @@ import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
-import { IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
+import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
 import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
@@ -86,6 +89,8 @@ type Gestao = { responsavelId?: number | null; situacaoId?: number | null };
 
 /** Visão da tela Mesa: o MESMO espaço mostra o Dashboard de governança, Protocolos, DFDs ou a lista plana de Itens. */
 type Vista = "dashboard" | "protocolos" | "dfds" | "itens";
+/** Visão dos ITENS: Normal (um por linha) | Consolidada (um por CÓDIGO — quantidades somadas, valor médio ponderado). */
+type ModoItens = "normal" | "consolidada";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
 const FATIA_CONFERENCIA = 150;
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
@@ -113,6 +118,21 @@ export type ModoPcaMesa = {
   /** Ações da seleção de itens (ex.: "Retirar do PCA"); o editor de massa só aparece com itens NÃO incorporados. */
   acoesItens?: (selecionados: ItemDfdRow[], limpar: () => void) => ReactNode;
 };
+/** Linha consolidada ainda sem as informações calculadas (nunca acontece com a lista montada — só por segurança). */
+const SEM_INFO = {
+  estado: { rotulo: "", cor: "var(--ok)", extraErros: 0, extraAtencoes: 0, titulo: "", rotulos: [] } as ResumoEstado,
+  rotulosEstado: [] as string[],
+  protocolos: [] as string[],
+  pcas: [] as string[],
+  dfds: [] as string[],
+  siglas: [] as string[],
+  prioridades: [] as string[],
+  seqsPca: [] as { texto: string; riscado: boolean }[],
+  catalogoPior: null as ItemDfdRow | null,
+  catalogo: [] as string[],
+};
+/** O PCA (ano) de um DFD na Mesa: o do protocolo de origem; sem ele, o do próprio DFD (o item segue o DFD). */
+const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
 /** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
 const podar = (sel: Sel, validas: Set<number>): Sel => {
   const n = new Set([...sel].filter((k) => validas.has(Number(k))));
@@ -256,6 +276,7 @@ export function DfdsView({
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
   const [vista, setVista] = useState<Vista>("protocolos");
+  const [modoItens, setModoItens] = useState<ModoItens>("normal");
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
@@ -650,7 +671,7 @@ export function DfdsView({
   }
 
   // ---- Planilha ÚNICA de DFDs (a MESMA dos banners) para a aba DFDs — conferência real por linha. ----
-  const dfdPorId = new Map(dfds.map((d) => [d.id, d]));
+  const dfdPorId = useMemo(() => new Map(dfds.map((d) => [d.id, d])), [dfds]);
   // PCA (ano) das linhas — coluna "PCA" dos protocolos, DFDs e itens (o nome do PCA cadastrado na dica). Só na Mesa
   // PRINCIPAL: a do PCA é de um PCA só. O DFD segue o PCA do protocolo de origem; o item, o do DFD.
   const nomePcaPorAno = useMemo(() => {
@@ -659,7 +680,6 @@ export function DfdsView({
     return m;
   }, [pcas]);
   const pcaDe = (ano: number | null | undefined): PcaDaLinha | null => (ano != null ? { ano, nome: nomePcaPorAno.get(ano) ?? `PCA ${ano}` } : null);
-  const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -928,14 +948,73 @@ export function DfdsView({
   // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
   // tabela de itens do DFD; o filtro da coluna Estado junta todos os repetidos para conferir.
   const repetidosItens = useMemo(() => (itens ? repetidosPorDfd(itens) : null), [itens]);
-  const repDoItem = (r: ItemDfdRow) => {
-    const rep = repetidosItens?.get(r.id);
-    if (!rep) return null;
-    // A MESMA régua do banner do DFD: tipo do DFD + a categoria do protocolo de origem (exceções do ADM).
-    const ctx = { dfdTipo: tipoCurtoDfd(r.dfdTipo), categoria: classificarAssunto(r.protocoloAssunto) };
-    if (comportamentoNo(regras, "item.duplicado", ctx) === "ignora") return null;
-    return { ...rep, cor: corImportancia(regras, nivelDe(regras, "item.duplicado", ctx)) };
-  };
+  const repDoItem = useCallback(
+    (r: ItemDfdRow) => {
+      const rep = repetidosItens?.get(r.id);
+      if (!rep) return null;
+      // A MESMA régua do banner do DFD: tipo do DFD + a categoria do protocolo de origem (exceções do ADM).
+      const ctx = { dfdTipo: tipoCurtoDfd(r.dfdTipo), categoria: classificarAssunto(r.protocoloAssunto) };
+      if (comportamentoNo(regras, "item.duplicado", ctx) === "ignora") return null;
+      return { ...rep, cor: corImportancia(regras, nivelDe(regras, "item.duplicado", ctx)) };
+    },
+    [repetidosItens, regras],
+  );
+
+  // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
+  const consolidada = vista === "itens" && modoItens === "consolidada";
+  const consolidados = useMemo(() => (consolidada ? consolidarItens(itensF ?? []) : null), [consolidada, itensF]);
+  // Tudo o que as células de cada linha consolidada mostram — calculado UMA vez por lista (não por célula nem por
+  // renderização): o ESTADO (os problemas dos itens de origem agrupados), as listas "todos juntos" e o veredito do
+  // catálogo MAIS grave entre os itens (o tipo do DFD de origem conta).
+  const infoConsolidados = useMemo(() => {
+    const peso = { erro: 3, atencao: 2, conforme: 1 } as const;
+    return new Map(
+      (consolidados ?? []).map((l) => {
+        const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it))));
+        let pior: { it: ItemDfdRow; peso: number } | null = null;
+        const catalogo = new Set<string>();
+        for (const it of l.itens) {
+          const v = veredictoLinhaCatalogo(it.catalogo, regras, tipoCurtoDfd(it.dfdTipo));
+          if (!v) continue;
+          catalogo.add(rotuloVeredictoCatalogo(v));
+          if (!pior || peso[v.nivel] > pior.peso) pior = { it, peso: peso[v.nivel] };
+        }
+        return [
+          l.chave,
+          {
+            estado: resumoEstado(e.mensagens),
+            rotulosEstado: e.rotulos,
+            protocolos: distintos(l.itens, (it) => it.protocoloNumero),
+            pcas: distintos(l.itens, (it) => anoPcaDoDfd(dfdPorId.get(it.dfdId))),
+            dfds: distintos(l.itens, (it) => it.dfdNumero),
+            siglas: distintos(l.itens, (it) => it.sigla),
+            prioridades: distintos(l.itens, (it) => dfdPorId.get(it.dfdId)?.prioridade),
+            seqsPca: l.itens
+              .filter((it) => it.pcaSequencial != null)
+              .sort((a, b) => (a.pcaSequencial ?? 0) - (b.pcaSequencial ?? 0))
+              .map((it) => ({ texto: String(it.pcaSequencial), riscado: !it.pcaAtivo })),
+            catalogoPior: pior?.it ?? null,
+            catalogo: Array.from(catalogo),
+          },
+        ] as const;
+      }),
+    );
+  }, [consolidados, repDoItem, dfdPorId, regras]);
+  // Detalhe (COMPOSIÇÃO) da linha consolidada aberta. Recarregando os itens (depois de gravar no banner do item),
+  // segue a última — o detalhe não pisca nem troca de lugar na pilha de banners.
+  const [composicao, setComposicao] = useState<string | null>(null);
+  const achadaComposicao = useMemo(
+    () => (composicao ? (consolidados?.find((l) => l.chave === composicao) ?? null) : null),
+    [composicao, consolidados],
+  );
+  const ultimaComposicao = useRef<ItemConsolidado<ItemDfdRow> | null>(null);
+  if (!composicao) ultimaComposicao.current = null;
+  else if (achadaComposicao) ultimaComposicao.current = achadaComposicao;
+  const linhaComposicao = achadaComposicao ?? (composicao && itensF === null ? ultimaComposicao.current : null);
+  // Fora da visão consolidada — ou o código sumiu da lista recarregada —, o detalhe fecha.
+  useEffect(() => {
+    if (composicao && (!consolidada || (itensF !== null && !achadaComposicao))) setComposicao(null);
+  }, [composicao, consolidada, itensF, achadaComposicao]);
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
@@ -1018,6 +1097,189 @@ export function DfdsView({
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
     { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+  ];
+
+  // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados de todos os itens do código JUNTOS na
+  // célula (listas com "+N"; a lista inteira na dica e no detalhe) e os números agregados: quantidade somada, valor
+  // unitário MÉDIO ponderado (+ a variação dos preços) e o total — mais a curva ABC do valor. Os filtros de lista acham
+  // a linha por QUALQUER valor dela (ex.: um protocolo).
+  type Cons = ItemConsolidado<ItemDfdRow>;
+  const lista = (vs: string[]) => (vs.length ? vs : ["—"]);
+  const infoDe = (l: Cons) => infoConsolidados.get(l.chave) ?? SEM_INFO;
+  // Ordem da visão consolidada: o PRODUTO e os números primeiro (código, descrição, quantidade, médio, total, ABC); as
+  // listas de origem (DFDs, protocolos, unidades…) depois.
+  const colsConsolidados: Column<Cons>[] = [
+    ...(modoPca
+      ? [
+          {
+            key: "pcaSeq",
+            header: "Seq. PCA",
+            nowrap: true,
+            value: (l: Cons) => infoDe(l).seqsPca[0]?.texto ?? "",
+            valores: (l: Cons) => infoDe(l).seqsPca.map((x) => x.texto),
+            render: (l: Cons) => <CelulaLista valores={infoDe(l).seqsPca} />,
+          },
+        ]
+      : []),
+    {
+      key: "estado",
+      header: "Estado",
+      nowrap: true,
+      value: (l) => infoDe(l).estado.rotulo || ESTADO_ITEM_ROTULO.regular,
+      valores: (l) => (infoDe(l).rotulosEstado.length ? infoDe(l).rotulosEstado : [ESTADO_ITEM_ROTULO.regular]),
+      render: (l) => {
+        const e = infoDe(l).estado;
+        return e.rotulo ? <EstadoResumo res={e} /> : <EstadoPonto cor={estadoItemCor("regular")} rotulo={ESTADO_ITEM_ROTULO.regular} />;
+      },
+    },
+    {
+      key: "codigo",
+      header: "Código",
+      nowrap: true,
+      value: (l) => l.codigo ?? "Sem código",
+      render: (l) => (l.codigo ? <span className="font-mono text-[12px]">{l.codigo}</span> : <span className="text-faint">Sem código</span>),
+    },
+    {
+      key: "catalogo",
+      header: "Catálogo",
+      nowrap: true,
+      value: (l) => {
+        const pior = infoDe(l).catalogoPior;
+        return pior ? rotuloVeredictoCatalogo(veredictoLinhaCatalogo(pior.catalogo, regras, tipoCurtoDfd(pior.dfdTipo))) : "—";
+      },
+      valores: (l) => lista(infoDe(l).catalogo),
+      render: (l) => {
+        const pior = infoDe(l).catalogoPior;
+        return <CelulaCatalogo conf={pior?.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(pior?.dfdTipo ?? null)} />;
+      },
+    },
+    {
+      key: "descricao",
+      header: "Descrição",
+      minWidth: 260,
+      value: (l) => l.descricoes[0]?.texto ?? "",
+      valores: (l) => (l.descricoes.length ? l.descricoes.map((d) => d.texto) : [""]),
+      // A mais frequente numa linha só; "+N" = descrições diferentes (todas na dica e no detalhe).
+      render: (l) => (
+        <span className="flex min-w-0 items-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
+          <span className="line-clamp-1 min-w-0">{l.descricoes[0]?.texto ?? "—"}</span>
+          {l.descricoes.length > 1 && (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] font-semibold tabular-nums text-muted">+{l.descricoes.length - 1}</span>
+          )}
+        </span>
+      ),
+    },
+    // Unidades diferentes no mesmo código = a quantidade soma unidades distintas → âmbar (atenção).
+    {
+      key: "unidade",
+      header: "Unidade",
+      nowrap: true,
+      value: (l) => l.unidades.map((u) => u.texto).join(" · "),
+      valores: (l) => (l.unidades.length ? l.unidades.map((u) => u.texto) : [""]),
+      render: (l) =>
+        l.unidades.length > 1 ? (
+          <span
+            className="inline-flex items-center gap-1 whitespace-nowrap font-medium"
+            style={{ color: "var(--warn)" }}
+            title={`Unidades diferentes — a quantidade soma unidades distintas:\n${dicaLista(l.unidades, (u) => `${u.texto} (${u.n} ${u.n === 1 ? "item" : "itens"})`)}`}
+          >
+            <IconAlert className="h-3.5 w-3.5 shrink-0" />
+            {l.unidades.map((u) => u.texto).join(" · ")}
+          </span>
+        ) : (
+          (l.unidades[0]?.texto ?? "—")
+        ),
+    },
+    { key: "qtd", header: "Qtd. total", align: "center", filter: "range", nowrap: true, numero: (l) => l.quantidade, render: (l) => (l.quantidade != null ? num(l.quantidade) : "—") },
+    {
+      key: "vmedio",
+      header: "Vlr. unit. médio",
+      align: "right",
+      filter: "range",
+      nowrap: true,
+      numero: (l) => l.valorMedio,
+      render: (l) => (
+        <span title="Média ponderada pela quantidade (Σ qtd × valor ÷ Σ qtd)">{l.valorMedio != null ? brl(l.valorMedio) : "—"}</span>
+      ),
+    },
+    {
+      key: "variacao",
+      header: "Variação",
+      align: "center",
+      filter: "range",
+      nowrap: true,
+      numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
+      render: (l) => <CelulaVariacao cv={l.variacao} min={l.valorMin} max={l.valorMax} n={l.itens.length - l.semValor} />,
+    },
+    { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (l) => l.valorTotal, render: (l) => brl(l.valorTotal) },
+    {
+      key: "abc",
+      header: "ABC",
+      align: "center",
+      nowrap: true,
+      value: (l) => l.abc ?? "—",
+      render: (l) => <SeloAbc classe={l.abc} participacao={l.participacao} />,
+    },
+    // Quantos itens o código junta (a lista DFD · item na dica — até 30 — e inteira no detalhe).
+    {
+      key: "itens",
+      header: "Itens",
+      align: "center",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.itens.length,
+      render: (l) => (
+        <span className="tabular-nums" title={dicaLista(l.itens, (it) => `DFD ${it.dfdNumero} · item ${it.item ?? "—"}`)}>
+          {num(l.itens.length)}
+        </span>
+      ),
+    },
+    {
+      key: "dfd",
+      header: "Nº DFD",
+      nowrap: true,
+      value: (l) => infoDe(l).dfds.join(" · "),
+      valores: (l) => infoDe(l).dfds,
+      render: (l) => <CelulaLista valores={infoDe(l).dfds} mono />,
+    },
+    {
+      key: "protocolo",
+      header: "Protocolo",
+      nowrap: true,
+      value: (l) => infoDe(l).protocolos.join(" · ") || "—",
+      valores: (l) => lista(infoDe(l).protocolos),
+      render: (l) => <CelulaLista valores={infoDe(l).protocolos} mono />,
+    },
+    {
+      key: "sigla",
+      header: "Sigla",
+      nowrap: true,
+      value: (l) => infoDe(l).siglas.join(" · ") || "—",
+      valores: (l) => lista(infoDe(l).siglas),
+      render: (l) => <CelulaLista valores={infoDe(l).siglas} mono destaque />,
+    },
+    ...(modoPca
+      ? []
+      : [
+          {
+            key: "pca",
+            header: "PCA",
+            align: "center" as const,
+            nowrap: true,
+            value: (l: Cons) => infoDe(l).pcas.join(" · ") || "—",
+            valores: (l: Cons) => lista(infoDe(l).pcas),
+            render: (l: Cons) => <CelulaLista valores={infoDe(l).pcas} dica={dicaLista(infoDe(l).pcas, (a) => pcaDe(Number(a))?.nome ?? a)} />,
+          },
+        ]),
+    {
+      key: "prioridade",
+      header: "Prioridade",
+      align: "center",
+      nowrap: true,
+      value: (l) => infoDe(l).prioridades.join(" · ") || "—",
+      valores: (l) => lista(infoDe(l).prioridades),
+      render: (l) => <CelulaLista valores={infoDe(l).prioridades} max={3} />,
+    },
   ];
 
   // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). A MESMA altura de linha nas três visões (densidade
@@ -1103,6 +1365,30 @@ export function DfdsView({
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
   );
+  // Visão CONSOLIDADA: uma linha por código (na ordem do valor — a curva ABC), SÓ leitura (a edição é item a item);
+  // tocar numa linha abre o detalhe da composição. O rodapé soma o MESMO total da visão normal.
+  const tabelaConsolidada = (
+    <DataTable
+      columns={colsConsolidados}
+      rows={consolidados ?? []}
+      getKey={(l) => l.chave}
+      onRowClick={(l) => setComposicao(l.chave)}
+      activeKey={composicao}
+      scrollInterno
+      reservaInferior={reserva}
+      minWidth={modoPca ? 1480 : 1560}
+      density="compact"
+      vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
+      resumo={(linhas) => {
+        const semCodigo = linhas.filter((l) => l.codigo == null).length;
+        const nItens = linhas.reduce((s, l) => s + l.itens.length, 0);
+        const codigos = linhas.length - semCodigo;
+        return `${num(codigos)} ${codigos === 1 ? "código" : "códigos"}${semCodigo ? ` · ${num(semCodigo)} sem código` : ""} · ${num(nItens)} ${
+          nItens === 1 ? "item" : "itens"
+        } · ${brl(linhas.reduce((s, l) => s + l.valorTotal, 0))}`;
+      }}
+    />
+  );
 
   // Barra de SELEÇÃO FIXA no rodapé do display (visão atual): registro das seleções (chips removíveis) +
   // somatório R$ + o editor de massa da visão. Só para editores.
@@ -1174,7 +1460,7 @@ export function DfdsView({
         )}
       </BarraSelecao>
     );
-  } else if (podeEditar && vista === "itens" && (selItens.size > 0 || aplicandoMassa)) {
+  } else if (podeEditar && vista === "itens" && !consolidada && (selItens.size > 0 || aplicandoMassa)) {
     const sel = (itensF ?? []).filter((it) => selItens.has(it.id));
     barraSelecao = (
       <BarraSelecao
@@ -1224,6 +1510,18 @@ export function DfdsView({
           ]}
         />
         {modoPca?.ferramenta}
+        {/* Só na visão Itens: Normal (um por linha) | Consolidada (um por código). */}
+        {vista === "itens" && (
+          <Segmented<ModoItens>
+            value={modoItens}
+            onChange={setModoItens}
+            ariaLabel="Visão dos itens"
+            options={[
+              { value: "normal", label: "Normal" },
+              { value: "consolidada", label: "Consolidada" },
+            ]}
+          />
+        )}
         <div className="ml-auto flex items-center gap-2">
           <SeletorFiltro
             icone={
@@ -1264,8 +1562,8 @@ export function DfdsView({
         </div>
       </div>
 
-      {/* MESMO espaço para as visões — `key={vista}` remonta e replaya o morph (fade+escala). */}
-      <div key={vista} className="animate-cat-morph">
+      {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. */}
+      <div key={vista === "itens" ? `itens-${modoItens}` : vista} className="animate-cat-morph">
         {vista === "dashboard" && dash ? (
           <DashboardMesa
             protocolos={dash.protocolos}
@@ -1280,6 +1578,8 @@ export function DfdsView({
           tabelaProtocolos
         ) : vista === "dfds" ? (
           tabelaDfds
+        ) : consolidada ? (
+          tabelaConsolidada
         ) : (
           tabelaItens
         )}
@@ -1302,6 +1602,13 @@ export function DfdsView({
       )}
 
       {barraSelecao}
+
+      {/* Detalhe da linha CONSOLIDADA (composição do código); tocar numa ocorrência abre o item na pilha, por cima. */}
+      <ComposicaoItem
+        linha={linhaComposicao}
+        onFechar={() => setComposicao(null)}
+        onAbrirItem={(it) => setAberto({ tipo: "item", dfdId: it.dfdId, itemId: it.id, item: { item: it.item, codigo: it.codigo } })}
+      />
 
       {/* PILHA DE BANNERS do GRAVADO — os MESMOS componentes/conferência da análise, em ORDEM FIXA
           Protocolo | DFD | Item: cada "Ver …" surge no seu lugar, qualquer que seja o banner de entrada. */}

@@ -1,11 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brl, brlCompact, dataBR, dec, formatBytes, mesLabel, num, pct } from "../src/lib/format.ts";
+import { brl, brlCompact, dataBR, dec, dicaLista, formatBytes, mesLabel, num, pct } from "../src/lib/format.ts";
 
 // Intl insere espaços não-quebráveis (NBSP/narrow) no pt-BR; normalizamos.
 const sp = (s: string) => s.replace(/\s/g, " ");
 
 describe("format (pt-BR)", () => {
+  it("dicaLista: um por linha, só os primeiros `max` (o resto = '… e mais N'); formata só os exibidos", () => {
+    assert.equal(dicaLista([], String), "");
+    assert.equal(dicaLista([1, 2, 3], (n) => `DFD ${n}`), "DFD 1\nDFD 2\nDFD 3");
+    let chamadas = 0;
+    const muitos = Array.from({ length: 5000 }, (_, i) => i);
+    const d = dicaLista(
+      muitos,
+      (n) => {
+        chamadas++;
+        return String(n);
+      },
+      3,
+    );
+    assert.equal(sp(d), "0 1 2 … e mais 4.997");
+    assert.equal(chamadas, 3);
+  });
+
   it("brl formata moeda e trata null/undefined como 0", () => {
     assert.equal(sp(brl(1234.5)), "R$ 1.234,50");
     assert.equal(sp(brl(0)), "R$ 0,00");

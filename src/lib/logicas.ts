@@ -264,6 +264,23 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Configurações → Situações / Avaliação", href: "/painel/configuracoes" },
   },
   {
+    id: "mesa-itens-consolidados",
+    dominio: "protocolo",
+    titulo: "Itens consolidados por código (Mesa → Itens)",
+    descricao:
+      "Na visão Itens da Mesa, ao lado de Protocolos · DFDs · Itens, um seletor alterna Normal (um item por linha) e Consolidada: os itens de MESMO código viram uma linha só — quantidades somadas, valor unitário MÉDIO ponderado pela quantidade e os demais dados (protocolos, DFDs, unidades, prioridades…) juntos na célula, com \"+N\" e a lista inteira na dica.",
+    detalhes: [
+      "O código é comparado só pelos dígitos (\"524.194.727-0\" = \"5241947270\"); item sem código não consolida (fica numa linha própria).",
+      "Valor unitário médio = Σ (quantidade × valor) ÷ Σ quantidade — a linha fecha: quantidade × médio = o total. Itens sem quantidade ou sem valor ficam fora da média e são avisados.",
+      "Variação dos preços (coeficiente de variação): até 25% homogêneo (verde), até 50% atenção (âmbar), acima alerta (vermelho) — aponta preço destoante.",
+      "Curva ABC pelo valor: A = os códigos que somam os primeiros 80% do valor, B = até 95%, C = o resto; a lista vem do maior valor para o menor.",
+      "Unidades diferentes no mesmo código ficam em âmbar (a soma mistura unidades); descrições diferentes aparecem como \"+N\" e, no detalhe, numeradas (D1, D2…) em cada item.",
+      "Tocar numa linha abre o detalhe: indicadores, avisos e cada item de origem com o desvio do preço em relação à média; tocar num item abre o banner dele por cima. \"Copiar resumo\" gera o texto para um despacho.",
+      "O Estado junta os problemas dos itens (\"Item sem valor (2)\"); o total do rodapé é o MESMO da visão Normal. A edição segue item a item (visão Normal ou banner do item).",
+    ],
+    fonte: "consolidarItens (itens-consolidados) + ComposicaoItem",
+  },
+  {
     id: "proto-historico",
     dominio: "protocolo",
     titulo: "Histórico conectado: protocolo › DFD › item",

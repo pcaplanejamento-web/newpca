@@ -24,7 +24,9 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   **Dashboard de governança** (ícone à esquerda das visões: saúde, situação, tempo na Mesa, entrada semanal, carga por
   responsável e valor por unidade — tocar numa pessoa filtra a Mesa). "Importar protocolo"/"Importar DFD" ficam no
   rodapé da tabela. As três tabelas são compactas (a mesma altura de linha), têm as colunas **PCA** e **Prioridade** (DFDs e
-  itens) e ocupam todo o espaço, abrindo com as linhas por página escolhidas pelo ADM. O responsável é escolhido entre as
+  itens) e ocupam todo o espaço, abrindo com as linhas por página escolhidas pelo ADM. A visão Itens alterna **Normal**
+  e **Consolidada** (os itens de mesmo código numa linha: quantidade somada, valor unitário médio ponderado, variação dos
+  preços, curva ABC e os demais dados juntos; tocar abre a composição com o desvio de cada preço). O responsável é escolhido entre as
   pessoas do grupo e aparece com **foto + apelido** (apelido definido no Perfil). Um DFD importado de novo
   **sobrescreve** o cadastrado com **escolha dado a dado** (manter o gravado × usar o novo — botão "Sobrescrever DFD"
   no banner do DFD), registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link

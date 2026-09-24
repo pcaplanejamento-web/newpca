@@ -39,6 +39,9 @@ import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { CelulaLista } from "@/components/CelulaLista";
+import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
+import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
 import type { PcaDetalhe } from "@/lib/dfd";
 import { conciliacaoCapa, indiceAposRemover, mapaItensDuplicados, outrosDoGrupo, removerItemDfd, resumoEstado, unificarItensDfd } from "@/lib/dfd-tratamento";
@@ -709,6 +712,52 @@ function GraficosGovernancaDemo() {
   );
 }
 
+/** Itens de exemplo da visão CONSOLIDADA — o MESMO código em 3 DFDs (preços e unidades diferentes) + outro código. */
+const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
+  { id: 1, codigo: "5241947270", descricao: "PAPEL A4 75G/M² — RESMA COM 500 FOLHAS", unidade: "RESMA", quantidade: 120, valorUnitario: 24.9, valorTotal: 2988, dfdNumero: "1201", protocoloNumero: "97600/2026", sigla: "SME", item: 3 },
+  { id: 2, codigo: "524.194.727-0", descricao: "Papel A4 75g/m² — resma com 500 folhas", unidade: "RESMA", quantidade: 80, valorUnitario: 27.5, valorTotal: 2200, dfdNumero: "1243", protocoloNumero: "97611/2026", sigla: "SMS", item: 7 },
+  { id: 3, codigo: "5241947270", descricao: "PAPEL SULFITE A4 BRANCO", unidade: "CX", quantidade: 10, valorUnitario: 139, valorTotal: 1390, dfdNumero: "1300", protocoloNumero: "97611/2026", sigla: "SMS", item: 12 },
+  { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
+];
+
+function ConsolidadosDemo() {
+  const linhas = consolidarItens(ITENS_CONSOLIDADOS_DEMO);
+  const [aberta, setAberta] = useState<string | null>(null);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaLista valores={["97600/2026", "97611/2026", "97650/2026"]} mono />
+        <CelulaLista valores={["SME", "SMS"]} mono destaque />
+        <CelulaLista valores={[{ texto: "12" }, { texto: "45", riscado: true }]} />
+        <CelulaLista valores={[]} />
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaVariacao cv={0.12} min={10} max={12.5} n={3} />
+        <CelulaVariacao cv={0.38} min={8} max={15} n={4} />
+        <CelulaVariacao cv={0.74} min={2} max={9} n={5} />
+        <CelulaVariacao cv={null} />
+        <SeloAbc classe="A" participacao={0.62} />
+        <SeloAbc classe="B" participacao={0.1} />
+        <SeloAbc classe="C" participacao={0.01} />
+        <SeloAbc classe={null} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {linhas.map((l) => (
+          <Button key={l.chave} variant="secondary" size="sm" onClick={() => setAberta(l.chave)}>
+            Detalhe · {l.codigo} ({l.itens.length} {l.itens.length === 1 ? "item" : "itens"})
+          </Button>
+        ))}
+      </div>
+      <ComposicaoItem linha={linhas.find((l) => l.chave === aberta) ?? null} onFechar={() => setAberta(null)} />
+      <p className="text-[12px] text-faint">
+        Os itens de MESMO código viram uma linha: quantidade somada, valor unitário médio PONDERADO pela quantidade,
+        variação dos preços (até 25% homogêneo · até 50% atenção · acima, alerta) e a curva ABC do valor. Unidades
+        diferentes no mesmo código ficam em âmbar (a soma mistura unidades).
+      </p>
+    </div>
+  );
+}
+
 /** Demo dos filtros de HIERARQUIA (acima das tabelas da Mesa) e do dropdown DENTRO da célula. */
 function SeletoresDemo() {
   const [resp, setResp] = useState("todos");
@@ -716,10 +765,11 @@ function SeletoresDemo() {
   const [situacao, setSituacao] = useState<number | null>(2);
   const [pessoa, setPessoa] = useState<number | null>(null);
   const [vista, setVista] = useState("protocolos");
+  const [modoItens, setModoItens] = useState("normal");
   return (
     <div className="space-y-4">
       {/* A BARRA DA MESA: as visões — o Dashboard (item SÓ-ÍCONE do Segmented) antes de Protocolos · DFDs · Itens — à
-          esquerda; os filtros à direita. */}
+          esquerda (em Itens, ao lado, Normal | Consolidada); os filtros à direita. */}
       <div className="flex flex-wrap items-center gap-2">
         <Segmented
           value={vista}
@@ -732,6 +782,17 @@ function SeletoresDemo() {
             { value: "itens", label: "Itens" },
           ]}
         />
+        {vista === "itens" && (
+          <Segmented
+            value={modoItens}
+            onChange={setModoItens}
+            ariaLabel="Visão dos itens"
+            options={[
+              { value: "normal", label: "Normal" },
+              { value: "consolidada", label: "Consolidada" },
+            ]}
+          />
+        )}
         <div className="ml-auto flex items-center gap-2">
           <SeletorFiltro
             icone={(() => {
@@ -2148,6 +2209,10 @@ export function Catalogo() {
 
       <Secao titulo="Barra da Mesa — Dashboard (só ícone) + visões + filtros de HIERARQUIA à direita; dropdown DENTRO da célula (Situação · Responsável)">
         <SeletoresDemo />
+      </Secao>
+
+      <Secao titulo="Itens CONSOLIDADOS (Mesa → Itens → Consolidada) — CelulaLista · CelulaVariacao · SeloAbc · ComposicaoItem">
+        <ConsolidadosDemo />
       </Secao>
 
       <Secao titulo="Tabela — selecionar TODAS as linhas filtradas + coluna travada pelo filtro de hierarquia">

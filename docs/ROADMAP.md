@@ -26,6 +26,21 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Mesa → Itens: visão CONSOLIDADA por código (quantidade somada, valor médio ponderado, variação e curva ABC) — entregue
+✅ Na visão **Itens** da Mesa (principal e do PCA), um seletor ao lado de Protocolos · DFDs · Itens alterna **Normal** (um
+item por linha, como antes) e **Consolidada**: os itens de **mesmo código** viram **uma linha** — **quantidade somada**,
+**valor unitário médio ponderado** pela quantidade (a linha fecha: quantidade × médio = total) e as demais colunas com os
+dados **todos juntos** na célula (protocolos, DFDs, siglas, PCAs, prioridades, nº no PCA — os primeiros + "+N", a lista
+inteira na dica; o filtro de cada coluna acha a linha por qualquer valor dela). Extras para o planejamento: **variação dos
+preços** (verde ≤ 25% · âmbar ≤ 50% · vermelho acima — aponta preço destoante), **curva ABC** do valor (A = os que somam 80%,
+B = até 95%, C = o resto; a lista vem do maior valor), **unidades diferentes** no mesmo código em âmbar (a soma mistura
+unidades) e o **Estado** com os problemas dos itens agrupados ("Item sem valor (2)"). O rodapé mostra códigos · sem código ·
+itens · o MESMO total da visão Normal. ✅ Tocar numa linha abre o **detalhe da composição**: 6 indicadores (quantidade,
+médio, menor e maior preço, variação, total + ABC), avisos, as descrições diferentes numeradas (D1, D2…) e a tabela dos itens
+de origem com o **desvio de cada preço em relação à média**; tocar num item abre o banner dele por cima (Esc fecha o de
+cima primeiro) e **"Copiar resumo"** gera o texto para um despacho. Sem consulta nova ao banco (usa a lista de itens já
+carregada), calculado só com a visão aberta e linear (20 mil itens). Núcleo puro `itens-consolidados.ts` + testes.
+
 ### Mesa compacta + PCA no cabeçalho (filtro de todo o sistema) + preferências — entregue
 ✅ **Alturas padronizadas e menores:** a barra da Mesa (visões + filtros) na altura padrão dos controles; os filtros de
 Responsável e Assunto só com o ícone (escolhida uma pessoa, o ícone vira a foto dela); as tabelas de Protocolos, DFDs e Itens
