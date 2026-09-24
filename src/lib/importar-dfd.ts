@@ -46,13 +46,14 @@ async function postDfd(body: unknown): Promise<{ dfdId?: number }> {
   throw ultimo ?? new Error("Falha ao gravar o DFD.");
 }
 
-/** Apaga um DFD parcial (best-effort) — usado no rollback do all-or-nothing. */
-async function apagarDfd(dfdId: number): Promise<void> {
+/** Apaga o DFD NOVO que ficou pela metade — o rollback do all-or-nothing. `true` = não ficou nada gravado. */
+async function apagarDfd(dfdId: number): Promise<boolean> {
   try {
-    // `desfazer`: a gravação que acabou de falhar — o servidor deixa desfazer o DFD novo mesmo num protocolo ENVIADO a um PCA.
-    await fetch(`/api/dfd/${dfdId}?origem=desfazer`, { method: "DELETE" });
+    // `desfazer`: o servidor deixa apagar a gravação nova pela metade mesmo num protocolo ENVIADO a um PCA.
+    const res = await fetch(`/api/dfd/${dfdId}?origem=desfazer`, { method: "DELETE" });
+    return res.ok || res.status === 404;
   } catch {
-    // best-effort: se falhar, a re-importação (idempotente) resolve depois.
+    return false; // sem rede: o DFD segue incompleto — a re-importação (idempotente) completa
   }
 }
 
@@ -77,9 +78,9 @@ export async function enviarDfdEmLotes(
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao gravar o DFD.";
-    if (opcoes.existia) throw new Error(`${msg} — gravação INCOMPLETA (${enviados} de ${total} itens): reenvie para completar.`);
-    await apagarDfd(dfdId); // DFD novo: não deixa DFD parcial
-    throw e;
+    // DFD novo: desfaz (não deixa DFD parcial). Sobrescrita — ou o desfazer que não passou — fica INCOMPLETA: avisa.
+    if (!opcoes.existia && (await apagarDfd(dfdId))) throw e;
+    throw new Error(`${msg} — gravação INCOMPLETA (${enviados} de ${total} itens): reenvie para completar.`);
   }
   return { dfdId };
 }

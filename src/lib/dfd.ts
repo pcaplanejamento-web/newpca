@@ -767,7 +767,6 @@ export async function getDfdReparticao(
   numero: string;
   planejamento: string | null;
   criadoPor: number | null;
-  criadoEm: string | null;
 } | null> {
   const [r] = await getDb()
     .select({
@@ -777,7 +776,6 @@ export async function getDfdReparticao(
       numero: dfds.numero,
       planejamento: dfds.planejamento,
       criadoPor: dfds.criadoPor,
-      criadoEm: dfds.criadoEm,
     })
     .from(dfds)
     .where(eq(dfds.id, id))

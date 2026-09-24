@@ -40,7 +40,9 @@ com 1 excluído = 14 gravados). · ✅ **Protocolo em um PCA não é excluído**
 lixeira; o servidor recusa (409 enviado — devolva à Mesa principal; 423 incorporado) e também a re-importação que
 substituiria um protocolo de mesmo Id que está em um PCA. · ✅ **DFD de protocolo em um PCA não é excluído** (sem lixeira na
 Mesa do PCA; o servidor recusa; o reenvio de protocolo em PCA mantém os gravados) — só o desfazer automático da importação que
-falhou remove o DFD recém-criado pelo próprio usuário (tudo-ou-nada).
+falhou no meio remove a gravação NOVA do próprio usuário que ficou pela metade (tudo-ou-nada; se o desfazer não passar, a
+importação avisa "gravação INCOMPLETA — reenvie para completar"). Mover o DFD para outro protocolo segue permitido no enviado
+(caminho de saída do PCA, como "Devolver à Mesa").
 
 ### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
 ✅ O Catálogo ganhou duas visões (Catálogo · Lista de Itens · **Unidades de medida** · **Classificações**), carregadas só

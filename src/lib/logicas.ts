@@ -176,7 +176,8 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Na análise do PDF do protocolo, 'Excluir do protocolo' (no rodapé do DFD ou em massa na seleção) tira o DFD do envio: fica 'Excluído' (cinza, na tabela 'DFDs fora do envio'), não é gravado, sai da somatória da capa e deixa de bloquear a protocolação. 'Restaurar' (no DFD) ou 'Restaurar excluídos' traz de volta.",
     detalhes: [
-      "Na importação nada é apagado do banco: o DFD já cadastrado de mesmo nº continua como está — e segue na somatória quando é deste processo.",
+      "Na importação nada é apagado do banco: o DFD já cadastrado de mesmo nº continua como está — e segue na somatória quando é deste processo (seja qual for o botão que tirou o do PDF do envio).",
+      "Ao voltar ao envio ('Restaurar' ou 'Manter este'), a assinatura achatada que a análise pulou é lida por OCR — o DFD fica pendente e a protocolação espera.",
       "No reenvio (sobrescrever o protocolo gravado), excluir tira o DFD do processo: o gravado de mesmo nº vai para a lista 'fora do envio' do topo (Excluir, padrão, ou Manter).",
       "Excluir um dos DFDs duplicados resolve o par (o outro segue).",
     ],
@@ -503,9 +504,10 @@ export const LOGICAS: LogicaRef[] = [
       "Um protocolo ENVIADO à Mesa de um PCA ou INCORPORADO a ele não pode ser excluído: a Mesa do PCA não tem a lixeira e o servidor recusa. O enviado sai do PCA por 'Devolver à Mesa' (e então pode ser excluído na Mesa principal); o incorporado é permanente.",
     detalhes: [
       "A re-importação que substituiria (apagaria) um protocolo de mesmo Id que está em um PCA também é recusada.",
-      "Os DFDs de um protocolo em um PCA também não são excluídos (no reenvio, os gravados fora do envio ficam mantidos) — só o desfazer automático da importação que falhou remove o DFD recém-criado pelo próprio usuário.",
+      "Os DFDs de um protocolo em um PCA também não são excluídos (no reenvio, os gravados fora do envio ficam mantidos) — só o desfazer automático da importação que falhou no meio remove a gravação NOVA do próprio usuário que ficou pela metade (menos itens que o declarado).",
+      "Mover o DFD para outro protocolo ('Vincular a protocolo') segue permitido no protocolo enviado — como 'Devolver à Mesa', é um caminho de saída do PCA.",
     ],
-    fonte: "motivoNaoExcluirProtocolo / motivoNaoExcluirDfd (pca-core) · pcaDeProtocolos (trava-pca)",
+    fonte: "motivoNaoExcluirProtocolo / motivoNaoExcluirDfd / gravacaoParcial (pca-core) · pcaDeProtocolos (trava-pca)",
   },
 
   // ---- Acesso & RBAC ----

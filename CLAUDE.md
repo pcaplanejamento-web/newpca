@@ -848,7 +848,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Gravação garantida (all-or-nothing por DFD):** `enviarDfdEmLotes` faz **retry** de falha transitória (rede/5xx;
   4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. **Exceção: DFD que
   JÁ EXISTIA** (sobrescrita/reenvio, `opcoes.existia`) **não é apagado** (perderia também a versão anterior) — a falha diz
-  "gravação INCOMPLETA (n de N itens): reenvie para completar". `appendDfdItens`
+  "gravação INCOMPLETA (n de N itens): reenvie para completar"; o mesmo aviso quando o desfazer não passa (sem rede, ou
+  recusado — `apagarDfd` confere a resposta). `appendDfdItens`
   é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
   **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
 - **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
@@ -906,14 +907,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   somatória/contagem da capa, dos erros e do despacho, e deixa de bloquear (erro, tipo não permitido, duplicado — excluir um
   dos duplicados resolve o par). Estado `excluidosDoProtocolo` = subconjunto de `descartados` (a MESMA régua de
   `protocolar()`/somatória); **na importação nada é apagado do banco**: o DFD já cadastrado de mesmo nº (se houver) continua
-  como está — e segue na somatória quando é deste processo (todo excluído não-gravado entra em `mantidosExistentes` no clique;
-  a régua da somatória decide quando a consulta dos já cadastrados chega). **No REENVIO**, excluir tira o DFD do processo: o
+  como está — e segue na somatória quando é deste processo (`existentesMantidos`: o cadastrado DESTE processo cujo nº nenhum
+  DFD ativo grava — seja qual for o botão que tirou o do PDF do envio ou a ordem dos cliques; calculado a cada render, vale
+  também quando a consulta dos já cadastrados chega depois). **No REENVIO**, excluir tira o DFD do processo: o
   GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão — ou Manter, como o que não veio no PDF; a
   confirmação avisa quantos gravados serão EXCLUÍDOS) — em protocolo que está em um PCA, só "Mantido" (DFD em PCA não é
   excluído; `ComparacaoProtocolo.excluirBloqueado`). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
   do envio depois (Manter o existente, a escolha do duplicado, o rastro do reenvio), ele deixa de ser "Excluído" e vira
   "Descartado" — o "Restaurar excluídos" não o traz. O DFD fora do envio não entra na fila do OCR nem segura a protocolação
-  (`ocrPendenteNoEnvio`); ao voltar (Restaurar), a assinatura achatada é lida (`lerOcrAoVoltar`). Desfazer: **"Restaurar"** no rodapé do DFD ou **"Restaurar excluídos (N)"** no título da
+  (`ocrPendenteNoEnvio`); ao voltar ("Restaurar"/"Manter este"), a assinatura achatada é lida (`lerOcrAoVoltar` →
+  `mesclarOcrSePreciso`, que deixa o DFD "pendente" enquanto lê — também ao abrir o DFD: a protocolação espera). Desfazer: **"Restaurar"** no rodapé do DFD ou **"Restaurar excluídos (N)"** no título da
   tabela cinza "DFDs fora do envio" (`PlanilhaDfds.acaoDescartados`, via `ProtocoloView`). Aviso flutuante confirma; o rodapé
   conta "N excluído(s)" e o resultado da protocolação informa os excluídos na análise. Validado ponta a ponta com o PDF real
   (`pd101820`, 15 DFDs): excluir 2 → 13 DFDs e a somatória menos os dois; protocolar com 1 excluído → 14 gravados.
@@ -1546,8 +1549,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **DFD de protocolo em um PCA também NÃO é excluído (regra do usuário):** na Mesa do PCA a lixeira do DFD some (o "Vincular a
   protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
   `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
-  importação que acabou de falhar (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — o DFD criado por ESTE
-  usuário há ≤ 15 min (`criadoHaPouco`, `MINUTOS_DESFAZER_DFD`) sai de um protocolo ENVIADO; do incorporado, nunca.
+  importação que falhou no meio (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — só a gravação NOVA
+  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele e com menos itens gravados que o total declarado
+  no `start-dfd`; um DFD completo nunca, qualquer que seja a hora) sai de um protocolo ENVIADO; do incorporado, nunca (o
+  histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
+  protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
+  poder ser excluído.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).

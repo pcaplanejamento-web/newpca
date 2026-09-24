@@ -138,34 +138,34 @@ export function motivoNaoExcluirProtocolo(
   return `Na Mesa do ${nomePca?.trim() || "PCA"} — protocolo em um PCA não é excluído (devolva-o à Mesa principal para excluir).`;
 }
 
-/** Janela do DESFAZER da importação (minutos): o DFD criado há mais tempo não é "a gravação que acabou de falhar". */
-export const MINUTOS_DESFAZER_DFD = 15;
-
-/** `criado_em` do SQLite ("AAAA-MM-DD HH:MM:SS", UTC) foi há no máximo `minutos` de `agora` (ms)? Inválido/futuro além de
- * 1 min (relógio) = não. */
-export function criadoHaPouco(criadoEm: string | null | undefined, agora: number, minutos = MINUTOS_DESFAZER_DFD): boolean {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(String(criadoEm ?? "").trim());
-  if (!m) return false;
-  const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
-  const dt = agora - t;
-  return dt >= -60_000 && dt <= minutos * 60_000;
+/**
+ * A gravação que ficou PELA METADE — o que o DESFAZER da importação pode apagar: o DFD criado por ESTE usuário com MENOS
+ * itens gravados que o total declarado no `start-dfd`. Só uma importação interrompida deixa o DFD assim (salvar os itens
+ * ou editá-los em massa recalcula o total); um DFD completo nunca é "pela metade", qualquer que seja a hora.
+ */
+export function gravacaoParcial(g: {
+  criadoPor: number | null | undefined;
+  usuarioId: number;
+  totalItens: number | null | undefined;
+  itensGravados: number;
+}): boolean {
+  return g.criadoPor != null && g.criadoPor === g.usuarioId && (g.totalItens ?? 0) > g.itensGravados;
 }
 
 /**
  * DFD de um protocolo que está em um PCA — ENVIADO ou INCORPORADO — NÃO é excluído (regra do usuário; a mesma do
- * protocolo). Única exceção: DESFAZER a gravação da importação que acabou de falhar (`apagarDfd`, tudo-ou-nada por DFD) —
- * o DFD criado por ESTE usuário há menos de `MINUTOS_DESFAZER_DFD` sai de um protocolo ENVIADO (senão ficaria pela
- * metade); do incorporado, nunca. Devolve o motivo, ou `null` = pode excluir.
+ * protocolo). Única exceção: DESFAZER a gravação da importação que falhou no meio (`apagarDfd`, tudo-ou-nada por DFD) —
+ * `pelaMetade` (`gravacaoParcial`) sai de um protocolo ENVIADO (senão ficaria incompleto); do incorporado, nunca.
+ * Devolve o motivo, ou `null` = pode excluir.
  */
 export function motivoNaoExcluirDfd(
   p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined },
   nomePca?: string | null,
-  desfazer?: { criadoPor: number | null | undefined; criadoEm: string | null | undefined; usuarioId: number; agora: number } | null,
+  pelaMetade = false,
 ): string | null {
   if (p.pcaId == null) return null;
   if (p.pcaIncorporadoEm) return mensagemTravaPca(nomePca);
-  if (desfazer && desfazer.criadoPor != null && desfazer.criadoPor === desfazer.usuarioId && criadoHaPouco(desfazer.criadoEm, desfazer.agora))
-    return null;
+  if (pelaMetade) return null;
   return `DFD de protocolo na Mesa do ${nomePca?.trim() || "PCA"} — DFD em um PCA não é excluído (devolva o protocolo à Mesa principal para excluir).`;
 }
 

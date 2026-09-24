@@ -9,7 +9,7 @@ import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { motivoNaoExcluirDfd } from "@/lib/pca-core";
+import { gravacaoParcial, motivoNaoExcluirDfd } from "@/lib/pca-core";
 import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
@@ -31,7 +31,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return ok({ dfd, unidade: unidade ?? null });
 }
 
-/** Exclui o DFD. `?origem=reenvio` = excluído pelo reenvio do protocolo (não veio no PDF) — só o histórico muda. */
+/** Exclui o DFD. `?origem=reenvio` = excluído pelo reenvio do protocolo (não veio no PDF) — só o histórico muda;
+ * `?origem=desfazer` = o rollback da importação que falhou no meio (`apagarDfd`, `importar-dfd`). */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirEditor();
   if ("erro" in a) return a.erro;
@@ -43,16 +44,20 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
     return erro("Sem acesso a este DFD.", 403);
   }
-  // DFD de protocolo em um PCA (enviado ou incorporado) NÃO é excluído — salvo o DESFAZER da importação que acabou de
-  // falhar (o DFD novo deste usuário, num protocolo enviado): 423 incorporado, 409 enviado.
+  const alvo = await getDfd(id); // snapshot p/ o log antes de apagar (e os itens GRAVADOS, p/ o desfazer)
   const origem = new URL(req.url).searchParams.get("origem");
+  // DESFAZER da importação que falhou no meio: só a gravação NOVA deste usuário que ficou pela metade.
+  const desfeita =
+    origem === "desfazer" &&
+    !!alvo &&
+    gravacaoParcial({ criadoPor: dfd.criadoPor, usuarioId: a.u.id, totalItens: alvo.totalItens, itensGravados: alvo.itens.length });
+  // DFD de protocolo em um PCA (enviado ou incorporado) NÃO é excluído — salvo esse desfazer num protocolo enviado:
+  // 423 incorporado, 409 enviado.
   const noPca = (await pcaDeProtocolos([dfd.protocoloId])).get(dfd.protocoloId ?? 0);
   if (noPca) {
-    const desfazer = origem === "desfazer" ? { criadoPor: dfd.criadoPor, criadoEm: dfd.criadoEm, usuarioId: a.u.id, agora: Date.now() } : null;
-    const motivo = motivoNaoExcluirDfd(noPca, noPca.nome, desfazer);
+    const motivo = motivoNaoExcluirDfd(noPca, noPca.nome, desfeita);
     if (motivo) return erro(motivo, noPca.pcaIncorporadoEm ? 423 : 409);
   }
-  const alvo = await getDfd(id); // snapshot p/ o log antes de apagar
   const r = await excluirDfd(id);
   if (!r.ok) return erro(r.erro, 409);
   const reenvio = origem === "reenvio";
@@ -61,7 +66,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     acao: "excluir",
     entidade: "dfd",
     entidadeId: id,
-    resumo: `DFD ${alvo?.numero ?? id} excluído${reenvio ? " (fora do envio do PDF reenviado)" : origem === "desfazer" ? " (gravação desfeita após falha)" : ""}`,
+    resumo: `DFD ${alvo?.numero ?? id} excluído${reenvio ? " (fora do envio do PDF reenviado)" : desfeita ? " (gravação desfeita após falha)" : ""}`,
     antes: alvo ? { numero: alvo.numero, tipo: alvo.tipo, valorTotal: alvo.valorTotal, totalItens: alvo.itens.length } : null,
     protocoloId: dfd.protocoloId,
     origem: reenvio ? "reenvio" : "exclusao",
