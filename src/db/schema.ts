@@ -120,61 +120,6 @@ export const sessoes = sqliteTable(
 );
 
 /**
- * Protocolos (módulo curado) — digitaliza a planilha "Distribuição de
- * Protocolos". Os campos de seleção (orgao/natureza/responsavel/distribuicao)
- * têm opções gerenciáveis em `protocoloOpcoes`; `situacao` é um enum fixo com
- * cores próprias na interface. Só `numero` é obrigatório.
- */
-export const protocolos = sqliteTable(
-  "protocolos",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    numero: text("numero").notNull(),
-    data: text("data"), // ISO yyyy-mm-dd (data do protocolo)
-    orgao: text("orgao"),
-    orgaoSigla: text("orgao_sigla"),
-    natureza: text("natureza"),
-    responsavel: text("responsavel"),
-    situacao: text("situacao", {
-      enum: ["em_analise", "em_andamento", "finalizado", "devolvido", "cancelado"],
-    })
-      .notNull()
-      .default("em_analise"),
-    distribuicao: text("distribuicao"),
-    // Grupo dono do protocolo (dados por grupo). NULL = legado/sem grupo.
-    grupoId: integer("grupo_id").references(() => grupos.id, { onDelete: "set null" }),
-    criadoPor: integer("criado_por").references(() => usuarios.id, {
-      onDelete: "set null",
-    }),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [
-    index("protocolos_situacao_idx").on(t.situacao),
-    index("protocolos_natureza_idx").on(t.natureza),
-    index("protocolos_responsavel_idx").on(t.responsavel),
-    index("protocolos_data_idx").on(t.data),
-    index("protocolos_grupo_idx").on(t.grupoId),
-  ],
-);
-
-/** Opções gerenciáveis dos campos de seleção do protocolo. */
-export const protocoloOpcoes = sqliteTable(
-  "protocolo_opcoes",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    campo: text("campo", {
-      enum: ["orgao", "natureza", "responsavel", "distribuicao"],
-    }).notNull(),
-    valor: text("valor").notNull(),
-    ordem: integer("ordem").notNull().default(0),
-    // Opções por grupo (cada grupo tem seu vocabulário). NULL = legado.
-    grupoId: integer("grupo_id").references(() => grupos.id, { onDelete: "set null" }),
-  },
-  (t) => [uniqueIndex("protocolo_opcoes_uq").on(t.campo, t.valor, t.grupoId)],
-);
-
-/**
  * Configuração global da plataforma (linha única, id = 1). `dados` guarda a
  * APARÊNCIA controlada pelo ADM (tokens de cor claro/escuro + raio/densidade/
  * motion + identidade) num JSON validado. Injetada sem flash no RootLayout.
@@ -192,8 +137,10 @@ export const configuracoes = sqliteTable("configuracoes", {
 /**
  * RBAC por GRUPO. Uma `permissao` define quais abas ficam disponíveis (JSON de
  * keys). Um `grupo` aponta para uma permissão; membros do grupo compartilham a
- * permissão E os dados (protocolos/opções carregam `grupo_id`). Um usuário pode
+ * permissão E as unidades acessíveis (`grupo_reparticoes`). Um usuário pode
  * estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho.
+ * (As tabelas `protocolos`/`protocolo_opcoes` do antigo módulo Protocolos ficam
+ * no banco, DORMENTES — sem código; os protocolos vivem em `dfd_protocolos`.)
  */
 export const permissoes = sqliteTable("permissoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -690,11 +637,6 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
-export type Protocolo = typeof protocolos.$inferSelect;
-export type NovoProtocolo = typeof protocolos.$inferInsert;
-export type SituacaoProtocolo = Protocolo["situacao"];
-export type ProtocoloOpcao = typeof protocoloOpcoes.$inferSelect;
-export type CampoOpcao = ProtocoloOpcao["campo"];
 export type Configuracao = typeof configuracoes.$inferSelect;
 export type Permissao = typeof permissoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;

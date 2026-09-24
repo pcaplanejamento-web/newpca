@@ -6,22 +6,17 @@ import { type ReactNode, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
-import { SearchField } from "./Field";
+import { NAV_MODULOS } from "./navModulos";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   IconBell,
-  IconBox,
   IconBuilding,
   IconLandmark,
-  IconLayers,
   IconCheck,
   IconChevronDown,
-  IconClipboard,
   IconClock,
   IconClose,
-  IconDashboard,
   IconDatabase,
-  IconFile,
   IconLogout,
   IconMenu,
   IconPalette,
@@ -31,7 +26,6 @@ import {
   IconSpinner,
   IconUser,
   IconUsers,
-  IconWallet,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
 import { nomeExibicao } from "@/lib/pessoa";
@@ -47,26 +41,16 @@ const ROLE_LABEL: Record<Role, string> = {
 type NavItem = {
   href: string;
   label: string;
-  Icon: typeof IconDashboard;
+  Icon: typeof IconSettings;
   roles?: Role[];
-  exact?: boolean;
   /** Chave de aba gerenciável por permissão (só nos módulos). */
   aba?: string;
 };
 type NavSecao = { titulo: string; itens: NavItem[] };
 
 const SECOES: NavSecao[] = [
-  {
-    titulo: "Módulos",
-    itens: [
-      { href: "/painel", label: "Dashboard", Icon: IconDashboard, exact: true, aba: "dashboard" },
-      { href: "/painel/protocolos", label: "Protocolos", Icon: IconFile, aba: "protocolos" },
-      { href: "/painel/mesa", label: "Mesa", Icon: IconClipboard, aba: "dfd" },
-      { href: "/painel/pca", label: "PCA", Icon: IconBox, aba: "pca" },
-      { href: "/painel/catalogo", label: "Catálogo", Icon: IconLayers, aba: "catalogo" },
-      { href: "/painel/orcamento", label: "Orçamento", Icon: IconWallet, aba: "orcamento" },
-    ],
-  },
+  // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
+  { titulo: "Módulos", itens: NAV_MODULOS },
   {
     titulo: "Administração",
     itens: [
@@ -94,7 +78,7 @@ function secoesVisiveis(role: Role, abas: Set<string>): NavSecao[] {
 }
 
 function itemAtivo(pathname: string, item: NavItem): boolean {
-  return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
 /** Identidade do site definida pelo ADM (Configurações → Identidade). */
@@ -217,29 +201,6 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
         Sair
       </button>
     </div>
-  );
-}
-
-function BuscaGlobal({ className = "" }: { className?: string }) {
-  const router = useRouter();
-  const [q, setQ] = useState("");
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const termo = q.trim();
-        router.push(termo ? `/painel/protocolos?q=${encodeURIComponent(termo)}` : "/painel/protocolos");
-      }}
-      className={className}
-    >
-      <SearchField
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onClear={() => setQ("")}
-        placeholder="Buscar protocolos..."
-        aria-label="Buscar protocolos"
-      />
-    </form>
   );
 }
 
@@ -467,14 +428,13 @@ export function AppShell({
             type="button"
             aria-label="Abrir menu"
             onClick={() => setMenuAberto(true)}
-            className="rounded-control p-2 text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
           >
             <IconMenu className="h-5 w-5" />
           </button>
           <div className="lg:hidden">
             <Brand compact identidade={identidade} />
           </div>
-          <BuscaGlobal className="hidden w-full max-w-sm lg:block" />
 
           <div className="ml-auto flex items-center gap-1.5">
             <div className="hidden items-center gap-1.5 sm:flex">

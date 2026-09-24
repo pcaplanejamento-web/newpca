@@ -19,3 +19,9 @@ test("/painel/dfds redireciona para /painel/mesa", async ({ page }) => {
   await page.goto("/painel/dfds");
   await expect(page).toHaveURL(/\/painel\/mesa/);
 });
+
+// `/painel` é só a porta de entrada: leva à Mesa (o antigo Dashboard e a tela Protocolos legada saíram).
+test("/painel redireciona para /painel/mesa", async ({ page }) => {
+  await page.goto("/painel");
+  await expect(page).toHaveURL(/\/painel\/mesa/);
+});

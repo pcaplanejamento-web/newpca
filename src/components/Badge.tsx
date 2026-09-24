@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { SituacaoProtocolo } from "@/db/schema";
 
 // Badge de status/categoria, coerente em claro e escuro.
 export type Tone =
@@ -29,46 +28,6 @@ const TONE_VAR: Record<Tone, string> = {
 /** Cor (CSS var) de um tom do Badge — reutilizável por outros componentes. */
 export function toneVar(tone: Tone): string {
   return TONE_VAR[tone];
-}
-
-/** Tom fixo por situação do protocolo. */
-export function situacaoTone(situacao?: SituacaoProtocolo | string | null): Tone {
-  switch (situacao) {
-    case "finalizado":
-      return "emerald";
-    case "em_analise":
-      return "amber";
-    case "em_andamento":
-      return "blue";
-    case "devolvido":
-      return "orange";
-    case "cancelado":
-      return "slate";
-    default:
-      return "slate";
-  }
-}
-
-const AUTO: Tone[] = ["emerald", "blue", "violet", "amber", "orange", "cyan", "red"];
-
-/** Tom determinístico por texto (para naturezas/valores livres). */
-export function hashTone(texto?: string | null): Tone {
-  if (!texto) return "slate";
-  let h = 0;
-  for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) | 0;
-  return AUTO[Math.abs(h) % AUTO.length];
-}
-
-/** Tom por natureza — cores fixas para os valores conhecidos (como no print),
- *  com fallback determinístico para valores novos. */
-export function naturezaTone(natureza?: string | null): Tone {
-  const n = (natureza ?? "").toUpperCase();
-  if (n.startsWith("INCLUSÃO 2027") || n.startsWith("INCLUSAO 2027")) return "emerald";
-  if (n.startsWith("INCLUSÃO") || n.startsWith("INCLUSAO")) return "amber";
-  if (n.startsWith("EXCLUSÃO") || n.startsWith("EXCLUSAO")) return "red";
-  if (n.startsWith("CORREÇÃO") || n.startsWith("CORRECAO")) return "blue";
-  if (n.startsWith("COMUNICAÇÃO") || n.startsWith("COMUNICACAO")) return "violet";
-  return hashTone(natureza);
 }
 
 export function Badge({

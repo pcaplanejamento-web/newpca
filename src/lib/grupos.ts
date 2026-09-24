@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos } from "@/db/schema";
-import { ABAS } from "./abas";
+import { ABAS, abasConhecidas } from "./abas";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 
@@ -68,9 +68,7 @@ export async function abasPermitidas(
     .where(eq(permissoes.id, g.permissaoId))
     .limit(1);
   try {
-    const arr: unknown = JSON.parse(p?.abas ?? "[]");
-    if (!Array.isArray(arr)) return new Set();
-    return new Set(arr.filter((x): x is string => typeof x === "string"));
+    return new Set(abasConhecidas(JSON.parse(p?.abas ?? "[]"))); // chaves de módulos removidos não valem
   } catch {
     return new Set();
   }

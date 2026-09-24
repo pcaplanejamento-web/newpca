@@ -50,7 +50,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
   Mais) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
   (`getCloudflareContext().env.DB` → `.meta.size_after` — o Drizzle não expõe `.meta`), enumeração por
-  `sqlite_master` (inclui as tabelas **legadas órfãs** de `0005` e as de sistema) e, por tabela, `COUNT(*)` +
+  `sqlite_master` (inclui as tabelas **legadas órfãs** — as de `0005` e `protocolos`/`protocolo_opcoes` do antigo módulo
+  Protocolos, sinalizadas "legado" — e as de sistema) e, por tabela, `COUNT(*)` +
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
   sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
@@ -61,7 +62,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ROTULO_ACAO`/`ROTULO_ENTIDADE`/`ROTULO_ORIGEM`); acesso ao D1 em **`auditoria.ts`** (`registrarAuditoria` **BEST-EFFORT — nunca
   lança**; `historicoDfd`/`historicoProtocolo`/`listarAuditoria`). **Instrumentado em TODOS os pontos de escrita**, no nível da ROTA (onde o ator
   `exigirX().u` é conhecido): DFD (import/edição de campos/**itens**/exclusão/vínculo), protocolo, catálogo (+itens/tipos),
-  PCA, planilha (`/api/upload`), protocolos legado, admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
+  PCA, planilha (`/api/upload`), admin RBAC (grupos/permissões/órgãos/unidades + reordenar) e
   **usuários** (papel/status = alto valor), config (aparência/avaliação/integrações — só o FATO, **nunca** segredos/senha)
   e auth (login/logout/cadastro/perfil/senha). Nas edições, o "antes" vem dos `get*` já usados na rota (diff por campo).
   - **Histórico CONECTADO protocolo › DFD › item (migração `0031`, aditiva):** cada linha ganhou **`protocolo_id`** (o
@@ -108,12 +109,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
-- **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** (dashboard/
-  protocolos/pca/**dfd**) o grupo vê. **Admin ignora** (vê todas — regra firme). A nav em `AppShell`
-  filtra por `abasPermitidas`. Abas em `src/lib/abas.ts`.
-- **Dados por grupo:** `protocolos` e `protocolo_opcoes` carregam `grupo_id`; **todas** as funções de
-  `src/lib/protocolos.ts` escopam pelo grupo ativo (`getGrupoAtivoId`, sentinela `-1` = nada). Criar
-  exige grupo ativo.
+- **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
+  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
+  ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
+  rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas`.
+  **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
+  `/api/protocolos*`, `lib/protocolos.ts`) foram REMOVIDOS — `/painel` é só a PORTA DE ENTRADA (redirect no servidor
+  para `rotaInicial`: a 1ª aba liberada — a Mesa; sem nenhuma, o Perfil). Permissão antiga com as chaves removidas
+  (`dashboard`/`protocolos`) segue valendo: **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
+  /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). As tabelas
+  `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
+  migração de DROP).
 - **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
   **orgao_id** (FK→`orgaos`, migração `0022`) + **responsavel_dfd** — cadastro do ADM, nullable): lista global
   **reordenável por botões ↑/↓** (`DataTable` com colunas `filter:"none"`; persiste em
@@ -220,11 +226,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   unidade selecionada, mostra **atenção âmbar** (Callout no `DfdConferir` + mensagem no painel), **configurável** —
   ponto de avaliação `dfd.orgaoUnidadeDivergente` (padrão `intermediario`, não bloqueia). O servidor (`POST /api/dfd`)
   só computa/bloqueia se elevado a `fundamental` (custo zero no padrão).
-- **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** protocolos e
-  PCA. `getReparticaoFiltro()` devolve `{id,codigo}` da ativa, ou **`null` em "Geral"** (= todas, sem
-  filtro). **Módulo Protocolos LEGADO (`protocolos.ts`) — "Órgão" = unidade:** ali o campo "Órgão" do
-  protocolo é escolhido da lista de unidades (guarda `orgao`=nome, `orgao_sigla`=código); `escopo()` filtra
-  por `orgao_sigla = código`. É **distinto** do novo Órgão-entidade (subsistema DFD acima). No **PCA**, cada
+- **Repartição escopa os dados (além de acesso):** a repartição ativa do head **filtra** os protocolos/DFDs da Mesa e
+  o PCA. `getReparticaoFiltro()` devolve `{id,codigo}` da ativa, ou **`null` em "Geral"** (= todas, sem
+  filtro). No **PCA**, cada
   `unidade` (planilha) recebe `reparticao_id` da unidade ativa no
   import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
   `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
@@ -488,7 +492,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vertical no cabeçalho, rodapé fora da margem, trecho após TAB, linha em branco no topo da página — **cada cenário
     nas DUAS vias**),
     `grade-pdf`, `parse-dfd-comum`, `normalize`, `parse-dfd` (planilha com valores crus). Escala: 5.000 itens em ~0,3 s.
-- **Tela "Mesa"** (ex-"DFD"; `/painel/mesa` = `MesaPage` → `DfdsView`, aba **`dfd`** intacta — `/painel/dfds` **redireciona** p/ bookmarks; nav/label "Mesa" em `AppShell`/`BottomNav`/`abas.ts`) — separada do PCA. `PcaModuleView` ficou só com
+- **Tela "Mesa"** (ex-"DFD"; `/painel/mesa` = `MesaPage` → `DfdsView`, aba **`dfd`** intacta — `/painel/dfds` **redireciona** p/ bookmarks; nav/label "Mesa" em `abas.ts` → `NAV_MODULOS`, a MESMA fonte da sidebar e da `BottomNav`; `/painel` leva à Mesa) — separada do PCA. `PcaModuleView` ficou só com
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,
   reativo aos filtros (`DataTable` `resumo={(linhas)=>…}`). Migração `0015` concede a aba `dfd` a quem já tinha `pca`.
@@ -604,7 +608,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     tira os outros; só com a quantidade e o MESMO valor unitário em todos — `motivoNaoUnificar`, senão diz por quê) +
     **"Remover item"** (`removerItemDfd`). O índice do item depois de remover outros: `indiceAposRemover`. Hosts: o
     `DfdPainelDireito` (análise avulso/protocolo, DFD gravado, protocolo gravado — `onUnificarItens` + `onPainel`) e o
-    banner só do item (`useDfdGravado`, `useRepetidosDoItem`).
+    banner só do item (`useDfdGravado`, `useRepetidosDoItem` → `{lista, cor}` — a cor da importância do ADM). **Linear
+    com milhares de iguais:** `mapaItensDuplicados` dá a cada índice o GRUPO compartilhado; as listas mostram até
+    `MAX_IGUAIS` (10) + "+N" (`outrosDoGrupo`; `repetidosDoDfd`/`repetidosPorDfd` → `RepeticaoItem {iguais, total}`). Após
+    "Unificar", o campo numérico destravado acompanha o valor novo (`NumInput` ressincroniza quando o valor muda de fora).
   - **Valor unitário AUSENTE = `semValorUnitario`** (vazio, zero, negativo ou NÃO numérico — NaN viraria `null` no JSON):
     a MESMA régua no cliente e no servidor.
   - **Conferência por LINHA única (`avaliarLinhaDfd`, `src/lib/conferencia-dfd.ts`, puro):** o ESTADO de cada DFD nas
@@ -622,8 +629,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (antes era fixo e derrubava na protocolação um DFD de 200+ itens que a análise liberara — "Todos os itens precisam de
     valor unitário"). O avulso usa a categoria do protocolo do DFD sobrescrito (`base.protocoloAssunto`). **Catálogo
     BLOQUEANTE** (o ADM pôs um ponto de catálogo em "bloqueia"): a análise do protocolo confere os itens de TODO DFD no
-    catálogo (fila `conferirItensCliente`, um DFD por vez; linha "Conferindo…", o Protocolar espera) e a linha/despacho
-    usam o veredito (`avaliarLinhaDfd(..., { conformidade })`); no padrão (avisa) segue lazy, só no DFD aberto.
+    catálogo (fila, um DFD por vez; linha "Conferindo…", o Protocolar espera) e a linha/despacho usam o veredito
+    (`avaliarLinhaDfd(..., { conformidade })`); a fila usa `conferirItensClienteResultado` (distingue FALHA de rede de "nada
+    a conferir"), tenta de novo com espera crescente até `MAX_FALHAS_CATALOGO` (3) e então segue avisando no rodapé; a MESMA
+    régua (`catPendenteDe`) na fila, na linha e no botão Protocolar. No padrão (avisa) segue lazy, só no DFD aberto.
+    **Leitura do DFD única:** uma por vez (`parseEmCursoRef`), nunca sobrescreve o DFD já no cache (edições) e uma leitura
+    que dá certo limpa a falha anterior.
     **Protocolar com DFD em erro** (quando o ADM deixa — `protocolo.semDfdEmErro` não bloqueia): uma CONFIRMAÇÃO lista
     antes quais DFDs NÃO serão protocolados (e os duplicados sem escolha); rodapé "N com erro — não serão protocolados".
   - **Protocolo:** assunto por **seleção** (`opcoesAssunto` = atual + categorias fixas + assuntos cadastrados; primitivo
@@ -761,7 +772,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   descarta os conflitantes (cinza, fora da somatória e da protocolação; "Restaurar" volta) e o ERRO SOME antes de
   protocolar. Um nº mantido por "Manter o existente" que um DFD ATIVO ainda grava não conta duas vezes na somatória.
   Rede de segurança no `protocolar()`: com o ponto sem bloquear e o duplicado sem escolha, do MESMO nº só o 1º gravável
-  segue — o 2º é relatado, nunca sobrescreve o 1º em silêncio.
+  segue — o 2º é relatado, nunca sobrescreve o 1º em silêncio. **O MESMO nº SEMPRE liga** (só um por nº é gravado): com o
+  ponto em "ignorar", a comparação e o "Manter este" seguem para o mesmo nº (só o mesmo planejamento deixa de ligar);
+  "Manter o existente" descarta também as cópias de mesmo nº; a confirmação separa mesmo nº (só um é gravado) × mesmo
+  planejamento (vão todos). Selo por DFD na comparação: **Descartado / Sem escolha / Segue**; "Abrir" não reabre a
+  comparação por cima (celular).
   **Sobrescrita de DFD com ESCOLHA POR DADO (não existem dois DFDs com o mesmo nº):** um DFD importado de novo SOBRESCREVE
   o cadastrado, e cada DIFERENÇA gravado × arquivo novo é uma escolha **"Manter gravado | Usar novo"** (+ "todos" por
   bloco). Núcleo PURO **`sobrescrita-dfd.ts`** (testado): `comparacaoEscolha` (a MESMA régua do reenvio — `compararDfd`;
@@ -1348,14 +1363,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nada de UI ad-hoc/inline. Ícones = **lucide-react** reexportados como `Icon*` em `icons.tsx`.
 - **Nenhuma cor NEUTRA hardcoded** — só `var(--token)` via utilitários (`bg-surface`, `text-text`,
   `text-muted`, `border-border`, `rounded-card`, `shadow-ring`/`shadow-soft`, `bg-accent`…),
-  gerados por `@theme inline` em `globals.css`. A **única hex** é a **cor semântica** (natureza/
-  situação/avatar), via `src/lib/semantic.ts` (`naturezaVar`/`situacaoVar`/`avatarVar`); tintas
+  gerados por `@theme inline` em `globals.css`. A **única hex** é a **cor semântica** (tons de apoio `--nat-comunicacao`/
+  `--sit-*` [KPIs do PCA, erro de campo, tons violet/orange do `Badge`, "Limpar" dos filtros], feedback `--ok/--warn/
+  --danger/--info`, avatar via `avatarVar` em `src/lib/semantic.ts`); tintas
   saem por CSS `color-mix` com `--tint-target`/`--glow-target`.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
-- **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `StatusTag`
-  (`NaturezaTag`+`SituacaoDot`), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
+- **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro), `KpiStat` (§6.4), `Segmented`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
@@ -1476,8 +1491,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
   query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login e Resend
   = cards **"em breve"** (sem lógica). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
-- **Responsivo/touch mobile-first**: **tabela↔cards**, **botão↔FAB**, **modal↔bottom-sheet**,
-  sidebar↔bottom-nav; sem overflow horizontal (conteúdo largo rola no próprio container); alvos
+- **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
+  sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
   **fixa** (`lg:sticky lg:top-0 lg:h-dvh`) com **scroll interno** na navegação (a lista rola se houver muitas abas).
 - **Render correto desde o início** (sem flash/CLS): shim `__name` + `<style>` de tokens antes do

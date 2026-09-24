@@ -56,8 +56,6 @@ const DOMINIOS: Record<string, string> = {
   orgaos: "Acesso",
   reparticoes: "Acesso",
   grupo_reparticoes: "Acesso",
-  protocolos: "Protocolos",
-  protocolo_opcoes: "Protocolos",
   unidades: "Planilha PCA",
   itens: "Planilha PCA",
   dfd_protocolos: "DFD/PCA",
@@ -72,9 +70,12 @@ const DOMINIOS: Record<string, string> = {
   colunas: "Legado",
   coluna_opcoes: "Legado",
   linhas: "Legado",
+  protocolos: "Legado",
+  protocolo_opcoes: "Legado",
 };
 
-const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas"]);
+// Sobras de módulos removidos (Tabelas `0005`; o antigo módulo Protocolos) — dormentes, só sinalizadas.
+const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas", "protocolos", "protocolo_opcoes"]);
 
 // Colunas notoriamente grandes (base64/JSON) — destaque só-leitura na tela.
 const COLUNAS_PESADAS: { tabela: string; coluna: string; rotulo: string }[] = [

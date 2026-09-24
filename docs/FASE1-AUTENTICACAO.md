@@ -7,7 +7,7 @@ Núcleo da plataforma: separa o **público** do **interno** e adiciona controle 
 |---|---|---|
 | `/` | **Pública** | Página inicial institucional (com botão "Entrar") |
 | `/login`, `/cadastro` | Pública | Autenticação (sem barra lateral) |
-| `/painel` | **Requer login** | Dashboard (indicadores, gráficos, consulta) |
+| `/painel` | **Requer login** | Porta de entrada: redireciona à **Mesa** (ou ao 1º módulo liberado; sem nenhum, ao Perfil). O Dashboard do PCA fica em `/` (público) e na aba Dashboard de cada PCA |
 | `/painel/upload` | Requer login | Importação de planilha |
 | `/painel/usuarios` | **Admin** | Aprovar cadastros, definir papéis, ativar/excluir |
 

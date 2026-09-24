@@ -14,35 +14,33 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 ## Navegação
 | | Desktop (`lg+`) | Mobile (`< lg`) |
 |---|---|---|
-| Rápida | **Sidebar** com 2 seções: *Ferramentas* / *Administração* | **Bottom-nav** (Painel · Protocolos · Atividades · Perfil) |
+| Rápida | **Sidebar** com 2 seções: *Módulos* (Mesa · PCA · Catálogo · Orçamento) / *Administração* | **Bottom-nav** com os MESMOS módulos + Perfil |
 | Menu completo | na própria sidebar (gated por papel) | **Menu hambúrguer** → drawer com a **mesma navegação da sidebar** (`NavLinks` + `UserMenu`), gated por papel |
-| Topo | busca global + sino + tema | **hambúrguer** + marca + sino + tema + avatar (→ Perfil) |
+| Topo | unidade e grupo ativos + sino + tema | **hambúrguer** (alvo 44px) + marca + sino + tema + avatar (→ Perfil) |
 
-`AppShell` (`src/components/AppShell.tsx`) monta sidebar (desktop) + topbar + drawer do hambúrguer (mobile) + `<BottomNav>`. `secoesVisiveis(role)` filtra itens por papel e alimenta a sidebar **e** o drawer. **Acesso ao Perfil:** o **card do usuário** (avatar + nome, no rodapé da sidebar/drawer, `UserMenu`) é um link para `/painel/perfil`; no mobile também há a aba *Perfil* na bottom-nav e o avatar da topbar. A tela **Perfil** (`PerfilView`) é só conta/preferências/sair (a navegação completa fica no hambúrguer/sidebar).
+`AppShell` (`src/components/AppShell.tsx`) monta sidebar (desktop) + topbar + drawer do hambúrguer (mobile) + `<BottomNav>`. `secoesVisiveis(role, abas)` filtra itens por papel e pela permissão de abas do grupo ativo e alimenta a sidebar **e** o drawer. Os módulos saem de UMA fonte — `NAV_MODULOS` (`navModulos.ts`, na ordem de `ABAS`) — na sidebar e na bottom-nav. `/painel` é só a porta de entrada: redireciona à **Mesa** (ou ao 1º módulo liberado; sem nenhum, ao Perfil) — o antigo Dashboard e a tela Protocolos legada saíram (tudo na Mesa). **Acesso ao Perfil:** o **card do usuário** (avatar + nome, no rodapé da sidebar/drawer, `UserMenu`) é um link para `/painel/perfil`; no mobile também há a aba *Perfil* na bottom-nav e o avatar da topbar. A tela **Perfil** (`PerfilView`) é só conta/preferências/sair (a navegação completa fica no hambúrguer/sidebar).
 
 **Layout desktop:** aproveitar toda a largura — evitar coluna estreita centralizada (ex.: Perfil usa `grid lg:grid-cols-2`). No mobile, empilhar.
 
 ## Listas (tabela ↔ cards)
 - **Desktop:** `<table>` dentro de container `rounded-2xl` (`hidden lg:block`).
-- **Mobile:** grade de **cards** (`lg:hidden`). Ex.: `ProtocoloCard` — número (emerald) + badge de situação; órgão + `sigla · data`; divisor; badge de natureza + responsável (nome + `Avatar`).
+- **Mobile:** grade de **cards** (`lg:hidden`) nas listas curtas; as tabelas de trabalho (`DataTable`, Mesa) rolam no próprio container.
 - Fonte de dados única; só a renderização muda por breakpoint.
 
 ## Componentes compartilhados
 - `StatCard` — tile de estatística plano (chip colorido + rótulo + valor); clicável (filtro) ou `<Link>`.
-- `Badge` — status/categoria com tom fixo (`situacaoTone`) ou determinístico (`hashTone`); coerente claro/escuro.
+- `Badge` — status/categoria por tom (`Tone` → um token via `toneVar`); coerente claro/escuro.
 - `Avatar` — iniciais + cor determinística por nome (`sm/md/lg`).
-- `Fab` — ação flutuante (só mobile; acima da bottom-nav). No desktop a ação fica no cabeçalho.
-- `EmConstrucao` / `AcessoRestrito` — estados padrão para abas em desenvolvimento / sem permissão.
+- `AcessoRestrito` — estado padrão para tela sem permissão.
 - `KpiCard` — tile colorido em gradiente (dashboard do PCA). Distinto do `StatCard` (plano).
 - `Skeleton` / `SkeletonCard` / `SkeletonLinhas` — placeholders com **shimmer** (`.animate-shimmer`, keyframe em `globals.css`). Usados no **skeleton de rota** (`src/app/painel/loading.tsx`, aparece na navegação) e nas listas enquanto carregam (Usuários, Tabelas, Itens). Padrão completo (skeleton/shimmer/otimista/offline): pendências = optimistic UI e offline/PWA.
 
 ## Filtros
-- Sempre visíveis: busca (cresce) + botão **Filtros** (abre avançado) + **chips** de situação roláveis.
-- Avançado (colapsável): selects de natureza / responsável + limpar. Mesmo componente reflui em mobile e desktop.
+- No cabeçalho de cada coluna (`DataTable`: `MultiSelectHeader` / `RangeFilterHeader` / `DateFilterHeader`), **conectados**
+  entre si; acima da tabela, os filtros de **hierarquia** (`SeletorFiltro` — ex.: Responsável e Assunto na Mesa).
 
 ## Modais / formulários
-- **Bottom-sheet** no mobile, **modal central** no desktop: `fixed inset-0 flex items-end justify-center sm:items-center` + painel `rounded-t-2xl sm:rounded-2xl`, `max-h-[92vh]` com corpo rolável. Ex.: `NovoProtocoloModal`, `UploadForm`.
-- Selects de opção permitem **cadastrar nova opção inline** (`CampoSelecao` → `POST /api/protocolos/opcoes`).
+- **Bottom-sheet** no mobile, **modal central** no desktop: `fixed inset-0 flex items-end justify-center sm:items-center` + painel `rounded-t-2xl sm:rounded-2xl`, `max-h-[92vh]` com corpo rolável. Ex.: `Modal` (portal, cabeçalho e rodapé fixos).
 
 ## Layout
 - Conteúdo com `pb-24 lg:pb-8` para não ficar sob a bottom-nav.
@@ -50,7 +48,7 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - Conteúdo largo (tabelas) rola dentro do próprio container; o `body` nunca rola na horizontal.
 
 ## Verificação
-Testar cada tela em **375px** e **≥1280px**, nos **dois temas**: sidebar↔bottom-nav, tabela↔cards, botão↔FAB, modal↔bottom-sheet.
+Testar cada tela em **375px** e **≥1280px**, nos **dois temas**: sidebar↔bottom-nav, tabela↔cards, modal↔bottom-sheet.
 
 ## Design System por tokens (Fase 4) — componentes desta fase
 Biblioteca única em `/design-system` (`Catalogo`). **Só se usa componente do DS**; nenhum
@@ -81,7 +79,7 @@ componente fixa cor **neutra** (só `var(--token)`); a única hex crua é **sem�
 
 ## Auditoria de componentização (Fase 5) — primitivos e migrações
 Passe para tornar o DS de fato a fonte única (sem cor **neutra** hardcoded; toda UI por componente).
-- **Tokens de feedback** `--ok/--warn/--danger/--info` (`globals.css`) + `feedbackVar()` (`lib/semantic.ts`);
+- **Tokens de feedback** `--ok/--warn/--danger/--info` (`globals.css`; o `kind` do componente vira `var(--{kind})`);
   fundos suaves por `color-mix`. **`--scrim`** (escurece o fundo de modais/drawers nos 2 temas).
 - **`Callout`** (novo): banner de feedback (info/sucesso/alerta/erro) por token — fonte única de avisos/erros.
 - **`Button`** ganha a variante **`danger`** (ações destrutivas). **`Pager`** (novo): paginação única
@@ -90,7 +88,8 @@ Passe para tornar o DS de fato a fonte única (sem cor **neutra** hardcoded; tod
   mapa de tons → um token por tom (`toneVar`), fundo/contorno por `color-mix` (sem slate/emerald/... hardcoded).
 - **Telas migradas** (sem cor hardcoded, controles por componente): `UsuariosAdmin` (→`DataTable`+`Button`+
   `Badge`+`Callout`), `TabelaEditor` e `ProtocolosView` (grades editáveis inline — mantêm a tabela própria,
-  mas botões→`Button`, busca→`SearchField`, paginação→`Pager`, chips→`Badge`, avisos→`Callout`, tudo por token).
+  mas botões→`Button`, busca→`SearchField`, paginação→`Pager`, chips→`Badge`, avisos→`Callout`, tudo por token;
+  ambas removidas depois — o `ProtocolosView` saiu com a tela Protocolos legada: tudo na Mesa).
 - **Pendente (próxima fatia):** `ItemTable` (troca do motor por `DataTable` client-side depende de rever o
   teto de 200 linhas do `getItens` na home pública), `PerfilView`/`UploadForm` (botões/inputs), `AppShell`
   (busca→`SearchField`, notificações→`Dropdown`), app-pages (`ferramentas` card inline→`LinkCard`), glyphs

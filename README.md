@@ -24,6 +24,9 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   **sobrescreve** o cadastrado com **escolha dado a dado** (manter o gravado × usar o novo — botão "Sobrescrever DFD"
   no banner do DFD), registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link
   para o protocolo onde ele está agora.
+- **Área da equipe (`/painel`)**: entra direto na **Mesa**; os módulos Mesa · PCA · Catálogo · Orçamento (a mesma lista
+  na barra lateral e na barra inferior do celular) são liberados pela permissão do grupo ativo — o admin vê todos. O
+  antigo Dashboard de protocolos e a tela Protocolos legada foram removidos: tudo fica na Mesa.
 
 ## Stack
 

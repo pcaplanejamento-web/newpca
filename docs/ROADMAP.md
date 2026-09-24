@@ -12,7 +12,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
 ### Fase 1 (padrão de design + navegação) — entregue
-✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** — tabela única com **edição inline** (adicionar linha → editar células, como na planilha; dropdowns Natureza/Responsável/Situação/Distribuição, filtros por Natureza/Situação/Responsável/Período, paginação; tabela no desktop, cards editáveis no mobile) · ✅ **Ferramentas** (Dashboard do PCA + Importar + Tabelas dinâmicas) · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
+✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** (ambos depois substituídos pela **Mesa** — ver "Tudo na Mesa") — tabela única com **edição inline** (adicionar linha → editar células, como na planilha; dropdowns Natureza/Responsável/Situação/Distribuição, filtros por Natureza/Situação/Responsável/Período, paginação; tabela no desktop, cards editáveis no mobile) · ✅ **Ferramentas** (Dashboard do PCA + Importar + Tabelas dinâmicas) · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
 
 ### Fase 1b (perfil) — entregue
 ✅ **Tela do usuário**: editar nome/e-mail/**matrícula**, **trocar senha**, **foto** (base64 redimensionada no cliente); a foto reflete no menu; admin edita esses dados em Usuários. · ✅ **Carregamento profissional**: tema aplicado antes da pintura (fim do flash), skeletons com shimmer nas listas, sem títulos/descrições redundantes.
@@ -25,6 +25,19 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+
+### Tudo na Mesa: Dashboard e Protocolos legados removidos — entregue
+✅ Saíram da navegação e do código o antigo **Dashboard** (`/painel`, contagens do módulo legado) e a tela **Protocolos**
+legada (`/painel/protocolos`, `/api/protocolos*`, `lib/protocolos.ts` e os componentes `ProtocolosView`/`ProtocoloCard`/
+`StatusTag`/`Fab`/`EmConstrucao`, a busca "Buscar protocolos" do cabeçalho e as cores da natureza/situação legadas).
+**Protocolos, DFDs e itens vivem na Mesa.** ✅ `/painel` virou só a porta de entrada: leva à **Mesa** (ou ao 1º módulo
+que o grupo ativo pode ver; sem nenhum, ao Perfil). ✅ Os módulos (Mesa · PCA · Catálogo · Orçamento) saem de UMA fonte
+na barra lateral e na barra inferior do celular (alvos ≥ 44px; o Catálogo e o Orçamento passaram a aparecer também no
+celular). ✅ Permissões antigas com as abas removidas seguem valendo (as chaves somem na leitura; o ADM salva sem erro).
+✅ Dados preservados: as tabelas `protocolos`/`protocolo_opcoes` ficam no banco, dormentes (sinalizadas "legado" em
+Armazenamento), e o histórico "Protocolo (legado)" da Auditoria segue legível. O Dashboard do **PCA** (tela inicial `/` e
+aba do espaço do PCA) não muda.
+
 ### Protocolação sem bloqueio surpresa: item repetido tratável, DFDs duplicados comparáveis — entregue
 ✅ **Item repetido NUNCA bloqueia** (mesmo código, descrição E unidade — UN × CX é outra compra): vira ATENÇÃO, a tabela de
 itens marca cada repetido ("Item duplicado", junto do par nas pendências; também na visão Itens da Mesa) e o detalhe do
@@ -37,7 +50,11 @@ ligado só por tabela). ✅ **Nada é barrado só no fim da protocolação**: o 
 (exceções do ADM por categoria do protocolo; valor unitário nos lotes de 200+ itens pelo nível do ADM — era fixo e
 derrubava o DFD, como o "DFD 175: Todos os itens precisam de valor unitário"); com o catálogo bloqueante, a análise
 confere os itens de todos os DFDs antes; protocolar com DFD em erro (quando o ADM permite) pede confirmação listando o
-que não segue; dois DFDs de mesmo nº sem escolha nunca se sobrescrevem em silêncio.
+que não segue; dois DFDs de mesmo nº sem escolha nunca se sobrescrevem em silêncio. ✅ **Auditoria da entrega:** o mesmo
+nº de DFD sempre fica comparável/escolhível (só um por nº é gravado), "Manter o existente" leva junto as cópias de mesmo
+nº, a unificação de itens atualiza o campo aberto na hora, a conferência do catálogo tenta de novo em falha de rede (até
+3 vezes) antes de seguir avisando, cada DFD é lido uma vez só (sem perder edições) e a lista de iguais fica leve mesmo
+com milhares de itens repetidos.
 ### Captura dos ITENS do DFD pelo padrão definitivo (grade desenhada) + texto limpo — entregue
 ✅ **Leitura exata da tabela de itens pela GRADE**: o PDF do Centi desenha cada célula (borda + zebra); o sistema lê
 esses traços (`grade-pdf.ts`, no mesmo passe do texto renderizado) e põe cada trecho na **célula certa** — código,

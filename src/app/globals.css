@@ -42,16 +42,10 @@
   --tint-target: #000000; /* tinta = cor + preto */
   --glow-target: #ffffff; /* glow  = cor + branco */
 
-  /* Semânticas — natureza (§3, iguais nos 2 temas) */
-  --nat-exclusao: #dc2626;
-  --nat-inclusao-2026: #d97706;
-  --nat-inclusao-2027: #16a34a;
-  --nat-correcao: #2563eb;
+  /* Semânticas de apoio (§3, iguais nos 2 temas): violeta = Badge "violet"; âmbar/verde/laranja = KPIs do
+     Dashboard do PCA; laranja = erro de campo (Field/AuthForm) e Badge "orange"; vermelho = "Limpar" dos filtros. */
   --nat-comunicacao: #9333ea;
-
-  /* Semânticas — situação (§3; +em-andamento para o enum atual do app) */
   --sit-em-analise: #ca8a04;
-  --sit-em-andamento: #2563eb;
   --sit-finalizado: #16a34a;
   --sit-devolvido: #ea580c;
   --sit-cancelado: #dc2626;

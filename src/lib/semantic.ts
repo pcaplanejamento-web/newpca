@@ -3,35 +3,8 @@
 // pode trocar a cor no token e reflete em toda a UI. As tintas/glows derivam
 // desses tokens via color-mix nos componentes.
 
-/** Natureza (rótulo) → var da cor. Prefixos como no print. */
-export function naturezaVar(natureza?: string | null): string {
-  const n = (natureza ?? "").toUpperCase();
-  if (n.startsWith("INCLUSÃO 2027") || n.startsWith("INCLUSAO 2027")) return "var(--nat-inclusao-2027)";
-  if (n.startsWith("INCLUSÃO") || n.startsWith("INCLUSAO")) return "var(--nat-inclusao-2026)";
-  if (n.startsWith("EXCLUSÃO") || n.startsWith("EXCLUSAO")) return "var(--nat-exclusao)";
-  if (n.startsWith("CORREÇÃO") || n.startsWith("CORRECAO")) return "var(--nat-correcao)";
-  if (n.startsWith("COMUNICAÇÃO") || n.startsWith("COMUNICACAO")) return "var(--nat-comunicacao)";
-  return "var(--faint)";
-}
-
-const SIT_VAR: Record<string, string> = {
-  em_analise: "var(--sit-em-analise)",
-  em_andamento: "var(--sit-em-andamento)",
-  finalizado: "var(--sit-finalizado)",
-  devolvido: "var(--sit-devolvido)",
-  cancelado: "var(--sit-cancelado)",
-};
-
-/** Situação (valor do enum) → var da cor. */
-export function situacaoVar(situacao?: string | null): string {
-  return SIT_VAR[situacao ?? ""] ?? "var(--faint)";
-}
-
-/** Feedback de UI (banners/estados/ações) → var da cor de feedback. */
+/** Feedback de UI (banners/estados/ações) — o `kind` vira a var `--{kind}` nos componentes (Callout, avisos). */
 export type Feedback = "ok" | "warn" | "danger" | "info";
-export function feedbackVar(kind: Feedback): string {
-  return `var(--${kind})`;
-}
 
 const AV_KNOWN: Record<string, string> = {
   jhone: "var(--av-jhone)",

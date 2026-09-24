@@ -8,7 +8,7 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { Avatar } from "@/components/Avatar";
-import { Badge } from "@/components/Badge";
+import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
 import { mensagemTravaPca } from "@/lib/pca-core";
@@ -46,7 +46,6 @@ import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl } from "@/lib/format";
-import { EmConstrucao } from "@/components/EmConstrucao";
 import { CampoLista, Checkbox, PasswordField, SearchField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
@@ -98,7 +97,6 @@ import { Segmented } from "@/components/Segmented";
 import { Switch } from "@/components/Switch";
 import { StatCard } from "@/components/StatCard";
 import { StatMini } from "@/components/StatMini";
-import { NaturezaTag, SituacaoDot } from "@/components/StatusTag";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
 import { TokenEditor } from "./TokenEditor";
@@ -681,24 +679,24 @@ function CampoListaDemo() {
 /** Demo: "selecionar todos" marca TODAS as linhas filtradas (não só a página) + coluna TRAVADA pelo
  * filtro de hierarquia (o seletor acima manda na coluna). */
 function TabelaHierarquiaDemo() {
-  const [natureza, setNatureza] = useState("todos");
+  const [assunto, setAssunto] = useState("todos");
   const [sel, setSel] = useState<Set<string | number>>(new Set());
-  const linhas = natureza === "todos" ? PROTOS : PROTOS.filter((p) => p.natureza === natureza);
+  const linhas = assunto === "todos" ? PROTOS : PROTOS.filter((p) => p.assunto === assunto);
   const colunas = COLUNAS.map((c) =>
-    c.key === "natureza" && natureza !== "todos" ? { ...c, travado: `Travada pelo filtro "Natureza: ${natureza}" (acima da tabela)` } : c,
+    c.key === "assunto" && assunto !== "todos" ? { ...c, travado: `Travada pelo filtro "Assunto: ${assunto}" (acima da tabela)` } : c,
   );
   return (
     <div className="space-y-3">
       <SeletorFiltro
         icone={<IconFilter className="h-4 w-4" />}
-        rotulo="Natureza"
-        valor={natureza}
+        rotulo="Assunto"
+        valor={assunto}
         onChange={(v) => {
-          setNatureza(v);
+          setAssunto(v);
           setSel(new Set());
         }}
-        ativo={natureza !== "todos"}
-        opcoes={[{ valor: "todos", rotulo: "Todas" }, ...[...new Set(PROTOS.map((p) => p.natureza))].map((n) => ({ valor: n, rotulo: n }))]}
+        ativo={assunto !== "todos"}
+        opcoes={[{ valor: "todos", rotulo: "Todos" }, ...[...new Set(PROTOS.map((p) => p.assunto))].map((n) => ({ valor: n, rotulo: n }))]}
       />
       <DataTable
         columns={colunas}
@@ -884,14 +882,8 @@ const NEUTROS: [string, string][] = [
   ["border-2", "--border-2"], ["accent", "--accent"], ["accent-soft", "--accent-soft"],
 ];
 const SEMANTICAS: [string, string][] = [
-  ["exclusão", "--nat-exclusao"], ["inclusão 26", "--nat-inclusao-2026"], ["inclusão 27", "--nat-inclusao-2027"],
-  ["correção", "--nat-correcao"], ["comunicação", "--nat-comunicacao"], ["em análise", "--sit-em-analise"],
-  ["finalizado", "--sit-finalizado"], ["devolvido", "--sit-devolvido"], ["cancelado", "--sit-cancelado"],
-];
-const NATUREZAS = ["EXCLUSÃO", "INCLUSÃO 2026", "INCLUSÃO 2027", "CORREÇÃO", "COMUNICAÇÃO INTERNA"];
-const SITUACOES = [
-  { v: "em_analise", l: "Em análise" }, { v: "em_andamento", l: "Em andamento" },
-  { v: "finalizado", l: "Finalizado" }, { v: "devolvido", l: "Devolvido" }, { v: "cancelado", l: "Cancelado" },
+  ["violeta", "--nat-comunicacao"], ["âmbar", "--sit-em-analise"], ["verde", "--sit-finalizado"],
+  ["laranja", "--sit-devolvido"], ["vermelho", "--sit-cancelado"],
 ];
 const ORGAOS = [
   "Secretaria Municipal de Saúde", "Secretaria Municipal de Educação", "Secretaria de Infraestrutura",
@@ -902,30 +894,30 @@ const ICONES = (
   Object.entries(Icons) as [string, (p: { className?: string }) => ReactNode][]
 ).filter(([k]) => k.startsWith("Icon"));
 
+// Protocolos de exemplo (como na Mesa): assunto da capa + situação cadastrada pelo ADM (`SITUACOES_DEMO`).
 type Proto = {
   id: number;
   data: string;
   orgao: string;
   sigla: string;
-  natureza: string;
+  assunto: string;
   responsavel: string;
-  situacao: string;
+  situacaoId: number | null;
   valor: number;
 };
-const SIT_LABEL: Record<string, string> = {
-  em_analise: "Em análise",
-  em_andamento: "Em andamento",
-  finalizado: "Finalizado",
-  devolvido: "Devolvido",
-  cancelado: "Cancelado",
-};
+/** Tom do assunto pela categoria (INCLUSÃO / EXCLUSÃO / ALTERAÇÃO) — só para a demo. */
+function tomAssunto(assunto: string): Tone {
+  if (assunto.startsWith("EXCLUSÃO")) return "red";
+  if (assunto.startsWith("ALTERAÇÃO")) return "blue";
+  return "emerald";
+}
 const PROTOS: Proto[] = [
-  { id: 118223, data: "02/09/2026", orgao: "Secretaria Municipal de Saúde", sigla: "SMS", natureza: "INCLUSÃO 2027", responsavel: "Naty", situacao: "em_analise", valor: 1250000 },
-  { id: 115282, data: "28/08/2026", orgao: "Secretaria Municipal de Educação", sigla: "SME", natureza: "EXCLUSÃO", responsavel: "Cris", situacao: "finalizado", valor: 84300.5 },
-  { id: 117904, data: "30/08/2026", orgao: "Secretaria de Infraestrutura", sigla: "SEINFRA", natureza: "CORREÇÃO", responsavel: "Thamires", situacao: "em_analise", valor: 3200000 },
-  { id: 116540, data: "25/08/2026", orgao: "Diretoria de Logística e Transporte", sigla: "DLT", natureza: "INCLUSÃO 2026", responsavel: "Naty", situacao: "devolvido", valor: 15900 },
-  { id: 118990, data: "04/09/2026", orgao: "Secretaria Municipal da Fazenda", sigla: "SEFAZ", natureza: "COMUNICAÇÃO INTERNA", responsavel: "", situacao: "em_analise", valor: 452000 },
-  { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", natureza: "EXCLUSÃO", responsavel: "Naty", situacao: "cancelado", valor: 7800 },
+  { id: 118223, data: "02/09/2026", orgao: "Secretaria Municipal de Saúde", sigla: "SMS", assunto: "INCLUSÃO - PCA 2027", responsavel: "Naty", situacaoId: 2, valor: 1250000 },
+  { id: 115282, data: "28/08/2026", orgao: "Secretaria Municipal de Educação", sigla: "SME", assunto: "EXCLUSÃO - PCA 2027", responsavel: "Cris", situacaoId: 4, valor: 84300.5 },
+  { id: 117904, data: "30/08/2026", orgao: "Secretaria de Infraestrutura", sigla: "SEINFRA", assunto: "ALTERAÇÃO NÃO ONEROSA - PCA 2027", responsavel: "Thamires", situacaoId: 2, valor: 3200000 },
+  { id: 116540, data: "25/08/2026", orgao: "Diretoria de Logística e Transporte", sigla: "DLT", assunto: "INCLUSÃO - PCA 2027", responsavel: "Naty", situacaoId: 3, valor: 15900 },
+  { id: 118990, data: "04/09/2026", orgao: "Secretaria Municipal da Fazenda", sigla: "SEFAZ", assunto: "INCLUSÃO - PCA 2027", responsavel: "", situacaoId: null, valor: 452000 },
+  { id: 113220, data: "12/08/2026", orgao: "Gabinete do Prefeito", sigla: "GAB", assunto: "EXCLUSÃO - PCA 2027", responsavel: "Naty", situacaoId: 1, valor: 7800 },
 ];
 const COLUNAS: Column<Proto>[] = [
   {
@@ -957,11 +949,11 @@ const COLUNAS: Column<Proto>[] = [
     ),
   },
   {
-    key: "natureza",
-    header: "Natureza",
+    key: "assunto",
+    header: "Assunto",
     minWidth: 172,
-    value: (r) => r.natureza,
-    render: (r) => <NaturezaTag natureza={r.natureza} />,
+    value: (r) => r.assunto,
+    render: (r) => <Badge tone={tomAssunto(r.assunto)}>{r.assunto}</Badge>,
   },
   {
     key: "responsavel",
@@ -982,8 +974,8 @@ const COLUNAS: Column<Proto>[] = [
     key: "situacao",
     header: "Situação",
     minWidth: 130,
-    value: (r) => SIT_LABEL[r.situacao] ?? "—",
-    render: (r) => <SituacaoDot situacao={r.situacao} label={SIT_LABEL[r.situacao] ?? "—"} />,
+    value: (r) => SITUACOES_DEMO.find((s) => s.id === r.situacaoId)?.nome ?? "Sem situação",
+    render: (r) => <SeletorCelula ariaLabel="Situação" valor={r.situacaoId} opcoes={SITUACOES_DEMO} vazio="Sem situação" />,
   },
   // Coluna R$: filtro de FAIXA (barra de arrasto + "Valor cheio"), conectado aos demais filtros.
   { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (r) => r.valor, render: (r) => brl(r.valor) },
@@ -1320,7 +1312,7 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="Cores — semânticas">
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
           {SEMANTICAS.map(([n, t]) => (
             <Swatch key={t} nome={n} token={t} />
           ))}
@@ -1388,19 +1380,6 @@ export function Catalogo() {
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <Switch label="Bloqueia importação/protocolação" checked={sw} onChange={setSw} />
           <Switch label="Desligada (desabilitada)" checked={false} onChange={() => {}} disabled />
-        </div>
-      </Secao>
-
-      <Secao titulo="Status — Natureza (keyline) e Situação (dot)">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          {NATUREZAS.map((n) => (
-            <NaturezaTag key={n} natureza={n} />
-          ))}
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border pt-4">
-          {SITUACOES.map((s) => (
-            <SituacaoDot key={s.v} situacao={s.v} label={s.l} />
-          ))}
         </div>
       </Secao>
 
@@ -1737,17 +1716,8 @@ export function Catalogo() {
         </LinkExterno>
       </Secao>
 
-      <Secao titulo="Acesso restrito & Em construção">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
-          <EmConstrucao
-            titulo="Auditoria"
-            descricao="Este módulo está em desenvolvimento."
-            icon={<IconClock className="h-5 w-5" />}
-            fase="Fase 5"
-            itens={["Registro de alterações", "Filtro por usuário", "Exportação"]}
-          />
-        </div>
+      <Secao titulo="Acesso restrito">
+        <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
       </Secao>
 
       <Secao titulo="Sombra suave (contorno suave)">

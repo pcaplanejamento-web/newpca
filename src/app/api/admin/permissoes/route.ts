@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { grupos, permissoes } from "@/db/schema";
+import { abasConhecidas } from "@/lib/abas";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -8,10 +9,10 @@ import { permissaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
 
+/** As abas gravadas que EXISTEM (a de um módulo removido some — o editor não a reenvia e o salvar não falha). */
 function parseAbas(s: string): string[] {
   try {
-    const a: unknown = JSON.parse(s);
-    return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+    return abasConhecidas(JSON.parse(s));
   } catch {
     return [];
   }

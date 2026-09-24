@@ -31,7 +31,6 @@ import {
   KeyRound,
   Landmark,
   Layers,
-  LayoutDashboard,
   Link2,
   Scale,
   Loader2,
@@ -66,7 +65,6 @@ import {
   type LucideProps,
 } from "lucide-react";
 
-export const IconDashboard = LayoutDashboard;
 export const IconUpload = Upload;
 export const IconMenu = Menu;
 export const IconClose = X;

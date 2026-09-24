@@ -1,56 +1,32 @@
 # Protocolos
 
-A página **Protocolos** (`/painel/protocolos`) é uma **tabela única** com
-**edição inline** (como na planilha): clicar em **Novo protocolo** adiciona uma
-linha e os dados são preenchidos **na própria célula** (dropdowns coloridos para
-Natureza/Responsável/Situação/Distribuição, data e texto para os demais). Módulo
-**curado** (campos fixos + opções gerenciáveis), no padrão dos prints:
-**tabela no desktop** e **cards editáveis no mobile**. Sem modal.
+Os protocolos (o "processo" que empacota vários DFDs) vivem na **Mesa** (`/painel/mesa`, aba de módulo `dfd`), na
+visão **Protocolos** — no mesmo espaço das visões **DFDs** e **Itens**. Não existe mais tela própria de protocolos: a
+antiga página `/painel/protocolos` (a planilha "Distribuição de Protocolos" com edição inline) e o antigo Dashboard de
+protocolos (`/painel`) foram **removidos**; `/painel` agora leva direto à Mesa (ou ao 1º módulo que o grupo ativo pode
+ver; sem nenhum, ao Perfil).
 
-> O **construtor de tabelas dinâmicas** genérico (listas com colunas livres)
-> fica em **Ferramentas → Tabelas dinâmicas** (`/painel/ferramentas/tabelas`),
-> separado de Protocolos. Ver [DESIGN.md](./DESIGN.md).
+## Na Mesa
+- **Importar / criar:** botão "Importar" da visão Protocolos → soltar o PDF do protocolo (capa + DFDs, lido no
+  navegador) **ou** criar o protocolo manualmente. A análise confere cada DFD pelas regras do ADM antes de protocolar.
+- **Tabela de protocolos:** Estado (agregado: capa + DFDs + itens) · Situação · Responsável · Distribuição · Data ·
+  Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor — filtros conectados em todas as colunas, seleção com
+  somatório e edição em massa (barra fixa no rodapé do display).
+- **Gestão:** Situação = as cadastradas pelo ADM (Configurações → Situações: nome + cor + ordem); Responsável = uma
+  pessoa do grupo ativo (o padrão de quem protocola é escolhido no Perfil → Protocolação); Distribuição = quem
+  protocolou.
+- **Banner do protocolo:** clicar numa linha abre o protocolo gravado (capa, DFDs, reenvio com comparação, histórico).
+- **PCA:** da Mesa, "Enviar ao PCA" leva os protocolos para a Mesa daquele PCA, onde são incorporados.
 
-## Modelo de dados (migração `0006`)
-- **`protocolos`** — `numero` (obrigatório), `data`, `orgao`, `orgao_sigla`,
-  `natureza`, `responsavel`, `situacao` (enum fixo), `distribuicao`, `criado_por`,
-  timestamps. Índices por situação/natureza/responsável/data.
-- **`protocolo_opcoes`** — opções gerenciáveis por `campo`
-  (`orgao` | `natureza` | `responsavel` | `distribuicao`), `UNIQUE(campo,valor)`.
-  Semeada: naturezas (INCLUSÃO 2027/2026, EXCLUSÃO, CORREÇÃO, COMUNICAÇÃO INTERNA)
-  e responsáveis (NATY, CRIS, MARIA).
-- **Situação** é um enum fixo com cores próprias na UI (`<Badge>`):
-  `em_analise` (âmbar), `em_andamento` (azul), `finalizado` (esmeralda),
-  `devolvido` (laranja), `cancelado` (cinza).
+## Modelo de dados
+- `dfd_protocolos` (migração `0016` em diante) + `dfds.protocolo_id` — ver [CLAUDE.md](../CLAUDE.md) ("Protocolo →
+  DFDs" e "Gestão do protocolo").
+- **Legado (dormente):** as tabelas `protocolos` e `protocolo_opcoes` (migração `0006`, do antigo módulo) continuam no
+  banco com os dados preservados, mas sem código — fora do `schema.ts` e sem migração de DROP; aparecem como "legado"
+  na tela Armazenamento (ADM). O histórico dessas alterações segue legível na Auditoria ("Protocolo (legado)").
+- **Permissões antigas** que liberavam as abas `dashboard`/`protocolos` continuam válidas: essas chaves são ignoradas
+  na leitura (`abasConhecidas`) e o ADM salva a permissão normalmente.
 
-## Funcionalidades
-- **Cabeçalho** com contagem: "{total} protocolos · {em análise} em análise".
-- **Colunas** (padrão da planilha): DATA, PROTOCOLO, ÓRGÃO (+ sigla), NATUREZA,
-  RESPONSÁVEL (+ avatar), SITUAÇÃO, DISTRIBUIÇÃO.
-- **Edição inline**: "Novo protocolo" adiciona uma linha editável; "Editar" (na
-  linha) edita no lugar; célula por tipo (data, texto, seleção). **Data = hoje**.
-- **Cadastrar opção inline** nos selects ("+ Nova opção…"), salva em `protocolo_opcoes`.
-- **Filtros** (dropdowns): Natureza · Situação · Responsável · Período (ano).
-  Busca por número/órgão vem da barra superior (`?q=`). **Paginação.**
-- **Tabela** (desktop) ↔ **cards editáveis** (mobile) da mesma fonte de dados.
-- **FAB "Novo"** no mobile; botão no cabeçalho no desktop.
-
-## Permissões
-Todos os usuários ativos **visualizam**; **admin/gestor** criam, editam e excluem
-(protocolos e opções). Guardas via `src/lib/api-auth.ts`.
-
-## Lib e API
-- `src/lib/protocolos.ts` — `SITUACOES`, `listarProtocolos` (filtros natureza/
-  situacao/responsavel/ano/q), `listarAnos`, `getResumoProtocolos`,
-  `protocolosRecentes`, `criar/atualizar/excluirProtocolo`, `listar/adicionar/removerOpcao`,
-  schemas zod.
-- `GET/POST /api/protocolos` (lista+resumo+opções / criar) ·
-  `PATCH/DELETE /api/protocolos/[id]` (usados na edição inline) ·
-  `POST/DELETE /api/protocolos/opcoes`.
-
-## Componentes
-`ProtocolosView` (orquestra a tabela; edição inline via `LinhaEdicaoDesktop` e
-`CardEdicaoMobile`, ambos em nível de módulo para preservar o foco ao digitar;
-`CampoSelecao` para os selects com "+ Nova opção…"). `ProtocoloCard` (exibição
-mobile), reutilizando `Badge` (+`naturezaTone`/`situacaoTone`), `Avatar`, `Fab`.
-O construtor genérico (`TabelasIndex`/`TabelaEditor`) fica em Ferramentas.
+## Referências
+- Regras de engenharia e detalhes: [CLAUDE.md](../CLAUDE.md).
+- Histórico de entregas: [ROADMAP.md](./ROADMAP.md) ("Tudo na Mesa").
