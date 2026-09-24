@@ -114,18 +114,22 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
   }
 
   async function mover(id: number, dir: -1 | 1) {
-    if (!dados) return;
+    if (!dados || salvando) return;
     const i = dados.unidades.findIndex((x) => x.id === id);
     const alvo = i + dir;
     if (i < 0 || alvo < 0 || alvo >= dados.unidades.length) return;
     const nova = [...dados.unidades];
     [nova[i], nova[alvo]] = [nova[alvo], nova[i]];
     setDados({ ...dados, unidades: nova.map((u, ordem) => ({ ...u, ordem })) });
+    // Uma gravação de ordem por vez (as ações ficam travadas até o servidor confirmar — nada de ordens concorrentes).
+    setSalvando(true);
     try {
       await chamarPadronizacao("/api/catalogo/unidades-medida/ordem", "PATCH", { ids: nova.map((x) => x.id) });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar a nova ordem.");
       await carregar();
+    } finally {
+      setSalvando(false);
     }
   }
 

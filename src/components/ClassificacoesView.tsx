@@ -131,18 +131,22 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
   }
 
   async function mover(id: number, dir: -1 | 1) {
-    if (!cad) return;
+    if (!cad || salvando) return;
     const i = cad.classificacoes.findIndex((x) => x.id === id);
     const alvo = i + dir;
     if (i < 0 || alvo < 0 || alvo >= cad.classificacoes.length) return;
     const nova = [...cad.classificacoes];
     [nova[i], nova[alvo]] = [nova[alvo], nova[i]];
     setCad({ ...cad, classificacoes: nova.map((c, ordem) => ({ ...c, ordem })) });
+    // Uma gravação de ordem por vez (as ações ficam travadas até o servidor confirmar — nada de ordens concorrentes).
+    setSalvando(true);
     try {
       await chamarPadronizacao("/api/catalogo/classificacoes/ordem", "PATCH", { ids: nova.map((x) => x.id) });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar a nova ordem.");
       await carregarCadastro();
+    } finally {
+      setSalvando(false);
     }
   }
 
