@@ -7,6 +7,7 @@ import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
 import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
+import { filtroAnoPcaProtocolo } from "./dfd-sql";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
 
@@ -101,7 +102,7 @@ export async function listarProtocolos(reparticaoId?: number, anoPca?: number | 
     and(
       isNull(dfdProtocolos.pcaId),
       reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
-      anoPca != null ? eq(dfdProtocolos.anoPca, anoPca) : undefined,
+      filtroAnoPcaProtocolo(anoPca),
     ),
   );
 }

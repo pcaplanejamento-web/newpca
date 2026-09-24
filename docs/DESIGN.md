@@ -71,8 +71,11 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - **`--h-header`** — altura do cabeçalho (56px); a faixa da marca na sidebar tem a mesma altura (bordas alinhadas).
 - A **densidade** do ADM (Aparência) muda todos juntos (compacta / padrão / confortável) — e também a altura padrão dos
   controles (`--h-control-sm`), que é a da linha das tabelas compactas.
-- **Tabelas de rolagem interna** ocupam o espaço até o fim do display desde o primeiro quadro (rodapé rente ao fim) e abrem
-  com as linhas por página escolhidas pelo ADM (Configurações → Tabelas).
+- **Tabelas de rolagem interna** ocupam o espaço até o fim do display desde o primeiro quadro (rodapé rente ao fim) — também
+  ao recarregar a página (a altura já vem no HTML do servidor) — e abrem com as linhas por página escolhidas pelo ADM
+  (Configurações → Tabelas).
+- **Cabeçalho:** todos os controles com a altura padrão (44px no celular e no tablet); numa tela estreita só o seletor de PCA
+  encolhe (o rótulo trunca), e o nome acessível de cada seletor diz o valor escolhido.
 - **Cortes** = os do Tailwind (`sm` 40rem · `lg` 64rem) também no CSS próprio e nas medidas em JS (`ehDesktop`) — com a
   fonte do navegador ampliada, JS e CSS continuam no mesmo layout.
 - Grades responsivas: stats `grid-cols-2/3 → lg:grid-cols-5`; listas `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`.

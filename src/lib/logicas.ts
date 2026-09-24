@@ -241,10 +241,12 @@ export const LOGICAS: LogicaRef[] = [
       "O seletor à esquerda do topo escolhe um PCA (ou \"Todos os PCAs\"): a Mesa passa a mostrar só os protocolos daquele PCA (e os DFDs e itens deles — o DFD segue o PCA do protocolo de origem), o módulo PCA só o card dele e o Orçamento só os orçamentos do ano dele. A escolha fica guardada no navegador, como a unidade e o grupo ativos.",
     detalhes: [
       "Casa pelo ANO do PCA (o protocolo e o DFD guardam o ano) — só entram no seletor os PCAs cadastrados com ano.",
+      "Um protocolo antigo, sem ano, aparece no PCA dos DFDs dele — protocolos, DFDs e itens nunca se contradizem.",
       "Não filtra a Mesa de um PCA (já é daquele PCA), o Catálogo, a Administração nem a tela pública; dentro do espaço de um PCA, escolher outro leva ao espaço do escolhido.",
+      "Só aparece para quem vê a Mesa, o PCA ou o Orçamento.",
       "As tabelas da Mesa ganharam as colunas PCA (protocolos, DFDs e itens) e Prioridade (DFDs e itens).",
     ],
-    fonte: "pca-filtro (cookie pca_filtro) + filtroAnoPcaDfd (dfd-sql)",
+    fonte: "pca-filtro (cookie pca_filtro) + filtroAnoPcaDfd/filtroAnoPcaProtocolo (dfd-sql)",
   },
   {
     id: "proto-dashboard-mesa",

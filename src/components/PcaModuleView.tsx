@@ -48,6 +48,7 @@ export function PcaModuleView({
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; id?: number; error?: string };
       if (!r.ok || !j.ok || !j.id) throw new Error(j.error ?? "Não foi possível criar o PCA.");
       router.push(`/painel/pca/${j.id}?aba=configuracao`);
+      router.refresh(); // depois da navegação (fila do roteador): o layout (o seletor de PCA do cabeçalho) passa a listá-lo
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível criar o PCA.");
       setSalvando(false);

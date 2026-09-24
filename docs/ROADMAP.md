@@ -34,9 +34,16 @@ do protocolo — nos protocolos, DFDs e itens) e **Prioridade** (ALTA/MÉDIA/BAI
 banners do protocolo). ✅ **PCA no cabeçalho:** um seletor à esquerda do topo escolhe o PCA e filtra a Mesa, os cards do PCA
 e o Orçamento ("Todos os PCAs" = como antes). ✅ **Perfil → Mesa:** a Mesa abre só com os protocolos do próprio usuário (o
 padrão), com todos ou com os sem responsável — escolha de cada um. ✅ **Tabelas:** ocupam todo o espaço desde o primeiro
-quadro (o rodapé fica rente ao fim, com poucas ou muitas linhas; sem "pulo" ao carregar) e abrem com a quantidade de linhas
-escolhida pelo ADM em **Configurações → Tabelas**. ✅ Corrigido: o "Restaurar padrão" da Aparência apagava junto as regras de
-Avaliação e as Integrações — agora zera só a aparência.
+quadro (o rodapé fica rente ao fim, com poucas ou muitas linhas; sem "pulo" ao carregar — inclusive ao recarregar a página
+ou no primeiro acesso: a altura já vem no HTML do servidor) e abrem com a quantidade de linhas escolhida pelo ADM em
+**Configurações → Tabelas**. ✅ Corrigido: o "Restaurar padrão" da Aparência apagava junto as regras de Avaliação e as
+Integrações — agora zera só a aparência (e a rota da Aparência nunca devolve esses blocos).
+✅ **Auditoria:** o seletor do cabeçalho acompanha a troca de PCA dentro do espaço de um PCA (antes ficava no anterior) e
+lista na hora o PCA criado/excluído; a prioridade lida no banco nunca derruba a lista (seções fora do formato); o protocolo
+antigo sem ano aparece no PCA dos seus DFDs (protocolos, DFDs e itens nunca se contradizem); os itens vêm pelo MESMO PCA da
+página; as preferências do Perfil não gravam pela metade; o seletor só aparece para quem vê Mesa/PCA/Orçamento; todos os
+controles do cabeçalho com 44px no celular e no tablet (o menu não encolhe em telas de 360px) e o nome acessível diz o valor
+escolhido; o cadastro de PCAs é lido uma vez por página.
 
 ### Mesa: Dashboard de governança, barra única e importação na tabela + espaçamento do sistema inteiro — entregue
 ✅ **Dashboard de governança** (ícone à esquerda de Protocolos · DFDs · Itens): 5 KPIs (protocolos na Mesa com a
@@ -294,8 +301,8 @@ real (DFD 140 → BRUNO BOTELHO SALEH + CPF + data). Testes puros em `parse-assi
   **liga/desliga** dos botões (Protocolar / Importar DFD avulso). Barra no cliente (com o motivo) e no servidor; núcleo
   puro/testável (`assuntoCadastrado`/`tipoPermitido`/`gateProtocolo`); allow-list no blob `avaliacao` (sem migração);
   config vazia = igual a hoje.
-- **Adiado:** nº de linhas PADRÃO definido pelo ADM (A5 — o gancho `linhasPadrao` do `DataTable` já existe; falta ligar a
-  uma config do ADM, na área da sessão Configurações).
+- **Entregue depois:** nº de linhas PADRÃO definido pelo ADM (A5) — **Configurações → Tabelas** (30/50/100/200), entregue às
+  tabelas pelo contexto `ConfigTabelas` (o antigo gancho `linhasPadrao` saiu); ver "Mesa compacta + PCA no cabeçalho".
 
 ### Tela DFD: visão única Protocolos/DFDs/Itens (morph) + coluna Data — entregue
 ✅ Redesign da tela DFD numa superfície de tabela única:

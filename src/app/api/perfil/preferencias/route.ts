@@ -15,7 +15,11 @@ export async function PATCH(req: Request) {
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(preferenciasPerfilSchema, req);
   if ("resp" in p) return p.resp;
-  const mesa = p.data.mesaResponsavel;
+  const { mesaResponsavel: mesa, responsavelPadraoId: alvo } = p.data;
+  // Valida TUDO antes de gravar qualquer coisa (nada salvo pela metade). Salvar de novo o MESMO padrão (hoje fora do
+  // grupo) não é uma escolha nova — nada muda.
+  const padraoMuda = alvo !== undefined && (alvo == null || alvo !== (await responsavelPadraoGravado(a.u.id)));
+  if (padraoMuda && alvo != null && !(await pessoaDoGrupo(alvo, await getGrupoAtivoId(a.u)))) return erro("Escolha uma pessoa ativa do seu grupo.", 422);
   if (mesa !== undefined) {
     await definirMesaResponsavel(a.u.id, mesa);
     await registrarAuditoria({
@@ -26,12 +30,8 @@ export async function PATCH(req: Request) {
       resumo: `Mesa abre com o responsável: ${ROTULO_MESA_RESPONSAVEL[mesa]}`,
     });
   }
-  if (p.data.responsavelPadraoId === undefined) return ok();
-  const alvo = p.data.responsavelPadraoId;
-  // Salvar de novo o MESMO padrão (hoje fora do grupo) não é uma escolha nova — nada muda.
-  if (alvo != null && alvo === (await responsavelPadraoGravado(a.u.id))) return ok();
-  if (alvo != null && !(await pessoaDoGrupo(alvo, await getGrupoAtivoId(a.u)))) return erro("Escolha uma pessoa ativa do seu grupo.", 422);
-  await definirResponsavelPadrao(a.u.id, alvo);
+  if (!padraoMuda) return ok();
+  await definirResponsavelPadrao(a.u.id, alvo ?? null);
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

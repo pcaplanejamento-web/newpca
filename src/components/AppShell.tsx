@@ -211,7 +211,7 @@ function SinoNotificacoes() {
     <Dropdown
       align="end"
       ariaLabel="Notificações"
-      triggerClassName="h-11 w-11 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 lg:h-9 lg:w-9"
+      triggerClassName="h-11 w-11 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
       trigger={<IconBell className="h-5 w-5" />}
       width={256}
     >
@@ -251,8 +251,8 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
   return (
     <Dropdown
       align="start"
-      ariaLabel="Grupo ativo"
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-[var(--h-control-sm)] text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60"
+      ariaLabel={`Grupo ativo: ${ativo.nome}`}
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 lg:h-[var(--h-control-sm)]"
       width={220}
       trigger={
         <>
@@ -273,7 +273,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
               key={g.id}
               type="button"
               onClick={() => trocar(g.id, close)}
-              className={`flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
+              className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
                 g.id === ativo.id ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
               }`}
             >
@@ -299,8 +299,17 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
   const router = useRouter();
   const pathname = usePathname();
   const [trocando, setTrocando] = useState(false);
+  // A escolha vale NA HORA pelo estado local: o layout é COMPARTILHADO — ir de um espaço de PCA a outro (push) não o
+  // renderiza de novo, e o `ativoId` do servidor ficaria o antigo (a marca no PCA errado e o clique de volta sem efeito).
+  // Quando o servidor manda outro valor (refresh), ele vale.
+  const [sel, setSel] = useState(ativoId);
+  const [doServidor, setDoServidor] = useState(ativoId);
+  if (doServidor !== ativoId) {
+    setDoServidor(ativoId);
+    setSel(ativoId);
+  }
   if (pcas.length === 0) return null;
-  const ativo = pcas.find((p) => p.id === ativoId) ?? null;
+  const ativo = pcas.find((p) => p.id === sel) ?? null;
 
   async function trocar(id: number | null, close: () => void) {
     close();
@@ -313,6 +322,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
         body: JSON.stringify({ pcaId: id }),
       });
       if (!res.ok) throw new Error();
+      setSel(id);
       if (id != null && /^\/painel\/pca\/\d+/.test(pathname)) router.push(`/painel/pca/${id}${window.location.search}`);
       else router.refresh();
     } catch {
@@ -322,24 +332,24 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
     }
   }
 
-  const opcao = (sel: boolean) =>
-    `flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
-      sel ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+  const opcao = (marcado: boolean) =>
+    `flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
+      marcado ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
     }`;
   return (
     <Dropdown
       align="start"
-      ariaLabel="PCA (filtra todo o sistema)"
-      triggerClassName={`gap-1.5 rounded-chip border px-3 h-11 text-[13px] font-medium sm:h-[var(--h-control-sm)] ${
+      ariaLabel={`PCA do cabeçalho: ${ativo ? `${ativo.nome} (${ativo.ano})` : "todos os PCAs"} — filtra todo o sistema`}
+      triggerClassName={`gap-1 rounded-chip border px-2 h-11 min-w-11 justify-center text-[13px] font-medium sm:gap-1.5 sm:px-3 lg:h-[var(--h-control-sm)] ${
         ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
       }`}
       width={260}
       trigger={
         <>
-          {trocando ? <IconSpinner className="h-3.5 w-3.5" /> : <IconBox className="h-3.5 w-3.5 opacity-70" />}
-          <span className="max-w-[5rem] truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
+          {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+          <span className="truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
           <span className="hidden max-w-[12rem] truncate sm:inline">{ativo ? ativo.nome : "Todos os PCAs"}</span>
-          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <IconChevronDown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
       }
     >
@@ -391,8 +401,8 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
   return (
     <Dropdown
       align="start"
-      ariaLabel="Unidade ativa"
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-[var(--h-control-sm)] text-[13px] font-medium text-text-2 hover:bg-surface-2"
+      ariaLabel={`Unidade ativa: ${ativa.nome}`}
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
       width={260}
       trigger={
         <>
@@ -413,7 +423,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
               key={r.id}
               type="button"
               onClick={() => trocar(r.id, close)}
-              className={`flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] ${
+              className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
                 r.id === ativa.id ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
               }`}
             >
@@ -455,6 +465,8 @@ export function AppShell({
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
   const abasSet = new Set(abas);
+  // O PCA do cabeçalho filtra a Mesa, o módulo PCA e o Orçamento — sem nenhuma dessas abas, o seletor não aparece.
+  const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
 
   return (
     <div className="min-h-dvh bg-bg text-text lg:flex">
@@ -511,17 +523,22 @@ export function AppShell({
             type="button"
             aria-label="Abrir menu"
             onClick={() => setMenuAberto(true)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
           >
             <IconMenu className="h-5 w-5" />
           </button>
-          <div className="lg:hidden">
+          <div className="shrink-0 lg:hidden">
             <Brand compact identidade={identidade} />
           </div>
-          {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA. */}
-          <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
+          {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA; só para quem vê o que ele filtra (Mesa, PCA,
+              Orçamento). É o único item que ENCOLHE numa tela estreita (o rótulo trunca) — os demais mantêm os 44px. */}
+          {filtraPca && (
+            <div className="min-w-0">
+              <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
+            </div>
+          )}
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <div className="hidden items-center gap-1.5 sm:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />

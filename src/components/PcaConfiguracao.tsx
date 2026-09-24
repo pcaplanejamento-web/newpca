@@ -109,6 +109,7 @@ export function PcaConfiguracao({
     const r = await fetch(`/api/pca/${pca.id}`, { method: "DELETE" });
     if (r.ok) {
       router.push("/painel/pca");
+      router.refresh(); // depois da navegação: o layout (o seletor de PCA do cabeçalho) deixa de listá-lo
       return;
     }
     setSalvando(null);

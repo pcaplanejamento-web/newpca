@@ -239,12 +239,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
   `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**
   `{pcaId|null}` com `filtroPcaSchema`, `exigirUsuario`, 404 p/ PCA inexistente). "Todos os PCAs" (sem cookie) = sem filtro.
-  Casa pelo ANO (o protocolo/DFD guarda `ano_pca`): a **Mesa principal** (protocolos por `dfd_protocolos.ano_pca`; DFDs e a
-  lista lazy de itens — `/api/dfd/itens` — pelo PCA do protocolo de origem, senão o do DFD: `filtroAnoPcaDfd`/`anoPcaDfdSql`,
-  `dfd-sql.ts`; o Dashboard segue as listas), os **cards do módulo PCA** (só o card do escolhido; o subtítulo avisa) e o
+  Casa pelo ANO (o protocolo/DFD guarda `ano_pca`) com UMA régua — o PCA do DFD = o do protocolo de origem, senão o do
+  próprio DFD (`anoPcaDfdSql`, `dfd-sql.ts`): a **Mesa principal** (DFDs e a lista lazy de itens por `filtroAnoPcaDfd`; os
+  protocolos por `filtroAnoPcaProtocolo` = o ano do protocolo, e o ANTIGO sem ano entra pelo ano de um DFD dele — protocolos,
+  DFDs e itens nunca se contradizem; os itens recebem o ano EXPLÍCITO da página — `/api/dfd/itens?ano=` —, nunca o cookie
+  relido depois; o Dashboard segue as listas), os **cards do módulo PCA** (só o card do escolhido; o subtítulo avisa) e o
   **Orçamento** (os orçamentos/lançamentos do ano — `listarOrcamentos(ano)`/`getOrcamentoItens(_, ano)`). NÃO filtra a Mesa do
   PCA (já é de um PCA), o espaço de um PCA (dentro dele, escolher outro PCA leva ao espaço do escolhido, na mesma aba), o
-  Catálogo, a Administração nem a tela pública. A Mesa vazia diz qual PCA está filtrando.
+  Catálogo, a Administração nem a tela pública. A Mesa vazia diz qual PCA está filtrando. O seletor guarda a escolha em
+  estado LOCAL (o layout é compartilhado — ir de um espaço de PCA a outro não o renderiza de novo; vale o do servidor quando
+  ele muda), só aparece para quem vê Mesa/PCA/Orçamento, e criar/excluir um PCA faz `router.refresh()` depois da navegação
+  (a lista do cabeçalho acompanha). `listarPcas` é memorizado POR REQUISIÇÃO (`cache` do React): layout + página = uma
+  consulta.
 - Migrações `0009` (grupos/permissões), `0010` (repartições) e `0011` (`unidades.reparticao_id`) semeiam
   o grupo/repartição **"Geral"** e migram os dados/usuários existentes para lá — por isso o uso atual não muda.
 
@@ -1469,8 +1475,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
 - **ALTURA PADRÃO dos controles = `--h-control-sm`** (34px; 31/38 nas densidades compacta/confortável do ADM) no desktop e
-  **44px no celular**: o trilho do `Segmented`, o `SeletorFiltro`, o `Button size="sm"`, os seletores do cabeçalho e a
-  LINHA das tabelas compactas. Dentro da linha, os controles medem `--h-control-sm` − 6px no desktop (`Button size="xs"`,
+  **44px no celular e no tablet** (abaixo do `lg`): o trilho do `Segmented`, o `SeletorFiltro`, o `Button size="sm"`, TODOS os
+  controles do cabeçalho (PCA, unidade, grupo, notificações, `ThemeToggle`) e a LINHA das tabelas compactas. Numa tela
+  estreita (360px) só o seletor de PCA encolhe (o rótulo trunca) — o menu e os ícones mantêm os 44px. Dentro da linha, os controles medem `--h-control-sm` − 6px no desktop (`Button size="xs"`,
   `SeletorCelula`) e 44px no celular.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; **`size="sm"`** = compacto p/ rodapés de
   tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
@@ -1513,7 +1520,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`scrollInterno`** = no desktop a tabela OCUPA o espaço até o fim do display DESDE O PRIMEIRO QUADRO (altura TOTAL fixa,
   coluna flex: o CORPO rola por dentro com o `thead` `sticky`, o rodapé fica rente ao fim com qualquer nº de linhas; sem
   linhas, a mensagem fica no meio do espaço) — medida em `useLayoutEffect` (antes da pintura) com o topo pela cadeia de
-  `offsetTop` (`topoNoDocumento`: ignora o `transform` do morph das visões), sem scroll do navegador; um **seletor de linhas
+  `offsetTop` (`topoNoDocumento`: ignora o `transform` do morph das visões), sem scroll do navegador; no HTML do SERVIDOR
+  (F5/1º acesso) a MESMA conta roda num trecho FIXO (`ALTURA_NO_HTML`) que o navegador executa ao ler a tabela — antes da
+  1ª pintura —, só na renderização do servidor e na hidratação (`useSyncExternalStore`; depois sai do DOM; as classes da
+  coluna são `lg:` desde o servidor); um **seletor de linhas
   por página (30/50/100/200)** no rodapé começa na escolha do ADM (**Configurações → Tabelas**, `aparencia.tabelas.linhas`,
   entregue pelo contexto **`ConfigTabelas`** do layout da área logada — `useLinhasTabela`; sem provedor = 30) e limita as
   linhas em DOM (performático com milhares); no celular rola normal; opt-in, exclui `fillHeight` — usado na **Mesa**;

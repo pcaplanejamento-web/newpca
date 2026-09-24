@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, gt, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { cache } from "react";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
 import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
 import { filtroAnoPcaDfd, prioridadeTextoSql } from "./dfd-sql";
-import { type GrupoAssinatura, gruposAssinatura } from "./dfd-tratamento";
+import { type GrupoAssinatura, gruposAssinatura, prioridadeDoDfd } from "./dfd-tratamento";
 import { normPrioridade, type Prioridade } from "./normalize";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
@@ -281,9 +282,11 @@ export async function listarItensDfds(reparticaoId?: number, pcaId?: number, ano
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
 
-/** Colunas do DETALHE do DFD (resumo + cabeçalho completo + seções/assinaturas em JSON). */
+/** Colunas do DETALHE do DFD (resumo + cabeçalho completo + seções/assinaturas em JSON). A prioridade sai das seções já
+ * lidas (`paraDetalhe`) — o JSON não é lido duas vezes. */
+const { prioridadeTexto: _prioridadeNoBanco, ...colunasResumoDetalhe } = colunasDfd;
 const colunasDetalhe = {
-  ...colunasDfd,
+  ...colunasResumoDetalhe,
   orgaoEntidade: dfds.orgaoEntidade,
   matricula: dfds.matricula,
   email: dfds.email,
@@ -304,9 +307,9 @@ const colunasItem = {
   valorTotal: dfdItens.valorTotal,
 };
 
-/** Linha crua do detalhe → `DfdDetalhe` (JSON de seções/assinaturas lido com tolerância). */
+/** Linha crua do detalhe → `DfdDetalhe` (JSON de seções/assinaturas lido com tolerância; a prioridade pela seção). */
 function paraDetalhe(
-  d: DfdResumoCru & {
+  d: Omit<DfdResumoCru, "prioridadeTexto"> & {
     orgaoEntidade: string | null;
     matricula: string | null;
     email: string | null;
@@ -317,12 +320,12 @@ function paraDetalhe(
   },
   itens: DfdItemRow[],
 ): DfdDetalhe {
-  const { prioridadeTexto, ...resto } = d;
   const assinaturas = parseAssinaturas(d.assinaturas);
+  const secoes = parseSecoes(d.secoes);
   return {
-    ...resto,
-    prioridade: normPrioridade(prioridadeTexto).valor,
-    secoes: parseSecoes(d.secoes),
+    ...d,
+    prioridade: prioridadeDoDfd(secoes),
+    secoes,
     assinaturas,
     assinaturaGrupos: gruposAssinatura(assinaturas),
     itens,
@@ -884,22 +887,27 @@ export type PcaDetalhe = PcaResumo & {
   grupos: PcaReparticaoGrupo[];
 };
 
-export async function listarPcas(): Promise<PcaResumo[]> {
-  return getDb()
-    .select({
-      id: pcas.id,
-      nome: pcas.nome,
-      ano: pcas.ano,
-      ativo: pcas.ativo,
-      totalDfds: pcas.totalDfds,
-      totalItens: pcas.totalItens,
-      valorEstimado: pcas.valorEstimado,
-      criadoEm: pcas.criadoEm,
-      fonte: pcas.fonte,
-    })
-    .from(pcas)
-    .orderBy(desc(pcas.ativo), desc(pcas.criadoEm), desc(pcas.id));
-}
+/** O cadastro de PCAs (o ativo primeiro). Memorizado POR REQUISIÇÃO (`cache` do React): o layout (o seletor de PCA do
+ * cabeçalho) e a página (Mesa, PCA, Orçamento) leem o MESMO resultado numa consulta só; fora da renderização (rotas) não
+ * memoriza. `async` = uma Promise de verdade (o construtor do Drizzle executaria a consulta a cada `await`). Quem recebe a
+ * lista não a altera (é compartilhada). */
+export const listarPcas = cache(
+  async (): Promise<PcaResumo[]> =>
+    getDb()
+      .select({
+        id: pcas.id,
+        nome: pcas.nome,
+        ano: pcas.ano,
+        ativo: pcas.ativo,
+        totalDfds: pcas.totalDfds,
+        totalItens: pcas.totalItens,
+        valorEstimado: pcas.valorEstimado,
+        criadoEm: pcas.criadoEm,
+        fonte: pcas.fonte,
+      })
+      .from(pcas)
+      .orderBy(desc(pcas.ativo), desc(pcas.criadoEm), desc(pcas.id)),
+);
 
 /** Compilação de uma edição: DFDs agrupados por repartição (ordem da tela) + itens. */
 export async function getPca(id: number): Promise<PcaDetalhe | null> {

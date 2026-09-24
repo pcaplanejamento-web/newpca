@@ -170,8 +170,9 @@ export function DfdsView({
   situacoes?: SituacaoCadastrada[];
   /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
   filtroInicial?: FiltroMesa;
-  /** O PCA do CABEÇALHO que filtra a Mesa principal (as listas já chegam filtradas; `null` = todos os PCAs). */
-  pcaFiltro?: { nome: string } | null;
+  /** O PCA do CABEÇALHO que filtra a Mesa principal (as listas já chegam filtradas — e os itens, lazy, vêm pelo MESMO
+   * ano; `null` = todos os PCAs). */
+  pcaFiltro?: { nome: string; ano: number } | null;
   /** Mesa dentro do PCA (sem importação; ações de incorporar/devolver e retirar item). */
   modoPca?: ModoPcaMesa;
 }) {
@@ -265,11 +266,13 @@ export function DfdsView({
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
   }, [dfds]);
   const pcaDaMesa = modoPca?.pcaId;
+  // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
+  const anoFiltro = pcaFiltro?.ano;
   useEffect(() => {
     if (vista !== "itens" || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
-    fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : "/api/dfd/itens", { signal: ac.signal })
+    fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
       .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[] }>)
       .then((j) => {
         if (!ac.signal.aborted) setItens(j.ok ? (j.itens ?? []) : []);
@@ -281,7 +284,7 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens, pcaDaMesa]);
+  }, [vista, itens, pcaDaMesa, anoFiltro]);
   // Itens seguem o filtro de hierarquia pelo DFD de origem (que segue o do protocolo).
   // No PCA os itens seguem os DFDs VISÍVEIS (o escopo Todos/Enviados/Incorporados filtra os DFDs).
   const emPca = !!modoPca;
@@ -1038,8 +1041,8 @@ export function DfdsView({
       Importar<span className="hidden sm:inline"> {oQueImporta}</span>
     </Button>
   ) : null;
-  const semDados = (oQue: string) =>
-    `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${importa ? " Use “Importar” no rodapé da tabela." : ""}`;
+  const semDados = (oQue: string, dica = importa) =>
+    `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
       columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
@@ -1096,7 +1099,7 @@ export function DfdsView({
       reservaInferior={reserva}
       minWidth={modoPca ? 1120 : 1300}
       density="compact"
-      vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : "Nenhum item nesta visão."}
+      vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
   );

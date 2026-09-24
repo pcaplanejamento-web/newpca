@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { aparenciaToCss, LINHAS_TABELA_PADRAO, linhasTabela, parseAparencia, semChavesVisuais } from "../src/lib/theme.ts";
+import { aparenciaToCss, LINHAS_TABELA_PADRAO, linhasTabela, parseAparencia, semChavesVisuais, soAparencia } from "../src/lib/theme.ts";
 
 describe("theme — aparenciaToCss (serialização segura)", () => {
   it("serializa cores válidas por tema", () => {
@@ -61,5 +61,9 @@ describe("theme — tabelas e o 'Restaurar padrão' da Aparência", () => {
       avaliacao: { niveis: { "dfd.prioridade": "fundamental" } },
       integracoes: { turnstile: { ativo: true } },
     });
+    // A rota devolve só a APARÊNCIA: os blocos irmãos (avaliação, integrações com segredo cifrado) nunca saem por ela.
+    const { avaliacao: _a, integracoes: _i, ...aparencia } = dados;
+    assert.deepEqual(soAparencia(dados), aparencia);
+    assert.deepEqual(soAparencia({ avaliacao: {}, integracoes: {} }), {});
   });
 });

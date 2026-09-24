@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { configuracoes } from "@/db/schema";
 import { ok, parseCorpo } from "@/lib/http";
 import { invalidarAparencia } from "@/lib/aparencia";
-import { type Aparencia, parseAparencia, semChavesVisuais } from "@/lib/theme";
+import { type Aparencia, parseAparencia, semChavesVisuais, soAparencia } from "@/lib/theme";
 import { aparenciaSchema } from "@/lib/theme-validation";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ async function lerDados() {
 export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  return ok({ aparencia: await lerDados() });
+  return ok({ aparencia: soAparencia(await lerDados()) });
 }
 
 export async function PATCH(req: Request) {
@@ -50,11 +50,12 @@ export async function PATCH(req: Request) {
     .where(eq(configuracoes.id, 1));
   invalidarAparencia();
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Identidade/aparência atualizada" });
-  return ok({ aparencia: novo });
+  return ok({ aparencia: soAparencia(novo) });
 }
 
 /** "Restaurar padrão" da tela Aparência: zera só as chaves VISUAIS — a identidade, as tabelas e os blocos irmãos do
- * MESMO registro (avaliação, integrações) ficam (antes o registro inteiro virava "{}" e levava junto as regras do ADM). */
+ * MESMO registro (avaliação, integrações) ficam (antes o registro inteiro virava "{}" e levava junto as regras do ADM).
+ * As respostas desta rota trazem SÓ a aparência (`soAparencia`) — nunca os blocos irmãos. */
 export async function DELETE() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -65,5 +66,5 @@ export async function DELETE() {
     .where(eq(configuracoes.id, 1));
   invalidarAparencia();
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: "Aparência restaurada ao padrão" });
-  return ok({ aparencia: novo });
+  return ok({ aparencia: soAparencia(novo) });
 }

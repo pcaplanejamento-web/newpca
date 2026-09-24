@@ -69,6 +69,17 @@ export function semChavesVisuais<T extends Record<string, unknown>>(dados: T): P
   return resto as Partial<T>;
 }
 
+/** Chaves da APARÊNCIA no registro de configurações: as visuais + identidade + tabelas. */
+const CHAVES_APARENCIA: readonly string[] = [...CHAVES_VISUAIS, "identidade", "tabelas"];
+
+/** Só a APARÊNCIA de um registro de configurações — o que a rota da Aparência devolve: os blocos irmãos do MESMO
+ * registro (avaliação, integrações — com o segredo cifrado) nunca saem por ela. */
+export function soAparencia(dados: Record<string, unknown>): Aparencia {
+  const r: Record<string, unknown> = {};
+  for (const k of CHAVES_APARENCIA) if (dados[k] !== undefined) r[k] = dados[k];
+  return r as Aparencia;
+}
+
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const PERMITIDAS = new Set<string>(TOKENS_COR);
 

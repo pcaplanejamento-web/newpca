@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -70,6 +70,23 @@ function topoNoDocumento(el: HTMLElement): number {
   for (let n: HTMLElement | null = el; n; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
   return y;
 }
+
+/**
+ * Altura cheia JÁ no HTML do SERVIDOR (F5 / 1º acesso): o navegador roda este trecho ao LER a tabela — antes da 1ª
+ * pintura — com a MESMA conta do efeito (o topo pela cadeia de `offsetTop` até o fim do display, menos o respiro do
+ * `<main>` e a folga; só no desktop). A hidratação assume depois e o trecho sai do DOM. Na navegação pelo app o React não
+ * roda scripts — lá o `useLayoutEffect` já mede antes de pintar. Texto FIXO (nenhum dado do usuário).
+ */
+const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0)return;var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:16)-${FOLGA}))+"px"})(document.currentScript)`;
+
+const semAssinatura = () => () => {};
+/** `true` só na renderização do SERVIDOR e na hidratação dela; em seguida (e em toda renderização no cliente), `false`. */
+const useHtmlDoServidor = () =>
+  useSyncExternalStore(
+    semAssinatura,
+    () => false,
+    () => true,
+  );
 
 export function DataTable<R>({
   columns,
@@ -148,6 +165,7 @@ export function DataTable<R>({
   const rodapeRef = useRef<HTMLDivElement>(null);
   const [autoRows, setAutoRows] = useState<number | null>(null);
   const [altura, setAltura] = useState<number | null>(null); // altura TOTAL da tabela no desktop (scrollInterno)
+  const htmlDoServidor = useHtmlDoServidor();
   // Medidas ANTES da pintura (`useLayoutEffect`): a tabela já aparece no tamanho certo, sem um quadro "solto" antes.
   useLayoutEffect(() => {
     if (!fillHeight) return;
@@ -190,6 +208,7 @@ export function DataTable<R>({
       if (!el) return;
       if (!ehDesktop()) {
         setAltura(null); // mobile: rola normal (paginado)
+        el.style.removeProperty("height"); // a do HTML do servidor, se a tela estreitou antes da hidratação
         return;
       }
       // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
@@ -306,6 +325,7 @@ export function DataTable<R>({
   const densPy = density === "comfortable" ? "18px" : compacta ? "3px" : undefined;
   const alturaLinha = compacta ? "var(--h-control-sm)" : undefined;
   // Desktop (scrollInterno): o cartão tem a ALTURA do espaço e é uma coluna flex — o corpo ocupa o que sobra e rola.
+  // As classes da coluna valem desde o HTML do servidor (só `lg:` — sem altura fixa, o corpo fica no tamanho do conteúdo).
   const cheia = scrollInterno && altura != null;
 
   return (
@@ -315,9 +335,11 @@ export function DataTable<R>({
       // pode grudar na tela no celular (abaixo).
       className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
+      // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
+      suppressHydrationWarning={scrollInterno}
     >
       <div
-        className={`overflow-x-auto ${scrollInterno ? "overflow-y-auto" : ""} ${cheia ? (visiveis.length > 0 ? "min-h-0 flex-1" : "flex-none") : ""}`}
+        className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
         <table className="w-full border-collapse text-sm" style={{ minWidth }}>
           <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
@@ -457,7 +479,7 @@ export function DataTable<R>({
       {/* Sem linhas: a mensagem fica FORA da área que rola na horizontal — centrada no que se vê (no celular a tabela
           é mais larga que a tela e o texto sumia à direita); na tabela de altura cheia, no meio do espaço vazio. */}
       {visiveis.length === 0 && (
-        <p className={`px-4 py-12 text-center text-[13px] text-faint ${cheia ? "grid min-h-0 flex-1 place-items-center" : ""}`}>
+        <p className={`px-4 py-12 text-center text-[13px] text-faint ${scrollInterno ? "lg:grid lg:min-h-0 lg:flex-1 lg:place-items-center" : ""}`}>
           {rows.length === 0 && vazio != null ? vazio : "Nenhum registro com os filtros atuais."}
         </p>
       )}
@@ -511,6 +533,10 @@ export function DataTable<R>({
           {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}
         </div>
       </div>
+      {scrollInterno && htmlDoServidor && (
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: trecho FIXO (constante acima, sem dados do usuário) — a altura cheia no HTML do servidor.
+        <script dangerouslySetInnerHTML={{ __html: ALTURA_NO_HTML }} />
+      )}
     </div>
   );
 }
