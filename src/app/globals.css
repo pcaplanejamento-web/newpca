@@ -144,8 +144,9 @@
   --h-control: 42px;
   --h-control-sm: 38px;
 }
-/* Celular: a margem do conteúdo encolhe (em qualquer densidade) — sobra largura para as tabelas e cartões. */
-@media (max-width: 639px) {
+/* Celular: a margem do conteúdo encolhe (em qualquer densidade) — sobra largura para as tabelas e cartões. O corte é o
+   `sm` do Tailwind (40rem), o MESMO das classes. */
+@media (width < 40rem) {
   :root {
     --pad-canvas: 12px;
   }
@@ -272,30 +273,41 @@
 }
 
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
-   Fica ACIMA da navegação inferior do celular e da barra de seleção fixa da Mesa (a BarraSelecao publica a
-   própria altura em --reserva-rodape enquanto está montada). */
+   Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
+   própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o
+   DataTable da Mesa publica --rodape-tabela: no celular esse rodapé gruda sobre a navegação e, no desktop, fica
+   rente ao fim do display — o aviso nunca cobre o "Importar" nem a paginação). Entre o rodapé e o que vem abaixo
+   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem do conteúdo (--pad-canvas) ou o
+   espaço entre blocos (--gap-block) — daí o `max` dos dois. Sem essa tabela o termo vale −100vh e o `max` de fora
+   fica na posição de sempre. Cortes = os do Tailwind (sm 40rem · lg 64rem). */
 .avisos-flutuantes {
   position: fixed;
   z-index: 90;
   left: 0.75rem;
   right: 0.75rem;
-  bottom: calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + 0.5rem);
+  bottom: max(
+    calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + 0.5rem),
+    calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+  );
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.5rem;
   pointer-events: none;
 }
-@media (min-width: 640px) {
+@media (min-width: 40rem) {
   .avisos-flutuantes {
     left: auto;
     width: 22rem;
   }
 }
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .avisos-flutuantes {
     right: 1rem;
-    bottom: calc(var(--reserva-rodape, 0px) + 1rem);
+    bottom: max(
+      calc(var(--reserva-rodape, 0px) + 1rem),
+      calc(var(--reserva-rodape, 0px) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+    );
   }
 }
 

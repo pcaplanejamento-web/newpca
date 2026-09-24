@@ -8,6 +8,7 @@ import {
   corrigirNomePelaCamada,
   cpfDeOcr,
   dropsignerDeOcr,
+  filaSerial,
   type LeituraOcr,
   limparNomeOcr,
   localizarBlocosAssinatura,
@@ -246,5 +247,47 @@ describe("assinaturasDeOcr — sem duplicar a mesma assinatura", () => {
     const r = assinaturasDeOcr({ blocos: [b1, b2, b1], pagina: "" });
     assert.equal(r.length, 1);
     assert.equal(r[0].nome, "EDILENE ALVES DA CRUZ");
+  });
+});
+
+// Encerrar o OCR no meio de uma leitura travava a fila PARA SEMPRE (o `terminate` do tesseract.js não rejeita o job em
+// curso) — e com ela toda leitura seguinte, de qualquer importação. Leituras e encerramento passam pela MESMA fila.
+describe("filaSerial — leituras e encerramento do OCR em ordem", () => {
+  it("uma tarefa por vez, na ordem pedida: o encerramento espera a leitura em curso", async () => {
+    const naFila = filaSerial();
+    const log: string[] = [];
+    let liberar: () => void = () => {};
+    const leitura = naFila(async () => {
+      log.push("leitura:início");
+      await new Promise<void>((r) => {
+        liberar = r;
+      });
+      log.push("leitura:fim");
+      return 1;
+    });
+    const encerrar = naFila(async () => {
+      log.push("encerrar");
+    });
+    const outra = naFila(async () => {
+      log.push("outra");
+      return 2;
+    });
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(log, ["leitura:início"], "o encerramento não passa na frente da leitura em curso");
+    liberar();
+    assert.equal(await leitura, 1);
+    await encerrar;
+    assert.equal(await outra, 2);
+    assert.deepEqual(log, ["leitura:início", "leitura:fim", "encerrar", "outra"]);
+  });
+
+  it("a falha de uma tarefa chega a quem pediu e não trava as seguintes", async () => {
+    const naFila = filaSerial();
+    const falha = naFila(async () => {
+      throw new Error("leitura ruim");
+    });
+    const depois = naFila(async () => "ok");
+    await assert.rejects(falha, /leitura ruim/);
+    assert.equal(await depois, "ok");
   });
 });

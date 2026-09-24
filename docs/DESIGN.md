@@ -45,7 +45,9 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   Itens`; à direita os filtros de hierarquia. 40px no desktop; no celular alvos ≥ 44px.
 - **Importar na tabela:** "Importar protocolo"/"Importar DFD" ficam no **rodapé da tabela**, à esquerda do seletor de linhas
   (`DataTable.acoesRodape`, `Button size="sm"`; "Importar" no celular); a tabela aparece sempre (sem linhas, `vazio`
-  explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior.
+  explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior; os
+  **avisos flutuantes** sobem acima dele (a tabela publica a altura do rodapé em `--rodape-tabela`) — nunca cobrem o
+  "Importar" nem a paginação, no celular e no desktop.
 - **Dashboard (`DashboardMesa`):** KPIs no topo + 6 quadros em grade (1 → 2 → 3 colunas). Gráficos em HTML por token
   (`charts/Barras`: `BarrasH`, `Colunas`, `BarraSegmentada`): marcas finas, 2px de respiro entre segmentos, texto sempre em
   tokens de texto (a cor fica na marca), legenda quando há ≥ 2 séries, números visíveis e dica no hover/foco/toque. Estados
@@ -63,6 +65,8 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
 - **`--pad-card`** — respiro interno de cartões, quadros e banners (`ChartCard`, KPIs, seções, `Modal`) (14px).
 - **`--h-header`** — altura do cabeçalho (56px); a faixa da marca na sidebar tem a mesma altura (bordas alinhadas).
 - A **densidade** do ADM (Aparência) muda todos juntos (compacta / padrão / confortável).
+- **Cortes** = os do Tailwind (`sm` 40rem · `lg` 64rem) também no CSS próprio e nas medidas em JS (`ehDesktop`) — com a
+  fonte do navegador ampliada, JS e CSS continuam no mesmo layout.
 - Grades responsivas: stats `grid-cols-2/3 → lg:grid-cols-5`; listas `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`.
 - Conteúdo largo (tabelas) rola dentro do próprio container; o `body` nunca rola na horizontal.
 

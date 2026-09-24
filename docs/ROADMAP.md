@@ -40,7 +40,11 @@ curso nunca se perde — nem ao recarregar a lista, nem ao trocar de visão ou a
 UMA régua de tokens no sistema inteiro: a margem do conteúdo é igual no topo e nas laterais (a mesma distância do
 cabeçalho, do menu e da borda do display), menor entre os componentes e dentro dos cartões/banners, cabeçalho e faixa da
 marca na mesma altura — tudo seguindo a densidade escolhida pelo ADM. Alvos de 44px no celular (visões, filtros,
-paginação, linhas por página).
+paginação, linhas por página). ✅ **Auditoria das importações lado a lado:** protocolo e DFD avulso podem importar ao mesmo
+tempo sem travar a leitura de assinatura por OCR (o encerramento do OCR espera a vez na fila — antes, fechar uma análise
+no meio de uma leitura travava o OCR até recarregar a página); fechar a análise libera a memória; sair da Mesa no meio da
+leitura do PDF para na página seguinte; os avisos flutuantes nunca cobrem o "Importar" nem a paginação (celular e
+desktop); o progresso do quadro Saúde conta só os conferidos.
 
 ### Tudo na Mesa: Dashboard e Protocolos legados removidos — entregue
 ✅ Saíram da navegação e do código o antigo **Dashboard** (`/painel`, contagens do módulo legado) e a tela **Protocolos**

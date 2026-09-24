@@ -6,7 +6,8 @@ import type { Feedback } from "@/lib/semantic";
 import { IconAlert, IconCheck, IconClose, IconInfo, IconSpinner } from "./icons";
 
 /** Região ÚNICA (no `body`) onde os avisos flutuantes se empilham — canto inferior, acima da navegação
- * inferior do celular e da barra de seleção fixa (`--reserva-rodape`, ver `.avisos-flutuantes`). */
+ * inferior do celular, da barra de seleção fixa (`--reserva-rodape`) e do rodapé da tabela da Mesa
+ * (`--rodape-tabela` — o "Importar" e a paginação ficam livres), ver `.avisos-flutuantes`. */
 const REGIAO = "avisos-flutuantes";
 function regiao(): HTMLElement {
   let el = document.getElementById(REGIAO);

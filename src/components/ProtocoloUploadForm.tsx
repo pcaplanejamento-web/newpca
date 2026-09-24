@@ -414,7 +414,11 @@ export function ProtocoloUploadForm({
     try {
       limparDoc();
       resetCache();
-      const { index: idx, doc } = await indexarProtocoloPdf(file, (pagina, total) => setLeitura({ pagina, total }));
+      const { index: idx, doc } = await indexarProtocoloPdf(
+        file,
+        (pagina, total) => setLeitura({ pagina, total }),
+        () => !vivoRef.current, // desmontou (saiu da Mesa): para na próxima página
+      );
       if (!vivoRef.current) {
         await doc.destroy();
         return;
@@ -481,6 +485,7 @@ export function ProtocoloUploadForm({
       void carregarExistentes(idx, doc, autos); // quem SOBRESCREVE quem (no servidor, em qualquer unidade)
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
     } catch (e) {
+      if (!vivoRef.current) return; // leitura cancelada ao desmontar — nada a mostrar (o documento já foi liberado)
       setStatus("error");
       setLeitura(null);
       setErro(e instanceof Error ? e.message : "Falha ao ler o protocolo.");
@@ -617,12 +622,13 @@ export function ProtocoloUploadForm({
     setAutoRepIds((arr) => (arr[i] == null ? arr.map((x, j) => (j === i ? refino : x)) : arr));
   }
 
+  // Fechar (ou concluir a protocolação) LIBERA a análise: o form segue montado na Mesa (o botão está no host), então
+  // o índice, os DFDs lidos e as cópias dos arquivos não ficam na memória (nem são recalculados a cada render).
   function fechar() {
     setAberto(false);
-    setAbertoIdx(-1);
-    setPainel(null);
-    setAnalise(null);
     limparDoc();
+    resetCache();
+    setIndex(null);
   }
 
   const nomeArq = extra.nomeArquivo ?? "protocolo.pdf";

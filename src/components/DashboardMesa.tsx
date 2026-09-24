@@ -79,6 +79,8 @@ export function DashboardMesa({
   const conferindo = p.saude.conferindo.n;
   const naoConferidos = p.saude.naoConferido.n;
   const conferidos = total - conferindo - naoConferidos;
+  // Progresso = os PRONTOS (conferidos); os que falharam não contam como prontos — vão à parte, na mesma frase.
+  const falhas = naoConferidos > 0 ? ` · ${plural(naoConferidos, "não conferido", "não conferidos")}` : "";
   const segmentosDe = (n: (e: EstadoPainel) => number) =>
     ESTADOS_PAINEL.map((e) => ({ chave: e, valor: n(e), cor: cores[e], rotulo: ROTULO_ESTADO[e] }));
   const corSaude = p.saude.erro.n > 0 ? cores.erro : p.saude.atencao.n > 0 ? cores.atencao : cores.regular;
@@ -180,7 +182,7 @@ export function DashboardMesa({
           cor={corSaude}
           hint={
             conferindo > 0
-              ? `conferindo ${num(total - conferindo)} de ${num(total)}…`
+              ? `conferindo ${num(conferidos)} de ${num(total)}…${falhas}`
               : naoConferidos > 0
                 ? `${num(naoConferidos)} não conferido${naoConferidos === 1 ? "" : "s"} · ${num(p.saude.erro.n)} com erro`
                 : `${num(p.saude.erro.n)} com erro · ${num(p.saude.atencao.n)} em atenção`
@@ -205,7 +207,7 @@ export function DashboardMesa({
           title="Saúde dos protocolos"
           subtitle={
             conferindo > 0
-              ? `Conferindo ${num(total - conferindo)} de ${num(total)}…`
+              ? `Conferindo ${num(conferidos)} de ${num(total)}…${falhas}`
               : naoConferidos > 0
                 ? `${plural(naoConferidos, "protocolo não conferido", "protocolos não conferidos")} — recarregue a página para tentar de novo`
                 : "Estado agregado (capa, DFDs e itens) pelas regras do ADM"

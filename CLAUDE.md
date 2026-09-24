@@ -314,7 +314,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vazia). A protocolação espera a análise. Abrir um DFD adianta a leitura dele (`mesclarOcrSePreciso`); `ocrTentadoRef`
     evita repetir; `lerAssinaturasOcr` é **serializado** (fila — o worker do tesseract é único). No avulso, `parseDfdPdf` roda
     inline. **Sem duplicar:** leituras da MESMA assinatura (mesma data/hora ao segundo + CPF compatível) viram UMA, e o nome
-    repetido na linha do OCR ("NOME NOME" — o nome impresso ao lado + o do carimbo) é colapsado (DFD 142 real). Worker liberado por `encerrarOcr`. **Best-effort:** qualquer erro → sem assinatura (= antes).
+    repetido na linha do OCR ("NOME NOME" — o nome impresso ao lado + o do carimbo) é colapsado (DFD 142 real). Worker liberado por `encerrarOcr`, que
+    ENTRA NA MESMA FILA das leituras (`filaSerial`, `ocr-assinatura-core`): o `terminate` do tesseract.js 7 não rejeita o job em curso — encerrar
+    no meio de uma leitura (fechar a análise, a outra importação terminar) travava a fila até recarregar a página. **Best-effort:** qualquer erro → sem assinatura (= antes).
     **Conferência (`validarAssinatura`):** uma assinatura lida por OCR (`ocr:true` ou `foxit`) que **não casa** um
     responsável é reconhecida **SEM bloquear** (status `"ocr"`) — exceto se houver uma de leitura LIMPA (texto) com nome
     que também falhou (essa bloqueia). Casou → `ok`. `ocr` é persistido (`assinaturaSchema`/`parseAssinaturas`). UI: Foxit
@@ -509,11 +511,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     inteiro); os DOIS formulários (`ProtocoloUploadForm`/`DfdUploadForm`) ficam montados FORA da tabela, em QUALQUER visão
     (Mesa principal, editores) — cada botão só incrementa o SEU contador `iniciar` (`abrirProto`/`abrirDfd`; o MESMO mecanismo
     do reenvio/sobrescrita: cada valor novo abre o lançador) — então recarregar/filtrar a lista, trocar de visão ou abrir o
-    Dashboard nunca perde uma importação em curso (e o `ProtocoloUploadForm` que DESMONTA no meio da leitura descarta o PDF
-    e libera o OCR — `vivoRef`); os forms não renderizam nada no fluxo (lançador/análise/avisos são modais e avisos
-    flutuantes). A tabela aparece SEMPRE (sem linhas, `DataTable.vazio` diz por quê: "Nenhum protocolo… use “Importar” no
+    Dashboard nunca perde uma importação em curso (e o `ProtocoloUploadForm` que DESMONTA no meio da leitura PARA na página
+    seguinte — `indexarProtocoloPdf(…, cancelado)` —, descarta o PDF e libera o OCR — `vivoRef`); FECHAR a análise (ou
+    concluir a protocolação) libera o índice, os DFDs lidos e as cópias dos arquivos (`fechar` → `resetCache` +
+    `setIndex(null)` — o form segue montado, nada fica na memória); as duas importações podem correr JUNTAS (o worker do OCR
+    é único e o `encerrarOcr` ENTRA NA FILA — ver OCR); os forms não renderizam nada no fluxo (lançador/análise/avisos são
+    modais e avisos flutuantes). A tabela aparece SEMPRE (sem linhas, `DataTable.vazio` diz por quê: "Nenhum protocolo… use “Importar” no
     rodapé da tabela" / o filtro de hierarquia / "Carregando itens…") — o botão nunca some; no CELULAR o rodapé das tabelas
-    da Mesa GRUDA acima da navegação inferior (e da barra de seleção) — o "Importar" e a paginação ficam sempre ao alcance.
+    da Mesa GRUDA acima da navegação inferior (e da barra de seleção) — o "Importar" e a paginação ficam sempre ao alcance
+    (e os avisos flutuantes sobem acima desse rodapé — `--rodape-tabela` — no celular e no desktop).
     Cada visão tem **altura de linha própria** (prop
     `density` do `DataTable`): Protocolos **comfortable** (alta) · DFDs **default** (média, `PlanilhaDfds`) · Itens
     **compact** (fina). Sem os cabeçalhos redundantes "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé
@@ -574,7 +580,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do Dashboard é carregado SOB DEMANDA (`next/dynamic`, `ssr:false`, esqueleto da mesma grade) — a Mesa não baixa gráficos à
     toa. A conferência agregada roda com Protocolos OU Dashboard abertos (`precisaConfProto` — alternar entre os dois não
     reinicia as requisições) e uma nova tentativa dos que falharam volta a "Conferindo…" na hora; no Dashboard, "conferindo"
-    (em curso) e "não conferido" (falhou — recarregue) aparecem separados. O valor por unidade agrupa pelo ID da unidade (a
+    (em curso) e "não conferido" (falhou — recarregue) aparecem separados, e o progresso conta só os PRONTOS ("Conferindo 5
+    de 10… · 2 não conferidos" — a mesma régua do "de N conferidos" da conformidade). O valor por unidade agrupa pelo ID da unidade (a
     sigla pode repetir entre órgãos).
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
     **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
@@ -1449,8 +1456,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
-  `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular e da `BarraSelecao`
-  fixa via `--reserva-rodape`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
+  `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular, da `BarraSelecao`
+  fixa via `--reserva-rodape` e do rodapé da tabela da Mesa via `--rodape-tabela`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
   sozinho) + `Toast`/`Toaster` (renderiza o MESMO `AvisoFlutuante`), `DataTable` (seleção+filtro no cabeçalho+clique na
   linha; **"selecionar todos" marca TODAS as linhas FILTRADAS, não só a página** (estado indeterminado quando parcial);
   **`Column.travado`** = filtro da coluna TRAVADO por um filtro de hierarquia acima da tabela (cadeado + o motivo no
@@ -1469,7 +1476,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`reservaInferior`** = altura reservada no fim do display p/ algo fixo abaixo (a `BarraSelecao` da Mesa);
   **`acoesRodape`** = ações no RODAPÉ da tabela, à esquerda do seletor de linhas/paginação (ex.: "Importar protocolo" da Mesa);
   com `scrollInterno`, no CELULAR o rodapé GRUDA acima da navegação inferior (`overflow-clip` no contêiner, `sticky` +
-  `--reserva-rodape` da barra de seleção);
+  `--reserva-rodape` da barra de seleção) e a tabela publica a altura dele em `--rodape-tabela` (os avisos flutuantes sobem
+  acima); o corte celular × desktop das medidas em JS é o `lg` do Tailwind (`ehDesktop`, `matchMedia("(min-width: 64rem)")`
+  — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;

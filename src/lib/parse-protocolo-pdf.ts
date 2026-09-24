@@ -30,18 +30,27 @@ export async function indexarProtocoloPdf(
   file: File,
   /** Progresso REAL da leitura (página lida / total) — feedback de carregamento no cliente. */
   onProgresso?: (pagina: number, total: number) => void,
+  /** Leitura CANCELADA (ex.: o form desmontou): para na próxima página em vez de ler o PDF inteiro à toa. */
+  cancelado?: () => boolean,
 ): Promise<{ index: ProtocoloIndex; doc: PdfDoc }> {
   const doc = await abrirPdf(file);
-  const paginas: PaginaTexto[] = [];
-  for (let p = 1; p <= doc.numPages; p++) {
-    onProgresso?.(p, doc.numPages);
-    const items = await doc.pageItems(p);
-    const lines = linhasDeTexto(items);
-    // Geometria descartada por página (índice leve, memória O(nº DFDs)) — EXCETO a da CAPA,
-    // guardada p/ a extração coluna-aware dos campos multi-linha (Interessado etc.).
-    paginas.push(ehCapa(lines) ? { page: p, lines, items } : { page: p, lines });
+  try {
+    const paginas: PaginaTexto[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      if (cancelado?.()) throw new Error("Leitura do protocolo cancelada.");
+      onProgresso?.(p, doc.numPages);
+      const items = await doc.pageItems(p);
+      const lines = linhasDeTexto(items);
+      // Geometria descartada por página (índice leve, memória O(nº DFDs)) — EXCETO a da CAPA,
+      // guardada p/ a extração coluna-aware dos campos multi-linha (Interessado etc.).
+      paginas.push(ehCapa(lines) ? { page: p, lines, items } : { page: p, lines });
+    }
+    return { index: indexarProtocolo(paginas, file.name), doc };
+  } catch (e) {
+    // Cancelada ou falhou no meio: o documento ainda não tem dono — libera aqui (o pdf.js não fica preso).
+    await doc.destroy().catch(() => undefined);
+    throw e;
   }
-  return { index: indexarProtocolo(paginas, file.name), doc };
 }
 
 export async function parseDfdDoProtocolo(doc: PdfDoc, dfd: DfdIndexado, nomeArquivo: string) {

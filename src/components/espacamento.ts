@@ -9,3 +9,12 @@ export function tokenPx(nome: `--${string}`, padrao: number): number {
   const v = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(nome));
   return Number.isFinite(v) ? v : padrao;
 }
+
+/**
+ * Layout de DESKTOP? — o MESMO breakpoint `lg` do Tailwind (`64rem`; numa media query o rem é o tamanho de fonte do
+ * NAVEGADOR, então com a fonte ampliada o corte passa de 1024px). Medidas em JS que dependem do layout usam este teste,
+ * nunca `innerWidth < 1024` — senão, entre um corte e outro, o JS mediria o desktop sobre o CSS do celular.
+ */
+export function ehDesktop(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 64rem)").matches;
+}

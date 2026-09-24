@@ -1,4 +1,4 @@
-import { type Caixa, type LeituraOcr, type MotorOcr, binarizarRgba, lerAssinaturasPorOcr, type OpcoesRecorte } from "./ocr-assinatura-core.ts";
+import { type Caixa, type LeituraOcr, type MotorOcr, binarizarRgba, filaSerial, lerAssinaturasPorOcr, type OpcoesRecorte } from "./ocr-assinatura-core.ts";
 import type { Assinatura } from "./parse-dfd-comum.ts";
 
 /**
@@ -50,15 +50,23 @@ async function getWorker() {
   return workerP;
 }
 
-/** Encerra o worker do OCR (libera a thread/WASM). Best-effort — chamar ao fim de uma importação. */
-export async function encerrarOcr(): Promise<void> {
-  const p = workerP;
-  workerP = null;
-  try {
+// Fila: uma leitura por vez. O worker do tesseract é ÚNICO e cada leitura troca o modo de página
+// (`setParameters`) antes de reconhecer — duas leituras intercaladas (ex.: a análise em background e
+// o "abrir DFD") misturariam os modos. O ENCERRAMENTO também entra nela (ver `encerrarOcr`).
+const naFila = filaSerial();
+
+/**
+ * Encerra o worker do OCR (libera a thread/WASM). Best-effort — chamar ao fim de uma importação. Entra na FILA: o
+ * `terminate` do tesseract.js NÃO rejeita os jobs em curso — um `recognize` pendente nunca voltaria e a fila (e toda
+ * leitura seguinte, de QUALQUER importação — o protocolo e o DFD avulso dividem o worker) travaria até recarregar a
+ * página. Assim o worker só é encerrado depois das leituras já pedidas; uma leitura pedida depois cria um novo.
+ */
+export function encerrarOcr(): Promise<void> {
+  return naFila(async () => {
+    const p = workerP;
+    workerP = null;
     if (p) await (await p).worker.terminate();
-  } catch {
-    /* nada a fazer */
-  }
+  }).catch(() => undefined);
 }
 
 function recortar(src: HTMLCanvasElement, k: Caixa, up: number, opts?: OpcoesRecorte): HTMLCanvasElement {
@@ -84,20 +92,13 @@ function recortar(src: HTMLCanvasElement, k: Caixa, up: number, opts?: OpcoesRec
   return c;
 }
 
-// Fila: uma leitura por vez. O worker do tesseract é ÚNICO e cada leitura troca o modo de página
-// (`setParameters`) antes de reconhecer — duas leituras intercaladas (ex.: a análise em background e
-// o "abrir DFD") misturariam os modos. Encadeia as leituras numa promessa.
-let fila: Promise<unknown> = Promise.resolve();
-
 /**
  * Lê por OCR as assinaturas achatadas das páginas de UM DFD (qualquer página, em ordem de prioridade — ver
  * `lerAssinaturasPorOcr`). Devolve `Assinatura[]` com `ocr:true` (normalmente 0 ou 1). Best-effort: `[]`.
- * Serializado pela `fila` (uma leitura por vez).
+ * Serializado pela fila (uma leitura por vez).
  */
 export function lerAssinaturasOcr(doc: DocOcr, paginas: number[]): Promise<Assinatura[]> {
-  const r = fila.then(() => lerAgora(doc, paginas));
-  fila = r.catch(() => undefined);
-  return r;
+  return naFila(() => lerAgora(doc, paginas));
 }
 
 async function lerAgora(doc: DocOcr, paginas: number[]): Promise<Assinatura[]> {

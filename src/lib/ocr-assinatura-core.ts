@@ -562,3 +562,17 @@ export function caixasImagensDaOpList(fnArray: number[], argsArray: unknown[], o
   }
   return out;
 }
+
+/**
+ * FILA serial: uma tarefa por vez, na ordem pedida; a falha de uma não trava as seguintes. O worker do OCR é ÚNICO —
+ * as leituras E o encerramento passam por aqui (encerrar no meio de uma leitura a deixaria pendente para sempre: o
+ * `terminate` do tesseract.js não rejeita o job em curso). Puro.
+ */
+export function filaSerial(): <T>(tarefa: () => Promise<T>) => Promise<T> {
+  let fila: Promise<unknown> = Promise.resolve();
+  return (tarefa) => {
+    const r = fila.then(tarefa);
+    fila = r.catch(() => undefined);
+    return r;
+  };
+}

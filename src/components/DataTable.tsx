@@ -13,7 +13,7 @@ import {
   ordenarIndices,
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
-import { tokenPx } from "./espacamento";
+import { ehDesktop, tokenPx } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -146,7 +146,7 @@ export function DataTable<R>({
       const el = wrapRef.current;
       if (!el) return;
       // Só no desktop (o mobile rola normalmente e tem bottom-nav fixa).
-      if (window.innerWidth < 1024) {
+      if (!ehDesktop()) {
         setAutoRows(null);
         return;
       }
@@ -181,7 +181,7 @@ export function DataTable<R>({
     const calc = () => {
       const el = wrapRef.current;
       if (!el) return;
-      if (window.innerWidth < 1024) {
+      if (!ehDesktop()) {
         setMaxH(null); // mobile: rola normal (paginado)
         return;
       }
@@ -203,6 +203,23 @@ export function DataTable<R>({
       ro.disconnect();
     };
   }, [scrollInterno, reservaInferior]);
+
+  // scrollInterno: publica o espaço do RODAPÉ (altura + a folga até o fim do display) em `--rodape-tabela` — os avisos
+  // flutuantes do canto inferior sobem acima dele (no celular ele gruda sobre a navegação; no desktop fica rente ao fim
+  // do display) e nunca cobrem o "Importar" nem a paginação. Uma tabela assim por tela (a Mesa); sai ao desmontar.
+  useEffect(() => {
+    const el = rodapeRef.current;
+    if (!scrollInterno || !el) return;
+    const raiz = document.documentElement.style;
+    const medir = () => raiz.setProperty("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      raiz.removeProperty("--rodape-tabela");
+    };
+  }, [scrollInterno]);
 
   // Linhas por página efetivas: scrollInterno (seletor) › fillHeight (medido) › pageSize.
   const tamPagina = scrollInterno ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
