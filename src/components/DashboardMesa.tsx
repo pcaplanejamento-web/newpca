@@ -75,8 +75,10 @@ export function DashboardMesa({
   const situacaoPorId = useMemo(() => new Map(situacoes.map((s) => [s.id, s])), [situacoes]);
 
   const total = p.protocolos;
-  const pendentes = p.saude.conferindo.n + p.saude.naoConferido.n;
-  const conferidos = total - pendentes;
+  // Ainda em conferência × conferência que FALHOU (não se repete sozinha — a tabela diz "Não conferido").
+  const conferindo = p.saude.conferindo.n;
+  const naoConferidos = p.saude.naoConferido.n;
+  const conferidos = total - conferindo - naoConferidos;
   const segmentosDe = (n: (e: EstadoPainel) => number) =>
     ESTADOS_PAINEL.map((e) => ({ chave: e, valor: n(e), cor: cores[e], rotulo: ROTULO_ESTADO[e] }));
   const corSaude = p.saude.erro.n > 0 ? cores.erro : p.saude.atencao.n > 0 ? cores.atencao : cores.regular;
@@ -123,10 +125,11 @@ export function DashboardMesa({
   });
   if (p.outrosResponsaveis) {
     const o = p.outrosResponsaveis;
+    const quem = plural(o.pessoas, "outra pessoa", "outras pessoas");
     linhasResp.splice(linhasResp.length - (p.responsaveis.at(-1)?.id == null ? 1 : 0), 0, {
       chave: "outros",
-      rotulo: `Outras ${num(o.pessoas)} pessoas`,
-      titulo: `Outras ${num(o.pessoas)} pessoas: ${plural(o.n, "protocolo", "protocolos")} · ${brl(o.valor)}`,
+      rotulo: quem,
+      titulo: `${quem}: ${plural(o.n, "protocolo", "protocolos")} · ${brl(o.valor)}`,
       segmentos: segmentosDe((e) => o.porEstado[e]),
       valor: num(o.n),
       detalhe: brlCompact(o.valor),
@@ -134,7 +137,7 @@ export function DashboardMesa({
     });
   }
   const linhasUnidade: LinhaBarra[] = p.unidades.map((u) => ({
-    chave: u.sigla || "sem",
+    chave: u.chave,
     rotulo: u.sigla ? <span className="font-mono text-[12px] font-semibold">{u.sigla}</span> : "Sem unidade",
     titulo: `${u.nome ?? (u.sigla || "Sem unidade")}: ${brl(u.valor)} · ${plural(u.dfds, "DFD", "DFDs")}`,
     segmentos: [{ chave: "v", valor: u.valor, cor: "var(--accent)", rotulo: "Valor" }],
@@ -144,10 +147,11 @@ export function DashboardMesa({
   }));
   if (p.outrasUnidades) {
     const o = p.outrasUnidades;
+    const quais = plural(o.unidades, "outra unidade", "outras unidades");
     linhasUnidade.push({
       chave: "outras",
-      rotulo: `Outras ${num(o.unidades)} unidades`,
-      titulo: `Outras ${num(o.unidades)} unidades: ${brl(o.valor)} · ${plural(o.dfds, "DFD", "DFDs")}`,
+      rotulo: quais,
+      titulo: `${quais}: ${brl(o.valor)} · ${plural(o.dfds, "DFD", "DFDs")}`,
       segmentos: [{ chave: "v", valor: o.valor, cor: "var(--accent)", rotulo: "Valor" }],
       valor: brlCompact(o.valor),
       detalhe: pct(o.valor, p.valor),
@@ -175,9 +179,11 @@ export function DashboardMesa({
           value={conferidos > 0 ? pct(p.saude.regular.n, conferidos) : "—"}
           cor={corSaude}
           hint={
-            pendentes > 0
-              ? `conferindo ${num(conferidos)} de ${num(total)}…`
-              : `${num(p.saude.erro.n)} com erro · ${num(p.saude.atencao.n)} em atenção`
+            conferindo > 0
+              ? `conferindo ${num(total - conferindo)} de ${num(total)}…`
+              : naoConferidos > 0
+                ? `${num(naoConferidos)} não conferido${naoConferidos === 1 ? "" : "s"} · ${num(p.saude.erro.n)} com erro`
+                : `${num(p.saude.erro.n)} com erro · ${num(p.saude.atencao.n)} em atenção`
           }
         />
         <KpiStat
@@ -197,7 +203,13 @@ export function DashboardMesa({
       <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-2 xl:grid-cols-3">
         <ChartCard
           title="Saúde dos protocolos"
-          subtitle={pendentes > 0 ? `Conferindo ${num(conferidos)} de ${num(total)}…` : "Estado agregado (capa, DFDs e itens) pelas regras do ADM"}
+          subtitle={
+            conferindo > 0
+              ? `Conferindo ${num(total - conferindo)} de ${num(total)}…`
+              : naoConferidos > 0
+                ? `${plural(naoConferidos, "protocolo não conferido", "protocolos não conferidos")} — recarregue a página para tentar de novo`
+                : "Estado agregado (capa, DFDs e itens) pelas regras do ADM"
+          }
         >
           {vazio ? (
             <ChartEmpty label="Nenhum protocolo na Mesa" />
@@ -208,7 +220,7 @@ export function DashboardMesa({
                   {conferidos > 0 ? pct(p.saude.regular.n, conferidos) : "—"}
                 </span>
                 <span className="text-[12.5px] text-muted">
-                  regulares{pendentes > 0 ? ` · de ${plural(conferidos, "conferido", "conferidos")}` : ""}
+                  regulares{conferidos < total ? ` · de ${plural(conferidos, "conferido", "conferidos")}` : ""}
                 </span>
               </div>
               <BarraSegmentada trilho altura={12} segmentos={segmentosDe((e) => p.saude[e].n)} />
@@ -230,10 +242,10 @@ export function DashboardMesa({
         </ChartCard>
 
         <ChartCard title="Situação" subtitle="As situações cadastradas pelo ADM, na ordem dele">
-          {vazio ? (
-            <ChartEmpty label="Nenhum protocolo na Mesa" />
-          ) : linhasSituacao.length === 0 ? (
+          {situacoes.length === 0 ? (
             <ChartEmpty label="Nenhuma situação cadastrada (Configurações → Situações)" />
+          ) : vazio ? (
+            <ChartEmpty label="Nenhum protocolo na Mesa" />
           ) : (
             <BarrasH ariaLabel="Protocolos por situação" linhas={linhasSituacao} />
           )}

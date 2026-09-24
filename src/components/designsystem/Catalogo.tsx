@@ -20,6 +20,7 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
+import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
@@ -645,7 +646,10 @@ function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[] } {
     estado: ESTADOS_DASH[i % ESTADOS_DASH.length],
   }));
   const siglas = ["FMS", "SME", "SMA", "SMO", "SEMAS", "SMF", "GAB", "PROC", "SMC"];
-  const dfds = Array.from({ length: 90 }, (_, i): DfdPainel => ({ unidade: siglas[(i * i) % siglas.length], unidadeNome: null, valor: 5_000 + ((i * 104_729) % 350_000), itens: 1 + (i % 25) }));
+  const dfds = Array.from({ length: 90 }, (_, i): DfdPainel => {
+    const u = (i * i) % siglas.length;
+    return { unidadeId: u + 1, unidade: siglas[u], unidadeNome: null, valor: 5_000 + ((i * 104_729) % 350_000), itens: 1 + (i % 25) };
+  });
   return { protocolos, dfds };
 }
 
@@ -713,26 +717,20 @@ function SeletoresDemo() {
   const [vista, setVista] = useState("protocolos");
   return (
     <div className="space-y-4">
-      {/* A BARRA DA MESA: o Dashboard (item SÓ-ÍCONE do Segmented) + as visões à esquerda; os filtros à direita. */}
+      {/* A BARRA DA MESA: as visões — o Dashboard (item SÓ-ÍCONE do Segmented) antes de Protocolos · DFDs · Itens — à
+          esquerda; os filtros à direita. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex max-w-full items-center gap-1.5">
-          <Segmented
-            value={vista}
-            onChange={setVista}
-            ariaLabel="Dashboard da Mesa"
-            options={[{ value: "dashboard", label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]}
-          />
-          <Segmented
-            value={vista}
-            onChange={setVista}
-            ariaLabel="Visões da Mesa"
-            options={[
-              { value: "protocolos", label: "Protocolos" },
-              { value: "dfds", label: "DFDs" },
-              { value: "itens", label: "Itens" },
-            ]}
-          />
-        </div>
+        <Segmented
+          value={vista}
+          onChange={setVista}
+          ariaLabel="Visões da Mesa"
+          options={[
+            { value: "dashboard", label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true },
+            { value: "protocolos", label: "Protocolos" },
+            { value: "dfds", label: "DFDs" },
+            { value: "itens", label: "Itens" },
+          ]}
+        />
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <SeletorFiltro
             icone={<IconUser className="h-4 w-4" />}
@@ -1590,6 +1588,10 @@ export function Catalogo() {
 
       <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens)">
         <DashboardMesaDemo />
+      </Secao>
+
+      <Secao titulo="DashboardMesaEsqueleto (enquanto o Dashboard carrega — a MESMA grade)">
+        <DashboardMesaEsqueleto />
       </Secao>
 
       <Secao titulo="Avatares">
@@ -2478,7 +2480,7 @@ export function Catalogo() {
   if (framed) {
     return (
       <div className="min-h-dvh bg-bg text-text">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{vitrine}</div>
+        <div className="mx-auto max-w-6xl p-[var(--pad-canvas)]">{vitrine}</div>
       </div>
     );
   }

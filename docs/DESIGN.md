@@ -41,10 +41,11 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   Mesa; no celular descem para a linha de baixo, lado a lado, só ícone + valor).
 
 ## Barra da Mesa e Dashboard de governança
-- **Uma linha:** à esquerda o **Dashboard** (item só-ícone do `Segmented`, `soIcone`) + `Protocolos · DFDs · Itens`; à
-  direita os filtros de hierarquia. Controles com 40px no desktop e 44px no celular.
+- **Uma linha:** à esquerda UM `Segmented` com o **Dashboard** primeiro (item só-ícone, `soIcone`) e `Protocolos · DFDs ·
+  Itens`; à direita os filtros de hierarquia. 40px no desktop; no celular alvos ≥ 44px.
 - **Importar na tabela:** "Importar protocolo"/"Importar DFD" ficam no **rodapé da tabela**, à esquerda do seletor de linhas
-  (`DataTable.acoesRodape`, `Button size="sm"`); a tabela aparece sempre (sem linhas, `vazio` explica).
+  (`DataTable.acoesRodape`, `Button size="sm"`; "Importar" no celular); a tabela aparece sempre (sem linhas, `vazio`
+  explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior.
 - **Dashboard (`DashboardMesa`):** KPIs no topo + 6 quadros em grade (1 → 2 → 3 colunas). Gráficos em HTML por token
   (`charts/Barras`: `BarrasH`, `Colunas`, `BarraSegmentada`): marcas finas, 2px de respiro entre segmentos, texto sempre em
   tokens de texto (a cor fica na marca), legenda quando há ≥ 2 séries, números visíveis e dica no hover/foco/toque. Estados

@@ -34,8 +34,9 @@ Mesa** (faixas de dias desde a protocolação), **entrada semanal** (12 semanas)
 numa pessoa filtra a Mesa) e **valor por unidade** (com a participação). Sobre os MESMOS dados da Mesa e os filtros do topo
 — nenhuma consulta nova ao banco; o código só é baixado quando o ícone é aberto. ✅ **Barra única:** os filtros de
 Responsável e Assunto na MESMA linha das visões, à direita (no celular, lado a lado na linha de baixo). ✅ **Importar na
-tabela:** "Importar protocolo"/"Importar DFD" no rodapé da tabela, à esquerda do seletor de linhas; a tabela aparece
-sempre (sem linhas, diz por quê) e a importação em curso nunca se perde quando a lista recarrega. ✅ **Espaçamento** com
+tabela:** "Importar protocolo"/"Importar DFD" no rodapé da tabela, à esquerda do seletor de linhas (no celular o rodapé
+fica grudado acima da navegação, sempre ao alcance); a tabela aparece sempre (sem linhas, diz por quê) e a importação em
+curso nunca se perde — nem ao recarregar a lista, nem ao trocar de visão ou abrir o Dashboard. ✅ **Espaçamento** com
 UMA régua de tokens no sistema inteiro: a margem do conteúdo é igual no topo e nas laterais (a mesma distância do
 cabeçalho, do menu e da borda do display), menor entre os componentes e dentro dos cartões/banners, cabeçalho e faixa da
 marca na mesma altura — tudo seguindo a densidade escolhida pelo ADM. Alvos de 44px no celular (visões, filtros,

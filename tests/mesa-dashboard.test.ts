@@ -22,7 +22,15 @@ const P = (id: number, criadoEm: string | null, extra: Partial<ProtocoloPainel> 
   estado: "regular",
   ...extra,
 });
-const D = (unidade: string | null, valor: number | null, extra: Partial<DfdPainel> = {}): DfdPainel => ({ unidade, unidadeNome: null, valor, itens: 1, ...extra });
+// A sigla identifica a unidade no exemplo (id derivado dela); `unidadeId` explícito testa siglas repetidas.
+const D = (unidade: string | null, valor: number | null, extra: Partial<DfdPainel> = {}): DfdPainel => ({
+  unidadeId: unidade == null ? null : [...unidade].reduce((h, c) => h * 31 + c.charCodeAt(0), 7),
+  unidade,
+  unidadeNome: null,
+  valor,
+  itens: 1,
+  ...extra,
+});
 const vazio = { protocolos: [], dfds: [], situacoes: [] };
 
 describe("painelMesa — Dashboard de governança da Mesa (puro)", () => {
@@ -185,30 +193,43 @@ describe("painelMesa — Dashboard de governança da Mesa (puro)", () => {
 
   it("unidades pelos DFDs: maiores valores primeiro, 'sem unidade' e a cauda em 'Outras'", () => {
     const dfds = [
-      D("SMS", 300, { unidadeNome: "Secretaria de Saúde", itens: 4 }),
-      D("SMS", 200),
+      D("SMS", 300, { itens: 4 }),
+      D("SMS", 200, { unidadeNome: "Secretaria de Saúde" }), // o nome vem de QUALQUER DFD da unidade
+      D("SMS", 1, { unidadeNome: "Outro nome", valor: 0 }),
       D("SME", 900),
       D(null, 50, { itens: null }),
       D("SMA", Number.NaN),
     ];
     const r = painelMesa({ ...vazio, dfds }, AGORA);
-    assert.equal(r.dfds, 5);
-    assert.equal(r.itens, 7);
+    assert.equal(r.dfds, 6);
+    assert.equal(r.itens, 8);
     assert.equal(r.valor, 1450);
     assert.deepEqual(
       r.unidades.map((u) => [u.sigla, u.dfds, u.valor]),
       [
         ["SME", 1, 900],
-        ["SMS", 2, 500],
+        ["SMS", 3, 500],
         ["", 1, 50],
         ["SMA", 1, 0],
       ],
     );
     assert.equal(r.unidades[1].nome, "Secretaria de Saúde");
+    assert.equal(r.unidades[2].chave, "sem");
     const muitas = Array.from({ length: MAX_UNIDADES + 2 }, (_, i) => D(`U${i}`, 100 - i));
     const r2 = painelMesa({ ...vazio, dfds: muitas }, AGORA);
     assert.equal(r2.unidades.length, MAX_UNIDADES);
     assert.deepEqual(r2.outrasUnidades, { unidades: 2, dfds: 2, valor: 100 - MAX_UNIDADES + (100 - MAX_UNIDADES - 1) });
+  });
+
+  it("unidades de MESMA sigla em órgãos diferentes ficam em linhas separadas (agrupadas pelo id)", () => {
+    const r = painelMesa({ ...vazio, dfds: [D("GAB", 100, { unidadeId: 1 }), D("GAB", 40, { unidadeId: 2 }), D("GAB", 10, { unidadeId: 1 })] }, AGORA);
+    assert.deepEqual(
+      r.unidades.map((u) => [u.chave, u.sigla, u.valor]),
+      [
+        ["1", "GAB", 110],
+        ["2", "GAB", 40],
+      ],
+    );
   });
 
   it("valores não numéricos nos protocolos não viram NaN", () => {

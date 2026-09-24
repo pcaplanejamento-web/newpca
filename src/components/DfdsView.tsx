@@ -42,6 +42,7 @@ import { type Column, DataTable } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
+import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaCatalogo, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser } from "./icons";
@@ -54,30 +55,13 @@ import { Segmented } from "./Segmented";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
-import { Skeleton } from "./Skeleton";
 import { toast } from "./Toast";
 
-/** Esqueleto do Dashboard (a MESMA grade: 5 KPIs + 6 quadros) enquanto o código dele carrega. */
-function EsqueletoDashboard() {
-  return (
-    <div aria-busy className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-5">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className={`h-[104px] rounded-card ${i === 0 ? "col-span-2 lg:col-span-1" : ""}`} />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-2 xl:grid-cols-3">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-72 rounded-card" />
-        ))}
-      </div>
-    </div>
-  );
-}
-/** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa). */
+/** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
+ * esqueleto da MESMA grade. */
 const DashboardMesa = dynamic(() => import("./DashboardMesa").then((m) => m.DashboardMesa), {
   ssr: false,
-  loading: EsqueletoDashboard,
+  loading: DashboardMesaEsqueleto,
 });
 
 type Rep = {
@@ -211,8 +195,10 @@ export function DfdsView({
   const [selProtos, setSelProtos] = useState<Sel>(new Set());
   const [selItens, setSelItens] = useState<Sel>(new Set());
   const [aplicandoMassa, setAplicandoMassa] = useState<{ feito: number; total: number; rotulo: string } | null>(null);
-  // IMPORTAÇÃO: cada clique no botão do rodapé da tabela abre o lançador do formulário (montado FORA da tabela).
-  const [abrirImport, setAbrirImport] = useState(0);
+  // IMPORTAÇÃO: cada clique no botão do rodapé da tabela abre o lançador do SEU formulário (os dois ficam montados
+  // FORA da tabela — um contador para cada, senão um clique abriria os dois).
+  const [abrirProto, setAbrirProto] = useState(0);
+  const [abrirDfd, setAbrirDfd] = useState(0);
   // Altura da barra de seleção fixa — as tabelas (scroll interno) reservam esse espaço (+ o espaço entre os blocos
   // da tela, o token `--gap-block` das classes).
   const [alturaBarra, setAlturaBarra] = useState(0);
@@ -362,11 +348,17 @@ export function DfdsView({
   // lista recarrega ou a visão reabre.
   const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
   const [confProtoVersao, setConfProtoVersao] = useState(0);
+  // Alternar entre Protocolos e Dashboard NÃO reinicia as requisições em curso (o mesmo cache serve aos dois).
+  const precisaConfProto = vista === "protocolos" || vista === "dashboard";
   useEffect(() => {
-    if (vista !== "protocolos" && vista !== "dashboard") return;
+    if (!precisaConfProto) return;
     if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
     const alvo = confProtoRef.current;
-    alvo.falhos.clear();
+    // Nova tentativa dos que falharam: voltam a "Conferindo…" já (não ficam "Não conferido" até a 1ª resposta).
+    if (alvo.falhos.size > 0) {
+      alvo.falhos.clear();
+      setConfProtoVersao((v) => v + 1);
+    }
     const faltam = protocolos.filter((p) => !alvo.m.has(chaveProto(p)));
     if (faltam.length === 0) return;
     const fatias: ProtocoloResumo[][] = [];
@@ -410,7 +402,7 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [vista, protocolos, ctxConf]);
+  }, [precisaConfProto, protocolos, ctxConf]);
   /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
    * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
   const estadoDoProtocolo = (p: ProtocoloResumo): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
@@ -726,7 +718,9 @@ export function DfdsView({
       const estado: EstadoPainel = pendente ? "conferindo" : naoConferido ? "naoConferido" : conf.estado;
       return { id: p.id, criadoEm: p.criadoEm, valor: p.valorTotal, responsavelId: resp?.id ?? null, situacaoId: situacaoDe(p), estado };
     });
-    const dfdsDash = dfdsF.map((d): DfdPainel => ({ unidade: d.reparticaoCodigo, unidadeNome: d.reparticaoNome, valor: d.valorTotal, itens: d.totalItens }));
+    const dfdsDash = dfdsF.map(
+      (d): DfdPainel => ({ unidadeId: d.reparticaoId, unidade: d.reparticaoCodigo, unidadeNome: d.reparticaoNome, valor: d.valorTotal, itens: d.totalItens }),
+    );
     return { protocolos: protocolosDash, dfds: dfdsDash, pessoas: pessoasDash };
   }, [vista, protocolosF, dfdsF, gestao, dirPessoas, confProtoVersao, ctxConf, regras]);
 
@@ -968,17 +962,26 @@ export function DfdsView({
 
   // Corpo de cada visão: a TABELA sempre (sem linhas, ela diz por quê). Alturas de linha DIFERENTES por visão:
   // protocolo alta · DFD média · item fina. A IMPORTAÇÃO (Mesa principal, editores) fica no RODAPÉ da tabela, à
-  // esquerda do seletor de linhas; o formulário é montado FORA dela (a lista recarregar nunca perde uma importação).
+  // esquerda do seletor de linhas; os formulários ficam montados FORA dela, em qualquer visão (recarregar a lista,
+  // trocar de visão ou abrir o Dashboard nunca perde uma importação em curso).
   const filtrado = filtroMesaAtivo(filtro);
   const semResultado = "Nada com o responsável/assunto escolhido acima — ajuste ou limpe o filtro.";
-  const importa = podeEditar && !modoPca && (vista === "protocolos" || vista === "dfds");
-  const rotuloImportar = vista === "protocolos" ? "Importar protocolo" : "Importar DFD";
+  const podeImportar = podeEditar && !modoPca;
+  const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
+  const oQueImporta = vista === "protocolos" ? "protocolo" : "DFD";
+  const rotuloImportar = `Importar ${oQueImporta}`;
+  // No celular o rótulo encolhe para "Importar" (o rodapé gruda na tela — cabe numa linha); o nome acessível é o inteiro.
   const botaoImportar = importa ? (
-    <Button size="sm" onClick={() => setAbrirImport((n) => n + 1)} icon={<IconUpload className="h-4 w-4" />}>
-      {rotuloImportar}
+    <Button
+      size="sm"
+      aria-label={rotuloImportar}
+      onClick={() => (vista === "protocolos" ? setAbrirProto : setAbrirDfd)((n) => n + 1)}
+      icon={<IconUpload className="h-4 w-4" />}
+    >
+      Importar<span className="hidden sm:inline"> {oQueImporta}</span>
     </Button>
   ) : null;
-  const semDados = (oQue: string) => `Nenhum ${oQue} nesta visão.${importa ? ` Use “${rotuloImportar}” no rodapé.` : ""}`;
+  const semDados = (oQue: string) => `Nenhum ${oQue} nesta visão.${importa ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
       columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
@@ -1143,30 +1146,22 @@ export function DfdsView({
         </AvisoFlutuante>
       )}
 
-      {/* BARRA DA MESA (uma linha): à esquerda, o DASHBOARD (só o ícone) + as visões Protocolos · DFDs · Itens (+ a
-          ferramenta do PCA); à direita, os FILTROS DE HIERARQUIA — responsável e assunto do protocolo, que valem para
-          todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de protocolos. */}
+      {/* BARRA DA MESA (uma linha): à esquerda, as visões — o DASHBOARD (só o ícone, antes de Protocolos · DFDs · Itens;
+          fora da Mesa do PCA) — + a ferramenta do PCA; à direita, os FILTROS DE HIERARQUIA — responsável e assunto do
+          protocolo, que valem para todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de
+          protocolos. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex max-w-full items-center gap-1.5">
-          {!modoPca && (
-            <Segmented<Vista>
-              value={vista}
-              onChange={setVista}
-              ariaLabel="Dashboard da Mesa"
-              options={[{ value: "dashboard", label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]}
-            />
-          )}
-          <Segmented<Vista>
-            value={vista}
-            onChange={setVista}
-            ariaLabel="Visões da Mesa"
-            options={[
-              { value: "protocolos", label: "Protocolos" },
-              { value: "dfds", label: "DFDs" },
-              { value: "itens", label: "Itens" },
-            ]}
-          />
-        </div>
+        <Segmented<Vista>
+          value={vista}
+          onChange={setVista}
+          ariaLabel="Visões da Mesa"
+          options={[
+            ...(modoPca ? [] : [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]),
+            { value: "protocolos", label: "Protocolos" },
+            { value: "dfds", label: "DFDs" },
+            { value: "itens", label: "Itens" },
+          ]}
+        />
         {modoPca?.ferramenta}
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <SeletorFiltro
@@ -1193,7 +1188,7 @@ export function DfdsView({
             ]}
           />
           {filtrado && (
-            <Button variant="ghost" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
+            <Button variant="ghost" size="sm" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
               Limpar filtros
             </Button>
           )}
@@ -1221,21 +1216,21 @@ export function DfdsView({
         )}
       </div>
 
-      {/* Formulários de IMPORTAÇÃO (Mesa principal, editores): o botão fica no rodapé da tabela; aqui, fora dela, só
-          lançador, análise e avisos (modais/avisos flutuantes — nada no fluxo da página). */}
-      {importa &&
-        (vista === "protocolos" ? (
+      {/* Formulários de IMPORTAÇÃO (Mesa principal, editores): os botões ficam no rodapé das tabelas; aqui, fora delas e
+          em QUALQUER visão, só lançador, análise e avisos (modais/avisos flutuantes — nada no fluxo da página). */}
+      {podeImportar && (
+        <>
           <ProtocoloUploadForm
-            iniciar={abrirImport}
+            iniciar={abrirProto}
             reparticoes={reparticoes}
             reparticaoAtivaId={reparticaoAtivaId}
             pcas={pcas}
             regras={regras}
             orgaos={orgaos}
           />
-        ) : (
-          <DfdUploadForm iniciar={abrirImport} reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
-        ))}
+          <DfdUploadForm iniciar={abrirDfd} reparticoes={reparticoes} reparticaoAtivaId={reparticaoAtivaId} pcas={pcas} regras={regras} orgaos={orgaos} />
+        </>
+      )}
 
       {barraSelecao}
 

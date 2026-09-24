@@ -283,7 +283,9 @@ export function DataTable<R>({
   return (
     <div
       ref={wrapRef}
-      className="overflow-hidden rounded-card border border-border bg-surface shadow-ring"
+      // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
+      // pode grudar na tela no celular (abaixo).
+      className={`${scrollInterno ? "overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
       style={densPy ? ({ "--cell-py": densPy } as CSSProperties) : undefined}
     >
       <div
@@ -435,12 +437,16 @@ export function DataTable<R>({
 
       <div
         ref={rodapeRef}
-        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted"
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted ${
+          // Rolagem interna no CELULAR (a página rola): o rodapé — resumo, ações (ex.: "Importar"), linhas e paginação —
+          // GRUDA acima da navegação inferior (e da barra de seleção fixa, `--reserva-rodape`) enquanto a tabela está na tela.
+          scrollInterno ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
+        }`}
       >
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
           {ativos.length > 0 && (
             <button
               type="button"
@@ -457,7 +463,7 @@ export function DataTable<R>({
           {acoesRodape}
           {scrollInterno && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
-              <span>Linhas</span>
+              <span className="hidden sm:inline">Linhas</span>
               <select
                 aria-label="Linhas por página"
                 value={limite}

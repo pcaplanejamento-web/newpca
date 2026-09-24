@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 
 // Controle segmentado (abas) — spec §6.5. Trilho --surface-2, item ativo em
 // --surface com sombra leve. Rola horizontalmente se faltar espaço (mobile).
-// Altura FIXA do item (32px; 36px no celular — o controle inteiro fica com 44px, alvo de toque), então um
-// item SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica) tem a MESMA altura dos de texto.
+// Altura FIXA do item (32px no desktop; 40px no celular, e a área de toque cobre também o respiro do trilho —
+// 46px), então um item SÓ-ÍCONE (`soIcone`: o rótulo vira o nome acessível + a dica; 44px de largura no celular)
+// tem a MESMA altura dos de texto.
 export function Segmented<T extends string>({
   value,
   options,
@@ -42,8 +43,8 @@ export function Segmented<T extends string>({
             title={o.soIcone ? o.label : undefined}
             disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-8 ${
-              o.soIcone ? "w-9 lg:w-8" : "px-3"
+            className={`relative inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-8 ${
+              o.soIcone ? "w-11 lg:w-8" : "px-3"
             } ${active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text-2"}`}
           >
             {o.icone}

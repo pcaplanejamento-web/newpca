@@ -171,7 +171,8 @@ export function Colunas({
   const passo = n > 8 ? 2 : 1;
   const eixo = "absolute right-full mr-1.5 -translate-y-1/2 text-[10.5px] leading-none text-faint tabular-nums";
   return (
-    <div className="pl-7">
+    // `pt-4`: o valor no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro.
+    <div className="pl-7 pt-4">
       <ul aria-label={ariaLabel} className="relative flex items-end gap-1" style={{ height: altura }}>
         {/* Grade: teto (com o valor), metade e a linha de base (zero) — finas e recessivas. */}
         <li aria-hidden className="pointer-events-none absolute inset-x-0 top-0 border-t border-border">

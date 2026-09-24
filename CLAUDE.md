@@ -499,24 +499,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Planilha (PCA)** + **PCA** (o seletor de "Gerar PCA" recebe TODOS os DFDs). A tabela de DFDs (`DfdsView`) tem
   **filtro/ordenação em todas as colunas** (cada uma com `value`) e **somatório de itens e valores** no rodapé,
   reativo aos filtros (`DataTable` `resumo={(linhas)=>…}`). Migração `0015` concede a aba `dfd` a quem já tinha `pca`.
-  - **BARRA DA MESA (uma linha) + visão ÚNICA com `Segmented` + morph:** à esquerda, o **Dashboard** (item SÓ-ÍCONE —
-    `Segmented` com `soIcone`, `IconDashboard`) + o `Segmented` **Protocolos · DFDs · Itens** (`vista`; na Mesa do PCA, a
-    `ferramenta` Todos | Enviados | Incorporados logo depois, sem Dashboard); à DIREITA, os **filtros de hierarquia**
-    (abaixo). Alternam as visões no **MESMO espaço**, com transição `animate-cat-morph` (`<div key={vista}>` remonta e
-    replaya). **Importação NA TABELA:** o botão **"Importar protocolo"** (visão Protocolos) / **"Importar DFD"** (visão DFDs)
-    fica no **RODAPÉ da tabela, à esquerda do seletor de linhas** (`DataTable.acoesRodape`, `Button size="sm"`); o
-    formulário (`ProtocoloUploadForm`/`DfdUploadForm`) é montado FORA da tabela — o botão só incrementa o contador `iniciar`
-    (o MESMO mecanismo do reenvio/sobrescrita: cada valor novo abre o lançador) — então recarregar/filtrar a lista nunca perde
-    uma importação em curso; os forms não renderizam nada no fluxo (lançador/análise/avisos são modais e avisos flutuantes).
-    A tabela aparece SEMPRE (sem linhas, `DataTable.vazio` diz por quê: "Nenhum protocolo… use “Importar protocolo” no
-    rodapé" / o filtro de hierarquia / "Carregando itens…") — o botão nunca some. Cada visão tem **altura de linha própria** (prop
+  - **BARRA DA MESA (uma linha) + visão ÚNICA com `Segmented` + morph:** à esquerda, UM `Segmented` (`vista`) com o
+    **Dashboard** primeiro — item SÓ-ÍCONE (`soIcone`, `IconDashboard`; nome acessível "Dashboard de governança") — e
+    **Protocolos · DFDs · Itens** (na Mesa do PCA, sem o Dashboard e com a `ferramenta` Todos | Enviados | Incorporados
+    logo depois); à DIREITA, os **filtros de hierarquia** (abaixo). Alternam as visões no **MESMO espaço**, com transição
+    `animate-cat-morph` (`<div key={vista}>` remonta e replaya). **Importação NA TABELA:** o botão **"Importar protocolo"**
+    (visão Protocolos) / **"Importar DFD"** (visão DFDs) fica no **RODAPÉ da tabela, à esquerda do seletor de linhas**
+    (`DataTable.acoesRodape`, `Button size="sm"`; no celular o rótulo encolhe para "Importar" — o nome acessível segue
+    inteiro); os DOIS formulários (`ProtocoloUploadForm`/`DfdUploadForm`) ficam montados FORA da tabela, em QUALQUER visão
+    (Mesa principal, editores) — cada botão só incrementa o SEU contador `iniciar` (`abrirProto`/`abrirDfd`; o MESMO mecanismo
+    do reenvio/sobrescrita: cada valor novo abre o lançador) — então recarregar/filtrar a lista, trocar de visão ou abrir o
+    Dashboard nunca perde uma importação em curso (e o `ProtocoloUploadForm` que DESMONTA no meio da leitura descarta o PDF
+    e libera o OCR — `vivoRef`); os forms não renderizam nada no fluxo (lançador/análise/avisos são modais e avisos
+    flutuantes). A tabela aparece SEMPRE (sem linhas, `DataTable.vazio` diz por quê: "Nenhum protocolo… use “Importar” no
+    rodapé da tabela" / o filtro de hierarquia / "Carregando itens…") — o botão nunca some; no CELULAR o rodapé das tabelas
+    da Mesa GRUDA acima da navegação inferior (e da barra de seleção) — o "Importar" e a paginação ficam sempre ao alcance.
+    Cada visão tem **altura de linha própria** (prop
     `density` do `DataTable`): Protocolos **comfortable** (alta) · DFDs **default** (média, `PlanilhaDfds`) · Itens
     **compact** (fina). Sem os cabeçalhos redundantes "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé
     `resumo`). Tabela de **Protocolos**: **Estado** (AGREGADO — abaixo) · **Situação** (dropdown na célula) · **Responsável**
     (dropdown na célula) · **Distribuição** (quem protocolou) · **Data** (data/hora da PROTOCOLAÇÃO — `criado_em` em Brasília,
     `dataHoraBR`/`dataIsoBrasilia`) · Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor. No celular, os filtros
     descem para a linha de baixo, lado a lado (só ícone + valor; o rótulo segue no nome acessível) — o `Segmented` não
-    encolhe (a aba "Itens" nunca fica cortada); todos os controles da barra têm 44px no celular e 40px no desktop.
+    encolhe (a aba "Itens" nunca fica cortada); no celular todos os alvos da barra têm ≥ 44px (itens do `Segmented` com a
+    área de toque cobrindo o trilho, filtros de 44px, "Limpar filtros" `size="sm"`).
   - **Gestão do protocolo (migração `0031`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
@@ -566,7 +572,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     agregada roda também com o Dashboard aberto (mesmo cache). Gráficos em HTML por token (`charts/Barras`: `BarrasH`,
     `Colunas`, `BarraSegmentada` — marcas finas, 2px de respiro, texto em tokens de texto, dica no hover/foco/toque). O código
     do Dashboard é carregado SOB DEMANDA (`next/dynamic`, `ssr:false`, esqueleto da mesma grade) — a Mesa não baixa gráficos à
-    toa.
+    toa. A conferência agregada roda com Protocolos OU Dashboard abertos (`precisaConfProto` — alternar entre os dois não
+    reinicia as requisições) e uma nova tentativa dos que falharam volta a "Conferindo…" na hora; no Dashboard, "conferindo"
+    (em curso) e "não conferido" (falhou — recarregue) aparecem separados. O valor por unidade agrupa pelo ID da unidade (a
+    sigla pode repetir entre órgãos).
   - **Visão "Itens"** = lista PLANA de TODOS os itens dos DFDs em escopo (Protocolo · Nº DFD · Sigla · Item · Código ·
     **Catálogo** · Descrição · Unidade · Qtd · Vlr. unit. · Vlr. total), carregada **SOB DEMANDA** (lazy) na 1ª abertura via
     `GET /api/dfd/itens` → `listarItensDfds(reparticaoId?)` (escopo por unidade, como `listarDfds`); o cache é
@@ -1431,9 +1440,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; **`size="sm"`** = compacto p/ rodapés de
-  tabela — 34px no desktop, 44px no celular), `KpiStat` (§6.4), `Segmented` (altura fixa — 44px no celular; item
-  **`soIcone`** = só o ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa), **`DashboardMesa`** (o
-  Dashboard de governança da Mesa) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
+  tabela — 34px no desktop, 44px no celular), `KpiStat` (§6.4), `Segmented` (altura fixa — itens de 40px no celular com a área de
+  toque cobrindo o trilho; item **`soIcone`** = só o ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa),
+  **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
+  — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
   **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown`,
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
@@ -1458,6 +1468,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
   **`reservaInferior`** = altura reservada no fim do display p/ algo fixo abaixo (a `BarraSelecao` da Mesa);
   **`acoesRodape`** = ações no RODAPÉ da tabela, à esquerda do seletor de linhas/paginação (ex.: "Importar protocolo" da Mesa);
+  com `scrollInterno`, no CELULAR o rodapé GRUDA acima da navegação inferior (`overflow-clip` no contêiner, `sticky` +
+  `--reserva-rodape` da barra de seleção);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;

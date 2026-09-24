@@ -24,8 +24,9 @@ export type ProtocoloPainel = {
   situacaoId: number | null;
   estado: EstadoPainel;
 };
-/** DFD como o Dashboard o vê: a unidade requisitante e os totais. */
-export type DfdPainel = { unidade: string | null; unidadeNome: string | null; valor: number | null; itens: number | null };
+/** DFD como o Dashboard o vê: a unidade requisitante (id + sigla + nome — a sigla pode repetir entre órgãos) e os
+ * totais. */
+export type DfdPainel = { unidadeId: number | null; unidade: string | null; unidadeNome: string | null; valor: number | null; itens: number | null };
 
 /** Quantidade + valor (R$) de um recorte. */
 export type Fatia = { n: number; valor: number };
@@ -71,8 +72,9 @@ export type PainelMesa = {
   faixasIdade: ({ rotulo: string; curto: string } & Fatia)[];
   /** As últimas `SEMANAS_PAINEL` semanas (segunda a domingo), a mais antiga primeiro; `inicio` = AAAA-MM-DD. */
   semanas: ({ inicio: string; rotulo: string; atual: boolean } & Fatia)[];
-  /** Maiores valores primeiro ("" = sem unidade). */
-  unidades: { sigla: string; nome: string | null; dfds: number; valor: number }[];
+  /** Maiores valores primeiro, uma linha por UNIDADE (pelo id — a sigla pode repetir entre órgãos); `chave` "sem" e
+   * sigla "" = sem unidade. */
+  unidades: { chave: string; sigla: string; nome: string | null; dfds: number; valor: number }[];
   outrasUnidades: { unidades: number; dfds: number; valor: number } | null;
 };
 
@@ -178,19 +180,20 @@ export function painelMesa(
           { pessoas: cauda.length, n: 0, valor: 0, porEstado: porEstadoVazio() },
         );
 
-  // Unidades (pelos DFDs): maiores valores primeiro; a cauda vira "Outras".
-  const porUnidade = new Map<string, { sigla: string; nome: string | null; dfds: number; valor: number }>();
+  // Unidades (pelos DFDs, agrupadas pelo ID): maiores valores primeiro; a cauda vira "Outras".
+  const porUnidade = new Map<string, { chave: string; sigla: string; nome: string | null; dfds: number; valor: number }>();
   let itens = 0;
   let valorDfds = 0;
   for (const d of dfds) {
     const v = valorSeguro(d.valor);
     itens += valorSeguro(d.itens);
     valorDfds += v;
-    const sigla = (d.unidade ?? "").trim();
-    const u = porUnidade.get(sigla) ?? { sigla, nome: d.unidadeNome?.trim() || null, dfds: 0, valor: 0 };
+    const chave = d.unidadeId != null ? String(d.unidadeId) : "sem";
+    const u = porUnidade.get(chave) ?? { chave, sigla: d.unidadeId != null ? (d.unidade ?? "").trim() : "", nome: null, dfds: 0, valor: 0 };
+    u.nome ??= d.unidadeNome?.trim() || null;
     u.dfds++;
     u.valor += v;
-    porUnidade.set(sigla, u);
+    porUnidade.set(chave, u);
   }
   const unidades = [...porUnidade.values()].sort((a, b) => b.valor - a.valor || b.dfds - a.dfds || a.sigla.localeCompare(b.sigla, "pt-BR"));
   const outras = unidades.slice(MAX_UNIDADES);

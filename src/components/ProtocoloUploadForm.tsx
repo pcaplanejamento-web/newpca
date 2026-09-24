@@ -272,9 +272,17 @@ export function ProtocoloUploadForm({
   const gravadosPorNumero = useMemo(() => new Map((reenvio?.dfds ?? []).map((d) => [chaveDfd(d.numero), d])), [reenvio]);
   const gravadoDe = (numero: string | null | undefined): DfdDetalhe | null => (reenvio ? (gravadosPorNumero.get(chaveDfd(numero)) ?? null) : null);
 
-  useEffect(() => () => {
-    void docRef.current?.destroy();
-    void encerrarOcr(); // libera o worker do OCR ao desmontar
+  // Montado? Uma leitura de PDF em curso quando o form DESMONTA (ex.: saiu da Mesa) descarta o documento em vez de
+  // seguir analisando sozinha — o pdf.js e o worker do OCR nunca ficam presos.
+  const vivoRef = useRef(true);
+  useEffect(() => {
+    vivoRef.current = true;
+    return () => {
+      vivoRef.current = false;
+      void docRef.current?.destroy();
+      docRef.current = null; // a análise em curso para no próximo passo (`docRef.current !== doc`)
+      void encerrarOcr(); // libera o worker do OCR ao desmontar
+    };
   }, []);
   useEffect(() => {
     if (!importando) return;
@@ -318,7 +326,7 @@ export function ProtocoloUploadForm({
 
   // O botão do HOST abre o lançador (no reenvio, só o PDF — sem criação manual). Só um clique NOVO abre: o
   // contador vive no host e sobrevive a este form remontar (ex.: fechar/reabrir o protocolo); com a leitura de
-  // um PDF em andamento, o clique espera (o aviso flutuante mostra o progresso).
+  // um PDF em andamento, o clique é IGNORADO (o aviso flutuante mostra o progresso da leitura).
   const iniciarVisto = useRef(iniciar);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao contador do host.
   useEffect(() => {
@@ -407,6 +415,10 @@ export function ProtocoloUploadForm({
       limparDoc();
       resetCache();
       const { index: idx, doc } = await indexarProtocoloPdf(file, (pagina, total) => setLeitura({ pagina, total }));
+      if (!vivoRef.current) {
+        await doc.destroy();
+        return;
+      }
       const p = idx.protocolo;
       // Separa as vias / recusa documento errado: protocolo exige capa OU ≥2 DFDs.
       if (p.numero == null && idx.dfds.length <= 1) {
