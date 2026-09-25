@@ -37,6 +37,10 @@ export type EntidadeAuditoria =
   | "situacao_protocolo"
   | "unidade_medida"
   | "classificacao_item"
+  | "tarefa"
+  | "tarefa_quadro"
+  | "tarefa_lista"
+  | "tarefa_etiqueta"
   | "sessao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
@@ -73,6 +77,10 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   situacao_protocolo: "Situação de protocolo",
   unidade_medida: "Unidade de medida",
   classificacao_item: "Classificação de item",
+  tarefa: "Tarefa",
+  tarefa_quadro: "Quadro de tarefas",
+  tarefa_lista: "Lista de tarefas",
+  tarefa_etiqueta: "Etiqueta de tarefa",
   sessao: "Sessão",
 };
 

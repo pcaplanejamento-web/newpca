@@ -393,8 +393,9 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     d.exec(sql); // idempotente: rodar de novo não duplica a aba
     for (const arq of arquivos.slice(i36 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
     const abas = (id: number) => JSON.parse((d.prepare("SELECT abas FROM permissoes WHERE id = ?").get(id) as { abas: string }).abas);
-    assert.deepEqual(abas(901), ["dashboard", "protocolos", "dfd"]);
-    assert.deepEqual(abas(902), ["protocolos", "dfd"]);
+    // (a 0042 depois concede as Tarefas a quem tem a Mesa)
+    assert.deepEqual(abas(901), ["dashboard", "protocolos", "dfd", "tarefas"]);
+    assert.deepEqual(abas(902), ["protocolos", "dfd", "tarefas"]);
     assert.deepEqual(abas(903), ["pca"]);
     assert.deepEqual(abas(904), ["dashboard"]);
   });
@@ -439,6 +440,19 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("DELETE FROM usuarios WHERE id = 9411");
     const n = db.prepare("SELECT COUNT(*) AS n FROM edicoes_tabela WHERE usuario_id = 9411").get() as { n: number };
     assert.equal(n.n, 0);
+  });
+
+  it("0042 tarefas (quadros por grupo, listas, cartões com ticket único por quadro) e a aba para quem tem a Mesa", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["tarefa_quadros", "tarefa_listas", "tarefas", "tarefa_pessoas", "tarefa_etiquetas", "tarefa_etiqueta_links"]) assert.ok(tabelas.includes(t), t);
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='index'").includes("tarefas_quadro_ticket_uq"));
+    const a = aplicarTudo();
+    a.exec("INSERT INTO permissoes (id, nome, abas) VALUES (9420, 'Com mesa', '[\"dfd\"]'), (9421, 'Sem mesa', '[\"pca\"]')");
+    a.exec(readFileSync(join(DIR, "0042_tarefas.sql"), "utf8").split("--> statement-breakpoint").at(-1) as string);
+    const com = a.prepare("SELECT abas FROM permissoes WHERE id = 9420").get() as { abas: string };
+    const sem = a.prepare("SELECT abas FROM permissoes WHERE id = 9421").get() as { abas: string };
+    assert.deepEqual(JSON.parse(com.abas), ["dfd", "tarefas"]);
+    assert.deepEqual(JSON.parse(sem.abas), ["pca"]);
   });
 
   it("índice único de e-mail existe", () => {

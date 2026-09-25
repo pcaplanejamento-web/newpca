@@ -107,6 +107,12 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
+import { CartaoTarefa } from "@/components/CartaoTarefa";
+import { FiltrosTarefas } from "@/components/FiltrosTarefas";
+import { QuadroCard, QuadroNovoCard } from "@/components/QuadroCard";
+import { ColunaTarefas } from "@/components/QuadroKanban";
+import { SeletorPessoas } from "@/components/SeletorPessoas";
+import { FILTRO_TAREFAS_PADRAO, type TarefaResumo } from "@/lib/tarefas-core";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -1790,6 +1796,52 @@ function DfdViewSecoesDemo() {
   return <DfdView dfd={{ ...DFD_DEMO, secoes }} onSecoesChange={setSecoes} unica />;
 }
 
+function TarefasDemo() {
+  const pessoas = [
+    { id: 1, nome: "Ana Souza", apelido: "Ana", foto: null },
+    { id: 2, nome: "Bruno Lima", apelido: null, foto: null },
+    { id: 3, nome: "Carla Dias", apelido: "Carla", foto: null },
+  ];
+  const etiquetas = [
+    { id: 1, nome: "Licitação", cor: "#e11d48" },
+    { id: 2, nome: "Aguardando", cor: "#0ea5e9" },
+  ];
+  const mEt = new Map(etiquetas.map((e) => [e.id, e]));
+  const mPe = new Map(pessoas.map((p) => [p.id, p]));
+  const base: TarefaResumo = {
+    id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
+    arquivada: false, pessoas: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
+  };
+  const cartoes: TarefaResumo[] = [
+    { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2] },
+    { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3] },
+    { ...base, id: 3, ticket: 130, titulo: "Revisar a classificação dos itens", concluidaEm: "2026-01-01" },
+  ];
+  const [sel, setSel] = useState<number[]>([1]);
+  const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <QuadroCard href="#" quadro={{ id: 1, grupoId: 1, grupoNome: "Planejamento", nome: "Planejamento do PCA 2027", cor: "#6366f1", descricao: null, arquivado: false, abertas: 12, atrasadas: 3, concluidas: 40 }} />
+        <QuadroNovoCard onClick={() => {}} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} />
+      </div>
+      <div className="flex flex-wrap items-start gap-3">
+        <ColunaTarefas lista={{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: 2, concluida: false, arquivada: false }} qtd={3} onCriar={async () => true}>
+          {cartoes.map((t) => (
+            <CartaoTarefa key={t.id} tarefa={t} etiquetas={mEt} pessoas={mPe} hoje="2026-06-01" onAbrir={() => {}} />
+          ))}
+        </ColunaTarefas>
+        <div className="max-w-md">
+          <SeletorPessoas pessoas={pessoas} selecionadas={sel} onChange={setSel} usuarioId={1} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -2922,6 +2974,10 @@ export function Catalogo() {
           />
           <OrcamentoNovoCard onClick={() => {}} />
         </div>
+      </Secao>
+
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) e SeletorPessoas (várias pessoas, com foto)">
+        <TarefasDemo />
       </Secao>
 
       <Secao titulo="OrcamentoItemDetalhe (detalhe do lançamento do orçamento — só leitura)">

@@ -4,7 +4,7 @@ import { ABA_KEYS, ABAS, abasConhecidas, rotaInicial } from "../src/lib/abas.ts"
 
 describe("abas de módulo (permissões)", () => {
   it("a Mesa é o 1º módulo e cada aba tem rota própria", () => {
-    assert.deepEqual(ABA_KEYS, ["dfd", "pca", "catalogo", "orcamento"]);
+    assert.deepEqual(ABA_KEYS, ["dfd", "pca", "catalogo", "orcamento", "tarefas"]);
     assert.equal(ABAS[0].href, "/painel/mesa");
     assert.equal(new Set(ABAS.map((a) => a.href)).size, ABAS.length);
     assert.deepEqual(

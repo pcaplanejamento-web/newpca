@@ -71,6 +71,11 @@ import {
   Wrench,
   X,
   type LucideProps,
+  SquareKanban,
+  Archive,
+  ArchiveRestore,
+  Tag,
+  Flag,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -150,3 +155,8 @@ export const IconCopy = Copy;
 export function IconSpinner({ className, ...props }: LucideProps) {
   return <Loader2 {...props} className={`animate-spin ${className ?? ""}`} />;
 }
+export const IconKanban = SquareKanban;
+export const IconArquivar = Archive;
+export const IconDesarquivar = ArchiveRestore;
+export const IconEtiqueta = Tag;
+export const IconBandeira = Flag;

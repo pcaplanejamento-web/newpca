@@ -110,7 +110,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
-  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
+  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
   rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas`.
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
@@ -1724,6 +1724,57 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **"Aceitar SIGLA"** por linha e **"Vincular N sugestões"** em massa; gravação otimista (pendentes valem só sobre a base de
   vínculos em que foram feitas). O vínculo aparece na coluna **"No sistema"** dos lançamentos e no bloco "No sistema" do
   `OrcamentoItemDetalhe` (prop `vinculo`). Ícone `IconLink`. `lotesDeIds` agora é exportado por `reparticoes.ts`.
+
+## Tarefas (quadro estilo Trello) — migração `0042`
+- **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a
+  Mesa `dfd`). **Vários QUADROS por grupo**: o quadro é de UM grupo (`tarefa_quadros.grupo_id` cascade) — só os membros do
+  grupo veem/editam (`quadroAcessivel`: membro via `gruposDoUsuario`; o ADM, todos) e os RESPONSÁVEIS são pessoas do grupo
+  (`pessoasValidas`; as já designadas que saíram do grupo seguem valendo/visíveis). `/painel/tarefas` (`TarefasView`) = os
+  quadros do GRUPO ATIVO do cabeçalho (ADM sem grupo = todos) em cards 4:5 (`QuadroCard`: faixa na cor, abertas/atrasadas/
+  concluídas) + `QuadroNovoCard` (editor com grupo ativo → modal `CamposQuadro` nome/cor/descrição → abre o quadro; nasce com
+  A fazer · Em andamento · Concluído).
+- **Modelo (aditivo):** `tarefa_quadros` (+ `prox_ticket`), `tarefa_listas` (`ordem` real, `limite_wip`, `concluida` = "lista
+  de concluídas", `arquivada`), `tarefas` (**`ticket`** ÚNICO por quadro, prioridade baixa/media/alta/urgente, `inicio`/`prazo`
+  "AAAA-MM-DD", **`ordem` REAL fracionária**, `concluida_em`, `arquivada`), `tarefa_pessoas` (PK tarefa+usuário, `papel`
+  responsavel) e `tarefa_etiquetas` + `tarefa_etiqueta_links`. Núcleo PURO **`tarefas-core.ts`** (testado): `estadoPrazo`
+  (semáforo: ok · vence ≤ `DIAS_AVISO_PRAZO`=2 · hoje · atrasada · concluída — `COR_ESTADO_PRAZO`), `ordemEntre` (soltar entre
+  dois sem renumerar; `renumerar` quando o vão < `VAO_MINIMO`), `vizinhos`/`moverCartao` (otimista; entrar numa lista de
+  concluídas conclui, sair desconclui), `filtrarTarefas` (responsável todos/eu/sem/pessoa · prazo · prioridade · etiqueta ·
+  busca `predicadoBusca` por título/#ticket), `excedeWip`, `resumoQuadro`, `rotuloTicket`/`rotuloData`,
+  `prefixoEdicoesTarefas`. Zod em `tarefas-validation.ts`; D1 em **`tarefas.ts`**; BUILDERS de lote em **`tarefas-sql.ts`**
+  (`comandosCriarTarefa` = reserva o ticket + fim da lista + responsáveis/etiquetas num `db.batch` atômico; `comandosMover`;
+  `comandosVinculos`) testados pelo driver D1 REAL (`tests/tarefas-sql.test.ts`). Loader **`tarefas-dados.ts`**
+  (`carregarQuadros`, `carregarQuadro` = listas + cartões resumidos + etiquetas + pessoas do grupo + edições salvas, UMA carga
+  para as três abas).
+- **Espaço do quadro** (`/painel/tarefas/[id]` → **`QuadroTarefas`**): UMA linha de cabeçalho (voltar · cor · nome · grupo ·
+  abertas/atrasadas/concluídas) + `AbasEspaco` **Quadro · Lista · Configuração** com `FerramentasAba` (**`FiltrosTarefas`** —
+  busca + `SeletorFiltro` Responsável [a FOTO da escolhida; "as minhas"] / Prazo / Prioridade / Etiqueta + Limpar — e "Nova
+  tarefa"). Os cartões ficam em estado LOCAL (sincronizado com o servidor a cada `router.refresh`); o filtro segue entre abas.
+  - **Quadro** = **`QuadroKanban`** (listas lado a lado, até o fim do display no desktop com rolagem interna por lista —
+    `useAlturaAteOFim`; no celular, `snap` uma coluna por vez) + **`ColunaTarefas`** (nome, contagem com o **WIP em âmbar**
+    quando passa, "Adicionar tarefa" pelo título — Enter cria e segue) + **`CartaoTarefa`** (etiquetas, título, `#ticket`
+    `CelulaCopiavel`, bandeira da prioridade, prazo no semáforo, fotos; a camada-botão cobre o cartão). **Arrasto**
+    (`ArrastoCartoes.tsx`: `useArrastoCartoes` + `CartaoPreso` + `SombraCartao` — o MESMO padrão do arrasto de colunas: ouvintes
+    na janela, limiar 6px, `segurar` [extraído para `src/components/segurar.ts`, compartilhado com `EdicaoColunas`], fantasma
+    por `translate3d`, rolagem automática horizontal/vertical, pouso em `duracaoMotionMs()`): mouse no cartão inteiro, TOQUE
+    pela alça (`IconGrip`, só `pointer-coarse`); Alt + setas movem pelo teclado. Soltar = `moverCartao` otimista + `POST
+    /api/tarefas/[id]/mover {listaId, anteriorId, proximoId}` (o servidor calcula a ordem pelos VIZINHOS; renumerou ⇒
+    refresh; falhou ⇒ volta).
+  - **Lista** = **`TabelaTarefas`** (`DataTable scrollInterno density="compact"` + **edições salvas** — chave
+    `tarefas:<quadro>:lista`; Ativas | Arquivadas — restaurar pelo detalhe).
+  - **Configuração** = **`ConfiguracaoQuadro`** (editores; os demais consultam): `CamposQuadro` + arquivar (`Switch`) + excluir;
+    listas (`AcoesCadastro` ↑/↓ · editar [nome, WIP, "de concluídas", arquivada] · excluir SÓ vazia → 409); etiquetas (nome +
+    `ColorField`).
+  - **Detalhe** = **`TarefaDetalhe`** (`Modal`, criar/editar): título, lista, prioridade (`Segmented`), início/prazo (data +
+    semáforo), responsáveis (**`SeletorPessoas`** — chips com foto), etiquetas, descrição (lazy: `GET /api/tarefas/[id]`);
+    salva SÓ o que mudou; arquivar/restaurar; excluir (editor); fechar com alteração confirma (`useConfirmacao`).
+- **Rotas** (envelope `http.ts`, auditoria `tarefa`/`tarefa_quadro`/`tarefa_lista`/`tarefa_etiqueta`): `POST
+  /api/tarefas/quadros` (editor; no grupo ativo), `PATCH`/`DELETE /api/tarefas/quadros/[id]`, `POST`/`PATCH
+  /api/tarefas/quadros/[id]/listas` (criar / ordem), `POST /api/tarefas/quadros/[id]/etiquetas`, `PATCH`/`DELETE
+  /api/tarefas/listas/[id]` e `/api/tarefas/etiquetas/[id]` (editor), `POST /api/tarefas` (qualquer membro), `GET`/`PATCH
+  /api/tarefas/[id]` (membro; trocar de lista leva ao FIM dela) + `DELETE` (editor) e `POST /api/tarefas/[id]/mover`.
+- **Próximas fases** (ver `docs/ROADMAP.md`): checklist, comentários/@menção, anexos, vínculo com Protocolo/DFD/PCA/Orçamento,
+  histórico, massa, exportar, Calendário; depois recorrência, Dashboard, notificações, modelos e automações.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

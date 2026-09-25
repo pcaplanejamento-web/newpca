@@ -759,3 +759,117 @@ export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+// ---------------------------------------------------------------------------
+// TAREFAS (migração `0042`) — quadro estilo Trello: QUADROS por grupo, LISTAS (colunas) e CARTÕES com nº de TICKET
+// sequencial por quadro, responsáveis (pessoas do grupo), prazo, prioridade e ETIQUETAS.
+// ---------------------------------------------------------------------------
+export const tarefaQuadros = sqliteTable(
+  "tarefa_quadros",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    grupoId: integer("grupo_id")
+      .notNull()
+      .references(() => grupos.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull().default("#6366f1"),
+    descricao: text("descricao"),
+    arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),
+    proxTicket: integer("prox_ticket").notNull().default(1),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_quadros_grupo_idx").on(t.grupoId)],
+);
+
+export const tarefaListas = sqliteTable(
+  "tarefa_listas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    ordem: real("ordem").notNull().default(0),
+    limiteWip: integer("limite_wip"),
+    /** Lista de CONCLUÍDAS: o cartão que entra ganha `concluida_em`; o que sai perde. */
+    concluida: integer("concluida", { mode: "boolean" }).notNull().default(false),
+    arquivada: integer("arquivada", { mode: "boolean" }).notNull().default(false),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_listas_quadro_idx").on(t.quadroId, t.ordem)],
+);
+
+export const tarefas = sqliteTable(
+  "tarefas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    listaId: integer("lista_id")
+      .notNull()
+      .references(() => tarefaListas.id, { onDelete: "cascade" }),
+    ticket: integer("ticket").notNull(),
+    titulo: text("titulo").notNull(),
+    descricao: text("descricao"),
+    prioridade: text("prioridade").notNull().default("media"),
+    /** Datas "AAAA-MM-DD". */
+    inicio: text("inicio"),
+    prazo: text("prazo"),
+    /** Ordem FRACIONÁRIA na lista (soltar entre dois cartões sem renumerar a lista). */
+    ordem: real("ordem").notNull().default(0),
+    concluidaEm: text("concluida_em"),
+    arquivada: integer("arquivada", { mode: "boolean" }).notNull().default(false),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("tarefas_quadro_ticket_uq").on(t.quadroId, t.ticket),
+    index("tarefas_lista_ordem_idx").on(t.listaId, t.ordem),
+    index("tarefas_prazo_idx").on(t.prazo),
+  ],
+);
+
+export const tarefaPessoas = sqliteTable(
+  "tarefa_pessoas",
+  {
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    papel: text("papel").notNull().default("responsavel"),
+  },
+  (t) => [primaryKey({ columns: [t.tarefaId, t.usuarioId] }), index("tarefa_pessoas_usuario_idx").on(t.usuarioId)],
+);
+
+export const tarefaEtiquetas = sqliteTable(
+  "tarefa_etiquetas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull(),
+    ordem: integer("ordem").notNull().default(0),
+  },
+  (t) => [index("tarefa_etiquetas_quadro_idx").on(t.quadroId)],
+);
+
+export const tarefaEtiquetaLinks = sqliteTable(
+  "tarefa_etiqueta_links",
+  {
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    etiquetaId: integer("etiqueta_id")
+      .notNull()
+      .references(() => tarefaEtiquetas.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.tarefaId, t.etiquetaId] })],
+);

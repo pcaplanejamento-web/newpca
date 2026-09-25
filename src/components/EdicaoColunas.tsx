@@ -13,33 +13,13 @@ import { createPortal } from "react-dom";
 import { LARGURA_MAX, LARGURA_MIN, soltarColuna } from "@/lib/colunas-layout";
 import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
 import { duracaoMotionMs } from "./Modal";
+import { segurar } from "./segurar";
 
 /**
  * EDIÇÃO DE COLUNAS direto no cabeçalho — as peças COMPARTILHADAS pela tabela cruzada do Comparativo e pela `DataTable`
  * (Mesa): a alça de ARRASTO (a coluna levanta, vai presa ao cursor, a sombra mostra o destino e ela pousa), as ações
  * congelar · ocultar · ordenar e a borda de LARGURA. Mouse, toque e teclado.
  */
-
-/** Enquanto o usuário SEGURA algo (arrastar uma coluna, ajustar a largura): nenhuma seleção de texto (bloqueia o
- * `selectstart` e limpa a que houver), nenhum arrasto NATIVO do navegador (`dragstart` de imagem/texto — ele cancelaria o
- * ponteiro: a coluna presa parava e a "imagem" do navegador seguia o mouse) e o cursor da ação no documento inteiro.
- * Devolve a função que desfaz. */
-function segurar(cursor: string): () => void {
-  const corpo = document.body.style;
-  const antes = { cursor: corpo.cursor, selecao: corpo.userSelect };
-  const bloquear = (e: Event) => e.preventDefault();
-  corpo.cursor = cursor;
-  corpo.userSelect = "none";
-  window.getSelection()?.removeAllRanges();
-  document.addEventListener("selectstart", bloquear);
-  document.addEventListener("dragstart", bloquear);
-  return () => {
-    corpo.cursor = antes.cursor;
-    corpo.userSelect = antes.selecao;
-    document.removeEventListener("selectstart", bloquear);
-    document.removeEventListener("dragstart", bloquear);
-  };
-}
 
 /** Alça de LARGURA na borda direita do cabeçalho (dentro da coluna — não invade a alça de arrasto da vizinha): arrastar
  * (mouse ou toque), ←/→ no teclado, duplo clique = padrão. */
