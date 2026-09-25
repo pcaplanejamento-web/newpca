@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import { salvarPreferenciaSchema } from "../src/lib/preferencias-validation.ts";
 import {
   basePercentual,
+  COL_EXTRA,
+  COL_ROTULO,
   COL_TOTAL,
+  colunasNaOrdem,
   chaveLayoutComparativo,
   coerceLayout,
   colunaPermitida,
@@ -16,11 +19,11 @@ import {
   MAX_COLUNAS_CRUZAMENTO,
   matrizCruzamento,
   medidaOrcamento,
+  ordemDasColunas,
   ordenarLinhas,
   percentual,
   permissoesColunas,
   permissoesLinhas,
-  reordenarColunas,
   semVazios,
   soltarColuna,
 } from "../src/lib/orcamento-cruzamento.ts";
@@ -118,16 +121,25 @@ describe("orcamento-cruzamento", () => {
     assert.deepEqual(m.at(-1), ["TOTAL", "", 187, 50, 137, 0]);
   });
 
-  it("colunas: oculta — os valores das linhas acompanham e o total não muda", () => {
+  it("colunas na ordem dada (as ausentes saem) — os valores das linhas acompanham e o total não muda", () => {
     const c = cruzar(L, "unidade", "nomeElemento", "inicial");
-    const r = reordenarColunas(c, "rotulo", [c.colunas.find((x) => x.rotulo === "OBRAS")?.chave ?? ""]);
+    const [aux, dia] = c.colunas.map((x) => x.chave);
+    const r = colunasNaOrdem(c, [dia, aux]);
     assert.deepEqual(
       r.colunas.map((x) => x.rotulo),
-      ["AUXÍLIOS", "DIÁRIAS"],
+      ["DIÁRIAS", "AUXÍLIOS"],
     );
-    const semus = r.linhas.find((l) => l.rotulo === "10 - SEMUS");
-    assert.deepEqual(semus?.valores, [50, 100]);
+    assert.deepEqual(r.linhas.find((l) => l.rotulo === "10 - SEMUS")?.valores, [100, 50]);
     assert.equal(r.total, c.total, "ocultar não muda o total");
+  });
+
+  it("ordem exibida: congeladas na ordem delas + livres pela manual, o resto na ordem padrão", () => {
+    const padrao = [COL_ROTULO, COL_EXTRA, COL_TOTAL, "a", "b", "c"];
+    assert.deepEqual(ordemDasColunas(padrao, LAYOUT_PADRAO.fixadas, []), { fixadas: [COL_ROTULO, COL_EXTRA, COL_TOTAL], livres: ["a", "b", "c"] });
+    assert.deepEqual(ordemDasColunas(padrao, ["b", COL_ROTULO, "sumiu"], ["c", COL_TOTAL]), {
+      fixadas: ["b", COL_ROTULO],
+      livres: ["c", COL_TOTAL, COL_EXTRA, "a"],
+    });
   });
 
   it("ordem das linhas pela coluna EXTRA (sigla): vazios no fim", () => {
@@ -153,13 +165,16 @@ describe("orcamento-cruzamento", () => {
       ocultas: [COL_TOTAL],
       ordemLinhas: { por: { coluna: "c1" }, desc: true },
       ordemColunas: "manual",
+      ordemManual: ["c2"],
       extra: 1,
     });
     assert.deepEqual(l.larguras, { a: LARGURA_MAX, b: LARGURA_MIN });
-    assert.deepEqual(l.fixadas, ["c1"]);
+    assert.deepEqual(l.fixadas, [COL_ROTULO, COL_EXTRA, COL_TOTAL, "c1"], "formato antigo: rótulo, Sigla e Total congelados + as de antes");
     assert.deepEqual(l.ordemLinhas, { por: { coluna: "c1" }, desc: true });
-    assert.equal(l.ordemColunas, "manual");
-    assert.equal(coerceLayout({ ordemColunas: "total-desc", ordemLinhas: { por: "?" } }).ordemColunas, "rotulo", "ordem antiga/desconhecida = A–Z");
+    assert.deepEqual(l.ordemManual, ["c2"]);
+    assert.deepEqual(coerceLayout({ ordemColunas: "total-desc", ordemManual: ["x"] }).ordemManual, [], "ordem antiga não manual = padrão");
+    assert.deepEqual(coerceLayout({ v: 2, fixadas: [], ocultas: [COL_ROTULO, "a"] }).fixadas, [], "formato atual: vale o que está salvo");
+    assert.deepEqual(coerceLayout({ v: 2, ocultas: [COL_ROTULO, "a"] }).ocultas, ["a"], "o rótulo nunca é ocultado");
     assert.ok(layoutIgual({ ...l, larguras: { b: 56, a: 640 } }, l), "a ordem das chaves não importa");
     assert.ok(!layoutIgual(l, LAYOUT_PADRAO));
     assert.equal(chaveLayoutComparativo("unidade", "fonte"), "orcamento-comparativo:unidade:fonte");
@@ -182,22 +197,13 @@ describe("orcamento-cruzamento", () => {
     assert.deepEqual(soltarColuna(["a"], ["c"], "c", 99), { fixadas: ["a"], livres: ["c"] }, "destino fora do fim = fim");
   });
 
-  it("edição da planilha: ordem MANUAL, Sigla/Total soltas, calor e zerados", () => {
-    const c = cruzar(L, "unidade", "nomeElemento", "inicial");
-    const [aux, , obr] = c.colunas.map((x) => x.chave);
-    const r = reordenarColunas(c, "manual", [], [obr, aux]);
-    assert.deepEqual(
-      r.colunas.map((x) => x.rotulo),
-      ["OBRAS", "AUXÍLIOS", "DIÁRIAS"],
-      "fora da lista vai ao fim",
-    );
-    assert.deepEqual(r.linhas.find((l) => l.rotulo === "10 - SEMUS")?.valores, [0, 50, 100]);
-    const l = coerceLayout({ ordemColunas: "manual", ordemManual: [obr], soltas: [COL_TOTAL, "x"], calor: true, zerados: false });
-    assert.equal(l.ordemColunas, "manual");
-    assert.deepEqual(l.ordemManual, [obr]);
-    assert.deepEqual(l.soltas, [COL_TOTAL], "só Sigla/Total podem ser soltas");
+  it("formato antigo: Sigla/Total SOLTAS saem das congeladas; calor e zerados", () => {
+    const l = coerceLayout({ ordemColunas: "manual", ordemManual: ["o"], soltas: [COL_TOTAL, "x"], calor: true, zerados: false });
+    assert.deepEqual(l.fixadas, [COL_ROTULO, COL_EXTRA]);
+    assert.deepEqual(l.ordemManual, ["o"]);
     assert.equal(l.calor, true);
     assert.equal(l.zerados, false);
     assert.equal(LAYOUT_PADRAO.zerados, true, "o padrão oculta os zerados");
+    assert.ok(layoutIgual(coerceLayout(l), l), "o convertido é estável");
   });
 });

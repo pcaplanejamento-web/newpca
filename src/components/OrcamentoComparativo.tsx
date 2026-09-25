@@ -6,8 +6,10 @@ import { brl, num } from "@/lib/format";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import {
   COL_EXTRA,
+  COL_ROTULO,
   COL_TOTAL,
   type Cruzamento,
+  colunasNaOrdem,
   chaveLayoutComparativo,
   coerceLayout,
   colunaPermitida,
@@ -24,23 +26,23 @@ import {
   matrizCruzamento,
   medidaOrcamento,
   type OrdemCruzamento,
+  ordemDasColunas,
   ordenarLinhas,
   percentual,
   permissoesColunas,
   permissoesLinhas,
-  reordenarColunas,
   semVazios,
-  soltarColuna,
 } from "@/lib/orcamento-cruzamento";
 import { type AlvoVinculo, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { Checkbox, SearchField, SelectField } from "./Field";
-import { IconDesafixar, IconDownload, IconEye, IconEyeOff, IconFixar, IconGrip, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
+import { IconDesafixar, IconDownload, IconEye, IconFixar, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
@@ -59,9 +61,10 @@ const MODOS: { value: ModoCruzamento; label: string; curto: string }[] = [
  * duas colunas do CUBO (uma nas LINHAS, outra nas COLUNAS — ex.: Unidade × Elemento de despesa) e compara os valores da
  * MEDIDA escolhida. Ao escolher as linhas, o seletor das colunas APONTA as permitidas (as demais aparecem desabilitadas
  * com o motivo — `permissoesColunas`). Tocar num cabeçalho ordena as linhas só na VISTA. **"Editar"** transforma a PRÓPRIA
- * planilha no editor do layout, DIRETO na coluna: arrastar o nome move (soltar à esquerda da divisa congela), o alfinete
- * congela e o olho oculta — inclusive Sigla e Total —, a borda ajusta a largura; a barra de edição traz mapa de calor,
- * ocultar zerados e congelar/descongelar/mostrar todas; **"Salvar"** grava o layout do PAR de colunas ligadas na conta do usuário
+ * planilha no editor do layout, DIRETO na coluna — TODAS, inclusive o nome das linhas, a Sigla e o Total: arrastar o nome
+ * move (com a sombra do destino; soltar entre as congeladas congela), o alfinete congela, o olho oculta, a borda ajusta a
+ * largura; a barra de edição (enxuta) traz mapa de calor, ocultar zerados e congelar/descongelar/mostrar todas. A
+ * explicação de tudo fica na AJUDA (?); **"Salvar"** grava o layout do PAR de colunas ligadas na conta do usuário
  * (`PUT /api/preferencias/tabela`; o layout igual ao padrão apaga o salvo) e "Cancelar" descarta.
  */
 export function OrcamentoComparativo({
@@ -111,16 +114,12 @@ export function OrcamentoComparativo({
   const ordem = editando ? layout.ordemLinhas : (ordemVista ?? layout.ordemLinhas);
   const mudar = (f: (l: LayoutCruzamento) => LayoutCruzamento) => setRascunho((r) => (r ? f(r) : r));
 
-  // TODAS as colunas na ordem do layout (a edição mostra as ocultas esmaecidas) → e só as VISÍVEIS (exportar, resumo).
+  // O cruzamento (sem zerados, se pedido) — a tabela ordena/oculta as colunas pelo layout.
   const cruzBase = useMemo(() => {
     if (!coluna) return null;
     const c = cruzar(base, linha, coluna, medida);
-    return reordenarColunas(layout.zerados ? semVazios(c) : c, layout.ordemColunas, [], layout.ordemManual);
-  }, [base, linha, coluna, medida, layout.zerados, layout.ordemColunas, layout.ordemManual]);
-  const cruz = useMemo(
-    () => (cruzBase ? reordenarColunas(cruzBase, "manual", layout.ocultas, cruzBase.colunas.map((c) => c.chave)) : null),
-    [cruzBase, layout.ocultas],
-  );
+    return layout.zerados ? semVazios(c) : c;
+  }, [base, linha, coluna, medida, layout.zerados]);
 
   // A sigla do CADASTRO (Vínculos) ao lado de Órgão/Unidade — a chave do vínculo é a MESMA do agrupamento.
   const tipo = TIPO_VINCULO[linha];
@@ -158,19 +157,30 @@ export function OrcamentoComparativo({
     setDimColuna(linha);
     reiniciarVista();
   };
-  // Ordenar: na edição vai ao rascunho (salvo com o layout); fora dela, só a vista. 1º clique: textos crescente, valores
+  // Ordenar: na edição vai ao rascunho (salvo com o layout); fora dela, só a vista. 1º toque: textos crescente, valores
   // do MAIOR para o menor; o 2º inverte.
-  const ordenar = (por: OrdemCruzamento["por"], desc?: boolean) => {
+  const ordenar = (por: OrdemCruzamento["por"]) => {
     const o = ordem;
     const mesma = typeof por === "object" ? typeof o.por === "object" && o.por.coluna === por.coluna : o.por === por;
-    const nova = { por, desc: desc ?? (mesma ? !o.desc : por !== "rotulo" && por !== "extra") };
+    const nova = { por, desc: mesma ? !o.desc : por !== "rotulo" && por !== "extra" };
     if (editando) mudar((l) => ({ ...l, ordemLinhas: nova }));
     else setOrdemVista(nova);
   };
 
-  // EDIÇÃO da planilha (o menu de cada coluna e a borda do cabeçalho).
-  const alternar = (lista: "fixadas" | "ocultas" | "soltas", k: string) =>
-    mudar((l) => ({ ...l, [lista]: l[lista].includes(k) ? l[lista].filter((x) => x !== k) : [...l[lista], k] }));
+  // TODAS as colunas da tabela (as estruturais + as de valores) na ordem PADRÃO e na ordem do LAYOUT; as VISÍVEIS de
+  // valores formam o que se exporta e o resumo.
+  const padrao = useMemo(
+    () => [COL_ROTULO, ...(siglaDe ? [COL_EXTRA] : []), COL_TOTAL, ...(cruzBase?.colunas ?? []).map((c) => c.chave)],
+    [siglaDe, cruzBase],
+  );
+  const cruz = useMemo(() => {
+    if (!cruzBase) return null;
+    const o = ordemDasColunas(padrao, layout.fixadas, layout.ordemManual);
+    return colunasNaOrdem(cruzBase, [...o.fixadas, ...o.livres].filter((k) => !layout.ocultas.includes(k)));
+  }, [cruzBase, padrao, layout.fixadas, layout.ordemManual, layout.ocultas]);
+
+  // EDIÇÃO da planilha (direto na coluna): largura, ocultar e a ORDEM (arrastar/congelar). As colunas fora da vista
+  // (ex.: zeradas ocultas) mantêm o que tinham.
   const edicao = {
     onLargura: (k: string, px: number | null) =>
       mudar((l) => {
@@ -179,21 +189,17 @@ export function OrcamentoComparativo({
         else larguras[k] = Math.round(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, px)));
         return { ...l, larguras };
       }),
-    // A Sigla e o Total congelam por padrão (desktop): "descongelar" os SOLTA.
-    onFixar: (k: string) => (k === COL_EXTRA || k === COL_TOTAL ? alternar("soltas", k) : alternar("fixadas", k)),
-    onOcultar: (k: string) => alternar("ocultas", k),
-    // ARRASTAR: soltar entre as congeladas CONGELA, depois delas SOLTA; a ordem das livres vira a MANUAL.
-    onSoltar: (k: string, destino: number) =>
+    onOcultar: (k: string) => mudar((l) => ({ ...l, ocultas: l.ocultas.includes(k) ? l.ocultas.filter((x) => x !== k) : [...l.ocultas, k] })),
+    onOrdem: (fixadas: string[], livres: string[]) =>
       mudar((l) => {
-        const todas = (cruzBase?.colunas ?? []).map((c) => c.chave);
-        const presentes = new Set(todas);
-        const fix = l.fixadas.filter((x) => presentes.has(x));
-        const r = soltarColuna(fix, todas.filter((x) => !fix.includes(x)), k, destino);
-        // As congeladas fora da vista (ex.: zeradas ocultas) seguem congeladas.
-        return { ...l, fixadas: [...r.fixadas, ...l.fixadas.filter((x) => !presentes.has(x))], ordemColunas: "manual", ordemManual: r.livres };
+        const presentes = new Set(padrao);
+        return {
+          ...l,
+          fixadas: [...fixadas, ...l.fixadas.filter((x) => !presentes.has(x))],
+          ordemManual: [...livres, ...l.ordemManual.filter((x) => !presentes.has(x))],
+        };
       }),
   };
-  const dados = (cruzBase?.colunas ?? []).map((c) => c.chave);
 
   function editar() {
     setRascunho(layout);
@@ -357,45 +363,60 @@ export function OrcamentoComparativo({
               Editar
             </Button>
           )}
+          <Ajuda titulo="Comparativo">
+            <TopicoAjuda icone={<IconTrocar className="h-4 w-4" />} titulo="Linhas × Colunas">
+              Escolha duas colunas do CUBO para cruzar. As que não combinam aparecem desabilitadas com o motivo; o botão entre elas inverte.
+            </TopicoAjuda>
+            <TopicoAjuda icone={<IconDownload className="h-4 w-4" />} titulo="Medida, visão e leitura">
+              A medida define o valor somado; a visão restringe os lançamentos; R$ ou % da linha, da coluna ou do total. Tocar numa célula mostra os lançamentos
+              que formam o número; tocar no nome de uma coluna ordena as linhas.
+            </TopicoAjuda>
+            <TopicoAjuda icone={<IconPencil className="h-4 w-4" />} titulo="Editar a planilha">
+              Todas as colunas — inclusive o nome das linhas, a Sigla e o Total — se editam direto no cabeçalho: arraste o nome para mover (a sombra mostra onde vai
+              ficar; soltar entre as congeladas congela), o alfinete congela, o olho oculta e a borda ajusta a largura (duplo clique volta ao padrão).
+            </TopicoAjuda>
+            <TopicoAjuda icone={<IconSave className="h-4 w-4" />} titulo="Salvar">
+              Os ajustes valem para o par de colunas escolhido e ficam na sua conta. "Padrão" volta ao original; "Cancelar" descarta.
+            </TopicoAjuda>
+          </Ajuda>
         </div>
       </div>
 
       {editando && (
-        <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-accent/40 bg-surface px-[var(--pad-card)] py-2">
-          <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
-            <span className="font-semibold text-text">Editando a planilha</span>
-            <span className="inline-flex items-center gap-1">
-              <IconGrip className="h-3.5 w-3.5" /> arraste o nome para mover (à esquerda da divisa, congela)
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <IconFixar className="h-3.5 w-3.5" /> congela
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <IconEyeOff className="h-3.5 w-3.5" /> oculta
-            </span>
-            <span className="max-lg:hidden">a borda ajusta a largura</span>
-          </p>
+        <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-accent/40 bg-surface px-[var(--pad-card)] py-1.5">
+          <span className="text-[13px] font-semibold text-text">Editando</span>
           <div className="flex min-h-11 flex-wrap items-center gap-x-4 lg:min-h-0">
             <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
             <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               size="sm"
-              variant="ghost"
+              variant="icon"
+              title="Congelar todas"
+              aria-label="Congelar todas as colunas"
               icon={<IconFixar className="h-4 w-4" />}
-              onClick={() => mudar((l) => ({ ...l, fixadas: dados.filter((k) => !l.ocultas.includes(k)), soltas: [] }))}
-            >
-              Congelar todas
-            </Button>
-            <Button size="sm" variant="ghost" icon={<IconDesafixar className="h-4 w-4" />} onClick={() => mudar((l) => ({ ...l, fixadas: [], soltas: [COL_EXTRA, COL_TOTAL] }))}>
-              Descongelar todas
-            </Button>
-            <Button size="sm" variant="ghost" icon={<IconEye className="h-4 w-4" />} onClick={() => mudar((l) => ({ ...l, ocultas: [] }))} disabled={layout.ocultas.length === 0}>
-              Mostrar todas
-            </Button>
+              onClick={() => mudar((l) => ({ ...l, fixadas: padrao.filter((k) => !l.ocultas.includes(k)) }))}
+            />
+            <Button
+              size="sm"
+              variant="icon"
+              title="Descongelar todas (o nome das linhas segue congelado)"
+              aria-label="Descongelar todas as colunas"
+              icon={<IconDesafixar className="h-4 w-4" />}
+              onClick={() => mudar((l) => ({ ...l, fixadas: [COL_ROTULO] }))}
+            />
+            <Button
+              size="sm"
+              variant="icon"
+              title="Mostrar todas"
+              aria-label="Mostrar todas as colunas"
+              icon={<IconEye className="h-4 w-4" />}
+              onClick={() => mudar((l) => ({ ...l, ocultas: [] }))}
+              disabled={layout.ocultas.length === 0}
+            />
           </div>
-          <div className="flex items-center gap-2 lg:ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <Button size="sm" variant="ghost" icon={<IconUndo className="h-4 w-4" />} onClick={() => setRascunho(LAYOUT_PADRAO)} disabled={gravando}>
               Padrão
             </Button>
@@ -419,9 +440,9 @@ export function OrcamentoComparativo({
         modo={modo}
         calor={layout.calor}
         fixadas={layout.fixadas}
+        ordemManual={layout.ordemManual}
         larguras={layout.larguras}
         ocultas={layout.ocultas}
-        soltas={layout.soltas}
         ordem={ordem}
         onOrdenar={ordenar}
         onAbrir={editando ? undefined : (l, c) => setAberto({ linha: l, coluna: c })}

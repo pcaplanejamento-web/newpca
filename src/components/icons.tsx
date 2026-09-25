@@ -13,6 +13,7 @@ import {
   Calendar,
   Camera,
   Check,
+  CircleHelp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -128,6 +129,7 @@ export const IconFixar = Pin;
 export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
+export const IconAjuda = CircleHelp;
 export const IconRefresh = RefreshCw;
 export const IconPlug = Plug;
 export const IconInfo = Info;

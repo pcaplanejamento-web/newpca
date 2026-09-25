@@ -12,11 +12,22 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { basePercentual, COL_EXTRA, COL_ROTULO, COL_TOTAL, LARGURA_MAX, LARGURA_MIN, type ModoCruzamento, type OrdemCruzamento, percentual } from "@/lib/orcamento-cruzamento";
+import {
+  basePercentual,
+  COL_EXTRA,
+  COL_ROTULO,
+  COL_TOTAL,
+  LARGURA_MAX,
+  LARGURA_MIN,
+  type ModoCruzamento,
+  type OrdemCruzamento,
+  ordemDasColunas,
+  percentual,
+  soltarColuna,
+} from "@/lib/orcamento-cruzamento";
 import { LINHAS_TABELA } from "@/lib/theme";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { useLinhasTabela } from "./ConfigTabelas";
-import { ehDesktop } from "./espacamento";
 import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip } from "./icons";
 import { Pager } from "./Pager";
 
@@ -26,15 +37,19 @@ export type LinhaTabelaCruzada = EixoTabelaCruzada & { valores: number[]; extra?
 const fmtPct = (v: number | null) => (v == null ? "–" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`);
 const zerado = (v: number) => Math.abs(v) < 0.005;
 
-/** Larguras PADRÃO (tokens locais, px) — o usuário ajusta cada coluna arrastando a borda do cabeçalho (sobrepõe o token).
- * No celular só o rótulo e as colunas fixadas congelam (a extra e o total rolam — senão sobraria pouca tela); no desktop a
- * extra e o total congelam salvo se o usuário os SOLTAR. */
+/** Larguras PADRÃO por tipo de coluna (tokens locais, px) — o usuário ajusta cada coluna pela borda do cabeçalho. */
 const LARGURAS =
   "[--cz-rot:152px] [--cz-ext:88px] [--cz-tot:120px] [--cz-col:120px] lg:[--cz-rot:280px] lg:[--cz-ext:112px] lg:[--cz-tot:144px] lg:[--cz-col:136px]";
 const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWidth: w });
-const CEL = "h-11 border-b border-border/60 px-3 lg:h-[var(--h-control-sm)]";
+/** Toda célula: altura dos controles e o texto CENTRADO na altura. */
+const CEL = "h-11 border-b border-border/60 px-3 align-middle lg:h-[var(--h-control-sm)]";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
-const DIVISA_LG = "lg:shadow-[inset_-1px_0_0_var(--border)]";
+
+/** Uma coluna da tabela — as ESTRUTURAIS (rótulo das linhas, extra, total) e as de VALORES são tratadas igual. */
+type Coluna = { chave: string; tipo: "rotulo" | "extra" | "total" | "valor"; rotulo: string; total: number; j: number };
+const VAR_LARGURA: Record<Coluna["tipo"], string> = { rotulo: "--cz-rot", extra: "--cz-ext", total: "--cz-tot", valor: "--cz-col" };
+const ORDEM_DE: Record<Exclude<Coluna["tipo"], "valor">, OrdemCruzamento["por"]> = { rotulo: "rotulo", extra: "extra", total: "total" };
+const porDe = (c: Coluna): OrdemCruzamento["por"] => (c.tipo === "valor" ? { coluna: c.chave } : ORDEM_DE[c.tipo]);
 
 /** Alça de LARGURA na borda direita do cabeçalho (modo de edição): arrastar (mouse ou toque), ←/→ no teclado, duplo clique
  * = padrão. */
@@ -101,45 +116,46 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
   );
 }
 
-/** O que o modo de EDIÇÃO faz com uma coluna. `chave` = a da coluna ou `COL_*`. */
+/** O que o modo de EDIÇÃO faz. `chave` = a da coluna ou `COL_*`. */
 export type EdicaoTabelaCruzada = {
   onLargura: (chave: string, px: number | null) => void;
-  onFixar: (chave: string) => void;
   onOcultar: (chave: string) => void;
-  /** A coluna ARRASTADA foi solta na posição `destino` da ordem exibida SEM ela (entre as congeladas = congela). */
-  onSoltar: (chave: string, destino: number) => void;
+  /** Nova ORDEM das colunas (arrastar, congelar/descongelar): as congeladas e as livres, na ordem. */
+  onOrdem: (fixadas: string[], livres: string[]) => void;
 };
 
 /** Ação DIRETA no cabeçalho da coluna (congelar/ocultar) — 44px no toque, discreta no desktop, accent quando ligada. */
-function AcaoColuna({ rotulo, ligada, icone, onClick, soDesktop = false }: { rotulo: string; ligada: boolean; icone: ReactNode; onClick: () => void; soDesktop?: boolean }) {
+function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotulo: string; ligada: boolean; icone: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       aria-pressed={ligada}
       aria-label={rotulo}
       title={rotulo}
+      disabled={disabled}
       onClick={onClick}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-7 lg:w-7 ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
         ligada ? "bg-accent/10 text-accent" : "text-faint hover:bg-surface hover:text-text-2"
-      } ${soDesktop ? "max-lg:hidden" : ""}`}
+      }`}
     >
       {icone}
     </button>
   );
 }
 
-type Arrasto = { chave: string; rotulo: string; x: number; y: number; destino: number };
+type Arrasto = { chave: string; x: number; y: number; dx: number; dy: number; largura: number; destino: number };
 
 /**
- * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL (fixa
- * no rodapé). Visual limpo: cabeçalho sem caixa-alta, zeros como "–", linhas só com divisórias horizontais. Tocar no
- * cabeçalho ORDENA as linhas; tocar numa célula, rótulo ou total chama `onAbrir` (a origem do número). Congela o rótulo,
- * as colunas `fixadas` (à esquerda, na ordem; as que não cabem na largura visível deixam de congelar — nunca somem) e, no
- * desktop, a extra e o total (salvo `soltas`). Com **`edicao`**, a PRÓPRIA planilha vira o editor, DIRETO na coluna:
- * ARRASTAR o nome reordena (mouse ou toque, com a coluna "fantasma", a linha de destino e rolagem automática nas bordas;
- * soltar entre as congeladas CONGELA, depois delas SOLTA; Alt+←/→ no teclado), o alfinete congela, o olho oculta (a
- * oculta fica esmaecida para voltar) — inclusive a extra (Sigla) e o Total — e a borda ajusta a largura. Valor ou % da linha/coluna/total; mapa de calor opcional. No desktop ocupa a altura até o fim do display (o corpo
- * rola por dentro); linhas por página = Configurações → Tabelas.
+ * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL (fixa no
+ * rodapé). Visual limpo: cabeçalho sem caixa-alta, zeros como "–", só divisórias horizontais, todo texto CENTRADO na
+ * altura. TODAS as colunas — o rótulo das linhas, a extra (ex.: Sigla), o Total e as de valores — são IGUAIS: tocar no
+ * nome ORDENA as linhas; congeladas ficam à esquerda (as que não cabem na largura visível deixam de congelar — nunca
+ * somem). Com **`edicao`**, a PRÓPRIA planilha vira o editor, direto na coluna: ARRASTAR o nome move (mouse ou toque; a
+ * coluna vai "presa" ao cursor, o LUGAR onde vai ficar aparece sombreado já na posição nova, a tabela rola sozinha nas
+ * bordas; soltar entre as congeladas CONGELA; Alt+←/→ no teclado), o alfinete congela, o olho oculta (a oculta fica
+ * esmaecida para voltar) e a borda ajusta a largura. Valor ou % da linha/coluna/total; mapa de calor opcional; tocar numa
+ * célula chama `onAbrir` (a origem do número). No desktop ocupa a altura até o fim do display (o corpo rola por dentro);
+ * linhas por página = Configurações → Tabelas.
  */
 export function TabelaCruzada({
   rotuloLinhas,
@@ -151,9 +167,9 @@ export function TabelaCruzada({
   modo = "valor",
   calor = false,
   fixadas,
+  ordemManual = [],
   larguras,
   ocultas = [],
-  soltas = [],
   ordem,
   onOrdenar,
   onAbrir,
@@ -163,26 +179,27 @@ export function TabelaCruzada({
   resumo,
 }: {
   rotuloLinhas: string;
-  /** Coluna extra ao lado do rótulo (ex.: a sigla no sistema) — só quando informada. */
+  /** Coluna extra (ex.: a sigla no sistema) — só quando informada. */
   rotuloExtra?: string;
-  /** Já ORDENADAS e filtradas (a tabela só pagina). `valores` alinhados a `colunas` (TODAS, na ordem de exibição). */
+  /** Já ORDENADAS e filtradas (a tabela só pagina). `valores` alinhados a `colunas`. */
   linhas: LinhaTabelaCruzada[];
+  /** As colunas de VALORES na ordem padrão. */
   colunas: EixoTabelaCruzada[];
   total: number;
   formatar: (v: number) => string;
   modo?: ModoCruzamento;
   calor?: boolean;
-  /** Chaves das colunas CONGELADAS (na ordem). */
+  /** Chaves CONGELADAS (na ordem) — de qualquer coluna, inclusive `COL_*`. */
   fixadas: string[];
-  /** Largura (px) por coluna — `COL_ROTULO`/`COL_EXTRA`/`COL_TOTAL` ou a chave da coluna; ausente = padrão. */
+  /** Ordem das colunas LIVRES montada arrastando. */
+  ordemManual?: string[];
+  /** Largura (px) por coluna; ausente = a padrão do tipo. */
   larguras: Record<string, number>;
-  /** Colunas OCULTAS (a extra e o total pelas chaves `COL_EXTRA`/`COL_TOTAL`) — na edição aparecem esmaecidas. */
+  /** Colunas OCULTAS — na edição aparecem esmaecidas. */
   ocultas?: string[];
-  /** A extra/o total SOLTOS (não congelam no desktop). */
-  soltas?: string[];
   ordem: OrdemCruzamento;
-  /** Ordena as linhas (`desc` ausente = alterna). */
-  onOrdenar: (por: OrdemCruzamento["por"], desc?: boolean) => void;
+  /** Ordena as linhas (alterna a cada toque). */
+  onOrdenar: (por: OrdemCruzamento["por"]) => void;
   /** Origem do número: linha e/ou coluna (`null` = todas). */
   onAbrir?: (linha: string | null, coluna: string | null) => void;
   ativa?: { linha: string | null; coluna: string | null } | null;
@@ -197,39 +214,50 @@ export function TabelaCruzada({
   const linhasAdm = useLinhasTabela();
   const [limite, setLimite] = useState<number>(linhasAdm);
   const [page, setPage] = useState(1);
+  const [arrasto, setArrasto] = useState<Arrasto | null>(null);
+  const arrastou = useRef(false);
   const editando = edicao != null;
   const fora = useMemo(() => new Set(ocultas), [ocultas]);
-  // Fora da edição, a extra e o total OCULTOS somem; na edição ficam (esmaecidos) para voltar.
-  const comExtra = rotuloExtra != null && (editando || !fora.has(COL_EXTRA));
-  const comTotal = editando || !fora.has(COL_TOTAL);
-  const extraFixa = comExtra && !soltas.includes(COL_EXTRA);
-  const totalFixo = comTotal && !soltas.includes(COL_TOTAL);
 
-  // Colunas na ordem de EXIBIÇÃO (índices em `valores`): as fixadas primeiro (na ordem em que foram fixadas), depois as
-  // demais; fora da edição, sem as ocultas.
-  const ordemCols = useMemo(() => {
-    const pos = new Map(colunas.map((c, j) => [c.chave, j]));
-    const visivel = (j: number) => editando || !fora.has(colunas[j].chave);
-    const fix = fixadas.flatMap((k) => (pos.has(k) && visivel(pos.get(k) as number) ? [pos.get(k) as number] : []));
-    const set = new Set(fix);
-    return { fix, todas: [...fix, ...colunas.map((_, j) => j).filter((j) => !set.has(j) && visivel(j))] };
-  }, [colunas, fixadas, fora, editando]);
-  const wCol = (chave: string) => (larguras[chave] ? `${larguras[chave]}px` : "var(--cz-col)");
+  // TODAS as colunas por chave, na ordem PADRÃO (rótulo, extra, total, valores).
+  const porChave = useMemo(() => {
+    const m = new Map<string, Coluna>();
+    m.set(COL_ROTULO, { chave: COL_ROTULO, tipo: "rotulo", rotulo: rotuloLinhas, total, j: -1 });
+    if (rotuloExtra != null) m.set(COL_EXTRA, { chave: COL_EXTRA, tipo: "extra", rotulo: rotuloExtra, total: 0, j: -1 });
+    m.set(COL_TOTAL, { chave: COL_TOTAL, tipo: "total", rotulo: "Total", total, j: -1 });
+    colunas.forEach((c, j) => {
+      m.set(c.chave, { chave: c.chave, tipo: "valor", rotulo: c.rotulo, total: c.total, j });
+    });
+    return m;
+  }, [rotuloLinhas, rotuloExtra, colunas, total]);
 
-  // Quantas colunas fixadas CABEM congeladas na largura visível (as demais seguem na frente, mas rolam).
-  const [nFix, setNFix] = useState(ordemCols.fix.length);
+  // A ORDEM exibida (congeladas + livres) — durante o arrasto, JÁ com a coluna no lugar onde vai ficar (a prévia).
+  const ordemAtual = useMemo(() => {
+    const visivel = (k: string) => editando || k === COL_ROTULO || !fora.has(k);
+    const o = ordemDasColunas([...porChave.keys()], fixadas, ordemManual);
+    return { fixadas: o.fixadas.filter(visivel), livres: o.livres.filter(visivel) };
+  }, [porChave, fixadas, ordemManual, fora, editando]);
+  const vista = arrasto ? soltarColuna(ordemAtual.fixadas, ordemAtual.livres, arrasto.chave, arrasto.destino) : ordemAtual;
+  const exibidas = [...vista.fixadas, ...vista.livres].map((k) => porChave.get(k) as Coluna);
+  const nCongeladas = vista.fixadas.length;
+  const w = (c: Coluna) => (larguras[c.chave] ? `${larguras[c.chave]}px` : `var(${VAR_LARGURA[c.tipo]})`);
+
+  // Quantas congeladas CABEM na largura visível (as demais seguem na frente, mas rolam) — no celular, em geral só o nome.
+  const [nFix, setNFix] = useState(nCongeladas);
+  const chaveFix = vista.fixadas.join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mede pelas congeladas (chaveFix) e larguras.
   useLayoutEffect(() => {
     const el = rolagem.current;
     const raiz = ref.current;
     if (!el || !raiz) return;
     const calc = () => {
       const cs = getComputedStyle(raiz);
-      const px = (v: string) => Number.parseFloat(cs.getPropertyValue(v)) || 0;
-      let x = px("--cz-rot") + (ehDesktop() ? (extraFixa ? px("--cz-ext") : 0) + (totalFixo ? px("--cz-tot") : 0) : 0);
+      let x = 0;
       let n = 0;
-      for (const j of ordemCols.fix) {
-        x += larguras[colunas[j].chave] ?? px("--cz-col");
-        if (x > el.clientWidth - 96) break;
+      for (const k of vista.fixadas) {
+        const c = porChave.get(k) as Coluna;
+        x += larguras[k] ?? (Number.parseFloat(cs.getPropertyValue(VAR_LARGURA[c.tipo])) || 0);
+        if (n > 0 && x > el.clientWidth * 0.6) break; // as congeladas usam no máximo ~60% da largura visível
         n++;
       }
       setNFix(n);
@@ -238,7 +266,11 @@ export function TabelaCruzada({
     const ro = new ResizeObserver(calc);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ordemCols, larguras, colunas, extraFixa, totalFixo]);
+  }, [chaveFix, larguras, porChave]);
+  const esquerda = (p: number): CSSProperties => {
+    const antes = exibidas.slice(0, p).map(w);
+    return { left: antes.length ? `calc(${antes.join(" + ")})` : 0 };
+  };
 
   const maxAbs = useMemo(() => (calor ? Math.max(0, ...linhas.flatMap((l) => l.valores.map(Math.abs))) : 0), [calor, linhas]);
   const pages = Math.max(1, Math.ceil(linhas.length / limite));
@@ -256,82 +288,6 @@ export function TabelaCruzada({
       : undefined;
   const ehAtiva = (l: string | null, c: string | null) => ativa != null && ativa.linha === l && ativa.coluna === c;
   const anelAtivo = "outline outline-2 -outline-offset-2 outline-[var(--accent)]";
-  const esmaecida = (chave: string) => (fora.has(chave) ? "opacity-40" : "");
-  // Deslocamento da coluna fixada p: o rótulo + (no desktop) a extra e o total congelados + as fixadas antes dela.
-  const esquerda = (p: number): CSSProperties => {
-    const antes = ordemCols.fix.slice(0, p).map((j) => wCol(colunas[j].chave));
-    return { left: `calc(var(--cz-rot) + var(--cz-base) + ${antes.length ? antes.join(" + ") : "0px"})` };
-  };
-
-  // ARRASTAR uma coluna (edição): o nome é a alça — mouse ou toque (pointer capture), com fantasma, a linha de destino e
-  // rolagem automática perto das bordas. Um toque SEM arrastar ordena (como fora da edição).
-  const [arrasto, setArrasto] = useState<Arrasto | null>(null);
-  const arrastou = useRef(false);
-  const iniciarArrasto = (e: ReactPointerEvent<HTMLButtonElement>, chave: string, rotulo: string) => {
-    if (!edicao || e.button > 0) return;
-    const el = e.currentTarget;
-    const rolo = rolagem.current;
-    el.setPointerCapture(e.pointerId);
-    const x0 = e.clientX;
-    const y0 = e.clientY;
-    let ativo = false;
-    let ultimo = { x: x0, y: y0 };
-    let destino = 0;
-    let vel = 0;
-    let quadro = 0;
-    arrastou.current = false;
-    // Os cabeçalhos das colunas de valores na ordem EXIBIDA, sem a arrastada.
-    const alvos = () => [...(ref.current?.querySelectorAll<HTMLElement>("thead th[data-col]") ?? [])].filter((th) => th.dataset.col !== chave);
-    const calcular = () => {
-      const lista = alvos();
-      const i = lista.findIndex((th) => {
-        const r = th.getBoundingClientRect();
-        return ultimo.x < r.left + r.width / 2;
-      });
-      destino = i < 0 ? lista.length : i;
-      setArrasto({ chave, rotulo, x: ultimo.x, y: ultimo.y, destino });
-    };
-    const rolar = () => {
-      if (vel && rolo) {
-        rolo.scrollLeft += vel;
-        calcular();
-      }
-      quadro = requestAnimationFrame(rolar);
-    };
-    const mover = (ev: PointerEvent) => {
-      ultimo = { x: ev.clientX, y: ev.clientY };
-      if (!ativo) {
-        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
-        ativo = true;
-        arrastou.current = true;
-        quadro = requestAnimationFrame(rolar);
-      }
-      const r = rolo?.getBoundingClientRect();
-      vel = r ? (ev.clientX < r.left + 56 ? -14 : ev.clientX > r.right - 56 ? 14 : 0) : 0;
-      calcular();
-    };
-    const fim = (ev: PointerEvent) => {
-      cancelAnimationFrame(quadro);
-      el.removeEventListener("pointermove", mover);
-      el.removeEventListener("pointerup", fim);
-      el.removeEventListener("pointercancel", fim);
-      setArrasto(null);
-      if (ativo && ev.type === "pointerup") edicao.onSoltar(chave, destino);
-    };
-    el.addEventListener("pointermove", mover);
-    el.addEventListener("pointerup", fim);
-    el.addEventListener("pointercancel", fim);
-  };
-  // A linha de DESTINO: antes da coluna na posição `destino` (sem a arrastada) — ou depois da última.
-  const semOrigem = arrasto ? ordemCols.todas.map((j) => colunas[j].chave).filter((k) => k !== arrasto.chave) : [];
-  const marcaDestino = (chave: string) =>
-    !arrasto
-      ? ""
-      : semOrigem[arrasto.destino] === chave
-        ? "shadow-[inset_3px_0_0_var(--accent)]"
-        : arrasto.destino === semOrigem.length && semOrigem.at(-1) === chave
-          ? "shadow-[inset_-3px_0_0_var(--accent)]"
-          : "";
 
   const seta = (por: OrdemCruzamento["por"]) => {
     const igual = typeof por === "object" ? typeof ordem.por === "object" && ordem.por.coluna === por.coluna : ordem.por === por;
@@ -353,146 +309,255 @@ export function TabelaCruzada({
     alvoCelula(e);
   };
 
-  const cab = `sticky top-0 z-20 border-b border-border px-3 py-2 align-bottom text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
-  const botaoCab = "flex w-full items-center gap-1 rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-  const fimDaBase = ordemCols.fix.length === 0 || nFix === 0; // a extra/o total é a última coluna congelada
-  const divisaTotal = totalFixo && fimDaBase ? DIVISA_LG : "";
-  const divisaExtra = extraFixa && !totalFixo && fimDaBase ? DIVISA_LG : "";
-  const estiloRaiz: CSSProperties & Record<`--${string}`, string> = {
-    ...(altura != null ? { height: altura } : {}),
-    ...(larguras[COL_ROTULO] ? { "--cz-rot": `${larguras[COL_ROTULO]}px` } : {}),
-    ...(!comExtra ? { "--cz-ext": "0px" } : larguras[COL_EXTRA] ? { "--cz-ext": `${larguras[COL_EXTRA]}px` } : {}),
-    ...(!comTotal ? { "--cz-tot": "0px" } : larguras[COL_TOTAL] ? { "--cz-tot": `${larguras[COL_TOTAL]}px` } : {}),
-    // O que a extra e o total ocupam da faixa CONGELADA (desktop): a largura quando congelados, 0 quando soltos.
-    "--cz-ext-f": extraFixa ? "var(--cz-ext)" : "0px",
-    "--cz-tot-f": totalFixo ? "var(--cz-tot)" : "0px",
+  // ARRASTAR (edição): o nome da coluna é a alça — mouse ou toque (pointer capture). A coluna segue o cursor no MESMO ponto
+  // em que foi pega; o destino = antes da 1ª coluna (sem a arrastada) cujo meio fica à direita do cursor; a tabela rola
+  // sozinha perto das bordas. Um toque SEM arrastar ordena.
+  const iniciarArrasto = (e: ReactPointerEvent<HTMLButtonElement>, chave: string) => {
+    if (!edicao || e.button > 0) return;
+    const el = e.currentTarget;
+    const th = el.closest("th");
+    const rolo = rolagem.current;
+    if (!th || !rolo) return;
+    el.setPointerCapture(e.pointerId);
+    const caixa = th.getBoundingClientRect();
+    const pega = { dx: e.clientX - caixa.left, dy: e.clientY - caixa.top, largura: caixa.width };
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let ativo = false;
+    let ultimo = { x: x0, y: y0 };
+    let destino = 0;
+    let vel = 0;
+    let quadro = 0;
+    arrastou.current = false;
+    const calcular = () => {
+      const lista = [...(ref.current?.querySelectorAll<HTMLElement>("thead th[data-col]") ?? [])].filter((c) => c.dataset.col !== chave);
+      const i = lista.findIndex((c) => {
+        const r = c.getBoundingClientRect();
+        return ultimo.x < r.left + r.width / 2;
+      });
+      destino = i < 0 ? lista.length : i;
+      setArrasto({ chave, x: ultimo.x, y: ultimo.y, ...pega, destino });
+    };
+    const rolar = () => {
+      if (vel) {
+        rolo.scrollLeft += vel;
+        calcular();
+      }
+      quadro = requestAnimationFrame(rolar);
+    };
+    const corpo = document.body.style;
+    const mover = (ev: PointerEvent) => {
+      ultimo = { x: ev.clientX, y: ev.clientY };
+      if (!ativo) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+        ativo = true;
+        arrastou.current = true;
+        corpo.cursor = "grabbing";
+        corpo.userSelect = "none";
+        quadro = requestAnimationFrame(rolar);
+      }
+      const r = rolo.getBoundingClientRect();
+      vel = ev.clientX < r.left + 56 ? -14 : ev.clientX > r.right - 56 ? 14 : 0;
+      calcular();
+    };
+    const fim = (ev: PointerEvent) => {
+      cancelAnimationFrame(quadro);
+      el.removeEventListener("pointermove", mover);
+      el.removeEventListener("pointerup", fim);
+      el.removeEventListener("pointercancel", fim);
+      corpo.cursor = "";
+      corpo.userSelect = "";
+      setArrasto(null);
+      if (ativo && ev.type === "pointerup") {
+        const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, chave, destino);
+        edicao.onOrdem(r.fixadas, r.livres);
+      }
+    };
+    el.addEventListener("pointermove", mover);
+    el.addEventListener("pointerup", fim);
+    el.addEventListener("pointercancel", fim);
+  };
+  const congelar = (k: string) => {
+    if (!edicao) return;
+    const { fixadas: f, livres: l } = ordemAtual;
+    if (f.includes(k)) edicao.onOrdem(f.filter((x) => x !== k), [k, ...l]);
+    else edicao.onOrdem([...f, k], l.filter((x) => x !== k));
   };
 
-  /** O cabeçalho de uma coluna: tocar ORDENA; na edição, as ações DIRETAS (congelar/ocultar), o nome ARRASTÁVEL (colunas de
-   * valores) e a borda de largura. */
-  const cabecalho = (o: {
-    chave: string;
-    rotulo: string;
-    por: OrdemCruzamento["por"];
-    alinhar: "left" | "right";
-    fixa?: boolean;
-    /** Congelar só vale no desktop (a Sigla e o Total rolam no celular). */
-    fixarSoDesktop?: boolean;
-    acoes?: boolean;
-    /** Posição na ordem exibida (colunas de valores) — arrastável. */
-    posicao?: number;
-  }) => {
-    const direita = o.alinhar === "right";
-    const arrastavel = edicao != null && o.posicao != null;
-    const rotulo = (
+  const cab = `sticky top-0 border-b border-border px-3 py-2 align-middle text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
+  const botaoCab = "flex w-full items-center gap-1 rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  const direita = (c: Coluna) => c.tipo === "valor" || c.tipo === "total";
+
+  /** O cabeçalho de uma coluna: tocar ORDENA; na edição, as ações diretas (congelar/ocultar), o nome ARRASTÁVEL e a borda de
+   * largura. `p` = posição na ordem exibida. */
+  const cabecalho = (c: Coluna, p: number, congelada: boolean) => {
+    const dir = direita(c);
+    const por = porDe(c);
+    const nome = (
       <button
         type="button"
-        className={`${botaoCab} ${direita ? "justify-end" : ""} ${arrastavel ? "cursor-grab touch-none select-none active:cursor-grabbing" : ""}`}
-        title={arrastavel ? `${o.rotulo} — arraste para mover (Alt+←/→)` : o.rotulo}
-        onPointerDown={arrastavel ? (e) => iniciarArrasto(e, o.chave, o.rotulo) : undefined}
+        className={`${botaoCab} ${dir ? "justify-end" : ""} ${edicao ? "cursor-grab touch-none select-none" : ""}`}
+        title={edicao ? `${c.rotulo} — arraste para mover (Alt+←/→)` : c.rotulo}
+        onPointerDown={edicao ? (e) => iniciarArrasto(e, c.chave) : undefined}
         onClick={() => {
           if (arrastou.current) {
             arrastou.current = false;
             return;
           }
-          onOrdenar(o.por);
+          onOrdenar(por);
         }}
         onKeyDown={
-          arrastavel
+          edicao
             ? (e) => {
                 if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
                 e.preventDefault();
-                const p = o.posicao as number;
-                edicao.onSoltar(o.chave, e.key === "ArrowLeft" ? Math.max(0, p - 1) : p + 1);
+                const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, c.chave, e.key === "ArrowLeft" ? Math.max(0, p - 1) : p + 1);
+                edicao.onOrdem(r.fixadas, r.livres);
               }
             : undefined
         }
       >
-        {arrastavel && <IconGrip className="h-3.5 w-3.5 shrink-0 text-faint" aria-hidden />}
-        {direita && seta(o.por)}
-        <span className={direita ? "line-clamp-2 break-words text-right" : "truncate"}>{o.rotulo}</span>
-        {!direita && seta(o.por)}
+        {edicao && <IconGrip className="h-3.5 w-3.5 shrink-0 text-faint" aria-hidden />}
+        {dir && seta(por)}
+        <span className={dir ? "line-clamp-2 break-words text-right" : "truncate"}>{c.rotulo}</span>
+        {!dir && seta(por)}
       </button>
     );
-    if (!edicao) return rotulo;
-    const oculta = fora.has(o.chave);
+    if (!edicao) return nome;
+    const oculta = fora.has(c.chave);
     return (
       <>
-        {o.acoes && (
-          <div className={`mb-1 flex items-center gap-0.5 ${direita ? "justify-end" : ""}`}>
-            <AcaoColuna
-              rotulo={o.fixa ? `Descongelar ${o.rotulo}` : `Congelar ${o.rotulo}`}
-              ligada={!!o.fixa}
-              icone={<IconFixar className="h-3.5 w-3.5" />}
-              onClick={() => edicao.onFixar(o.chave)}
-              soDesktop={o.fixarSoDesktop}
-            />
-            <AcaoColuna
-              rotulo={oculta ? `Mostrar ${o.rotulo}` : `Ocultar ${o.rotulo}`}
-              ligada={oculta}
-              icone={<IconEyeOff className="h-3.5 w-3.5" />}
-              onClick={() => edicao.onOcultar(o.chave)}
-            />
-          </div>
-        )}
-        {rotulo}
-        <AlcaLargura rotulo={o.rotulo} largura={larguras[o.chave]} onLargura={(px) => edicao.onLargura(o.chave, px)} />
+        <div className={`mb-1 flex items-center gap-0.5 ${dir ? "justify-end" : ""}`}>
+          <AcaoColuna
+            rotulo={congelada ? `Descongelar ${c.rotulo}` : `Congelar ${c.rotulo}`}
+            ligada={congelada}
+            icone={<IconFixar className="h-3.5 w-3.5" />}
+            onClick={() => congelar(c.chave)}
+          />
+          <AcaoColuna
+            rotulo={c.tipo === "rotulo" ? "A coluna das linhas não se oculta" : oculta ? `Mostrar ${c.rotulo}` : `Ocultar ${c.rotulo}`}
+            ligada={oculta}
+            icone={<IconEyeOff className="h-3.5 w-3.5" />}
+            onClick={() => edicao.onOcultar(c.chave)}
+            disabled={c.tipo === "rotulo"}
+          />
+        </div>
+        {nome}
+        <AlcaLargura rotulo={c.rotulo} largura={larguras[c.chave]} onLargura={(px) => edicao.onLargura(c.chave, px)} />
       </>
     );
   };
 
+  /** Classes/estilo comuns de uma célula da coluna na posição p (congelada, divisa, a SOMBRA do destino no arrasto). */
+  const posicao = (c: Coluna, p: number) => {
+    const fixa = p < nFix;
+    const sombra = arrasto?.chave === c.chave;
+    return {
+      fixa,
+      classe: `${fixa ? "sticky" : ""} ${fixa && p === nFix - 1 ? DIVISA : ""} ${sombra ? "!bg-accent/10 !text-transparent [&_*]:!text-transparent" : ""}`,
+      estilo: { ...larguraVar(w(c)), ...(fixa ? esquerda(p) : {}) },
+      esmaecida: fora.has(c.chave) ? "opacity-40" : "",
+    };
+  };
+
+  /** A célula de uma linha do corpo, por tipo de coluna. */
+  const celula = (c: Coluna, p: number, l: LinhaTabelaCruzada) => {
+    const { fixa, classe, estilo, esmaecida } = posicao(c, p);
+    const base = `${CEL} ${classe} ${fixa ? "z-10 bg-surface" : ""} group-hover/linha:bg-surface-2`;
+    if (c.tipo === "rotulo")
+      return (
+        <th
+          key={c.chave}
+          scope="row"
+          data-l={l.chave}
+          tabIndex={onAbrir ? 0 : undefined}
+          className={`${base} bg-surface text-left font-normal text-text ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
+          style={estilo}
+          title={l.rotulo}
+        >
+          <span className="block truncate">{l.rotulo}</span>
+        </th>
+      );
+    if (c.tipo === "extra")
+      return (
+        <td key={c.chave} className={`${base} text-left text-text-2`} style={estilo} title={l.extra}>
+          <span className={`block truncate ${esmaecida}`}>{l.extra || <span className="text-faint">–</span>}</span>
+        </td>
+      );
+    const v = c.tipo === "total" ? l.total : l.valores[c.j];
+    const zero = zerado(v);
+    const dataC = c.tipo === "valor" ? c.chave : undefined;
+    return (
+      <td
+        key={c.chave}
+        data-l={l.chave}
+        data-c={dataC}
+        tabIndex={onAbrir && !zero ? 0 : undefined}
+        className={`${base} whitespace-nowrap text-right tabular-nums ${c.tipo === "total" ? "font-semibold text-text" : zero ? "text-faint" : "text-text-2"} ${
+          onAbrir && !zero ? "cursor-pointer hover:text-accent" : ""
+        } ${ehAtiva(l.chave, dataC ?? null) ? anelAtivo : ""}`}
+        style={{ ...estilo, ...(c.tipo === "valor" && !fixa ? fundo(v) : {}) }}
+      >
+        <span className={esmaecida}>{texto(v, { linha: l.total, coluna: c.tipo === "total" ? total : c.total })}</span>
+      </td>
+    );
+  };
+
+  /** A célula da linha TOTAL (rodapé fixo), por tipo de coluna. */
+  const celulaTotal = (c: Coluna, p: number) => {
+    const { fixa, classe, estilo, esmaecida } = posicao(c, p);
+    const base = `${CEL} ${classe} sticky bottom-0 border-t border-border bg-surface-2 ${fixa ? "z-30" : "z-20"}`;
+    if (c.tipo === "extra") return <td key={c.chave} className={base} style={estilo} />;
+    const geral = c.tipo !== "valor"; // o rótulo e o Total do rodapé = o total geral
+    return (
+      <td
+        key={c.chave}
+        data-l={geral ? "" : undefined}
+        data-c={geral ? "" : c.chave}
+        tabIndex={onAbrir ? 0 : undefined}
+        className={`${base} whitespace-nowrap tabular-nums ${c.tipo === "rotulo" ? "text-left" : "text-right"} ${onAbrir ? "cursor-pointer hover:text-accent" : ""} ${
+          ehAtiva(null, geral ? null : c.chave) ? anelAtivo : ""
+        }`}
+        style={estilo}
+      >
+        <span className={esmaecida}>{c.tipo === "rotulo" ? "Total" : texto(c.total, { linha: total, coluna: c.tipo === "total" ? total : c.total })}</span>
+      </td>
+    );
+  };
+
+  const presa = arrasto ? (porChave.get(arrasto.chave) as Coluna) : null;
+
   return (
     <div
       ref={ref}
-      className={`${LARGURAS} [--cz-base:0px] lg:[--cz-base:calc(var(--cz-ext-f)_+_var(--cz-tot-f))] flex flex-col overflow-clip rounded-card border bg-surface ${
-        editando ? "border-accent/50" : "border-border"
-      }`}
-      style={estiloRaiz}
+      className={`${LARGURAS} flex flex-col overflow-clip rounded-card border bg-surface ${editando ? "border-accent/50" : "border-border"}`}
+      style={{
+        ...(altura != null ? { height: altura } : {}),
+        ...Object.fromEntries(
+          [...porChave.values()].filter((c) => c.tipo !== "valor" && larguras[c.chave]).map((c) => [VAR_LARGURA[c.tipo], `${larguras[c.chave]}px`]),
+        ),
+      }}
       suppressHydrationWarning
     >
-      {linhas.length === 0 || ordemCols.todas.length === 0 ? (
+      {linhas.length === 0 || colunas.length === 0 ? (
         <p className="grid flex-1 place-items-center px-4 py-12 text-center text-[13px] text-faint">{vazio}</p>
       ) : (
         <div ref={rolagem} className="max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain lg:max-h-none">
           <table className="w-max border-separate border-spacing-0 text-[13px]">
             <thead>
               <tr>
-                <th scope="col" aria-sort={ariaSort("rotulo")} className={`${cab} left-0 z-30 text-left ${DIVISA}`} style={larguraVar("var(--cz-rot)")}>
-                  {cabecalho({ chave: COL_ROTULO, rotulo: rotuloLinhas, por: "rotulo", alinhar: "left" })}
-                </th>
-                {comExtra && (
-                  <th
-                    scope="col"
-                    aria-sort={ariaSort("extra")}
-                    className={`${cab} text-left ${extraFixa ? "lg:left-[var(--cz-rot)] lg:z-30" : ""} ${divisaExtra}`}
-                    style={larguraVar("var(--cz-ext)")}
-                  >
-                    {cabecalho({ chave: COL_EXTRA, rotulo: rotuloExtra, por: "extra", alinhar: "left", fixa: extraFixa, fixarSoDesktop: true, acoes: true })}
-                  </th>
-                )}
-                {comTotal && (
-                  <th
-                    scope="col"
-                    aria-sort={ariaSort("total")}
-                    className={`${cab} text-right ${totalFixo ? "lg:left-[calc(var(--cz-rot)_+_var(--cz-ext-f))] lg:z-30" : ""} ${divisaTotal}`}
-                    style={larguraVar("var(--cz-tot)")}
-                  >
-                    {cabecalho({ chave: COL_TOTAL, rotulo: "Total", por: "total", alinhar: "right", fixa: totalFixo, fixarSoDesktop: true, acoes: true })}
-                  </th>
-                )}
-                {ordemCols.todas.map((j, p) => {
-                  const c = colunas[j];
-                  const fixa = p < nFix;
+                {exibidas.map((c, p) => {
+                  const { fixa, classe, estilo } = posicao(c, p);
                   return (
                     <th
                       key={c.chave}
                       scope="col"
                       data-col={c.chave}
-                      aria-sort={ariaSort({ coluna: c.chave })}
-                      className={`${cab} text-right ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : ""} ${arrasto?.chave === c.chave ? "opacity-40" : ""} ${marcaDestino(c.chave)}`}
-                      style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : {}) }}
+                      aria-sort={ariaSort(porDe(c))}
+                      className={`${cab} ${classe} ${fixa ? "z-30" : "z-20"} ${direita(c) ? "text-right" : "text-left"}`}
+                      style={estilo}
                     >
-                      {cabecalho({ chave: c.chave, rotulo: c.rotulo, por: { coluna: c.chave }, alinhar: "right", fixa: p < ordemCols.fix.length, acoes: true, posicao: p })}
+                      {cabecalho(c, p, p < nCongeladas)}
                     </th>
                   );
                 })}
@@ -501,102 +566,12 @@ export function TabelaCruzada({
             <tbody onClick={alvoCelula} onKeyDown={teclado}>
               {visiveis.map((l) => (
                 <tr key={l.chave} className="group/linha">
-                  <th
-                    scope="row"
-                    data-l={l.chave}
-                    tabIndex={onAbrir ? 0 : undefined}
-                    className={`${CEL} sticky left-0 z-10 bg-surface text-left font-normal text-text group-hover/linha:bg-surface-2 ${DIVISA} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
-                    style={larguraVar("var(--cz-rot)")}
-                    title={l.rotulo}
-                  >
-                    <span className="block truncate">{l.rotulo}</span>
-                  </th>
-                  {comExtra && (
-                    <td
-                      className={`${CEL} bg-surface text-left text-text-2 group-hover/linha:bg-surface-2 ${extraFixa ? "lg:sticky lg:left-[var(--cz-rot)] lg:z-10" : ""} ${divisaExtra}`}
-                      style={larguraVar("var(--cz-ext)")}
-                      title={l.extra}
-                    >
-                      <span className={`block truncate ${esmaecida(COL_EXTRA)}`}>{l.extra || <span className="text-faint">–</span>}</span>
-                    </td>
-                  )}
-                  {comTotal && (
-                    <td
-                      data-l={l.chave}
-                      tabIndex={onAbrir ? 0 : undefined}
-                      className={`${CEL} bg-surface text-right font-semibold tabular-nums text-text group-hover/linha:bg-surface-2 ${totalFixo ? "lg:sticky lg:left-[calc(var(--cz-rot)_+_var(--cz-ext-f))] lg:z-10" : ""} ${divisaTotal} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
-                      style={larguraVar("var(--cz-tot)")}
-                    >
-                      <span className={esmaecida(COL_TOTAL)}>{texto(l.total, { linha: l.total, coluna: total })}</span>
-                    </td>
-                  )}
-                  {ordemCols.todas.map((j, p) => {
-                    const c = colunas[j];
-                    const v = l.valores[j];
-                    const fixa = p < nFix;
-                    const zero = zerado(v);
-                    return (
-                      <td
-                        key={c.chave}
-                        data-l={l.chave}
-                        data-c={c.chave}
-                        tabIndex={onAbrir && !zero ? 0 : undefined}
-                        className={`${CEL} whitespace-nowrap text-right tabular-nums ${zero ? "text-faint" : "text-text-2"} ${
-                          fixa ? `sticky z-10 bg-surface group-hover/linha:bg-surface-2 ${p === nFix - 1 ? DIVISA : ""}` : "group-hover/linha:bg-surface-2"
-                        } ${onAbrir && !zero ? "cursor-pointer hover:text-accent" : ""} ${ehAtiva(l.chave, c.chave) ? anelAtivo : ""}`}
-                        style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : fundo(v)) }}
-                      >
-                        <span className={esmaecida(c.chave)}>{texto(v, { linha: l.total, coluna: c.total })}</span>
-                      </td>
-                    );
-                  })}
+                  {exibidas.map((c, p) => celula(c, p, l))}
                 </tr>
               ))}
             </tbody>
             <tfoot onClick={alvoCelula} onKeyDown={teclado}>
-              <tr className="font-semibold text-text">
-                <th
-                  scope="row"
-                  data-l=""
-                  data-c=""
-                  tabIndex={onAbrir ? 0 : undefined}
-                  className={`${CEL} sticky bottom-0 left-0 z-30 border-t border-border bg-surface-2 text-left ${DIVISA} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(null, null) ? anelAtivo : ""}`}
-                  style={larguraVar("var(--cz-rot)")}
-                >
-                  Total
-                </th>
-                {comExtra && (
-                  <td
-                    className={`${CEL} sticky bottom-0 z-20 border-t border-border bg-surface-2 ${extraFixa ? "lg:left-[var(--cz-rot)] lg:z-30" : ""} ${divisaExtra}`}
-                    style={larguraVar("var(--cz-ext)")}
-                  />
-                )}
-                {comTotal && (
-                  <td
-                    className={`${CEL} sticky bottom-0 z-20 border-t border-border bg-surface-2 text-right tabular-nums ${totalFixo ? "lg:left-[calc(var(--cz-rot)_+_var(--cz-ext-f))] lg:z-30" : ""} ${divisaTotal}`}
-                    style={larguraVar("var(--cz-tot)")}
-                  >
-                    <span className={esmaecida(COL_TOTAL)}>{texto(total, { linha: total, coluna: total })}</span>
-                  </td>
-                )}
-                {ordemCols.todas.map((j, p) => {
-                  const c = colunas[j];
-                  const fixa = p < nFix;
-                  return (
-                    <td
-                      key={c.chave}
-                      data-c={c.chave}
-                      tabIndex={onAbrir ? 0 : undefined}
-                      className={`${CEL} sticky bottom-0 whitespace-nowrap border-t border-border bg-surface-2 text-right tabular-nums ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : "z-20"} ${
-                        onAbrir ? "cursor-pointer hover:text-accent" : ""
-                      } ${ehAtiva(null, c.chave) ? anelAtivo : ""}`}
-                      style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : {}) }}
-                    >
-                      <span className={esmaecida(c.chave)}>{texto(c.total, { linha: total, coluna: c.total })}</span>
-                    </td>
-                  );
-                })}
-              </tr>
+              <tr className="font-semibold text-text">{exibidas.map((c, p) => celulaTotal(c, p))}</tr>
             </tfoot>
           </table>
         </div>
@@ -627,15 +602,28 @@ export function TabelaCruzada({
         </div>
       </div>
       <AlturaNoHtml />
+      {/* A coluna PRESA ao cursor (no mesmo ponto em que foi pega): o nome + os primeiros valores. */}
       {arrasto &&
+        presa &&
         createPortal(
           <div
             aria-hidden
-            className="pointer-events-none fixed z-[300] flex max-w-60 items-center gap-1.5 rounded-control border border-accent/50 bg-surface px-2.5 py-1.5 text-[12px] font-medium text-text shadow-soft"
-            style={{ left: arrasto.x + 12, top: arrasto.y + 12 }}
+            className="pointer-events-none fixed z-[300] -rotate-1 overflow-hidden rounded-control border border-accent/60 bg-surface text-[13px] shadow-soft"
+            style={{ left: arrasto.x - arrasto.dx, top: arrasto.y - arrasto.dy, width: arrasto.largura }}
           >
-            <IconGrip className="h-3.5 w-3.5 shrink-0 text-accent" />
-            <span className="truncate">{arrasto.rotulo}</span>
+            <div className="flex items-center gap-1 border-b border-border bg-surface-2 px-3 py-2 text-[12px] font-medium text-text">
+              <IconGrip className="h-3.5 w-3.5 shrink-0 text-accent" />
+              <span className="truncate">{presa.rotulo}</span>
+            </div>
+            {visiveis.slice(0, 6).map((l) => (
+              <div key={l.chave} className={`truncate border-b border-border/60 px-3 py-1.5 tabular-nums text-text-2 ${direita(presa) ? "text-right" : ""}`}>
+                {presa.tipo === "rotulo"
+                  ? l.rotulo
+                  : presa.tipo === "extra"
+                    ? l.extra || "–"
+                    : texto(presa.tipo === "total" ? l.total : l.valores[presa.j], { linha: l.total, coluna: presa.total })}
+              </div>
+            ))}
           </div>,
           document.body,
         )}

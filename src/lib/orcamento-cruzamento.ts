@@ -180,61 +180,59 @@ export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento, extraDe?: (
   return [...c.linhas].sort((a, b) => sinal * (chave(a) - chave(b)) || colator.compare(a.rotulo, b.rotulo));
 }
 
-/** Ordem das COLUNAS: pelo rótulo (A–Z — o padrão) ou MANUAL (a lista que o usuário montou ARRASTANDO as colunas; as que
- * não estão nela vão ao fim, A–Z). */
-export type OrdemColunas = "rotulo" | "manual";
-
-/** Reordena as colunas e tira as OCULTAS (os `valores` das linhas acompanham; os totais seguem os do cruzamento). */
-export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: string[] = [], manual: string[] = []): Cruzamento {
-  const fora = new Set(ocultas);
-  const idx = c.colunas.map((_, j) => j).filter((j) => !fora.has(c.colunas[j].chave));
-  const pos = new Map(manual.map((k, i) => [k, i]));
-  const naLista = (j: number) => pos.get(c.colunas[j].chave) ?? Number.POSITIVE_INFINITY;
-  const cmp: Record<OrdemColunas, (a: number, b: number) => number> = {
-    manual: (a, b) => naLista(a) - naLista(b) || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
-    rotulo: (a, b) => colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
-  };
-  idx.sort(cmp[ordem] ?? cmp.rotulo);
-  return { ...c, colunas: idx.map((j) => c.colunas[j]), linhas: c.linhas.map((l) => ({ ...l, valores: idx.map((j) => l.valores[j]) })) };
-}
-
-/** Chaves especiais das colunas FIXAS da tabela (para larguras e ocultar). */
+/** Chaves das colunas ESTRUTURAIS da tabela — o rótulo das linhas, a extra (ex.: a sigla) e o total —, editáveis como as
+ * de valores (mover, congelar, ocultar, largura). */
 export const COL_ROTULO = "__rotulo";
 export const COL_EXTRA = "__extra";
 export const COL_TOTAL = "__total";
 export const LARGURA_MIN = 56;
 export const LARGURA_MAX = 640;
 
-/** Os AJUSTES da tabela que o usuário pode SALVAR: larguras (px por coluna), colunas fixadas (na ordem) e ocultas, a
- * ordem das linhas e a das colunas. */
+/** Os AJUSTES da tabela que o usuário pode SALVAR — para TODAS as colunas (inclusive `COL_*`): larguras (px), as
+ * CONGELADAS (na ordem), as OCULTAS (o rótulo nunca), a ordem MANUAL das livres, a ordem das linhas, calor e zerados. */
 export type LayoutCruzamento = {
+  v: 2;
   larguras: Record<string, number>;
-  /** Colunas de VALORES congeladas (na ordem). */
   fixadas: string[];
-  /** Colunas ocultas (inclusive `COL_EXTRA`/`COL_TOTAL`). */
   ocultas: string[];
-  /** Sigla/Total DESCONGELADAS (por padrão ficam congeladas no desktop). */
-  soltas: string[];
-  ordemLinhas: OrdemCruzamento;
-  ordemColunas: OrdemColunas;
-  /** A ordem MANUAL das colunas (vale com `ordemColunas: "manual"`). */
+  /** Ordem das colunas LIVRES montada arrastando; as que não estão nela seguem a ordem padrão. */
   ordemManual: string[];
+  ordemLinhas: OrdemCruzamento;
   calor: boolean;
   /** Ocultar linhas e colunas zeradas. */
   zerados: boolean;
 };
 
+/** O rótulo, a extra e o total nascem CONGELADOS (nessa ordem). */
+const FIXAS_PADRAO = [COL_ROTULO, COL_EXTRA, COL_TOTAL];
+
 export const LAYOUT_PADRAO: LayoutCruzamento = {
+  v: 2,
   larguras: {},
-  fixadas: [],
+  fixadas: FIXAS_PADRAO,
   ocultas: [],
-  soltas: [],
-  ordemLinhas: { por: "rotulo", desc: false },
-  ordemColunas: "rotulo",
   ordemManual: [],
+  ordemLinhas: { por: "rotulo", desc: false },
   calor: false,
   zerados: true,
 };
+
+/**
+ * A ORDEM EXIBIDA das colunas: as congeladas (na ordem delas) e as livres (pela ordem manual; as que não estão nela, na
+ * ordem PADRÃO — `padrao` = rótulo, extra, total e os valores A–Z). Só as chaves presentes em `padrao` entram.
+ */
+export function ordemDasColunas(padrao: string[], fixadas: string[], manual: string[]): { fixadas: string[]; livres: string[] } {
+  const presentes = new Set(padrao);
+  const fix = fixadas.filter((k) => presentes.has(k));
+  const congeladas = new Set(fix);
+  const pos = new Map(manual.map((k, i) => [k, i]));
+  const idx = new Map(padrao.map((k, i) => [k, i]));
+  const naLista = (k: string) => pos.get(k) ?? Number.POSITIVE_INFINITY;
+  const livres = padrao
+    .filter((k) => !congeladas.has(k))
+    .sort((a, b) => naLista(a) - naLista(b) || (idx.get(a) ?? 0) - (idx.get(b) ?? 0));
+  return { fixadas: fix, livres };
+}
 
 /**
  * SOLTA a coluna ARRASTADA na posição `destino` da ordem exibida (congeladas + livres, SEM a arrastada). Soltar entre as
@@ -250,15 +248,22 @@ export function soltarColuna(fixadas: string[], livres: string[], chave: string,
   return { fixadas: todas.slice(0, k), livres: todas.slice(k) };
 }
 
+/** As colunas de VALORES na ordem dada (as ausentes saem — ex.: as ocultas); os `valores` das linhas acompanham. */
+export function colunasNaOrdem(c: Cruzamento, chaves: string[]): Cruzamento {
+  const pos = new Map(c.colunas.map((x, j) => [x.chave, j]));
+  const idx = chaves.flatMap((k) => (pos.has(k) ? [pos.get(k) as number] : []));
+  return { ...c, colunas: idx.map((j) => c.colunas[j]), linhas: c.linhas.map((l) => ({ ...l, valores: idx.map((j) => l.valores[j]) })) };
+}
+
 /** A chave do layout salvo do Comparativo — um por PAR de colunas ligadas (as colunas mudam com o par). */
 export const chaveLayoutComparativo = (linha: DimensaoOrcamento, coluna: DimensaoOrcamento) => `orcamento-comparativo:${linha}:${coluna}`;
 
-const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "manual"];
 const listaChaves = (v: unknown) =>
   Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 300))].slice(0, 500) : [];
 
 /** Qualquer JSON → layout VÁLIDO e canônico (larguras no intervalo e em ordem de chave; sem repetição) — o salvo nunca
- * quebra a tabela, e dois layouts iguais têm o mesmo JSON (`layoutIgual`). */
+ * quebra a tabela, e dois layouts iguais têm o mesmo JSON (`layoutIgual`). O formato ANTERIOR (sem `v`: só os valores
+ * congeláveis, Sigla/Total "soltas", ordem manual só com `ordemColunas: "manual"`) é convertido. */
 export function coerceLayout(v: unknown): LayoutCruzamento {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const larguras: Record<string, number> = {};
@@ -274,14 +279,18 @@ export function coerceLayout(v: unknown): LayoutCruzamento {
       : ol?.por && typeof ol.por === "object" && typeof (ol.por as { coluna?: unknown }).coluna === "string"
         ? { coluna: (ol.por as { coluna: string }).coluna }
         : "rotulo";
+  const atual = o.v === 2;
+  const soltas = atual ? [] : listaChaves(o.soltas);
+  const fixadas = atual
+    ? listaChaves(o.fixadas)
+    : [...new Set([...FIXAS_PADRAO.filter((k) => k === COL_ROTULO || !soltas.includes(k)), ...listaChaves(o.fixadas)])];
   return {
+    v: 2,
     larguras,
-    fixadas: listaChaves(o.fixadas),
-    ocultas: listaChaves(o.ocultas),
-    soltas: listaChaves(o.soltas).filter((k) => k === COL_EXTRA || k === COL_TOTAL),
+    fixadas,
+    ocultas: listaChaves(o.ocultas).filter((k) => k !== COL_ROTULO),
+    ordemManual: atual || o.ordemColunas === "manual" ? listaChaves(o.ordemManual) : [],
     ordemLinhas: { por, desc: ol?.desc === true },
-    ordemColunas: ORDENS_COLUNAS.includes(o.ordemColunas as OrdemColunas) ? (o.ordemColunas as OrdemColunas) : "rotulo",
-    ordemManual: listaChaves(o.ordemManual),
     calor: o.calor === true,
     zerados: o.zerados !== false,
   };

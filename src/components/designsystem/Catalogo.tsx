@@ -8,7 +8,8 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
-import { type ModoCruzamento, type OrdemCruzamento, soltarColuna } from "@/lib/orcamento-cruzamento";
+import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
+import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
 import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -703,12 +704,11 @@ function DashboardMesaDemo() {
 function TabelaCruzadaDemo() {
   const [editar, setEditar] = useState(false);
   const [larguras, setLarguras] = useState<Record<string, number>>({});
-  const [fixadas, setFixadas] = useState<string[]>(["dia"]);
+  const [fixadas, setFixadas] = useState<string[]>(LAYOUT_PADRAO.fixadas);
+  const [ordemManual, setOrdemManual] = useState<string[]>([]);
   const [ocultas, setOcultas] = useState<string[]>([]);
-  const [soltas, setSoltas] = useState<string[]>([]);
   const [ordem, setOrdem] = useState<OrdemCruzamento>({ por: "rotulo", desc: false });
   const [modo, setModo] = useState<ModoCruzamento>("valor");
-  const alterna = (set: (f: (l: string[]) => string[]) => void, k: string) => set((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
   const colunas = [
     { chave: "aux", rotulo: "AUXÍLIO FARDAMENTO", total: 495_000 },
     { chave: "dia", rotulo: "DIÁRIAS - PESSOAL CIVIL", total: 4_237_500 },
@@ -749,6 +749,14 @@ function TabelaCruzadaDemo() {
           ]}
         />
         <Checkbox checked={editar} onChange={(e) => setEditar(e.target.checked)} label="Editar a planilha" />
+        <Ajuda titulo="Ajuda (?)">
+          <TopicoAjuda icone={<Icons.IconGrip className="h-4 w-4" />} titulo="Arrastar">
+            Arraste o nome de qualquer coluna; a sombra mostra onde ela vai ficar.
+          </TopicoAjuda>
+          <TopicoAjuda icone={<Icons.IconFixar className="h-4 w-4" />} titulo="Congelar">
+            O alfinete prende a coluna à esquerda.
+          </TopicoAjuda>
+        </Ajuda>
       </div>
       <div className="h-80 [&>div]:!h-full">
         <TabelaCruzada
@@ -761,13 +769,11 @@ function TabelaCruzadaDemo() {
           modo={modo}
           calor
           fixadas={fixadas}
+          ordemManual={ordemManual}
           larguras={larguras}
           ocultas={ocultas}
-          soltas={soltas}
           ordem={ordem}
-          onOrdenar={(por, desc) =>
-            setOrdem((o) => ({ por, desc: desc ?? (JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra") }))
-          }
+          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra" }))}
           onAbrir={editar ? undefined : () => {}}
           edicao={
             editar
@@ -777,17 +783,11 @@ function TabelaCruzadaDemo() {
                       const { [k]: _, ...resto } = l;
                       return px == null ? resto : { ...resto, [k]: Math.max(56, Math.round(px)) };
                     }),
-                  onFixar: (k) => (k.startsWith("__") ? alterna(setSoltas, k) : alterna(setFixadas, k)),
-                  onOcultar: (k) => alterna(setOcultas, k),
-                  onSoltar: (k, destino) =>
-                    setFixadas((f) =>
-                      soltarColuna(
-                        f,
-                        colunas.map((c) => c.chave).filter((x) => !f.includes(x)),
-                        k,
-                        destino,
-                      ).fixadas,
-                    ),
+                  onOcultar: (k) => setOcultas((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k])),
+                  onOrdem: (f, l) => {
+                    setFixadas(f);
+                    setOrdemManual(l);
+                  },
                 }
               : undefined
           }
@@ -2003,7 +2003,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; no modo EDIÇÃO: arrastar o nome move/congela, alfinete congela, olho oculta — inclusive Sigla e Total — e a borda ajusta a largura) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
+      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">

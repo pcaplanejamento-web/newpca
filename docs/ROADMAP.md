@@ -1002,6 +1002,9 @@ largura e "Salvar" grava o layout (o antigo painel "Colunas" saiu).
 ✅ **Comparativo — edição direta na coluna:** sem menus — arrastar o nome move a coluna (fantasma, linha de destino, rolagem
 automática; soltar à esquerda da divisa congela), alfinete congela e olho oculta direto no cabeçalho (inclusive Sigla e
 Total), borda ajusta a largura; barra de edição numa linha.
+✅ **Comparativo — todas as colunas iguais:** Unidade, Sigla e Total se movem, congelam, ocultam e ajustam como as
+demais; arrastar leva a coluna presa ao cursor e mostra a SOMBRA do lugar onde vai ficar; textos centrados na altura;
+barra de edição enxuta e a explicação num botão de ajuda (?) — componente `Ajuda`.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
