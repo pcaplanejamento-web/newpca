@@ -26,6 +26,14 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Sobrescrever protocolo: "Gravado × novo" em massa na seleção — entregue
+✅ Na análise do protocolo (reenvio ou importação com DFDs já cadastrados), a barra da seleção ganhou o campo **"Gravado ×
+novo"**: marcar os DFDs (ou todos) e escolher **Manter os gravados** ou **Usar os novos** aplica a escolha em TODAS as
+diferenças de cada um de uma vez (o mesmo "todos" do painel Diferenças). O gravado que falta é lido sob demanda (uma leitura
+por DFD); o Aplicar espera a análise e a leitura das assinaturas; no reenvio, o DFD que ficou igual ao gravado não é
+regravado. Validado com o PDF real: reenvio (2 gravados → "Igual", voltar a "Usar os novos" restaura as diferenças,
+sobrescrever grava só os 13 novos) e importação com DFDs já cadastrados (Substitui/Move, histórico "mantido do gravado").
+
 ### Copiar o valor da célula + excluir DFDs na análise do protocolo + protocolo em PCA não é excluído — entregue
 ✅ **Ícone de copiar na célula** (`CelulaCopiavel`, DS) em TODA tabela nas colunas **nº do protocolo** (copia SEM o ano —
 "144756/2026" → "144756"), **Id do protocolo**, **nº do DFD**, **nº de planejamento**, **código** e **descrição do item**:

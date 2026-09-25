@@ -9,6 +9,7 @@ import {
   comparacaoEscolha,
   entradasEscolha,
   escolhasParaHistorico,
+  escolherTudo,
   estadoEscolha,
   listaCurta,
   MAX_ROTULOS_HISTORICO,
@@ -163,6 +164,26 @@ describe("sobrescrita com escolha — entradas e estado", () => {
     assert.equal(r.mantidos.length, entradas.length);
     const t = aplicarTodas(entradas, "novo", w, gravado, novo);
     assert.equal(resumoEscolhas(entradas, t, gravado, novo).novos, entradas.length);
+  });
+
+  it("escolherTudo (o 'todos' do painel e a escolha EM MASSA): gravado = o gravado; novo = o arquivo; dado igual nos dois fica", () => {
+    // Trabalho com escolhas misturadas + uma edição à mão num dado que NÃO difere (matrícula: nula nos dois).
+    let w = aplicarEscolha(porChave("objeto"), "gravado", marcarItensNovos(novo), gravado, novo);
+    w = { ...w, matricula: "123" };
+    const g = escolherTudo("gravado", w, gravado, novo);
+    assert.equal(
+      compararDfd({ ...gravado, matricula: "123", reparticaoId: null, anoPca: null }, { ...semMarcas(g), reparticaoId: null, anoPca: null }).situacao,
+      "igual",
+    );
+    assert.equal(g.matricula, "123"); // não é escolha do arquivo: a edição fica
+    assert.equal(resumoEscolhas(entradas, g, gravado, novo).mantidos.length, entradas.length);
+    const n = escolherTudo("novo", g, gravado, novo);
+    assert.equal(resumoEscolhas(entradas, n, gravado, novo).novos, entradas.length);
+    assert.deepEqual(semMarcas(n).itens, semMarcas(novo).itens);
+    assert.equal(n.valorTotal, novo.valorTotal);
+    // Sem diferenças (gravado = novo): nada muda.
+    const igual = marcarItensNovos(gravado);
+    assert.equal(escolherTudo("gravado", igual, gravado, igual), igual);
   });
 
   it("semMarcas tira a origem dos itens (não vai ao servidor); lista curta", () => {

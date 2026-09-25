@@ -7,6 +7,7 @@ import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import type { AcaoMassaItem, CampoMassaItem } from "@/lib/massa-itens";
 import { MESES, type Prioridade, parseNumberBR } from "@/lib/normalize";
 import { nomeExibicao } from "@/lib/pessoa";
+import type { Lado } from "@/lib/sobrescrita-dfd";
 import { type EtiquetaTarefa, type ListaTarefas, PRIORIDADES as PRIORIDADES_TAREFA, type Prioridade as PrioridadeTarefa, ROTULO_PRIORIDADE } from "@/lib/tarefas-core";
 import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
 import { Button } from "./Button";
@@ -88,10 +89,14 @@ const CAMPOS: { value: CampoMassa; label: string; chave: ChaveAvaliacao }[] = [
   { value: "fundamentacao", label: "Fund. legal", chave: "dfd.fundamentacao" },
 ];
 
+/** Os campos da barra: os de conteúdo/unidade + a escolha GRAVADO × NOVO da sobrescrita (quando o host a oferece). */
+type CampoBarra = CampoMassa | "versao";
+
 /**
  * Edição EM MASSA dos DFDs selecionados — a MESMA na análise do protocolo, no protocolo gravado e na
  * lista de DFDs da Mesa. Só oferece os campos que o ADM deixou editáveis (`editavelDe`). Emite uma
- * `AcaoMassa` (a aplicação é do host: rascunho na análise/protocolo; servidor na Mesa).
+ * `AcaoMassa` (a aplicação é do host: rascunho na análise/protocolo; servidor na Mesa). Na SOBRESCRITA (reenvio do
+ * protocolo ou importação com DFDs já gravados) o host oferece também `versao`: o campo "Gravado × novo".
  */
 export function BarraEdicaoMassa({
   reparticoes,
@@ -99,6 +104,7 @@ export function BarraEdicaoMassa({
   regras = regrasPadrao(),
   aplicando = false,
   onAplicar,
+  versao = null,
 }: {
   reparticoes: Rep[];
   /** Ano padrão da previsão (o do PCA do processo). */
@@ -106,9 +112,19 @@ export function BarraEdicaoMassa({
   regras?: RegrasAvaliacao;
   aplicando?: boolean;
   onAplicar: (acao: AcaoMassa) => void;
+  /** SOBRESCRITA: o campo "Gravado × novo" — nos selecionados que já têm DFD gravado (`alvos`), TODAS as diferenças vão
+   * para o lado escolhido (o "todos" do painel Diferenças, de uma vez). `aviso` = por que ainda não dá (o Aplicar fica
+   * desabilitado). */
+  versao?: { alvos: number; onAplicar: (lado: Lado) => void; aviso?: string | null } | null;
 }) {
-  const campos = CAMPOS.filter((c) => editavelDe(regras, c.chave));
-  const [campo, setCampo] = useState<CampoMassa>(campos[0]?.value ?? "reparticao");
+  const campos: { value: CampoBarra; label: string }[] = [
+    ...(versao ? [{ value: "versao" as const, label: "Gravado × novo" }] : []),
+    ...CAMPOS.filter((c) => editavelDe(regras, c.chave)).map(({ value, label }) => ({ value, label })),
+  ];
+  const [campoSel, setCampo] = useState<CampoBarra>(campos[0]?.value ?? "reparticao");
+  // O campo escolhido pode sair da lista (ex.: a seleção deixou de ter DFD gravado) — vale o 1º.
+  const campo = campos.some((c) => c.value === campoSel) ? campoSel : (campos[0]?.value ?? "reparticao");
+  const [lado, setLado] = useState<Lado | "">("");
   const [rep, setRep] = useState<number | null>(null);
   const [tipo, setTipo] = useState("");
   const [prio, setPrio] = useState<Prioridade | "">("");
@@ -120,7 +136,9 @@ export function BarraEdicaoMassa({
 
   const previsao = buildPrevisao(mes, ano, anual);
   const acao: AcaoMassa | null =
-    campo === "reparticao"
+    campo === "versao"
+      ? null
+      : campo === "reparticao"
       ? rep != null
         ? { campo, reparticaoId: rep }
         : null
@@ -140,16 +158,38 @@ export function BarraEdicaoMassa({
               ? { campo, valor: fund.trim() }
               : null;
 
+  const escolhendoVersao = campo === "versao" && !!versao;
   return (
     <Moldura
-      campos={campos.map(({ value, label }) => ({ value, label }))}
+      campos={campos}
       campo={campo}
       onCampo={setCampo}
-      pronto={!!acao}
+      pronto={escolhendoVersao ? lado !== "" && !versao.aviso : !!acao}
       aplicando={aplicando}
-      onAplicar={() => acao && onAplicar(acao)}
+      onAplicar={() => {
+        if (escolhendoVersao) {
+          if (lado) versao.onAplicar(lado);
+        } else if (acao) onAplicar(acao);
+      }}
       controle={
         <>
+          {escolhendoVersao && (
+            <>
+              <Segmented<Lado | "">
+                value={lado}
+                ariaLabel="Gravado ou novo"
+                options={[
+                  { value: "gravado", label: "Manter os gravados" },
+                  { value: "novo", label: "Usar os novos" },
+                ]}
+                onChange={setLado}
+              />
+              <Nota>
+                {versao.aviso ??
+                  `${versao.alvos === 1 ? "1 selecionado tem" : `${versao.alvos} selecionados têm`} DFD gravado — vale em todas as diferenças.`}
+              </Nota>
+            </>
+          )}
           {campo === "reparticao" && <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />}
           {campo === "tipo" && (
             <select

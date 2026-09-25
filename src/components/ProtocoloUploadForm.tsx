@@ -72,7 +72,16 @@ import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import { casarPorInteressado, preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
-import { comparacaoEscolha, entradasEscolha, escolhasParaHistorico, marcarItensNovos, resumoEscolhas, semMarcas } from "@/lib/sobrescrita-dfd";
+import {
+  comparacaoEscolha,
+  entradasEscolha,
+  escolhasParaHistorico,
+  escolherTudo,
+  type Lado,
+  marcarItensNovos,
+  resumoEscolhas,
+  semMarcas,
+} from "@/lib/sobrescrita-dfd";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { BarraSelecaoDfds } from "./BarraSelecao";
@@ -272,7 +281,7 @@ export function ProtocoloUploadForm({
   // SOBRESCRITA com ESCOLHA POR DADO: o DFD GRAVADO de mesmo nº (carregado ao abrir o DFD) e o NOVO como veio
   // do arquivo (a base estável das escolhas — o `parsed` é o DFD de TRABALHO, com as escolhas/edições).
   const [gravadosSrv, setGravadosSrv] = useState<Map<string, DfdDetalhe>>(new Map());
-  const gravadoPedidoRef = useRef(new Set<string>()); // nºs cujo gravado já foi pedido (não repete)
+  const gravadoPedidoRef = useRef(new Map<string, Promise<DfdDetalhe | null>>()); // leitura do gravado por nº (não repete)
   const arquivosRef = useRef(new Map<number, DfdParseado>());
   // REENVIO: DFDs do PDF que ESTE processo já teve e foram SOBRESCRITOS por outro protocolo (o rastro) —
   // mantidos lá por padrão (não puxa de volta a versão antiga); "Restaurar" traz para cá.
@@ -326,7 +335,7 @@ export function ProtocoloUploadForm({
     setRemovidosManter(new Set());
     setHerdados(new Map());
     setGravadosSrv(new Map());
-    gravadoPedidoRef.current = new Set();
+    gravadoPedidoRef.current = new Map();
     setFantasmas(new Set());
     setErroExistentes(null);
     arquivosRef.current = new Map();
@@ -761,6 +770,11 @@ export function ProtocoloUploadForm({
   function lerOcrAoVoltar(idxs: number[]) {
     for (const i of idxs) void mesclarOcrSePreciso(i, parsedRef.current.get(i) ?? null);
   }
+  /** Este DFD SOBRESCREVE um DFD gravado ACESSÍVEL (substitui/move — a escolha gravado × novo vale para ele)? */
+  const sobrescreve = (idx: number): boolean => {
+    const n = index?.dfds[idx]?.numero;
+    return n != null && ["substitui", "move"].includes(classificar(n));
+  };
   /** Este DFD substitui/move um já CADASTRADO (conflito com o banco)? */
   const conflitaComExistente = (idx: number): boolean => {
     const n = index?.dfds[idx]?.numero;
@@ -1080,6 +1094,16 @@ export function ProtocoloUploadForm({
     !bloqueadoPorRegra &&
     !existentesPendentes;
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
+  // GRAVADO × NOVO em massa: os selecionados que sobrescrevem um DFD gravado. Espera a análise e a leitura da assinatura
+  // (OCR) — a assinatura achatada é do ARQUIVO e chega depois: escolher antes misturaria as duas versões.
+  const selSobrescreve = linhasSel.filter((l) => sobrescreve(l.key));
+  const avisoVersao = existentesPendentes
+    ? "Conferindo os DFDs já cadastrados…"
+    : analisando
+      ? "Aguarde a análise terminar (a leitura dos DFDs e das assinaturas)."
+      : selSobrescreve.some((l) => ocrPendente.has(l.key) || carregandoIdx === l.key)
+        ? "Aguarde a leitura da assinatura (OCR) dos selecionados."
+        : null;
 
   // ---- DFD aberto ao lado.
   const dfdAberto = abertoIdx >= 0 ? (parsed.get(abertoIdx) ?? null) : null;
@@ -1102,29 +1126,46 @@ export function ProtocoloUploadForm({
       ]
     : [];
 
-  // SOBRESCRITA com ESCOLHA POR DADO: ao abrir um DFD que substitui/move um já cadastrado (acessível), carrega o
-  // GRAVADO completo (sob demanda — só o aberto; no reenvio ele já veio com o protocolo).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reage ao DFD aberto e à consulta dos já cadastrados (o resto é lido na hora).
-  useEffect(() => {
-    if (numeroAberto == null || existentesSrv == null) return;
-    const chave = chaveDfd(numeroAberto);
-    const ex = existentesSrv.get(chave);
-    if (gravadoDe(numeroAberto) || !ex?.acessivel || gravadoPedidoRef.current.has(chave)) return;
-    gravadoPedidoRef.current.add(chave);
+  /** O DFD GRAVADO completo de um nº já cadastrado (acessível) — a base da ESCOLHA POR DADO, carregada sob demanda (a do
+   * reenvio já veio com o protocolo). Uma leitura por nº: quem pede de novo espera a MESMA; falhou ⇒ `null` e a próxima
+   * tentativa lê de novo. Não é caso de sobrescrita (nº novo ou sem acesso) ⇒ `null`. */
+  function carregarGravado(numero: string): Promise<DfdDetalhe | null> {
+    const g = gravadoDe(numero);
+    if (g) return Promise.resolve(g);
+    const chave = chaveDfd(numero);
+    const ex = existentesSrv?.get(chave);
+    if (!ex?.acessivel) return Promise.resolve(null);
+    const pedido = gravadoPedidoRef.current.get(chave);
+    if (pedido) return pedido;
     const doc = docRef.current;
-    void (async () => {
+    const mapa = gravadoPedidoRef.current;
+    const ler = async (): Promise<DfdDetalhe | null> => {
       try {
         const r = await fetch(`/api/dfd/${ex.id}`);
         const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
         if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? `HTTP ${r.status}`);
-        const g = j.dfd;
-        if (docRef.current === doc) setGravadosSrv((m) => new Map(m).set(chave, g));
+        const lido = j.dfd;
+        if (docRef.current === doc) setGravadosSrv((m) => new Map(m).set(chave, lido));
+        return lido;
       } catch {
-        if (docRef.current !== doc) return;
-        gravadoPedidoRef.current.delete(chave); // tenta de novo ao reabrir
-        setErro(`Não foi possível carregar o DFD ${numeroAberto} já cadastrado para comparar — sem a comparação, ao protocolar vale o novo.`);
+        if (mapa.get(chave) === leitura) mapa.delete(chave); // tenta de novo depois
+        return null;
       }
-    })();
+    };
+    const leitura = ler();
+    mapa.set(chave, leitura);
+    return leitura;
+  }
+  // SOBRESCRITA com ESCOLHA POR DADO: ao abrir um DFD que substitui/move um já cadastrado (acessível), carrega o
+  // GRAVADO completo (sob demanda — só o aberto; no reenvio ele já veio com o protocolo).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage ao DFD aberto e à consulta dos já cadastrados (o resto é lido na hora).
+  useEffect(() => {
+    if (numeroAberto == null || existentesSrv == null || gravadoDe(numeroAberto) || !existentesSrv.get(chaveDfd(numeroAberto))?.acessivel) return;
+    const doc = docRef.current;
+    void carregarGravado(numeroAberto).then((g) => {
+      if (!g && docRef.current === doc)
+        setErro(`Não foi possível carregar o DFD ${numeroAberto} já cadastrado para comparar — sem a comparação, ao protocolar vale o novo.`);
+    });
   }, [numeroAberto, existentesSrv]);
   const gravadoAberto = numeroAberto != null ? gravadoBase(numeroAberto) : null;
   const gravadoAbertoP = useMemo(() => (gravadoAberto ? detalheParaParseado(gravadoAberto) : null), [gravadoAberto]);
@@ -1149,7 +1190,7 @@ export function ProtocoloUploadForm({
   });
   // Nº de diferenças do DFD aberto (o que muda ao sobrescrever) — o botão "Diferenças (N)".
   const difAberto = sob ? sob.final.total : reenvio && gravadoDe(numeroAberto) ? (comparacaoDe(abertoIdx)?.total ?? 0) : null;
-  const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && numeroAberto != null && ["substitui", "move"].includes(classificar(numeroAberto));
+  const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && sobrescreve(abertoIdx);
 
   // ---- DUPLICADOS do DFD aberto: a comparação lado a lado (aberto × cada duplicado, a régua do reenvio) e a
   // ESCOLHA de qual fica. O duplicado ainda não lido (além do teto da análise) é lido ao abrir a comparação.
@@ -1361,6 +1402,62 @@ export function ProtocoloUploadForm({
         return n;
       });
       if (falhas.length > 0) setErro(`Não foi possível aplicar em ${falhas.length} DFD(s) com leitura incompleta: ${falhas.join(", ")}.`);
+    } finally {
+      setSel(new Set());
+      setAplicandoMassa(false);
+    }
+  }
+
+  /** GRAVADO × NOVO EM MASSA (o campo "Gravado × novo" da seleção): em cada DFD selecionado que sobrescreve um DFD
+   * gravado, TODAS as diferenças vão para o lado escolhido — o "Manter todos os gravados"/"Usar todos os novos" do painel
+   * Diferenças, de uma vez. Não marca "editado" (escolher não é editar: no reenvio, o que ficou igual ao gravado não é
+   * regravado); o selecionado sem gravado (novo) fica como está. A assinatura achatada é do ARQUIVO: é lida antes. */
+  async function escolherLadoMassa(lado: Lado) {
+    const alvos = [...sel].map(Number).filter((i) => !descartados.has(i) && sobrescreve(i));
+    if (alvos.length === 0) return;
+    const semGravado = sel.size - alvos.length;
+    setAplicandoMassa(true);
+    setErro(null);
+    const doc = docRef.current;
+    const numeroDe = (i: number) => index?.dfds[i]?.numero ?? String(i);
+    try {
+      // O gravado que ainda não veio (importação) é carregado antes, 4 por vez — no reenvio ele já está na memória.
+      const gravados = new Map<number, DfdDetalhe | null>();
+      let prox = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(4, alvos.length) }, async () => {
+          while (prox < alvos.length) {
+            const i = alvos[prox++];
+            gravados.set(i, await carregarGravado(numeroDe(i)));
+          }
+        }),
+      );
+      const falhas: string[] = [];
+      let aplicados = 0;
+      for (const i of alvos) {
+        const d = await garantirParse(i).catch(() => null);
+        if (d) await mesclarOcrSePreciso(i, d);
+        if (docRef.current !== doc) return;
+        const g = gravados.get(i);
+        const arq = arquivosRef.current.get(i);
+        if (!d || !g || !arq) {
+          falhas.push(numeroDe(i));
+          continue;
+        }
+        const gP = detalheParaParseado(g);
+        setParsed((m) => {
+          const cur = m.get(i);
+          return cur ? new Map(m).set(i, escolherTudo(lado, cur, gP, arq)) : m;
+        });
+        aplicados++;
+      }
+      if (aplicados > 0)
+        toast.success(
+          `${lado === "gravado" ? "Mantidos os gravados" : "Usados os novos"} em ${num(aplicados)} DFD(s)` +
+            `${semGravado > 0 ? ` · ${num(semGravado)} sem DFD gravado ficaram como estão` : ""}.`,
+        );
+      if (falhas.length > 0)
+        setErro(`Não foi possível aplicar em ${falhas.length} DFD(s) — a leitura do DFD ou do gravado falhou: ${falhas.join(", ")}.`);
     } finally {
       setSel(new Set());
       setAplicandoMassa(false);
@@ -2000,7 +2097,18 @@ export function ProtocoloUploadForm({
                   </Button>
                 }
               >
-                <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={anoPca} regras={regras} aplicando={aplicandoMassa} onAplicar={aplicarMassa} />
+                <BarraEdicaoMassa
+                  reparticoes={reparticoes}
+                  anoPadrao={anoPca}
+                  regras={regras}
+                  aplicando={aplicandoMassa}
+                  onAplicar={aplicarMassa}
+                  versao={
+                    selSobrescreve.length > 0
+                      ? { alvos: selSobrescreve.length, onAplicar: (lado) => void escolherLadoMassa(lado), aviso: avisoVersao }
+                      : null
+                  }
+                />
               </BarraSelecaoDfds>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">

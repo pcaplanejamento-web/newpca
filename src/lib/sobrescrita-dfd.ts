@@ -235,6 +235,15 @@ export function aplicarTodas(entradas: EntradaEscolha[], lado: Lado, trabalho: D
   return itens.length === 0 ? demais : trocarItens(demais, itens.map((e) => ({ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) })));
 }
 
+/**
+ * TODAS as diferenças de um DFD para o `lado` — o "Manter todos os gravados"/"Usar todos os novos" do painel Diferenças,
+ * e a escolha EM MASSA dos DFDs selecionados (Gravado × novo). Edição à mão num dado que difere é sobreposta (é o pedido
+ * explícito); o que não é escolha do arquivo (a unidade, um dado igual nos dois — editado ou não) fica como está.
+ */
+export function escolherTudo(lado: Lado, trabalho: DfdParseado, gravado: DfdParseado, novo: DfdParseado): DfdParseado {
+  return aplicarTodas(entradasEscolha(comparacaoEscolha(gravado, novo)), lado, trabalho, gravado, novo);
+}
+
 /** O que foi MANTIDO do gravado e o que foi EDITADO à mão — vai ao histórico da sobrescrita. */
 export function resumoEscolhas(
   entradas: EntradaEscolha[],

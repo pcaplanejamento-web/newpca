@@ -232,8 +232,9 @@ export const LOGICAS: LogicaRef[] = [
       "DFD de mesmo número numa unidade sem acesso não pode ser sobrescrito (aparece como erro; mantenha o já cadastrado).",
       "Na protocolação, o DFD que substitui/move um cadastrado fica na unidade dele (salvo escolha); a escolha espera a leitura da assinatura por OCR.",
       "Enquanto a sobrescrita está em andamento, o banner do DFD fica só-leitura; fechar a conferência com escolhas feitas pede confirmação.",
+      "EM MASSA: na seleção da análise do protocolo (reenvio ou importação com DFDs já gravados), o campo 'Gravado × novo' aplica 'Manter os gravados' ou 'Usar os novos' em todas as diferenças dos DFDs selecionados de uma vez (marcar todos + Aplicar). Espera a análise e a leitura das assinaturas; no reenvio, o que ficou igual ao gravado não é regravado.",
     ],
-    fonte: "sobrescrita-dfd / useSobrescrita / POST /api/dfd",
+    fonte: "sobrescrita-dfd (escolherTudo) / useSobrescrita / BarraEdicaoMassa.versao / POST /api/dfd",
   },
   {
     id: "proto-rastro",

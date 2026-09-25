@@ -2804,6 +2804,8 @@ export function Catalogo() {
                 ]}
                 anoPadrao={2027}
                 onAplicar={(a) => toast(`Aplicar: ${a.campo}`)}
+                // Sobrescrita (reenvio/importação com DFDs já gravados): o campo "Gravado × novo".
+                versao={{ alvos: 2, onAplicar: (lado) => toast(lado === "gravado" ? "Manter os gravados (demo)" : "Usar os novos (demo)") }}
               />
             </BarraSelecaoDfds>
           ) : (

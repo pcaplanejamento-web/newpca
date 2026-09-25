@@ -943,7 +943,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`DfdUploadForm`** em modo `sobrescrever` (só o MESMO nº; lançador próprio; o DFD **continua no protocolo dele** — sem
   `protocoloId` o `upsertDfdCabecalho` mantém o atual); o **"Importar DFD"** da Mesa quando o nº já existe (acessível) vira a
   mesma sobrescrita; e a **protocolação** (`ProtocoloUploadForm`: ao abrir um DFD que substitui/move, o gravado carrega sob
-  demanda; no reenvio já veio). O avulso/banner herdam do gravado o que o arquivo não traz (`herdarTratamentos`, como o
+  demanda; no reenvio já veio). **EM MASSA — "Gravado × novo" na seleção:** na análise do protocolo (reenvio OU importação
+  com DFDs já gravados), a barra da seleção ganha o campo **"Gravado × novo"** (o 1º do `BarraEdicaoMassa`, prop `versao` —
+  só quando algum selecionado SOBRESCREVE um DFD gravado acessível: `sobrescreve` = Substitui/Move): **Manter os gravados |
+  Usar os novos** aplica o "todos" do painel Diferenças em CADA selecionado de uma vez (marcar todos + Aplicar —
+  `escolherTudo`, puro/testado; o gravado que falta é lido sob demanda por **`carregarGravado`** — UMA leitura por nº,
+  compartilhada com o DFD aberto, 4 por vez); não marca "editado" (escolher não é editar: no reenvio, o que ficou IGUAL ao
+  gravado não é regravado — "sem diferença"); o selecionado sem gravado (novo) fica como está; a nota diz quantos
+  selecionados têm DFD gravado; o Aplicar ESPERA a análise e a leitura por OCR dos selecionados (`avisoVersao` — a
+  assinatura achatada é do ARQUIVO: escolher antes misturaria as duas versões). O avulso/banner herdam do gravado o que o arquivo não traz (`herdarTratamentos`, como o
   reenvio). **Histórico:** `origem:"sobrescrita"` ("Sobrescrita do DFD", `ROTULO_ORIGEM`) + o diff gravado × novo + obs
   "Mantido do gravado (escolha): …"/"Editado antes de gravar: …" (`dfdMetaSchema.escolhas` = os 12 primeiros rótulos + as
   quantidades — `escolhasParaHistorico`, o envio nunca é recusado por um DFD com milhares de diferenças); na protocolação a
@@ -2026,7 +2034,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `AvisoFlutuante` ganhou `acoes`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
-  **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do
+  **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa; `versao` = o campo "Gravado × novo" da
+  sobrescrita, na análise do protocolo), **`DfdRodape`** (rodapé fixo do banner do
   DFD: estado + ações + mensagens + Fechar + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
   item / histórico), **`ProtocoloView`** (CORPO ÚNICO do banner do protocolo — análise e gravado), `CampoCadeado`
   (+ **`CadeadoBotao`**, o cadeado reusado por campos, itens e SEÇÕES do DFD). Hook `useConformidade` (conformidade do
