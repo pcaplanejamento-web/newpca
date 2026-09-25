@@ -1668,7 +1668,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   em `--motion-duration` — e só então a ordem é aplicada (sem movimento reduzido: direto). Robusto: ouvintes na JANELA (a
   prévia reordena os cabeçalhos no DOM e mover um nó derruba o pointer capture), a coluna presa anda direto no DOM
   (`translate3d`, sem re-render), a tabela só re-renderiza quando o DESTINO muda e, da pressão até soltar, NENHUMA seleção
-  de texto (`segurar()`: bloqueia o `selectstart`, limpa a seleção e põe o cursor no documento — também na largura).
+  de texto nem ARRASTO NATIVO do navegador (`segurar()`: bloqueia o `selectstart` e o `dragstart` — o arrasto nativo de uma
+  FOTO/texto cancelava o ponteiro: a coluna parava e a imagem do navegador seguia o mouse —, limpa a seleção e põe o cursor
+  no documento — também na largura). A coluna presa mostra as células COMO SÃO (fotos, selos) e a sombra do destino esconde
+  TODO o conteúdo (`[&>*]:invisible`), não só o texto.
   **EDIÇÕES SALVAS (migração `0041`, tabela `edicoes_tabela`: chave do par + nome + layout + dono + `publico`):** no RODAPÉ,
   o `SeletorEdicoes` — lápis · seletor "Edição" (Padrão do sistema · Minhas · Públicas com o autor) · **estrela** = usar a em
   uso como MINHA PADRÃO (a tabela abre nela; guardada em `preferencias_tabela` — migração `0040`, `usuario_id` + `chave`

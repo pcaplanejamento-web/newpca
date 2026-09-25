@@ -90,6 +90,8 @@ type OrdemAtual = { key: string | null; dir: "asc" | "desc" };
 const SEM_EDICOES: EdicaoTabela[] = [];
 const SEM_PADROES: Record<string, unknown> = {};
 const larguraFixa = (px: number): CSSProperties => ({ width: px, minWidth: px, maxWidth: px });
+/** O LUGAR onde a coluna arrastada vai ficar: só o fundo accent — TODO o conteúdo (texto, fotos, selos) some. */
+const SOMBRA = "!bg-accent/10 !text-transparent [&>*]:invisible";
 /** Divisa à direita da última coluna congelada. */
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
@@ -396,7 +398,7 @@ export function DataTable<R>({
     return {
       fixa,
       classe: `${fixa ? "sticky" : ""} ${fixa && p === nFix - 1 ? DIVISA : ""} ${w ? "overflow-hidden" : ""} ${
-        arrasto?.chave === k ? "!bg-accent/10 [&_*]:!text-transparent !text-transparent" : ""
+        arrasto?.chave === k ? SOMBRA : ""
       }`,
       estilo: { ...(w ? larguraFixa(w) : {}), ...(fixa ? { left: fixos[p] } : {}) } as CSSProperties,
     };
@@ -685,10 +687,7 @@ export function DataTable<R>({
           fantasma={fantasma}
           rotulo={columns[indice.get(arrasto.chave) as number]?.header ?? ""}
           direita={columns[indice.get(arrasto.chave) as number]?.align === "right"}
-          celulas={visiveis.slice(0, 6).map((r) => {
-            const c = columns[indice.get(arrasto.chave) as number];
-            return c?.value ? c.value(r) : c?.render?.(r);
-          })}
+          celulas={visiveis.slice(0, 6).map((r) => columns[indice.get(arrasto.chave) as number]?.render?.(r))}
         />
       )}
     </div>

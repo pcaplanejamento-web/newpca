@@ -300,7 +300,7 @@ export function TabelaCruzada({
     const sombra = arrasto?.chave === c.chave;
     return {
       fixa,
-      classe: `${fixa ? "sticky" : ""} ${fixa && p === nFix - 1 ? DIVISA : ""} ${sombra ? "!bg-accent/10 !text-transparent [&_*]:!text-transparent" : ""}`,
+      classe: `${fixa ? "sticky" : ""} ${fixa && p === nFix - 1 ? DIVISA : ""} ${sombra ? "!bg-accent/10 !text-transparent [&>*]:invisible" : ""}`,
       estilo: { ...larguraVar(w(c)), ...(fixa ? esquerda(p) : {}) },
       esmaecida: fora.has(c.chave) ? "opacity-40" : "",
     };

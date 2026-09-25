@@ -1022,6 +1022,8 @@ na linha das abas e o Comparativo dentro da aba Orçamento, abaixo dos KPIs (PCA
 ✅ **Edições de tabela na Mesa e na Mesa do PCA:** Protocolos, DFDs, Itens e Consolidada com a mesma edição do Comparativo —
 arrastar, congelar, ocultar, ordenar e largura no cabeçalho — e edições salvas (colunas + ordenação + filtros), pessoais ou
 públicas, com a padrão de cada usuário. Peças compartilhadas (`EdicaoColunas`, `useEditorEdicoes`, `colunas-layout`).
+✅ **Arrasto de coluna com fotos:** a coluna presa leva as fotos junto e segue o mouse (o arrasto nativo do navegador fica
+bloqueado enquanto se segura); a sombra do destino não mostra mais as fotos.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

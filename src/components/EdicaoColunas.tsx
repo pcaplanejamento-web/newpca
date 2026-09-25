@@ -21,7 +21,9 @@ import { duracaoMotionMs } from "./Modal";
  */
 
 /** Enquanto o usuário SEGURA algo (arrastar uma coluna, ajustar a largura): nenhuma seleção de texto (bloqueia o
- * `selectstart` e limpa a que houver) e o cursor da ação no documento inteiro. Devolve a função que desfaz. */
+ * `selectstart` e limpa a que houver), nenhum arrasto NATIVO do navegador (`dragstart` de imagem/texto — ele cancelaria o
+ * ponteiro: a coluna presa parava e a "imagem" do navegador seguia o mouse) e o cursor da ação no documento inteiro.
+ * Devolve a função que desfaz. */
 function segurar(cursor: string): () => void {
   const corpo = document.body.style;
   const antes = { cursor: corpo.cursor, selecao: corpo.userSelect };
@@ -30,10 +32,12 @@ function segurar(cursor: string): () => void {
   corpo.userSelect = "none";
   window.getSelection()?.removeAllRanges();
   document.addEventListener("selectstart", bloquear);
+  document.addEventListener("dragstart", bloquear);
   return () => {
     corpo.cursor = antes.cursor;
     corpo.userSelect = antes.selecao;
     document.removeEventListener("selectstart", bloquear);
+    document.removeEventListener("dragstart", bloquear);
   };
 }
 
@@ -334,8 +338,8 @@ export function useArrastoColunas({
   return { arrasto, vista, fantasma, iniciar, mover, congelar };
 }
 
-/** A coluna PRESA ao cursor (no mesmo ponto em que foi pega): o nome + as primeiras células. LEVANTA ao pegar e POUSA ao
- * soltar. */
+/** A coluna PRESA ao cursor (no mesmo ponto em que foi pega): o nome + as primeiras células COMO SÃO (texto, fotos, selos).
+ * LEVANTA ao pegar e POUSA ao soltar. */
 export function ColunaPresa({
   arrasto,
   fantasma,
