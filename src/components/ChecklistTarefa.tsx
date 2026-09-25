@@ -6,11 +6,12 @@ import { progressoChecklist } from "@/lib/tarefas-core";
 import { Button } from "./Button";
 import { BarraSegmentada } from "./charts/Barras";
 import { Checkbox } from "./Field";
-import { IconArrowDown, IconArrowUp, IconCheck, IconPlus, IconTrash } from "./icons";
+import { IconArrowDown, IconArrowUp, IconCheck, IconPencil, IconPlus, IconTrash } from "./icons";
 
 /**
- * CHECKLIST de uma tarefa: a barra de progresso (feitos/total), um `Checkbox` por item (tocar marca/desmarca), renomear
- * tocando no texto, ↑/↓ e remover; "Adicionar item" no pé (Enter acrescenta e segue no campo). Só apresenta — quem usa
+ * CHECKLIST de uma tarefa: a barra de progresso (feitos/total), um `Checkbox` por item — tocar na caixa OU no texto
+ * marca/desmarca (o que se espera no toque) —, renomear pelo lápis, ↑/↓ (a partir de `sm`; no celular a linha fica para o
+ * texto) e remover; "Adicionar item" no pé (Enter acrescenta e segue no campo). Só apresenta — quem usa
  * grava (cada ação é imediata). `disabled` = só leitura.
  */
 export function ChecklistTarefa({
@@ -66,7 +67,7 @@ export function ChecklistTarefa({
       <ul className="divide-y divide-border rounded-card border border-border">
         {itens.map((i, idx) => (
           <li key={i.id} className="flex min-h-11 items-center gap-2 px-2 py-1">
-            <Checkbox checked={i.feito} disabled={disabled} onChange={() => onAlternar(i)} label="" aria-label={`Concluir: ${i.texto}`} />
+            <Checkbox alvo checked={i.feito} disabled={disabled} onChange={() => onAlternar(i)} label="" aria-label={`Concluir: ${i.texto}`} />
             {editando?.id === i.id ? (
               <input
                 // biome-ignore lint/a11y/noAutofocus: o campo abre pelo toque no texto — o foco vai para ele.
@@ -83,14 +84,15 @@ export function ChecklistTarefa({
                     setEditando(null);
                   }
                 }}
-                className="h-9 min-w-0 flex-1 rounded-control border border-accent bg-surface px-2 text-[13px] text-text outline-none ring-4 ring-accent/20"
+                className="h-11 min-w-0 flex-1 rounded-control border border-accent lg:h-9 bg-surface px-2 text-[13px] text-text outline-none ring-4 ring-accent/20"
               />
             ) : (
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => setEditando({ id: i.id, texto: i.texto })}
-                className={`min-w-0 flex-1 truncate py-2 text-left text-[13px] disabled:cursor-default ${i.feito ? "text-muted line-through decoration-faint" : "text-text"}`}
+                onClick={() => onAlternar(i)}
+                aria-pressed={i.feito}
+                className={`min-h-11 min-w-0 flex-1 truncate text-left lg:min-h-[var(--h-control-sm)] text-[13px] disabled:cursor-default ${i.feito ? "text-muted line-through decoration-faint" : "text-text"}`}
                 title={i.texto}
               >
                 {i.texto}
@@ -98,10 +100,12 @@ export function ChecklistTarefa({
             )}
             {!disabled && (
               <div className="flex shrink-0 gap-0.5">
-                <Button variant="ghost" size="xs" disabled={idx === 0} aria-label={`Mover ${i.texto} para cima`} icon={<IconArrowUp className="h-4 w-4" />} onClick={() => onMover(i, -1)} />
+                <Button variant="ghost" size="xs" aria-label={`Renomear ${i.texto}`} icon={<IconPencil className="h-4 w-4" />} onClick={() => setEditando({ id: i.id, texto: i.texto })} />
+                <Button variant="ghost" size="xs" className="max-sm:hidden" disabled={idx === 0} aria-label={`Mover ${i.texto} para cima`} icon={<IconArrowUp className="h-4 w-4" />} onClick={() => onMover(i, -1)} />
                 <Button
                   variant="ghost"
                   size="xs"
+                  className="max-sm:hidden"
                   disabled={idx === itens.length - 1}
                   aria-label={`Mover ${i.texto} para baixo`}
                   icon={<IconArrowDown className="h-4 w-4" />}
@@ -123,7 +127,7 @@ export function ChecklistTarefa({
               placeholder="Adicionar item"
               onChange={(e) => setNovo(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && adicionar()}
-              className="h-9 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-faint"
+              className="h-11 min-w-0 flex-1 bg-transparent lg:h-9 text-[13px] text-text outline-none placeholder:text-faint"
             />
             {novo.trim() && <Button size="xs" variant="ghost" loading={salvando} aria-label="Adicionar item" icon={<IconCheck className="h-4 w-4" />} onClick={adicionar} />}
           </li>

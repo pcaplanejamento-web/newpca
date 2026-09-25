@@ -97,7 +97,7 @@ function PainelNotificacoes({ onContagem, fechar }: { onContagem: (n: number) =>
       <div className="flex min-h-11 items-center justify-between gap-2 px-2 lg:min-h-9">
         <p className="text-sm font-semibold text-text">Notificações</p>
         {!!dados?.naoLidas && (
-          <button type="button" onClick={todas} className="min-h-11 rounded-control px-2 text-[12px] font-semibold text-accent hover:bg-surface-2 lg:min-h-8">
+          <button type="button" onClick={todas} className="min-h-11 rounded-control px-2 text-[12px] font-semibold text-accent hover:bg-surface-2 lg:min-h-[var(--h-control-sm)]">
             Marcar todas como lidas
           </button>
         )}

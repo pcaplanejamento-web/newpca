@@ -1889,6 +1889,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     fixa como "Nativa", liga/desliga, excluir, e o formulário Quando · Fazer · Com; até `MAX_AUTOMACOES`=20) e **Modelos**
     (`ModelosQuadro`). Rotas `POST /api/tarefas/quadros/[id]/automacoes` e `PATCH`/`DELETE /api/tarefas/automacoes/[id]`
     (editor).
+- **Usabilidade e toque (revisão):** CRIAR TAREFA é UM fluxo — o formulário completo (`TarefaDetalhe`, `AberturaTarefa`
+  "nova" com `titulo`/`prazo` já preenchidos), aberto de onde se está: Quadro = "+ Adicionar tarefa" da coluna (rápido pelo
+  título; **"Mais detalhes"** leva o título ao formulário naquela lista), Lista = "Adicionar tarefa" na barra (some com as
+  Arquivadas à vista), Calendário = o "+" do dia (grade) / do dia da agenda / do cabeçalho (prazo = o dia); sem botão no
+  Dashboard. Abas **Quadro · Lista · Calendário · Dashboard · Configuração** (curtos no celular: Agenda · Painel · Config.).
+  Filtros ativos por extenso em chips removíveis (`ChipsFiltrosTarefas`); Ativas | Arquivadas virou um `SeletorFiltro`;
+  "N arquivadas — ver na Lista" no Quadro. No TOQUE: o cartão tem a alça (44px, `any-pointer-coarse`) e o menu **⋯**
+  (Abrir · topo/fim da lista · Concluir · Mover para… · Arquivar — sem arrastar); o encaixe `snap-x` fica desligado durante
+  o arrasto (a rolagem automática para a coluna vizinha funciona); mouse/caneta arrastam o cartão inteiro; no celular, os
+  PONTOS das colunas acima do quadro (a atual marcada; tocar leva a ela). Detalhe: Prioridade em linha própria (não corta),
+  **Concluir/Reabrir** no rodapé (leva à lista de concluídas/1ª aberta pelo MESMO `PATCH` — automações e recorrência
+  disparam), nota ao trocar de Lista e, no celular, "Tarefa | Atividade" no próprio corpo (no desktop a Atividade segue ao
+  lado). Checklist: tocar no TEXTO marca/desmarca, renomear pelo lápis (`Checkbox alvo` = 44px). Calendário: grade a
+  partir do `lg`, agenda abaixo. Dashboard: KPIs `sm:grid-cols-3 xl:grid-cols-5`. Validado no harness em 360/390/768/1024/
+  1280/1920 (sem estouro horizontal) e com toque (CDP).
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
@@ -1951,7 +1966,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   controles do cabeçalho (PCA, unidade, grupo, notificações, `ThemeToggle`) e a LINHA das tabelas compactas. Numa tela
   estreita (360px) só o seletor de PCA encolhe (o rótulo trunca) — o menu e os ícones mantêm os 44px. Dentro da linha, os controles medem `--h-control-sm` − 6px no desktop (`Button size="xs"`,
   `SeletorCelula`) e 44px no celular.
-- **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; **`size="sm"`** = compacto p/ rodapés de
+- **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; o padrão `md` mede 44px no celular e
+  `--h-control` no desktop; SÓ ÍCONE (sem texto) = QUADRADO em qualquer tamanho; **`size="sm"`** = compacto p/ rodapés de
   tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
   desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4), `Segmented` (o trilho inteiro na altura padrão — anel
   INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
@@ -1961,7 +1977,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
   — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
-  **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown`,
+  **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única

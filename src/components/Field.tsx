@@ -139,7 +139,7 @@ export function SearchField({
           type="button"
           onClick={onClear}
           aria-label="Limpar busca"
-          className="shrink-0 rounded-chip p-1 text-muted transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-chip text-muted lg:mr-0 lg:h-auto lg:w-auto lg:p-1 transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <IconClose className="h-4 w-4" />
         </button>
@@ -153,15 +153,21 @@ export function Checkbox({
   label,
   checked,
   id,
+  alvo = false,
   ...rest
 }: {
   label?: ReactNode;
   checked?: boolean;
+  /** Sem rótulo ao lado (ex.: numa linha de lista): a área de toque vira um quadrado de 44px no celular. */
+  alvo?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "type" | "checked">) {
   const auto = useId();
   const cid = id ?? auto;
   return (
-    <label htmlFor={cid} className="inline-flex cursor-pointer select-none items-center gap-2.5">
+    <label
+      htmlFor={cid}
+      className={`inline-flex cursor-pointer select-none items-center gap-2.5 ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
+    >
       <input id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span
         className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${

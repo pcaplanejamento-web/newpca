@@ -39,7 +39,9 @@ import { toast } from "./Toast";
 import { VinculoTarefa } from "./VinculoTarefa";
 
 /** Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa) ou uma existente. */
-export type AberturaTarefa = { tipo: "nova"; listaId: number; vinculo?: Vinculo | null } | { tipo: "editar"; id: number };
+export type AberturaTarefa =
+  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; titulo?: string; prazo?: string }
+  | { tipo: "editar"; id: number };
 
 type Rascunho = {
   titulo: string;
@@ -124,6 +126,8 @@ export function TarefaDetalhe({
   const [conteudo, setConteudo] = useState<Conteudo | null>(null);
   const [salvando, setSalvando] = useState<null | "salvar" | "arquivar" | "excluir">(null);
   const [atividade, setAtividade] = useState(false);
+  // Desktop: a Atividade é um banner AO LADO; no celular (um banner por vez), uma aba "Tarefa | Atividade" no próprio corpo.
+  const [desk, setDesk] = useState(true);
   const [abaAtividade, setAbaAtividade] = useState<"comentarios" | "historico">("comentarios");
   const [versaoHist, setVersaoHist] = useState(0);
   const [modeloNovo, setModeloNovo] = useState<{ nome: string; prazoDias: string } | null>(null);
@@ -175,11 +179,11 @@ export function TarefaDetalhe({
           checklist: [],
         }
       : {
-          titulo: "",
+          titulo: aberto.tipo === "nova" ? (aberto.titulo ?? "") : "",
           listaId: aberto.tipo === "nova" ? aberto.listaId : (listas[0]?.id ?? 0),
           prioridade: "media",
           inicio: "",
-          prazo: "",
+          prazo: aberto.tipo === "nova" ? (aberto.prazo ?? "") : "",
           estimativa: "",
           pessoas: [],
           observadores: [],
@@ -191,6 +195,7 @@ export function TarefaDetalhe({
         };
     setR(base);
     setInicial(base);
+    setDesk(ehDesktop());
     setAtividade(aberto.tipo === "editar" && ehDesktop());
     setAbaAtividade("comentarios");
     if (aberto.tipo === "editar") carregar(aberto.id, true);
@@ -233,7 +238,8 @@ export function TarefaDetalhe({
     onFechar();
   };
 
-  const salvar = async () => {
+  /** Grava; `listaDestino` = também leva a tarefa a essa lista (Concluir/Reabrir — o mesmo caminho: automações e recorrência). */
+  const salvar = async (listaDestino?: number) => {
     if (!pode) return;
     setSalvando("salvar");
     try {
@@ -258,7 +264,8 @@ export function TarefaDetalhe({
       } else if (existente) {
         const d: Record<string, unknown> = {};
         if (r.titulo.trim() !== inicial.titulo) d.titulo = r.titulo.trim();
-        if (r.listaId !== inicial.listaId) d.listaId = r.listaId;
+        const lista = listaDestino ?? r.listaId;
+        if (lista !== inicial.listaId) d.listaId = lista;
         if (r.prioridade !== inicial.prioridade) d.prioridade = r.prioridade;
         if (r.inicio !== inicial.inicio) d.inicio = r.inicio || null;
         if (r.prazo !== inicial.prazo) d.prazo = r.prazo || null;
@@ -270,7 +277,7 @@ export function TarefaDetalhe({
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
-        toast.success("Tarefa salva.");
+        toast.success(listaDestino == null ? "Tarefa salva." : listas.find((l) => l.id === listaDestino)?.concluida ? "Tarefa concluída." : "Tarefa reaberta.");
       }
       onSalvo();
       onFechar();
@@ -361,6 +368,8 @@ export function TarefaDetalhe({
   };
   const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
   const listaAtual = listas.find((l) => l.id === r.listaId);
+  const listaConcluidas = listas.find((l) => l.concluida);
+  const listaAberta = listas.find((l) => !l.concluida);
 
   const painelAtividade = idAberto
     ? [
@@ -409,7 +418,7 @@ export function TarefaDetalhe({
         titulo={nova ? "Nova tarefa" : `Tarefa ${existente ? rotuloTicket(existente.ticket) : ""}`}
         size="lg"
         larguraPrincipal={44}
-        paineis={painelAtividade}
+        paineis={desk ? painelAtividade : undefined}
         bloqueado={salvando != null}
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -432,10 +441,11 @@ export function TarefaDetalhe({
                 size="sm"
                 loading={salvando === "arquivar"}
                 disabled={salvando != null}
+                aria-label={existente.arquivada ? "Restaurar" : "Arquivar"}
                 icon={existente.arquivada ? <IconDesarquivar className="h-4 w-4" /> : <IconArquivar className="h-4 w-4" />}
                 onClick={arquivar}
               >
-                {existente.arquivada ? "Restaurar" : "Arquivar"}
+                <span className="max-sm:hidden">{existente.arquivada ? "Restaurar" : "Arquivar"}</span>
               </Button>
             )}
             {existente && podeExcluir && (
@@ -461,7 +471,7 @@ export function TarefaDetalhe({
                 onClick={() => setModeloNovo({ nome: existente.titulo, prazoDias: "" })}
               />
             )}
-            {existente && (
+            {existente && desk && (
               <Button variant={atividade ? "secondary" : "ghost"} size="sm" aria-pressed={atividade} icon={<IconComentario className="h-4 w-4" />} onClick={() => setAtividade((a) => !a)}>
                 Atividade{nComentarios ? ` (${nComentarios})` : ""}
               </Button>
@@ -470,13 +480,42 @@ export function TarefaDetalhe({
               <Button variant="ghost" disabled={salvando != null} onClick={fechar}>
                 {sujo ? "Cancelar" : "Fechar"}
               </Button>
-              <Button loading={salvando === "salvar"} disabled={!pode || (!nova && !sujo)} onClick={salvar}>
+              {existente && !existente.arquivada && listaConcluidas && (concluida ? listaAberta : true) && (
+                <Button
+                  variant="secondary"
+                  disabled={!pode}
+                  icon={<IconCheck className="h-4 w-4" style={concluida ? undefined : { color: "var(--ok)" }} />}
+                  onClick={() => salvar(concluida ? listaAberta?.id : listaConcluidas.id)}
+                >
+                  {concluida ? "Reabrir" : "Concluir"}
+                </Button>
+              )}
+              <Button loading={salvando === "salvar"} disabled={!pode || (!nova && !sujo)} onClick={() => salvar()}>
                 {nova ? "Criar tarefa" : "Salvar"}
               </Button>
             </div>
           </div>
         }
       >
+        {!desk && existente && (
+          <div className="mb-4">
+            <Segmented<"tarefa" | "atividade">
+              ariaLabel="Tarefa ou atividade"
+              value={atividade ? "atividade" : "tarefa"}
+              onChange={(v) => setAtividade(v === "atividade")}
+              options={[
+                { value: "tarefa", label: "Tarefa" },
+                { value: "atividade", label: `Atividade${nComentarios ? ` (${nComentarios})` : ""}` },
+              ]}
+            />
+          </div>
+        )}
+        {!desk && atividade && painelAtividade ? (
+          <div className="flex min-h-[60dvh] flex-col gap-3">
+            {painelAtividade[0].cabecalho}
+            <div className="flex min-h-0 flex-1 flex-col">{painelAtividade[0].children}</div>
+          </div>
+        ) : (
         <div className="space-y-4">
           {nova && modelos.length > 0 && (
             <SelectField label="Usar modelo" value="" onChange={(e) => usarModelo(e.target.value)}>
@@ -489,8 +528,12 @@ export function TarefaDetalhe({
             </SelectField>
           )}
           <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova} onChange={(e) => set("titulo", e.target.value)} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField label="Lista" value={String(r.listaId)} onChange={(e) => set("listaId", Number(e.target.value))}>
+          <SelectField
+            label="Lista"
+            value={String(r.listaId)}
+            hint={!nova && r.listaId !== inicial.listaId ? "Ao salvar, a tarefa vai para o fim desta lista." : undefined}
+            onChange={(e) => set("listaId", Number(e.target.value))}
+          >
               {listas.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.nome}
@@ -498,8 +541,8 @@ export function TarefaDetalhe({
                 </option>
               ))}
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
-            </SelectField>
-            <Secao titulo="Prioridade">
+          </SelectField>
+          <Secao titulo="Prioridade">
               <Segmented<Prioridade>
                 ariaLabel="Prioridade"
                 value={r.prioridade}
@@ -510,9 +553,8 @@ export function TarefaDetalhe({
                   icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} />,
                 }))}
               />
-            </Secao>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          </Secao>
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
             <TextField label="Início" type="date" value={r.inicio} onChange={(e) => set("inicio", e.target.value)} />
             <TextField
               label="Prazo"
@@ -630,6 +672,7 @@ export function TarefaDetalhe({
             </>
           )}
         </div>
+        )}
       </Modal>
       <Modal
         open={modeloNovo != null}

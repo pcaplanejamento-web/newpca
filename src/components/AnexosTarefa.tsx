@@ -92,7 +92,11 @@ export function AnexosTarefa({
             <li key={a.id} className="flex min-h-11 items-center gap-2 px-3 py-1.5">
               {a.tipo === "link" ? <IconLink className="h-4 w-4 shrink-0 text-muted" /> : <IconFile className="h-4 w-4 shrink-0 text-muted" />}
               <div className="min-w-0 flex-1">
-                <LinkExterno href={a.tipo === "link" ? (a.url ?? "#") : `/api/tarefas/anexos/${a.id}`} variante="texto" className="block truncate text-[13px] font-medium">
+                <LinkExterno
+                  href={a.tipo === "link" ? (a.url ?? "#") : `/api/tarefas/anexos/${a.id}`}
+                  variante="texto"
+                  className="block truncate text-[13px] font-medium leading-[2.75rem] lg:leading-normal"
+                >
                   {a.nome}
                 </LinkExterno>
                 <p className="truncate text-[11px] text-faint">

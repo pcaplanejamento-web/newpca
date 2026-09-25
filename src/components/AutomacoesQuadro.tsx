@@ -144,7 +144,7 @@ export function AutomacoesQuadro({
       </ul>
       {podeEditar && (
         <div className="space-y-2 border-t border-border pt-3">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
             <SelectField label="Quando" value={quando} disabled={ocupado || cheio} onChange={(e) => setQuando(e.target.value)}>
               {listas.map((l) => (
                 <option key={l.id} value={`lista:${l.id}`}>

@@ -86,6 +86,7 @@ import {
   LayoutTemplate,
   BellRing,
   UserPlus,
+  Ellipsis,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -180,3 +181,4 @@ export const IconAutomacao = Zap;
 export const IconModelo = LayoutTemplate;
 export const IconPrazo = BellRing;
 export const IconAtribuir = UserPlus;
+export const IconMais = Ellipsis;

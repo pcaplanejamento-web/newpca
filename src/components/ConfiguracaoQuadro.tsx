@@ -163,7 +163,7 @@ export function ConfiguracaoQuadro({
   const wipValido = !lista?.limiteWip.trim() || (/^\d+$/.test(lista.limiteWip.trim()) && Number(lista.limiteWip) >= 1 && Number(lista.limiteWip) <= 999);
 
   return (
-    <div className="grid gap-[var(--gap-block)] lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
       <Secao titulo="Quadro">
         <CamposQuadro valor={campos} onChange={setCampos} disabled={!podeEditar} />
         {podeEditar && (
@@ -203,9 +203,12 @@ export function ConfiguracaoQuadro({
             {listasOrdem.map((l, i) => (
               <li key={l.id} className={`flex min-h-11 items-center gap-2 py-1.5 ${l.arquivada ? "opacity-60" : ""}`}>
                 {l.concluida && <IconCheck className="h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} aria-label="Lista de concluídas" />}
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text">{l.nome}</span>
-                {l.limiteWip != null && <Badge>WIP {l.limiteWip}</Badge>}
-                {l.arquivada && <Badge>Arquivada</Badge>}
+                {/* Nome + selos quebram de linha no celular: as ações (↑/↓/editar/excluir) nunca empurram o cartão. */}
+                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                  <span className="min-w-0 max-w-full truncate text-[13px] font-medium text-text">{l.nome}</span>
+                  {l.limiteWip != null && <Badge>WIP {l.limiteWip}</Badge>}
+                  {l.arquivada && <Badge>Arquivada</Badge>}
+                </span>
                 {podeEditar && (
                   <AcoesCadastro
                     nome={l.nome}

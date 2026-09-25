@@ -1005,6 +1005,10 @@ dos dados), **sino de notificações** real (atribuída, menção, comentário, 
 derivados na leitura, sem cron), **modelos** de quadro (listas + etiquetas, no "Novo quadro") e de tarefa ("Usar modelo" /
 "Salvar como modelo") e **automações** simples por quadro ("quando entrar na lista X / for concluída → mover, atribuir,
 etiquetar, prioridade, notificar"; sem laço).
+✅ **Revisão de uso e toque:** criação de tarefa num fluxo só (o "+ Adicionar tarefa" da coluna com "Mais detalhes", o da
+Lista e o "+" do dia no Calendário abrem o MESMO formulário), Concluir/Reabrir no detalhe, menu de ações no cartão para
+quem usa o toque (mover/concluir/arquivar sem arrastar), arrasto com rolagem automática no celular, filtros ativos em
+chips, abas curtas no celular e alvos de 44px — validado de 360 a 1920px.
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

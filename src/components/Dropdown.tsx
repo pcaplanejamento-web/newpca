@@ -66,7 +66,8 @@ export function Dropdown({
   // biome-ignore lint/correctness/useExhaustiveDependencies: assina só ao abrir; reposicionar lê props/refs estáveis.
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    // `pointerdown` (não `mousedown`): no toque (iOS) tocar numa área vazia não gera evento de mouse — o painel não fechava.
+    const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
@@ -77,12 +78,12 @@ export function Dropdown({
       setOpen(false);
     };
     const onMove = () => reposicionar();
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", onMove);
     window.addEventListener("scroll", onMove, true);
     return () => {
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("resize", onMove);
       window.removeEventListener("scroll", onMove, true);

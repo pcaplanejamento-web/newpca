@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { KeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
   COR_ESTADO_PRAZO,
@@ -25,8 +25,9 @@ const MAX_AVATARES = 3;
 /**
  * CARTÃO de uma tarefa no quadro: as etiquetas (faixas na cor), o título, e na base o nº do TICKET (copiável), a
  * PRIORIDADE (bandeira na cor), o PRAZO no semáforo (verde · âmbar · vermelho) e os RESPONSÁVEIS (fotos). O cartão todo é
- * o botão que abre o detalhe (camada que cobre o cartão — os controles de dentro ficam por cima); no mouse o próprio
- * cartão arrasta, no toque a ALÇA (o dedo no cartão rola a tela). Alt + setas movem pelo teclado.
+ * o botão que abre o detalhe (camada que cobre o cartão — os controles de dentro ficam por cima); no mouse/caneta o próprio
+ * cartão arrasta, no toque a ALÇA (o dedo no cartão rola a tela) e o menu `acoes` (mover/concluir/arquivar sem arrastar).
+ * Alt + setas movem pelo teclado.
  */
 export function CartaoTarefa({
   tarefa: t,
@@ -36,6 +37,7 @@ export function CartaoTarefa({
   onAbrir,
   onPegar,
   onTeclaMover,
+  acoes,
   oculto = false,
 }: {
   tarefa: TarefaResumo;
@@ -49,8 +51,12 @@ export function CartaoTarefa({
   onTeclaMover?: (direcao: "esquerda" | "direita" | "cima" | "baixo") => void;
   /** O cartão em arrasto (a sombra está no lugar dele). */
   oculto?: boolean;
+  /** Menu de ações no TOQUE (ao lado da alça): mover para outra lista, topo/fim, concluir, arquivar. */
+  acoes?: ReactNode;
 }) {
   const estado = estadoPrazo(t.prazo, hoje, t.concluidaEm != null);
+  // No toque, a alça (e o menu) ocupam o canto de cima: o texto não passa por baixo deles.
+  const toque = onPegar || acoes ? (acoes && onPegar ? "any-pointer-coarse:pr-[5.25rem]" : "any-pointer-coarse:pr-10") : "";
   const marcas = t.etiquetas.map((e) => etiquetas.get(e)).filter((e): e is EtiquetaTarefa => !!e);
   const resp = t.pessoas.map((p) => pessoas.get(p)).filter((p): p is Pessoa => !!p);
   const tecla = (e: KeyboardEvent) => {
@@ -63,7 +69,7 @@ export function CartaoTarefa({
   return (
     <article
       data-cartao={t.id}
-      onPointerDown={(e) => e.pointerType === "mouse" && onPegar?.(e)}
+      onPointerDown={(e) => e.pointerType !== "touch" && onPegar?.(e)}
       className={`group/cartao relative shrink-0 rounded-card border border-border bg-surface p-2.5 shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 ${
         onPegar ? "lg:cursor-grab" : ""
       } ${t.concluidaEm ? "opacity-75" : ""} ${oculto ? "hidden" : ""}`}
@@ -76,7 +82,7 @@ export function CartaoTarefa({
         className="absolute inset-0 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       />
       {marcas.length > 0 && (
-        <div className="pointer-events-none mb-1.5 flex flex-wrap gap-1">
+        <div className={`pointer-events-none mb-1.5 flex flex-wrap gap-1 ${toque}`}>
           {marcas.map((e) => (
             <span
               key={e.id}
@@ -89,7 +95,7 @@ export function CartaoTarefa({
           ))}
         </div>
       )}
-      <p className={`pointer-events-none line-clamp-3 pr-6 text-[13px] font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
+      <p className={`pointer-events-none line-clamp-3 pr-6 text-[13px] ${toque} font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
         <span className="relative z-10 font-mono tabular-nums">
           <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
@@ -156,15 +162,20 @@ export function CartaoTarefa({
           </span>
         )}
       </div>
-      {onPegar && (
-        <span
-          role="presentation"
-          onPointerDown={(e) => e.pointerType !== "mouse" && onPegar(e)}
-          title="Arrastar"
-          className="absolute top-0.5 right-0.5 z-10 hidden h-11 w-9 touch-none items-center justify-center text-faint pointer-coarse:flex"
-        >
-          <IconGrip className="h-4 w-4" />
-        </span>
+      {(onPegar || acoes) && (
+        <div className="absolute top-0 right-0 z-10 hidden items-center any-pointer-coarse:flex">
+          {acoes}
+          {onPegar && (
+            <span
+              role="presentation"
+              onPointerDown={(e) => e.pointerType === "touch" && onPegar(e)}
+              title="Arrastar"
+              className="flex h-11 w-11 touch-none items-center justify-center text-faint"
+            >
+              <IconGrip className="h-4 w-4" />
+            </span>
+          )}
+        </div>
       )}
     </article>
   );

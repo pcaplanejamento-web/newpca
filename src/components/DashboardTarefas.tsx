@@ -143,8 +143,8 @@ export function DashboardTarefas({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-5">
-        <div className="col-span-2 lg:col-span-1">
+      <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
+        <div className="col-span-2 sm:col-span-1">
           <KpiStat
             label="Tarefas abertas"
             value={num(p.abertas)}

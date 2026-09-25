@@ -30,11 +30,11 @@ import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
-import { FiltrosTarefas } from "./FiltrosTarefas";
+import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
-import { IconChevronLeft, IconDownload, IconPlus } from "./icons";
+import { IconArquivar, IconChevronLeft, IconDownload, IconPlus } from "./icons";
 import { QuadroKanban } from "./QuadroKanban";
-import { Segmented } from "./Segmented";
+import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
 import { toast } from "./Toast";
@@ -52,8 +52,11 @@ const LOTE_MASSA = 50;
 
 /**
  * ESPAÇO DE UM QUADRO de tarefas (`/painel/tarefas/[id]`): UMA linha de cabeçalho (voltar · cor · nome · grupo · abertas ·
- * atrasadas · concluídas) e as abas **Dashboard · Quadro · Lista · Calendário · Configuração** (`AbasEspaco`), com os FILTROS e "Nova
- * tarefa" na mesma linha (`FerramentasAba`). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
+ * atrasadas · concluídas) e as abas **Quadro · Lista · Calendário · Dashboard · Configuração** (`AbasEspaco`; no celular,
+ * rótulos curtos), com os FILTROS na mesma linha (`FerramentasAba`) e os ativos por extenso logo abaixo. CRIAR TAREFA é
+ * UM fluxo só — o formulário completo (`TarefaDetalhe`), aberto de onde se está: no Quadro pelo "Adicionar tarefa" da
+ * coluna (rápido pelo título, ou "Mais detalhes"), na Lista pelo botão da barra e no Calendário tocando num dia (prazo =
+ * o dia). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
  * com o `router.refresh`); o filtro segue de uma aba para a outra. Na Lista: seleção + EDIÇÃO EM MASSA e exportar .xlsx.
  * `novaInicial` (o `?nova=tipo:id` do "Criar tarefa" da Mesa) abre a tarefa NOVA já vinculada; `tarefaInicial`, a tarefa.
  */
@@ -100,6 +103,9 @@ export function QuadroTarefas({
   const filtradas = useMemo(() => filtrarTarefas(tarefas, filtro, { usuarioId, hoje }), [tarefas, filtro, usuarioId, hoje]);
   const noQuadro = useMemo(() => filtradas.filter((t) => !t.arquivada && listasAtivas.has(t.listaId)), [filtradas, listasAtivas]);
   const naLista = useMemo(() => filtradas.filter((t) => t.arquivada === arquivadas), [filtradas, arquivadas]);
+  const nArquivadas = useMemo(() => tarefas.filter((t) => t.arquivada).length, [tarefas]);
+  /** Abre o formulário de uma tarefa NOVA (a lista de onde se pediu; título/prazo já preenchidos). */
+  const nova = (listaId = ativas[0]?.id, extra: { titulo?: string; prazo?: string } = {}) => listaId && setAberto({ tipo: "nova", listaId, ...extra });
 
   // Chegada pela Mesa: `?nova=` abre a tarefa NOVA já vinculada; `?tarefa=` abre aquela tarefa — uma vez, e limpa a URL.
   // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
@@ -146,7 +152,7 @@ export function QuadroTarefas({
     try {
       const r = await chamar<{ ordens: [number, number][]; atualizar: boolean }>(`/api/tarefas/${id}/mover`, "POST", { listaId, ...viz });
       // A lista foi renumerada, uma automação agiu ou nasceu a próxima ocorrência de uma recorrente: recarrega.
-      if (r.ordens.length || r.atualizar) router.refresh();
+      if (r.ordens?.length || r.atualizar) router.refresh();
     } catch (e) {
       setTarefas(antes);
       toast.error((e as Error).message);
@@ -161,6 +167,19 @@ export function QuadroTarefas({
     } catch (e) {
       toast.error((e as Error).message);
       return false;
+    }
+  };
+
+  const arquivar = async (id: number) => {
+    const antes = tarefas;
+    setTarefas(antes.map((t) => (t.id === id ? { ...t, arquivada: true } : t)));
+    try {
+      await chamar(`/api/tarefas/${id}`, "PATCH", { arquivada: true });
+      toast.success("Tarefa arquivada — restaure pela aba Lista (Arquivadas).");
+      router.refresh();
+    } catch (e) {
+      setTarefas(antes);
+      toast.error((e as Error).message);
     }
   };
 
@@ -211,40 +230,64 @@ export function QuadroTarefas({
       <AbasEspaco<AbaQuadro>
         aba={aba}
         opcoes={[
-          { value: "dashboard", label: "Dashboard" },
           { value: "quadro", label: "Quadro" },
           { value: "lista", label: "Lista" },
-          { value: "calendario", label: "Calendário" },
-          { value: "configuracao", label: "Configuração" },
+          { value: "calendario", label: "Calendário", curto: "Agenda" },
+          { value: "dashboard", label: "Dashboard", curto: "Painel" },
+          { value: "configuracao", label: "Configuração", curto: "Config." },
         ]}
       >
         {aba !== "configuracao" && (
           <FerramentasAba>
-            {aba === "lista" && (
-              <Segmented<"ativas" | "arquivadas">
-                ariaLabel="Tarefas ativas ou arquivadas"
-                value={arquivadas ? "arquivadas" : "ativas"}
-                onChange={(v) => setArquivadas(v === "arquivadas")}
-                options={[
-                  { value: "ativas", label: "Ativas" },
-                  { value: "arquivadas", label: "Arquivadas" },
-                ]}
-              />
-            )}
             <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
             {aba === "lista" && (
-              <Button size="sm" variant="secondary" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
-                <span className="max-sm:sr-only">XLSX</span>
-              </Button>
+              <>
+                <SeletorFiltro
+                  icone={<IconArquivar className="h-4 w-4" />}
+                  rotulo="Mostrar"
+                  valor={arquivadas ? "arquivadas" : "ativas"}
+                  ativo={arquivadas}
+                  onChange={(v) => setArquivadas(v === "arquivadas")}
+                  opcoes={[
+                    { valor: "ativas", rotulo: "Tarefas ativas" },
+                    { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
+                  ]}
+                />
+                <Button size="sm" variant="secondary" className="max-sm:w-11 max-sm:px-0" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
+                  <span className="max-sm:hidden">XLSX</span>
+                </Button>
+                {!arquivadas && (
+                  <Button size="sm" variant="accent" className="max-sm:w-11 max-sm:px-0" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
+                    <span className="max-sm:hidden">Adicionar tarefa</span>
+                  </Button>
+                )}
+              </>
             )}
-            <Button size="sm" variant="accent" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} onClick={() => setAberto({ tipo: "nova", listaId: ativas[0].id })}>
-              <span className="max-sm:sr-only">Nova tarefa</span>
-            </Button>
           </FerramentasAba>
+        )}
+        {aba !== "configuracao" && (
+          <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2 empty:hidden">
+            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            {aba === "lista" && arquivadas && (
+              <span className="text-[12.5px] text-muted">Mostrando as ARQUIVADAS — restaure pelo detalhe da tarefa ou pela edição em massa.</span>
+            )}
+            {aba === "quadro" && nArquivadas > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setArquivadas(true);
+                  router.push(`${pathname}?aba=lista`, { scroll: false });
+                }}
+                className="ml-auto min-h-11 rounded-control px-2 text-[12.5px] text-muted underline-offset-2 hover:text-text-2 hover:underline lg:min-h-[var(--h-control-sm)]"
+              >
+                {num(nArquivadas)} arquivada{nArquivadas === 1 ? "" : "s"} — ver na Lista
+              </button>
+            )}
+          </div>
         )}
         {aba === "dashboard" ? (
           <DashboardTarefas
-            tarefas={filtradas}
+            tarefas={noQuadro}
             listas={listas}
             pessoas={pessoas}
             hoje={hoje}
@@ -267,6 +310,8 @@ export function QuadroTarefas({
               onAbrir={(id) => setAberto({ tipo: "editar", id })}
               onMover={mover}
               onCriar={criar}
+              onDetalhes={(listaId, titulo) => nova(listaId, { titulo })}
+              onArquivar={arquivar}
             />
           )
         ) : aba === "lista" ? (
@@ -284,7 +329,12 @@ export function QuadroTarefas({
             reservaInferior={alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0}
           />
         ) : aba === "calendario" ? (
-          <CalendarioTarefas tarefas={filtradas.filter((t) => !t.arquivada)} hoje={hoje} onAbrir={(id) => setAberto({ tipo: "editar", id })} />
+          <CalendarioTarefas
+            tarefas={noQuadro}
+            hoje={hoje}
+            onAbrir={(id) => setAberto({ tipo: "editar", id })}
+            onNova={semListas ? undefined : (prazo) => nova(undefined, { prazo })}
+          />
         ) : (
           <ConfiguracaoQuadro
             quadro={quadro}

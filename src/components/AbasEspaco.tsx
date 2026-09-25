@@ -32,7 +32,8 @@ export function AbasEspaco<T extends string>({
 }: {
   /** A aba que o servidor montou (`children`). */
   aba: T;
-  opcoes: { value: T; label: string }[];
+  /** `curto` = o rótulo nos telefones quando todas as abas não cabem. */
+  opcoes: { value: T; label: string; curto?: string }[];
   children: ReactNode;
 }) {
   const router = useRouter();

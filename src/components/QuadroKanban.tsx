@@ -1,18 +1,21 @@
 "use client";
 
-import { Fragment, type ReactNode, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Pessoa } from "@/lib/pessoa";
 import { cartoesDaLista, type EtiquetaTarefa, excedeWip, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { CartaoPreso, SombraCartao, useArrastoCartoes } from "./ArrastoCartoes";
 import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
-import { IconCheck, IconPlus } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconMais, IconPencil, IconPlus } from "./icons";
 
 /**
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
  * no desktop ocupa até o fim do display e cada lista rola por dentro. Arrastar move o cartão (`useArrastoCartoes`) — a
- * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista cria pelo título.
+ * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista cria pelo título — ou abre o formulário
+ * completo ("Mais detalhes") naquela lista. No TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
+ * sem arrastar) e, no celular, os PONTOS acima do quadro dizem em qual coluna se está (tocar leva a ela).
  */
 export function QuadroKanban({
   listas,
@@ -23,6 +26,8 @@ export function QuadroKanban({
   onAbrir,
   onMover,
   onCriar,
+  onDetalhes,
+  onArquivar,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -35,6 +40,9 @@ export function QuadroKanban({
   onMover: (id: number, listaId: number, indice: number) => void;
   /** Cria pelo título (resolve quando gravou). */
   onCriar: (listaId: number, titulo: string) => Promise<boolean>;
+  /** Abre o formulário COMPLETO de uma tarefa nova na lista (com o título já digitado). */
+  onDetalhes: (listaId: number, titulo: string) => void;
+  onArquivar: (id: number) => void;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
@@ -43,6 +51,66 @@ export function QuadroKanban({
   const mPessoas = useMemo(() => new Map(pessoas.map((p) => [p.id, p])), [pessoas]);
   const porLista = useMemo(() => new Map(listas.map((l) => [l.id, cartoesDaLista(tarefas, l.id)])), [listas, tarefas]);
   const preso = arrasto ? tarefas.find((t) => t.id === arrasto.id) : undefined;
+  const concluidas = listas.find((l) => l.concluida);
+  // A coluna à vista no celular (uma por vez, com encaixe): a mais próxima da borda esquerda da área rolável.
+  const [atual, setAtual] = useState(0);
+  useEffect(() => {
+    const el = rolo.current;
+    if (!el) return;
+    const ver = () => {
+      const cols = [...el.querySelectorAll<HTMLElement>("[data-lista]")];
+      const x = el.scrollLeft + el.clientWidth / 2;
+      let i = 0;
+      cols.forEach((c, k) => {
+        if (c.offsetLeft <= x) i = k;
+      });
+      setAtual(i);
+    };
+    el.addEventListener("scroll", ver, { passive: true });
+    return () => el.removeEventListener("scroll", ver);
+  }, []);
+  const irPara = (i: number) => rolo.current?.querySelectorAll<HTMLElement>("[data-lista]")[i]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+
+  /** O menu de ações do cartão no TOQUE (sem arrastar). */
+  const menu = (t: TarefaResumo, l: ListaTarefas, pos: number, total: number) => (
+    <Dropdown
+      align="end"
+      ariaLabel={`Ações da tarefa ${t.titulo}`}
+      triggerClassName="h-11 w-11 justify-center text-faint"
+      trigger={<IconMais className="h-4 w-4" />}
+      width={260}
+    >
+      {(fechar) => {
+        const item = (rotulo: string, icone: ReactNode, fn: () => void, off = false) => (
+          <button
+            key={rotulo}
+            type="button"
+            disabled={off}
+            onClick={() => {
+              fechar();
+              fn();
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40"
+          >
+            {icone}
+            <span className="truncate">{rotulo}</span>
+          </button>
+        );
+        return (
+          <div className="space-y-0.5">
+            {item("Abrir", <IconPencil className="h-4 w-4 text-muted" />, () => onAbrir(t.id))}
+            {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
+            {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
+            {concluidas && concluidas.id !== l.id && item("Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onMover(t.id, concluidas.id, Number.MAX_SAFE_INTEGER))}
+            {listas
+              .filter((x) => x.id !== l.id && x.id !== concluidas?.id)
+              .map((x) => item(`Mover para “${x.nome}”`, <IconArrowRight className="h-4 w-4 text-muted" />, () => onMover(t.id, x.id, Number.MAX_SAFE_INTEGER)))}
+            {item("Arquivar", <IconArquivar className="h-4 w-4 text-muted" />, () => onArquivar(t.id))}
+          </div>
+        );
+      }}
+    </Dropdown>
+  );
 
   const teclaMover = (t: TarefaResumo, d: "esquerda" | "direita" | "cima" | "baixo") => {
     const li = listas.findIndex((l) => l.id === t.listaId);
@@ -54,6 +122,25 @@ export function QuadroKanban({
   };
 
   return (
+    <>
+    {listas.length > 1 && (
+      <nav aria-label="Colunas do quadro" className="-mt-1 flex gap-1.5 overflow-x-auto lg:hidden">
+        {listas.map((l, i) => (
+          <button
+            key={l.id}
+            type="button"
+            aria-current={i === atual}
+            onClick={() => irPara(i)}
+            className={`flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-colors ${
+              i === atual ? "bg-accent text-white" : "bg-surface-2 text-text-2"
+            }`}
+          >
+            <span className="max-w-[8rem] truncate">{l.nome}</span>
+            <span className="tabular-nums opacity-80">{porLista.get(l.id)?.length ?? 0}</span>
+          </button>
+        ))}
+      </nav>
+    )}
     <div
       ref={rolo}
       suppressHydrationWarning
@@ -67,8 +154,8 @@ export function QuadroKanban({
         const destinoAqui = arrasto?.listaId === l.id ? arrasto.indice : -1;
         let j = 0;
         return (
-          <ColunaTarefas key={l.id} lista={l} qtd={cartoes.length} onCriar={(titulo) => onCriar(l.id, titulo)}>
-            {cartoes.map((t) => {
+          <ColunaTarefas key={l.id} lista={l} qtd={cartoes.length} onCriar={(titulo) => onCriar(l.id, titulo)} onDetalhes={(titulo) => onDetalhes(l.id, titulo)}>
+            {cartoes.map((t, pos) => {
               const sombra = arrasto && t.id !== arrasto.id && j++ === destinoAqui;
               return (
                 <Fragment key={t.id}>
@@ -82,6 +169,7 @@ export function QuadroKanban({
                     onAbrir={() => !foiArrasto() && onAbrir(t.id)}
                     onPegar={(e) => iniciar(e, t.id, l.id)}
                     onTeclaMover={(d) => teclaMover(t, d)}
+                    acoes={menu(t, l, pos, cartoes.length)}
                   />
                 </Fragment>
               );
@@ -96,22 +184,27 @@ export function QuadroKanban({
         </CartaoPreso>
       )}
     </div>
+    </>
   );
 }
 
 /**
  * UMA LISTA do quadro: o nome, a contagem (com o LIMITE — WIP — em âmbar quando passa), a pilha de cartões (rola por
- * dentro no desktop) e, no pé, "Adicionar tarefa" (vira o campo do título: Enter cria e segue no campo; Esc fecha).
+ * dentro no desktop) e, no pé, "Adicionar tarefa" (vira o campo do título: Enter cria e segue no campo; Esc fecha;
+ * "Mais detalhes" leva o título ao formulário completo — o MESMO de toda criação de tarefa).
  */
 export function ColunaTarefas({
   lista: l,
   qtd,
   onCriar,
+  onDetalhes,
   children,
 }: {
   lista: ListaTarefas;
   qtd: number;
   onCriar?: (titulo: string) => Promise<boolean>;
+  /** Abre o formulário completo com o título digitado. */
+  onDetalhes?: (titulo: string) => void;
   children: ReactNode;
 }) {
   const [novo, setNovo] = useState<string | null>(null);
@@ -188,7 +281,20 @@ export function ColunaTarefas({
               <Button size="sm" loading={salvando} disabled={!novo.trim()} onClick={criar}>
                 Adicionar
               </Button>
-              <Button size="sm" variant="ghost" disabled={salvando} onClick={() => setNovo(null)}>
+              {onDetalhes && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={salvando}
+                  onClick={() => {
+                    onDetalhes(novo.trim());
+                    setNovo(null);
+                  }}
+                >
+                  Mais detalhes
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="ml-auto" disabled={salvando} onClick={() => setNovo(null)}>
                 Cancelar
               </Button>
             </div>

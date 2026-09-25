@@ -24,8 +24,8 @@ const BORDA = 56;
 const VEL = 14;
 
 /**
- * ARRASTAR cartões entre as listas de um quadro (o padrão do arrasto de colunas — `EdicaoColunas`): mouse no cartão
- * inteiro, toque pela ALÇA (o dedo no cartão rola a tela). Ouvintes na JANELA, começa depois de 6px, o cartão PRESO
+ * ARRASTAR cartões entre as listas de um quadro (o padrão do arrasto de colunas — `EdicaoColunas`): mouse/caneta no
+ * cartão inteiro, toque pela ALÇA (o dedo no cartão rola a tela); o encaixe das colunas fica desligado durante o arrasto. Ouvintes na JANELA, começa depois de 6px, o cartão PRESO
  * anda direto no DOM (`translate3d`), a tela só re-renderiza quando o DESTINO muda, o quadro rola sozinho perto das
  * bordas (na horizontal; e a lista/página na vertical) e, ao soltar, o cartão POUSA no lugar sombreado antes de a ordem
  * mudar. O DOM: `[data-lista]` (a coluna) › `[data-cartoes]` (a pilha que rola) › `[data-cartao]`.
@@ -113,6 +113,8 @@ export function useArrastoCartoes({
         if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < LIMIAR) return;
         ativo = true;
         arrastou.current = true;
+        // O ENCAIXE das colunas (celular: `snap-x mandatory`) puxaria de volta cada passo da rolagem automática.
+        rolo.style.scrollSnapType = "none";
         soltarCursor = segurar("grabbing");
         calcular();
         quadroRaf = requestAnimationFrame(rolar);
@@ -127,6 +129,7 @@ export function useArrastoCartoes({
     };
     const limpar = () => {
       cancelAnimationFrame(quadroRaf);
+      rolo.style.scrollSnapType = "";
       window.removeEventListener("pointermove", mover);
       window.removeEventListener("pointerup", fim);
       window.removeEventListener("pointercancel", fim);

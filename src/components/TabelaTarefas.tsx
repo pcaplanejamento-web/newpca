@@ -248,7 +248,7 @@ export function TabelaTarefas({
       selected={selecao}
       onSelected={onSelecao ? (s) => onSelecao(new Set([...s].map(Number))) : undefined}
       reservaInferior={reservaInferior}
-      vazio="Nenhuma tarefa — crie pelo botão “Nova tarefa” ou na aba Quadro."
+      vazio="Nenhuma tarefa — use “Adicionar tarefa” (aqui ou no pé de uma coluna do Quadro)."
       resumo={(linhas) => (
         <span>
           {num(linhas.length)} {linhas.length === 1 ? "tarefa" : "tarefas"}
