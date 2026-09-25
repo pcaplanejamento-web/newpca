@@ -42,10 +42,10 @@ export function rotuloOpcaoPessoa(p: { id: number; nome: string; apelido?: strin
   return p.id === euId ? `${base} (eu)` : base;
 }
 
-/** Decodifica a foto gravada (data-URL base64 png/jpeg/webp) em bytes + tipo — `null` se ausente/inválida. */
-export function decodificarFoto(dataUrl: string | null | undefined): { tipo: string; bytes: Uint8Array<ArrayBuffer> } | null {
-  const m = /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(String(dataUrl ?? ""));
-  if (!m) return null;
+/** Decodifica um data-URL base64 gravado em bytes + tipo — só os tipos `aceitos`; `null` se ausente/inválido. */
+export function decodificarDataUrl(dataUrl: string | null | undefined, aceitos: RegExp): { tipo: string; bytes: Uint8Array<ArrayBuffer> } | null {
+  const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(String(dataUrl ?? ""));
+  if (!m || !aceitos.test(m[1])) return null;
   try {
     const bin = atob(m[2].replace(/\s+/g, ""));
     const bytes = new Uint8Array(bin.length);
@@ -55,3 +55,6 @@ export function decodificarFoto(dataUrl: string | null | undefined): { tipo: str
     return null;
   }
 }
+
+/** Decodifica a foto gravada (data-URL base64 png/jpeg/webp) em bytes + tipo — `null` se ausente/inválida. */
+export const decodificarFoto = (dataUrl: string | null | undefined) => decodificarDataUrl(dataUrl, /^image\/(?:png|jpe?g|webp)$/);

@@ -107,7 +107,13 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
+import { AnexosTarefa } from "@/components/AnexosTarefa";
+import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
+import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
+import { ChecklistTarefa } from "@/components/ChecklistTarefa";
+import { ComentariosTarefa } from "@/components/ComentariosTarefa";
+import { VinculoTarefa } from "@/components/VinculoTarefa";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { QuadroCard, QuadroNovoCard } from "@/components/QuadroCard";
 import { ColunaTarefas } from "@/components/QuadroKanban";
@@ -1810,11 +1816,12 @@ function TarefasDemo() {
   const mPe = new Map(pessoas.map((p) => [p.id, p]));
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
-    arquivada: false, pessoas: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
+    arquivada: false, pessoas: [], observadores: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
+    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, anexos: 0,
   };
   const cartoes: TarefaResumo[] = [
-    { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2] },
-    { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3] },
+    { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculo: { tipo: "protocolo", id: 1, rotulo: "144756/2026" } },
+    { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3], anexos: 2 },
     { ...base, id: 3, ticket: 130, titulo: "Revisar a classificação dos itens", concluidaEm: "2026-01-01" },
   ];
   const [sel, setSel] = useState<number[]>([1]);
@@ -1838,6 +1845,48 @@ function TarefasDemo() {
           <SeletorPessoas pessoas={pessoas} selecionadas={sel} onChange={setSel} usuarioId={1} />
         </div>
       </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChecklistTarefa
+          itens={[
+            { id: 1, texto: "Abrir o PDF do protocolo", feito: true, ordem: 1 },
+            { id: 2, texto: "Conferir os itens com o catálogo", feito: false, ordem: 2 },
+          ]}
+          onAlternar={() => {}}
+          onAdicionar={async () => true}
+          onRenomear={() => {}}
+          onRemover={() => {}}
+          onMover={() => {}}
+        />
+        <AnexosTarefa
+          anexos={[{ id: 1, tipo: "link", nome: "Planilha de preços", url: "https://example.com", mime: null, tamanho: null, criadoPor: 1, criadoEm: "2026-06-01 12:00:00" }]}
+          usuarioId={1}
+          podeModerar={false}
+          onArquivo={async () => true}
+          onLink={async () => true}
+          onExcluir={() => {}}
+        />
+        <div className="h-72 rounded-card border border-border p-3">
+          <ComentariosTarefa
+            comentarios={[{ id: 1, usuarioId: 2, usuarioNome: "Bruno", texto: "Feito, @Ana — falta só o DFD 1209.", mencoes: [1], criadoEm: "2026-06-01 12:00:00", editadoEm: null }]}
+            pessoas={pessoas}
+            usuarioId={1}
+            podeModerar={false}
+            onEnviar={async () => true}
+            onEditar={async () => true}
+            onExcluir={() => {}}
+          />
+        </div>
+        <div className="space-y-3">
+          <VinculoTarefa valor={{ tipo: "protocolo", id: 1, rotulo: "144756/2026" }} onChange={() => {}} />
+          <BarraEdicaoMassaTarefas
+            listas={[{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }]}
+            pessoas={pessoas}
+            etiquetas={etiquetas}
+            onAplicar={() => {}}
+          />
+        </div>
+      </div>
+      <CalendarioTarefas tarefas={cartoes} hoje="2026-01-01" onAbrir={() => {}} />
     </div>
   );
 }
@@ -2976,7 +3025,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) e SeletorPessoas (várias pessoas, com foto)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa, AnexosTarefa (link ou arquivo ≤ 1 MB), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas e CalendarioTarefas (grade do mês; agenda no celular)">
         <TarefasDemo />
       </Secao>
 

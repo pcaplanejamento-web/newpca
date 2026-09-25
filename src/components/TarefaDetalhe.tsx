@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { Pessoa } from "@/lib/pessoa";
+import type { AnexoTarefa, ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
 import {
   COR_ESTADO_PRAZO,
   COR_PRIORIDADE,
@@ -15,19 +16,26 @@ import {
   ROTULO_PRIORIDADE,
   rotuloTicket,
   type TarefaResumo,
+  type VinculoTarefa as Vinculo,
 } from "@/lib/tarefas-core";
+import { AnexosTarefa } from "./AnexosTarefa";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { ChecklistTarefa } from "./ChecklistTarefa";
+import { ComentariosTarefa } from "./ComentariosTarefa";
 import { useConfirmacao } from "./Confirmacao";
+import { ehDesktop } from "./espacamento";
 import { SelectField, TextArea, TextField } from "./Field";
-import { IconArquivar, IconBandeira, IconCheck, IconDesarquivar, IconTrash } from "./icons";
+import { Historico, useHistorico } from "./Historico";
+import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
+import { VinculoTarefa } from "./VinculoTarefa";
 
-/** Qual detalhe está aberto: uma tarefa NOVA (na lista dada) ou uma existente. */
-export type AberturaTarefa = { tipo: "nova"; listaId: number } | { tipo: "editar"; id: number };
+/** Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa) ou uma existente. */
+export type AberturaTarefa = { tipo: "nova"; listaId: number; vinculo?: Vinculo | null } | { tipo: "editar"; id: number };
 
 type Rascunho = {
   titulo: string;
@@ -35,17 +43,34 @@ type Rascunho = {
   prioridade: Prioridade;
   inicio: string;
   prazo: string;
+  estimativa: string;
   pessoas: number[];
+  observadores: number[];
   etiquetas: number[];
+  vinculo: Vinculo | null;
   descricao: string;
 };
+type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; anexos: AnexoTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
+const mesmoVinculo = (a: Vinculo | null, b: Vinculo | null) => (a?.tipo ?? null) === (b?.tipo ?? null) && (a?.id ?? null) === (b?.id ?? null);
+const numEstimativa = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
+
+function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 text-[13.5px] font-bold text-text">{titulo}</p>
+      {children}
+    </div>
+  );
+}
 
 /**
- * DETALHE de uma tarefa (criar e editar) num banner: título, lista, prioridade, responsáveis (as pessoas do grupo), início
- * e PRAZO (com o semáforo), etiquetas e a descrição. Salvar manda SÓ o que mudou. Arquivar/restaurar (qualquer pessoa do
- * grupo) e excluir (editores). Fechar com alterações pede confirmação.
+ * DETALHE de uma tarefa (criar e editar) num banner: título, lista, prioridade, responsáveis e observadores (pessoas do
+ * grupo), início e PRAZO (com o semáforo), estimativa, etiquetas, VÍNCULO (protocolo/DFD/PCA/orçamento) e a descrição —
+ * "Salvar" manda SÓ o que mudou. Da tarefa existente, também o CHECKLIST e os ANEXOS (gravam na hora) e, no painel da
+ * direita, a ATIVIDADE — comentários com @menção | histórico. Arquivar/restaurar (qualquer pessoa do grupo) e excluir
+ * (editores). Fechar com alterações pede confirmação.
  */
 export function TarefaDetalhe({
   aberto,
@@ -73,22 +98,47 @@ export function TarefaDetalhe({
   todas: Pessoa[];
   hoje: string;
   usuarioId: number;
+  /** Editor (admin/gestor): exclui a tarefa e modera comentários/anexos. */
   podeExcluir: boolean;
   onFechar: () => void;
+  /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
 }) {
   const existente = aberto?.tipo === "editar" ? tarefas.find((t) => t.id === aberto.id) : undefined;
+  const idAberto = aberto?.tipo === "editar" ? aberto.id : null;
   const [inicial, setInicial] = useState<Rascunho | null>(null);
   const [r, setR] = useState<Rascunho | null>(null);
-  const [carregandoDesc, setCarregandoDesc] = useState(false);
+  const [conteudo, setConteudo] = useState<Conteudo | null>(null);
   const [salvando, setSalvando] = useState<null | "salvar" | "arquivar" | "excluir">(null);
+  const [atividade, setAtividade] = useState(false);
+  const [abaAtividade, setAbaAtividade] = useState<"comentarios" | "historico">("comentarios");
+  const [versaoHist, setVersaoHist] = useState(0);
   const { confirmar, confirmacao } = useConfirmacao();
   const pedido = useRef(0);
+  const historico = useHistorico(atividade && abaAtividade === "historico" && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
 
-  // Abre: monta o rascunho (a descrição de uma existente chega pela rota — o quadro traz só o resumo).
+  /** O conteúdo da tarefa aberta (descrição + checklist + comentários + anexos). Só a resposta MAIS RECENTE vale. */
+  const carregar = useCallback(async (id: number, primeira: boolean) => {
+    const n = ++pedido.current;
+    try {
+      const j = await chamar<{ tarefa: { descricao: string | null } } & Conteudo>(`/api/tarefas/${id}`);
+      if (n !== pedido.current) return;
+      setConteudo({ checklist: j.checklist, comentarios: j.comentarios, anexos: j.anexos });
+      if (primeira) {
+        const descricao = j.tarefa.descricao ?? "";
+        setR((x) => (x ? { ...x, descricao } : x));
+        setInicial((x) => (x ? { ...x, descricao } : x));
+      }
+    } catch (e) {
+      if (n === pedido.current) toast.error((e as Error).message);
+    }
+  }, []);
+
+  // Abre: monta o rascunho (a descrição e o conteúdo de uma existente chegam pela rota — o quadro traz só o resumo).
   // biome-ignore lint/correctness/useExhaustiveDependencies: reinicia só quando OUTRO detalhe abre.
   useEffect(() => {
-    const n = ++pedido.current;
+    pedido.current++;
+    setConteudo(null);
     if (!aberto) {
       setR(null);
       setInicial(null);
@@ -101,8 +151,11 @@ export function TarefaDetalhe({
           prioridade: existente.prioridade,
           inicio: existente.inicio ?? "",
           prazo: existente.prazo ?? "",
+          estimativa: existente.estimativaH == null ? "" : String(existente.estimativaH).replace(".", ","),
           pessoas: existente.pessoas,
+          observadores: existente.observadores,
           etiquetas: existente.etiquetas,
+          vinculo: existente.vinculo,
           descricao: "",
         }
       : {
@@ -111,34 +164,49 @@ export function TarefaDetalhe({
           prioridade: "media",
           inicio: "",
           prazo: "",
+          estimativa: "",
           pessoas: [],
+          observadores: [],
           etiquetas: [],
+          vinculo: aberto.tipo === "nova" ? (aberto.vinculo ?? null) : null,
           descricao: "",
         };
     setR(base);
     setInicial(base);
-    if (aberto.tipo !== "editar") return;
-    setCarregandoDesc(true);
-    chamar<{ tarefa: { descricao: string | null } }>(`/api/tarefas/${aberto.id}`)
-      .then((j) => {
-        if (n !== pedido.current) return;
-        const descricao = j.tarefa.descricao ?? "";
-        setR((x) => (x ? { ...x, descricao } : x));
-        setInicial((x) => (x ? { ...x, descricao } : x));
-      })
-      .catch((e: Error) => n === pedido.current && toast.error(e.message))
-      .finally(() => n === pedido.current && setCarregandoDesc(false));
-  }, [aberto?.tipo, aberto?.tipo === "editar" ? aberto.id : aberto?.listaId]);
+    setAtividade(aberto.tipo === "editar" && ehDesktop());
+    setAbaAtividade("comentarios");
+    if (aberto.tipo === "editar") carregar(aberto.id, true);
+  }, [aberto?.tipo, idAberto, aberto?.tipo === "nova" ? aberto.listaId : null]);
 
   if (!aberto || !r || !inicial) return <>{confirmacao}</>;
   const nova = aberto.tipo === "nova";
   const sujo = JSON.stringify(r) !== JSON.stringify(inicial);
   const datasOk = !r.inicio || !r.prazo || r.inicio <= r.prazo;
-  const pode = r.titulo.trim().length > 0 && datasOk && !salvando && !carregandoDesc;
+  const est = numEstimativa(r.estimativa);
+  const estOk = est == null || (Number.isFinite(est) && est >= 0 && est <= 9999);
+  const carregando = !nova && !conteudo;
+  const pode = r.titulo.trim().length > 0 && datasOk && estOk && !salvando && !carregando;
   const concluida = existente?.concluidaEm != null;
   const estado = estadoPrazo(r.prazo || null, hoje, concluida);
   const fora = todas.filter((p) => !pessoas.some((x) => x.id === p.id));
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setR((x) => (x ? { ...x, [k]: v } : x));
+
+  /** Uma gravação IMEDIATA do conteúdo (checklist/comentário/anexo): o aviso de erro, e o conteúdo + o quadro recarregados. */
+  const agir = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    if (!idAberto) return false;
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      toast.error((e as Error).message);
+      return false;
+    } finally {
+      await carregar(idAberto, false);
+      setVersaoHist((v) => v + 1);
+      onSalvo();
+    }
+  };
+  const base = `/api/tarefas/${idAberto}`;
 
   const fechar = async () => {
     if (salvando) return;
@@ -160,8 +228,11 @@ export function TarefaDetalhe({
           prioridade: r.prioridade,
           inicio: r.inicio || null,
           prazo: r.prazo || null,
+          estimativaH: est,
           pessoas: r.pessoas,
+          observadores: r.observadores,
           etiquetas: r.etiquetas,
+          vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
         });
         toast.success("Tarefa criada.");
       } else if (existente) {
@@ -171,8 +242,11 @@ export function TarefaDetalhe({
         if (r.prioridade !== inicial.prioridade) d.prioridade = r.prioridade;
         if (r.inicio !== inicial.inicio) d.inicio = r.inicio || null;
         if (r.prazo !== inicial.prazo) d.prazo = r.prazo || null;
+        if (r.estimativa !== inicial.estimativa) d.estimativaH = est;
         if (!iguais(r.pessoas, inicial.pessoas)) d.pessoas = r.pessoas;
+        if (!iguais(r.observadores, inicial.observadores)) d.observadores = r.observadores;
         if (!iguais(r.etiquetas, inicial.etiquetas)) d.etiquetas = r.etiquetas;
+        if (!mesmoVinculo(r.vinculo, inicial.vinculo)) d.vinculo = r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null;
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
         toast.success("Tarefa salva.");
@@ -205,7 +279,7 @@ export function TarefaDetalhe({
     if (!existente) return;
     const ok = await confirmar({
       titulo: `Excluir a tarefa ${rotuloTicket(existente.ticket)}?`,
-      texto: "Esta ação não pode ser desfeita — no dia a dia, prefira arquivar.",
+      texto: "Checklist, comentários e anexos vão junto. Esta ação não pode ser desfeita — no dia a dia, prefira arquivar.",
       confirmar: "Excluir",
       perigo: true,
     });
@@ -223,7 +297,54 @@ export function TarefaDetalhe({
     }
   };
 
+  const itens = conteudo?.checklist ?? [];
+  const moverItem = (i: ItemChecklist, d: -1 | 1) => {
+    const idx = itens.findIndex((x) => x.id === i.id);
+    const viz = d < 0 ? { anteriorId: itens[idx - 2]?.id ?? null, proximoId: itens[idx - 1]?.id ?? null } : { anteriorId: itens[idx + 1]?.id ?? null, proximoId: itens[idx + 2]?.id ?? null };
+    agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", viz));
+  };
+  const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
   const listaAtual = listas.find((l) => l.id === r.listaId);
+
+  const painelAtividade = idAberto
+    ? [
+        {
+          id: "atividade",
+          aberto: atividade,
+          largura: 30,
+          titulo: "Atividade",
+          onClose: () => setAtividade(false),
+          cabecalho: (
+            <Segmented<"comentarios" | "historico">
+              ariaLabel="Atividade da tarefa"
+              value={abaAtividade}
+              onChange={setAbaAtividade}
+              options={[
+                { value: "comentarios", label: `Comentários${nComentarios ? ` (${nComentarios})` : ""}` },
+                { value: "historico", label: "Histórico" },
+              ]}
+            />
+          ),
+          children:
+            abaAtividade === "comentarios" ? (
+              <ComentariosTarefa
+                comentarios={conteudo?.comentarios ?? []}
+                pessoas={todas}
+                usuarioId={usuarioId}
+                podeModerar={podeExcluir}
+                onEnviar={(texto) => agir(() => chamar(`${base}/comentarios`, "POST", { texto }))}
+                onEditar={(c, texto) => agir(() => chamar(`${base}/comentarios/${c.id}`, "PATCH", { texto }))}
+                onExcluir={async (c) => {
+                  if (await confirmar({ titulo: "Excluir o comentário?", confirmar: "Excluir", perigo: true })) agir(() => chamar(`${base}/comentarios/${c.id}`, "DELETE"));
+                }}
+              />
+            ) : (
+              <Historico entradas={historico.linhas ?? []} carregando={!historico.linhas && !historico.erro} erro={historico.erro} vazio="Nenhuma alteração registrada." />
+            ),
+        },
+      ]
+    : undefined;
+
   return (
     <>
       <Modal
@@ -231,14 +352,12 @@ export function TarefaDetalhe({
         onClose={fechar}
         titulo={nova ? "Nova tarefa" : `Tarefa ${existente ? rotuloTicket(existente.ticket) : ""}`}
         size="lg"
+        larguraPrincipal={44}
+        paineis={painelAtividade}
         bloqueado={salvando != null}
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {existente ? (
-              <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge>
-            ) : (
-              <Badge>Nova</Badge>
-            )}
+            {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}
             <h2 className="min-w-0 truncate text-base font-semibold text-text">{nova ? "Nova tarefa" : existente?.titulo}</h2>
             {existente?.arquivada && <Badge>Arquivada</Badge>}
             {concluida && (
@@ -275,6 +394,11 @@ export function TarefaDetalhe({
                 onClick={excluir}
               />
             )}
+            {existente && (
+              <Button variant={atividade ? "secondary" : "ghost"} size="sm" aria-pressed={atividade} icon={<IconComentario className="h-4 w-4" />} onClick={() => setAtividade((a) => !a)}>
+                Atividade{nComentarios ? ` (${nComentarios})` : ""}
+              </Button>
+            )}
             <div className="ml-auto flex gap-2">
               <Button variant="ghost" disabled={salvando != null} onClick={fechar}>
                 {sujo ? "Cancelar" : "Fechar"}
@@ -287,14 +411,7 @@ export function TarefaDetalhe({
         }
       >
         <div className="space-y-4">
-          <TextField
-            label="Título"
-            value={r.titulo}
-            maxLength={200}
-            placeholder="O que precisa ser feito"
-            autoFocus={nova}
-            onChange={(e) => set("titulo", e.target.value)}
-          />
+          <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova} onChange={(e) => set("titulo", e.target.value)} />
           <div className="grid gap-4 sm:grid-cols-2">
             <SelectField label="Lista" value={String(r.listaId)} onChange={(e) => set("listaId", Number(e.target.value))}>
               {listas.map((l) => (
@@ -305,8 +422,7 @@ export function TarefaDetalhe({
               ))}
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
             </SelectField>
-            <div>
-              <p className="mb-2 text-[13.5px] font-bold text-text">Prioridade</p>
+            <Secao titulo="Prioridade">
               <Segmented<Prioridade>
                 ariaLabel="Prioridade"
                 value={r.prioridade}
@@ -317,9 +433,9 @@ export function TarefaDetalhe({
                   icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} />,
                 }))}
               />
-            </div>
+            </Secao>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <TextField label="Início" type="date" value={r.inicio} onChange={(e) => set("inicio", e.target.value)} />
             <TextField
               label="Prazo"
@@ -335,14 +451,29 @@ export function TarefaDetalhe({
                 ) : undefined
               }
             />
+            <TextField
+              label="Estimativa (horas)"
+              inputMode="decimal"
+              value={r.estimativa}
+              placeholder="Ex.: 4 ou 1,5"
+              error={estOk ? undefined : "Um número de 0 a 9999."}
+              onChange={(e) => set("estimativa", e.target.value)}
+            />
           </div>
-          <div>
-            <p className="mb-2 text-[13.5px] font-bold text-text">Responsáveis</p>
-            <SeletorPessoas pessoas={pessoas} fora={fora} selecionadas={r.pessoas} usuarioId={usuarioId} onChange={(v) => set("pessoas", v)} />
-          </div>
+          <Secao titulo="Responsáveis">
+            <SeletorPessoas pessoas={pessoas} fora={fora} selecionadas={r.pessoas} usuarioId={usuarioId} onChange={(v) => setR((x) => (x ? { ...x, pessoas: v, observadores: x.observadores.filter((o) => !v.includes(o)) } : x))} />
+          </Secao>
+          <Secao titulo="Observadores (acompanham)">
+            <SeletorPessoas
+              pessoas={pessoas.filter((p) => !r.pessoas.includes(p.id))}
+              fora={fora}
+              selecionadas={r.observadores}
+              usuarioId={usuarioId}
+              onChange={(v) => set("observadores", v)}
+            />
+          </Secao>
           {etiquetas.length > 0 && (
-            <div>
-              <p className="mb-2 text-[13.5px] font-bold text-text">Etiquetas</p>
+            <Secao titulo="Etiquetas">
               <div className="flex flex-wrap gap-1.5">
                 {etiquetas.map((e) => {
                   const ativa = r.etiquetas.includes(e.id);
@@ -365,17 +496,56 @@ export function TarefaDetalhe({
                   );
                 })}
               </div>
-            </div>
+            </Secao>
           )}
+          <Secao titulo="Vínculo">
+            <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />
+          </Secao>
           <TextArea
             label="Descrição"
-            rows={6}
+            rows={5}
             value={r.descricao}
             maxLength={10_000}
-            disabled={carregandoDesc}
-            placeholder={carregandoDesc ? "Carregando…" : "Detalhes, passos, contexto (opcional)"}
+            disabled={carregando}
+            placeholder={carregando ? "Carregando…" : "Detalhes, passos, contexto (opcional)"}
             onChange={(e) => set("descricao", e.target.value)}
           />
+          {nova ? (
+            <p className="text-[12.5px] text-muted">Checklist, anexos e comentários ficam disponíveis depois de criar a tarefa.</p>
+          ) : (
+            <>
+              <Secao titulo="Checklist">
+                {conteudo ? (
+                  <ChecklistTarefa
+                    itens={itens}
+                    onAlternar={(i) => agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", { feito: !i.feito }))}
+                    onAdicionar={(texto) => agir(() => chamar(`${base}/checklist`, "POST", { texto }))}
+                    onRenomear={(i, texto) => agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", { texto }))}
+                    onRemover={(i) => agir(() => chamar(`${base}/checklist/${i.id}`, "DELETE"))}
+                    onMover={moverItem}
+                  />
+                ) : (
+                  <p className="text-[12.5px] text-muted">Carregando…</p>
+                )}
+              </Secao>
+              <Secao titulo="Anexos">
+                {conteudo ? (
+                  <AnexosTarefa
+                    anexos={conteudo.anexos}
+                    usuarioId={usuarioId}
+                    podeModerar={podeExcluir}
+                    onArquivo={(a) => agir(() => chamar(`${base}/anexos`, "POST", { tipo: "arquivo", ...a }))}
+                    onLink={(a) => agir(() => chamar(`${base}/anexos`, "POST", { tipo: "link", ...a }))}
+                    onExcluir={async (a) => {
+                      if (await confirmar({ titulo: `Excluir o anexo "${a.nome}"?`, confirmar: "Excluir", perigo: true })) agir(() => chamar(`/api/tarefas/anexos/${a.id}`, "DELETE"));
+                    }}
+                  />
+                ) : (
+                  <p className="text-[12.5px] text-muted">Carregando…</p>
+                )}
+              </Secao>
+            </>
+          )}
         </div>
       </Modal>
       {confirmacao}

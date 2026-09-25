@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { num } from "@/lib/format";
+import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
 import {
@@ -14,28 +15,39 @@ import {
   moverCartao,
   prefixoEdicoesTarefas,
   resumoQuadro,
+  rotuloTicket,
+  type VinculoTarefa,
   vizinhos,
 } from "@/lib/tarefas-core";
+import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
 import { AbasEspaco, FerramentasAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
+import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
+import { BarraSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
+import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import type { EdicoesDaTabela } from "./DataTable";
 import { FiltrosTarefas } from "./FiltrosTarefas";
-import { IconChevronLeft, IconPlus } from "./icons";
+import { tokenPx } from "./espacamento";
+import { IconChevronLeft, IconDownload, IconPlus } from "./icons";
 import { QuadroKanban } from "./QuadroKanban";
 import { Segmented } from "./Segmented";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
 import { toast } from "./Toast";
 
-export type AbaQuadro = "quadro" | "lista" | "configuracao";
+export type AbaQuadro = "quadro" | "lista" | "calendario" | "configuracao";
+
+/** Até quantas tarefas por chamada da edição em massa (o teto do schema). */
+const LOTE_MASSA = 50;
 
 /**
  * ESPAÇO DE UM QUADRO de tarefas (`/painel/tarefas/[id]`): UMA linha de cabeçalho (voltar · cor · nome · grupo · abertas ·
- * atrasadas · concluídas) e as abas **Quadro · Lista · Configuração** (`AbasEspaco`), com os FILTROS e "Nova tarefa" na
- * mesma linha (`FerramentasAba`). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta com o
- * `router.refresh`); o filtro segue de uma aba para a outra.
+ * atrasadas · concluídas) e as abas **Quadro · Lista · Calendário · Configuração** (`AbasEspaco`), com os FILTROS e "Nova
+ * tarefa" na mesma linha (`FerramentasAba`). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
+ * com o `router.refresh`); o filtro segue de uma aba para a outra. Na Lista: seleção + EDIÇÃO EM MASSA e exportar .xlsx.
+ * `novaInicial` (o `?nova=tipo:id` do "Criar tarefa" da Mesa) abre a tarefa NOVA já vinculada; `tarefaInicial`, a tarefa.
  */
 export function QuadroTarefas({
   aba,
@@ -49,14 +61,23 @@ export function QuadroTarefas({
   hoje,
   podeEditar,
   usuarioId,
-}: DadosQuadro & { aba: AbaQuadro; usuarioId: number }) {
+  novaInicial = null,
+  tarefaInicial = null,
+}: DadosQuadro & { aba: AbaQuadro; usuarioId: number; novaInicial?: VinculoTarefa | null; tarefaInicial?: number | null }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [tarefas, setTarefas] = useState(doServidor);
   useEffect(() => setTarefas(doServidor), [doServidor]);
   const [filtro, setFiltro] = useState<FiltroTarefas>(FILTRO_TAREFAS_PADRAO);
   const [arquivadas, setArquivadas] = useState(false);
   const [aberto, setAberto] = useState<AberturaTarefa | null>(null);
   const [ed, setEd] = useState(edicoes);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [aplicando, setAplicando] = useState(false);
+  const [alturaBarra, setAlturaBarra] = useState(0);
+  // Trocar de aba ou de Ativas/Arquivadas limpa a seleção (a barra só vale para o que está à vista).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera quando a aba/visão muda.
+  useEffect(() => setSel(new Set()), [aba, arquivadas]);
 
   const ativas = useMemo(() => listas.filter((l) => !l.arquivada), [listas]);
   const doGrupo = useMemo(() => {
@@ -68,6 +89,39 @@ export function QuadroTarefas({
   const filtradas = useMemo(() => filtrarTarefas(tarefas, filtro, { usuarioId, hoje }), [tarefas, filtro, usuarioId, hoje]);
   const noQuadro = useMemo(() => filtradas.filter((t) => !t.arquivada && listasAtivas.has(t.listaId)), [filtradas, listasAtivas]);
   const naLista = useMemo(() => filtradas.filter((t) => t.arquivada === arquivadas), [filtradas, arquivadas]);
+
+  // Chegada pela Mesa: `?nova=` abre a tarefa NOVA já vinculada; `?tarefa=` abre aquela tarefa — uma vez, e limpa a URL.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
+  useEffect(() => {
+    if (tarefaInicial) setAberto({ tipo: "editar", id: tarefaInicial });
+    else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, vinculo: novaInicial });
+    else return;
+    router.replace(`${pathname}?aba=${aba}`, { scroll: false });
+  }, []);
+
+  const aplicarMassa = async (acao: AcaoMassaTarefas) => {
+    const ids = [...sel];
+    setAplicando(true);
+    let alterados = 0;
+    const falhas: string[] = [];
+    for (let i = 0; i < ids.length; i += LOTE_MASSA) {
+      try {
+        const r = await chamar<{ alterados: number; falhas: { ticket: number | null; motivo: string }[] }>("/api/tarefas/massa", "POST", { ids: ids.slice(i, i + LOTE_MASSA), acao });
+        alterados += r.alterados;
+        for (const f of r.falhas) falhas.push(`${f.ticket != null ? rotuloTicket(f.ticket) : "?"}: ${f.motivo}`);
+      } catch (e) {
+        falhas.push((e as Error).message);
+      }
+    }
+    setAplicando(false);
+    setSel(new Set());
+    router.refresh();
+    if (falhas.length) toast.warning(`${num(alterados)} alterada(s); não foi possível: ${falhas.slice(0, 4).join("; ")}${falhas.length > 4 ? "…" : ""}`, 8000);
+    else toast.success(`${num(alterados)} tarefa(s) alterada(s).`);
+  };
+
+  const exportar = () =>
+    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje })).catch(() => toast.error("Não foi possível exportar."));
 
   const mover = async (id: number, listaId: number, indice: number) => {
     const antes = tarefas;
@@ -147,6 +201,7 @@ export function QuadroTarefas({
         opcoes={[
           { value: "quadro", label: "Quadro" },
           { value: "lista", label: "Lista" },
+          { value: "calendario", label: "Calendário" },
           { value: "configuracao", label: "Configuração" },
         ]}
       >
@@ -164,6 +219,11 @@ export function QuadroTarefas({
               />
             )}
             <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            {aba === "lista" && (
+              <Button size="sm" variant="secondary" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
+                <span className="max-sm:sr-only">XLSX</span>
+              </Button>
+            )}
             <Button size="sm" variant="accent" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} onClick={() => setAberto({ tipo: "nova", listaId: ativas[0].id })}>
               <span className="max-sm:sr-only">Nova tarefa</span>
             </Button>
@@ -196,11 +256,40 @@ export function QuadroTarefas({
             ativa={aberto?.tipo === "editar" ? aberto.id : null}
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
             edicoes={edicoesLista}
+            selecao={sel}
+            onSelecao={setSel}
+            reservaInferior={alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0}
           />
+        ) : aba === "calendario" ? (
+          <CalendarioTarefas tarefas={filtradas.filter((t) => !t.arquivada)} hoje={hoje} onAbrir={(id) => setAberto({ tipo: "editar", id })} />
         ) : (
           <ConfiguracaoQuadro quadro={quadro} listas={listas} etiquetas={etiquetas} podeEditar={podeEditar} onMudou={() => router.refresh()} />
         )}
       </AbasEspaco>
+
+      {aba === "lista" && (sel.size > 0 || aplicando) && (
+        <BarraSelecao
+          fixa
+          onAltura={setAlturaBarra}
+          bloqueada={aplicando}
+          registros={naLista.filter((t) => sel.has(t.id)).map((t) => ({ key: t.id, rotulo: `${rotuloTicket(t.ticket)} ${t.titulo}` }))}
+          onRemover={(k) =>
+            setSel((s) => {
+              const n = new Set(s);
+              n.delete(Number(k));
+              return n;
+            })
+          }
+          onLimpar={() => setSel(new Set())}
+          resumo={
+            <span>
+              {num(sel.size)} {sel.size === 1 ? "tarefa selecionada" : "tarefas selecionadas"}
+            </span>
+          }
+        >
+          <BarraEdicaoMassaTarefas listas={ativas} pessoas={doGrupo} etiquetas={etiquetas} arquivadas={arquivadas} aplicando={aplicando} onAplicar={aplicarMassa} />
+        </BarraSelecao>
+      )}
 
       <TarefaDetalhe
         aberto={aberto}

@@ -22,6 +22,7 @@ import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
 import { useConformidade } from "./useConformidade";
+import { TarefasDoVinculo } from "./TarefasDoVinculo";
 
 type Rep = {
   id: number;
@@ -349,6 +350,7 @@ export function useDfdGravado({
                   <IconLayers className="h-4 w-4" /> Ver protocolo
                 </Button>
               )}
+              {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} />}
               {botaoSobrescrever}
             </>
           }

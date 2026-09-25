@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandosCriarTarefa, comandosMover, comandosVinculos } from "../src/lib/tarefas-sql.ts";
+import { comandosCriarTarefa, comandosMassa, comandosMover, comandosVinculos } from "../src/lib/tarefas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // TAREFAS pelos MESMOS builders do servidor, no driver `drizzle-orm/d1` REAL e DENTRO de `db.batch`.
@@ -55,9 +55,42 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
   });
 
   it("troca responsáveis e etiquetas (undefined = não mexe)", async () => {
-    await orm.batch(comandosVinculos(orm, 1, [9502], undefined) as never);
+    await orm.batch(comandosVinculos(orm, 1, { pessoas: [9502] }) as never);
     const ps = db.prepare("SELECT usuario_id AS u FROM tarefa_pessoas WHERE tarefa_id = 1").all() as { u: number }[];
     assert.deepEqual(ps.map((p) => p.u), [9502]);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_etiqueta_links WHERE tarefa_id = 1").get() as { n: number }).n, 1);
+  });
+
+  it("observador: responsável prevalece; virar responsável tira da observação", async () => {
+    const papeis = () =>
+      (db.prepare("SELECT usuario_id AS u, papel AS p FROM tarefa_pessoas WHERE tarefa_id = 1 ORDER BY usuario_id").all() as { u: number; p: string }[]).map(
+        (r) => `${r.u}:${r.p}`,
+      );
+    await orm.batch(comandosVinculos(orm, 1, { observadores: [9501, 9502] }) as never);
+    assert.deepEqual(papeis(), ["9501:observador", "9502:responsavel"]);
+    await orm.batch(comandosVinculos(orm, 1, { pessoas: [9501, 9502], observadores: [] }) as never);
+    assert.deepEqual(papeis(), ["9501:responsavel", "9502:responsavel"]);
+  });
+
+  it("massa: mover leva ao FIM da lista de destino (na ordem) e conclui; responsável/etiqueta/prioridade/arquivar", async () => {
+    await orm.batch(comandosMassa(orm, [1, 2], { campo: "lista", listaId: 2 }, true) as never);
+    const ts = db.prepare("SELECT id, lista_id AS l, ordem AS o, concluida_em AS c FROM tarefas ORDER BY id").all() as {
+      id: number;
+      l: number;
+      o: number;
+      c: string | null;
+    }[];
+    assert.deepEqual(ts.map((t) => [t.l, t.o]), [[2, 1], [2, 2]]);
+    assert.ok(ts.every((t) => t.c));
+    await orm.batch(comandosMassa(orm, [1, 2], { campo: "responsavel", modo: "adicionar", usuarioId: 9501 }) as never);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_pessoas WHERE usuario_id = 9501 AND papel = 'responsavel'").get() as { n: number }).n, 2);
+    await orm.batch(comandosMassa(orm, [1, 2], { campo: "responsavel", modo: "remover", usuarioId: 9501 }) as never);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_pessoas WHERE usuario_id = 9501").get() as { n: number }).n, 0);
+    await orm.batch(comandosMassa(orm, [1, 2], { campo: "etiqueta", modo: "adicionar", etiquetaId: 1 }) as never);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_etiqueta_links").get() as { n: number }).n, 2);
+    await orm.batch(comandosMassa(orm, [2], { campo: "prioridade", prioridade: "urgente" }) as never);
+    await orm.batch(comandosMassa(orm, [1], { campo: "arquivar", arquivada: true }) as never);
+    const r = db.prepare("SELECT id, prioridade AS p, arquivada AS a FROM tarefas ORDER BY id").all() as { id: number; p: string; a: number }[];
+    assert.deepEqual(r.map((x) => [x.p, x.a]), [["media", 1], ["urgente", 0]]);
   });
 });

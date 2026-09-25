@@ -45,6 +45,7 @@ import { type BaseReenvio, ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
 import { useConformidade } from "./useConformidade";
+import { TarefasDoVinculo } from "./TarefasDoVinculo";
 
 type Rep = {
   id: number;
@@ -544,6 +545,7 @@ export function useProtocoloGravado({
                 Histórico
               </Button>
             )}
+            {proto && !travado && <TarefasDoVinculo tipo="protocolo" id={proto.id} />}
             {!travado && temRelatorio && (
               <Button
                 variant="secondary"

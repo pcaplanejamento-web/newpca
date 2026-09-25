@@ -15,6 +15,7 @@ const MAX_VISIVEIS = 200;
  * SELEÇÃO ÚNICA COM BUSCA: campo de busca (sem acento/caixa; vários termos de uma vez com ":") + a lista rolável das
  * opções que casam (rótulo + detalhe), a escolhida destacada. Teclado no campo: ↑/↓ percorrem, Enter escolhe.
  * Alvos ≥ 44px; renderiza até 200 (a busca restringe o resto). Ex.: o protocolo de destino ao mover/vincular um DFD.
+ * `onBusca` = a busca vai TAMBÉM ao servidor (quem usa troca as `opcoes` pelo resultado — ex.: o vínculo de uma tarefa).
  */
 export function SeletorBusca({
   opcoes,
@@ -24,6 +25,7 @@ export function SeletorBusca({
   placeholder = "Pesquisar…",
   vazio = "Nada encontrado",
   disabled = false,
+  onBusca,
 }: {
   opcoes: OpcaoBusca[];
   valor: string;
@@ -32,6 +34,8 @@ export function SeletorBusca({
   placeholder?: string;
   vazio?: string;
   disabled?: boolean;
+  /** O texto digitado (a cada mudança) — para buscar no servidor. */
+  onBusca?: (q: string) => void;
 }) {
   const id = useId();
   const [busca, setBusca] = useState("");
@@ -58,10 +62,12 @@ export function SeletorBusca({
         onChange={(e) => {
           setBusca(e.target.value);
           setCursor(-1);
+          onBusca?.(e.target.value);
         }}
         onClear={() => {
           setBusca("");
           setCursor(-1);
+          onBusca?.("");
         }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {

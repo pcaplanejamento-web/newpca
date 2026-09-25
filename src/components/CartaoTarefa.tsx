@@ -10,12 +10,13 @@ import {
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   rotuloData,
+  ROTULO_VINCULO,
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { IconBandeira, IconClock, IconGrip } from "./icons";
+import { IconAnexo, IconBandeira, IconChecklist, IconClock, IconComentario, IconGrip, IconLink } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
 const MAX_AVATARES = 3;
@@ -88,7 +89,7 @@ export function CartaoTarefa({
         </div>
       )}
       <p className={`pointer-events-none line-clamp-3 pr-6 text-[13px] font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
-      <div className="mt-2 flex items-center gap-2 text-[11px] text-muted">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
         <span className="relative z-10 font-mono tabular-nums">
           <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
             {rotuloTicket(t.ticket)}
@@ -107,6 +108,33 @@ export function CartaoTarefa({
           >
             <IconClock className="h-3 w-3" />
             {rotuloData(t.prazo, hoje)}
+          </span>
+        )}
+        {t.checklist.total > 0 && (
+          <span
+            className="pointer-events-none inline-flex items-center gap-0.5 tabular-nums"
+            title={`Checklist ${t.checklist.feitos} de ${t.checklist.total}`}
+            style={t.checklist.feitos === t.checklist.total ? { color: "var(--ok)" } : undefined}
+          >
+            <IconChecklist className="h-3.5 w-3.5" />
+            {t.checklist.feitos}/{t.checklist.total}
+          </span>
+        )}
+        {t.comentarios > 0 && (
+          <span className="pointer-events-none inline-flex items-center gap-0.5 tabular-nums" title={`${t.comentarios} comentário(s)`}>
+            <IconComentario className="h-3.5 w-3.5" />
+            {t.comentarios}
+          </span>
+        )}
+        {t.anexos > 0 && (
+          <span className="pointer-events-none inline-flex items-center gap-0.5 tabular-nums" title={`${t.anexos} anexo(s)`}>
+            <IconAnexo className="h-3.5 w-3.5" />
+            {t.anexos}
+          </span>
+        )}
+        {t.vinculo && (
+          <span className="pointer-events-none inline-flex" title={`${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? "(excluído)"}`}>
+            <IconLink className="h-3.5 w-3.5 text-accent" aria-label={`Vinculada a ${ROTULO_VINCULO[t.vinculo.tipo]}`} />
           </span>
         )}
         {resp.length > 0 && (

@@ -112,6 +112,15 @@ export async function historicoDfd(dfdId: number, limite = 300): Promise<LinhaHi
   return semDuplicatas(linhas);
 }
 
+/** Histórico de UMA entidade qualquer (ex.: uma tarefa) — as linhas `entidade + entidade_id`, mais recente primeiro
+ * (o índice `auditoria_entidade_idx` cobre). */
+export async function historicoEntidade(entidade: EntidadeAuditoria, id: number, limite = 300): Promise<LinhaHistorico[]> {
+  return consultaHist()
+    .where(and(eq(auditoria.entidade, entidade), eq(auditoria.entidadeId, id)))
+    .orderBy(desc(auditoria.id))
+    .limit(limite);
+}
+
 /**
  * Histórico CONECTADO de um PROTOCOLO: as alterações da capa/gestão + TODAS as dos DFDs e itens que
  * passaram por ele (`protocolo_id`) — inclusive DFDs já excluídos — e, do legado (antes da coluna

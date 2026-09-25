@@ -190,6 +190,7 @@ export function DfdsView({
   pcaFiltro = null,
   modoPca,
   edicoes,
+  abrirInicial = null,
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -217,6 +218,8 @@ export function DfdsView({
   /** As EDIÇÕES SALVAS das tabelas desta Mesa (`carregarMesa`): cada tabela (protocolos, DFDs, itens, consolidada) tem as
    * suas — `<prefixo><tabela>`. */
   edicoes?: { prefixo: string; lista: EdicaoTabela[]; padroes: Record<string, unknown> };
+  /** O banner que a Mesa ABRE ao chegar (`?abrir=protocolo:<id>|dfd:<id>` — o link do vínculo de uma tarefa). */
+  abrirInicial?: AberturaMesa | null;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -234,7 +237,11 @@ export function DfdsView({
     };
   const [erro, setErro] = useState<string | null>(null);
   // Banners do GRAVADO — os MESMOS componentes da análise (protocolo / DFD solto).
-  const [aberto, setAberto] = useState<AberturaMesa | null>(null);
+  const [aberto, setAberto] = useState<AberturaMesa | null>(abrirInicial);
+  // O `?abrir=` já foi usado: sai da URL (recarregar não reabre o banner), sem nova renderização.
+  useEffect(() => {
+    if (abrirInicial) window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, [abrirInicial]);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string; protocoloId: number | null } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
   const [salvandoVinc, setSalvandoVinc] = useState(false);

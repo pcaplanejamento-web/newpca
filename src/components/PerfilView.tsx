@@ -13,6 +13,7 @@ import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
 import { Segmented } from "./Segmented";
 import { ThemeToggle } from "./ThemeToggle";
+import { redimensionarImagem } from "@/lib/imagem-cliente";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
   admin: "Administrador",
@@ -21,32 +22,6 @@ const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
 };
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
-
-/** Redimensiona a imagem no cliente (máx `max`px) e devolve um data-URL JPEG. */
-function redimensionarFoto(file: File, max = 256): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Falha ao ler o arquivo."));
-    reader.onload = () => {
-      const img = new window.Image();
-      img.onerror = () => reject(new Error("Imagem inválida."));
-      img.onload = () => {
-        const escala = Math.min(1, max / Math.max(img.width, img.height));
-        const w = Math.max(1, Math.round(img.width * escala));
-        const h = Math.max(1, Math.round(img.height * escala));
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas indisponível."));
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 function Aviso({ msg }: { msg: Msg }) {
   if (!msg) return null;
@@ -160,7 +135,7 @@ export function PerfilView({
       return;
     }
     try {
-      setFoto(await redimensionarFoto(file));
+      setFoto(await redimensionarImagem(file));
       setFotoAlterada(true);
       setMsgPerfil(null);
     } catch (err) {

@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel } from "@/lib/tarefas";
+import { criarTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { criarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -19,7 +19,9 @@ export async function POST(req: Request) {
   const lista = await getLista(d.listaId);
   if (!lista || lista.quadroId !== q.id || lista.arquivada) return erro("Lista inválida.", 422);
   const pessoas = d.pessoas ?? [];
-  if (!(await pessoasValidas(q.grupoId, pessoas))) return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
+  const observadores = d.observadores ?? [];
+  if (!(await pessoasValidas(q.grupoId, [...pessoas, ...observadores]))) return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
+  if (d.vinculo && !(await vinculoAcessivel(a.u, d.vinculo))) return erro("Vínculo não encontrado.", 422);
   const nova = await criarTarefa({
     quadroId: q.id,
     listaId: lista.id,
@@ -30,8 +32,11 @@ export async function POST(req: Request) {
     prazo: d.prazo ?? null,
     concluida: lista.concluida,
     pessoas,
+    observadores,
     etiquetas: await etiquetasDoQuadro(q.id, d.etiquetas ?? []),
     criadoPor: a.u.id,
+    estimativaH: d.estimativaH ?? null,
+    vinculo: d.vinculo ?? null,
   });
   await registrarAuditoria({
     usuario: a.u,

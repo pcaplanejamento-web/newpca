@@ -12,6 +12,7 @@ import {
   PRIORIDADES,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
+  ROTULO_VINCULO,
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
@@ -33,6 +34,9 @@ export function TabelaTarefas({
   ativa,
   onAbrir,
   edicoes,
+  selecao,
+  onSelecao,
+  reservaInferior = 0,
 }: {
   tarefas: TarefaResumo[];
   /** TODAS as listas (inclusive arquivadas — o nome de qualquer cartão). */
@@ -43,6 +47,11 @@ export function TabelaTarefas({
   ativa: number | null;
   onAbrir: (id: number) => void;
   edicoes?: EdicoesDaTabela;
+  /** Seleção (edição em massa) — sem ela, a tabela não seleciona. */
+  selecao?: Set<number>;
+  onSelecao?: (s: Set<number>) => void;
+  /** Altura reservada no fim do display (a barra de seleção fixa). */
+  reservaInferior?: number;
 }) {
   const colunas = useMemo<Column<TarefaResumo>[]>(() => {
     const lista = new Map(listas.map((l) => [l.id, l]));
@@ -79,7 +88,7 @@ export function TabelaTarefas({
           </span>
         ),
       },
-      { key: "lista", header: "Lista", nowrap: true, value: (t) => lista.get(t.listaId)?.nome ?? "—" },
+      { key: "lista", header: "Lista", nowrap: true, value: (t) => lista.get(t.listaId)?.nome ?? "—", render: (t) => lista.get(t.listaId)?.nome ?? "—" },
       {
         key: "prioridade",
         header: "Prioridade",
@@ -157,6 +166,40 @@ export function TabelaTarefas({
         ),
       },
       {
+        key: "checklist",
+        header: "Checklist",
+        nowrap: true,
+        filter: "range",
+        formatarFaixa: (n) => `${Math.round(n)}%`,
+        numero: (t) => (t.checklist.total ? (t.checklist.feitos / t.checklist.total) * 100 : null),
+        value: (t) => (t.checklist.total ? `${t.checklist.feitos}/${t.checklist.total}` : ""),
+        render: (t) =>
+          t.checklist.total ? (
+            <span className="tabular-nums" style={t.checklist.feitos === t.checklist.total ? { color: "var(--ok)" } : undefined}>
+              {t.checklist.feitos}/{t.checklist.total}
+            </span>
+          ) : (
+            <span className="text-faint">—</span>
+          ),
+      },
+      {
+        key: "estimativa",
+        header: "Estimativa (h)",
+        nowrap: true,
+        filter: "range",
+        formatarFaixa: (n) => num(n),
+        numero: (t) => t.estimativaH,
+        value: (t) => (t.estimativaH == null ? "" : String(t.estimativaH)),
+        render: (t) => (t.estimativaH == null ? <span className="text-faint">—</span> : num(t.estimativaH)),
+      },
+      {
+        key: "vinculo",
+        header: "Vínculo",
+        nowrap: true,
+        value: (t) => (t.vinculo ? `${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}` : "Sem vínculo"),
+        render: (t) => (t.vinculo ? <span className="text-[12.5px] text-text-2">{`${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}`}</span> : <span className="text-faint">—</span>),
+      },
+      {
         key: "criada",
         header: "Criada em",
         nowrap: true,
@@ -185,6 +228,10 @@ export function TabelaTarefas({
       scrollInterno
       density="compact"
       edicoes={edicoes}
+      selectable={!!onSelecao}
+      selected={selecao}
+      onSelected={onSelecao ? (s) => onSelecao(new Set([...s].map(Number))) : undefined}
+      reservaInferior={reservaInferior}
       vazio="Nenhuma tarefa — crie pelo botão “Nova tarefa” ou na aba Quadro."
       resumo={(linhas) => (
         <span>

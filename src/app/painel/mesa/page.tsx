@@ -1,14 +1,18 @@
 import { DfdsView } from "@/components/DfdsView";
 import { getUsuarioAtual } from "@/lib/auth";
 import { carregarMesa } from "@/lib/mesa-dados";
+import { lerVinculo } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
 
 // Tela "Mesa" (ex-"DFD"): mesa de trabalho única — Protocolos, DFDs e Itens vistos e abertos
 // pelos mesmos banners padrão. Rota /painel/mesa (a antiga /painel/dfds redireciona). O carregamento
-// é o MESMO da aba Mesa do PCA (`carregarMesa`).
-export default async function MesaPage() {
-  const m = await carregarMesa(await getUsuarioAtual());
+// é o MESMO da aba Mesa do PCA (`carregarMesa`). `?abrir=protocolo:<id>|dfd:<id>` abre o banner direto (o link do
+// vínculo de uma tarefa); o acesso é conferido pela rota do banner, como no clique.
+export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string }> }) {
+  const [m, sp] = await Promise.all([getUsuarioAtual().then(carregarMesa), searchParams]);
+  const alvo = lerVinculo(sp.abrir);
+  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   return (
     <DfdsView
       podeEditar={m.podeEditar}
@@ -26,6 +30,7 @@ export default async function MesaPage() {
       filtroInicial={m.filtroInicial}
       pcaFiltro={m.pcaFiltro}
       edicoes={m.edicoes}
+      abrirInicial={abrirInicial}
     />
   );
 }

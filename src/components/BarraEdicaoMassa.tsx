@@ -6,6 +6,9 @@ import { type AcaoMassa, buildPrevisao, type CampoMassa } from "@/lib/dfd-tratam
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import type { AcaoMassaItem, CampoMassaItem } from "@/lib/massa-itens";
 import { MESES, type Prioridade, parseNumberBR } from "@/lib/normalize";
+import { nomeExibicao } from "@/lib/pessoa";
+import { type EtiquetaTarefa, type ListaTarefas, PRIORIDADES as PRIORIDADES_TAREFA, type Prioridade as PrioridadeTarefa, ROTULO_PRIORIDADE } from "@/lib/tarefas-core";
+import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
 import { Button } from "./Button";
 import { Checkbox, TextField } from "./Field";
 import { inputCls } from "./formStyles";
@@ -398,6 +401,125 @@ export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplica
               onChange={(e) => setNumero(e.target.value)}
             />
           </div>
+        )
+      }
+    />
+  );
+}
+
+type CampoTarefa = AcaoMassaTarefas["campo"];
+
+/**
+ * EDIÇÃO EM MASSA das TAREFAS (aba Lista do quadro): mover de lista, responsável (+/−), etiqueta (+/−), prazo (ou
+ * limpar), prioridade e arquivar/restaurar — a MESMA moldura dos editores da Mesa (controle em cima; campo + Aplicar).
+ */
+export function BarraEdicaoMassaTarefas({
+  listas,
+  pessoas,
+  etiquetas,
+  arquivadas = false,
+  aplicando = false,
+  onAplicar,
+}: {
+  /** As listas ATIVAS (destinos). */
+  listas: ListaTarefas[];
+  /** As pessoas do GRUPO do quadro. */
+  pessoas: { id: number; nome: string; apelido?: string | null }[];
+  etiquetas: EtiquetaTarefa[];
+  /** A seleção é de ARQUIVADAS (a ação vira "Restaurar"). */
+  arquivadas?: boolean;
+  aplicando?: boolean;
+  onAplicar: (acao: AcaoMassaTarefas) => void;
+}) {
+  const campos: { value: CampoTarefa; label: string }[] = [
+    { value: "lista", label: "Lista" },
+    { value: "responsavel", label: "Responsável" },
+    ...(etiquetas.length ? [{ value: "etiqueta" as const, label: "Etiqueta" }] : []),
+    { value: "prazo", label: "Prazo" },
+    { value: "prioridade", label: "Prioridade" },
+    { value: "arquivar", label: arquivadas ? "Restaurar" : "Arquivar" },
+  ];
+  const [campo, setCampo] = useState<CampoTarefa>("lista");
+  const [lista, setLista] = useState("");
+  const [modo, setModo] = useState<"adicionar" | "remover">("adicionar");
+  const [pessoa, setPessoa] = useState("");
+  const [etiqueta, setEtiqueta] = useState("");
+  const [prazo, setPrazo] = useState("");
+  const [limparPrazo, setLimparPrazo] = useState(false);
+  const [prioridade, setPrioridade] = useState<PrioridadeTarefa>("media");
+  const acao: AcaoMassaTarefas | null =
+    campo === "lista"
+      ? lista
+        ? { campo, listaId: Number(lista) }
+        : null
+      : campo === "responsavel"
+        ? pessoa
+          ? { campo, modo, usuarioId: Number(pessoa) }
+          : null
+        : campo === "etiqueta"
+          ? etiqueta
+            ? { campo, modo, etiquetaId: Number(etiqueta) }
+            : null
+          : campo === "prazo"
+            ? limparPrazo || prazo
+              ? { campo, prazo: limparPrazo ? null : prazo }
+              : null
+            : campo === "prioridade"
+              ? { campo, prioridade }
+              : { campo, arquivada: !arquivadas };
+  const modoSeg = (
+    <Segmented<"adicionar" | "remover">
+      ariaLabel="Adicionar ou remover"
+      value={modo}
+      onChange={setModo}
+      options={[
+        { value: "adicionar", label: "Adicionar" },
+        { value: "remover", label: "Remover" },
+      ]}
+    />
+  );
+  const sel = (rotulo: string, valor: string, set: (v: string) => void, opcoes: { v: string; r: string }[]) => (
+    <select aria-label={rotulo} className={inputCls} style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }} value={valor} onChange={(e) => set(e.target.value)}>
+      <option value="">— {rotulo} —</option>
+      {opcoes.map((o) => (
+        <option key={o.v} value={o.v}>
+          {o.r}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <Moldura
+      campos={campos}
+      campo={campo}
+      onCampo={setCampo}
+      pronto={!!acao}
+      aplicando={aplicando}
+      onAplicar={() => acao && onAplicar(acao)}
+      rotulo={campo === "arquivar" ? (arquivadas ? "Restaurar" : "Arquivar") : "Aplicar"}
+      controle={
+        campo === "lista" ? (
+          sel("Lista de destino", lista, setLista, listas.map((l) => ({ v: String(l.id), r: l.nome })))
+        ) : campo === "responsavel" ? (
+          <>
+            {modoSeg}
+            {sel("Pessoa", pessoa, setPessoa, pessoas.map((p) => ({ v: String(p.id), r: nomeExibicao(p) })))}
+          </>
+        ) : campo === "etiqueta" ? (
+          <>
+            {modoSeg}
+            {sel("Etiqueta", etiqueta, setEtiqueta, etiquetas.map((e) => ({ v: String(e.id), r: e.nome })))}
+          </>
+        ) : campo === "prazo" ? (
+          <>
+            <input type="date" aria-label="Prazo" className={inputCls} style={{ width: "auto", minWidth: 170 }} disabled={limparPrazo} value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+            <Checkbox checked={limparPrazo} onChange={(e) => setLimparPrazo(e.target.checked)} label="Sem prazo (limpar)" />
+          </>
+        ) : campo === "prioridade" ? (
+          <Segmented<PrioridadeTarefa> ariaLabel="Prioridade" value={prioridade} onChange={setPrioridade} options={PRIORIDADES_TAREFA.map((p) => ({ value: p, label: ROTULO_PRIORIDADE[p] }))} />
+        ) : (
+          <Nota>{arquivadas ? "As tarefas voltam ao quadro." : "As tarefas saem do quadro — restaure pela aba Lista (Arquivadas)."}</Nota>
         )
       }
     />

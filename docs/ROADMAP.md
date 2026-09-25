@@ -952,7 +952,7 @@ abre ao clicar numa **fatia/barra** dos gráficos do Dashboard do PCA (painel e 
 mesma chave do gráfico; itens ANUAIS com 1/12 no cronograma), nos quadros do **Dashboard de governança da Mesa** (os
 protocolos de cada estado/situação/faixa de tempo/semana e os DFDs de cada unidade — abrem os banners da Mesa) e nas
 **métricas das Integrações** (o dia e a fonte Cloudflare). A soma do detalhe é sempre a do número clicado (testado).
-### Tarefas (quadro estilo Trello) — Fase 1 entregue
+### Tarefas (quadro estilo Trello) — Fases 1 e 2 entregues
 ✅ Novo módulo **`tarefas`** (`/painel/tarefas`, migração **`0042`** — a aba vai a quem já tem a Mesa): **vários quadros por
 grupo** (só o grupo do quadro vê e recebe tarefas; o ADM vê todos), cards 4:5 + "Novo quadro" (editor, no grupo ativo). No
 quadro (`/painel/tarefas/[id]`): abas **Quadro** (kanban — listas lado a lado, **arrastar** cartões com mouse no cartão e
@@ -963,9 +963,12 @@ Cartão com **nº de TICKET** único por quadro (`#128`, copiável), prioridade 
 vence em 2 dias/hoje · atrasada), início, **vários responsáveis** (pessoas do grupo, com foto) e etiquetas. **Filtros**
 (responsável com a foto — "as minhas" —, prazo, prioridade, etiqueta, busca por título/#ticket com ":") valem nas duas
 abas. Arquivar/restaurar; excluir (editor); auditoria de toda escrita.
-🔜 **Fase 2:** checklist, comentários com @menção, anexos (links + arquivo ≤ 1 MB), vínculo com Protocolo/DFD/PCA/Orçamento
-("Criar tarefa" nos banners da Mesa), histórico do cartão, edição em massa, exportar .xlsx e aba Calendário.
-💡 **Fase 3:** recorrência, Dashboard do quadro, notificações no sino, modelos e automações.
+✅ **Fase 2 (migração `0043`):** **checklist** (progresso no cartão), **comentários com @menção**, **anexos** (links e
+imagem/PDF até 1 MB — a imagem maior é reduzida no navegador), **estimativa** e **observadores**, **vínculo** com
+Protocolo/DFD/PCA/Orçamento (o link abre o banner na Mesa — `?abrir=`), botão **"Tarefas"** nos banners do DFD e do
+protocolo (lista as ligadas + **"Criar tarefa"** já vinculada), **histórico** do cartão, **edição em massa** e **exportar
+.xlsx** na Lista, e a aba **Calendário** (grade do mês; agenda no celular).
+🔜 **Fase 3:** recorrência, Dashboard do quadro, notificações no sino, modelos e automações.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar

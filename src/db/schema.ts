@@ -825,11 +825,17 @@ export const tarefas = sqliteTable(
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** Estimativa em horas (migração `0043`). */
+    estimativaH: real("estimativa_h"),
+    /** VÍNCULO com o sistema (`protocolo`/`dfd`/`pca`/`orcamento` + id) — sem FK: o alvo pode ser excluído depois. */
+    vinculoTipo: text("vinculo_tipo"),
+    vinculoId: integer("vinculo_id"),
   },
   (t) => [
     uniqueIndex("tarefas_quadro_ticket_uq").on(t.quadroId, t.ticket),
     index("tarefas_lista_ordem_idx").on(t.listaId, t.ordem),
     index("tarefas_prazo_idx").on(t.prazo),
+    index("tarefas_vinculo_idx").on(t.vinculoTipo, t.vinculoId),
   ],
 );
 
@@ -872,4 +878,58 @@ export const tarefaEtiquetaLinks = sqliteTable(
       .references(() => tarefaEtiquetas.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.tarefaId, t.etiquetaId] })],
+);
+
+export const tarefaChecklist = sqliteTable(
+  "tarefa_checklist",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    texto: text("texto").notNull(),
+    feito: integer("feito", { mode: "boolean" }).notNull().default(false),
+    ordem: real("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_checklist_tarefa_idx").on(t.tarefaId, t.ordem)],
+);
+
+export const tarefaComentarios = sqliteTable(
+  "tarefa_comentarios",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    /** Snapshot do nome (o comentário sobrevive à exclusão do usuário). */
+    usuarioNome: text("usuario_nome").notNull(),
+    texto: text("texto").notNull(),
+    /** JSON `number[]` — as pessoas citadas com @. */
+    mencoes: text("mencoes").notNull().default("[]"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    editadoEm: text("editado_em"),
+  },
+  (t) => [index("tarefa_comentarios_tarefa_idx").on(t.tarefaId)],
+);
+
+export const tarefaAnexos = sqliteTable(
+  "tarefa_anexos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    /** `link` (url) | `arquivo` (conteudo = data-URL ≤ 1 MB). */
+    tipo: text("tipo").notNull(),
+    nome: text("nome").notNull(),
+    url: text("url"),
+    conteudo: text("conteudo"),
+    mime: text("mime"),
+    tamanho: integer("tamanho"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_anexos_tarefa_idx").on(t.tarefaId)],
 );

@@ -1747,7 +1747,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`carregarQuadros`, `carregarQuadro` = listas + cartões resumidos + etiquetas + pessoas do grupo + edições salvas, UMA carga
   para as três abas).
 - **Espaço do quadro** (`/painel/tarefas/[id]` → **`QuadroTarefas`**): UMA linha de cabeçalho (voltar · cor · nome · grupo ·
-  abertas/atrasadas/concluídas) + `AbasEspaco` **Quadro · Lista · Configuração** com `FerramentasAba` (**`FiltrosTarefas`** —
+  abertas/atrasadas/concluídas) + `AbasEspaco` **Quadro · Lista · Calendário · Configuração** com `FerramentasAba` (**`FiltrosTarefas`** —
   busca + `SeletorFiltro` Responsável [a FOTO da escolhida; "as minhas"] / Prazo / Prioridade / Etiqueta + Limpar — e "Nova
   tarefa"). Os cartões ficam em estado LOCAL (sincronizado com o servidor a cada `router.refresh`); o filtro segue entre abas.
   - **Quadro** = **`QuadroKanban`** (listas lado a lado, até o fim do display no desktop com rolagem interna por lista —
@@ -1773,8 +1773,45 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/tarefas/quadros/[id]/listas` (criar / ordem), `POST /api/tarefas/quadros/[id]/etiquetas`, `PATCH`/`DELETE
   /api/tarefas/listas/[id]` e `/api/tarefas/etiquetas/[id]` (editor), `POST /api/tarefas` (qualquer membro), `GET`/`PATCH
   /api/tarefas/[id]` (membro; trocar de lista leva ao FIM dela) + `DELETE` (editor) e `POST /api/tarefas/[id]/mover`.
-- **Próximas fases** (ver `docs/ROADMAP.md`): checklist, comentários/@menção, anexos, vínculo com Protocolo/DFD/PCA/Orçamento,
-  histórico, massa, exportar, Calendário; depois recorrência, Dashboard, notificações, modelos e automações.
+- **FASE 2 — conteúdo e equipe (migração `0043`, aditiva):** `tarefas` + `estimativa_h`, `vinculo_tipo`/`vinculo_id`
+  (índice; SEM FK — o alvo pode ser excluído: o rótulo vira "#id (excluído)"); tabelas `tarefa_checklist` (texto, feito, `ordem`
+  real), `tarefa_comentarios` (autor + snapshot do nome, `mencoes` JSON) e `tarefa_anexos` (`link` url | `arquivo` data-URL
+  png/jpeg/webp/pdf ≤ 1 MB — `ANEXO_MAX_BYTES`, teto de 30 por tarefa). **Observadores** = `tarefa_pessoas.papel='observador'`
+  (a pessoa é responsável OU observadora — virar responsável tira da observação: `comandosVinculos` com
+  `onConflictDoUpdate`). Núcleo puro (`tarefas-core`): `TIPOS_VINCULO`/`hrefVinculo` (protocolo/DFD →
+  `/painel/mesa?abrir=tipo:id`, PCA/orçamento → o espaço), `lerVinculo`, `progressoChecklist`, `mencoesDoTexto` (apelido,
+  nome inteiro sem espaço ou 1º nome só quando não é ambíguo — nunca cita a pessoa errada) + `textoMencao`, `gradeMes`/
+  `tarefasPorPrazo` (calendário). `TarefaResumo` ganhou `observadores`, `estimativaH`, `vinculo {tipo,id,rotulo}` e as
+  contagens `checklist {feitos,total}`/`comentarios`/`anexos` (agregadas no `dadosQuadro` por `GROUP BY`; os rótulos dos
+  vínculos por `rotulosVinculos`, lotes ≤ 90). `comandosMassa` (builders, testados no driver D1 real): mover de lista (cada
+  uma ao FIM do destino, na ordem; conclusão pela lista), responsável/etiqueta +/−, prazo, prioridade, arquivar.
+  - **Detalhe (`TarefaDetalhe`)** — campos + **Estimativa**, **Observadores** (`SeletorPessoas`), **Vínculo**
+    (**`VinculoTarefa`**: `Segmented` do tipo + `SeletorBusca` com `onBusca` → `GET /api/tarefas/vinculos`, no escopo de unidade
+    do usuário) e, na tarefa existente, **`ChecklistTarefa`** (progresso, marcar, renomear, ↑/↓ pelos vizinhos, remover) e
+    **`AnexosTarefa`** (`Dropzone` — imagem maior que 1 MB é REDUZIDA no navegador por `redimensionarImagem`,
+    `src/lib/imagem-cliente.ts`, a MESMA da foto do perfil; PDF maior pede o link — + link http/s; lista com `LinkExterno
+    variante="texto"`) — gravam NA HORA (`agir`: recarrega o conteúdo e o quadro). Painel da direita **Atividade**
+    (`Modal.paineis`, aberto por padrão no desktop; botão "Atividade (N)" no rodapé): **Comentários** (**`ComentariosTarefa`**:
+    "@" sugere as pessoas do grupo, Ctrl/⌘+Enter envia, editar só o próprio, excluir o próprio ou o editor) | **Histórico**
+    (`Historico` + `GET /api/tarefas/[id]/historico` = `historicoEntidade("tarefa", id)`, nova em `auditoria.ts`).
+    `GET /api/tarefas/[id]` devolve a tarefa + o conteúdo (anexos SEM o arquivo; o arquivo é servido por `GET
+    /api/tarefas/anexos/[id]` — `decodificarDataUrl`, `pessoa.ts`, generalizado da foto; cache `immutable`).
+  - **Cartão** ganhou os ícones checklist `n/m` (verde completo), comentários, anexos e vínculo.
+  - **Aba Calendário** (**`CalendarioTarefas`**): grade do mês domingo → sábado (hoje marcado; faixa na cor do semáforo; "+N"
+    abre o dia; ←/→/Hoje; os mesmos filtros); no celular vira a AGENDA do mês. As sem prazo só são contadas.
+  - **Aba Lista**: colunas novas Checklist/Estimativa (faixa)/Vínculo; **seleção** + `BarraSelecao` fixa +
+    **`BarraEdicaoMassaTarefas`** (`BarraEdicaoMassa.tsx`, a MESMA `Moldura`) → `POST /api/tarefas/massa` (≤ 50/chamada,
+    `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); botão **XLSX** (`exportar-tarefas.ts`:
+    `linhasPlanilhaTarefas` puro/testado + SheetJS por import dinâmico).
+  - **Mesa ⇄ Tarefas:** `/painel/mesa?abrir=protocolo:<id>|dfd:<id>` abre o banner (`DfdsView.abrirInicial`; a URL é
+    limpa); o botão **`TarefasDoVinculo`** ("Tarefas (abertas/total)") no rodapé do DFD gravado e do protocolo gravado lista
+    as tarefas ligadas (`GET /api/tarefas/do-vinculo`) e **"Criar tarefa"** num quadro → `/painel/tarefas/<q>?nova=tipo:id`
+    (a tarefa NOVA abre já vinculada); `?tarefa=<id>` abre aquela tarefa no quadro. Sem tarefas nem quadros, o botão some.
+  - **Rotas novas:** `POST /api/tarefas/[id]/checklist` + `PATCH`/`DELETE …/checklist/[itemId]`, `POST …/comentarios` +
+    `PATCH`/`DELETE …/comentarios/[cid]`, `POST …/anexos` + `GET`/`DELETE /api/tarefas/anexos/[id]`, `GET …/historico`,
+    `POST /api/tarefas/massa`, `GET /api/tarefas/vinculos?tipo=&q=`, `GET /api/tarefas/do-vinculo?tipo=&id=` — todas
+    `exigirUsuario` + membro do grupo do quadro (`tarefaAcessivel`), vínculo conferido por `vinculoAcessivel`, auditoria.
+- **Próxima fase** (ver `docs/ROADMAP.md`): recorrência, Dashboard do quadro, notificações no sino, modelos e automações.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

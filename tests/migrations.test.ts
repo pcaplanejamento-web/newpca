@@ -455,6 +455,14 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual(JSON.parse(sem.abas), ["pca"]);
   });
 
+  it("0043 conteúdo das tarefas (checklist, comentários, anexos) + estimativa e vínculo no cartão", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["tarefa_checklist", "tarefa_comentarios", "tarefa_anexos"]) assert.ok(tabelas.includes(t), t);
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('tarefas')");
+    for (const c of ["estimativa_h", "vinculo_tipo", "vinculo_id"]) assert.ok(cols.includes(c), c);
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='index'").includes("tarefas_vinculo_idx"));
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

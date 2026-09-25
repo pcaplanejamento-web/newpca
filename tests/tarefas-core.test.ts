@@ -8,11 +8,19 @@ import {
   moverCartao,
   ordemEntre,
   resumoQuadro,
+  gradeMes,
+  hrefVinculo,
+  lerVinculo,
+  mencoesDoTexto,
+  progressoChecklist,
   rotuloData,
+  tarefasPorPrazo,
+  textoMencao,
   somarDias,
   type TarefaResumo,
   vizinhos,
 } from "../src/lib/tarefas-core.ts";
+import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
 
 const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> = {}): TarefaResumo => ({
@@ -27,9 +35,15 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   concluidaEm: null,
   arquivada: false,
   pessoas: [],
+  observadores: [],
   etiquetas: [],
   criadoEm: null,
   atualizadoEm: null,
+  estimativaH: null,
+  vinculo: null,
+  checklist: { feitos: 0, total: 0 },
+  comentarios: 0,
+  anexos: 0,
   ...x,
 });
 const LISTAS = [
@@ -115,5 +129,67 @@ describe("rotuloData", () => {
     assert.equal(rotuloData("2027-01-03", "2026-12-31"), "03/01/2027");
     assert.equal(rotuloData(null, "2026-01-01"), "");
     assert.equal(rotuloData("x", "2026-01-01"), "");
+  });
+});
+
+describe("vínculo, checklist e menções", () => {
+  it("lerVinculo/hrefVinculo: protocolo e DFD abrem na Mesa, PCA e orçamento no espaço deles; inválido = null", () => {
+    assert.deepEqual(lerVinculo("protocolo:12"), { tipo: "protocolo", id: 12 });
+    assert.equal(lerVinculo("dfd:0"), null);
+    assert.equal(lerVinculo("x:1"), null);
+    assert.equal(lerVinculo(undefined), null);
+    assert.equal(hrefVinculo({ tipo: "dfd", id: 7 }), "/painel/mesa?abrir=dfd:7");
+    assert.equal(hrefVinculo({ tipo: "pca", id: 3 }), "/painel/pca/3");
+    assert.equal(hrefVinculo({ tipo: "orcamento", id: 4 }), "/painel/orcamento/4");
+  });
+  it("progressoChecklist conta os feitos", () => {
+    assert.deepEqual(progressoChecklist([{ feito: true }, { feito: false }, { feito: true }]), { feitos: 2, total: 3 });
+    assert.deepEqual(progressoChecklist([]), { feitos: 0, total: 0 });
+  });
+  it("mencoesDoTexto: apelido, nome inteiro sem espaço e 1º nome (só quando não é ambíguo), sem caixa/acento", () => {
+    const pessoas = [
+      { id: 1, nome: "Ana Souza", apelido: "Aninha" },
+      { id: 2, nome: "Ana Lima", apelido: null },
+      { id: 3, nome: "José Álvares", apelido: null },
+    ];
+    assert.deepEqual(mencoesDoTexto("oi @aninha e @jose", pessoas).sort(), [1, 3]);
+    assert.deepEqual(mencoesDoTexto("@Ana, veja", pessoas), []); // dois "Ana": ambíguo
+    assert.deepEqual(mencoesDoTexto("@AnaLima", pessoas), [2]);
+    assert.deepEqual(mencoesDoTexto("sem citação", pessoas), []);
+    assert.equal(textoMencao({ nome: "José Álvares", apelido: null }), "@José");
+    assert.equal(textoMencao({ nome: "Ana Souza", apelido: "Ana S" }), "@AnaS");
+  });
+});
+
+describe("calendário", () => {
+  it("gradeMes: semanas de domingo a sábado cobrindo o mês", () => {
+    const g = gradeMes(2026, 9); // set/2026 começa numa terça
+    assert.equal(g[0][0], "2026-08-30");
+    assert.equal(g[0][2], "2026-09-01");
+    assert.equal(g.at(-1)?.at(-1), "2026-10-03");
+    assert.ok(g.every((s) => s.length === 7));
+    assert.equal(gradeMes(2026, 2).length, 4); // fev/2026: dom 01 → sáb 28 = exatamente 4 semanas
+  });
+  it("tarefasPorPrazo agrupa por dia e ignora sem prazo", () => {
+    const m = tarefasPorPrazo([T(2, 1, 1, { prazo: "2026-09-10" }), T(1, 1, 2, { prazo: "2026-09-10" }), T(3, 1, 3)]);
+    assert.deepEqual(m.get("2026-09-10")?.map((t) => t.id), [1, 2]);
+    assert.equal(m.size, 1);
+  });
+});
+
+describe("exportar", () => {
+  it("linhasPlanilhaTarefas: cabeçalho + uma linha por tarefa, com nomes e rótulos", () => {
+    const l = linhasPlanilhaTarefas([T(5, 1, 1, { prazo: "2026-09-01", pessoas: [7], etiquetas: [3], checklist: { feitos: 1, total: 2 }, vinculo: { tipo: "dfd", id: 9, rotulo: "1209" } })], {
+      listas: [{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }],
+      etiquetas: [{ id: 3, nome: "Licitação", cor: "#000000" }],
+      pessoas: [{ id: 7, nome: "Ana Souza", apelido: "Ana", foto: null }],
+      hoje: "2026-09-25",
+    });
+    assert.equal(l.length, 2);
+    assert.deepEqual(l[1].slice(0, 6), ["#5", "Tarefa 5", "A fazer", "Média", "Atrasada", "01/09/2026"]);
+    assert.equal(l[1][8], "Ana");
+    assert.equal(l[1][10], "Licitação");
+    assert.equal(l[1][11], "1/2");
+    assert.equal(l[1][12], "DFD 1209");
   });
 });

@@ -76,6 +76,10 @@ import {
   ArchiveRestore,
   Tag,
   Flag,
+  Paperclip,
+  MessageSquare,
+  Send,
+  ListChecks,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -160,3 +164,7 @@ export const IconArquivar = Archive;
 export const IconDesarquivar = ArchiveRestore;
 export const IconEtiqueta = Tag;
 export const IconBandeira = Flag;
+export const IconAnexo = Paperclip;
+export const IconComentario = MessageSquare;
+export const IconEnviar = Send;
+export const IconChecklist = ListChecks;

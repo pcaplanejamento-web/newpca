@@ -2,6 +2,7 @@
  * TAREFAS (quadro estilo Trello) — núcleo PURO (testável): prazo com semáforo, ordem FRACIONÁRIA dos cartões (soltar
  * entre dois sem renumerar a lista), mover um cartão, filtros, WIP e rótulos. Sem banco e sem JSX.
  */
+import { stripAccents } from "./normalize.ts";
 import { predicadoBusca } from "./tabela-filtros.ts";
 
 export const PRIORIDADES = ["baixa", "media", "alta", "urgente"] as const;
@@ -29,10 +30,73 @@ export type TarefaResumo = {
   arquivada: boolean;
   /** Responsáveis (ids de usuário). */
   pessoas: number[];
+  /** Observadores (acompanham, sem ser responsáveis). */
+  observadores: number[];
   etiquetas: number[];
   criadoEm: string | null;
   atualizadoEm: string | null;
+  estimativaH: number | null;
+  vinculo: VinculoTarefa | null;
+  /** Contagens do conteúdo (os ícones do cartão). */
+  checklist: { feitos: number; total: number };
+  comentarios: number;
+  anexos: number;
 };
+
+/** A que parte do sistema a tarefa se liga. */
+export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento"] as const;
+export type TipoVinculo = (typeof TIPOS_VINCULO)[number];
+export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", pca: "PCA", orcamento: "Orçamento" };
+/** O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). */
+export type VinculoTarefa = { tipo: TipoVinculo; id: number; rotulo?: string | null };
+
+export const ehTipoVinculo = (v: unknown): v is TipoVinculo => typeof v === "string" && (TIPOS_VINCULO as readonly string[]).includes(v);
+
+/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`); PCA e orçamento, o espaço deles. */
+export function hrefVinculo(v: { tipo: TipoVinculo; id: number }): string {
+  if (v.tipo === "pca") return `/painel/pca/${v.id}`;
+  if (v.tipo === "orcamento") return `/painel/orcamento/${v.id}`;
+  return `/painel/mesa?abrir=${v.tipo}:${v.id}`;
+}
+
+/** Lê "protocolo:12" / "dfd:7" (o `?abrir=` da Mesa e o `?nova=` do quadro). Inválido = `null`. */
+export function lerVinculo(v: string | null | undefined): { tipo: TipoVinculo; id: number } | null {
+  const m = /^([a-z]+):(\d{1,12})$/.exec(v ?? "");
+  if (!m || !ehTipoVinculo(m[1])) return null;
+  const id = Number(m[2]);
+  return id > 0 ? { tipo: m[1], id } : null;
+}
+
+/** Progresso do checklist. */
+export const progressoChecklist = (itens: { feito: boolean }[]) => ({ feitos: itens.filter((i) => i.feito).length, total: itens.length });
+
+const chaveMencao = (s: string) => stripAccents(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** O texto que se digita para citar alguém: "@" + o apelido (ou o 1º nome), sem espaços. */
+export const textoMencao = (p: { nome: string; apelido?: string | null }) =>
+  `@${(p.apelido?.trim() || p.nome.trim().split(/\s+/)[0] || "").replace(/\s+/g, "")}`;
+
+/**
+ * As PESSOAS citadas com "@" no texto: o termo casa (sem caixa/acento/espaço) o apelido, o 1º nome ou o nome inteiro.
+ * Um termo que casa duas pessoas pelo 1º nome só vale se o apelido/nome inteiro desempatar — nunca cita a pessoa errada.
+ */
+export function mencoesDoTexto(texto: string, pessoas: { id: number; nome: string; apelido?: string | null }[]): number[] {
+  const termos = [...texto.matchAll(/@([\p{L}\p{N}._-]{2,60})/gu)].map((m) => chaveMencao(m[1]));
+  if (!termos.length) return [];
+  const exato = new Map<string, number>();
+  const primeiro = new Map<string, number[]>();
+  for (const p of pessoas) {
+    for (const c of [p.apelido ?? "", p.nome]) if (chaveMencao(c)) exato.set(chaveMencao(c), p.id);
+    const pn = chaveMencao(p.nome.trim().split(/\s+/)[0] ?? "");
+    if (pn) primeiro.set(pn, [...(primeiro.get(pn) ?? []), p.id]);
+  }
+  const ids = new Set<number>();
+  for (const t of termos) {
+    const id = exato.get(t) ?? ((primeiro.get(t)?.length ?? 0) === 1 ? primeiro.get(t)?.[0] : undefined);
+    if (id != null) ids.add(id);
+  }
+  return [...ids];
+}
 
 export type ListaTarefas = { id: number; nome: string; ordem: number; limiteWip: number | null; concluida: boolean; arquivada: boolean };
 export type EtiquetaTarefa = { id: number; nome: string; cor: string };
@@ -186,3 +250,29 @@ export function rotuloData(d: string | null, hoje: string): string {
   const [a, m, dia] = d.split("-");
   return a === hoje.slice(0, 4) ? `${dia}/${m}` : `${dia}/${m}/${a}`;
 }
+
+/**
+ * A GRADE do mês no calendário: as semanas (domingo → sábado) que cobrem o mês `mes` (1–12) de `ano`, como datas
+ * "AAAA-MM-DD" — os dias de fora do mês completam a 1ª e a última semana.
+ */
+export function gradeMes(ano: number, mes: number): string[][] {
+  const primeiro = new Date(Date.UTC(ano, mes - 1, 1));
+  const inicio = somarDias(primeiro.toISOString().slice(0, 10), -primeiro.getUTCDay());
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10);
+  const semanas: string[][] = [];
+  for (let d = inicio; d <= ultimo; ) {
+    const semana: string[] = [];
+    for (let i = 0; i < 7; i++, d = somarDias(d, 1)) semana.push(d);
+    semanas.push(semana);
+  }
+  return semanas;
+}
+
+/** As tarefas agrupadas pelo PRAZO ("AAAA-MM-DD" → cartões, na ordem do prazo e do ticket); sem prazo ficam de fora. */
+export function tarefasPorPrazo(tarefas: TarefaResumo[]): Map<string, TarefaResumo[]> {
+  const m = new Map<string, TarefaResumo[]>();
+  for (const t of [...tarefas].sort((a, b) => a.ticket - b.ticket)) if (dataValida(t.prazo)) m.set(t.prazo, [...(m.get(t.prazo) ?? []), t]);
+  return m;
+}
+
+export const NOMES_MES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
