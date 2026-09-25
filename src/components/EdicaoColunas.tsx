@@ -41,7 +41,8 @@ function segurar(cursor: string): () => void {
   };
 }
 
-/** Alça de LARGURA na borda direita do cabeçalho: arrastar (mouse ou toque), ←/→ no teclado, duplo clique = padrão. */
+/** Alça de LARGURA na borda direita do cabeçalho (dentro da coluna — não invade a alça de arrasto da vizinha): arrastar
+ * (mouse ou toque), ←/→ no teclado, duplo clique = padrão. */
 function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string; largura?: number; onLargura: (px: number | null) => void }) {
   const [ativa, setAtiva] = useState(false);
   const alca = useRef<HTMLSpanElement>(null);
@@ -96,10 +97,11 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
         e.preventDefault();
         onLargura(largura(e.currentTarget) + (e.key === "ArrowRight" ? 16 : -16));
       }}
-      className="group/alca absolute inset-y-0 -right-2 z-10 w-4 cursor-col-resize touch-none focus-visible:outline-none"
+      // DENTRO da própria coluna (nunca por cima da alça de arrasto da vizinha): 12px no toque, 8px no desktop.
+      className="group/alca absolute inset-y-0 right-0 z-10 w-3 cursor-col-resize touch-none focus-visible:outline-none lg:w-2"
     >
       <span
-        className={`absolute inset-y-1.5 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors ${
+        className={`absolute inset-y-1.5 right-0 w-0.5 rounded-full transition-colors ${
           ativa ? "bg-accent" : "bg-border-2 group-hover/alca:bg-accent/60 group-focus-visible/alca:bg-accent"
         }`}
       />

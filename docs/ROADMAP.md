@@ -1024,6 +1024,8 @@ arrastar, congelar, ocultar, ordenar e largura no cabeçalho — e edições sal
 públicas, com a padrão de cada usuário. Peças compartilhadas (`EdicaoColunas`, `useEditorEdicoes`, `colunas-layout`).
 ✅ **Arrasto de coluna com fotos:** a coluna presa leva as fotos junto e segue o mouse (o arrasto nativo do navegador fica
 bloqueado enquanto se segura); a sombra do destino não mostra mais as fotos.
+✅ **Arrasto × largura separados:** a faixa de largura fica dentro da própria coluna e não cobre mais a alça de arrasto da
+vizinha — pegar a alça só move, a borda só redimensiona.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

@@ -514,7 +514,7 @@ export function DataTable<R>({
                     data-col={c.key}
                     className={`${head} ${alinhaTexto} ${c.nowrap ? "whitespace-nowrap" : ""} ${pos.classe} ${pos.fixa ? "z-20 bg-surface-2" : ""} ${
                       // A congelada já é `sticky` (referência da alça/ações); a livre ganha `relative`.
-                      editando ? `pl-6 align-top ${pos.fixa ? "" : "relative"}` : ""
+                      editando ? `pr-4 pl-6 align-top ${pos.fixa ? "" : "relative"}` : ""
                     }`}
                     // Coluna FILTRADA: tópico marcado também por um sublinhado accent no cabeçalho.
                     style={{

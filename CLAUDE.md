@@ -1659,7 +1659,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **LÁPIS** (só o ícone) fica no **RODAPÉ da tabela** (`TabelaCruzada.acoesRodape`) e liga a edição (`TabelaCruzada.edicao`;
   as colunas ligadas travam, a origem dos números pausa). Cada cabeçalho: a **ALÇA de arrasto** ocupa a faixa ESQUERDA com a
   ALTURA TODA do cabeçalho (←/→ no teclado movem); no TOPO, alinhadas, as ações **congelar · ocultar · ordenar** (a seta
-  alterna ▲ crescente / ▼ decrescente); a borda direita ajusta a largura (arrastar, ←/→, duplo clique = padrão). O NOME
+  alterna ▲ crescente / ▼ decrescente); a borda direita ajusta a largura (arrastar, ←/→, duplo clique = padrão — a faixa da largura fica DENTRO da coluna, 12px no
+  toque/8px no desktop, sem invadir a alça de arrasto da vizinha: cada ponto responde a UM controle). O NOME
   fica no MESMO lugar dentro e fora da edição e TODO cabeçalho tem a MESMA gráfica — Unidade, Sigla e Total iguais às de
   valores: nome em até 2 linhas CENTRADO na horizontal (`px-5` simétrico; as ações do topo também centradas).
   **Arrastar:** a coluna **LEVANTA** (anima do tamanho real para 104% com sombra — `animate-levantar`) e vai **PRESA ao
