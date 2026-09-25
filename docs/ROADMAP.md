@@ -977,6 +977,11 @@ Visões** (componente compartilhado `AbasEspaco`, também usado pelo espaço do 
 fora do orçamento. O CUBO passou a trazer **Função, Programa, Ação, Ficha e Fonte** — lidos pelo parser (o CUBO antigo segue
 aceito), gravados (lotes 5×17=85 params), exibidos na tabela e no detalhe, exportados (XLSX/PDF) e disponíveis como
 **dimensões das Visões** (inclusive no Orçamento do PCA). Validado contra o CUBO real (1.345 lançamentos, 0 rejeições).
+✅ **Orçamento enxuto e profissional:** card 4:5 SÓ com indicadores (dotação atualizada, % empenhado, empenhado, saldo,
+órgãos/unidades/lançamentos — agregados no banco), grade compacta; tela do orçamento sem cartão de cabeçalho (uma linha com
+os indicadores) e com as ferramentas de cada aba (busca, XLSX, PDF, vincular sugestões, criar visão) na MESMA linha das
+abas, à direita (`FerramentasAba`); tabelas no padrão da Mesa (`scrollInterno` + `compact`, linhas por página de
+Configurações); visões carregadas no servidor (sem fetch extra) e vínculo de cada lançamento resolvido uma vez.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

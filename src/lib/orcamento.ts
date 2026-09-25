@@ -22,12 +22,32 @@ export type OrcamentoResumo = {
   totalItens: number;
   valorInicial: number;
   atualizadoEm: string | null;
+  /** Σ dos lançamentos (indicadores do card e do cabeçalho — agregados no banco, sem trazer os lançamentos). */
+  suplementacao: number;
+  anulacao: number;
+  empenho: number;
+  saldo: number;
+  orgaos: number;
+  unidades: number;
 };
 
-/** Lista os orçamentos (sem lançamentos) — o ano mais recente primeiro. */
-/** `ano` = o do PCA escolhido no CABEÇALHO (filtro global; `null` = todos os anos). */
-export async function listarOrcamentos(ano?: number | null): Promise<OrcamentoResumo[]> {
-  return getDb()
+/** Resumo com os INDICADORES (Σ por orçamento, numa agregação só) — base da lista e do cabeçalho do orçamento. */
+function selecionarResumos() {
+  const db = getDb();
+  const agg = db
+    .select({
+      orcamentoId: orcamentoItens.orcamentoId,
+      suplementacao: sql<number>`COALESCE(SUM(${orcamentoItens.valorSuplementacao}), 0)`.as("a_suplementacao"),
+      anulacao: sql<number>`COALESCE(SUM(${orcamentoItens.valorAnulacao}), 0)`.as("a_anulacao"),
+      empenho: sql<number>`COALESCE(SUM(${orcamentoItens.valorEmpenho}), 0)`.as("a_empenho"),
+      saldo: sql<number>`COALESCE(SUM(${orcamentoItens.saldo}), 0)`.as("a_saldo"),
+      orgaos: sql<number>`COUNT(DISTINCT ${orcamentoItens.orgao})`.as("a_orgaos"),
+      unidades: sql<number>`COUNT(DISTINCT ${orcamentoItens.unidade})`.as("a_unidades"),
+    })
+    .from(orcamentoItens)
+    .groupBy(orcamentoItens.orcamentoId)
+    .as("agg");
+  return db
     .select({
       id: orcamentos.id,
       nome: orcamentos.nome,
@@ -35,8 +55,21 @@ export async function listarOrcamentos(ano?: number | null): Promise<OrcamentoRe
       totalItens: orcamentos.totalItens,
       valorInicial: orcamentos.valorInicial,
       atualizadoEm: orcamentos.atualizadoEm,
+      suplementacao: sql<number>`COALESCE(${agg.suplementacao}, 0)`,
+      anulacao: sql<number>`COALESCE(${agg.anulacao}, 0)`,
+      empenho: sql<number>`COALESCE(${agg.empenho}, 0)`,
+      saldo: sql<number>`COALESCE(${agg.saldo}, 0)`,
+      orgaos: sql<number>`COALESCE(${agg.orgaos}, 0)`,
+      unidades: sql<number>`COALESCE(${agg.unidades}, 0)`,
     })
     .from(orcamentos)
+    .leftJoin(agg, eq(agg.orcamentoId, orcamentos.id));
+}
+
+/** Lista os orçamentos (sem lançamentos) — o ano mais recente primeiro. `ano` = o do PCA escolhido no CABEÇALHO
+ * (filtro global; `null` = todos os anos). */
+export async function listarOrcamentos(ano?: number | null): Promise<OrcamentoResumo[]> {
+  return selecionarResumos()
     .where(ano != null ? eq(orcamentos.ano, ano) : undefined)
     .orderBy(desc(orcamentos.ano), desc(orcamentos.id));
 }
@@ -94,18 +127,7 @@ export async function getOrcamentoItens(orcamentoId: number): Promise<OrcamentoI
 
 /** Um orçamento pelo id (resumo do card/cabeçalho) — também valida o alvo de uma operação. `null` se não existe. */
 export async function getOrcamento(id: number): Promise<OrcamentoResumo | null> {
-  const [o] = await getDb()
-    .select({
-      id: orcamentos.id,
-      nome: orcamentos.nome,
-      ano: orcamentos.ano,
-      totalItens: orcamentos.totalItens,
-      valorInicial: orcamentos.valorInicial,
-      atualizadoEm: orcamentos.atualizadoEm,
-    })
-    .from(orcamentos)
-    .where(eq(orcamentos.id, id))
-    .limit(1);
+  const [o] = await selecionarResumos().where(eq(orcamentos.id, id)).limit(1);
   return o ?? null;
 }
 

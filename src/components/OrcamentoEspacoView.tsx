@@ -3,21 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import { brl, num } from "@/lib/format";
+import { brlCompact, num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
+import { dotacaoAtualizada, pctEmpenhado } from "@/lib/orcamento-indicadores";
 import { AbasEspaco } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { IconChevronLeft, IconTrash } from "./icons";
-import { PcaCapa } from "./PcaCard";
 
 export type AbaOrcamento = "lancamentos" | "vinculos" | "visoes";
 
 /**
- * TELA DO ORÇAMENTO (`/painel/orcamento/[id]`) — aberta pelo card: cabeçalho (capa 4:5 em miniatura, nome, ano,
- * dotação e lançamentos) + excluir (editor) e as abas **Lançamentos · Vínculos · Visões** no MESMO espaço
- * (`AbasEspaco`: o servidor monta SÓ a aba ativa). Espelha o espaço do PCA.
+ * TELA DO ORÇAMENTO (`/painel/orcamento/[id]`) — aberta pelo card. Enxuta, usando a largura toda: UMA linha de
+ * cabeçalho (voltar · nome · ano · indicadores · excluir) e a barra das abas **Lançamentos · Vínculos · Visões** com as
+ * ferramentas da aba à direita (`AbasEspaco` + `FerramentasAba`; o servidor monta SÓ a aba ativa).
  */
 export function OrcamentoEspacoView({
   orcamento: o,
@@ -48,28 +48,46 @@ export function OrcamentoEspacoView({
     setFalha(true);
   }
 
+  const indicadores = [
+    { rotulo: "Dotação atualizada", valor: brlCompact(dotacaoAtualizada(o)) },
+    { rotulo: "Empenhado", valor: `${brlCompact(o.empenho)} · ${Math.round(pctEmpenhado(o))}%` },
+    { rotulo: "Saldo", valor: brlCompact(o.saldo) },
+    { rotulo: "Lançamentos", valor: num(o.totalItens) },
+  ];
+
   return (
     <div className="space-y-[var(--gap-block)]">
-      <Link href="/painel/orcamento" className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-text-2">
-        <IconChevronLeft className="h-4 w-4" /> Orçamento
-      </Link>
-
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="w-16 shrink-0 sm:w-20">
-          <PcaCapa capa={null} ano={o.ano} className="!rounded-xl" />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            href="/painel/orcamento"
+            aria-label="Voltar para Orçamento"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+          >
+            <IconChevronLeft className="h-4 w-4" />
+          </Link>
+          <h1 className="min-w-0 truncate text-lg font-bold text-text" title={o.nome}>
+            {o.nome}
+          </h1>
+          <Badge tone="blue">{o.ano}</Badge>
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="min-w-0 max-w-full truncate text-2xl font-black tracking-tight text-text sm:text-3xl">{o.nome}</h1>
-            <Badge tone="blue">{o.ano}</Badge>
-          </div>
-          <p className="text-sm text-muted">
-            Dotação inicial <span className="font-semibold tabular-nums text-text-2">{brl(o.valorInicial)}</span> · {num(o.totalItens)}{" "}
-            {o.totalItens === 1 ? "lançamento" : "lançamentos"}
-          </p>
-        </div>
+        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          {indicadores.map((i) => (
+            <div key={i.rotulo} className="flex items-baseline gap-1.5">
+              <dt className="text-muted">{i.rotulo}</dt>
+              <dd className="font-semibold tabular-nums text-text">{i.valor}</dd>
+            </div>
+          ))}
+        </dl>
         {podeEditar && (
-          <Button variant="ghost" loading={excluindo} icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />} onClick={excluir}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            loading={excluindo}
+            icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+            onClick={excluir}
+          >
             Excluir
           </Button>
         )}

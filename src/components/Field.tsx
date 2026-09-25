@@ -101,13 +101,18 @@ export function SearchField({
   value,
   onClear,
   placeholder = "Pesquisar…",
+  compacto = false,
   ...rest
-}: CampoProps & { onClear?: () => void }) {
+}: CampoProps & {
+  onClear?: () => void;
+  /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque. */
+  compacto?: boolean;
+}) {
   const preenchido = typeof value === "string" && value.length > 0;
   return (
-    <div className={`${WRAP} h-[46px] border-border-2`}>
-      <IconSearch className="h-[18px] w-[18px] shrink-0 text-muted" />
-      <input value={value} placeholder={placeholder} type="search" className={INPUT} {...rest} />
+    <div className={`${WRAP} ${compacto ? "h-11 !px-3 lg:h-[var(--h-control-sm)]" : "h-[46px]"} border-border-2`}>
+      <IconSearch className={`${compacto ? "h-4 w-4" : "h-[18px] w-[18px]"} shrink-0 text-muted`} />
+      <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px]" : ""}`} {...rest} />
       {preenchido && onClear && (
         <button
           type="button"

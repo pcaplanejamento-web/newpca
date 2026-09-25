@@ -7,6 +7,7 @@ import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
 import { getUsuarioAtual } from "@/lib/auth";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
 import { DIMENSOES_ORCAMENTO, type LinhaOrcamentoVisao } from "@/lib/orcamento-visao";
+import { listarVisoesOrcamento } from "@/lib/pca-espaco";
 
 export const dynamic = "force-dynamic";
 
@@ -28,19 +29,18 @@ export default async function OrcamentoEspacoPage({
   const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
   const aba: AbaOrcamento = ABAS.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : "lancamentos";
-  const itens = await getOrcamentoItens(id);
-
   let conteudo: ReactNode;
   if (aba === "visoes") {
+    const [itens, visoes] = await Promise.all([getOrcamentoItens(id), listarVisoesOrcamento()]);
     // Só as dimensões da visão + a dotação (a prévia do Σ).
     const linhas = itens.map((i) => {
       const l: LinhaOrcamentoVisao & { valorInicial: number } = { valorInicial: i.valorInicial };
       for (const d of DIMENSOES_ORCAMENTO) l[d.key] = i[d.key];
       return l;
     });
-    conteudo = <OrcamentoVisoes itens={linhas} podeEditar={podeEditar} />;
+    conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={podeEditar} />;
   } else {
-    const [vinculos, alvos] = await Promise.all([listarVinculosOrcamento(), alvosVinculoOrcamento()]);
+    const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
     conteudo =
       aba === "vinculos" ? (
         <OrcamentoVinculosAba

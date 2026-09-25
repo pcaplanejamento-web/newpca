@@ -150,7 +150,7 @@ export function OrcamentoView({
           <p className="text-sm text-muted">{filtro ? `Nenhum orçamento do ano do ${filtro}.` : "Nenhum orçamento ainda."}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {orcamentos.map((o) => (
             <OrcamentoCard key={o.id} orcamento={o} href={`/painel/orcamento/${o.id}`} />
           ))}

@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import type { AlvoVinculo, LinhaVinculo, TipoVinculo } from "@/lib/orcamento-vinculo";
+import { predicadoBusca } from "@/lib/tabela-filtros";
+import { FerramentasAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
+import { SearchField } from "./Field";
 import { selectCls } from "./formStyles";
 import { IconLink } from "./icons";
 
@@ -16,21 +19,26 @@ export type VinculoAlterado = { tipo: TipoVinculo; texto: string; alvoId: number
  * um órgão/unidade CADASTRADO no sistema. Tabela filtrável (estado · tipo · nome no orçamento ·
  * vínculo · lançamentos · dotação); o editor escolhe o alvo num `select` (unidades agrupadas por
  * órgão; ocultos só aparecem se já vinculados) ou aceita a SUGESTÃO automática (nome/sigla),
- * uma a uma ou todas de uma vez. Apresentacional: grava via `onVincular`.
+ * uma a uma ou todas de uma vez. O vínculo vale para TODOS os orçamentos (é pelo texto). Busca e "Vincular N
+ * sugestões" ficam nas `FerramentasAba` (na barra das abas, à direita). Apresentacional: grava via `onVincular`.
+ * `scrollInterno` = tabela padrão da Mesa (corpo rola por dentro; linhas por página de Configurações).
  */
 export function OrcamentoVinculos({
   linhas,
   alvos,
   podeEditar,
   salvando = false,
+  scrollInterno = false,
   onVincular,
 }: {
   linhas: LinhaVinculo[];
   alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
   podeEditar: boolean;
   salvando?: boolean;
+  scrollInterno?: boolean;
   onVincular: (lista: VinculoAlterado[]) => void;
 }) {
+  const [busca, setBusca] = useState("");
   const porId = useMemo(
     () => ({
       orgao: new Map(alvos.orgaos.map((o) => [o.id, o])),
@@ -121,7 +129,7 @@ export function OrcamentoVinculos({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <select
               aria-label={`Vínculo de ${l.texto}`}
-              className={`${selectCls} min-h-[44px] w-full max-w-[320px] sm:min-h-0`}
+              className={`${selectCls} min-h-[44px] w-full max-w-[300px] lg:min-h-0`}
               value={l.alvoId ?? ""}
               disabled={salvando}
               onChange={(e) => mudar(l, e.target.value ? Number(e.target.value) : null)}
@@ -130,7 +138,7 @@ export function OrcamentoVinculos({
               {opcoes(l)}
             </select>
             {l.alvoId == null && l.sugestaoId != null && (
-              <Button variant="ghost" disabled={salvando} onClick={() => mudar(l, l.sugestaoId)} title={rotulo(l.tipo, l.sugestaoId)}>
+              <Button size="xs" variant="ghost" disabled={salvando} onClick={() => mudar(l, l.sugestaoId)} title={rotulo(l.tipo, l.sugestaoId)}>
                 Aceitar {porId[l.tipo].get(l.sugestaoId)?.sigla}
               </Button>
             )}
@@ -159,41 +167,50 @@ export function OrcamentoVinculos({
     },
   ];
 
+  const casa = predicadoBusca(busca);
+  const visiveis = casa ? linhas.filter((l) => casa([l.texto, l.contexto, rotulo(l.tipo, l.alvoId)])) : linhas;
+
   return (
-    <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          Vincule cada Órgão/Unidade do relatório ao cadastro do sistema. O vínculo vale para todos os orçamentos, inclusive os próximos anos.
-        </p>
+    <>
+      <FerramentasAba>
+        <div className="min-w-0 flex-1 sm:max-w-sm">
+          <SearchField
+            compacto
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onClear={() => setBusca("")}
+            placeholder="Buscar… (vários com :)"
+            aria-label="Buscar nos vínculos"
+          />
+        </div>
         {podeEditar && sugeridas.length > 0 && (
           <Button
+            size="sm"
             variant="secondary"
             icon={<IconLink className="h-4 w-4" />}
             loading={salvando}
+            title="O vínculo vale para todos os orçamentos"
             onClick={() => onVincular(sugeridas.map((l) => ({ tipo: l.tipo, texto: l.texto, alvoId: l.sugestaoId })))}
           >
             Vincular {sugeridas.length} {sugeridas.length === 1 ? "sugestão" : "sugestões"}
           </Button>
         )}
-      </div>
+      </FerramentasAba>
       <DataTable
         columns={colunas}
-        rows={linhas}
+        rows={visiveis}
         getKey={(l) => `${l.tipo}|${l.chave}`}
-        pageSize={20}
+        scrollInterno={scrollInterno}
+        pageSize={scrollInterno ? undefined : 20}
+        density="compact"
         minWidth={1000}
-        resumo={(ls) => (
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span>{ls.length === 1 ? "1 texto" : `${ls.length} textos`}</span>
-            <span className="text-text-2">
-              Vinculados <span className="font-semibold tabular-nums text-text">{ls.filter((l) => l.alvoId != null).length}</span>
-            </span>
-            <span className="text-text-2">
-              Dotação <span className="font-semibold tabular-nums text-text">{brl(ls.reduce((s, l) => s + l.valorInicial, 0))}</span>
-            </span>
-          </span>
-        )}
+        vazio={busca ? "Nenhum órgão ou unidade para esta busca." : "Nenhum órgão ou unidade neste orçamento."}
+        resumo={(ls) =>
+          `${num(ls.length)} ${ls.length === 1 ? "texto" : "textos"} · ${num(ls.filter((l) => l.alvoId != null).length)} vinculados · Dotação ${brl(
+            ls.reduce((s, l) => s + l.valorInicial, 0),
+          )}`
+        }
       />
-    </div>
+    </>
   );
 }

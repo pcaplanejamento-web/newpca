@@ -2,15 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { exportarOrcamentoPdf, exportarOrcamentoXlsx } from "@/lib/exportar-orcamento";
-import { brl } from "@/lib/format";
+import { brl, num } from "@/lib/format";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import { type AlvoVinculo, alvoDoTexto, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { FerramentasAba } from "./AbasEspaco";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { SearchField } from "./Field";
-import { IconAlert, IconDownload } from "./icons";
+import { IconDownload } from "./icons";
 import { Modal } from "./Modal";
 import { OrcamentoItemDetalhe } from "./OrcamentoItemDetalhe";
 
@@ -51,8 +52,9 @@ const colValor = (key: string, header: string, get: (r: OrcamentoItemRow) => num
 
 /**
  * Aba LANÇAMENTOS da tela do orçamento: TODAS as colunas do CUBO (Órgão · Unidade · No sistema · Função ·
- * Programa · Ação · Elemento · Código · Ficha · Fonte + os valores) numa tabela filtrável, com busca, somatório
- * no rodapé e exportação XLSX/PDF. Clicar numa linha abre o detalhe SÓ-LEITURA (`OrcamentoItemDetalhe`) com o
+ * Programa · Ação · Elemento · Código · Ficha · Fonte + os valores) na tabela padrão da Mesa (`scrollInterno` +
+ * `compact`: o corpo rola por dentro e as linhas por página seguem Configurações → Tabelas), somatório no rodapé;
+ * busca e exportação XLSX/PDF na barra das abas (`FerramentasAba`). Clicar numa linha abre o detalhe SÓ-LEITURA (`OrcamentoItemDetalhe`) com o
  * vínculo do Órgão/Unidade ao cadastro. Os lançamentos vêm do sistema oficial — não são editados aqui.
  */
 export function OrcamentoLancamentos({
@@ -76,15 +78,21 @@ export function OrcamentoLancamentos({
     () => ({ orgao: new Map(alvos.orgaos.map((o) => [o.id, o])), unidade: new Map(alvos.unidades.map((u) => [u.id, u])) }),
     [alvos],
   );
-  const vinculoDe = (r: OrcamentoItemRow) => {
-    const o = alvoPorId.orgao.get(alvoDoTexto(mapa, "orgao", r.orgao) ?? -1);
-    const u = alvoPorId.unidade.get(alvoDoTexto(mapa, "unidade", r.unidade) ?? -1);
-    return {
-      orgao: o ? `${o.sigla} — ${o.nome}` : null,
-      unidade: u ? `${u.sigla} — ${u.nome}` : null,
-      siglas: [o?.sigla, u?.sigla].filter(Boolean).join(" / "),
-    };
-  };
+  // O vínculo de cada lançamento, resolvido UMA vez (a coluna, o filtro dela e o detalhe leem daqui).
+  const vinculoPorId = useMemo(() => {
+    const m = new Map<number, { orgao: string | null; unidade: string | null; siglas: string }>();
+    for (const r of itens) {
+      const o = alvoPorId.orgao.get(alvoDoTexto(mapa, "orgao", r.orgao) ?? -1);
+      const u = alvoPorId.unidade.get(alvoDoTexto(mapa, "unidade", r.unidade) ?? -1);
+      m.set(r.id, {
+        orgao: o ? `${o.sigla} — ${o.nome}` : null,
+        unidade: u ? `${u.sigla} — ${u.nome}` : null,
+        siglas: [o?.sigla, u?.sigla].filter(Boolean).join(" / "),
+      });
+    }
+    return m;
+  }, [itens, mapa, alvoPorId]);
+  const vinculoDe = (r: OrcamentoItemRow) => vinculoPorId.get(r.id) ?? { orgao: null, unidade: null, siglas: "" };
 
   const filtrados = useMemo(() => {
     const casa = predicadoBusca(busca); // vários termos de uma vez com ":"
@@ -137,51 +145,47 @@ export function OrcamentoLancamentos({
   const detalhe = aberto ? vinculoDe(aberto) : null;
 
   return (
-    <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-      {erro && (
-        <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
-          {erro}
-        </Callout>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-0 flex-1 basis-64">
+    <>
+      <FerramentasAba>
+        <div className="min-w-0 flex-1 sm:max-w-sm">
           <SearchField
+            compacto
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             onClear={() => setBusca("")}
-            placeholder="Buscar órgão, unidade, programa, ação, elemento, ficha ou fonte…"
+            placeholder="Buscar… (vários com :)"
+            aria-label="Buscar nos lançamentos"
           />
         </div>
-        <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => exportarOrcamentoXlsx(titulo, filtrados)}>
+        <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => exportarOrcamentoXlsx(titulo, filtrados)}>
           XLSX
         </Button>
-        <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportarPdf}>
+        <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportarPdf}>
           PDF
         </Button>
-      </div>
+      </FerramentasAba>
       <DataTable
         columns={colunas}
         rows={filtrados}
         getKey={(r) => r.id}
-        fillHeight
+        scrollInterno
+        density="compact"
         minWidth={2600}
         onRowClick={(r) => setAberto(r)}
         activeKey={aberto?.id ?? null}
-        resumo={(linhas) => (
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span>{linhas.length === 1 ? "1 lançamento" : `${linhas.length} lançamentos`}</span>
-            <span className="text-text-2">
-              Inicial <span className="font-semibold tabular-nums text-text">{brl(soma(linhas, "valorInicial"))}</span>
-            </span>
-            <span className="text-text-2">
-              Saldo <span className="font-semibold tabular-nums text-text">{brl(soma(linhas, "saldo"))}</span>
-            </span>
-          </span>
-        )}
+        vazio={busca ? "Nenhum lançamento para esta busca." : "Nenhum lançamento neste orçamento."}
+        resumo={(linhas) =>
+          `${num(linhas.length)} ${linhas.length === 1 ? "lançamento" : "lançamentos"} · Inicial ${brl(soma(linhas, "valorInicial"))} · Saldo ${brl(soma(linhas, "saldo"))}`
+        }
       />
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo="Detalhe do lançamento" size="lg">
         {aberto && detalhe ? <OrcamentoItemDetalhe key={aberto.id} item={aberto} vinculo={{ orgao: detalhe.orgao, unidade: detalhe.unidade }} /> : <div />}
       </Modal>
-    </div>
+      {erro && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível exportar" onClose={() => setErro(null)}>
+          {erro}
+        </AvisoFlutuante>
+      )}
+    </>
   );
 }

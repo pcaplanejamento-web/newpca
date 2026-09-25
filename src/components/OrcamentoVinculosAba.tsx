@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import { type AlvoVinculo, chaveVinculo, linhasVinculo, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
-import { Callout } from "./Callout";
-import { IconAlert } from "./icons";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type VinculoAlterado, OrcamentoVinculos } from "./OrcamentoVinculos";
 
 const SEM_PENDENTES: ReadonlyMap<string, VinculoAlterado> = new Map();
@@ -76,13 +75,13 @@ export function OrcamentoVinculosAba({
   }
 
   return (
-    <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+    <>
+      <OrcamentoVinculos linhas={linhas} alvos={alvos} podeEditar={podeEditar} salvando={salvando} scrollInterno onVincular={salvar} />
       {erro && (
-        <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
+        <AvisoFlutuante kind="danger" titulo="Não foi possível vincular" onClose={() => setErro(null)}>
           {erro}
-        </Callout>
+        </AvisoFlutuante>
       )}
-      <OrcamentoVinculos linhas={linhas} alvos={alvos} podeEditar={podeEditar} salvando={salvando} onVincular={salvar} />
-    </div>
+    </>
   );
 }

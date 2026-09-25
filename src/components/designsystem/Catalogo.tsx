@@ -2148,6 +2148,9 @@ export function Catalogo() {
           origem e um &quot;valor vigente&quot; (Badge) quando derivado do código.
         </p>
         <SearchField value="" onChange={() => {}} placeholder="Buscar uma regra ou comportamento…" aria-label="demo" />
+        <div className="mt-2 max-w-sm">
+          <SearchField compacto value="" onChange={() => {}} placeholder="Buscar… (vários com :) — compacto, p/ barras de ferramentas" aria-label="demo compacto" />
+        </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <FilterChip label="Todos" active />
           <FilterChip label="Avaliação" />
@@ -2758,11 +2761,24 @@ export function Catalogo() {
         <PadronizacaoDemo />
       </Secao>
 
-      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card 4:5 do orçamento — a mesma capa do PCA; abre a tela do orçamento)">
+      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card 4:5 do orçamento — só informação: dotação atualizada, % empenhado, saldo, abrangência)">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <OrcamentoCard
             href="/painel/orcamento"
-            orcamento={{ id: 1, nome: "Orçamento 2026", ano: 2026, totalItens: 1345, valorInicial: 1_390_000_000, atualizadoEm: "2026-01-15 10:00:00" }}
+            orcamento={{
+              id: 1,
+              nome: "Orçamento 2026",
+              ano: 2026,
+              totalItens: 1345,
+              valorInicial: 1_953_650_000,
+              atualizadoEm: "2026-01-15 10:00:00",
+              suplementacao: 120_000_000,
+              anulacao: 40_000_000,
+              empenho: 610_000_000,
+              saldo: 1_423_650_000,
+              orgaos: 18,
+              unidades: 39,
+            }}
           />
           <OrcamentoNovoCard onClick={() => {}} />
         </div>
