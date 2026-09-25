@@ -1,11 +1,25 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { Pessoa } from "@/lib/pessoa";
-import type { AnexoTarefa, ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
+import type { ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
 import {
+  adicionarBloco,
+  type BlocoTarefa,
+  blocosDaTarefa,
+  blocosDisponiveis,
+  blocosParaGravar,
+  blocoTemDado,
   COR_ESTADO_PRAZO,
+  type DadosBlocos,
+  MAX_NOTA,
+  MAX_TITULO_LINK,
+  MAX_URL,
+  moverBloco,
+  removerBloco,
+  ROTULO_BLOCO,
+  urlValida,
   COR_PRIORIDADE,
   type EtiquetaTarefa,
   estadoPrazo,
@@ -21,15 +35,16 @@ import {
   type TarefaResumo,
   type VinculoTarefa as Vinculo,
 } from "@/lib/tarefas-core";
-import { AnexosTarefa } from "./AnexosTarefa";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { ChecklistTarefa } from "./ChecklistTarefa";
+import { ChipPreso, GuiaBloco, MolduraBloco, PaletaBlocos, useArrastoBlocos } from "./BlocosTarefa";
+import { acoesChecklistRascunho, ChecklistTarefa, useChecklistServidor } from "./ChecklistTarefa";
 import { ComentariosTarefa } from "./ComentariosTarefa";
 import { useConfirmacao } from "./Confirmacao";
 import { ehDesktop } from "./espacamento";
 import { SelectField, TextArea, TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
+import { LinkExterno } from "./LinkExterno";
 import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconModelo, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { RecorrenciaTarefa } from "./RecorrenciaTarefa";
@@ -38,9 +53,12 @@ import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
 import { VinculoTarefa } from "./VinculoTarefa";
 
-/** Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa) ou uma existente. */
+/**
+ * Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa; `prazo` = o
+ * dia do calendário) ou uma existente.
+ */
 export type AberturaTarefa =
-  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; titulo?: string; prazo?: string }
+  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string }
   | { tipo: "editar"; id: number };
 
 type Rascunho = {
@@ -56,16 +74,31 @@ type Rascunho = {
   vinculo: Vinculo | null;
   descricao: string;
   recorrencia: Recorrencia | null;
-  /** Itens de checklist de um MODELO (só na criação — vão junto no POST). */
+  /** O checklist da tarefa NOVA (textos — vão junto no POST; um modelo o preenche). */
   checklist: string[];
+  /** Os BLOCOS, na ordem (a paleta). */
+  blocos: BlocoTarefa[];
 };
 /** Um modelo de tarefa do quadro (o seletor "Usar modelo"). */
 export type ModeloTarefaOpcao = { id: number; nome: string; conteudo: ModeloTarefa };
-type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; anexos: AnexoTarefa[] };
+type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
 const mesmoVinculo = (a: Vinculo | null, b: Vinculo | null) => (a?.tipo ?? null) === (b?.tipo ?? null) && (a?.id ?? null) === (b?.id ?? null);
 const numEstimativa = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
+
+/** O que decide se um bloco de campo tem dado — a partir do rascunho. */
+const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number): DadosBlocos => ({
+  inicio: r.inicio || null,
+  prazo: r.prazo || null,
+  pessoas: r.pessoas,
+  observadores: r.observadores,
+  etiquetas: r.etiquetas,
+  vinculo: r.vinculo,
+  estimativaH: r.estimativa.trim() ? 1 : null,
+  recorrencia: r.recorrencia,
+  checklist,
+});
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -77,12 +110,13 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /**
- * DETALHE de uma tarefa (criar e editar) num banner: título, lista, prioridade, responsáveis e observadores (pessoas do
- * grupo), início e PRAZO (com o semáforo), estimativa, etiquetas, VÍNCULO (protocolo/DFD/PCA/orçamento) e a descrição —
- * "Salvar" manda SÓ o que mudou. Da tarefa existente, também o CHECKLIST e os ANEXOS (gravam na hora) e, no painel da
- * direita, a ATIVIDADE — comentários com @menção | histórico. RECORRÊNCIA (concluir cria a próxima). Na criação, "Usar
- * modelo" preenche o rascunho; a existente vira MODELO ("Salvar como modelo"). Arquivar/restaurar (qualquer pessoa do
- * grupo) e excluir (editores). Fechar com alterações pede confirmação.
+ * DETALHE de uma tarefa (criar e editar) num banner. Fixos no topo: título, lista, prioridade e descrição. O resto é
+ * montado por BLOCOS (a paleta — arraste até o lugar ou toque para acrescentar): Nota, Checklist, Link, Prazo (início +
+ * prazo com o semáforo), Responsáveis (+ observadores), Etiquetas, Vínculo, Estimativa e Recorrência — na ordem escolhida
+ * (alça, ↑/↓). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista, em fila). No painel
+ * da direita, a ATIVIDADE — comentários com @menção | histórico. Na criação, "Usar modelo" preenche o rascunho; a
+ * existente vira MODELO. Arquivar/restaurar (qualquer pessoa do grupo) e excluir (editores). Fechar com alterações pede
+ * confirmação.
  */
 export function TarefaDetalhe({
   aberto,
@@ -111,7 +145,7 @@ export function TarefaDetalhe({
   todas: Pessoa[];
   hoje: string;
   usuarioId: number;
-  /** Editor (admin/gestor): exclui a tarefa e modera comentários/anexos. */
+  /** Editor (admin/gestor): exclui a tarefa e modera comentários. */
   podeExcluir: boolean;
   /** Os MODELOS de tarefa do quadro. */
   modelos?: ModeloTarefaOpcao[];
@@ -135,17 +169,18 @@ export function TarefaDetalhe({
   const pedido = useRef(0);
   const historico = useHistorico(atividade && abaAtividade === "historico" && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
 
-  /** O conteúdo da tarefa aberta (descrição + checklist + comentários + anexos). Só a resposta MAIS RECENTE vale. */
+  /** O conteúdo da tarefa aberta (descrição + blocos + checklist + comentários). Só a resposta MAIS RECENTE vale. */
   const carregar = useCallback(async (id: number, primeira: boolean) => {
     const n = ++pedido.current;
     try {
-      const j = await chamar<{ tarefa: { descricao: string | null } } & Conteudo>(`/api/tarefas/${id}`);
+      const j = await chamar<{ tarefa: { descricao: string | null; blocos: BlocoTarefa[] | null } } & Conteudo>(`/api/tarefas/${id}`);
       if (n !== pedido.current) return;
-      setConteudo({ checklist: j.checklist, comentarios: j.comentarios, anexos: j.anexos });
+      setConteudo({ checklist: j.checklist, comentarios: j.comentarios });
       if (primeira) {
         const descricao = j.tarefa.descricao ?? "";
-        setR((x) => (x ? { ...x, descricao } : x));
-        setInicial((x) => (x ? { ...x, descricao } : x));
+        const comBlocos = (x: Rascunho | null) => (x ? { ...x, descricao, blocos: blocosDaTarefa(j.tarefa.blocos, dadosDoRascunho(x, j.checklist.length)) } : x);
+        setR(comBlocos);
+        setInicial(comBlocos);
       }
     } catch (e) {
       if (n === pedido.current) toast.error((e as Error).message);
@@ -177,9 +212,10 @@ export function TarefaDetalhe({
           descricao: "",
           recorrencia: existente.recorrencia,
           checklist: [],
+          blocos: [],
         }
       : {
-          titulo: aberto.tipo === "nova" ? (aberto.titulo ?? "") : "",
+          titulo: "",
           listaId: aberto.tipo === "nova" ? aberto.listaId : (listas[0]?.id ?? 0),
           prioridade: "media",
           inicio: "",
@@ -192,7 +228,9 @@ export function TarefaDetalhe({
           descricao: "",
           recorrencia: null,
           checklist: [],
+          blocos: [],
         };
+    base.blocos = blocosDaTarefa(existente ? null : [], dadosDoRascunho(base, existente?.checklist.total ?? 0));
     setR(base);
     setInicial(base);
     setDesk(ehDesktop());
@@ -201,6 +239,12 @@ export function TarefaDetalhe({
     if (aberto.tipo === "editar") carregar(aberto.id, true);
   }, [aberto?.tipo, idAberto, aberto?.tipo === "nova" ? aberto.listaId : null]);
 
+  const checklistServidor = useChecklistServidor(idAberto ? `/api/tarefas/${idAberto}` : null, conteudo?.checklist ?? null, onSalvo);
+  const listaBlocos = useRef<HTMLDivElement>(null);
+  const soltarBloco = (carga: { tipo: "novo"; bloco: BlocoTarefa["tipo"] } | { tipo: "mover"; id: string }, indice: number) =>
+    setR((x) => (x ? { ...x, blocos: carga.tipo === "novo" ? adicionarBloco(x.blocos, carga.bloco, indice) : moverBloco(x.blocos, carga.id, indice) } : x));
+  const arrastoBlocos = useArrastoBlocos(listaBlocos, soltarBloco);
+
   if (!aberto || !r || !inicial) return <>{confirmacao}</>;
   const nova = aberto.tipo === "nova";
   const sujo = JSON.stringify(r) !== JSON.stringify(inicial);
@@ -208,13 +252,14 @@ export function TarefaDetalhe({
   const est = numEstimativa(r.estimativa);
   const estOk = est == null || (Number.isFinite(est) && est >= 0 && est <= 9999);
   const carregando = !nova && !conteudo;
-  const pode = r.titulo.trim().length > 0 && datasOk && estOk && !salvando && !carregando;
+  const linksOk = r.blocos.every((b) => b.tipo !== "link" || !b.url.trim() || urlValida(b.url));
+  const pode = r.titulo.trim().length > 0 && datasOk && estOk && linksOk && !salvando && !carregando;
   const concluida = existente?.concluidaEm != null;
   const estado = estadoPrazo(r.prazo || null, hoje, concluida);
   const fora = todas.filter((p) => !pessoas.some((x) => x.id === p.id));
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setR((x) => (x ? { ...x, [k]: v } : x));
 
-  /** Uma gravação IMEDIATA do conteúdo (checklist/comentário/anexo): o aviso de erro, e o conteúdo + o quadro recarregados. */
+  /** Uma gravação IMEDIATA de um comentário: o aviso de erro, e o conteúdo + o quadro recarregados. */
   const agir = async (fn: () => Promise<unknown>): Promise<boolean> => {
     if (!idAberto) return false;
     try {
@@ -258,7 +303,8 @@ export function TarefaDetalhe({
           etiquetas: r.etiquetas,
           vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
           recorrencia: r.recorrencia,
-          checklist: r.checklist,
+          checklist: r.checklist.map((c) => c.trim()).filter(Boolean),
+          blocos: blocosParaGravar(r.blocos),
         });
         toast.success("Tarefa criada.");
       } else if (existente) {
@@ -276,6 +322,7 @@ export function TarefaDetalhe({
         if (!mesmoVinculo(r.vinculo, inicial.vinculo)) d.vinculo = r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null;
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
+        if (JSON.stringify(r.blocos) !== JSON.stringify(inicial.blocos)) d.blocos = blocosParaGravar(r.blocos);
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
         toast.success(listaDestino == null ? "Tarefa salva." : listas.find((l) => l.id === listaDestino)?.concluida ? "Tarefa concluída." : "Tarefa reaberta.");
       }
@@ -307,7 +354,7 @@ export function TarefaDetalhe({
     if (!existente) return;
     const ok = await confirmar({
       titulo: `Excluir a tarefa ${rotuloTicket(existente.ticket)}?`,
-      texto: "Checklist, comentários e anexos vão junto. Esta ação não pode ser desfeita — no dia a dia, prefira arquivar.",
+      texto: "Checklist, notas e comentários vão junto. Esta ação não pode ser desfeita — no dia a dia, prefira arquivar.",
       confirmar: "Excluir",
       perigo: true,
     });
@@ -341,6 +388,11 @@ export function TarefaDetalhe({
             prazo: prazoDoModelo(m, hoje) ?? "",
             recorrencia: m.recorrencia,
             checklist: m.checklist,
+            // Os blocos do modelo + os de campo que o modelo preenche.
+            blocos: blocosDaTarefa(
+              m.blocos ?? [],
+              dadosDoRascunho({ ...x, estimativa: m.estimativaH == null ? "" : "1", prazo: prazoDoModelo(m, hoje) ?? "", etiquetas: m.etiquetas, recorrencia: m.recorrencia }, m.checklist.length),
+            ),
           }
         : x,
     );
@@ -360,12 +412,156 @@ export function TarefaDetalhe({
     }
   };
 
-  const itens = conteudo?.checklist ?? [];
-  const moverItem = (i: ItemChecklist, d: -1 | 1) => {
-    const idx = itens.findIndex((x) => x.id === i.id);
-    const viz = d < 0 ? { anteriorId: itens[idx - 2]?.id ?? null, proximoId: itens[idx - 1]?.id ?? null } : { anteriorId: itens[idx + 1]?.id ?? null, proximoId: itens[idx + 2]?.id ?? null };
-    agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", viz));
+  const acoesChecklist = nova ? acoesChecklistRascunho(r.checklist, (v) => set("checklist", v)) : checklistServidor;
+  const nChecklist = acoesChecklist?.itens.length ?? existente?.checklist.total ?? 0;
+  const setBlocos = (fn: (l: BlocoTarefa[]) => BlocoTarefa[]) => setR((x) => (x ? { ...x, blocos: fn(x.blocos) } : x));
+  const setBloco = (id: string, patch: Partial<{ texto: string; url: string; titulo: string }>) =>
+    setBlocos((l) => l.map((b) => (b.id === id ? ({ ...b, ...patch } as BlocoTarefa) : b)));
+
+  /** REMOVER um bloco: o de campo limpa o campo (com dado, pede confirmação; o checklist gravado exclui os itens). */
+  const tirarBloco = async (b: BlocoTarefa) => {
+    const temDado =
+      b.tipo === "nota" ? b.texto.trim() !== "" : b.tipo === "link" ? b.url.trim() !== "" : blocoTemDado(b.tipo, dadosDoRascunho(r, nChecklist));
+    if (temDado) {
+      const texto =
+        b.tipo === "checklist" && !nova
+          ? `Os ${nChecklist} itens do checklist serão excluídos agora.`
+          : b.tipo === "nota" || b.tipo === "link"
+            ? "O conteúdo sai da tarefa ao salvar."
+            : "O campo fica vazio ao salvar.";
+      if (!(await confirmar({ titulo: `Remover o bloco ${ROTULO_BLOCO[b.tipo]}?`, texto, confirmar: "Remover", perigo: true }))) return;
+    }
+    if (b.tipo === "checklist" && !nova) for (const i of acoesChecklist?.itens ?? []) acoesChecklist?.remover(i.id);
+    setR((x) => {
+      if (!x) return x;
+      const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
+      if (b.tipo === "prazo") Object.assign(y, { inicio: "", prazo: "" });
+      else if (b.tipo === "pessoas") Object.assign(y, { pessoas: [], observadores: [] });
+      else if (b.tipo === "etiquetas") y.etiquetas = [];
+      else if (b.tipo === "vinculo") y.vinculo = null;
+      else if (b.tipo === "estimativa") y.estimativa = "";
+      else if (b.tipo === "recorrencia") y.recorrencia = null;
+      else if (b.tipo === "checklist") y.checklist = [];
+      return y;
+    });
   };
+
+  /** O CONTEÚDO de cada bloco — os mesmos campos de sempre. */
+  const conteudoBloco = (b: BlocoTarefa): ReactNode => {
+    switch (b.tipo) {
+      case "nota":
+        return (
+          <TextArea label="" aria-label="Nota" rows={4} value={b.texto} maxLength={MAX_NOTA} placeholder="Escreva a nota" onChange={(e) => setBloco(b.id, { texto: e.target.value })} />
+        );
+      case "link": {
+        const erro = b.url.trim() && !urlValida(b.url) ? "Informe um endereço http(s)." : undefined;
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField label="Endereço" type="url" inputMode="url" value={b.url} maxLength={MAX_URL} placeholder="https://" error={erro} onChange={(e) => setBloco(b.id, { url: e.target.value })} />
+              <TextField label="Título (opcional)" value={b.titulo} maxLength={MAX_TITULO_LINK} onChange={(e) => setBloco(b.id, { titulo: e.target.value })} />
+            </div>
+            {urlValida(b.url) && (
+              <LinkExterno variante="texto" href={b.url.trim()} className="inline-flex min-h-11 items-center break-all text-[13px] lg:min-h-0">
+                {b.titulo.trim() || b.url.trim()}
+              </LinkExterno>
+            )}
+          </div>
+        );
+      }
+      case "checklist":
+        return acoesChecklist ? (
+          <ChecklistTarefa
+            acoes={acoesChecklist}
+            rascunho={nova}
+            onRemover={nova ? undefined : (i) => confirmar({ titulo: `Remover "${i.texto}" do checklist?`, confirmar: "Remover", perigo: true })}
+          />
+        ) : (
+          <p className="text-[12.5px] text-muted">Carregando…</p>
+        );
+      case "prazo":
+        return (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField label="Início" type="date" value={r.inicio} onChange={(e) => set("inicio", e.target.value)} />
+            <TextField
+              label="Prazo"
+              type="date"
+              value={r.prazo}
+              onChange={(e) => set("prazo", e.target.value)}
+              error={datasOk ? undefined : "O início não pode ser depois do prazo."}
+              hint={
+                r.prazo ? (
+                  <span className="font-semibold" style={{ color: COR_ESTADO_PRAZO[estado] }}>
+                    {ROTULO_ESTADO_PRAZO[estado]}
+                  </span>
+                ) : undefined
+              }
+            />
+          </div>
+        );
+      case "pessoas":
+        return (
+          <div className="space-y-4">
+            <Secao titulo="Responsáveis">
+              <SeletorPessoas
+                pessoas={pessoas}
+                fora={fora}
+                selecionadas={r.pessoas}
+                usuarioId={usuarioId}
+                onChange={(v) => setR((x) => (x ? { ...x, pessoas: v, observadores: x.observadores.filter((o) => !v.includes(o)) } : x))}
+              />
+            </Secao>
+            <Secao titulo="Observadores (acompanham)">
+              <SeletorPessoas pessoas={pessoas.filter((p) => !r.pessoas.includes(p.id))} fora={fora} selecionadas={r.observadores} usuarioId={usuarioId} onChange={(v) => set("observadores", v)} />
+            </Secao>
+          </div>
+        );
+      case "etiquetas":
+        return etiquetas.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {etiquetas.map((e) => {
+              const ativa = r.etiquetas.includes(e.id);
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  aria-pressed={ativa}
+                  onClick={() => set("etiquetas", ativa ? r.etiquetas.filter((x) => x !== e.id) : [...r.etiquetas, e.id])}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+                  style={{
+                    color: e.cor,
+                    background: `color-mix(in srgb, ${e.cor} ${ativa ? 18 : 6}%, var(--surface))`,
+                    boxShadow: `inset 0 0 0 ${ativa ? 2 : 1}px color-mix(in srgb, ${e.cor} ${ativa ? 70 : 25}%, transparent)`,
+                  }}
+                >
+                  {ativa && <IconCheck className="h-3.5 w-3.5" />}
+                  {e.nome}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[12.5px] text-muted">O quadro ainda não tem etiquetas — crie na aba Configuração.</p>
+        );
+      case "vinculo":
+        return <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />;
+      case "estimativa":
+        return (
+          <TextField
+            label="Horas"
+            inputMode="decimal"
+            value={r.estimativa}
+            placeholder="Ex.: 4 ou 1,5"
+            error={estOk ? undefined : "Um número de 0 a 9999."}
+            onChange={(e) => set("estimativa", e.target.value)}
+          />
+        );
+      case "recorrencia":
+        return <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />;
+    }
+  };
+  const arrasto = arrastoBlocos.arrasto;
+  const movendo = arrasto?.carga.tipo === "mover" ? arrasto.carga.id : null;
   const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
   const listaAtual = listas.find((l) => l.id === r.listaId);
   const listaConcluidas = listas.find((l) => l.concluida);
@@ -543,134 +739,54 @@ export function TarefaDetalhe({
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
           </SelectField>
           <Secao titulo="Prioridade">
-              <Segmented<Prioridade>
-                ariaLabel="Prioridade"
-                value={r.prioridade}
-                onChange={(v) => set("prioridade", v)}
-                options={PRIORIDADES.map((p) => ({
-                  value: p,
-                  label: ROTULO_PRIORIDADE[p],
-                  icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} />,
-                }))}
-              />
-          </Secao>
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-            <TextField label="Início" type="date" value={r.inicio} onChange={(e) => set("inicio", e.target.value)} />
-            <TextField
-              label="Prazo"
-              type="date"
-              value={r.prazo}
-              onChange={(e) => set("prazo", e.target.value)}
-              error={datasOk ? undefined : "O início não pode ser depois do prazo."}
-              hint={
-                r.prazo ? (
-                  <span className="font-semibold" style={{ color: COR_ESTADO_PRAZO[estado] }}>
-                    {ROTULO_ESTADO_PRAZO[estado]}
-                  </span>
-                ) : undefined
-              }
+            <Segmented<Prioridade>
+              ariaLabel="Prioridade"
+              value={r.prioridade}
+              onChange={(v) => set("prioridade", v)}
+              options={PRIORIDADES.map((p) => ({
+                value: p,
+                label: ROTULO_PRIORIDADE[p],
+                icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} />,
+              }))}
             />
-            <TextField
-              label="Estimativa (horas)"
-              inputMode="decimal"
-              value={r.estimativa}
-              placeholder="Ex.: 4 ou 1,5"
-              error={estOk ? undefined : "Um número de 0 a 9999."}
-              onChange={(e) => set("estimativa", e.target.value)}
-            />
-          </div>
-          <Secao titulo="Responsáveis">
-            <SeletorPessoas pessoas={pessoas} fora={fora} selecionadas={r.pessoas} usuarioId={usuarioId} onChange={(v) => setR((x) => (x ? { ...x, pessoas: v, observadores: x.observadores.filter((o) => !v.includes(o)) } : x))} />
-          </Secao>
-          <Secao titulo="Observadores (acompanham)">
-            <SeletorPessoas
-              pessoas={pessoas.filter((p) => !r.pessoas.includes(p.id))}
-              fora={fora}
-              selecionadas={r.observadores}
-              usuarioId={usuarioId}
-              onChange={(v) => set("observadores", v)}
-            />
-          </Secao>
-          {etiquetas.length > 0 && (
-            <Secao titulo="Etiquetas">
-              <div className="flex flex-wrap gap-1.5">
-                {etiquetas.map((e) => {
-                  const ativa = r.etiquetas.includes(e.id);
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      aria-pressed={ativa}
-                      onClick={() => set("etiquetas", ativa ? r.etiquetas.filter((x) => x !== e.id) : [...r.etiquetas, e.id])}
-                      className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
-                      style={{
-                        color: e.cor,
-                        background: `color-mix(in srgb, ${e.cor} ${ativa ? 18 : 6}%, var(--surface))`,
-                        boxShadow: `inset 0 0 0 ${ativa ? 2 : 1}px color-mix(in srgb, ${e.cor} ${ativa ? 70 : 25}%, transparent)`,
-                      }}
-                    >
-                      {ativa && <IconCheck className="h-3.5 w-3.5" />}
-                      {e.nome}
-                    </button>
-                  );
-                })}
-              </div>
-            </Secao>
-          )}
-          <Secao titulo="Recorrência">
-            <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />
-          </Secao>
-          <Secao titulo="Vínculo">
-            <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />
           </Secao>
           <TextArea
             label="Descrição"
-            rows={5}
+            rows={4}
             value={r.descricao}
             maxLength={10_000}
             disabled={carregando}
             placeholder={carregando ? "Carregando…" : "Detalhes, passos, contexto (opcional)"}
             onChange={(e) => set("descricao", e.target.value)}
           />
-          {nova ? (
-            <p className="text-[12.5px] text-muted">
-              {r.checklist.length ? `O checklist do modelo (${r.checklist.length} ${r.checklist.length === 1 ? "item" : "itens"}) entra ao criar. ` : ""}
-              Checklist, anexos e comentários ficam disponíveis depois de criar a tarefa.
-            </p>
-          ) : (
-            <>
-              <Secao titulo="Checklist">
-                {conteudo ? (
-                  <ChecklistTarefa
-                    itens={itens}
-                    onAlternar={(i) => agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", { feito: !i.feito }))}
-                    onAdicionar={(texto) => agir(() => chamar(`${base}/checklist`, "POST", { texto }))}
-                    onRenomear={(i, texto) => agir(() => chamar(`${base}/checklist/${i.id}`, "PATCH", { texto }))}
-                    onRemover={(i) => agir(() => chamar(`${base}/checklist/${i.id}`, "DELETE"))}
-                    onMover={moverItem}
-                  />
-                ) : (
-                  <p className="text-[12.5px] text-muted">Carregando…</p>
-                )}
-              </Secao>
-              <Secao titulo="Anexos">
-                {conteudo ? (
-                  <AnexosTarefa
-                    anexos={conteudo.anexos}
-                    usuarioId={usuarioId}
-                    podeModerar={podeExcluir}
-                    onArquivo={(a) => agir(() => chamar(`${base}/anexos`, "POST", { tipo: "arquivo", ...a }))}
-                    onLink={(a) => agir(() => chamar(`${base}/anexos`, "POST", { tipo: "link", ...a }))}
-                    onExcluir={async (a) => {
-                      if (await confirmar({ titulo: `Excluir o anexo "${a.nome}"?`, confirmar: "Excluir", perigo: true })) agir(() => chamar(`/api/tarefas/anexos/${a.id}`, "DELETE"));
-                    }}
-                  />
-                ) : (
-                  <p className="text-[12.5px] text-muted">Carregando…</p>
-                )}
-              </Secao>
-            </>
-          )}
+          <div ref={listaBlocos} className="space-y-3">
+            {r.blocos.map((b, i) => (
+              <Fragment key={b.id}>
+                {arrasto && arrasto.indice === i - (movendo && r.blocos.findIndex((x) => x.id === movendo) < i ? 1 : 0) && b.id !== movendo && <GuiaBloco />}
+                <MolduraBloco
+                  id={b.id}
+                  tipo={b.tipo}
+                  primeiro={i === 0}
+                  ultimo={i === r.blocos.length - 1}
+                  disabled={carregando}
+                  arrastando={b.id === movendo}
+                  onPegar={(e) => arrastoBlocos.iniciar(e, { tipo: "mover", id: b.id }, ROTULO_BLOCO[b.tipo])}
+                  onMover={(d) => setBlocos((l) => moverBloco(l, b.id, i + d))}
+                  onRemover={() => tirarBloco(b)}
+                >
+                  {conteudoBloco(b)}
+                </MolduraBloco>
+              </Fragment>
+            ))}
+            {arrasto && arrasto.indice >= r.blocos.length - (movendo ? 1 : 0) && <GuiaBloco />}
+          </div>
+          <PaletaBlocos
+            disponiveis={blocosDisponiveis(r.blocos)}
+            disabled={carregando}
+            onIniciar={(e, t) => arrastoBlocos.iniciar(e, { tipo: "novo", bloco: t }, ROTULO_BLOCO[t], () => setBlocos((l) => adicionarBloco(l, t)))}
+            onAdicionar={(t) => setBlocos((l) => adicionarBloco(l, t))}
+          />
+          {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={arrastoBlocos.fantasma} />}
         </div>
         )}
       </Modal>

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { num } from "@/lib/format";
+import { dataBR, num } from "@/lib/format";
 import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
@@ -15,8 +15,10 @@ import {
   filtrarTarefas,
   moverCartao,
   prefixoEdicoesTarefas,
+  reagendar,
   resumoQuadro,
   rotuloTicket,
+  type TarefaCalendario,
   type VinculoTarefa,
   vizinhos,
 } from "@/lib/tarefas-core";
@@ -54,11 +56,12 @@ const LOTE_MASSA = 50;
  * ESPAÇO DE UM QUADRO de tarefas (`/painel/tarefas/[id]`): UMA linha de cabeçalho (voltar · cor · nome · grupo · abertas ·
  * atrasadas · concluídas) e as abas **Quadro · Lista · Calendário · Dashboard · Configuração** (`AbasEspaco`; no celular,
  * rótulos curtos), com os FILTROS na mesma linha (`FerramentasAba`) e os ativos por extenso logo abaixo. CRIAR TAREFA é
- * UM fluxo só — o formulário completo (`TarefaDetalhe`), aberto de onde se está: no Quadro pelo "Adicionar tarefa" da
- * coluna (rápido pelo título, ou "Mais detalhes"), na Lista pelo botão da barra e no Calendário tocando num dia (prazo =
- * o dia). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
+ * UM fluxo só — o BANNER da tarefa (`TarefaDetalhe`), aberto de onde se está: no Quadro pelo "Adicionar tarefa" da
+ * coluna (naquela lista), na Lista pelo botão da barra e no Calendário pelo "+" de um dia (prazo = o dia); no Calendário,
+ * arrastar uma tarefa para outro dia a REAGENDA (otimista). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
  * com o `router.refresh`); o filtro segue de uma aba para a outra. Na Lista: seleção + EDIÇÃO EM MASSA e exportar .xlsx.
- * `novaInicial` (o `?nova=tipo:id` do "Criar tarefa" da Mesa) abre a tarefa NOVA já vinculada; `tarefaInicial`, a tarefa.
+ * `novaInicial` (o `?nova=tipo:id` do "Criar tarefa" da Mesa) abre a tarefa NOVA já vinculada; `prazoInicial` (o
+ * `?prazo=` do calendário de todos os quadros), a tarefa NOVA com esse prazo; `tarefaInicial`, a tarefa.
  */
 export function QuadroTarefas({
   aba,
@@ -76,8 +79,9 @@ export function QuadroTarefas({
   podeEditar,
   usuarioId,
   novaInicial = null,
+  prazoInicial = null,
   tarefaInicial = null,
-}: DadosQuadro & { aba: AbaQuadro; usuarioId: number; novaInicial?: VinculoTarefa | null; tarefaInicial?: number | null }) {
+}: DadosQuadro & { aba: AbaQuadro; usuarioId: number; novaInicial?: VinculoTarefa | null; prazoInicial?: string | null; tarefaInicial?: number | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const [tarefas, setTarefas] = useState(doServidor);
@@ -104,14 +108,15 @@ export function QuadroTarefas({
   const noQuadro = useMemo(() => filtradas.filter((t) => !t.arquivada && listasAtivas.has(t.listaId)), [filtradas, listasAtivas]);
   const naLista = useMemo(() => filtradas.filter((t) => t.arquivada === arquivadas), [filtradas, arquivadas]);
   const nArquivadas = useMemo(() => tarefas.filter((t) => t.arquivada).length, [tarefas]);
-  /** Abre o formulário de uma tarefa NOVA (a lista de onde se pediu; título/prazo já preenchidos). */
-  const nova = (listaId = ativas[0]?.id, extra: { titulo?: string; prazo?: string } = {}) => listaId && setAberto({ tipo: "nova", listaId, ...extra });
+  /** Abre o banner de uma tarefa NOVA (a lista de onde se pediu; o prazo do dia do calendário). */
+  const nova = (listaId = ativas[0]?.id, prazo?: string) => listaId && setAberto({ tipo: "nova", listaId, prazo });
 
   // Chegada pela Mesa: `?nova=` abre a tarefa NOVA já vinculada; `?tarefa=` abre aquela tarefa — uma vez, e limpa a URL.
   // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
   useEffect(() => {
     if (tarefaInicial) setAberto({ tipo: "editar", id: tarefaInicial });
     else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, vinculo: novaInicial });
+    else if (prazoInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, prazo: prazoInicial });
     else return;
     router.replace(`${pathname}?aba=${aba}`, { scroll: false });
   }, []);
@@ -159,14 +164,17 @@ export function QuadroTarefas({
     }
   };
 
-  const criar = async (listaId: number, titulo: string) => {
+  /** REAGENDAR (arrastar no calendário): o prazo vai para o dia e o início anda junto — otimista, volta se falhar. */
+  const reagendarTarefa = async (t: TarefaCalendario, dia: string) => {
+    const antes = tarefas;
+    const novo = reagendar(t, dia);
+    setTarefas(antes.map((x) => (x.id === t.id ? { ...x, ...novo } : x)));
     try {
-      await chamar("/api/tarefas", "POST", { quadroId: quadro.id, listaId, titulo });
-      router.refresh();
-      return true;
+      await chamar(`/api/tarefas/${t.id}`, "PATCH", novo);
+      toast.success(`${rotuloTicket(t.ticket)} reagendada para ${dataBR(dia)}.`);
     } catch (e) {
+      setTarefas(antes);
       toast.error((e as Error).message);
-      return false;
     }
   };
 
@@ -309,8 +317,7 @@ export function QuadroTarefas({
               hoje={hoje}
               onAbrir={(id) => setAberto({ tipo: "editar", id })}
               onMover={mover}
-              onCriar={criar}
-              onDetalhes={(listaId, titulo) => nova(listaId, { titulo })}
+              onNova={(listaId) => nova(listaId)}
               onArquivar={arquivar}
             />
           )
@@ -332,8 +339,9 @@ export function QuadroTarefas({
           <CalendarioTarefas
             tarefas={noQuadro}
             hoje={hoje}
-            onAbrir={(id) => setAberto({ tipo: "editar", id })}
-            onNova={semListas ? undefined : (prazo) => nova(undefined, { prazo })}
+            onAbrir={(t) => setAberto({ tipo: "editar", id: t.id })}
+            onNova={semListas ? undefined : (prazo) => nova(undefined, prazo)}
+            onReagendar={reagendarTarefa}
           />
         ) : (
           <ConfiguracaoQuadro

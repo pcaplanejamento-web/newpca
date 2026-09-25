@@ -107,11 +107,11 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
-import { AnexosTarefa } from "@/components/AnexosTarefa";
+import { MolduraBloco, PaletaBlocos } from "@/components/BlocosTarefa";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
 import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
-import { ChecklistTarefa } from "@/components/ChecklistTarefa";
+import { acoesChecklistRascunho, ChecklistTarefa } from "@/components/ChecklistTarefa";
 import { ComentariosTarefa } from "@/components/ComentariosTarefa";
 import { VinculoTarefa } from "@/components/VinculoTarefa";
 import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
@@ -122,7 +122,7 @@ import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { QuadroCard, QuadroNovoCard } from "@/components/QuadroCard";
 import { ColunaTarefas } from "@/components/QuadroKanban";
 import { SeletorPessoas } from "@/components/SeletorPessoas";
-import { FILTRO_TAREFAS_PADRAO, type Recorrencia, type TarefaResumo } from "@/lib/tarefas-core";
+import { adicionarBloco, type BlocoTarefa, blocosDisponiveis, FILTRO_TAREFAS_PADRAO, moverBloco, type Recorrencia, removerBloco, type TarefaResumo } from "@/lib/tarefas-core";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -1821,16 +1821,18 @@ function TarefasDemo() {
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
     arquivada: false, pessoas: [], observadores: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
-    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, anexos: 0, recorrencia: null,
+    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, recorrencia: null,
   };
   const cartoes: TarefaResumo[] = [
     { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculo: { tipo: "protocolo", id: 1, rotulo: "144756/2026" } },
-    { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3], anexos: 2 },
+    { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3], notas: 1, links: 2 },
     { ...base, id: 3, ticket: 130, titulo: "Revisar a classificação dos itens", concluidaEm: "2026-01-01" },
   ];
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
   const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
+  const [checkDemo, setCheckDemo] = useState(["Abrir o PDF do protocolo", "Conferir os itens com o catálogo"]);
+  const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const listasDemo = [
     { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
     { id: 2, nome: "Em andamento", ordem: 2, limiteWip: 2, concluida: false, arquivada: false },
@@ -1846,7 +1848,7 @@ function TarefasDemo() {
         <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} />
       </div>
       <div className="flex flex-wrap items-start gap-3">
-        <ColunaTarefas lista={{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: 2, concluida: false, arquivada: false }} qtd={3} onCriar={async () => true}>
+        <ColunaTarefas lista={{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: 2, concluida: false, arquivada: false }} qtd={3} onNova={() => {}}>
           {cartoes.map((t) => (
             <CartaoTarefa key={t.id} tarefa={t} etiquetas={mEt} pessoas={mPe} hoje="2026-06-01" onAbrir={() => {}} />
           ))}
@@ -1856,25 +1858,23 @@ function TarefasDemo() {
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChecklistTarefa
-          itens={[
-            { id: 1, texto: "Abrir o PDF do protocolo", feito: true, ordem: 1 },
-            { id: 2, texto: "Conferir os itens com o catálogo", feito: false, ordem: 2 },
-          ]}
-          onAlternar={() => {}}
-          onAdicionar={async () => true}
-          onRenomear={() => {}}
-          onRemover={() => {}}
-          onMover={() => {}}
-        />
-        <AnexosTarefa
-          anexos={[{ id: 1, tipo: "link", nome: "Planilha de preços", url: "https://example.com", mime: null, tamanho: null, criadoPor: 1, criadoEm: "2026-06-01 12:00:00" }]}
-          usuarioId={1}
-          podeModerar={false}
-          onArquivo={async () => true}
-          onLink={async () => true}
-          onExcluir={() => {}}
-        />
+        <ChecklistTarefa acoes={acoesChecklistRascunho(checkDemo, setCheckDemo)} rascunho />
+        <div className="space-y-2">
+          {blocos.map((b, i) => (
+            <MolduraBloco
+              key={b.id}
+              id={b.id}
+              tipo={b.tipo}
+              primeiro={i === 0}
+              ultimo={i === blocos.length - 1}
+              onMover={(d) => setBlocos((l) => moverBloco(l, b.id, i + d))}
+              onRemover={() => setBlocos((l) => removerBloco(l, b.id))}
+            >
+              <p className="text-[12.5px] text-muted">O conteúdo do bloco (nota, link, prazo…).</p>
+            </MolduraBloco>
+          ))}
+          <PaletaBlocos disponiveis={blocosDisponiveis(blocos)} onAdicionar={(t) => setBlocos((l) => adicionarBloco(l, t))} />
+        </div>
         <div className="h-72 rounded-card border border-border p-3">
           <ComentariosTarefa
             comentarios={[{ id: 1, usuarioId: 2, usuarioNome: "Bruno", texto: "Feito, @Ana — falta só o DFD 1209.", mencoes: [1], criadoEm: "2026-06-01 12:00:00", editadoEm: null }]}
@@ -1896,7 +1896,7 @@ function TarefasDemo() {
           />
         </div>
       </div>
-      <CalendarioTarefas tarefas={cartoes} hoje="2026-01-01" onAbrir={() => {}} />
+      <CalendarioTarefas tarefas={cartoes} hoje="2026-01-01" onAbrir={() => {}} onNova={() => {}} onReagendar={() => {}} />
       <div className="grid gap-4 lg:grid-cols-2">
         <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />
         <div className="max-w-sm space-y-1 rounded-card border border-border p-2">
@@ -3071,7 +3071,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa, AnexosTarefa (link ou arquivo ≤ 1 MB), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (grade do mês; agenda no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (Mês com faixas início → prazo · Semana · Agenda; reagendar arrastando; mini-grade no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

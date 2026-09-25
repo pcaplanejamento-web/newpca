@@ -2,8 +2,8 @@ import type { UsuarioSessao } from "./auth";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { dataIsoBrasilia } from "./format";
 import { getGrupoAtivoId, gruposDoUsuario } from "./grupos";
-import { dadosQuadro, listarAutomacoes, listarModelosQuadro, listarModelosTarefa, listarQuadros, quadroAcessivel } from "./tarefas";
-import { prefixoEdicoesTarefas } from "./tarefas-core";
+import { contadoresDosQuadros, dadosQuadro, etiquetasDosQuadros, listarAutomacoes, listarModelosQuadro, listarModelosTarefa, listarQuadros, quadroAcessivel, tarefasDoCalendario } from "./tarefas";
+import { gradeMes, lerMes, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
 /**
@@ -19,6 +19,32 @@ export async function carregarQuadros(u: UsuarioSessao) {
     u.role === "admin" ? listarModelosQuadro(null) : gruposDoUsuario(u.id).then((g) => listarModelosQuadro(g.map((x) => x.id))),
   ]);
   return { quadros, grupoAtivo, modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })) };
+}
+
+/**
+ * O CALENDÁRIO de TODOS os quadros (`/painel/tarefas?aba=calendario&mes=AAAA-MM`): as tarefas da grade do mês (as
+ * semanas inteiras) dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo, todos), as etiquetas deles (filtro) e as
+ * PESSOAS responsáveis. Só a aba ativa é montada — a lista de quadros não carrega nada disto.
+ */
+export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
+  const { quadros, grupoAtivo, modelos } = await carregarQuadros(u);
+  const hoje = dataIsoBrasilia(new Date().toISOString());
+  const mes = lerMes(mesPedido, hoje);
+  const grade = gradeMes(mes.ano, mes.mes);
+  const ativos = quadros.filter((q) => !q.arquivado);
+  const ids = ativos.map((q) => q.id);
+  const [tarefas, etiquetas, contadores] = await Promise.all([
+    tarefasDoCalendario(ids, grade[0][0], grade.at(-1)?.[6] ?? grade[0][6]),
+    etiquetasDosQuadros(ids),
+    contadoresDosQuadros(ids, hoje, semanaDe(hoje)[6]),
+  ]);
+  const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
+  return {
+    quadros,
+    grupoAtivo,
+    modelos,
+    calendario: { tarefas, contadores, mes, hoje, etiquetas, pessoas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })) },
+  };
 }
 
 /**

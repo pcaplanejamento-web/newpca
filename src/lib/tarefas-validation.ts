@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FREQUENCIAS, GATILHOS, PRIORIDADES, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -43,6 +43,32 @@ export const recorrenciaSchema = z.object({
   base: z.enum(["prazo", "conclusao"]),
 });
 
+const idBloco = z.string().regex(/^[A-Za-z0-9_-]{1,20}$/, "Bloco inválido.");
+/** Os BLOCOS da tarefa (a ordem + o conteúdo das notas e links); sem repetir id nem bloco único. */
+export const blocosSchema = z
+  .array(
+    z.discriminatedUnion("tipo", [
+      z.object({ id: idBloco, tipo: z.literal("nota"), texto: z.string().trim().max(MAX_NOTA, `Nota com até ${MAX_NOTA} caracteres.`) }),
+      z.object({
+        id: idBloco,
+        tipo: z.literal("link"),
+        url: z
+          .string()
+          .trim()
+          .max(MAX_URL)
+          .refine((u) => /^https?:\/\/[^\s]+$/i.test(u), "Informe um endereço http(s)."),
+        titulo: z.string().trim().max(MAX_TITULO_LINK),
+      }),
+      z.object({ id: idBloco, tipo: z.enum(TIPOS_BLOCO.filter((t) => t !== "nota" && t !== "link") as [string, ...string[]]) }),
+    ]),
+  )
+  .max(MAX_BLOCOS, `Até ${MAX_BLOCOS} blocos.`)
+  .refine((l) => new Set(l.map((b) => b.id)).size === l.length, "Bloco repetido.")
+  .refine((l) => {
+    const unicos = l.filter((b) => b.tipo !== "nota" && b.tipo !== "link").map((b) => b.tipo);
+    return new Set(unicos).size === unicos.length;
+  }, "Bloco repetido.");
+
 const camposTarefa = {
   titulo: z.string().trim().min(1, "Dê um título à tarefa.").max(200, "Título com até 200 caracteres."),
   descricao: z.string().max(10_000, "Descrição com até 10.000 caracteres.").nullable().optional(),
@@ -55,6 +81,7 @@ const camposTarefa = {
   estimativaH: z.number().min(0).max(9999).nullable().optional(),
   vinculo: z.object({ tipo: z.enum(TIPOS_VINCULO), id }).nullable().optional(),
   recorrencia: recorrenciaSchema.nullable().optional(),
+  blocos: blocosSchema.optional(),
 };
 const inicioAntesDoPrazo = (v: { inicio?: string | null; prazo?: string | null }) => !v.inicio || !v.prazo || v.inicio <= v.prazo;
 const MSG_DATAS = { message: "O início não pode ser depois do prazo.", path: ["prazo"] };
@@ -78,34 +105,6 @@ export const editarChecklistSchema = z
 export const comentarioSchema = z.object({
   texto: z.string().trim().min(1, "Escreva o comentário.").max(5000, "Comentário com até 5.000 caracteres."),
 });
-
-/** Tamanho máximo de um ARQUIVO anexado (decodificado). */
-export const ANEXO_MAX_BYTES = 1024 * 1024;
-const MIME_ANEXO = /^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,([A-Za-z0-9+/]+={0,2})$/;
-/** Bytes de um base64 (sem decodificar). */
-const bytesBase64 = (b64: string) => Math.floor((b64.length * 3) / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
-
-/** Um ANEXO: link http(s) ou arquivo (data-URL png/jpeg/webp/pdf ≤ 1 MB). */
-export const anexoSchema = z.discriminatedUnion("tipo", [
-  z.object({
-    tipo: z.literal("link"),
-    nome: z.string().trim().max(120).optional(),
-    url: z
-      .string()
-      .trim()
-      .max(2000)
-      .refine((u) => /^https?:\/\/[^\s]+$/i.test(u), "Informe um endereço http(s)."),
-  }),
-  z.object({
-    tipo: z.literal("arquivo"),
-    nome: z.string().trim().min(1).max(120),
-    conteudo: z
-      .string()
-      .max(1_500_000)
-      .refine((c) => MIME_ANEXO.test(c), "Arquivo aceito: imagem PNG/JPEG/WEBP ou PDF.")
-      .refine((c) => bytesBase64(c.slice(c.indexOf(",") + 1)) <= ANEXO_MAX_BYTES, "Arquivo com até 1 MB."),
-  }),
-]);
 
 /** EDIÇÃO EM MASSA (aba Lista): até 50 tarefas por chamada. */
 export const massaTarefasSchema = z.object({

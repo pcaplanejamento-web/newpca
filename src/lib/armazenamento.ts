@@ -72,10 +72,11 @@ const DOMINIOS: Record<string, string> = {
   linhas: "Legado",
   protocolos: "Legado",
   protocolo_opcoes: "Legado",
+  tarefa_anexos: "Legado",
 };
 
-// Sobras de módulos removidos (Tabelas `0005`; o antigo módulo Protocolos) — dormentes, só sinalizadas.
-const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas", "protocolos", "protocolo_opcoes"]);
+// Sobras de módulos removidos (Tabelas `0005`; o antigo módulo Protocolos; os anexos das tarefas, `0045`) — dormentes, só sinalizadas.
+const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas", "protocolos", "protocolo_opcoes", "tarefa_anexos"]);
 
 // Colunas notoriamente grandes (base64/JSON) — destaque só-leitura na tela.
 const COLUNAS_PESADAS: { tabela: string; coluna: string; rotulo: string }[] = [
@@ -85,6 +86,7 @@ const COLUNAS_PESADAS: { tabela: string; coluna: string; rotulo: string }[] = [
   { tabela: "configuracoes", coluna: "dados", rotulo: "Configurações do ADM (JSON)" },
   { tabela: "reparticoes", coluna: "responsavel_dfd", rotulo: "Responsáveis por DFDs (JSON)" },
   { tabela: "linhas", coluna: "dados", rotulo: "Linhas legadas (JSON)" },
+  { tabela: "tarefa_anexos", coluna: "conteudo", rotulo: "Anexos legados das tarefas (base64)" },
 ];
 
 function ehSistema(nome: string): boolean {

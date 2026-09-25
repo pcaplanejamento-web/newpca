@@ -13,8 +13,8 @@ import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, Ic
 /**
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
  * no desktop ocupa até o fim do display e cada lista rola por dentro. Arrastar move o cartão (`useArrastoCartoes`) — a
- * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista cria pelo título — ou abre o formulário
- * completo ("Mais detalhes") naquela lista. No TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
+ * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista abre o BANNER da tarefa nova naquela
+ * lista (`onNova` — o mesmo formulário de toda criação). No TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
  * sem arrastar) e, no celular, os PONTOS acima do quadro dizem em qual coluna se está (tocar leva a ela).
  */
 export function QuadroKanban({
@@ -25,8 +25,7 @@ export function QuadroKanban({
   hoje,
   onAbrir,
   onMover,
-  onCriar,
-  onDetalhes,
+  onNova,
   onArquivar,
 }: {
   /** As listas ATIVAS, na ordem. */
@@ -38,10 +37,8 @@ export function QuadroKanban({
   hoje: string;
   onAbrir: (id: number) => void;
   onMover: (id: number, listaId: number, indice: number) => void;
-  /** Cria pelo título (resolve quando gravou). */
-  onCriar: (listaId: number, titulo: string) => Promise<boolean>;
-  /** Abre o formulário COMPLETO de uma tarefa nova na lista (com o título já digitado). */
-  onDetalhes: (listaId: number, titulo: string) => void;
+  /** Abre o banner de uma tarefa NOVA na lista. */
+  onNova: (listaId: number) => void;
   onArquivar: (id: number) => void;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
@@ -154,7 +151,7 @@ export function QuadroKanban({
         const destinoAqui = arrasto?.listaId === l.id ? arrasto.indice : -1;
         let j = 0;
         return (
-          <ColunaTarefas key={l.id} lista={l} qtd={cartoes.length} onCriar={(titulo) => onCriar(l.id, titulo)} onDetalhes={(titulo) => onDetalhes(l.id, titulo)}>
+          <ColunaTarefas key={l.id} lista={l} qtd={cartoes.length} onNova={() => onNova(l.id)}>
             {cartoes.map((t, pos) => {
               const sombra = arrasto && t.id !== arrasto.id && j++ === destinoAqui;
               return (
@@ -190,40 +187,20 @@ export function QuadroKanban({
 
 /**
  * UMA LISTA do quadro: o nome, a contagem (com o LIMITE — WIP — em âmbar quando passa), a pilha de cartões (rola por
- * dentro no desktop) e, no pé, "Adicionar tarefa" (vira o campo do título: Enter cria e segue no campo; Esc fecha;
- * "Mais detalhes" leva o título ao formulário completo — o MESMO de toda criação de tarefa).
+ * dentro no desktop) e, no pé, "Adicionar tarefa" — abre o banner da tarefa nova nesta lista (`onNova`).
  */
 export function ColunaTarefas({
   lista: l,
   qtd,
-  onCriar,
-  onDetalhes,
+  onNova,
   children,
 }: {
   lista: ListaTarefas;
   qtd: number;
-  onCriar?: (titulo: string) => Promise<boolean>;
-  /** Abre o formulário completo com o título digitado. */
-  onDetalhes?: (titulo: string) => void;
+  onNova?: () => void;
   children: ReactNode;
 }) {
-  const [novo, setNovo] = useState<string | null>(null);
-  const [salvando, setSalvando] = useState(false);
-  const campo = useRef<HTMLTextAreaElement>(null);
   const passou = excedeWip(qtd, l.limiteWip);
-
-  const criar = async () => {
-    const titulo = (novo ?? "").trim();
-    if (!titulo || !onCriar || salvando) return;
-    setSalvando(true);
-    const ok = await onCriar(titulo);
-    setSalvando(false);
-    if (ok) {
-      setNovo("");
-      campo.current?.focus();
-    }
-  };
-
   return (
     <section
       data-lista={l.id}
@@ -246,60 +223,13 @@ export function ColunaTarefas({
       <div data-cartoes className="flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         {children}
       </div>
-      {onCriar &&
-        (novo == null ? (
-          <div className="px-2 pb-2">
-            <Button variant="ghost" size="sm" className="w-full !justify-start text-muted" icon={<IconPlus className="h-4 w-4" />} onClick={() => setNovo("")}>
-              Adicionar tarefa
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2 px-2 pb-2">
-            <textarea
-              ref={campo}
-              // biome-ignore lint/a11y/noAutofocus: o campo aparece pelo clique em "Adicionar tarefa" — o foco vai para ele.
-              autoFocus
-              rows={2}
-              value={novo}
-              maxLength={200}
-              disabled={salvando}
-              aria-label={`Título da nova tarefa em ${l.nome}`}
-              placeholder="Título da tarefa"
-              onChange={(e) => setNovo(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  criar();
-                } else if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setNovo(null);
-                }
-              }}
-              className="w-full resize-none rounded-card border border-accent bg-surface px-2.5 py-2 text-[13px] text-text outline-none ring-4 ring-accent/20 placeholder:text-faint"
-            />
-            <div className="flex gap-2">
-              <Button size="sm" loading={salvando} disabled={!novo.trim()} onClick={criar}>
-                Adicionar
-              </Button>
-              {onDetalhes && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={salvando}
-                  onClick={() => {
-                    onDetalhes(novo.trim());
-                    setNovo(null);
-                  }}
-                >
-                  Mais detalhes
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" className="ml-auto" disabled={salvando} onClick={() => setNovo(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        ))}
+      {onNova && (
+        <div className="px-2 pb-2">
+          <Button variant="ghost" size="sm" className="w-full !justify-start text-muted" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar tarefa em ${l.nome}`} onClick={onNova}>
+            Adicionar tarefa
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

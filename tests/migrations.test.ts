@@ -480,6 +480,29 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n.n, 3);
   });
 
+  it("0045 blocos da tarefa: os LINKS anexados viram blocos Link; arquivos e tarefas sem link ficam NULL", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('tarefas')");
+    assert.ok(cols.includes("blocos"));
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0045")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9450, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9450, 9450, 'Q')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9450, 9450, 'L')");
+    a.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (1, 9450, 9450, 1, 'com link'), (2, 9450, 9450, 2, 'só arquivo'), (3, 9450, 9450, 3, 'nada')");
+    a.exec(
+      "INSERT INTO tarefa_anexos (tarefa_id, tipo, nome, url) VALUES (1, 'link', 'Planilha', 'https://ex.com/a'), (1, 'link', 'Edital', 'https://ex.com/b')",
+    );
+    a.exec("INSERT INTO tarefa_anexos (tarefa_id, tipo, nome, conteudo) VALUES (2, 'arquivo', 'foto.png', 'data:image/png;base64,AAAA')");
+    a.exec(readFileSync(join(DIR, arquivos.find((f) => f.startsWith("0045")) ?? ""), "utf8"));
+    const linhas = a.prepare("SELECT id, blocos FROM tarefas ORDER BY id").all() as { id: number; blocos: string | null }[];
+    const b1 = JSON.parse(linhas[0].blocos ?? "[]") as { tipo: string; url: string; titulo: string; id: string }[];
+    assert.equal(b1.length, 2);
+    assert.deepEqual(b1.map((b) => [b.tipo, b.url, b.titulo]).sort(), [["link", "https://ex.com/a", "Planilha"], ["link", "https://ex.com/b", "Edital"]].sort());
+    assert.equal(new Set(b1.map((b) => b.id)).size, 2);
+    assert.equal(linhas[1].blocos, null);
+    assert.equal(linhas[2].blocos, null);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

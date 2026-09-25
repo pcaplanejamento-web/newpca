@@ -5,8 +5,10 @@ import { useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
+import { AbasEspaco } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { CalendarioQuadros, type DadosCalendarioQuadros } from "./CalendarioQuadros";
 import { SelectField } from "./Field";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
@@ -17,11 +19,29 @@ const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 /** Um MODELO de quadro que o "Novo quadro" pode usar (as listas, para a prévia). */
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
 
+export type AbaTarefas = "quadros" | "calendario";
+
 /**
- * Módulo TAREFAS — a LISTA de quadros do grupo ativo (cards 4:5) + o card "+" (editor) que cria um quadro (nome, cor,
- * descrição — em branco ou a partir de um MODELO de quadro) no grupo ativo do cabeçalho e o ABRE. 100% design-system.
+ * Módulo TAREFAS — duas abas (`AbasEspaco`; o servidor monta só a ativa): **Quadros** = os quadros do grupo ativo (cards
+ * 4:5) + o card "+" (editor) que cria um quadro (em branco ou de um MODELO) no grupo ativo e o ABRE; **Calendário** = as
+ * tarefas de TODOS os quadros do grupo num calendário só (`CalendarioQuadros`). 100% design-system.
  */
-export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: QuadroCardDados[]; podeCriar: boolean; modelos?: ModeloQuadroOpcao[] }) {
+export function TarefasView({
+  aba,
+  quadros,
+  podeCriar,
+  modelos = [],
+  calendario,
+  usuarioId,
+}: {
+  aba: AbaTarefas;
+  quadros: QuadroCardDados[];
+  podeCriar: boolean;
+  modelos?: ModeloQuadroOpcao[];
+  /** Os dados da aba Calendário (só quando ela é a ativa). */
+  calendario?: DadosCalendarioQuadros;
+  usuarioId: number;
+}) {
   const router = useRouter();
   const [novo, setNovo] = useState<CamposQuadroValor | null>(null);
   const [modeloId, setModeloId] = useState("");
@@ -60,7 +80,16 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
         </p>
       </div>
 
-      {quadros.length === 0 && !podeCriar ? (
+      <AbasEspaco<AbaTarefas>
+        aba={aba}
+        opcoes={[
+          { value: "quadros", label: "Quadros" },
+          { value: "calendario", label: "Calendário" },
+        ]}
+      >
+      {aba === "calendario" && calendario ? (
+        <CalendarioQuadros dados={calendario} usuarioId={usuarioId} />
+      ) : quadros.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum quadro de tarefas neste grupo.</p>
@@ -73,6 +102,7 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
           {podeCriar && <QuadroNovoCard onClick={() => setNovo(NOVO)} />}
         </div>
       )}
+      </AbasEspaco>
 
       <Modal
         open={novo != null}

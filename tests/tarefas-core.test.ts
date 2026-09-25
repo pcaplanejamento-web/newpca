@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  adicionarBloco,
+  blocosDaTarefa,
+  blocosDisponiveis,
+  blocosParaGravar,
+  contadoresCalendario,
+  contagemBlocos,
+  type DadosBlocos,
+  faixasDaSemana,
+  fimDeSemana,
+  lerBlocos,
+  lerMes,
+  moverBloco,
+  reagendar,
+  removerBloco,
+  semanaDe,
+  somarMes,
+  textoMes,
   estadoPrazo,
   excedeWip,
   FILTRO_TAREFAS_PADRAO,
@@ -35,7 +52,7 @@ import {
   type RecorteTarefas,
 } from "../src/lib/tarefas-core.ts";
 import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
-import { criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
+import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
 
 const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> = {}): TarefaResumo => ({
   id,
@@ -58,7 +75,8 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   checklist: { feitos: 0, total: 0 },
   comentarios: 0,
   recorrencia: null,
-  anexos: 0,
+  notas: 0,
+  links: 0,
   ...x,
 });
 const LISTAS = [
@@ -336,5 +354,144 @@ describe("tarefas — fase 3: automações e modelos", () => {
     assert.equal(prazoDoModelo(t, "2026-09-25"), "2026-09-30");
     assert.equal(t.recorrencia?.freq, "diaria");
     assert.equal(prazoDoModelo(coerceModeloTarefa({}), "2026-09-25"), null);
+  });
+});
+
+describe("tarefas — calendário profissional", () => {
+  it("semanaDe (domingo → sábado) e fim de semana", () => {
+    assert.deepEqual(semanaDe("2026-09-25"), ["2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26"]);
+    assert.equal(fimDeSemana("2026-09-26"), true);
+    assert.equal(fimDeSemana("2026-09-20"), true);
+    assert.equal(fimDeSemana("2026-09-23"), false);
+  });
+
+  it("reagendar: o início anda junto (mesma duração); sem início, só o prazo; início depois do dia é puxado", () => {
+    assert.deepEqual(reagendar({ inicio: "2026-09-01", prazo: "2026-09-05" }, "2026-09-10"), { inicio: "2026-09-06", prazo: "2026-09-10" });
+    assert.deepEqual(reagendar({ inicio: null, prazo: "2026-09-05" }, "2026-09-02"), { inicio: null, prazo: "2026-09-02" });
+    assert.deepEqual(reagendar({ inicio: "2026-09-20", prazo: null }, "2026-09-10"), { inicio: "2026-09-10", prazo: "2026-09-10" });
+    assert.deepEqual(reagendar({ inicio: "2026-09-01", prazo: null }, "2026-09-10"), { inicio: "2026-09-01", prazo: "2026-09-10" });
+  });
+
+  it("faixasDaSemana: início → prazo contínuo, cortado na semana, empilhado sem sobrepor", () => {
+    const sem = semanaDe("2026-09-23");
+    const t = (id: number, inicio: string | null, prazo: string | null) => ({ id, ticket: id, inicio, prazo });
+    const f = faixasDaSemana([t(1, "2026-09-15", "2026-09-22"), t(2, null, "2026-09-22"), t(3, "2026-09-24", "2026-10-02"), t(4, null, null), t(5, null, "2026-10-10")], sem);
+    const por = new Map(f.map((x) => [x.tarefa.id, x]));
+    assert.equal(por.size, 3);
+    assert.deepEqual([por.get(1)?.coluna, por.get(1)?.span, por.get(1)?.antes, por.get(1)?.depois], [0, 3, true, false]);
+    assert.deepEqual([por.get(3)?.coluna, por.get(3)?.span, por.get(3)?.depois], [4, 3, true]);
+    // A 1 e a 2 se cruzam (dia 22): linhas diferentes; a 3 cabe na linha 0.
+    assert.notEqual(por.get(1)?.linha, por.get(2)?.linha);
+    assert.equal(por.get(3)?.linha, 0);
+  });
+
+  it("contadoresCalendario: só as abertas", () => {
+    const c = contadoresCalendario(
+      [
+        { prazo: "2026-09-20", concluidaEm: null },
+        { prazo: "2026-09-25", concluidaEm: null },
+        { prazo: "2026-09-26", concluidaEm: null },
+        { prazo: "2026-09-30", concluidaEm: null },
+        { prazo: null, concluidaEm: null },
+        { prazo: "2026-09-01", concluidaEm: "2026-09-02" },
+      ],
+      "2026-09-25",
+    );
+    assert.deepEqual(c, { atrasadas: 1, hoje: 1, naSemana: 2, semPrazo: 1 });
+  });
+
+  it("lerMes / somarMes / textoMes", () => {
+    assert.deepEqual(lerMes("2026-02", "2026-09-25"), { ano: 2026, mes: 2 });
+    assert.deepEqual(lerMes("2026-13", "2026-09-25"), { ano: 2026, mes: 9 });
+    assert.deepEqual(lerMes(undefined, "2026-09-25"), { ano: 2026, mes: 9 });
+    assert.deepEqual(somarMes(2026, 12, 1), { ano: 2027, mes: 1 });
+    assert.deepEqual(somarMes(2026, 1, -1), { ano: 2025, mes: 12 });
+    assert.equal(textoMes(2026, 3), "2026-03");
+  });
+});
+
+describe("tarefas — blocos", () => {
+  const vazio: DadosBlocos = { inicio: null, prazo: null, pessoas: [], observadores: [], etiquetas: [], vinculo: null, estimativaH: null, recorrencia: null, checklist: 0 };
+
+  it("lerBlocos é tolerante: inválido sai, bloco único não repete, JSON quebrado = null", () => {
+    assert.equal(lerBlocos(null), null);
+    assert.equal(lerBlocos("{quebrado"), null);
+    const l = lerBlocos(
+      JSON.stringify([
+        { id: "a", tipo: "nota", texto: " oi " },
+        { id: "b", tipo: "prazo" },
+        { id: "c", tipo: "prazo" },
+        { id: "d", tipo: "xyz" },
+        { id: "e", tipo: "link", url: "javascript:alert(1)", titulo: "x" },
+        { id: "a", tipo: "nota", texto: "dup id" },
+      ]),
+    );
+    assert.deepEqual(l, [
+      { id: "a", tipo: "nota", texto: "oi" },
+      { id: "b", tipo: "prazo" },
+      { id: "e", tipo: "link", url: "", titulo: "x" },
+    ]);
+  });
+
+  it("blocosDaTarefa: tarefa antiga deriva dos campos; bloco com dado nunca some; ordem gravada é mantida", () => {
+    assert.deepEqual(blocosDaTarefa(null, vazio), []);
+    const d = { ...vazio, prazo: "2026-09-30", pessoas: [1], checklist: 2 };
+    assert.deepEqual(
+      blocosDaTarefa(null, d).map((b) => b.tipo),
+      ["checklist", "prazo", "pessoas"],
+    );
+    const g = blocosDaTarefa([{ id: "b1", tipo: "pessoas" }, { id: "b2", tipo: "nota", texto: "x" }], d);
+    assert.deepEqual(
+      g.map((b) => b.tipo),
+      ["pessoas", "nota", "checklist", "prazo"],
+    );
+    assert.equal(new Set(g.map((b) => b.id)).size, g.length);
+  });
+
+  it("adicionar / mover / remover / disponíveis", () => {
+    let l = adicionarBloco([], "nota");
+    l = adicionarBloco(l, "prazo", 0);
+    l = adicionarBloco(l, "prazo"); // único: não repete
+    l = adicionarBloco(l, "nota");
+    assert.deepEqual(
+      l.map((b) => b.tipo),
+      ["prazo", "nota", "nota"],
+    );
+    assert.ok(!blocosDisponiveis(l).includes("prazo"));
+    assert.ok(blocosDisponiveis(l).includes("nota"));
+    const movido = moverBloco(l, l[0].id, 2);
+    assert.deepEqual(
+      movido.map((b) => b.tipo),
+      ["nota", "nota", "prazo"],
+    );
+    assert.equal(removerBloco(l, l[1].id).length, 2);
+    let cheio: ReturnType<typeof adicionarBloco> = [];
+    for (let i = 0; i < 40; i++) cheio = adicionarBloco(cheio, "nota");
+    assert.equal(cheio.length, 30);
+    assert.deepEqual(blocosDisponiveis(cheio), []);
+  });
+
+  it("para gravar: sem nota vazia nem link sem endereço; contagem do cartão", () => {
+    const l = blocosParaGravar([
+      { id: "a", tipo: "nota", texto: "  " },
+      { id: "b", tipo: "nota", texto: " x " },
+      { id: "c", tipo: "link", url: "", titulo: "" },
+      { id: "d", tipo: "link", url: "https://ex.com", titulo: "" },
+      { id: "e", tipo: "checklist" },
+    ]);
+    assert.deepEqual(
+      l.map((b) => b.id),
+      ["b", "d", "e"],
+    );
+    assert.deepEqual(contagemBlocos(l), { notas: 1, links: 1 });
+    assert.deepEqual(contagemBlocos(null), { notas: 0, links: 0 });
+  });
+
+  it("blocosSchema recusa link não-http, bloco único repetido e id repetido", () => {
+    assert.ok(blocosSchema.safeParse([{ id: "a", tipo: "nota", texto: "x" }, { id: "b", tipo: "link", url: "https://ex.com", titulo: "" }]).success);
+    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "link", url: "ftp://ex.com", titulo: "" }]).success);
+    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "prazo" }, { id: "b", tipo: "prazo" }]).success);
+    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "nota", texto: "" }, { id: "a", tipo: "nota", texto: "" }]).success);
+    assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", blocos: [{ id: "a", tipo: "estimativa" }] }).success);
   });
 });

@@ -76,7 +76,8 @@ import {
   ArchiveRestore,
   Tag,
   Flag,
-  Paperclip,
+  StickyNote,
+  Globe,
   MessageSquare,
   Send,
   ListChecks,
@@ -171,7 +172,10 @@ export const IconArquivar = Archive;
 export const IconDesarquivar = ArchiveRestore;
 export const IconEtiqueta = Tag;
 export const IconBandeira = Flag;
-export const IconAnexo = Paperclip;
+/** Bloco NOTA da tarefa. */
+export const IconNota = StickyNote;
+/** Bloco LINK da tarefa (endereço na web). */
+export const IconWeb = Globe;
 export const IconComentario = MessageSquare;
 export const IconEnviar = Send;
 export const IconChecklist = ListChecks;

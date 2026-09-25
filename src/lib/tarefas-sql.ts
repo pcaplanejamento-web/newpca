@@ -11,7 +11,7 @@ import {
   tarefaQuadros,
   tarefas,
 } from "../db/schema.ts";
-import type { ModeloQuadro, Prioridade, Recorrencia, TipoNotificacao, TipoVinculo } from "./tarefas-core.ts";
+import { type BlocoTarefa, blocosParaGravar, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo } from "./tarefas-core.ts";
 import type { AcaoMassaTarefas } from "./tarefas-validation.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
@@ -51,6 +51,8 @@ export function comandosCriarTarefa(
     recorrenciaAnteriorId?: number | null;
     /** Itens do checklist (desmarcados), na ordem. */
     checklist?: string[];
+    /** Os blocos da tarefa (a ordem + notas e links). */
+    blocos?: BlocoTarefa[] | null;
   },
 ) {
   return [
@@ -75,6 +77,7 @@ export function comandosCriarTarefa(
       vinculoId: d.vinculo?.id ?? null,
       recorrencia: d.recorrencia ? JSON.stringify(d.recorrencia) : null,
       recorrenciaAnteriorId: d.recorrenciaAnteriorId ?? null,
+      blocos: d.blocos ? JSON.stringify(blocosParaGravar(d.blocos)) : null,
     }),
     ...d.pessoas.map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u })),
     // Observador que também é responsável fica só responsável (a chave é tarefa + pessoa).

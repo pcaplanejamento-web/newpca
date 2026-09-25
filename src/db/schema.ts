@@ -834,6 +834,8 @@ export const tarefas = sqliteTable(
     recorrencia: text("recorrencia"),
     /** A ocorrência ANTERIOR da série (ÚNICO: concluir de novo nunca gera a próxima duas vezes). */
     recorrenciaAnteriorId: integer("recorrencia_anterior_id").references((): AnySQLiteColumn => tarefas.id, { onDelete: "set null" }),
+    /** JSON `BlocoTarefa[]` — os BLOCOS da tarefa, na ordem (migração `0045`; NULL = derivados dos campos). */
+    blocos: text("blocos"),
   },
   (t) => [
     uniqueIndex("tarefas_quadro_ticket_uq").on(t.quadroId, t.ticket),
@@ -919,25 +921,7 @@ export const tarefaComentarios = sqliteTable(
   (t) => [index("tarefa_comentarios_tarefa_idx").on(t.tarefaId)],
 );
 
-export const tarefaAnexos = sqliteTable(
-  "tarefa_anexos",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    tarefaId: integer("tarefa_id")
-      .notNull()
-      .references(() => tarefas.id, { onDelete: "cascade" }),
-    /** `link` (url) | `arquivo` (conteudo = data-URL ≤ 1 MB). */
-    tipo: text("tipo").notNull(),
-    nome: text("nome").notNull(),
-    url: text("url"),
-    conteudo: text("conteudo"),
-    mime: text("mime"),
-    tamanho: integer("tamanho"),
-    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [index("tarefa_anexos_tarefa_idx").on(t.tarefaId)],
-);
+// `tarefa_anexos` (migração `0043`) fica DORMENTE desde a `0045` — os anexos saíram do sistema (os links viraram blocos).
 
 /** NOTIFICAÇÕES do sino (migração `0044`). `chave` = dedup das DERIVADAS (prazo) — única por pessoa. */
 export const notificacoes = sqliteTable(

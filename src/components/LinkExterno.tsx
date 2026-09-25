@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * É o ÚNICO ponto do app que renderiza uma âncora externa (o `Button href` usa
  * `next/link`, interno). Use só para URLs oficiais/externas (ex.: verificação de
  * assinatura digital no site da Prefeitura). Estilo idêntico ao `Button` secundário; `variante="texto"` = link em
- * linha (accent, sublinhado no hover — ex.: a lista de anexos de uma tarefa).
+ * linha (accent, sublinhado no hover — ex.: o bloco Link de uma tarefa).
  */
 export function LinkExterno({
   href,

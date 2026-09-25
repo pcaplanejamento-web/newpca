@@ -11,13 +11,14 @@ const ABAS: AbaQuadro[] = ["dashboard", "quadro", "lista", "calendario", "config
 
 // ESPAÇO DO QUADRO de tarefas: Dashboard · Quadro (kanban) · Lista (tabela) · Calendário · Configuração. As abas usam os MESMOS dados
 // (listas, cartões, etiquetas, pessoas do grupo) — uma carga só; o filtro e as alterações seguem de uma aba para a outra.
-// `?nova=protocolo:12` ("Criar tarefa" da Mesa) abre uma tarefa NOVA já vinculada; `?tarefa=<id>` abre aquela tarefa.
+// `?nova=protocolo:12` ("Criar tarefa" da Mesa) abre uma tarefa NOVA já vinculada; `?prazo=AAAA-MM-DD` (o calendário de
+// todos os quadros), uma tarefa NOVA com esse prazo; `?tarefa=<id>` abre aquela tarefa.
 export default async function QuadroTarefasPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; nova?: string; tarefa?: string }>;
+  searchParams: Promise<{ aba?: string; nova?: string; tarefa?: string; prazo?: string }>;
 }) {
   const u = await getUsuarioAtual();
   if (!u) redirect("/login");
@@ -29,5 +30,6 @@ export default async function QuadroTarefasPage({
   const nova = lerVinculo(sp.nova);
   const novaInicial = nova ? { ...nova, rotulo: (await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) ?? null } : null;
   const tarefaInicial = dados.tarefas.find((t) => String(t.id) === sp.tarefa)?.id ?? null;
-  return <QuadroTarefas {...dados} aba={aba} usuarioId={u.id} novaInicial={novaInicial} tarefaInicial={tarefaInicial} />;
+  const prazoInicial = /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
+  return <QuadroTarefas {...dados} aba={aba} usuarioId={u.id} novaInicial={novaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />;
 }

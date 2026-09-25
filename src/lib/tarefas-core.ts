@@ -41,7 +41,9 @@ export type TarefaResumo = {
   /** Contagens do conteúdo (os ícones do cartão). */
   checklist: { feitos: number; total: number };
   comentarios: number;
-  anexos: number;
+  /** Quantas notas e links (blocos) — os ícones do cartão. */
+  notas: number;
+  links: number;
   /** A regra de repetição (fase 3); `null` = não se repete. */
   recorrencia: Recorrencia | null;
 };
@@ -211,8 +213,11 @@ export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsavel: "todos", praz
 export const filtroTarefasAtivo = (f: FiltroTarefas) =>
   f.responsavel !== "todos" || f.prazo !== "todos" || f.prioridade !== "todas" || f.etiqueta != null || f.busca.trim() !== "";
 
+/** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
+export type TarefaFiltravel = Pick<TarefaResumo, "pessoas" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket">;
+
 /** Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). */
-export function filtrarTarefas(tarefas: TarefaResumo[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): TarefaResumo[] {
+export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): T[] {
   const casa = predicadoBusca(f.busca);
   const fimSemana = somarDias(ctx.hoje, 7);
   return tarefas.filter((t) => {
@@ -271,14 +276,260 @@ export function gradeMes(ano: number, mes: number): string[][] {
   return semanas;
 }
 
+/**
+ * Uma tarefa como o CALENDÁRIO a usa (o do quadro e o de todos os quadros do grupo — `quadroId` = de qual quadro).
+ */
+export type TarefaCalendario = Pick<TarefaResumo, "id" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "etiquetas" | "recorrencia"> & {
+  quadroId?: number;
+};
+
 /** As tarefas agrupadas pelo PRAZO ("AAAA-MM-DD" → cartões, na ordem do prazo e do ticket); sem prazo ficam de fora. */
-export function tarefasPorPrazo(tarefas: TarefaResumo[]): Map<string, TarefaResumo[]> {
-  const m = new Map<string, TarefaResumo[]>();
+export function tarefasPorPrazo<T extends { ticket: number; prazo: string | null }>(tarefas: T[]): Map<string, T[]> {
+  const m = new Map<string, T[]>();
   for (const t of [...tarefas].sort((a, b) => a.ticket - b.ticket)) if (dataValida(t.prazo)) m.set(t.prazo, [...(m.get(t.prazo) ?? []), t]);
   return m;
 }
 
 export const NOMES_MES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+/** Os nomes curtos dos dias (domingo primeiro) — cabeçalho das grades. */
+export const DIAS_SEMANA_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** A semana (domingo → sábado) que contém `dia`. */
+export function semanaDe(dia: string): string[] {
+  const d = new Date(Date.parse(`${dia}T00:00:00Z`));
+  const inicio = somarDias(dia, -d.getUTCDay());
+  return Array.from({ length: 7 }, (_, i) => somarDias(inicio, i));
+}
+
+/** Sábado ou domingo? */
+export const fimDeSemana = (dia: string) => {
+  const w = new Date(Date.parse(`${dia}T00:00:00Z`)).getUTCDay();
+  return w === 0 || w === 6;
+};
+
+/**
+ * REAGENDAR (arrastar a tarefa para outro dia no calendário): o PRAZO vai para `dia` e o INÍCIO anda junto, mantendo a
+ * mesma duração; sem prazo, o início (se houver) só não pode passar do novo prazo.
+ */
+export function reagendar(t: { inicio: string | null; prazo: string | null }, dia: string): { inicio: string | null; prazo: string } {
+  if (dataValida(t.prazo) && dataValida(t.inicio)) return { inicio: somarDias(t.inicio, diasEntre(t.prazo, dia)), prazo: dia };
+  return { inicio: dataValida(t.inicio) && t.inicio > dia ? dia : (t.inicio ?? null), prazo: dia };
+}
+
+/**
+ * As FAIXAS de uma semana (visão Mês/Semana): cada tarefa com prazo ocupa de max(início, 1º dia) a min(prazo, último dia)
+ * — sem início, só o dia do prazo. `coluna`/`span` em dias (0–6) e `linha` = a faixa livre mais alta (empilhamento
+ * guloso, sem sobrepor). `continua` marca as pontas cortadas pela semana (a faixa segue antes/depois).
+ */
+export type FaixaSemana<T> = { tarefa: T; coluna: number; span: number; linha: number; antes: boolean; depois: boolean };
+export function faixasDaSemana<T extends { id: number; inicio: string | null; prazo: string | null; ticket: number }>(tarefas: T[], semana: string[]): FaixaSemana<T>[] {
+  const ini = semana[0];
+  const fim = semana[semana.length - 1];
+  const itens = tarefas
+    .filter((t): t is T & { prazo: string } => dataValida(t.prazo))
+    .map((t) => {
+      const comeco = dataValida(t.inicio) && t.inicio < t.prazo ? t.inicio : t.prazo;
+      return { t, comeco, final: t.prazo };
+    })
+    .filter((x) => x.final >= ini && x.comeco <= fim)
+    .sort((a, b) => (a.comeco < b.comeco ? -1 : a.comeco > b.comeco ? 1 : diasEntre(b.comeco, b.final) - diasEntre(a.comeco, a.final) || a.t.ticket - b.t.ticket));
+  const ocupadas: number[][] = []; // por linha, a última coluna ocupada
+  return itens.map(({ t, comeco, final }) => {
+    const a = comeco < ini ? ini : comeco;
+    const b = final > fim ? fim : final;
+    const coluna = diasEntre(ini, a);
+    const span = diasEntre(a, b) + 1;
+    let linha = ocupadas.findIndex((l) => l.every((c) => c < coluna || c >= coluna + span));
+    if (linha < 0) linha = ocupadas.push([]) - 1;
+    for (let c = coluna; c < coluna + span; c++) ocupadas[linha].push(c);
+    return { tarefa: t, coluna, span, linha, antes: comeco < ini, depois: final > fim };
+  });
+}
+
+/** Os NÚMEROS do cabeçalho do calendário (tarefas abertas): atrasadas, vencem hoje, vencem nesta semana e sem prazo. */
+export function contadoresCalendario(tarefas: { prazo: string | null; concluidaEm: string | null }[], hoje: string) {
+  const semana = semanaDe(hoje);
+  let atrasadas = 0;
+  let hojeN = 0;
+  let naSemana = 0;
+  let semPrazo = 0;
+  for (const t of tarefas) {
+    if (t.concluidaEm != null) continue;
+    if (!dataValida(t.prazo)) semPrazo++;
+    else if (t.prazo < hoje) atrasadas++;
+    else {
+      if (t.prazo === hoje) hojeN++;
+      if (t.prazo <= semana[6]) naSemana++;
+    }
+  }
+  return { atrasadas, hoje: hojeN, naSemana, semPrazo };
+}
+
+/** "AAAA-MM" do mês de `dia` e os meses vizinhos (`?mes=` da tela Calendário). */
+export const mesDe = (dia: string) => dia.slice(0, 7);
+export function lerMes(v: string | null | undefined, hoje: string): { ano: number; mes: number } {
+  const m = /^(\d{4})-(\d{2})$/.exec(v ?? "");
+  const [a, mm] = m ? [Number(m[1]), Number(m[2])] : [Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7))];
+  return mm >= 1 && mm <= 12 && a >= 1970 && a <= 9999 ? { ano: a, mes: mm } : { ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) };
+}
+export const somarMes = (ano: number, mes: number, n: number) => {
+  const t = ano * 12 + (mes - 1) + n;
+  return { ano: Math.floor(t / 12), mes: (t % 12) + 1 };
+};
+export const textoMes = (ano: number, mes: number) => `${ano}-${String(mes).padStart(2, "0")}`;
+
+// ─── BLOCOS da tarefa (migração `0045`) ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Os BLOCOS com que se monta uma tarefa (a paleta do detalhe): NOTA e LINK guardam o conteúdo no próprio bloco (repetem);
+ * os demais só marcam a POSIÇÃO de um campo que já existe (prazo, pessoas…) — são únicos. Título, lista, prioridade e
+ * descrição ficam fixos no topo.
+ */
+export const TIPOS_BLOCO = ["nota", "checklist", "link", "prazo", "pessoas", "etiquetas", "vinculo", "estimativa", "recorrencia"] as const;
+export type TipoBloco = (typeof TIPOS_BLOCO)[number];
+export const ROTULO_BLOCO: Record<TipoBloco, string> = {
+  nota: "Nota",
+  checklist: "Checklist",
+  link: "Link",
+  prazo: "Prazo",
+  pessoas: "Responsáveis",
+  etiquetas: "Etiquetas",
+  vinculo: "Vínculo",
+  estimativa: "Estimativa",
+  recorrencia: "Recorrência",
+};
+export const BLOCOS_REPETIVEIS: readonly TipoBloco[] = ["nota", "link"];
+export const MAX_BLOCOS = 30;
+export const MAX_NOTA = 5000;
+export const MAX_URL = 1000;
+export const MAX_TITULO_LINK = 200;
+
+export type BlocoTarefa =
+  | { id: string; tipo: "nota"; texto: string }
+  | { id: string; tipo: "link"; url: string; titulo: string }
+  | { id: string; tipo: Exclude<TipoBloco, "nota" | "link"> };
+
+export const urlValida = (u: string) => u.length <= MAX_URL && /^https?:\/\/[^\s]+$/i.test(u.trim());
+
+/** Lê os blocos gravados (JSON ou array) — tolerante: descarta o inválido, repetição de bloco único e o excesso. `null` = nunca gravou. */
+export function lerBlocos(v: unknown): BlocoTarefa[] | null {
+  let bruto = v;
+  if (typeof v === "string") {
+    try {
+      bruto = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(bruto)) return null;
+  const vistos = new Set<string>();
+  const out: BlocoTarefa[] = [];
+  for (const b of bruto as Record<string, unknown>[]) {
+    if (out.length >= MAX_BLOCOS) break;
+    const tipo = b?.tipo;
+    if (!(TIPOS_BLOCO as readonly unknown[]).includes(tipo)) continue;
+    const id = typeof b.id === "string" && b.id && b.id.length <= 20 ? b.id : `b${out.length + 1}`;
+    if (vistos.has(id)) continue;
+    const t = tipo as TipoBloco;
+    if (!BLOCOS_REPETIVEIS.includes(t) && out.some((x) => x.tipo === t)) continue;
+    vistos.add(id);
+    if (t === "nota") out.push({ id, tipo: t, texto: texto(b.texto, MAX_NOTA) });
+    else if (t === "link") {
+      const url = typeof b.url === "string" ? b.url.trim() : "";
+      out.push({ id, tipo: t, url: urlValida(url) ? url : "", titulo: texto(b.titulo, MAX_TITULO_LINK) });
+    } else out.push({ id, tipo: t });
+  }
+  return out;
+}
+
+/** O que diz se um bloco de CAMPO tem dado (um bloco com dado nunca some da tarefa). */
+export type DadosBlocos = {
+  inicio: string | null;
+  prazo: string | null;
+  pessoas: number[];
+  observadores: number[];
+  etiquetas: number[];
+  vinculo: unknown;
+  estimativaH: number | null;
+  recorrencia: unknown;
+  checklist: number;
+};
+export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
+  switch (tipo) {
+    case "prazo":
+      return !!(d.inicio || d.prazo);
+    case "pessoas":
+      return d.pessoas.length > 0 || d.observadores.length > 0;
+    case "etiquetas":
+      return d.etiquetas.length > 0;
+    case "vinculo":
+      return d.vinculo != null;
+    case "estimativa":
+      return d.estimativaH != null;
+    case "recorrencia":
+      return d.recorrencia != null;
+    case "checklist":
+      return d.checklist > 0;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Os blocos que a tarefa MOSTRA, na ordem: os gravados + os de campo que têm dado e ainda não estão (no fim, na ordem da
+ * paleta). Sem gravação (tarefa antiga), só os de campo com dado.
+ */
+export function blocosDaTarefa(gravados: BlocoTarefa[] | null, d: DadosBlocos): BlocoTarefa[] {
+  const lista = [...(gravados ?? [])];
+  for (const tipo of TIPOS_BLOCO) {
+    if (BLOCOS_REPETIVEIS.includes(tipo) || lista.some((b) => b.tipo === tipo) || !blocoTemDado(tipo, d)) continue;
+    lista.push({ id: novoIdBloco(lista), tipo } as BlocoTarefa);
+  }
+  return lista;
+}
+
+/** Um id que ainda não está na lista ("b1", "b2"…). */
+export function novoIdBloco(lista: { id: string }[]): string {
+  let n = lista.length + 1;
+  const ids = new Set(lista.map((b) => b.id));
+  while (ids.has(`b${n}`)) n++;
+  return `b${n}`;
+}
+
+/** Os tipos que ainda podem entrar (a paleta): os repetíveis sempre, os únicos se ausentes; nada além do teto. */
+export const blocosDisponiveis = (lista: BlocoTarefa[]): TipoBloco[] =>
+  lista.length >= MAX_BLOCOS ? [] : TIPOS_BLOCO.filter((t) => BLOCOS_REPETIVEIS.includes(t) || !lista.some((b) => b.tipo === t));
+
+/** ADICIONA um bloco na posição `pos` (fim quando ausente). Único repetido ou teto atingido = a lista igual. */
+export function adicionarBloco(lista: BlocoTarefa[], tipo: TipoBloco, pos?: number): BlocoTarefa[] {
+  if (!blocosDisponiveis(lista).includes(tipo)) return lista;
+  const id = novoIdBloco(lista);
+  const b: BlocoTarefa = tipo === "nota" ? { id, tipo, texto: "" } : tipo === "link" ? { id, tipo, url: "", titulo: "" } : ({ id, tipo } as BlocoTarefa);
+  const i = pos == null ? lista.length : Math.max(0, Math.min(lista.length, pos));
+  return [...lista.slice(0, i), b, ...lista.slice(i)];
+}
+
+/** MOVE o bloco para a posição `destino` (índice na lista SEM ele). */
+export function moverBloco(lista: BlocoTarefa[], id: string, destino: number): BlocoTarefa[] {
+  const b = lista.find((x) => x.id === id);
+  if (!b) return lista;
+  const sem = lista.filter((x) => x.id !== id);
+  const i = Math.max(0, Math.min(sem.length, destino));
+  return [...sem.slice(0, i), b, ...sem.slice(i)];
+}
+
+export const removerBloco = (lista: BlocoTarefa[], id: string) => lista.filter((b) => b.id !== id);
+
+/** O que se GRAVA: sem nota vazia e sem link sem endereço (rascunhos que ficaram em branco). */
+export const blocosParaGravar = (lista: BlocoTarefa[]): BlocoTarefa[] =>
+  lista.filter((b) => (b.tipo === "nota" ? b.texto.trim() !== "" : b.tipo === "link" ? urlValida(b.url) : true)).map((b) => (b.tipo === "nota" ? { ...b, texto: b.texto.trim() } : b));
+
+/** Quantas NOTAS e LINKS (os ícones do cartão). */
+export const contagemBlocos = (lista: BlocoTarefa[] | null) => ({
+  notas: (lista ?? []).filter((b) => b.tipo === "nota").length,
+  links: (lista ?? []).filter((b) => b.tipo === "link").length,
+});
 
 // ─── Fase 3: RECORRÊNCIA ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -627,6 +878,8 @@ export type ModeloTarefa = {
   /** Prazo RELATIVO: dias depois de criar (`null` = sem prazo). */
   prazoDias: number | null;
   recorrencia: Recorrencia | null;
+  /** Os blocos da tarefa (notas, links e a ordem) — `null` = modelo antigo. */
+  blocos: BlocoTarefa[] | null;
 };
 export type ModeloResumo = { id: number; tipo: "quadro" | "tarefa"; nome: string; grupoId: number | null; quadroId: number | null; criadoPor: number | null };
 
@@ -670,6 +923,7 @@ export function coerceModeloTarefa(v: unknown): ModeloTarefa {
     estimativaH: o.estimativaH != null && Number.isFinite(est) && est >= 0 && est <= 9999 ? est : null,
     prazoDias: o.prazoDias != null && Number.isInteger(n) && n >= 0 && n <= 3650 ? n : null,
     recorrencia: lerRecorrencia(o.recorrencia),
+    blocos: lerBlocos(o.blocos),
   };
 }
 

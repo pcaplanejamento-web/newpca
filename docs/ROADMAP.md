@@ -982,7 +982,7 @@ abre ao clicar numa **fatia/barra** dos gráficos do Dashboard do PCA (painel e 
 mesma chave do gráfico; itens ANUAIS com 1/12 no cronograma), nos quadros do **Dashboard de governança da Mesa** (os
 protocolos de cada estado/situação/faixa de tempo/semana e os DFDs de cada unidade — abrem os banners da Mesa) e nas
 **métricas das Integrações** (o dia e a fonte Cloudflare). A soma do detalhe é sempre a do número clicado (testado).
-### Tarefas (quadro estilo Trello) — Fases 1, 2 e 3 entregues
+### Tarefas (quadro estilo Trello) — Fases 1 a 4 entregues
 ✅ Novo módulo **`tarefas`** (`/painel/tarefas`, migração **`0042`** — a aba vai a quem já tem a Mesa): **vários quadros por
 grupo** (só o grupo do quadro vê e recebe tarefas; o ADM vê todos), cards 4:5 + "Novo quadro" (editor, no grupo ativo). No
 quadro (`/painel/tarefas/[id]`): abas **Quadro** (kanban — listas lado a lado, **arrastar** cartões com mouse no cartão e
@@ -1009,6 +1009,13 @@ etiquetar, prioridade, notificar"; sem laço).
 Lista e o "+" do dia no Calendário abrem o MESMO formulário), Concluir/Reabrir no detalhe, menu de ações no cartão para
 quem usa o toque (mover/concluir/arquivar sem arrastar), arrasto com rolagem automática no celular, filtros ativos em
 chips, abas curtas no celular e alvos de 44px — validado de 360 a 1920px.
+✅ **Fase 4 (migração `0045`):** "Adicionar tarefa" abre o **banner** da tarefa direto na coluna; a tarefa é montada por
+**BLOCOS** (Nota, Checklist, Link, Prazo, Responsáveis, Etiquetas, Vínculo, Estimativa, Recorrência) — arraste da paleta até
+o lugar ou toque para acrescentar, reordene pela alça ou ↑/↓; **anexos removidos** (os links viraram blocos Link); o
+**checklist** ficou otimista e em fila (sem gravação dupla no Enter/Esc, toques rápidos consistentes) e existe já na tarefa
+nova; **calendário profissional** (Mês com faixas início → prazo · Semana · Agenda, reagendar arrastando, números do
+período, legenda, teclado, mini-grade no celular) e a **tela Calendário** em Tarefas com as tarefas de TODOS os quadros do
+grupo (cor de cada quadro, filtros + filtro de quadro, criar num dia escolhendo o quadro).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

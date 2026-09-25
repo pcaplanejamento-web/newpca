@@ -2,7 +2,7 @@ import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aposMovimento, avisarAtribuicao, criarTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
-import { rotuloTicket } from "@/lib/tarefas-core";
+import { lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
 import { criarTarefaSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     vinculo: d.vinculo ?? null,
     recorrencia: d.recorrencia ?? null,
     checklist: d.checklist ?? [],
+    blocos: d.blocos ? lerBlocos(d.blocos) : null,
   });
   await registrarAuditoria({
     usuario: a.u,

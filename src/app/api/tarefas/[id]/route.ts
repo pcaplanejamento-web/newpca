@@ -15,14 +15,14 @@ import {
   ultimoDaLista,
   vinculoAcessivel,
 } from "@/lib/tarefas";
-import { rotuloTicket } from "@/lib/tarefas-core";
+import { lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
 import { editarTarefaSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** A tarefa COMPLETA (com a descrição) + o CONTEÚDO (checklist, comentários, anexos sem o arquivo) — o detalhe do cartão. */
+/** A tarefa COMPLETA (com a descrição) + o CONTEÚDO (checklist e comentários) — o detalhe do cartão. */
 export async function GET(_req: Request, ctx: Ctx) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -41,7 +41,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
   const p = await parseCorpo(editarTarefaSchema, req);
   if ("resp" in p) return p.resp;
-  const { listaId, pessoas, observadores, etiquetas, ...campos } = p.data;
+  const { listaId, pessoas, observadores, etiquetas, blocos: blocosPedidos, ...campos } = p.data;
+  const blocos = blocosPedidos === undefined ? undefined : (lerBlocos(blocosPedidos) ?? []);
   const atuais = [...r.tarefa.pessoas, ...r.tarefa.observadores];
   if (!(await pessoasValidas(r.quadro.grupoId, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
     return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
@@ -54,7 +55,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     await moverTarefa(id, lista.id, await ultimoDaLista(lista.id, id), null, lista.concluida);
     entrou = lista;
   }
-  await atualizarTarefa(id, campos, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined });
+  await atualizarTarefa(id, { ...campos, blocos }, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined });
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

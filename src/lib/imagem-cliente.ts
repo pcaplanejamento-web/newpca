@@ -1,5 +1,4 @@
-/** Redimensiona a imagem NO NAVEGADOR (lado maior até `max`px) e devolve um data-URL JPEG — a foto do perfil e os
- * anexos de imagem das tarefas. */
+/** Redimensiona a imagem NO NAVEGADOR (lado maior até `max`px) e devolve um data-URL JPEG — a foto do perfil. */
 export function redimensionarImagem(file: File, max = 256, qualidade = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

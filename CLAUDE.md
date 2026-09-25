@@ -50,7 +50,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
   Mais) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
   (`getCloudflareContext().env.DB` → `.meta.size_after` — o Drizzle não expõe `.meta`), enumeração por
-  `sqlite_master` (inclui as tabelas **legadas órfãs** — as de `0005` e `protocolos`/`protocolo_opcoes` do antigo módulo
+  `sqlite_master` (inclui as tabelas **legadas órfãs** — as de `0005`, `tarefa_anexos` (`0045`) e `protocolos`/`protocolo_opcoes` do antigo módulo
   Protocolos, sinalizadas "legado" — e as de sistema) e, por tabela, `COUNT(*)` +
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
@@ -1808,30 +1808,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/tarefas/[id]` (membro; trocar de lista leva ao FIM dela) + `DELETE` (editor) e `POST /api/tarefas/[id]/mover`.
 - **FASE 2 — conteúdo e equipe (migração `0043`, aditiva):** `tarefas` + `estimativa_h`, `vinculo_tipo`/`vinculo_id`
   (índice; SEM FK — o alvo pode ser excluído: o rótulo vira "#id (excluído)"); tabelas `tarefa_checklist` (texto, feito, `ordem`
-  real), `tarefa_comentarios` (autor + snapshot do nome, `mencoes` JSON) e `tarefa_anexos` (`link` url | `arquivo` data-URL
-  png/jpeg/webp/pdf ≤ 1 MB — `ANEXO_MAX_BYTES`, teto de 30 por tarefa). **Observadores** = `tarefa_pessoas.papel='observador'`
+  real), `tarefa_comentarios` (autor + snapshot do nome, `mencoes` JSON) e `tarefa_anexos` (DORMENTE desde a `0045` — os
+  anexos saíram; ver FASE 4). **Observadores** = `tarefa_pessoas.papel='observador'`
   (a pessoa é responsável OU observadora — virar responsável tira da observação: `comandosVinculos` com
   `onConflictDoUpdate`). Núcleo puro (`tarefas-core`): `TIPOS_VINCULO`/`hrefVinculo` (protocolo/DFD →
   `/painel/mesa?abrir=tipo:id`, PCA/orçamento → o espaço), `lerVinculo`, `progressoChecklist`, `mencoesDoTexto` (apelido,
   nome inteiro sem espaço ou 1º nome só quando não é ambíguo — nunca cita a pessoa errada) + `textoMencao`, `gradeMes`/
   `tarefasPorPrazo` (calendário). `TarefaResumo` ganhou `observadores`, `estimativaH`, `vinculo {tipo,id,rotulo}` e as
-  contagens `checklist {feitos,total}`/`comentarios`/`anexos` (agregadas no `dadosQuadro` por `GROUP BY`; os rótulos dos
+  contagens `checklist {feitos,total}`/`comentarios` (+ `notas`/`links` na FASE 4) (agregadas no `dadosQuadro` por `GROUP BY`; os rótulos dos
   vínculos por `rotulosVinculos`, lotes ≤ 90). `comandosMassa` (builders, testados no driver D1 real): mover de lista (cada
   uma ao FIM do destino, na ordem; conclusão pela lista), responsável/etiqueta +/−, prazo, prioridade, arquivar.
   - **Detalhe (`TarefaDetalhe`)** — campos + **Estimativa**, **Observadores** (`SeletorPessoas`), **Vínculo**
     (**`VinculoTarefa`**: `Segmented` do tipo + `SeletorBusca` com `onBusca` → `GET /api/tarefas/vinculos`, no escopo de unidade
-    do usuário) e, na tarefa existente, **`ChecklistTarefa`** (progresso, marcar, renomear, ↑/↓ pelos vizinhos, remover) e
-    **`AnexosTarefa`** (`Dropzone` — imagem maior que 1 MB é REDUZIDA no navegador por `redimensionarImagem`,
-    `src/lib/imagem-cliente.ts`, a MESMA da foto do perfil; PDF maior pede o link — + link http/s; lista com `LinkExterno
-    variante="texto"`) — gravam NA HORA (`agir`: recarrega o conteúdo e o quadro). Painel da direita **Atividade**
+    do usuário) e o **`ChecklistTarefa`** (ver FASE 4). Painel da direita **Atividade**
     (`Modal.paineis`, aberto por padrão no desktop; botão "Atividade (N)" no rodapé): **Comentários** (**`ComentariosTarefa`**:
     "@" sugere as pessoas do grupo, Ctrl/⌘+Enter envia, editar só o próprio, excluir o próprio ou o editor) | **Histórico**
     (`Historico` + `GET /api/tarefas/[id]/historico` = `historicoEntidade("tarefa", id)`, nova em `auditoria.ts`).
-    `GET /api/tarefas/[id]` devolve a tarefa + o conteúdo (anexos SEM o arquivo; o arquivo é servido por `GET
-    /api/tarefas/anexos/[id]` — `decodificarDataUrl`, `pessoa.ts`, generalizado da foto; cache `immutable`).
-  - **Cartão** ganhou os ícones checklist `n/m` (verde completo), comentários, anexos e vínculo.
-  - **Aba Calendário** (**`CalendarioTarefas`**): grade do mês domingo → sábado (hoje marcado; faixa na cor do semáforo; "+N"
-    abre o dia; ←/→/Hoje; os mesmos filtros); no celular vira a AGENDA do mês. As sem prazo só são contadas.
+    `GET /api/tarefas/[id]` devolve a tarefa (com os `blocos`) + o conteúdo (checklist e comentários).
+  - **Cartão** ganhou os ícones checklist `n/m` (verde completo), comentários, notas/links (FASE 4) e vínculo.
+  - **Aba Calendário** (**`CalendarioTarefas`** — ver FASE 4).
   - **Aba Lista**: colunas novas Checklist/Estimativa (faixa)/Vínculo; **seleção** + `BarraSelecao` fixa +
     **`BarraEdicaoMassaTarefas`** (`BarraEdicaoMassa.tsx`, a MESMA `Moldura`) → `POST /api/tarefas/massa` (≤ 50/chamada,
     `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); botão **XLSX** (`exportar-tarefas.ts`:
@@ -1841,7 +1836,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     as tarefas ligadas (`GET /api/tarefas/do-vinculo`) e **"Criar tarefa"** num quadro → `/painel/tarefas/<q>?nova=tipo:id`
     (a tarefa NOVA abre já vinculada); `?tarefa=<id>` abre aquela tarefa no quadro. Sem tarefas nem quadros, o botão some.
   - **Rotas novas:** `POST /api/tarefas/[id]/checklist` + `PATCH`/`DELETE …/checklist/[itemId]`, `POST …/comentarios` +
-    `PATCH`/`DELETE …/comentarios/[cid]`, `POST …/anexos` + `GET`/`DELETE /api/tarefas/anexos/[id]`, `GET …/historico`,
+    `PATCH`/`DELETE …/comentarios/[cid]`, `GET …/historico`,
     `POST /api/tarefas/massa`, `GET /api/tarefas/vinculos?tipo=&q=`, `GET /api/tarefas/do-vinculo?tipo=&id=` — todas
     `exigirUsuario` + membro do grupo do quadro (`tarefaAcessivel`), vínculo conferido por `vinculoAcessivel`, auditoria.
 - **FASE 3 — recorrência, Dashboard, notificações, modelos e automações (migração `0044`, aditiva):** `tarefas` +
@@ -1889,9 +1884,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     fixa como "Nativa", liga/desliga, excluir, e o formulário Quando · Fazer · Com; até `MAX_AUTOMACOES`=20) e **Modelos**
     (`ModelosQuadro`). Rotas `POST /api/tarefas/quadros/[id]/automacoes` e `PATCH`/`DELETE /api/tarefas/automacoes/[id]`
     (editor).
-- **Usabilidade e toque (revisão):** CRIAR TAREFA é UM fluxo — o formulário completo (`TarefaDetalhe`, `AberturaTarefa`
-  "nova" com `titulo`/`prazo` já preenchidos), aberto de onde se está: Quadro = "+ Adicionar tarefa" da coluna (rápido pelo
-  título; **"Mais detalhes"** leva o título ao formulário naquela lista), Lista = "Adicionar tarefa" na barra (some com as
+- **Usabilidade e toque (revisão):** CRIAR TAREFA é UM fluxo — o BANNER da tarefa (`TarefaDetalhe`, `AberturaTarefa`
+  "nova" com a lista e o `prazo`), aberto de onde se está: Quadro = "+ Adicionar tarefa" da coluna (abre o banner DIRETO
+  naquela lista — `ColunaTarefas.onNova`; sem campo rápido), Lista = "Adicionar tarefa" na barra (some com as
   Arquivadas à vista), Calendário = o "+" do dia (grade) / do dia da agenda / do cabeçalho (prazo = o dia); sem botão no
   Dashboard. Abas **Quadro · Lista · Calendário · Dashboard · Configuração** (curtos no celular: Agenda · Painel · Config.).
   Filtros ativos por extenso em chips removíveis (`ChipsFiltrosTarefas`); Ativas | Arquivadas virou um `SeletorFiltro`;
@@ -1901,9 +1896,46 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   PONTOS das colunas acima do quadro (a atual marcada; tocar leva a ela). Detalhe: Prioridade em linha própria (não corta),
   **Concluir/Reabrir** no rodapé (leva à lista de concluídas/1ª aberta pelo MESMO `PATCH` — automações e recorrência
   disparam), nota ao trocar de Lista e, no celular, "Tarefa | Atividade" no próprio corpo (no desktop a Atividade segue ao
-  lado). Checklist: tocar no TEXTO marca/desmarca, renomear pelo lápis (`Checkbox alvo` = 44px). Calendário: grade a
-  partir do `lg`, agenda abaixo. Dashboard: KPIs `sm:grid-cols-3 xl:grid-cols-5`. Validado no harness em 360/390/768/1024/
+  lado). Checklist: tocar no TEXTO marca/desmarca, renomear pelo lápis (`Checkbox alvo` = 44px). Dashboard: KPIs `sm:grid-cols-3 xl:grid-cols-5`. Validado no harness em 360/390/768/1024/
   1280/1920 (sem estouro horizontal) e com toque (CDP).
+- **FASE 4 — BLOCOS, checklist robusto, calendário profissional e tela Calendário (migração `0045`, aditiva):**
+  - **Sem anexos:** saíram `AnexosTarefa`, as rotas `…/anexos`, `anexoSchema`/`ANEXO_MAX_BYTES` e as funções de anexo. A `0045`
+    converte cada anexo do tipo LINK num **bloco Link** (`json_group_array`, nada se perde); `tarefa_anexos` fica DORMENTE
+    (fora do `schema.ts`, sem DROP). `redimensionarImagem`/`decodificarDataUrl` seguem (foto do perfil).
+  - **BLOCOS da tarefa** (`tarefas.blocos` = JSON `BlocoTarefa[]`; NULL = tarefa antiga): no `TarefaDetalhe`, FIXOS no topo
+    título, lista, prioridade e descrição; o resto é montado por blocos — **Nota** e **Link** (repetíveis; o conteúdo fica no
+    próprio bloco) e **Checklist · Prazo (início+prazo) · Responsáveis (+observadores) · Etiquetas · Vínculo · Estimativa ·
+    Recorrência** (únicos; só a POSIÇÃO — o dado segue nas colunas de sempre). **`PaletaBlocos`** (`BlocosTarefa.tsx`): chips
+    dos disponíveis — ARRASTAR (mouse/caneta) até o lugar, com linha-guia (`GuiaBloco`) e o **`ChipPreso`** no ponteiro, ou
+    TOCAR/clicar/Enter para acrescentar no fim; no celular fica recolhida em "Adicionar bloco". **`MolduraBloco`**: alça
+    (arrasta para reordenar — também no toque), ↑/↓, remover (com dado, confirma; o de campo LIMPA o campo; o checklist
+    gravado exclui os itens). Hook **`useArrastoBlocos`** (o padrão do arrasto de cartões: ouvintes na janela, limiar 6px,
+    `segurar`, rola o banner perto das bordas). Núcleo puro (`tarefas-core`, testado): `TIPOS_BLOCO`/`ROTULO_BLOCO`,
+    `lerBlocos` (tolerante), `blocosDaTarefa` (gravados + os de campo COM DADO que faltam — um bloco com dado nunca some),
+    `adicionarBloco`/`moverBloco`/`removerBloco`/`blocosDisponiveis` (teto `MAX_BLOCOS`=30), `blocosParaGravar` (sem nota vazia
+    nem link sem endereço), `contagemBlocos`, `urlValida` (link inválido trava o Salvar). Zod `blocosSchema` (sem id nem bloco
+    único repetido; link só http/s) em `POST`/`PATCH /api/tarefas`; a recorrência e o "Salvar como modelo" levam os blocos
+    (`ModeloTarefa.blocos`). O cartão mostra os ícones **Nota**/**Link** (`TarefaResumo.notas`/`links`, contados no banco por
+    `json_each` — o texto das notas não vai ao quadro).
+  - **Checklist corrigido** (`ChecklistTarefa`): as ações vêm de **`useChecklistServidor`** (tarefa gravada — OTIMISTA e em
+    FILA serial: dois toques rápidos nunca se atropelam; item novo com id provisório até o POST devolver o real, e as ações
+    sobre ele esperam na fila; falhou ⇒ aviso + relê do servidor; ao esvaziar a fila o quadro recarrega a contagem; trocar
+    de tarefa começa do zero — `geracao`) ou **`acoesChecklistRascunho`** (tarefa NOVA: os textos vão no `POST`). Enter/Esc
+    fecham a renomeação UMA vez (o blur que vem depois não grava de novo; Esc cancela de verdade); remover confirma.
+  - **Calendário profissional** (`CalendarioTarefas`, genérico sobre `TarefaCalendario`): vistas **Mês · Semana · Agenda**
+    (`Segmented`); no MÊS as tarefas com início → prazo são FAIXAS contínuas na semana (`faixasDaSemana`, empilhamento sem
+    sobrepor, pontas cortadas pela semana), fim de semana sombreado, dias de fora esmaecidos, "+N" abre a semana inteira, o
+    nº do dia abre a lista do DIA, setas movem entre os dias (Enter abre); no celular a grade vira a MINI-GRADE (pontos por
+    dia) + a lista do dia tocado. **Reagendar arrastando** (`useArrastoDias`: mouse/caneta na tarefa, toque pela alça; o dia
+    sob o ponteiro destaca; `reagendar` puro — o início anda junto, mesma duração) → `PATCH` otimista, volta se falhar.
+    Cabeçalho: ←/→ (mês ou semana), Hoje, os NÚMEROS (atrasadas · hoje · nesta semana · sem prazo — `contadoresCalendario`)
+    e a legenda do semáforo. `semanaDe`/`fimDeSemana`/`lerMes`/`somarMes`/`textoMes` puros e testados.
+  - **Tela Calendário de TODOS os quadros** (`/painel/tarefas?aba=calendario&mes=AAAA-MM`): `TarefasView` virou `AbasEspaco`
+    **Quadros | Calendário** (o servidor monta só a ativa). **`CalendarioQuadros`**: o MESMO `CalendarioTarefas` com a COR de
+    cada quadro (faixa; o semáforo vira o ponto) + legenda, os `FiltrosTarefas` + o filtro de **Quadro**; o mês vem do
+    servidor (`carregarCalendario` → `tarefasDoCalendario` — a grade do mês, sem ids em lista; `contadoresDosQuadros`;
+    `etiquetasDosQuadros`). Tocar abre a tarefa no quadro (`?aba=calendario&tarefa=`); "+" num dia escolhe o quadro e abre lá
+    a tarefa nova (`?prazo=AAAA-MM-DD` → `QuadroTarefas.prazoInicial`); arrastar reagenda.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
