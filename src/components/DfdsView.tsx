@@ -6,6 +6,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
   type AcaoMassa,
   ESTADO_ITEM_ROTULO,
@@ -55,7 +56,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { CelulaLista, MaisN } from "./CelulaLista";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
-import { type Column, DataTable } from "./DataTable";
+import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
@@ -188,6 +189,7 @@ export function DfdsView({
   filtroInicial = FILTRO_MESA_TODOS,
   pcaFiltro = null,
   modoPca,
+  edicoes,
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -212,8 +214,24 @@ export function DfdsView({
   pcaFiltro?: { nome: string; ano: number } | null;
   /** Mesa dentro do PCA (sem importação; ações de incorporar/devolver e retirar item). */
   modoPca?: ModoPcaMesa;
+  /** As EDIÇÕES SALVAS das tabelas desta Mesa (`carregarMesa`): cada tabela (protocolos, DFDs, itens, consolidada) tem as
+   * suas — `<prefixo><tabela>`. */
+  edicoes?: { prefixo: string; lista: EdicaoTabela[]; padroes: Record<string, unknown> };
 }) {
   const router = useRouter();
+  // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
+  const [edLista, setEdLista] = useState(edicoes?.lista ?? []);
+  const [edPadroes, setEdPadroes] = useState(edicoes?.padroes ?? {});
+  const edicoesDe = (tabela: string): EdicoesDaTabela | undefined =>
+    edicoes && {
+      chave: `${edicoes.prefixo}${tabela}`,
+      lista: edLista,
+      padroes: edPadroes,
+      onMudar: (l, p) => {
+        setEdLista(l);
+        setEdPadroes(p);
+      },
+    };
   const [erro, setErro] = useState<string | null>(null);
   // Banners do GRAVADO — os MESMOS componentes da análise (protocolo / DFD solto).
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
@@ -1653,6 +1671,7 @@ export function DfdsView({
       minWidth={modoPca ? 1380 : 1450}
       density="compact"
       acoesRodape={botaoImportar}
+      edicoes={edicoesDe("protocolos")}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
         modoPca?.rodapeProtocolos
@@ -1677,6 +1696,7 @@ export function DfdsView({
       acoes={acoesDfd}
       regras={regras}
       acoesRodape={botaoImportar}
+      edicoes={edicoesDe("dfds")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
   );
@@ -1696,6 +1716,7 @@ export function DfdsView({
       reservaInferior={reserva}
       minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
+      edicoes={edicoesDe("itens")}
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
@@ -1714,6 +1735,7 @@ export function DfdsView({
       reservaInferior={reserva}
       minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
+      edicoes={edicoesDe("consolidada")}
       vazio={
         carregandoItens || itensF === null
           ? "Carregando itens…"

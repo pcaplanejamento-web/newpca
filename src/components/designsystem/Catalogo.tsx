@@ -1195,6 +1195,9 @@ function TabelaHierarquiaDemo() {
         onSelected={setSel}
         pageSize={3}
         footer={`${sel.size} de ${linhas.length} selecionada(s) — o "selecionar todos" marca todas as filtradas, não só a página`}
+        // EDIÇÃO da tabela (lápis no rodapé): arrastar, congelar, ocultar, ordenar, largura — e salvar (colunas + ordenação +
+        // filtros), só para mim ou pública (salvar exige login).
+        edicoes={{ chave: "design-system:demo", lista: [], padroes: {} }}
       />
     </div>
   );

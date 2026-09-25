@@ -1,6 +1,17 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  alternarOculta,
+  coerceLayoutTabela,
+  comLargura,
+  comOrdem,
+  LAYOUT_TABELA_PADRAO,
+  type LayoutTabela,
+  layoutTabelaIgual,
+  ordemDasColunas,
+} from "@/lib/colunas-layout";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -14,6 +25,8 @@ import {
   ordenarIndices,
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
+import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
+import { useEditorEdicoes } from "./EdicoesTabela";
 import { useLinhasTabela } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { ehDesktop } from "./espacamento";
@@ -63,6 +76,23 @@ export type Column<R> = {
 
 type Key = string | number;
 
+/** EDIÇÕES SALVAS de uma tabela (opt-in): a `chave` da tabela, as edições que o usuário vê (as dele e as públicas) e as
+ * preferências de edição PADRÃO dele — carregadas no servidor (`carregarEdicoes`). */
+export type EdicoesDaTabela = {
+  chave: string;
+  lista: EdicaoTabela[];
+  padroes: Record<string, unknown>;
+  /** Quem guarda a lista fora da tabela (a tabela que remonta volta com as edições novas). */
+  onMudar?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
+};
+
+type OrdemAtual = { key: string | null; dir: "asc" | "desc" };
+const SEM_EDICOES: EdicaoTabela[] = [];
+const SEM_PADROES: Record<string, unknown> = {};
+const larguraFixa = (px: number): CSSProperties => ({ width: px, minWidth: px, maxWidth: px });
+/** Divisa à direita da última coluna congelada. */
+const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
+
 export function DataTable<R>({
   columns,
   rows,
@@ -82,6 +112,7 @@ export function DataTable<R>({
   reservaInferior = 0,
   acoesRodape,
   vazio,
+  edicoes,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -126,9 +157,33 @@ export function DataTable<R>({
   /** Mensagem do corpo quando NÃO há linhas (sem dados) — com linhas escondidas pelos filtros das colunas,
    * vale a mensagem padrão dos filtros. */
   vazio?: ReactNode;
+  /**
+   * EDIÇÃO DA TABELA + EDIÇÕES SALVAS (opt-in — ex.: as tabelas da Mesa): o LÁPIS no rodapé liga a edição direto no
+   * cabeçalho (arrastar a coluna, congelar, ocultar, ordenar, largura — as MESMAS peças do Comparativo, `EdicaoColunas`)
+   * e "Salvar" guarda a edição — colunas + a ORDENAÇÃO + os FILTROS das colunas — só para o usuário ou PÚBLICA; o seletor
+   * troca de edição e a estrela marca a PADRÃO (a tabela abre nela). Sem ela, a tabela é a de sempre.
+   */
+  edicoes?: EdicoesDaTabela;
 }) {
-  const [filters, setFilters] = useState<Record<string, FiltroValor>>({});
-  const [sort, setSort] = useState<{ key: string | null; dir: "asc" | "desc" }>({ key: null, dir: "asc" });
+  // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
+  // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
+  const editor = useEditorEdicoes<LayoutTabela>({
+    chave: edicoes?.chave ?? "",
+    edicoes: edicoes?.lista ?? SEM_EDICOES,
+    padroes: edicoes?.padroes ?? SEM_PADROES,
+    onMudar: edicoes?.onMudar,
+    coerce: coerceLayoutTabela,
+    igual: layoutTabelaIgual,
+    padrao: LAYOUT_TABELA_PADRAO,
+    paraSalvar: (l: LayoutTabela): LayoutTabela => ({ ...l, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, filtros: filters }),
+    aoEscolher: (l: LayoutTabela) => {
+      setFilters(l.filtros);
+      setSort(l.ordem ?? { key: null, dir: "asc" });
+      setPage(1);
+    },
+  });
+  const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => editor.salvo.filtros);
+  const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => editor.salvo.ordem ?? { key: null, dir: "asc" });
   const [page, setPage] = useState(1);
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
@@ -281,6 +336,74 @@ export function DataTable<R>({
   // As classes da coluna valem desde o HTML do servidor (só `lg:` — sem altura fixa, o corpo fica no tamanho do conteúdo).
   const cheia = scrollInterno && altura != null;
 
+  // COLUNAS na ordem do layout (congeladas + livres); as OCULTAS saem (na edição ficam esmaecidas, para voltar). Sem
+  // edições salvas, a ordem é a das `columns` (layout padrão vazio).
+  const editando = editor.editando;
+  const lay = editor.layout;
+  const chaves = useMemo(() => columns.map((c) => c.key), [columns]);
+  const indice = useMemo(() => new Map(columns.map((c, j) => [c.key, j])), [columns]);
+  const fora = useMemo(() => new Set(lay.ocultas), [lay.ocultas]);
+  const ordemAtual = useMemo(() => {
+    const o = ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
+    const vis = (k: string) => editando || !fora.has(k);
+    return { fixadas: o.fixadas.filter(vis), livres: o.livres.filter(vis) };
+  }, [chaves, lay.fixadas, lay.ordemManual, fora, editando]);
+  const rolagemRef = useRef<HTMLDivElement>(null);
+  const tabelaRef = useRef<HTMLTableElement>(null);
+  const { arrasto, vista, fantasma, iniciar, mover, congelar } = useArrastoColunas({
+    raiz: wrapRef,
+    rolagem: rolagemRef,
+    ordem: ordemAtual,
+    onOrdem: editando ? (f, l) => editor.mudar((x) => comOrdem(x, chaves, f, l)) : undefined,
+  });
+  const exibidas = [...vista.fixadas, ...vista.livres].map((k) => indice.get(k) as number);
+
+  // CONGELADAS: `sticky` à esquerda pela largura REAL das anteriores (medida; a seleção vem antes delas) — as que passam
+  // de ~60% da largura visível deixam de congelar (no celular, em geral só a 1ª). Remede quando a tabela muda de tamanho.
+  const [fixos, setFixos] = useState<number[]>([]);
+  const chaveFix = vista.fixadas.join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mede pelas congeladas (chaveFix), a seleção e as larguras.
+  useLayoutEffect(() => {
+    const tab = tabelaRef.current;
+    const rolo = rolagemRef.current;
+    if (!tab || !rolo || !chaveFix) {
+      setFixos((f) => (f.length ? [] : f));
+      return;
+    }
+    const calc = () => {
+      const ths = tab.querySelectorAll<HTMLElement>("thead th");
+      let x = selectable ? (ths[0]?.offsetWidth ?? 0) : 0;
+      const lefts: number[] = [];
+      for (let p = 0; p < vista.fixadas.length; p++) {
+        const w = ths[p + (selectable ? 1 : 0)]?.offsetWidth ?? 0;
+        if (p > 0 && x + w > rolo.clientWidth * 0.6) break;
+        lefts.push(x);
+        x += w;
+      }
+      setFixos((f) => (f.length === lefts.length && f.every((v, i) => v === lefts[i]) ? f : lefts));
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(tab);
+    ro.observe(rolo);
+    return () => ro.disconnect();
+  }, [chaveFix, selectable, lay.larguras]);
+  const nFix = fixos.length;
+  /** Estilo/classe da coluna na posição `p` (congelada, divisa, largura definida, a SOMBRA do destino no arrasto). */
+  const posicao = (k: string, p: number) => {
+    const fixa = p < nFix;
+    const w = lay.larguras[k];
+    return {
+      fixa,
+      classe: `${fixa ? "sticky" : ""} ${fixa && p === nFix - 1 ? DIVISA : ""} ${w ? "overflow-hidden" : ""} ${
+        arrasto?.chave === k ? "!bg-accent/10 [&_*]:!text-transparent !text-transparent" : ""
+      }`,
+      estilo: { ...(w ? larguraFixa(w) : {}), ...(fixa ? { left: fixos[p] } : {}) } as CSSProperties,
+    };
+  };
+  const selFixa = nFix > 0;
+  const ordenarPor = (k: string) => setSort((o) => ({ key: k, dir: o.key === k && o.dir === "asc" ? "desc" : "asc" }));
+
   return (
     <div
       ref={wrapRef}
@@ -292,13 +415,14 @@ export function DataTable<R>({
       suppressHydrationWarning={scrollInterno}
     >
       <div
+        ref={rolagemRef}
         className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
-        <table className="w-full border-collapse text-sm" style={{ minWidth }}>
+        <table ref={tabelaRef} className="w-full border-collapse text-sm" style={{ minWidth }}>
           <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy}`}>
+                <th className={`w-10 px-3 ${headPy} ${selFixa ? "sticky left-0 z-20 bg-surface-2" : ""}`}>
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -312,7 +436,8 @@ export function DataTable<R>({
                   />
                 </th>
               )}
-              {columns.map((c, j) => {
+              {exibidas.map((j, p) => {
+                const c = columns[j];
                 const tipo = c.filter ?? "values";
                 const externo = c.filtroExterno;
                 const marcado = externo ? externo.valor.length > 0 : !c.travado && filtroAtivo(tipo, filters[c.key]);
@@ -321,72 +446,100 @@ export function DataTable<R>({
                 // Popover do filtro abre alinhado ao início, exceto colunas à direita.
                 const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
                 const opcoes = externo ? externo.opcoes : (facetas.opcoes[j] ?? []);
+                const pos = posicao(c.key, p);
+                const filtro = c.travado ? (
+                  <span className="inline-flex items-center gap-1" title={c.travado}>
+                    <IconLock className="h-3 w-3 shrink-0" aria-hidden />
+                    {c.header}
+                  </span>
+                ) : externo ? (
+                  opcoes.length > 0 || marcado ? (
+                    <MultiSelectHeader
+                      label={c.header}
+                      options={opcoes}
+                      value={externo.valor}
+                      onApply={(v) => {
+                        externo.onChange(normalizarSelecao(v, opcoes));
+                        setPage(1);
+                      }}
+                      onSort={(d) => setSort({ key: c.key, dir: d })}
+                      sortDir={sortDe(c.key)}
+                      align={alinha}
+                      marcado={marcado}
+                    />
+                  ) : (
+                    <span>{c.header}</span>
+                  )
+                ) : tipo === "date" ? (
+                  <DateFilterHeader
+                    label={c.header}
+                    value={filters[c.key] as IntervaloData | undefined}
+                    anos={facetas.anos[j]?.length ? (facetas.anos[j] as number[]) : undefined}
+                    onApply={(v) => aplicarFiltro(c.key, v.de || v.ate ? v : null)}
+                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    sortDir={sortDe(c.key)}
+                    align={alinha}
+                  />
+                ) : tipo === "range" ? (
+                  <RangeFilterHeader
+                    label={c.header}
+                    dominio={facetas.dominios[j] ?? []}
+                    value={filters[c.key] as FaixaValor | undefined}
+                    onApply={(f) => aplicarFiltro(c.key, normalizarFaixa(f, facetas.dominios[j] ?? []))}
+                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    sortDir={sortDe(c.key)}
+                    align={alinha}
+                    marcado={marcado}
+                    formatar={c.formatarFaixa}
+                  />
+                ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
+                  <MultiSelectHeader
+                    label={c.header}
+                    options={opcoes}
+                    value={(filters[c.key] as string[] | undefined) ?? []}
+                    onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
+                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    sortDir={sortDe(c.key)}
+                    align={alinha}
+                    marcado={marcado}
+                  />
+                ) : (
+                  <span>{c.header}</span>
+                );
                 return (
                   <th
                     key={c.key}
-                    className={`${head} ${alinhaTexto} ${c.nowrap ? "whitespace-nowrap" : ""}`}
+                    data-col={c.key}
+                    className={`${head} ${alinhaTexto} ${c.nowrap ? "whitespace-nowrap" : ""} ${pos.classe} ${pos.fixa ? "z-20 bg-surface-2" : ""} ${
+                      // A congelada já é `sticky` (referência da alça/ações); a livre ganha `relative`.
+                      editando ? `pl-6 align-top ${pos.fixa ? "" : "relative"}` : ""
+                    }`}
                     // Coluna FILTRADA: tópico marcado também por um sublinhado accent no cabeçalho.
-                    style={{ ...(c.minWidth ? { minWidth: c.minWidth } : {}), ...(marcado ? { boxShadow: "inset 0 -2px 0 var(--accent)" } : {}) }}
+                    style={{
+                      ...(c.minWidth ? { minWidth: c.minWidth } : {}),
+                      ...pos.estilo,
+                      ...(marcado ? { boxShadow: "inset 0 -2px 0 var(--accent)" } : {}),
+                    }}
                     aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                   >
-                    {c.travado ? (
-                      <span className="inline-flex items-center gap-1" title={c.travado}>
-                        <IconLock className="h-3 w-3 shrink-0" aria-hidden />
-                        {c.header}
-                      </span>
-                    ) : externo ? (
-                      opcoes.length > 0 || marcado ? (
-                        <MultiSelectHeader
-                          label={c.header}
-                          options={opcoes}
-                          value={externo.valor}
-                          onApply={(v) => {
-                            externo.onChange(normalizarSelecao(v, opcoes));
-                            setPage(1);
-                          }}
-                          onSort={(d) => setSort({ key: c.key, dir: d })}
-                          sortDir={sortDe(c.key)}
-                          align={alinha}
-                          marcado={marcado}
-                        />
-                      ) : (
-                        <span>{c.header}</span>
-                      )
-                    ) : tipo === "date" ? (
-                      <DateFilterHeader
-                        label={c.header}
-                        value={filters[c.key] as IntervaloData | undefined}
-                        anos={facetas.anos[j]?.length ? (facetas.anos[j] as number[]) : undefined}
-                        onApply={(v) => aplicarFiltro(c.key, v.de || v.ate ? v : null)}
-                        onSort={(d) => setSort({ key: c.key, dir: d })}
-                        sortDir={sortDe(c.key)}
-                        align={alinha}
-                      />
-                    ) : tipo === "range" ? (
-                      <RangeFilterHeader
-                        label={c.header}
-                        dominio={facetas.dominios[j] ?? []}
-                        value={filters[c.key] as FaixaValor | undefined}
-                        onApply={(f) => aplicarFiltro(c.key, normalizarFaixa(f, facetas.dominios[j] ?? []))}
-                        onSort={(d) => setSort({ key: c.key, dir: d })}
-                        sortDir={sortDe(c.key)}
-                        align={alinha}
-                        marcado={marcado}
-                        formatar={c.formatarFaixa}
-                      />
-                    ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
-                      <MultiSelectHeader
-                        label={c.header}
-                        options={opcoes}
-                        value={(filters[c.key] as string[] | undefined) ?? []}
-                        onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
-                        onSort={(d) => setSort({ key: c.key, dir: d })}
-                        sortDir={sortDe(c.key)}
-                        align={alinha}
-                        marcado={marcado}
-                      />
+                    {editando ? (
+                      <CabecalhoEdicao
+                        rotulo={c.header}
+                        congelada={p < vista.fixadas.length}
+                        oculta={fora.has(c.key)}
+                        ordem={sortDe(c.key)}
+                        onArrastar={(e) => iniciar(e, c.key)}
+                        onMover={(d) => mover(c.key, p, d)}
+                        onCongelar={() => congelar(c.key)}
+                        onOcultar={() => editor.mudar((x) => alternarOculta(x, c.key))}
+                        onOrdenar={() => ordenarPor(c.key)}
+                        largura={lay.larguras[c.key]}
+                        onLargura={(px) => editor.mudar((x) => comLargura(x, c.key, px))}
+                      >
+                        <div className={fora.has(c.key) ? "opacity-40" : ""}>{filtro}</div>
+                      </CabecalhoEdicao>
                     ) : (
-                      <span>{c.header}</span>
+                      filtro
                     )}
                   </th>
                 );
@@ -420,12 +573,13 @@ export function DataTable<R>({
                   }
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
+                  // Com colunas congeladas a linha tem fundo OPACO (as células presas herdam — nada aparece por baixo).
                   className={`group/linha border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
                     onRowClick ? "cursor-pointer" : ""
-                  } ${ativa ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : ""}`}
+                  } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
                 >
                   {selectable && (
-                    <td className="w-10 px-3">
+                    <td className={`w-10 px-3 ${selFixa ? "sticky left-0 z-10 bg-inherit" : ""}`}>
                       <input
                         type="checkbox"
                         aria-label="Selecionar linha"
@@ -435,14 +589,21 @@ export function DataTable<R>({
                       />
                     </td>
                   )}
-                  {columns.map((c) => (
-                    <td
-                      key={c.key}
-                      className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center"} ${c.nowrap ? "whitespace-nowrap" : ""}`}
-                    >
-                      {c.render?.(r)}
-                    </td>
-                  ))}
+                  {exibidas.map((j, p) => {
+                    const c = columns[j];
+                    const pos = posicao(c.key, p);
+                    return (
+                      <td
+                        key={c.key}
+                        className={`${cell} text-[13px] text-text-2 ${c.align === "right" ? "text-right" : c.align === "left" ? "text-left" : "text-center"} ${
+                          c.nowrap ? "whitespace-nowrap" : ""
+                        } ${pos.classe} ${pos.fixa ? "z-10 bg-inherit" : ""} ${fora.has(c.key) ? "opacity-40" : ""}`}
+                        style={pos.estilo}
+                      >
+                        {c.render?.(r)}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -483,6 +644,15 @@ export function DataTable<R>({
               <IconFilter className="h-3.5 w-3.5" /> Limpar filtros ({ativos.length})
             </button>
           )}
+          {edicoes &&
+            editor.rodape({
+              onEditar: () => editor.editar(lay),
+              disabled: rows.length === 0,
+              onCongelarTodas: () => editor.mudar((x) => ({ ...x, fixadas: chaves.filter((k) => !x.ocultas.includes(k)) })),
+              onDescongelarTodas: () => editor.mudar((x) => ({ ...x, fixadas: [] })),
+              onMostrarTodas: () => editor.mudar((x) => ({ ...x, ocultas: [] })),
+              semOcultas: lay.ocultas.length === 0,
+            })}
           {acoesRodape}
           {scrollInterno && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
@@ -508,6 +678,19 @@ export function DataTable<R>({
         </div>
       </div>
       {scrollInterno && <AlturaNoHtml />}
+      {edicoes && editor.camadas}
+      {arrasto && (
+        <ColunaPresa
+          arrasto={arrasto}
+          fantasma={fantasma}
+          rotulo={columns[indice.get(arrasto.chave) as number]?.header ?? ""}
+          direita={columns[indice.get(arrasto.chave) as number]?.align === "right"}
+          celulas={visiveis.slice(0, 6).map((r) => {
+            const c = columns[indice.get(arrasto.chave) as number];
+            return c?.value ? c.value(r) : c?.render?.(r);
+          })}
+        />
+      )}
     </div>
   );
 }

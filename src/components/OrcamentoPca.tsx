@@ -30,7 +30,7 @@ type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
 
 /** Os dados do Comparativo (tabela cruzada) do orçamento do ano — os MESMOS da tela do orçamento. */
-export type ComparativoPca = Omit<ComponentProps<typeof OrcamentoComparativo>, "inicio">;
+export type ComparativoPca = Omit<ComponentProps<typeof OrcamentoComparativo>, "inicio" | "onMudarEdicoes">;
 
 const COR_FAIXA: Record<FaixaComprometimento, string> = {
   ok: "var(--ok)",
@@ -186,6 +186,8 @@ function BarraPct({ l }: { l: LinhaComparativo }) {
  */
 export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcamentoPca; comparativo?: ComparativoPca | null }) {
   const [vista, setVista] = useState<Vista>("unidade");
+  // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
+  const [edicoesComp, setEdicoesComp] = useState(() => (comparativo ? { lista: comparativo.edicoes, padroes: comparativo.padroes } : null));
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [aberta, setAberta] = useState<LinhaComparativo | null>(null);
   const linhas = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
@@ -262,7 +264,13 @@ export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcame
       </div>
 
       {comparativo && vista === "comparativo" ? (
-        <OrcamentoComparativo {...comparativo} inicio={trocaVista} />
+        <OrcamentoComparativo
+          {...comparativo}
+          edicoes={edicoesComp?.lista ?? comparativo.edicoes}
+          padroes={edicoesComp?.padroes ?? comparativo.padroes}
+          onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
+          inicio={trocaVista}
+        />
       ) : (
         <>
           <FerramentasAba>

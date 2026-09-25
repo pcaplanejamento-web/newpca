@@ -25,6 +25,7 @@ export default async function MesaPage() {
       usuarioId={m.usuarioId}
       filtroInicial={m.filtroInicial}
       pcaFiltro={m.pcaFiltro}
+      edicoes={m.edicoes}
     />
   );
 }

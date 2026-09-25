@@ -1,6 +1,7 @@
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
+import { carregarEdicoes } from "./edicoes-tabela";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { FILTRO_MESA_TODOS, filtroInicialMesa } from "./mesa-filtros";
 import { listarOrgaos } from "./orgaos";
@@ -51,6 +52,9 @@ async function contextoBanners(u: UsuarioSessao | null) {
   return { lista: repCtx.lista, reparticoes, pcas, regras, orgaos, podeEditar: u?.role === "admin" || u?.role === "gestor" };
 }
 
+/** O prefixo das chaves das edições salvas das tabelas da Mesa (a principal e a do PCA têm as suas). */
+const prefixoEdicoesMesa = (pcaId?: number) => (pcaId ? "mesa-pca:" : "mesa:");
+
 export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const [rep, ctx, pref] = await Promise.all([
     getReparticaoFiltro(u),
@@ -61,13 +65,15 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   const pcaFiltro = pcaId ? null : await getPcaFiltro(await pcasDoFiltro(ctx.pcas));
   const ano = pcaFiltro?.ano ?? null;
-  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes] = await Promise.all([
+  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes] = await Promise.all([
     pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id, undefined, ano),
     pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id, ano),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
     getGrupoAtivoId(u).then(listarPessoasDoGrupo),
     listarSituacoes(),
+    // As EDIÇÕES SALVAS das tabelas desta Mesa (as do usuário e as públicas) — a do PCA tem as suas (outras colunas).
+    carregarEdicoes(u?.id ?? null, prefixoEdicoesMesa(pcaId)),
   ]);
   const protocolos = pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos;
   const dfds = pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos;
@@ -96,5 +102,6 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     filtroInicial: pcaId ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
     pcaFiltro,
+    edicoes: { prefixo: prefixoEdicoesMesa(pcaId), ...edicoes },
   };
 }

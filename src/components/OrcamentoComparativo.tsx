@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
+import { alternarOculta, comLargura, comOrdem, ordemDasColunas } from "@/lib/colunas-layout";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
 import { brl, num } from "@/lib/format";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
@@ -15,8 +16,6 @@ import {
   coerceLayout,
   colunaPermitida,
   cruzar,
-  LARGURA_MAX,
-  LARGURA_MIN,
   LAYOUT_PADRAO,
   type LayoutCruzamento,
   lancamentosDoRecorte,
@@ -27,7 +26,6 @@ import {
   matrizCruzamento,
   medidaOrcamento,
   type OrdemCruzamento,
-  ordemDasColunas,
   ordenarLinhas,
   percentual,
   permissoesColunas,
@@ -39,13 +37,11 @@ import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOr
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
-import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { SalvarEdicao, SeletorEdicoes, useEdicoesTabela } from "./EdicoesTabela";
+import { useEditorEdicoes } from "./EdicoesTabela";
 import { Checkbox, SearchField, SelectField } from "./Field";
-import { IconDesafixar, IconDownload, IconEye, IconFixar, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
+import { IconDownload, IconPencil, IconSave, IconTrocar } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
@@ -79,6 +75,7 @@ export function OrcamentoComparativo({
   padroes,
   visaoInicial = null,
   inicio,
+  onMudarEdicoes,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
@@ -93,6 +90,8 @@ export function OrcamentoComparativo({
   visaoInicial?: number | null;
   /** Controles do HOST no início da linha dos seletores (ex.: a troca de visão da aba Orçamento do PCA). */
   inicio?: ReactNode;
+  /** Quem guarda as edições FORA (a tabela remonta ao trocar de vista e volta com as edições novas). */
+  onMudarEdicoes?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
@@ -101,11 +100,7 @@ export function OrcamentoComparativo({
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);
-  const [rascunho, setRascunho] = useState<LayoutCruzamento | null>(null); // ≠ null = EDITANDO a planilha
   const [ordemVista, setOrdemVista] = useState<OrdemCruzamento | null>(null); // ordenação só da vista (fora da edição)
-  const [salvando, setSalvando] = useState(false);
-  const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
-  const { confirmar, confirmacao } = useConfirmacao();
 
   const visao = visoes.find((v) => v.id === visaoId) ?? null;
   const base = useMemo(() => (visao ? aplicarVisao(itens, visao.filtros) : itens), [itens, visao]);
@@ -120,12 +115,18 @@ export function OrcamentoComparativo({
   // O LAYOUT do par ligado: o rascunho enquanto edita; senão o da EDIÇÃO em uso (a padrão do usuário ao abrir) ou o padrão
   // do sistema.
   const chave = coluna ? chaveLayoutComparativo(linha, coluna) : "";
-  const ed = useEdicoesTabela(chave, edicoes, padroes);
-  const salvo = useMemo(() => coerceLayout(ed.atual?.valor), [ed.atual]);
-  const editando = rascunho != null;
-  const layout = rascunho ?? salvo;
+  const editor = useEditorEdicoes<LayoutCruzamento>({
+    chave,
+    edicoes,
+    padroes,
+    coerce: coerceLayout,
+    igual: layoutIgual,
+    padrao: LAYOUT_PADRAO,
+    onMudar: onMudarEdicoes,
+    aoEscolher: () => setOrdemVista(null),
+  });
+  const { layout, editando, mudar } = editor;
   const ordem = editando ? layout.ordemLinhas : (ordemVista ?? layout.ordemLinhas);
-  const mudar = (f: (l: LayoutCruzamento) => LayoutCruzamento) => setRascunho((r) => (r ? f(r) : r));
 
   // O cruzamento (sem zerados, se pedido) — a tabela ordena/oculta as colunas pelo layout.
   const cruzBase = useMemo(() => {
@@ -195,57 +196,16 @@ export function OrcamentoComparativo({
   // EDIÇÃO da planilha (direto na coluna): largura, ocultar e a ORDEM (arrastar/congelar). As colunas fora da vista
   // (ex.: zeradas ocultas) mantêm o que tinham.
   const edicao = {
-    onLargura: (k: string, px: number | null) =>
-      mudar((l) => {
-        const larguras = { ...l.larguras };
-        if (px == null) delete larguras[k];
-        else larguras[k] = Math.round(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, px)));
-        return { ...l, larguras };
-      }),
-    onOcultar: (k: string) => mudar((l) => ({ ...l, ocultas: l.ocultas.includes(k) ? l.ocultas.filter((x) => x !== k) : [...l.ocultas, k] })),
-    onOrdem: (fixadas: string[], livres: string[]) =>
-      mudar((l) => {
-        const presentes = new Set(padrao);
-        return {
-          ...l,
-          fixadas: [...fixadas, ...l.fixadas.filter((x) => !presentes.has(x))],
-          ordemManual: [...livres, ...l.ordemManual.filter((x) => !presentes.has(x))],
-        };
-      }),
+    onLargura: (k: string, px: number | null) => mudar((l) => comLargura(l, k, px)),
+    onOcultar: (k: string) => mudar((l) => alternarOculta(l, k)),
+    onOrdem: (fixadas: string[], livres: string[]) => mudar((l) => comOrdem(l, padrao, fixadas, livres)),
   };
 
   function editar() {
-    setRascunho(layout);
+    editor.editar(layout);
     setOrdemVista(null);
     setAberto(null);
   }
-  async function cancelar() {
-    if (rascunho && !layoutIgual(rascunho, salvo) && !(await confirmar({ titulo: "Descartar as edições da planilha?", confirmar: "Descartar", perigo: true })))
-      return;
-    setRascunho(null);
-  }
-  // As ações das edições salvas: o erro vira aviso flutuante (nada de alerta do navegador).
-  const tentar = async (f: () => Promise<unknown>, ok?: string) => {
-    try {
-      await f();
-      if (ok) setAviso({ kind: "ok", texto: ok });
-    } catch (e) {
-      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Não foi possível concluir." });
-    }
-  };
-  const salvar = (d: { nome: string; publico: boolean; atualizar: boolean; padrao: boolean }) =>
-    tentar(async () => {
-      if (!rascunho) return;
-      await ed.salvar({ ...d, valor: rascunho });
-      setSalvando(false);
-      setRascunho(null);
-    }, "Edição salva.");
-  const excluirEdicao = async () => {
-    const e = ed.atual;
-    if (!e || !(await confirmar({ titulo: `Excluir a edição "${e.nome}"?`, texto: e.publico ? "Ela é pública: some para todos." : undefined, confirmar: "Excluir", perigo: true })))
-      return;
-    await tentar(() => ed.excluir(e), "Edição excluída.");
-  };
 
   const m = medidaOrcamento(medida);
   const comSigla = siglaDe != null && !layout.ocultas.includes(COL_EXTRA);
@@ -424,74 +384,21 @@ export function OrcamentoComparativo({
                 ? "Nenhuma linha para esta busca."
                 : "Nenhum lançamento para comparar."
         }
-        acoesRodape={
-          editando ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="flex min-h-11 items-center gap-x-4 lg:min-h-0">
-                <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
-                <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="icon"
-                  title="Congelar todas"
-                  aria-label="Congelar todas as colunas"
-                  icon={<IconFixar className="h-4 w-4" />}
-                  onClick={() => mudar((l) => ({ ...l, fixadas: padrao.filter((k) => !l.ocultas.includes(k)) }))}
-                />
-                <Button
-                  size="sm"
-                  variant="icon"
-                  title="Descongelar todas (o nome das linhas segue congelado)"
-                  aria-label="Descongelar todas as colunas"
-                  icon={<IconDesafixar className="h-4 w-4" />}
-                  onClick={() => mudar((l) => ({ ...l, fixadas: [COL_ROTULO] }))}
-                />
-                <Button
-                  size="sm"
-                  variant="icon"
-                  title="Mostrar todas"
-                  aria-label="Mostrar todas as colunas"
-                  icon={<IconEye className="h-4 w-4" />}
-                  onClick={() => mudar((l) => ({ ...l, ocultas: [] }))}
-                  disabled={layout.ocultas.length === 0}
-                />
-                <Button
-                  size="sm"
-                  variant="icon"
-                  title="Voltar ao padrão do sistema"
-                  aria-label="Voltar ao padrão do sistema"
-                  icon={<IconUndo className="h-4 w-4" />}
-                  onClick={() => setRascunho(LAYOUT_PADRAO)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={cancelar}>
-                  Cancelar
-                </Button>
-                <Button size="sm" icon={<IconSave className="h-4 w-4" />} onClick={() => setSalvando(true)}>
-                  Salvar
-                </Button>
-              </div>
+        acoesRodape={editor.rodape({
+          onEditar: editar,
+          disabled: !cruzBase,
+          extras: (
+            <div className="flex min-h-11 items-center gap-x-4 lg:min-h-0">
+              <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
+              <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
             </div>
-          ) : (
-            <SeletorEdicoes
-              minhas={ed.minhas}
-              publicas={ed.publicas}
-              atual={ed.atual}
-              padraoId={ed.padraoId}
-              disabled={!cruzBase || ed.gravando}
-              onEditar={editar}
-              onEscolher={(id) => {
-                ed.escolher(id);
-                setOrdemVista(null);
-              }}
-              onPadrao={() => tentar(() => ed.definirPadrao(ed.atual?.id ?? null), ed.atual ? `"${ed.atual.nome}" é a sua padrão.` : "A tabela abre no padrão do sistema.")}
-              onExcluir={excluirEdicao}
-            />
-          )
-        }
+          ),
+          onCongelarTodas: () => mudar((l) => ({ ...l, fixadas: padrao.filter((k) => !l.ocultas.includes(k)) })),
+          // O nome das linhas segue congelado.
+          onDescongelarTodas: () => mudar((l) => ({ ...l, fixadas: [COL_ROTULO] })),
+          onMostrarTodas: () => mudar((l) => ({ ...l, ocultas: [] })),
+          semOcultas: layout.ocultas.length === 0,
+        })}
         resumo={
           cruz && coluna
             ? `${num(linhas.length)} ${linhas.length === 1 ? "linha" : "linhas"} × ${num(nVisiveis)} ${nVisiveis === 1 ? "coluna" : "colunas"} · ${m.rotulo} ${brl(cruz.total)}`
@@ -523,22 +430,7 @@ export function OrcamentoComparativo({
         />
       </OrigemDados>
 
-      {salvando && (
-        <SalvarEdicao
-          aberto
-          atual={ed.atual}
-          ehPadrao={(ed.atual?.id ?? null) === ed.padraoId && ed.atual != null}
-          gravando={ed.gravando}
-          onFechar={() => setSalvando(false)}
-          onSalvar={salvar}
-        />
-      )}
-      {confirmacao}
-      {aviso && (
-        <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 3000 : undefined}>
-          {aviso.texto}
-        </AvisoFlutuante>
-      )}
+      {editor.camadas}
     </>
   );
 }

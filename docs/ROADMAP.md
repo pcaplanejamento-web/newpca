@@ -1019,6 +1019,9 @@ Sigla e Total inclusive — com a mesma gráfica, centrados; edições públicas
 ✅ **Espaço do PCA enxuto:** cabeçalho numa linha (voltar · nome · ano · status · fonte), filtro de unidade do Dashboard
 na linha das abas e o Comparativo dentro da aba Orçamento, abaixo dos KPIs (PCA × Orçamento — aberto — | Comparativo).
 ✅ **Comparativo — leitura simplificada:** R$ ou % (participação na linha); "% coluna" e "% total" removidos.
+✅ **Edições de tabela na Mesa e na Mesa do PCA:** Protocolos, DFDs, Itens e Consolidada com a mesma edição do Comparativo —
+arrastar, congelar, ocultar, ordenar e largura no cabeçalho — e edições salvas (colunas + ordenação + filtros), pessoais ou
+públicas, com a padrão de cada usuário. Peças compartilhadas (`EdicaoColunas`, `useEditorEdicoes`, `colunas-layout`).
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

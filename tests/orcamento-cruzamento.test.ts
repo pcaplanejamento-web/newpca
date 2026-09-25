@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { LARGURA_MAX, LARGURA_MIN, ordemDasColunas, soltarColuna } from "../src/lib/colunas-layout.ts";
 import { salvarPreferenciaSchema } from "../src/lib/preferencias-validation.ts";
 import {
   COL_EXTRA,
@@ -10,21 +11,17 @@ import {
   coerceLayout,
   colunaPermitida,
   cruzar,
-  LARGURA_MAX,
-  LARGURA_MIN,
   LAYOUT_PADRAO,
   lancamentosDoRecorte,
   layoutIgual,
   MAX_COLUNAS_CRUZAMENTO,
   matrizCruzamento,
   medidaOrcamento,
-  ordemDasColunas,
   ordenarLinhas,
   percentual,
   permissoesColunas,
   permissoesLinhas,
   semVazios,
-  soltarColuna,
 } from "../src/lib/orcamento-cruzamento.ts";
 
 const V = { valorEmendaImpositiva: 0, valorSuplementacao: 0, valorEmpenho: 0, saldo: 0, valorAnulacao: 0 };

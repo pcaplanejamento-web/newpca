@@ -1,3 +1,4 @@
+import { coerceLarguras, listaChaves } from "./colunas-layout.ts";
 import { dotacaoAtualizada } from "./orcamento-indicadores.ts";
 import { DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type LinhaOrcamentoVisao, valorDimensao } from "./orcamento-visao.ts";
 import { norm } from "./parse-dfd-comum.ts";
@@ -185,8 +186,6 @@ export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento, extraDe?: (
 export const COL_ROTULO = "__rotulo";
 export const COL_EXTRA = "__extra";
 export const COL_TOTAL = "__total";
-export const LARGURA_MIN = 56;
-export const LARGURA_MAX = 640;
 
 /** Os AJUSTES da tabela que o usuário pode SALVAR — para TODAS as colunas (inclusive `COL_*`): larguras (px), as
  * CONGELADAS (na ordem), as OCULTAS (o rótulo nunca), a ordem MANUAL das livres, a ordem das linhas, calor e zerados. */
@@ -217,37 +216,6 @@ export const LAYOUT_PADRAO: LayoutCruzamento = {
   zerados: true,
 };
 
-/**
- * A ORDEM EXIBIDA das colunas: as congeladas (na ordem delas) e as livres (pela ordem manual; as que não estão nela, na
- * ordem PADRÃO — `padrao` = rótulo, extra, total e os valores A–Z). Só as chaves presentes em `padrao` entram.
- */
-export function ordemDasColunas(padrao: string[], fixadas: string[], manual: string[]): { fixadas: string[]; livres: string[] } {
-  const presentes = new Set(padrao);
-  const fix = fixadas.filter((k) => presentes.has(k));
-  const congeladas = new Set(fix);
-  const pos = new Map(manual.map((k, i) => [k, i]));
-  const idx = new Map(padrao.map((k, i) => [k, i]));
-  const naLista = (k: string) => pos.get(k) ?? Number.POSITIVE_INFINITY;
-  const livres = padrao
-    .filter((k) => !congeladas.has(k))
-    .sort((a, b) => naLista(a) - naLista(b) || (idx.get(a) ?? 0) - (idx.get(b) ?? 0));
-  return { fixadas: fix, livres };
-}
-
-/**
- * SOLTA a coluna ARRASTADA na posição `destino` da ordem exibida (congeladas + livres, SEM a arrastada). Soltar entre as
- * congeladas a CONGELA; depois delas, a SOLTA; exatamente na divisa, mantém o que era. Devolve as duas listas novas.
- */
-export function soltarColuna(fixadas: string[], livres: string[], chave: string, destino: number): { fixadas: string[]; livres: string[] } {
-  const eraFixa = fixadas.includes(chave);
-  const f = fixadas.filter((k) => k !== chave);
-  const todas = [...f, ...livres.filter((k) => k !== chave)];
-  const t = Math.max(0, Math.min(destino, todas.length));
-  todas.splice(t, 0, chave);
-  const k = t < f.length || (t === f.length && eraFixa) ? f.length + 1 : f.length;
-  return { fixadas: todas.slice(0, k), livres: todas.slice(k) };
-}
-
 /** As colunas de VALORES na ordem dada (as ausentes saem — ex.: as ocultas); os `valores` das linhas acompanham. */
 export function colunasNaOrdem(c: Cruzamento, chaves: string[]): Cruzamento {
   const pos = new Map(c.colunas.map((x, j) => [x.chave, j]));
@@ -258,20 +226,12 @@ export function colunasNaOrdem(c: Cruzamento, chaves: string[]): Cruzamento {
 /** A chave do layout salvo do Comparativo — um por PAR de colunas ligadas (as colunas mudam com o par). */
 export const chaveLayoutComparativo = (linha: DimensaoOrcamento, coluna: DimensaoOrcamento) => `orcamento-comparativo:${linha}:${coluna}`;
 
-const listaChaves = (v: unknown) =>
-  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 300))].slice(0, 500) : [];
-
 /** Qualquer JSON → layout VÁLIDO e canônico (larguras no intervalo e em ordem de chave; sem repetição) — o salvo nunca
  * quebra a tabela, e dois layouts iguais têm o mesmo JSON (`layoutIgual`). O formato ANTERIOR (sem `v`: só os valores
  * congeláveis, Sigla/Total "soltas", ordem manual só com `ordemColunas: "manual"`) é convertido. */
 export function coerceLayout(v: unknown): LayoutCruzamento {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  const larguras: Record<string, number> = {};
-  if (o.larguras && typeof o.larguras === "object" && !Array.isArray(o.larguras)) {
-    for (const [k, w] of Object.entries(o.larguras as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, 500)) {
-      if (k.length && k.length <= 300 && typeof w === "number" && Number.isFinite(w)) larguras[k] = Math.round(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, w)));
-    }
-  }
+  const larguras = coerceLarguras(o.larguras);
   const ol = o.ordemLinhas as { por?: unknown; desc?: unknown } | undefined;
   const por =
     ol?.por === "rotulo" || ol?.por === "extra" || ol?.por === "total"

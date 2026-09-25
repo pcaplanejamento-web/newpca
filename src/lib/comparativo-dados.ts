@@ -1,7 +1,6 @@
-import { listarEdicoesTabela } from "./edicoes-tabela";
+import { carregarEdicoes } from "./edicoes-tabela";
 import { alvosVinculoOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "./orcamento";
 import { listarVisoesOrcamento } from "./pca-espaco";
-import { listarPreferenciasTabela } from "./preferencias-tabela";
 
 /**
  * Os dados do COMPARATIVO (a tabela cruzada) de UM orçamento — os MESMOS na tela do orçamento e no espaço do PCA: os
@@ -9,13 +8,12 @@ import { listarPreferenciasTabela } from "./preferencias-tabela";
  * padrão dele. Só escopo de request.
  */
 export async function dadosComparativo(orcamentoId: number, usuarioId: number | null) {
-  const [itens, visoes, vinculos, alvos, edicoes, padroes] = await Promise.all([
+  const [itens, visoes, vinculos, alvos, ed] = await Promise.all([
     getOrcamentoItens(orcamentoId),
     listarVisoesOrcamento(),
     listarVinculosOrcamento(),
     alvosVinculoOrcamento(),
-    usuarioId != null ? listarEdicoesTabela(usuarioId, "orcamento-comparativo:") : [],
-    usuarioId != null ? listarPreferenciasTabela(usuarioId, "padrao:orcamento-comparativo:") : {},
+    carregarEdicoes(usuarioId, "orcamento-comparativo:"),
   ]);
-  return { itens, visoes, vinculos, alvos, edicoes, padroes };
+  return { itens, visoes, vinculos, alvos, edicoes: ed.lista, padroes: ed.padroes };
 }

@@ -591,6 +591,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     puro **`mesa-filtros.ts`**
     (`passaFiltroMesa`/`opcoesAssuntoMesa`). Enquanto ativos, **travam** as colunas Responsável/Assunto da tabela de
     protocolos (`Column.travado` do `DataTable`: cadeado + o motivo; o filtro da coluna sai de uso) — a hierarquia manda.
+  - **EDIÇÕES DA TABELA na Mesa (e na Mesa do PCA):** as QUATRO tabelas — Protocolos, DFDs (`PlanilhaDfds.edicoes`), Itens e
+    Consolidada — têm a MESMA edição do Comparativo do orçamento (`DataTable.edicoes`): o LÁPIS no rodapé liga a edição NO
+    CABEÇALHO (arrastar a coluna com a sombra do destino, congelar — `sticky` pela largura REAL, até ~60% da largura visível —,
+    ocultar, ordenar ▲/▼, largura pela borda) e **Salvar** guarda colunas + a ORDENAÇÃO + os FILTROS das colunas (os filtros
+    externos da Consolidada ficam de fora) — só para o usuário ou PÚBLICA (todos usam, até como a sua padrão); a estrela marca
+    a PADRÃO (a tabela ABRE nela, com os filtros e a ordem). Chaves `mesa:<tabela>` e `mesa-pca:<tabela>` (as colunas diferem);
+    carregadas no servidor por `carregarMesa` (`carregarEdicoes`) e guardadas no `DfdsView` (trocar de visão remonta a tabela,
+    que volta com as edições novas — `EdicoesDaTabela.onMudar`). Sem migração (a `edicoes_tabela` da `0041`).
   - **DASHBOARD DE GOVERNANÇA da Mesa (o ícone à esquerda das visões; só na Mesa principal):** `DashboardMesa` = 5 KPIs
     (Protocolos na Mesa [+ sparkline das 7 últimas semanas] · Valor na Mesa [Σ DFDs] · **Conformidade** [% regular dos
     conferidos] · **Com responsável** · **Tempo médio na Mesa** [+ quantos há mais de `DIAS_ALERTA`=30 dias]) + 6 quadros:
@@ -1668,7 +1676,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   minha. Editando, o rodapé troca para mapa de calor, ocultar zerados, congelar/descongelar/mostrar todas, voltar ao padrão
   do sistema, **Cancelar** e **Salvar** → `SalvarEdicao` (nome; **só para mim** ou **pública** — todos veem e usam;
   ATUALIZAR a minha ou salvar como NOVA — a de outra pessoa sempre vira nova, minha; "usar como minha padrão"). Hook
-  **`useEdicoesTabela`** (`EdicoesTabela.tsx`, genérico — reutilizável por outras tabelas) + núcleo puro
+  **`useEdicoesTabela`** + o orquestrador **`useEditorEdicoes`** (`EdicoesTabela.tsx`, genéricos — o layout salvo, o rascunho, o
+  rodapé [seletor | barra da edição] e as camadas; os MESMOS no Comparativo e na `DataTable` da Mesa) + núcleo puro
   **`edicoes-tabela-core.ts`** (`edicoesDaChave`/`edicaoInicial`/`idPadrao`/`chavePadrao`, testado) + D1 em
   **`edicoes-tabela.ts`** (`listarEdicoesTabela` = as minhas + as públicas, com o autor) + rotas **`POST
   /api/tabela/edicoes`** e **`PATCH`/`DELETE /api/tabela/edicoes/[id]`** (`exigirUsuario`; só o DONO ou o ADM altera/exclui;
@@ -1679,7 +1688,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `COL_EXTRA`/`COL_TOTAL` inclusive; o padrão congela os três —, **ordemManual** das livres, ordem das linhas, calor,
   zerados; a ordem exibida sai de `ordemDasColunas`) é
   normalizado por `coerceLayout` (qualquer JSON → válido e o formato ANTERIOR — Sigla/Total "soltas" — convertido;
-  `layoutIgual` compara pelo conteúdo). Núcleo PURO
+  `layoutIgual` compara pelo conteúdo). As peças da edição NO CABEÇALHO são COMPARTILHADAS com a `DataTable`: **`EdicaoColunas.tsx`**
+  (`CabecalhoEdicao`, `useArrastoColunas`, `ColunaPresa`) + o núcleo puro **`colunas-layout.ts`** (`ordemDasColunas`/
+  `soltarColuna`/`comOrdem`/`comLargura`/`alternarOculta` e o `LayoutTabela` da `DataTable` — `coerceLayoutTabela`). Núcleo PURO
   **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
   `ordemDasColunas`/`soltarColuna`/`colunasNaOrdem`/`lancamentosDoRecorte`/`matrizCruzamento`/`coerceLayout`, testado; o CUBO real = 39 unidades × 36
   elementos em ~5 ms). Altura até o fim do display pela MESMA medida do `DataTable scrollInterno` (**`AlturaCheia.tsx`**:
@@ -1811,6 +1822,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `--reserva-rodape` da barra de seleção) e a tabela publica a altura dele em `--rodape-tabela` (os avisos flutuantes sobem
   acima); o corte celular × desktop das medidas em JS é o `lg` do Tailwind (`ehDesktop`, `matchMedia("(min-width: 64rem)")`
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
+  **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
+  pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;

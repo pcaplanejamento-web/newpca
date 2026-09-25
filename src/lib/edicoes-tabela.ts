@@ -3,6 +3,7 @@ import { edicoesTabela, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import type { EdicaoTabela } from "./edicoes-tabela-core";
 import { nomeExibicao } from "./pessoa";
+import { listarPreferenciasTabela } from "./preferencias-tabela";
 
 /**
  * EDIÇÕES SALVAS de tabela (migração `0041`) — acesso ao D1 (só escopo de request). O usuário vê as DELE e as PÚBLICAS;
@@ -69,4 +70,12 @@ export async function atualizarEdicaoTabela(id: number, d: { nome?: string; publ
 
 export async function excluirEdicaoTabela(id: number): Promise<void> {
   await getDb().delete(edicoesTabela).where(eq(edicoesTabela.id, id));
+}
+
+/** As EDIÇÕES SALVAS das tabelas de uma tela (chaves começando por `prefixo`) que o usuário vê — as dele e as públicas — e
+ * as preferências de edição PADRÃO dele. Sem usuário, nada. */
+export async function carregarEdicoes(usuarioId: number | null, prefixo: string): Promise<{ lista: EdicaoTabela[]; padroes: Record<string, unknown> }> {
+  if (usuarioId == null) return { lista: [], padroes: {} };
+  const [lista, padroes] = await Promise.all([listarEdicoesTabela(usuarioId, prefixo), listarPreferenciasTabela(usuarioId, `padrao:${prefixo}`)]);
+  return { lista, padroes };
 }

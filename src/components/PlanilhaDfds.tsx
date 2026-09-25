@@ -16,7 +16,7 @@ import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { type Column, DataTable } from "./DataTable";
+import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
 
@@ -137,6 +137,7 @@ export function PlanilhaDfds({
   acoesRodape,
   vazio,
   acaoDescartados,
+  edicoes,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -165,6 +166,8 @@ export function PlanilhaDfds({
   vazio?: ReactNode;
   /** Ação ao lado do título da tabela dos DFDs FORA do envio (ex.: "Restaurar excluídos" da análise). */
   acaoDescartados?: ReactNode;
+  /** EDIÇÕES SALVAS da tabela principal (ex.: a Mesa) — repassadas ao `DataTable`. */
+  edicoes?: EdicoesDaTabela;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -368,7 +371,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;
