@@ -26,6 +26,14 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Protocolar sem DFD ou item com erro — nada fica para trás — entregue
+✅ A protocolação avalia as importâncias dos pontos de DFD e de Item e **trava** com qualquer DFD do envio em erro (regra
+FIXA — "Sem DFD ou item com erro" só aceita "bloqueia"): nunca pula um DFD — só fica fora o que o usuário tirou do envio
+(Excluir do protocolo, Manter o existente, escolha do duplicado). O duplicado de MESMO nº sem escolha é sempre erro; os
+DFDs além do teto da análise (300) são analisados ANTES de gravar e, sem erro, a protocolação segue sozinha ao terminar;
+itens não conferidos no catálogo por falha de rede travam até "Conferir de novo"; falha de gravação deixa a protocolação
+INCOMPLETA, com a lista dos DFDs não gravados e o caminho para completar ("Reenviar protocolo").
+
 ### Revisão da lógica gravado × novo (sobrescrita) — entregue
 ✅ Revisão completa da sobrescrita (reenvio, importação do protocolo, avulso): a mesma SEÇÃO com títulos diferentes
 ("PRIORIDADE" × "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO") é uma escolha só — manter a gravada não deixa a do arquivo

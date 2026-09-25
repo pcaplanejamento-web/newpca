@@ -150,11 +150,17 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "proto-sem-erro",
     dominio: "protocolo",
-    titulo: "Não protocola com DFD defeituoso",
+    titulo: "Não protocola com DFD ou item com erro — nada fica para trás",
     descricao:
-      "O botão 'Protocolar' fica desabilitado enquanto algum DFD estiver com erro (ou ainda em análise). Se o ADM permitir protocolar assim, uma confirmação lista ANTES os DFDs que não serão protocolados. O relatório de devolução sai em formato de DESPACHO, pronto para devolver o processo para correção.",
-    fonte: "ProtocoloUploadForm / linhasRelatorioProtocolo",
-    configuravelEm: { rotulo: "Avaliação (protocolo.semDfdEmErro)" },
+      "O botão 'Protocolar' fica desabilitado enquanto algum DFD do envio estiver com erro — o erro é o que a importância de cada ponto de DFD e de ITEM manda bloquear (valor unitário, quantidade, catálogo…) —, ainda em análise, com a assinatura em leitura ou com o catálogo sem conferir. A regra é FIXA: a protocolação nunca pula um DFD; só fica fora o que o usuário tirou do envio (Excluir do protocolo, Manter o existente, escolha do duplicado). O relatório de devolução sai em formato de DESPACHO, pronto para devolver o processo para correção.",
+    detalhes: [
+      "DFD duplicado com o MESMO nº sem escolha é sempre erro (só um por nº é gravado — o outro ficaria para trás).",
+      "DFDs além do teto da análise (300) são analisados ANTES de gravar; sem erro, a protocolação segue sozinha ao terminar.",
+      "Itens não conferidos no catálogo por falha de rede (quando o catálogo bloqueia) travam até 'Conferir de novo'.",
+      "Falha de GRAVAÇÃO (rede/servidor) deixa a protocolação INCOMPLETA: o aviso lista os DFDs não gravados; complete pelo 'Reenviar protocolo'.",
+    ],
+    fonte: "ProtocoloUploadForm (semErroBloqueia, dupNivel, protocolarAposAnalise) / avaliarLinhaDfd / linhasRelatorioProtocolo",
+    configuravelEm: { rotulo: "Avaliação (importâncias dos pontos de DFD e Item)" },
   },
   {
     id: "proto-duplicados",

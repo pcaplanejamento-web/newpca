@@ -133,9 +133,10 @@ type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move" | "semAcesso";
 /** Progresso REAL da análise em background: 1ª passada (texto) e 2ª (assinaturas por OCR). */
-type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: number | null };
+/** Progresso da análise; `ate` = o fim da faixa de DFDs em análise (os de índice menor ainda não lidos estão "na fila"). */
+type Analise = { fase: "texto" | "ocr"; feito: number; total: number; atual: number | null; ate: number };
 /** Conferência dos itens de um DFD com o catálogo, com os ITENS e o TIPO conferidos (outros = reconferir); `ok: false`
- * = falha de rede (nova tentativa com espera; depois de 3, o servidor confere ao gravar). */
+ * = falha de rede (nova tentativa com espera; depois de 3, a protocolação trava até "Conferir de novo"). */
 type ConfCat = { itens: DfdParseado["itens"]; tipo: string | null; conf?: Map<string, ConferenciaItem>; ok: boolean; falhas: number };
 const MAX_FALHAS_CATALOGO = 3;
 
@@ -275,11 +276,14 @@ export function ProtocoloUploadForm({
   const [aplicandoMassa, setAplicandoMassa] = useState(false);
 
   const [importando, setImportando] = useState(false);
+  // "Protocolar" pedido com DFDs ainda sem análise: analisa os restantes e protocola ao terminar (se nada estiver com erro).
+  const [protocolarAposAnalise, setProtocolarAposAnalise] = useState(false);
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
   const [relatorio, setRelatorio] = useState<{
     numero: string;
     importados: number;
-    bloqueados: { numero: string; motivo: string }[];
+    /** Falhas de gravação (a protocolação ficou INCOMPLETA). */
+    falhas: { numero: string; motivo: string }[];
     /** (reenvio) DFDs sem diferença (não regravados) e gravados excluídos por não virem no PDF. */
     iguais?: number;
     excluidos?: number;
@@ -301,8 +305,8 @@ export function ProtocoloUploadForm({
   const gravadoPedidoRef = useRef(new Map<string, Promise<DfdDetalhe | null>>()); // leitura do gravado por nº (não repete)
   // Os gravados JÁ lidos, na hora (as leituras e o OCR em curso — closures antigas — herdam deles).
   const gravadosLidosRef = useRef(new Map<string, DfdDetalhe>());
-  // Carga dos gravados em curso (a protocolação espera: a herança do gravado vale antes de gravar).
-  const [carregandoGravados, setCarregandoGravados] = useState(false);
+  // Cargas dos gravados em curso (a protocolação espera: a herança do gravado vale antes de gravar).
+  const [gravadosEmCarga, setGravadosEmCarga] = useState(0);
   // Espelho da consulta dos já cadastrados (a carga dos gravados roda na closure de quando a consulta chegou).
   const existentesRef = useRef<Map<string, ExistenteImport> | null>(null);
   const arquivosRef = useRef(new Map<number, DfdParseado>());
@@ -358,12 +362,13 @@ export function ProtocoloUploadForm({
     setPainel(null);
     setOcrPendente(new Set());
     setAnalise(null);
+    setProtocolarAposAnalise(false);
     setRemovidosManter(new Set());
     setHerdados(new Map());
     setGravadosSrv(new Map());
     gravadoPedidoRef.current = new Map();
     gravadosLidosRef.current = new Map();
-    setCarregandoGravados(false);
+    setGravadosEmCarga(0);
     existentesRef.current = null;
     repEscolhidaRef.current = new Set();
     setFantasmas(new Set());
@@ -579,11 +584,13 @@ export function ProtocoloUploadForm({
     }
   }
 
-  /** Parseia (background) os DFDs até o teto, atualizando estados e o PROGRESSO real. */
-  async function analisarTodos(idx0: ProtocoloIndex, doc: PdfDoc) {
+  /** Parseia (background) os DFDs até o teto, atualizando estados e o PROGRESSO real. Com `de`, analisa os RESTANTES (do
+   * índice `de` ao último — os além do teto, antes de protocolar: nada fica sem análise); os fora do envio ficam de fora. */
+  async function analisarTodos(idx0: ProtocoloIndex, doc: PdfDoc, de = 0) {
     const nome = idx0.protocolo.nomeArquivo ?? "protocolo.pdf";
-    const total = Math.min(idx0.dfds.length, CAP_ANALISE);
-    if (total === 0) return;
+    const ate = de === 0 ? Math.min(idx0.dfds.length, CAP_ANALISE) : idx0.dfds.length;
+    const total = ate - de;
+    if (total <= 0) return;
     const paraOcr: { i: number; dfd: DfdParseado }[] = []; // DFDs sem assinatura NOMEADA de texto (achatada)
     /** DFD que JÁ está no cache (o usuário abriu / editou em massa antes da análise chegar): não
      * re-parseia nem sobrescreve (preserva as edições), mas a previsão da unidade e a fila do OCR valem. */
@@ -594,9 +601,10 @@ export function ProtocoloUploadForm({
         setOcrPendente((s) => new Set(s).add(i));
       }
     };
-    for (let i = 0; i < total; i++) {
+    for (let i = de; i < ate; i++) {
       if (docRef.current !== doc) return; // outro protocolo foi aberto / banner fechado — aborta
-      setAnalise({ fase: "texto", feito: i, total, atual: i });
+      if (de > 0 && descartadosRef.current.has(i)) continue; // fora do envio: não precisa ser analisado para protocolar
+      setAnalise({ fase: "texto", feito: i - de, total, atual: i, ate });
       const jaLido = parsedRef.current.get(i);
       if (jaLido) {
         viaCache(i, jaLido);
@@ -643,7 +651,7 @@ export function ProtocoloUploadForm({
       }
       // Já lido (ou em leitura) por outro caminho (abrir o DFD / restaurar): quem lê tira da espera.
       if (ocrTentadoRef.current.has(i)) continue;
-      setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i });
+      setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i, ate });
       await emCursoOcr(
         i,
         (async () => {
@@ -793,6 +801,13 @@ export function ProtocoloUploadForm({
   const mesmoNumero = (a: number, b: number) => chaveDfd(index?.dfds[a]?.numero) === chaveDfd(index?.dfds[b]?.numero);
   /** Duplicata AINDA não resolvida: este DFD (não descartado) conflita com outro também não descartado. */
   const dupPendente = (idx: number): boolean => !descartados.has(idx) && dupDe(idx).some((j) => !descartados.has(j));
+  /** Nível da duplicata pendente: o MESMO nº sem escolha é SEMPRE erro (só um DFD por nº é gravado — o outro ficaria
+   * para trás); o mesmo planejamento segue o ponto do ADM (vão todos). `null` = sem duplicata pendente apontada. */
+  const dupNivel = (idx: number): "erro" | "atencao" | null => {
+    if (!dupPendente(idx)) return null;
+    if (dupDe(idx).some((j) => !descartados.has(j) && mesmoNumero(idx, j)) || dupComp === "bloqueia") return "erro";
+    return dupComp === "ignora" ? null : "atencao";
+  };
   /** "Manter este DFD": descarta os que conflitam com ELE; se ele estava descartado, volta ao processo (troca) — e a
    * assinatura achatada que a análise pulou é lida agora. Ele passa a gravar o nº dele (o já cadastrado de mesmo nº não
    * fica mais "mantido"). */
@@ -900,7 +915,7 @@ export function ProtocoloUploadForm({
   }, [regras, categoria]);
   const catBloqueia = (d: DfdParseado) => catBloqueiaPorTipo.get(tipoCurtoDfd(d.tipo)) ?? false;
   /** A conformidade do DFD com o catálogo para a linha: `pronto` = conferida para ESTES itens/tipo (ou não precisa);
-   * `falhou` = a rede falhou 3× (a linha segue sem o catálogo — o servidor confere ao gravar). */
+   * `falhou` = a rede falhou 3× (a linha segue sem o catálogo e a protocolação trava até "Conferir de novo"). */
   const confDe = (idx: number, d: DfdParseado): { pronto: boolean; conf?: Map<string, ConferenciaItem>; falhou?: boolean } => {
     if (!catBloqueia(d)) return { pronto: true };
     const c = confCat.get(idx);
@@ -930,7 +945,7 @@ export function ProtocoloUploadForm({
   });
   const avaliarLinha = (idx: number, d: DfdParseado, conformidade?: Map<string, ConferenciaItem>): LinhaAvaliada => {
     const repId = dfdRepIds[idx] ?? null;
-    const dup = dupComp !== "ignora" && dupPendente(idx) ? (dupComp === "bloqueia" ? "erro" : "atencao") : null;
+    const dup = dupNivel(idx);
     const auto = (autoMap.get(idx)?.length ?? 0) > 0;
     const editado = editados.has(idx);
     const k = `${repId}|${anoPca}|${categoria}|${auto}|${editado}|${dup}`;
@@ -945,7 +960,7 @@ export function ProtocoloUploadForm({
     if (errosParse.has(idx) || descartados.has(idx)) return null;
     if (carregandoIdx === idx) return "texto";
     if (!parsed.has(idx)) {
-      if (analise?.fase === "texto") return analise.atual === idx ? "texto" : idx < CAP_ANALISE ? "fila" : null;
+      if (analise?.fase === "texto") return analise.atual === idx ? "texto" : idx < analise.ate ? "fila" : null;
       return null; // além do teto: analisado ao abrir/protocolar
     }
     if (ocrPendente.has(idx)) return analise?.fase === "ocr" && analise.atual === idx ? "ocr" : "fila";
@@ -1128,26 +1143,34 @@ export function ProtocoloUploadForm({
   // Portões do protocolo respeitando os níveis do ADM (número é sempre obrigatório).
   const repBloqueia = protoRepId == null && comportamentoNo(regras, "protocolo.reparticao", { categoria }) === "bloqueia";
   const anoPcaBloqueia = anoPca == null && comportamentoNo(regras, "protocolo.anoPca", { categoria }) === "bloqueia";
-  const semErroBloqueia = dfdsComErro > 0 && comportamentoNo(regras, "protocolo.semDfdEmErro", { categoria }) === "bloqueia";
-  const dupBloqueia = dupComp === "bloqueia" && (index?.dfds ?? []).some((_, i) => dupPendente(i));
+  // Nada fica para trás (regra fixa — `protocolo.semDfdEmErro` só aceita "bloqueia"): com QUALQUER DFD do envio em erro —
+  // pela importância de cada ponto de DFD e de Item (o duplicado de mesmo nº sem escolha inclusive) —, não se protocola.
+  const semErroBloqueia = dfdsComErro > 0;
+  const dupBloqueia = (index?.dfds ?? []).some((_, i) => dupNivel(i) === "erro");
   // Trava de protocolação do ADM (assunto não cadastrado / tipo de DFD não permitido / botão desligado).
   const tiposCurtosGate = ativos.map((i) => parsed.get(i)).filter((d): d is DfdParseado => !!d).map((d) => tipoCurtoDfd(d.tipo));
   const gateTrava = gateProtocolo(assunto, tiposCurtosGate, regras);
   const protocolarDesligado = !protocolarHabilitado(regras);
-  const bloqueadoPorRegra =
-    repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
+  const bloqueadoPorRegra = repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || !gateTrava.ok || protocolarDesligado;
   // Sem saber quem SOBRESCREVE quem (consulta dos já cadastrados), não protocola às cegas.
-  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null || carregandoGravados);
-  // DFDs cujos itens ainda estão sendo conferidos no catálogo (ponto bloqueante) — a protocolação espera; os que a
-  // rede não deixou conferir seguem (o servidor confere ao gravar) e o rodapé avisa.
+  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null || gravadosEmCarga > 0);
+  // DFDs cujos itens ainda estão sendo conferidos no catálogo (ponto bloqueante) — a protocolação espera…
   const catPendentes = ativos.filter((i) => {
     const d = parsed.get(i);
     return !!d && catPendenteDe(i, d);
   }).length;
+  // …e os que a rede não deixou conferir TRAVAM a protocolação (o servidor recusaria o DFD ao gravar — ficaria para trás):
+  // "Conferir de novo" refaz a fila.
   const catFalhas = ativos.filter((i) => {
     const d = parsed.get(i);
     return !!d && !!confDe(i, d).falhou;
   }).length;
+  const reconferirCatalogo = () =>
+    setConfCat((m) => {
+      const n = new Map(m);
+      for (const [i, c] of m) if (!c.ok) n.delete(i);
+      return n;
+    });
   // Leitura da assinatura por OCR pendente em algum DFD que VAI no envio (o fora do envio não segura a protocolação).
   const ocrPendenteNoEnvio = [...ocrPendente].some((i) => !descartados.has(i));
   const podeProtocolar =
@@ -1156,8 +1179,19 @@ export function ProtocoloUploadForm({
     !analisando &&
     !ocrPendenteNoEnvio &&
     catPendentes === 0 &&
+    catFalhas === 0 &&
     !bloqueadoPorRegra &&
     !existentesPendentes;
+  // "Protocolar" com DFDs do envio ainda sem análise (além do teto): eles são analisados ANTES (nada é gravado sem a
+  // conferência) e, terminada a análise — leitura, OCR, gravados e catálogo —, a protocolação segue sozinha se não houver
+  // erro; com erro, para e o rodapé diz o que corrigir.
+  const analiseConcluida = !analisando && !ocrPendenteNoEnvio && catPendentes === 0 && !existentesPendentes;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dispara quando a análise dos restantes termina (o resto é lido na hora).
+  useEffect(() => {
+    if (!protocolarAposAnalise || !analiseConcluida) return;
+    setProtocolarAposAnalise(false);
+    if (podeProtocolar) void protocolar();
+  }, [protocolarAposAnalise, analiseConcluida]);
   const pct = progresso && progresso.total > 0 ? Math.round((progresso.feito / progresso.total) * 100) : 0;
   // GRAVADO × NOVO em massa: os selecionados que sobrescrevem um DFD gravado. Espera a análise e a leitura da assinatura
   // (OCR) — a assinatura achatada é do ARQUIVO e chega depois: escolher antes misturaria as duas versões.
@@ -1179,10 +1213,10 @@ export function ProtocoloUploadForm({
   // Mensagens (erro/atenção/acerto) do DFD aberto — botão + painel lateral (herda o anoPca do protocolo).
   // O DUPLICADO pendente entra no painel também (clicar nele abre a comparação dos duplicados) — a MESMA régua da
   // célula Estado e do rodapé.
-  const msgDupAberto: MensagemDfd | null =
-    abertoIdx >= 0 && dupComp !== "ignora" && dupPendente(abertoIdx)
-      ? { status: dupComp === "bloqueia" ? "erro" : "atencao", chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "duplicados" }
-      : null;
+  const nivelDupAberto = abertoIdx >= 0 ? dupNivel(abertoIdx) : null;
+  const msgDupAberto: MensagemDfd | null = nivelDupAberto
+    ? { status: nivelDupAberto, chave: "protocolo.dfdDuplicado", texto: MSG_DFD_DUPLICADO, ancora: "duplicados" }
+    : null;
   const mensagensAberto = dfdAberto
     ? [
         ...(msgDupAberto ? [msgDupAberto] : []),
@@ -1247,12 +1281,12 @@ export function ProtocoloUploadForm({
     });
   }
   /** IMPORTAÇÃO: os GRAVADOS que os DFDs da análise sobrescrevem, em segundo plano (4 por vez) — a herança e a escolha
-   * ficam prontas antes de abrir/protocolar (a protocolação espera: `carregandoGravados`). */
+   * ficam prontas antes de abrir/protocolar (a protocolação espera: `gravadosEmCarga`). */
   async function carregarGravados(numeros: string[]) {
     const doc = docRef.current;
     const alvos = [...new Set(numeros.map(chaveDfd))].filter((k) => existentesRef.current?.get(k)?.acessivel);
     if (alvos.length === 0) return;
-    setCarregandoGravados(true);
+    setGravadosEmCarga((n) => n + 1);
     const falhas: string[] = [];
     let prox = 0;
     await Promise.all(
@@ -1264,7 +1298,7 @@ export function ProtocoloUploadForm({
       }),
     );
     if (docRef.current !== doc) return;
-    setCarregandoGravados(false);
+    setGravadosEmCarga((n) => Math.max(0, n - 1));
     if (falhas.length > 0)
       setErro(
         `Não foi possível carregar ${falhas.length === 1 ? "o DFD já cadastrado" : `${falhas.length} DFDs já cadastrados`} (${listaCurta(falhas, 10)}) — abra o DFD para tentar de novo; sem ele, ao protocolar vale o novo.`,
@@ -1318,7 +1352,7 @@ export function ProtocoloUploadForm({
     if (!verDuplicados) return;
     for (const j of dupsAberto) {
       // A análise em andamento chega nele (não lê duas vezes); além do teto, lê agora.
-      if (parsed.has(j) || errosParse.has(j) || (analise?.fase === "texto" && j < CAP_ANALISE)) continue;
+      if (parsed.has(j) || errosParse.has(j) || (analise?.fase === "texto" && j < analise.ate)) continue;
       garantirParse(j).catch((e) => setErrosParse((m) => new Map(m).set(j, e instanceof Error ? e.message : "Falha ao ler o DFD.")));
     }
   }, [verDuplicados, abertoIdx, dupsAberto.join(",")]);
@@ -1590,6 +1624,15 @@ export function ProtocoloUploadForm({
 
   async function protocolar() {
     if (!index) return;
+    // NADA FICA PARA TRÁS: DFD do envio ainda sem análise (além do teto) é analisado ANTES de gravar qualquer coisa — a
+    // protocolação segue sozinha ao terminar, se nenhum estiver com erro (senão, para e o rodapé aponta o que corrigir).
+    const semAnalise = index.dfds.findIndex((_, i) => !descartados.has(i) && !parsed.has(i) && !errosParse.has(i));
+    if (semAnalise >= 0 && docRef.current) {
+      setProtocolarAposAnalise(true);
+      if (!reenvio) void carregarGravados(index.dfds.slice(semAnalise).map((d) => d.numero));
+      void analisarTodos(index, docRef.current, semAnalise);
+      return;
+    }
     // REENVIO: confirma a sobrescrita com o resumo do que muda (o que é igual não é regravado).
     const aExcluir = removidos.filter((r) => r.excluir);
     const resumoReenvio = reenvio
@@ -1598,26 +1641,13 @@ export function ProtocoloUploadForm({
         `${capaDiffs.length > 0 ? `, ${capaDiffs.length} campo(s) da capa` : ""}` +
         `${removidos.length > 0 ? `; fora do envio: ${aExcluir.length} excluído(s), ${removidos.length - aExcluir.length} mantido(s)` : ""}`
       : "";
-    // O que NÃO segue (o ADM deixou protocolar assim) — quem protocola vê a lista ANTES e decide: DFDs com erro (não
-    // são gravados) e duplicados sem escolha (do mesmo nº de DFD só o 1º gravável segue).
-    const nums = (l: LinhaDfd[]) => {
-      const ns = l.map((x) => x.numero);
-      return ns.length > 12 ? `${ns.slice(0, 12).join(", ")} e mais ${ns.length - 12}` : ns.join(", ");
-    };
-    // Duplicados sem escolha: do MESMO nº de DFD só um é gravado; do mesmo planejamento (nº diferentes) vão todos.
-    const dupSemEscolha = linhasDfd.filter((l) => dupPendente(l.key));
-    const mesmoNumeroPendente = (i: number) => dupDe(i).some((j) => !descartados.has(j) && mesmoNumero(i, j));
-    const dupNumero = dupSemEscolha.filter((l) => mesmoNumeroPendente(l.key));
-    const dupPlanejamento = dupSemEscolha.filter((l) => !mesmoNumeroPendente(l.key));
-    const avisos = [
-      linhasErro.length > 0 ? `${linhasErro.length} DFD(s) com erro NÃO serão protocolados: ${nums(linhasErro)}.` : "",
-      dupNumero.length > 0 ? `${dupNumero.length} DFD(s) com o MESMO nº sem escolha (${nums(dupNumero)}) — de cada nº só um é gravado.` : "",
+    // Duplicados de mesmo PLANEJAMENTO (nº diferentes) sem escolha, com o ADM deixando seguir: vão TODOS — quem
+    // protocola vê a lista antes (o de mesmo nº nunca chega aqui: sem escolha, é erro e trava).
+    const dupPlanejamento = linhasDfd.filter((l) => dupNivel(l.key) === "atencao").map((l) => l.numero);
+    const avisos =
       dupPlanejamento.length > 0
-        ? `${dupPlanejamento.length} DFD(s) com o mesmo nº de planejamento sem escolha (${nums(dupPlanejamento)}) — serão gravados todos.`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+        ? `${dupPlanejamento.length} DFD(s) com o mesmo nº de planejamento sem escolha (${listaCurta(dupPlanejamento)}) — serão gravados todos.`
+        : "";
     if (
       reenvio &&
       !confirm(
@@ -1627,7 +1657,7 @@ export function ProtocoloUploadForm({
       )
     )
       return;
-    if (!reenvio && avisos && !confirm(`${avisos}\n\nProtocolar os demais DFDs?`)) return;
+    if (!reenvio && avisos && !confirm(`${avisos}\n\nProtocolar?`)) return;
     setImportando(true);
     setErro(null);
     setRelatorio(null);
@@ -1660,56 +1690,22 @@ export function ProtocoloUploadForm({
       if (!res.ok || !pj.ok || !pj.protocoloId) throw new Error(pj.error ?? "Erro ao criar o protocolo.");
       const protocoloId = pj.protocoloId;
 
-      const doc = docRef.current;
       const dfds = index.dfds;
-      const bloqueados: { numero: string; motivo: string }[] = [];
+      // FALHAS de gravação (rede/servidor) — a análise já garantiu que nenhum DFD do envio está com erro: a protocolação
+      // não pula DFD; o que falhar aqui deixa a protocolação INCOMPLETA (o resultado diz como completar).
+      const falhas: { numero: string; motivo: string }[] = [];
       let importados = 0;
       let iguais = 0;
       let excluidos = 0;
-      // Nºs de DFD já GRAVADOS (ou mantidos sem diferença) nesta protocolação: um 2º DFD com o MESMO nº (duplicado sem
-      // escolha — o ADM não bloqueia) nunca sobrescreve o 1º em silêncio.
-      const numerosGravados = new Set<string>();
       for (let i = 0; i < dfds.length; i++) {
-        if (descartados.has(i)) continue; // DFD descartado (duplicado / "manter o existente") — não protocola
+        if (descartados.has(i)) continue; // fora do envio por decisão do usuário (excluído / duplicado / mantido o existente)
         const di = dfds[i];
-        if (numerosGravados.has(chaveDfd(di.numero))) {
-          bloqueados.push({
-            numero: di.numero,
-            motivo: "Outro DFD com o MESMO nº já foi gravado nesta protocolação (duplicado no processo, sem escolha) — compare os duplicados e escolha qual fica.",
-          });
-          continue;
-        }
-        // Mesmo nº numa unidade SEM ACESSO: o servidor recusaria (anti-sequestro) — nem lê (no REENVIO, o
-        // gravado sem diferença é pulado abaixo, como os demais).
-        if (classificar(di.numero) === "semAcesso" && !gravadoDe(di.numero)) {
-          bloqueados.push({ numero: di.numero, motivo: MSG_SEM_ACESSO.texto });
+        const full = parsed.get(i);
+        if (!full) {
+          falhas.push({ numero: di.numero, motivo: "DFD não analisado" });
           continue;
         }
         setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
-        // Usa a cópia EDITADA do cache; senão parseia local (streaming, sem acumular).
-        let full = parsed.get(i) ?? null;
-        if (!full) {
-          if (!doc) break;
-          try {
-            full = prepararDfd(i, await parseDfdDoProtocolo(doc, di, nomeArq), anoPca).dfd;
-          } catch (e) {
-            bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao ler o DFD" });
-            continue;
-          }
-        }
-        // Assinatura achatada de um DFD além do teto da análise: tenta o OCR (uma vez) e mescla.
-        if (precisaOcr(full.assinaturas) && !ocrTentadoRef.current.has(i) && doc) {
-          ocrTentadoRef.current.add(i);
-          setProgresso({ feito: i, total: dfds.length, label: `DFD ${di.numero} — lendo assinatura…` });
-          let ocr: Assinatura[] = [];
-          try {
-            ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
-          } catch {
-            /* OCR é auxiliar — segue sem assinatura (a conferência decide) */
-          }
-          lerOcrNoArquivo(i, ocr); // a base da escolha acompanha a leitura (o histórico não acusa "Assinaturas")
-          full = comOcr(full, ocr).dfd; // + a validação herdada do gravado (reenvio)
-        }
         // REENVIO: DFD sem NENHUMA diferença em relação ao gravado não é regravado (fica como está).
         const gravado = gravadoDe(di.numero);
         if (
@@ -1718,22 +1714,7 @@ export function ProtocoloUploadForm({
           compararDfd(comparavelGravado(gravado), { ...full, reparticaoId: dfdRepIds[i] ?? null, anoPca }).situacao === "igual"
         ) {
           iguais++;
-          numerosGravados.add(chaveDfd(di.numero));
           setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length}) — sem diferença` });
-          continue;
-        }
-        // REENVIO: o gravado de unidade SEM ACESSO que mudou não pode ser regravado daqui.
-        if (classificar(di.numero) === "semAcesso") {
-          bloqueados.push({ numero: di.numero, motivo: MSG_SEM_ACESSO.texto });
-          continue;
-        }
-        // MESMA conferência da tabela (fonte única, com o catálogo quando ele bloqueia): DFD com erro nunca é protocolado.
-        const conf = avaliarLinhaDfd(full, repDe(dfdRepIds[i]), { anoPca, regras, categoria, orgaos, conformidade: confDe(i, full).conf });
-        if (conf.estado === "erro") {
-          bloqueados.push({
-            numero: di.numero,
-            motivo: conf.mensagens.filter((m) => m.status === "erro").map((m) => m.texto).join(" "),
-          });
           continue;
         }
         // SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado / EDITADO antes de gravar → histórico.
@@ -1777,9 +1758,8 @@ export function ProtocoloUploadForm({
             { existia: classificar(di.numero) !== "novo" },
           );
           importados++;
-          numerosGravados.add(chaveDfd(di.numero));
         } catch (e) {
-          bloqueados.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
+          falhas.push({ numero: di.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
         }
         setProgresso({ feito: i + 1, total: dfds.length, label: `DFD ${di.numero} (${i + 1}/${dfds.length})` });
       }
@@ -1793,10 +1773,10 @@ export function ProtocoloUploadForm({
           if (!del.ok || !dj.ok) throw new Error(dj.error ?? `HTTP ${del.status}`);
           excluidos++;
         } catch (e) {
-          bloqueados.push({ numero: r.numero, motivo: `não foi possível excluir (${e instanceof Error ? e.message : "falha"})` });
+          falhas.push({ numero: r.numero, motivo: `não foi possível excluir (${e instanceof Error ? e.message : "falha"})` });
         }
       }
-      setRelatorio({ numero, importados, bloqueados, excluidosDoProtocolo: excluidosDoProtocolo.size, ...(reenvio ? { iguais, excluidos } : {}) });
+      setRelatorio({ numero, importados, falhas, excluidosDoProtocolo: excluidosDoProtocolo.size, ...(reenvio ? { iguais, excluidos } : {}) });
       fechar();
       router.refresh();
       onConcluido?.();
@@ -1855,22 +1835,22 @@ export function ProtocoloUploadForm({
     if (anoPcaBloqueia) return "Defina o PCA do processo para protocolar";
     if (repBloqueia) return "Defina a unidade do processo para protocolar";
     if (!temDfds) return "Sem DFDs — cria só o protocolo.";
-    if (semErroBloqueia) return `${dfdsComErro} DFD(s) com erro`;
-    if (conc.bloqueia) return "Valor da capa diverge da somatória — substitua para liberar";
     if (dupBloqueia) return 'DFD duplicado — abra o DFD e use "Duplicados" para comparar e escolher qual fica';
-    const situacao =
-      dfdsComErro > 0 ? `${dfdsComErro} com erro — não serão protocolados` : temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
-    const cat = catFalhas > 0 ? ` · catálogo não conferido em ${catFalhas} (rede) — o servidor confere ao gravar` : "";
+    if (semErroBloqueia) return `${dfdsComErro} DFD(s) com erro — corrija ou exclua do protocolo para protocolar (nenhum fica para trás)`;
+    if (catFalhas > 0) return `Itens de ${catFalhas} DFD(s) não conferidos no catálogo (rede) — confira de novo para protocolar`;
+    if (conc.bloqueia) return "Valor da capa diverge da somatória — substitua para liberar";
+    const situacao = temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
     const fora = excluidosDoProtocolo.size > 0 ? ` · ${num(excluidosDoProtocolo.size)} excluído(s)` : "";
-    return `${totalDfds} DFD(s)${fora} · ${semRep} sem unidade · ${situacao}${cat}`;
+    return `${totalDfds} DFD(s)${fora} · ${semRep} sem unidade · ${situacao}`;
   })();
   const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
   const numeroAtual = analise?.atual != null ? (index?.dfds[analise.atual]?.numero ?? "") : "";
+  const aoTerminar = protocolarAposAnalise ? " — a protocolação segue ao terminar" : "";
   const rotuloAnalise = !analise
     ? ""
     : analise.fase === "texto"
-      ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`
-      : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…`;
+      ? `Analisando DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…${aoTerminar}`
+      : `Lendo assinatura por OCR — DFD ${numeroAtual} (${analise.feito + 1} de ${analise.total})…${aoTerminar}`;
   // Estado do DFD ABERTO no rodapé = a MESMA régua do painel ao lado (mensagens completas, incl. catálogo, ano do
   // PCA e o duplicado pendente); fora do envio segue "Excluído"/"Descartado".
   const estadoAberto =
@@ -1927,9 +1907,15 @@ export function ProtocoloUploadForm({
       )}
     </>
   );
-  // Resultado da protocolação/sobrescrita (importados, bloqueados; no reenvio: sem diferença e excluídos).
-  const kindResultado = relatorio && relatorio.bloqueados.length > 0 ? "warn" : "ok";
-  const tituloResultado = relatorio ? `Protocolo ${relatorio.numero} ${reenvio ? "sobrescrito" : "salvo"}!` : "";
+  // Resultado da protocolação/sobrescrita (importados; no reenvio: sem diferença e excluídos). Falha de GRAVAÇÃO (rede/
+  // servidor) deixa a protocolação INCOMPLETA: diz quais DFDs não foram gravados e como completar.
+  const incompleta = !!relatorio && relatorio.falhas.length > 0;
+  const kindResultado = incompleta ? "danger" : "ok";
+  const tituloResultado = relatorio
+    ? incompleta
+      ? `Protocolo ${relatorio.numero}: ${reenvio ? "sobrescrita" : "protocolação"} INCOMPLETA`
+      : `Protocolo ${relatorio.numero} ${reenvio ? "sobrescrito" : "salvo"}!`
+    : "";
   const corpoResultado = relatorio && (
     <>
       <p>
@@ -1938,23 +1924,28 @@ export function ProtocoloUploadForm({
         {relatorio.excluidosDoProtocolo ? ` · ${num(relatorio.excluidosDoProtocolo)} excluído(s) na análise (não gravado${relatorio.excluidosDoProtocolo === 1 ? "" : "s"})` : ""}
         {relatorio.iguais != null ? ` · ${num(relatorio.iguais)} sem diferença (mantido${relatorio.iguais === 1 ? "" : "s"})` : ""}
         {relatorio.excluidos != null && relatorio.excluidos > 0 ? ` · ${num(relatorio.excluidos)} gravado(s) excluído(s) (fora do envio)` : ""}
-        {relatorio.bloqueados.length > 0 ? ` · ${relatorio.bloqueados.length} bloqueado(s)` : ""}.
+        {incompleta ? ` · ${num(relatorio.falhas.length)} não gravado(s)` : ""}.
       </p>
-      {relatorio.bloqueados.length > 0 && (
-        <ul className="mt-1.5 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-[12px] opacity-90">
-          {relatorio.bloqueados.map((b) => (
-            <li key={b.numero}>
-              DFD {b.numero}: {b.motivo}
-            </li>
-          ))}
-        </ul>
+      {incompleta && (
+        <>
+          <ul className="mt-1.5 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-[12px] opacity-90">
+            {relatorio.falhas.map((b) => (
+              <li key={b.numero}>
+                DFD {b.numero}: {b.motivo}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[12px] font-medium">
+            Para completar, abra o protocolo na Mesa e use &quot;Reenviar protocolo&quot; com o mesmo PDF.
+          </p>
+        </>
       )}
     </>
   );
   const resultado =
     relatorio &&
     (reenvio ? (
-      <Callout kind={kindResultado} icon={<IconCheck className="h-5 w-5" />}>
+      <Callout kind={kindResultado} icon={incompleta ? <IconAlert className="h-5 w-5" /> : <IconCheck className="h-5 w-5" />}>
         <p className="font-semibold">{tituloResultado}</p>
         <div className="opacity-90">{corpoResultado}</div>
       </Callout>
@@ -1963,7 +1954,7 @@ export function ProtocoloUploadForm({
         kind={kindResultado}
         titulo={tituloResultado}
         onClose={() => setRelatorio(null)}
-        duracao={relatorio.bloqueados.length > 0 ? undefined : 10000}
+        duracao={incompleta ? undefined : 10000}
       >
         {corpoResultado}
       </AvisoFlutuante>
@@ -2246,9 +2237,14 @@ export function ProtocoloUploadForm({
                   <Progress value={pctAnalise} label={rotuloAnalise} />
                 </div>
               ) : (
-                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || !numero.trim() || erroExistentes ? "var(--danger)" : "var(--muted)" }}>
+                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || catFalhas > 0 || !numero.trim() || erroExistentes ? "var(--danger)" : "var(--muted)" }}>
                   {statusTexto}
                 </span>
+              )}
+              {!importando && !analise && catFalhas > 0 && (
+                <Button variant="secondary" size="sm" onClick={reconferirCatalogo} icon={<IconRefresh className="h-4 w-4" />}>
+                  Conferir de novo
+                </Button>
               )}
               <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 {!importando && temRelatorio && (

@@ -762,12 +762,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     BLOQUEANTE** (o ADM pôs um ponto de catálogo em "bloqueia"): a análise do protocolo confere os itens de TODO DFD no
     catálogo (fila, um DFD por vez; linha "Conferindo…", o Protocolar espera) e a linha/despacho usam o veredito
     (`avaliarLinhaDfd(..., { conformidade })`); a fila usa `conferirItensClienteResultado` (distingue FALHA de rede de "nada
-    a conferir"), tenta de novo com espera crescente até `MAX_FALHAS_CATALOGO` (3) e então segue avisando no rodapé; a MESMA
+    a conferir"), tenta de novo com espera crescente até `MAX_FALHAS_CATALOGO` (3) e então TRAVA a protocolação (o servidor
+    recusaria o DFD ao gravar — ficaria para trás) até **"Conferir de novo"** no rodapé (`reconferirCatalogo`); a MESMA
     régua (`catPendenteDe`) na fila, na linha e no botão Protocolar. No padrão (avisa) segue lazy, só no DFD aberto.
     **Leitura do DFD única:** uma por vez (`parseEmCursoRef`), nunca sobrescreve o DFD já no cache (edições) e uma leitura
     que dá certo limpa a falha anterior.
-    **Protocolar com DFD em erro** (quando o ADM deixa — `protocolo.semDfdEmErro` não bloqueia): uma CONFIRMAÇÃO lista
-    antes quais DFDs NÃO serão protocolados (e os duplicados sem escolha); rodapé "N com erro — não serão protocolados".
+    **NADA FICA PARA TRÁS (regra FIXA — `protocolo.semDfdEmErro` só aceita "bloqueia"):** com QUALQUER DFD do envio em
+    erro — o erro é o que a importância de cada ponto de DFD e de ITEM manda bloquear (valor unitário, quantidade, catálogo…
+    agregados no DFD por `avaliarLinhaDfd`) —, o **Protocolar** trava (rodapé "N DFD(s) com erro — corrija ou exclua do
+    protocolo"); a protocolação nunca pula um DFD: só fica fora o que o USUÁRIO tirou do envio (Excluir do protocolo /
+    Manter o existente / escolha do duplicado). DFDs além do teto da análise são analisados ANTES de gravar (ver
+    `CAP_ANALISE`); falha de GRAVAÇÃO (rede/servidor) deixa a protocolação **INCOMPLETA** — o resultado lista os DFDs não
+    gravados e manda completar pelo "Reenviar protocolo".
   - **Protocolo:** assunto por **seleção** (`opcoesAssunto` = atual + categorias fixas + assuntos cadastrados; primitivo
     `CampoSelecao` com cadeado) e, se a capa do PDF veio **sem número**, o número pode ser informado (`numeroEditavel`).
 - **Avaliação CONFIGURÁVEL pelo ADM — IMPORTÂNCIAS gerenciáveis (`avaliacao-core.ts` puro + `avaliacao.ts` loader):**
@@ -810,7 +816,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (global + por-tipo; a categoria é aplicada no cliente e no `POST /api/protocolo`). **Não configurável**
   (estrutural/técnico, permanece travado): integridade de parse, tetos do Zod, acesso/anti-sequestro por repartição,
   **identificadores da capa/DFD imutáveis** (protocolo número/Id/data/ano do PCA; DFD número/planejamento — o TIPO é escolhido por seleção, ver abaixo). **Gates
-  só-cliente** (como hoje): conciliação do valor da capa e "sem DFD com erro".
+  só-cliente** (como hoje): conciliação do valor da capa e "sem DFD com erro" (este FIXO — só "bloqueia").
 - **Trava de PROTOCOLAÇÃO — assuntos + tipos permitidos + liga/desliga dos botões (allow-list, sem migração):** aba
   **"Protocolação"** de `AvaliacaoAdmin` (Configurações → Avaliação). O ADM cadastra **assuntos permitidos**
   (`RegrasAvaliacao.assuntos` = `{id,termo}`; casa por `norm`-contains, como `classificarAssunto`), marca os **tipos de
@@ -908,11 +914,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   PDF (págs.), itens e valor, **"Manter este"** em cada um (troca a escolha a qualquer momento) e "Abrir". Escolher
   descarta os conflitantes (cinza, fora da somatória e da protocolação; "Restaurar" volta) e o ERRO SOME antes de
   protocolar. Um nº mantido por "Manter o existente" que um DFD ATIVO ainda grava não conta duas vezes na somatória.
-  Rede de segurança no `protocolar()`: com o ponto sem bloquear e o duplicado sem escolha, do MESMO nº só o 1º gravável
-  segue — o 2º é relatado, nunca sobrescreve o 1º em silêncio. **O MESMO nº SEMPRE liga** (só um por nº é gravado): com o
-  ponto em "ignorar", a comparação e o "Manter este" seguem para o mesmo nº (só o mesmo planejamento deixa de ligar);
-  "Manter o existente" descarta também as cópias de mesmo nº; a confirmação separa mesmo nº (só um é gravado) × mesmo
-  planejamento (vão todos). Selo por DFD na comparação: **Descartado / Sem escolha / Segue**; "Abrir" não reabre a
+  **O MESMO nº SEMPRE liga e, sem escolha, é SEMPRE ERRO** (só um por nº é gravado — o outro ficaria para trás;
+  `dupNivel`), qualquer que seja o nível do ADM: com o ponto em "ignorar", a comparação e o "Manter este" seguem para o
+  mesmo nº (só o mesmo planejamento deixa de ligar); "Manter o existente" descarta também as cópias de mesmo nº; o mesmo
+  PLANEJAMENTO (nº diferentes) segue o ponto — em "avisa", vão todos, com a confirmação listando-os antes. Selo por DFD na comparação: **Descartado / Sem escolha / Segue**; "Abrir" não reabre a
   comparação por cima (celular).
   **EXCLUIR DFDs do protocolo NA ANÁLISE (antes de protocolar):** botão **"Excluir do protocolo"** no rodapé do banner do DFD
   (`DfdRodape.acoes`) e EM MASSA na seleção (`BarraSelecaoDfds.acoes`). O DFD excluído fica FORA DO ENVIO — estado
@@ -1010,8 +1015,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **continuação (wrap)**, e uma linha só da coluna DIREITA é **pulada** — capturando o valor INTEIRO. Sem geometria
   (Node/testes) cai no regex de 1 linha. Validado no `Protocolo 4.pdf` real (Interessado/Observação completos). (2) ao **Protocolar**, DFD a DFD: `parseDfdDoProtocolo`
   (parse completo — matcher **O(n log n)**) → `faltasObrigatorias` → `enviarDfdEmLotes` (start-dfd/append) → descarta.
-  Barra de **progresso** + **relatório final** (importados / bloqueados com motivo); **defeituoso nunca é
-  protocolado**. `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
+  Barra de **progresso** + **relatório final** (importados; falha de gravação = INCOMPLETA, com os DFDs não gravados);
+  **defeituoso nunca é protocolado** (trava o Protocolar — nada é pulado). `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
   `protocolo.ts` (`iniciarProtocolo` = `POST /api/protocolo` `start-protocolo`; totais **ao vivo**), `GET`/`DELETE
   /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular — na Mesa pelo `SeletorBusca`, com pesquisa). UI na **aba Protocolos** de `DfdsView`
   (`ProtocoloUploadForm` → banner: metadados + **repartição do protocolo pelo Interessado** + tabela dos DFDs (sempre
@@ -1023,8 +1028,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   em background até `CAP_ANALISE=300`, **cacheando o parse por índice** (`Map<idx, DfdParseado>`) para as **edições
   sobreviverem** ao envio (a análise NÃO re-parseia/sobrescreve um DFD que o usuário já abriu ou editou em massa —
   `parsedRef` —, mas ainda prevê a unidade e põe na fila do OCR a partir da cópia do cache);
-  `protocolar` usa a cópia do cache e só re-parseia o que faltou. **Progresso REAL da análise:** `analise =
-  {fase:"texto"|"ocr", feito, total, atual}` → barra `Progress` no rodapé ("Analisando DFD 1234 (3 de 15)…" /
+  `protocolar` grava a cópia do cache — com DFDs do envio ainda SEM análise (além do teto), analisa os restantes ANTES
+  (`analisarTodos(…, de)`: a MESMA leitura, OCR, herança e catálogo; os gravados deles em `carregarGravados`) e, ao
+  terminar, protocola sozinho se nada estiver com erro (`protocolarAposAnalise`; o rodapé avisa "a protocolação segue ao
+  terminar"). **Progresso REAL da análise:** `analise = {fase:"texto"|"ocr", feito, total, atual, ate}` → barra `Progress` no rodapé ("Analisando DFD 1234 (3 de 15)…" /
   "Lendo assinatura por OCR — DFD …") e, por linha, `LinhaDfd.processando` ("Lendo o DFD…"/"Lendo assinatura
   (OCR)…"/"Na fila", com spinner na célula Estado); a leitura do PDF (índice) mostra "Página p de N"
   (`indexarProtocoloPdf(file, onProgresso)`). Corpo do banner = `ProtocoloView` (corpo ÚNICO, ver abaixo). **Capa: identificadores IMUTÁVEIS, conteúdo editável (cadeado por campo) + conferência do valor:** os
@@ -1049,9 +1056,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ver "BARRA DA MESA"); no protocolo ele é **dividido ao meio** (soltar/escolher o PDF **|** criar protocolo manualmente). Isso libera espaço para as tabelas: as de **DFDs/Protocolos**
   (telas DFD e PCA) usam `DataTable fillHeight` (linhas por página automáticas p/ preencher a altura do display no
   desktop, sem scroll do navegador); as demais tabelas ficam em **≤20 linhas/página**.
-- **Protocolação bloqueada com DFD defeituoso:** o botão "Protocolar" fica **desabilitado** enquanto algum DFD estiver
-  com **erro** (ou ainda analisando) — não se protocola um processo com DFDs defeituosos (o `POST` segue validando por
-  garantia). Estado **"regularizado automaticamente" = verde** (`estadoCor`).
+- **Protocolação bloqueada com DFD defeituoso (SEMPRE — nada fica para trás):** o botão "Protocolar" fica **desabilitado**
+  enquanto algum DFD do envio estiver com **erro** (por um ponto de DFD ou de ITEM cuja importância bloqueia), ainda em
+  análise, com a assinatura em leitura ou com o catálogo sem conferir — não se protocola um processo com DFDs defeituosos
+  nem se deixa DFD/item para trás (o `POST` segue validando por garantia). Estado **"regularizado automaticamente" = verde** (`estadoCor`).
   **Tabela ÚNICA de DFDs — `PlanilhaDfds` (`src/components/PlanilhaDfds.tsx`):** o MESMO componente lista DFDs em
   TODO lugar — banner de importação, banner do protocolo GRAVADO (`ProtocoloView`) e a **aba DFDs** (`DfdsView`). Cada
   tela mapeia seus dados (parse do PDF / D1) para o modelo `LinhaDfd`. Colunas: **[seleção] · Estado · [Situação] · Nº
