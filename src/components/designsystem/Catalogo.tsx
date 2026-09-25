@@ -108,6 +108,7 @@ import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/H
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
 import { MolduraBloco, PaletaBlocos } from "@/components/BlocosTarefa";
+import { NavTarefas } from "@/components/TarefasView";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
 import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
@@ -1844,6 +1845,7 @@ function TarefasDemo() {
         <QuadroCard href="#" quadro={{ id: 1, grupoId: 1, grupoNome: "Planejamento", nome: "Planejamento do PCA 2027", cor: "#6366f1", descricao: null, arquivado: false, abertas: 12, atrasadas: 3, concluidas: 40 }} />
         <QuadroNovoCard onClick={() => {}} />
       </div>
+      <NavTarefas atual="quadros" />
       <div className="flex flex-wrap items-center gap-2">
         <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} />
       </div>
@@ -3071,7 +3073,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (Mês com faixas início → prazo · Semana · Agenda; reagendar arrastando; mini-grade no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), NavTarefas (Quadros | Calendário), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (Mês com faixas início → prazo · Semana · Agenda; reagendar arrastando; mini-grade no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

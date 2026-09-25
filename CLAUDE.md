@@ -112,7 +112,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
   **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
-  rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas`.
+  rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o menu lateral soma o **Calendário** — `NAV_CALENDARIO`, com a permissão de Tarefas).
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
   `/api/protocolos*`, `lib/protocolos.ts`) foram REMOVIDOS — `/painel` é só a PORTA DE ENTRADA (redirect no servidor
   para `rotaInicial`: a 1ª aba liberada — a Mesa; sem nenhuma, o Perfil, que AVISA — `PerfilView.semModulos`) e o link
@@ -1930,12 +1930,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     sob o ponteiro destaca; `reagendar` puro — o início anda junto, mesma duração) → `PATCH` otimista, volta se falhar.
     Cabeçalho: ←/→ (mês ou semana), Hoje, os NÚMEROS (atrasadas · hoje · nesta semana · sem prazo — `contadoresCalendario`)
     e a legenda do semáforo. `semanaDe`/`fimDeSemana`/`lerMes`/`somarMes`/`textoMes` puros e testados.
-  - **Tela Calendário de TODOS os quadros** (`/painel/tarefas?aba=calendario&mes=AAAA-MM`): `TarefasView` virou `AbasEspaco`
-    **Quadros | Calendário** (o servidor monta só a ativa). **`CalendarioQuadros`**: o MESMO `CalendarioTarefas` com a COR de
-    cada quadro (faixa; o semáforo vira o ponto) + legenda, os `FiltrosTarefas` + o filtro de **Quadro**; o mês vem do
-    servidor (`carregarCalendario` → `tarefasDoCalendario` — a grade do mês, sem ids em lista; `contadoresDosQuadros`;
-    `etiquetasDosQuadros`). Tocar abre a tarefa no quadro (`?aba=calendario&tarefa=`); "+" num dia escolhe o quadro e abre lá
-    a tarefa nova (`?prazo=AAAA-MM-DD` → `QuadroTarefas.prazoInicial`); arrastar reagenda.
+  - **Tela CALENDÁRIO de TODOS os quadros — ITEM DO MENU** (`/painel/calendario?mes=AAAA-MM`; `NAV_CALENDARIO` em
+    `navModulos.ts`, logo depois de Tarefas no menu lateral e na gaveta do celular — mesma permissão, a aba `tarefas`; fora da
+    barra inferior). **`NavTarefas`** (`TarefasView.tsx`, `Segmented` Quadros | Calendário) liga as duas telas (no celular é
+    o caminho a partir de Tarefas); o antigo `/painel/tarefas?aba=calendario` redireciona. **`CalendarioQuadros`**: o MESMO
+    `CalendarioTarefas` com a COR de cada quadro (faixa; o semáforo vira o ponto) + legenda, os `FiltrosTarefas` + o filtro
+    de **Quadro**; o mês vem do servidor (`carregarCalendario` → `tarefasDoCalendario` — a grade do mês, sem ids em lista;
+    `contadoresDosQuadros`; `etiquetasDosQuadros`). Tocar abre a tarefa no quadro (`?aba=calendario&tarefa=`); "+" num dia
+    escolhe o quadro e abre lá a tarefa nova (`?prazo=AAAA-MM-DD` → `QuadroTarefas.prazoInicial`); arrastar reagenda.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

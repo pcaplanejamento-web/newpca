@@ -37,7 +37,7 @@ export type DadosCalendarioQuadros = {
 };
 
 /**
- * CALENDÁRIO de TODOS os quadros do grupo (`/painel/tarefas?aba=calendario`): o MESMO `CalendarioTarefas` do quadro, com
+ * CALENDÁRIO de TODOS os quadros do grupo (`/painel/calendario`, item do menu): o MESMO `CalendarioTarefas` do quadro, com
  * as tarefas de cada quadro na COR dele (legenda), os filtros do quadro (`FiltrosTarefas`) + o filtro de QUADRO. O mês vem
  * do servidor (`?mes=`). Tocar numa tarefa abre-a no quadro dela; "+" num dia escolhe o quadro (se houver mais de um) e
  * abre lá a tarefa nova com aquele prazo; arrastar para outro dia REAGENDA (otimista).
@@ -63,7 +63,7 @@ export function CalendarioQuadros({ dados, usuarioId }: { dados: DadosCalendario
   );
   const q = quadro != null ? porId.get(quadro) : undefined;
 
-  const irMes = (m: { ano: number; mes: number }) => iniciar(() => router.push(`/painel/tarefas?aba=calendario&mes=${textoMes(m.ano, m.mes)}`, { scroll: false }));
+  const irMes = (m: { ano: number; mes: number }) => iniciar(() => router.push(`/painel/calendario?mes=${textoMes(m.ano, m.mes)}`, { scroll: false }));
   const abrirNova = (dia: string, quadroId: number) => router.push(`/painel/tarefas/${quadroId}?aba=calendario&prazo=${dia}`);
   const reagendarTarefa = async (t: TarefaCalendario & { quadroId: number }, dia: string) => {
     const antes = tarefas;

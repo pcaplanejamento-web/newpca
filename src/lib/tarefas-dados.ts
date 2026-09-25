@@ -22,29 +22,24 @@ export async function carregarQuadros(u: UsuarioSessao) {
 }
 
 /**
- * O CALENDÁRIO de TODOS os quadros (`/painel/tarefas?aba=calendario&mes=AAAA-MM`): as tarefas da grade do mês (as
- * semanas inteiras) dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo, todos), as etiquetas deles (filtro) e as
- * PESSOAS responsáveis. Só a aba ativa é montada — a lista de quadros não carrega nada disto.
+ * O CALENDÁRIO de TODOS os quadros (`/painel/calendario?mes=AAAA-MM`): as tarefas da grade do mês (as semanas inteiras)
+ * dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo, todos), as etiquetas deles (filtro), os NÚMEROS do cabeçalho
+ * e as PESSOAS responsáveis.
  */
 export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
-  const { quadros, grupoAtivo, modelos } = await carregarQuadros(u);
+  const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const mes = lerMes(mesPedido, hoje);
   const grade = gradeMes(mes.ano, mes.mes);
-  const ativos = quadros.filter((q) => !q.arquivado);
-  const ids = ativos.map((q) => q.id);
+  const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
+  const ids = quadros.map((q) => q.id);
   const [tarefas, etiquetas, contadores] = await Promise.all([
     tarefasDoCalendario(ids, grade[0][0], grade.at(-1)?.[6] ?? grade[0][6]),
     etiquetasDosQuadros(ids),
     contadoresDosQuadros(ids, hoje, semanaDe(hoje)[6]),
   ]);
   const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
-  return {
-    quadros,
-    grupoAtivo,
-    modelos,
-    calendario: { tarefas, contadores, mes, hoje, etiquetas, pessoas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })) },
-  };
+  return { tarefas, contadores, mes, hoje, etiquetas, pessoas, quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })) };
 }
 
 /**

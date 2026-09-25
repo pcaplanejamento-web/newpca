@@ -1014,7 +1014,7 @@ chips, abas curtas no celular e alvos de 44px — validado de 360 a 1920px.
 o lugar ou toque para acrescentar, reordene pela alça ou ↑/↓; **anexos removidos** (os links viraram blocos Link); o
 **checklist** ficou otimista e em fila (sem gravação dupla no Enter/Esc, toques rápidos consistentes) e existe já na tarefa
 nova; **calendário profissional** (Mês com faixas início → prazo · Semana · Agenda, reagendar arrastando, números do
-período, legenda, teclado, mini-grade no celular) e a **tela Calendário** em Tarefas com as tarefas de TODOS os quadros do
+período, legenda, teclado, mini-grade no celular) e a tela **Calendário** — item próprio do menu (`/painel/calendario`) — com as tarefas de TODOS os quadros do
 grupo (cor de cada quadro, filtros + filtro de quadro, criar num dia escolhendo o quadro).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

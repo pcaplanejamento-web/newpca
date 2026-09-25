@@ -5,13 +5,12 @@ import { useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
-import { AbasEspaco } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { CalendarioQuadros, type DadosCalendarioQuadros } from "./CalendarioQuadros";
 import { SelectField } from "./Field";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
+import { Segmented } from "./Segmented";
 import { CamposQuadro, type CamposQuadroValor, QuadroCard, QuadroNovoCard } from "./QuadroCard";
 
 const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
@@ -19,29 +18,30 @@ const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 /** Um MODELO de quadro que o "Novo quadro" pode usar (as listas, para a prévia). */
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
 
-export type AbaTarefas = "quadros" | "calendario";
+/**
+ * QUADROS | CALENDÁRIO — a troca entre as duas telas de Tarefas (`/painel/tarefas` e `/painel/calendario`, também no menu
+ * lateral). No celular é o caminho para o Calendário (a barra inferior não o tem).
+ */
+export function NavTarefas({ atual }: { atual: "quadros" | "calendario" }) {
+  const router = useRouter();
+  return (
+    <Segmented<"quadros" | "calendario">
+      ariaLabel="Tarefas"
+      value={atual}
+      onChange={(v) => v !== atual && router.push(v === "quadros" ? "/painel/tarefas" : "/painel/calendario")}
+      options={[
+        { value: "quadros", label: "Quadros" },
+        { value: "calendario", label: "Calendário" },
+      ]}
+    />
+  );
+}
 
 /**
- * Módulo TAREFAS — duas abas (`AbasEspaco`; o servidor monta só a ativa): **Quadros** = os quadros do grupo ativo (cards
- * 4:5) + o card "+" (editor) que cria um quadro (em branco ou de um MODELO) no grupo ativo e o ABRE; **Calendário** = as
- * tarefas de TODOS os quadros do grupo num calendário só (`CalendarioQuadros`). 100% design-system.
+ * Módulo TAREFAS — os QUADROS do grupo ativo (cards 4:5) + o card "+" (editor) que cria um quadro (em branco ou de um
+ * MODELO) no grupo ativo e o ABRE; `NavTarefas` leva ao Calendário de todos os quadros. 100% design-system.
  */
-export function TarefasView({
-  aba,
-  quadros,
-  podeCriar,
-  modelos = [],
-  calendario,
-  usuarioId,
-}: {
-  aba: AbaTarefas;
-  quadros: QuadroCardDados[];
-  podeCriar: boolean;
-  modelos?: ModeloQuadroOpcao[];
-  /** Os dados da aba Calendário (só quando ela é a ativa). */
-  calendario?: DadosCalendarioQuadros;
-  usuarioId: number;
-}) {
+export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: QuadroCardDados[]; podeCriar: boolean; modelos?: ModeloQuadroOpcao[] }) {
   const router = useRouter();
   const [novo, setNovo] = useState<CamposQuadroValor | null>(null);
   const [modeloId, setModeloId] = useState("");
@@ -80,16 +80,8 @@ export function TarefasView({
         </p>
       </div>
 
-      <AbasEspaco<AbaTarefas>
-        aba={aba}
-        opcoes={[
-          { value: "quadros", label: "Quadros" },
-          { value: "calendario", label: "Calendário" },
-        ]}
-      >
-      {aba === "calendario" && calendario ? (
-        <CalendarioQuadros dados={calendario} usuarioId={usuarioId} />
-      ) : quadros.length === 0 && !podeCriar ? (
+      <NavTarefas atual="quadros" />
+      {quadros.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum quadro de tarefas neste grupo.</p>
@@ -102,7 +94,6 @@ export function TarefasView({
           {podeCriar && <QuadroNovoCard onClick={() => setNovo(NOVO)} />}
         </div>
       )}
-      </AbasEspaco>
 
       <Modal
         open={novo != null}
