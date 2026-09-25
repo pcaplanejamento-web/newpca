@@ -996,6 +996,9 @@ cada número (`TabelaCruzada` + `orcamento-cruzamento.ts`).
 ✅ **Comparativo — ajustes salvos:** visual minimalista; largura de cada coluna pela borda do cabeçalho (toque também);
 ordenar por qualquer coluna; painel "Colunas" para ocultar, fixar/desfixar (uma a uma ou todas) e ordenar as colunas;
 ajustes salvos na conta do usuário por par de colunas (migração `0040`, `preferencias_tabela`).
+✅ **Comparativo — edição na própria planilha:** botão "Editar" liga o modo de edição; o cabeçalho de cada coluna (inclusive
+Sigla e Total) abre o menu — ordenar, congelar/descongelar, mover, ocultar/mostrar, largura padrão —, a borda ajusta a
+largura e "Salvar" grava o layout (o antigo painel "Colunas" saiu).
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

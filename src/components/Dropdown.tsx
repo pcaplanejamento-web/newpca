@@ -15,6 +15,7 @@ export function Dropdown({
   panelClassName = "",
   width,
   ariaLabel,
+  className = "inline-block max-w-full",
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
@@ -23,6 +24,8 @@ export function Dropdown({
   panelClassName?: string;
   width?: number;
   ariaLabel?: string;
+  /** Classe do invólucro (padrão: em linha). Ex.: `block w-full` para o gatilho ocupar a célula. */
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
@@ -90,7 +93,7 @@ export function Dropdown({
   }, [open]);
 
   return (
-    <div className="inline-block max-w-full">
+    <div className={className}>
       <button
         ref={triggerRef}
         type="button"

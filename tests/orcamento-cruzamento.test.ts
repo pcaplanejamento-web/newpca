@@ -16,6 +16,7 @@ import {
   MAX_COLUNAS_CRUZAMENTO,
   matrizCruzamento,
   medidaOrcamento,
+  moverColuna,
   ordenarLinhas,
   percentual,
   permissoesColunas,
@@ -173,5 +174,27 @@ describe("orcamento-cruzamento", () => {
     assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "a b/../", valor: {} }).success);
     assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "x", valor: { g: "a".repeat(40_000) } }).success);
     assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "x", valor: [1] }).success);
+  });
+
+  it("edição da planilha: ordem MANUAL, mover coluna, Sigla/Total soltas, calor e zerados", () => {
+    const c = cruzar(L, "unidade", "nomeElemento", "inicial");
+    const [aux, dia, obr] = c.colunas.map((x) => x.chave);
+    const nova = moverColuna([aux, dia, obr], obr, -1);
+    assert.deepEqual(nova, [aux, obr, dia]);
+    assert.deepEqual(moverColuna(nova, aux, -1), nova, "não sai da ponta");
+    const r = reordenarColunas(c, "manual", [], [obr, aux]);
+    assert.deepEqual(
+      r.colunas.map((x) => x.rotulo),
+      ["OBRAS", "AUXÍLIOS", "DIÁRIAS"],
+      "fora da lista vai ao fim",
+    );
+    assert.deepEqual(r.linhas.find((l) => l.rotulo === "10 - SEMUS")?.valores, [0, 50, 100]);
+    const l = coerceLayout({ ordemColunas: "manual", ordemManual: [obr], soltas: [COL_TOTAL, "x"], calor: true, zerados: false });
+    assert.equal(l.ordemColunas, "manual");
+    assert.deepEqual(l.ordemManual, [obr]);
+    assert.deepEqual(l.soltas, [COL_TOTAL], "só Sigla/Total podem ser soltas");
+    assert.equal(l.calor, true);
+    assert.equal(l.zerados, false);
+    assert.equal(LAYOUT_PADRAO.zerados, true, "o padrão oculta os zerados");
   });
 });

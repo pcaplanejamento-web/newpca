@@ -701,9 +701,14 @@ function DashboardMesaDemo() {
 /** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
 /** Clique numa fatia → ORIGEM DOS DADOS (o mesmo banner do Orçamento do PCA, dos gráficos do Dashboard e da Mesa). */
 function TabelaCruzadaDemo() {
+  const [editar, setEditar] = useState(false);
   const [larguras, setLarguras] = useState<Record<string, number>>({});
+  const [fixadas, setFixadas] = useState<string[]>(["dia"]);
+  const [ocultas, setOcultas] = useState<string[]>([]);
+  const [soltas, setSoltas] = useState<string[]>([]);
   const [ordem, setOrdem] = useState<OrdemCruzamento>({ por: "rotulo", desc: false });
   const [modo, setModo] = useState<ModoCruzamento>("valor");
+  const alterna = (set: (f: (l: string[]) => string[]) => void, k: string) => set((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
   const colunas = [
     { chave: "aux", rotulo: "AUXÍLIO FARDAMENTO", total: 495_000 },
     { chave: "dia", rotulo: "DIÁRIAS - PESSOAL CIVIL", total: 4_237_500 },
@@ -739,10 +744,11 @@ function TabelaCruzadaDemo() {
           onChange={setModo}
           options={[
             { value: "valor", label: "R$" },
-            { value: "linha", label: "% da linha" },
-            { value: "total", label: "% do total" },
+            { value: "linha", label: "% linha" },
+            { value: "total", label: "% total" },
           ]}
         />
+        <Checkbox checked={editar} onChange={(e) => setEditar(e.target.checked)} label="Editar a planilha" />
       </div>
       <div className="h-80 [&>div]:!h-full">
         <TabelaCruzada
@@ -754,17 +760,29 @@ function TabelaCruzadaDemo() {
           formatar={brl}
           modo={modo}
           calor
-          fixadas={["dia"]}
+          fixadas={fixadas}
           larguras={larguras}
-          onLargura={(k, px) =>
-            setLarguras((l) => {
-              const { [k]: _, ...resto } = l;
-              return px == null ? resto : { ...resto, [k]: Math.max(56, Math.round(px)) };
-            })
-          }
+          ocultas={ocultas}
+          soltas={soltas}
           ordem={ordem}
-          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra" }))}
-          onAbrir={() => {}}
+          onOrdenar={(por, desc) =>
+            setOrdem((o) => ({ por, desc: desc ?? (JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra") }))
+          }
+          onAbrir={editar ? undefined : () => {}}
+          edicao={
+            editar
+              ? {
+                  onLargura: (k, px) =>
+                    setLarguras((l) => {
+                      const { [k]: _, ...resto } = l;
+                      return px == null ? resto : { ...resto, [k]: Math.max(56, Math.round(px)) };
+                    }),
+                  onFixar: (k) => (k.startsWith("__") ? alterna(setSoltas, k) : alterna(setFixadas, k)),
+                  onOcultar: (k) => alterna(setOcultas, k),
+                  onMover: () => {},
+                }
+              : undefined
+          }
           vazio="Nenhum lançamento."
           resumo="3 linhas × 4 colunas"
         />
@@ -1977,7 +1995,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; largura pela borda do cabeçalho, ordenar em qualquer cabeçalho, colunas congeladas, % e mapa de calor) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
+      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; no modo EDIÇÃO o cabeçalho de cada coluna, inclusive Sigla e Total, abre o menu e a borda ajusta a largura) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">

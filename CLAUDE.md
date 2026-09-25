@@ -1635,16 +1635,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das linhas, sem dados, mais de
   `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1); inverter linhas × colunas; MEDIDA; VISÃO
   salva; R$ ou % da linha/coluna/total; busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
-  tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número). **AJUSTES** (por PAR de colunas
-  ligadas): **largura** de QUALQUER coluna arrastando a borda do cabeçalho (mouse/toque; ←/→ no teclado; duplo clique =
-  padrão; `LARGURA_MIN`–`LARGURA_MAX`), **ordenar** as linhas pelo cabeçalho de QUALQUER coluna (rótulo, Sigla, Total ou
-  valores), e no painel **"Colunas"** (`Modal`): **ocultar** colunas (uma a uma, todas ou mostrar todas — inclusive
-  Sigla/Total), **fixar/desfixar** (uma a uma ou TODAS — as fixadas vão para a esquerda; as que não cabem na largura
-  visível deixam de congelar, nunca somem), a **ordem das colunas** (A–Z · Z–A · maior/menor total), larguras padrão,
-  mapa de calor e ocultar zerados. Os ajustes ficam num RASCUNHO ("Ajustes não salvos" no rodapé) e o usuário **SALVA**
-  na conta dele — tabela **`preferencias_tabela`** (migração **`0040`**, aditiva: `usuario_id` + `chave` única + `valor`
-  JSON; `preferencias-tabela.ts`; `PUT`/`DELETE /api/preferencias/tabela`, `exigirUsuario`, `preferencias-validation.ts`
-  com teto de 32 KB) com a chave `chaveLayoutComparativo(linha, coluna)`; "Padrão" apaga o salvo. O layout lido é
+  tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número); tocar num cabeçalho ordena as linhas SÓ
+  na vista. **EDIÇÃO NA PRÓPRIA PLANILHA (por PAR de colunas ligadas):** o botão **"Editar"** liga o modo de edição
+  (`TabelaCruzada.edicao`; as colunas ligadas travam, a origem dos números pausa): o cabeçalho de CADA coluna — **inclusive
+  Sigla e Total** — abre o menu (`Dropdown`, itens de 44px no toque): ordenar (crescente/decrescente), **congelar/
+  descongelar** (Sigla e Total congelam por padrão no desktop — `soltas`), **mover** para a esquerda/direita (entre as
+  congeladas muda a ordem delas; nas demais vira a ordem MANUAL — `moverColuna`/`ordemManual`), **ocultar/mostrar** (as
+  ocultas aparecem ESMAECIDAS para voltar) e largura padrão; a **borda do cabeçalho** ajusta a largura (arrastar com
+  mouse/toque, ←/→, duplo clique = padrão; `LARGURA_MIN`–`LARGURA_MAX`). A barra de edição traz a ordem das colunas (A–Z ·
+  Z–A · maior/menor total · Manual), mapa de calor, ocultar zerados, congelar/descongelar todas, mostrar todas, larguras
+  padrão, **Padrão**, **Cancelar** (descarta; confirma se mudou) e **Salvar** — grava o layout (`LayoutCruzamento`:
+  larguras, fixadas, ocultas, soltas, ordem das linhas e das colunas, ordem manual, calor, zerados) na conta do usuário:
+  tabela **`preferencias_tabela`** (migração **`0040`**, aditiva: `usuario_id` + `chave` única + `valor` JSON;
+  `preferencias-tabela.ts`; `PUT`/`DELETE /api/preferencias/tabela`, `exigirUsuario`, `preferencias-validation.ts` com teto
+  de 32 KB) com a chave `chaveLayoutComparativo(linha, coluna)`; salvar o layout IGUAL ao padrão apaga o salvo. O layout lido é
   normalizado por `coerceLayout` (qualquer JSON → válido; `layoutIgual` compara pelo conteúdo). Núcleo PURO
   **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
   `reordenarColunas`/`lancamentosDoRecorte`/`matrizCruzamento`/`coerceLayout`, testado; o CUBO real = 39 unidades × 36
@@ -1877,8 +1881,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
-  **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — largura pela borda do cabeçalho, ordenação em
-  qualquer cabeçalho, colunas congeladas, %, mapa de calor e origem de cada número; o Comparativo do orçamento),
+  **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
+  de calor e origem de cada número; com `edicao`, a própria planilha vira o editor: menu por coluna, inclusive Sigla e
+  Total, e largura pela borda; o Comparativo do orçamento), `Dropdown` (`className` = invólucro, ex.: `block w-full`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

@@ -180,14 +180,18 @@ export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento, extraDe?: (
   return [...c.linhas].sort((a, b) => sinal * (chave(a) - chave(b)) || colator.compare(a.rotulo, b.rotulo));
 }
 
-/** Ordem das COLUNAS: pelo rótulo (A–Z / Z–A) ou pelo total (maior / menor primeiro). */
-export type OrdemColunas = "rotulo" | "rotulo-desc" | "total-desc" | "total-asc";
+/** Ordem das COLUNAS: pelo rótulo (A–Z / Z–A), pelo total (maior / menor primeiro) ou MANUAL (a lista que o usuário
+ * montou movendo as colunas; as que não estão nela vão ao fim, A–Z). */
+export type OrdemColunas = "rotulo" | "rotulo-desc" | "total-desc" | "total-asc" | "manual";
 
 /** Reordena as colunas e tira as OCULTAS (os `valores` das linhas acompanham; os totais seguem os do cruzamento). */
-export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: string[] = []): Cruzamento {
+export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: string[] = [], manual: string[] = []): Cruzamento {
   const fora = new Set(ocultas);
   const idx = c.colunas.map((_, j) => j).filter((j) => !fora.has(c.colunas[j].chave));
+  const pos = new Map(manual.map((k, i) => [k, i]));
+  const naLista = (j: number) => pos.get(c.colunas[j].chave) ?? Number.POSITIVE_INFINITY;
   const cmp: Record<OrdemColunas, (a: number, b: number) => number> = {
+    manual: (a, b) => naLista(a) - naLista(b) || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
     rotulo: (a, b) => colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
     "rotulo-desc": (a, b) => colator.compare(c.colunas[b].rotulo, c.colunas[a].rotulo),
     "total-desc": (a, b) => c.colunas[b].total - c.colunas[a].total || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
@@ -208,18 +212,47 @@ export const LARGURA_MAX = 640;
  * ordem das linhas e a das colunas. */
 export type LayoutCruzamento = {
   larguras: Record<string, number>;
+  /** Colunas de VALORES congeladas (na ordem). */
   fixadas: string[];
+  /** Colunas ocultas (inclusive `COL_EXTRA`/`COL_TOTAL`). */
   ocultas: string[];
+  /** Sigla/Total DESCONGELADAS (por padrão ficam congeladas no desktop). */
+  soltas: string[];
   ordemLinhas: OrdemCruzamento;
   ordemColunas: OrdemColunas;
+  /** A ordem MANUAL das colunas (vale com `ordemColunas: "manual"`). */
+  ordemManual: string[];
+  calor: boolean;
+  /** Ocultar linhas e colunas zeradas. */
+  zerados: boolean;
 };
 
-export const LAYOUT_PADRAO: LayoutCruzamento = { larguras: {}, fixadas: [], ocultas: [], ordemLinhas: { por: "rotulo", desc: false }, ordemColunas: "rotulo" };
+export const LAYOUT_PADRAO: LayoutCruzamento = {
+  larguras: {},
+  fixadas: [],
+  ocultas: [],
+  soltas: [],
+  ordemLinhas: { por: "rotulo", desc: false },
+  ordemColunas: "rotulo",
+  ordemManual: [],
+  calor: false,
+  zerados: true,
+};
+
+/** Move a coluna `chave` uma posição (−1 = esquerda, +1 = direita) na ordem EXIBIDA — devolve a nova ordem manual. */
+export function moverColuna(ordemExibida: string[], chave: string, delta: -1 | 1): string[] {
+  const i = ordemExibida.indexOf(chave);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= ordemExibida.length) return ordemExibida;
+  const nova = [...ordemExibida];
+  [nova[i], nova[j]] = [nova[j], nova[i]];
+  return nova;
+}
 
 /** A chave do layout salvo do Comparativo — um por PAR de colunas ligadas (as colunas mudam com o par). */
 export const chaveLayoutComparativo = (linha: DimensaoOrcamento, coluna: DimensaoOrcamento) => `orcamento-comparativo:${linha}:${coluna}`;
 
-const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "rotulo-desc", "total-desc", "total-asc"];
+const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "rotulo-desc", "total-desc", "total-asc", "manual"];
 const listaChaves = (v: unknown) =>
   Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 300))].slice(0, 500) : [];
 
@@ -244,8 +277,12 @@ export function coerceLayout(v: unknown): LayoutCruzamento {
     larguras,
     fixadas: listaChaves(o.fixadas),
     ocultas: listaChaves(o.ocultas),
+    soltas: listaChaves(o.soltas).filter((k) => k === COL_EXTRA || k === COL_TOTAL),
     ordemLinhas: { por, desc: ol?.desc === true },
     ordemColunas: ORDENS_COLUNAS.includes(o.ordemColunas as OrdemColunas) ? (o.ordemColunas as OrdemColunas) : "rotulo",
+    ordemManual: listaChaves(o.ordemManual),
+    calor: o.calor === true,
+    zerados: o.zerados !== false,
   };
 }
 
