@@ -12,11 +12,12 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { IconChevronLeft, IconTrash } from "./icons";
 
-export type AbaOrcamento = "lancamentos" | "vinculos" | "visoes";
+export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
 
 /**
  * TELA DO ORÇAMENTO (`/painel/orcamento/[id]`) — aberta pelo card. Enxuta, usando a largura toda: UMA linha de
- * cabeçalho (voltar · nome · ano · indicadores · excluir — só o ícone) e a barra das abas **Lançamentos · Vínculos · Visões** com as
+ * cabeçalho (voltar · nome · ano · indicadores · excluir — só o ícone) e a barra das abas **Lançamentos · Comparativo · Vínculos ·
+ * Visões** com as
  * ferramentas da aba à direita (`AbasEspaco` + `FerramentasAba`; o servidor monta SÓ a aba ativa).
  */
 export function OrcamentoEspacoView({
@@ -97,6 +98,7 @@ export function OrcamentoEspacoView({
         aba={aba}
         opcoes={[
           { value: "lancamentos", label: "Lançamentos" },
+          { value: "comparativo", label: "Comparativo" },
           { value: "vinculos", label: "Vínculos" },
           { value: "visoes", label: "Visões" },
         ]}

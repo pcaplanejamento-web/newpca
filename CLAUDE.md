@@ -1615,7 +1615,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Lançamentos/Vínculos/Visões fora do orçamento. A **tela do orçamento** (`OrcamentoEspacoView`) é ENXUTA e usa a largura
   toda: UMA linha (voltar · nome · ano · dotação atualizada · empenhado % · saldo · lançamentos · Excluir — só o ÍCONE,
   `Button variant="icon" size="sm"`, com nome acessível) e a barra das
-  abas **Lançamentos · Vínculos · Visões** (`AbasEspaco`, o MESMO do espaço do PCA; o servidor monta SÓ a aba `?aba=` e
+  abas **Lançamentos · Comparativo · Vínculos · Visões** (`AbasEspaco`, o MESMO do espaço do PCA; o servidor monta SÓ a aba `?aba=` e
   manda só os campos que ela usa) — as **ferramentas de cada aba ficam NA MESMA LINHA das abas, à direita**
   (`FerramentasAba`: portal para o slot da barra; o estado segue na aba). Tabelas no **padrão da Mesa** (`DataTable
   scrollInterno` + `density="compact"`: corpo rola por dentro e as **linhas por página seguem Configurações → Tabelas**).
@@ -1629,6 +1629,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   lançamentos num LOTE ATÔMICO (`comandosSubstituirLancamentos`, **`orcamento-sql.ts`** — builders testados pelo driver D1
   REAL no `db.batch`: apaga os do alvo, move os da origem, recalcula os totais, apaga a origem); qualquer falha deixa o
   orçamento anterior intacto e apaga o temporário. O orçamento mantém id/nome/ano (vínculos e visões seguem pelo texto).
+  **Comparativo** (`OrcamentoComparativo` → **`TabelaCruzada`**): a TABELA CRUZADA horizontal (como a planilha da
+  Prefeitura — ex.: Unidade × Elemento de despesa). O usuário LIGA duas colunas do CUBO (Linhas × Colunas, `SelectField
+  compacto`) e o seletor das colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das
+  linhas, sem dados neste orçamento, mais de `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1);
+  inverter linhas × colunas (se o par invertido for permitido); MEDIDA (dotação inicial/atualizada, suplementação,
+  anulação, empenho, saldo, emenda); restringir por uma VISÃO salva; células em R$ ou % da linha/coluna/total; mapa de
+  calor; ocultar linhas/colunas zeradas; busca nas linhas; ordenar pelo rótulo, pelo total ou por qualquer coluna
+  (cabeçalho); **CONGELAR colunas** pelo alfinete do cabeçalho (vão para a esquerda, na ordem escolhida; o rótulo — e, no
+  desktop, a Sigla + o Total — sempre congelados; larguras por tokens locais `--cz-*`, sem medir); a **Sigla** do cadastro
+  (Vínculos) ao lado de Órgão/Unidade; linha TOTAL fixa no rodapé; exportar .xlsx (`exportarCruzamentoXlsx`); tocar numa
+  célula, rótulo ou total abre a **`OrigemDados`** com os lançamentos do recorte (a soma = o número). Núcleo PURO
+  **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
+  `lancamentosDoRecorte`/`matrizCruzamento`, testado; o CUBO real = 39 unidades × 36 elementos em ~5 ms). Altura até o fim
+  do display pela MESMA medida do `DataTable scrollInterno` (**`AlturaCheia.tsx`**: `useAlturaAteOFim` + `AlturaNoHtml`,
+  extraídos do `DataTable`); linhas por página de Configurações → Tabelas.
   **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
   DISTINTOS deste orçamento (o vínculo segue GLOBAL); na barra: busca + "Vincular N sugestões". **Visões**
   (`OrcamentoVisoes`): tabela das visões (filtros + lançamentos e Σ que cada uma pega DESTE orçamento) → clicar abre o
@@ -1854,7 +1869,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
-  ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto` (altura das barras de ferramentas),
+  ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
+  **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais, colunas congeláveis pelo alfinete, ordenação, %, mapa
+  de calor e origem de cada número — o Comparativo do orçamento),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

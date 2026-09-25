@@ -989,6 +989,10 @@ reenvio). Excluir o orçamento virou um botão só de ícone.
 ✅ **Editor de visão até o fim da tela:** no desktop o editor "Editar visão" tem a altura da tabela ao lado (até o fim do
 display), com nome e ações fixos e as dimensões rolando por dentro; cada dimensão (`SeletorMultiplo`) na altura padrão dos
 controles (`--h-control-sm`; 44px no toque), busca compacta e lista enxuta.
+✅ **Comparativo do orçamento (tabela cruzada):** aba nova na tela do orçamento — duas colunas do CUBO ligadas (Linhas ×
+Colunas, com as permitidas apontadas e o motivo das demais), medida, visão, R$/% (linha, coluna, total), mapa de calor,
+ocultar zerados, ordenação, colunas congeladas pelo alfinete, sigla do cadastro, total fixo, exportar .xlsx e a origem de
+cada número (`TabelaCruzada` + `orcamento-cruzamento.ts`).
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

@@ -73,6 +73,16 @@ export function exportarOrcamentoXlsx(nome: string, itens: OrcamentoItemExport[]
   XLSX.writeFile(wb, `${nomeSeguro(nome)}.xlsx`);
 }
 
+/** Baixa a TABELA CRUZADA do comparativo (matriz pronta — `matrizCruzamento`) como .xlsx: 1ª coluna larga (+ a coluna
+ * extra, se houver), valores como número. */
+export function exportarCruzamentoXlsx(nome: string, matriz: (string | number)[][], comExtra: boolean) {
+  const ws = XLSX.utils.aoa_to_sheet(matriz);
+  ws["!cols"] = (matriz[0] ?? []).map((_, j) => ({ wch: j === 0 ? 48 : comExtra && j === 1 ? 14 : 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Comparativo");
+  XLSX.writeFile(wb, `${nomeSeguro(nome)}.xlsx`);
+}
+
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
 
 /** Abre uma janela de impressão formatada do orçamento (o usuário salva como PDF). */

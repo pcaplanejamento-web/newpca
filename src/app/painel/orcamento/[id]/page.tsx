@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { type AbaOrcamento, OrcamentoEspacoView } from "@/components/OrcamentoEspacoView";
+import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
@@ -11,9 +12,9 @@ import { listarVisoesOrcamento } from "@/lib/pca-espaco";
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaOrcamento[] = ["lancamentos", "vinculos", "visoes"];
+const ABAS: AbaOrcamento[] = ["lancamentos", "comparativo", "vinculos", "visoes"];
 
-// TELA DO ORÇAMENTO (aberta pelo card): Lançamentos · Vínculos · Visões. O servidor monta SÓ a aba ativa
+// TELA DO ORÇAMENTO (aberta pelo card): Lançamentos · Comparativo · Vínculos · Visões. O servidor monta SÓ a aba ativa
 // (`?aba=`) e manda ao cliente só os campos que ela usa.
 export default async function OrcamentoEspacoPage({
   params,
@@ -39,6 +40,14 @@ export default async function OrcamentoEspacoPage({
       return l;
     });
     conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={podeEditar} />;
+  } else if (aba === "comparativo") {
+    const [itens, visoes, vinculos, alvos] = await Promise.all([
+      getOrcamentoItens(id),
+      listarVisoesOrcamento(),
+      listarVinculosOrcamento(),
+      alvosVinculoOrcamento(),
+    ]);
+    conteudo = <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} itens={itens} visoes={visoes} vinculos={vinculos} alvos={alvos} />;
   } else {
     const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
     conteudo =

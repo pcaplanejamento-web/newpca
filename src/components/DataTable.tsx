@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -15,7 +15,8 @@ import {
 } from "@/lib/tabela-filtros";
 import { DateFilterHeader } from "./DateFilterHeader";
 import { useLinhasTabela } from "./ConfigTabelas";
-import { ehDesktop, tokenPx } from "./espacamento";
+import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
+import { ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -61,38 +62,6 @@ export type Column<R> = {
 };
 
 type Key = string | number;
-
-/** Folga (px) além do respiro do `<main>` na medida da altura — arredondamento de subpixel sem rolar a página. */
-const FOLGA = 4;
-/** Distância (px) do fim da tabela à borda inferior do display: o respiro do `<main>` (o token `--pad-canvas` — o
- * MESMO das classes) + a folga + o que fica FIXO abaixo (ex.: a barra de seleção da Mesa). */
-const reservaAteORodape = (reservaInferior: number) => tokenPx("--pad-canvas", 16) + FOLGA + reservaInferior;
-
-/** Topo do elemento NO DOCUMENTO pela cadeia de `offsetTop` — ignora `transform` (o morph das visões anima escala e
- * deslocamento ao montar: o `getBoundingClientRect` no meio da animação mediria alguns px errado e a tabela "pularia" no
- * fim dela). Para tabelas da PÁGINA (não dentro de um contêiner fixo). */
-function topoNoDocumento(el: HTMLElement): number {
-  let y = 0;
-  for (let n: HTMLElement | null = el; n; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
-  return y;
-}
-
-/**
- * Altura cheia JÁ no HTML do SERVIDOR (F5 / 1º acesso): o navegador roda este trecho ao LER a tabela — antes da 1ª
- * pintura — com a MESMA conta do efeito (o topo pela cadeia de `offsetTop` até o fim do display, menos o respiro do
- * `<main>` e a folga; só no desktop). A hidratação assume depois e o trecho sai do DOM. Na navegação pelo app o React não
- * roda scripts — lá o `useLayoutEffect` já mede antes de pintar. Texto FIXO (nenhum dado do usuário).
- */
-const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0)return;var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:16)-${FOLGA}))+"px"})(document.currentScript)`;
-
-const semAssinatura = () => () => {};
-/** `true` só na renderização do SERVIDOR e na hidratação dela; em seguida (e em toda renderização no cliente), `false`. */
-const useHtmlDoServidor = () =>
-  useSyncExternalStore(
-    semAssinatura,
-    () => false,
-    () => true,
-  );
 
 export function DataTable<R>({
   columns,
@@ -170,8 +139,6 @@ export function DataTable<R>({
   // Rodapé (resumo/ações/linhas/pager) — a altura REAL entra na medida (muda com as ações e no celular).
   const rodapeRef = useRef<HTMLDivElement>(null);
   const [autoRows, setAutoRows] = useState<number | null>(null);
-  const [altura, setAltura] = useState<number | null>(null); // altura TOTAL da tabela no desktop (scrollInterno)
-  const htmlDoServidor = useHtmlDoServidor();
   // Medidas ANTES da pintura (`useLayoutEffect`): a tabela já aparece no tamanho certo, sem um quadro "solto" antes.
   useLayoutEffect(() => {
     if (!fillHeight) return;
@@ -207,30 +174,7 @@ export function DataTable<R>({
 
   // scrollInterno: a ALTURA TOTAL da tabela = do topo dela até o fim do display (menos o que fica fixo abaixo) — o
   // cartão ocupa o espaço inteiro e o corpo (flex) rola por dentro; o rodapé fica rente ao fim, com qualquer nº de linhas.
-  useLayoutEffect(() => {
-    if (!scrollInterno) return;
-    const calc = () => {
-      const el = wrapRef.current;
-      if (!el) return;
-      if (!ehDesktop()) {
-        setAltura(null); // mobile: rola normal (paginado)
-        el.style.removeProperty("height"); // a do HTML do servidor, se a tela estreitou antes da hidratação
-        return;
-      }
-      // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe a tabela.
-      const top = topoNoDocumento(el);
-      if (top <= 0) return;
-      setAltura(Math.max(240, Math.floor(window.innerHeight - top - reservaAteORodape(reservaInferior))));
-    };
-    calc();
-    window.addEventListener("resize", calc);
-    const ro = new ResizeObserver(calc);
-    ro.observe(document.body);
-    return () => {
-      window.removeEventListener("resize", calc);
-      ro.disconnect();
-    };
-  }, [scrollInterno, reservaInferior]);
+  const altura = useAlturaAteOFim(wrapRef, scrollInterno, reservaInferior);
 
   // scrollInterno: publica o espaço do RODAPÉ (altura + a folga até o fim do display) em `--rodape-tabela` — os avisos
   // flutuantes do canto inferior sobem acima dele (no celular ele gruda sobre a navegação; no desktop fica rente ao fim
@@ -563,10 +507,7 @@ export function DataTable<R>({
           {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}
         </div>
       </div>
-      {scrollInterno && htmlDoServidor && (
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: trecho FIXO (constante acima, sem dados do usuário) — a altura cheia no HTML do servidor.
-        <script dangerouslySetInnerHTML={{ __html: ALTURA_NO_HTML }} />
-      )}
+      {scrollInterno && <AlturaNoHtml />}
     </div>
   );
 }

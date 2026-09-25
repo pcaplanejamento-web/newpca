@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowDown,
+  ArrowLeftRight,
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
@@ -46,6 +47,8 @@ import {
   Package,
   Palette,
   Pencil,
+  Pin,
+  PinOff,
   Plug,
   Plus,
   RefreshCw,
@@ -120,6 +123,9 @@ export const IconArrowRight = ArrowRight;
 export const IconUndo = Undo2;
 export const IconArrowUp = ArrowUp;
 export const IconArrowDown = ArrowDown;
+export const IconTrocar = ArrowLeftRight;
+export const IconFixar = Pin;
+export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
 export const IconRefresh = RefreshCw;

@@ -50,11 +50,32 @@ export function SelectField({
   label,
   hint,
   id,
+  compacto = false,
   children,
   ...rest
-}: { label?: string; hint?: ReactNode; children: ReactNode } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
+}: {
+  label?: string;
+  hint?: ReactNode;
+  /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
+   * rótulo vira um prefixo discreto DENTRO da caixa. */
+  compacto?: boolean;
+  children: ReactNode;
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
   const auto = useId();
   const fid = id ?? auto;
+  if (compacto)
+    return (
+      <div className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
+        {label && (
+          <label htmlFor={fid} className="shrink-0 text-[12px] text-muted">
+            {label}
+          </label>
+        )}
+        <select id={fid} className={`${INPUT} h-full min-w-0 cursor-pointer !text-[13px] font-semibold disabled:cursor-default disabled:opacity-60`} {...rest}>
+          {children}
+        </select>
+      </div>
+    );
   return (
     <div>
       {label && (

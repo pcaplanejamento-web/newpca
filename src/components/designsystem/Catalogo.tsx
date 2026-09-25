@@ -7,6 +7,8 @@ import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
+import { TabelaCruzada } from "@/components/TabelaCruzada";
+import type { ModoCruzamento, OrdemCruzamento } from "@/lib/orcamento-cruzamento";
 import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -698,6 +700,73 @@ function DashboardMesaDemo() {
 
 /** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
 /** Clique numa fatia → ORIGEM DOS DADOS (o mesmo banner do Orçamento do PCA, dos gráficos do Dashboard e da Mesa). */
+function TabelaCruzadaDemo() {
+  const [fixadas, setFixadas] = useState<string[]>(["dia"]);
+  const [ordem, setOrdem] = useState<OrdemCruzamento>({ por: "rotulo", desc: false });
+  const [modo, setModo] = useState<ModoCruzamento>("valor");
+  const colunas = [
+    { chave: "aux", rotulo: "AUXÍLIO FARDAMENTO", total: 495_000 },
+    { chave: "dia", rotulo: "DIÁRIAS - PESSOAL CIVIL", total: 4_237_500 },
+    { chave: "ind", rotulo: "INDENIZAÇÕES TRABALHISTAS", total: 23_053_000 },
+    { chave: "obr", rotulo: "OBRIGAÇÕES PATRONAIS", total: 29_167_000 },
+  ];
+  const linhas = [
+    { chave: "a", rotulo: "1 - AGÊNCIA MUNICIPAL DE MOBILIDADE E TRÂNSITO", extra: "AMMT", valores: [180_000, 20_000, 500_000, 100_000], total: 800_000 },
+    { chave: "b", rotulo: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", extra: "SME", valores: [0, 260_000, 3_600_000, 4_800_000], total: 8_660_000 },
+    { chave: "c", rotulo: "33 - FUNDO MUNICIPAL DE SAÚDE", extra: "FMS", valores: [315_000, 3_957_500, 18_953_000, 24_267_000], total: 47_492_500 },
+  ];
+  const tot = linhas.reduce((x, l) => x + l.total, 0);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-56">
+          <SelectField compacto label="Linhas" defaultValue="unidade">
+            <option value="unidade">Unidade (39)</option>
+            <option value="orgao">Órgão (18)</option>
+          </SelectField>
+        </div>
+        <div className="w-72">
+          <SelectField compacto label="Colunas" defaultValue="nomeElemento">
+            <option value="nomeElemento">Elemento de despesa (35)</option>
+            <option value="ficha" disabled>
+              Ficha — 1.141 valores — acima de 120 colunas
+            </option>
+          </SelectField>
+        </div>
+        <Segmented<ModoCruzamento>
+          ariaLabel="Ler as células como"
+          value={modo}
+          onChange={setModo}
+          options={[
+            { value: "valor", label: "R$" },
+            { value: "linha", label: "% da linha" },
+            { value: "total", label: "% do total" },
+          ]}
+        />
+      </div>
+      <div className="h-80 [&>div]:!h-full">
+        <TabelaCruzada
+          rotuloLinhas="Unidade"
+          rotuloExtra="Sigla"
+          linhas={linhas}
+          colunas={colunas}
+          total={tot}
+          formatar={brl}
+          modo={modo}
+          calor
+          fixadas={fixadas}
+          onFixar={(k) => setFixadas((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))}
+          ordem={ordem}
+          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" }))}
+          onAbrir={() => {}}
+          vazio="Nenhum lançamento."
+          resumo="3 linhas × 4 colunas"
+        />
+      </div>
+    </div>
+  );
+}
+
 function OrigemDadosDemo() {
   const [aberta, setAberta] = useState<string | null>(null);
   const [rotulo, setRotulo] = useState("");
@@ -1902,6 +1971,9 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; congelar pelo alfinete, ordenar no cabeçalho, % e mapa de calor) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
+        <TabelaCruzadaDemo />
+      </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
         <GraficosGovernancaDemo />
       </Secao>
