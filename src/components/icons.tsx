@@ -80,6 +80,12 @@ import {
   MessageSquare,
   Send,
   ListChecks,
+  Repeat,
+  AtSign,
+  Zap,
+  LayoutTemplate,
+  BellRing,
+  UserPlus,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -168,3 +174,9 @@ export const IconAnexo = Paperclip;
 export const IconComentario = MessageSquare;
 export const IconEnviar = Send;
 export const IconChecklist = ListChecks;
+export const IconRepetir = Repeat;
+export const IconMencao = AtSign;
+export const IconAutomacao = Zap;
+export const IconModelo = LayoutTemplate;
+export const IconPrazo = BellRing;
+export const IconAtribuir = UserPlus;

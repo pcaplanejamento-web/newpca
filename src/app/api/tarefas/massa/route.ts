@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aplicarMassaTarefas, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
+import { aplicarMassaTarefas, aposMovimento, avisarSobreTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { type AcaoMassaTarefas, massaTarefasSchema } from "@/lib/tarefas-validation";
 
@@ -37,11 +37,11 @@ export async function POST(req: Request) {
     falhas.push({ id: t.id, ticket: t.ticket, motivo: "De outro quadro." });
     return false;
   });
-  let concluida = false;
+  let destino: { id: number; concluida: boolean } | null = null;
   if (acao.campo === "lista") {
     const l = await getLista(acao.listaId);
     if (!l || l.quadroId !== quadro.id || l.arquivada) return erro("Lista inválida.", 422);
-    concluida = l.concluida;
+    destino = l;
   }
   if (acao.campo === "responsavel" && acao.modo === "adicionar" && !(await pessoasValidas(quadro.grupoId, [acao.usuarioId])))
     return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     await aplicarMassaTarefas(
       doQuadro.map((t) => t.id),
       acao,
-      concluida,
+      destino?.concluida ?? false,
     );
     for (const t of doQuadro)
       await registrarAuditoria({
@@ -63,5 +63,12 @@ export async function POST(req: Request) {
         depois: acao,
       });
   }
-  return ok({ alterados: doQuadro.length, falhas });
+  let atualizar = false;
+  if (destino) {
+    const entraram = doQuadro.filter((t) => t.listaId !== destino.id).map((t) => t.id);
+    atualizar = await aposMovimento(a.u, quadro, entraram, destino);
+  }
+  if (acao.campo === "responsavel" && acao.modo === "adicionar")
+    for (const t of doQuadro) await avisarSobreTarefa(a.u, "atribuida", [acao.usuarioId], t, quadro, "Tarefa atribuída a você");
+  return ok({ alterados: doQuadro.length, falhas, atualizar });
 }

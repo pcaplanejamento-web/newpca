@@ -7,9 +7,9 @@ import { carregarQuadro } from "@/lib/tarefas-dados";
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaQuadro[] = ["quadro", "lista", "calendario", "configuracao"];
+const ABAS: AbaQuadro[] = ["dashboard", "quadro", "lista", "calendario", "configuracao"];
 
-// ESPAÇO DO QUADRO de tarefas: Quadro (kanban) · Lista (tabela) · Calendário · Configuração. As abas usam os MESMOS dados
+// ESPAÇO DO QUADRO de tarefas: Dashboard · Quadro (kanban) · Lista (tabela) · Calendário · Configuração. As abas usam os MESMOS dados
 // (listas, cartões, etiquetas, pessoas do grupo) — uma carga só; o filtro e as alterações seguem de uma aba para a outra.
 // `?nova=protocolo:12` ("Criar tarefa" da Mesa) abre uma tarefa NOVA já vinculada; `?tarefa=<id>` abre aquela tarefa.
 export default async function QuadroTarefasPage({

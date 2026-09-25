@@ -1,9 +1,10 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { editarComentario, excluirComentario, getComentario, tarefaAcessivel } from "@/lib/tarefas";
+import { avisarSobreTarefa, editarComentario, excluirComentario, getComentario, lerMencoes, tarefaAcessivel } from "@/lib/tarefas";
 import { mencoesDoTexto, rotuloTicket } from "@/lib/tarefas-core";
 import { comentarioSchema } from "@/lib/tarefas-validation";
+import { nomeExibicao } from "@/lib/pessoa";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const mencoes = mencoesDoTexto(p.data.texto, await listarPessoasDoGrupo(x.r.quadro.grupoId));
   await editarComentario(x.c.id, p.data.texto, mencoes);
   await registrarAuditoria({ usuario: x.u, acao: "editar", entidade: "tarefa", entidadeId: x.r.tarefa.id, resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: comentário editado` });
+  // Só quem foi citado AGORA (não estava no texto anterior) é avisado.
+  const antes = new Set(lerMencoes(x.c.mencoes));
+  await avisarSobreTarefa(x.u, "mencionada", mencoes.filter((m) => !antes.has(m)), x.r.tarefa, x.r.quadro, `${nomeExibicao(x.u)} mencionou você`);
   return ok({ mencoes });
 }
 

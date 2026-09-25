@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
+import { aposMovimento, avisarAtribuicao, criarTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { criarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
     criadoPor: a.u.id,
     estimativaH: d.estimativaH ?? null,
     vinculo: d.vinculo ?? null,
+    recorrencia: d.recorrencia ?? null,
+    checklist: d.checklist ?? [],
   });
   await registrarAuditoria({
     usuario: a.u,
@@ -46,5 +48,8 @@ export async function POST(req: Request) {
     resumo: `Tarefa ${rotuloTicket(nova.ticket)} "${d.titulo}" criada no quadro "${q.nome}"`,
     depois: d,
   });
-  return ok(nova);
+  await avisarAtribuicao(a.u, [], pessoas, { ...nova, titulo: d.titulo }, q);
+  // Criar numa lista também é "entrar" nela (automações; criada já concluída e recorrente gera a próxima).
+  const atualizar = await aposMovimento(a.u, q, [nova.id], lista);
+  return ok({ ...nova, atualizar });
 }

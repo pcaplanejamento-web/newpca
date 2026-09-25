@@ -7,6 +7,7 @@ import {
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   ROTULO_VINCULO,
+  rotuloRecorrencia,
   rotuloTicket,
   type TarefaResumo,
 } from "./tarefas-core.ts";
@@ -21,7 +22,7 @@ export function linhasPlanilhaTarefas(
   const pes = new Map(ctx.pessoas.map((p) => [p.id, nomeExibicao(p)]));
   const nomes = (ids: number[], m: Map<number, string>) => ids.map((i) => m.get(i) ?? `#${i}`).join(", ");
   return [
-    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Criada em", "Concluída em", "Arquivada"],
+    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada"],
     ...tarefas.map((t) => [
       rotuloTicket(t.ticket),
       t.titulo,
@@ -36,6 +37,7 @@ export function linhasPlanilhaTarefas(
       nomes(t.etiquetas, etq),
       t.checklist.total ? `${t.checklist.feitos}/${t.checklist.total}` : "",
       t.vinculo ? `${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}` : "",
+      t.recorrencia ? rotuloRecorrencia(t.recorrencia) : "",
       t.criadoEm ? dataBR(dataIsoBrasilia(t.criadoEm)) : "",
       t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : "",
       t.arquivada ? "Sim" : "",

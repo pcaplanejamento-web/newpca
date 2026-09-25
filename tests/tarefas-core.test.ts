@@ -19,6 +19,20 @@ import {
   somarDias,
   type TarefaResumo,
   vizinhos,
+  automacoesDoEvento,
+  coerceModeloQuadro,
+  coerceModeloTarefa,
+  lerAcaoAutomacao,
+  lerRecorrencia,
+  notificacaoDePrazo,
+  painelTarefas,
+  prazoDoModelo,
+  proximaOcorrencia,
+  rotuloRecorrencia,
+  tarefasDoRecorte,
+  type Automacao,
+  type ListaTarefas,
+  type RecorteTarefas,
 } from "../src/lib/tarefas-core.ts";
 import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
@@ -43,6 +57,7 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   vinculo: null,
   checklist: { feitos: 0, total: 0 },
   comentarios: 0,
+  recorrencia: null,
   anexos: 0,
   ...x,
 });
@@ -191,5 +206,135 @@ describe("exportar", () => {
     assert.equal(l[1][10], "Licitação");
     assert.equal(l[1][11], "1/2");
     assert.equal(l[1][12], "DFD 1209");
+    assert.equal(l[1][13], "");
+  });
+});
+
+describe("tarefas — fase 3: recorrência", () => {
+  const hoje = "2026-09-25";
+  it("lê a regra com tolerância (inválida = null)", () => {
+    assert.deepEqual(lerRecorrencia('{"freq":"semanal","intervalo":2,"dias":[3,1,1,9]}'), { freq: "semanal", intervalo: 2, dias: [1, 3], base: "prazo" });
+    assert.equal(lerRecorrencia("x"), null);
+    assert.equal(lerRecorrencia({ freq: "horaria", intervalo: 1 }), null);
+    assert.equal(lerRecorrencia({ freq: "diaria", intervalo: 0 }), null);
+    assert.deepEqual(lerRecorrencia({ freq: "mensal", intervalo: 1, dias: [1], base: "conclusao" }), { freq: "mensal", intervalo: 1, base: "conclusao" });
+  });
+  it("rótulo legível", () => {
+    assert.equal(rotuloRecorrencia({ freq: "diaria", intervalo: 1, base: "prazo" }), "Diária");
+    assert.equal(rotuloRecorrencia({ freq: "semanal", intervalo: 2, dias: [1, 3], base: "prazo" }), "A cada 2 semanas (seg, qua)");
+    assert.equal(rotuloRecorrencia({ freq: "mensal", intervalo: 3, base: "conclusao" }), "A cada 3 meses após concluir");
+  });
+  it("próxima: diária, mensal presa ao fim do mês, anual e duração mantida", () => {
+    assert.deepEqual(proximaOcorrencia({ freq: "diaria", intervalo: 1, base: "prazo" }, { inicio: null, prazo: "2026-09-25" }, "2026-09-25", hoje), { inicio: null, prazo: "2026-09-26" });
+    assert.equal(proximaOcorrencia({ freq: "mensal", intervalo: 1, base: "prazo" }, { inicio: null, prazo: "2027-01-31" }, hoje, hoje).prazo, "2027-02-28");
+    assert.equal(proximaOcorrencia({ freq: "mensal", intervalo: 1, base: "prazo" }, { inicio: null, prazo: "2027-12-15" }, hoje, hoje).prazo, "2028-01-15");
+    assert.equal(proximaOcorrencia({ freq: "anual", intervalo: 1, base: "prazo" }, { inicio: null, prazo: "2028-02-29" }, hoje, "2028-02-29").prazo, "2029-02-28");
+    assert.deepEqual(proximaOcorrencia({ freq: "semanal", intervalo: 1, base: "prazo" }, { inicio: "2026-09-28", prazo: "2026-10-02" }, hoje, hoje), { inicio: "2026-10-05", prazo: "2026-10-09" });
+  });
+  it("semanal com dias e intervalo", () => {
+    // 2026-09-28 = segunda. Toda semana seg e qua.
+    const r = { freq: "semanal" as const, intervalo: 1, dias: [1, 3], base: "prazo" as const };
+    assert.equal(proximaOcorrencia(r, { inicio: null, prazo: "2026-09-28" }, hoje, hoje).prazo, "2026-09-30");
+    assert.equal(proximaOcorrencia(r, { inicio: null, prazo: "2026-09-30" }, hoje, hoje).prazo, "2026-10-05");
+    // A cada 2 semanas: da quarta pula para a segunda de DUAS semanas depois.
+    assert.equal(proximaOcorrencia({ ...r, intervalo: 2 }, { inicio: null, prazo: "2026-09-30" }, hoje, hoje).prazo, "2026-10-12");
+  });
+  it("prazo que ficou para trás avança até hoje ou depois; sem prazo conta da conclusão; base conclusão", () => {
+    assert.equal(proximaOcorrencia({ freq: "diaria", intervalo: 1, base: "prazo" }, { inicio: null, prazo: "2026-09-01" }, hoje, hoje).prazo, hoje);
+    assert.equal(proximaOcorrencia({ freq: "semanal", intervalo: 1, base: "prazo" }, { inicio: null, prazo: null }, "2026-09-25", hoje).prazo, "2026-10-02");
+    assert.equal(proximaOcorrencia({ freq: "diaria", intervalo: 3, base: "conclusao" }, { inicio: null, prazo: "2026-09-10" }, "2026-09-25", hoje).prazo, "2026-09-28");
+  });
+});
+
+describe("tarefas — fase 3: notificação de prazo", () => {
+  const t = { id: 5, ticket: 12, titulo: "Relatório", prazo: "2026-09-26", quadroId: 3, quadroNome: "Compras" };
+  it("vence amanhã, atrasada (até 30 dias) e nada fora disso", () => {
+    const n = notificacaoDePrazo(t, "2026-09-25");
+    assert.equal(n?.tipo, "vence_amanha");
+    assert.equal(n?.chave, "vence:5:2026-09-26");
+    assert.equal(n?.link, "/painel/tarefas/3?tarefa=5");
+    assert.equal(notificacaoDePrazo(t, "2026-09-27")?.tipo, "atrasada");
+    assert.equal(notificacaoDePrazo(t, "2026-09-26"), null);
+    assert.equal(notificacaoDePrazo(t, "2026-11-30"), null);
+    assert.equal(notificacaoDePrazo({ ...t, prazo: null }, "2026-09-25"), null);
+  });
+});
+
+describe("tarefas — fase 3: dashboard", () => {
+  const hoje = "2026-09-25";
+  const listas: ListaTarefas[] = [
+    { id: 1, nome: "A fazer", ordem: 1, limiteWip: 2, concluida: false, arquivada: false },
+    { id: 2, nome: "Feito", ordem: 2, limiteWip: null, concluida: true, arquivada: false },
+  ];
+  const ts = [
+    T(1, 1, 1, { prazo: "2026-09-20", pessoas: [7], criadoEm: "2026-09-21 12:00:00" }),
+    T(2, 1, 2, { prazo: "2026-09-26", pessoas: [7, 8], prioridade: "alta", criadoEm: "2026-09-22 12:00:00" }),
+    T(3, 1, 3, { criadoEm: "2026-09-01 12:00:00" }),
+    T(4, 2, 1, { prazo: "2026-09-24", concluidaEm: "2026-09-23 15:00:00", criadoEm: "2026-09-20 12:00:00" }),
+    T(5, 2, 2, { prazo: "2026-09-10", concluidaEm: "2026-09-12 15:00:00", criadoEm: "2026-09-10 12:00:00" }),
+    T(6, 1, 4, { arquivada: true, criadoEm: "2026-09-22 12:00:00" }),
+  ];
+  const p = painelTarefas(ts, listas, hoje);
+  it("KPIs e faixas (arquivadas fora)", () => {
+    assert.equal(p.abertas, 3);
+    assert.deepEqual(p.faixas, { atrasada: 1, vence: 1, ok: 1 });
+    assert.equal(p.concluidasMes, 2);
+    assert.equal(p.noPrazo, 50);
+    assert.equal(p.leadTime, 2.5);
+    assert.equal(p.semResponsavel, 1);
+    assert.deepEqual(p.porLista.map((l) => l.n), [3, 2]);
+  });
+  it("carga por pessoa (sem responsável por último) e semanas", () => {
+    assert.deepEqual(p.carga.map((c) => [c.id, c.total]), [[7, 2], [8, 1], [null, 1]]);
+    assert.equal(p.semanas.length, 12);
+    const atual = p.semanas.at(-1);
+    assert.equal(atual?.inicio, "2026-09-21");
+    assert.equal(atual?.criadas, 2);
+    assert.equal(atual?.concluidas, 1);
+  });
+  it("a soma do recorte = o número clicado", () => {
+    const casos: [RecorteTarefas, number][] = [
+      [{ dim: "abertas" }, p.abertas],
+      [{ dim: "faixa", faixa: "atrasada" }, p.faixas.atrasada],
+      [{ dim: "concluidasMes" }, p.concluidasMes],
+      [{ dim: "pessoa", id: 7 }, 2],
+      [{ dim: "pessoa", id: null }, 1],
+      [{ dim: "lista", id: 1 }, 3],
+      [{ dim: "prioridade", prioridade: "alta" }, 1],
+      [{ dim: "semana", inicio: "2026-09-21", serie: "criadas" }, 2],
+      [{ dim: "semana", inicio: "2026-09-21", serie: "concluidas" }, 1],
+    ];
+    for (const [r, n] of casos) assert.equal(tarefasDoRecorte(ts, r, hoje).length, n, JSON.stringify(r));
+  });
+});
+
+describe("tarefas — fase 3: automações e modelos", () => {
+  const regras: Automacao[] = [
+    { id: 1, gatilho: "entrar_lista", listaId: 2, acao: { tipo: "atribuir", usuarioId: 7 }, ativa: true },
+    { id: 2, gatilho: "concluir", listaId: null, acao: { tipo: "notificar" }, ativa: true },
+    { id: 3, gatilho: "entrar_lista", listaId: 2, acao: { tipo: "prioridade", prioridade: "alta" }, ativa: false },
+  ];
+  it("só as ativas do evento", () => {
+    assert.deepEqual(automacoesDoEvento(regras, { listaId: 2, concluida: false }), [{ tipo: "atribuir", usuarioId: 7 }]);
+    assert.deepEqual(automacoesDoEvento(regras, { listaId: 2, concluida: true }).map((a) => a.tipo), ["atribuir", "notificar"]);
+    assert.deepEqual(automacoesDoEvento(regras, { listaId: 1, concluida: false }), []);
+  });
+  it("lê a ação gravada (inválida = null)", () => {
+    assert.deepEqual(lerAcaoAutomacao('{"tipo":"mover_lista","listaId":4}'), { tipo: "mover_lista", listaId: 4 });
+    assert.equal(lerAcaoAutomacao('{"tipo":"mover_lista"}'), null);
+    assert.equal(lerAcaoAutomacao('{"tipo":"prioridade","prioridade":"x"}'), null);
+    assert.equal(lerAcaoAutomacao("{"), null);
+  });
+  it("modelos: qualquer JSON vira válido", () => {
+    const q = coerceModeloQuadro({ listas: [{ nome: " Fila ", limiteWip: 3 }, { nome: "" }, { nome: "OK", concluida: true }], etiquetas: [{ nome: "Urg", cor: "bad" }], cor: "#112233" });
+    assert.deepEqual(q.listas, [{ nome: "Fila", limiteWip: 3, concluida: false }, { nome: "OK", limiteWip: null, concluida: true }]);
+    assert.equal(q.etiquetas[0].cor, "#6366f1");
+    assert.equal(coerceModeloQuadro(null).listas.length, 1);
+    const t = coerceModeloTarefa({ titulo: "", checklist: ["a", "", 3], prazoDias: 5, recorrencia: { freq: "diaria", intervalo: 1 } });
+    assert.equal(t.titulo, "Nova tarefa");
+    assert.deepEqual(t.checklist, ["a"]);
+    assert.equal(prazoDoModelo(t, "2026-09-25"), "2026-09-30");
+    assert.equal(t.recorrencia?.freq, "diaria");
+    assert.equal(prazoDoModelo(coerceModeloTarefa({}), "2026-09-25"), null);
   });
 });

@@ -1,8 +1,17 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { tarefaEtiquetaLinks, tarefaPessoas, tarefaQuadros, tarefas } from "../db/schema.ts";
-import type { Prioridade, TipoVinculo } from "./tarefas-core.ts";
+import {
+  notificacoes,
+  tarefaChecklist,
+  tarefaEtiquetaLinks,
+  tarefaEtiquetas,
+  tarefaListas,
+  tarefaPessoas,
+  tarefaQuadros,
+  tarefas,
+} from "../db/schema.ts";
+import type { ModeloQuadro, Prioridade, Recorrencia, TipoNotificacao, TipoVinculo } from "./tarefas-core.ts";
 import type { AcaoMassaTarefas } from "./tarefas-validation.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
@@ -37,6 +46,11 @@ export function comandosCriarTarefa(
     criadoPor: number;
     estimativaH?: number | null;
     vinculo?: { tipo: TipoVinculo; id: number } | null;
+    recorrencia?: Recorrencia | null;
+    /** A ocorrência anterior da série (ÚNICA — a 2ª tentativa de gerar a mesma próxima derruba o lote inteiro). */
+    recorrenciaAnteriorId?: number | null;
+    /** Itens do checklist (desmarcados), na ordem. */
+    checklist?: string[];
   },
 ) {
   return [
@@ -59,6 +73,8 @@ export function comandosCriarTarefa(
       estimativaH: d.estimativaH ?? null,
       vinculoTipo: d.vinculo?.tipo ?? null,
       vinculoId: d.vinculo?.id ?? null,
+      recorrencia: d.recorrencia ? JSON.stringify(d.recorrencia) : null,
+      recorrenciaAnteriorId: d.recorrenciaAnteriorId ?? null,
     }),
     ...d.pessoas.map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u })),
     // Observador que também é responsável fica só responsável (a chave é tarefa + pessoa).
@@ -66,6 +82,7 @@ export function comandosCriarTarefa(
       .filter((u) => !d.pessoas.includes(u))
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
+    ...(d.checklist ?? []).map((texto, i) => db.insert(tarefaChecklist).values({ tarefaId: idDaNova(d.quadroId), texto, ordem: i + 1 })),
     db
       .select({ id: tarefas.id, ticket: tarefas.ticket })
       .from(tarefas)
@@ -174,4 +191,66 @@ export function comandosMassa(db: Db, ids: number[], acao: AcaoMassaTarefas, lis
     case "arquivar":
       return [db.update(tarefas).set({ arquivada: acao.arquivada, atualizadoEm: agora }).where(inArray(tarefas.id, ids))];
   }
+}
+
+/** O id do quadro recém-criado DENTRO do lote (o lote do D1 é uma transação sequencial). */
+const quadroNovo = sql`(SELECT MAX(id) FROM tarefa_quadros)`;
+
+/**
+ * CRIA um quadro a partir de um MODELO num lote atômico: o quadro + as listas (na ordem) + as etiquetas. O último comando
+ * devolve `[{ id }]`.
+ */
+export function comandosCriarQuadroDoModelo(
+  db: Db,
+  d: { grupoId: number; nome: string; cor: string; descricao: string | null; criadoPor: number },
+  m: ModeloQuadro,
+) {
+  return [
+    db.insert(tarefaQuadros).values({ grupoId: d.grupoId, nome: d.nome, cor: d.cor, descricao: d.descricao, criadoPor: d.criadoPor }),
+    ...m.listas.map((l, i) => db.insert(tarefaListas).values({ quadroId: quadroNovo, nome: l.nome, limiteWip: l.limiteWip, concluida: l.concluida, ordem: i + 1 })),
+    ...m.etiquetas.map((e, i) => db.insert(tarefaEtiquetas).values({ quadroId: quadroNovo, nome: e.nome, cor: e.cor, ordem: i + 1 })),
+    db.select({ id: tarefaQuadros.id }).from(tarefaQuadros).where(eq(tarefaQuadros.id, quadroNovo)),
+  ] as const;
+}
+
+export type NovaNotificacao = {
+  usuarioId: number;
+  tipo: TipoNotificacao;
+  titulo: string;
+  texto?: string | null;
+  link?: string | null;
+  tarefaId?: number | null;
+  quadroId?: number | null;
+  atorId?: number | null;
+  atorNome?: string | null;
+  /** Dedup (as DERIVADAS de prazo): repetida = ignorada. */
+  chave?: string | null;
+};
+/** Linhas por INSERT (10 colunas × 9 = 90 parâmetros — abaixo do limite de 100 do D1). */
+const NOTIF_POR_INSERT = 9;
+
+/** GRAVA notificações (em lotes de 9 linhas por comando); a de `chave` repetida para a mesma pessoa é ignorada. */
+export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
+  const cmds = [];
+  for (let i = 0; i < linhas.length; i += NOTIF_POR_INSERT)
+    cmds.push(
+      db
+        .insert(notificacoes)
+        .values(
+          linhas.slice(i, i + NOTIF_POR_INSERT).map((n) => ({
+            usuarioId: n.usuarioId,
+            tipo: n.tipo,
+            titulo: n.titulo.slice(0, 200),
+            texto: n.texto?.slice(0, 500) ?? null,
+            link: n.link ?? null,
+            tarefaId: n.tarefaId ?? null,
+            quadroId: n.quadroId ?? null,
+            atorId: n.atorId ?? null,
+            atorNome: n.atorNome ?? null,
+            chave: n.chave ?? null,
+          })),
+        )
+        .onConflictDoNothing(),
+    );
+  return cmds;
 }

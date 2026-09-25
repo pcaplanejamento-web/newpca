@@ -463,6 +463,23 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='index'").includes("tarefas_vinculo_idx"));
   });
 
+  it("0044 recorrência (anterior ÚNICA), notificações (chave única por pessoa), modelos e automações", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    for (const t of ["notificacoes", "tarefa_modelos", "tarefa_automacoes"]) assert.ok(tabelas.includes(t), t);
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('tarefas')");
+    for (const c of ["recorrencia", "recorrencia_anterior_id"]) assert.ok(cols.includes(c), c);
+    const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["tarefas_recorrencia_anterior_uq", "notificacoes_chave_uq"]) assert.ok(idx.includes(i), i);
+    const a = aplicarTudo();
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9440, 'N', 'n9440@x', 'h')");
+    a.exec("INSERT INTO notificacoes (usuario_id, tipo, titulo, chave) VALUES (9440, 'atrasada', 'A', 'k1')");
+    assert.throws(() => a.exec("INSERT INTO notificacoes (usuario_id, tipo, titulo, chave) VALUES (9440, 'atrasada', 'A', 'k1')"));
+    // Sem chave (as gravadas por evento) repetem à vontade.
+    a.exec("INSERT INTO notificacoes (usuario_id, tipo, titulo) VALUES (9440, 'atribuida', 'B'), (9440, 'atribuida', 'B')");
+    const n = a.prepare("SELECT COUNT(*) AS n FROM notificacoes WHERE usuario_id = 9440").get() as { n: number };
+    assert.equal(n.n, 3);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

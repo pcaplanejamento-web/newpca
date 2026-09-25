@@ -10,13 +10,14 @@ import {
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   rotuloData,
+  rotuloRecorrencia,
   ROTULO_VINCULO,
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { IconAnexo, IconBandeira, IconChecklist, IconClock, IconComentario, IconGrip, IconLink } from "./icons";
+import { IconAnexo, IconBandeira, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconRepetir } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
 const MAX_AVATARES = 3;
@@ -108,6 +109,11 @@ export function CartaoTarefa({
           >
             <IconClock className="h-3 w-3" />
             {rotuloData(t.prazo, hoje)}
+          </span>
+        )}
+        {t.recorrencia && (
+          <span className="pointer-events-none inline-flex" title={`Recorrente: ${rotuloRecorrencia(t.recorrencia)}`}>
+            <IconRepetir className="h-3.5 w-3.5" aria-label="Recorrente" />
           </span>
         )}
         {t.checklist.total > 0 && (

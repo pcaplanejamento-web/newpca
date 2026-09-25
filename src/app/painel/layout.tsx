@@ -5,6 +5,7 @@ import { getAparencia } from "@/lib/aparencia";
 import { getUsuarioAtual } from "@/lib/auth";
 import { abasPermitidas, getGrupoAtivo, getReparticaoContexto, gruposDoUsuario } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
+import { contarNaoLidas } from "@/lib/notificacoes";
 import { linhasTabela } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -23,10 +24,11 @@ export default async function PainelLayout({
     getAparencia(),
     pcasDoFiltro(),
   ]);
-  const [abas, contexto, pcaFiltro] = await Promise.all([
+  const [abas, contexto, pcaFiltro, notificacoes] = await Promise.all([
     abasPermitidas(usuario, ativo).then((s) => [...s]),
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
+    contarNaoLidas(usuario, grupos.map((g) => g.id)),
   ]);
 
   return (
@@ -40,6 +42,7 @@ export default async function PainelLayout({
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
       identidade={aparencia.identidade}
+      notificacoes={notificacoes}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)}>{children}</ConfigTabelas>

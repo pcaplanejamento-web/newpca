@@ -13,13 +13,14 @@ import {
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   ROTULO_VINCULO,
+  rotuloRecorrencia,
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
-import { IconBandeira } from "./icons";
+import { IconBandeira, IconRepetir } from "./icons";
 
 /**
  * A aba LISTA do quadro: as tarefas numa tabela (o padrão da Mesa — `scrollInterno`, compacta, filtro/ordem em todas as
@@ -198,6 +199,21 @@ export function TabelaTarefas({
         nowrap: true,
         value: (t) => (t.vinculo ? `${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}` : "Sem vínculo"),
         render: (t) => (t.vinculo ? <span className="text-[12.5px] text-text-2">{`${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}`}</span> : <span className="text-faint">—</span>),
+      },
+      {
+        key: "recorrencia",
+        header: "Recorrência",
+        nowrap: true,
+        value: (t) => (t.recorrencia ? rotuloRecorrencia(t.recorrencia) : "Não se repete"),
+        render: (t) =>
+          t.recorrencia ? (
+            <span className="inline-flex items-center gap-1 text-[12.5px] text-text-2">
+              <IconRepetir className="h-3.5 w-3.5" />
+              {rotuloRecorrencia(t.recorrencia)}
+            </span>
+          ) : (
+            <span className="text-faint">—</span>
+          ),
       },
       {
         key: "criada",

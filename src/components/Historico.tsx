@@ -48,6 +48,8 @@ const TOM_ORIGEM: Record<OrigemAuditoria, Tone> = {
   massa: "orange",
   celula: "slate",
   vinculo: "amber",
+  automacao: "cyan",
+  recorrencia: "emerald",
   exclusao: "red",
 };
 const ROTULOS_HISTORICO = ["Antes", "Depois"] as const;

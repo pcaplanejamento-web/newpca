@@ -6,21 +6,44 @@ import {
   orcamentos,
   pcas,
   tarefaAnexos,
+  tarefaAutomacoes,
   tarefaChecklist,
   tarefaComentarios,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
   tarefaListas,
+  tarefaModelos,
   tarefaPessoas,
   tarefaQuadros,
   tarefas,
 } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
+import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
+import { dataIsoBrasilia } from "./format";
 import { getReparticaoContexto, gruposDoUsuario } from "./grupos";
 import { lotesDeIds } from "./reparticoes";
+import { atorDe, notificar } from "./notificacoes";
+import { nomeExibicao } from "./pessoa";
 import { listarPessoasDoGrupo } from "./usuarios";
 import {
+  type AcaoAutomacao,
+  type Automacao,
+  automacoesDoEvento,
+  coerceModeloQuadro,
+  coerceModeloTarefa,
+  GATILHOS,
+  type GatilhoAutomacao,
+  lerAcaoAutomacao,
+  lerRecorrencia,
+  linkTarefa,
+  type ModeloQuadro,
+  type ModeloResumo,
+  type ModeloTarefa,
+  proximaOcorrencia,
+  type Recorrencia,
+  rotuloTicket,
+  type TipoNotificacao,
   type EtiquetaTarefa,
   type ListaTarefas,
   ordemEntre,
@@ -32,7 +55,7 @@ import {
   ehTipoVinculo,
   type VinculoTarefa,
 } from "./tarefas-core";
-import { comandosCriarTarefa, comandosMassa, comandosMover, comandosVinculos } from "./tarefas-sql";
+import { comandosCriarQuadroDoModelo, comandosCriarTarefa, comandosMassa, comandosMover, comandosVinculos } from "./tarefas-sql";
 import type { AcaoMassaTarefas } from "./tarefas-validation";
 
 /**
@@ -138,6 +161,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         estimativaH: tarefas.estimativaH,
         vinculoTipo: tarefas.vinculoTipo,
         vinculoId: tarefas.vinculoId,
+        recorrencia: tarefas.recorrencia,
       })
       .from(tarefas)
       .where(doQuadro),
@@ -196,6 +220,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         checklist: porCheck.get(t.id) ?? { feitos: 0, total: 0 },
         comentarios: porComentario.get(t.id) ?? 0,
         anexos: porAnexo.get(t.id) ?? 0,
+        recorrencia: lerRecorrencia(t.recorrencia),
       };
     }),
   };
@@ -263,6 +288,7 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     checklist: { feitos: checks.filter((c) => c.feito).length, total: checks.length },
     comentarios: Number(com[0]?.n ?? 0),
     anexos: Number(anx[0]?.n ?? 0),
+    recorrencia: lerRecorrencia(t.recorrencia),
   };
 }
 
@@ -385,17 +411,19 @@ export async function atualizarTarefa(
     arquivada?: boolean;
     estimativaH?: number | null;
     vinculo?: { tipo: TipoVinculo; id: number } | null;
+    recorrencia?: Recorrencia | null;
   },
   vinculos: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[] },
 ) {
   const db = getDb();
-  const { vinculo, ...resto } = campos;
+  const { vinculo, recorrencia, ...resto } = campos;
   await db.batch([
     db
       .update(tarefas)
       .set({
         ...resto,
         ...(vinculo !== undefined ? { vinculoTipo: vinculo?.tipo ?? null, vinculoId: vinculo?.id ?? null } : {}),
+        ...(recorrencia !== undefined ? { recorrencia: recorrencia ? JSON.stringify(recorrencia) : null } : {}),
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
       })
       .where(eq(tarefas.id, id)),
@@ -452,7 +480,7 @@ export type ComentarioTarefa = { id: number; usuarioId: number | null; usuarioNo
 /** O anexo SEM o conteúdo (o arquivo é servido pela rota própria). */
 export type AnexoTarefa = { id: number; tipo: "link" | "arquivo"; nome: string; url: string | null; mime: string | null; tamanho: number | null; criadoPor: number | null; criadoEm: string | null };
 
-const lerMencoes = (v: string | null): number[] => {
+export const lerMencoes = (v: string | null): number[] => {
   try {
     const a = JSON.parse(v ?? "[]");
     return Array.isArray(a) ? a.filter((x): x is number => Number.isInteger(x)) : [];
@@ -697,4 +725,288 @@ export async function vinculoAcessivel(u: UsuarioSessao, v: { tipo: TipoVinculo;
   if (!r) return false;
   if (u.role === "admin" || r.rep == null) return true;
   return (await getReparticaoContexto(u)).lista.some((x) => x.id === r.rep);
+}
+
+// ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────
+
+/** Avisa pessoas sobre UMA tarefa (sem o próprio autor). Nunca lança. */
+export async function avisarSobreTarefa(
+  u: UsuarioSessao,
+  tipo: TipoNotificacao,
+  destinos: number[],
+  t: { id: number; ticket: number; titulo: string },
+  quadro: { id: number; nome: string },
+  titulo: string,
+) {
+  await notificar(
+    destinos.map((usuarioId) => ({
+      usuarioId,
+      tipo,
+      titulo,
+      texto: `${rotuloTicket(t.ticket)} ${t.titulo} · ${quadro.nome}`,
+      link: linkTarefa(quadro.id, t.id),
+      tarefaId: t.id,
+      quadroId: quadro.id,
+      ...atorDe(u),
+    })),
+    u.id,
+  );
+}
+
+/** "Tarefa atribuída a você" para os responsáveis NOVOS (os de `depois` que não estavam em `antes`). */
+export async function avisarAtribuicao(u: UsuarioSessao, antes: number[], depois: number[], t: { id: number; ticket: number; titulo: string }, quadro: Quadro) {
+  const novos = depois.filter((p) => !antes.includes(p));
+  if (novos.length) await avisarSobreTarefa(u, "atribuida", novos, t, quadro, `${nomeExibicao(u)} atribuiu uma tarefa a você`);
+}
+
+/** As AUTOMAÇÕES do quadro (a de ação inválida some). */
+export async function listarAutomacoes(quadroId: number): Promise<Automacao[]> {
+  const linhas = await getDb().select().from(tarefaAutomacoes).where(eq(tarefaAutomacoes.quadroId, quadroId)).orderBy(asc(tarefaAutomacoes.id));
+  return linhas.flatMap((l) => {
+    const acao = lerAcaoAutomacao(l.acao);
+    return acao && (GATILHOS as readonly string[]).includes(l.gatilho) ? [{ id: l.id, gatilho: l.gatilho as GatilhoAutomacao, listaId: l.listaId, acao, ativa: l.ativa }] : [];
+  });
+}
+
+export async function getAutomacao(id: number) {
+  const [a] = await getDb().select().from(tarefaAutomacoes).where(eq(tarefaAutomacoes.id, id));
+  return a ?? null;
+}
+
+export async function criarAutomacao(quadroId: number, d: { gatilho: GatilhoAutomacao; listaId: number | null; acao: AcaoAutomacao }): Promise<number> {
+  const [a] = await getDb()
+    .insert(tarefaAutomacoes)
+    .values({ quadroId, gatilho: d.gatilho, listaId: d.gatilho === "entrar_lista" ? d.listaId : null, acao: JSON.stringify(d.acao) })
+    .returning({ id: tarefaAutomacoes.id });
+  return a.id;
+}
+
+export async function atualizarAutomacao(id: number, ativa: boolean) {
+  await getDb().update(tarefaAutomacoes).set({ ativa }).where(eq(tarefaAutomacoes.id, id));
+}
+
+export async function excluirAutomacao(id: number) {
+  await getDb().delete(tarefaAutomacoes).where(eq(tarefaAutomacoes.id, id));
+}
+
+/** A ação de automação é válida NESTE quadro agora (a lista/etiqueta/pessoa ainda existe e é dele)? */
+export async function acaoValida(quadro: Quadro, a: AcaoAutomacao): Promise<boolean> {
+  if (a.tipo === "mover_lista") {
+    const l = await getLista(a.listaId);
+    return !!l && l.quadroId === quadro.id && !l.arquivada;
+  }
+  if (a.tipo === "etiquetar") return (await etiquetasDoQuadro(quadro.id, [a.etiquetaId])).length > 0;
+  if (a.tipo === "atribuir") return pessoasValidas(quadro.grupoId, [a.usuarioId]);
+  return true;
+}
+
+/**
+ * Depois que tarefas ENTRARAM numa lista (arrastar, trocar de lista, massa, criar): roda as AUTOMAÇÕES do quadro
+ * (profundidade 1 — uma ação não dispara outra regra) e, se terminaram CONCLUÍDAS, gera a PRÓXIMA ocorrência das
+ * recorrentes. BEST-EFFORT: nunca derruba o movimento que já foi gravado. Devolve se mudou algo além do movimento
+ * (a tela recarrega).
+ */
+export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, ids: number[], lista: { id: number; concluida: boolean }): Promise<boolean> {
+  if (!ids.length) return false;
+  let mudou = false;
+  let concluida = lista.concluida;
+  try {
+    const acoes = automacoesDoEvento(await listarAutomacoes(quadro.id), { listaId: lista.id, concluida: lista.concluida });
+    for (const a of acoes) {
+      if (!(await acaoValida(quadro, a))) continue;
+      const alvo = await tarefasPorIds(ids);
+      if (a.tipo === "notificar") {
+        for (const t of alvo) {
+          const x = await getTarefa(t.id);
+          if (x) await avisarSobreTarefa(u, "automacao", [...x.pessoas, ...x.observadores], t, quadro, `Automação: tarefa ${concluida ? "concluída" : "movida"}`);
+        }
+        continue;
+      }
+      let destinoConcluida = false;
+      if (a.tipo === "mover_lista") {
+        destinoConcluida = (await getLista(a.listaId))?.concluida ?? false;
+        concluida = destinoConcluida;
+      }
+      await aplicarMassaTarefas(
+        ids,
+        a.tipo === "mover_lista"
+          ? { campo: "lista", listaId: a.listaId }
+          : a.tipo === "atribuir"
+            ? { campo: "responsavel", modo: "adicionar", usuarioId: a.usuarioId }
+            : a.tipo === "etiquetar"
+              ? { campo: "etiqueta", modo: "adicionar", etiquetaId: a.etiquetaId }
+              : { campo: "prioridade", prioridade: a.prioridade },
+        destinoConcluida,
+      );
+      mudou = true;
+      for (const t of alvo) await registrarAuditoria({ usuario: u, acao: "editar", entidade: "tarefa", entidadeId: t.id, origem: "automacao", resumo: `Tarefa ${rotuloTicket(t.ticket)}: automação (${a.tipo})`, depois: a });
+      if (a.tipo === "atribuir") for (const t of alvo) await avisarSobreTarefa(u, "atribuida", [a.usuarioId], t, quadro, "Uma automação atribuiu uma tarefa a você");
+    }
+    if (concluida && (await gerarRecorrentes(u, quadro, ids)) > 0) mudou = true;
+  } catch (e) {
+    console.error("pós-movimento das tarefas falhou", e);
+  }
+  return mudou;
+}
+
+/**
+ * Gera a PRÓXIMA ocorrência das tarefas RECORRENTES concluídas (na 1ª lista aberta do quadro, com os mesmos
+ * responsáveis/observadores/etiquetas/vínculo e o checklist desmarcado). A anterior é ÚNICA no banco: concluir, reabrir e
+ * concluir de novo nunca duplica. Devolve quantas nasceram.
+ */
+export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: number[]): Promise<number> {
+  const db = getDb();
+  const candidatas = (
+    await Promise.all(
+      lotesDeIds(ids).map((l) =>
+        db
+          .select({ id: tarefas.id })
+          .from(tarefas)
+          .where(
+            and(
+              inArray(tarefas.id, l),
+              sql`${tarefas.recorrencia} IS NOT NULL`,
+              sql`${tarefas.concluidaEm} IS NOT NULL`,
+              sql`NOT EXISTS (SELECT 1 FROM tarefas p WHERE p.recorrencia_anterior_id = ${tarefas.id})`,
+            ),
+          ),
+      ),
+    )
+  ).flat();
+  if (!candidatas.length) return 0;
+  const [inicial] = await db
+    .select({ id: tarefaListas.id })
+    .from(tarefaListas)
+    .where(and(eq(tarefaListas.quadroId, quadro.id), eq(tarefaListas.concluida, false), eq(tarefaListas.arquivada, false)))
+    .orderBy(asc(tarefaListas.ordem), asc(tarefaListas.id))
+    .limit(1);
+  if (!inicial) return 0;
+  const hoje = dataIsoBrasilia(new Date().toISOString());
+  let n = 0;
+  for (const { id } of candidatas) {
+    const t = await getTarefa(id);
+    const rec = t?.recorrencia;
+    if (!t || !rec || !t.concluidaEm) continue;
+    const { inicio, prazo } = proximaOcorrencia(rec, t, dataIsoBrasilia(t.concluidaEm) || hoje, hoje);
+    const checklist = (await db.select({ texto: tarefaChecklist.texto }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)).orderBy(asc(tarefaChecklist.ordem))).map((c) => c.texto);
+    try {
+      const nova = await criarTarefa({
+        quadroId: quadro.id,
+        listaId: inicial.id,
+        titulo: t.titulo,
+        descricao: t.descricao,
+        prioridade: t.prioridade,
+        inicio,
+        prazo,
+        concluida: false,
+        pessoas: t.pessoas,
+        observadores: t.observadores,
+        etiquetas: t.etiquetas,
+        criadoPor: u.id,
+        estimativaH: t.estimativaH,
+        vinculo: t.vinculo,
+        recorrencia: rec,
+        recorrenciaAnteriorId: id,
+        checklist,
+      });
+      n++;
+      await registrarAuditoria({
+        usuario: u,
+        acao: "criar",
+        entidade: "tarefa",
+        entidadeId: nova.id,
+        origem: "recorrencia",
+        resumo: `Tarefa ${rotuloTicket(nova.ticket)} "${t.titulo}" criada pela recorrência de ${rotuloTicket(t.ticket)} (prazo ${prazo})`,
+      });
+    } catch {
+      // Outra requisição já gerou a próxima (a anterior é ÚNICA) — nada a fazer.
+    }
+  }
+  return n;
+}
+
+const lerConteudo = (v: string) => {
+  try {
+    return JSON.parse(v) as unknown;
+  } catch {
+    return {};
+  }
+};
+
+/** Os MODELOS DE QUADRO dos grupos dados (`null` = todos — o ADM). */
+export async function listarModelosQuadro(grupoIds: number[] | null): Promise<(ModeloResumo & { conteudo: ModeloQuadro })[]> {
+  if (grupoIds && !grupoIds.length) return [];
+  const linhas = await getDb()
+    .select()
+    .from(tarefaModelos)
+    .where(and(eq(tarefaModelos.tipo, "quadro"), grupoIds ? inArray(tarefaModelos.grupoId, grupoIds.slice(0, 90)) : undefined))
+    .orderBy(asc(tarefaModelos.nome));
+  return linhas.map((m) => ({ id: m.id, tipo: "quadro", nome: m.nome, grupoId: m.grupoId, quadroId: m.quadroId, criadoPor: m.criadoPor, conteudo: modeloQuadroDe(m) }));
+}
+
+/** Os MODELOS DE TAREFA do quadro. */
+export async function listarModelosTarefa(quadroId: number): Promise<(ModeloResumo & { conteudo: ModeloTarefa })[]> {
+  const linhas = await getDb()
+    .select()
+    .from(tarefaModelos)
+    .where(and(eq(tarefaModelos.tipo, "tarefa"), eq(tarefaModelos.quadroId, quadroId)))
+    .orderBy(asc(tarefaModelos.nome));
+  return linhas.map((m) => ({ id: m.id, tipo: "tarefa", nome: m.nome, grupoId: m.grupoId, quadroId: m.quadroId, criadoPor: m.criadoPor, conteudo: modeloTarefaDe(m) }));
+}
+
+/** O conteúdo de um modelo de QUADRO gravado, já validado. */
+export const modeloQuadroDe = (m: { conteudo: string }) => coerceModeloQuadro(lerConteudo(m.conteudo));
+export const modeloTarefaDe = (m: { conteudo: string }) => coerceModeloTarefa(lerConteudo(m.conteudo));
+
+export async function getModelo(id: number) {
+  const [m] = await getDb().select().from(tarefaModelos).where(eq(tarefaModelos.id, id));
+  return m ?? null;
+}
+
+export async function criarModelo(d: { tipo: "quadro" | "tarefa"; nome: string; grupoId: number | null; quadroId: number | null; conteudo: ModeloQuadro | ModeloTarefa; criadoPor: number }): Promise<number> {
+  const [m] = await getDb()
+    .insert(tarefaModelos)
+    .values({ ...d, conteudo: JSON.stringify(d.conteudo) })
+    .returning({ id: tarefaModelos.id });
+  return m.id;
+}
+
+export async function excluirModelo(id: number) {
+  await getDb().delete(tarefaModelos).where(eq(tarefaModelos.id, id));
+}
+
+/** O RETRATO do quadro como modelo: as listas ativas (na ordem) e as etiquetas, a cor e a descrição. */
+export async function modeloDoQuadro(q: Quadro): Promise<ModeloQuadro> {
+  const { listas, etiquetas } = await dadosQuadro(q.id);
+  return coerceModeloQuadro({
+    cor: q.cor,
+    descricao: q.descricao,
+    listas: listas.filter((l) => !l.arquivada),
+    etiquetas: etiquetas.map((e) => ({ nome: e.nome, cor: e.cor })),
+  });
+}
+
+/** O RETRATO de uma tarefa como modelo (o checklist desmarcado; o prazo vira relativo, informado por quem salva). */
+export async function modeloDaTarefa(t: TarefaCompleta, prazoDias: number | null): Promise<ModeloTarefa> {
+  const checklist = await getDb().select({ texto: tarefaChecklist.texto }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, t.id)).orderBy(asc(tarefaChecklist.ordem));
+  return coerceModeloTarefa({
+    titulo: t.titulo,
+    descricao: t.descricao,
+    prioridade: t.prioridade,
+    etiquetas: t.etiquetas,
+    checklist: checklist.map((c) => c.texto),
+    estimativaH: t.estimativaH,
+    prazoDias,
+    recorrencia: t.recorrencia,
+  });
+}
+
+/** CRIA um quadro a partir de um modelo (listas + etiquetas num lote atômico). */
+export async function criarQuadroDoModelo(grupoId: number, d: { nome: string; cor?: string; descricao?: string | null }, m: ModeloQuadro, usuarioId: number): Promise<number> {
+  const db = getDb();
+  const r = await db.batch(
+    comandosCriarQuadroDoModelo(db, { grupoId, nome: d.nome, cor: d.cor ?? m.cor ?? "#6366f1", descricao: d.descricao ?? m.descricao ?? null, criadoPor: usuarioId }, m),
+  );
+  const [q] = r[r.length - 1] as { id: number }[];
+  return q.id;
 }

@@ -830,9 +830,14 @@ export const tarefas = sqliteTable(
     /** VÍNCULO com o sistema (`protocolo`/`dfd`/`pca`/`orcamento` + id) — sem FK: o alvo pode ser excluído depois. */
     vinculoTipo: text("vinculo_tipo"),
     vinculoId: integer("vinculo_id"),
+    /** RECORRÊNCIA (migração `0044`): JSON `Recorrencia` (`tarefas-core`); NULL = não se repete. */
+    recorrencia: text("recorrencia"),
+    /** A ocorrência ANTERIOR da série (ÚNICO: concluir de novo nunca gera a próxima duas vezes). */
+    recorrenciaAnteriorId: integer("recorrencia_anterior_id").references((): AnySQLiteColumn => tarefas.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("tarefas_quadro_ticket_uq").on(t.quadroId, t.ticket),
+    uniqueIndex("tarefas_recorrencia_anterior_uq").on(t.recorrenciaAnteriorId),
     index("tarefas_lista_ordem_idx").on(t.listaId, t.ordem),
     index("tarefas_prazo_idx").on(t.prazo),
     index("tarefas_vinculo_idx").on(t.vinculoTipo, t.vinculoId),
@@ -932,4 +937,60 @@ export const tarefaAnexos = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("tarefa_anexos_tarefa_idx").on(t.tarefaId)],
+);
+
+/** NOTIFICAÇÕES do sino (migração `0044`). `chave` = dedup das DERIVADAS (prazo) — única por pessoa. */
+export const notificacoes = sqliteTable(
+  "notificacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    tipo: text("tipo").notNull(),
+    titulo: text("titulo").notNull(),
+    texto: text("texto"),
+    link: text("link"),
+    tarefaId: integer("tarefa_id").references(() => tarefas.id, { onDelete: "cascade" }),
+    quadroId: integer("quadro_id").references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    atorId: integer("ator_id").references(() => usuarios.id, { onDelete: "set null" }),
+    atorNome: text("ator_nome"),
+    chave: text("chave"),
+    lida: integer("lida", { mode: "boolean" }).notNull().default(false),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id), uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave)],
+);
+
+/** MODELOS de quadro (`grupo_id`) e de tarefa (`quadro_id`) — `conteudo` JSON (`tarefas-core`). */
+export const tarefaModelos = sqliteTable(
+  "tarefa_modelos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tipo: text("tipo").notNull(),
+    grupoId: integer("grupo_id").references(() => grupos.id, { onDelete: "cascade" }),
+    quadroId: integer("quadro_id").references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    conteudo: text("conteudo").notNull().default("{}"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_modelos_grupo_idx").on(t.tipo, t.grupoId), index("tarefa_modelos_quadro_idx").on(t.quadroId)],
+);
+
+/** AUTOMAÇÕES do quadro: "quando `gatilho` (na lista), fazer `acao`" (JSON). */
+export const tarefaAutomacoes = sqliteTable(
+  "tarefa_automacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    gatilho: text("gatilho").notNull(),
+    listaId: integer("lista_id").references(() => tarefaListas.id, { onDelete: "cascade" }),
+    acao: text("acao").notNull(),
+    ativa: integer("ativa", { mode: "boolean" }).notNull().default(true),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_automacoes_quadro_idx").on(t.quadroId)],
 );

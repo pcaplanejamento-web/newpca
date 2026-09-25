@@ -1,7 +1,7 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { getLista, moverTarefa, tarefaAcessivel } from "@/lib/tarefas";
+import { aposMovimento, getLista, moverTarefa, tarefaAcessivel } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { moverTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -19,7 +19,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const lista = await getLista(p.data.listaId);
   if (!lista || lista.quadroId !== r.quadro.id || lista.arquivada) return erro("Lista inválida.", 422);
   const res = await moverTarefa(id, lista.id, p.data.anteriorId, p.data.proximoId, lista.concluida);
-  if (lista.id !== r.tarefa.listaId)
+  let atualizar = false;
+  if (lista.id !== r.tarefa.listaId) {
     await registrarAuditoria({
       usuario: a.u,
       acao: "editar",
@@ -27,5 +28,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       entidadeId: id,
       resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)} movida para "${lista.nome}"`,
     });
-  return ok(res);
+    atualizar = await aposMovimento(a.u, r.quadro, [id], lista);
+  }
+  return ok({ ...res, atualizar });
 }

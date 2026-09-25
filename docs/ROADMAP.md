@@ -982,7 +982,7 @@ abre ao clicar numa **fatia/barra** dos gráficos do Dashboard do PCA (painel e 
 mesma chave do gráfico; itens ANUAIS com 1/12 no cronograma), nos quadros do **Dashboard de governança da Mesa** (os
 protocolos de cada estado/situação/faixa de tempo/semana e os DFDs de cada unidade — abrem os banners da Mesa) e nas
 **métricas das Integrações** (o dia e a fonte Cloudflare). A soma do detalhe é sempre a do número clicado (testado).
-### Tarefas (quadro estilo Trello) — Fases 1 e 2 entregues
+### Tarefas (quadro estilo Trello) — Fases 1, 2 e 3 entregues
 ✅ Novo módulo **`tarefas`** (`/painel/tarefas`, migração **`0042`** — a aba vai a quem já tem a Mesa): **vários quadros por
 grupo** (só o grupo do quadro vê e recebe tarefas; o ADM vê todos), cards 4:5 + "Novo quadro" (editor, no grupo ativo). No
 quadro (`/painel/tarefas/[id]`): abas **Quadro** (kanban — listas lado a lado, **arrastar** cartões com mouse no cartão e
@@ -998,7 +998,14 @@ imagem/PDF até 1 MB — a imagem maior é reduzida no navegador), **estimativa*
 Protocolo/DFD/PCA/Orçamento (o link abre o banner na Mesa — `?abrir=`), botão **"Tarefas"** nos banners do DFD e do
 protocolo (lista as ligadas + **"Criar tarefa"** já vinculada), **histórico** do cartão, **edição em massa** e **exportar
 .xlsx** na Lista, e a aba **Calendário** (grade do mês; agenda no celular).
-🔜 **Fase 3:** recorrência, Dashboard do quadro, notificações no sino, modelos e automações.
+✅ **Fase 3 (migração `0044`):** **recorrência** (diária/semanal com dias/mensal/anual, a cada N, do prazo ou da conclusão —
+concluir cria a próxima na 1ª lista, sem nunca duplicar), aba **Dashboard** do quadro (KPIs + saúde dos prazos, carga por
+pessoa que filtra o quadro, por lista com o WIP, por prioridade, criadas/concluídas por semana — cada número abre a origem
+dos dados), **sino de notificações** real (atribuída, menção, comentário, automação e os PRAZOS — vence amanhã/atrasada —
+derivados na leitura, sem cron), **modelos** de quadro (listas + etiquetas, no "Novo quadro") e de tarefa ("Usar modelo" /
+"Salvar como modelo") e **automações** simples por quadro ("quando entrar na lista X / for concluída → mover, atribuir,
+etiquetar, prioridade, notificar"; sem laço).
+🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar

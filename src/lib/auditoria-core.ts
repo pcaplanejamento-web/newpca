@@ -41,6 +41,8 @@ export type EntidadeAuditoria =
   | "tarefa_quadro"
   | "tarefa_lista"
   | "tarefa_etiqueta"
+  | "tarefa_modelo"
+  | "tarefa_automacao"
   | "sessao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
@@ -81,6 +83,8 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   tarefa_quadro: "Quadro de tarefas",
   tarefa_lista: "Lista de tarefas",
   tarefa_etiqueta: "Etiqueta de tarefa",
+  tarefa_modelo: "Modelo de tarefas",
+  tarefa_automacao: "Automação de tarefas",
   sessao: "Sessão",
 };
 
@@ -133,6 +137,8 @@ export type OrigemAuditoria =
   | "massa" // edição em massa na Mesa
   | "celula" // dropdown na tabela da Mesa (responsável/situação)
   | "vinculo" // vincular/desvincular um DFD a um protocolo
+  | "automacao" // ação de uma automação do quadro de tarefas
+  | "recorrencia" // próxima ocorrência de uma tarefa recorrente
   | "exclusao";
 
 export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
@@ -144,6 +150,8 @@ export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   massa: "Edição em massa",
   celula: "Tabela da Mesa",
   vinculo: "Vínculo com protocolo",
+  automacao: "Automação",
+  recorrencia: "Recorrência",
   exclusao: "Exclusão",
 };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -27,6 +28,7 @@ import { BarraSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
+import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
@@ -37,14 +39,20 @@ import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
 import { toast } from "./Toast";
 
-export type AbaQuadro = "quadro" | "lista" | "calendario" | "configuracao";
+export type AbaQuadro = "dashboard" | "quadro" | "lista" | "calendario" | "configuracao";
+
+/** O Dashboard (gráficos) só baixa quando a aba abre — a MESMA grade de esqueleto do Dashboard da Mesa. */
+const DashboardTarefas = dynamic(() => import("./DashboardTarefas").then((m) => m.DashboardTarefas), {
+  ssr: false,
+  loading: () => <DashboardMesaEsqueleto />,
+});
 
 /** Até quantas tarefas por chamada da edição em massa (o teto do schema). */
 const LOTE_MASSA = 50;
 
 /**
  * ESPAÇO DE UM QUADRO de tarefas (`/painel/tarefas/[id]`): UMA linha de cabeçalho (voltar · cor · nome · grupo · abertas ·
- * atrasadas · concluídas) e as abas **Quadro · Lista · Calendário · Configuração** (`AbasEspaco`), com os FILTROS e "Nova
+ * atrasadas · concluídas) e as abas **Dashboard · Quadro · Lista · Calendário · Configuração** (`AbasEspaco`), com os FILTROS e "Nova
  * tarefa" na mesma linha (`FerramentasAba`). Os cartões ficam num estado LOCAL (arrastar é otimista — a ordem gravada volta
  * com o `router.refresh`); o filtro segue de uma aba para a outra. Na Lista: seleção + EDIÇÃO EM MASSA e exportar .xlsx.
  * `novaInicial` (o `?nova=tipo:id` do "Criar tarefa" da Mesa) abre a tarefa NOVA já vinculada; `tarefaInicial`, a tarefa.
@@ -58,6 +66,9 @@ export function QuadroTarefas({
   membros,
   pessoas,
   edicoes,
+  automacoes,
+  modelosTarefa,
+  modelosQuadro,
   hoje,
   podeEditar,
   usuarioId,
@@ -133,8 +144,9 @@ export function QuadroTarefas({
     const viz = vizinhos(antes, id, listaId, pos);
     setTarefas(moverCartao(antes, listas, id, listaId, pos, new Date().toISOString()));
     try {
-      const r = await chamar<{ ordens: [number, number][] }>(`/api/tarefas/${id}/mover`, "POST", { listaId, ...viz });
-      if (r.ordens.length) router.refresh(); // a lista foi renumerada no servidor
+      const r = await chamar<{ ordens: [number, number][]; atualizar: boolean }>(`/api/tarefas/${id}/mover`, "POST", { listaId, ...viz });
+      // A lista foi renumerada, uma automação agiu ou nasceu a próxima ocorrência de uma recorrente: recarrega.
+      if (r.ordens.length || r.atualizar) router.refresh();
     } catch (e) {
       setTarefas(antes);
       toast.error((e as Error).message);
@@ -199,6 +211,7 @@ export function QuadroTarefas({
       <AbasEspaco<AbaQuadro>
         aba={aba}
         opcoes={[
+          { value: "dashboard", label: "Dashboard" },
           { value: "quadro", label: "Quadro" },
           { value: "lista", label: "Lista" },
           { value: "calendario", label: "Calendário" },
@@ -229,7 +242,17 @@ export function QuadroTarefas({
             </Button>
           </FerramentasAba>
         )}
-        {aba === "quadro" ? (
+        {aba === "dashboard" ? (
+          <DashboardTarefas
+            tarefas={filtradas}
+            listas={listas}
+            pessoas={pessoas}
+            hoje={hoje}
+            responsavel={filtro.responsavel}
+            onResponsavel={(r) => setFiltro((f) => ({ ...f, responsavel: r }))}
+            onAbrir={(id) => setAberto({ tipo: "editar", id })}
+          />
+        ) : aba === "quadro" ? (
           semListas ? (
             <p className="rounded-card border border-dashed border-border-2 bg-surface px-6 py-12 text-center text-sm text-muted">
               Nenhuma lista ativa — crie uma na Configuração do quadro.
@@ -263,7 +286,18 @@ export function QuadroTarefas({
         ) : aba === "calendario" ? (
           <CalendarioTarefas tarefas={filtradas.filter((t) => !t.arquivada)} hoje={hoje} onAbrir={(id) => setAberto({ tipo: "editar", id })} />
         ) : (
-          <ConfiguracaoQuadro quadro={quadro} listas={listas} etiquetas={etiquetas} podeEditar={podeEditar} onMudou={() => router.refresh()} />
+          <ConfiguracaoQuadro
+            quadro={quadro}
+            listas={listas}
+            etiquetas={etiquetas}
+            automacoes={automacoes}
+            pessoas={doGrupo}
+            modelosQuadro={modelosQuadro}
+            modelosTarefa={modelosTarefa}
+            usuarioId={usuarioId}
+            podeEditar={podeEditar}
+            onMudou={() => router.refresh()}
+          />
         )}
       </AbasEspaco>
 
@@ -302,6 +336,7 @@ export function QuadroTarefas({
         hoje={hoje}
         usuarioId={usuarioId}
         podeExcluir={podeEditar}
+        modelos={modelosTarefa}
         onFechar={() => setAberto(null)}
         onSalvo={() => router.refresh()}
       />

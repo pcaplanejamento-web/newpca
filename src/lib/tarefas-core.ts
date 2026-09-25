@@ -2,6 +2,7 @@
  * TAREFAS (quadro estilo Trello) — núcleo PURO (testável): prazo com semáforo, ordem FRACIONÁRIA dos cartões (soltar
  * entre dois sem renumerar a lista), mover um cartão, filtros, WIP e rótulos. Sem banco e sem JSX.
  */
+import { dataIsoBrasilia } from "./format.ts";
 import { stripAccents } from "./normalize.ts";
 import { predicadoBusca } from "./tabela-filtros.ts";
 
@@ -41,6 +42,8 @@ export type TarefaResumo = {
   checklist: { feitos: number; total: number };
   comentarios: number;
   anexos: number;
+  /** A regra de repetição (fase 3); `null` = não se repete. */
+  recorrencia: Recorrencia | null;
 };
 
 /** A que parte do sistema a tarefa se liga. */
@@ -276,3 +279,399 @@ export function tarefasPorPrazo(tarefas: TarefaResumo[]): Map<string, TarefaResu
 }
 
 export const NOMES_MES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+// ─── Fase 3: RECORRÊNCIA ─────────────────────────────────────────────────────────────────────────────────────
+
+export const FREQUENCIAS = ["diaria", "semanal", "mensal", "anual"] as const;
+export type Frequencia = (typeof FREQUENCIAS)[number];
+export const ROTULO_FREQUENCIA: Record<Frequencia, string> = { diaria: "Diária", semanal: "Semanal", mensal: "Mensal", anual: "Anual" };
+const UNIDADE_FREQ: Record<Frequencia, [string, string]> = { diaria: ["dia", "dias"], semanal: ["semana", "semanas"], mensal: ["mês", "meses"], anual: ["ano", "anos"] };
+/** "dia"/"dias"… — a unidade do intervalo (o campo "a cada N"). */
+export const unidadeFrequencia = (f: Frequencia, n: number) => UNIDADE_FREQ[f][n === 1 ? 0 : 1];
+export const DIAS_CURTOS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+/**
+ * A regra de REPETIÇÃO de uma tarefa: a cada `intervalo` dias/semanas/meses/anos (`dias` = os dias da semana, 0 = domingo,
+ * só na semanal). `base` = a próxima conta a partir do PRAZO da atual (agenda fixa) ou da data da CONCLUSÃO.
+ */
+export type Recorrencia = { freq: Frequencia; intervalo: number; dias?: number[]; base: "prazo" | "conclusao" };
+
+/** Lê a regra gravada (JSON ou objeto) — qualquer coisa inválida = `null` (não se repete). */
+export function lerRecorrencia(v: unknown): Recorrencia | null {
+  let o: unknown = v;
+  if (typeof v === "string") {
+    try {
+      o = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  if (!o || typeof o !== "object") return null;
+  const r = o as Record<string, unknown>;
+  if (!(FREQUENCIAS as readonly unknown[]).includes(r.freq)) return null;
+  const intervalo = Number(r.intervalo);
+  if (!Number.isInteger(intervalo) || intervalo < 1 || intervalo > 365) return null;
+  const dias = Array.isArray(r.dias) ? [...new Set(r.dias.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b) : [];
+  return { freq: r.freq as Frequencia, intervalo, ...(r.freq === "semanal" && dias.length ? { dias } : {}), base: r.base === "conclusao" ? "conclusao" : "prazo" };
+}
+
+/** "Semanal — a cada 2 semanas (seg, qua)" / "Diária". */
+export function rotuloRecorrencia(r: Recorrencia): string {
+  const cada = r.intervalo === 1 ? ROTULO_FREQUENCIA[r.freq] : `A cada ${r.intervalo} ${UNIDADE_FREQ[r.freq][1]}`;
+  const dias = r.freq === "semanal" && r.dias?.length ? ` (${r.dias.map((d) => DIAS_CURTOS[d]).join(", ")})` : "";
+  return `${cada}${dias}${r.base === "conclusao" ? " após concluir" : ""}`;
+}
+
+const diaNum = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / diaMs);
+const isoNum = (n: number) => new Date(n * diaMs).toISOString().slice(0, 10);
+/** Domingo da semana do dia (1970-01-01 foi uma quinta). */
+const domingoDe = (n: number) => n - ((n + 4) % 7);
+
+/** "AAAA-MM-DD" + n meses, com o dia PRESO ao último do mês (31/jan + 1 mês = 28 ou 29/fev). */
+function somarMeses(iso: string, n: number, diaAlvo: number): string {
+  const [a, m] = iso.split("-").map(Number);
+  const total = a * 12 + (m - 1) + n;
+  const ano = Math.floor(total / 12);
+  const mes = total % 12;
+  const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes, Math.min(diaAlvo, ultimo))).toISOString().slice(0, 10);
+}
+
+/** A data seguinte à `base` pela regra (um passo). */
+function passo(r: Recorrencia, base: string, diaAlvo: number): string {
+  if (r.freq === "diaria") return somarDias(base, r.intervalo);
+  if (r.freq === "mensal") return somarMeses(base, r.intervalo, diaAlvo);
+  if (r.freq === "anual") return somarMeses(base, 12 * r.intervalo, diaAlvo);
+  if (!r.dias?.length) return somarDias(base, 7 * r.intervalo);
+  // Semanal com dias: o próximo dia marcado, só nas semanas "da vez" (a cada `intervalo` semanas contando da base).
+  const b = diaNum(base);
+  const semanaBase = domingoDe(b);
+  for (let d = b + 1; d <= b + 7 * r.intervalo + 7; d++) {
+    const semanas = (domingoDe(d) - semanaBase) / 7;
+    if (semanas % r.intervalo === 0 && r.dias.includes((d + 4) % 7)) return isoNum(d);
+  }
+  return somarDias(base, 7 * r.intervalo);
+}
+
+/**
+ * A PRÓXIMA ocorrência de uma tarefa recorrente concluída: o novo prazo (e o início, mantendo a duração início → prazo).
+ * Conta do PRAZO atual (base "prazo"; sem prazo, da conclusão) ou da CONCLUSÃO (`concluidaEm` = "AAAA-MM-DD"); um prazo que
+ * ficou para trás avança até cair em `hoje` ou depois (nunca nasce atrasada). Sem prazo na atual, conta da conclusão —
+ * a próxima sempre nasce com prazo (a série precisa de uma agenda).
+ */
+export function proximaOcorrencia(
+  r: Recorrencia,
+  atual: { inicio: string | null; prazo: string | null },
+  concluidaEm: string,
+  hoje: string,
+): { inicio: string | null; prazo: string } {
+  const base = r.base === "prazo" && dataValida(atual.prazo) ? atual.prazo : concluidaEm;
+  const diaAlvo = Number(base.slice(8, 10));
+  let prazo = passo(r, base, diaAlvo);
+  for (let i = 0; prazo < hoje && i < 5000; i++) prazo = passo(r, prazo, diaAlvo);
+  const duracao = dataValida(atual.inicio) && dataValida(atual.prazo) ? diasEntre(atual.inicio, atual.prazo) : null;
+  return { inicio: duracao != null ? somarDias(prazo, -duracao) : null, prazo };
+}
+
+// ─── Fase 3: NOTIFICAÇÕES de PRAZO (derivadas na leitura — sem cron) ─────────────────────────────────────────
+
+export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao"] as const;
+export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
+
+/** O link que abre a tarefa no quadro. */
+export const linkTarefa = (quadroId: number, tarefaId: number) => `/painel/tarefas/${quadroId}?tarefa=${tarefaId}`;
+
+/**
+ * A notificação de PRAZO de uma tarefa ABERTA do responsável: "vence amanhã" (prazo = amanhã) ou "atrasada" (prazo já
+ * passou — até 30 dias; mais antigo não volta a avisar). A `chave` é por tarefa + prazo: avisa UMA vez por prazo (mudou
+ * o prazo, avisa de novo). Fora disso, `null`.
+ */
+export function notificacaoDePrazo(
+  t: { id: number; ticket: number; titulo: string; prazo: string | null; quadroId: number; quadroNome: string },
+  hoje: string,
+): { tipo: TipoNotificacao; chave: string; titulo: string; texto: string; link: string } | null {
+  if (!dataValida(t.prazo)) return null;
+  const d = diasEntre(hoje, t.prazo);
+  const base = { link: linkTarefa(t.quadroId, t.id), texto: `${rotuloTicket(t.ticket)} ${t.titulo} · ${t.quadroNome}` };
+  if (d === 1) return { ...base, tipo: "vence_amanha", chave: `vence:${t.id}:${t.prazo}`, titulo: "Tarefa vence amanhã" };
+  if (d < 0 && d >= -30) return { ...base, tipo: "atrasada", chave: `atrasada:${t.id}:${t.prazo}`, titulo: `Tarefa atrasada (prazo ${rotuloData(t.prazo, hoje)})` };
+  return null;
+}
+
+// ─── Fase 3: DASHBOARD do quadro ─────────────────────────────────────────────────────────────────────────────
+
+/** Semanas da série criadas × concluídas (a atual incluída — parcial). */
+export const SEMANAS_TAREFAS = 12;
+/** A classe do prazo de uma tarefa ABERTA (as 3 faixas do Dashboard). */
+export type FaixaPrazo = "atrasada" | "vence" | "ok";
+export const FAIXAS_PRAZO: FaixaPrazo[] = ["atrasada", "vence", "ok"];
+export const ROTULO_FAIXA: Record<FaixaPrazo, string> = { atrasada: "Atrasadas", vence: "Vencem em até 2 dias", ok: "No prazo / sem prazo" };
+export const COR_FAIXA: Record<FaixaPrazo, string> = { atrasada: "var(--danger)", vence: "var(--warn)", ok: "var(--ok)" };
+
+export const faixaPrazo = (t: TarefaResumo, hoje: string): FaixaPrazo => {
+  const e = estadoPrazo(t.prazo, hoje, false);
+  return e === "atrasada" ? "atrasada" : e === "vence" || e === "hoje" ? "vence" : "ok";
+};
+/** Segunda-feira (AAAA-MM-DD) da semana do dia. */
+const segundaDe = (iso: string) => {
+  const n = diaNum(iso);
+  return isoNum(n - ((n + 3) % 7));
+};
+const aberta = (t: TarefaResumo) => !t.arquivada && !t.concluidaEm;
+const valida = (t: TarefaResumo) => !t.arquivada;
+
+/** Um recorte do Dashboard (o que foi tocado) — `tarefasDoRecorte` usa a MESMA regra da agregação. */
+export type RecorteTarefas =
+  | { dim: "abertas" }
+  | { dim: "faixa"; faixa: FaixaPrazo }
+  | { dim: "concluidasMes" }
+  | { dim: "pessoa"; id: number | null }
+  | { dim: "lista"; id: number }
+  | { dim: "prioridade"; prioridade: Prioridade }
+  | { dim: "semana"; inicio: string; serie: "criadas" | "concluidas" };
+
+/** As tarefas (não arquivadas) de um recorte — a soma do detalhe = o número clicado. */
+export function tarefasDoRecorte(tarefas: TarefaResumo[], r: RecorteTarefas, hoje: string): TarefaResumo[] {
+  const mes = hoje.slice(0, 7);
+  return tarefas.filter((t) => {
+    if (!valida(t)) return false;
+    switch (r.dim) {
+      case "abertas":
+        return aberta(t);
+      case "faixa":
+        return aberta(t) && faixaPrazo(t, hoje) === r.faixa;
+      case "concluidasMes":
+        return !!t.concluidaEm && dataIsoBrasilia(t.concluidaEm).startsWith(mes);
+      case "pessoa":
+        return aberta(t) && (r.id == null ? t.pessoas.length === 0 : t.pessoas.includes(r.id));
+      case "lista":
+        return t.listaId === r.id;
+      case "prioridade":
+        return aberta(t) && t.prioridade === r.prioridade;
+      case "semana": {
+        const ts = r.serie === "criadas" ? t.criadoEm : t.concluidaEm;
+        const dia = dataIsoBrasilia(ts);
+        return !!dia && segundaDe(dia) === r.inicio;
+      }
+      default:
+        return false;
+    }
+  });
+}
+
+type PorFaixa = Record<FaixaPrazo, number>;
+const zeroFaixa = (): PorFaixa => ({ atrasada: 0, vence: 0, ok: 0 });
+
+export type PainelTarefas = {
+  abertas: number;
+  faixas: PorFaixa;
+  concluidasMes: number;
+  /** Dias médios da criação à conclusão (as concluídas); `null` sem nenhuma. */
+  leadTime: number | null;
+  /** % das concluídas COM prazo que terminaram até o prazo; `null` sem nenhuma. */
+  noPrazo: number | null;
+  semResponsavel: number;
+  /** Carga (abertas) por pessoa por faixa — "Sem responsável" (id `null`) por último. */
+  carga: { id: number | null; total: number; faixas: PorFaixa }[];
+  /** Cartões por lista (não arquivados), na ordem das listas ativas. */
+  porLista: { id: number; nome: string; n: number; limiteWip: number | null; concluida: boolean }[];
+  porPrioridade: { prioridade: Prioridade; n: number }[];
+  /** As últimas `SEMANAS_TAREFAS` semanas (segunda a domingo), a mais antiga primeiro. */
+  semanas: { inicio: string; rotulo: string; atual: boolean; criadas: number; concluidas: number }[];
+};
+
+/** Agrega o DASHBOARD do quadro sobre as tarefas já carregadas (arquivadas fora). `hoje` = "AAAA-MM-DD" (Brasília). */
+export function painelTarefas(tarefas: TarefaResumo[], listas: ListaTarefas[], hoje: string): PainelTarefas {
+  const faixas = zeroFaixa();
+  const porPessoa = new Map<number | null, { total: number; faixas: PorFaixa }>();
+  const porPrio = new Map<Prioridade, number>(PRIORIDADES.map((p) => [p, 0]));
+  const porLista = new Map<number, number>();
+  const segAtual = segundaDe(hoje);
+  const semanas = Array.from({ length: SEMANAS_TAREFAS }, (_, i) => {
+    const inicio = somarDias(segAtual, -7 * (SEMANAS_TAREFAS - 1 - i));
+    return { inicio, rotulo: `${inicio.slice(8)}/${inicio.slice(5, 7)}`, atual: i === SEMANAS_TAREFAS - 1, criadas: 0, concluidas: 0 };
+  });
+  const semana = new Map(semanas.map((s) => [s.inicio, s]));
+  let abertas = 0;
+  let concluidasMes = 0;
+  let somaLead = 0;
+  let nLead = 0;
+  let comPrazo = 0;
+  let dentro = 0;
+  let semResponsavel = 0;
+  for (const t of tarefas) {
+    if (!valida(t)) continue;
+    porLista.set(t.listaId, (porLista.get(t.listaId) ?? 0) + 1);
+    const criada = dataIsoBrasilia(t.criadoEm);
+    const sc = criada ? semana.get(segundaDe(criada)) : undefined;
+    if (sc) sc.criadas++;
+    if (t.concluidaEm) {
+      const fim = dataIsoBrasilia(t.concluidaEm);
+      if (fim) {
+        const sf = semana.get(segundaDe(fim));
+        if (sf) sf.concluidas++;
+        if (fim.startsWith(hoje.slice(0, 7))) concluidasMes++;
+        if (criada) {
+          somaLead += Math.max(0, diasEntre(criada, fim));
+          nLead++;
+        }
+        if (dataValida(t.prazo)) {
+          comPrazo++;
+          if (fim <= t.prazo) dentro++;
+        }
+      }
+      continue;
+    }
+    abertas++;
+    const f = faixaPrazo(t, hoje);
+    faixas[f]++;
+    porPrio.set(t.prioridade, (porPrio.get(t.prioridade) ?? 0) + 1);
+    if (!t.pessoas.length) semResponsavel++;
+    for (const id of t.pessoas.length ? t.pessoas : [null]) {
+      const c = porPessoa.get(id) ?? { total: 0, faixas: zeroFaixa() };
+      c.total++;
+      c.faixas[f]++;
+      porPessoa.set(id, c);
+    }
+  }
+  const carga = [...porPessoa.entries()]
+    .map(([id, c]) => ({ id, ...c }))
+    .sort((a, b) => (a.id == null ? 1 : b.id == null ? -1 : b.total - a.total || a.id - b.id));
+  return {
+    abertas,
+    faixas,
+    concluidasMes,
+    leadTime: nLead ? somaLead / nLead : null,
+    noPrazo: comPrazo ? (dentro / comPrazo) * 100 : null,
+    semResponsavel,
+    carga,
+    porLista: listas.filter((l) => !l.arquivada).map((l) => ({ id: l.id, nome: l.nome, n: porLista.get(l.id) ?? 0, limiteWip: l.limiteWip, concluida: l.concluida })),
+    porPrioridade: [...PRIORIDADES].reverse().map((p) => ({ prioridade: p, n: porPrio.get(p) ?? 0 })),
+    semanas,
+  };
+}
+
+// ─── Fase 3: AUTOMAÇÕES ──────────────────────────────────────────────────────────────────────────────────────
+
+export const GATILHOS = ["entrar_lista", "concluir"] as const;
+export type GatilhoAutomacao = (typeof GATILHOS)[number];
+export const ROTULO_GATILHO: Record<GatilhoAutomacao, string> = { entrar_lista: "Quando entrar na lista", concluir: "Quando for concluída" };
+export const TIPOS_ACAO = ["mover_lista", "atribuir", "etiquetar", "prioridade", "notificar"] as const;
+export type TipoAcao = (typeof TIPOS_ACAO)[number];
+export const ROTULO_ACAO: Record<TipoAcao, string> = {
+  mover_lista: "mover para a lista",
+  atribuir: "atribuir a",
+  etiquetar: "etiquetar com",
+  prioridade: "mudar a prioridade para",
+  notificar: "notificar os responsáveis e observadores",
+};
+export type AcaoAutomacao =
+  | { tipo: "mover_lista"; listaId: number }
+  | { tipo: "atribuir"; usuarioId: number }
+  | { tipo: "etiquetar"; etiquetaId: number }
+  | { tipo: "prioridade"; prioridade: Prioridade }
+  | { tipo: "notificar" };
+export type Automacao = { id: number; gatilho: GatilhoAutomacao; listaId: number | null; acao: AcaoAutomacao; ativa: boolean };
+/** Teto de regras por quadro. */
+export const MAX_AUTOMACOES = 20;
+
+/** Lê a ação gravada (JSON) — inválida = `null` (a regra é ignorada). */
+export function lerAcaoAutomacao(v: unknown): AcaoAutomacao | null {
+  let o: unknown = v;
+  if (typeof v === "string") {
+    try {
+      o = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  const a = (o ?? {}) as Record<string, unknown>;
+  const n = (k: string) => (Number.isInteger(a[k]) && (a[k] as number) > 0 ? (a[k] as number) : null);
+  switch (a.tipo) {
+    case "mover_lista":
+      return n("listaId") ? { tipo: "mover_lista", listaId: n("listaId") as number } : null;
+    case "atribuir":
+      return n("usuarioId") ? { tipo: "atribuir", usuarioId: n("usuarioId") as number } : null;
+    case "etiquetar":
+      return n("etiquetaId") ? { tipo: "etiquetar", etiquetaId: n("etiquetaId") as number } : null;
+    case "prioridade":
+      return (PRIORIDADES as readonly unknown[]).includes(a.prioridade) ? { tipo: "prioridade", prioridade: a.prioridade as Prioridade } : null;
+    case "notificar":
+      return { tipo: "notificar" };
+    default:
+      return null;
+  }
+}
+
+/**
+ * As AÇÕES que um evento dispara: a tarefa ENTROU na lista `listaId` (e, se a lista é de concluídas, também "concluir").
+ * Só as regras ATIVAS; "entrar na lista" casa a lista da regra. Profundidade 1: quem executa NÃO reavalia as regras
+ * depois das ações (mover por automação não dispara outra automação — nunca entra em laço).
+ */
+export function automacoesDoEvento(regras: Automacao[], evento: { listaId: number; concluida: boolean }): AcaoAutomacao[] {
+  return regras
+    .filter((r) => r.ativa && ((r.gatilho === "entrar_lista" && r.listaId === evento.listaId) || (r.gatilho === "concluir" && evento.concluida)))
+    .map((r) => r.acao);
+}
+
+// ─── Fase 3: MODELOS ─────────────────────────────────────────────────────────────────────────────────────────
+
+export type ModeloQuadro = { cor?: string; descricao?: string | null; listas: { nome: string; limiteWip: number | null; concluida: boolean }[]; etiquetas: { nome: string; cor: string }[] };
+export type ModeloTarefa = {
+  titulo: string;
+  descricao: string | null;
+  prioridade: Prioridade;
+  etiquetas: number[];
+  checklist: string[];
+  estimativaH: number | null;
+  /** Prazo RELATIVO: dias depois de criar (`null` = sem prazo). */
+  prazoDias: number | null;
+  recorrencia: Recorrencia | null;
+};
+export type ModeloResumo = { id: number; tipo: "quadro" | "tarefa"; nome: string; grupoId: number | null; quadroId: number | null; criadoPor: number | null };
+
+const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+const corHex = (v: unknown) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
+
+/** Qualquer JSON → um modelo de QUADRO válido (ao menos uma lista; listas/etiquetas com nome). */
+export function coerceModeloQuadro(v: unknown): ModeloQuadro {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const listas = (Array.isArray(o.listas) ? o.listas : [])
+    .map((l: Record<string, unknown>) => ({
+      nome: texto(l?.nome, 60),
+      limiteWip: Number.isInteger(l?.limiteWip) && (l.limiteWip as number) > 0 ? (l.limiteWip as number) : null,
+      concluida: l?.concluida === true,
+    }))
+    .filter((l) => l.nome)
+    .slice(0, 30);
+  const etiquetas = (Array.isArray(o.etiquetas) ? o.etiquetas : [])
+    .map((e: Record<string, unknown>) => ({ nome: texto(e?.nome, 30), cor: corHex(e?.cor) ?? "#6366f1" }))
+    .filter((e) => e.nome)
+    .slice(0, 50);
+  return {
+    cor: corHex(o.cor) ?? undefined,
+    descricao: texto(o.descricao, 500) || null,
+    listas: listas.length ? listas : [{ nome: "A fazer", limiteWip: null, concluida: false }],
+    etiquetas,
+  };
+}
+
+/** Qualquer JSON → um modelo de TAREFA válido. */
+export function coerceModeloTarefa(v: unknown): ModeloTarefa {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const n = Number(o.prazoDias);
+  const est = Number(o.estimativaH);
+  return {
+    titulo: texto(o.titulo, 200) || "Nova tarefa",
+    descricao: texto(o.descricao, 10_000) || null,
+    prioridade: (PRIORIDADES as readonly unknown[]).includes(o.prioridade) ? (o.prioridade as Prioridade) : "media",
+    etiquetas: Array.isArray(o.etiquetas) ? o.etiquetas.filter((e): e is number => Number.isInteger(e) && e > 0).slice(0, 20) : [],
+    checklist: Array.isArray(o.checklist) ? o.checklist.map((c) => texto(c, 300)).filter(Boolean).slice(0, 100) : [],
+    estimativaH: o.estimativaH != null && Number.isFinite(est) && est >= 0 && est <= 9999 ? est : null,
+    prazoDias: o.prazoDias != null && Number.isInteger(n) && n >= 0 && n <= 3650 ? n : null,
+    recorrencia: lerRecorrencia(o.recorrencia),
+  };
+}
+
+/** O prazo de uma tarefa criada HOJE por um modelo (prazo relativo). */
+export const prazoDoModelo = (m: Pick<ModeloTarefa, "prazoDias">, hoje: string) => (m.prazoDias == null ? null : somarDias(hoje, m.prazoDias));

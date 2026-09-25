@@ -5,7 +5,15 @@ import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandosCriarTarefa, comandosMassa, comandosMover, comandosVinculos } from "../src/lib/tarefas-sql.ts";
+import { coerceModeloQuadro } from "../src/lib/tarefas-core.ts";
+import {
+  comandosCriarQuadroDoModelo,
+  comandosCriarTarefa,
+  comandosMassa,
+  comandosMover,
+  comandosNotificacoes,
+  comandosVinculos,
+} from "../src/lib/tarefas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // TAREFAS pelos MESMOS builders do servidor, no driver `drizzle-orm/d1` REAL e DENTRO de `db.batch`.
@@ -92,5 +100,39 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     await orm.batch(comandosMassa(orm, [1], { campo: "arquivar", arquivada: true }) as never);
     const r = db.prepare("SELECT id, prioridade AS p, arquivada AS a FROM tarefas ORDER BY id").all() as { id: number; p: string; a: number }[];
     assert.deepEqual(r.map((x) => [x.p, x.a]), [["media", 1], ["urgente", 0]]);
+  });
+
+  it("recorrência: a próxima nasce com checklist e a regra; a MESMA anterior de novo derruba o lote (sem duplicar nem gastar ticket)", async () => {
+    const rec = { freq: "diaria" as const, intervalo: 1, base: "prazo" as const };
+    const d = { ...base, listaId: 1, titulo: "Rotina", pessoas: [9501], etiquetas: [], prazo: "2026-09-26", recorrencia: rec, recorrenciaAnteriorId: 2, checklist: ["a", "b"] };
+    const r = await orm.batch(comandosCriarTarefa(orm, d));
+    const nova = (r.at(-1) as { id: number; ticket: number }[])[0];
+    const t = db.prepare("SELECT recorrencia AS r, recorrencia_anterior_id AS a FROM tarefas WHERE id = ?").get(nova.id) as { r: string; a: number };
+    assert.deepEqual([JSON.parse(t.r), t.a], [rec, 2]);
+    const itens = db.prepare("SELECT texto, feito, ordem FROM tarefa_checklist WHERE tarefa_id = ? ORDER BY ordem").all(nova.id) as { texto: string; feito: number }[];
+    assert.deepEqual(itens.map((i) => [i.texto, i.feito]), [["a", 0], ["b", 0]]);
+    const prox = (db.prepare("SELECT prox_ticket AS p FROM tarefa_quadros WHERE id = 1").get() as { p: number }).p;
+    await assert.rejects(orm.batch(comandosCriarTarefa(orm, d)));
+    assert.equal((db.prepare("SELECT prox_ticket AS p FROM tarefa_quadros WHERE id = 1").get() as { p: number }).p, prox);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefas WHERE recorrencia_anterior_id = 2").get() as { n: number }).n, 1);
+  });
+
+  it("quadro a partir de modelo: listas na ordem e etiquetas, num lote", async () => {
+    const m = coerceModeloQuadro({ listas: [{ nome: "Fila" }, { nome: "Pronto", concluida: true, limiteWip: 4 }], etiquetas: [{ nome: "Doc", cor: "#123456" }] });
+    const r = await orm.batch(comandosCriarQuadroDoModelo(orm, { grupoId: 9500, nome: "Novo", cor: "#112233", descricao: null, criadoPor: 9501 }, m));
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const ls = db.prepare("SELECT nome, concluida AS c, limite_wip AS w FROM tarefa_listas WHERE quadro_id = ? ORDER BY ordem").all(id) as { nome: string; c: number; w: number | null }[];
+    assert.deepEqual(ls.map((l) => [l.nome, l.c, l.w]), [["Fila", 0, null], ["Pronto", 1, 4]]);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_etiquetas WHERE quadro_id = ?").get(id) as { n: number }).n, 1);
+  });
+
+  it("notificações: lotes de 9 linhas; a chave repetida da mesma pessoa é ignorada", async () => {
+    const linhas = Array.from({ length: 20 }, (_, i) => ({ usuarioId: 9501, tipo: "atribuida" as const, titulo: `N${i}` }));
+    const cmds = comandosNotificacoes(orm, [...linhas, { usuarioId: 9502, tipo: "atrasada", titulo: "A", chave: "k" }]);
+    assert.equal(cmds.length, 3);
+    await orm.batch(cmds as never);
+    await orm.batch(comandosNotificacoes(orm, [{ usuarioId: 9502, tipo: "atrasada", titulo: "A", chave: "k" }, { usuarioId: 9501, tipo: "atrasada", titulo: "A", chave: "k" }]) as never);
+    const n = (u: number) => (db.prepare("SELECT COUNT(*) AS n FROM notificacoes WHERE usuario_id = ?").get(u) as { n: number }).n;
+    assert.deepEqual([n(9501), n(9502)], [21, 1]);
   });
 });

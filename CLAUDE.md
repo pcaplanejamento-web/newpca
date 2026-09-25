@@ -1780,7 +1780,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`carregarQuadros`, `carregarQuadro` = listas + cartões resumidos + etiquetas + pessoas do grupo + edições salvas, UMA carga
   para as três abas).
 - **Espaço do quadro** (`/painel/tarefas/[id]` → **`QuadroTarefas`**): UMA linha de cabeçalho (voltar · cor · nome · grupo ·
-  abertas/atrasadas/concluídas) + `AbasEspaco` **Quadro · Lista · Calendário · Configuração** com `FerramentasAba` (**`FiltrosTarefas`** —
+  abertas/atrasadas/concluídas) + `AbasEspaco` **Dashboard · Quadro · Lista · Calendário · Configuração** com `FerramentasAba` (**`FiltrosTarefas`** —
   busca + `SeletorFiltro` Responsável [a FOTO da escolhida; "as minhas"] / Prazo / Prioridade / Etiqueta + Limpar — e "Nova
   tarefa"). Os cartões ficam em estado LOCAL (sincronizado com o servidor a cada `router.refresh`); o filtro segue entre abas.
   - **Quadro** = **`QuadroKanban`** (listas lado a lado, até o fim do display no desktop com rolagem interna por lista —
@@ -1844,7 +1844,52 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `PATCH`/`DELETE …/comentarios/[cid]`, `POST …/anexos` + `GET`/`DELETE /api/tarefas/anexos/[id]`, `GET …/historico`,
     `POST /api/tarefas/massa`, `GET /api/tarefas/vinculos?tipo=&q=`, `GET /api/tarefas/do-vinculo?tipo=&id=` — todas
     `exigirUsuario` + membro do grupo do quadro (`tarefaAcessivel`), vínculo conferido por `vinculoAcessivel`, auditoria.
-- **Próxima fase** (ver `docs/ROADMAP.md`): recorrência, Dashboard do quadro, notificações no sino, modelos e automações.
+- **FASE 3 — recorrência, Dashboard, notificações, modelos e automações (migração `0044`, aditiva):** `tarefas` +
+  `recorrencia` (JSON `Recorrencia` {freq diaria|semanal|mensal|anual, intervalo 1–365, dias 0–6 na semanal, base prazo|
+  conclusao}) + `recorrencia_anterior_id` (FK set null, **ÚNICO** — a mesma anterior de novo derruba o lote inteiro: concluir,
+  reabrir e concluir nunca duplica nem gasta ticket); tabelas `notificacoes` (usuário, tipo, título/texto/link, tarefa/quadro
+  cascade, ator + snapshot do nome, `lida`, **`chave` única por pessoa** = dedup das derivadas), `tarefa_modelos` (`quadro` =
+  do GRUPO, `tarefa` = do QUADRO; `conteudo` JSON) e `tarefa_automacoes` (quadro, `gatilho` entrar_lista|concluir, lista,
+  `acao` JSON, `ativa`). Origens de auditoria novas `automacao`/`recorrencia`; entidades `tarefa_modelo`/`tarefa_automacao`.
+  - **Núcleo puro (`tarefas-core`, testado):** `lerRecorrencia`/`rotuloRecorrencia`/**`proximaOcorrencia`** (mensal preso ao
+    fim do mês, semanal pelos dias e a cada N semanas, base atrasada avança até hoje, mantém a duração início → prazo; sem
+    prazo conta da conclusão), **`notificacaoDePrazo`** (vence amanhã | atrasada até 30 dias; chave `tipo:tarefa:prazo` —
+    avisa UMA vez por prazo), **`painelTarefas`** + **`tarefasDoRecorte`** (a MESMA regra — soma do detalhe = número; semana
+    seg → dom como a Mesa), **`automacoesDoEvento`** (só as ativas; profundidade 1), `lerAcaoAutomacao`,
+    `coerceModeloQuadro`/`coerceModeloTarefa`/`prazoDoModelo`. Builders novos (`tarefas-sql`, testados no driver D1 real):
+    `comandosCriarTarefa` com recorrência/anterior/checklist, `comandosCriarQuadroDoModelo`, `comandosNotificacoes` (9 linhas
+    por INSERT, `onConflictDoNothing`).
+  - **Motor (`tarefas.ts`):** **`aposMovimento(u, quadro, ids, lista)`** — ponto ÚNICO chamado nos 4 caminhos que põem a
+    tarefa numa lista (`POST /api/tarefas`, `PATCH /api/tarefas/[id]` com troca de lista, `/mover`, massa "lista"): roda as
+    automações (a ação conferida contra o quadro AGORA — `acaoValida`; mover/atribuir/etiquetar/prioridade viram a MESMA
+    `comandosMassa`; `notificar` avisa responsáveis + observadores) e, terminando CONCLUÍDA, **`gerarRecorrentes`** (1ª lista
+    aberta, mesmos responsáveis/observadores/etiquetas/vínculo/estimativa, checklist desmarcado). BEST-EFFORT; as rotas
+    devolvem `atualizar` (o quadro recarrega). `avisarSobreTarefa`/`avisarAtribuicao` (responsável NOVO na criação, edição e
+    massa; menção NOVA no comentário/edição; "comentou" aos que acompanham).
+  - **Notificações (`notificacoes.ts`):** `notificar` BEST-EFFORT (nunca o próprio ator); **as de prazo são DERIVADAS NA
+    LEITURA** (`contarNaoLidas` no layout e `listarNotificacoes`: tarefas abertas em que a pessoa é responsável, nos quadros
+    dos grupos dela, prazo de 30 dias atrás até amanhã → gravadas pela `chave`, então o "lida" persiste); as lidas saem após
+    60 dias. `GET /api/notificacoes` (`?contar=1` = só o número) e `PATCH` (`{ids ≤ 90}` | `{todas:true}`).
+    **`SinoNotificacoes`** (cabeçalho do `AppShell`): contador do layout, reconta ao trocar de tela e ao voltar à janela
+    (sem polling); ao abrir carrega a lista (`ItemNotificacao`: foto do autor ou ícone do tipo, cor do semáforo nas de
+    prazo); tocar marca lida e abre a tarefa (`linkTarefa` → `?tarefa=`); "Marcar todas como lidas".
+  - **Aba Dashboard** (1ª aba; `DashboardTarefas` por `next/dynamic`, esqueleto = `DashboardMesaEsqueleto`): KPIs (abertas
+    + spark, atrasadas, vencem em até 2 dias, concluídas no mês + % no prazo, tempo médio até concluir) + Saúde dos prazos,
+    **Carga por pessoa** (tocar filtra o Responsável do quadro), Tarefas por lista (âmbar acima do WIP), Abertas por
+    prioridade, Entrada e Conclusões por semana (12) — tocar abre a **`OrigemDados`** com as tarefas (a linha abre o detalhe).
+    Sobre as tarefas JÁ FILTRADAS da barra; nenhuma consulta nova.
+  - **Recorrência na tela:** **`RecorrenciaTarefa`** no `TarefaDetalhe` (`Switch` Repetir + `Segmented` frequência + "a cada
+    N" + dias da semana em chips + base; mostra a próxima data); `IconRepetir` no cartão e no calendário, coluna
+    "Recorrência" na Lista e no .xlsx.
+  - **Modelos:** "Novo quadro" com **"Começar de"** (modelos de quadro dos grupos da pessoa — `POST /api/tarefas/quadros`
+    `{modeloId}` → `criarQuadroDoModelo`); o detalhe da tarefa NOVA tem **"Usar modelo"** (preenche o rascunho; o checklist
+    vai no `POST /api/tarefas` `checklist`) e a existente, **"Salvar como modelo"** (nome + prazo relativo). Rotas `POST
+    /api/tarefas/modelos` (quadro = editor; tarefa = membro) e `DELETE /api/tarefas/modelos/[id]` (quem salvou ou editor).
+  - **Configuração:** seções **Automações** (`AutomacoesQuadro`: as regras em FRASE — `fraseAutomacao` —, a da recorrência
+    fixa como "Nativa", liga/desliga, excluir, e o formulário Quando · Fazer · Com; até `MAX_AUTOMACOES`=20) e **Modelos**
+    (`ModelosQuadro`). Rotas `POST /api/tarefas/quadros/[id]/automacoes` e `PATCH`/`DELETE /api/tarefas/automacoes/[id]`
+    (editor).
+- **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import type { Pessoa } from "@/lib/pessoa";
 import type { Quadro } from "@/lib/tarefas";
-import type { EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
+import type { Automacao, EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
 import { AcoesCadastro } from "./AcoesCadastro";
+import { AutomacoesQuadro, ModelosQuadro } from "./AutomacoesQuadro";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
@@ -23,12 +25,18 @@ type RascunhoEtiqueta = { id: number | null; nome: string; cor: string };
 /**
  * A aba CONFIGURAÇÃO do quadro (editores; os demais só consultam): os dados do quadro (nome · cor · descrição), arquivar
  * e excluir; as LISTAS (ordem ↑/↓, nome, limite de cartões — WIP —, "lista de concluídas" — entrar nela conclui a tarefa —,
- * arquivar; excluir só a vazia) e as ETIQUETAS (nome + cor). Cada alteração grava na hora e recarrega o quadro.
+ * arquivar; excluir só a vazia), as ETIQUETAS (nome + cor), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
+ * recarrega o quadro.
  */
 export function ConfiguracaoQuadro({
   quadro,
   listas,
   etiquetas,
+  automacoes,
+  pessoas,
+  modelosQuadro,
+  modelosTarefa,
+  usuarioId,
   podeEditar,
   onMudou,
 }: {
@@ -36,6 +44,12 @@ export function ConfiguracaoQuadro({
   /** TODAS as listas (inclusive arquivadas), na ordem. */
   listas: ListaTarefas[];
   etiquetas: EtiquetaTarefa[];
+  automacoes: Automacao[];
+  /** As pessoas do grupo (alvo de "atribuir"). */
+  pessoas: Pessoa[];
+  modelosQuadro: { id: number; nome: string; criadoPor: number | null; listas: string[] }[];
+  modelosTarefa: { id: number; nome: string; criadoPor: number | null }[];
+  usuarioId: number;
   podeEditar: boolean;
   onMudou: () => void;
 }) {
@@ -246,6 +260,32 @@ export function ConfiguracaoQuadro({
           )}
         </Secao>
       </div>
+
+      <Secao titulo="Automações">
+        <AutomacoesQuadro
+          quadroId={quadro.id}
+          automacoes={automacoes}
+          listas={listas.filter((l) => !l.arquivada)}
+          etiquetas={etiquetas}
+          pessoas={pessoas}
+          podeEditar={podeEditar}
+          ocupado={ocupado != null}
+          gravar={gravar}
+        />
+      </Secao>
+
+      <Secao titulo="Modelos">
+        <ModelosQuadro
+          quadroId={quadro.id}
+          quadroNome={quadro.nome}
+          modelosQuadro={modelosQuadro.map((m) => ({ ...m, detalhe: m.listas.join(" · ") }))}
+          modelosTarefa={modelosTarefa.map((m) => ({ ...m, detalhe: "" }))}
+          usuarioId={usuarioId}
+          podeEditar={podeEditar}
+          ocupado={ocupado != null}
+          gravar={gravar}
+        />
+      </Secao>
 
       <Modal
         open={lista != null}

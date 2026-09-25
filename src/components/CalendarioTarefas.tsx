@@ -13,7 +13,7 @@ import {
   tarefasPorPrazo,
 } from "@/lib/tarefas-core";
 import { Button } from "./Button";
-import { IconChevronLeft, IconChevronRight } from "./icons";
+import { IconChevronLeft, IconChevronRight, IconRepetir } from "./icons";
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 /** Quantos cartões cabem num dia antes do "+N". */
@@ -34,6 +34,7 @@ function CartaoDia({ t, hoje, onAbrir }: { t: TarefaResumo; hoje: string; onAbri
     >
       <span className="shrink-0 pl-1 font-mono text-[10.5px] text-faint">{rotuloTicket(t.ticket)}</span>
       <span className="truncate">{t.titulo}</span>
+      {t.recorrencia && <IconRepetir aria-label="Recorrente" className="ml-auto h-3 w-3 shrink-0 text-faint" />}
     </button>
   );
 }

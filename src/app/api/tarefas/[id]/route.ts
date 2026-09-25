@@ -2,7 +2,9 @@ import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import {
+  aposMovimento,
   atualizarTarefa,
+  avisarAtribuicao,
   conteudoTarefa,
   etiquetasDoQuadro,
   excluirTarefa,
@@ -45,10 +47,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
   if (campos.vinculo && !(campos.vinculo.tipo === r.tarefa.vinculo?.tipo && campos.vinculo.id === r.tarefa.vinculo.id) && !(await vinculoAcessivel(a.u, campos.vinculo)))
     return erro("Vínculo não encontrado.", 422);
+  let entrou: { id: number; concluida: boolean } | null = null;
   if (listaId != null && listaId !== r.tarefa.listaId) {
     const lista = await getLista(listaId);
     if (!lista || lista.quadroId !== r.quadro.id || lista.arquivada) return erro("Lista inválida.", 422);
     await moverTarefa(id, lista.id, await ultimoDaLista(lista.id, id), null, lista.concluida);
+    entrou = lista;
   }
   await atualizarTarefa(id, campos, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined });
   await registrarAuditoria({
@@ -60,7 +64,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     antes: r.tarefa,
     depois: p.data,
   });
-  return ok();
+  if (pessoas) await avisarAtribuicao(a.u, r.tarefa.pessoas, pessoas, { ...r.tarefa, titulo: campos.titulo ?? r.tarefa.titulo }, r.quadro);
+  // Entrou noutra lista: automações e, concluída, a próxima ocorrência (depois de gravar a regra nova, se veio junto).
+  const atualizar = entrou ? await aposMovimento(a.u, r.quadro, [id], entrou) : false;
+  return ok({ atualizar });
 }
 
 /** Exclui a tarefa (editores) — no dia a dia, prefira arquivar. */

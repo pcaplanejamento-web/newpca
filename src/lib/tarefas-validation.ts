@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PRIORIDADES, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { FREQUENCIAS, GATILHOS, PRIORIDADES, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -9,6 +9,7 @@ const data = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
   .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)), "Data inválida.");
 const id = z.number().int().positive();
+const checklistTexto = z.string().trim().min(1, "Escreva o item.").max(300, "Item com até 300 caracteres.");
 const ids = (max: number) => z.array(id).max(max).transform((v) => [...new Set(v)]);
 
 export const quadroSchema = z.object({
@@ -16,6 +17,8 @@ export const quadroSchema = z.object({
   cor: cor.optional(),
   descricao: z.string().trim().max(500, "Descrição com até 500 caracteres.").nullable().optional(),
 });
+/** Criar um quadro — em branco ou a partir de um MODELO de quadro (`modeloId`). */
+export const criarQuadroSchema = quadroSchema.extend({ modeloId: id.nullable().optional() });
 export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional() });
 
 export const listaSchema = z.object({
@@ -32,6 +35,14 @@ export const etiquetaSchema = z.object({
   cor,
 });
 
+/** A regra de REPETIÇÃO (`Recorrencia`, `tarefas-core`). */
+export const recorrenciaSchema = z.object({
+  freq: z.enum(FREQUENCIAS),
+  intervalo: z.number().int().min(1, "Intervalo de 1 a 365.").max(365, "Intervalo de 1 a 365."),
+  dias: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  base: z.enum(["prazo", "conclusao"]),
+});
+
 const camposTarefa = {
   titulo: z.string().trim().min(1, "Dê um título à tarefa.").max(200, "Título com até 200 caracteres."),
   descricao: z.string().max(10_000, "Descrição com até 10.000 caracteres.").nullable().optional(),
@@ -43,11 +54,14 @@ const camposTarefa = {
   etiquetas: ids(20).optional(),
   estimativaH: z.number().min(0).max(9999).nullable().optional(),
   vinculo: z.object({ tipo: z.enum(TIPOS_VINCULO), id }).nullable().optional(),
+  recorrencia: recorrenciaSchema.nullable().optional(),
 };
 const inicioAntesDoPrazo = (v: { inicio?: string | null; prazo?: string | null }) => !v.inicio || !v.prazo || v.inicio <= v.prazo;
 const MSG_DATAS = { message: "O início não pode ser depois do prazo.", path: ["prazo"] };
 
-export const criarTarefaSchema = z.object({ quadroId: id, listaId: id, ...camposTarefa }).refine(inicioAntesDoPrazo, MSG_DATAS);
+export const criarTarefaSchema = z
+  .object({ quadroId: id, listaId: id, ...camposTarefa, checklist: z.array(checklistTexto).max(100).optional() })
+  .refine(inicioAntesDoPrazo, MSG_DATAS);
 export const editarTarefaSchema = z
   .object({ ...camposTarefa, titulo: camposTarefa.titulo.optional(), listaId: id.optional(), arquivada: z.boolean().optional() })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
@@ -56,7 +70,7 @@ export const editarTarefaSchema = z
 export const moverTarefaSchema = z.object({ listaId: id, anteriorId: id.nullable(), proximoId: id.nullable() });
 
 /** Um item do CHECKLIST (criar/editar). */
-export const checklistSchema = z.object({ texto: z.string().trim().min(1, "Escreva o item.").max(300, "Item com até 300 caracteres.") });
+export const checklistSchema = z.object({ texto: checklistTexto });
 export const editarChecklistSchema = z
   .object({ texto: checklistSchema.shape.texto.optional(), feito: z.boolean().optional(), anteriorId: id.nullable().optional(), proximoId: id.nullable().optional() })
   .refine((v) => v.texto != null || v.feito != null || v.anteriorId !== undefined || v.proximoId !== undefined, "Nada a alterar.");
@@ -110,3 +124,29 @@ export const massaTarefasSchema = z.object({
   ]),
 });
 export type AcaoMassaTarefas = z.infer<typeof massaTarefasSchema>["acao"];
+
+/** Marcar notificações como LIDAS: as pedidas ou todas. */
+export const notificacoesPatchSchema = z.union([z.object({ ids: z.array(id).min(1).max(90) }), z.object({ todas: z.literal(true) })]);
+
+const nomeModelo = z.string().trim().min(1, "Dê um nome ao modelo.").max(80, "Nome com até 80 caracteres.");
+/** Salvar um MODELO: de quadro (retrato das listas/etiquetas do quadro) ou de tarefa (os campos da tarefa). */
+export const modeloSchema = z.discriminatedUnion("tipo", [
+  z.object({ tipo: z.literal("quadro"), nome: nomeModelo, quadroId: id }),
+  z.object({ tipo: z.literal("tarefa"), nome: nomeModelo, tarefaId: id, prazoDias: z.number().int().min(0).max(3650).nullable().optional() }),
+]);
+
+/** Uma AUTOMAÇÃO do quadro ("quando X, fazer Y"). */
+export const automacaoSchema = z
+  .object({
+    gatilho: z.enum(GATILHOS),
+    listaId: id.nullable().optional(),
+    acao: z.discriminatedUnion("tipo", [
+      z.object({ tipo: z.literal("mover_lista"), listaId: id }),
+      z.object({ tipo: z.literal("atribuir"), usuarioId: id }),
+      z.object({ tipo: z.literal("etiquetar"), etiquetaId: id }),
+      z.object({ tipo: z.literal("prioridade"), prioridade: z.enum(PRIORIDADES) }),
+      z.object({ tipo: z.literal("notificar") }),
+    ]),
+  })
+  .refine((v) => v.gatilho !== "entrar_lista" || v.listaId != null, { message: "Escolha a lista.", path: ["listaId"] });
+export const editarAutomacaoSchema = z.object({ ativa: z.boolean() });

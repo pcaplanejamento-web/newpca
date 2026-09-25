@@ -10,11 +10,14 @@ import {
   type EtiquetaTarefa,
   estadoPrazo,
   type ListaTarefas,
+  type ModeloTarefa,
   type Prioridade,
+  prazoDoModelo,
   PRIORIDADES,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   rotuloTicket,
+  type Recorrencia,
   type TarefaResumo,
   type VinculoTarefa as Vinculo,
 } from "@/lib/tarefas-core";
@@ -27,8 +30,9 @@ import { useConfirmacao } from "./Confirmacao";
 import { ehDesktop } from "./espacamento";
 import { SelectField, TextArea, TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconTrash } from "./icons";
+import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconModelo, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { RecorrenciaTarefa } from "./RecorrenciaTarefa";
 import { Segmented } from "./Segmented";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
@@ -49,7 +53,12 @@ type Rascunho = {
   etiquetas: number[];
   vinculo: Vinculo | null;
   descricao: string;
+  recorrencia: Recorrencia | null;
+  /** Itens de checklist de um MODELO (só na criação — vão junto no POST). */
+  checklist: string[];
 };
+/** Um modelo de tarefa do quadro (o seletor "Usar modelo"). */
+export type ModeloTarefaOpcao = { id: number; nome: string; conteudo: ModeloTarefa };
 type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; anexos: AnexoTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -69,8 +78,9 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
  * DETALHE de uma tarefa (criar e editar) num banner: título, lista, prioridade, responsáveis e observadores (pessoas do
  * grupo), início e PRAZO (com o semáforo), estimativa, etiquetas, VÍNCULO (protocolo/DFD/PCA/orçamento) e a descrição —
  * "Salvar" manda SÓ o que mudou. Da tarefa existente, também o CHECKLIST e os ANEXOS (gravam na hora) e, no painel da
- * direita, a ATIVIDADE — comentários com @menção | histórico. Arquivar/restaurar (qualquer pessoa do grupo) e excluir
- * (editores). Fechar com alterações pede confirmação.
+ * direita, a ATIVIDADE — comentários com @menção | histórico. RECORRÊNCIA (concluir cria a próxima). Na criação, "Usar
+ * modelo" preenche o rascunho; a existente vira MODELO ("Salvar como modelo"). Arquivar/restaurar (qualquer pessoa do
+ * grupo) e excluir (editores). Fechar com alterações pede confirmação.
  */
 export function TarefaDetalhe({
   aberto,
@@ -83,6 +93,7 @@ export function TarefaDetalhe({
   hoje,
   usuarioId,
   podeExcluir,
+  modelos = [],
   onFechar,
   onSalvo,
 }: {
@@ -100,6 +111,8 @@ export function TarefaDetalhe({
   usuarioId: number;
   /** Editor (admin/gestor): exclui a tarefa e modera comentários/anexos. */
   podeExcluir: boolean;
+  /** Os MODELOS de tarefa do quadro. */
+  modelos?: ModeloTarefaOpcao[];
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
@@ -113,6 +126,7 @@ export function TarefaDetalhe({
   const [atividade, setAtividade] = useState(false);
   const [abaAtividade, setAbaAtividade] = useState<"comentarios" | "historico">("comentarios");
   const [versaoHist, setVersaoHist] = useState(0);
+  const [modeloNovo, setModeloNovo] = useState<{ nome: string; prazoDias: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const pedido = useRef(0);
   const historico = useHistorico(atividade && abaAtividade === "historico" && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
@@ -157,6 +171,8 @@ export function TarefaDetalhe({
           etiquetas: existente.etiquetas,
           vinculo: existente.vinculo,
           descricao: "",
+          recorrencia: existente.recorrencia,
+          checklist: [],
         }
       : {
           titulo: "",
@@ -170,6 +186,8 @@ export function TarefaDetalhe({
           etiquetas: [],
           vinculo: aberto.tipo === "nova" ? (aberto.vinculo ?? null) : null,
           descricao: "",
+          recorrencia: null,
+          checklist: [],
         };
     setR(base);
     setInicial(base);
@@ -233,6 +251,8 @@ export function TarefaDetalhe({
           observadores: r.observadores,
           etiquetas: r.etiquetas,
           vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
+          recorrencia: r.recorrencia,
+          checklist: r.checklist,
         });
         toast.success("Tarefa criada.");
       } else if (existente) {
@@ -248,6 +268,7 @@ export function TarefaDetalhe({
         if (!iguais(r.etiquetas, inicial.etiquetas)) d.etiquetas = r.etiquetas;
         if (!mesmoVinculo(r.vinculo, inicial.vinculo)) d.vinculo = r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null;
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
+        if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
         toast.success("Tarefa salva.");
       }
@@ -294,6 +315,41 @@ export function TarefaDetalhe({
       toast.error((e as Error).message);
     } finally {
       setSalvando(null);
+    }
+  };
+
+  /** "Usar modelo": o rascunho da tarefa NOVA recebe os campos do modelo (as etiquetas que ainda existem; o prazo relativo). */
+  const usarModelo = (id: string) => {
+    const m = modelos.find((x) => String(x.id) === id)?.conteudo;
+    if (!m) return;
+    setR((x) =>
+      x
+        ? {
+            ...x,
+            titulo: m.titulo,
+            descricao: m.descricao ?? "",
+            prioridade: m.prioridade,
+            etiquetas: m.etiquetas.filter((e) => etiquetas.some((y) => y.id === e)),
+            estimativa: m.estimativaH == null ? "" : String(m.estimativaH).replace(".", ","),
+            prazo: prazoDoModelo(m, hoje) ?? "",
+            recorrencia: m.recorrencia,
+            checklist: m.checklist,
+          }
+        : x,
+    );
+  };
+
+  const salvarComoModelo = async () => {
+    if (!existente || !modeloNovo?.nome.trim()) return;
+    const dias = modeloNovo.prazoDias.trim() === "" ? null : Number(modeloNovo.prazoDias);
+    if (dias != null && (!Number.isInteger(dias) || dias < 0 || dias > 3650)) return toast.error("Prazo: dias inteiros de 0 a 3650.");
+    try {
+      await chamar("/api/tarefas/modelos", "POST", { tipo: "tarefa", nome: modeloNovo.nome.trim(), tarefaId: existente.id, prazoDias: dias });
+      toast.success("Modelo salvo — use em “Nova tarefa”.");
+      setModeloNovo(null);
+      onSalvo();
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -395,6 +451,17 @@ export function TarefaDetalhe({
               />
             )}
             {existente && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={salvando != null}
+                aria-label="Salvar como modelo"
+                title="Salvar como modelo"
+                icon={<IconModelo className="h-4 w-4" />}
+                onClick={() => setModeloNovo({ nome: existente.titulo, prazoDias: "" })}
+              />
+            )}
+            {existente && (
               <Button variant={atividade ? "secondary" : "ghost"} size="sm" aria-pressed={atividade} icon={<IconComentario className="h-4 w-4" />} onClick={() => setAtividade((a) => !a)}>
                 Atividade{nComentarios ? ` (${nComentarios})` : ""}
               </Button>
@@ -411,6 +478,16 @@ export function TarefaDetalhe({
         }
       >
         <div className="space-y-4">
+          {nova && modelos.length > 0 && (
+            <SelectField label="Usar modelo" value="" onChange={(e) => usarModelo(e.target.value)}>
+              <option value="">Escolha um modelo para preencher…</option>
+              {modelos.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nome}
+                </option>
+              ))}
+            </SelectField>
+          )}
           <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova} onChange={(e) => set("titulo", e.target.value)} />
           <div className="grid gap-4 sm:grid-cols-2">
             <SelectField label="Lista" value={String(r.listaId)} onChange={(e) => set("listaId", Number(e.target.value))}>
@@ -498,6 +575,9 @@ export function TarefaDetalhe({
               </div>
             </Secao>
           )}
+          <Secao titulo="Recorrência">
+            <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />
+          </Secao>
           <Secao titulo="Vínculo">
             <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />
           </Secao>
@@ -511,7 +591,10 @@ export function TarefaDetalhe({
             onChange={(e) => set("descricao", e.target.value)}
           />
           {nova ? (
-            <p className="text-[12.5px] text-muted">Checklist, anexos e comentários ficam disponíveis depois de criar a tarefa.</p>
+            <p className="text-[12.5px] text-muted">
+              {r.checklist.length ? `O checklist do modelo (${r.checklist.length} ${r.checklist.length === 1 ? "item" : "itens"}) entra ao criar. ` : ""}
+              Checklist, anexos e comentários ficam disponíveis depois de criar a tarefa.
+            </p>
           ) : (
             <>
               <Secao titulo="Checklist">
@@ -547,6 +630,36 @@ export function TarefaDetalhe({
             </>
           )}
         </div>
+      </Modal>
+      <Modal
+        open={modeloNovo != null}
+        onClose={() => setModeloNovo(null)}
+        titulo="Salvar como modelo"
+        size="md"
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setModeloNovo(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={!modeloNovo?.nome.trim()} onClick={salvarComoModelo}>
+              Salvar modelo
+            </Button>
+          </div>
+        }
+      >
+        {modeloNovo && (
+          <div className="space-y-4">
+            <TextField label="Nome do modelo" value={modeloNovo.nome} maxLength={80} onChange={(e) => setModeloNovo({ ...modeloNovo, nome: e.target.value })} />
+            <TextField
+              label="Prazo (dias depois de criar)"
+              inputMode="numeric"
+              value={modeloNovo.prazoDias}
+              placeholder="Vazio = sem prazo"
+              onChange={(e) => setModeloNovo({ ...modeloNovo, prazoDias: e.target.value })}
+            />
+            <p className="text-[12.5px] text-muted">Guarda título, descrição, prioridade, etiquetas, estimativa, recorrência e o checklist (desmarcado) — sem responsáveis nem vínculo.</p>
+          </div>
+        )}
       </Modal>
       {confirmacao}
     </>

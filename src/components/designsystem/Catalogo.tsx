@@ -114,11 +114,15 @@ import { CartaoTarefa } from "@/components/CartaoTarefa";
 import { ChecklistTarefa } from "@/components/ChecklistTarefa";
 import { ComentariosTarefa } from "@/components/ComentariosTarefa";
 import { VinculoTarefa } from "@/components/VinculoTarefa";
+import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
+import { DashboardTarefas } from "@/components/DashboardTarefas";
+import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
+import { ItemNotificacao } from "@/components/SinoNotificacoes";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { QuadroCard, QuadroNovoCard } from "@/components/QuadroCard";
 import { ColunaTarefas } from "@/components/QuadroKanban";
 import { SeletorPessoas } from "@/components/SeletorPessoas";
-import { FILTRO_TAREFAS_PADRAO, type TarefaResumo } from "@/lib/tarefas-core";
+import { FILTRO_TAREFAS_PADRAO, type Recorrencia, type TarefaResumo } from "@/lib/tarefas-core";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -1817,7 +1821,7 @@ function TarefasDemo() {
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
     arquivada: false, pessoas: [], observadores: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
-    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, anexos: 0,
+    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, anexos: 0, recorrencia: null,
   };
   const cartoes: TarefaResumo[] = [
     { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculo: { tipo: "protocolo", id: 1, rotulo: "144756/2026" } },
@@ -1826,6 +1830,12 @@ function TarefasDemo() {
   ];
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
+  const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
+  const listasDemo = [
+    { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
+    { id: 2, nome: "Em andamento", ordem: 2, limiteWip: 2, concluida: false, arquivada: false },
+    { id: 3, nome: "Concluído", ordem: 3, limiteWip: null, concluida: true, arquivada: false },
+  ];
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -1887,6 +1897,40 @@ function TarefasDemo() {
         </div>
       </div>
       <CalendarioTarefas tarefas={cartoes} hoje="2026-01-01" onAbrir={() => {}} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />
+        <div className="max-w-sm space-y-1 rounded-card border border-border p-2">
+          <ItemNotificacao
+            n={{ id: 1, tipo: "mencionada", titulo: "Bruno mencionou você", texto: "#128 Conferir DFDs do protocolo · Planejamento", link: null, lida: false, criadoEm: "2026-06-01 12:00:00", ator: { id: 2, nome: "Bruno Lima", foto: null } }}
+            onAbrir={() => {}}
+          />
+          <ItemNotificacao
+            n={{ id: 2, tipo: "atrasada", titulo: "Tarefa atrasada (prazo 30/05)", texto: "#129 Atualizar o catálogo · Planejamento", link: null, lida: true, criadoEm: "2026-06-01 09:00:00", ator: null }}
+            onAbrir={() => {}}
+          />
+        </div>
+        <AutomacoesQuadro
+          quadroId={1}
+          automacoes={[{ id: 1, gatilho: "entrar_lista", listaId: 2, acao: { tipo: "atribuir", usuarioId: 1 }, ativa: true }]}
+          listas={listasDemo}
+          etiquetas={etiquetas}
+          pessoas={pessoas}
+          podeEditar
+          ocupado={false}
+          gravar={async () => true}
+        />
+        <ModelosQuadro
+          quadroId={1}
+          quadroNome="Planejamento do PCA 2027"
+          modelosQuadro={[{ id: 1, nome: "Rotina de compras", criadoPor: 1, detalhe: "A fazer · Em andamento · Concluído" }]}
+          modelosTarefa={[]}
+          usuarioId={1}
+          podeEditar
+          ocupado={false}
+          gravar={async () => true}
+        />
+      </div>
+      <DashboardTarefas tarefas={cartoes} listas={listasDemo} pessoas={pessoas} hoje="2026-01-01" responsavel="todos" onResponsavel={() => {}} onAbrir={() => {}} />
     </div>
   );
 }
@@ -3027,7 +3071,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa, AnexosTarefa (link ou arquivo ≤ 1 MB), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas e CalendarioTarefas (grade do mês; agenda no celular)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa, AnexosTarefa (link ou arquivo ≤ 1 MB), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (grade do mês; agenda no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

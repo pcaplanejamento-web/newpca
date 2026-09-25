@@ -7,10 +7,10 @@ import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { NAV_MODULOS } from "./navModulos";
+import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
 import {
-  IconBell,
   IconBox,
   IconBuilding,
   IconLandmark,
@@ -203,23 +203,6 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
         Sair
       </button>
     </div>
-  );
-}
-
-function SinoNotificacoes() {
-  return (
-    <Dropdown
-      align="end"
-      ariaLabel="Notificações"
-      triggerClassName="h-11 w-11 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-      trigger={<IconBell className="h-5 w-5" />}
-      width={256}
-    >
-      <div className="p-2 text-center">
-        <p className="text-sm font-semibold text-text">Notificações</p>
-        <p className="mt-1 text-xs text-muted">Você está em dia. Nada por aqui ainda.</p>
-      </div>
-    </Dropdown>
   );
 }
 
@@ -449,6 +432,7 @@ export function AppShell({
   pcas = [],
   pcaFiltroId = null,
   identidade,
+  notificacoes = 0,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -461,6 +445,8 @@ export function AppShell({
   pcas?: PcaNav[];
   pcaFiltroId?: number | null;
   identidade?: Identidade;
+  /** Notificações NÃO LIDAS (o número do sino). */
+  notificacoes?: number;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -543,7 +529,7 @@ export function AppShell({
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
-            <SinoNotificacoes />
+            <SinoNotificacoes naoLidas={notificacoes} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
               <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
