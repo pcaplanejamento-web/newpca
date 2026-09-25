@@ -1013,6 +1013,9 @@ muda; nenhuma seleção de texto enquanto se segura uma coluna ou a borda de lar
 topo; o nome no mesmo lugar dentro e fora da edição. **Edições salvas** por usuário ou **públicas** (migração `0041`,
 `edicoes_tabela`), com a **padrão** de cada usuário (estrela) — seletor, lápis e estrela no rodapé da tabela. Confirmações
 em card flutuante (`useConfirmacao`) no lugar do `confirm()` do navegador em todo o módulo Orçamento.
+✅ **Comparativo no PCA + seleção de linha:** aba **Comparativo** no espaço do PCA (o orçamento do ano do PCA, na visão
+da Configuração); um toque marca a linha e dois abrem a origem do número (também no celular); todos os cabeçalhos — Unidade,
+Sigla e Total inclusive — com a mesma gráfica, centrados; edições públicas: várias, usadas por qualquer pessoa.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

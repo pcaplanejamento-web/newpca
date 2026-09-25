@@ -8,11 +8,11 @@ import { Badge } from "./Badge";
 import { IconChevronLeft } from "./icons";
 import { PcaCapa } from "./PcaCard";
 
-export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
+export type AbaPca = "dashboard" | "orcamento" | "comparativo" | "mesa" | "configuracao";
 
 /**
  * ESPAÇO do PCA (`/painel/pca/[id]`): cabeçalho (capa, nome, status, fonte · ano) e as abas Dashboard ·
- * Orçamento · Mesa|Importação · Configuração no MESMO espaço (`AbasEspaco`: o servidor monta SÓ a aba ativa).
+ * Orçamento · Comparativo · Mesa|Importação · Configuração no MESMO espaço (`AbasEspaco`: o servidor monta SÓ a aba ativa).
  */
 export function PcaEspacoView({
   pca,
@@ -52,6 +52,7 @@ export function PcaEspacoView({
         opcoes={[
           { value: "dashboard", label: "Dashboard" },
           { value: "orcamento", label: "Orçamento" },
+          { value: "comparativo", label: "Comparativo" },
           { value: "mesa", label: pca.fonte === "lista" ? "Importação" : "Mesa" },
           { value: "configuracao", label: "Configuração" },
         ]}

@@ -6,11 +6,10 @@ import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
 import { getUsuarioAtual } from "@/lib/auth";
+import { dadosComparativo } from "@/lib/comparativo-dados";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
 import { DIMENSOES_ORCAMENTO, type LinhaOrcamentoVisao } from "@/lib/orcamento-visao";
 import { listarVisoesOrcamento } from "@/lib/pca-espaco";
-import { listarEdicoesTabela } from "@/lib/edicoes-tabela";
-import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 
 export const dynamic = "force-dynamic";
 
@@ -43,25 +42,7 @@ export default async function OrcamentoEspacoPage({
     });
     conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={podeEditar} />;
   } else if (aba === "comparativo") {
-    const [itens, visoes, vinculos, alvos, edicoes, padroes] = await Promise.all([
-      getOrcamentoItens(id),
-      listarVisoesOrcamento(),
-      listarVinculosOrcamento(),
-      alvosVinculoOrcamento(),
-      u ? listarEdicoesTabela(u.id, "orcamento-comparativo:") : [],
-      u ? listarPreferenciasTabela(u.id, "padrao:orcamento-comparativo:") : {},
-    ]);
-    conteudo = (
-      <OrcamentoComparativo
-        titulo={`${orcamento.nome} ${orcamento.ano}`}
-        itens={itens}
-        visoes={visoes}
-        vinculos={vinculos}
-        alvos={alvos}
-        edicoes={edicoes}
-        padroes={padroes}
-      />
-    );
+    conteudo = <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, u?.id ?? null)} />;
   } else {
     const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
     conteudo =

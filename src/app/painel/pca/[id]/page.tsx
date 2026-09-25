@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { MesaPca } from "@/components/MesaPca";
+import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
 import { PcaConfiguracao } from "@/components/PcaConfiguracao";
@@ -8,6 +9,7 @@ import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getUsuarioAtual } from "@/lib/auth";
+import { dadosComparativo } from "@/lib/comparativo-dados";
 import { num } from "@/lib/format";
 import { carregarMesa } from "@/lib/mesa-dados";
 import { resumoVisao } from "@/lib/orcamento-visao";
@@ -17,6 +19,7 @@ import {
   dfdsEmOutroPca,
   getPcaEspaco,
   listarVisoesOrcamento,
+  orcamentoDoAno,
   orcamentoDoPca,
   type PcaEspaco,
   pcaTemDados,
@@ -26,9 +29,9 @@ import { getUnidades } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "comparativo", "mesa", "configuracao"];
 
-// ESPAÇO do PCA: Dashboard · Orçamento · Mesa (protocolos) | Importação (lista) · Configuração.
+// ESPAÇO do PCA: Dashboard · Orçamento · Comparativo · Mesa (protocolos) | Importação (lista) · Configuração.
 export default async function PcaEspacoPage({
   params,
   searchParams,
@@ -65,7 +68,8 @@ export default async function PcaEspacoPage({
         }}
       />
     );
-  } else if (aba === "mesa") conteudo = await abaMesa(pca, u, podeEditar);
+  } else if (aba === "comparativo") conteudo = await abaComparativo(pca, u?.id ?? null);
+  else if (aba === "mesa") conteudo = await abaMesa(pca, u, podeEditar);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
@@ -115,6 +119,21 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
       />
     </div>
   );
+}
+
+/**
+ * Aba COMPARATIVO: a MESMA tabela cruzada da tela do orçamento, sobre o orçamento do ANO do PCA, abrindo na visão que a
+ * Configuração do PCA escolheu (trocável). Sem orçamento do ano ⇒ o aviso.
+ */
+async function abaComparativo(pca: PcaEspaco, usuarioId: number | null) {
+  const orc = await orcamentoDoAno(pca.ano);
+  if (!orc)
+    return (
+      <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
+        {pca.ano == null ? "Defina o ano do PCA na aba Configuração." : `Nenhum orçamento de ${pca.ano} — importe o CUBO em Orçamento.`}
+      </p>
+    );
+  return <OrcamentoComparativo titulo={`${orc.nome} ${orc.ano}`} visaoInicial={pca.orcamentoVisaoId} {...await dadosComparativo(orc.id, usuarioId)} />;
 }
 
 /** Aba MESA (fonte protocolo — só os protocolos ENVIADOS a este PCA) | IMPORTAÇÃO (fonte lista). */

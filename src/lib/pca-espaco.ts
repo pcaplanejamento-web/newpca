@@ -816,17 +816,21 @@ export type OrcamentoDoPca = {
 };
 
 /** Orçamento (CUBO do MESMO ano) filtrado pela visão do PCA + o planejado por unidade. */
+/** O orçamento do ANO (o importado por último) — o que o PCA daquele ano usa. Sem ano/sem orçamento ⇒ `null`. */
+export async function orcamentoDoAno(ano: number | null): Promise<{ id: number; nome: string; ano: number } | null> {
+  if (ano == null) return null;
+  const [orc] = await getDb()
+    .select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano })
+    .from(orcamentos)
+    .where(eq(orcamentos.ano, ano))
+    .orderBy(desc(orcamentos.id))
+    .limit(1);
+  return orc ?? null;
+}
+
 export async function orcamentoDoPca(pca: PcaEspaco): Promise<OrcamentoDoPca> {
   const db = getDb();
-  const [orc] =
-    pca.ano != null
-      ? await db
-          .select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano })
-          .from(orcamentos)
-          .where(eq(orcamentos.ano, pca.ano))
-          .orderBy(desc(orcamentos.id))
-          .limit(1)
-      : [];
+  const orc = await orcamentoDoAno(pca.ano);
   const [visao, reps, vincs] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
     db.select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),
@@ -882,7 +886,7 @@ export async function orcamentoDoPca(pca: PcaEspaco): Promise<OrcamentoDoPca> {
     const c = await itensConsolidados(pca);
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
   }
-  return { orcamento: orc ?? null, visao, bruto, filtrado, linhas, planejado, unidades: reps };
+  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps };
 }
 
 /** DFDs (id + protocolo) dos protocolos dados. */

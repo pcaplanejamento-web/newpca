@@ -1426,7 +1426,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no banco). Cliente único `padronizacao-cliente.ts`
   (`chamarPadronizacao`).
 
-## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Comparativo · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
@@ -1455,7 +1455,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
-  unidade pelos **Vínculos** (`orcamento_vinculos`). **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
+  unidade pelos **Vínculos** (`orcamento_vinculos`). **Comparativo** = o MESMO `OrcamentoComparativo` da tela do orçamento,
+  sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último), abrindo na visão da Configuração do PCA
+  (`visaoInicial`, trocável); os dados vêm do loader único `dadosComparativo` (`comparativo-dados.ts`, as duas telas); sem
+  orçamento do ano ⇒ aviso. **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
   **`modoPca`** (ver "Mesa do PCA" abaixo). **Importação** (fonte lista) = `PlanilhasPca` (`Dropzone` com `onFiles` — várias
   planilhas em fila — + cards "Planilhas deste PCA" com excluir). **Configuração** = `PcaConfiguracao` (identificação; fonte em
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
@@ -1635,7 +1638,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das linhas, sem dados, mais de
   `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1); inverter linhas × colunas; MEDIDA; VISÃO
   salva; R$ ou % da linha/coluna/total; busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
-  tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número); tocar num cabeçalho ordena as linhas SÓ
+  UM toque/clique MARCA a linha (fundo accent opaco — as congeladas cobrem o que rola) e DOIS (duplo clique ou toque duplo na
+  mesma célula em até 400 ms — detecção própria, vale no celular; `touch-manipulation` tira o zoom do toque duplo) numa
+  célula, rótulo ou total abrem a **`OrigemDados`** (a soma = o número; Enter abre direto); tocar num cabeçalho ordena as linhas SÓ
   na vista; todo texto das células CENTRADO na altura. **TODAS as colunas são iguais** — o nome das linhas (Unidade…), a
   Sigla, o Total e as de valores: tocar no nome ordena; congeladas à esquerda (as que passam de ~60% da largura visível
   deixam de congelar — no celular, em geral só o nome). **EDIÇÃO NA PRÓPRIA PLANILHA (por PAR de colunas ligadas):** o
@@ -1643,7 +1648,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   as colunas ligadas travam, a origem dos números pausa). Cada cabeçalho: a **ALÇA de arrasto** ocupa a faixa ESQUERDA com a
   ALTURA TODA do cabeçalho (←/→ no teclado movem); no TOPO, alinhadas, as ações **congelar · ocultar · ordenar** (a seta
   alterna ▲ crescente / ▼ decrescente); a borda direita ajusta a largura (arrastar, ←/→, duplo clique = padrão). O NOME
-  fica no MESMO lugar dentro e fora da edição (o recuo esquerdo `pl-5` é o da alça — cabeçalho e células alinhados).
+  fica no MESMO lugar dentro e fora da edição e TODO cabeçalho tem a MESMA gráfica — Unidade, Sigla e Total iguais às de
+  valores: nome em até 2 linhas CENTRADO na horizontal (`px-5` simétrico; as ações do topo também centradas).
   **Arrastar:** a coluna **LEVANTA** (anima do tamanho real para 104% com sombra — `animate-levantar`) e vai **PRESA ao
   cursor** no ponto em que foi pega; o **LUGAR onde vai ficar aparece SOMBREADO já na posição nova** (prévia
   `soltarColuna`); a tabela ROLA sozinha perto das bordas; ao soltar, a coluna **POUSA** — voa até o lugar e volta ao tamanho
@@ -1906,7 +1912,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nome com a coluna presa ao cursor e a SOMBRA do destino, alfinete, olho e largura pela borda; o Comparativo do orçamento),
   **`Ajuda`**/`TopicoAjuda` (o "(?)" — botão discreto que abre a explicação de uma tela num painel; tira o texto de
   instrução da tela), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
-  SALVAS de uma tabela: pessoais ou públicas, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — a
+  SALVAS de uma tabela: pessoais ou públicas — quantas quiserem; todos veem e usam as públicas, até como a sua padrão; só o dono ou o ADM altera —, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — a
   CONFIRMAÇÃO do sistema num `AvisoFlutuante` com Cancelar/Confirmar, no lugar do `confirm()` do navegador; o
   `AvisoFlutuante` ganhou `acoes`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está

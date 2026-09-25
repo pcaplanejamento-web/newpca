@@ -45,6 +45,8 @@ const LARGURAS =
 const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWidth: w });
 /** Toda célula: altura dos controles e o texto CENTRADO na altura; o recuo à esquerda é o da alça de arrasto do cabeçalho
  * (o texto do cabeçalho e o das células ficam alinhados, dentro e fora da edição). */
+/** A linha MARCADA (um toque): fundo accent OPACO — as congeladas cobrem o que rola por baixo. */
+const MARCADA = "!bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]";
 const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle lg:h-[var(--h-control-sm)]";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
@@ -326,16 +328,32 @@ export function TabelaCruzada({
   };
   const ariaSort = (por: OrdemCruzamento["por"]) => (seta(por) ? (ordem.desc ? "descending" : "ascending") : undefined);
 
-  // Um clique numa célula (delegado — milhares de células sem um manipulador cada).
-  const alvoCelula = (e: MouseEvent | KeyboardEvent) => {
-    const td = (e.target as HTMLElement).closest<HTMLElement>("[data-l],[data-c]");
+  // UM toque MARCA a linha; DOIS (na mesma célula, em até 400 ms — duplo clique ou toque duplo no celular) abrem a origem
+  // do número. Delegado — milhares de células sem um manipulador cada. Enter/Espaço marcam e abrem direto.
+  const [marcada, setMarcada] = useState<string | null>(null);
+  const ultimo = useRef<{ alvo: string; t: number } | null>(null);
+  const abrirCelula = (td: HTMLElement) => onAbrir?.(td.dataset.l || null, td.dataset.c || null);
+  const alvoCelula = (e: MouseEvent) => {
+    const el = e.target as HTMLElement;
+    const tr = el.closest<HTMLElement>("[data-linha]");
+    if (tr) setMarcada(tr.dataset.linha ?? null);
+    const td = el.closest<HTMLElement>("[data-l],[data-c]");
     if (!td || !onAbrir) return;
-    onAbrir(td.dataset.l || null, td.dataset.c || null);
+    const alvo = `${td.dataset.l ?? ""}|${td.dataset.c ?? ""}`;
+    const agora = e.timeStamp;
+    if (ultimo.current && ultimo.current.alvo === alvo && agora - ultimo.current.t < 400) {
+      ultimo.current = null;
+      abrirCelula(td);
+    } else ultimo.current = { alvo, t: agora };
   };
   const teclado = (e: KeyboardEvent) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
-    alvoCelula(e);
+    const el = e.target as HTMLElement;
+    const tr = el.closest<HTMLElement>("[data-linha]");
+    if (tr) setMarcada(tr.dataset.linha ?? null);
+    const td = el.closest<HTMLElement>("[data-l],[data-c]");
+    if (td) abrirCelula(td);
   };
 
   // ARRASTAR (edição): o nome da coluna é a alça — mouse ou toque. Os ouvintes ficam na JANELA (a prévia REORDENA os
@@ -435,7 +453,7 @@ export function TabelaCruzada({
     else edicao.onOrdem([...f, k], l.filter((x) => x !== k));
   };
 
-  const cab = `sticky top-0 border-b border-border py-2 pr-3 pl-5 align-middle text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
+  const cab = `sticky top-0 border-b border-border px-5 py-2 align-middle text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
   const direita = (c: Coluna) => c.tipo === "valor" || c.tipo === "total";
   const mesmaOrdem = (por: OrdemCruzamento["por"]) =>
     typeof por === "object" ? typeof ordem.por === "object" && ordem.por.coluna === por.coluna : ordem.por === por;
@@ -447,16 +465,14 @@ export function TabelaCruzada({
    * topo, e a borda direita ajusta a largura. `p` = posição na ordem exibida.
    */
   const cabecalho = (c: Coluna, p: number, congelada: boolean) => {
-    const dir = direita(c);
     const por = porDe(c);
     const conteudo = (
       <>
-        {dir && seta(por)}
-        <span className={dir ? "line-clamp-2 break-words text-right" : "truncate"}>{c.rotulo}</span>
-        {!dir && seta(por)}
+        <span className="line-clamp-2 break-words text-center">{c.rotulo}</span>
+        {seta(por)}
       </>
     );
-    const linha = `flex w-full items-center gap-1 ${dir ? "justify-end" : ""}`;
+    const linha = "flex w-full items-center justify-center gap-1";
     if (!edicao)
       return (
         <button
@@ -491,7 +507,7 @@ export function TabelaCruzada({
         >
           <IconGrip className="h-3.5 w-3.5" />
         </button>
-        <div className="mb-1 flex items-center justify-end gap-0.5">
+        <div className="mb-1 flex items-center justify-center gap-0.5">
           <AcaoColuna
             rotulo={congelada ? `Descongelar ${c.rotulo}` : `Congelar ${c.rotulo}`}
             ligada={congelada}
@@ -533,7 +549,8 @@ export function TabelaCruzada({
   /** A célula de uma linha do corpo, por tipo de coluna. */
   const celula = (c: Coluna, p: number, l: LinhaTabelaCruzada) => {
     const { fixa, classe, estilo, esmaecida } = posicao(c, p);
-    const base = `${CEL} ${classe} ${fixa ? "z-10 bg-surface" : ""} group-hover/linha:bg-surface-2`;
+    const marc = marcada === l.chave;
+    const base = `${CEL} ${classe} ${fixa ? "z-10 bg-surface" : ""} ${marc ? MARCADA : "group-hover/linha:bg-surface-2"}`;
     if (c.tipo === "rotulo")
       return (
         <th
@@ -541,7 +558,7 @@ export function TabelaCruzada({
           scope="row"
           data-l={l.chave}
           tabIndex={onAbrir ? 0 : undefined}
-          className={`${base} bg-surface text-left font-normal text-text ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
+          className={`${base} bg-surface text-left ${marc ? "font-medium text-accent" : "font-normal text-text"} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
           style={estilo}
           title={l.rotulo}
         >
@@ -613,7 +630,7 @@ export function TabelaCruzada({
         <p className="grid flex-1 place-items-center px-4 py-12 text-center text-[13px] text-faint">{vazio}</p>
       ) : (
         <div ref={rolagem} className="max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain lg:max-h-none">
-          <table className="w-max border-separate border-spacing-0 text-[13px]">
+          <table className="w-max touch-manipulation border-separate border-spacing-0 text-[13px]">
             <thead>
               <tr>
                 {exibidas.map((c, p) => {
@@ -624,7 +641,7 @@ export function TabelaCruzada({
                       scope="col"
                       data-col={c.chave}
                       aria-sort={ariaSort(porDe(c))}
-                      className={`${cab} ${classe} ${fixa ? "z-30" : "z-20"} ${direita(c) ? "text-right" : "text-left"}`}
+                      className={`${cab} ${classe} ${fixa ? "z-30" : "z-20"} text-center`}
                       style={estilo}
                     >
                       {cabecalho(c, p, p < nCongeladas)}
@@ -635,7 +652,7 @@ export function TabelaCruzada({
             </thead>
             <tbody onClick={alvoCelula} onKeyDown={teclado}>
               {visiveis.map((l) => (
-                <tr key={l.chave} className="group/linha">
+                <tr key={l.chave} data-linha={l.chave} className="group/linha">
                   {exibidas.map((c, p) => celula(c, p, l))}
                 </tr>
               ))}
@@ -693,7 +710,7 @@ export function TabelaCruzada({
                 arrasto.pousando ? "scale-100 shadow-none" : "scale-[1.04] shadow-soft"
               }`}
             >
-              <div className="flex items-center gap-1 border-b border-border bg-surface-2 py-2 pr-3 pl-5 text-[12px] font-medium text-text">
+              <div className="flex items-center justify-center gap-1 border-b border-border bg-surface-2 px-5 py-2 text-center text-[12px] font-medium text-text">
                 <span className="truncate">{presa.rotulo}</span>
               </div>
               {visiveis.slice(0, 6).map((l) => (

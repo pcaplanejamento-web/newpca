@@ -79,6 +79,7 @@ export function OrcamentoComparativo({
   alvos,
   edicoes,
   padroes,
+  visaoInicial = null,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
@@ -89,11 +90,13 @@ export function OrcamentoComparativo({
   edicoes: EdicaoTabela[];
   /** As preferências de edição PADRÃO do usuário (`padrao:<chave>`). */
   padroes: Record<string, unknown>;
+  /** A visão com que abre (ex.: a do PCA) — trocável; inexistente ⇒ todos os lançamentos. */
+  visaoInicial?: number | null;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
   const [medida, setMedida] = useState<MedidaOrcamento>("inicial");
-  const [visaoId, setVisaoId] = useState<number | null>(null);
+  const [visaoId, setVisaoId] = useState<number | null>(visaoInicial);
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);
@@ -376,8 +379,8 @@ export function OrcamentoComparativo({
               Escolha duas colunas do CUBO para cruzar. As que não combinam aparecem desabilitadas com o motivo; o botão entre elas inverte.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconDownload className="h-4 w-4" />} titulo="Medida, visão e leitura">
-              A medida define o valor somado; a visão restringe os lançamentos; R$ ou % da linha, da coluna ou do total. Tocar numa célula mostra os lançamentos
-              que formam o número; tocar no nome de uma coluna ordena as linhas.
+              A medida define o valor somado; a visão restringe os lançamentos; R$ ou % da linha, da coluna ou do total. Um toque marca a linha; dois toques (ou
+              duplo clique) numa célula mostram os lançamentos que formam o número; tocar no nome de uma coluna ordena as linhas.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconPencil className="h-4 w-4" />} titulo="Editar a planilha">
               O lápis, no rodapé da tabela, liga a edição. Todas as colunas — inclusive o nome das linhas, a Sigla e o Total — se editam no cabeçalho: segure a
