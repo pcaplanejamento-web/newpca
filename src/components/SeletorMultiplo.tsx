@@ -12,7 +12,8 @@ export type OpcaoMultipla = { valor: string; contagem?: number };
 const MAX_VISIVEIS = 300;
 
 /**
- * Linha RECOLHÍVEL de seleção MÚLTIPLA (padrão das "Visões salvas" do orçamento): rótulo à esquerda e,
+ * Linha RECOLHÍVEL de seleção MÚLTIPLA (padrão das "Visões salvas" do orçamento), na ALTURA PADRÃO dos controles
+ * (`--h-control-sm` no desktop, 44px no toque): rótulo à esquerda e,
  * à direita, "Todos" ou "N selecionados" (accent). Aberta: busca (vários de uma vez com ":" — `opcoesDaBusca`;
  * Enter marca os encontrados) + marcar/limpar os filtrados + a lista de valores com a contagem. Nenhum marcado =
  * "Todos" (sem filtro).
@@ -45,21 +46,22 @@ export function SeletorMultiplo({
   const alternar = (v: string) => onChange(sel.has(v) ? selecionados.filter((x) => x !== v) : [...selecionados, v]);
 
   return (
-    <div className="rounded-card border border-border bg-surface">
+    <div className="rounded-control border border-border bg-surface">
       <button
         type="button"
         disabled={disabled}
         aria-expanded={aberto}
         onClick={() => setAberto((a) => !a)}
-        className="flex min-h-[52px] w-full items-center gap-3 px-4 text-left disabled:opacity-60"
+        className="flex h-11 w-full items-center gap-2 px-3 text-left disabled:opacity-60 lg:h-[var(--h-control-sm)]"
       >
-        <span className="flex-1 font-semibold text-text">{rotulo}</span>
-        <span className={`text-sm ${n > 0 ? "font-semibold text-accent" : "text-muted"}`}>{n > 0 ? `${num(n)} selecionado${n === 1 ? "" : "s"}` : "Todos"}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text">{rotulo}</span>
+        <span className={`shrink-0 text-[12px] ${n > 0 ? "font-semibold text-accent" : "text-muted"}`}>{n > 0 ? `${num(n)} selecionado${n === 1 ? "" : "s"}` : "Todos"}</span>
         <IconChevronDown className={`h-4 w-4 text-muted transition-transform ${aberto ? "rotate-180" : ""}`} />
       </button>
       {aberto && (
-        <div className="space-y-3 border-t border-border p-3">
+        <div className="space-y-2 border-t border-border p-2">
           <SearchField
+            compacto
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             onClear={() => setBusca("")}
@@ -72,7 +74,7 @@ export function SeletorMultiplo({
             aria-label={`Buscar ${rotulo.toLowerCase()} (use : para vários)`}
             placeholder={`Buscar ${rotulo.toLowerCase()} (use : para vários)…`}
           />
-          <div className="flex flex-wrap gap-3 text-xs">
+          <div className="flex flex-wrap gap-x-3 px-1 text-xs">
             <button
               type="button"
               className="font-semibold text-accent hover:underline disabled:opacity-50"
@@ -87,23 +89,23 @@ export function SeletorMultiplo({
               </button>
             )}
           </div>
-          <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
+          <ul className="max-h-60 overflow-y-auto px-1">
             {orfaos.map((v) => (
-              <li key={`o:${v}`} className="flex items-center justify-between gap-2 text-sm">
+              <li key={`o:${v}`} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
                 <Checkbox checked onChange={() => alternar(v)} label={<span className="text-muted">{v}</span>} disabled={disabled} />
                 <span className="text-xs text-faint">fora do filtro</span>
               </li>
             ))}
             {filtradas.slice(0, MAX_VISIVEIS).map((o) => (
-              <li key={o.valor} className="flex items-center justify-between gap-2 text-sm">
+              <li key={o.valor} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
                 <Checkbox checked={sel.has(o.valor)} onChange={() => alternar(o.valor)} label={o.valor} disabled={disabled} />
                 {o.contagem != null && <span className="shrink-0 text-xs tabular-nums text-faint">{num(o.contagem)}</span>}
               </li>
             ))}
             {filtradas.length > MAX_VISIVEIS && (
-              <li className="pt-1 text-xs text-faint">+{num(filtradas.length - MAX_VISIVEIS)} — refine a busca para ver os demais.</li>
+              <li className="py-1 text-xs text-faint">+{num(filtradas.length - MAX_VISIVEIS)} — refine a busca para ver os demais.</li>
             )}
-            {filtradas.length === 0 && orfaos.length === 0 && <li className="text-xs text-faint">Nenhum valor.</li>}
+            {filtradas.length === 0 && orfaos.length === 0 && <li className="py-1 text-xs text-faint">Nenhum valor.</li>}
           </ul>
         </div>
       )}

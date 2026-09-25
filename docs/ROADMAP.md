@@ -986,6 +986,9 @@ Configurações); visões carregadas no servidor (sem fetch extra) e vínculo de
 da Mesa) — a prévia compara atual × nova e a troca é ATÔMICA (a planilha nova vai para um envio temporário e só então
 substitui os lançamentos; se algo falhar, o orçamento atual fica). Importação unificada no `ImportarOrcamento` (novo e
 reenvio). Excluir o orçamento virou um botão só de ícone.
+✅ **Editor de visão até o fim da tela:** no desktop o editor "Editar visão" tem a altura da tabela ao lado (até o fim do
+display), com nome e ações fixos e as dimensões rolando por dentro; cada dimensão (`SeletorMultiplo`) na altura padrão dos
+controles (`--h-control-sm`; 44px no toque), busca compacta e lista enxuta.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
