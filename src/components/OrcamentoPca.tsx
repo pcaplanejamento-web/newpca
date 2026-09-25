@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, num } from "@/lib/format";
 import {
   comparativoPorUnidade,
@@ -13,18 +13,24 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
+import { FerramentasAba } from "./AbasEspaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { IconDownload, IconInfo, IconScale } from "./icons";
+import { IconDownload, IconInfo } from "./icons";
 import { ItemTable } from "./ItemTable";
-import { KpiStat } from "./KpiStat";
+import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
+import { StatMini } from "./StatMini";
 
 type Filtro = "todas" | "acima" | "dentro";
+type Vista = "comparativo" | "unidade";
+
+/** Os dados do Comparativo (tabela cruzada) do orçamento do ano — os MESMOS da tela do orçamento. */
+export type ComparativoPca = Omit<ComponentProps<typeof OrcamentoComparativo>, "inicio">;
 
 const COR_FAIXA: Record<FaixaComprometimento, string> = {
   ok: "var(--ok)",
@@ -173,11 +179,13 @@ function BarraPct({ l }: { l: LinhaComparativo }) {
 }
 
 /**
- * Aba ORÇAMENTO do PCA: a dotação do CUBO do MESMO ano (filtrada pela visão escolhida na
- * Configuração) × o planejado no PCA (os itens incorporados ativos), em KPIs e no COMPARATIVO por unidade. Os
- * lançamentos chegam à unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo".
+ * Aba ORÇAMENTO do PCA — enxuta: os KPIs (a dotação do CUBO do MESMO ano, filtrada pela visão da Configuração, × o
+ * planejado no PCA — os itens incorporados ativos) e, abaixo, o COMPARATIVO em duas vistas: a tabela cruzada da tela do
+ * orçamento (`OrcamentoComparativo`, abrindo na visão do PCA) e o **PCA × Orçamento** por unidade (os lançamentos chegam à
+ * unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo"). Sem orçamento do ano, só o por unidade.
  */
-export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
+export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcamentoPca; comparativo?: ComparativoPca | null }) {
+  const [vista, setVista] = useState<Vista>("comparativo");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [aberta, setAberta] = useState<LinhaComparativo | null>(null);
   const linhas = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
@@ -199,7 +207,7 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
 
   const cols: Column<LinhaComparativo>[] = [
     { key: "unidade", header: "Unidade", align: "left", nowrap: true, value: (l) => l.sigla, render: (l) => <span className="font-semibold text-text" title={l.nome}>{l.sigla}</span> },
-    { key: "contratacoes", header: "Contratações", nowrap: true, filter: "range", numero: (l) => l.contratacoes, render: (l) => num(l.contratacoes) },
+    { key: "contratacoes", header: "Contratações", nowrap: true, filter: "range", numero: (l) => l.contratacoes, formatarFaixa: num, render: (l) => num(l.contratacoes) },
     { key: "planejado", header: "Contratações do PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.planejado, render: (l) => <span className="text-accent">{brl(l.planejado)}</span> },
     { key: "orcamento", header: "Orçamento para o PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.orcamento, render: (l) => brl(l.orcamento) },
     {
@@ -216,6 +224,20 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
 
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
 
+  // A troca de vista fica no INÍCIO da linha de controles de cada vista (sem linha a mais).
+  const trocaVista = comparativo && (
+    <Segmented<Vista>
+      value={vista}
+      onChange={setVista}
+      ariaLabel="Vista do comparativo"
+      options={[
+        { value: "comparativo", label: "Comparativo" },
+        { value: "unidade", label: "PCA × Orçamento", curto: "PCA × Orç." },
+      ]}
+    />
+  );
+  const comprometido = t.comprometido;
+
   return (
     <div className="space-y-[var(--gap-block)]">
       {!dados.orcamento && (
@@ -223,69 +245,60 @@ export function OrcamentoPca({ dados }: { dados: DadosOrcamentoPca }) {
           Nenhum orçamento de {dados.ano} importado — importe o CUBO em Orçamento para comparar.
         </Callout>
       )}
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
-        <KpiStat
-          label={`Dotação ${dados.ano} (filtrada)`}
+      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
+        <StatMini
+          label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
           value={brlCompact(dados.filtrado)}
-          hint={
-            dados.visaoNome
-              ? `bruta ${brlCompact(dados.bruto)} − ${brlCompact(dados.bruto - dados.filtrado)} pela visão "${dados.visaoNome}"`
-              : "sem visão — orçamento inteiro"
-          }
+          hint={dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}
         />
-        <KpiStat label="Planejado no PCA" value={brlCompact(t.planejado)} cor="var(--info)" hint="itens ativos" />
-        <KpiStat label="Saldo" value={brlCompact(t.saldo)} cor={t.saldo < 0 ? "var(--danger)" : "var(--ok)"} hint="dotação − planejado" />
-        <KpiStat
+        <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint="itens ativos" />
+        <StatMini label="Saldo" value={brlCompact(t.saldo)} tone={t.saldo < 0 ? "danger" : "ok"} hint="dotação − planejado" />
+        <StatMini
           label="Comprometido"
-          value={t.comprometido == null ? "—" : `${Math.round(t.comprometido * 100)}%`}
-          cor={t.comprometido == null ? "var(--muted)" : t.comprometido > 1 ? "var(--danger)" : t.comprometido >= 0.9 ? "var(--warn)" : "var(--ok)"}
+          value={comprometido == null ? "—" : `${Math.round(comprometido * 100)}%`}
+          tone={comprometido == null ? "default" : comprometido > 1 ? "danger" : comprometido >= 0.9 ? "warn" : "ok"}
           hint="planejado ÷ dotação"
         />
       </div>
 
-      <section className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-        <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-            <IconScale className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="font-bold text-text">Comparativo Orçamento × Contratações</h2>
-            <p className="text-sm text-muted">
-              Por unidade · contratações do PCA vs. orçamento para o PCA (já filtrado pela visão) — clique numa linha para ver a origem dos dados
-            </p>
+      {comparativo && vista === "comparativo" ? (
+        <OrcamentoComparativo {...comparativo} inicio={trocaVista} />
+      ) : (
+        <>
+          <FerramentasAba>
+            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={vis.length === 0}>
+              XLSX
+            </Button>
+          </FerramentasAba>
+          <div className="flex flex-wrap items-center gap-2">
+            {trocaVista}
+            <Segmented<Filtro>
+              value={filtro}
+              onChange={setFiltro}
+              ariaLabel="Unidades"
+              options={[
+                { value: "todas", label: `Todas (${linhas.length})` },
+                { value: "acima", label: `Acima (${acima.length})` },
+                { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
+              ]}
+            />
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented<Filtro>
-            value={filtro}
-            onChange={setFiltro}
-            options={[
-              { value: "todas", label: `Todas (${linhas.length})` },
-              { value: "acima", label: `Acima do orçamento (${acima.length})` },
-              { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
-            ]}
-          />
-          <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={vis.length === 0}>
-            Exportar .xlsx
-          </Button>
-        </div>
-        {vis.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">Nada a comparar nesta visão.</p>
-        ) : (
           <DataTable
             columns={cols}
             rows={vis}
             getKey={(l) => (l.unidadeId == null ? "sem" : l.unidadeId)}
-            pageSize={20}
+            scrollInterno
+            density="compact"
             minWidth={900}
             onRowClick={setAberta}
             activeKey={aberta ? (aberta.unidadeId == null ? "sem" : aberta.unidadeId) : null}
+            vazio="Nada a comparar nesta visão."
             resumo={(ls) =>
               `${ls.length} unidade(s) · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
             }
           />
-        )}
-      </section>
+        </>
+      )}
       <OrigemLinha dados={dados} aberta={aberta} onClose={() => setAberta(null)} />
     </div>
   );

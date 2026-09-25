@@ -1426,11 +1426,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/catalogo/classificacoes/itens` (as descrições distintas, agregadas no banco). Cliente único `padronizacao-cliente.ts`
   (`chamarPadronizacao`).
 
-## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Comparativo · Mesa/Importação · Configuração) — migração `0033`
+## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
-  **`/painel/pca/[id]`** (`PcaEspacoView`: cabeçalho + `Segmented` de abas com `animate-cat-morph`; `?aba=`).
+  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO como a tela do orçamento: UMA linha de cabeçalho — voltar · nome · ano ·
+  status · fonte; a capa fica no card e na Configuração — e as abas `AbasEspaco` com as ferramentas da aba à direita; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
   (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
   **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
@@ -1455,16 +1456,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
-  unidade pelos **Vínculos** (`orcamento_vinculos`). **Comparativo** = o MESMO `OrcamentoComparativo` da tela do orçamento,
-  sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último), abrindo na visão da Configuração do PCA
-  (`visaoInicial`, trocável); os dados vêm do loader único `dadosComparativo` (`comparativo-dados.ts`, as duas telas); sem
-  orçamento do ano ⇒ aviso. **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
+  unidade pelos **Vínculos** (`orcamento_vinculos`). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
+  vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`): **Comparativo** = o MESMO
+  `OrcamentoComparativo` da tela do orçamento, sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último,
+  buscado UMA vez e repassado a `orcamentoDoPca`), abrindo na visão da Configuração do PCA (`visaoInicial`, trocável; dados
+  do loader único `dadosComparativo`, `comparativo-dados.ts`, as duas telas) | **PCA × Orçamento** = o comparativo por
+  unidade (`DataTable scrollInterno` compacta; XLSX nas ferramentas da aba). Sem orçamento do ano, só o por unidade. **Mesa** (fonte protocolo) = `MesaPca` → a MESMA `DfdsView` com
   **`modoPca`** (ver "Mesa do PCA" abaixo). **Importação** (fonte lista) = `PlanilhasPca` (`Dropzone` com `onFiles` — várias
   planilhas em fila — + cards "Planilhas deste PCA" com excluir). **Configuração** = `PcaConfiguracao` (identificação; fonte em
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
-  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha).
+  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha) NA LINHA DAS ABAS (`FerramentasAba`, `UnitFilter compacto`).
 - **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
   `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
   `density="compact"`, busca por produto/código (vários com ":"); com `origem` mostra Protocolo · Nº DFD

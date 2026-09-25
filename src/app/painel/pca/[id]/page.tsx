@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { MesaPca } from "@/components/MesaPca";
-import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
+import { FerramentasAba } from "@/components/AbasEspaco";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
 import { PcaConfiguracao } from "@/components/PcaConfiguracao";
@@ -29,9 +29,9 @@ import { getUnidades } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "comparativo", "mesa", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "configuracao"];
 
-// ESPAÇO do PCA: Dashboard · Orçamento · Comparativo · Mesa (protocolos) | Importação (lista) · Configuração.
+// ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos) | Importação (lista) · Configuração.
 export default async function PcaEspacoPage({
   params,
   searchParams,
@@ -51,24 +51,7 @@ export default async function PcaEspacoPage({
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
-  else if (aba === "orcamento") {
-    const orc = await orcamentoDoPca(pca);
-    conteudo = (
-      <OrcamentoPca
-        dados={{
-          pcaId: pca.id,
-          ano: pca.ano,
-          orcamento: orc.orcamento,
-          visaoNome: orc.visao?.nome ?? null,
-          bruto: orc.bruto,
-          filtrado: orc.filtrado,
-          linhas: orc.linhas,
-          planejado: orc.planejado,
-          unidades: orc.unidades,
-        }}
-      />
-    );
-  } else if (aba === "comparativo") conteudo = await abaComparativo(pca, u?.id ?? null);
+  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u?.id ?? null);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, podeEditar);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
@@ -85,7 +68,7 @@ export default async function PcaEspacoPage({
 
   return (
     <PcaEspacoView
-      pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa }}
+      pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
       aba={aba}
     >
       {conteudo}
@@ -107,9 +90,11 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
   return (
     <div className="space-y-[var(--gap-block)]">
       {dash.unidades.length > 1 && (
-        <div className="w-full sm:ml-auto sm:w-80">
-          <UnitFilter unidades={dash.unidades} current={dash.unidadeId} />
-        </div>
+        <FerramentasAba>
+          <div className="w-full sm:w-80">
+            <UnitFilter compacto unidades={dash.unidades} current={dash.unidadeId} />
+          </div>
+        </FerramentasAba>
       )}
       <PainelPca
         dados={dash}
@@ -122,18 +107,28 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
 }
 
 /**
- * Aba COMPARATIVO: a MESMA tabela cruzada da tela do orçamento, sobre o orçamento do ANO do PCA, abrindo na visão que a
- * Configuração do PCA escolheu (trocável). Sem orçamento do ano ⇒ o aviso.
+ * Aba ORÇAMENTO: os KPIs (dotação do CUBO do ANO do PCA × planejado) e, abaixo, o COMPARATIVO — a MESMA tabela cruzada da
+ * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
-async function abaComparativo(pca: PcaEspaco, usuarioId: number | null) {
-  const orc = await orcamentoDoAno(pca.ano);
-  if (!orc)
-    return (
-      <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
-        {pca.ano == null ? "Defina o ano do PCA na aba Configuração." : `Nenhum orçamento de ${pca.ano} — importe o CUBO em Orçamento.`}
-      </p>
-    );
-  return <OrcamentoComparativo titulo={`${orc.nome} ${orc.ano}`} visaoInicial={pca.orcamentoVisaoId} {...await dadosComparativo(orc.id, usuarioId)} />;
+async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null) {
+  const ref = await orcamentoDoAno(pca.ano);
+  const [orc, comp] = await Promise.all([orcamentoDoPca(pca, ref), ref ? dadosComparativo(ref.id, usuarioId) : null]);
+  return (
+    <OrcamentoPca
+      dados={{
+        pcaId: pca.id,
+        ano: pca.ano,
+        orcamento: orc.orcamento,
+        visaoNome: orc.visao?.nome ?? null,
+        bruto: orc.bruto,
+        filtrado: orc.filtrado,
+        linhas: orc.linhas,
+        planejado: orc.planejado,
+        unidades: orc.unidades,
+      }}
+      comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}
+    />
+  );
 }
 
 /** Aba MESA (fonte protocolo — só os protocolos ENVIADOS a este PCA) | IMPORTAÇÃO (fonte lista). */

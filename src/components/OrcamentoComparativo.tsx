@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
 import { brl, num } from "@/lib/format";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
@@ -80,6 +80,7 @@ export function OrcamentoComparativo({
   edicoes,
   padroes,
   visaoInicial = null,
+  inicio,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
@@ -92,6 +93,8 @@ export function OrcamentoComparativo({
   padroes: Record<string, unknown>;
   /** A visão com que abre (ex.: a do PCA) — trocável; inexistente ⇒ todos os lançamentos. */
   visaoInicial?: number | null;
+  /** Controles do HOST no início da linha dos seletores (ex.: a troca de visão da aba Orçamento do PCA). */
+  inicio?: ReactNode;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
@@ -321,6 +324,7 @@ export function OrcamentoComparativo({
       </FerramentasAba>
 
       <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2">
+        {inicio}
         <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
           <div className="min-w-0 sm:w-52">
             <SelectField compacto label="Linhas" value={linha} disabled={editando} onChange={(e) => escolherLinha(e.target.value as DimensaoOrcamento)}>

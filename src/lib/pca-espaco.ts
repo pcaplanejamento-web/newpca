@@ -828,9 +828,10 @@ export async function orcamentoDoAno(ano: number | null): Promise<{ id: number; 
   return orc ?? null;
 }
 
-export async function orcamentoDoPca(pca: PcaEspaco): Promise<OrcamentoDoPca> {
+/** `orcDoAno` = o orçamento do ano já buscado (`orcamentoDoAno`) — evita consultá-lo de novo. */
+export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
   const db = getDb();
-  const orc = await orcamentoDoAno(pca.ano);
+  const orc = orcDoAno !== undefined ? orcDoAno : await orcamentoDoAno(pca.ano);
   const [visao, reps, vincs] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
     db.select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),

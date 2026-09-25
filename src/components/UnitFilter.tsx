@@ -9,9 +9,12 @@ type U = { id: number; codigo: string; municipio: string };
 export function UnitFilter({
   unidades,
   current,
+  compacto = false,
 }: {
   unidades: U[];
   current?: number;
+  /** Na altura dos controles (barra de ferramentas de uma aba). */
+  compacto?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -27,7 +30,9 @@ export function UnitFilter({
   }
 
   return (
-    <label className="flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 py-2 text-sm">
+    <label
+      className={`flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 text-sm ${compacto ? "h-11 lg:h-[var(--h-control-sm)]" : "py-2"}`}
+    >
       <IconBuilding className="h-[18px] w-[18px] shrink-0 text-faint" />
       <span className="hidden shrink-0 text-muted sm:inline">Unidade:</span>
       <select
