@@ -1,43 +1,116 @@
 "use client";
 
-import { type KeyboardEvent, type MouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
-import { basePercentual, type ModoCruzamento, type OrdemCruzamento, percentual } from "@/lib/orcamento-cruzamento";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { basePercentual, COL_EXTRA, COL_ROTULO, COL_TOTAL, LARGURA_MAX, LARGURA_MIN, type ModoCruzamento, type OrdemCruzamento, percentual } from "@/lib/orcamento-cruzamento";
 import { LINHAS_TABELA } from "@/lib/theme";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { useLinhasTabela } from "./ConfigTabelas";
-import { IconArrowDown, IconArrowUp, IconDesafixar, IconFixar } from "./icons";
+import { ehDesktop } from "./espacamento";
+import { IconArrowDown, IconArrowUp } from "./icons";
 import { Pager } from "./Pager";
 
 export type EixoTabelaCruzada = { chave: string; rotulo: string; total: number };
 export type LinhaTabelaCruzada = EixoTabelaCruzada & { valores: number[]; extra?: string };
 
-const fmtPct = (v: number | null) => (v == null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`);
+const fmtPct = (v: number | null) => (v == null ? "–" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`);
+const zerado = (v: number) => Math.abs(v) < 0.005;
 
-/** Larguras (tokens locais) — as colunas CONGELADAS se deslocam por elas, sem medir nada. No celular, só o rótulo e as
- * colunas fixadas congelam (a sigla e o total rolam — senão sobraria pouca tela). */
+/** Larguras PADRÃO (tokens locais, px) — o usuário ajusta cada coluna arrastando a borda do cabeçalho (sobrepõe o token).
+ * No celular só o rótulo e as colunas fixadas congelam (a extra e o total rolam — senão sobraria pouca tela). */
 const LARGURAS =
-  "[--cz-rot:9.5rem] [--cz-tot:7.5rem] [--cz-col:7.5rem] [--cz-base:0px] lg:[--cz-rot:18rem] lg:[--cz-tot:9.5rem] lg:[--cz-col:9rem] lg:[--cz-base:calc(var(--cz-ext)_+_var(--cz-tot))]";
-const W_ROT = "w-[var(--cz-rot)] min-w-[var(--cz-rot)] max-w-[var(--cz-rot)]";
-const W_EXT = "w-[var(--cz-ext)] min-w-[var(--cz-ext)] max-w-[var(--cz-ext)]";
-const W_TOT = "w-[var(--cz-tot)] min-w-[var(--cz-tot)] max-w-[var(--cz-tot)]";
-const W_COL = "w-[var(--cz-col)] min-w-[var(--cz-col)] max-w-[var(--cz-col)]";
-const CEL = "h-11 border-b border-border px-2.5 lg:h-[var(--h-control-sm)]";
-const FIXA_LG_EXT = "lg:sticky lg:left-[var(--cz-rot)]";
-const FIXA_LG_TOT = "lg:sticky lg:left-[calc(var(--cz-rot)_+_var(--cz-ext))]";
-const ULTIMA_FIXA = "shadow-[inset_-2px_0_0_var(--border)]";
-const ULTIMA_FIXA_LG = "lg:shadow-[inset_-2px_0_0_var(--border)]";
+  "[--cz-rot:152px] [--cz-ext:88px] [--cz-tot:120px] [--cz-col:120px] lg:[--cz-rot:280px] lg:[--cz-ext:112px] lg:[--cz-tot:144px] lg:[--cz-col:136px]";
+const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWidth: w });
+const CEL = "h-11 border-b border-border/60 px-3 lg:h-[var(--h-control-sm)]";
+const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
+const DIVISA_LG = "lg:shadow-[inset_-1px_0_0_var(--border)]";
+
+/** Alça de LARGURA na borda direita do cabeçalho: arrastar (mouse ou toque), ←/→ no teclado, duplo clique = padrão. */
+function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string; largura?: number; onLargura: (px: number | null) => void }) {
+  const [ativa, setAtiva] = useState(false);
+  const alca = useRef<HTMLSpanElement>(null);
+  const [atual, setAtual] = useState(0); // a largura exibida (px) — o valor do separador para leitores de tela
+  const largura = (el: HTMLElement) => (el.parentElement as HTMLElement).getBoundingClientRect().width;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-mede quando a largura DEFINIDA muda.
+  useLayoutEffect(() => {
+    if (alca.current) setAtual(Math.round(largura(alca.current)));
+  }, [definida]);
+  const iniciar = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    const el = e.currentTarget;
+    const x0 = e.clientX;
+    const w0 = largura(el);
+    e.preventDefault();
+    e.stopPropagation();
+    el.setPointerCapture(e.pointerId);
+    setAtiva(true);
+    let quadro = 0;
+    const mover = (ev: PointerEvent) => {
+      cancelAnimationFrame(quadro);
+      quadro = requestAnimationFrame(() => onLargura(w0 + ev.clientX - x0));
+    };
+    const fim = () => {
+      cancelAnimationFrame(quadro);
+      setAtiva(false);
+      el.removeEventListener("pointermove", mover);
+      el.removeEventListener("pointerup", fim);
+      el.removeEventListener("pointercancel", fim);
+    };
+    el.addEventListener("pointermove", mover);
+    el.addEventListener("pointerup", fim);
+    el.addEventListener("pointercancel", fim);
+  };
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: separador INTERATIVO (arrastável/teclado) — o <hr> não recebe foco nem eventos.
+    <span
+      ref={alca}
+      role="separator"
+      aria-orientation="vertical"
+      aria-valuenow={atual}
+      aria-valuemin={LARGURA_MIN}
+      aria-valuemax={LARGURA_MAX}
+      aria-label={`Largura de ${rotulo} (setas ajustam, duplo clique volta ao padrão)`}
+      tabIndex={0}
+      onPointerDown={iniciar}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={() => onLargura(null)}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        onLargura(largura(e.currentTarget) + (e.key === "ArrowRight" ? 16 : -16));
+      }}
+      className="group/alca absolute inset-y-0 -right-2 z-10 w-4 cursor-col-resize touch-none focus-visible:outline-none"
+    >
+      <span
+        className={`absolute inset-y-1.5 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors ${
+          ativa ? "bg-accent" : "bg-transparent group-hover/alca:bg-border-2 group-focus-visible/alca:bg-accent pointer-coarse:bg-border"
+        }`}
+      />
+    </span>
+  );
+}
 
 /**
- * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL
- * (fixa no rodapé). Congela o RÓTULO das linhas (e, no desktop, a coluna extra + o total) e as colunas que o usuário
- * FIXAR (alfinete no cabeçalho — vão para a esquerda, na ordem em que foram fixadas). Ordena pelo rótulo, pelo total ou
- * por qualquer coluna (clique no cabeçalho); lê o VALOR ou a participação (% da linha/coluna/total); MAPA DE CALOR
- * opcional; tocar numa célula, num rótulo ou num total chama `onAbrir` (a origem do número). No desktop ocupa a altura
- * até o fim do display (o corpo rola por dentro); linhas por página = Configurações → Tabelas. 100% por token.
+ * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL (fixa
+ * no rodapé). Visual limpo: cabeçalho sem caixa-alta, zeros como "–", linhas só com divisórias horizontais. O usuário
+ * ORDENA pelo cabeçalho de QUALQUER coluna (rótulo, extra, total ou valores), AJUSTA A LARGURA arrastando a borda do
+ * cabeçalho (toque também) e vê CONGELADAS o rótulo (no desktop também a extra e o total) + as colunas `fixadas` (à
+ * esquerda, na ordem; as que não cabem na largura visível deixam de congelar — nunca somem da tela). Valor ou % da
+ * linha/coluna/total; mapa de calor opcional; tocar numa célula, rótulo ou total chama `onAbrir` (a origem do número).
+ * No desktop ocupa a altura até o fim do display (o corpo rola por dentro); linhas por página = Configurações → Tabelas.
  */
 export function TabelaCruzada({
   rotuloLinhas,
   rotuloExtra,
+  mostrarTotal = true,
   linhas,
   colunas,
   total,
@@ -45,18 +118,21 @@ export function TabelaCruzada({
   modo = "valor",
   calor = false,
   fixadas,
-  onFixar,
+  larguras,
+  onLargura,
   ordem,
   onOrdenar,
   onAbrir,
   ativa = null,
   vazio,
   resumo,
+  acoesRodape,
 }: {
   rotuloLinhas: string;
   /** Coluna extra ao lado do rótulo (ex.: a sigla no sistema) — só quando informada. */
   rotuloExtra?: string;
-  /** Já ORDENADAS e filtradas (a tabela só pagina). `valores` alinhados a `colunas`. */
+  mostrarTotal?: boolean;
+  /** Já ORDENADAS e filtradas (a tabela só pagina). `valores` alinhados a `colunas` (já na ordem de exibição). */
   linhas: LinhaTabelaCruzada[];
   colunas: EixoTabelaCruzada[];
   total: number;
@@ -65,7 +141,10 @@ export function TabelaCruzada({
   calor?: boolean;
   /** Chaves das colunas CONGELADAS (na ordem). */
   fixadas: string[];
-  onFixar: (chave: string) => void;
+  /** Largura (px) por coluna — `COL_ROTULO`/`COL_EXTRA`/`COL_TOTAL` ou a chave da coluna; ausente = padrão. */
+  larguras: Record<string, number>;
+  /** Nova largura de uma coluna (`null` = volta ao padrão). */
+  onLargura: (chave: string, px: number | null) => void;
   ordem: OrdemCruzamento;
   onOrdenar: (por: OrdemCruzamento["por"]) => void;
   /** Origem do número: linha e/ou coluna (`null` = todas). */
@@ -73,12 +152,16 @@ export function TabelaCruzada({
   ativa?: { linha: string | null; coluna: string | null } | null;
   vazio: ReactNode;
   resumo?: ReactNode;
+  /** Ações no rodapé, à esquerda do seletor de linhas (ex.: salvar os ajustes). */
+  acoesRodape?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const rolagem = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(ref, true);
   const linhasAdm = useLinhasTabela();
   const [limite, setLimite] = useState<number>(linhasAdm);
   const [page, setPage] = useState(1);
+  const comExtra = rotuloExtra != null;
 
   // Colunas na ordem de EXIBIÇÃO: as fixadas primeiro (na ordem em que foram fixadas), depois as demais.
   const ordemCols = useMemo(() => {
@@ -87,35 +170,63 @@ export function TabelaCruzada({
     const set = new Set(fix);
     return { fix, todas: [...fix, ...colunas.map((_, j) => j).filter((j) => !set.has(j))] };
   }, [colunas, fixadas]);
-  const maxAbs = useMemo(() => (calor ? Math.max(0, ...linhas.flatMap((l) => l.valores.map(Math.abs))) : 0), [calor, linhas]);
+  const wCol = (chave: string) => (larguras[chave] ? `${larguras[chave]}px` : "var(--cz-col)");
 
+  // Quantas colunas fixadas CABEM congeladas na largura visível (as demais seguem na frente, mas rolam).
+  const [nFix, setNFix] = useState(ordemCols.fix.length);
+  useLayoutEffect(() => {
+    const el = rolagem.current;
+    const raiz = ref.current;
+    if (!el || !raiz) return;
+    const calc = () => {
+      const cs = getComputedStyle(raiz);
+      const px = (v: string) => Number.parseFloat(cs.getPropertyValue(v)) || 0;
+      let x = px("--cz-rot") + (ehDesktop() ? px("--cz-ext") + px("--cz-tot") : 0);
+      let n = 0;
+      for (const j of ordemCols.fix) {
+        x += larguras[colunas[j].chave] ?? px("--cz-col");
+        if (x > el.clientWidth - 96) break;
+        n++;
+      }
+      setNFix(n);
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ordemCols, larguras, colunas]);
+
+  const maxAbs = useMemo(() => (calor ? Math.max(0, ...linhas.flatMap((l) => l.valores.map(Math.abs))) : 0), [calor, linhas]);
   const pages = Math.max(1, Math.ceil(linhas.length / limite));
   const pg = Math.min(page, pages);
   const visiveis = linhas.slice((pg - 1) * limite, pg * limite);
-  const comExtra = rotuloExtra != null;
-  const nFix = ordemCols.fix.length;
 
   const texto = (v: number, bases: { linha: number; coluna: number }) => {
+    if (zerado(v)) return "–";
     const base = basePercentual(modo, { ...bases, geral: total });
     return base == null ? formatar(v) : fmtPct(percentual(v, base));
   };
-  const fundo = (v: number) =>
-    calor && maxAbs > 0 && v !== 0
-      ? { background: `color-mix(in srgb, var(${v < 0 ? "--danger" : "--accent"}) ${Math.round(6 + (Math.abs(v) / maxAbs) * 34)}%, transparent)` }
+  const fundo = (v: number): CSSProperties | undefined =>
+    calor && maxAbs > 0 && !zerado(v)
+      ? { background: `color-mix(in srgb, var(${v < 0 ? "--danger" : "--accent"}) ${Math.round(4 + (Math.abs(v) / maxAbs) * 22)}%, transparent)` }
       : undefined;
   const ehAtiva = (l: string | null, c: string | null) => ativa != null && ativa.linha === l && ativa.coluna === c;
   const anelAtivo = "outline outline-2 -outline-offset-2 outline-[var(--accent)]";
-  const fixaCol = (p: number) => ({ left: `calc(var(--cz-rot) + var(--cz-base) + ${p} * var(--cz-col))` });
+  // Deslocamento da coluna fixada p: o rótulo + (no desktop) a extra e o total + as fixadas antes dela.
+  const esquerda = (p: number): CSSProperties => {
+    const antes = ordemCols.fix.slice(0, p).map((j) => wCol(colunas[j].chave));
+    return { left: `calc(var(--cz-rot) + var(--cz-base) + ${antes.length ? antes.join(" + ") : "0px"})` };
+  };
 
   const seta = (por: OrdemCruzamento["por"]) => {
     const igual = typeof por === "object" ? typeof ordem.por === "object" && ordem.por.coluna === por.coluna : ordem.por === por;
     if (!igual) return null;
     const Seta = ordem.desc ? IconArrowDown : IconArrowUp;
-    return <Seta className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />;
+    return <Seta className="h-3 w-3 shrink-0 text-accent" aria-hidden />;
   };
   const ariaSort = (por: OrdemCruzamento["por"]) => (seta(por) ? (ordem.desc ? "descending" : "ascending") : undefined);
 
-  // Um clique numa célula de dados (delegado — milhares de células sem um manipulador cada).
+  // Um clique numa célula (delegado — milhares de células sem um manipulador cada).
   const alvoCelula = (e: MouseEvent | KeyboardEvent) => {
     const td = (e.target as HTMLElement).closest<HTMLElement>("[data-l],[data-c]");
     if (!td || !onAbrir) return;
@@ -127,119 +238,130 @@ export function TabelaCruzada({
     alvoCelula(e);
   };
 
-  const botaoCab = "flex w-full items-center gap-1 rounded-[6px] text-left hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-  const cabecalho = "sticky top-0 z-20 border-b border-border bg-surface-2 px-2.5 py-1.5 align-bottom text-[11.5px] font-semibold uppercase leading-tight tracking-wide text-muted";
+  const cab = "sticky top-0 z-20 border-b border-border bg-surface px-3 py-2 align-bottom text-[12px] font-medium leading-snug text-muted";
+  const botaoCab = "flex w-full items-center gap-1 rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  const ultimaBase = ordemCols.fix.length === 0 || nFix === 0;
+  const estiloRaiz: CSSProperties & Record<`--${string}`, string> = {
+    ...(altura != null ? { height: altura } : {}),
+    ...(larguras[COL_ROTULO] ? { "--cz-rot": `${larguras[COL_ROTULO]}px` } : {}),
+    ...(!comExtra ? { "--cz-ext": "0px" } : larguras[COL_EXTRA] ? { "--cz-ext": `${larguras[COL_EXTRA]}px` } : {}),
+    ...(!mostrarTotal ? { "--cz-tot": "0px" } : larguras[COL_TOTAL] ? { "--cz-tot": `${larguras[COL_TOTAL]}px` } : {}),
+  };
 
   return (
     <div
       ref={ref}
-      className={`${LARGURAS} ${comExtra ? "[--cz-ext:6rem] lg:[--cz-ext:7.5rem]" : "[--cz-ext:0px]"} flex flex-col overflow-clip rounded-card border border-border bg-surface shadow-ring`}
-      style={altura != null ? { height: altura } : undefined}
+      className={`${LARGURAS} [--cz-base:0px] lg:[--cz-base:calc(var(--cz-ext)_+_var(--cz-tot))] flex flex-col overflow-clip rounded-card border border-border bg-surface`}
+      style={estiloRaiz}
       suppressHydrationWarning
     >
-      {linhas.length === 0 ? (
+      {linhas.length === 0 || colunas.length === 0 ? (
         <p className="grid flex-1 place-items-center px-4 py-12 text-center text-[13px] text-faint">{vazio}</p>
       ) : (
-        <div className="max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain lg:max-h-none">
+        <div ref={rolagem} className="max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain lg:max-h-none">
           <table className="w-max border-separate border-spacing-0 text-[13px]">
             <thead>
               <tr>
-                <th scope="col" aria-sort={ariaSort("rotulo")} className={`${cabecalho} ${W_ROT} left-0 z-30`}>
+                <th scope="col" aria-sort={ariaSort("rotulo")} className={`${cab} left-0 z-30 text-left ${DIVISA}`} style={larguraVar("var(--cz-rot)")}>
                   <button type="button" className={botaoCab} onClick={() => onOrdenar("rotulo")}>
                     <span className="truncate">{rotuloLinhas}</span>
                     {seta("rotulo")}
                   </button>
+                  <AlcaLargura rotulo={rotuloLinhas} largura={larguras[COL_ROTULO]} onLargura={(px) => onLargura(COL_ROTULO, px)} />
                 </th>
                 {comExtra && (
-                  <th scope="col" className={`${cabecalho} ${W_EXT} ${FIXA_LG_EXT} lg:z-30`}>
-                    <span className="block truncate">{rotuloExtra}</span>
+                  <th scope="col" aria-sort={ariaSort("extra")} className={`${cab} text-left lg:left-[var(--cz-rot)] lg:z-30`} style={larguraVar("var(--cz-ext)")}>
+                    <button type="button" className={botaoCab} onClick={() => onOrdenar("extra")}>
+                      <span className="truncate">{rotuloExtra}</span>
+                      {seta("extra")}
+                    </button>
+                    <AlcaLargura rotulo={rotuloExtra} largura={larguras[COL_EXTRA]} onLargura={(px) => onLargura(COL_EXTRA, px)} />
                   </th>
                 )}
-                <th scope="col" aria-sort={ariaSort("total")} className={`${cabecalho} ${W_TOT} ${FIXA_LG_TOT} lg:z-30 ${nFix === 0 ? ULTIMA_FIXA_LG : ""}`}>
-                  <button type="button" className={`${botaoCab} justify-end text-right`} onClick={() => onOrdenar("total")}>
-                    {seta("total")}
-                    <span>Total</span>
-                  </button>
-                </th>
+                {mostrarTotal && (
+                  <th
+                    scope="col"
+                    aria-sort={ariaSort("total")}
+                    className={`${cab} text-right lg:left-[calc(var(--cz-rot)_+_var(--cz-ext))] lg:z-30 ${ultimaBase ? DIVISA_LG : ""}`}
+                    style={larguraVar("var(--cz-tot)")}
+                  >
+                    <button type="button" className={`${botaoCab} justify-end`} onClick={() => onOrdenar("total")}>
+                      {seta("total")}
+                      <span>Total</span>
+                    </button>
+                    <AlcaLargura rotulo="Total" largura={larguras[COL_TOTAL]} onLargura={(px) => onLargura(COL_TOTAL, px)} />
+                  </th>
+                )}
                 {ordemCols.todas.map((j, p) => {
                   const c = colunas[j];
                   const fixa = p < nFix;
-                  const Pino = fixa ? IconDesafixar : IconFixar;
                   return (
                     <th
                       key={c.chave}
                       scope="col"
                       aria-sort={ariaSort({ coluna: c.chave })}
-                      className={`${cabecalho} ${W_COL} ${fixa ? `z-30 ${p === nFix - 1 ? ULTIMA_FIXA : ""}` : ""}`}
-                      style={fixa ? fixaCol(p) : undefined}
+                      className={`${cab} text-right ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : ""}`}
+                      style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : {}) }}
                     >
-                      <div className="flex items-end gap-1">
-                        <button type="button" className={`${botaoCab} min-w-0 flex-1 justify-end text-right`} title={c.rotulo} onClick={() => onOrdenar({ coluna: c.chave })}>
-                          {seta({ coluna: c.chave })}
-                          <span className="line-clamp-3 break-words">{c.rotulo}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onFixar(c.chave)}
-                          aria-pressed={fixa}
-                          aria-label={fixa ? `Descongelar ${c.rotulo}` : `Congelar ${c.rotulo}`}
-                          title={fixa ? "Descongelar coluna" : "Congelar coluna"}
-                          className={`grid h-11 w-8 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-6 lg:w-6 ${
-                            fixa ? "text-accent" : "text-faint hover:text-text-2"
-                          }`}
-                        >
-                          <Pino className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                      <button type="button" className={`${botaoCab} justify-end text-right`} title={c.rotulo} onClick={() => onOrdenar({ coluna: c.chave })}>
+                        {seta({ coluna: c.chave })}
+                        <span className="line-clamp-2 break-words">{c.rotulo}</span>
+                      </button>
+                      <AlcaLargura rotulo={c.rotulo} largura={larguras[c.chave]} onLargura={(px) => onLargura(c.chave, px)} />
                     </th>
                   );
                 })}
               </tr>
             </thead>
-            <tbody
-              onClick={alvoCelula}
-              onKeyDown={teclado}
-            >
+            <tbody onClick={alvoCelula} onKeyDown={teclado}>
               {visiveis.map((l) => (
                 <tr key={l.chave} className="group/linha">
                   <th
                     scope="row"
                     data-l={l.chave}
                     tabIndex={onAbrir ? 0 : undefined}
-                    className={`${CEL} ${W_ROT} sticky left-0 z-10 bg-surface text-left font-medium text-text group-hover/linha:bg-surface-2 ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
+                    className={`${CEL} sticky left-0 z-10 bg-surface text-left font-normal text-text group-hover/linha:bg-surface-2 ${DIVISA} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
+                    style={larguraVar("var(--cz-rot)")}
                     title={l.rotulo}
                   >
                     <span className="block truncate">{l.rotulo}</span>
                   </th>
                   {comExtra && (
-                    <td className={`${CEL} ${W_EXT} ${FIXA_LG_EXT} bg-surface text-center font-semibold text-text-2 group-hover/linha:bg-surface-2 lg:z-10`} title={l.extra}>
-                      <span className="block truncate">{l.extra || <span className="text-faint">—</span>}</span>
+                    <td
+                      className={`${CEL} bg-surface text-left text-text-2 group-hover/linha:bg-surface-2 lg:sticky lg:left-[var(--cz-rot)] lg:z-10`}
+                      style={larguraVar("var(--cz-ext)")}
+                      title={l.extra}
+                    >
+                      <span className="block truncate">{l.extra || <span className="text-faint">–</span>}</span>
                     </td>
                   )}
-                  <td
-                    data-l={l.chave}
-                    tabIndex={onAbrir ? 0 : undefined}
-                    className={`${CEL} ${W_TOT} ${FIXA_LG_TOT} bg-surface text-right font-semibold tabular-nums text-text group-hover/linha:bg-surface-2 lg:z-10 ${nFix === 0 ? ULTIMA_FIXA_LG : ""} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
-                  >
-                    {texto(l.total, { linha: l.total, coluna: total })}
-                  </td>
+                  {mostrarTotal && (
+                    <td
+                      data-l={l.chave}
+                      tabIndex={onAbrir ? 0 : undefined}
+                      className={`${CEL} bg-surface text-right font-semibold tabular-nums text-text group-hover/linha:bg-surface-2 lg:sticky lg:left-[calc(var(--cz-rot)_+_var(--cz-ext))] lg:z-10 ${ultimaBase ? DIVISA_LG : ""} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(l.chave, null) ? anelAtivo : ""}`}
+                      style={larguraVar("var(--cz-tot)")}
+                    >
+                      {texto(l.total, { linha: l.total, coluna: total })}
+                    </td>
+                  )}
                   {ordemCols.todas.map((j, p) => {
                     const c = colunas[j];
                     const v = l.valores[j];
                     const fixa = p < nFix;
-                    const zero = Math.abs(v) < 0.005;
+                    const zero = zerado(v);
                     return (
                       <td
                         key={c.chave}
                         data-l={l.chave}
                         data-c={c.chave}
                         tabIndex={onAbrir && !zero ? 0 : undefined}
-                        className={`${CEL} ${W_COL} whitespace-nowrap text-right tabular-nums ${zero ? "text-faint" : "text-text-2"} ${
-                          fixa ? `sticky z-10 bg-surface group-hover/linha:bg-surface-2 ${p === nFix - 1 ? ULTIMA_FIXA : ""}` : "group-hover/linha:bg-surface-2"
+                        className={`${CEL} whitespace-nowrap text-right tabular-nums ${zero ? "text-faint" : "text-text-2"} ${
+                          fixa ? `sticky z-10 bg-surface group-hover/linha:bg-surface-2 ${p === nFix - 1 ? DIVISA : ""}` : "group-hover/linha:bg-surface-2"
                         } ${onAbrir && !zero ? "cursor-pointer hover:text-accent" : ""} ${ehAtiva(l.chave, c.chave) ? anelAtivo : ""}`}
-                        style={{ ...(fixa ? fixaCol(p) : {}), ...(fixa ? {} : fundo(v)) }}
+                        style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : fundo(v)) }}
                       >
-                        {zero && modo === "valor" ? "–" : texto(v, { linha: l.total, coluna: c.total })}
+                        {texto(v, { linha: l.total, coluna: c.total })}
                       </td>
                     );
                   })}
@@ -247,16 +369,26 @@ export function TabelaCruzada({
               ))}
             </tbody>
             <tfoot onClick={alvoCelula} onKeyDown={teclado}>
-              <tr className="font-bold text-text">
-                <th scope="row" data-l="" data-c="" tabIndex={onAbrir ? 0 : undefined} className={`${CEL} ${W_ROT} sticky bottom-0 left-0 z-30 ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(null, null) ? anelAtivo : ""} border-t border-border bg-surface-2 text-left uppercase`}>
+              <tr className="font-semibold text-text">
+                <th
+                  scope="row"
+                  data-l=""
+                  data-c=""
+                  tabIndex={onAbrir ? 0 : undefined}
+                  className={`${CEL} sticky bottom-0 left-0 z-30 border-t border-border bg-surface-2 text-left ${DIVISA} ${onAbrir ? "cursor-pointer" : ""} ${ehAtiva(null, null) ? anelAtivo : ""}`}
+                  style={larguraVar("var(--cz-rot)")}
+                >
                   Total
                 </th>
-                {comExtra && <td className={`${CEL} ${W_EXT} sticky bottom-0 z-20 border-t border-border bg-surface-2 lg:left-[var(--cz-rot)] lg:z-30`} />}
-                <td
-                  className={`${CEL} ${W_TOT} sticky bottom-0 z-20 border-t border-border bg-surface-2 text-right tabular-nums lg:left-[calc(var(--cz-rot)_+_var(--cz-ext))] lg:z-30 ${nFix === 0 ? ULTIMA_FIXA_LG : ""}`}
-                >
-                  {texto(total, { linha: total, coluna: total })}
-                </td>
+                {comExtra && <td className={`${CEL} sticky bottom-0 z-20 border-t border-border bg-surface-2 lg:left-[var(--cz-rot)] lg:z-30`} style={larguraVar("var(--cz-ext)")} />}
+                {mostrarTotal && (
+                  <td
+                    className={`${CEL} sticky bottom-0 z-20 border-t border-border bg-surface-2 text-right tabular-nums lg:left-[calc(var(--cz-rot)_+_var(--cz-ext))] lg:z-30 ${ultimaBase ? DIVISA_LG : ""}`}
+                    style={larguraVar("var(--cz-tot)")}
+                  >
+                    {texto(total, { linha: total, coluna: total })}
+                  </td>
+                )}
                 {ordemCols.todas.map((j, p) => {
                   const c = colunas[j];
                   const fixa = p < nFix;
@@ -265,10 +397,10 @@ export function TabelaCruzada({
                       key={c.chave}
                       data-c={c.chave}
                       tabIndex={onAbrir ? 0 : undefined}
-                      className={`${CEL} ${W_COL} sticky bottom-0 whitespace-nowrap border-t border-border bg-surface-2 text-right tabular-nums ${fixa ? `z-30 ${p === nFix - 1 ? ULTIMA_FIXA : ""}` : "z-20"} ${
+                      className={`${CEL} sticky bottom-0 whitespace-nowrap border-t border-border bg-surface-2 text-right tabular-nums ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : "z-20"} ${
                         onAbrir ? "cursor-pointer hover:text-accent" : ""
                       } ${ehAtiva(null, c.chave) ? anelAtivo : ""}`}
-                      style={fixa ? fixaCol(p) : undefined}
+                      style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : {}) }}
                     >
                       {texto(c.total, { linha: total, coluna: c.total })}
                     </td>
@@ -280,9 +412,10 @@ export function TabelaCruzada({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border px-3 py-1.5 text-[12.5px] text-muted">
         <span>{resumo}</span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {acoesRodape}
           <label className="flex items-center gap-1.5">
             <span className="hidden sm:inline">Linhas</span>
             <select

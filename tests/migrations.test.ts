@@ -419,6 +419,16 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(depois.classificacao_id, null, "excluir a classificação deveria zerar a da unidade (set null)");
   });
 
+  it("0040 preferências de tabela por usuário (única por usuário + chave; some com o usuário)", () => {
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO usuarios (id, email, nome, senha_hash) VALUES (9401, 'pref@x', 'P', 'h')");
+    db.exec("INSERT INTO preferencias_tabela (usuario_id, chave, valor) VALUES (9401, 'orcamento-comparativo:unidade:fonte', '{}')");
+    assert.throws(() => db.exec("INSERT INTO preferencias_tabela (usuario_id, chave, valor) VALUES (9401, 'orcamento-comparativo:unidade:fonte', '{}')"));
+    db.exec("DELETE FROM usuarios WHERE id = 9401");
+    const n = db.prepare("SELECT COUNT(*) AS n FROM preferencias_tabela WHERE usuario_id = 9401").get() as { n: number };
+    assert.equal(n.n, 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

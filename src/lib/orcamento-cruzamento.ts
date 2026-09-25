@@ -159,17 +159,97 @@ export function semVazios(c: Cruzamento): Cruzamento {
   return { ...c, linhas, colunas: c.colunas.filter((_, j) => manterCol[j]) };
 }
 
-/** Ordem das linhas: pelo rótulo (natural), pelo TOTAL ou por uma COLUNA (a chave dela). */
-export type OrdemCruzamento = { por: "rotulo" | "total" | { coluna: string }; desc: boolean };
+/** Ordem das linhas: pelo rótulo (natural), pela coluna EXTRA (ex.: a sigla), pelo TOTAL ou por uma COLUNA (a chave dela). */
+export type OrdemCruzamento = { por: "rotulo" | "extra" | "total" | { coluna: string }; desc: boolean };
 
-export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento): LinhaCruzada[] {
-  const j = typeof ordem.por === "object" ? c.colunas.findIndex((x) => x.chave === (ordem.por as { coluna: string }).coluna) : -1;
-  const chave = (l: LinhaCruzada) => (ordem.por === "rotulo" ? 0 : j >= 0 ? l.valores[j] : l.total);
+export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento, extraDe?: (chave: string) => string): LinhaCruzada[] {
   const sinal = ordem.desc ? -1 : 1;
-  return [...c.linhas].sort((a, b) =>
-    ordem.por === "rotulo" ? sinal * colator.compare(a.rotulo, b.rotulo) : sinal * (chave(a) - chave(b)) || colator.compare(a.rotulo, b.rotulo),
-  );
+  if (ordem.por === "rotulo") return [...c.linhas].sort((a, b) => sinal * colator.compare(a.rotulo, b.rotulo));
+  if (ordem.por === "extra") {
+    // Vazios sempre no fim; empate pelo rótulo.
+    const ex = (l: LinhaCruzada) => extraDe?.(l.chave) ?? "";
+    return [...c.linhas].sort((a, b) => {
+      const x = ex(a);
+      const y = ex(b);
+      if (!x || !y) return x === y ? colator.compare(a.rotulo, b.rotulo) : x ? -1 : 1;
+      return sinal * colator.compare(x, y) || colator.compare(a.rotulo, b.rotulo);
+    });
+  }
+  const j = typeof ordem.por === "object" ? c.colunas.findIndex((x) => x.chave === (ordem.por as { coluna: string }).coluna) : -1;
+  const chave = (l: LinhaCruzada) => (j >= 0 ? l.valores[j] : l.total);
+  return [...c.linhas].sort((a, b) => sinal * (chave(a) - chave(b)) || colator.compare(a.rotulo, b.rotulo));
 }
+
+/** Ordem das COLUNAS: pelo rótulo (A–Z / Z–A) ou pelo total (maior / menor primeiro). */
+export type OrdemColunas = "rotulo" | "rotulo-desc" | "total-desc" | "total-asc";
+
+/** Reordena as colunas e tira as OCULTAS (os `valores` das linhas acompanham; os totais seguem os do cruzamento). */
+export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: string[] = []): Cruzamento {
+  const fora = new Set(ocultas);
+  const idx = c.colunas.map((_, j) => j).filter((j) => !fora.has(c.colunas[j].chave));
+  const cmp: Record<OrdemColunas, (a: number, b: number) => number> = {
+    rotulo: (a, b) => colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
+    "rotulo-desc": (a, b) => colator.compare(c.colunas[b].rotulo, c.colunas[a].rotulo),
+    "total-desc": (a, b) => c.colunas[b].total - c.colunas[a].total || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
+    "total-asc": (a, b) => c.colunas[a].total - c.colunas[b].total || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
+  };
+  idx.sort(cmp[ordem] ?? cmp.rotulo);
+  return { ...c, colunas: idx.map((j) => c.colunas[j]), linhas: c.linhas.map((l) => ({ ...l, valores: idx.map((j) => l.valores[j]) })) };
+}
+
+/** Chaves especiais das colunas FIXAS da tabela (para larguras e ocultar). */
+export const COL_ROTULO = "__rotulo";
+export const COL_EXTRA = "__extra";
+export const COL_TOTAL = "__total";
+export const LARGURA_MIN = 56;
+export const LARGURA_MAX = 640;
+
+/** Os AJUSTES da tabela que o usuário pode SALVAR: larguras (px por coluna), colunas fixadas (na ordem) e ocultas, a
+ * ordem das linhas e a das colunas. */
+export type LayoutCruzamento = {
+  larguras: Record<string, number>;
+  fixadas: string[];
+  ocultas: string[];
+  ordemLinhas: OrdemCruzamento;
+  ordemColunas: OrdemColunas;
+};
+
+export const LAYOUT_PADRAO: LayoutCruzamento = { larguras: {}, fixadas: [], ocultas: [], ordemLinhas: { por: "rotulo", desc: false }, ordemColunas: "rotulo" };
+
+/** A chave do layout salvo do Comparativo — um por PAR de colunas ligadas (as colunas mudam com o par). */
+export const chaveLayoutComparativo = (linha: DimensaoOrcamento, coluna: DimensaoOrcamento) => `orcamento-comparativo:${linha}:${coluna}`;
+
+const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "rotulo-desc", "total-desc", "total-asc"];
+const listaChaves = (v: unknown) =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 300))].slice(0, 500) : [];
+
+/** Qualquer JSON → layout VÁLIDO e canônico (larguras no intervalo e em ordem de chave; sem repetição) — o salvo nunca
+ * quebra a tabela, e dois layouts iguais têm o mesmo JSON (`layoutIgual`). */
+export function coerceLayout(v: unknown): LayoutCruzamento {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const larguras: Record<string, number> = {};
+  if (o.larguras && typeof o.larguras === "object" && !Array.isArray(o.larguras)) {
+    for (const [k, w] of Object.entries(o.larguras as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, 500)) {
+      if (k.length && k.length <= 300 && typeof w === "number" && Number.isFinite(w)) larguras[k] = Math.round(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, w)));
+    }
+  }
+  const ol = o.ordemLinhas as { por?: unknown; desc?: unknown } | undefined;
+  const por =
+    ol?.por === "rotulo" || ol?.por === "extra" || ol?.por === "total"
+      ? ol.por
+      : ol?.por && typeof ol.por === "object" && typeof (ol.por as { coluna?: unknown }).coluna === "string"
+        ? { coluna: (ol.por as { coluna: string }).coluna }
+        : "rotulo";
+  return {
+    larguras,
+    fixadas: listaChaves(o.fixadas),
+    ocultas: listaChaves(o.ocultas),
+    ordemLinhas: { por, desc: ol?.desc === true },
+    ordemColunas: ORDENS_COLUNAS.includes(o.ordemColunas as OrdemColunas) ? (o.ordemColunas as OrdemColunas) : "rotulo",
+  };
+}
+
+export const layoutIgual = (a: LayoutCruzamento, b: LayoutCruzamento) => JSON.stringify(coerceLayout(a)) === JSON.stringify(coerceLayout(b));
 
 /** Como as células se leem: o VALOR ou a participação (% da linha, da coluna ou do total geral). */
 export type ModoCruzamento = "valor" | "linha" | "coluna" | "total";

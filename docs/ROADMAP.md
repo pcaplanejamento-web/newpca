@@ -993,6 +993,9 @@ controles (`--h-control-sm`; 44px no toque), busca compacta e lista enxuta.
 Colunas, com as permitidas apontadas e o motivo das demais), medida, visão, R$/% (linha, coluna, total), mapa de calor,
 ocultar zerados, ordenação, colunas congeladas pelo alfinete, sigla do cadastro, total fixo, exportar .xlsx e a origem de
 cada número (`TabelaCruzada` + `orcamento-cruzamento.ts`).
+✅ **Comparativo — ajustes salvos:** visual minimalista; largura de cada coluna pela borda do cabeçalho (toque também);
+ordenar por qualquer coluna; painel "Colunas" para ocultar, fixar/desfixar (uma a uma ou todas) e ordenar as colunas;
+ajustes salvos na conta do usuário por par de colunas (migração `0040`, `preferencias_tabela`).
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

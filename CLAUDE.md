@@ -1630,20 +1630,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   REAL no `db.batch`: apaga os do alvo, move os da origem, recalcula os totais, apaga a origem); qualquer falha deixa o
   orçamento anterior intacto e apaga o temporário. O orçamento mantém id/nome/ano (vínculos e visões seguem pelo texto).
   **Comparativo** (`OrcamentoComparativo` → **`TabelaCruzada`**): a TABELA CRUZADA horizontal (como a planilha da
-  Prefeitura — ex.: Unidade × Elemento de despesa). O usuário LIGA duas colunas do CUBO (Linhas × Colunas, `SelectField
-  compacto`) e o seletor das colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das
-  linhas, sem dados neste orçamento, mais de `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1);
-  inverter linhas × colunas (se o par invertido for permitido); MEDIDA (dotação inicial/atualizada, suplementação,
-  anulação, empenho, saldo, emenda); restringir por uma VISÃO salva; células em R$ ou % da linha/coluna/total; mapa de
-  calor; ocultar linhas/colunas zeradas; busca nas linhas; ordenar pelo rótulo, pelo total ou por qualquer coluna
-  (cabeçalho); **CONGELAR colunas** pelo alfinete do cabeçalho (vão para a esquerda, na ordem escolhida; o rótulo — e, no
-  desktop, a Sigla + o Total — sempre congelados; larguras por tokens locais `--cz-*`, sem medir); a **Sigla** do cadastro
-  (Vínculos) ao lado de Órgão/Unidade; linha TOTAL fixa no rodapé; exportar .xlsx (`exportarCruzamentoXlsx`); tocar numa
-  célula, rótulo ou total abre a **`OrigemDados`** com os lançamentos do recorte (a soma = o número). Núcleo PURO
+  Prefeitura — ex.: Unidade × Elemento de despesa), em visual MINIMALISTA (cabeçalho sem caixa-alta, zeros como "–", só
+  divisórias horizontais). O usuário LIGA duas colunas do CUBO (Linhas × Colunas, `SelectField compacto`) e o seletor das
+  colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das linhas, sem dados, mais de
+  `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1); inverter linhas × colunas; MEDIDA; VISÃO
+  salva; R$ ou % da linha/coluna/total; busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
+  tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número). **AJUSTES** (por PAR de colunas
+  ligadas): **largura** de QUALQUER coluna arrastando a borda do cabeçalho (mouse/toque; ←/→ no teclado; duplo clique =
+  padrão; `LARGURA_MIN`–`LARGURA_MAX`), **ordenar** as linhas pelo cabeçalho de QUALQUER coluna (rótulo, Sigla, Total ou
+  valores), e no painel **"Colunas"** (`Modal`): **ocultar** colunas (uma a uma, todas ou mostrar todas — inclusive
+  Sigla/Total), **fixar/desfixar** (uma a uma ou TODAS — as fixadas vão para a esquerda; as que não cabem na largura
+  visível deixam de congelar, nunca somem), a **ordem das colunas** (A–Z · Z–A · maior/menor total), larguras padrão,
+  mapa de calor e ocultar zerados. Os ajustes ficam num RASCUNHO ("Ajustes não salvos" no rodapé) e o usuário **SALVA**
+  na conta dele — tabela **`preferencias_tabela`** (migração **`0040`**, aditiva: `usuario_id` + `chave` única + `valor`
+  JSON; `preferencias-tabela.ts`; `PUT`/`DELETE /api/preferencias/tabela`, `exigirUsuario`, `preferencias-validation.ts`
+  com teto de 32 KB) com a chave `chaveLayoutComparativo(linha, coluna)`; "Padrão" apaga o salvo. O layout lido é
+  normalizado por `coerceLayout` (qualquer JSON → válido; `layoutIgual` compara pelo conteúdo). Núcleo PURO
   **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
-  `lancamentosDoRecorte`/`matrizCruzamento`, testado; o CUBO real = 39 unidades × 36 elementos em ~5 ms). Altura até o fim
-  do display pela MESMA medida do `DataTable scrollInterno` (**`AlturaCheia.tsx`**: `useAlturaAteOFim` + `AlturaNoHtml`,
-  extraídos do `DataTable`); linhas por página de Configurações → Tabelas.
+  `reordenarColunas`/`lancamentosDoRecorte`/`matrizCruzamento`/`coerceLayout`, testado; o CUBO real = 39 unidades × 36
+  elementos em ~5 ms). Altura até o fim do display pela MESMA medida do `DataTable scrollInterno` (**`AlturaCheia.tsx`**:
+  `useAlturaAteOFim` + `AlturaNoHtml`); larguras padrão por tokens locais `--cz-*` (px); linhas por página de
+  Configurações → Tabelas.
   **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
   DISTINTOS deste orçamento (o vínculo segue GLOBAL); na barra: busca + "Vincular N sugestões". **Visões**
   (`OrcamentoVisoes`): tabela das visões (filtros + lançamentos e Σ que cada uma pega DESTE orçamento) → clicar abre o
@@ -1870,8 +1877,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
-  **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais, colunas congeláveis pelo alfinete, ordenação, %, mapa
-  de calor e origem de cada número — o Comparativo do orçamento),
+  **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — largura pela borda do cabeçalho, ordenação em
+  qualquer cabeçalho, colunas congeladas, %, mapa de calor e origem de cada número; o Comparativo do orçamento),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

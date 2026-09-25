@@ -716,6 +716,22 @@ export type NovoOrcamentoItem = typeof orcamentoItens.$inferInsert;
  * vazio = "Todos"). Dentro da dimensão = OU; entre dimensões = E. Usadas pelo PCA (orçamento para o
  * PCA) e pela tela do Orçamento. Núcleo puro em `src/lib/orcamento-visao.ts`.
  */
+/** Ajustes SALVOS de uma tabela, por usuário (migração `0040`): `chave` = a tabela/contexto (ex.:
+ * `orcamento-comparativo:unidade:nomeElemento`), `valor` = JSON do layout (larguras, fixadas, ocultas, ordem). */
+export const preferenciasTabela = sqliteTable(
+  "preferencias_tabela",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    chave: text("chave").notNull(),
+    valor: text("valor").notNull(),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("preferencias_tabela_uq").on(t.usuarioId, t.chave)],
+);
+
 export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),

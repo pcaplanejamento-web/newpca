@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { salvarPreferenciaSchema } from "../src/lib/preferencias-validation.ts";
 import {
   basePercentual,
+  COL_TOTAL,
+  chaveLayoutComparativo,
+  coerceLayout,
   colunaPermitida,
   cruzar,
+  LARGURA_MAX,
+  LARGURA_MIN,
+  LAYOUT_PADRAO,
   lancamentosDoRecorte,
+  layoutIgual,
   MAX_COLUNAS_CRUZAMENTO,
   matrizCruzamento,
   medidaOrcamento,
@@ -12,6 +20,7 @@ import {
   percentual,
   permissoesColunas,
   permissoesLinhas,
+  reordenarColunas,
   semVazios,
 } from "../src/lib/orcamento-cruzamento.ts";
 
@@ -106,5 +115,63 @@ describe("orcamento-cruzamento", () => {
     const m = matrizCruzamento(c, c.linhas, "Unidade", { rotulo: "Sigla", de: (k) => (k.includes("SEMUS") ? "SMS" : "") });
     assert.deepEqual(m[0], ["Unidade", "Sigla", "Total", "AUXÍLIOS", "DIÁRIAS", "OBRAS"]);
     assert.deepEqual(m.at(-1), ["TOTAL", "", 187, 50, 137, 0]);
+  });
+
+  it("colunas: reordena (A–Z, Z–A, total) e oculta — os valores das linhas acompanham", () => {
+    const c = cruzar(L, "unidade", "nomeElemento", "inicial");
+    const r = reordenarColunas(c, "total-desc", [c.colunas.find((x) => x.rotulo === "OBRAS")?.chave ?? ""]);
+    assert.deepEqual(
+      r.colunas.map((x) => x.rotulo),
+      ["DIÁRIAS", "AUXÍLIOS"],
+    );
+    const semus = r.linhas.find((l) => l.rotulo === "10 - SEMUS");
+    assert.deepEqual(semus?.valores, [100, 50]);
+    assert.equal(r.total, c.total, "ocultar não muda o total");
+    assert.deepEqual(
+      reordenarColunas(c, "rotulo-desc").colunas.map((x) => x.rotulo),
+      ["OBRAS", "DIÁRIAS", "AUXÍLIOS"],
+    );
+  });
+
+  it("ordem das linhas pela coluna EXTRA (sigla): vazios no fim", () => {
+    const c = cruzar(L, "unidade", "nomeElemento", "inicial");
+    const sigla: Record<string, string> = { "10 - SEMUS": "SMS", "2 - SEMED": "SME" };
+    const ordem = ordenarLinhas(c, { por: "extra", desc: false }, (k) => sigla[k] ?? "");
+    assert.deepEqual(
+      ordem.map((l) => l.rotulo),
+      ["2 - SEMED", "10 - SEMUS", "—"],
+    );
+    assert.deepEqual(
+      ordenarLinhas(c, { por: "extra", desc: true }, (k) => sigla[k] ?? "").map((l) => l.rotulo),
+      ["10 - SEMUS", "2 - SEMED", "—"],
+    );
+  });
+
+  it("layout salvo: normaliza qualquer JSON e compara pelo conteúdo", () => {
+    assert.deepEqual(coerceLayout(undefined), LAYOUT_PADRAO);
+    assert.deepEqual(coerceLayout("lixo"), LAYOUT_PADRAO);
+    const l = coerceLayout({
+      larguras: { b: 10, a: 9999, x: "20" },
+      fixadas: ["c1", "c1", 3],
+      ocultas: [COL_TOTAL],
+      ordemLinhas: { por: { coluna: "c1" }, desc: true },
+      ordemColunas: "total-desc",
+      extra: 1,
+    });
+    assert.deepEqual(l.larguras, { a: LARGURA_MAX, b: LARGURA_MIN });
+    assert.deepEqual(l.fixadas, ["c1"]);
+    assert.deepEqual(l.ordemLinhas, { por: { coluna: "c1" }, desc: true });
+    assert.equal(l.ordemColunas, "total-desc");
+    assert.equal(coerceLayout({ ordemColunas: "x", ordemLinhas: { por: "?" } }).ordemColunas, "rotulo");
+    assert.ok(layoutIgual({ ...l, larguras: { b: 56, a: 640 } }, l), "a ordem das chaves não importa");
+    assert.ok(!layoutIgual(l, LAYOUT_PADRAO));
+    assert.equal(chaveLayoutComparativo("unidade", "fonte"), "orcamento-comparativo:unidade:fonte");
+  });
+
+  it("preferência: chave segura e valor com teto", () => {
+    assert.ok(salvarPreferenciaSchema.safeParse({ chave: "orcamento-comparativo:unidade:fonte", valor: LAYOUT_PADRAO }).success);
+    assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "a b/../", valor: {} }).success);
+    assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "x", valor: { g: "a".repeat(40_000) } }).success);
+    assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "x", valor: [1] }).success);
   });
 });

@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Columns3,
   Copy,
   Database,
   Download,
@@ -124,6 +125,7 @@ export const IconUndo = Undo2;
 export const IconArrowUp = ArrowUp;
 export const IconArrowDown = ArrowDown;
 export const IconTrocar = ArrowLeftRight;
+export const IconColunas = Columns3;
 export const IconFixar = Pin;
 export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;

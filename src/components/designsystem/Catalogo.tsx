@@ -701,7 +701,7 @@ function DashboardMesaDemo() {
 /** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
 /** Clique numa fatia → ORIGEM DOS DADOS (o mesmo banner do Orçamento do PCA, dos gráficos do Dashboard e da Mesa). */
 function TabelaCruzadaDemo() {
-  const [fixadas, setFixadas] = useState<string[]>(["dia"]);
+  const [larguras, setLarguras] = useState<Record<string, number>>({});
   const [ordem, setOrdem] = useState<OrdemCruzamento>({ por: "rotulo", desc: false });
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const colunas = [
@@ -754,10 +754,16 @@ function TabelaCruzadaDemo() {
           formatar={brl}
           modo={modo}
           calor
-          fixadas={fixadas}
-          onFixar={(k) => setFixadas((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))}
+          fixadas={["dia"]}
+          larguras={larguras}
+          onLargura={(k, px) =>
+            setLarguras((l) => {
+              const { [k]: _, ...resto } = l;
+              return px == null ? resto : { ...resto, [k]: Math.max(56, Math.round(px)) };
+            })
+          }
           ordem={ordem}
-          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" }))}
+          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra" }))}
           onAbrir={() => {}}
           vazio="Nenhum lançamento."
           resumo="3 linhas × 4 colunas"
@@ -1971,7 +1977,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; congelar pelo alfinete, ordenar no cabeçalho, % e mapa de calor) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
+      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; largura pela borda do cabeçalho, ordenar em qualquer cabeçalho, colunas congeladas, % e mapa de calor) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
