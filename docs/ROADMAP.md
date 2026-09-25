@@ -1005,6 +1005,9 @@ Total), borda ajusta a largura; barra de edição numa linha.
 ✅ **Comparativo — todas as colunas iguais:** Unidade, Sigla e Total se movem, congelam, ocultam e ajustam como as
 demais; arrastar leva a coluna presa ao cursor e mostra a SOMBRA do lugar onde vai ficar; textos centrados na altura;
 barra de edição enxuta e a explicação num botão de ajuda (?) — componente `Ajuda`.
+✅ **Comparativo — arrastar sem travar:** os ouvintes do arrasto passaram para a janela (a prévia reordenava os
+cabeçalhos e derrubava o pointer capture), a coluna presa anda direto no DOM e a tabela só re-renderiza quando o destino
+muda; nenhuma seleção de texto enquanto se segura uma coluna ou a borda de largura.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

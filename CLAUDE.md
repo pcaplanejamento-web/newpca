@@ -1642,7 +1642,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **"Editar"** (`TabelaCruzada.edicao`; as colunas ligadas travam, a origem dos números pausa) e cada cabeçalho ganha as
   ações diretas: **ARRASTAR o nome** move a coluna (mouse ou toque — pointer capture, `touch-none`; a coluna vai **PRESA ao
   cursor** no mesmo ponto em que foi pega — nome + os primeiros valores —, com o cursor "agarrando"; o **LUGAR onde vai
-  ficar aparece SOMBREADO já na posição nova** — prévia `soltarColuna`; a tabela ROLA sozinha perto das bordas; Alt+←/→) e
+  ficar aparece SOMBREADO já na posição nova** — prévia `soltarColuna`; a tabela ROLA sozinha perto das bordas; Alt+←/→;
+  robusto: os ouvintes ficam na JANELA — a prévia reordena os cabeçalhos no DOM e mover um nó derruba o pointer capture, o
+  que travava o arrasto —, a coluna presa anda direto no DOM (`translate3d`, sem re-render) e a tabela só re-renderiza
+  quando o DESTINO muda; da pressão até soltar NENHUMA seleção de texto — `segurar()`: bloqueia o `selectstart`, limpa a
+  seleção e põe o cursor no documento, também ao ajustar a largura; desmontar no meio desfaz tudo) e
   soltar entre as congeladas CONGELA, depois delas SOLTA; o **alfinete** congela/descongela, o **olho** oculta/mostra (o nome
   das linhas não se oculta; as ocultas ficam ESMAECIDAS para voltar) e a **borda** ajusta a largura (arrastar, ←/→, duplo
   clique = padrão). A barra de edição é ENXUTA (mapa de calor, ocultar zerados, congelar/descongelar/mostrar todas por

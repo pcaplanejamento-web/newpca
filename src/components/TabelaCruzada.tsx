@@ -6,6 +6,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -51,6 +52,23 @@ const VAR_LARGURA: Record<Coluna["tipo"], string> = { rotulo: "--cz-rot", extra:
 const ORDEM_DE: Record<Exclude<Coluna["tipo"], "valor">, OrdemCruzamento["por"]> = { rotulo: "rotulo", extra: "extra", total: "total" };
 const porDe = (c: Coluna): OrdemCruzamento["por"] => (c.tipo === "valor" ? { coluna: c.chave } : ORDEM_DE[c.tipo]);
 
+/** Enquanto o usuário SEGURA algo (arrastar uma coluna, ajustar a largura): nenhuma seleção de texto (bloqueia o
+ * `selectstart` e limpa a que houver) e o cursor da ação no documento inteiro. Devolve a função que desfaz. */
+function segurar(cursor: string): () => void {
+  const corpo = document.body.style;
+  const antes = { cursor: corpo.cursor, selecao: corpo.userSelect };
+  const bloquear = (e: Event) => e.preventDefault();
+  corpo.cursor = cursor;
+  corpo.userSelect = "none";
+  window.getSelection()?.removeAllRanges();
+  document.addEventListener("selectstart", bloquear);
+  return () => {
+    corpo.cursor = antes.cursor;
+    corpo.userSelect = antes.selecao;
+    document.removeEventListener("selectstart", bloquear);
+  };
+}
+
 /** Alça de LARGURA na borda direita do cabeçalho (modo de edição): arrastar (mouse ou toque), ←/→ no teclado, duplo clique
  * = padrão. */
 function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string; largura?: number; onLargura: (px: number | null) => void }) {
@@ -70,6 +88,7 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
     e.stopPropagation();
     el.setPointerCapture(e.pointerId);
     setAtiva(true);
+    const soltar = segurar("col-resize");
     let quadro = 0;
     const mover = (ev: PointerEvent) => {
       cancelAnimationFrame(quadro);
@@ -77,6 +96,7 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
     };
     const fim = () => {
       cancelAnimationFrame(quadro);
+      soltar();
       setAtiva(false);
       el.removeEventListener("pointermove", mover);
       el.removeEventListener("pointerup", fim);
@@ -143,6 +163,7 @@ function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotu
   );
 }
 
+/** O arrasto em curso — só o que muda a TABELA (o destino); a posição da coluna presa ao cursor anda direto no DOM. */
 type Arrasto = { chave: string; x: number; y: number; dx: number; dy: number; largura: number; destino: number };
 
 /**
@@ -216,6 +237,10 @@ export function TabelaCruzada({
   const [page, setPage] = useState(1);
   const [arrasto, setArrasto] = useState<Arrasto | null>(null);
   const arrastou = useRef(false);
+  const fantasma = useRef<HTMLDivElement>(null);
+  const encerrar = useRef<(() => void) | null>(null);
+  // Desmontar no meio de um arrasto (ex.: sair da edição) desfaz tudo — ouvintes, cursor, seleção.
+  useEffect(() => () => encerrar.current?.(), []);
   const editando = edicao != null;
   const fora = useMemo(() => new Set(ocultas), [ocultas]);
 
@@ -309,25 +334,30 @@ export function TabelaCruzada({
     alvoCelula(e);
   };
 
-  // ARRASTAR (edição): o nome da coluna é a alça — mouse ou toque (pointer capture). A coluna segue o cursor no MESMO ponto
-  // em que foi pega; o destino = antes da 1ª coluna (sem a arrastada) cujo meio fica à direita do cursor; a tabela rola
-  // sozinha perto das bordas. Um toque SEM arrastar ordena.
+  // ARRASTAR (edição): o nome da coluna é a alça — mouse ou toque. Os ouvintes ficam na JANELA (a prévia REORDENA os
+  // cabeçalhos no DOM, e mover um nó derruba o pointer capture — o arrasto "travava" e o soltar se perdia). A coluna presa
+  // segue o cursor DIRETO no DOM (sem re-renderizar a tabela a cada movimento); a tabela só muda quando o DESTINO muda. O
+  // destino = antes da 1ª coluna (sem a arrastada) cujo meio fica à direita do cursor; perto das bordas, a tabela rola
+  // sozinha. Da pressão até soltar, nenhuma seleção de texto. Um toque SEM arrastar ordena.
   const iniciarArrasto = (e: ReactPointerEvent<HTMLButtonElement>, chave: string) => {
-    if (!edicao || e.button > 0) return;
-    const el = e.currentTarget;
-    const th = el.closest("th");
+    if (!edicao || !e.isPrimary || e.button > 0) return;
+    const th = e.currentTarget.closest("th");
     const rolo = rolagem.current;
     if (!th || !rolo) return;
-    el.setPointerCapture(e.pointerId);
+    if (e.pointerType === "mouse") e.preventDefault(); // sem seleção nem foco a partir daqui (o clique segue valendo)
+    encerrar.current?.();
     const caixa = th.getBoundingClientRect();
     const pega = { dx: e.clientX - caixa.left, dy: e.clientY - caixa.top, largura: caixa.width };
+    const ponteiro = e.pointerId;
     const x0 = e.clientX;
     const y0 = e.clientY;
     let ativo = false;
     let ultimo = { x: x0, y: y0 };
-    let destino = 0;
+    let destino = -1;
     let vel = 0;
     let quadro = 0;
+    let soltarCursor: (() => void) | null = null;
+    const soltarSelecao = segurar("");
     arrastou.current = false;
     const calcular = () => {
       const lista = [...(ref.current?.querySelectorAll<HTMLElement>("thead th[data-col]") ?? [])].filter((c) => c.dataset.col !== chave);
@@ -335,8 +365,13 @@ export function TabelaCruzada({
         const r = c.getBoundingClientRect();
         return ultimo.x < r.left + r.width / 2;
       });
-      destino = i < 0 ? lista.length : i;
+      const novo = i < 0 ? lista.length : i;
+      if (novo === destino) return;
+      destino = novo;
       setArrasto({ chave, x: ultimo.x, y: ultimo.y, ...pega, destino });
+    };
+    const moverFantasma = () => {
+      if (fantasma.current) fantasma.current.style.transform = `translate3d(${ultimo.x - pega.dx}px, ${ultimo.y - pega.dy}px, 0)`;
     };
     const rolar = () => {
       if (vel) {
@@ -345,37 +380,48 @@ export function TabelaCruzada({
       }
       quadro = requestAnimationFrame(rolar);
     };
-    const corpo = document.body.style;
     const mover = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
       ultimo = { x: ev.clientX, y: ev.clientY };
       if (!ativo) {
         if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
         ativo = true;
         arrastou.current = true;
-        corpo.cursor = "grabbing";
-        corpo.userSelect = "none";
+        soltarCursor = segurar("grabbing");
         quadro = requestAnimationFrame(rolar);
       }
       const r = rolo.getBoundingClientRect();
       vel = ev.clientX < r.left + 56 ? -14 : ev.clientX > r.right - 56 ? 14 : 0;
+      moverFantasma();
       calcular();
     };
-    const fim = (ev: PointerEvent) => {
+    const limpar = () => {
       cancelAnimationFrame(quadro);
-      el.removeEventListener("pointermove", mover);
-      el.removeEventListener("pointerup", fim);
-      el.removeEventListener("pointercancel", fim);
-      corpo.cursor = "";
-      corpo.userSelect = "";
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", fim);
+      window.removeEventListener("pointercancel", fim);
+      soltarCursor?.();
+      soltarSelecao();
+      encerrar.current = null;
+    };
+    const fim = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
+      limpar();
       setArrasto(null);
-      if (ativo && ev.type === "pointerup") {
+      // O clique que o navegador dispara logo após soltar não ordena; o próximo, sim.
+      if (ativo)
+        setTimeout(() => {
+          arrastou.current = false;
+        }, 0);
+      if (ativo && ev.type === "pointerup" && destino >= 0) {
         const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, chave, destino);
         edicao.onOrdem(r.fixadas, r.livres);
       }
     };
-    el.addEventListener("pointermove", mover);
-    el.addEventListener("pointerup", fim);
-    el.addEventListener("pointercancel", fim);
+    encerrar.current = limpar;
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", fim);
+    window.addEventListener("pointercancel", fim);
   };
   const congelar = (k: string) => {
     if (!edicao) return;
@@ -608,8 +654,9 @@ export function TabelaCruzada({
         createPortal(
           <div
             aria-hidden
-            className="pointer-events-none fixed z-[300] -rotate-1 overflow-hidden rounded-control border border-accent/60 bg-surface text-[13px] shadow-soft"
-            style={{ left: arrasto.x - arrasto.dx, top: arrasto.y - arrasto.dy, width: arrasto.largura }}
+            ref={fantasma}
+            className="pointer-events-none fixed top-0 left-0 z-[300] select-none overflow-hidden rounded-control border border-accent/60 bg-surface text-[13px] shadow-soft will-change-transform"
+            style={{ width: arrasto.largura, transform: `translate3d(${arrasto.x - arrasto.dx}px, ${arrasto.y - arrasto.dy}px, 0)` }}
           >
             <div className="flex items-center gap-1 border-b border-border bg-surface-2 px-3 py-2 text-[12px] font-medium text-text">
               <IconGrip className="h-3.5 w-3.5 shrink-0 text-accent" />
