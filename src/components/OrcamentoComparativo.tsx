@@ -23,8 +23,6 @@ import {
   type ModoCruzamento,
   matrizCruzamento,
   medidaOrcamento,
-  moverColuna,
-  type OrdemColunas,
   type OrdemCruzamento,
   ordenarLinhas,
   percentual,
@@ -32,6 +30,7 @@ import {
   permissoesLinhas,
   reordenarColunas,
   semVazios,
+  soltarColuna,
 } from "@/lib/orcamento-cruzamento";
 import { type AlvoVinculo, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
@@ -41,7 +40,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { Checkbox, SearchField, SelectField } from "./Field";
-import { IconDesafixar, IconDownload, IconEye, IconFixar, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
+import { IconDesafixar, IconDownload, IconEye, IconEyeOff, IconFixar, IconGrip, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
@@ -55,21 +54,14 @@ const MODOS: { value: ModoCruzamento; label: string; curto: string }[] = [
   { value: "coluna", label: "% coluna", curto: "% col." },
   { value: "total", label: "% total", curto: "% tot." },
 ];
-const ORDENS_COLUNAS: { value: OrdemColunas; label: string; curto: string }[] = [
-  { value: "rotulo", label: "A–Z", curto: "A–Z" },
-  { value: "rotulo-desc", label: "Z–A", curto: "Z–A" },
-  { value: "total-desc", label: "Maior total", curto: "Maior" },
-  { value: "total-asc", label: "Menor total", curto: "Menor" },
-];
-
 /**
  * Aba COMPARATIVO da tela do orçamento — a TABELA CRUZADA (horizontal, como a planilha da Prefeitura): o usuário LIGA
  * duas colunas do CUBO (uma nas LINHAS, outra nas COLUNAS — ex.: Unidade × Elemento de despesa) e compara os valores da
  * MEDIDA escolhida. Ao escolher as linhas, o seletor das colunas APONTA as permitidas (as demais aparecem desabilitadas
  * com o motivo — `permissoesColunas`). Tocar num cabeçalho ordena as linhas só na VISTA. **"Editar"** transforma a PRÓPRIA
- * planilha no editor do layout: o cabeçalho de cada coluna — inclusive Sigla e Total — abre o menu (ordenar, congelar,
- * mover, ocultar, largura padrão), a borda ajusta a largura e a barra de edição traz a ordem das colunas, o mapa de calor,
- * ocultar zerados e as ações em massa; **"Salvar"** grava o layout do PAR de colunas ligadas na conta do usuário
+ * planilha no editor do layout, DIRETO na coluna: arrastar o nome move (soltar à esquerda da divisa congela), o alfinete
+ * congela e o olho oculta — inclusive Sigla e Total —, a borda ajusta a largura; a barra de edição traz mapa de calor,
+ * ocultar zerados e congelar/descongelar/mostrar todas; **"Salvar"** grava o layout do PAR de colunas ligadas na conta do usuário
  * (`PUT /api/preferencias/tabela`; o layout igual ao padrão apaga o salvo) e "Cancelar" descarta.
  */
 export function OrcamentoComparativo({
@@ -190,12 +182,15 @@ export function OrcamentoComparativo({
     // A Sigla e o Total congelam por padrão (desktop): "descongelar" os SOLTA.
     onFixar: (k: string) => (k === COL_EXTRA || k === COL_TOTAL ? alternar("soltas", k) : alternar("fixadas", k)),
     onOcultar: (k: string) => alternar("ocultas", k),
-    // Mover: entre as congeladas, muda a ordem delas; nas demais, vira a ordem MANUAL das colunas.
-    onMover: (k: string, delta: -1 | 1) =>
+    // ARRASTAR: soltar entre as congeladas CONGELA, depois delas SOLTA; a ordem das livres vira a MANUAL.
+    onSoltar: (k: string, destino: number) =>
       mudar((l) => {
-        if (l.fixadas.includes(k)) return { ...l, fixadas: moverColuna(l.fixadas, k, delta) };
-        const livres = (cruzBase?.colunas ?? []).map((c) => c.chave).filter((x) => !l.fixadas.includes(x));
-        return { ...l, ordemColunas: "manual", ordemManual: moverColuna(livres, k, delta) };
+        const todas = (cruzBase?.colunas ?? []).map((c) => c.chave);
+        const presentes = new Set(todas);
+        const fix = l.fixadas.filter((x) => presentes.has(x));
+        const r = soltarColuna(fix, todas.filter((x) => !fix.includes(x)), k, destino);
+        // As congeladas fora da vista (ex.: zeradas ocultas) seguem congeladas.
+        return { ...l, fixadas: [...r.fixadas, ...l.fixadas.filter((x) => !presentes.has(x))], ordemColunas: "manual", ordemManual: r.livres };
       }),
   };
   const dados = (cruzBase?.colunas ?? []).map((c) => c.chave);
@@ -366,65 +361,50 @@ export function OrcamentoComparativo({
       </div>
 
       {editando && (
-        <div className="mb-[var(--gap-block)] space-y-2 rounded-card border border-accent/40 bg-surface px-[var(--pad-card)] py-2.5">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p className="min-w-0 flex-1 text-[12.5px] text-muted">
-              <span className="font-semibold text-text">Editando a planilha.</span> Toque no cabeçalho de uma coluna — inclusive Sigla e Total — para ordenar, congelar,
-              mover ou ocultar; arraste a borda para a largura.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="ghost" icon={<IconUndo className="h-4 w-4" />} onClick={() => setRascunho(LAYOUT_PADRAO)} disabled={gravando}>
-                Padrão
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelar} disabled={gravando}>
-                Cancelar
-              </Button>
-              <Button size="sm" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={gravando}>
-                Salvar
-              </Button>
-            </div>
+        <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-accent/40 bg-surface px-[var(--pad-card)] py-2">
+          <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+            <span className="font-semibold text-text">Editando a planilha</span>
+            <span className="inline-flex items-center gap-1">
+              <IconGrip className="h-3.5 w-3.5" /> arraste o nome para mover (à esquerda da divisa, congela)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <IconFixar className="h-3.5 w-3.5" /> congela
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <IconEyeOff className="h-3.5 w-3.5" /> oculta
+            </span>
+            <span className="max-lg:hidden">a borda ajusta a largura</span>
+          </p>
+          <div className="flex min-h-11 flex-wrap items-center gap-x-4 lg:min-h-0">
+            <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
+            <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Segmented<OrdemColunas>
-              ariaLabel="Ordem das colunas"
-              value={layout.ordemColunas}
-              onChange={(v) => mudar((l) => ({ ...l, ordemColunas: v }))}
-              options={layout.ordemColunas === "manual" ? [...ORDENS_COLUNAS, { value: "manual", label: "Manual", curto: "Manual" }] : ORDENS_COLUNAS}
-            />
-            <div className="flex min-h-11 flex-wrap items-center gap-x-4 lg:min-h-0">
-              <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
-              <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<IconFixar className="h-4 w-4" />}
-                onClick={() => mudar((l) => ({ ...l, fixadas: dados.filter((k) => !l.ocultas.includes(k)), soltas: [] }))}
-              >
-                Congelar todas
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<IconDesafixar className="h-4 w-4" />}
-                onClick={() => mudar((l) => ({ ...l, fixadas: [], soltas: [COL_EXTRA, COL_TOTAL] }))}
-              >
-                Descongelar todas
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<IconEye className="h-4 w-4" />}
-                onClick={() => mudar((l) => ({ ...l, ocultas: [] }))}
-                disabled={layout.ocultas.length === 0}
-              >
-                Mostrar todas
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => mudar((l) => ({ ...l, larguras: {} }))} disabled={Object.keys(layout.larguras).length === 0}>
-                Larguras padrão
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<IconFixar className="h-4 w-4" />}
+              onClick={() => mudar((l) => ({ ...l, fixadas: dados.filter((k) => !l.ocultas.includes(k)), soltas: [] }))}
+            >
+              Congelar todas
+            </Button>
+            <Button size="sm" variant="ghost" icon={<IconDesafixar className="h-4 w-4" />} onClick={() => mudar((l) => ({ ...l, fixadas: [], soltas: [COL_EXTRA, COL_TOTAL] }))}>
+              Descongelar todas
+            </Button>
+            <Button size="sm" variant="ghost" icon={<IconEye className="h-4 w-4" />} onClick={() => mudar((l) => ({ ...l, ocultas: [] }))} disabled={layout.ocultas.length === 0}>
+              Mostrar todas
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 lg:ml-auto">
+            <Button size="sm" variant="ghost" icon={<IconUndo className="h-4 w-4" />} onClick={() => setRascunho(LAYOUT_PADRAO)} disabled={gravando}>
+              Padrão
+            </Button>
+            <Button size="sm" variant="ghost" onClick={cancelar} disabled={gravando}>
+              Cancelar
+            </Button>
+            <Button size="sm" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={gravando}>
+              Salvar
+            </Button>
           </div>
         </div>
       )}

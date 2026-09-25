@@ -8,7 +8,7 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
-import type { ModoCruzamento, OrdemCruzamento } from "@/lib/orcamento-cruzamento";
+import { type ModoCruzamento, type OrdemCruzamento, soltarColuna } from "@/lib/orcamento-cruzamento";
 import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -779,7 +779,15 @@ function TabelaCruzadaDemo() {
                     }),
                   onFixar: (k) => (k.startsWith("__") ? alterna(setSoltas, k) : alterna(setFixadas, k)),
                   onOcultar: (k) => alterna(setOcultas, k),
-                  onMover: () => {},
+                  onSoltar: (k, destino) =>
+                    setFixadas((f) =>
+                      soltarColuna(
+                        f,
+                        colunas.map((c) => c.chave).filter((x) => !f.includes(x)),
+                        k,
+                        destino,
+                      ).fixadas,
+                    ),
                 }
               : undefined
           }
@@ -1995,7 +2003,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; no modo EDIÇÃO o cabeçalho de cada coluna, inclusive Sigla e Total, abre o menu e a borda ajusta a largura) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
+      <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; no modo EDIÇÃO: arrastar o nome move/congela, alfinete congela, olho oculta — inclusive Sigla e Total — e a borda ajusta a largura) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">

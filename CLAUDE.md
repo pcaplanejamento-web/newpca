@@ -1636,22 +1636,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1); inverter linhas × colunas; MEDIDA; VISÃO
   salva; R$ ou % da linha/coluna/total; busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
   tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número); tocar num cabeçalho ordena as linhas SÓ
-  na vista. **EDIÇÃO NA PRÓPRIA PLANILHA (por PAR de colunas ligadas):** o botão **"Editar"** liga o modo de edição
-  (`TabelaCruzada.edicao`; as colunas ligadas travam, a origem dos números pausa): o cabeçalho de CADA coluna — **inclusive
-  Sigla e Total** — abre o menu (`Dropdown`, itens de 44px no toque): ordenar (crescente/decrescente), **congelar/
-  descongelar** (Sigla e Total congelam por padrão no desktop — `soltas`), **mover** para a esquerda/direita (entre as
-  congeladas muda a ordem delas; nas demais vira a ordem MANUAL — `moverColuna`/`ordemManual`), **ocultar/mostrar** (as
-  ocultas aparecem ESMAECIDAS para voltar) e largura padrão; a **borda do cabeçalho** ajusta a largura (arrastar com
-  mouse/toque, ←/→, duplo clique = padrão; `LARGURA_MIN`–`LARGURA_MAX`). A barra de edição traz a ordem das colunas (A–Z ·
-  Z–A · maior/menor total · Manual), mapa de calor, ocultar zerados, congelar/descongelar todas, mostrar todas, larguras
-  padrão, **Padrão**, **Cancelar** (descarta; confirma se mudou) e **Salvar** — grava o layout (`LayoutCruzamento`:
-  larguras, fixadas, ocultas, soltas, ordem das linhas e das colunas, ordem manual, calor, zerados) na conta do usuário:
+  na vista. **EDIÇÃO NA PRÓPRIA PLANILHA — DIRETO NA COLUNA (por PAR de colunas ligadas):** o botão **"Editar"** liga o
+  modo de edição (`TabelaCruzada.edicao`; as colunas ligadas travam, a origem dos números pausa) e cada cabeçalho ganha as
+  ações diretas: **ARRASTAR o nome** move a coluna (mouse ou toque — pointer capture, `touch-none`; a coluna "fantasma" segue
+  o dedo, uma LINHA accent marca o destino, a tabela ROLA sozinha perto das bordas; Alt+←/→ no teclado) e **soltar à
+  esquerda da divisa CONGELA**, depois dela SOLTA (`soltarColuna`, puro: a ordem das livres vira a MANUAL — `ordemManual`);
+  o **alfinete** congela/descongela e o **olho** oculta/mostra — **inclusive Sigla e Total** (congelados por padrão no
+  desktop — `soltas`; no celular rolam, então o alfinete deles só aparece no desktop); as ocultas ficam ESMAECIDAS para voltar;
+  a **borda do cabeçalho** ajusta a largura (arrastar, ←/→, duplo clique = padrão; `LARGURA_MIN`–`LARGURA_MAX`); tocar no
+  nome sem arrastar ordena. A barra de edição (uma linha) traz a legenda das ações, mapa de calor, ocultar zerados,
+  congelar/descongelar/mostrar todas, **Padrão**, **Cancelar** (confirma se mudou) e **Salvar** — grava o layout (`LayoutCruzamento`:
+  larguras, fixadas, ocultas, soltas, ordem das linhas, ordem das colunas A–Z|manual, calor, zerados) na conta do usuário:
   tabela **`preferencias_tabela`** (migração **`0040`**, aditiva: `usuario_id` + `chave` única + `valor` JSON;
   `preferencias-tabela.ts`; `PUT`/`DELETE /api/preferencias/tabela`, `exigirUsuario`, `preferencias-validation.ts` com teto
   de 32 KB) com a chave `chaveLayoutComparativo(linha, coluna)`; salvar o layout IGUAL ao padrão apaga o salvo. O layout lido é
   normalizado por `coerceLayout` (qualquer JSON → válido; `layoutIgual` compara pelo conteúdo). Núcleo PURO
   **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
-  `reordenarColunas`/`lancamentosDoRecorte`/`matrizCruzamento`/`coerceLayout`, testado; o CUBO real = 39 unidades × 36
+  `reordenarColunas`/`soltarColuna`/`lancamentosDoRecorte`/`matrizCruzamento`/`coerceLayout`, testado; o CUBO real = 39 unidades × 36
   elementos em ~5 ms). Altura até o fim do display pela MESMA medida do `DataTable scrollInterno` (**`AlturaCheia.tsx`**:
   `useAlturaAteOFim` + `AlturaNoHtml`); larguras padrão por tokens locais `--cz-*` (px); linhas por página de
   Configurações → Tabelas.
@@ -1882,8 +1883,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
   **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
-  de calor e origem de cada número; com `edicao`, a própria planilha vira o editor: menu por coluna, inclusive Sigla e
-  Total, e largura pela borda; o Comparativo do orçamento), `Dropdown` (`className` = invólucro, ex.: `block w-full`),
+  de calor e origem de cada número; com `edicao`, a própria planilha vira o editor DIRETO na coluna: arrastar o nome move
+  e congela, alfinete, olho e largura pela borda — inclusive Sigla e Total; o Comparativo do orçamento),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

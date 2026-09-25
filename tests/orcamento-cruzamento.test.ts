@@ -16,13 +16,13 @@ import {
   MAX_COLUNAS_CRUZAMENTO,
   matrizCruzamento,
   medidaOrcamento,
-  moverColuna,
   ordenarLinhas,
   percentual,
   permissoesColunas,
   permissoesLinhas,
   reordenarColunas,
   semVazios,
+  soltarColuna,
 } from "../src/lib/orcamento-cruzamento.ts";
 
 const V = { valorEmendaImpositiva: 0, valorSuplementacao: 0, valorEmpenho: 0, saldo: 0, valorAnulacao: 0 };
@@ -118,20 +118,16 @@ describe("orcamento-cruzamento", () => {
     assert.deepEqual(m.at(-1), ["TOTAL", "", 187, 50, 137, 0]);
   });
 
-  it("colunas: reordena (A–Z, Z–A, total) e oculta — os valores das linhas acompanham", () => {
+  it("colunas: oculta — os valores das linhas acompanham e o total não muda", () => {
     const c = cruzar(L, "unidade", "nomeElemento", "inicial");
-    const r = reordenarColunas(c, "total-desc", [c.colunas.find((x) => x.rotulo === "OBRAS")?.chave ?? ""]);
+    const r = reordenarColunas(c, "rotulo", [c.colunas.find((x) => x.rotulo === "OBRAS")?.chave ?? ""]);
     assert.deepEqual(
       r.colunas.map((x) => x.rotulo),
-      ["DIÁRIAS", "AUXÍLIOS"],
+      ["AUXÍLIOS", "DIÁRIAS"],
     );
     const semus = r.linhas.find((l) => l.rotulo === "10 - SEMUS");
-    assert.deepEqual(semus?.valores, [100, 50]);
+    assert.deepEqual(semus?.valores, [50, 100]);
     assert.equal(r.total, c.total, "ocultar não muda o total");
-    assert.deepEqual(
-      reordenarColunas(c, "rotulo-desc").colunas.map((x) => x.rotulo),
-      ["OBRAS", "DIÁRIAS", "AUXÍLIOS"],
-    );
   });
 
   it("ordem das linhas pela coluna EXTRA (sigla): vazios no fim", () => {
@@ -156,14 +152,14 @@ describe("orcamento-cruzamento", () => {
       fixadas: ["c1", "c1", 3],
       ocultas: [COL_TOTAL],
       ordemLinhas: { por: { coluna: "c1" }, desc: true },
-      ordemColunas: "total-desc",
+      ordemColunas: "manual",
       extra: 1,
     });
     assert.deepEqual(l.larguras, { a: LARGURA_MAX, b: LARGURA_MIN });
     assert.deepEqual(l.fixadas, ["c1"]);
     assert.deepEqual(l.ordemLinhas, { por: { coluna: "c1" }, desc: true });
-    assert.equal(l.ordemColunas, "total-desc");
-    assert.equal(coerceLayout({ ordemColunas: "x", ordemLinhas: { por: "?" } }).ordemColunas, "rotulo");
+    assert.equal(l.ordemColunas, "manual");
+    assert.equal(coerceLayout({ ordemColunas: "total-desc", ordemLinhas: { por: "?" } }).ordemColunas, "rotulo", "ordem antiga/desconhecida = A–Z");
     assert.ok(layoutIgual({ ...l, larguras: { b: 56, a: 640 } }, l), "a ordem das chaves não importa");
     assert.ok(!layoutIgual(l, LAYOUT_PADRAO));
     assert.equal(chaveLayoutComparativo("unidade", "fonte"), "orcamento-comparativo:unidade:fonte");
@@ -176,12 +172,19 @@ describe("orcamento-cruzamento", () => {
     assert.ok(!salvarPreferenciaSchema.safeParse({ chave: "x", valor: [1] }).success);
   });
 
-  it("edição da planilha: ordem MANUAL, mover coluna, Sigla/Total soltas, calor e zerados", () => {
+  it("arrastar: soltar entre as congeladas CONGELA, depois delas SOLTA, na divisa mantém", () => {
+    // congeladas [a, b] | livres [c, d]
+    assert.deepEqual(soltarColuna(["a", "b"], ["c", "d"], "d", 1), { fixadas: ["a", "d", "b"], livres: ["c"] });
+    assert.deepEqual(soltarColuna(["a", "b"], ["c", "d"], "a", 3), { fixadas: ["b"], livres: ["c", "d", "a"] });
+    assert.deepEqual(soltarColuna(["a", "b"], ["c", "d"], "b", 1), { fixadas: ["a", "b"], livres: ["c", "d"] }, "divisa: segue congelada");
+    assert.deepEqual(soltarColuna(["a", "b"], ["c", "d"], "c", 2), { fixadas: ["a", "b"], livres: ["c", "d"] }, "divisa: segue livre");
+    assert.deepEqual(soltarColuna([], ["c", "d", "e"], "e", 0), { fixadas: [], livres: ["e", "c", "d"] }, "sem congeladas: só reordena");
+    assert.deepEqual(soltarColuna(["a"], ["c"], "c", 99), { fixadas: ["a"], livres: ["c"] }, "destino fora do fim = fim");
+  });
+
+  it("edição da planilha: ordem MANUAL, Sigla/Total soltas, calor e zerados", () => {
     const c = cruzar(L, "unidade", "nomeElemento", "inicial");
-    const [aux, dia, obr] = c.colunas.map((x) => x.chave);
-    const nova = moverColuna([aux, dia, obr], obr, -1);
-    assert.deepEqual(nova, [aux, obr, dia]);
-    assert.deepEqual(moverColuna(nova, aux, -1), nova, "não sai da ponta");
+    const [aux, , obr] = c.colunas.map((x) => x.chave);
     const r = reordenarColunas(c, "manual", [], [obr, aux]);
     assert.deepEqual(
       r.colunas.map((x) => x.rotulo),

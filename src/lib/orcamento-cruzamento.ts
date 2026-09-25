@@ -180,9 +180,9 @@ export function ordenarLinhas(c: Cruzamento, ordem: OrdemCruzamento, extraDe?: (
   return [...c.linhas].sort((a, b) => sinal * (chave(a) - chave(b)) || colator.compare(a.rotulo, b.rotulo));
 }
 
-/** Ordem das COLUNAS: pelo rótulo (A–Z / Z–A), pelo total (maior / menor primeiro) ou MANUAL (a lista que o usuário
- * montou movendo as colunas; as que não estão nela vão ao fim, A–Z). */
-export type OrdemColunas = "rotulo" | "rotulo-desc" | "total-desc" | "total-asc" | "manual";
+/** Ordem das COLUNAS: pelo rótulo (A–Z — o padrão) ou MANUAL (a lista que o usuário montou ARRASTANDO as colunas; as que
+ * não estão nela vão ao fim, A–Z). */
+export type OrdemColunas = "rotulo" | "manual";
 
 /** Reordena as colunas e tira as OCULTAS (os `valores` das linhas acompanham; os totais seguem os do cruzamento). */
 export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: string[] = [], manual: string[] = []): Cruzamento {
@@ -193,9 +193,6 @@ export function reordenarColunas(c: Cruzamento, ordem: OrdemColunas, ocultas: st
   const cmp: Record<OrdemColunas, (a: number, b: number) => number> = {
     manual: (a, b) => naLista(a) - naLista(b) || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
     rotulo: (a, b) => colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
-    "rotulo-desc": (a, b) => colator.compare(c.colunas[b].rotulo, c.colunas[a].rotulo),
-    "total-desc": (a, b) => c.colunas[b].total - c.colunas[a].total || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
-    "total-asc": (a, b) => c.colunas[a].total - c.colunas[b].total || colator.compare(c.colunas[a].rotulo, c.colunas[b].rotulo),
   };
   idx.sort(cmp[ordem] ?? cmp.rotulo);
   return { ...c, colunas: idx.map((j) => c.colunas[j]), linhas: c.linhas.map((l) => ({ ...l, valores: idx.map((j) => l.valores[j]) })) };
@@ -239,20 +236,24 @@ export const LAYOUT_PADRAO: LayoutCruzamento = {
   zerados: true,
 };
 
-/** Move a coluna `chave` uma posição (−1 = esquerda, +1 = direita) na ordem EXIBIDA — devolve a nova ordem manual. */
-export function moverColuna(ordemExibida: string[], chave: string, delta: -1 | 1): string[] {
-  const i = ordemExibida.indexOf(chave);
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= ordemExibida.length) return ordemExibida;
-  const nova = [...ordemExibida];
-  [nova[i], nova[j]] = [nova[j], nova[i]];
-  return nova;
+/**
+ * SOLTA a coluna ARRASTADA na posição `destino` da ordem exibida (congeladas + livres, SEM a arrastada). Soltar entre as
+ * congeladas a CONGELA; depois delas, a SOLTA; exatamente na divisa, mantém o que era. Devolve as duas listas novas.
+ */
+export function soltarColuna(fixadas: string[], livres: string[], chave: string, destino: number): { fixadas: string[]; livres: string[] } {
+  const eraFixa = fixadas.includes(chave);
+  const f = fixadas.filter((k) => k !== chave);
+  const todas = [...f, ...livres.filter((k) => k !== chave)];
+  const t = Math.max(0, Math.min(destino, todas.length));
+  todas.splice(t, 0, chave);
+  const k = t < f.length || (t === f.length && eraFixa) ? f.length + 1 : f.length;
+  return { fixadas: todas.slice(0, k), livres: todas.slice(k) };
 }
 
 /** A chave do layout salvo do Comparativo — um por PAR de colunas ligadas (as colunas mudam com o par). */
 export const chaveLayoutComparativo = (linha: DimensaoOrcamento, coluna: DimensaoOrcamento) => `orcamento-comparativo:${linha}:${coluna}`;
 
-const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "rotulo-desc", "total-desc", "total-asc", "manual"];
+const ORDENS_COLUNAS: OrdemColunas[] = ["rotulo", "manual"];
 const listaChaves = (v: unknown) =>
   Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 300))].slice(0, 500) : [];
 

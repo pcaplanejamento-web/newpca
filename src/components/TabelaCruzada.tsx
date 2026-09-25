@@ -11,13 +11,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { basePercentual, COL_EXTRA, COL_ROTULO, COL_TOTAL, LARGURA_MAX, LARGURA_MIN, type ModoCruzamento, type OrdemCruzamento, percentual } from "@/lib/orcamento-cruzamento";
 import { LINHAS_TABELA } from "@/lib/theme";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { useLinhasTabela } from "./ConfigTabelas";
 import { ehDesktop } from "./espacamento";
-import { Dropdown } from "./Dropdown";
-import { IconArrowDown, IconArrowUp, IconChevronDown, IconChevronLeft, IconChevronRight, IconDesafixar, IconEye, IconEyeOff, IconFixar, IconUndo } from "./icons";
+import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip } from "./icons";
 import { Pager } from "./Pager";
 
 export type EixoTabelaCruzada = { chave: string; rotulo: string; total: number };
@@ -101,39 +101,44 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
   );
 }
 
-/** O que o modo de EDIÇÃO faz com uma coluna (o menu do cabeçalho). `chave` = a da coluna ou `COL_*`. */
+/** O que o modo de EDIÇÃO faz com uma coluna. `chave` = a da coluna ou `COL_*`. */
 export type EdicaoTabelaCruzada = {
   onLargura: (chave: string, px: number | null) => void;
   onFixar: (chave: string) => void;
   onOcultar: (chave: string) => void;
-  onMover: (chave: string, delta: -1 | 1) => void;
+  /** A coluna ARRASTADA foi solta na posição `destino` da ordem exibida SEM ela (entre as congeladas = congela). */
+  onSoltar: (chave: string, destino: number) => void;
 };
 
-/** Um item do menu da coluna (alvo de 44px no toque). */
-function ItemMenu({ icone, children, onClick, disabled = false }: { icone: ReactNode; children: ReactNode; onClick: () => void; disabled?: boolean }) {
+/** Ação DIRETA no cabeçalho da coluna (congelar/ocultar) — 44px no toque, discreta no desktop, accent quando ligada. */
+function AcaoColuna({ rotulo, ligada, icone, onClick, soDesktop = false }: { rotulo: string; ligada: boolean; icone: ReactNode; onClick: () => void; soDesktop?: boolean }) {
   return (
     <button
       type="button"
-      role="menuitem"
-      disabled={disabled}
+      aria-pressed={ligada}
+      aria-label={rotulo}
+      title={rotulo}
       onClick={onClick}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[13px] text-text-2 transition-colors hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-40 lg:min-h-9"
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-7 lg:w-7 ${
+        ligada ? "bg-accent/10 text-accent" : "text-faint hover:bg-surface hover:text-text-2"
+      } ${soDesktop ? "max-lg:hidden" : ""}`}
     >
-      <span className="shrink-0 text-muted">{icone}</span>
-      {children}
+      {icone}
     </button>
   );
 }
+
+type Arrasto = { chave: string; rotulo: string; x: number; y: number; destino: number };
 
 /**
  * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL (fixa
  * no rodapé). Visual limpo: cabeçalho sem caixa-alta, zeros como "–", linhas só com divisórias horizontais. Tocar no
  * cabeçalho ORDENA as linhas; tocar numa célula, rótulo ou total chama `onAbrir` (a origem do número). Congela o rótulo,
  * as colunas `fixadas` (à esquerda, na ordem; as que não cabem na largura visível deixam de congelar — nunca somem) e, no
- * desktop, a extra e o total (salvo `soltas`). Com **`edicao`**, a PRÓPRIA planilha vira o editor: o cabeçalho de CADA
- * coluna — inclusive a extra (Sigla) e o Total — abre o menu (ordenar, fixar/soltar, mover, ocultar/mostrar, largura
- * padrão), a borda do cabeçalho ajusta a largura (arrastar, também no toque) e as colunas OCULTAS aparecem esmaecidas para
- * voltar. Valor ou % da linha/coluna/total; mapa de calor opcional. No desktop ocupa a altura até o fim do display (o corpo
+ * desktop, a extra e o total (salvo `soltas`). Com **`edicao`**, a PRÓPRIA planilha vira o editor, DIRETO na coluna:
+ * ARRASTAR o nome reordena (mouse ou toque, com a coluna "fantasma", a linha de destino e rolagem automática nas bordas;
+ * soltar entre as congeladas CONGELA, depois delas SOLTA; Alt+←/→ no teclado), o alfinete congela, o olho oculta (a
+ * oculta fica esmaecida para voltar) — inclusive a extra (Sigla) e o Total — e a borda ajusta a largura. Valor ou % da linha/coluna/total; mapa de calor opcional. No desktop ocupa a altura até o fim do display (o corpo
  * rola por dentro); linhas por página = Configurações → Tabelas.
  */
 export function TabelaCruzada({
@@ -258,6 +263,76 @@ export function TabelaCruzada({
     return { left: `calc(var(--cz-rot) + var(--cz-base) + ${antes.length ? antes.join(" + ") : "0px"})` };
   };
 
+  // ARRASTAR uma coluna (edição): o nome é a alça — mouse ou toque (pointer capture), com fantasma, a linha de destino e
+  // rolagem automática perto das bordas. Um toque SEM arrastar ordena (como fora da edição).
+  const [arrasto, setArrasto] = useState<Arrasto | null>(null);
+  const arrastou = useRef(false);
+  const iniciarArrasto = (e: ReactPointerEvent<HTMLButtonElement>, chave: string, rotulo: string) => {
+    if (!edicao || e.button > 0) return;
+    const el = e.currentTarget;
+    const rolo = rolagem.current;
+    el.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let ativo = false;
+    let ultimo = { x: x0, y: y0 };
+    let destino = 0;
+    let vel = 0;
+    let quadro = 0;
+    arrastou.current = false;
+    // Os cabeçalhos das colunas de valores na ordem EXIBIDA, sem a arrastada.
+    const alvos = () => [...(ref.current?.querySelectorAll<HTMLElement>("thead th[data-col]") ?? [])].filter((th) => th.dataset.col !== chave);
+    const calcular = () => {
+      const lista = alvos();
+      const i = lista.findIndex((th) => {
+        const r = th.getBoundingClientRect();
+        return ultimo.x < r.left + r.width / 2;
+      });
+      destino = i < 0 ? lista.length : i;
+      setArrasto({ chave, rotulo, x: ultimo.x, y: ultimo.y, destino });
+    };
+    const rolar = () => {
+      if (vel && rolo) {
+        rolo.scrollLeft += vel;
+        calcular();
+      }
+      quadro = requestAnimationFrame(rolar);
+    };
+    const mover = (ev: PointerEvent) => {
+      ultimo = { x: ev.clientX, y: ev.clientY };
+      if (!ativo) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+        ativo = true;
+        arrastou.current = true;
+        quadro = requestAnimationFrame(rolar);
+      }
+      const r = rolo?.getBoundingClientRect();
+      vel = r ? (ev.clientX < r.left + 56 ? -14 : ev.clientX > r.right - 56 ? 14 : 0) : 0;
+      calcular();
+    };
+    const fim = (ev: PointerEvent) => {
+      cancelAnimationFrame(quadro);
+      el.removeEventListener("pointermove", mover);
+      el.removeEventListener("pointerup", fim);
+      el.removeEventListener("pointercancel", fim);
+      setArrasto(null);
+      if (ativo && ev.type === "pointerup") edicao.onSoltar(chave, destino);
+    };
+    el.addEventListener("pointermove", mover);
+    el.addEventListener("pointerup", fim);
+    el.addEventListener("pointercancel", fim);
+  };
+  // A linha de DESTINO: antes da coluna na posição `destino` (sem a arrastada) — ou depois da última.
+  const semOrigem = arrasto ? ordemCols.todas.map((j) => colunas[j].chave).filter((k) => k !== arrasto.chave) : [];
+  const marcaDestino = (chave: string) =>
+    !arrasto
+      ? ""
+      : semOrigem[arrasto.destino] === chave
+        ? "shadow-[inset_3px_0_0_var(--accent)]"
+        : arrasto.destino === semOrigem.length && semOrigem.at(-1) === chave
+          ? "shadow-[inset_-3px_0_0_var(--accent)]"
+          : "";
+
   const seta = (por: OrdemCruzamento["por"]) => {
     const igual = typeof por === "object" ? typeof ordem.por === "object" && ordem.por.coluna === por.coluna : ordem.por === por;
     if (!igual) return null;
@@ -293,93 +368,74 @@ export function TabelaCruzada({
     "--cz-tot-f": totalFixo ? "var(--cz-tot)" : "0px",
   };
 
-  /** O cabeçalho de uma coluna: fora da edição ORDENA; na edição abre o MENU da coluna. */
+  /** O cabeçalho de uma coluna: tocar ORDENA; na edição, as ações DIRETAS (congelar/ocultar), o nome ARRASTÁVEL (colunas de
+   * valores) e a borda de largura. */
   const cabecalho = (o: {
     chave: string;
     rotulo: string;
     por: OrdemCruzamento["por"];
-    texto: boolean;
     alinhar: "left" | "right";
     fixa?: boolean;
-    fixavel?: boolean;
-    ocultavel?: boolean;
-    mover?: { esquerda: boolean; direita: boolean };
+    /** Congelar só vale no desktop (a Sigla e o Total rolam no celular). */
+    fixarSoDesktop?: boolean;
+    acoes?: boolean;
+    /** Posição na ordem exibida (colunas de valores) — arrastável. */
+    posicao?: number;
   }) => {
-    const rotulo = <span className={o.alinhar === "right" ? "line-clamp-2 break-words text-right" : "truncate"}>{o.rotulo}</span>;
-    if (!edicao)
-      return (
-        <button type="button" className={`${botaoCab} ${o.alinhar === "right" ? "justify-end" : ""}`} title={o.rotulo} onClick={() => onOrdenar(o.por)}>
-          {o.alinhar === "right" && seta(o.por)}
-          {rotulo}
-          {o.alinhar === "left" && seta(o.por)}
-        </button>
-      );
+    const direita = o.alinhar === "right";
+    const arrastavel = edicao != null && o.posicao != null;
+    const rotulo = (
+      <button
+        type="button"
+        className={`${botaoCab} ${direita ? "justify-end" : ""} ${arrastavel ? "cursor-grab touch-none select-none active:cursor-grabbing" : ""}`}
+        title={arrastavel ? `${o.rotulo} — arraste para mover (Alt+←/→)` : o.rotulo}
+        onPointerDown={arrastavel ? (e) => iniciarArrasto(e, o.chave, o.rotulo) : undefined}
+        onClick={() => {
+          if (arrastou.current) {
+            arrastou.current = false;
+            return;
+          }
+          onOrdenar(o.por);
+        }}
+        onKeyDown={
+          arrastavel
+            ? (e) => {
+                if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+                e.preventDefault();
+                const p = o.posicao as number;
+                edicao.onSoltar(o.chave, e.key === "ArrowLeft" ? Math.max(0, p - 1) : p + 1);
+              }
+            : undefined
+        }
+      >
+        {arrastavel && <IconGrip className="h-3.5 w-3.5 shrink-0 text-faint" aria-hidden />}
+        {direita && seta(o.por)}
+        <span className={direita ? "line-clamp-2 break-words text-right" : "truncate"}>{o.rotulo}</span>
+        {!direita && seta(o.por)}
+      </button>
+    );
+    if (!edicao) return rotulo;
     const oculta = fora.has(o.chave);
     return (
       <>
-        <Dropdown
-          className="block w-full"
-          triggerClassName={`w-full gap-1 text-left hover:text-text ${o.alinhar === "right" ? "justify-end" : ""}`}
-          ariaLabel={`Editar a coluna ${o.rotulo}`}
-          width={232}
-          align={o.alinhar === "right" ? "end" : "start"}
-          trigger={
-            <>
-              {o.fixa && <IconFixar className="h-3 w-3 shrink-0 text-accent" aria-hidden />}
-              {oculta && <IconEyeOff className="h-3 w-3 shrink-0" aria-hidden />}
-              {rotulo}
-              <IconChevronDown className="h-3 w-3 shrink-0" aria-hidden />
-            </>
-          }
-        >
-          {(fechar) => {
-            const agir = (f: () => void) => () => {
-              f();
-              fechar();
-            };
-            const [crescente, decrescente] = o.texto ? ["A → Z", "Z → A"] : ["Menor → maior", "Maior → menor"];
-            return (
-              <div className="space-y-0.5">
-                <p className="truncate px-2.5 pb-1 text-[12px] font-semibold text-text" title={o.rotulo}>
-                  {o.rotulo}
-                </p>
-                <ItemMenu icone={<IconArrowUp className="h-4 w-4" />} onClick={agir(() => onOrdenar(o.por, false))}>
-                  Ordenar {crescente}
-                </ItemMenu>
-                <ItemMenu icone={<IconArrowDown className="h-4 w-4" />} onClick={agir(() => onOrdenar(o.por, true))}>
-                  Ordenar {decrescente}
-                </ItemMenu>
-                {o.fixavel && (
-                  <ItemMenu
-                    icone={o.fixa ? <IconDesafixar className="h-4 w-4" /> : <IconFixar className="h-4 w-4" />}
-                    onClick={agir(() => edicao.onFixar(o.chave))}
-                    disabled={oculta}
-                  >
-                    {o.fixa ? "Descongelar" : "Congelar à esquerda"}
-                  </ItemMenu>
-                )}
-                {o.mover && (
-                  <>
-                    <ItemMenu icone={<IconChevronLeft className="h-4 w-4" />} onClick={agir(() => edicao.onMover(o.chave, -1))} disabled={!o.mover.esquerda}>
-                      Mover para a esquerda
-                    </ItemMenu>
-                    <ItemMenu icone={<IconChevronRight className="h-4 w-4" />} onClick={agir(() => edicao.onMover(o.chave, 1))} disabled={!o.mover.direita}>
-                      Mover para a direita
-                    </ItemMenu>
-                  </>
-                )}
-                {o.ocultavel && (
-                  <ItemMenu icone={oculta ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} onClick={agir(() => edicao.onOcultar(o.chave))}>
-                    {oculta ? "Mostrar" : "Ocultar"}
-                  </ItemMenu>
-                )}
-                <ItemMenu icone={<IconUndo className="h-4 w-4" />} onClick={agir(() => edicao.onLargura(o.chave, null))} disabled={!larguras[o.chave]}>
-                  Largura padrão
-                </ItemMenu>
-              </div>
-            );
-          }}
-        </Dropdown>
+        {o.acoes && (
+          <div className={`mb-1 flex items-center gap-0.5 ${direita ? "justify-end" : ""}`}>
+            <AcaoColuna
+              rotulo={o.fixa ? `Descongelar ${o.rotulo}` : `Congelar ${o.rotulo}`}
+              ligada={!!o.fixa}
+              icone={<IconFixar className="h-3.5 w-3.5" />}
+              onClick={() => edicao.onFixar(o.chave)}
+              soDesktop={o.fixarSoDesktop}
+            />
+            <AcaoColuna
+              rotulo={oculta ? `Mostrar ${o.rotulo}` : `Ocultar ${o.rotulo}`}
+              ligada={oculta}
+              icone={<IconEyeOff className="h-3.5 w-3.5" />}
+              onClick={() => edicao.onOcultar(o.chave)}
+            />
+          </div>
+        )}
+        {rotulo}
         <AlcaLargura rotulo={o.rotulo} largura={larguras[o.chave]} onLargura={(px) => edicao.onLargura(o.chave, px)} />
       </>
     );
@@ -402,7 +458,7 @@ export function TabelaCruzada({
             <thead>
               <tr>
                 <th scope="col" aria-sort={ariaSort("rotulo")} className={`${cab} left-0 z-30 text-left ${DIVISA}`} style={larguraVar("var(--cz-rot)")}>
-                  {cabecalho({ chave: COL_ROTULO, rotulo: rotuloLinhas, por: "rotulo", texto: true, alinhar: "left" })}
+                  {cabecalho({ chave: COL_ROTULO, rotulo: rotuloLinhas, por: "rotulo", alinhar: "left" })}
                 </th>
                 {comExtra && (
                   <th
@@ -411,16 +467,7 @@ export function TabelaCruzada({
                     className={`${cab} text-left ${extraFixa ? "lg:left-[var(--cz-rot)] lg:z-30" : ""} ${divisaExtra}`}
                     style={larguraVar("var(--cz-ext)")}
                   >
-                    {cabecalho({
-                      chave: COL_EXTRA,
-                      rotulo: rotuloExtra,
-                      por: "extra",
-                      texto: true,
-                      alinhar: "left",
-                      fixa: extraFixa,
-                      fixavel: true,
-                      ocultavel: true,
-                    })}
+                    {cabecalho({ chave: COL_EXTRA, rotulo: rotuloExtra, por: "extra", alinhar: "left", fixa: extraFixa, fixarSoDesktop: true, acoes: true })}
                   </th>
                 )}
                 {comTotal && (
@@ -430,35 +477,22 @@ export function TabelaCruzada({
                     className={`${cab} text-right ${totalFixo ? "lg:left-[calc(var(--cz-rot)_+_var(--cz-ext-f))] lg:z-30" : ""} ${divisaTotal}`}
                     style={larguraVar("var(--cz-tot)")}
                   >
-                    {cabecalho({ chave: COL_TOTAL, rotulo: "Total", por: "total", texto: false, alinhar: "right", fixa: totalFixo, fixavel: true, ocultavel: true })}
+                    {cabecalho({ chave: COL_TOTAL, rotulo: "Total", por: "total", alinhar: "right", fixa: totalFixo, fixarSoDesktop: true, acoes: true })}
                   </th>
                 )}
                 {ordemCols.todas.map((j, p) => {
                   const c = colunas[j];
                   const fixa = p < nFix;
-                  const naFaixa = p < ordemCols.fix.length; // fixada (mesmo sem caber) — move entre as fixadas
                   return (
                     <th
                       key={c.chave}
                       scope="col"
+                      data-col={c.chave}
                       aria-sort={ariaSort({ coluna: c.chave })}
-                      className={`${cab} text-right ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : ""}`}
+                      className={`${cab} text-right ${fixa ? `z-30 ${p === nFix - 1 ? DIVISA : ""}` : ""} ${arrasto?.chave === c.chave ? "opacity-40" : ""} ${marcaDestino(c.chave)}`}
                       style={{ ...larguraVar(wCol(c.chave)), ...(fixa ? esquerda(p) : {}) }}
                     >
-                      {cabecalho({
-                        chave: c.chave,
-                        rotulo: c.rotulo,
-                        por: { coluna: c.chave },
-                        texto: false,
-                        alinhar: "right",
-                        fixa: naFaixa,
-                        fixavel: true,
-                        ocultavel: true,
-                        mover: {
-                          esquerda: naFaixa ? p > 0 : p > ordemCols.fix.length,
-                          direita: naFaixa ? p < ordemCols.fix.length - 1 : p < ordemCols.todas.length - 1,
-                        },
-                      })}
+                      {cabecalho({ chave: c.chave, rotulo: c.rotulo, por: { coluna: c.chave }, alinhar: "right", fixa: p < ordemCols.fix.length, acoes: true, posicao: p })}
                     </th>
                   );
                 })}
@@ -593,6 +627,18 @@ export function TabelaCruzada({
         </div>
       </div>
       <AlturaNoHtml />
+      {arrasto &&
+        createPortal(
+          <div
+            aria-hidden
+            className="pointer-events-none fixed z-[300] flex max-w-60 items-center gap-1.5 rounded-control border border-accent/50 bg-surface px-2.5 py-1.5 text-[12px] font-medium text-text shadow-soft"
+            style={{ left: arrasto.x + 12, top: arrasto.y + 12 }}
+          >
+            <IconGrip className="h-3.5 w-3.5 shrink-0 text-accent" />
+            <span className="truncate">{arrasto.rotulo}</span>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
