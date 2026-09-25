@@ -837,7 +837,20 @@ export async function orcamentoDoPca(pca: PcaEspaco): Promise<OrcamentoDoPca> {
   let linhas: OrcamentoDoPca["linhas"] = [];
   if (orc) {
     const itens = await db
-      .select({ id: orcamentoItens.id, orgao: orcamentoItens.orgao, unidade: orcamentoItens.unidade, nomeElemento: orcamentoItens.nomeElemento, codigoElemento: orcamentoItens.codigoElemento, valor: orcamentoItens.valorInicial })
+      // Todas as DIMENSÕES da visão (inclui Função/Programa/Ação/Ficha/Fonte do CUBO novo) — senão o filtro não casa.
+      .select({
+        id: orcamentoItens.id,
+        orgao: orcamentoItens.orgao,
+        unidade: orcamentoItens.unidade,
+        funcao: orcamentoItens.funcao,
+        programa: orcamentoItens.programa,
+        acao: orcamentoItens.acao,
+        nomeElemento: orcamentoItens.nomeElemento,
+        codigoElemento: orcamentoItens.codigoElemento,
+        ficha: orcamentoItens.ficha,
+        fonte: orcamentoItens.fonte,
+        valor: orcamentoItens.valorInicial,
+      })
       .from(orcamentoItens)
       .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);

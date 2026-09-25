@@ -12,8 +12,8 @@ import { type AlvoVinculo, chaveVinculo, type VinculoOrcamento } from "./orcamen
  * sem conflito, sem tipos.
  */
 
-// orcamento_itens = 12 colunas vinculadas por linha → 8×12 = 96 (< limite de 100 do D1).
-const ROWS_PER_STMT = 8;
+// orcamento_itens = 17 colunas vinculadas por linha → 5×17 = 85 (< limite de 100 do D1).
+const ROWS_PER_STMT = 5;
 
 export type OrcamentoResumo = {
   id: number;
@@ -48,6 +48,11 @@ export type OrcamentoItemRow = {
   unidade: string | null;
   nomeElemento: string | null;
   codigoElemento: string | null;
+  funcao: string | null;
+  programa: string | null;
+  acao: string | null;
+  ficha: string | null;
+  fonte: string | null;
   valorEmendaImpositiva: number;
   valorInicial: number;
   valorSuplementacao: number;
@@ -64,6 +69,11 @@ const COLS = {
   unidade: orcamentoItens.unidade,
   nomeElemento: orcamentoItens.nomeElemento,
   codigoElemento: orcamentoItens.codigoElemento,
+  funcao: orcamentoItens.funcao,
+  programa: orcamentoItens.programa,
+  acao: orcamentoItens.acao,
+  ficha: orcamentoItens.ficha,
+  fonte: orcamentoItens.fonte,
   valorEmendaImpositiva: orcamentoItens.valorEmendaImpositiva,
   valorInicial: orcamentoItens.valorInicial,
   valorSuplementacao: orcamentoItens.valorSuplementacao,
@@ -73,35 +83,26 @@ const COLS = {
   sequencial: orcamentoItens.sequencial,
 };
 
-/** Lançamentos na ordem do arquivo (`sequencial`). Sem `orcamentoId` = de TODOS os
- * orçamentos (a tela carrega tudo e agrupa no cliente). */
-/** Lançamentos de UM orçamento ou de todos — `ano` restringe aos orçamentos do ano do PCA do CABEÇALHO. */
-export async function getOrcamentoItens(orcamentoId?: number, ano?: number | null): Promise<OrcamentoItemRow[]> {
-  const db = getDb();
-  if (orcamentoId != null)
-    return db
-      .select(COLS)
-      .from(orcamentoItens)
-      .where(eq(orcamentoItens.orcamentoId, orcamentoId))
-      .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id));
-  const ordem = [asc(orcamentoItens.orcamentoId), asc(orcamentoItens.sequencial), asc(orcamentoItens.id)] as const;
-  return ano != null
-    ? db
-        .select(COLS)
-        .from(orcamentoItens)
-        .innerJoin(orcamentos, eq(orcamentoItens.orcamentoId, orcamentos.id))
-        .where(eq(orcamentos.ano, ano))
-        .orderBy(...ordem)
-    : db
-        .select(COLS)
-        .from(orcamentoItens)
-        .orderBy(...ordem);
+/** Lançamentos de UM orçamento, na ordem do arquivo (`sequencial`) — a tela do orçamento. */
+export async function getOrcamentoItens(orcamentoId: number): Promise<OrcamentoItemRow[]> {
+  return getDb()
+    .select(COLS)
+    .from(orcamentoItens)
+    .where(eq(orcamentoItens.orcamentoId, orcamentoId))
+    .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id));
 }
 
-/** Um orçamento pelo id (`{id,nome,ano}`) — para validar o alvo de uma operação. `null` se não existe. */
-export async function getOrcamento(id: number): Promise<{ id: number; nome: string; ano: number } | null> {
+/** Um orçamento pelo id (resumo do card/cabeçalho) — também valida o alvo de uma operação. `null` se não existe. */
+export async function getOrcamento(id: number): Promise<OrcamentoResumo | null> {
   const [o] = await getDb()
-    .select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano })
+    .select({
+      id: orcamentos.id,
+      nome: orcamentos.nome,
+      ano: orcamentos.ano,
+      totalItens: orcamentos.totalItens,
+      valorInicial: orcamentos.valorInicial,
+      atualizadoEm: orcamentos.atualizadoEm,
+    })
     .from(orcamentos)
     .where(eq(orcamentos.id, id))
     .limit(1);
@@ -143,6 +144,11 @@ function insertStmts(db: ReturnType<typeof getDb>, orcamentoId: number, itens: O
           unidade: it.unidade || null,
           nomeElemento: it.nomeElemento || null,
           codigoElemento: it.codigoElemento || null,
+          funcao: it.funcao || null,
+          programa: it.programa || null,
+          acao: it.acao || null,
+          ficha: it.ficha || null,
+          fonte: it.fonte || null,
           valorEmendaImpositiva: it.valorEmendaImpositiva,
           valorInicial: it.valorInicial,
           valorSuplementacao: it.valorSuplementacao,

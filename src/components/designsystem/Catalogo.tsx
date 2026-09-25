@@ -101,6 +101,7 @@ import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
+import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -2757,7 +2758,17 @@ export function Catalogo() {
         <PadronizacaoDemo />
       </Secao>
 
-      <Secao titulo="OrcamentoItemDetalhe (painel lateral do lançamento do orçamento — só leitura)">
+      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card 4:5 do orçamento — a mesma capa do PCA; abre a tela do orçamento)">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <OrcamentoCard
+            href="/painel/orcamento"
+            orcamento={{ id: 1, nome: "Orçamento 2026", ano: 2026, totalItens: 1345, valorInicial: 1_390_000_000, atualizadoEm: "2026-01-15 10:00:00" }}
+          />
+          <OrcamentoNovoCard onClick={() => {}} />
+        </div>
+      </Secao>
+
+      <Secao titulo="OrcamentoItemDetalhe (detalhe do lançamento do orçamento — só leitura)">
         <div className="max-w-md">
           <OrcamentoItemDetalhe
             item={{
@@ -2767,6 +2778,11 @@ export function Catalogo() {
               unidade: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO",
               nomeElemento: "OUTROS SERVIÇOS DE TERCEIROS - PESSOA JURÍDICA",
               codigoElemento: "3.3.90.39.00",
+              funcao: "12 - EDUCACAO",
+              programa: "6149 - PROGRAMA EDUCAÇÃO DE QUALIDADE - RUMO AO 1° LUGAR",
+              acao: "2176 - MANTER AS ATIVIDADES DO ENSINO FUNDAMENTAL",
+              ficha: "0640",
+              fonte: "100 - RECURSOS ORDINÁRIOS",
               valorEmendaImpositiva: 0,
               valorInicial: 5000000,
               valorSuplementacao: 0,

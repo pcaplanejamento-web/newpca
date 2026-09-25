@@ -15,6 +15,18 @@ describe("orcamento-visao", () => {
     assert.deepEqual(coerceFiltros('{"orgao":["FME","FME"," "],"xx":["a"],"unidade":"x"}'), { orgao: ["FME"] });
     assert.deepEqual(coerceFiltros("lixo"), {});
   });
+  it("dimensões do NOVO CUBO (Função/Programa/Ação/Ficha/Fonte): aceitas no filtro e filtram; ausentes = \"—\"", () => {
+    assert.deepEqual(coerceFiltros({ fonte: ["100 - RECURSOS ORDINÁRIOS"], ficha: ["0624"] }), { fonte: ["100 - RECURSOS ORDINÁRIOS"], ficha: ["0624"] });
+    const novo = [
+      { orgao: "FMACL", fonte: "100 - RECURSOS ORDINÁRIOS", acao: "2191 - MANTER" },
+      { orgao: "FMACL", fonte: "150 - FUNDEB", acao: "2191 - MANTER" },
+      { orgao: "FME" }, // CUBO antigo: sem as colunas novas
+    ];
+    assert.equal(aplicarVisao(novo, { fonte: ["100 - recursos ordinarios"] }).length, 1);
+    assert.equal(aplicarVisao(novo, { acao: ["2191 - MANTER"] }).length, 2);
+    assert.equal(aplicarVisao(novo, { fonte: ["—"] }).length, 1);
+    assert.match(resumoVisao({ fonte: ["x", "y"], acao: ["z"] }), /1 ação · 2 fonte/);
+  });
   it("OU dentro da dimensão, E entre dimensões; sem filtro = tudo", () => {
     assert.equal(aplicarVisao(L, {}).length, 4);
     assert.equal(aplicarVisao(L, { nomeElemento: ["MATERIAL DE CONSUMO", "OBRAS"] }).length, 3);

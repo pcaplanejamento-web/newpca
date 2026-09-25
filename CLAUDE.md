@@ -1469,8 +1469,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (ver "CONSULTA PÚBLICA" abaixo — a mesma no painel e na tela inicial).
 - **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
   qualquer que seja a situação).
-- **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da `OrcamentoView` → `OrcamentoVisoes`): nome + por
-  dimensão (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Elemento, Código) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
+- **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →
+  `OrcamentoVisoes`; as visões são GLOBAIS — a prévia do Σ usa os lançamentos do orçamento aberto): nome + por dimensão
+  (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Função, Programa, Ação, Elemento, Código, Ficha, Fonte) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
   selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts` puro). Uma coluna
   nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `GET/POST /api/orcamento/visoes` + `PATCH/DELETE
   /api/orcamento/visoes/[id]` (auditoria `orcamento_visao`).
@@ -1583,29 +1584,41 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   excluem, demais com a aba só consultam. A migração `0028` concede a aba a quem já vê o `catalogo`.
 - **Modelo (`orcamentos` + `orcamento_itens`, ISOLADO — sem FK p/ PCA/DFD):** `orcamentos` (nome, **ano** integer
   obrigatório, `total_itens`, `valor_inicial` = Σ dotação p/ o card sem varrer itens); `orcamento_itens` (orgao/unidade/
-  nome_elemento/codigo_elemento + **6 valores `real`** [emenda impositiva/inicial/suplementação/empenho/saldo/anulação] +
+  nome_elemento/codigo_elemento + **NOVO PADRÃO DO CUBO (migração `0039`, aditiva): `funcao`/`programa`/`acao`/`ficha`/
+  `fonte`** (texto; vazias nos orçamentos importados no padrão antigo) + **6 valores `real`** [emenda impositiva/inicial/suplementação/empenho/saldo/anulação] +
   sequencial; **SEM chave única** — muitas linhas compartilham o mesmo `codigo_elemento`; excluir o orçamento apaga os
   lançamentos, cascade). Acesso em `src/lib/orcamento.ts` (`listarOrcamentos`/`getOrcamentoItens`/`criarOrcamento`/
   `atualizarOrcamento`/`excluirOrcamento`/`inserirOrcamentoItens`); schemas Zod em `orcamento-validation.ts` (puro).
 - **Parser DEDICADO (`.xlsx`):** `parse-orcamento-xlsx(-core/-comum).ts` — detecção de colunas **pelo CABEÇALHO, por
-  posição** (Órgão/Unidade/Nome Elemento/Código + valores, em qualquer ordem; `rotuloColunaOrcamento`), com a leitura
+  posição** (Órgão/Unidade/Função/Programa/Ação/Nome Elemento/Código/Ficha/Fonte + valores, em qualquer ordem; colunas
+  MESCLADAS vazias no meio são ignoradas; o CUBO ANTIGO, sem as 5 colunas novas, segue lido; `rotuloColunaOrcamento`), com a leitura
   SheetJS no navegador (`raw:false`, fora do bundle do Worker). Pula o título e o **rodapé** ("Qtd. total N"), convertendo
   os valores com **`parseValorPlanilha`** (tolerante a en-US `"5,000,000.00"` E pt-BR `"5.000.000,00"`, inteiros com
   milhar e negativos). Validado contra o CUBO real: **1.345 lançamentos, 18 órgãos, 39 unidades** (bate com o "Qtd. total"
-  do arquivo). Fixtures em `tests/parse-orcamento-xlsx.test.ts`.
+  do arquivo) — e o **CUBO novo** (mesmos 1.345; 17 funções, 41 programas, 242 ações, 1.141 fichas, 31 fontes; Ficha
+  preserva o zero à esquerda "0624"). Fixtures (padrão antigo E novo) em `tests/parse-orcamento-xlsx.test.ts`.
 - **Import em LOTES (`importar-orcamento.ts` → `POST /api/orcamento`):** discriminada `start-orcamento`|`append-orcamento-itens`
   (espelha `importar-catalogo`: retry de transitório, all-or-nothing — cada import cria um orçamento NOVO; falha apaga o
-  parcial). Insert PURO em lotes de **8×12=96** params (< 100 do D1); recomputa `total_itens` + `valor_inicial`. `append`
+  parcial). Insert PURO em lotes de **5×17=85** params (< 100 do D1); recomputa `total_itens` + `valor_inicial`. `append`
   é IDEMPOTENTE (apaga `sequencial >= desde` antes de reinserir). Rotas `POST /api/orcamento` + `PATCH`/`DELETE
   /api/orcamento/[id]` (renomear/ano, excluir) — `exigirEditor`, envelope `http.ts`, **auditoria** (`registrarAuditoria`,
   entidade `orcamento`).
-- **UI (`OrcamentoView`):** um **`Segmented`** alterna **Orçamentos** (cards retangulares por arquivo importado — nome +
-  **ano** (`Badge`) + Σ dotação (`brl`) + nº lançamentos; abrir → `Modal` full com a planilha daquele orçamento) e
-  **Lançamentos** (todos numa **tabela única filtrável** — filtro por Órgão/Unidade/Elemento/Código e **somatório no
-  rodapé** reativo aos filtros). A troca anima por `animate-cat-morph`. Clicar numa linha abre o **`OrcamentoItemDetalhe`**
-  (`Modal.lateral`, SÓ-leitura). Importa via `Dropzone` (`.xlsx`) → prévia com **Nome + Ano** (obrigatório) → grava.
-  Exporta XLSX/PDF (`exportar-orcamento.ts`). Só componentes do DS; ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) +
-  nav em `AppShell`.
+- **UI — LISTA (`/painel/orcamento` = `OrcamentoView`) + TELA DO ORÇAMENTO (`/painel/orcamento/[id]`):** a lista mostra
+  SÓ os **cards 4:5** (`OrcamentoCard` — a MESMA capa do PCA, `PcaCapa`: ano em marca d'água; ano no topo; nome + Σ
+  dotação (`brlCompact`) + nº lançamentos na base) + o card **"+"** (`OrcamentoNovoCard`, editor) que importa o `.xlsx`
+  (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). A página da lista carrega
+  só o RESUMO (`listarOrcamentos`; filtro do PCA do cabeçalho). **Não há mais** Lançamentos/Vínculos/Visões fora do
+  orçamento. Clicar no card abre a **tela do orçamento** (`OrcamentoEspacoView`, espelha o espaço do PCA): voltar ·
+  miniatura da capa · nome · ano · dotação/lançamentos · **Excluir** (editor) + as abas **Lançamentos · Vínculos · Visões**
+  no componente compartilhado **`AbasEspaco`** (o MESMO do espaço do PCA — `Segmented` + morph + esqueleto; o servidor
+  monta SÓ a aba ativa `?aba=` e manda ao cliente só os campos que ela usa). **Lançamentos** (`OrcamentoLancamentos`):
+  TODAS as colunas do CUBO (Órgão · Unidade · No sistema · Função · Programa · Ação · Elemento · Código · Ficha · Fonte +
+  valores com filtro por faixa), busca (`predicadoBusca` em todos os textos), somatório no rodapé, **exportar XLSX/PDF**
+  (o que está filtrado; `exportar-orcamento.ts` com as colunas novas) e o detalhe SÓ-leitura **`OrcamentoItemDetalhe`**
+  (classificação + ficha + fonte + vínculo). **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos`): os textos
+  DISTINTOS deste orçamento (o vínculo segue GLOBAL). **Visões** (`OrcamentoVisoes`). `getOrcamentoItens(id)` agora é
+  sempre de UM orçamento; `getOrcamento(id)` devolve o resumo. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav
+  em `AppShell`.
 - **Vínculos Órgão/Unidade do CUBO → cadastro do sistema (migração `0030`):** o CUBO traz Órgão/Unidade como TEXTO
   próprio ("FUNDO MUNICIPAL DE EDUCACAO DE RIO V…", "2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"). Tabela
   **`orcamento_vinculos`** (`tipo` `orgao`|`unidade` + `chave` = texto normalizado, **único** por tipo+chave; `orgao_id`/
@@ -1616,7 +1629,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mapaVinculos`/`alvoDoTexto`). Acesso em `orcamento.ts` (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — órgãos +
   unidades sem a "Geral", `definirVinculosOrcamento` = UPSERT `ON CONFLICT(tipo,chave)` em lotes de 16 linhas (80 params),
   conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (`exigirEditor`, `vinculosOrcamentoSchema` ≤ 200,
-  auditoria). UI: 3ª visão **"Vínculos"** no `Segmented` da `OrcamentoView` → componente **`OrcamentoVinculos`** (DS,
+  auditoria). UI: aba **"Vínculos"** da tela do orçamento → componente **`OrcamentoVinculos`** (DS,
   catalogado): tabela filtrável Estado (Vinculado/Sugestão/Sem vínculo) · Tipo · No orçamento · **No sistema** (`select`,
   unidades por `optgroup` de órgão, ocultos só se já vinculados; alvo ≥44px no mobile) · Lançamentos · Dotação, com
   **"Aceitar SIGLA"** por linha e **"Vincular N sugestões"** em massa; gravação otimista (pendentes valem só sobre a base de
@@ -1821,6 +1834,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
+  **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento, capa `PcaCapa`), **`AbasEspaco`** (abas de um ESPAÇO — PCA e
+  Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

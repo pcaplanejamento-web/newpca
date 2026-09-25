@@ -639,6 +639,12 @@ export const orcamentoItens = sqliteTable(
     unidade: text("unidade"),
     nomeElemento: text("nome_elemento"),
     codigoElemento: text("codigo_elemento"),
+    // Classificação programática + fonte de recurso (novo padrão do CUBO, migração 0039).
+    funcao: text("funcao"),
+    programa: text("programa"),
+    acao: text("acao"),
+    ficha: text("ficha"),
+    fonte: text("fonte"),
     valorEmendaImpositiva: real("valor_emenda_impositiva").notNull().default(0),
     valorInicial: real("valor_inicial").notNull().default(0),
     valorSuplementacao: real("valor_suplementacao").notNull().default(0),

@@ -235,6 +235,11 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(u?.oculto, 0, "unidade deve começar visível");
   });
 
+  it("0039 acrescenta Função/Programa/Ação/Ficha/Fonte em orcamento_itens (novo padrão do CUBO)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('orcamento_itens')");
+    for (const c of ["funcao", "programa", "acao", "ficha", "fonte"]) assert.ok(cols.includes(c), `coluna ausente em orcamento_itens: ${c}`);
+  });
+
   it("0028 cria orcamento/orcamento_itens (aba orcamento + cascade)", () => {
     const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
     for (const t of ["orcamentos", "orcamento_itens"]) {

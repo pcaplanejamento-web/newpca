@@ -4,8 +4,8 @@ import { brl } from "@/lib/format";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 
 /**
- * Corpo de um `Modal.lateral`: detalhe SÓ-LEITURA de UM lançamento do orçamento (Órgão/
- * Unidade/Elemento de despesa + valores). Os lançamentos vêm do sistema oficial — não são
+ * Corpo de um `Modal`: detalhe SÓ-LEITURA de UM lançamento do orçamento (Órgão/Unidade/Elemento de
+ * despesa + a classificação programática — Função/Programa/Ação — a Ficha e a Fonte de recurso + valores). Os lançamentos vêm do sistema oficial — não são
  * editáveis na tela. Só componentes/tokens do design-system. Espelha o modo "consultar"
  * do `CatalogoItemDetalhe`. `vinculo` = o Órgão/Unidade do SISTEMA a que o texto do CUBO está
  * vinculado (tela "Vínculos"); sem vínculo mostra "Sem vínculo".
@@ -22,16 +22,23 @@ export function OrcamentoItemDetalhe({
       <div>
         <p className="text-xs text-muted">Elemento de despesa</p>
         <p className="mt-0.5 font-semibold leading-snug text-text">{item.nomeElemento || "—"}</p>
-        {item.codigoElemento && (
-          <span className="mt-1.5 inline-block rounded-chip bg-surface-2 px-2.5 py-1 font-mono text-[13px] font-bold text-text">
-            {item.codigoElemento}
-          </span>
-        )}
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {item.codigoElemento && (
+            <span className="inline-block rounded-chip bg-surface-2 px-2.5 py-1 font-mono text-[13px] font-bold text-text">{item.codigoElemento}</span>
+          )}
+          {item.ficha && (
+            <span className="inline-block rounded-chip bg-surface-2 px-2.5 py-1 font-mono text-[13px] text-text-2">Ficha {item.ficha}</span>
+          )}
+        </div>
       </div>
 
-      <dl className="grid gap-x-6 gap-y-3.5">
+      <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
         <Campo label="Órgão" valor={item.orgao ?? "—"} />
         <Campo label="Unidade" valor={item.unidade ?? "—"} />
+        <Campo label="Função" valor={item.funcao ?? "—"} />
+        <Campo label="Programa" valor={item.programa ?? "—"} />
+        <Campo label="Ação" valor={item.acao ?? "—"} />
+        <Campo label="Fonte de recurso" valor={item.fonte ?? "—"} />
       </dl>
 
       {vinculo && (

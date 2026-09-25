@@ -10,6 +10,11 @@ export type OrcamentoItemParseado = {
   unidade: string;
   nomeElemento: string;
   codigoElemento: string;
+  funcao: string;
+  programa: string;
+  acao: string;
+  ficha: string;
+  fonte: string;
   valorEmendaImpositiva: number;
   valorInicial: number;
   valorSuplementacao: number;
@@ -31,6 +36,11 @@ export type ColKeyOrcamento =
   | "unidade"
   | "nomeElemento"
   | "codigoElemento"
+  | "funcao"
+  | "programa"
+  | "acao"
+  | "ficha"
+  | "fonte"
   | "emenda"
   | "inicial"
   | "suplementacao"
@@ -55,6 +65,12 @@ export function rotuloColunaOrcamento(str: string): ColKeyOrcamento | null {
   if (/^UNIDADE/.test(s)) return "unidade";
   if (/^NOME/.test(s)) return "nomeElemento"; // "Nome Elemento"
   if (/^COD/.test(s)) return "codigoElemento"; // "Codigo Elemento"
+  // Classificação programática + fonte de recurso (novo padrão do CUBO).
+  if (/^FUNCAO/.test(s)) return "funcao";
+  if (/^PROGRAMA/.test(s)) return "programa";
+  if (/^ACAO/.test(s)) return "acao";
+  if (/^FICHA/.test(s)) return "ficha";
+  if (/^FONTE/.test(s)) return "fonte";
   return null;
 }
 

@@ -971,6 +971,13 @@ aceita uma a uma ou **todas as sugestões** de uma vez, ou escolhe no seletor (u
 o órgão/unidade zera o vínculo (FK set null). Rota `PUT /api/orcamento/vinculos` (editor, auditoria). Testes puros +
 schema + migração.
 
+✅ **Tela do orçamento + novo padrão do CUBO** (migração `0039`, aditiva): a lista virou **cards 4:5** (`OrcamentoCard`, a
+mesma capa do PCA) e clicar abre a **tela do orçamento** (`/painel/orcamento/[id]`) com as abas **Lançamentos · Vínculos ·
+Visões** (componente compartilhado `AbasEspaco`, também usado pelo espaço do PCA). Saíram os Lançamentos/Vínculos/Visões de
+fora do orçamento. O CUBO passou a trazer **Função, Programa, Ação, Ficha e Fonte** — lidos pelo parser (o CUBO antigo segue
+aceito), gravados (lotes 5×17=85 params), exibidos na tabela e no detalhe, exportados (XLSX/PDF) e disponíveis como
+**dimensões das Visões** (inclusive no Orçamento do PCA). Validado contra o CUBO real (1.345 lançamentos, 0 rejeições).
+
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**
 (binding cru → `.meta.size_after`), **tabela por tabela** (linhas · tamanho · % do total, ordenável + somatório no

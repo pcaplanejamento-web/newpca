@@ -10,13 +10,27 @@ import { norm } from "./parse-dfd-comum.ts";
  * entra acrescentando uma entrada em `DIMENSOES_ORCAMENTO` (a UI e o filtro seguem o catálogo).
  */
 
-export type DimensaoOrcamento = "orgao" | "unidade" | "nomeElemento" | "codigoElemento";
+export type DimensaoOrcamento =
+  | "orgao"
+  | "unidade"
+  | "funcao"
+  | "programa"
+  | "acao"
+  | "nomeElemento"
+  | "codigoElemento"
+  | "ficha"
+  | "fonte";
 
 export const DIMENSOES_ORCAMENTO: { key: DimensaoOrcamento; rotulo: string; rotuloCurto: string }[] = [
   { key: "orgao", rotulo: "Órgão", rotuloCurto: "órgão" },
   { key: "unidade", rotulo: "Unidade", rotuloCurto: "unidade" },
+  { key: "funcao", rotulo: "Função", rotuloCurto: "função" },
+  { key: "programa", rotulo: "Programa", rotuloCurto: "programa" },
+  { key: "acao", rotulo: "Ação", rotuloCurto: "ação" },
   { key: "nomeElemento", rotulo: "Elemento de despesa", rotuloCurto: "elemento de despesa" },
   { key: "codigoElemento", rotulo: "Código do elemento", rotuloCurto: "código" },
+  { key: "ficha", rotulo: "Ficha", rotuloCurto: "ficha" },
+  { key: "fonte", rotulo: "Fonte de recurso", rotuloCurto: "fonte" },
 ];
 
 /** `{dimensão: valores[]}` — só as dimensões com seleção. */

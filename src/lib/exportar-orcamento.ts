@@ -11,6 +11,11 @@ export type OrcamentoItemExport = {
   unidade: string | null;
   nomeElemento: string | null;
   codigoElemento: string | null;
+  funcao: string | null;
+  programa: string | null;
+  acao: string | null;
+  ficha: string | null;
+  fonte: string | null;
   valorEmendaImpositiva: number;
   valorInicial: number;
   valorSuplementacao: number;
@@ -24,8 +29,13 @@ const nomeSeguro = (s: string) => s.replace(/[^\p{L}\p{N}\-_ ]+/gu, "").trim().s
 const CABECALHO = [
   "Órgão",
   "Unidade",
+  "Função",
+  "Programa",
+  "Ação",
   "Nome Elemento",
   "Código Elemento",
+  "Ficha",
+  "Fonte",
   "Valor Emenda Impositiva",
   "Valor Inicial",
   "Valor Suplementação",
@@ -41,8 +51,13 @@ export function exportarOrcamentoXlsx(nome: string, itens: OrcamentoItemExport[]
     ...itens.map((it) => [
       it.orgao ?? "",
       it.unidade ?? "",
+      it.funcao ?? "",
+      it.programa ?? "",
+      it.acao ?? "",
       it.nomeElemento ?? "",
       it.codigoElemento ?? "",
+      it.ficha ?? "",
+      it.fonte ?? "",
       it.valorEmendaImpositiva,
       it.valorInicial,
       it.valorSuplementacao,
@@ -52,7 +67,7 @@ export function exportarOrcamentoXlsx(nome: string, itens: OrcamentoItemExport[]
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 34 }, { wch: 30 }, { wch: 42 }, { wch: 16 }, ...Array(6).fill({ wch: 16 })];
+  ws["!cols"] = [{ wch: 34 }, { wch: 30 }, { wch: 24 }, { wch: 40 }, { wch: 40 }, { wch: 42 }, { wch: 16 }, { wch: 8 }, { wch: 40 }, ...Array(6).fill({ wch: 16 })];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Orçamento");
   XLSX.writeFile(wb, `${nomeSeguro(nome)}.xlsx`);
@@ -67,7 +82,7 @@ export function exportarOrcamentoPdf(nome: string, itens: OrcamentoItemExport[])
   const linhas = itens
     .map(
       (it) =>
-        `<tr><td>${esc(it.orgao ?? "")}</td><td>${esc(it.unidade ?? "")}</td><td>${esc(it.nomeElemento ?? "")}</td><td class="m">${esc(it.codigoElemento ?? "")}</td><td class="v">${esc(brl(it.valorInicial))}</td><td class="v">${esc(brl(it.valorSuplementacao))}</td><td class="v">${esc(brl(it.valorEmpenho))}</td><td class="v">${esc(brl(it.saldo))}</td></tr>`,
+        `<tr><td>${esc(it.orgao ?? "")}</td><td>${esc(it.unidade ?? "")}</td><td>${esc(it.acao ?? "")}</td><td>${esc(it.nomeElemento ?? "")}</td><td class="m">${esc(it.codigoElemento ?? "")}</td><td class="m">${esc(it.ficha ?? "")}</td><td>${esc(it.fonte ?? "")}</td><td class="v">${esc(brl(it.valorInicial))}</td><td class="v">${esc(brl(it.valorSuplementacao))}</td><td class="v">${esc(brl(it.valorEmpenho))}</td><td class="v">${esc(brl(it.saldo))}</td></tr>`,
     )
     .join("");
   const totalInicial = itens.reduce((s, it) => s + it.valorInicial, 0);
@@ -81,7 +96,7 @@ th{background:#f3f4f6;font-size:9.5px;text-transform:uppercase;letter-spacing:.0
 td.v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}td.m{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}
 tr{break-inside:avoid}thead{display:table-header-group}@page{margin:12mm;size:landscape}
 </style></head><body><h1>${esc(nome)}</h1><p class="sub">${esc(sub)} · Plataforma PCA</p>
-<table><thead><tr><th>Órgão</th><th>Unidade</th><th>Elemento</th><th>Código</th><th>Inicial</th><th>Suplement.</th><th>Empenho</th><th>Saldo</th></tr></thead><tbody>${linhas}</tbody></table>
+<table><thead><tr><th>Órgão</th><th>Unidade</th><th>Ação</th><th>Elemento</th><th>Código</th><th>Ficha</th><th>Fonte</th><th>Inicial</th><th>Suplement.</th><th>Empenho</th><th>Saldo</th></tr></thead><tbody>${linhas}</tbody></table>
 <script>window.onload=function(){setTimeout(function(){window.print()},80)}</script></body></html>`;
   w.document.write(html);
   w.document.close();

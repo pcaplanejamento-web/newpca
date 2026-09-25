@@ -7,8 +7,9 @@ import {
 
 /**
  * Núcleo PURO do parser de ORÇAMENTO a partir da MATRIZ de células (2D, já como texto).
- * As colunas são detectadas pelo CABEÇALHO por posição (Órgão/Unidade/Nome Elemento/
- * Código + os valores, em qualquer ordem), reaproveitando `rotuloColunaOrcamento`. Sem
+ * As colunas são detectadas pelo CABEÇALHO por posição (Órgão/Unidade/Função/Programa/Ação/
+ * Nome Elemento/Código/Ficha/Fonte + os valores, em qualquer ordem; o CUBO antigo, sem as
+ * colunas de classificação/fonte, segue lido — elas ficam vazias), reaproveitando `rotuloColunaOrcamento`. Sem
  * SheetJS/D1 aqui → testável no Node com matrizes sintéticas. Espelha `parse-catalogo-xlsx-core`.
  */
 export function parseOrcamentoFromMatriz(aoa: unknown[][], nomeArquivo?: string): OrcamentoParseado {
@@ -54,6 +55,11 @@ export function parseOrcamentoFromMatriz(aoa: unknown[][], nomeArquivo?: string)
     const nomeElemento = txt(row, "nomeElemento");
     const codigoElemento = txt(row, "codigoElemento");
     const unidade = txt(row, "unidade");
+    const funcao = txt(row, "funcao");
+    const programa = txt(row, "programa");
+    const acao = txt(row, "acao");
+    const ficha = txt(row, "ficha");
+    const fonte = txt(row, "fonte");
     const valorEmendaImpositiva = val(row, "emenda");
     const valorInicial = val(row, "inicial");
     const valorSuplementacao = val(row, "suplementacao");
@@ -69,6 +75,11 @@ export function parseOrcamentoFromMatriz(aoa: unknown[][], nomeArquivo?: string)
       unidade,
       nomeElemento,
       codigoElemento,
+      funcao,
+      programa,
+      acao,
+      ficha,
+      fonte,
       valorEmendaImpositiva,
       valorInicial,
       valorSuplementacao,

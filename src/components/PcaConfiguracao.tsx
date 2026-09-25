@@ -234,9 +234,9 @@ export function PcaConfiguracao({
           <p className="mt-2 text-xs text-faint">
             As visões são criadas em{" "}
             <Link href="/painel/orcamento" className="text-accent hover:underline">
-              Orçamento → Visões
-            </Link>
-            .
+              Orçamento
+            </Link>{" "}
+            → abra um orçamento → aba Visões.
           </p>
         </section>
 

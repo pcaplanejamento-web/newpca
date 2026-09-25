@@ -41,6 +41,11 @@ describe("rotuloColunaOrcamento", () => {
     assert.equal(rotuloColunaOrcamento("Valor Empenho "), "empenho");
     assert.equal(rotuloColunaOrcamento("Saldo "), "saldo");
     assert.equal(rotuloColunaOrcamento("Valor Anulação "), "anulacao");
+    assert.equal(rotuloColunaOrcamento("Função "), "funcao");
+    assert.equal(rotuloColunaOrcamento("Programa "), "programa");
+    assert.equal(rotuloColunaOrcamento("Ação "), "acao");
+    assert.equal(rotuloColunaOrcamento("Ficha "), "ficha");
+    assert.equal(rotuloColunaOrcamento("Fonte "), "fonte");
     assert.equal(rotuloColunaOrcamento("Coluna qualquer"), null);
   });
 });
@@ -75,6 +80,40 @@ describe("parseOrcamentoFromMatriz", () => {
     assert.equal(r.itens[1].valorInicial, 700000);
     assert.equal(r.itens[1].sequencial, 1);
     assert.equal(r.total, 5700000);
+  });
+
+  it("formato antigo (sem Função/Programa/Ação/Ficha/Fonte) → colunas novas vazias", () => {
+    const a = parseOrcamentoFromMatriz(matriz, "CUBO.XLSX").itens[0];
+    assert.equal(a.funcao, "");
+    assert.equal(a.programa, "");
+    assert.equal(a.acao, "");
+    assert.equal(a.ficha, "");
+    assert.equal(a.fonte, "");
+  });
+
+  it("NOVO padrão do CUBO: Função · Programa · Ação · Ficha · Fonte (colunas mescladas vazias no meio)", () => {
+    // Espelha o CUBO real: Unidade ocupa 3 colunas, Programa 2 e Fonte 2 (mescladas → vazias).
+    const novo: unknown[][] = [
+      ["", "", "", "", "", "", "ESTADO DE GOIÁS"],
+      [""],
+      ["Órgão ", "Unidade ", "", "", "Função ", "Programa ", "", "Ação ", "Nome Elemento ", "Codigo Elemento ", "Ficha ", "Valor emenda impositiva ", "Valor Inicial ", "Fonte ", "", "Valor Suplementação ", "Valor Empenho ", "Saldo ", "Valor Anulação "],
+      ["FD. MUN. DE ASS. SOCIAL ALTAIR COELHO DE LIMA", "26 - FMACL", "", "", "08 - ASSITENCIA SOCIAL", "6151 - PROGRAMA ASSISTÊNCIA SOCIAL PRESENTE", "", "2191 - MANTER AS ATIVIDADES DA FMACL", "CONTRATAÇÃO POR TEMPO DETERMINADO", "3.1.90.04.00", "0624", "0.00", "5,000.00", "100 - RECURSOS ORDINÁRIOS", "", "0.00", "0.00", "5,000.00", "0.00"],
+      ["Qtd. total 1", "", ""],
+    ];
+    const r = parseOrcamentoFromMatriz(novo, "CUBO.XLSX");
+    assert.equal(r.itens.length, 1);
+    const a = r.itens[0];
+    assert.equal(a.unidade, "26 - FMACL");
+    assert.equal(a.funcao, "08 - ASSITENCIA SOCIAL");
+    assert.equal(a.programa, "6151 - PROGRAMA ASSISTÊNCIA SOCIAL PRESENTE");
+    assert.equal(a.acao, "2191 - MANTER AS ATIVIDADES DA FMACL");
+    assert.equal(a.ficha, "0624"); // zero à esquerda preservado (texto)
+    assert.equal(a.fonte, "100 - RECURSOS ORDINÁRIOS");
+    assert.equal(a.nomeElemento, "CONTRATAÇÃO POR TEMPO DETERMINADO");
+    assert.equal(a.codigoElemento, "3.1.90.04.00");
+    assert.equal(a.valorInicial, 5000);
+    assert.equal(a.saldo, 5000);
+    assert.equal(r.total, 5000);
   });
 
   it("matriz sem cabeçalho → vazio", () => {
