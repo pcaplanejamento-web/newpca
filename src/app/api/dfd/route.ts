@@ -187,8 +187,9 @@ export async function POST(req: Request) {
     const obs: string[] = [];
     if (!completo) obs.push(`Itens regravados em lotes (${qtd}) — sem o detalhe por item.`);
     if (movido) obs.push(`Veio do protocolo ${antigo.protocoloNumero ?? `#${antigo.protocoloId}`} — lá ele fica como "sobrescrito".`);
-    // SOBRESCRITA com escolha por dado: o que o usuário MANTEVE do gravado e o que editou antes de gravar.
-    if (escolhas?.mantidos.length) obs.push(`Mantido do gravado (escolha): ${listaCurta(escolhas.mantidos, 12, escolhas.qtdMantidos)}.`);
+    // SOBRESCRITA com escolha por dado: o que ficou COMO NO GRAVADO (escolhido, ou ajustado ao valor gravado) e o que foi
+    // editado antes de gravar (nenhum dos dois).
+    if (escolhas?.mantidos.length) obs.push(`Mantido como no gravado: ${listaCurta(escolhas.mantidos, 12, escolhas.qtdMantidos)}.`);
     if (escolhas?.editados.length) obs.push(`Editado antes de gravar: ${listaCurta(escolhas.editados, 12, escolhas.qtdEditados)}.`);
     detalhe = c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens, obs } : { alvo, obs };
     const diferencas = !c ? "" : c.total === 0 ? " — sem diferenças" : ` — ${c.total} diferença(s)`;

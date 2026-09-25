@@ -1,6 +1,6 @@
 import { SECOES_OBRIGATORIAS, setTextoSecao, situacaoSecao, textoSecao } from "./dfd-tratamento.ts";
 import { brl, num } from "./format.ts";
-import { type Assinatura, type DfdSecao, listaRefs, norm, refDfd, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, type DfdSecao, listaRefs, norm, refDfd, SECOES_PADRAO, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
 /**
  * REENVIO de um protocolo (sobrescrever com o MESMO PDF, corrigido) — núcleo PURO/testável da
@@ -151,10 +151,11 @@ const CAMPOS_DFD: [keyof DfdComparavel, string][] = [
   ["numeroLicitacao", "Nº da licitação"],
 ];
 
-/** Pareia os itens gravados com os do PDF, em 3 rodadas: o MESMO item (código + descrição), depois pelo
- * Nº do item (descrição/código editados) e, por fim, só pelo código. Assim um item removido com a lista
- * RENUMERADA vira 1 "removido" (e os seguintes só mudam de nº), não uma cascata de "alterados". Devolve
- * ÍNDICES (gravado, novo) — a sobrescrita com escolha reusa o MESMO pareamento. Puro. */
+/** Pareia os itens gravados com os do PDF, em 4 rodadas: o MESMO item (código + descrição), o código ÚNICO dos
+ * dois lados (o mesmo produto com a descrição corrigida — mesmo com a lista renumerada), o Nº do item (código
+ * corrigido) e, por fim, só o código (os repetidos, na ordem). Assim um item removido com a lista RENUMERADA vira
+ * 1 "removido" (e os seguintes só mudam de nº), não uma cascata de "alterados" — também quando as descrições
+ * mudaram. Devolve ÍNDICES (gravado, novo) — a sobrescrita com escolha reusa o MESMO pareamento. Puro. */
 export function parearItens(g: ItemComparavel[], p: ItemComparavel[]): { pares: [number, number][]; novos: number[]; removidos: number[] } {
   const livresG = new Set(g.map((_, i) => i));
   const pares: [number, number][] = [];
@@ -184,6 +185,20 @@ export function parearItens(g: ItemComparavel[], p: ItemComparavel[]): { pares: 
     pendentes = sobra;
   };
   rodada((x) => (txt(x.codigo) ? `${txt(x.codigo)}\u0001${norm(x.descricao)}` : null));
+  // Código que aparece UMA vez entre os livres de CADA lado: é o mesmo produto (vence o nº, que a renumeração desloca).
+  const contar = (l: ItemComparavel[], idx: Iterable<number>) => {
+    const m = new Map<string, number>();
+    for (const i of idx) {
+      const c = txt(l[i].codigo);
+      if (c) m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return m;
+  };
+  const [cg, cp] = [contar(g, livresG), contar(p, pendentes)];
+  rodada((x) => {
+    const c = txt(x.codigo);
+    return c && cg.get(c) === 1 && cp.get(c) === 1 ? c : null;
+  });
   rodada((x) => (x.item != null ? String(x.item) : null));
   rodada((x) => txt(x.codigo) || null);
   return { pares, novos: pendentes, removidos: [...livresG] };
@@ -202,9 +217,13 @@ export function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
   return out;
 }
 
-/** Chave de uma SEÇÃO para comparar: o título normalizado SEM a numeração (o nº varia entre modelos:
- * "5 - …" × "6 - …"). Puro. */
-export const chaveSecao = (titulo: string) => norm(titulo).replace(/^\d+(\.\d+)*\s*[-–.)]?\s*/, "");
+/** Chave de uma SEÇÃO para comparar: a seção PADRÃO do título (`SECOES_PADRAO` — "PRIORIDADE" e "PRIORIDADE DA
+ * COMPRA OU DA CONTRATAÇÃO" são a MESMA seção, como o resto do sistema as lê); fora do padrão, o título normalizado
+ * SEM a numeração (o nº varia entre modelos: "5 - …" × "6 - …"). Puro. */
+export const chaveSecao = (titulo: string) => {
+  const t = norm(titulo).replace(/^\d+(\.\d+)*\s*[-–.)]?\s*/, "");
+  return SECOES_PADRAO.find((x) => x.re.test(t))?.chave ?? t;
+};
 
 const ROTULO_FONTE: Record<string, string> = {
   certificado: "certificado",
@@ -438,7 +457,8 @@ function herdarTratamentosTexto<T extends DfdTratavel>(novo: T, gravado: DfdTrat
   }
   if (secoes !== dfd.secoes) dfd = { ...dfd, secoes };
   const semRefs = (d: DfdTratavel) => !txt(d.numeroContrato) && !txt(d.numeroAta) && !txt(d.numeroLicitacao);
-  if (semRefs(dfd) && !semRefs(gravado)) {
+  // Só no DFD-R (renovação): nos demais tipos as referências não aparecem nem se editam — ficariam gravadas escondidas.
+  if (semRefs(dfd) && !semRefs(gravado) && tipoCurtoDfd(dfd.tipo) === "DFD-R") {
     dfd = { ...dfd, numeroContrato: gravado.numeroContrato, numeroAta: gravado.numeroAta, numeroLicitacao: gravado.numeroLicitacao };
     herdados.push("Referências de renovação");
   }

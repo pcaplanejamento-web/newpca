@@ -298,3 +298,44 @@ describe("sobrescrita com escolha — ordem, seções repetidas, histórico e es
     assert.equal(listaCurta(["A", "B"], 12, 5), "A, B e mais 3");
   });
 });
+
+describe("sobrescrita com escolha — seção padrão, total do lado inteiro e estado pelo valor", () => {
+  it("a MESMA seção com títulos diferentes é UMA escolha — manter a gravada tira a do arquivo (sem seção duplicada)", () => {
+    const g = dfd({ secoes: [{ numero: 6, titulo: "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "ALTA" }] });
+    const n = marcarItensNovos(dfd({ secoes: [{ numero: 6, titulo: "PRIORIDADE", texto: "MÉDIA" }] }));
+    const secoes = entradasEscolha(comparacaoEscolha(g, n)).filter((e) => e.tipo === "secao");
+    assert.equal(secoes.length, 1);
+    const w = aplicarEscolha(secoes[0], "gravado", n, g, n);
+    assert.deepEqual(
+      w.secoes.map((s) => `${s.titulo}: ${s.texto}`),
+      ["PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO: ALTA"],
+    );
+    assert.equal(estadoEscolha(secoes[0], w, g, n), "gravado");
+  });
+
+  it("com os itens de UM lado inteiro, vale o valor total DESSE lado (o TOTAL GERAL pode diferir da soma)", () => {
+    const g = { ...dfd({ itens: [item(1, "111", 1, 10), item(2, "222", 2, 10.005)] }), valorTotal: 30.01 };
+    const n = marcarItensNovos({ ...dfd({ itens: [item(1, "111", 1, 10), item(2, "222", 3, 10)] }), valorTotal: 40.02 });
+    const entradas = entradasEscolha(comparacaoEscolha(g, n));
+    const tudoG = escolherTudo("gravado", n, g, n);
+    assert.equal(tudoG.valorTotal, 30.01);
+    assert.equal(compararDfd({ ...g, reparticaoId: null, anoPca: null }, { ...semMarcas(tudoG), reparticaoId: null, anoPca: null }).situacao, "igual");
+    // "Usar todos os novos" no estado inicial não troca o TOTAL GERAL do arquivo pela soma.
+    assert.equal(escolherTudo("novo", n, g, n).valorTotal, 40.02);
+    // Mistura (um item de cada lado): a soma dos itens.
+    const e2 = entradas.find((e) => e.tipo === "item");
+    assert.ok(e2);
+    const misto = aplicarEscolha(e2, "gravado", marcarItensNovos({ ...n, itens: [item(1, "111", 7, 10), n.itens[1]] }), g, n);
+    assert.notEqual(misto.valorTotal, 30.01);
+  });
+
+  it("estado do item pelo VALOR: editado até ficar igual ao gravado = gravado (como os campos)", () => {
+    const g = dfd({ itens: [item(1, "111", 5)] });
+    const n = marcarItensNovos(dfd({ itens: [item(1, "111", 8)] }));
+    const e = entradasEscolha(comparacaoEscolha(g, n)).find((x) => x.tipo === "item");
+    assert.ok(e);
+    const editado = { ...n, itens: [{ ...n.itens[0], quantidade: 5, valorTotal: 50 }] };
+    assert.equal(estadoEscolha(e, editado, g, n), "gravado");
+    assert.equal(estadoEscolha(e, { ...n, itens: [{ ...n.itens[0], quantidade: 6, valorTotal: 60 }] }, g, n), "editado");
+  });
+});

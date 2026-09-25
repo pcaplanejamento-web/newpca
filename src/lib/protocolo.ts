@@ -5,6 +5,7 @@ import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
 import { classificarAssunto } from "./avaliacao-core";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
+import { comandosMesmoId } from "./protocolo-sql";
 import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import { filtroAnoPcaProtocolo } from "./dfd-sql";
@@ -259,21 +260,36 @@ export async function iniciarProtocolo(
     nomeArquivo: p.nomeArquivo ?? null,
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
-  // Dedup por Id (regra do usuário): NÃO coexistem dois protocolos com o mesmo `idExterno`
-  // (Id da capa) — o novo SOBRESCREVE o de mesmo Id. O upsert por `numero` cobre o mesmo
-  // número; aqui removemos um eventual protocolo de MESMO Id e número DIFERENTE (os DFDs
-  // dele ficam órfãos por FK `set null`, como em qualquer exclusão de protocolo). O
-  // anti-sequestro (Id em unidade inacessível) é conferido na rota antes de chamar.
-  if (p.idExterno) {
-    await db.delete(dfdProtocolos).where(and(eq(dfdProtocolos.idExterno, p.idExterno), ne(dfdProtocolos.numero, p.numero)));
-  }
-  const [row] = await db
+  const upsert = db
     .insert(dfdProtocolos)
     .values({ numero: p.numero, criadoPor: criadoPor ?? null, responsavelId: responsavelPadrao, ...set })
     // Sobrescrita (mesmo nº / reenvio): o responsável já designado PERMANECE (a situação e a
     // distribuição também — não estão no `set`).
     .onConflictDoUpdate({ target: dfdProtocolos.numero, set: { ...set, responsavelId: sql`COALESCE(${dfdProtocolos.responsavelId}, ${responsavelPadrao})` } })
     .returning({ id: dfdProtocolos.id });
+  // Dedup por Id (regra do usuário): NÃO coexistem dois protocolos com o mesmo `idExterno` (Id da capa). O de MESMO Id e
+  // nº DIFERENTE é o mesmo processo renumerado — `comandosMesmoId` o renumera (ou passa os DFDs dele ao que fica) no MESMO
+  // lote do upsert: nenhum DFD fica órfão. O anti-sequestro e a trava do PCA são conferidos na rota antes de chamar.
+  const mesmoId = p.idExterno
+    ? await db
+        .select({ id: dfdProtocolos.id })
+        .from(dfdProtocolos)
+        .where(and(eq(dfdProtocolos.idExterno, p.idExterno), ne(dfdProtocolos.numero, p.numero)))
+    : [];
+  if (mesmoId.length === 0) {
+    const [row] = await upsert;
+    return { id: row.id, numero: p.numero };
+  }
+  const [alvo] = await db.select({ id: dfdProtocolos.id }).from(dfdProtocolos).where(eq(dfdProtocolos.numero, p.numero)).limit(1);
+  const cmds = comandosMesmoId(
+    db,
+    p.numero,
+    mesmoId.map((x) => x.id),
+    alvo?.id ?? null,
+  );
+  // biome-ignore lint/suspicious/noExplicitAny: a tupla exigida por db.batch() do Drizzle é inviável de anotar.
+  const res = await db.batch([...cmds, upsert] as unknown as [any, ...any[]]);
+  const [row] = res[cmds.length] as { id: number }[];
   return { id: row.id, numero: p.numero };
 }
 

@@ -26,13 +26,27 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Revisão da lógica gravado × novo (sobrescrita) — entregue
+✅ Revisão completa da sobrescrita (reenvio, importação do protocolo, avulso): a mesma SEÇÃO com títulos diferentes
+("PRIORIDADE" × "PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO") é uma escolha só — manter a gravada não deixa a do arquivo
+duplicada; itens renumerados com a descrição corrigida casam pelo CÓDIGO (1 removido, não uma cascata de alterados);
+com os itens de um lado inteiro vale o valor total desse lado ("Manter todos os gravados" volta a ser IGUAL mesmo com o
+TOTAL GERAL arredondado); o estado de cada item é lido pelo valor (como os campos) e o histórico diz "Mantido como no
+gravado"; as referências da renovação só são herdadas no DFD-R. Na **importação do protocolo**, os DFDs gravados vêm em
+segundo plano e o que o arquivo não traz é HERDADO (tipo, seções, referências, validação da equipe), como no reenvio e no
+avulso; o DFD fora do envio, de unidade sem acesso ou durante a gravação abre só-leitura; a unidade do cadastro não passa
+por cima da escolha do usuário (qualquer que seja a ordem das leituras); a escolha em massa espera a leitura por OCR em
+curso. **Protocolo de mesmo Id e número diferente** = o mesmo processo renumerado: o registro é renumerado (DFDs, gestão e
+histórico seguem) e nenhum DFD fica sem protocolo (`comandosMesmoId`, testado pelo driver D1 real); na análise, os DFDs dele
+são "Substitui". Abrir um item pela Mesa → Itens casa nº + código (nº repetido não abre o item errado).
+
 ### Sobrescrever protocolo: "Gravado × novo" em massa na seleção — entregue
 ✅ Na análise do protocolo (reenvio ou importação com DFDs já cadastrados), a barra da seleção ganhou o campo **"Gravado ×
 novo"**: marcar os DFDs (ou todos) e escolher **Manter os gravados** ou **Usar os novos** aplica a escolha em TODAS as
 diferenças de cada um de uma vez (o mesmo "todos" do painel Diferenças). O gravado que falta é lido sob demanda (uma leitura
 por DFD); o Aplicar espera a análise e a leitura das assinaturas; no reenvio, o DFD que ficou igual ao gravado não é
 regravado. Validado com o PDF real: reenvio (2 gravados → "Igual", voltar a "Usar os novos" restaura as diferenças,
-sobrescrever grava só os 13 novos) e importação com DFDs já cadastrados (Substitui/Move, histórico "mantido do gravado").
+sobrescrever grava só os 13 novos) e importação com DFDs já cadastrados (Substitui/Move, histórico "mantido como no gravado").
 
 ### Copiar o valor da célula + excluir DFDs na análise do protocolo + protocolo em PCA não é excluído — entregue
 ✅ **Ícone de copiar na célula** (`CelulaCopiavel`, DS) em TODA tabela nas colunas **nº do protocolo** (copia SEM o ano —

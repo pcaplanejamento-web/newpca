@@ -7,6 +7,7 @@ import {
   type DiffCampo,
   type DiffItemDfd,
   diffItem,
+  parearItens,
 } from "./comparar-protocolo.ts";
 import { type DfdItemParseado, type DfdParseado, type DfdSecao, listaRefs, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
@@ -158,13 +159,25 @@ export function estadoEscolha(e: EntradaEscolha, trabalho: DfdParseado, gravado:
   // Depois de qualquer escolha só um dos dois existe no trabalho (a escolha troca um pelo outro).
   const achado = (n != null ? idx.get(refN(n)) : undefined) ?? (g != null ? idx.get(refG(g)) : undefined);
   if (!achado) return n != null && g == null ? "gravado" : g != null && n == null ? "novo" : "editado";
-  if (n != null && achado.ref === refN(n)) return igualItem(achado, novo.itens[n]) ? "novo" : "editado";
-  if (g != null && achado.ref === refG(g)) return igualItem(achado, gravado.itens[g]) ? "gravado" : "editado";
+  // Pelo VALOR (como os campos): igual ao do arquivo ⇒ novo; igual ao gravado ⇒ gravado; senão editado à mão.
+  if (n != null && igualItem(achado, novo.itens[n])) return "novo";
+  if (g != null && igualItem(achado, gravado.itens[g])) return "gravado";
   return "editado";
 }
 
-/** Soma dos itens (o valor do DFD é SEMPRE a soma — nunca estimado). */
-function comTotal(d: DfdParseado, itens: DfdItemParseado[]): DfdParseado {
+/** Os itens são EXATAMENTE os de `fonte` (o mesmo pareamento da comparação, sem nenhuma diferença)? */
+function mesmosItens(itens: DfdItemParseado[], fonte: DfdItemParseado[]): boolean {
+  if (itens.length !== fonte.length) return false;
+  const { pares, novos, removidos } = parearItens(fonte, itens);
+  return novos.length === 0 && removidos.length === 0 && pares.every(([i, j]) => igualItem(fonte[i], itens[j]));
+}
+
+/** O valor do DFD depois das escolhas dos itens: com os itens de UM lado inteiro, o valor total DESSE lado (o "TOTAL
+ * GERAL" do documento pode diferir da soma por arredondamento — "Manter todos os gravados" devolve o valor gravado e o
+ * DFD volta a ser IGUAL); com a mistura dos dois, a soma dos itens (nunca estimado). */
+function comTotal(d: DfdParseado, itens: DfdItemParseado[], lados: DfdParseado[]): DfdParseado {
+  const lado = lados.find((l) => mesmosItens(itens, l.itens));
+  if (lado) return { ...d, itens, valorTotal: lado.valorTotal };
   const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
   return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
 }
@@ -178,7 +191,12 @@ function itemDoLado(chave: string, lado: Lado, gravado: DfdParseado, novo: DfdPa
 
 /** Troca, nos itens do trabalho, os PARES das escolhas pelo item do lado escolhido — no lugar do par (senão no
  * fim) — e ordena pelo Nº do item. Uma passada só (linear), para 1 ou N escolhas. */
-function trocarItens(trabalho: DfdParseado, escolhas: { chave: string; item: DfdItemParseado | null }[]): DfdParseado {
+function trocarItens(
+  trabalho: DfdParseado,
+  escolhas: { chave: string; item: DfdItemParseado | null }[],
+  gravado: DfdParseado,
+  novo: DfdParseado,
+): DfdParseado {
   const donoDaRef = new Map<string, number>(); // ref (n:/g:) → índice da escolha
   escolhas.forEach((c, k) => {
     const { g, n } = indicesItem(c.chave);
@@ -200,7 +218,7 @@ function trocarItens(trabalho: DfdParseado, escolhas: { chave: string; item: Dfd
   escolhas.forEach((c, k) => {
     if (c.item && !colocado.has(k)) out.push(c.item); // o par não estava no trabalho → entra (a ordem vem abaixo)
   });
-  return comTotal(trabalho, ordenarPorItem(out));
+  return comTotal(trabalho, ordenarPorItem(out), [gravado, novo]);
 }
 
 /** APLICA uma escolha: copia o valor do `lado` escolhido para o DFD de trabalho (sobrepõe uma edição à mão
@@ -224,7 +242,7 @@ export function aplicarEscolha(e: EntradaEscolha, lado: Lado, trabalho: DfdParse
     return { ...trabalho, secoes: i < 0 ? [...resto, ...escolhidas] : [...resto.slice(0, i), ...escolhidas, ...resto.slice(i)] };
   }
   // Item: o lado escolhido NÃO tem o item ⇒ fica sem ele.
-  return trocarItens(trabalho, [{ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) }]);
+  return trocarItens(trabalho, [{ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) }], gravado, novo);
 }
 
 /** Aplica o MESMO lado a várias escolhas (os botões "usar todos os novos" / "manter todos os gravados") — os
@@ -232,7 +250,14 @@ export function aplicarEscolha(e: EntradaEscolha, lado: Lado, trabalho: DfdParse
 export function aplicarTodas(entradas: EntradaEscolha[], lado: Lado, trabalho: DfdParseado, gravado: DfdParseado, novo: DfdParseado): DfdParseado {
   const itens = entradas.filter((e) => e.tipo === "item");
   const demais = entradas.filter((e) => e.tipo !== "item").reduce((w, e) => aplicarEscolha(e, lado, w, gravado, novo), trabalho);
-  return itens.length === 0 ? demais : trocarItens(demais, itens.map((e) => ({ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) })));
+  return itens.length === 0
+    ? demais
+    : trocarItens(
+        demais,
+        itens.map((e) => ({ chave: e.chave, item: itemDoLado(e.chave, lado, gravado, novo) })),
+        gravado,
+        novo,
+      );
 }
 
 /**
@@ -244,7 +269,7 @@ export function escolherTudo(lado: Lado, trabalho: DfdParseado, gravado: DfdPars
   return aplicarTodas(entradasEscolha(comparacaoEscolha(gravado, novo)), lado, trabalho, gravado, novo);
 }
 
-/** O que foi MANTIDO do gravado e o que foi EDITADO à mão — vai ao histórico da sobrescrita. */
+/** O que ficou COMO NO GRAVADO e o que foi EDITADO à mão (nenhum dos dois) — vai ao histórico da sobrescrita. */
 export function resumoEscolhas(
   entradas: EntradaEscolha[],
   trabalho: DfdParseado,

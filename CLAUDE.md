@@ -878,9 +878,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **vários DFDs** (escala a **milhares**); todo DFD vem de um protocolo. Entidade `dfd_protocolos` (escopo por
   **repartição**, `numero`=Número Processo único; **`idExterno`** = "Id:" da capa, migração `0019`; sem `grupo_id`) +
   `dfds.protocoloId` nullable (FK `set null`). **Dedup/sobrescrita por Id:** não coexistem dois protocolos com o
-  MESMO `idExterno` — protocolar **sobrescreve** o de mesmo Id (`iniciarProtocolo` apaga o de mesmo Id e número
-  diferente antes do upsert por `numero`; o `POST /api/protocolo` faz o **anti-sequestro por Id E por Nº** — 403 se o Id
-  ou o número já existe em unidade inacessível: `getProtocoloPorIdExterno`/`getProtocoloPorNumero`). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
+  MESMO `idExterno` — o de mesmo Id e nº DIFERENTE é o MESMO processo RENUMERADO: `iniciarProtocolo` o **renumera** (o mesmo
+  registro — DFDs, gestão, histórico e rastro seguem) ou, com outro protocolo já no nº novo, passa os DFDs dele a esse e o
+  exclui — tudo no MESMO lote do upsert (`comandosMesmoId`, **`protocolo-sql.ts`**, builders testados pelo driver D1 real):
+  nenhum DFD fica órfão (antes a FK `set null` orfanava os que não vinham no PDF e os mantidos). Na análise, o DFD
+  cadastrado num protocolo de MESMO Id é "deste processo" (`/api/dfd/existentes` devolve `protocoloIdExterno`: Substitui,
+  não Move; "Manter o existente" o mantém na capa). O `POST /api/protocolo` faz o **anti-sequestro por Id E por Nº** — 403
+  se o Id ou o número já existe em unidade inacessível: `getProtocoloPorIdExterno`/`getProtocoloPorNumero`; o de mesmo Id
+  em um PCA é recusado (409). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
   `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
   **Excluir em CASCATA (regra do usuário):** `excluirProtocolo` (`protocolo.ts`) apaga os **DFDs vinculados**
   (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
@@ -935,34 +940,43 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   chave do título, assinaturas, item novo/alterado/removido pela chave ESTÁVEL do pareamento `parearItens`: `a:g:n`/`n:n`/
   `r:g`), `aplicarEscolha`/`aplicarTodas` (copiam o lado escolhido para o DFD de TRABALHO; itens reencontrados pela marca
   de origem `ref` — `marcarItensNovos`, `n:<j>`/`g:<i>`, só na tela, `semMarcas` antes de enviar; total = Σ itens),
-  `estadoEscolha` (lido do próprio DFD de trabalho: gravado / novo / **editado** à mão), `resumoEscolhas` (mantidos/
-  editados → histórico) e `outrasDiferencas` ("Outras alterações": unidade, total e edições). Hook **`useSobrescrita`**
+  `estadoEscolha` (lido do próprio DFD de trabalho PELO VALOR — campo, seção e item: igual ao gravado / igual ao novo /
+  **editado** à mão), `resumoEscolhas` (mantidos/editados → histórico) e `outrasDiferencas` ("Outras alterações": unidade, total e edições). Hook **`useSobrescrita`**
   (gravado + novo [o arquivo, estável] + trabalho → props `EscolhaSobrescritaProps` do `ComparacaoDfdView`, via o painel
   "Diferenças (N)" do `DfdPainelDireito`; N = o que muda DE FATO). Onde: **botão "Sobrescrever DFD"** no banner do DFD
   gravado (`useDfdGravado` e o DFD ao lado no `useProtocoloGravado` — desabilitado com rascunho) → o MESMO
   **`DfdUploadForm`** em modo `sobrescrever` (só o MESMO nº; lançador próprio; o DFD **continua no protocolo dele** — sem
   `protocoloId` o `upsertDfdCabecalho` mantém o atual); o **"Importar DFD"** da Mesa quando o nº já existe (acessível) vira a
-  mesma sobrescrita; e a **protocolação** (`ProtocoloUploadForm`: ao abrir um DFD que substitui/move, o gravado carrega sob
-  demanda; no reenvio já veio). **EM MASSA — "Gravado × novo" na seleção:** na análise do protocolo (reenvio OU importação
+  mesma sobrescrita; e a **protocolação** (`ProtocoloUploadForm`: os gravados que os DFDs da análise substituem/movem vêm
+  em SEGUNDO PLANO logo após a consulta dos já cadastrados — **`carregarGravados`**, 4 por vez, até o teto da análise; a
+  protocolação espera, "Conferindo os DFDs já cadastrados…" — e, na chegada, **herdam** o que o arquivo não traz, como no
+  reenvio e no avulso — `herdarDoGravado`: tipo, seções obrigatórias, referências da renovação [só DFD-R] e a validação da
+  assinatura pela equipe [depois do OCR]; no reenvio o gravado já veio). **EM MASSA — "Gravado × novo" na seleção:** na análise do protocolo (reenvio OU importação
   com DFDs já gravados), a barra da seleção ganha o campo **"Gravado × novo"** (o 1º do `BarraEdicaoMassa`, prop `versao` —
   só quando algum selecionado SOBRESCREVE um DFD gravado acessível: `sobrescreve` = Substitui/Move): **Manter os gravados |
   Usar os novos** aplica o "todos" do painel Diferenças em CADA selecionado de uma vez (marcar todos + Aplicar —
-  `escolherTudo`, puro/testado; o gravado que falta é lido sob demanda por **`carregarGravado`** — UMA leitura por nº,
-  compartilhada com o DFD aberto, 4 por vez); não marca "editado" (escolher não é editar: no reenvio, o que ficou IGUAL ao
+  `escolherTudo`, puro/testado; o gravado que falta é lido por **`carregarGravado`** — UMA leitura por nº, compartilhada
+  com a carga em segundo plano e o DFD aberto, 4 por vez; a leitura por OCR EM CURSO do DFD termina antes — `emCursoOcr`);
+  não marca "editado" (escolher não é editar: no reenvio, o que ficou IGUAL ao
   gravado não é regravado — "sem diferença"); o selecionado sem gravado (novo) fica como está; a nota diz quantos
   selecionados têm DFD gravado; o Aplicar ESPERA a análise e a leitura por OCR dos selecionados (`avisoVersao` — a
   assinatura achatada é do ARQUIVO: escolher antes misturaria as duas versões). O avulso/banner herdam do gravado o que o arquivo não traz (`herdarTratamentos`, como o
   reenvio). **Histórico:** `origem:"sobrescrita"` ("Sobrescrita do DFD", `ROTULO_ORIGEM`) + o diff gravado × novo + obs
-  "Mantido do gravado (escolha): …"/"Editado antes de gravar: …" (`dfdMetaSchema.escolhas` = os 12 primeiros rótulos + as
+  "Mantido como no gravado: …"/"Editado antes de gravar: …" (`dfdMetaSchema.escolhas` = os 12 primeiros rótulos + as
   quantidades — `escolhasParaHistorico`, o envio nunca é recusado por um DFD com milhares de diferenças); na protocolação a
   origem segue o canal e as escolhas vão nas obs. Selo **"Sobrescrita"** no `DfdCabecalho`. Robustez: a ordem dos itens
   segue o Nº do item depois de qualquer escolha (`ordenarPorItem`, estável — nada de `sequencial` embaralhado), "todos"
-  aplica os itens numa passada só e o estado de cada escolha usa um índice por marca (linear, mesmo com milhares); seções
-  de mesmo título voltam num bloco só; o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
+  aplica os itens numa passada só e o estado de cada escolha usa um índice por marca (linear, mesmo com milhares); a SEÇÃO
+  é identificada pela seção PADRÃO do título (`chaveSecao` → `SECOES_PADRAO`: "PRIORIDADE" e "PRIORIDADE DA COMPRA OU DA
+  CONTRATAÇÃO" são UMA escolha — manter a gravada tira a do arquivo) e as de mesmo tipo voltam num bloco só; com os itens
+  de UM lado inteiro vale o valor total DESSE lado (o "TOTAL GERAL" pode diferir da soma por arredondamento — "Manter
+  todos os gravados" volta a ser IGUAL); na mistura, a soma; o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
   (`sobrescrever.onOcupado`: lançador → leitura → escolha → gravação — sem rascunho concorrente nem base velha); só a
   leitura mais recente de arquivo vale; fechar a conferência com escolhas/edições feitas pede confirmação; na
   protocolação, a escolha só destrava depois da leitura da assinatura por OCR daquele DFD e o DFD que substitui/move um
-  cadastrado fica na **unidade dele** (salvo escolha do usuário — como no reenvio/banner). No **reenvio**, o DFD gravado
+  cadastrado fica na **unidade dele** (salvo escolha do usuário no DFD ou em massa — `repEscolhidaRef`; a prevista pela
+  assinatura cede, qualquer que seja a ordem das leituras — como no reenvio/banner). Na análise, o DFD aberto fica
+  **só-leitura** gravando, fora do envio (excluído/descartado/mantido o existente) ou de unidade sem acesso. No **reenvio**, o DFD gravado
   de unidade SEM ACESSO é conferido com a unidade REAL (`BaseReenvio.unidades`, as mesmas do banner gravado) e fica
   só-leitura: sem diferença, é pulado (não é erro); com diferença, é erro "Unidade sem acesso" (o servidor recusaria) —
   "Manter o gravado" o mantém NO processo (entra na capa). "Manter o existente" só soma na capa o
@@ -1179,11 +1193,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (desabilitado com rascunho pendente) → o **MESMO `ProtocoloUploadForm`** em modo `reenvio` (`BaseReenvio` = protocolo +
     DFDs completos já carregados), com lançador próprio. Núcleo PURO **`comparar-protocolo.ts`** (testado):
     `identidadeReenvio` (só o MESMO nº **e** Id — outro protocolo é recusado no lançador E no servidor, 422),
-    `compararCapa`, `compararDfd` (cabeçalho, **seções casadas pelo TÍTULO sem numeração**, assinaturas, **itens pareados**
-    por nº → código+descrição → código: novo/removido/alterado campo a campo; situação novo/igual/alterado),
+    `compararCapa`, `compararDfd` (cabeçalho, **seções casadas pela seção PADRÃO do título** — `chaveSecao`, sem a
+    numeração —, assinaturas, **itens pareados** por código+descrição → código ÚNICO dos dois lados → nº → código:
+    novo/removido/alterado campo a campo; situação novo/igual/alterado),
     `linhasRelatorioReenvio` (relatório copiável) e **`herdarTratamentos`** (o que o PDF NÃO traz e o gravado já tratou —
-    tipo, seções obrigatórias ausentes/fora do padrão, referências de renovação, validação da assinatura pela equipe — é
-    herdado, nunca sobrescrevendo valor válido do PDF; listado como "Herdado do gravado"). UI (`ComparacaoReenvio.tsx`):
+    tipo, seções obrigatórias ausentes/fora do padrão, referências de renovação [só quando o DFD é DFD-R — nos demais
+    ficariam gravadas escondidas], validação da assinatura pela equipe — é herdado, nunca sobrescrevendo valor válido do
+    PDF; listado como "Herdado do gravado"). UI (`ComparacaoReenvio.tsx`):
     **`ComparacaoProtocolo`** no topo do banner (`ProtocoloView.topo`: contagens Novos/Alterados/Sem diferença/Fora do envio,
     diferenças da CAPA, DFDs gravados FORA DO ENVIO — não vieram no PDF ou o DFD do PDF foi excluído na análise — com
     **Excluir/Manter** um a um ou todos, "Relatório de
@@ -1197,8 +1213,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     código e a **validação da equipe** (validar/desfazer é diferença); DFD **editado** na análise nunca é pulado como
     "igual"; a validação da assinatura é herdada **depois do OCR** (`herdarTratamentos(…, {assinaturas})` em partes — a
     assinatura achatada só existe após a leitura) e o servidor mantém **quem/quando** da validação já gravada
-    (`carimbarValidacao` com as assinaturas do DFD existente); itens pareados por código+descrição → nº → código (remoção
-    com renumeração = 1 "removido"); o relatório lista os DFDs **ainda não comparados**; o lançador só abre num clique NOVO.
+    (`carimbarValidacao` com as assinaturas do DFD existente); itens pareados por código+descrição → código único → nº →
+    código (remoção com renumeração = 1 "removido", também com as descrições corrigidas); o DFD editado conta como
+    alterado na confirmação (é regravado); o relatório lista os DFDs **ainda não comparados**; o lançador só abre num clique NOVO.
   - **"1 · Área requisitante da demanda" editável (cadeado por campo):** para editores, o `DfdConferir` mostra o bloco
     editável (âncora `anoPca`) no lugar da Seção 1 só-leitura (`ocultarSecao1`); identificadores (Nº DFD/Planejamento/Ano
     do PCA) seguem travados; o conteúdo flui por `onCamposChange` → `atualizarDfdCampos` (que agora também sincroniza o

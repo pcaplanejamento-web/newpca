@@ -94,6 +94,7 @@ export type ExistenteImport =
       reparticaoId: number | null;
       protocoloId: number | null;
       protocoloNumero: string | null;
+      protocoloIdExterno: string | null;
       valorTotal: number | null;
       totalItens: number | null;
     }

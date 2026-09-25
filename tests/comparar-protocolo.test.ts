@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   type CapaComparavel,
+  chaveSecao,
   compararCapa,
   compararDfd,
   type DfdComparavel,
   herdarTratamentos,
   identidadeReenvio,
   linhasRelatorioReenvio,
+  parearItens,
   rotuloSituacaoReenvio,
 } from "../src/lib/comparar-protocolo.ts";
 import type { Assinatura } from "../src/lib/parse-dfd-comum.ts";
@@ -255,5 +257,47 @@ describe("herdarTratamentos — o que o PDF não traz e o gravado já tratou", (
     const r = herdarTratamentos({ ...gravado, assinaturas: semAssinatura }, { ...gravado, assinaturas: [manual] }, 2027);
     assert.equal(r.dfd.assinaturas.length, 1);
     assert.equal(r.dfd.assinaturas[0].fonte, "manual");
+  });
+});
+
+describe("compararDfd / herdarTratamentos — seção padrão, código único e referências só no DFD-R", () => {
+  it("a MESMA seção com títulos diferentes (modelo × tratamento) é UMA diferença", () => {
+    const c = compararDfd(
+      dfd({ secoes: [{ titulo: "6 - PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO", texto: "ALTA" }] }),
+      dfd({ secoes: [{ titulo: "6 - PRIORIDADE", texto: "MÉDIA" }] }),
+    );
+    assert.equal(c.secoes.length, 1);
+    assert.equal(c.secoes[0].antes, "ALTA");
+    assert.equal(c.secoes[0].depois, "MÉDIA");
+    assert.equal(chaveSecao("6 - PRIORIDADE"), chaveSecao("PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO"));
+    assert.notEqual(chaveSecao("3 - JUSTIFICATIVA"), chaveSecao("7 - FUNDAMENTAÇÃO LEGAL"));
+  });
+  it("item REMOVIDO com a lista renumerada E as descrições corrigidas: pareia pelo código único (1 removido)", () => {
+    const it = (item: number, codigo: string, descricao: string) => ({ item, codigo, descricao, unidade: "UN", quantidade: 1, valorUnitario: 1, valorTotal: 1 });
+    const g = [1, 2, 3, 4, 5].map((k) => it(k, String(100 + k), `DESC ${k}`));
+    const n = [2, 3, 4, 5].map((k, j) => it(j + 1, String(100 + k), `DESC ${k} CORRIGIDA`));
+    const c = compararDfd(dfd({ itens: g }), dfd({ itens: n }));
+    const porTipo = (t: string) => c.itens.filter((x) => x.tipo === t);
+    assert.equal(porTipo("removido").length, 1);
+    assert.equal(porTipo("removido")[0].codigo, "101");
+    assert.equal(porTipo("novo").length, 0);
+    for (const x of porTipo("alterado")) assert.deepEqual(x.campos.map((d) => d.campo), ["item", "descricao"]);
+  });
+  it("código REPETIDO não pareia pelo código único — segue pelo nº (e código corrigido também)", () => {
+    const it = (item: number, codigo: string, descricao: string) => ({ item, codigo, descricao, unidade: "UN", quantidade: 1, valorUnitario: 1, valorTotal: 1 });
+    const { pares, novos, removidos } = parearItens(
+      [it(1, "500", "SALA A"), it(2, "500", "SALA B"), it(3, "600", "CANETA")],
+      [it(1, "500", "SALA A2"), it(2, "500", "SALA B2"), it(3, "601", "CANETA")],
+    );
+    assert.deepEqual(pares.sort(), [[0, 0], [1, 1], [2, 2]]);
+    assert.deepEqual([novos, removidos], [[], []]);
+  });
+  it("referências de renovação só são herdadas quando o DFD é DFD-R", () => {
+    const g = { tipo: "DFD-R — Renovação", secoes: [], numeroContrato: "12/2025", numeroAta: "3/2024", numeroLicitacao: null, assinaturas: [] };
+    const s = herdarTratamentos({ ...g, tipo: "DFD-S — Solução", numeroContrato: null, numeroAta: null }, g, 2027);
+    assert.equal(s.dfd.numeroContrato, null);
+    assert.ok(!s.herdados.includes("Referências de renovação"));
+    const r = herdarTratamentos({ ...g, numeroContrato: null, numeroAta: null }, g, 2027);
+    assert.equal(r.dfd.numeroContrato, "12/2025");
   });
 });

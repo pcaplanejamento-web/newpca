@@ -41,11 +41,14 @@ export type ItemRef = { item: number | null; codigo: string | null };
 /** Conteúdo de um banner (o que a pilha de banners renderiza). */
 export type ConteudoBanner = { titulo: string; cabecalho?: ReactNode; acoesCabecalho?: ReactNode; rodape?: ReactNode; children: ReactNode };
 
-/** Índice do item (no DFD) que corresponde a uma linha da visão "Itens": pelo NÚMERO do item (único
- * no DFD), depois pelo código; `-1` = não está mais no DFD (ex.: removido por uma sobrescrita) — o banner
- * diz "Item não encontrado" em vez de trocar de item em silêncio. */
+/** Índice do item (no DFD) que corresponde a uma linha da visão "Itens": pelo NÚMERO + código (o nº pode
+ * repetir — ex.: um item mantido do gravado numa lista renumerada), depois só pelo nº e, por fim, pelo código;
+ * `-1` = não está mais no DFD (ex.: removido por uma sobrescrita) — o banner diz "Item não encontrado" em vez
+ * de trocar de item em silêncio. */
 function indiceDoItem(itens: DfdParseado["itens"], alvo: ItemRef): number {
   if (alvo.item != null) {
+    const exato = itens.findIndex((it) => it.item === alvo.item && (it.codigo ?? null) === (alvo.codigo ?? null));
+    if (exato >= 0) return exato;
     const i = itens.findIndex((it) => it.item === alvo.item);
     if (i >= 0) return i;
   }

@@ -78,6 +78,7 @@ import {
   escolhasParaHistorico,
   escolherTudo,
   type Lado,
+  listaCurta,
   marcarItensNovos,
   resumoEscolhas,
   semMarcas,
@@ -119,7 +120,15 @@ type Rep = {
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 /** DFD já cadastrado (conflito de número): de qual protocolo é + seus totais (p/ a somatória quando ele
  * PREVALECE); `acessivel: false` = de outra unidade (não pode ser sobrescrito daqui). */
-type DfdExistente = { numero: string; protocoloNumero: string | null; valorTotal?: number | null; totalItens?: number | null; id?: number; acessivel: boolean };
+type DfdExistente = {
+  numero: string;
+  protocoloNumero: string | null;
+  protocoloIdExterno?: string | null;
+  valorTotal?: number | null;
+  totalItens?: number | null;
+  id?: number;
+  acessivel: boolean;
+};
 type Status = "idle" | "parsing" | "error";
 type Extra = { idExterno: string | null; documento: string | null; localReparticao: string | null; valorCapa: number | null; nomeArquivo: string | null };
 type Situacao = "novo" | "substitui" | "move" | "semAcesso";
@@ -187,6 +196,9 @@ export function ProtocoloUploadForm({
   const docRef = useRef<PdfDoc | null>(null);
   // DFDs em que o OCR da assinatura achatada já foi tentado — não repete (o OCR é caro).
   const ocrTentadoRef = useRef<Set<number>>(new Set());
+  // Leitura por OCR EM CURSO por DFD (a leitura + a mescla no cache): quem precisa da assinatura do arquivo (abrir o DFD,
+  // a escolha gravado × novo em massa) espera a MESMA leitura — nunca segue sem ela.
+  const ocrEmCursoRef = useRef(new Map<number, Promise<void>>());
   const [status, setStatus] = useState<Status>("idle");
   const [leitura, setLeitura] = useState<{ pagina: number; total: number } | null>(null); // leitura do PDF (índice)
   const [erro, setErro] = useState<string | null>(null);
@@ -213,8 +225,13 @@ export function ProtocoloUploadForm({
 
   // Índice leve + unidade por DFD.
   const [index, setIndex] = useState<ProtocoloIndex | null>(null);
+  // Espelho do índice p/ as leituras em segundo plano (closure de quando o PDF foi lido: a herança do gravado).
+  const indexRef = useRef(index);
+  indexRef.current = index;
   const [dfdRepIds, setDfdRepIds] = useState<(number | null)[]>([]);
   const [autoRepIds, setAutoRepIds] = useState<(number | null)[]>([]);
+  // DFDs cuja UNIDADE o usuário escolheu (no DFD ou em massa) — a do cadastro (DFD que sobrescreve) não passa por cima.
+  const repEscolhidaRef = useRef(new Set<number>());
 
   // Cache de parse/edição por DFD (idx) + estados.
   const [parsed, setParsed] = useState<Map<number, DfdParseado>>(new Map());
@@ -282,12 +299,20 @@ export function ProtocoloUploadForm({
   // do arquivo (a base estável das escolhas — o `parsed` é o DFD de TRABALHO, com as escolhas/edições).
   const [gravadosSrv, setGravadosSrv] = useState<Map<string, DfdDetalhe>>(new Map());
   const gravadoPedidoRef = useRef(new Map<string, Promise<DfdDetalhe | null>>()); // leitura do gravado por nº (não repete)
+  // Os gravados JÁ lidos, na hora (as leituras e o OCR em curso — closures antigas — herdam deles).
+  const gravadosLidosRef = useRef(new Map<string, DfdDetalhe>());
+  // Carga dos gravados em curso (a protocolação espera: a herança do gravado vale antes de gravar).
+  const [carregandoGravados, setCarregandoGravados] = useState(false);
+  // Espelho da consulta dos já cadastrados (a carga dos gravados roda na closure de quando a consulta chegou).
+  const existentesRef = useRef<Map<string, ExistenteImport> | null>(null);
   const arquivosRef = useRef(new Map<number, DfdParseado>());
   // REENVIO: DFDs do PDF que ESTE processo já teve e foram SOBRESCRITOS por outro protocolo (o rastro) —
   // mantidos lá por padrão (não puxa de volta a versão antiga); "Restaurar" traz para cá.
   const [fantasmas, setFantasmas] = useState<Set<number>>(new Set());
   const gravadosPorNumero = useMemo(() => new Map((reenvio?.dfds ?? []).map((d) => [chaveDfd(d.numero), d])), [reenvio]);
   const gravadoDe = (numero: string | null | undefined): DfdDetalhe | null => (reenvio ? (gravadosPorNumero.get(chaveDfd(numero)) ?? null) : null);
+  /** O gravado de mesmo nº JÁ disponível: o do reenvio ou o já lido na importação (a base da herança). */
+  const gravadoLido = (numero: string | null | undefined): DfdDetalhe | null => gravadoDe(numero) ?? gravadosLidosRef.current.get(chaveDfd(numero)) ?? null;
 
   // Montado? Uma leitura de PDF em curso quando o form DESMONTA (ex.: saiu da Mesa) descarta o documento em vez de
   // seguir analisando sozinha — o pdf.js e o worker do OCR nunca ficam presos.
@@ -315,6 +340,7 @@ export function ProtocoloUploadForm({
     docRef.current?.destroy();
     docRef.current = null;
     ocrTentadoRef.current.clear(); // novo protocolo → o OCR pode ser tentado de novo
+    ocrEmCursoRef.current = new Map();
     void encerrarOcr(); // libera o worker do OCR entre protocolos
   }
   function resetCache() {
@@ -336,6 +362,10 @@ export function ProtocoloUploadForm({
     setHerdados(new Map());
     setGravadosSrv(new Map());
     gravadoPedidoRef.current = new Map();
+    gravadosLidosRef.current = new Map();
+    setCarregandoGravados(false);
+    existentesRef.current = null;
+    repEscolhidaRef.current = new Set();
     setFantasmas(new Set());
     setErroExistentes(null);
     arquivosRef.current = new Map();
@@ -362,7 +392,7 @@ export function ProtocoloUploadForm({
     // Os itens marcam a ORIGEM (arquivo novo) — a escolha da sobrescrita os reencontra depois de editados.
     const { dfd: normal, auto } = normalizarSecoesDfd(raw, regras, anoRef);
     const dfd = marcarItensNovos(normal);
-    const g = gravadoDe(dfd.numero);
+    const g = gravadoLido(dfd.numero);
     if (!g) return { dfd, auto };
     const h = herdarTratamentos(dfd, g, anoRef, { assinaturas: !precisaOcr(dfd.assinaturas) });
     anotarHerdados(i, h.herdados);
@@ -377,10 +407,10 @@ export function ProtocoloUploadForm({
     const arq = arquivosRef.current.get(i);
     if (arq) arquivosRef.current.set(i, comOcr(arq, ocr).dfd);
   }
-  /** REENVIO: herda do gravado a validação da assinatura pela equipe — DEPOIS do OCR (a assinatura
-   * achatada só existe após a leitura). Puro: devolve o DFD + o que foi herdado. */
+  /** Herda do gravado a validação da assinatura pela equipe — DEPOIS do OCR (a assinatura achatada só existe após a
+   * leitura). Puro: devolve o DFD + o que foi herdado. */
   function herdarAssinaturas(d: DfdParseado): { dfd: DfdParseado; herdados: string[] } {
-    const g = gravadoDe(d.numero);
+    const g = gravadoLido(d.numero);
     return g ? herdarTratamentos(d, g, null, { tratamentos: false }) : { dfd: d, herdados: [] };
   }
   /** Assinaturas lidas por OCR (ou nenhuma) + a validação herdada do gravado — o que vai para o cache. */
@@ -499,7 +529,7 @@ export function ProtocoloUploadForm({
       setLauncher(false);
       setAberto(true);
       setExistentesSrv(null);
-      void carregarExistentes(idx, doc, autos); // quem SOBRESCREVE quem (no servidor, em qualquer unidade)
+      void carregarExistentes(idx, doc); // quem SOBRESCREVE quem (no servidor, em qualquer unidade)
       void analisarTodos(idx, doc); // parse + estados em background (até o teto)
     } catch (e) {
       if (!vivoRef.current) return; // leitura cancelada ao desmontar — nada a mostrar (o documento já foi liberado)
@@ -516,19 +546,22 @@ export function ProtocoloUploadForm({
    * POSTERIOR sobrescreveu (o rastro) ficam MANTIDOS lá por padrão — reenviar não puxa de volta a versão
    * antiga ("Restaurar" traz, se for o caso).
    */
-  async function carregarExistentes(idx0: ProtocoloIndex, doc: PdfDoc, previstos: (number | null)[]) {
+  async function carregarExistentes(idx0: ProtocoloIndex, doc: PdfDoc) {
     try {
       const m = await buscarExistentes(idx0.dfds.map((d) => d.numero));
       if (docRef.current !== doc) return;
+      existentesRef.current = m;
       setExistentesSrv(m);
       // O DFD que SOBRESCREVE um já cadastrado fica na UNIDADE dele (cadastro/tratamento da equipe — como no
-      // reenvio e na sobrescrita pelo banner), salvo se o usuário já escolheu outra.
+      // reenvio e na sobrescrita pelo banner), salvo se o usuário já escolheu outra (a prevista pela assinatura cede).
       setDfdRepIds((arr) =>
         arr.map((x, i) => {
           const e = m.get(chaveDfd(idx0.dfds[i]?.numero));
-          return e?.acessivel && e.reparticaoId != null && (x == null || x === previstos[i]) ? e.reparticaoId : x;
+          return e?.acessivel && e.reparticaoId != null && !repEscolhidaRef.current.has(i) ? e.reparticaoId : x;
         }),
       );
+      // IMPORTAÇÃO: os gravados que os DFDs da análise sobrescrevem vêm já (4 por vez) — a herança e a escolha ficam prontas.
+      if (!reenvio) void carregarGravados(idx0.dfds.slice(0, CAP_ANALISE).map((d) => d.numero));
       const rastro = new Set((reenvio?.sobrescritos ?? []).map((s) => chaveDfd(s.numero)));
       if (!reenvio || rastro.size === 0) return;
       const f = new Set<number>();
@@ -611,24 +644,42 @@ export function ProtocoloUploadForm({
       // Já lido (ou em leitura) por outro caminho (abrir o DFD / restaurar): quem lê tira da espera.
       if (ocrTentadoRef.current.has(i)) continue;
       setAnalise({ fase: "ocr", feito: k, total: paraOcr.length, atual: i });
-      ocrTentadoRef.current.add(i);
-      const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
+      await emCursoOcr(
+        i,
+        (async () => {
+          const ocr = await ocrAssinaturasEmPaginas(doc, idx0.dfds[i].pages);
+          if (docRef.current !== doc) return;
+          // Lidas (ou não) — herda agora a validação da equipe do gravado (reenvio, ou o já lido na importação).
+          const local = comOcr(dfd, ocr);
+          anotarHerdados(i, local.herdados);
+          if (local.dfd.assinaturas !== dfd.assinaturas) {
+            lerOcrNoArquivo(i, ocr);
+            setParsed((m) => {
+              const cur = m.get(i);
+              return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
+            });
+            // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
+            refinarUnidade(i, local.dfd);
+          }
+          tirarDaEsperaOcr(i);
+        })(),
+      );
       if (docRef.current !== doc) return;
-      // Lidas (ou não) — no REENVIO herda agora a validação da equipe do gravado.
-      const local = comOcr(dfd, ocr);
-      anotarHerdados(i, local.herdados);
-      if (local.dfd.assinaturas !== dfd.assinaturas) {
-        lerOcrNoArquivo(i, ocr);
-        setParsed((m) => {
-          const cur = m.get(i);
-          return cur ? new Map(m).set(i, comOcr(cur, ocr).dfd) : m;
-        });
-        // As assinaturas não são editadas nesse meio-tempo → a cópia local basta p/ prever a unidade.
-        refinarUnidade(i, local.dfd);
-      }
-      tirarDaEsperaOcr(i);
     }
     if (docRef.current === doc) setAnalise(null);
+  }
+
+  /** Registra a leitura por OCR de um DFD (a leitura + a mescla) enquanto está EM CURSO — quem precisa da assinatura do
+   * arquivo (a escolha gravado × novo em massa) espera a MESMA. */
+  function emCursoOcr(i: number, leitura: Promise<void>): Promise<void> {
+    ocrTentadoRef.current.add(i);
+    const mapa = ocrEmCursoRef.current;
+    mapa.set(i, leitura);
+    const fim = () => {
+      if (mapa.get(i) === leitura) mapa.delete(i);
+    };
+    void leitura.then(fim, fim);
+    return leitura;
   }
 
   /** O DFD deixa de esperar a leitura da assinatura por OCR. */
@@ -673,20 +724,34 @@ export function ProtocoloUploadForm({
         id: g.id,
         numero: g.numero,
         protocoloNumero: reenvio?.protocolo.numero ?? null,
+        protocoloIdExterno: reenvio?.protocolo.idExterno ?? null,
         valorTotal: g.valorTotal,
         totalItens: g.totalItens,
         acessivel: e?.acessivel !== false,
       };
     if (!e) return null;
     return e.acessivel
-      ? { id: e.id, numero: e.numero, protocoloNumero: e.protocoloNumero, valorTotal: e.valorTotal, totalItens: e.totalItens, acessivel: true }
+      ? {
+          id: e.id,
+          numero: e.numero,
+          protocoloNumero: e.protocoloNumero,
+          protocoloIdExterno: e.protocoloIdExterno,
+          valorTotal: e.valorTotal,
+          totalItens: e.totalItens,
+          acessivel: true,
+        }
       : { numero: e.numero, protocoloNumero: null, acessivel: false };
   };
+  /** O DFD já cadastrado está NESTE processo: no protocolo de mesmo nº — ou de mesmo Id (o mesmo processo renumerado: ao
+   * protocolar, o servidor renumera aquele registro, com os DFDs dele). */
+  const noMesmoProcesso = (ex: DfdExistente): boolean =>
+    (!!ex.protocoloNumero && ex.protocoloNumero.trim() === numero.trim()) ||
+    (!!extra.idExterno?.trim() && ex.protocoloIdExterno?.trim() === extra.idExterno.trim());
   const classificar = (dfdNumero: string): Situacao => {
     const ex = existenteDe(dfdNumero);
     if (!ex) return "novo";
     if (!ex.acessivel) return "semAcesso";
-    if (ex.protocoloNumero && ex.protocoloNumero.trim() !== numero.trim()) return "move";
+    if (ex.protocoloNumero && !noMesmoProcesso(ex)) return "move";
     return "substitui";
   };
   /** O DFD GRAVADO (completo) que este DFD do PDF sobrescreve — a base da ESCOLHA POR DADO: no reenvio, o do
@@ -700,12 +765,12 @@ export function ProtocoloUploadForm({
     if (n == null || classificar(n) !== "semAcesso") return false;
     return !(gravadoDe(n) && !editados.has(idx) && comparacaoDe(idx)?.situacao === "igual");
   };
-  /** O DFD JÁ cadastrado é deste MESMO processo (o do reenvio, ou de um protocolo com este nº)? — o que
+  /** O DFD JÁ cadastrado é deste MESMO processo (o do reenvio, ou de um protocolo com este nº ou este Id)? — o que
    * "Manter o existente" mantém NO processo (entra na somatória/contagem da capa). */
   const existenteNoProcesso = (dfdNumero: string): boolean => {
     if (gravadoDe(dfdNumero)) return true;
     const ex = existenteDe(dfdNumero);
-    return !!ex?.protocoloNumero && ex.protocoloNumero.trim() === numero.trim();
+    return !!ex && noMesmoProcesso(ex);
   };
 
   // Categoria do protocolo (classifica o assunto livre) → aplica as exceções por categoria.
@@ -1020,7 +1085,7 @@ export function ProtocoloUploadForm({
       const c = comparacaoDe(i);
       if (!g) contagemReenvio.novos++;
       else if (!c) contagemReenvio.analisando++;
-      else if (c.situacao === "igual") contagemReenvio.iguais++;
+      else if (c.situacao === "igual" && !editados.has(i)) contagemReenvio.iguais++; // o editado é regravado
       else contagemReenvio.alterados++;
     }
   }
@@ -1072,7 +1137,7 @@ export function ProtocoloUploadForm({
   const bloqueadoPorRegra =
     repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || dupBloqueia || !gateTrava.ok || protocolarDesligado;
   // Sem saber quem SOBRESCREVE quem (consulta dos já cadastrados), não protocola às cegas.
-  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null);
+  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null || carregandoGravados);
   // DFDs cujos itens ainda estão sendo conferidos no catálogo (ponto bloqueante) — a protocolação espera; os que a
   // rede não deixou conferir seguem (o servidor confere ao gravar) e o rodapé avisa.
   const catPendentes = ativos.filter((i) => {
@@ -1126,14 +1191,15 @@ export function ProtocoloUploadForm({
       ]
     : [];
 
-  /** O DFD GRAVADO completo de um nº já cadastrado (acessível) — a base da ESCOLHA POR DADO, carregada sob demanda (a do
-   * reenvio já veio com o protocolo). Uma leitura por nº: quem pede de novo espera a MESMA; falhou ⇒ `null` e a próxima
-   * tentativa lê de novo. Não é caso de sobrescrita (nº novo ou sem acesso) ⇒ `null`. */
+  /** O DFD GRAVADO completo de um nº já cadastrado (acessível) — a base da ESCOLHA POR DADO e da HERANÇA: no reenvio, o do
+   * protocolo; na importação, lido do servidor (em segundo plano logo após a consulta dos já cadastrados — `carregarGravados`
+   * — e ao abrir o DFD, se ainda não veio). Uma leitura por nº: quem pede de novo espera a MESMA; falhou ⇒ `null` e a
+   * próxima tentativa lê de novo. Não é caso de sobrescrita (nº novo ou sem acesso) ⇒ `null`. */
   function carregarGravado(numero: string): Promise<DfdDetalhe | null> {
     const g = gravadoDe(numero);
     if (g) return Promise.resolve(g);
     const chave = chaveDfd(numero);
-    const ex = existentesSrv?.get(chave);
+    const ex = existentesRef.current?.get(chave);
     if (!ex?.acessivel) return Promise.resolve(null);
     const pedido = gravadoPedidoRef.current.get(chave);
     if (pedido) return pedido;
@@ -1145,7 +1211,11 @@ export function ProtocoloUploadForm({
         const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
         if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? `HTTP ${r.status}`);
         const lido = j.dfd;
-        if (docRef.current === doc) setGravadosSrv((m) => new Map(m).set(chave, lido));
+        if (docRef.current === doc) {
+          gravadosLidosRef.current.set(chave, lido);
+          herdarDoGravado(chave, lido);
+          setGravadosSrv((m) => new Map(m).set(chave, lido));
+        }
         return lido;
       } catch {
         if (mapa.get(chave) === leitura) mapa.delete(chave); // tenta de novo depois
@@ -1156,8 +1226,52 @@ export function ProtocoloUploadForm({
     mapa.set(chave, leitura);
     return leitura;
   }
+  /** IMPORTAÇÃO: o GRAVADO chegou — herda dele o que o arquivo NÃO traz, como no reenvio e no avulso (`herdarTratamentos`:
+   * tipo, seções obrigatórias, referências da renovação e a validação da assinatura pela equipe; nunca sobre um valor válido
+   * do arquivo), na BASE da escolha (o arquivo) e no DFD de trabalho. A validação da assinatura espera a leitura por OCR
+   * quando ela ainda falta (a mescla da leitura herda — `herdarAssinaturas`); o DFD ainda não lido herda na leitura. */
+  function herdarDoGravado(chave: string, g: DfdDetalhe) {
+    const idx0 = indexRef.current;
+    (idx0?.dfds ?? []).forEach((di, i) => {
+      const arq = chaveDfd(di.numero) === chave ? arquivosRef.current.get(i) : undefined;
+      if (!arq) return;
+      const partes = { assinaturas: !precisaOcr(arq.assinaturas) || (ocrTentadoRef.current.has(i) && !ocrEmCursoRef.current.has(i)) };
+      const h = herdarTratamentos(arq, g, idx0?.protocolo.anoPca, partes);
+      if (h.herdados.length === 0) return;
+      arquivosRef.current.set(i, h.dfd);
+      setParsed((m) => {
+        const cur = m.get(i);
+        return cur ? new Map(m).set(i, herdarTratamentos(cur, g, idx0?.protocolo.anoPca, partes).dfd) : m;
+      });
+      anotarHerdados(i, h.herdados);
+    });
+  }
+  /** IMPORTAÇÃO: os GRAVADOS que os DFDs da análise sobrescrevem, em segundo plano (4 por vez) — a herança e a escolha
+   * ficam prontas antes de abrir/protocolar (a protocolação espera: `carregandoGravados`). */
+  async function carregarGravados(numeros: string[]) {
+    const doc = docRef.current;
+    const alvos = [...new Set(numeros.map(chaveDfd))].filter((k) => existentesRef.current?.get(k)?.acessivel);
+    if (alvos.length === 0) return;
+    setCarregandoGravados(true);
+    const falhas: string[] = [];
+    let prox = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, alvos.length) }, async () => {
+        while (prox < alvos.length) {
+          const k = alvos[prox++];
+          if (!(await carregarGravado(k))) falhas.push(k);
+        }
+      }),
+    );
+    if (docRef.current !== doc) return;
+    setCarregandoGravados(false);
+    if (falhas.length > 0)
+      setErro(
+        `Não foi possível carregar ${falhas.length === 1 ? "o DFD já cadastrado" : `${falhas.length} DFDs já cadastrados`} (${listaCurta(falhas, 10)}) — abra o DFD para tentar de novo; sem ele, ao protocolar vale o novo.`,
+      );
+  }
   // SOBRESCRITA com ESCOLHA POR DADO: ao abrir um DFD que substitui/move um já cadastrado (acessível), carrega o
-  // GRAVADO completo (sob demanda — só o aberto; no reenvio ele já veio com o protocolo).
+  // GRAVADO completo se ainda não veio (no reenvio ele já veio com o protocolo).
   // biome-ignore lint/correctness/useExhaustiveDependencies: reage ao DFD aberto e à consulta dos já cadastrados (o resto é lido na hora).
   useEffect(() => {
     if (numeroAberto == null || existentesSrv == null || gravadoDe(numeroAberto) || !existentesSrv.get(chaveDfd(numeroAberto))?.acessivel) return;
@@ -1191,6 +1305,9 @@ export function ProtocoloUploadForm({
   // Nº de diferenças do DFD aberto (o que muda ao sobrescrever) — o botão "Diferenças (N)".
   const difAberto = sob ? sob.final.total : reenvio && gravadoDe(numeroAberto) ? (comparacaoDe(abertoIdx)?.total ?? 0) : null;
   const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && sobrescreve(abertoIdx);
+  // SÓ LEITURA na análise: gravando, fora do envio (excluído/descartado/mantido o existente) ou de unidade SEM ACESSO (o
+  // servidor recusaria regravá-lo) — editar aí não teria efeito ou viraria erro.
+  const soLeituraAberto = importando || descartados.has(abertoIdx) || (numeroAberto != null && classificar(numeroAberto) === "semAcesso");
 
   // ---- DUPLICADOS do DFD aberto: a comparação lado a lado (aberto × cada duplicado, a régua do reenvio) e a
   // ESCOLHA de qual fica. O duplicado ainda não lido (além do teto da análise) é lido ao abrir a comparação.
@@ -1267,6 +1384,7 @@ export function ProtocoloUploadForm({
     ) : null;
 
   function setRepDfd(idx: number, id: number | null) {
+    repEscolhidaRef.current.add(idx);
     setDfdRepIds((arr) => arr.map((x, i) => (i === idx ? id : x)));
     setEditados((s) => new Set(s).add(idx));
   }
@@ -1314,24 +1432,28 @@ export function ProtocoloUploadForm({
     const doc = docRef.current;
     const di = index?.dfds[idx];
     if (!doc || !di || !d || !precisaOcr(d.assinaturas) || ocrTentadoRef.current.has(idx)) return;
-    ocrTentadoRef.current.add(idx);
     setOcrPendente((s) => new Set(s).add(idx)); // lendo: "pendente" — a protocolação espera
-    try {
-      const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
-      if (docRef.current !== doc) return; // outro PDF foi aberto no meio da leitura — o resultado não é dele
-      const local = comOcr(d, ocr);
-      anotarHerdados(idx, local.herdados);
-      if (local.dfd.assinaturas !== d.assinaturas) {
-        lerOcrNoArquivo(idx, ocr);
-        setParsed((m) => {
-          const cur = m.get(idx);
-          return cur ? new Map(m).set(idx, comOcr(cur, ocr).dfd) : m;
-        });
-        refinarUnidade(idx, local.dfd);
-      }
-    } finally {
-      if (docRef.current === doc) tirarDaEsperaOcr(idx); // o pendente de OUTRO documento não é deste
-    }
+    return emCursoOcr(
+      idx,
+      (async () => {
+        try {
+          const ocr = await ocrAssinaturasEmPaginas(doc, di.pages);
+          if (docRef.current !== doc) return; // outro PDF foi aberto no meio da leitura — o resultado não é dele
+          const local = comOcr(d, ocr);
+          anotarHerdados(idx, local.herdados);
+          if (local.dfd.assinaturas !== d.assinaturas) {
+            lerOcrNoArquivo(idx, ocr);
+            setParsed((m) => {
+              const cur = m.get(idx);
+              return cur ? new Map(m).set(idx, comOcr(cur, ocr).dfd) : m;
+            });
+            refinarUnidade(idx, local.dfd);
+          }
+        } finally {
+          if (docRef.current === doc) tirarDaEsperaOcr(idx); // o pendente de OUTRO documento não é deste
+        }
+      })(),
+    );
   }
 
   async function abrir(idx: number) {
@@ -1382,6 +1504,7 @@ export function ProtocoloUploadForm({
     const falhas: string[] = [];
     try {
       if (acao.campo === "reparticao") {
+        for (const i of idxs) repEscolhidaRef.current.add(i);
         setDfdRepIds((arr) => arr.map((x, i) => (sel.has(i) ? acao.reparticaoId : x)));
         aplicados.push(...idxs);
       } else {
@@ -1437,6 +1560,7 @@ export function ProtocoloUploadForm({
       for (const i of alvos) {
         const d = await garantirParse(i).catch(() => null);
         if (d) await mesclarOcrSePreciso(i, d);
+        await ocrEmCursoRef.current.get(i); // a leitura por OCR em curso (de outro caminho) termina antes da escolha
         if (docRef.current !== doc) return;
         const g = gravados.get(i);
         const arq = arquivosRef.current.get(i);
@@ -2012,6 +2136,7 @@ export function ProtocoloUploadForm({
                     ) : (
                       <DfdConferir
                         dfd={dfdAberto}
+                        readOnly={soLeituraAberto}
                         reparticoes={reparticoes}
                         reparticaoAtivaId={reparticaoAtivaId}
                         repId={dfdRepIds[abertoIdx] ?? null}
@@ -2054,7 +2179,7 @@ export function ProtocoloUploadForm({
                     onIrPara={irParaMensagem}
                     conformidade={conformidade}
                     regras={regras}
-                    editavel
+                    editavel={!soLeituraAberto}
                     onEditarItem={(i, patch) => editarAberto((d) => editarItemDfd(d, i, patch))}
                     onRemoverItem={(i) => {
                       setPainel(null);

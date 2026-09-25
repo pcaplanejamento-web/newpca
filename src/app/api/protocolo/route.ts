@@ -71,11 +71,12 @@ export async function POST(req: Request) {
   const travas = await travaDeProtocolos([gravado?.id, mesmoNumero?.id, mesmoId?.id]);
   const trava = [...travas.values()][0];
   if (trava) return respostaTravado(trava);
-  // O de MESMO Id e nº DIFERENTE seria EXCLUÍDO para dar lugar ao novo — e protocolo em um PCA não é excluído (enviado:
-  // devolva à Mesa principal antes; incorporado: a trava acima).
-  if (mesmoId && mesmoId.numero !== protocolo.numero) {
-    const noPca = (await pcaDeProtocolos([mesmoId.id])).get(mesmoId.id);
-    if (noPca) return erro(`O protocolo ${mesmoId.numero} (mesmo Id) seria substituído, mas está no ${noPca.nome} — devolva-o à Mesa principal antes de importar de novo.`, 409);
+  // O de MESMO Id e nº DIFERENTE é o mesmo processo RENUMERADO (ou, com outro protocolo já no nº novo, sai para ele) — um
+  // protocolo em um PCA não muda assim (enviado: devolva à Mesa principal antes; incorporado: a trava acima).
+  const renumerado = mesmoId && mesmoId.numero !== protocolo.numero ? mesmoId : null;
+  if (renumerado) {
+    const noPca = (await pcaDeProtocolos([renumerado.id])).get(renumerado.id);
+    if (noPca) return erro(`O protocolo ${renumerado.numero} tem o mesmo Id e está no ${noPca.nome} — devolva-o à Mesa principal antes de importar de novo.`, 409);
   }
 
   // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação), se ainda for do grupo — só preenche um protocolo ainda sem
@@ -88,7 +89,9 @@ export async function POST(req: Request) {
     acao: reenvio ? "importar" : "protocolar",
     entidade: "protocolo",
     entidadeId: r.id,
-    resumo: reenvio ? `Protocolo ${r.numero} REENVIADO (sobrescrito): ${reenvio.resumo}`.slice(0, 500) : `Protocolo ${r.numero} protocolado`,
+    resumo: reenvio
+      ? `Protocolo ${r.numero} REENVIADO (sobrescrito): ${reenvio.resumo}`.slice(0, 500)
+      : `Protocolo ${r.numero} protocolado${renumerado ? ` (mesmo Id do ${renumerado.numero} — renumerado)` : ""}`,
     depois: reenvio ? null : { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
     protocoloId: r.id,
     origem: reenvio ? "reenvio" : "protocolacao",

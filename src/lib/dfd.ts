@@ -805,6 +805,8 @@ export type DfdExistente = {
   reparticaoId: number | null;
   protocoloId: number | null;
   protocoloNumero: string | null;
+  /** Id (capa) do protocolo — o de MESMO Id é o mesmo processo, mesmo renumerado. */
+  protocoloIdExterno: string | null;
   valorTotal: number | null;
   totalItens: number | null;
 };
@@ -825,6 +827,7 @@ export async function dfdsPorNumeros(numeros: string[]): Promise<DfdExistente[]>
           reparticaoId: dfds.reparticaoId,
           protocoloId: dfds.protocoloId,
           protocoloNumero: dfdProtocolos.numero,
+          protocoloIdExterno: dfdProtocolos.idExterno,
           valorTotal: dfds.valorTotal,
           totalItens: dfds.totalItens,
         })

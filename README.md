@@ -34,8 +34,9 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   desfaz); protocolo que está em um PCA — e os DFDs dele — não é excluído (o enviado volta pela "Devolver à Mesa"). O responsável é escolhido entre as
   pessoas do grupo e aparece com **foto + apelido** (apelido definido no Perfil). Um DFD importado de novo
   **sobrescreve** o cadastrado com **escolha dado a dado** (manter o gravado × usar o novo — botão "Sobrescrever DFD"
-  no banner do DFD; ao sobrescrever um protocolo, a seleção escolhe **"Gravado × novo"** para vários DFDs de uma vez),
-  registrado no histórico; o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link
+  no banner do DFD; ao sobrescrever um protocolo, a seleção escolhe **"Gravado × novo"** para vários DFDs de uma vez; o
+  que o arquivo não traz é herdado do gravado), registrado no histórico; o protocolo de **mesmo Id** com outro número é o
+  mesmo processo, renumerado (nenhum DFD fica sem protocolo); o protocolo de onde um DFD saiu guarda o **rastro cinza** com o link
   para o protocolo onde ele está agora.
 - **Padronização (Catálogo)**: cadastro de **Unidades de medida** (sigla, nome, sinônimos) com a **comparação de todas as
   unidades dos itens** (DFDs e catálogo) — cadastrada, sugestão ou não cadastrada; escolher a unidade na linha e confirmar

@@ -233,8 +233,11 @@ export const LOGICAS: LogicaRef[] = [
       "Na protocolação, o DFD que substitui/move um cadastrado fica na unidade dele (salvo escolha); a escolha espera a leitura da assinatura por OCR.",
       "Enquanto a sobrescrita está em andamento, o banner do DFD fica só-leitura; fechar a conferência com escolhas feitas pede confirmação.",
       "EM MASSA: na seleção da análise do protocolo (reenvio ou importação com DFDs já gravados), o campo 'Gravado × novo' aplica 'Manter os gravados' ou 'Usar os novos' em todas as diferenças dos DFDs selecionados de uma vez (marcar todos + Aplicar). Espera a análise e a leitura das assinaturas; no reenvio, o que ficou igual ao gravado não é regravado.",
+      "Na importação do protocolo, os DFDs gravados vêm em segundo plano e o que o arquivo não traz é HERDADO deles (tipo, seções obrigatórias, referências da renovação — só no DFD-R — e a validação da assinatura pela equipe), como no reenvio e no avulso.",
+      "A mesma seção com títulos diferentes ('PRIORIDADE' × 'PRIORIDADE DA COMPRA OU DA CONTRATAÇÃO') é UMA escolha; itens renumerados casam pelo código; com os itens de um lado inteiro vale o valor total desse lado.",
+      "Protocolo de MESMO Id e número diferente é o mesmo processo renumerado: o registro é renumerado (DFDs, gestão e histórico seguem) — nenhum DFD fica sem protocolo.",
     ],
-    fonte: "sobrescrita-dfd (escolherTudo) / useSobrescrita / BarraEdicaoMassa.versao / POST /api/dfd",
+    fonte: "sobrescrita-dfd (escolherTudo) / comparar-protocolo (chaveSecao, parearItens, herdarTratamentos) / useSobrescrita / BarraEdicaoMassa.versao / protocolo-sql (comandosMesmoId) / POST /api/dfd",
   },
   {
     id: "proto-rastro",
@@ -504,7 +507,7 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Um protocolo ENVIADO à Mesa de um PCA ou INCORPORADO a ele não pode ser excluído: a Mesa do PCA não tem a lixeira e o servidor recusa. O enviado sai do PCA por 'Devolver à Mesa' (e então pode ser excluído na Mesa principal); o incorporado é permanente.",
     detalhes: [
-      "A re-importação que substituiria (apagaria) um protocolo de mesmo Id que está em um PCA também é recusada.",
+      "A re-importação de um protocolo de mesmo Id (número diferente) que está em um PCA também é recusada.",
       "Os DFDs de um protocolo em um PCA também não são excluídos (no reenvio, os gravados fora do envio ficam mantidos) — só o desfazer automático da importação que falhou no meio remove a gravação NOVA do próprio usuário que ficou pela metade (menos itens que o declarado).",
       "Mover o DFD para outro protocolo ('Vincular a protocolo') segue permitido no protocolo enviado — como 'Devolver à Mesa', é um caminho de saída do PCA.",
     ],
