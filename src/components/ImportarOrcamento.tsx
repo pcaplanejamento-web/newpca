@@ -9,6 +9,7 @@ import type { OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
 import { TextField } from "./Field";
@@ -67,6 +68,7 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const ultimo = useRef(iniciar);
   useEffect(() => {
@@ -104,7 +106,15 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
 
   async function importar() {
     if (!preview || !anoValido || !anoNum) return;
-    if (alvo && !confirm(`Substituir os ${num(alvo.totalItens)} lançamentos de "${alvo.nome}" pelos ${num(preview.itens.length)} da planilha nova?`)) return;
+    if (
+      alvo &&
+      !(await confirmar({
+        titulo: "Substituir a planilha?",
+        texto: `Os ${num(alvo.totalItens)} lançamentos de "${alvo.nome}" dão lugar aos ${num(preview.itens.length)} da planilha nova.`,
+        confirmar: "Substituir",
+      }))
+    )
+      return;
     setEnviando(true);
     setProgresso(0);
     setAviso(null);
@@ -223,6 +233,7 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
         )}
       </Modal>
 
+      {confirmacao}
       {aviso && (
         <AvisoFlutuante
           kind={aviso.kind}

@@ -16,6 +16,7 @@ import {
 import { FerramentasAba } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import { IconPlus, IconTrash } from "./icons";
@@ -36,6 +37,7 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
   const [filtros, setFiltros] = useState<FiltrosVisao>({});
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const abrir = (v: VisaoOrcamento | "nova") => {
     setEditando(v);
@@ -76,7 +78,13 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
   }
 
   async function excluir(v: VisaoOrcamento) {
-    if (!confirm(`Excluir a visão "${v.nome}"? Os PCAs que a usam passam a considerar o orçamento inteiro.`)) return;
+    const ok = await confirmar({
+      titulo: `Excluir a visão "${v.nome}"?`,
+      texto: "Os PCAs que a usam passam a considerar o orçamento inteiro.",
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (!ok) return;
     const r = await fetch(`/api/orcamento/visoes/${v.id}`, { method: "DELETE" });
     if (!r.ok) setAviso({ kind: "danger", texto: "Não foi possível excluir a visão." });
     if (editando !== "nova" && editando?.id === v.id) setEditando(null);
@@ -203,6 +211,7 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
           </section>
         )}
       </div>
+      {confirmacao}
       {aviso && (
         <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 4000 : undefined}>
           {aviso.texto}

@@ -29,7 +29,8 @@ import {
 import { LINHAS_TABELA } from "@/lib/theme";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { useLinhasTabela } from "./ConfigTabelas";
-import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip } from "./icons";
+import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
+import { duracaoMotionMs } from "./Modal";
 import { Pager } from "./Pager";
 
 export type EixoTabelaCruzada = { chave: string; rotulo: string; total: number };
@@ -40,10 +41,11 @@ const zerado = (v: number) => Math.abs(v) < 0.005;
 
 /** Larguras PADRÃO por tipo de coluna (tokens locais, px) — o usuário ajusta cada coluna pela borda do cabeçalho. */
 const LARGURAS =
-  "[--cz-rot:152px] [--cz-ext:88px] [--cz-tot:120px] [--cz-col:120px] lg:[--cz-rot:280px] lg:[--cz-ext:112px] lg:[--cz-tot:144px] lg:[--cz-col:136px]";
+  "[--cz-rot:152px] [--cz-ext:120px] [--cz-tot:120px] [--cz-col:120px] lg:[--cz-rot:280px] lg:[--cz-ext:112px] lg:[--cz-tot:144px] lg:[--cz-col:136px]";
 const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWidth: w });
-/** Toda célula: altura dos controles e o texto CENTRADO na altura. */
-const CEL = "h-11 border-b border-border/60 px-3 align-middle lg:h-[var(--h-control-sm)]";
+/** Toda célula: altura dos controles e o texto CENTRADO na altura; o recuo à esquerda é o da alça de arrasto do cabeçalho
+ * (o texto do cabeçalho e o das células ficam alinhados, dentro e fora da edição). */
+const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle lg:h-[var(--h-control-sm)]";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
 /** Uma coluna da tabela — as ESTRUTURAIS (rótulo das linhas, extra, total) e as de VALORES são tratadas igual. */
@@ -144,7 +146,7 @@ export type EdicaoTabelaCruzada = {
   onOrdem: (fixadas: string[], livres: string[]) => void;
 };
 
-/** Ação DIRETA no cabeçalho da coluna (congelar/ocultar) — 44px no toque, discreta no desktop, accent quando ligada. */
+/** Ação DIRETA no cabeçalho da coluna (congelar/ocultar/ordenar) — alinhadas no topo, discretas, accent quando ligadas. */
 function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotulo: string; ligada: boolean; icone: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <button
@@ -154,7 +156,7 @@ function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotu
       title={rotulo}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
+      className={`grid h-9 w-7 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
         ligada ? "bg-accent/10 text-accent" : "text-faint hover:bg-surface hover:text-text-2"
       }`}
     >
@@ -164,7 +166,7 @@ function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotu
 }
 
 /** O arrasto em curso — só o que muda a TABELA (o destino); a posição da coluna presa ao cursor anda direto no DOM. */
-type Arrasto = { chave: string; x: number; y: number; dx: number; dy: number; largura: number; destino: number };
+type Arrasto = { chave: string; x: number; y: number; dx: number; dy: number; largura: number; destino: number; pousando?: boolean };
 
 /**
  * TABELA CRUZADA (horizontal, estilo planilha) — linhas × colunas de valores, com a coluna TOTAL e a linha TOTAL (fixa no
@@ -198,6 +200,7 @@ export function TabelaCruzada({
   edicao,
   vazio,
   resumo,
+  acoesRodape,
 }: {
   rotuloLinhas: string;
   /** Coluna extra (ex.: a sigla no sistema) — só quando informada. */
@@ -228,6 +231,8 @@ export function TabelaCruzada({
   edicao?: EdicaoTabelaCruzada;
   vazio: ReactNode;
   resumo?: ReactNode;
+  /** Ações no rodapé, à esquerda do seletor de linhas (ex.: as edições salvas e o lápis). */
+  acoesRodape?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const rolagem = useRef<HTMLDivElement>(null);
@@ -236,7 +241,6 @@ export function TabelaCruzada({
   const [limite, setLimite] = useState<number>(linhasAdm);
   const [page, setPage] = useState(1);
   const [arrasto, setArrasto] = useState<Arrasto | null>(null);
-  const arrastou = useRef(false);
   const fantasma = useRef<HTMLDivElement>(null);
   const encerrar = useRef<(() => void) | null>(null);
   // Desmontar no meio de um arrasto (ex.: sair da edição) desfaz tudo — ouvintes, cursor, seleção.
@@ -340,12 +344,13 @@ export function TabelaCruzada({
   // destino = antes da 1ª coluna (sem a arrastada) cujo meio fica à direita do cursor; perto das bordas, a tabela rola
   // sozinha. Da pressão até soltar, nenhuma seleção de texto. Um toque SEM arrastar ordena.
   const iniciarArrasto = (e: ReactPointerEvent<HTMLButtonElement>, chave: string) => {
-    if (!edicao || !e.isPrimary || e.button > 0) return;
+    if (!edicao || !e.isPrimary || e.button > 0 || arrasto?.pousando) return;
     const th = e.currentTarget.closest("th");
     const rolo = rolagem.current;
     if (!th || !rolo) return;
     if (e.pointerType === "mouse") e.preventDefault(); // sem seleção nem foco a partir daqui (o clique segue valendo)
     encerrar.current?.();
+    e.currentTarget.focus({ preventScroll: true });
     const caixa = th.getBoundingClientRect();
     const pega = { dx: e.clientX - caixa.left, dy: e.clientY - caixa.top, largura: caixa.width };
     const ponteiro = e.pointerId;
@@ -358,7 +363,6 @@ export function TabelaCruzada({
     let quadro = 0;
     let soltarCursor: (() => void) | null = null;
     const soltarSelecao = segurar("");
-    arrastou.current = false;
     const calcular = () => {
       const lista = [...(ref.current?.querySelectorAll<HTMLElement>("thead th[data-col]") ?? [])].filter((c) => c.dataset.col !== chave);
       const i = lista.findIndex((c) => {
@@ -386,7 +390,6 @@ export function TabelaCruzada({
       if (!ativo) {
         if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
         ativo = true;
-        arrastou.current = true;
         soltarCursor = segurar("grabbing");
         quadro = requestAnimationFrame(rolar);
       }
@@ -404,19 +407,21 @@ export function TabelaCruzada({
       soltarSelecao();
       encerrar.current = null;
     };
+    // SOLTAR: a coluna presa POUSA no lugar sombreado (voa até ele e volta ao tamanho) e só então a ordem é aplicada.
     const fim = (ev: PointerEvent) => {
       if (ev.pointerId !== ponteiro) return;
       limpar();
-      setArrasto(null);
-      // O clique que o navegador dispara logo após soltar não ordena; o próximo, sim.
-      if (ativo)
-        setTimeout(() => {
-          arrastou.current = false;
-        }, 0);
-      if (ativo && ev.type === "pointerup" && destino >= 0) {
-        const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, chave, destino);
+      if (!ativo || ev.type !== "pointerup" || destino < 0) return setArrasto(null);
+      const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, chave, destino);
+      const lugar = ref.current?.querySelector<HTMLElement>(`thead th[data-col="${CSS.escape(chave)}"]`)?.getBoundingClientRect();
+      const aplicar = () => {
+        setArrasto(null);
         edicao.onOrdem(r.fixadas, r.livres);
-      }
+      };
+      const ms = duracaoMotionMs();
+      if (!lugar || ms <= 0) return aplicar();
+      setArrasto({ chave, x: lugar.left + pega.dx, y: lugar.top + pega.dy, ...pega, destino, pousando: true });
+      window.setTimeout(aplicar, ms);
     };
     encerrar.current = limpar;
     window.addEventListener("pointermove", mover);
@@ -430,50 +435,63 @@ export function TabelaCruzada({
     else edicao.onOrdem([...f, k], l.filter((x) => x !== k));
   };
 
-  const cab = `sticky top-0 border-b border-border px-3 py-2 align-middle text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
-  const botaoCab = "flex w-full items-center gap-1 rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  const cab = `sticky top-0 border-b border-border py-2 pr-3 pl-5 align-middle text-[12px] font-medium leading-snug text-muted ${editando ? "bg-surface-2" : "bg-surface"}`;
   const direita = (c: Coluna) => c.tipo === "valor" || c.tipo === "total";
+  const mesmaOrdem = (por: OrdemCruzamento["por"]) =>
+    typeof por === "object" ? typeof ordem.por === "object" && ordem.por.coluna === por.coluna : ordem.por === por;
 
-  /** O cabeçalho de uma coluna: tocar ORDENA; na edição, as ações diretas (congelar/ocultar), o nome ARRASTÁVEL e a borda de
-   * largura. `p` = posição na ordem exibida. */
+  /**
+   * O cabeçalho de uma coluna. O NOME fica no MESMO lugar dentro e fora da edição (o recuo à esquerda é o da alça). Fora
+   * da edição, tocar no nome ORDENA. Na edição: a ALÇA de arrasto ocupa a faixa esquerda com a altura toda do cabeçalho
+   * (←/→ no teclado movem), as ações — congelar · ocultar · ordenar (▲ crescente / ▼ decrescente) — ficam ALINHADAS no
+   * topo, e a borda direita ajusta a largura. `p` = posição na ordem exibida.
+   */
   const cabecalho = (c: Coluna, p: number, congelada: boolean) => {
     const dir = direita(c);
     const por = porDe(c);
-    const nome = (
-      <button
-        type="button"
-        className={`${botaoCab} ${dir ? "justify-end" : ""} ${edicao ? "cursor-grab touch-none select-none" : ""}`}
-        title={edicao ? `${c.rotulo} — arraste para mover (Alt+←/→)` : c.rotulo}
-        onPointerDown={edicao ? (e) => iniciarArrasto(e, c.chave) : undefined}
-        onClick={() => {
-          if (arrastou.current) {
-            arrastou.current = false;
-            return;
-          }
-          onOrdenar(por);
-        }}
-        onKeyDown={
-          edicao
-            ? (e) => {
-                if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
-                e.preventDefault();
-                const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, c.chave, e.key === "ArrowLeft" ? Math.max(0, p - 1) : p + 1);
-                edicao.onOrdem(r.fixadas, r.livres);
-              }
-            : undefined
-        }
-      >
-        {edicao && <IconGrip className="h-3.5 w-3.5 shrink-0 text-faint" aria-hidden />}
+    const conteudo = (
+      <>
         {dir && seta(por)}
         <span className={dir ? "line-clamp-2 break-words text-right" : "truncate"}>{c.rotulo}</span>
         {!dir && seta(por)}
-      </button>
+      </>
     );
-    if (!edicao) return nome;
+    const linha = `flex w-full items-center gap-1 ${dir ? "justify-end" : ""}`;
+    if (!edicao)
+      return (
+        <button
+          type="button"
+          className={`${linha} rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40`}
+          title={c.rotulo}
+          onClick={() => onOrdenar(por)}
+        >
+          {conteudo}
+        </button>
+      );
     const oculta = fora.has(c.chave);
+    const ordenada = mesmaOrdem(por);
+    const Seta = !ordenada ? IconSort : ordem.desc ? IconArrowDown : IconArrowUp;
+    const mover = (delta: -1 | 1) => {
+      const r = soltarColuna(ordemAtual.fixadas, ordemAtual.livres, c.chave, delta < 0 ? Math.max(0, p - 1) : p + 1);
+      edicao.onOrdem(r.fixadas, r.livres);
+    };
     return (
       <>
-        <div className={`mb-1 flex items-center gap-0.5 ${dir ? "justify-end" : ""}`}>
+        <button
+          type="button"
+          aria-label={`Mover ${c.rotulo} (arraste; ←/→ no teclado)`}
+          title="Arraste para mover"
+          onPointerDown={(e) => iniciarArrasto(e, c.chave)}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            e.preventDefault();
+            mover(e.key === "ArrowLeft" ? -1 : 1);
+          }}
+          className="absolute inset-y-0 left-0 grid w-5 cursor-grab touch-none select-none place-items-center text-faint transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 active:cursor-grabbing"
+        >
+          <IconGrip className="h-3.5 w-3.5" />
+        </button>
+        <div className="mb-1 flex items-center justify-end gap-0.5">
           <AcaoColuna
             rotulo={congelada ? `Descongelar ${c.rotulo}` : `Congelar ${c.rotulo}`}
             ligada={congelada}
@@ -487,8 +505,14 @@ export function TabelaCruzada({
             onClick={() => edicao.onOcultar(c.chave)}
             disabled={c.tipo === "rotulo"}
           />
+          <AcaoColuna
+            rotulo={!ordenada ? `Ordenar por ${c.rotulo}` : ordem.desc ? `${c.rotulo}: decrescente (inverter)` : `${c.rotulo}: crescente (inverter)`}
+            ligada={ordenada}
+            icone={<Seta className="h-3.5 w-3.5" />}
+            onClick={() => onOrdenar(por)}
+          />
         </div>
-        {nome}
+        <div className={linha}>{conteudo}</div>
         <AlcaLargura rotulo={c.rotulo} largura={larguras[c.chave]} onLargura={(px) => edicao.onLargura(c.chave, px)} />
       </>
     );
@@ -626,6 +650,7 @@ export function TabelaCruzada({
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border px-3 py-1.5 text-[12.5px] text-muted">
         <span>{resumo}</span>
         <div className="flex flex-wrap items-center gap-2">
+          {acoesRodape}
           <label className="flex items-center gap-1.5">
             <span className="hidden sm:inline">Linhas</span>
             <select
@@ -655,22 +680,32 @@ export function TabelaCruzada({
           <div
             aria-hidden
             ref={fantasma}
-            className="pointer-events-none fixed top-0 left-0 z-[300] select-none overflow-hidden rounded-control border border-accent/60 bg-surface text-[13px] shadow-soft will-change-transform"
-            style={{ width: arrasto.largura, transform: `translate3d(${arrasto.x - arrasto.dx}px, ${arrasto.y - arrasto.dy}px, 0)` }}
+            className="pointer-events-none fixed top-0 left-0 z-[300] select-none will-change-transform"
+            style={{
+              width: arrasto.largura,
+              transform: `translate3d(${arrasto.x - arrasto.dx}px, ${arrasto.y - arrasto.dy}px, 0)`,
+              transition: arrasto.pousando ? "transform var(--motion-duration) var(--motion-ease)" : undefined,
+            }}
           >
-            <div className="flex items-center gap-1 border-b border-border bg-surface-2 px-3 py-2 text-[12px] font-medium text-text">
-              <IconGrip className="h-3.5 w-3.5 shrink-0 text-accent" />
-              <span className="truncate">{presa.rotulo}</span>
-            </div>
-            {visiveis.slice(0, 6).map((l) => (
-              <div key={l.chave} className={`truncate border-b border-border/60 px-3 py-1.5 tabular-nums text-text-2 ${direita(presa) ? "text-right" : ""}`}>
-                {presa.tipo === "rotulo"
-                  ? l.rotulo
-                  : presa.tipo === "extra"
-                    ? l.extra || "–"
-                    : texto(presa.tipo === "total" ? l.total : l.valores[presa.j], { linha: l.total, coluna: presa.total })}
+            {/* LEVANTA ao pegar (cresce um pouco e ganha sombra) e REPOUSA ao soltar (volta ao tamanho, sem sombra). */}
+            <div
+              className={`animate-levantar overflow-hidden rounded-control border border-accent/60 bg-surface text-[13px] transition-[scale,box-shadow] duration-[var(--motion-duration)] ${
+                arrasto.pousando ? "scale-100 shadow-none" : "scale-[1.04] shadow-soft"
+              }`}
+            >
+              <div className="flex items-center gap-1 border-b border-border bg-surface-2 py-2 pr-3 pl-5 text-[12px] font-medium text-text">
+                <span className="truncate">{presa.rotulo}</span>
               </div>
-            ))}
+              {visiveis.slice(0, 6).map((l) => (
+                <div key={l.chave} className={`truncate border-b border-border/60 py-1.5 pr-3 pl-5 tabular-nums text-text-2 ${direita(presa) ? "text-right" : ""}`}>
+                  {presa.tipo === "rotulo"
+                    ? l.rotulo
+                    : presa.tipo === "extra"
+                      ? l.extra || "–"
+                      : texto(presa.tipo === "total" ? l.total : l.valores[presa.j], { linha: l.total, coluna: presa.total })}
+                </div>
+              ))}
+            </div>
           </div>,
           document.body,
         )}

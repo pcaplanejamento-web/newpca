@@ -57,6 +57,7 @@ import {
   Search,
   Settings,
   Shield,
+  Star,
   Sun,
   Trash2,
   TrendingUp,
@@ -130,6 +131,7 @@ export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
 export const IconAjuda = CircleHelp;
+export const IconEstrela = Star;
 export const IconRefresh = RefreshCw;
 export const IconPlug = Plug;
 export const IconInfo = Info;

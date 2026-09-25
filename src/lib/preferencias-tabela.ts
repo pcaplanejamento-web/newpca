@@ -3,8 +3,8 @@ import { preferenciasTabela } from "@/db/schema";
 import { getDb } from "./db";
 
 /**
- * AJUSTES SALVOS de tabela por usuário (migração `0040`) — `{chave: valor}` (o JSON cru; quem usa normaliza, ex.:
- * `coerceLayout`). Só escopo de request (`getDb`).
+ * PREFERÊNCIAS de tabela por usuário (migração `0040`) — `{chave: valor}` (o JSON cru; quem usa normaliza), ex.: a
+ * EDIÇÃO PADRÃO (`padrao:<chave>` → `{ id }`, migração `0041`). Só escopo de request (`getDb`).
  */
 export async function listarPreferenciasTabela(usuarioId: number, prefixo: string): Promise<Record<string, unknown>> {
   const linhas = await getDb()

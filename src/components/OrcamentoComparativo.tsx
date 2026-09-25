@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
 import { brl, num } from "@/lib/format";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import {
   COL_EXTRA,
@@ -40,7 +41,9 @@ import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
+import { SalvarEdicao, SeletorEdicoes, useEdicoesTabela } from "./EdicoesTabela";
 import { Checkbox, SearchField, SelectField } from "./Field";
 import { IconDesafixar, IconDownload, IconEye, IconFixar, IconPencil, IconSave, IconTrocar, IconUndo } from "./icons";
 import { OrigemDados } from "./OrigemDados";
@@ -63,9 +66,10 @@ const MODOS: { value: ModoCruzamento; label: string; curto: string }[] = [
  * com o motivo — `permissoesColunas`). Tocar num cabeçalho ordena as linhas só na VISTA. **"Editar"** transforma a PRÓPRIA
  * planilha no editor do layout, DIRETO na coluna — TODAS, inclusive o nome das linhas, a Sigla e o Total: arrastar o nome
  * move (com a sombra do destino; soltar entre as congeladas congela), o alfinete congela, o olho oculta, a borda ajusta a
- * largura; a barra de edição (enxuta) traz mapa de calor, ocultar zerados e congelar/descongelar/mostrar todas. A
- * explicação de tudo fica na AJUDA (?); **"Salvar"** grava o layout do PAR de colunas ligadas na conta do usuário
- * (`PUT /api/preferencias/tabela`; o layout igual ao padrão apaga o salvo) e "Cancelar" descarta.
+ * largura. No RODAPÉ da tabela ficam o LÁPIS (liga a edição), as EDIÇÕES SALVAS do par de colunas (as minhas e as
+ * públicas — `useEdicoesTabela`/`SeletorEdicoes`), a estrela da minha PADRÃO e, editando, mapa de calor, ocultar zerados,
+ * congelar/descongelar/mostrar todas, Padrão, Cancelar e **Salvar** (`SalvarEdicao`: nome, só para mim ou pública,
+ * atualizar ou nova, usar como padrão). Confirmações e avisos em card flutuante; a explicação de tudo na AJUDA (?).
  */
 export function OrcamentoComparativo({
   titulo,
@@ -73,15 +77,18 @@ export function OrcamentoComparativo({
   visoes,
   vinculos,
   alvos,
-  layoutsSalvos,
+  edicoes,
+  padroes,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
   visoes: VisaoOrcamento[];
   vinculos: VinculoOrcamento[];
   alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
-  /** Os layouts SALVOS do usuário, por chave (`chaveLayoutComparativo`). */
-  layoutsSalvos: Record<string, unknown>;
+  /** As edições salvas que o usuário vê (as dele e as públicas) de todos os pares de colunas. */
+  edicoes: EdicaoTabela[];
+  /** As preferências de edição PADRÃO do usuário (`padrao:<chave>`). */
+  padroes: Record<string, unknown>;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
@@ -90,11 +97,11 @@ export function OrcamentoComparativo({
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);
-  const [salvos, setSalvos] = useState(layoutsSalvos);
   const [rascunho, setRascunho] = useState<LayoutCruzamento | null>(null); // ≠ null = EDITANDO a planilha
   const [ordemVista, setOrdemVista] = useState<OrdemCruzamento | null>(null); // ordenação só da vista (fora da edição)
-  const [gravando, setGravando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const visao = visoes.find((v) => v.id === visaoId) ?? null;
   const base = useMemo(() => (visao ? aplicarVisao(itens, visao.filtros) : itens), [itens, visao]);
@@ -106,9 +113,11 @@ export function OrcamentoComparativo({
   const coluna = colunaPermitida(permColunas, dimColuna);
   const podeTrocar = useMemo(() => coluna != null && permissoesColunas(base, coluna)[linha].permitida, [base, coluna, linha]);
 
-  // O LAYOUT do par ligado: o rascunho enquanto edita; senão o SALVO (ou o padrão).
+  // O LAYOUT do par ligado: o rascunho enquanto edita; senão o da EDIÇÃO em uso (a padrão do usuário ao abrir) ou o padrão
+  // do sistema.
   const chave = coluna ? chaveLayoutComparativo(linha, coluna) : "";
-  const salvo = useMemo(() => coerceLayout(salvos[chave]), [salvos, chave]);
+  const ed = useEdicoesTabela(chave, edicoes, padroes);
+  const salvo = useMemo(() => coerceLayout(ed.atual?.valor), [ed.atual]);
   const editando = rascunho != null;
   const layout = rascunho ?? salvo;
   const ordem = editando ? layout.ordemLinhas : (ordemVista ?? layout.ordemLinhas);
@@ -206,29 +215,33 @@ export function OrcamentoComparativo({
     setOrdemVista(null);
     setAberto(null);
   }
-  function cancelar() {
-    if (rascunho && !layoutIgual(rascunho, salvo) && !confirm("Descartar as edições da planilha?")) return;
+  async function cancelar() {
+    if (rascunho && !layoutIgual(rascunho, salvo) && !(await confirmar({ titulo: "Descartar as edições da planilha?", confirmar: "Descartar", perigo: true })))
+      return;
     setRascunho(null);
   }
-  async function salvar() {
-    if (!rascunho || !chave) return;
-    if (layoutIgual(rascunho, salvo)) return setRascunho(null);
-    const padrao = layoutIgual(rascunho, LAYOUT_PADRAO); // o padrão não precisa ficar gravado
-    setGravando(true);
-    const r = await fetch("/api/preferencias/tabela", {
-      method: padrao ? "DELETE" : "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(padrao ? { chave } : { chave, valor: rascunho }),
-    }).catch(() => null);
-    setGravando(false);
-    if (!r?.ok) return setAviso({ kind: "danger", texto: "Não foi possível salvar a planilha." });
-    setSalvos((s) => {
-      const { [chave]: _, ...resto } = s;
-      return padrao ? resto : { ...resto, [chave]: rascunho };
-    });
-    setRascunho(null);
-    setAviso({ kind: "ok", texto: `Planilha salva para ${rotuloDim(linha)} × ${coluna ? rotuloDim(coluna) : ""}.` });
-  }
+  // As ações das edições salvas: o erro vira aviso flutuante (nada de alerta do navegador).
+  const tentar = async (f: () => Promise<unknown>, ok?: string) => {
+    try {
+      await f();
+      if (ok) setAviso({ kind: "ok", texto: ok });
+    } catch (e) {
+      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Não foi possível concluir." });
+    }
+  };
+  const salvar = (d: { nome: string; publico: boolean; atualizar: boolean; padrao: boolean }) =>
+    tentar(async () => {
+      if (!rascunho) return;
+      await ed.salvar({ ...d, valor: rascunho });
+      setSalvando(false);
+      setRascunho(null);
+    }, "Edição salva.");
+  const excluirEdicao = async () => {
+    const e = ed.atual;
+    if (!e || !(await confirmar({ titulo: `Excluir a edição "${e.nome}"?`, texto: e.publico ? "Ela é pública: some para todos." : undefined, confirmar: "Excluir", perigo: true })))
+      return;
+    await tentar(() => ed.excluir(e), "Edição excluída.");
+  };
 
   const m = medidaOrcamento(medida);
   const comSigla = siglaDe != null && !layout.ocultas.includes(COL_EXTRA);
@@ -358,11 +371,6 @@ export function OrcamentoComparativo({
         )}
         <div className="flex items-center gap-2 lg:ml-auto">
           <Segmented<ModoCruzamento> ariaLabel="Ler as células como" value={modo} onChange={setModo} options={MODOS} />
-          {!editando && (
-            <Button size="sm" variant="secondary" icon={<IconPencil className="h-4 w-4" />} onClick={editar} disabled={!cruzBase}>
-              Editar
-            </Button>
-          )}
           <Ajuda titulo="Comparativo">
             <TopicoAjuda icone={<IconTrocar className="h-4 w-4" />} titulo="Linhas × Colunas">
               Escolha duas colunas do CUBO para cruzar. As que não combinam aparecem desabilitadas com o motivo; o botão entre elas inverte.
@@ -372,63 +380,17 @@ export function OrcamentoComparativo({
               que formam o número; tocar no nome de uma coluna ordena as linhas.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconPencil className="h-4 w-4" />} titulo="Editar a planilha">
-              Todas as colunas — inclusive o nome das linhas, a Sigla e o Total — se editam direto no cabeçalho: arraste o nome para mover (a sombra mostra onde vai
-              ficar; soltar entre as congeladas congela), o alfinete congela, o olho oculta e a borda ajusta a largura (duplo clique volta ao padrão).
+              O lápis, no rodapé da tabela, liga a edição. Todas as colunas — inclusive o nome das linhas, a Sigla e o Total — se editam no cabeçalho: segure a
+              alça à esquerda e arraste (a coluna levanta, a sombra mostra onde vai ficar e ela pousa ao soltar; entre as congeladas, congela); no topo, o
+              alfinete congela, o olho oculta e as setas ordenam (crescente/decrescente); a borda ajusta a largura (duplo clique volta ao padrão).
             </TopicoAjuda>
-            <TopicoAjuda icone={<IconSave className="h-4 w-4" />} titulo="Salvar">
-              Os ajustes valem para o par de colunas escolhido e ficam na sua conta. "Padrão" volta ao original; "Cancelar" descarta.
+            <TopicoAjuda icone={<IconSave className="h-4 w-4" />} titulo="Edições salvas">
+              "Salvar" guarda a edição com um nome, só para você ou pública (todos veem). No rodapé você troca de edição, marca a sua padrão na estrela (a tabela
+              abre nela) e exclui as suas. Cada par de colunas tem as suas edições.
             </TopicoAjuda>
           </Ajuda>
         </div>
       </div>
-
-      {editando && (
-        <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-accent/40 bg-surface px-[var(--pad-card)] py-1.5">
-          <span className="text-[13px] font-semibold text-text">Editando</span>
-          <div className="flex min-h-11 flex-wrap items-center gap-x-4 lg:min-h-0">
-            <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
-            <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="icon"
-              title="Congelar todas"
-              aria-label="Congelar todas as colunas"
-              icon={<IconFixar className="h-4 w-4" />}
-              onClick={() => mudar((l) => ({ ...l, fixadas: padrao.filter((k) => !l.ocultas.includes(k)) }))}
-            />
-            <Button
-              size="sm"
-              variant="icon"
-              title="Descongelar todas (o nome das linhas segue congelado)"
-              aria-label="Descongelar todas as colunas"
-              icon={<IconDesafixar className="h-4 w-4" />}
-              onClick={() => mudar((l) => ({ ...l, fixadas: [COL_ROTULO] }))}
-            />
-            <Button
-              size="sm"
-              variant="icon"
-              title="Mostrar todas"
-              aria-label="Mostrar todas as colunas"
-              icon={<IconEye className="h-4 w-4" />}
-              onClick={() => mudar((l) => ({ ...l, ocultas: [] }))}
-              disabled={layout.ocultas.length === 0}
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant="ghost" icon={<IconUndo className="h-4 w-4" />} onClick={() => setRascunho(LAYOUT_PADRAO)} disabled={gravando}>
-              Padrão
-            </Button>
-            <Button size="sm" variant="ghost" onClick={cancelar} disabled={gravando}>
-              Cancelar
-            </Button>
-            <Button size="sm" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={gravando}>
-              Salvar
-            </Button>
-          </div>
-        </div>
-      )}
 
       <TabelaCruzada
         rotuloLinhas={rotuloDim(linha)}
@@ -456,6 +418,74 @@ export function OrcamentoComparativo({
               : busca
                 ? "Nenhuma linha para esta busca."
                 : "Nenhum lançamento para comparar."
+        }
+        acoesRodape={
+          editando ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex min-h-11 items-center gap-x-4 lg:min-h-0">
+                <Checkbox checked={layout.calor} onChange={(e) => mudar((l) => ({ ...l, calor: e.target.checked }))} label="Mapa de calor" />
+                <Checkbox checked={layout.zerados} onChange={(e) => mudar((l) => ({ ...l, zerados: e.target.checked }))} label="Ocultar zerados" />
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="icon"
+                  title="Congelar todas"
+                  aria-label="Congelar todas as colunas"
+                  icon={<IconFixar className="h-4 w-4" />}
+                  onClick={() => mudar((l) => ({ ...l, fixadas: padrao.filter((k) => !l.ocultas.includes(k)) }))}
+                />
+                <Button
+                  size="sm"
+                  variant="icon"
+                  title="Descongelar todas (o nome das linhas segue congelado)"
+                  aria-label="Descongelar todas as colunas"
+                  icon={<IconDesafixar className="h-4 w-4" />}
+                  onClick={() => mudar((l) => ({ ...l, fixadas: [COL_ROTULO] }))}
+                />
+                <Button
+                  size="sm"
+                  variant="icon"
+                  title="Mostrar todas"
+                  aria-label="Mostrar todas as colunas"
+                  icon={<IconEye className="h-4 w-4" />}
+                  onClick={() => mudar((l) => ({ ...l, ocultas: [] }))}
+                  disabled={layout.ocultas.length === 0}
+                />
+                <Button
+                  size="sm"
+                  variant="icon"
+                  title="Voltar ao padrão do sistema"
+                  aria-label="Voltar ao padrão do sistema"
+                  icon={<IconUndo className="h-4 w-4" />}
+                  onClick={() => setRascunho(LAYOUT_PADRAO)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={cancelar}>
+                  Cancelar
+                </Button>
+                <Button size="sm" icon={<IconSave className="h-4 w-4" />} onClick={() => setSalvando(true)}>
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <SeletorEdicoes
+              minhas={ed.minhas}
+              publicas={ed.publicas}
+              atual={ed.atual}
+              padraoId={ed.padraoId}
+              disabled={!cruzBase || ed.gravando}
+              onEditar={editar}
+              onEscolher={(id) => {
+                ed.escolher(id);
+                setOrdemVista(null);
+              }}
+              onPadrao={() => tentar(() => ed.definirPadrao(ed.atual?.id ?? null), ed.atual ? `"${ed.atual.nome}" é a sua padrão.` : "A tabela abre no padrão do sistema.")}
+              onExcluir={excluirEdicao}
+            />
+          )
         }
         resumo={
           cruz && coluna
@@ -488,6 +518,17 @@ export function OrcamentoComparativo({
         />
       </OrigemDados>
 
+      {salvando && (
+        <SalvarEdicao
+          aberto
+          atual={ed.atual}
+          ehPadrao={(ed.atual?.id ?? null) === ed.padraoId && ed.atual != null}
+          gravando={ed.gravando}
+          onFechar={() => setSalvando(false)}
+          onSalvar={salvar}
+        />
+      )}
+      {confirmacao}
       {aviso && (
         <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 3000 : undefined}>
           {aviso.texto}

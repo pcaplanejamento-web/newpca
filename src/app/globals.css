@@ -272,6 +272,17 @@
   animation: fade-in-up 0.35s ease-out both;
 }
 
+/* A coluna da TabelaCruzada LEVANTA ao ser pega (cresce do tamanho real e ganha a sombra). */
+@keyframes levantar {
+  from {
+    scale: 1;
+    box-shadow: none;
+  }
+}
+.animate-levantar {
+  animation: levantar var(--motion-duration) var(--motion-ease);
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o

@@ -5,7 +5,7 @@ import { excluirPreferenciaSchema, salvarPreferenciaSchema } from "@/lib/prefere
 
 export const dynamic = "force-dynamic";
 
-/** Salva os AJUSTES de uma tabela do PRÓPRIO usuário (larguras, colunas fixadas/ocultas, ordem). */
+/** Salva uma preferência de tabela do PRÓPRIO usuário (ex.: a EDIÇÃO PADRÃO — `padrao:<chave>` → `{ id }`). */
 export async function PUT(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -15,7 +15,7 @@ export async function PUT(req: Request) {
   return ok();
 }
 
-/** Volta a tabela ao PADRÃO (apaga os ajustes salvos daquela chave). */
+/** Apaga a preferência (ex.: a tabela volta a abrir no padrão do sistema). */
 export async function DELETE(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;

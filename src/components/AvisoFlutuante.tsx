@@ -32,7 +32,8 @@ const ICONE: Record<Feedback, ReactNode> = {
  * andamento, resultado, falha de uma ação): aparece PEQUENO no canto inferior do display, sem deformar
  * nada ao redor (portal numa região fixa; vários se empilham). Cor/ícone pelo token de feedback
  * (`--danger/--warn/--ok/--info`); `carregando` troca o ícone pelo spinner; `onClose` mostra o X (alvo de
- * 44px) e `duracao` (ms) fecha sozinho. O `toast` usa o MESMO componente. Só tokens do design-system.
+ * 44px) e `duracao` (ms) fecha sozinho; `acoes` = botões (a confirmação do sistema — `useConfirmacao`, no lugar do
+ * `confirm()` do navegador). O `toast` usa o MESMO componente. Só tokens do design-system.
  */
 export function AvisoFlutuante({
   kind = "info",
@@ -41,6 +42,7 @@ export function AvisoFlutuante({
   onClose,
   duracao,
   carregando = false,
+  acoes,
 }: {
   kind?: Feedback;
   titulo?: string;
@@ -51,6 +53,8 @@ export function AvisoFlutuante({
   duracao?: number;
   /** Em andamento (spinner no lugar do ícone). */
   carregando?: boolean;
+  /** Botões do aviso (ex.: a CONFIRMAÇÃO — `useConfirmacao`), abaixo do texto. */
+  acoes?: ReactNode;
 }) {
   const [alvo, setAlvo] = useState<HTMLElement | null>(null);
   useEffect(() => setAlvo(regiao()), []);
@@ -83,6 +87,7 @@ export function AvisoFlutuante({
         {/* Texto longo (ex.: muitas falhas de uma edição em massa) ROLA dentro do aviso — o título e o X ficam
             sempre ao alcance e o aviso nunca cobre a tela. */}
         {children && <div className="max-h-[35dvh] overflow-y-auto overscroll-contain text-text-2">{children}</div>}
+        {acoes && <div className="mt-2 flex flex-wrap justify-end gap-2 pr-1.5 pb-0.5">{acoes}</div>}
       </div>
       {onClose && (
         <button

@@ -10,6 +10,8 @@ import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
 import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
+import { useConfirmacao } from "@/components/Confirmacao";
+import { SalvarEdicao, SeletorEdicoes } from "@/components/EdicoesTabela";
 import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -795,6 +797,35 @@ function TabelaCruzadaDemo() {
           resumo="3 linhas × 4 colunas"
         />
       </div>
+    </div>
+  );
+}
+
+function EdicoesTabelaDemo() {
+  const [atual, setAtual] = useState<number | null>(2);
+  const [padraoId, setPadraoId] = useState<number | null>(2);
+  const [salvar, setSalvar] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
+  const e = (id: number, nome: string, minha: boolean, publico: boolean) => ({ id, chave: "k", nome, publico, minha, autor: "Ana", valor: {} });
+  const minhas = [e(1, "Pessoal", true, false), e(2, "Por elemento", true, true)];
+  const publicas = [e(3, "Equipe do PCA", false, true)];
+  const escolhida = [...minhas, ...publicas].find((x) => x.id === atual) ?? null;
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <SeletorEdicoes
+        minhas={minhas}
+        publicas={publicas}
+        atual={escolhida}
+        padraoId={padraoId}
+        onEscolher={setAtual}
+        onPadrao={() => setPadraoId(atual)}
+        onExcluir={() => void confirmar({ titulo: "Excluir a edição?", confirmar: "Excluir", perigo: true })}
+        onEditar={() => setSalvar(true)}
+      />
+      {salvar && (
+        <SalvarEdicao aberto atual={escolhida} ehPadrao={atual === padraoId} gravando={false} onFechar={() => setSalvar(false)} onSalvar={() => setSalvar(false)} />
+      )}
+      {confirmacao}
     </div>
   );
 }
@@ -2005,6 +2036,9 @@ export function Catalogo() {
 
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
+      </Secao>
+      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir) + SalvarEdicao (só para mim ou pública) + confirmação em card flutuante (useConfirmacao)">
+        <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
         <GraficosGovernancaDemo />

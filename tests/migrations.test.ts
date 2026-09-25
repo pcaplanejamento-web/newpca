@@ -429,6 +429,18 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n.n, 0);
   });
 
+  it("0041 edições salvas de tabela (públicas ou pessoais; somem com o dono)", () => {
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO usuarios (id, email, nome, senha_hash) VALUES (9411, 'ed@x', 'E', 'h')");
+    db.exec("INSERT INTO edicoes_tabela (chave, nome, valor, usuario_id, publico) VALUES ('orcamento-comparativo:a:b', 'Minha', '{}', 9411, 1)");
+    const r = db.prepare("SELECT publico FROM edicoes_tabela WHERE usuario_id = 9411").get() as { publico: number };
+    assert.equal(r.publico, 1);
+    assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='index'").includes("edicoes_tabela_chave_idx"));
+    db.exec("DELETE FROM usuarios WHERE id = 9411");
+    const n = db.prepare("SELECT COUNT(*) AS n FROM edicoes_tabela WHERE usuario_id = 9411").get() as { n: number };
+    assert.equal(n.n, 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

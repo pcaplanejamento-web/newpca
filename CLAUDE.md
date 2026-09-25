@@ -1638,25 +1638,36 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   tocar numa célula, rótulo ou total abre a **`OrigemDados`** (a soma = o número); tocar num cabeçalho ordena as linhas SÓ
   na vista; todo texto das células CENTRADO na altura. **TODAS as colunas são iguais** — o nome das linhas (Unidade…), a
   Sigla, o Total e as de valores: tocar no nome ordena; congeladas à esquerda (as que passam de ~60% da largura visível
-  deixam de congelar — no celular, em geral só o nome). **EDIÇÃO NA PRÓPRIA PLANILHA (por PAR de colunas ligadas):**
-  **"Editar"** (`TabelaCruzada.edicao`; as colunas ligadas travam, a origem dos números pausa) e cada cabeçalho ganha as
-  ações diretas: **ARRASTAR o nome** move a coluna (mouse ou toque — pointer capture, `touch-none`; a coluna vai **PRESA ao
-  cursor** no mesmo ponto em que foi pega — nome + os primeiros valores —, com o cursor "agarrando"; o **LUGAR onde vai
-  ficar aparece SOMBREADO já na posição nova** — prévia `soltarColuna`; a tabela ROLA sozinha perto das bordas; Alt+←/→;
-  robusto: os ouvintes ficam na JANELA — a prévia reordena os cabeçalhos no DOM e mover um nó derruba o pointer capture, o
-  que travava o arrasto —, a coluna presa anda direto no DOM (`translate3d`, sem re-render) e a tabela só re-renderiza
-  quando o DESTINO muda; da pressão até soltar NENHUMA seleção de texto — `segurar()`: bloqueia o `selectstart`, limpa a
-  seleção e põe o cursor no documento, também ao ajustar a largura; desmontar no meio desfaz tudo) e
-  soltar entre as congeladas CONGELA, depois delas SOLTA; o **alfinete** congela/descongela, o **olho** oculta/mostra (o nome
-  das linhas não se oculta; as ocultas ficam ESMAECIDAS para voltar) e a **borda** ajusta a largura (arrastar, ←/→, duplo
-  clique = padrão). A barra de edição é ENXUTA (mapa de calor, ocultar zerados, congelar/descongelar/mostrar todas por
-  ícone, **Padrão**, **Cancelar**, **Salvar**) e a explicação de tudo fica na **AJUDA (?)** (`Ajuda`/`TopicoAjuda`). O
-  layout (`LayoutCruzamento` `v:2`: larguras, **fixadas** e **ocultas** de QUALQUER coluna — `COL_ROTULO`/`COL_EXTRA`/
-  `COL_TOTAL` inclusive; o padrão congela os três —, **ordemManual** das livres, ordem das linhas, calor, zerados; a ordem
-  exibida sai de `ordemDasColunas`) é salvo na conta do usuário:
-  tabela **`preferencias_tabela`** (migração **`0040`**, aditiva: `usuario_id` + `chave` única + `valor` JSON;
-  `preferencias-tabela.ts`; `PUT`/`DELETE /api/preferencias/tabela`, `exigirUsuario`, `preferencias-validation.ts` com teto
-  de 32 KB) com a chave `chaveLayoutComparativo(linha, coluna)`; salvar o layout IGUAL ao padrão apaga o salvo. O layout lido é
+  deixam de congelar — no celular, em geral só o nome). **EDIÇÃO NA PRÓPRIA PLANILHA (por PAR de colunas ligadas):** o
+  **LÁPIS** (só o ícone) fica no **RODAPÉ da tabela** (`TabelaCruzada.acoesRodape`) e liga a edição (`TabelaCruzada.edicao`;
+  as colunas ligadas travam, a origem dos números pausa). Cada cabeçalho: a **ALÇA de arrasto** ocupa a faixa ESQUERDA com a
+  ALTURA TODA do cabeçalho (←/→ no teclado movem); no TOPO, alinhadas, as ações **congelar · ocultar · ordenar** (a seta
+  alterna ▲ crescente / ▼ decrescente); a borda direita ajusta a largura (arrastar, ←/→, duplo clique = padrão). O NOME
+  fica no MESMO lugar dentro e fora da edição (o recuo esquerdo `pl-5` é o da alça — cabeçalho e células alinhados).
+  **Arrastar:** a coluna **LEVANTA** (anima do tamanho real para 104% com sombra — `animate-levantar`) e vai **PRESA ao
+  cursor** no ponto em que foi pega; o **LUGAR onde vai ficar aparece SOMBREADO já na posição nova** (prévia
+  `soltarColuna`); a tabela ROLA sozinha perto das bordas; ao soltar, a coluna **POUSA** — voa até o lugar e volta ao tamanho
+  em `--motion-duration` — e só então a ordem é aplicada (sem movimento reduzido: direto). Robusto: ouvintes na JANELA (a
+  prévia reordena os cabeçalhos no DOM e mover um nó derruba o pointer capture), a coluna presa anda direto no DOM
+  (`translate3d`, sem re-render), a tabela só re-renderiza quando o DESTINO muda e, da pressão até soltar, NENHUMA seleção
+  de texto (`segurar()`: bloqueia o `selectstart`, limpa a seleção e põe o cursor no documento — também na largura).
+  **EDIÇÕES SALVAS (migração `0041`, tabela `edicoes_tabela`: chave do par + nome + layout + dono + `publico`):** no RODAPÉ,
+  o `SeletorEdicoes` — lápis · seletor "Edição" (Padrão do sistema · Minhas · Públicas com o autor) · **estrela** = usar a em
+  uso como MINHA PADRÃO (a tabela abre nela; guardada em `preferencias_tabela` — migração `0040`, `usuario_id` + `chave`
+  única + `valor` JSON, `PUT`/`DELETE /api/preferencias/tabela` — como `padrao:<chave>` → `{id}`) · lixeira da
+  minha. Editando, o rodapé troca para mapa de calor, ocultar zerados, congelar/descongelar/mostrar todas, voltar ao padrão
+  do sistema, **Cancelar** e **Salvar** → `SalvarEdicao` (nome; **só para mim** ou **pública** — todos veem e usam;
+  ATUALIZAR a minha ou salvar como NOVA — a de outra pessoa sempre vira nova, minha; "usar como minha padrão"). Hook
+  **`useEdicoesTabela`** (`EdicoesTabela.tsx`, genérico — reutilizável por outras tabelas) + núcleo puro
+  **`edicoes-tabela-core.ts`** (`edicoesDaChave`/`edicaoInicial`/`idPadrao`/`chavePadrao`, testado) + D1 em
+  **`edicoes-tabela.ts`** (`listarEdicoesTabela` = as minhas + as públicas, com o autor) + rotas **`POST
+  /api/tabela/edicoes`** e **`PATCH`/`DELETE /api/tabela/edicoes/[id]`** (`exigirUsuario`; só o DONO ou o ADM altera/exclui;
+  `criarEdicaoSchema`/`editarEdicaoSchema`: nome ≤ 60, layout ≤ 32 KB). A `0041` converte os ajustes salvos antes (um por
+  usuário e par em `preferencias_tabela`) na edição pessoal "Minha edição" — e a torna a padrão dele. Confirmações e erros
+  em CARD FLUTUANTE (`useConfirmacao` + `AvisoFlutuante`), nunca no alerta do navegador; a explicação de tudo na **AJUDA
+  (?)**. O layout (`LayoutCruzamento` `v:2`: larguras, **fixadas** e **ocultas** de QUALQUER coluna — `COL_ROTULO`/
+  `COL_EXTRA`/`COL_TOTAL` inclusive; o padrão congela os três —, **ordemManual** das livres, ordem das linhas, calor,
+  zerados; a ordem exibida sai de `ordemDasColunas`) é
   normalizado por `coerceLayout` (qualquer JSON → válido e o formato ANTERIOR — Sigla/Total "soltas" — convertido;
   `layoutIgual` compara pelo conteúdo). Núcleo PURO
   **`orcamento-cruzamento.ts`** (`permissoesLinhas`/`permissoesColunas`/`cruzar`/`semVazios`/`ordenarLinhas`/
@@ -1894,7 +1905,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de calor e origem de cada número; TODAS as colunas iguais — com `edicao`, a própria planilha vira o editor: arrastar o
   nome com a coluna presa ao cursor e a SOMBRA do destino, alfinete, olho e largura pela borda; o Comparativo do orçamento),
   **`Ajuda`**/`TopicoAjuda` (o "(?)" — botão discreto que abre a explicação de uma tela num painel; tira o texto de
-  instrução da tela),
+  instrução da tela), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
+  SALVAS de uma tabela: pessoais ou públicas, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — a
+  CONFIRMAÇÃO do sistema num `AvisoFlutuante` com Cancelar/Confirmar, no lugar do `confirm()` do navegador; o
+  `AvisoFlutuante` ganhou `acoes`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa), **`DfdRodape`** (rodapé fixo do banner do

@@ -1008,6 +1008,11 @@ barra de edição enxuta e a explicação num botão de ajuda (?) — componente
 ✅ **Comparativo — arrastar sem travar:** os ouvintes do arrasto passaram para a janela (a prévia reordenava os
 cabeçalhos e derrubava o pointer capture), a coluna presa anda direto no DOM e a tabela só re-renderiza quando o destino
 muda; nenhuma seleção de texto enquanto se segura uma coluna ou a borda de largura.
+✅ **Comparativo — edições salvas e cabeçalho profissional:** a coluna levanta ao ser pega e pousa no lugar escolhido
+(animações); alça de arrasto em faixa à esquerda com a altura do cabeçalho; congelar · ocultar · ordenar (▲/▼) alinhados no
+topo; o nome no mesmo lugar dentro e fora da edição. **Edições salvas** por usuário ou **públicas** (migração `0041`,
+`edicoes_tabela`), com a **padrão** de cada usuário (estrela) — seletor, lápis e estrela no rodapé da tabela. Confirmações
+em card flutuante (`useConfirmacao`) no lugar do `confirm()` do navegador em todo o módulo Orçamento.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

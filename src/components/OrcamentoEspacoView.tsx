@@ -10,6 +10,7 @@ import { AbasEspaco } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { IconChevronLeft, IconTrash } from "./icons";
 
 export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
@@ -34,9 +35,16 @@ export function OrcamentoEspacoView({
   const router = useRouter();
   const [excluindo, setExcluindo] = useState(false);
   const [falha, setFalha] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   async function excluir() {
-    if (!confirm(`Excluir o orçamento "${o.nome}" (${o.ano}) e seus ${o.totalItens} lançamentos? Esta ação não pode ser desfeita.`)) return;
+    const ok = await confirmar({
+      titulo: `Excluir o orçamento "${o.nome}" (${o.ano})?`,
+      texto: `Os ${num(o.totalItens)} lançamentos vão junto. Esta ação não pode ser desfeita.`,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (!ok) return;
     setExcluindo(true);
     setFalha(false);
     const r = await fetch(`/api/orcamento/${o.id}`, { method: "DELETE" }).catch(() => null);
@@ -106,6 +114,7 @@ export function OrcamentoEspacoView({
         {children}
       </AbasEspaco>
 
+      {confirmacao}
       {falha && (
         <AvisoFlutuante kind="danger" titulo="Atenção" onClose={() => setFalha(false)}>
           Não foi possível excluir o orçamento.

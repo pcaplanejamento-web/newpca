@@ -9,6 +9,7 @@ import { getUsuarioAtual } from "@/lib/auth";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
 import { DIMENSOES_ORCAMENTO, type LinhaOrcamentoVisao } from "@/lib/orcamento-visao";
 import { listarVisoesOrcamento } from "@/lib/pca-espaco";
+import { listarEdicoesTabela } from "@/lib/edicoes-tabela";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +43,13 @@ export default async function OrcamentoEspacoPage({
     });
     conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={podeEditar} />;
   } else if (aba === "comparativo") {
-    const [itens, visoes, vinculos, alvos, layoutsSalvos] = await Promise.all([
+    const [itens, visoes, vinculos, alvos, edicoes, padroes] = await Promise.all([
       getOrcamentoItens(id),
       listarVisoesOrcamento(),
       listarVinculosOrcamento(),
       alvosVinculoOrcamento(),
-      u ? listarPreferenciasTabela(u.id, "orcamento-comparativo:") : {},
+      u ? listarEdicoesTabela(u.id, "orcamento-comparativo:") : [],
+      u ? listarPreferenciasTabela(u.id, "padrao:orcamento-comparativo:") : {},
     ]);
     conteudo = (
       <OrcamentoComparativo
@@ -56,7 +58,8 @@ export default async function OrcamentoEspacoPage({
         visoes={visoes}
         vinculos={vinculos}
         alvos={alvos}
-        layoutsSalvos={layoutsSalvos}
+        edicoes={edicoes}
+        padroes={padroes}
       />
     );
   } else {

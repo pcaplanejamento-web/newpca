@@ -732,6 +732,25 @@ export const preferenciasTabela = sqliteTable(
   (t) => [uniqueIndex("preferencias_tabela_uq").on(t.usuarioId, t.chave)],
 );
 
+/** EDIÇÕES SALVAS de uma tabela (migração `0041`): nome + layout (`valor` JSON), do usuário (`usuario_id`) — só para ele
+ * ou PÚBLICA (`publico` = 1, todos veem). A padrão de cada usuário fica em `preferencias_tabela` (`padrao:<chave>`). */
+export const edicoesTabela = sqliteTable(
+  "edicoes_tabela",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    chave: text("chave").notNull(),
+    nome: text("nome").notNull(),
+    valor: text("valor").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    publico: integer("publico", { mode: "boolean" }).notNull().default(false),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("edicoes_tabela_chave_idx").on(t.chave)],
+);
+
 export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
