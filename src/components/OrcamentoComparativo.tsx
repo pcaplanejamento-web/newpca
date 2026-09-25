@@ -53,11 +53,9 @@ import { TabelaCruzada } from "./TabelaCruzada";
 const rotuloDim = (d: DimensaoOrcamento) => DIMENSOES_ORCAMENTO.find((x) => x.key === d)?.rotulo ?? d;
 const TIPO_VINCULO: Partial<Record<DimensaoOrcamento, "orgao" | "unidade">> = { orgao: "orgao", unidade: "unidade" };
 
-const MODOS: { value: ModoCruzamento; label: string; curto: string }[] = [
-  { value: "valor", label: "R$", curto: "R$" },
-  { value: "linha", label: "% linha", curto: "% lin." },
-  { value: "coluna", label: "% coluna", curto: "% col." },
-  { value: "total", label: "% total", curto: "% tot." },
+const MODOS: { value: ModoCruzamento; label: string }[] = [
+  { value: "valor", label: "R$" },
+  { value: "pct", label: "%" },
 ];
 /**
  * Aba COMPARATIVO da tela do orçamento — a TABELA CRUZADA (horizontal, como a planilha da Prefeitura): o usuário LIGA
@@ -383,7 +381,7 @@ export function OrcamentoComparativo({
               Escolha duas colunas do CUBO para cruzar. As que não combinam aparecem desabilitadas com o motivo; o botão entre elas inverte.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconDownload className="h-4 w-4" />} titulo="Medida, visão e leitura">
-              A medida define o valor somado; a visão restringe os lançamentos; R$ ou % da linha, da coluna ou do total. Um toque marca a linha; dois toques (ou
+              A medida define o valor somado; a visão restringe os lançamentos; R$ ou % (a participação de cada valor na linha). Um toque marca a linha; dois toques (ou
               duplo clique) numa célula mostram os lançamentos que formam o número; tocar no nome de uma coluna ordena as linhas.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconPencil className="h-4 w-4" />} titulo="Editar a planilha">

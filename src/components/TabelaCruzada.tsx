@@ -14,7 +14,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  basePercentual,
   COL_EXTRA,
   COL_ROTULO,
   COL_TOTAL,
@@ -178,7 +177,7 @@ type Arrasto = { chave: string; x: number; y: number; dx: number; dy: number; la
  * somem). Com **`edicao`**, a PRÓPRIA planilha vira o editor, direto na coluna: ARRASTAR o nome move (mouse ou toque; a
  * coluna vai "presa" ao cursor, o LUGAR onde vai ficar aparece sombreado já na posição nova, a tabela rola sozinha nas
  * bordas; soltar entre as congeladas CONGELA; Alt+←/→ no teclado), o alfinete congela, o olho oculta (a oculta fica
- * esmaecida para voltar) e a borda ajusta a largura. Valor ou % da linha/coluna/total; mapa de calor opcional; tocar numa
+ * esmaecida para voltar) e a borda ajusta a largura. Valor (R$) ou % (participação na linha); mapa de calor opcional; tocar numa
  * célula chama `onAbrir` (a origem do número). No desktop ocupa a altura até o fim do display (o corpo rola por dentro);
  * linhas por página = Configurações → Tabelas.
  */
@@ -308,10 +307,10 @@ export function TabelaCruzada({
   const pg = Math.min(page, pages);
   const visiveis = linhas.slice((pg - 1) * limite, pg * limite);
 
-  const texto = (v: number, bases: { linha: number; coluna: number }) => {
+  /** O texto da célula: o valor, ou (modo %) a participação na LINHA — `baseLinha` = o total da linha. */
+  const texto = (v: number, baseLinha: number) => {
     if (zerado(v)) return "–";
-    const base = basePercentual(modo, { ...bases, geral: total });
-    return base == null ? formatar(v) : fmtPct(percentual(v, base));
+    return modo === "pct" ? fmtPct(percentual(v, baseLinha)) : formatar(v);
   };
   const fundo = (v: number): CSSProperties | undefined =>
     calor && maxAbs > 0 && !zerado(v)
@@ -585,7 +584,7 @@ export function TabelaCruzada({
         } ${ehAtiva(l.chave, dataC ?? null) ? anelAtivo : ""}`}
         style={{ ...estilo, ...(c.tipo === "valor" && !fixa ? fundo(v) : {}) }}
       >
-        <span className={esmaecida}>{texto(v, { linha: l.total, coluna: c.tipo === "total" ? total : c.total })}</span>
+        <span className={esmaecida}>{texto(v, l.total)}</span>
       </td>
     );
   };
@@ -607,7 +606,7 @@ export function TabelaCruzada({
         }`}
         style={estilo}
       >
-        <span className={esmaecida}>{c.tipo === "rotulo" ? "Total" : texto(c.total, { linha: total, coluna: c.tipo === "total" ? total : c.total })}</span>
+        <span className={esmaecida}>{c.tipo === "rotulo" ? "Total" : texto(c.total, total)}</span>
       </td>
     );
   };
@@ -719,7 +718,7 @@ export function TabelaCruzada({
                     ? l.rotulo
                     : presa.tipo === "extra"
                       ? l.extra || "–"
-                      : texto(presa.tipo === "total" ? l.total : l.valores[presa.j], { linha: l.total, coluna: presa.total })}
+                      : texto(presa.tipo === "total" ? l.total : l.valores[presa.j], l.total)}
                 </div>
               ))}
             </div>

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { salvarPreferenciaSchema } from "../src/lib/preferencias-validation.ts";
 import {
-  basePercentual,
   COL_EXTRA,
   COL_ROTULO,
   COL_TOTAL,
@@ -111,8 +110,6 @@ describe("orcamento-cruzamento", () => {
   });
 
   it("percentuais e matriz de exportação", () => {
-    assert.equal(basePercentual("valor", { linha: 1, coluna: 2, geral: 3 }), null);
-    assert.equal(basePercentual("coluna", { linha: 1, coluna: 2, geral: 3 }), 2);
     assert.equal(percentual(25, 100), 25);
     assert.equal(percentual(5, 0), null);
     const c = cruzar(L, "unidade", "nomeElemento", "inicial");

@@ -1018,6 +1018,7 @@ da Configuração); um toque marca a linha e dois abrem a origem do número (tam
 Sigla e Total inclusive — com a mesma gráfica, centrados; edições públicas: várias, usadas por qualquer pessoa.
 ✅ **Espaço do PCA enxuto:** cabeçalho numa linha (voltar · nome · ano · status · fonte), filtro de unidade do Dashboard
 na linha das abas e o Comparativo dentro da aba Orçamento, abaixo dos KPIs (Comparativo | PCA × Orçamento).
+✅ **Comparativo — leitura simplificada:** R$ ou % (participação na linha); "% coluna" e "% total" removidos.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

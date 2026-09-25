@@ -1640,7 +1640,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   divisórias horizontais). O usuário LIGA duas colunas do CUBO (Linhas × Colunas, `SelectField compacto`) e o seletor das
   colunas APONTA as permitidas — as demais ficam desabilitadas com o motivo (a mesma das linhas, sem dados, mais de
   `MAX_COLUNAS_CRUZAMENTO`=120 valores, ou EQUIVALENTE às linhas 1 para 1); inverter linhas × colunas; MEDIDA; VISÃO
-  salva; R$ ou % da linha/coluna/total; busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
+  salva; R$ ou % (a participação de cada valor na LINHA — `ModoCruzamento` "valor"|"pct"; na linha TOTAL, sobre o total geral); busca nas linhas; linha TOTAL fixa; exportar .xlsx (`exportarCruzamentoXlsx`);
   UM toque/clique MARCA a linha (fundo accent opaco — as congeladas cobrem o que rola) e DOIS (duplo clique ou toque duplo na
   mesma célula em até 400 ms — detecção própria, vale no celular; `touch-manipulation` tira o zoom do toque duplo) numa
   célula, rótulo ou total abrem a **`OrigemDados`** (a soma = o número; Enter abre direto); tocar num cabeçalho ordena as linhas SÓ

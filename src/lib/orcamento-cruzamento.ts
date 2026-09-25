@@ -298,15 +298,8 @@ export function coerceLayout(v: unknown): LayoutCruzamento {
 
 export const layoutIgual = (a: LayoutCruzamento, b: LayoutCruzamento) => JSON.stringify(coerceLayout(a)) === JSON.stringify(coerceLayout(b));
 
-/** Como as células se leem: o VALOR ou a participação (% da linha, da coluna ou do total geral). */
-export type ModoCruzamento = "valor" | "linha" | "coluna" | "total";
-
-/** A base do percentual de uma célula no modo (`null` = mostrar o valor). A célula de total da LINHA usa como base da
- * coluna o total geral; a de total da COLUNA usa como base da linha o total geral. */
-export function basePercentual(modo: ModoCruzamento, bases: { linha: number; coluna: number; geral: number }): number | null {
-  if (modo === "valor") return null;
-  return modo === "linha" ? bases.linha : modo === "coluna" ? bases.coluna : bases.geral;
-}
+/** Como as células se leem: o VALOR (R$) ou a PARTICIPAÇÃO na linha (%) — na linha TOTAL, a base é o total geral. */
+export type ModoCruzamento = "valor" | "pct";
 
 /** O percentual da célula (`null` quando a base é zero). */
 export const percentual = (v: number, base: number): number | null => (zerado(base) ? null : (v / base) * 100);

@@ -746,8 +746,7 @@ function TabelaCruzadaDemo() {
           onChange={setModo}
           options={[
             { value: "valor", label: "R$" },
-            { value: "linha", label: "% linha" },
-            { value: "total", label: "% total" },
+            { value: "pct", label: "%" },
           ]}
         />
         <Checkbox checked={editar} onChange={(e) => setEditar(e.target.checked)} label="Editar a planilha" />
