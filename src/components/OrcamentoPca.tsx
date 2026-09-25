@@ -180,12 +180,12 @@ function BarraPct({ l }: { l: LinhaComparativo }) {
 
 /**
  * Aba ORÇAMENTO do PCA — enxuta: os KPIs (a dotação do CUBO do MESMO ano, filtrada pela visão da Configuração, × o
- * planejado no PCA — os itens incorporados ativos) e, abaixo, o COMPARATIVO em duas vistas: a tabela cruzada da tela do
- * orçamento (`OrcamentoComparativo`, abrindo na visão do PCA) e o **PCA × Orçamento** por unidade (os lançamentos chegam à
+ * planejado no PCA — os itens incorporados ativos) e, abaixo, o COMPARATIVO em duas vistas: o **PCA × Orçamento** por
+ * unidade (a primeira, aberta) e a tabela cruzada da tela do orçamento (`OrcamentoComparativo`, abrindo na visão do PCA) (os lançamentos chegam à
  * unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo"). Sem orçamento do ano, só o por unidade.
  */
 export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcamentoPca; comparativo?: ComparativoPca | null }) {
-  const [vista, setVista] = useState<Vista>("comparativo");
+  const [vista, setVista] = useState<Vista>("unidade");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [aberta, setAberta] = useState<LinhaComparativo | null>(null);
   const linhas = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
@@ -231,8 +231,8 @@ export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcame
       onChange={setVista}
       ariaLabel="Vista do comparativo"
       options={[
-        { value: "comparativo", label: "Comparativo" },
         { value: "unidade", label: "PCA × Orçamento", curto: "PCA × Orç." },
+        { value: "comparativo", label: "Comparativo" },
       ]}
     />
   );

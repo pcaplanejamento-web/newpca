@@ -1457,7 +1457,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
-  vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`): **Comparativo** = o MESMO
+  vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`; **PCA × Orçamento** primeiro e aberto, depois
+  o Comparativo): **Comparativo** = o MESMO
   `OrcamentoComparativo` da tela do orçamento, sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último,
   buscado UMA vez e repassado a `orcamentoDoPca`), abrindo na visão da Configuração do PCA (`visaoInicial`, trocável; dados
   do loader único `dadosComparativo`, `comparativo-dados.ts`, as duas telas) | **PCA × Orçamento** = o comparativo por

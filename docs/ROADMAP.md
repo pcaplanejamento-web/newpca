@@ -1017,7 +1017,7 @@ em card flutuante (`useConfirmacao`) no lugar do `confirm()` do navegador em tod
 da Configuração); um toque marca a linha e dois abrem a origem do número (também no celular); todos os cabeçalhos — Unidade,
 Sigla e Total inclusive — com a mesma gráfica, centrados; edições públicas: várias, usadas por qualquer pessoa.
 ✅ **Espaço do PCA enxuto:** cabeçalho numa linha (voltar · nome · ano · status · fonte), filtro de unidade do Dashboard
-na linha das abas e o Comparativo dentro da aba Orçamento, abaixo dos KPIs (Comparativo | PCA × Orçamento).
+na linha das abas e o Comparativo dentro da aba Orçamento, abaixo dos KPIs (PCA × Orçamento — aberto — | Comparativo).
 ✅ **Comparativo — leitura simplificada:** R$ ou % (participação na linha); "% coluna" e "% total" removidos.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
