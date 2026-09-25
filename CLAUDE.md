@@ -1607,11 +1607,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SÓ os **cards 4:5** (`OrcamentoCard` — SÓ INFORMAÇÃO, sem imagem: ano + nome; **dotação ATUALIZADA** (inicial +
   suplementação − anulação) com a barra do **% empenhado**; empenhado e saldo; rodapé órgãos · unidades · lançamentos ·
   data) numa grade compacta (2 colunas no celular → 6 no 2xl) + o card **"+"** (`OrcamentoNovoCard`, editor) que importa
-  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). Os
+  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). O fluxo de
+  importação é UM contêiner, **`ImportarOrcamento`** (lançador + prévia + lotes com progresso + avisos flutuantes; cada
+  valor novo de `iniciar` abre o lançador — o mecanismo da Mesa), nos dois modos: **novo** e **reenvio** (`alvo`). Os
   indicadores vêm de UMA agregação no banco (`selecionarResumos` em `orcamento.ts`: `listarOrcamentos`/`getOrcamento`, sem
   trazer os lançamentos; núcleo puro `orcamento-indicadores.ts` — `dotacaoAtualizada`/`pctEmpenhado`). **Não há**
   Lançamentos/Vínculos/Visões fora do orçamento. A **tela do orçamento** (`OrcamentoEspacoView`) é ENXUTA e usa a largura
-  toda: UMA linha (voltar · nome · ano · dotação atualizada · empenhado % · saldo · lançamentos · Excluir) e a barra das
+  toda: UMA linha (voltar · nome · ano · dotação atualizada · empenhado % · saldo · lançamentos · Excluir — só o ÍCONE,
+  `Button variant="icon" size="sm"`, com nome acessível) e a barra das
   abas **Lançamentos · Vínculos · Visões** (`AbasEspaco`, o MESMO do espaço do PCA; o servidor monta SÓ a aba `?aba=` e
   manda só os campos que ela usa) — as **ferramentas de cada aba ficam NA MESMA LINHA das abas, à direita**
   (`FerramentasAba`: portal para o slot da barra; o estado segue na aba). Tabelas no **padrão da Mesa** (`DataTable
@@ -1619,7 +1622,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Lançamentos** (`OrcamentoLancamentos`): TODAS as colunas do CUBO (Órgão · Unidade · No sistema · Função · Programa ·
   Ação · Elemento · Código · Ficha · Fonte + valores com filtro por faixa), vínculo de cada linha resolvido UMA vez
   (`vinculoPorId`); na barra: busca (`SearchField compacto`, `predicadoBusca`) + **XLSX/PDF** (o que está filtrado); detalhe
-  SÓ-leitura `OrcamentoItemDetalhe`. **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
+  SÓ-leitura `OrcamentoItemDetalhe`; no RODAPÉ da tabela (`acoesRodape`, como o "Importar" da Mesa; editor) o botão
+  **"Reenviar planilha"** → `ImportarOrcamento alvo`: a prévia compara atual × nova (nome/ano travados), confirma e
+  `substituirOrcamentoEmLotes` grava a planilha nova num orçamento TEMPORÁRIO (os mesmos lotes all-or-nothing) e só então
+  `POST /api/orcamento/[id]/substituir` `{origemId}` (`exigirEditor`, auditoria "planilha reenviada — N → M") troca os
+  lançamentos num LOTE ATÔMICO (`comandosSubstituirLancamentos`, **`orcamento-sql.ts`** — builders testados pelo driver D1
+  REAL no `db.batch`: apaga os do alvo, move os da origem, recalcula os totais, apaga a origem); qualquer falha deixa o
+  orçamento anterior intacto e apaga o temporário. O orçamento mantém id/nome/ano (vínculos e visões seguem pelo texto).
+  **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
   DISTINTOS deste orçamento (o vínculo segue GLOBAL); na barra: busca + "Vincular N sugestões". **Visões**
   (`OrcamentoVisoes`): tabela das visões (filtros + lançamentos e Σ que cada uma pega DESTE orçamento) → clicar abre o
   editor ao lado; na barra: "Criar visão". As visões vêm do SERVIDOR (`listarVisoesOrcamento`; salvar/excluir →

@@ -78,3 +78,31 @@ export async function enviarOrcamentoEmLotes(
   }
   return { orcamentoId };
 }
+
+/**
+ * REENVIO: grava a planilha nova num orçamento TEMPORÁRIO (os mesmos lotes, com o all-or-nothing) e, completo, pede ao
+ * servidor para SUBSTITUIR os lançamentos do alvo por ele (lote atômico). Qualquer falha deixa o alvo intacto e apaga o
+ * temporário.
+ */
+export async function substituirOrcamentoEmLotes(
+  alvo: { id: number; nome: string; ano: number },
+  itens: OrcamentoItemImport[],
+  onLote?: (enviados: number, total: number) => void,
+): Promise<void> {
+  const { orcamentoId: origemId } = await enviarOrcamentoEmLotes({ nome: `${alvo.nome} (reenvio)`.slice(0, 200), ano: alvo.ano }, itens, onLote);
+  let res: Response | null = null;
+  try {
+    res = await fetch(`/api/orcamento/${alvo.id}/substituir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origemId }),
+    });
+  } catch {
+    res = null;
+  }
+  const j = res ? ((await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null) : null;
+  if (!res?.ok || !j?.ok) {
+    await apagarOrcamento(origemId);
+    throw new Error(j?.error ?? "Não foi possível substituir a planilha — o orçamento anterior foi mantido.");
+  }
+}

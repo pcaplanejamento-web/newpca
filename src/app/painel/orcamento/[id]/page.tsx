@@ -50,7 +50,7 @@ export default async function OrcamentoEspacoPage({
           podeEditar={podeEditar}
         />
       ) : (
-        <OrcamentoLancamentos titulo={`${orcamento.nome} · ${orcamento.ano}`} itens={itens} vinculos={vinculos} alvos={alvos} />
+        <OrcamentoLancamentos orcamento={orcamento} podeEditar={podeEditar} itens={itens} vinculos={vinculos} alvos={alvos} />
       );
   }
 

@@ -77,3 +77,6 @@ export const vinculosOrcamentoSchema = z.object({
     .max(200),
 });
 export type VinculosOrcamentoPayload = z.infer<typeof vinculosOrcamentoSchema>;
+
+// SUBSTITUIR os lançamentos de um orçamento pelos de outro (o CUBO reenviado, gravado num orçamento temporário).
+export const substituirOrcamentoSchema = z.object({ origemId: z.number().int().positive() });

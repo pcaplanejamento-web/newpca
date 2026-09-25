@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { exportarOrcamentoPdf, exportarOrcamentoXlsx } from "@/lib/exportar-orcamento";
 import { brl, num } from "@/lib/format";
-import type { OrcamentoItemRow } from "@/lib/orcamento";
+import type { OrcamentoItemRow, OrcamentoResumo } from "@/lib/orcamento";
 import { type AlvoVinculo, alvoDoTexto, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
@@ -11,7 +11,8 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { SearchField } from "./Field";
-import { IconDownload } from "./icons";
+import { IconDownload, IconUpload } from "./icons";
+import { ImportarOrcamento } from "./ImportarOrcamento";
 import { Modal } from "./Modal";
 import { OrcamentoItemDetalhe } from "./OrcamentoItemDetalhe";
 
@@ -55,16 +56,18 @@ const colValor = (key: string, header: string, get: (r: OrcamentoItemRow) => num
  * Programa · Ação · Elemento · Código · Ficha · Fonte + os valores) na tabela padrão da Mesa (`scrollInterno` +
  * `compact`: o corpo rola por dentro e as linhas por página seguem Configurações → Tabelas), somatório no rodapé;
  * busca e exportação XLSX/PDF na barra das abas (`FerramentasAba`). Clicar numa linha abre o detalhe SÓ-LEITURA (`OrcamentoItemDetalhe`) com o
- * vínculo do Órgão/Unidade ao cadastro. Os lançamentos vêm do sistema oficial — não são editados aqui.
+ * vínculo do Órgão/Unidade ao cadastro. Os lançamentos vêm do sistema oficial — não são editados aqui; o editor
+ * REENVIA a planilha pelo botão no rodapé da tabela (como o "Importar" da Mesa → `ImportarOrcamento` com `alvo`).
  */
 export function OrcamentoLancamentos({
-  titulo,
+  orcamento,
+  podeEditar,
   itens,
   vinculos,
   alvos,
 }: {
-  /** "Nome · Ano" — título da exportação. */
-  titulo: string;
+  orcamento: OrcamentoResumo;
+  podeEditar: boolean;
   itens: OrcamentoItemRow[];
   vinculos: VinculoOrcamento[];
   alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
@@ -72,6 +75,8 @@ export function OrcamentoLancamentos({
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<OrcamentoItemRow | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [reenviar, setReenviar] = useState(0); // cada valor novo abre o lançador do reenvio
+  const titulo = `${orcamento.nome} · ${orcamento.ano}`;
 
   const mapa = useMemo(() => mapaVinculos(vinculos), [vinculos]);
   const alvoPorId = useMemo(
@@ -173,6 +178,20 @@ export function OrcamentoLancamentos({
         minWidth={2600}
         onRowClick={(r) => setAberto(r)}
         activeKey={aberto?.id ?? null}
+        acoesRodape={
+          podeEditar ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconUpload className="h-4 w-4" />}
+              aria-label="Reenviar planilha"
+              title="Enviar a planilha nova e substituir os lançamentos"
+              onClick={() => setReenviar((n) => n + 1)}
+            >
+              Reenviar<span className="hidden sm:inline"> planilha</span>
+            </Button>
+          ) : undefined
+        }
         vazio={busca ? "Nenhum lançamento para esta busca." : "Nenhum lançamento neste orçamento."}
         resumo={(linhas) =>
           `${num(linhas.length)} ${linhas.length === 1 ? "lançamento" : "lançamentos"} · Inicial ${brl(soma(linhas, "valorInicial"))} · Saldo ${brl(soma(linhas, "saldo"))}`
@@ -181,6 +200,7 @@ export function OrcamentoLancamentos({
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo="Detalhe do lançamento" size="lg">
         {aberto && detalhe ? <OrcamentoItemDetalhe key={aberto.id} item={aberto} vinculo={{ orgao: detalhe.orgao, unidade: detalhe.unidade }} /> : <div />}
       </Modal>
+      {podeEditar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} />}
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Não foi possível exportar" onClose={() => setErro(null)}>
           {erro}

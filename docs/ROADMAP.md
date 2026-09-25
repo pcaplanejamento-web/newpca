@@ -982,6 +982,10 @@ aceito), gravados (lotes 5×17=85 params), exibidos na tabela e no detalhe, expo
 os indicadores) e com as ferramentas de cada aba (busca, XLSX, PDF, vincular sugestões, criar visão) na MESMA linha das
 abas, à direita (`FerramentasAba`); tabelas no padrão da Mesa (`scrollInterno` + `compact`, linhas por página de
 Configurações); visões carregadas no servidor (sem fetch extra) e vínculo de cada lançamento resolvido uma vez.
+✅ **Reenviar a planilha do orçamento:** botão "Reenviar planilha" no rodapé da tabela de Lançamentos (como o "Importar"
+da Mesa) — a prévia compara atual × nova e a troca é ATÔMICA (a planilha nova vai para um envio temporário e só então
+substitui os lançamentos; se algo falhar, o orçamento atual fica). Importação unificada no `ImportarOrcamento` (novo e
+reenvio). Excluir o orçamento virou um botão só de ícone.
 
 ### Armazenamento (ADM): raio-x do banco (D1) + higiene de sessões — entregue
 ✅ Tela `/painel/armazenamento` (só admin; também atalho em Configurações → Mais): **tamanho total do banco**

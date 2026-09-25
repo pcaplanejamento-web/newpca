@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { orcamentoItens, orcamentos, orcamentoVinculos, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
+import { comandosSubstituirLancamentos } from "./orcamento-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { OrcamentoItemImport, VinculosOrcamentoPayload } from "./orcamento-validation";
 import { type AlvoVinculo, chaveVinculo, type VinculoOrcamento } from "./orcamento-vinculo";
@@ -143,6 +144,16 @@ export async function atualizarOrcamento(id: number, campos: { nome?: string; an
   if (campos.nome !== undefined) set.nome = campos.nome;
   if (campos.ano !== undefined) set.ano = campos.ano;
   await getDb().update(orcamentos).set(set).where(eq(orcamentos.id, id));
+}
+
+/**
+ * SUBSTITUI os lançamentos do orçamento `alvoId` pelos de `origemId` (o CUBO reenviado, gravado antes num orçamento
+ * temporário) — UM lote atômico (`comandosSubstituirLancamentos`, `orcamento-sql.ts`). O alvo mantém id/nome/ano
+ * (vínculos e visões seguem pelo texto; nada mais aponta para o id).
+ */
+export async function substituirLancamentos(alvoId: number, origemId: number): Promise<void> {
+  const db = getDb();
+  await db.batch(comandosSubstituirLancamentos(db, alvoId, origemId));
 }
 
 /** Exclui um orçamento E seus lançamentos (explícito + cascade de backstop), atômico. */
