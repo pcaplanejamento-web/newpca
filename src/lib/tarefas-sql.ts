@@ -29,6 +29,10 @@ export const colunasEvento = (e: DadosEvento) => ({
   descricao: e.descricao,
   cor: e.cor,
   lembreteMin: e.lembreteMin,
+  recorrencia: e.recorrencia ? JSON.stringify(e.recorrencia) : null,
+  linkReuniao: e.linkReuniao,
+  ocupado: e.ocupado,
+  privado: e.privado,
 });
 
 /**

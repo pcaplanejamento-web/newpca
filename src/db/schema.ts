@@ -924,6 +924,14 @@ export const tarefaEventos = sqliteTable(
     cor: text("cor"),
     /** Minutos ANTES do início para o lembrete no sino (migração `0047`); NULL = sem lembrete. */
     lembreteMin: integer("lembrete_min"),
+    /** A REPETIÇÃO própria do evento (JSON `RecorrenciaEvento`, migração `0048`); NULL = não se repete. */
+    recorrencia: text("recorrencia"),
+    /** Link da reunião (Meet/Teams/Zoom colado). */
+    linkReuniao: text("link_reuniao"),
+    /** Livre (false) ou ocupado (true, o padrão). */
+    ocupado: integer("ocupado", { mode: "boolean" }).notNull().default(true),
+    /** Privado: quem não participa vê só "Ocupado". */
+    privado: integer("privado", { mode: "boolean" }).notNull().default(false),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -973,6 +981,23 @@ export const notificacoes = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id), uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave)],
+);
+
+/** Os CONVIDADOS de um evento e a RESPOSTA de cada um (migração `0048`). */
+export const tarefaEventoConvidados = sqliteTable(
+  "tarefa_evento_convidados",
+  {
+    eventoId: integer("evento_id")
+      .notNull()
+      .references(() => tarefaEventos.id, { onDelete: "cascade" }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    /** pendente | sim | nao | talvez */
+    resposta: text("resposta").notNull().default("pendente"),
+    respondidoEm: text("respondido_em"),
+  },
+  (t) => [primaryKey({ columns: [t.eventoId, t.usuarioId] }), index("tarefa_evento_convidados_usuario_idx").on(t.usuarioId)],
 );
 
 /** FERIADOS e pontos facultativos cadastrados pelo ADM (migração `0047`; os nacionais são calculados no código).

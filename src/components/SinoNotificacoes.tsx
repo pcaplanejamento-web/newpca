@@ -19,6 +19,8 @@ const VISUAL: Record<TipoNotificacao, { Icone: ComponentType<{ className?: strin
   atrasada: { Icone: IconPrazo, cor: "var(--danger)" },
   automacao: { Icone: IconAutomacao, cor: "var(--accent)" },
   lembrete: { Icone: IconCalendar, cor: "var(--info)" },
+  convite: { Icone: IconCalendar, cor: "var(--accent)" },
+  resposta: { Icone: IconCalendar, cor: "var(--ok)" },
 };
 
 /** Uma notificação da lista: o autor (foto) ou o ícone do tipo, título, texto, data; ponto accent = não lida. */

@@ -22,7 +22,8 @@ import type { Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import {
   CHAVE_OCULTOS_CALENDARIO,
-  type DadosEvento,
+  dadosDoEventoGravado,
+  diasEntre,
   type EtiquetaTarefa,
   type EventoCalendario,
   type EventoTarefa,
@@ -54,7 +55,8 @@ import { EventoBanner } from "./EventoBanner";
 import { dadosDoEvento, EditorEvento, problemasEvento, type RascunhoEvento, rascunhoEvento } from "./EventosTarefa";
 import { SelectField, TextField } from "./Field";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
-import { IconClock, IconKanban } from "./icons";
+import { IconClock, IconKanban, IconUsers } from "./icons";
+import { SeletorPessoas } from "./SeletorPessoas";
 import { JanelaFlutuante } from "./JanelaFlutuante";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
@@ -72,7 +74,10 @@ export type DadosCalendarioQuadros = {
   anual: boolean;
   hoje: string;
   etiquetas: (EtiquetaTarefa & { quadroId: number })[];
+  /** As pessoas (nomes e fotos): as do grupo ativo + as das tarefas e convites. */
   pessoas: Pessoa[];
+  /** Os ids das pessoas do GRUPO ativo (quem pode ser convidado; "pesquisar pessoas"). */
+  membros: number[];
   abertas: { id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null }[];
   /** As listas ativas dos quadros (concluir/reabrir e criar tarefa pelo calendário). */
   listas: { id: number; nome: string; concluida: boolean; quadroId: number }[];
@@ -170,11 +175,15 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [criacao, setCriacao] = useState<Criacao | null>(null);
   const [salvando, setSalvando] = useState(false);
+  /** "PESQUISAR PESSOAS" (como no Google): só os eventos em que alguma delas está (responsável, convidada ou autora). */
+  const [pessoasVer, setPessoasVer] = useState<number[]>([]);
   const { confirmar, confirmacao } = useConfirmacao();
   const idTarefa = tarefaSolta ?? (aberto && verTarefa && !aberto.pca ? aberto.tarefaId : null);
   const { ctx, atualizarTarefa } = useContextoTarefa(idTarefa);
 
   const porQuadro = useMemo(() => new Map(dados.quadros.map((q) => [q.id, q])), [dados.quadros]);
+  const membros = useMemo(() => dados.pessoas.filter((p) => dados.membros.includes(p.id)), [dados.pessoas, dados.membros]);
+  const responsaveis = useMemo(() => new Map(tarefas.map((t) => [t.id, t.pessoas])), [tarefas]);
   const variosQuadros = dados.quadros.length > 1;
   const etiquetas = useMemo(
     () => dados.etiquetas.map((e) => (variosQuadros ? { ...e, nome: `${e.nome} · ${porQuadro.get(e.quadroId)?.nome ?? ""}` } : e)),
@@ -196,11 +205,16 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   const todos = useMemo(() => {
     const t = filtrarTarefas(tarefas, { ...filtro, busca: "" }, { usuarioId, hoje: dados.hoje });
     const casa = predicadoBusca(filtro.busca);
-    const ev = [...eventosDoCalendario(t, eventosDb, de, ate, dados.hoje), ...(filtrando ? [] : eventosPca(dados.pca.dfds, de, ate))];
-    return casa
-      ? ev.filter((e) => casa([e.titulo, e.tarefaTitulo, e.local ?? "", e.pca ? `DFD ${e.pca.numero} ${e.pca.planejamento ?? ""} ${e.pca.sigla ?? ""}` : `${rotuloTicket(e.ticket)} ${e.ticket}`]))
-      : ev;
-  }, [tarefas, eventosDb, filtro, filtrando, usuarioId, dados.hoje, dados.pca.dfds, de, ate]);
+    const ev = [...eventosDoCalendario(t, eventosDb, de, ate, dados.hoje), ...(filtrando || pessoasVer.length ? [] : eventosPca(dados.pca.dfds, de, ate))];
+    const envolve = (e: EventoCalendario) =>
+      !e.pca &&
+      pessoasVer.some((p) => (responsaveis.get(e.tarefaId) ?? []).includes(p) || e.criadoPor === p || !!e.convidados?.some((c) => c.usuarioId === p));
+    return ev.filter(
+      (e) =>
+        (!pessoasVer.length || envolve(e)) &&
+        (!casa || casa([e.titulo, e.tarefaTitulo, e.local ?? "", e.pca ? `DFD ${e.pca.numero} ${e.pca.planejamento ?? ""} ${e.pca.sigla ?? ""}` : `${rotuloTicket(e.ticket)} ${e.ticket}`])),
+    );
+  }, [tarefas, eventosDb, filtro, filtrando, usuarioId, dados.hoje, dados.pca.dfds, de, ate, pessoasVer, responsaveis]);
   const visiveis = useMemo(() => todos.filter((e) => eventoVisivel(e, ocultos)), [todos, ocultos]);
   const grupos = useMemo<GrupoConjuntos[]>(() => {
     const m = new Map<number, Map<number, { id: number; ticket: number; titulo: string; eventos: number }>>();
@@ -311,12 +325,13 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     }
     const ev = eventosDb.find((x) => x.id === e.eventoId);
     if (!ev) return;
-    const d = eventoMovido(ev, dia, hora);
+    // Uma OCORRÊNCIA da série move a série inteira pela mesma distância.
+    const d = eventoMovido(ev, somarDias(ev.data, diasEntre(e.inicio, dia)), hora);
     const antes = eventosDb;
-    setEventosDb(antes.map((x) => (x.id === ev.id ? { ...x, ...d } : x)));
+    setEventosDb(antes.map((x) => (x.id === ev.id ? { ...x, ...d, convidados: x.convidados } : x)));
     try {
       await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", d);
-      comDesfazer(`"${ev.titulo}" movido para ${dataBR(dia)}${d.horaInicio && !d.diaInteiro ? ` às ${d.horaInicio}` : ""}.`, () =>
+      comDesfazer(`"${ev.titulo}"${ev.recorrencia ? " (a série)" : ""} movido para ${dataBR(dia)}${d.horaInicio && !d.diaInteiro ? ` às ${d.horaInicio}` : ""}.`, () =>
         chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoMovido(ev, ev.data, null)),
       );
       atualizar();
@@ -360,6 +375,23 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       atualizar();
     } catch (err) {
       setTarefas(antes);
+      toast.error((err as Error).message);
+    }
+  };
+
+  /** A RESPOSTA ao convite (Vai · Talvez · Não vai) — otimista. */
+  const responder = async (e: EventoCalendario, resposta: "sim" | "nao" | "talvez") => {
+    if (!e.eventoId) return;
+    const antes = eventosDb;
+    const troca = (lista: typeof eventosDb) =>
+      lista.map((x) => (x.id === e.eventoId ? { ...x, convidados: x.convidados.map((c) => (c.usuarioId === usuarioId ? { ...c, resposta } : c)) } : x));
+    setEventosDb(troca);
+    setAberto((a) => (a && a.eventoId === e.eventoId ? { ...a, convidados: a.convidados?.map((c) => (c.usuarioId === usuarioId ? { ...c, resposta } : c)) } : a));
+    try {
+      await chamar(`/api/tarefas/eventos/${e.eventoId}/resposta`, "POST", { resposta });
+      toast.success("Resposta enviada.");
+    } catch (err) {
+      setEventosDb(antes);
       toast.error((err as Error).message);
     }
   };
@@ -409,7 +441,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   };
   const rascunho = criacao ? { data: criacao.data, hora: criacao.tipo === "evento" && criacao.comHora ? criacao.hora : null, horaFim: criacao.horaFim, titulo: criacao.titulo } : null;
   const eventoDaCriacao = (c: Criacao): RascunhoEvento => ({
-    ...rascunhoEvento({ data: c.data }),
+    ...rascunhoEvento({ data: c.data }, opcoes.lembretePadrao),
     titulo: c.titulo,
     diaInteiro: !c.comHora,
     horaInicio: c.comHora ? c.hora : "",
@@ -478,8 +510,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       await chamar(`/api/tarefas/eventos/${ev.id}`, "DELETE");
       setEventosDb((l) => l.filter((x) => x.id !== ev.id));
       setAberto(null);
-      const { id: _id, tarefaId, ...dadosEv } = ev;
-      comDesfazer("Evento excluído.", () => chamar(`/api/tarefas/${tarefaId}/eventos`, "POST", dadosEv satisfies DadosEvento));
+      comDesfazer("Evento excluído.", () => chamar(`/api/tarefas/${ev.tarefaId}/eventos`, "POST", dadosDoEventoGravado(ev)));
       atualizar();
     } catch (err) {
       toast.error((err as Error).message);
@@ -518,6 +549,9 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           : undefined
       }
       onExcluir={aberto.eventoId ? () => excluir(aberto) : undefined}
+      pessoas={dados.pessoas}
+      usuarioId={usuarioId}
+      onResponder={(r) => r !== "pendente" && responder(aberto, r)}
     />
   );
   const opcoesTarefas = useMemo(
@@ -554,6 +588,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
         onOpcoes={mudarOpcoes}
         feriados={feriadosVisiveis}
         rascunho={rascunho}
+        usuarioId={usuarioId}
         semPrazo={semPrazo}
         onAbrirTarefa={(id) => {
           setAberto(null);
@@ -567,6 +602,22 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
               <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
             </div>
             <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            {membros.length > 1 && (
+              <details className="rounded-card border border-border bg-surface p-2" open={pessoasVer.length > 0}>
+                <summary className="flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-[12px] font-semibold text-text-2 lg:min-h-8">
+                  <IconUsers className="h-3.5 w-3.5 text-muted" />
+                  Pesquisar pessoas{pessoasVer.length ? ` (${pessoasVer.length})` : ""}
+                </summary>
+                <div className="space-y-2 px-1 pb-1 pt-1.5">
+                  <SeletorPessoas pessoas={membros} selecionadas={pessoasVer} onChange={setPessoasVer} usuarioId={usuarioId} />
+                  {pessoasVer.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => setPessoasVer([])}>
+                      Ver todos
+                    </Button>
+                  )}
+                </div>
+              </details>
+            )}
             {dados.truncado && <Callout kind="warn">Há eventos demais neste período — alguns ficaram de fora. Use os filtros ou oculte conjuntos.</Callout>}
             <BarraCalendario
               nav={nav}
@@ -756,7 +807,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
                 />
               </div>
             )}
-            <EditorEvento valor={edicao.r} onChange={(r) => setEdicao({ ...edicao, r })} disabled={salvando} />
+            <EditorEvento valor={edicao.r} onChange={(r) => setEdicao({ ...edicao, r })} disabled={salvando} pessoas={membros.length ? membros : undefined} usuarioId={usuarioId} />
           </div>
         )}
       </Modal>

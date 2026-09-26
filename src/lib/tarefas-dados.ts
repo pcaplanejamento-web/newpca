@@ -26,6 +26,7 @@ import { CHAVE_OPCOES_CALENDARIO, intervaloCalendario, lerOpcoesCalendario } fro
 import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
+import { mascararPrivados } from "./tarefas-core";
 import { CHAVE_OCULTOS_CALENDARIO, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
@@ -80,10 +81,16 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     abas.has("pca") ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
   ]);
-  const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
+  // As PESSOAS do grupo ativo (convidar, "pesquisar pessoas") + as das tarefas e dos convites (nomes e fotos).
+  const membros = grupoAtivo != null ? await listarPessoasDoGrupo(grupoAtivo) : [];
+  const conhecidas = new Set(membros.map((p) => p.id));
+  const faltam = [u.id, ...tarefas.flatMap((t) => t.pessoas), ...eventos.flatMap((e) => [...e.convidados.map((c) => c.usuarioId), ...(e.criadoPor ? [e.criadoPor] : [])])].filter((id) => !conhecidas.has(id));
+  const pessoas = [...membros, ...(faltam.length ? await pessoasPorIds([...new Set(faltam)]) : [])];
   return {
+    membros: membros.map((p) => p.id),
     tarefas,
-    eventos,
+    // O PRIVADO de quem a pessoa não participa vem só como "Ocupado".
+    eventos: mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.pessoas]))),
     contadores,
     mes,
     anual,

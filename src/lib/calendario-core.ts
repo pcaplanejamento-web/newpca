@@ -4,7 +4,7 @@
  * ADM), LEMBRETES dos eventos (o momento de avisar e a notificação do sino), as OPÇÕES da pessoa (semana começando na
  * segunda, ocultar o fim de semana), a PREVISÃO do PCA como eventos e a exportação/assinatura `.ics` (RFC 5545).
  */
-import { type DadosEvento, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
+import { type DadosEvento, dadosDoEventoGravado, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
 
 // ─── Mover um evento cadastrado (arrastar no calendário) ─────────────────────────────────────────────────────
 
@@ -14,8 +14,7 @@ import { type DadosEvento, dataValida, diasEntre, type EventoCalendario, type Ev
  * gravar (sem id/tarefa).
  */
 export function eventoMovido(ev: EventoTarefa, dia: string, hora: string | null): DadosEvento {
-  const { id: _id, tarefaId: _t, ...d } = ev;
-  const out: DadosEvento = { ...d, data: dia, dataFim: fimDoEvento(ev) > ev.data ? somarDias(dia, diasEntre(ev.data, fimDoEvento(ev))) : null };
+  const out: DadosEvento = { ...dadosDoEventoGravado(ev), data: dia, dataFim: fimDoEvento(ev) > ev.data ? somarDias(dia, diasEntre(ev.data, fimDoEvento(ev))) : null };
   if (hora && !ev.diaInteiro && horaValida(ev.horaInicio)) {
     const dur = horaValida(ev.horaFim) && minutosDe(ev.horaFim) > minutosDe(ev.horaInicio) ? minutosDe(ev.horaFim) - minutosDe(ev.horaInicio) : null;
     out.horaInicio = hora;
@@ -26,10 +25,7 @@ export function eventoMovido(ev: EventoTarefa, dia: string, hora: string | null)
 }
 
 /** Os dados a gravar do evento com o FIM novo (a borda arrastada). */
-export const eventoComFim = (ev: EventoTarefa, horaFim: string): DadosEvento => {
-  const { id: _id, tarefaId: _t, ...d } = ev;
-  return { ...d, horaFim };
-};
+export const eventoComFim = (ev: EventoTarefa, horaFim: string): DadosEvento => ({ ...dadosDoEventoGravado(ev), horaFim });
 
 // ─── Feriados ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -145,6 +141,10 @@ export type OpcoesCalendario = {
   /** "HH:MM"; `null` = sem expediente. */
   expedienteInicio: string | null;
   expedienteFim: string | null;
+  /** Esconde os eventos que a pessoa RECUSOU. */
+  ocultarRecusados: boolean;
+  /** O lembrete que todo evento NOVO da pessoa já traz (minutos; `null` = sem). */
+  lembretePadrao: number | null;
 };
 export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = {
   inicioSegunda: false,
@@ -153,6 +153,8 @@ export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = {
   numeroSemana: false,
   expedienteInicio: "08:00",
   expedienteFim: "18:00",
+  ocultarRecusados: false,
+  lembretePadrao: null,
 };
 export const CHAVE_OPCOES_CALENDARIO = "calendario:opcoes";
 export function lerOpcoesCalendario(v: unknown): OpcoesCalendario {
@@ -167,6 +169,8 @@ export function lerOpcoesCalendario(v: unknown): OpcoesCalendario {
     ocultarConcluidas: o.ocultarConcluidas === true,
     numeroSemana: o.numeroSemana === true,
     ...expediente,
+    ocultarRecusados: o.ocultarRecusados === true,
+    lembretePadrao: typeof o.lembretePadrao === "number" && Number.isInteger(o.lembretePadrao) && o.lembretePadrao >= 0 && o.lembretePadrao <= LEMBRETE_MAX_MIN ? o.lembretePadrao : null,
   };
 }
 /** Os dias EXIBIDOS de uma semana (sem sábado/domingo quando ocultos). */
@@ -244,7 +248,7 @@ export function lembreteDevido(e: { data: string; diaInteiro: boolean; horaInici
 
 /** A notificação do sino de um lembrete (chave única por evento + momento + antecedência — mudou, avisa de novo). */
 export function notificacaoDeLembrete(
-  e: { id: number; titulo: string; data: string; diaInteiro: boolean; horaInicio: string | null; horaFim: string | null; lembreteMin: number | null; local: string | null },
+  e: { id: number; titulo: string; data: string; diaInteiro: boolean; horaInicio: string | null; horaFim: string | null; lembreteMin: number | null; local: string | null; serieInicio?: string },
   t: { ticket: number; titulo: string },
   hoje: string,
 ): { tipo: "lembrete"; chave: string; titulo: string; texto: string; link: string } {
@@ -255,7 +259,8 @@ export function notificacaoDeLembrete(
     chave: `lembrete:${e.id}:${inicioDoEvento(e)}:${e.lembreteMin}`,
     titulo: `${quando}${hora}: ${e.titulo}`,
     texto: `${rotuloTicket(t.ticket)} ${t.titulo}${e.local ? ` · ${e.local}` : ""}`,
-    link: linkEvento(e.data, `e${e.id}`),
+    // A ocorrência de uma série abre pela chave dela (a 1ª é a do próprio evento).
+    link: linkEvento(e.data, e.serieInicio && e.serieInicio !== e.data ? `e${e.id}:${e.data}` : `e${e.id}`),
   };
 }
 
@@ -362,6 +367,8 @@ export function gerarIcs(eventos: EventoCalendario[], opts: { nome: string; agor
     const url = opts.url?.(e);
     if (url) l.push(`URL:${url}`);
     if (e.concluida) l.push("STATUS:CANCELLED");
+    if (e.ocupado === false) l.push("TRANSP:TRANSPARENT");
+    if (e.privado) l.push("CLASS:PRIVATE");
     if (e.lembreteMin != null)
       l.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escaparIcs(e.titulo)}`, `TRIGGER:-PT${e.lembreteMin}M`, "END:VALARM");
     l.push("END:VEVENT");

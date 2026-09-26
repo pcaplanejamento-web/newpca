@@ -1847,7 +1847,7 @@ function TarefasDemo() {
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
   const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
-  const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null, lembreteMin: 30 };
+  const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null, lembreteMin: 30, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] };
   const pcaDemo = eventosPca(
     [{ pcaId: 1, pcaNome: "PCA 2026", dfdId: 9, numero: "1234", planejamento: "1509", objeto: "Material de limpeza", sigla: "SME", valor: 125000, ano: 2026, mes: 1, anual: false }],
     "2025-12-28",

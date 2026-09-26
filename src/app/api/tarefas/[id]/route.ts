@@ -15,7 +15,7 @@ import {
   ultimoDaLista,
   vinculoAcessivel,
 } from "@/lib/tarefas";
-import { lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
+import { lerBlocos, mascararPrivados, rotuloTicket } from "@/lib/tarefas-core";
 import { contextoTarefa } from "@/lib/tarefas-dados";
 import { editarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -39,7 +39,8 @@ export async function GET(req: Request, ctx: Ctx) {
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!r) return erro("Tarefa não encontrada.", 404);
   if (new URL(req.url).searchParams.get("contexto") === "tarefa") return ok({ tarefa: r.tarefa });
-  return ok({ tarefa: r.tarefa, ...(await conteudoTarefa(r.tarefa.id)) });
+  const conteudo = await conteudoTarefa(r.tarefa.id);
+  return ok({ tarefa: r.tarefa, ...conteudo, eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.pessoas]])) });
 }
 
 /** Edita a tarefa (campos, responsáveis, etiquetas, arquivar; trocar de LISTA a leva ao fim da lista nova). */

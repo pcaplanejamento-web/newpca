@@ -2,11 +2,28 @@
 
 import { DURACAO_PADRAO_MIN_ROTULO, diasDoEvento, rotuloLembrete } from "@/lib/calendario-core";
 import { brl, dataBR } from "@/lib/format";
-import { COR_ESTADO_PRAZO, estadoPrazo, type EventoCalendario, ROTULO_ESTADO_PRAZO, ROTULO_TIPO_EVENTO, rotuloData, rotuloTicket } from "@/lib/tarefas-core";
+import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
+import {
+  COR_ESTADO_PRAZO,
+  estadoPrazo,
+  type EventoCalendario,
+  type RespostaConvite,
+  ROTULO_ESTADO_PRAZO,
+  ROTULO_RESPOSTA,
+  ROTULO_TIPO_EVENTO,
+  rotuloData,
+  rotuloRecorrenciaEvento,
+  rotuloTicket,
+} from "@/lib/tarefas-core";
+import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { IconBell, IconCalendar, IconClock, IconCopy, IconKanban, IconPencil, IconRepetir, IconTrash } from "./icons";
+import { IconBell, IconCalendar, IconClock, IconCopy, IconKanban, IconMapa, IconPencil, IconRepetir, IconTrash, IconUsers, IconVideo } from "./icons";
+import { LinkExterno } from "./LinkExterno";
+import { Segmented } from "./Segmented";
+
+const COR_RESPOSTA: Record<RespostaConvite, string> = { pendente: "var(--muted)", sim: "var(--ok)", nao: "var(--danger)", talvez: "var(--warn)" };
 
 const DIAS_LONGOS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 /** "quinta-feira, 25/09/2026". */
@@ -38,6 +55,9 @@ export function EventoBanner({
   onAbrirPca,
   avisoPrazo,
   tarefaAberta = false,
+  pessoas = [],
+  usuarioId = null,
+  onResponder,
 }: {
   evento: EventoCalendario;
   cor: string;
@@ -52,7 +72,16 @@ export function EventoBanner({
   avisoPrazo?: string | null;
   /** O banner da tarefa já está ao lado. */
   tarefaAberta?: boolean;
+  /** As pessoas (nome/foto dos convidados). */
+  pessoas?: Pessoa[];
+  usuarioId?: number | null;
+  /** A resposta de quem está vendo (só aparece para um convidado). */
+  onResponder?: (r: RespostaConvite) => void;
 }) {
+  const porId = new Map(pessoas.map((p) => [p.id, p]));
+  const convidados = e.convidados ?? [];
+  const eu = usuarioId != null ? convidados.find((c) => c.usuarioId === usuarioId) : undefined;
+  const contagem = (["sim", "talvez", "nao", "pendente"] as RespostaConvite[]).map((r) => [r, convidados.filter((c) => c.resposta === r).length] as const).filter(([, n]) => n > 0);
   const estado = estadoPrazo(e.tarefaPrazo, hoje, e.concluida);
   const explicacao =
     e.tipo === "periodo"
@@ -80,6 +109,8 @@ export function EventoBanner({
             )}
             {e.prevista && <Badge tone="amber">Prevista</Badge>}
             {e.concluida && <Badge tone="emerald">Concluída</Badge>}
+            {e.ocupado === false && <Badge>Livre</Badge>}
+            {e.privado && <Badge tone="slate">Privado</Badge>}
           </div>
         </div>
       </div>
@@ -91,6 +122,15 @@ export function EventoBanner({
           </dt>
           <dd className="text-text">{e.tipo === "pca" ? `A partir de ${dataPorExtenso(e.inicio)}` : quandoPorExtenso(e)}</dd>
         </div>
+        {e.repeticao && (
+          <div className="flex gap-2">
+            <dt className="shrink-0 text-muted">
+              <IconRepetir className="h-4 w-4" aria-hidden />
+              <span className="sr-only">Repetição</span>
+            </dt>
+            <dd className="text-text">{rotuloRecorrenciaEvento(e.repeticao)} — mover ou editar vale para a série</dd>
+          </div>
+        )}
         {e.lembreteMin != null && (
           <div className="flex gap-2">
             <dt className="shrink-0 text-muted">
@@ -106,11 +146,62 @@ export function EventoBanner({
               <span aria-hidden>@</span>
               <span className="sr-only">Local</span>
             </dt>
-            <dd className="break-words text-text">{e.local}</dd>
+            <dd className="min-w-0 text-text">
+              <span className="break-words">{e.local}</span>{" "}
+              <LinkExterno variante="texto" className="ml-1 inline-flex items-center gap-1 whitespace-nowrap align-middle" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.local)}`} icon={<IconMapa className="h-3.5 w-3.5" />}>
+                Abrir no mapa
+              </LinkExterno>
+            </dd>
           </div>
         )}
         {e.descricao && <dd className="whitespace-pre-wrap break-words rounded-control bg-surface-2 px-3 py-2 text-text-2">{e.descricao}</dd>}
       </dl>
+      {e.linkReuniao && (
+        <LinkExterno href={e.linkReuniao} icon={<IconVideo className="h-4 w-4" />}>
+          Entrar na reunião
+        </LinkExterno>
+      )}
+      {convidados.length > 0 && (
+        <section className="space-y-2" aria-label="Convidados">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-text-2">
+            <IconUsers className="h-4 w-4 text-muted" />
+            {convidados.length} convidado{convidados.length === 1 ? "" : "s"}
+            <span className="font-normal text-muted">· {contagem.map(([r, n]) => `${n} ${ROTULO_RESPOSTA[r].toLowerCase()}`).join(" · ")}</span>
+          </p>
+          <ul className="space-y-1">
+            {convidados.map((c) => {
+              const p = porId.get(c.usuarioId);
+              return (
+                <li key={c.usuarioId} className="flex items-center gap-2 text-[13px]">
+                  <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" />
+                  <span className="min-w-0 flex-1 truncate text-text" title={p?.nome}>
+                    {p ? nomeExibicao(p) : `Pessoa #${c.usuarioId}`}
+                    {c.usuarioId === usuarioId ? " (eu)" : ""}
+                  </span>
+                  <span className="shrink-0 text-[11.5px] font-semibold" style={{ color: COR_RESPOSTA[c.resposta] }}>
+                    {ROTULO_RESPOSTA[c.resposta]}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {eu && onResponder && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[12.5px] text-muted">Você vai?</span>
+              <Segmented<RespostaConvite>
+                ariaLabel="Sua resposta"
+                value={eu.resposta}
+                onChange={(r) => r !== "pendente" && onResponder(r)}
+                options={[
+                  { value: "sim", label: "Vai" },
+                  { value: "talvez", label: "Talvez" },
+                  { value: "nao", label: "Não vai" },
+                ]}
+              />
+            </div>
+          )}
+        </section>
+      )}
       {explicacao && <p className="text-[12.5px] text-muted">{explicacao}</p>}
       {avisoPrazo && (
         <Callout kind="warn">Prazo em dia não útil: o prazo da tarefa {avisoPrazo}.</Callout>

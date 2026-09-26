@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
 import {
   dfdProtocolos,
   dfds,
@@ -8,6 +8,7 @@ import {
   tarefaAutomacoes,
   tarefaChecklist,
   tarefaComentarios,
+  tarefaEventoConvidados,
   tarefaEventos,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
@@ -23,6 +24,7 @@ import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { getReparticaoContexto, gruposDoUsuario } from "./grupos";
 import { lotesDeIds } from "./reparticoes";
+import { linkEvento } from "./calendario-core";
 import { atorDe, notificar } from "./notificacoes";
 import { nomeExibicao } from "./pessoa";
 import { listarPessoasDoGrupo } from "./usuarios";
@@ -30,8 +32,11 @@ import {
   type AcaoAutomacao,
   type BlocoTarefa,
   blocosParaGravar,
+  coerceResposta,
   type DadosEvento,
   type EventoTarefa,
+  lerRecorrenciaEvento,
+  type RespostaConvite,
   contagemBlocos,
   lerBlocos,
   type Automacao,
@@ -314,7 +319,7 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
     or(
       and(sql`${tarefas.prazo} >= ${de}`, sql`(${tarefas.prazo} <= ${ate} OR ${tarefas.inicio} <= ${ate})`),
       and(sql`${tarefas.recorrencia} IS NOT NULL`, sql`${tarefas.concluidaEm} IS NULL`, sql`(${tarefas.prazo} IS NULL OR ${tarefas.prazo} <= ${ate})`),
-      sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND COALESCE(e.data_fim, e.data) >= ${de} AND e.data <= ${ate})`,
+      sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND e.data <= ${ate} AND (COALESCE(e.data_fim, e.data) >= ${de} OR (e.recorrencia IS NOT NULL AND COALESCE(json_extract(e.recorrencia, '$.ate'), '9999-12-31') >= ${de})))`,
     ),
   );
   const [linhas, pessoas, etiquetas] = await Promise.all([
@@ -642,7 +647,12 @@ export async function conteudoTarefa(id: number): Promise<{ checklist: ItemCheck
       .where(eq(tarefaChecklist.tarefaId, id))
       .orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id)),
     db.select().from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)).orderBy(asc(tarefaComentarios.id)),
-    db.select(COLS_EVENTO).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)).orderBy(asc(tarefaEventos.data), asc(tarefaEventos.horaInicio)),
+    db
+      .select(COLS_EVENTO)
+      .from(tarefaEventos)
+      .where(eq(tarefaEventos.tarefaId, id))
+      .orderBy(asc(tarefaEventos.data), asc(tarefaEventos.horaInicio))
+      .then(comConvidados),
   ]);
   return {
     checklist,
@@ -674,11 +684,31 @@ const COLS_EVENTO = {
   descricao: tarefaEventos.descricao,
   cor: tarefaEventos.cor,
   lembreteMin: tarefaEventos.lembreteMin,
+  recorrencia: tarefaEventos.recorrencia,
+  linkReuniao: tarefaEventos.linkReuniao,
+  ocupado: tarefaEventos.ocupado,
+  privado: tarefaEventos.privado,
+  criadoPor: tarefaEventos.criadoPor,
 };
+type LinhaEvento = Omit<EventoTarefa, "recorrencia" | "convidados"> & { recorrencia: string | null };
+
+/** As linhas + os CONVIDADOS de cada evento (lidos em lotes de ≤ 90 ids) e a repetição lida. */
+async function comConvidados(linhas: LinhaEvento[]): Promise<EventoTarefa[]> {
+  const por = new Map<number, EventoTarefa["convidados"]>();
+  const db = getDb();
+  for (const lote of lotesDeIds(linhas.map((l) => l.id))) {
+    const cs = await db
+      .select({ eventoId: tarefaEventoConvidados.eventoId, usuarioId: tarefaEventoConvidados.usuarioId, resposta: tarefaEventoConvidados.resposta })
+      .from(tarefaEventoConvidados)
+      .where(inArray(tarefaEventoConvidados.eventoId, lote));
+    for (const c of cs) por.set(c.eventoId, [...(por.get(c.eventoId) ?? []), { usuarioId: c.usuarioId, resposta: coerceResposta(c.resposta) }]);
+  }
+  return linhas.map((l) => ({ ...l, recorrencia: lerRecorrenciaEvento(l.recorrencia), convidados: por.get(l.id) ?? [] }));
+}
 
 export async function getEvento(id: number): Promise<EventoTarefa | null> {
   const [e] = await getDb().select(COLS_EVENTO).from(tarefaEventos).where(eq(tarefaEventos.id, id));
-  return e ?? null;
+  return e ? ((await comConvidados([e]))[0] ?? null) : null;
 }
 
 export async function contarEventos(tarefaId: number): Promise<number> {
@@ -687,18 +717,38 @@ export async function contarEventos(tarefaId: number): Promise<number> {
 }
 
 export async function criarEvento(tarefaId: number, d: DadosEvento, usuarioId: number): Promise<number> {
-  const [e] = await getDb()
+  const db = getDb();
+  const [e] = await db
     .insert(tarefaEventos)
     .values({ tarefaId, ...colunasEvento(d), criadoPor: usuarioId })
     .returning({ id: tarefaEventos.id });
+  if (d.convidados.length) await db.insert(tarefaEventoConvidados).values(d.convidados.map((u) => ({ eventoId: e.id, usuarioId: u }))).onConflictDoNothing();
   return e.id;
 }
 
+/** Grava o evento e os CONVIDADOS num lote: os que saíram são tirados; os que ficam mantêm a resposta; os novos entram
+ * "pendente". */
 export async function atualizarEvento(id: number, d: DadosEvento) {
+  const db = getDb();
+  const cmds = [
+    db
+      .update(tarefaEventos)
+      .set({ ...colunasEvento(d), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(tarefaEventos.id, id)),
+    db
+      .delete(tarefaEventoConvidados)
+      .where(and(eq(tarefaEventoConvidados.eventoId, id), d.convidados.length ? notInArray(tarefaEventoConvidados.usuarioId, d.convidados) : undefined)),
+    ...(d.convidados.length ? [db.insert(tarefaEventoConvidados).values(d.convidados.map((u) => ({ eventoId: id, usuarioId: u }))).onConflictDoNothing()] : []),
+  ];
+  await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+}
+
+/** A RESPOSTA do convidado (só dele). */
+export async function responderConvite(eventoId: number, usuarioId: number, resposta: RespostaConvite) {
   await getDb()
-    .update(tarefaEventos)
-    .set({ ...colunasEvento(d), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
-    .where(eq(tarefaEventos.id, id));
+    .update(tarefaEventoConvidados)
+    .set({ resposta, respondidoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(and(eq(tarefaEventoConvidados.eventoId, eventoId), eq(tarefaEventoConvidados.usuarioId, usuarioId)));
 }
 
 export async function excluirEvento(id: number) {
@@ -713,7 +763,7 @@ export const LIMITE_TAREFAS_CALENDARIO = 3000;
  * sem intervalo = todos) — o calendário. */
 export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: string): Promise<EventoTarefa[]> {
   if (!quadroIds.length) return [];
-  return getDb()
+  const linhas = await getDb()
     .select(COLS_EVENTO)
     .from(tarefaEventos)
     .innerJoin(tarefas, eq(tarefas.id, tarefaEventos.tarefaId))
@@ -721,12 +771,16 @@ export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: 
       and(
         inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
         eq(tarefas.arquivada, false),
-        de ? sql`COALESCE(${tarefaEventos.dataFim}, ${tarefaEventos.data}) >= ${de}` : undefined,
+        // A SÉRIE (repetição) entra se começou até o fim do intervalo e não terminou antes dele.
+        de
+          ? sql`(COALESCE(${tarefaEventos.dataFim}, ${tarefaEventos.data}) >= ${de} OR (${tarefaEventos.recorrencia} IS NOT NULL AND COALESCE(json_extract(${tarefaEventos.recorrencia}, '$.ate'), '9999-12-31') >= ${de}))`
+          : undefined,
         ate ? sql`${tarefaEventos.data} <= ${ate}` : undefined,
       ),
     )
     .orderBy(asc(tarefaEventos.data))
     .limit(LIMITE_EVENTOS_CALENDARIO);
+  return comConvidados(linhas);
 }
 
 /** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário
@@ -953,6 +1007,33 @@ export async function avisarAtribuicao(u: UsuarioSessao, antes: number[], depois
   const novos = depois.filter((p) => !antes.includes(p));
   if (novos.length) await avisarSobreTarefa(u, "atribuida", novos, t, quadro, `${nomeExibicao(u)} atribuiu uma tarefa a você`);
 }
+
+/** O CONVITE a um evento (os convidados NOVOS) e a RESPOSTA (a quem criou) — no sino, com o link que abre o evento. */
+export async function avisarConvite(u: UsuarioSessao, novos: number[], e: { id: number; titulo: string; data: string }, t: { id: number; ticket: number; titulo: string }, quadro: Quadro) {
+  if (!novos.length) return;
+  await notificar(
+    novos.map((usuarioId) => ({
+      usuarioId,
+      tipo: "convite" as const,
+      titulo: `${nomeExibicao(u)} convidou você: ${e.titulo}`,
+      texto: `${dataBRCurta(e.data)} · ${rotuloTicket(t.ticket)} ${t.titulo} · ${quadro.nome}`,
+      link: linkEvento(e.data, `e${e.id}`),
+      tarefaId: t.id,
+      quadroId: quadro.id,
+      ...atorDe(u),
+    })),
+    u.id,
+  );
+}
+export async function avisarResposta(u: UsuarioSessao, criadorId: number | null, resposta: RespostaConvite, e: { id: number; titulo: string; data: string }, t: { id: number }, quadroId: number) {
+  if (!criadorId) return;
+  const txt = resposta === "sim" ? "vai" : resposta === "nao" ? "não vai" : "talvez vá";
+  await notificar(
+    [{ usuarioId: criadorId, tipo: "resposta", titulo: `${nomeExibicao(u)} ${txt}: ${e.titulo}`, texto: dataBRCurta(e.data), link: linkEvento(e.data, `e${e.id}`), tarefaId: t.id, quadroId, ...atorDe(u) }],
+    u.id,
+  );
+}
+const dataBRCurta = (d: string) => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 
 /** As AUTOMAÇÕES do quadro (a de ação inválida some). */
 export async function listarAutomacoes(quadroId: number): Promise<Automacao[]> {

@@ -539,6 +539,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM calendario_tokens").get() as { n: number }).n, 0);
   });
 
+  it("0048 eventos de equipe: repetição, link, livre/ocupado, privado e convidados (cascade com o evento)", () => {
+    const cols = nomes(db, "SELECT name FROM pragma_table_info('tarefa_eventos')");
+    for (const c of ["recorrencia", "link_reuniao", "ocupado", "privado"]) assert.ok(cols.includes(c), c);
+    const a = aplicarTudo();
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9480, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9480, 9480, 'Q')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9480, 9480, 'L')");
+    a.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9480, 9480, 9480, 1, 'T')");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9480, 'U', 'u9480@x', 'h')");
+    a.exec("INSERT INTO tarefa_eventos (id, tarefa_id, titulo, data) VALUES (9480, 9480, 'Reunião', '2026-10-01')");
+    const e = a.prepare("SELECT ocupado, privado FROM tarefa_eventos WHERE id = 9480").get() as { ocupado: number; privado: number };
+    assert.deepEqual([e.ocupado, e.privado], [1, 0]);
+    a.exec("INSERT INTO tarefa_evento_convidados (evento_id, usuario_id) VALUES (9480, 9480)");
+    assert.equal((a.prepare("SELECT resposta FROM tarefa_evento_convidados").get() as { resposta: string }).resposta, "pendente");
+    assert.throws(() => a.exec("INSERT INTO tarefa_evento_convidados (evento_id, usuario_id) VALUES (9480, 9480)"));
+    a.exec("DELETE FROM tarefa_eventos WHERE id = 9480");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM tarefa_evento_convidados").get() as { n: number }).n, 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

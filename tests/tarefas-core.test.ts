@@ -537,10 +537,10 @@ describe("calendário por eventos", () => {
       t(4, { prazo: "2026-11-01" }),
     ];
     const eventos = [
-      { id: 7, tarefaId: 4, titulo: "Reunião", data: "2026-09-20", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:00", local: "Sala 2", descricao: null, cor: "#16a34a", lembreteMin: 30 },
-      { id: 8, tarefaId: 4, titulo: "Fora", data: "2026-10-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
-      { id: 9, tarefaId: 99, titulo: "Órfão", data: "2026-09-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
-      { id: 10, tarefaId: 4, titulo: "Viagem", data: "2026-08-30", dataFim: "2026-09-02", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
+      { id: 7, tarefaId: 4, titulo: "Reunião", data: "2026-09-20", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:00", local: "Sala 2", descricao: null, cor: "#16a34a", lembreteMin: 30, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] },
+      { id: 8, tarefaId: 4, titulo: "Fora", data: "2026-10-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] },
+      { id: 9, tarefaId: 99, titulo: "Órfão", data: "2026-09-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] },
+      { id: 10, tarefaId: 4, titulo: "Viagem", data: "2026-08-30", dataFim: "2026-09-02", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] },
     ];
     const ev = eventosDoCalendario(tarefas, eventos, "2026-09-01", "2026-09-30");
     const chaves = ev.map((e) => e.chave);

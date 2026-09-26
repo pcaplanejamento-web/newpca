@@ -93,7 +93,7 @@ describe("calendário profissional", () => {
   });
 
   it("mover evento: vários dias andam inteiros; com hora mantém a duração; preso às 23:59", () => {
-    const ev = { id: 1, tarefaId: 2, titulo: "E", data: "2026-09-10", dataFim: "2026-09-12", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: 60 };
+    const ev = { id: 1, tarefaId: 2, titulo: "E", data: "2026-09-10", dataFim: "2026-09-12", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: 60, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] };
     assert.deepEqual([eventoMovido(ev, "2026-09-20", null).data, eventoMovido(ev, "2026-09-20", null).dataFim], ["2026-09-20", "2026-09-22"]);
     assert.equal("id" in eventoMovido(ev, "2026-09-20", null), false);
     const h = { ...ev, dataFim: null, diaInteiro: false, horaInicio: "09:00", horaFim: "10:30" };
@@ -109,7 +109,7 @@ describe("calendário profissional", () => {
     const t = { id: 1, quadroId: 1, ticket: 5, titulo: "Pregão; limpeza", inicio: null, prazo: "2026-09-25", concluidaEm: null, recorrencia: null };
     const ev = eventosDoCalendario(
       [t],
-      [{ id: 3, tarefaId: 1, titulo: "Reunião, pauta", data: "2026-09-24", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: null, local: "Sala 2", descricao: "Linha 1\nLinha 2", cor: null, lembreteMin: 15 }],
+      [{ id: 3, tarefaId: 1, titulo: "Reunião, pauta", data: "2026-09-24", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: null, local: "Sala 2", descricao: "Linha 1\nLinha 2", cor: null, lembreteMin: 15, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] }],
       "2026-09-01",
       "2026-09-30",
     );
@@ -135,11 +135,11 @@ describe("validação do calendário", async () => {
   it("evento: data final e lembrete (opcionais, compatíveis com o formato anterior)", () => {
     const ant = eventoSchema.parse(base);
     assert.deepEqual([ant.dataFim, ant.lembreteMin], [null, null]);
-    const r = eventoSchema.parse({ ...base, dataFim: "2026-09-12", lembreteMin: 1440 });
+    const r = eventoSchema.parse({ ...base, dataFim: "2026-09-12", lembreteMin: 1440, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] });
     assert.deepEqual([r.dataFim, r.lembreteMin], ["2026-09-12", 1440]);
     assert.equal(eventoSchema.parse({ ...base, dataFim: "2026-09-10" }).dataFim, null);
     assert.equal(eventoSchema.safeParse({ ...base, dataFim: "2026-09-09" }).success, false);
-    assert.equal(eventoSchema.safeParse({ ...base, lembreteMin: 20000 }).success, false);
+    assert.equal(eventoSchema.safeParse({ ...base, lembreteMin: 20000, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] }).success, false);
   });
   it("feriado: data real, tipo conhecido", () => {
     assert.equal(feriadoSchema.safeParse({ data: "2026-08-05", nome: "Aniversário", tipo: "municipal", anual: true }).success, true);
@@ -168,5 +168,53 @@ describe("vistas e intervalo", async () => {
     assert.equal(c.lerOpcoesCalendario({ expedienteInicio: null }).expedienteInicio, null);
     assert.equal(c.lerOpcoesCalendario({ expedienteInicio: "18:00", expedienteFim: "08:00" }).expedienteInicio, null);
     assert.equal(c.lerOpcoesCalendario({}).expedienteInicio, "08:00");
+  });
+});
+
+describe("eventos de equipe (0048)", async () => {
+  const t = await import("../src/lib/tarefas-core.ts");
+  const { eventoSchema } = await import("../src/lib/tarefas-validation.ts");
+  const base = { id: 5, tarefaId: 1, titulo: "Reunião", data: "2026-09-01", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: "Sala", descricao: "x", cor: null, lembreteMin: 10, recorrencia: null, linkReuniao: "https://meet.x/a", ocupado: true, privado: false, criadoPor: 7, convidados: [{ usuarioId: 8, resposta: "sim" as const }] };
+  it("repetição: semanal nos dias, a cada N, até a data final; vários dias cruzam o intervalo", () => {
+    const r = { freq: "semanal" as const, intervalo: 1, dias: [2], ate: "2026-09-22" };
+    assert.deepEqual(t.ocorrenciasDoEvento({ data: "2026-09-01", dataFim: null, recorrencia: r }, "2026-09-01", "2026-09-30"), ["2026-09-01", "2026-09-08", "2026-09-15", "2026-09-22"]);
+    assert.deepEqual(t.ocorrenciasDoEvento({ data: "2026-09-01", dataFim: null, recorrencia: { ...r, ate: null } }, "2026-09-20", "2026-09-30"), ["2026-09-22", "2026-09-29"]);
+    assert.deepEqual(t.ocorrenciasDoEvento({ data: "2026-08-30", dataFim: "2026-09-02", recorrencia: null }, "2026-09-01", "2026-09-30"), ["2026-08-30"]);
+    const m = t.ocorrenciasDoEvento({ data: "2026-01-31", dataFim: null, recorrencia: { freq: "mensal", intervalo: 1, dias: [], ate: null } }, "2026-01-01", "2026-04-30");
+    assert.deepEqual(m, ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
+    assert.equal(t.lerRecorrenciaEvento(JSON.stringify(r))?.ate, "2026-09-22");
+    assert.equal(t.lerRecorrenciaEvento("lixo"), null);
+    assert.match(t.rotuloRecorrenciaEvento(r), /até 22\/09\/2026/);
+  });
+  it("eventosDoCalendario: a série vira ocorrências com chaves próprias", () => {
+    const ev = t.eventosDoCalendario(
+      [{ id: 1, quadroId: 1, ticket: 1, titulo: "T", inicio: null, prazo: null, concluidaEm: null, recorrencia: null }],
+      [{ ...base, recorrencia: { freq: "semanal", intervalo: 1, dias: [2], ate: null } }],
+      "2026-09-01",
+      "2026-09-16",
+    );
+    assert.deepEqual(ev.map((e) => e.chave), ["e5", "e5:2026-09-08", "e5:2026-09-15"]);
+    assert.equal(ev[1].repeticao?.freq, "semanal");
+    assert.equal(ev[1].convidados?.[0].resposta, "sim");
+  });
+  it("privado: quem não participa vê só 'Ocupado'; autor, convidado e responsável veem tudo", () => {
+    const p = { ...base, privado: true };
+    const resp = new Map([[1, [9]]]);
+    assert.equal(t.mascararPrivados([p], 3, resp)[0].titulo, "Ocupado");
+    assert.equal(t.mascararPrivados([p], 3, resp)[0].linkReuniao, null);
+    assert.equal(t.mascararPrivados([p], 7, resp)[0].titulo, "Reunião");
+    assert.equal(t.mascararPrivados([p], 8, resp)[0].titulo, "Reunião");
+    assert.equal(t.mascararPrivados([p], 9, resp)[0].titulo, "Reunião");
+    assert.equal(t.mascararPrivados([base], 3, resp)[0].titulo, "Reunião");
+    assert.deepEqual(t.dadosDoEventoGravado(base).convidados, [8]);
+  });
+  it("validação: link https, convidados sem repetir, repetição coerente, padrões", () => {
+    const d = { titulo: "E", data: "2026-09-10", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null };
+    const r = eventoSchema.parse({ ...d, convidados: [3, 3, 4] });
+    assert.deepEqual([r.convidados, r.ocupado, r.privado, r.recorrencia, r.linkReuniao], [[3, 4], true, false, null, null]);
+    assert.equal(eventoSchema.safeParse({ ...d, linkReuniao: "http://x" }).success, false);
+    assert.equal(eventoSchema.safeParse({ ...d, linkReuniao: "https://meet.google.com/abc" }).success, true);
+    assert.equal(eventoSchema.safeParse({ ...d, recorrencia: { freq: "semanal", intervalo: 1, dias: [1], ate: "2026-09-01" } }).success, false);
+    assert.deepEqual(eventoSchema.parse({ ...d, recorrencia: { freq: "mensal", intervalo: 2, dias: [1, 2], ate: null } }).recorrencia?.dias, []);
   });
 });

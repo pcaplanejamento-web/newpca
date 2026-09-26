@@ -6,7 +6,7 @@ import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
 import { nomeExibicao, urlFoto } from "./pessoa";
-import { notificacaoDePrazo, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
+import { lerRecorrenciaEvento, notificacaoDePrazo, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, type NovaNotificacao } from "./tarefas-sql";
 
 /**
@@ -115,6 +115,7 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
     const db = getDb();
     const agora = agoraBrasilia();
     const hoje = agora.slice(0, 10);
+    const ate = somarDias(hoje, Math.ceil(LEMBRETE_MAX_MIN / 1440) + 1);
     const linhas = await db
       .select({
         id: tarefaEventos.id,
@@ -125,6 +126,8 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
         horaFim: tarefaEventos.horaFim,
         lembreteMin: tarefaEventos.lembreteMin,
         local: tarefaEventos.local,
+        dataFim: tarefaEventos.dataFim,
+        recorrencia: tarefaEventos.recorrencia,
         tarefaId: tarefas.id,
         ticket: tarefas.ticket,
         tarefaTitulo: tarefas.titulo,
@@ -136,18 +139,23 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
       .where(
         and(
           sql`${tarefaEventos.lembreteMin} IS NOT NULL`,
-          gte(tarefaEventos.data, hoje),
-          lte(tarefaEventos.data, somarDias(hoje, Math.ceil(LEMBRETE_MAX_MIN / 1440) + 1)),
+          lte(tarefaEventos.data, ate),
+          // O evento de hoje em diante — ou a SÉRIE (repetição) que ainda não terminou.
+          sql`(${tarefaEventos.data} >= ${hoje} OR (${tarefaEventos.recorrencia} IS NOT NULL AND COALESCE(json_extract(${tarefaEventos.recorrencia}, '$.ate'), '9999-12-31') >= ${hoje}))`,
           eq(tarefas.arquivada, false),
           eq(tarefaQuadros.arquivado, false),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
-          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id}))`,
+          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id}) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
         ),
       )
       .limit(200);
     const novas: NovaNotificacao[] = [];
     for (const e of linhas)
-      if (lembreteDevido(e, agora)) novas.push({ usuarioId: u.id, ...notificacaoDeLembrete(e, { ticket: e.ticket, titulo: e.tarefaTitulo }, hoje), tarefaId: e.tarefaId, quadroId: e.quadroId });
+      // Cada OCORRÊNCIA da janela (a série repete o lembrete).
+      for (const data of ocorrenciasDoEvento({ data: e.data, dataFim: e.dataFim, recorrencia: lerRecorrenciaEvento(e.recorrencia) }, hoje, ate, 20)) {
+        const oc = { ...e, data, serieInicio: e.data };
+        if (lembreteDevido(oc, agora)) novas.push({ usuarioId: u.id, ...notificacaoDeLembrete(oc, { ticket: e.ticket, titulo: e.tarefaTitulo }, hoje), tarefaId: e.tarefaId, quadroId: e.quadroId });
+      }
     if (!novas.length) return;
     const cmds = comandosNotificacoes(db, novas);
     await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);

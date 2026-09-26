@@ -1034,9 +1034,12 @@ grava ao sair da página.
 imprimir; configurações; atalhos); criação rápida ao lado do ponto clicado (Evento | Tarefa, "(Sem título)" na grade, "Mais
 opções"); criar arrastando na grade; concluir a tarefa pelo círculo; painel de tarefas sem prazo (arrastar até um dia);
 Desfazer; horário de expediente; número da semana; fuso; vista Ano; atalhos C/G///?.
-🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail; convidados e confirmação de presença;
-videoconferência; local com mapa; repetição própria do evento; fuso secundário; disponibilidade (horários livres); importar
-`.ics`.
+✅ **Fase 8 — eventos de equipe (Pacote 2, migração `0048`):** convidados com confirmação de presença (Vai · Talvez · Não
+vai, notificação ao criador), link de videoconferência, local com mapa, repetição própria do evento (diária/semanal/mensal/
+anual, até uma data), Ocupado/Livre, evento privado (os outros veem "Ocupado"), "Pesquisar pessoas", ocultar recusados e
+lembrete padrão.
+🔜 **Do Google Agenda — a seguir (Pacote 3):** agendas externas (.ics por URL), busca em todos os meses, página de
+agendamento e fuso secundário; lembrete também por e-mail.
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

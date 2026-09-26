@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { diasExibidos, type FeriadoDia, N_DIAS, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario, semanaIso, type VistaCalendario } from "@/lib/calendario-core";
+import { diasExibidos, type FeriadoDia, N_DIAS, OPCOES_CALENDARIO_PADRAO, OPCOES_LEMBRETE, type OpcoesCalendario, semanaIso, type VistaCalendario } from "@/lib/calendario-core";
 import { dataBR, num } from "@/lib/format";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import {
@@ -40,7 +40,7 @@ import { ChipPreso } from "./BlocosTarefa";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { ehDesktop } from "./espacamento";
-import { SearchField, TextField } from "./Field";
+import { SearchField, SelectField, TextField } from "./Field";
 import {
   IconCalendar,
   IconCheck,
@@ -405,6 +405,7 @@ function EventoChip({
   onAbrir,
   onPegar,
   onConcluir,
+  recusado = false,
 }: {
   e: EventoCalendario;
   hoje: string;
@@ -413,15 +414,18 @@ function EventoChip({
   onAbrir: () => void;
   onPegar?: (ev: ReactPointerEvent<HTMLElement>) => void;
   onConcluir?: () => void;
+  /** Quem vê RECUSOU o convite (riscado, esmaecido). */
+  recusado?: boolean;
 }) {
   const { faixa, semaforo } = corDoEvento(e, hoje, corQuadro);
   const hora = horarioDe(e);
   const titulo = `${e.titulo}${hora ? ` — ${hora}` : ""} · ${e.pca ? e.pca.pcaNome : rotuloTicket(e.ticket)}${e.tipo === "periodo" ? ` — ${ROTULO_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)]}` : ""}${e.tipo === "recorrencia" ? (e.prevista ? " (ocorrência prevista)" : " (próxima ocorrência)") : ""}`;
   const tracejado = e.tipo === "recorrencia" || e.tipo === "pca";
+  const livre = e.ocupado === false;
   return (
     <div
-      className={`relative flex h-full min-w-0 items-stretch rounded-[6px] ${tracejado ? "border border-dashed" : ""}`}
-      style={{ background: `color-mix(in srgb, ${faixa} 14%, var(--surface))`, borderColor: tracejado ? faixa : undefined }}
+      className={`relative flex h-full min-w-0 items-stretch rounded-[6px] ${tracejado ? "border border-dashed" : livre ? "border" : ""} ${recusado ? "opacity-60" : ""}`}
+      style={{ background: livre ? "var(--surface)" : `color-mix(in srgb, ${faixa} 14%, var(--surface))`, borderColor: tracejado || livre ? faixa : undefined }}
     >
       {e.tipo === "periodo" && onConcluir ? (
         <button
@@ -444,7 +448,7 @@ function EventoChip({
         title={titulo}
         className={`flex min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
           compacta ? "h-full text-[11px]" : "min-h-11 text-[12.5px] lg:min-h-8"
-        } ${onPegar ? "cursor-grab active:cursor-grabbing" : ""} ${e.concluida ? "text-muted line-through decoration-faint" : ""}`}
+        } ${onPegar ? "cursor-grab active:cursor-grabbing" : ""} ${e.concluida || recusado ? "text-muted line-through decoration-faint" : ""}`}
       >
         {e.tipo === "periodo" && !onConcluir && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: semaforo }} />}
         {hora && <span className="shrink-0 font-semibold tabular-nums text-text-2">{e.horaInicio}</span>}
@@ -475,6 +479,7 @@ function EventoCaixa({
   onPegar,
   onRedimensionar,
   fimPrevia = null,
+  recusado = false,
 }: {
   e: EventoCalendario;
   hoje: string;
@@ -483,8 +488,10 @@ function EventoCaixa({
   onPegar?: (ev: ReactPointerEvent<HTMLElement>) => void;
   onRedimensionar?: (ev: ReactPointerEvent<HTMLElement>) => void;
   fimPrevia?: number | null;
+  recusado?: boolean;
 }) {
   const { faixa } = corDoEvento(e, hoje, corQuadro);
+  const livre = e.ocupado === false;
   const horario = fimPrevia != null ? `${e.horaInicio}–${horaDeMinutos(fimPrevia)}` : horarioDe(e);
   return (
     <div className="relative h-full w-full">
@@ -493,8 +500,11 @@ function EventoCaixa({
         onClick={onAbrir}
         onPointerDown={(ev) => onPegar?.(ev)}
         title={`${e.titulo} — ${horario} · ${origemCurta(e)}${e.local ? ` · ${e.local}` : ""}`}
-        className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab touch-none active:cursor-grabbing" : ""} ${e.concluida ? "text-muted line-through" : ""}`}
-        style={{ background: `color-mix(in srgb, ${faixa} 22%, var(--surface))`, boxShadow: `inset 3px 0 0 ${faixa}` }}
+        className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab touch-none active:cursor-grabbing" : ""} ${e.concluida || recusado ? "text-muted line-through" : ""} ${recusado ? "opacity-60" : ""}`}
+        style={{
+          background: livre ? "var(--surface)" : `color-mix(in srgb, ${faixa} 22%, var(--surface))`,
+          boxShadow: livre ? `inset 3px 0 0 ${faixa}, inset 0 0 0 1px ${faixa}` : `inset 3px 0 0 ${faixa}`,
+        }}
       >
         <span className="truncate font-semibold">{e.titulo}</span>
         <span className="truncate tabular-nums text-text-2">
@@ -607,6 +617,7 @@ export function CalendarioTarefas({
   semPrazo,
   nomeQuadro,
   onAbrirTarefa,
+  usuarioId = null,
 }: {
   eventos: EventoCalendario[];
   hoje: string;
@@ -633,6 +644,8 @@ export function CalendarioTarefas({
   semPrazo?: TarefaSemPrazo[];
   nomeQuadro?: (quadroId: number) => string | undefined;
   onAbrirTarefa?: (id: number) => void;
+  /** Quem vê (os convites que RECUSOU ficam riscados — ou somem, com "Mostrar eventos recusados" desligado). */
+  usuarioId?: number | null;
 }) {
   const raiz = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(raiz);
@@ -654,7 +667,11 @@ export function CalendarioTarefas({
   const nCols = opcoes.ocultarFimDeSemana ? 5 : 7;
   const colunasSemana = { gridTemplateColumns: `${opcoes.numeroSemana ? "1.75rem " : ""}repeat(${nCols}, minmax(0, 1fr))` };
   const prefixo = prefixoMes(mes);
-  const eventos = useMemo(() => (opcoes.ocultarConcluidas ? eventosEntrada.filter((e) => !e.concluida) : eventosEntrada), [eventosEntrada, opcoes.ocultarConcluidas]);
+  const recusou = (e: EventoCalendario) => usuarioId != null && !!e.convidados?.some((c) => c.usuarioId === usuarioId && c.resposta === "nao");
+  const eventos = useMemo(
+    () => eventosEntrada.filter((e) => !(opcoes.ocultarConcluidas && e.concluida) && !(opcoes.ocultarRecusados && usuarioId != null && e.convidados?.some((c) => c.usuarioId === usuarioId && c.resposta === "nao"))),
+    [eventosEntrada, opcoes.ocultarConcluidas, opcoes.ocultarRecusados, usuarioId],
+  );
   const dnd = useArrastoEventos(onMover);
   const rd = useRedimensionar(onRedimensionar);
   const cria = useCriarArrastando(onCriar);
@@ -822,7 +839,7 @@ export function CalendarioTarefas({
         </div>
         <div className="space-y-1">
           {lista.map((e) => (
-            <EventoChip key={e.chave} e={e} hoje={hoje} corQuadro={corQuadro} onAbrir={() => abrir(e)} onPegar={pegar(e)} onConcluir={concluir(e)} />
+            <EventoChip key={e.chave} e={e} hoje={hoje} corQuadro={corQuadro} onAbrir={() => abrir(e)} onPegar={pegar(e)} onConcluir={concluir(e)} recusado={recusou(e)} />
           ))}
           {rasc && (
             <div className="h-9">
@@ -885,7 +902,7 @@ export function CalendarioTarefas({
               className={`z-[1] min-w-0 p-0.5 ${dnd.arrasto ? "pointer-events-none" : ""} ${dnd.arrasto?.chave === f.item.chave ? "opacity-40" : ""}`}
               style={{ gridColumn: `${f.coluna + 2} / span ${f.span}`, gridRow: f.linha + 1 }}
             >
-              <EventoChip e={f.item} hoje={hoje} corQuadro={corQuadro} compacta onAbrir={() => abrir(f.item)} onPegar={pegar(f.item)} onConcluir={concluir(f.item)} />
+              <EventoChip e={f.item} hoje={hoje} corQuadro={corQuadro} compacta onAbrir={() => abrir(f.item)} onPegar={pegar(f.item)} onConcluir={concluir(f.item)} recusado={recusou(f.item)} />
             </div>
           ))}
           {rascTopo && (
@@ -989,6 +1006,7 @@ export function CalendarioTarefas({
                           onAbrir={() => abrir(l.evento)}
                           onPegar={pegar(l.evento)}
                           fimPrevia={fimPrevia}
+                          recusado={recusou(l.evento)}
                           onRedimensionar={onRedimensionar && l.evento.tipo === "evento" ? (ev) => rd.iniciar(ev, l.evento) : undefined}
                         />
                       </div>
@@ -1096,7 +1114,7 @@ export function CalendarioTarefas({
                       className={`z-[1] min-w-0 px-0.5 py-px ${f.antes ? "pl-0" : ""} ${f.depois ? "pr-0" : ""} ${dnd.arrasto ? "pointer-events-none" : ""} ${dnd.arrasto?.chave === f.item.chave ? "opacity-40" : ""}`}
                       style={{ gridColumn: `${f.coluna + off} / span ${f.span}`, gridRow: f.linha + 2 }}
                     >
-                      <EventoChip e={f.item} hoje={hoje} corQuadro={corQuadro} compacta onAbrir={() => abrir(f.item)} onPegar={pegar(f.item)} onConcluir={concluir(f.item)} />
+                      <EventoChip e={f.item} hoje={hoje} corQuadro={corQuadro} compacta onAbrir={() => abrir(f.item)} onPegar={pegar(f.item)} onConcluir={concluir(f.item)} recusado={recusou(f.item)} />
                     </div>
                   ))}
                 {rasc && linhaRasc >= 0 && (
@@ -1304,6 +1322,7 @@ export function CalendarioTarefas({
               <hr className="my-1.5 border-border" />
               <ItemMarcar rotulo="Mostrar fins de semana" marcado={!opcoes.ocultarFimDeSemana} onClick={() => opcao("ocultarFimDeSemana", !opcoes.ocultarFimDeSemana)} />
               <ItemMarcar rotulo="Mostrar tarefas concluídas" marcado={!opcoes.ocultarConcluidas} onClick={() => opcao("ocultarConcluidas", !opcoes.ocultarConcluidas)} />
+              {usuarioId != null && <ItemMarcar rotulo="Mostrar eventos recusados" marcado={!opcoes.ocultarRecusados} onClick={() => opcao("ocultarRecusados", !opcoes.ocultarRecusados)} />}
               <ItemMarcar rotulo="Mostrar número da semana" marcado={opcoes.numeroSemana} onClick={() => opcao("numeroSemana", !opcoes.numeroSemana)} />
             </>
           )}
@@ -1516,8 +1535,23 @@ export function CalendarioTarefas({
               <Switch checked={opcoes.inicioSegunda} onChange={(v) => opcao("inicioSegunda", v)} label="Semana começa na segunda" />
               <Switch checked={!opcoes.ocultarFimDeSemana} onChange={(v) => opcao("ocultarFimDeSemana", !v)} label="Mostrar fins de semana" />
               <Switch checked={!opcoes.ocultarConcluidas} onChange={(v) => opcao("ocultarConcluidas", !v)} label="Mostrar tarefas concluídas" />
+              {usuarioId != null && <Switch checked={!opcoes.ocultarRecusados} onChange={(v) => opcao("ocultarRecusados", !v)} label="Mostrar eventos recusados" />}
               <Switch checked={opcoes.numeroSemana} onChange={(v) => opcao("numeroSemana", v)} label="Mostrar número da semana" />
             </section>
+          )}
+          {onOpcoes && (
+            <SelectField
+              label="Lembrete padrão dos eventos novos"
+              value={opcoes.lembretePadrao == null ? "" : String(opcoes.lembretePadrao)}
+              onChange={(e) => opcao("lembretePadrao", e.target.value === "" ? null : Number(e.target.value))}
+            >
+              <option value="">Sem lembrete</option>
+              {OPCOES_LEMBRETE.map((o) => (
+                <option key={o.min} value={String(o.min)}>
+                  {o.rotulo}
+                </option>
+              ))}
+            </SelectField>
           )}
           {onOpcoes && (
             <section className="space-y-2" aria-label="Horário de expediente">

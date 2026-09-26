@@ -5,7 +5,7 @@ import { dataIsoBrasilia } from "@/lib/format";
 import { gruposDoUsuario } from "@/lib/grupos";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { eventosDosQuadros, listarQuadros, tarefasDoCalendario } from "@/lib/tarefas";
-import { CHAVE_OCULTOS_CALENDARIO, eventosDoCalendario, eventoVisivel, lerOcultos, somarDias } from "@/lib/tarefas-core";
+import { CHAVE_OCULTOS_CALENDARIO, eventosDoCalendario, eventoVisivel, lerOcultos, mascararPrivados, somarDias } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   const [tarefas, eventos, prefs] = await Promise.all([tarefasDoCalendario(ids, de, ate), eventosDosQuadros(ids, de, ate), listarPreferenciasTabela(u.id, CHAVE_OCULTOS_CALENDARIO)]);
   const ocultos = lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]);
   const origem = new URL(req.url).origin;
-  const lista = eventosDoCalendario(tarefas, eventos, de, ate, hoje).filter((e) => eventoVisivel(e, ocultos));
+  const visiveis = mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.pessoas])));
+  const lista = eventosDoCalendario(tarefas, visiveis, de, ate, hoje).filter((e) => eventoVisivel(e, ocultos));
   const ics = gerarIcs(lista, { nome: `Calendário — ${u.nome}`, agora: carimboIcs(new Date()), dominio: new URL(req.url).hostname, url: (e) => `${origem}${linkEvento(e.inicio, e.chave)}` });
   return new Response(ics, {
     headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'inline; filename="calendario.ics"', "Cache-Control": "private, max-age=300" },

@@ -2026,6 +2026,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Atalhos:** D/X/S(W)/M/Y/A, T, ←/→ ou P/N, **C** criar, **G** ir para uma data, **/** buscar, **?** ajuda.
   - **Impressão:** "Imprimir" no menu de vistas; o menu, o cabeçalho e a navegação inferior do app têm `print:hidden`.
   - A aba Calendário do quadro usa o MESMO componente (opções gravadas, concluir, tarefas sem prazo do quadro).
+- **FASE 8 — EVENTOS DE EQUIPE (migração `0048`, aditiva):** `tarefa_eventos` + `recorrencia` (JSON `RecorrenciaEvento`
+  {freq diaria|semanal|mensal|anual, intervalo, dias, ate}), `link_reuniao` (só https), `ocupado` (Ocupado | Livre — o Livre
+  aparece CONTORNADO) e `privado`; tabela **`tarefa_evento_convidados`** (evento + usuário cascade, `resposta`
+  pendente|sim|nao|talvez, `respondido_em`). Núcleo puro (`tarefas-core`, testado): `ocorrenciasDoEvento` (a SÉRIE expandida
+  no intervalo, teto 400 — chave `e{id}:{data}`; mover uma ocorrência move a série pelo DELTA de dias), `rotuloRecorrenciaEvento`,
+  `participaDoEvento`/**`mascararPrivados`** (o evento privado de quem não participa vira "Ocupado", sem local/descrição/link —
+  aplicado no SERVIDOR: carga do calendário, quadro, `GET /api/tarefas/[id]` e o feed ICS) e `dadosDoEventoGravado`. Rotas:
+  convidados = pessoas do grupo (`pessoasValidas`), avisados por notificação `convite`; o privado só é editado por quem
+  participa (403); **`POST /api/tarefas/eventos/[id]/resposta`** (só o convidado; avisa o criador — `resposta`). Lembretes
+  derivados incluem os convidados (menos quem recusou) e as ocorrências da série. UI: `EditorEvento` com Repetição
+  (`EditorRepeticao`, dias da semana em chips), Convidados (`SeletorPessoas`), link da reunião, Ocupado/Livre e Privado;
+  `EventoBanner` com a repetição, "Abrir no mapa", "Entrar na reunião", os convidados com a resposta e **"Você vai?"** (Vai ·
+  Talvez · Não vai, otimista); lateral do módulo com **"Pesquisar pessoas"** (ver só os eventos delas) e a opção "Ocultar
+  recusados"; o **lembrete padrão** (Configurações do calendário) preenche o evento novo.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

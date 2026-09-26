@@ -428,7 +428,7 @@ export function TarefaDetalhe({
 
   const acoesChecklist = nova ? acoesChecklistRascunho(r.checklist, (v) => set("checklist", v)) : checklistServidor;
   const nChecklist = acoesChecklist?.itens.length ?? existente?.checklist.total ?? 0;
-  const eventosVisiveis = nova ? r.eventos.map((e, i) => ({ ...e, id: i + 1 })) : (conteudo?.eventos ?? []);
+  const eventosVisiveis = nova ? r.eventos.map((e, i) => ({ ...e, id: i + 1, convidados: e.convidados.map((u) => ({ usuarioId: u, resposta: "pendente" as const })) })) : (conteudo?.eventos ?? []);
   const nEventos = nova ? r.eventos.length : (conteudo?.eventos.length ?? existente?.eventos ?? 0);
   /** Grava UM evento: na tarefa nova, no rascunho; na gravada, na hora (e recarrega o conteúdo). */
   const salvarEvento = async (id: number | null, d: DadosEvento): Promise<boolean> => {
@@ -595,7 +595,15 @@ export function TarefaDetalhe({
         return carregando ? (
           <p className="text-[12.5px] text-muted">Carregando…</p>
         ) : (
-          <EventosTarefa eventos={eventosVisiveis} hoje={hoje} onSalvar={salvarEvento} onExcluir={excluirEventoDaTarefa} ocupado={gravandoEvento} />
+          <EventosTarefa
+            eventos={eventosVisiveis}
+            hoje={hoje}
+            onSalvar={salvarEvento}
+            onExcluir={excluirEventoDaTarefa}
+            ocupado={gravandoEvento}
+            pessoas={nova ? undefined : pessoas}
+            usuarioId={usuarioId}
+          />
         );
       case "recorrencia":
         return <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />;

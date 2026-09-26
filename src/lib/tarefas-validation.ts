@@ -70,6 +70,8 @@ export const blocosSchema = z
     return new Set(unicos).size === unicos.length;
   }, "Bloco repetido.");
 
+/** Teto de convidados por evento. */
+export const MAX_CONVIDADOS = 50;
 const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM).");
 /** Um EVENTO da tarefa (bloco "Eventos"): dia inteiro ou com horário (o fim, se houver, depois do início). */
 export const eventoSchema = z
@@ -84,7 +86,27 @@ export const eventoSchema = z
     descricao: z.string().trim().max(2000, "Descrição com até 2.000 caracteres.").nullable(),
     cor: cor.nullable(),
     lembreteMin: z.number().int().min(0).max(LEMBRETE_MAX_MIN, "Lembrete de até 1 semana antes.").nullable().optional(),
+    recorrencia: z
+      .object({
+        freq: z.enum(FREQUENCIAS),
+        intervalo: z.number().int().min(1, "Intervalo de 1 a 365.").max(365, "Intervalo de 1 a 365."),
+        dias: z.array(z.number().int().min(0).max(6)).max(7),
+        ate: data.nullable(),
+      })
+      .nullable()
+      .optional(),
+    linkReuniao: z
+      .string()
+      .trim()
+      .max(500, "Link com até 500 caracteres.")
+      .refine((u) => !u || /^https:\/\/[^\s]+$/i.test(u), "Use um link https://.")
+      .nullable()
+      .optional(),
+    ocupado: z.boolean().optional(),
+    privado: z.boolean().optional(),
+    convidados: ids(MAX_CONVIDADOS).optional(),
   })
+  .refine((e) => !e.recorrencia?.ate || e.recorrencia.ate >= e.data, { message: "A repetição termina antes do evento.", path: ["recorrencia"] })
   .refine((e) => !e.dataFim || e.dataFim >= e.data, { message: "A data final tem de ser igual ou depois da data.", path: ["dataFim"] })
   .refine((e) => e.diaInteiro || e.horaInicio != null, { message: "Informe a hora de início (ou marque dia inteiro).", path: ["horaInicio"] })
   .refine((e) => e.diaInteiro || !e.horaInicio || !e.horaFim || e.horaFim > e.horaInicio, { message: "O fim tem de ser depois do início.", path: ["horaFim"] })
@@ -96,7 +118,14 @@ export const eventoSchema = z
     local: e.local || null,
     descricao: e.descricao || null,
     lembreteMin: e.lembreteMin ?? null,
+    recorrencia: e.recorrencia ? { ...e.recorrencia, dias: e.recorrencia.freq === "semanal" ? [...new Set(e.recorrencia.dias)].sort() : [] } : null,
+    linkReuniao: e.linkReuniao || null,
+    ocupado: e.ocupado ?? true,
+    privado: e.privado ?? false,
+    convidados: e.convidados ?? [],
   }));
+/** A RESPOSTA de um convidado. */
+export const respostaConviteSchema = z.object({ resposta: z.enum(["sim", "nao", "talvez"]) });
 /** Teto de eventos por tarefa. */
 export const MAX_EVENTOS_TAREFA = 100;
 

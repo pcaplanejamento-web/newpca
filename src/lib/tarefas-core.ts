@@ -641,7 +641,7 @@ export function proximaOcorrencia(
 
 // ─── Fase 3: NOTIFICAÇÕES de PRAZO (derivadas na leitura — sem cron) ─────────────────────────────────────────
 
-export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete"] as const;
+export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete", "convite", "resposta"] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 
 /** O link que abre a tarefa no quadro. */
@@ -963,10 +963,84 @@ export type EventoTarefa = {
   cor: string | null;
   /** Minutos ANTES do início para o lembrete no sino; `null` = sem lembrete. */
   lembreteMin: number | null;
+  /** A REPETIÇÃO própria do evento (migração `0048`); `null` = não se repete. */
+  recorrencia: RecorrenciaEvento | null;
+  /** Link da reunião (Meet/Teams/Zoom). */
+  linkReuniao: string | null;
+  /** Ocupado (padrão) ou livre. */
+  ocupado: boolean;
+  /** Privado: quem não participa vê só "Ocupado". */
+  privado: boolean;
+  /** Quem criou (participa sempre). */
+  criadoPor: number | null;
+  /** Os CONVIDADOS e a resposta de cada um. */
+  convidados: ConvidadoEvento[];
 };
 
-/** Os dados de um EVENTO a gravar (sem id nem tarefa). */
-export type DadosEvento = Omit<EventoTarefa, "id" | "tarefaId">;
+/** A resposta de um convidado. */
+export const RESPOSTAS_CONVITE = ["pendente", "sim", "nao", "talvez"] as const;
+export type RespostaConvite = (typeof RESPOSTAS_CONVITE)[number];
+export const ROTULO_RESPOSTA: Record<RespostaConvite, string> = { pendente: "Sem resposta", sim: "Vai", nao: "Não vai", talvez: "Talvez" };
+export type ConvidadoEvento = { usuarioId: number; resposta: RespostaConvite };
+export const coerceResposta = (v: unknown): RespostaConvite => ((RESPOSTAS_CONVITE as readonly unknown[]).includes(v) ? (v as RespostaConvite) : "pendente");
+
+/** A REPETIÇÃO de um evento (como a do Google: diária/semanal com os dias/mensal/anual, a cada N, até uma data opcional). */
+export type RecorrenciaEvento = { freq: Frequencia; intervalo: number; dias: number[]; ate: string | null };
+export function lerRecorrenciaEvento(v: unknown): RecorrenciaEvento | null {
+  const r = lerRecorrencia(v);
+  if (!r) return null;
+  let o: Record<string, unknown> = {};
+  try {
+    o = (typeof v === "string" ? JSON.parse(v) : v) as Record<string, unknown>;
+  } catch {
+    o = {};
+  }
+  const ate = typeof o?.ate === "string" && dataValida(o.ate) ? o.ate : null;
+  return { freq: r.freq, intervalo: r.intervalo, dias: r.dias ?? [], ate };
+}
+export const rotuloRecorrenciaEvento = (r: RecorrenciaEvento) =>
+  `${rotuloRecorrencia({ ...r, base: "prazo" })}${r.ate ? ` até ${r.ate.slice(8)}/${r.ate.slice(5, 7)}/${r.ate.slice(0, 4)}` : ""}`;
+
+/**
+ * As datas de INÍCIO das ocorrências de um evento que CRUZAM `de`–`ate` (a 1ª é a própria data; a repetição para na data
+ * final dela; o evento de vários dias conta pela duração). Teto `max`.
+ */
+export function ocorrenciasDoEvento(e: Pick<EventoTarefa, "data" | "dataFim" | "recorrencia">, de: string, ate: string, max = 400): string[] {
+  const dur = dataValida(e.dataFim) && e.dataFim > e.data ? diasEntre(e.data, e.dataFim) : 0;
+  const cruza = (d: string) => somarDias(d, dur) >= de && d <= ate;
+  if (!e.recorrencia) return cruza(e.data) ? [e.data] : [];
+  const r: Recorrencia = { freq: e.recorrencia.freq, intervalo: e.recorrencia.intervalo, dias: e.recorrencia.dias, base: "prazo" };
+  const fimSerie = e.recorrencia.ate && e.recorrencia.ate < ate ? e.recorrencia.ate : ate;
+  const out = cruza(e.data) ? [e.data] : [];
+  const diaAlvo = Number(e.data.slice(8, 10));
+  let d = e.data;
+  for (let i = 0; i < 5000 && out.length < max; i++) {
+    d = passo(r, d, diaAlvo);
+    if (d > fimSerie) break;
+    if (cruza(d)) out.push(d);
+  }
+  return out;
+}
+
+/** Os dados a GRAVAR de um evento (sem id/tarefa/autor; convidados = os ids). */
+export type DadosEvento = Omit<EventoTarefa, "id" | "tarefaId" | "criadoPor" | "convidados"> & { convidados: number[] };
+export const dadosDoEventoGravado = (e: EventoTarefa): DadosEvento => {
+  const { id: _i, tarefaId: _t, criadoPor: _c, convidados, ...d } = e;
+  return { ...d, convidados: convidados.map((c) => c.usuarioId) };
+};
+
+/** Quem PARTICIPA do evento (vê o privado): quem criou, os convidados e os responsáveis da tarefa. */
+export const participaDoEvento = (e: Pick<EventoTarefa, "criadoPor" | "convidados">, usuarioId: number, responsaveis: number[] = []) =>
+  e.criadoPor === usuarioId || e.convidados.some((c) => c.usuarioId === usuarioId) || responsaveis.includes(usuarioId);
+
+/** O PRIVADO para quem não participa: só "Ocupado" (sem local, descrição, link nem convidados). */
+export function mascararPrivados(eventos: EventoTarefa[], usuarioId: number, responsaveisPorTarefa: Map<number, number[]>): EventoTarefa[] {
+  return eventos.map((e) =>
+    e.privado && !participaDoEvento(e, usuarioId, responsaveisPorTarefa.get(e.tarefaId))
+      ? { ...e, titulo: "Ocupado", local: null, descricao: null, linkReuniao: null, convidados: [], lembreteMin: null }
+      : e,
+  );
+}
 
 /** De onde vem o evento do calendário: o PERÍODO da tarefa (início → prazo), uma OCORRÊNCIA futura da recorrência, um
  * EVENTO cadastrado ou a PREVISÃO DE ENTREGA de um DFD do PCA (o cronograma de contratações). */
@@ -1018,6 +1092,14 @@ export type EventoCalendario = {
   prevista: boolean;
   /** O DFD (tipo `pca`); nos demais, `null`. */
   pca: EventoPca | null;
+  /** Do evento cadastrado (os demais: livre/sem convidados). */
+  linkReuniao?: string | null;
+  ocupado?: boolean;
+  privado?: boolean;
+  criadoPor?: number | null;
+  convidados?: ConvidadoEvento[];
+  /** A regra, quando o evento cadastrado se repete (o banner diz qual). */
+  repeticao?: RecorrenciaEvento | null;
 };
 
 export const horaValida = (h: string | null | undefined): h is string => !!h && /^([01]\d|2[0-3]):[0-5]\d$/.test(h);
@@ -1104,25 +1186,32 @@ export function eventosDoCalendario(
   for (const e of eventos) {
     const t = porId.get(e.tarefaId);
     if (!t || !dataValida(e.data)) continue;
-    const fim = fimDoEvento(e);
-    if (fim < de || e.data > ate) continue;
+    const dur = diasEntre(e.data, fimDoEvento(e));
     const comHora = !e.diaInteiro && horaValida(e.horaInicio);
-    out.push({
-      ...base(t),
-      chave: `e${e.id}`,
-      tipo: "evento",
-      titulo: e.titulo,
-      inicio: e.data,
-      fim,
-      lembreteMin: e.lembreteMin,
-      diaInteiro: !comHora,
-      horaInicio: comHora ? e.horaInicio : null,
-      horaFim: comHora && horaValida(e.horaFim) ? e.horaFim : null,
-      local: e.local,
-      descricao: e.descricao,
-      cor: e.cor,
-      eventoId: e.id,
-    });
+    for (const inicio of ocorrenciasDoEvento(e, de, ate))
+      out.push({
+        ...base(t),
+        chave: inicio === e.data ? `e${e.id}` : `e${e.id}:${inicio}`,
+        tipo: "evento",
+        titulo: e.titulo,
+        inicio,
+        fim: somarDias(inicio, dur),
+        lembreteMin: e.lembreteMin,
+        recorrente: e.recorrencia != null,
+        repeticao: e.recorrencia,
+        linkReuniao: e.linkReuniao,
+        ocupado: e.ocupado,
+        privado: e.privado,
+        criadoPor: e.criadoPor,
+        convidados: e.convidados,
+        diaInteiro: !comHora,
+        horaInicio: comHora ? e.horaInicio : null,
+        horaFim: comHora && horaValida(e.horaFim) ? e.horaFim : null,
+        local: e.local,
+        descricao: e.descricao,
+        cor: e.cor,
+        eventoId: e.id,
+      });
   }
   return out.sort(
     (a, b) =>
