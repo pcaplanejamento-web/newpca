@@ -58,8 +58,9 @@ describe("calendário profissional", () => {
   });
 
   it("opções: leitura tolerante e dias exibidos sem o fim de semana", () => {
-    assert.deepEqual(lerOpcoesCalendario(null), { inicioSegunda: false, ocultarFimDeSemana: false });
-    assert.deepEqual(lerOpcoesCalendario({ inicioSegunda: true, ocultarFimDeSemana: "sim" }), { inicioSegunda: true, ocultarFimDeSemana: false });
+    const o = lerOpcoesCalendario({ inicioSegunda: true, ocultarFimDeSemana: "sim" });
+    assert.deepEqual([o.inicioSegunda, o.ocultarFimDeSemana], [true, false]);
+    assert.equal(lerOpcoesCalendario(null).inicioSegunda, false);
     assert.deepEqual(diasExibidos(semanaDe("2026-09-23"), { ocultarFimDeSemana: true }), ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"]);
   });
 
@@ -145,5 +146,27 @@ describe("validação do calendário", async () => {
     assert.equal(feriadoSchema.safeParse({ data: "2027-02-29", nome: "X", tipo: "municipal", anual: false }).success, false);
     assert.equal(feriadoSchema.safeParse({ data: "2026-08-05", nome: " ", tipo: "municipal", anual: false }).success, false);
     assert.equal(feriadoSchema.safeParse({ data: "2026-08-05", nome: "X", tipo: "outro", anual: false }).success, false);
+  });
+});
+
+describe("vistas e intervalo", async () => {
+  const c = await import("../src/lib/calendario-core.ts");
+  it("semana ISO", () => {
+    assert.equal(c.semanaIso("2026-01-01"), 1);
+    assert.equal(c.semanaIso("2026-09-25"), 39);
+    assert.equal(c.semanaIso("2027-01-01"), 53);
+    assert.equal(c.semanaIso("2024-12-30"), 1);
+  });
+  it("intervalo: semanas do mês + 1 semana; ano inteiro", () => {
+    assert.deepEqual(c.intervaloCalendario({ ano: 2026, mes: 9 }, 0), { de: "2026-08-30", ate: "2026-10-10" });
+    assert.deepEqual(c.intervaloCalendario({ ano: 2026, mes: 9 }, 1), { de: "2026-08-31", ate: "2026-10-11" });
+    assert.deepEqual(c.intervaloCalendario({ ano: 2026, mes: 9 }, 0, true), { de: "2025-12-25", ate: "2027-01-07" });
+  });
+  it("opções: expediente válido ou nenhum", () => {
+    const o = c.lerOpcoesCalendario({ expedienteInicio: "07:30", expedienteFim: "17:00", numeroSemana: true });
+    assert.deepEqual([o.expedienteInicio, o.expedienteFim, o.numeroSemana, o.ocultarConcluidas], ["07:30", "17:00", true, false]);
+    assert.equal(c.lerOpcoesCalendario({ expedienteInicio: null }).expedienteInicio, null);
+    assert.equal(c.lerOpcoesCalendario({ expedienteInicio: "18:00", expedienteFim: "08:00" }).expedienteInicio, null);
+    assert.equal(c.lerOpcoesCalendario({}).expedienteInicio, "08:00");
   });
 });

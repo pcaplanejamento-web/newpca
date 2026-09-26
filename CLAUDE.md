@@ -1998,6 +1998,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Robustez:** a preferência de ocultos pendente grava ao sair da página (`keepalive`); o contêiner avisa (`truncado`)
     quando uma carga bate no teto (`LIMITE_EVENTOS_CALENDARIO`/`LIMITE_TAREFAS_CALENDARIO`); depois de salvar a tarefa
     aberta ao lado, só o resumo dela é relido (`GET /api/tarefas/[id]?contexto=tarefa`).
+- **FASE 7 — CALENDÁRIO em TELA CHEIA, no padrão do Google Agenda (sem migração):**
+  - **Layout:** o `CalendarioTarefas` ocupa do topo até o fim do display (`useAlturaTela`: o respiro de baixo do `<main>`
+    já soma a navegação inferior no celular) — a PÁGINA NÃO ROLA; a lateral, a grade e os painéis rolam por dentro
+    (contêineres que rolam são `relative`: os `input.sr-only` das caixas de marcar não escapam do corte). Barra numa
+    linha: menu (celular) · Hoje · ‹ › · o período · **menu de VISTAS** (`Dropdown`: Dia · 4 dias · Semana · Mês · Ano ·
+    Programação com as teclas D/X/S/M/Y/A + Mostrar fins de semana / tarefas concluídas / número da semana + Imprimir) ·
+    atalhos · ⚙ **Configurações** (`Switch`es das opções + horário de EXPEDIENTE + o slot `configuracoes` — exportar/assinar)
+    · painel das **tarefas sem prazo** · Criar. Lateral (16rem): os NÚMEROS, o conteúdo do host (no módulo: os filtros das
+    tarefas, o mini-mês com os dias À VISTA destacados, tipos e conjuntos) e a legenda; no celular, folha. A vista e o painel
+    ficam lembrados no aparelho (`localStorage`, conveniência).
+  - **Mês** enche a altura: quantas faixas cabem por dia sai da altura REAL da linha (`useAltura`); "+N mais" abre o dia numa
+    `JanelaFlutuante`; tocar num dia vazio cria. **Dia · 4 dias (`N_DIAS`) · Semana**: grade com o fuso (GMT-03), o expediente
+    sombreado (abre no início dele), PRESSIONAR E ARRASTAR num horário vazio cria com o intervalo (`useCriarArrastando`; no
+    toque, o toque simples). **Ano**: os 12 meses com pontos (o host carrega o ano inteiro — `onAno` → `?ano=1`;
+    `intervaloCalendario` = a MESMA conta no servidor e no cliente: as semanas do mês + 1 semana, ou o ano). **Programação**:
+    a lista, rolando até hoje.
+  - **Criação rápida** (`JanelaFlutuante`, DS: ao lado do ponto clicado, arrastável pela alça, fecha no Esc/toque fora; no
+    celular vira folha): o "(Sem título)" aparece JÁ na grade (`rascunho`); **Evento** (numa tarefa aberta, com ou sem
+    horário) ou **Tarefa** (nova — quadro + lista + prazo no dia; `POST /api/tarefas`); "Mais opções" = o formulário completo
+    (a tarefa nova é criada e abre ao lado).
+  - **Concluir pelo calendário:** o período da tarefa leva o CÍRCULO (como a tarefa do Google) — leva à 1ª lista de concluídas
+    (ou à 1ª aberta, reabrindo) pelo mesmo `PATCH` do detalhe (automações/recorrência valem); `listasDosQuadros` na carga e
+    `TarefaCalendario.listaId`.
+  - **Tarefas sem prazo** (painel à direita): arrastar até um dia define o prazo; tocar abre a tarefa ao lado.
+  - **Desfazer** (`toast.desfazer` — o aviso ganhou o botão): mover, redimensionar, concluir/reabrir e excluir evento.
+  - **Atalhos:** D/X/S(W)/M/Y/A, T, ←/→ ou P/N, **C** criar, **G** ir para uma data, **/** buscar, **?** ajuda.
+  - **Impressão:** "Imprimir" no menu de vistas; o menu, o cabeçalho e a navegação inferior do app têm `print:hidden`.
+  - A aba Calendário do quadro usa o MESMO componente (opções gravadas, concluir, tarefas sem prazo do quadro).
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
@@ -2202,7 +2230,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`CalendarioTarefas`**/**`BarraCalendario`**/**`MiniMes`**/**`EventoBanner`**/**`EventosTarefa`**/**`EditorEvento`** (o
-  Calendário por eventos — ver Tarefas FASE 5),
+  Calendário por eventos — ver Tarefas FASES 5–7), **`JanelaFlutuante`** (janela ancorada ao ponto clicado, arrastável; folha no
+  celular — a criação rápida do Calendário), **`AssinaturaCalendario`** (exportar/assinar `.ics`),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),

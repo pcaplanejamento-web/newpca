@@ -135,16 +135,72 @@ export function avisoDiaNaoUtil(dia: string | null, feriados: Map<string, Feriad
 
 // ─── Opções da pessoa ─────────────────────────────────────────────────────────────────────────────────────────
 
-export type OpcoesCalendario = { inicioSegunda: boolean; ocultarFimDeSemana: boolean };
-export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = { inicioSegunda: false, ocultarFimDeSemana: false };
+/** As OPÇÕES da pessoa (`calendario:opcoes`): semana na segunda, sem fim de semana, sem as tarefas concluídas, o número
+ * da semana e o HORÁRIO DE EXPEDIENTE (a grade de horas sombreia o que fica fora e abre no início). */
+export type OpcoesCalendario = {
+  inicioSegunda: boolean;
+  ocultarFimDeSemana: boolean;
+  ocultarConcluidas: boolean;
+  numeroSemana: boolean;
+  /** "HH:MM"; `null` = sem expediente. */
+  expedienteInicio: string | null;
+  expedienteFim: string | null;
+};
+export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = {
+  inicioSegunda: false,
+  ocultarFimDeSemana: false,
+  ocultarConcluidas: false,
+  numeroSemana: false,
+  expedienteInicio: "08:00",
+  expedienteFim: "18:00",
+};
 export const CHAVE_OPCOES_CALENDARIO = "calendario:opcoes";
 export function lerOpcoesCalendario(v: unknown): OpcoesCalendario {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  return { inicioSegunda: o.inicioSegunda === true, ocultarFimDeSemana: o.ocultarFimDeSemana === true };
+  const hora = (x: unknown, padrao: string | null) => (x === null ? null : typeof x === "string" && horaValida(x) ? x : padrao);
+  const ini = hora(o.expedienteInicio, OPCOES_CALENDARIO_PADRAO.expedienteInicio);
+  const fim = hora(o.expedienteFim, OPCOES_CALENDARIO_PADRAO.expedienteFim);
+  const expediente = ini && fim && fim > ini ? { expedienteInicio: ini, expedienteFim: fim } : { expedienteInicio: null, expedienteFim: null };
+  return {
+    inicioSegunda: o.inicioSegunda === true,
+    ocultarFimDeSemana: o.ocultarFimDeSemana === true,
+    ocultarConcluidas: o.ocultarConcluidas === true,
+    numeroSemana: o.numeroSemana === true,
+    ...expediente,
+  };
 }
 /** Os dias EXIBIDOS de uma semana (sem sábado/domingo quando ocultos). */
 export const diasExibidos = (semana: string[], o: Pick<OpcoesCalendario, "ocultarFimDeSemana">) =>
   o.ocultarFimDeSemana ? semana.filter((d) => ![0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) : semana;
+
+/** O número da SEMANA (ISO 8601 — a semana de segunda a domingo; a 1ª semana do ano é a que tem a 1ª quinta-feira). */
+export function semanaIso(dia: string): number {
+  const d = new Date(`${dia}T12:00:00Z`);
+  const w = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - w + 3); // a quinta-feira da semana
+  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((d.getTime() - jan4.getTime()) / 86_400_000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+}
+
+/** As VISTAS do calendário (as do Google: Dia · 4 dias · Semana · Mês · Ano · Programação). */
+export const VISTAS_CALENDARIO = ["dia", "ndias", "semana", "mes", "ano", "agenda"] as const;
+export type VistaCalendario = (typeof VISTAS_CALENDARIO)[number];
+/** Quantos dias a vista "N dias" mostra. */
+export const N_DIAS = 4;
+
+/**
+ * O INTERVALO que o calendário carrega: as semanas inteiras do mês (com a semana escolhida) + 1 semana depois (a vista de
+ * 4 dias e a semana que atravessa o fim do mês) — ou, com `anual`, o ANO inteiro (a vista Ano). A MESMA conta no
+ * servidor (a carga) e no cliente (os eventos derivados).
+ */
+export function intervaloCalendario(mes: { ano: number; mes: number }, inicioSemana: 0 | 1, anual = false): { de: string; ate: string } {
+  if (anual) return { de: somarDias(`${mes.ano}-01-01`, -7), ate: somarDias(`${mes.ano}-12-31`, 7) };
+  const p = new Date(Date.UTC(mes.ano, mes.mes - 1, 1));
+  const de = somarDias(p.toISOString().slice(0, 10), -((p.getUTCDay() - inicioSemana + 7) % 7));
+  const ultimo = new Date(Date.UTC(mes.ano, mes.mes, 0)).toISOString().slice(0, 10);
+  const fimSemana = somarDias(ultimo, (6 - ((new Date(`${ultimo}T12:00:00Z`).getUTCDay() - inicioSemana + 7) % 7) + 7) % 7);
+  return { de, ate: somarDias(fimSemana, 7) };
+}
 
 // ─── Lembretes ────────────────────────────────────────────────────────────────────────────────────────────────
 

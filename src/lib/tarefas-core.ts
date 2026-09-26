@@ -281,7 +281,7 @@ export function gradeMes(ano: number, mes: number, inicioSemana: 0 | 1 = 0): str
 /**
  * Uma tarefa como o CALENDÁRIO a usa (o do quadro e o de todos os quadros do grupo — `quadroId` = de qual quadro).
  */
-export type TarefaCalendario = Pick<TarefaResumo, "id" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "etiquetas" | "recorrencia"> & {
+export type TarefaCalendario = Pick<TarefaResumo, "id" | "listaId" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "etiquetas" | "recorrencia"> & {
   quadroId?: number;
 };
 

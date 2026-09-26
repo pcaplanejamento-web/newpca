@@ -1029,9 +1029,14 @@ ocorrência PREVISTA da recorrência que conta da conclusão; feriados nacionais
 semana (preferência da pessoa); o CRONOGRAMA DO PCA (previsão de entrega dos DFDs vigentes) como conjunto; exportar `.ics`
 e link de ASSINATURA (Google Agenda/Outlook/celular); aviso quando a carga do mês bate no teto; a preferência de ocultos
 grava ao sair da página.
-🔜 **Do Google Agenda — a seguir:** vistas Ano e "N dias"; lembrete também por e-mail; convidados e confirmação de presença;
-videoconferência; local com mapa; repetição própria do evento; horário de trabalho; número da semana; fuso secundário;
-disponibilidade (horários livres); importar `.ics`; impressão; desfazer.
+✅ **Fase 7 — calendário em tela cheia (Pacote 1):** a página não rola (tudo rola por dentro); barra no padrão do Google
+(menu de vistas com Dia · 4 dias · Semana · Mês · Ano · Programação + mostrar fins de semana/concluídas/nº da semana +
+imprimir; configurações; atalhos); criação rápida ao lado do ponto clicado (Evento | Tarefa, "(Sem título)" na grade, "Mais
+opções"); criar arrastando na grade; concluir a tarefa pelo círculo; painel de tarefas sem prazo (arrastar até um dia);
+Desfazer; horário de expediente; número da semana; fuso; vista Ano; atalhos C/G///?.
+🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail; convidados e confirmação de presença;
+videoconferência; local com mapa; repetição própria do evento; fuso secundário; disponibilidade (horários livres); importar
+`.ics`.
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

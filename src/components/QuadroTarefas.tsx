@@ -18,7 +18,6 @@ import {
   type EventoCalendario,
   type EventoTarefa,
   eventosDoCalendario,
-  gradeMes,
   prefixoEdicoesTarefas,
   reagendar,
   resumoQuadro,
@@ -33,7 +32,7 @@ import { Badge } from "./Badge";
 import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
 import { BarraSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
-import { eventoComFim, eventoMovido, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
+import { CHAVE_OPCOES_CALENDARIO, eventoComFim, intervaloCalendario, eventoMovido, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
@@ -184,12 +183,43 @@ export function QuadroTarefas({
 
   /** O mês à vista na aba Calendário e os EVENTOS dele (período, recorrência e os cadastrados deste quadro). */
   const [mesCal, setMesCal] = useState(() => ({ ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) }));
-  const opcoesCal = calendario?.opcoes ?? OPCOES_CALENDARIO_PADRAO;
+  const [opcoesCal, setOpcoesCal] = useState(calendario?.opcoes ?? OPCOES_CALENDARIO_PADRAO);
+  useEffect(() => {
+    if (calendario) setOpcoesCal(calendario.opcoes);
+  }, [calendario]);
+  /** As OPÇÕES da pessoa (o menu de vistas e ⚙) — as MESMAS do módulo Calendário, gravadas na hora. */
+  const mudarOpcoesCal = (o: OpcoesCalendario) => {
+    setOpcoesCal(o);
+    chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_OPCOES_CALENDARIO, valor: o }).catch(() => toast.error("Não foi possível guardar as opções do calendário."));
+  };
+  /** O CÍRCULO do período: conclui (1ª lista de concluídas) ou reabre (1ª lista aberta) — pelo mesmo PATCH do detalhe. */
+  const concluirNoCalendario = async (e: EventoCalendario) => {
+    const destino = e.concluida ? ativas.find((l) => !l.concluida) : ativas.find((l) => l.concluida);
+    const t = tarefas.find((x) => x.id === e.tarefaId);
+    if (!t) return;
+    if (!destino) {
+      toast.info(e.concluida ? "O quadro não tem lista aberta." : "O quadro não tem lista de concluídas — marque uma na Configuração.");
+      return;
+    }
+    try {
+      await chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: destino.id });
+      toast.desfazer(`${rotuloTicket(t.ticket)} ${e.concluida ? "reaberta" : "concluída"}.`, () => {
+        chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: t.listaId })
+          .then(() => router.refresh())
+          .catch((err) => toast.error((err as Error).message));
+      });
+      router.refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+  const semPrazoCal = useMemo(
+    () => (aba === "calendario" ? noQuadro.filter((t) => !t.prazo && t.concluidaEm == null).map((t) => ({ id: t.id, quadroId: quadro.id, ticket: t.ticket, titulo: t.titulo })) : []),
+    [aba, noQuadro, quadro.id],
+  );
   const { eventosCal, feriadosCal } = useMemo(() => {
     if (aba !== "calendario") return { eventosCal: [], feriadosCal: undefined };
-    const g = gradeMes(mesCal.ano, mesCal.mes, opcoesCal.inicioSegunda ? 1 : 0);
-    const de = g[0][0];
-    const ate = g.at(-1)?.[6] ?? g[0][6];
+    const { de, ate } = intervaloCalendario(mesCal, opcoesCal.inicioSegunda ? 1 : 0);
     return {
       eventosCal: eventosDoCalendario(
         noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
@@ -413,8 +443,12 @@ export function QuadroTarefas({
             onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}
             onMover={moverNoCalendario}
             onRedimensionar={redimensionarNoCalendario}
+            onConcluir={concluirNoCalendario}
             opcoes={opcoesCal}
+            onOpcoes={mudarOpcoesCal}
             feriados={feriadosCal}
+            semPrazo={semPrazoCal}
+            onAbrirTarefa={(id) => setAberto({ tipo: "editar", id })}
           />
         ) : (
           <ConfiguracaoQuadro

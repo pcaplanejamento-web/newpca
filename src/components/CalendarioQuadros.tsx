@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   avisoDiaNaoUtil,
   CHAVE_OPCOES_CALENDARIO,
@@ -12,15 +13,16 @@ import {
   type FeriadoCadastro,
   feriadosNoIntervalo,
   gerarIcs,
+  intervaloCalendario,
   type OpcoesCalendario,
 } from "@/lib/calendario-core";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { dataBR, } from "@/lib/format";
+import { dataBR } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import {
   CHAVE_OCULTOS_CALENDARIO,
+  type DadosEvento,
   type EtiquetaTarefa,
   type EventoCalendario,
   type EventoTarefa,
@@ -29,7 +31,9 @@ import {
   FILTRO_TAREFAS_PADRAO,
   type FiltroTarefas,
   filtrarTarefas,
-  gradeMes,
+  horaDeMinutos,
+  horaValida,
+  minutosDe,
   type OcultosCalendario,
   reagendar,
   rotuloTicket,
@@ -44,12 +48,16 @@ import { AssinaturaCalendario } from "./AssinaturaCalendario";
 import { BarraCalendario, type ConjuntoPca, type GrupoConjuntos } from "./BarraCalendario";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { CalendarioTarefas } from "./CalendarioTarefas";
+import { CalendarioTarefas, type SlotCriar } from "./CalendarioTarefas";
 import { useConfirmacao } from "./Confirmacao";
 import { EventoBanner } from "./EventoBanner";
 import { dadosDoEvento, EditorEvento, problemasEvento, type RascunhoEvento, rascunhoEvento } from "./EventosTarefa";
+import { SelectField, TextField } from "./Field";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
+import { IconClock, IconKanban } from "./icons";
+import { JanelaFlutuante } from "./JanelaFlutuante";
 import { Modal } from "./Modal";
+import { Segmented } from "./Segmented";
 import { SeletorBusca } from "./SeletorBusca";
 import { TarefaDetalhe } from "./TarefaDetalhe";
 import { toast } from "./Toast";
@@ -60,10 +68,14 @@ export type DadosCalendarioQuadros = {
   eventos: EventoTarefa[];
   contadores: { atrasadas: number; hoje: number; naSemana: number; semPrazo: number };
   mes: { ano: number; mes: number };
+  /** O ano inteiro foi carregado (a vista Ano). */
+  anual: boolean;
   hoje: string;
   etiquetas: (EtiquetaTarefa & { quadroId: number })[];
   pessoas: Pessoa[];
-  abertas: { id: number; quadroId: number; ticket: number; titulo: string }[];
+  abertas: { id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null }[];
+  /** As listas ativas dos quadros (concluir/reabrir e criar tarefa pelo calendário). */
+  listas: { id: number; nome: string; concluida: boolean; quadroId: number }[];
   ocultos: OcultosCalendario;
   opcoes: OpcoesCalendario;
   feriados: FeriadoCadastro[];
@@ -110,19 +122,36 @@ function useContextoTarefa(tarefaId: number | null) {
   return { ctx: ctx && ctx.tarefa.id === tarefaId ? ctx : null, atualizarTarefa };
 }
 
-/** Edição de um evento no modal do Calendário (novo = escolhe a tarefa). */
+/** Edição completa de um evento ("Mais opções", Editar, Duplicar) — novo = escolhe a tarefa. */
 type Edicao = { eventoId: number | null; tarefaId: string; r: RascunhoEvento };
+/** A CRIAÇÃO RÁPIDA (a janela ao lado do dia): Evento (numa tarefa) ou Tarefa (nova, com o prazo no dia). */
+type Criacao = {
+  slot: SlotCriar;
+  tipo: "evento" | "tarefa";
+  titulo: string;
+  data: string;
+  comHora: boolean;
+  hora: string;
+  horaFim: string;
+  tarefaId: string;
+  quadroId: number;
+  listaId: number | null;
+};
 
 /**
- * MÓDULO CALENDÁRIO (`/painel/calendario`, permissão própria `calendario`): os EVENTOS de todos os quadros do grupo — o
- * PERÍODO de cada tarefa (início → prazo), as OCORRÊNCIAS da recorrência e os EVENTOS cadastrados (bloco "Eventos") — no
- * `CalendarioTarefas` (Dia · Semana · Mês · Agenda), com a `BarraCalendario` (mini-mês, TIPOS e CONJUNTOS: cada tarefa é
- * um conjunto; o que fica oculto é a preferência da pessoa, gravada em todos os aparelhos). Tocar num evento abre o BANNER
- * DO EVENTO aqui mesmo e "Ver tarefa" abre a tarefa AO LADO — nada sai da tela. "Criar" (ou um horário vazio) cadastra
- * um evento numa tarefa; arrastar reagenda; a borda de baixo muda a duração. Também: a PREVISÃO do PCA (cronograma de
- * contratações — quem vê o PCA), os FERIADOS (nacionais + os do ADM; o prazo em dia não útil é apontado), as OPÇÕES da
- * pessoa (semana na segunda, sem fim de semana), exportar/assinar `.ics` e `eventoInicial` (o link do lembrete abre o
- * evento). Os filtros da barra (responsável, prazo, prioridade, etiqueta, busca) valem para as tarefas.
+ * MÓDULO CALENDÁRIO (`/painel/calendario`, permissão própria `calendario`) — a tela INTEIRA é o calendário (o
+ * `CalendarioTarefas`: nada rola na página): na lateral os FILTROS das tarefas (busca, responsável, prazo, prioridade,
+ * etiqueta), o mini-mês, os TIPOS + feriados e os CONJUNTOS (cada tarefa, cada quadro e cada PCA — o que fica oculto é a
+ * preferência da pessoa). Os eventos: o PERÍODO de cada tarefa, as OCORRÊNCIAS da recorrência (e a prevista), os EVENTOS
+ * cadastrados e a PREVISÃO do PCA (quem vê o PCA).
+ * - CRIAR (o botão, um dia, um horário ou arrastando na grade) abre a JANELA de criação rápida ao lado, com o
+ *   "(Sem título)" já na grade: **Evento** (numa tarefa aberta, com ou sem horário) ou **Tarefa** (nova, no quadro/lista
+ *   escolhidos, com o prazo no dia); "Mais opções" leva ao formulário completo (a tarefa nova abre ao lado, criada).
+ * - Tocar num evento abre o BANNER DO EVENTO aqui mesmo; "Ver tarefa" abre a tarefa AO LADO.
+ * - O CÍRCULO do período conclui/reabre a tarefa (pela lista de concluídas do quadro — automações e recorrência valem).
+ * - Arrastar reagenda (evento, período e as TAREFAS SEM PRAZO do painel); a borda muda a duração; mover, redimensionar,
+ *   concluir e excluir têm **Desfazer**.
+ * - ⚙ Configurações: as opções da pessoa + exportar/assinar `.ics`; `eventoInicial` = o link do lembrete abre o evento.
  */
 export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: DadosCalendarioQuadros; usuarioId: number; eventoInicial?: string }) {
   const router = useRouter();
@@ -136,10 +165,14 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   const [opcoes, setOpcoes] = useState(dados.opcoes);
   const [aberto, setAberto] = useState<EventoCalendario | null>(null);
   const [verTarefa, setVerTarefa] = useState(false);
+  /** Uma tarefa aberta SEM evento (o painel das sem prazo, a tarefa recém-criada por "Mais opções"). */
+  const [tarefaSolta, setTarefaSolta] = useState<number | null>(null);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
+  const [criacao, setCriacao] = useState<Criacao | null>(null);
   const [salvando, setSalvando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
-  const { ctx, atualizarTarefa } = useContextoTarefa(aberto && verTarefa && !aberto.pca ? aberto.tarefaId : null);
+  const idTarefa = tarefaSolta ?? (aberto && verTarefa && !aberto.pca ? aberto.tarefaId : null);
+  const { ctx, atualizarTarefa } = useContextoTarefa(idTarefa);
 
   const porQuadro = useMemo(() => new Map(dados.quadros.map((q) => [q.id, q])), [dados.quadros]);
   const variosQuadros = dados.quadros.length > 1;
@@ -148,17 +181,18 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     [dados.etiquetas, porQuadro, variosQuadros],
   );
   const inicioSemana = opcoes.inicioSegunda ? 1 : 0;
-  const grade = useMemo(() => gradeMes(dados.mes.ano, dados.mes.mes, inicioSemana), [dados.mes.ano, dados.mes.mes, inicioSemana]);
-  const de = grade[0][0];
-  const ate = grade.at(-1)?.[6] ?? grade[0][6];
+  const { de, ate } = useMemo(() => intervaloCalendario(dados.mes, inicioSemana, dados.anual), [dados.mes, inicioSemana, dados.anual]);
   /** Os feriados do período (todos — o aviso do prazo); a grade só os mostra se não estiverem ocultos. */
   const feriadosPeriodo = useMemo(() => feriadosNoIntervalo(dados.feriados, de, ate), [dados.feriados, de, ate]);
   const feriadosVisiveis = ocultos.feriados ? undefined : feriadosPeriodo;
-  const filtrando = filtro.responsavel !== FILTRO_TAREFAS_PADRAO.responsavel || filtro.prazo !== FILTRO_TAREFAS_PADRAO.prazo || filtro.prioridade !== FILTRO_TAREFAS_PADRAO.prioridade || filtro.etiqueta !== FILTRO_TAREFAS_PADRAO.etiqueta;
+  const filtrando =
+    filtro.responsavel !== FILTRO_TAREFAS_PADRAO.responsavel ||
+    filtro.prazo !== FILTRO_TAREFAS_PADRAO.prazo ||
+    filtro.prioridade !== FILTRO_TAREFAS_PADRAO.prioridade ||
+    filtro.etiqueta !== FILTRO_TAREFAS_PADRAO.etiqueta;
 
-  // Os eventos do período: as tarefas passam pelos filtros da barra; a PREVISÃO do PCA só quando nenhum filtro de TAREFA
-  // está ligado (responsável/prazo/prioridade/etiqueta não se aplicam a um DFD). A busca vale em todos (título, tarefa,
-  // local, #, DFD).
+  // Os eventos do período: as tarefas passam pelos filtros da lateral; a PREVISÃO do PCA só quando nenhum filtro de
+  // TAREFA está ligado (responsável/prazo/prioridade/etiqueta não se aplicam a um DFD). A busca vale em todos.
   const todos = useMemo(() => {
     const t = filtrarTarefas(tarefas, { ...filtro, busca: "" }, { usuarioId, hoje: dados.hoje });
     const casa = predicadoBusca(filtro.busca);
@@ -196,6 +230,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     return s;
   }, [visiveis]);
   const nOcultos = ocultos.tarefas.length + ocultos.quadros.length + ocultos.pcas.length + ocultos.tipos.length + Number(ocultos.feriados);
+  const semPrazo = useMemo(() => dados.abertas.filter((t) => !t.prazo), [dados.abertas]);
 
   // O que fica OCULTO é a preferência da pessoa (gravada ~0,6 s depois da última mudança — marcar vários não vira vários
   // PUT). Fechar/sair da página com uma gravação pendente GRAVA na hora (`keepalive`) — nada se perde.
@@ -227,7 +262,14 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     };
   }, []);
 
-  /** As OPÇÕES (semana na segunda / sem fim de semana): gravam na hora; a semana nova muda a grade — o servidor recarrega. */
+  const urlMes = (m: { ano: number; mes: number }, anual = dados.anual) => `/painel/calendario?mes=${textoMes(m.ano, m.mes)}${anual ? "&ano=1" : ""}`;
+  const irMes = (m: { ano: number; mes: number }) => iniciar(() => router.push(urlMes(m), { scroll: false }));
+  const irAno = (anual: boolean) => {
+    if (anual !== dados.anual) iniciar(() => router.push(urlMes(dados.mes, anual), { scroll: false }));
+  };
+  const atualizar = () => iniciar(() => router.refresh());
+
+  /** As OPÇÕES da pessoa: gravam na hora; a semana começando noutro dia muda a grade — o servidor recarrega. */
   const mudarOpcoes = (o: OpcoesCalendario) => {
     const mudouInicio = o.inicioSegunda !== opcoes.inicioSegunda;
     setOpcoes(o);
@@ -236,22 +278,30 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       .catch(() => toast.error("Não foi possível guardar as opções do calendário."));
   };
 
-  const irMes = (m: { ano: number; mes: number }) => iniciar(() => router.push(`/painel/calendario?mes=${textoMes(m.ano, m.mes)}`, { scroll: false }));
-  const atualizar = () => iniciar(() => router.refresh());
+  /** Mostra "feito" com **Desfazer** (`reverter` = a gravação que volta ao estado anterior). */
+  const comDesfazer = (msg: string, reverter: () => Promise<unknown>) =>
+    toast.desfazer(msg, () => {
+      reverter()
+        .then(() => {
+          toast.success("Desfeito.");
+          atualizar();
+        })
+        .catch((e) => toast.error((e as Error).message));
+    });
 
-  /** ARRASTAR: o período muda o prazo (o início anda junto); o evento muda a data (e a hora, na grade — a duração fica). */
+  /** ARRASTAR: o período muda o prazo (o início anda junto; a tarefa SEM PRAZO ganha o prazo); o evento muda a data (e a
+   * hora, na grade — a duração fica). */
   const mover = async (e: EventoCalendario, dia: string, hora: string | null) => {
     if (e.tipo === "periodo") {
       const t = tarefas.find((x) => x.id === e.tarefaId);
-      if (!t) return;
       const antes = tarefas;
-      const novo = reagendar(t, dia);
-      setTarefas(antes.map((x) => (x.id === t.id ? { ...x, ...novo } : x)));
+      const original = t ? { inicio: t.inicio, prazo: t.prazo } : { prazo: null };
+      const novo = t ? reagendar(t, dia) : { prazo: dia };
+      if (t) setTarefas(antes.map((x) => (x.id === t.id ? { ...x, ...novo } : x)));
       try {
-        await chamar(`/api/tarefas/${t.id}`, "PATCH", novo);
+        await chamar(`/api/tarefas/${e.tarefaId}`, "PATCH", novo);
         const aviso = avisoDiaNaoUtil(dia, feriadosPeriodo);
-        if (aviso) toast.info(`${rotuloTicket(t.ticket)} reagendada para ${dataBR(dia)} — o prazo ${aviso}.`);
-        else toast.success(`${rotuloTicket(t.ticket)} reagendada para ${dataBR(dia)}.`);
+        comDesfazer(`${rotuloTicket(e.ticket)} com prazo em ${dataBR(dia)}${aviso ? ` — ${aviso}` : ""}.`, () => chamar(`/api/tarefas/${e.tarefaId}`, "PATCH", original));
         atualizar();
       } catch (err) {
         setTarefas(antes);
@@ -266,7 +316,9 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     setEventosDb(antes.map((x) => (x.id === ev.id ? { ...x, ...d } : x)));
     try {
       await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", d);
-      toast.success(`"${ev.titulo}" movido para ${dataBR(dia)}${d.horaInicio && !d.diaInteiro ? ` às ${d.horaInicio}` : ""}.`);
+      comDesfazer(`"${ev.titulo}" movido para ${dataBR(dia)}${d.horaInicio && !d.diaInteiro ? ` às ${d.horaInicio}` : ""}.`, () =>
+        chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoMovido(ev, ev.data, null)),
+      );
       atualizar();
     } catch (err) {
       setEventosDb(antes);
@@ -282,7 +334,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     setEventosDb(antes.map((x) => (x.id === ev.id ? { ...x, horaFim } : x)));
     try {
       await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoComFim(ev, horaFim));
-      toast.success(`"${ev.titulo}" agora vai até ${horaFim}.`);
+      comDesfazer(`"${ev.titulo}" agora vai até ${horaFim}.`, () => chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoMovido(ev, ev.data, null)));
       atualizar();
     } catch (err) {
       setEventosDb(antes);
@@ -290,7 +342,29 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     }
   };
 
-  /** Baixa o `.ics` dos eventos À VISTA (o mês, com os filtros e o que está oculto). */
+  /** O CÍRCULO do período: conclui (leva à 1ª lista de concluídas do quadro) ou reabre (1ª lista aberta). */
+  const concluir = async (e: EventoCalendario) => {
+    const t = tarefas.find((x) => x.id === e.tarefaId);
+    if (!t) return;
+    const listas = dados.listas.filter((l) => l.quadroId === t.quadroId);
+    const destino = e.concluida ? listas.find((l) => !l.concluida) : listas.find((l) => l.concluida);
+    if (!destino) {
+      toast.info(e.concluida ? "O quadro não tem lista aberta para reabrir a tarefa." : "O quadro não tem lista de concluídas — marque uma na Configuração do quadro.");
+      return;
+    }
+    const antes = tarefas;
+    setTarefas(antes.map((x) => (x.id === t.id ? { ...x, concluidaEm: e.concluida ? null : dados.hoje, listaId: destino.id } : x)));
+    try {
+      await chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: destino.id });
+      comDesfazer(`${rotuloTicket(t.ticket)} ${e.concluida ? "reaberta" : "concluída"}.`, () => chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: t.listaId }));
+      atualizar();
+    } catch (err) {
+      setTarefas(antes);
+      toast.error((err as Error).message);
+    }
+  };
+
+  /** Baixa o `.ics` dos eventos À VISTA (o período carregado, com os filtros e o que está oculto). */
   const exportar = () => {
     const ics = gerarIcs(visiveis, { nome: `Calendário — ${textoMes(dados.mes.ano, dados.mes.mes)}`, agora: carimboIcs(new Date()), dominio: window.location.hostname });
     const a = document.createElement("a");
@@ -314,8 +388,72 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     router.replace(`/painel/calendario?mes=${textoMes(dados.mes.ano, dados.mes.mes)}`, { scroll: false });
   }, [eventoInicial, todos, router, dados.mes.ano, dados.mes.mes]);
 
-  const abrirCriar = (slot: { data: string; hora: string | null }, tarefaId = "") =>
-    setEdicao({ eventoId: null, tarefaId, r: { ...rascunhoEvento({ data: slot.data }), diaInteiro: !slot.hora, horaInicio: slot.hora ?? "" } });
+  // ─── Criação rápida ──────────────────────────────────────────────────────────────────────────────────────────
+  const primeiraAberta = (quadroId: number) => dados.listas.find((l) => l.quadroId === quadroId && !l.concluida)?.id ?? null;
+  const abrirCriar = (slot: SlotCriar) => {
+    setAberto(null);
+    setVerTarefa(false);
+    const q = dados.quadros[0]?.id ?? 0;
+    setCriacao({
+      slot,
+      tipo: dados.abertas.length ? "evento" : "tarefa",
+      titulo: "",
+      data: slot.data,
+      comHora: !!slot.hora,
+      hora: slot.hora ?? "09:00",
+      horaFim: slot.horaFim ?? (slot.hora ? horaDeMinutos(minutosDe(slot.hora) + 60) : "10:00"),
+      tarefaId: "",
+      quadroId: q,
+      listaId: primeiraAberta(q),
+    });
+  };
+  const rascunho = criacao ? { data: criacao.data, hora: criacao.tipo === "evento" && criacao.comHora ? criacao.hora : null, horaFim: criacao.horaFim, titulo: criacao.titulo } : null;
+  const eventoDaCriacao = (c: Criacao): RascunhoEvento => ({
+    ...rascunhoEvento({ data: c.data }),
+    titulo: c.titulo,
+    diaInteiro: !c.comHora,
+    horaInicio: c.comHora ? c.hora : "",
+    horaFim: c.comHora ? c.horaFim : "",
+  });
+  const problemaCriacao = (c: Criacao): string | null => {
+    if (!c.titulo.trim()) return "Dê um título.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(c.data)) return "Escolha a data.";
+    if (c.tipo === "evento") {
+      if (!c.tarefaId) return "Escolha a tarefa do evento.";
+      if (c.comHora && (!horaValida(c.hora) || (horaValida(c.horaFim) && c.horaFim <= c.hora))) return "O fim tem de ser depois do início.";
+    } else if (!c.listaId) return "O quadro não tem lista aberta.";
+    return null;
+  };
+  /** Grava a criação rápida; `abrir` = "Mais opções" da TAREFA (cria e abre a tarefa ao lado). */
+  const salvarCriacao = async (abrir = false) => {
+    if (!criacao || problemaCriacao(criacao)) return;
+    setSalvando(true);
+    try {
+      if (criacao.tipo === "evento") {
+        const d = dadosDoEvento(eventoDaCriacao(criacao));
+        await chamar(`/api/tarefas/${criacao.tarefaId}/eventos`, "POST", d);
+        toast.success("Evento criado.");
+      } else {
+        const nova = await chamar<{ id: number; ticket: number }>("/api/tarefas", "POST", { quadroId: criacao.quadroId, listaId: criacao.listaId, titulo: criacao.titulo.trim(), prazo: criacao.data });
+        toast.success(`Tarefa ${rotuloTicket(nova.ticket)} criada.`);
+        if (abrir) setTarefaSolta(nova.id);
+      }
+      setCriacao(null);
+      atualizar();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+  /** "Mais opções" do EVENTO: o formulário completo com o que já foi preenchido. */
+  const maisOpcoes = () => {
+    if (!criacao) return;
+    if (criacao.tipo === "tarefa") return salvarCriacao(true);
+    setEdicao({ eventoId: null, tarefaId: criacao.tarefaId, r: eventoDaCriacao(criacao) });
+    setCriacao(null);
+  };
+
   const salvarEdicao = async () => {
     if (!edicao || Object.keys(problemasEvento(edicao.r)).length || (!edicao.eventoId && !edicao.tarefaId)) return;
     setSalvando(true);
@@ -334,12 +472,14 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     }
   };
   const excluir = async (e: EventoCalendario) => {
-    if (!e.eventoId || !(await confirmar({ titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true }))) return;
+    const ev = eventosDb.find((x) => x.id === e.eventoId);
+    if (!ev || !(await confirmar({ titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true }))) return;
     try {
-      await chamar(`/api/tarefas/eventos/${e.eventoId}`, "DELETE");
-      setEventosDb((l) => l.filter((x) => x.id !== e.eventoId));
+      await chamar(`/api/tarefas/eventos/${ev.id}`, "DELETE");
+      setEventosDb((l) => l.filter((x) => x.id !== ev.id));
       setAberto(null);
-      toast.success("Evento excluído.");
+      const { id: _id, tarefaId, ...dadosEv } = ev;
+      comDesfazer("Evento excluído.", () => chamar(`/api/tarefas/${tarefaId}/eventos`, "POST", dadosEv satisfies DadosEvento));
       atualizar();
     } catch (err) {
       toast.error((err as Error).message);
@@ -388,56 +528,177 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   if (!dados.quadros.length && !dados.pca.pcas.length)
     return <p className="rounded-card border border-dashed border-border-2 bg-surface px-6 py-12 text-center text-sm text-muted">Nenhum quadro de tarefas ativo neste grupo.</p>;
 
+  const erroCriacao = criacao ? problemaCriacao(criacao) : null;
   return (
-    <div className={`space-y-[var(--gap-block)] transition-opacity ${carregando ? "opacity-70" : ""}`} aria-busy={carregando}>
-      <div className="flex flex-wrap items-center gap-2">
-        <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
-      </div>
-      <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
-      {dados.truncado && (
-        <Callout kind="warn">
-          Há eventos demais neste mês para mostrar todos de uma vez — alguns ficaram de fora. Use os filtros (responsável, etiqueta, busca) ou oculte conjuntos.
-        </Callout>
-      )}
+    <div className={`transition-opacity ${carregando ? "opacity-70" : ""}`} aria-busy={carregando}>
       <CalendarioTarefas
         eventos={visiveis}
         hoje={dados.hoje}
         mes={dados.mes}
         onMes={irMes}
+        onAno={irAno}
         contadores={dados.contadores}
         corQuadro={(id) => porQuadro.get(id)?.cor}
+        nomeQuadro={(id) => porQuadro.get(id)?.nome}
         onAbrir={(e) => {
+          setCriacao(null);
+          setTarefaSolta(null);
           setVerTarefa(false);
           setAberto(e);
         }}
-        onCriar={dados.abertas.length ? abrirCriar : undefined}
+        onCriar={dados.quadros.length ? abrirCriar : undefined}
         onMover={mover}
         onRedimensionar={redimensionar}
+        onConcluir={concluir}
         opcoes={opcoes}
+        onOpcoes={mudarOpcoes}
         feriados={feriadosVisiveis}
-        rotuloLateral={nOcultos ? `Conjuntos (${nOcultos} ocultos)` : "Conjuntos"}
+        rascunho={rascunho}
+        semPrazo={semPrazo}
+        onAbrirTarefa={(id) => {
+          setAberto(null);
+          setTarefaSolta(id);
+        }}
+        configuracoes={<AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />}
+        rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
-          <BarraCalendario
-            nav={nav}
-            hoje={dados.hoje}
-            diasComEvento={diasComEvento}
-            grupos={grupos}
-            pcas={pcasConjuntos}
-            porTipo={porTipo}
-            feriadosNoPeriodo={feriadosPeriodo.size}
-            ocultos={ocultos}
-            onOcultos={mudarOcultos}
-            opcoes={opcoes}
-            onOpcoes={mudarOpcoes}
-            extras={<AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />}
-          />
+          <div className="space-y-[var(--gap-block)]">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            </div>
+            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            {dados.truncado && <Callout kind="warn">Há eventos demais neste período — alguns ficaram de fora. Use os filtros ou oculte conjuntos.</Callout>}
+            <BarraCalendario
+              nav={nav}
+              hoje={dados.hoje}
+              diasComEvento={diasComEvento}
+              grupos={grupos}
+              pcas={pcasConjuntos}
+              porTipo={porTipo}
+              feriadosNoPeriodo={feriadosPeriodo.size}
+              ocultos={ocultos}
+              onOcultos={mudarOcultos}
+              inicioSemana={inicioSemana}
+            />
+          </div>
         )}
       />
 
-      {/* O EVENTO (e, com "Ver tarefa", a TAREFA ao lado) — sem sair do calendário. */}
-      {aberto && verTarefa && ctx ? (
+      {/* CRIAÇÃO RÁPIDA — a janela ao lado do ponto clicado (no celular, folha). */}
+      <JanelaFlutuante
+        aberta={!!criacao}
+        ancora={criacao?.slot.ancora ?? null}
+        titulo="Criar"
+        onFechar={() => !salvando && setCriacao(null)}
+        rodape={
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" disabled={salvando || (criacao?.tipo === "tarefa" && !!erroCriacao)} onClick={maisOpcoes}>
+              Mais opções
+            </Button>
+            <Button size="sm" loading={salvando} disabled={!!erroCriacao} title={erroCriacao ?? undefined} onClick={() => salvarCriacao()}>
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        {criacao && (
+          <form
+            className="space-y-3"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              void salvarCriacao();
+            }}
+          >
+            <TextField
+              label="Título"
+              autoFocus
+              value={criacao.titulo}
+              maxLength={criacao.tipo === "evento" ? 120 : 200}
+              placeholder={criacao.tipo === "evento" ? "Adicionar título do evento" : "Adicionar título da tarefa"}
+              onChange={(e) => setCriacao({ ...criacao, titulo: e.target.value })}
+            />
+            {dados.abertas.length > 0 && (
+              <Segmented<"evento" | "tarefa">
+                ariaLabel="Criar evento ou tarefa"
+                value={criacao.tipo}
+                onChange={(tipo) => setCriacao({ ...criacao, tipo })}
+                options={[
+                  { value: "evento", label: "Evento" },
+                  { value: "tarefa", label: "Tarefa" },
+                ]}
+              />
+            )}
+            <div className="flex items-start gap-2.5">
+              <IconClock className="mt-3 h-4 w-4 shrink-0 text-muted" aria-hidden />
+              <div className="min-w-0 flex-1 space-y-2">
+                <TextField label={criacao.tipo === "tarefa" ? "Prazo" : "Data"} type="date" value={criacao.data} onChange={(e) => setCriacao({ ...criacao, data: e.target.value })} />
+                {criacao.tipo === "evento" &&
+                  (criacao.comHora ? (
+                    <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                      <TextField label="Início" type="time" value={criacao.hora} onChange={(e) => setCriacao({ ...criacao, hora: e.target.value })} />
+                      <TextField label="Fim" type="time" value={criacao.horaFim} onChange={(e) => setCriacao({ ...criacao, horaFim: e.target.value })} />
+                      <Button variant="ghost" size="sm" onClick={() => setCriacao({ ...criacao, comHora: false })}>
+                        Dia todo
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => setCriacao({ ...criacao, comHora: true })}>
+                      Adicionar horário
+                    </Button>
+                  ))}
+              </div>
+            </div>
+            {criacao.tipo === "evento" ? (
+              <div>
+                <p className="mb-1.5 text-[13px] font-semibold text-text">Tarefa</p>
+                <SeletorBusca
+                  opcoes={opcoesTarefas}
+                  valor={criacao.tarefaId}
+                  onChange={(v) => setCriacao({ ...criacao, tarefaId: v })}
+                  ariaLabel="Tarefa do evento"
+                  placeholder="Buscar tarefa por título ou #ticket"
+                />
+              </div>
+            ) : (
+              <div className="flex items-start gap-2.5">
+                <IconKanban className="mt-3 h-4 w-4 shrink-0 text-muted" aria-hidden />
+                <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                  <SelectField
+                    label="Quadro"
+                    value={String(criacao.quadroId)}
+                    onChange={(e) => {
+                      const q = Number(e.target.value);
+                      setCriacao({ ...criacao, quadroId: q, listaId: primeiraAberta(q) });
+                    }}
+                  >
+                    {dados.quadros.map((q) => (
+                      <option key={q.id} value={q.id}>
+                        {q.nome}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <SelectField label="Lista" value={String(criacao.listaId ?? "")} onChange={(e) => setCriacao({ ...criacao, listaId: Number(e.target.value) || null })}>
+                    {dados.listas
+                      .filter((l) => l.quadroId === criacao.quadroId)
+                      .map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.nome}
+                          {l.concluida ? " (concluídas)" : ""}
+                        </option>
+                      ))}
+                  </SelectField>
+                </div>
+              </div>
+            )}
+            <button type="submit" hidden aria-hidden tabIndex={-1} />
+          </form>
+        )}
+      </JanelaFlutuante>
+
+      {/* O EVENTO (e, com "Ver tarefa", a TAREFA ao lado) — ou uma TAREFA solta — sem sair do calendário. */}
+      {idTarefa != null && ctx ? (
         <TarefaDetalhe
-          aberto={{ tipo: "editar", id: aberto.tarefaId }}
+          aberto={{ tipo: "editar", id: idTarefa }}
           quadroId={ctx.quadro.id}
           tarefas={[ctx.tarefa]}
           listas={ctx.listas.filter((l) => !l.arquivada)}
@@ -448,12 +709,15 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           usuarioId={usuarioId}
           podeExcluir={ctx.podeEditar}
           modelos={ctx.modelosTarefa}
-          onFechar={() => setVerTarefa(false)}
+          onFechar={() => {
+            setVerTarefa(false);
+            setTarefaSolta(null);
+          }}
           onSalvo={() => {
             atualizarTarefa();
             atualizar();
           }}
-          esquerda={[{ id: "evento", aberto: true, largura: 26, titulo: "Evento", onClose: fecharTudo, children: banner }]}
+          esquerda={aberto && tarefaSolta == null ? [{ id: "evento", aberto: true, largura: 26, titulo: "Evento", onClose: fecharTudo, children: banner }] : undefined}
         />
       ) : (
         <Modal open={!!aberto} onClose={fecharTudo} titulo="Evento" size="md">

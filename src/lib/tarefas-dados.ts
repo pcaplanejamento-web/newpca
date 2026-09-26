@@ -9,6 +9,7 @@ import {
   etiquetasDosQuadros,
   eventosDosQuadros,
   listasDoQuadro,
+  listasDosQuadros,
   listarAutomacoes,
   listarModelosQuadro,
   listarModelosTarefa,
@@ -21,11 +22,11 @@ import {
   tarefasDoCalendario,
 } from "./tarefas";
 import { assinaturaDaPessoa } from "./calendario-assinatura";
-import { CHAVE_OPCOES_CALENDARIO, lerOpcoesCalendario } from "./calendario-core";
+import { CHAVE_OPCOES_CALENDARIO, intervaloCalendario, lerOpcoesCalendario } from "./calendario-core";
 import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
-import { CHAVE_OCULTOS_CALENDARIO, gradeMes, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+import { CHAVE_OCULTOS_CALENDARIO, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
 const PREFIXO_CALENDARIO = "calendario:";
@@ -59,19 +60,17 @@ export async function carregarQuadros(u: UsuarioSessao) {
  * "Criar" escolhe a tarefa), as preferências (ocultos + opções), os FERIADOS cadastrados, o CRONOGRAMA do PCA (quem vê o
  * módulo PCA), se a pessoa tem LINK DE ASSINATURA e `truncado` (alguma carga bateu no teto — a tela avisa).
  */
-export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
+export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, anual = false) {
   const grupo = await getGrupoAtivo(u);
   const grupoAtivo = grupo?.id ?? null;
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const mes = lerMes(mesPedido, hoje);
   const [prefs, abas] = await Promise.all([preferenciasCalendario(u.id), abasPermitidas(u, grupo)]);
   const inicio = prefs.opcoes.inicioSegunda ? 1 : 0;
-  const grade = gradeMes(mes.ano, mes.mes, inicio);
-  const de = grade[0][0];
-  const ate = grade.at(-1)?.[6] ?? grade[0][6];
+  const { de, ate } = intervaloCalendario(mes, inicio, anual);
   const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
-  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca] = await Promise.all([
+  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
     eventosDosQuadros(ids, de, ate),
     etiquetasDosQuadros(ids),
@@ -79,6 +78,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
     tarefasAbertasLeves(ids),
     assinaturaDaPessoa(u.id),
     abas.has("pca") ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
+    listasDosQuadros(ids),
   ]);
   const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
   return {
@@ -86,10 +86,12 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
     eventos,
     contadores,
     mes,
+    anual,
     hoje,
     etiquetas,
     pessoas,
     abertas,
+    listas,
     ...prefs,
     pca,
     assinatura: assinatura != null,

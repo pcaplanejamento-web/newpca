@@ -1933,7 +1933,12 @@ function TarefasDemo() {
         onCriar={() => {}}
         onMover={() => {}}
         onRedimensionar={() => {}}
+        onConcluir={() => {}}
         opcoes={opcoesDemo}
+        onOpcoes={setOpcoesDemo}
+        configuracoes={<AssinaturaCalendario ativa={false} onExportar={() => {}} nEventos={eventosDemo.length} />}
+        semPrazo={[{ id: 9, quadroId: 1, ticket: 131, titulo: "Levantar a demanda de papel" }]}
+        rascunho={{ data: "2026-01-08", hora: null, horaFim: null, titulo: "" }}
         feriados={ocultosDemo.feriados ? undefined : feriadosDemo}
         lateral={(nav) => (
           <BarraCalendario
@@ -1946,9 +1951,7 @@ function TarefasDemo() {
             feriadosNoPeriodo={feriadosDemo.size}
             ocultos={ocultosDemo}
             onOcultos={setOcultosDemo}
-            opcoes={opcoesDemo}
-            onOpcoes={setOpcoesDemo}
-            extras={<AssinaturaCalendario ativa={false} onExportar={() => {}} nEventos={eventosDemo.length} />}
+            inicioSemana={opcoesDemo.inicioSegunda ? 1 : 0}
           />
         )}
       />

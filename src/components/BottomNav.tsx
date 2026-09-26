@@ -15,7 +15,7 @@ const ITENS: ItemNav[] = [...NAV_MODULOS, { href: "/painel/perfil", label: "Perf
 export function BottomNav({ abas }: { abas: Set<string> }) {
   const pathname = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden print:hidden">
       <div className="mx-auto flex max-w-md items-stretch justify-around">
         {ITENS.filter((i) => !i.aba || abas.has(i.aba)).map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);

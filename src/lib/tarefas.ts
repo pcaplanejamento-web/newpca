@@ -150,6 +150,16 @@ export function listasDoQuadro(quadroId: number): Promise<ListaTarefas[]> {
     .orderBy(asc(tarefaListas.ordem), asc(tarefaListas.id));
 }
 
+/** As LISTAS ATIVAS dos quadros (o Calendário: concluir/reabrir e criar tarefa pelo próprio calendário). */
+export async function listasDosQuadros(quadroIds: number[]): Promise<(Pick<ListaTarefas, "id" | "nome" | "concluida"> & { quadroId: number })[]> {
+  if (!quadroIds.length) return [];
+  return getDb()
+    .select({ id: tarefaListas.id, nome: tarefaListas.nome, concluida: tarefaListas.concluida, quadroId: tarefaListas.quadroId })
+    .from(tarefaListas)
+    .where(and(inArray(tarefaListas.quadroId, quadroIds.slice(0, 90)), eq(tarefaListas.arquivada, false)))
+    .orderBy(asc(tarefaListas.quadroId), asc(tarefaListas.ordem), asc(tarefaListas.id));
+}
+
 /** As ETIQUETAS do quadro, na ordem. */
 export function etiquetasDoQuadroTodas(quadroId: number): Promise<EtiquetaTarefa[]> {
   return getDb()
@@ -312,6 +322,7 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
       .select({
         id: tarefas.id,
         quadroId: tarefas.quadroId,
+        listaId: tarefas.listaId,
         ticket: tarefas.ticket,
         titulo: tarefas.titulo,
         prioridade: tarefas.prioridade,
@@ -718,11 +729,12 @@ export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: 
     .limit(LIMITE_EVENTOS_CALENDARIO);
 }
 
-/** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário. */
-export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: number; quadroId: number; ticket: number; titulo: string }[]> {
+/** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário
+ * e o painel das tarefas SEM PRAZO (arrastar até um dia). */
+export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null }[]> {
   if (!quadroIds.length) return [];
   return getDb()
-    .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo })
+    .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo, prazo: tarefas.prazo })
     .from(tarefas)
     .where(
       and(

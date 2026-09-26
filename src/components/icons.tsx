@@ -88,6 +88,12 @@ import {
   BellRing,
   UserPlus,
   Ellipsis,
+  Circle,
+  CircleCheck,
+  Keyboard,
+  MapPin,
+  Printer,
+  Video,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -186,3 +192,9 @@ export const IconModelo = LayoutTemplate;
 export const IconPrazo = BellRing;
 export const IconAtribuir = UserPlus;
 export const IconMais = Ellipsis;
+export const IconCirculo = Circle;
+export const IconCirculoCheck = CircleCheck;
+export const IconTeclado = Keyboard;
+export const IconMapa = MapPin;
+export const IconImprimir = Printer;
+export const IconVideo = Video;

@@ -1,13 +1,11 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import type { OpcoesCalendario } from "@/lib/calendario-core";
+import { useEffect, useMemo, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { diasSemanaCurtos, gradeMes, NOMES_MES, type OcultosCalendario, OCULTOS_VAZIO, ROTULO_TIPO_EVENTO, rotuloTicket, somarMes, TIPOS_EVENTO, type TipoEvento, temOculto } from "@/lib/tarefas-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import type { MesCalendario, NavCalendario } from "./CalendarioTarefas";
 import { Checkbox, SearchField } from "./Field";
-import { Switch } from "./Switch";
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
 /** Um CONJUNTO de eventos = uma tarefa (com quantos eventos ela tem no período). */
@@ -16,7 +14,8 @@ export type GrupoConjuntos = { quadro: { id: number; nome: string; cor: string }
 /** Um PCA com previsões no período (o cronograma de contratações — um conjunto próprio). */
 export type ConjuntoPca = { id: number; nome: string; eventos: number };
 
-/** O MINI-MÊS da barra (ir para qualquer data): hoje marcado, o dia em foco destacado, ponto nos dias com eventos. */
+/** O MINI-MÊS da barra (ir para qualquer data): hoje marcado, os dias À VISTA (a semana/4 dias/o dia) destacados, ponto
+ * nos dias com eventos. */
 export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: NavCalendario; hoje: string; diasComEvento: Set<string>; inicioSemana?: 0 | 1 }) {
   const { ano, mes } = nav.mes;
   const [m, setM] = useState<MesCalendario>({ ano, mes });
@@ -24,6 +23,7 @@ export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: N
   useEffect(() => setM({ ano, mes }), [ano, mes]);
   const grade = useMemo(() => gradeMes(m.ano, m.mes, inicioSemana), [m.ano, m.mes, inicioSemana]);
   const prefixo = `${m.ano}-${String(m.mes).padStart(2, "0")}`;
+  const aVista = new Set(nav.vista === "mes" || nav.vista === "ano" || nav.vista === "agenda" ? [nav.foco] : nav.destaque);
   return (
     <div className="rounded-card border border-border bg-surface p-2">
       <div className="mb-1 flex items-center justify-between">
@@ -51,8 +51,8 @@ export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: N
               onClick={() => nav.irPara(d)}
               aria-label={`Ir para ${dataBR(d)}`}
               aria-current={d === nav.foco ? "date" : undefined}
-              className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums transition-colors lg:h-8 ${
-                d === hoje ? "bg-accent font-bold text-white" : d === nav.foco ? "bg-accent-soft font-semibold text-accent" : d.startsWith(prefixo) ? "text-text-2 hover:bg-surface-2" : "text-faint hover:bg-surface-2"
+              className={`relative mx-auto grid h-11 w-full place-items-center text-[12px] tabular-nums transition-colors lg:h-8 ${aVista.has(d) && d !== hoje ? "bg-accent-soft font-semibold text-accent" : ""} ${
+                d === hoje ? "rounded-full bg-accent font-bold text-white" : aVista.has(d) ? "" : d.startsWith(prefixo) ? "rounded-full text-text-2 hover:bg-surface-2" : "rounded-full text-faint hover:bg-surface-2"
               }`}
             >
               {Number(d.slice(8))}
@@ -69,9 +69,8 @@ export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: N
  * A BARRA do calendário (como a lista de agendas do Google): o MINI-MÊS, os TIPOS de evento (Período da tarefa ·
  * Recorrência · Eventos · Previsão do PCA) + os FERIADOS, os CONJUNTOS — cada TAREFA é um conjunto de eventos, agrupadas
  * por QUADRO (a cor dele), e cada PCA um conjunto do cronograma: marcar/desmarcar mostra/esconde a tarefa, o quadro ou o
- * PCA; busca na lista; "Mostrar todos"/"Ocultar todos" —, as OPÇÕES da pessoa (semana começando na segunda, ocultar o
- * fim de semana) e `extras` (exportar/assinar). Controlada — `onOcultos`/`onOpcoes` recebem o novo estado (quem usa
- * grava a preferência).
+ * PCA; busca na lista; "Mostrar todos"/"Ocultar todos". Controlada — `onOcultos` recebe o novo estado (quem usa grava a
+ * preferência). As opções (semana, fins de semana…) ficam no menu de vistas e nas configurações do calendário.
  */
 export function BarraCalendario({
   nav,
@@ -83,9 +82,7 @@ export function BarraCalendario({
   feriadosNoPeriodo = 0,
   ocultos,
   onOcultos,
-  opcoes,
-  onOpcoes,
-  extras,
+  inicioSemana = 0,
 }: {
   nav: NavCalendario;
   hoje: string;
@@ -97,9 +94,7 @@ export function BarraCalendario({
   feriadosNoPeriodo?: number;
   ocultos: OcultosCalendario;
   onOcultos: (o: OcultosCalendario) => void;
-  opcoes?: OpcoesCalendario;
-  onOpcoes?: (o: OpcoesCalendario) => void;
-  extras?: ReactNode;
+  inicioSemana?: 0 | 1;
 }) {
   const [busca, setBusca] = useState("");
   const casa = predicadoBusca(busca);
@@ -114,7 +109,7 @@ export function BarraCalendario({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComEvento} inicioSemana={opcoes?.inicioSegunda ? 1 : 0} />
+      <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComEvento} inicioSemana={inicioSemana} />
       <section className="rounded-card border border-border bg-surface p-2" aria-label="Tipos de evento">
         <p className="px-1 pb-1 text-[12px] font-semibold text-text-2">Tipos</p>
         {TIPOS_EVENTO.filter((t) => t !== "pca" || pcas.length > 0).map((t) => (
@@ -151,7 +146,7 @@ export function BarraCalendario({
         {visiveis.length === 0 && pcasVisiveis.length === 0 && (
           <p className="px-1 py-3 text-[12px] text-muted">{grupos.length || pcas.length ? "Nada encontrado." : "Nenhum evento no período."}</p>
         )}
-        <div className="max-h-[50dvh] space-y-2 overflow-y-auto">
+        <div className="space-y-2">
           {visiveis.map((g) => {
             const quadroOculto = ocultos.quadros.includes(g.quadro.id);
             return (
@@ -205,18 +200,6 @@ export function BarraCalendario({
           )}
         </div>
       </section>
-      {opcoes && onOpcoes && (
-        <section className="space-y-1 rounded-card border border-border bg-surface p-2" aria-label="Opções do calendário">
-          <p className="px-1 pb-1 text-[12px] font-semibold text-text-2">Opções</p>
-          <div className="px-1">
-            <Switch checked={opcoes.inicioSegunda} onChange={(v) => onOpcoes({ ...opcoes, inicioSegunda: v })} label="Semana começa na segunda" />
-          </div>
-          <div className="px-1">
-            <Switch checked={opcoes.ocultarFimDeSemana} onChange={(v) => onOpcoes({ ...opcoes, ocultarFimDeSemana: v })} label="Ocultar sábado e domingo" />
-          </div>
-        </section>
-      )}
-      {extras}
     </div>
   );
 }

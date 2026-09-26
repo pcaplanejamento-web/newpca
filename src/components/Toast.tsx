@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react";
 import type { Feedback } from "@/lib/semantic";
 import { AvisoFlutuante } from "./AvisoFlutuante";
+import { Button } from "./Button";
 
 // Toast — API imperativa (`toast.success("Salvo")`) sobre o AVISO FLUTUANTE padrão (canto inferior,
 // pequeno, sem deformar o layout). Monte <Toaster/> uma vez (no RootLayout).
 type Variant = "info" | "success" | "warning" | "danger";
-type ToastItem = { id: number; msg: string; variant: Variant; duration: number };
+type ToastItem = { id: number; msg: string; variant: Variant; duration: number; acao?: { rotulo: string; onClick: () => void } };
 
 let listeners: ((t: ToastItem) => void)[] = [];
 let seq = 0;
 
-function emit(msg: string, variant: Variant, duration = 4000) {
-  const t: ToastItem = { id: ++seq, msg, variant, duration };
+function emit(msg: string, variant: Variant, duration = 4000, acao?: ToastItem["acao"]) {
+  const t: ToastItem = { id: ++seq, msg, variant, duration, acao };
   for (const l of listeners) l(t);
 }
 
@@ -24,6 +25,8 @@ export const toast = Object.assign(
     success: (m: string, d?: number) => emit(m, "success", d),
     warning: (m: string, d?: number) => emit(m, "warning", d),
     error: (m: string, d?: number) => emit(m, "danger", d),
+    /** Sucesso com **Desfazer** (o botão chama `onDesfazer` e fecha o aviso) — mover, redimensionar, excluir… */
+    desfazer: (m: string, onDesfazer: () => void, d = 7000) => emit(m, "success", d, { rotulo: "Desfazer", onClick: onDesfazer }),
   },
 );
 
@@ -49,6 +52,20 @@ export function Toaster() {
       kind={KIND[item.variant]}
       duracao={item.duration > 0 ? item.duration : undefined}
       onClose={() => setItem((cur) => (cur?.id === item.id ? null : cur))}
+      acoes={
+        item.acao ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setItem(null);
+              item.acao?.onClick();
+            }}
+          >
+            {item.acao.rotulo}
+          </Button>
+        ) : undefined
+      }
     >
       <span className="text-text">{item.msg}</span>
     </AvisoFlutuante>
