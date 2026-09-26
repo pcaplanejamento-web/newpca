@@ -14,6 +14,7 @@ import {
   feriadosNoIntervalo,
   gerarIcs,
   intervaloCalendario,
+  linkEvento,
   type OpcoesCalendario,
 } from "@/lib/calendario-core";
 import { dataBR } from "@/lib/format";
@@ -46,7 +47,10 @@ import {
 } from "@/lib/tarefas-core";
 import type { ContextoTarefa } from "@/lib/tarefas-dados";
 import { AssinaturaCalendario } from "./AssinaturaCalendario";
-import { BarraCalendario, type ConjuntoPca, type GrupoConjuntos } from "./BarraCalendario";
+import { GerirAgendasExternas, useAgendasExternas } from "./AgendasExternas";
+import { BarraCalendario, type ConjuntoExterno, type ConjuntoPca, type GrupoConjuntos } from "./BarraCalendario";
+import { BuscaCalendario, type ResultadoBusca } from "./BuscaCalendario";
+import { PaginasAgendamento } from "./PaginasAgendamento";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CalendarioTarefas, type SlotCriar } from "./CalendarioTarefas";
@@ -194,6 +198,9 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   /** Os feriados do período (todos — o aviso do prazo); a grade só os mostra se não estiverem ocultos. */
   const feriadosPeriodo = useMemo(() => feriadosNoIntervalo(dados.feriados, de, ate), [dados.feriados, de, ate]);
   const feriadosVisiveis = ocultos.feriados ? undefined : feriadosPeriodo;
+  /** As AGENDAS EXTERNAS (.ics assinados) — carregadas depois da tela, no intervalo à vista. */
+  const externas = useAgendasExternas(de, ate);
+  const [gerirExternas, setGerirExternas] = useState(false);
   const filtrando =
     filtro.responsavel !== FILTRO_TAREFAS_PADRAO.responsavel ||
     filtro.prazo !== FILTRO_TAREFAS_PADRAO.prazo ||
@@ -205,21 +212,25 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   const todos = useMemo(() => {
     const t = filtrarTarefas(tarefas, { ...filtro, busca: "" }, { usuarioId, hoje: dados.hoje });
     const casa = predicadoBusca(filtro.busca);
-    const ev = [...eventosDoCalendario(t, eventosDb, de, ate, dados.hoje), ...(filtrando || pessoasVer.length ? [] : eventosPca(dados.pca.dfds, de, ate))];
+    const ev = [
+      ...eventosDoCalendario(t, eventosDb, de, ate, dados.hoje),
+      ...(filtrando || pessoasVer.length ? [] : [...eventosPca(dados.pca.dfds, de, ate), ...externas.agendas.flatMap((a) => a.eventos)]),
+    ];
     const envolve = (e: EventoCalendario) =>
       !e.pca &&
+      !e.externo &&
       pessoasVer.some((p) => (responsaveis.get(e.tarefaId) ?? []).includes(p) || e.criadoPor === p || !!e.convidados?.some((c) => c.usuarioId === p));
     return ev.filter(
       (e) =>
         (!pessoasVer.length || envolve(e)) &&
-        (!casa || casa([e.titulo, e.tarefaTitulo, e.local ?? "", e.pca ? `DFD ${e.pca.numero} ${e.pca.planejamento ?? ""} ${e.pca.sigla ?? ""}` : `${rotuloTicket(e.ticket)} ${e.ticket}`])),
+        (!casa || casa([e.titulo, e.tarefaTitulo, e.local ?? "", e.pca ? `DFD ${e.pca.numero} ${e.pca.planejamento ?? ""} ${e.pca.sigla ?? ""}` : e.externo ? "" : `${rotuloTicket(e.ticket)} ${e.ticket}`])),
     );
-  }, [tarefas, eventosDb, filtro, filtrando, usuarioId, dados.hoje, dados.pca.dfds, de, ate, pessoasVer, responsaveis]);
+  }, [tarefas, eventosDb, filtro, filtrando, usuarioId, dados.hoje, dados.pca.dfds, de, ate, pessoasVer, responsaveis, externas.agendas]);
   const visiveis = useMemo(() => todos.filter((e) => eventoVisivel(e, ocultos)), [todos, ocultos]);
   const grupos = useMemo<GrupoConjuntos[]>(() => {
     const m = new Map<number, Map<number, { id: number; ticket: number; titulo: string; eventos: number }>>();
     for (const e of todos) {
-      if (e.pca) continue;
+      if (e.pca || e.externo) continue;
       const g = m.get(e.quadroId) ?? new Map();
       const t = g.get(e.tarefaId) ?? { id: e.tarefaId, ticket: e.ticket, titulo: e.tarefaTitulo, eventos: 0 };
       t.eventos++;
@@ -233,6 +244,10 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     for (const e of todos) if (e.pca) n.set(e.pca.pcaId, (n.get(e.pca.pcaId) ?? 0) + 1);
     return dados.pca.pcas.filter((p) => n.has(p.id)).map((p) => ({ id: p.id, nome: p.nome, eventos: n.get(p.id) ?? 0 }));
   }, [todos, dados.pca.pcas]);
+  const externosConjuntos = useMemo<ConjuntoExterno[]>(
+    () => externas.agendas.map((a) => ({ id: a.id, nome: a.nome, cor: a.cor, eventos: todos.filter((e) => e.externo?.agendaId === a.id).length, erro: a.erro })),
+    [externas.agendas, todos],
+  );
   const porTipo = useMemo(() => {
     const c = Object.fromEntries(TIPOS_EVENTO.map((t) => [t, 0])) as Record<TipoEvento, number>;
     for (const e of todos) c[e.tipo]++;
@@ -243,7 +258,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     for (const e of visiveis) for (let d = e.inicio, i = 0; d <= e.fim && i < 62; d = somarDias(d, 1), i++) s.add(d);
     return s;
   }, [visiveis]);
-  const nOcultos = ocultos.tarefas.length + ocultos.quadros.length + ocultos.pcas.length + ocultos.tipos.length + Number(ocultos.feriados);
+  const nOcultos = ocultos.tarefas.length + ocultos.quadros.length + ocultos.pcas.length + ocultos.externos.length + ocultos.tipos.length + Number(ocultos.feriados);
   const semPrazo = useMemo(() => dados.abertas.filter((t) => !t.prazo), [dados.abertas]);
 
   // O que fica OCULTO é a preferência da pessoa (gravada ~0,6 s depois da última mudança — marcar vários não vira vários
@@ -410,15 +425,29 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   };
 
   // O link do LEMBRETE (?evento=) abre o evento aqui mesmo — uma vez; a URL fica limpa.
-  const inicialAberto = useRef(false);
+  const inicialAberto = useRef<string | null>(null);
   useEffect(() => {
-    if (inicialAberto.current || !eventoInicial) return;
-    inicialAberto.current = true;
+    if (!eventoInicial) {
+      inicialAberto.current = null;
+      return;
+    }
+    if (inicialAberto.current === eventoInicial) return;
+    inicialAberto.current = eventoInicial;
     const e = todos.find((x) => x.chave === eventoInicial);
     if (e) setAberto(e);
-    else toast.info("O evento do lembrete não está mais neste mês (ou foi excluído).");
+    else toast.info("O evento não está mais neste mês (ou foi excluído).");
     router.replace(`/painel/calendario?mes=${textoMes(dados.mes.ano, dados.mes.mes)}`, { scroll: false });
   }, [eventoInicial, todos, router, dados.mes.ano, dados.mes.mes]);
+  /** Um resultado da BUSCA em todos os meses: no período à vista abre na hora; senão vai ao mês dele e abre lá. */
+  const irParaResultado = (r: ResultadoBusca) => {
+    const e = todos.find((x) => x.chave === r.chave);
+    if (e) {
+      setCriacao(null);
+      setTarefaSolta(null);
+      setVerTarefa(false);
+      setAberto(e);
+    } else iniciar(() => router.push(linkEvento(r.data, r.chave), { scroll: false }));
+  };
 
   // ─── Criação rápida ──────────────────────────────────────────────────────────────────────────────────────────
   const primeiraAberta = (quadroId: number) => dados.listas.find((l) => l.quadroId === quadroId && !l.concluida)?.id ?? null;
@@ -521,17 +550,17 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     setVerTarefa(false);
     setAberto(null);
   };
-  const cor = (e: EventoCalendario) => (e.pca ? "var(--info)" : (e.cor ?? porQuadro.get(e.quadroId)?.cor ?? "var(--accent)"));
+  const cor = (e: EventoCalendario) => (e.pca ? "var(--info)" : e.externo ? (e.cor ?? "var(--muted)") : (e.cor ?? porQuadro.get(e.quadroId)?.cor ?? "var(--accent)"));
   const banner = aberto && (
     <EventoBanner
       evento={aberto}
       cor={cor(aberto)}
-      quadroNome={aberto.pca ? undefined : porQuadro.get(aberto.quadroId)?.nome}
+      quadroNome={aberto.pca || aberto.externo ? undefined : porQuadro.get(aberto.quadroId)?.nome}
       hoje={dados.hoje}
       tarefaAberta={verTarefa && !!ctx}
-      onVerTarefa={aberto.pca ? undefined : () => setVerTarefa(true)}
+      onVerTarefa={aberto.pca || aberto.externo ? undefined : () => setVerTarefa(true)}
       onAbrirPca={aberto.pca ? () => router.push(`/painel/pca/${aberto.pca?.pcaId}?aba=mesa`) : undefined}
-      avisoPrazo={aberto.pca || aberto.concluida ? null : avisoDiaNaoUtil(aberto.tarefaPrazo, feriadosPeriodo)}
+      avisoPrazo={aberto.pca || aberto.externo || aberto.concluida ? null : avisoDiaNaoUtil(aberto.tarefaPrazo, feriadosPeriodo)}
       onDuplicar={
         aberto.eventoId
           ? () => {
@@ -594,10 +623,16 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           setAberto(null);
           setTarefaSolta(id);
         }}
-        configuracoes={<AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />}
+        configuracoes={
+          <>
+            <AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />
+            <PaginasAgendamento tarefas={opcoesTarefas} />
+          </>
+        }
         rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
           <div className="space-y-[var(--gap-block)]">
+            <BuscaCalendario hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
             <div className="flex flex-wrap items-center gap-1.5">
               <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
             </div>
@@ -625,6 +660,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
               diasComEvento={diasComEvento}
               grupos={grupos}
               pcas={pcasConjuntos}
+              externos={externosConjuntos}
+              onGerirExternos={() => setGerirExternas(true)}
               porTipo={porTipo}
               feriadosNoPeriodo={feriadosPeriodo.size}
               ocultos={ocultos}
@@ -811,6 +848,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           </div>
         )}
       </Modal>
+      <GerirAgendasExternas aberto={gerirExternas} onFechar={() => setGerirExternas(false)} agendas={externas.agendas} onMudou={() => void externas.recarregar()} />
       {confirmacao}
     </div>
   );

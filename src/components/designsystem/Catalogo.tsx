@@ -111,6 +111,10 @@ import { AssinaturaCalendario } from "@/components/AssinaturaCalendario";
 import { BarraCalendario } from "@/components/BarraCalendario";
 import { MolduraBloco, PaletaBlocos } from "@/components/BlocosTarefa";
 import { EventoBanner } from "@/components/EventoBanner";
+import { AgendarView } from "@/components/AgendarView";
+import { GerirAgendasExternas } from "@/components/AgendasExternas";
+import { BuscaCalendario } from "@/components/BuscaCalendario";
+import { PaginasAgendamento } from "@/components/PaginasAgendamento";
 import { eventosPca, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO } from "@/lib/calendario-core";
 import { EventosTarefa } from "@/components/EventosTarefa";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
@@ -1847,6 +1851,7 @@ function TarefasDemo() {
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
   const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
+  const [gerirDemo, setGerirDemo] = useState(false);
   const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null, lembreteMin: 30, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] };
   const pcaDemo = eventosPca(
     [{ pcaId: 1, pcaNome: "PCA 2026", dfdId: 9, numero: "1234", planejamento: "1509", objeto: "Material de limpeza", sigla: "SME", valor: 125000, ano: 2026, mes: 1, anual: false }],
@@ -1947,7 +1952,9 @@ function TarefasDemo() {
             diasComEvento={new Set(["2026-01-02"])}
             grupos={[{ quadro: { id: 1, nome: "Planejamento", cor: "#6366f1" }, tarefas: [{ id: 1, ticket: 128, titulo: "Conferir DFDs", eventos: 2 }] }]}
             pcas={[{ id: 1, nome: "PCA 2026", eventos: 1 }]}
-            porTipo={{ periodo: 2, recorrencia: 0, evento: 1, pca: 1 }}
+            porTipo={{ periodo: 2, recorrencia: 0, evento: 1, pca: 1, externo: 1 }}
+            externos={[{ id: 1, nome: "Feriados do Estado", cor: "#0ea5e9", eventos: 1 }]}
+            onGerirExternos={() => {}}
             feriadosNoPeriodo={feriadosDemo.size}
             ocultos={ocultosDemo}
             onOcultos={setOcultosDemo}
@@ -1975,6 +1982,29 @@ function TarefasDemo() {
           </div>
         )}
         <EventosTarefa eventos={[{ id: 1, ...eventoDemo }]} hoje="2026-01-01" onSalvar={async () => true} onExcluir={() => {}} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3 rounded-card border border-border p-3">
+          <BuscaCalendario hoje="2026-01-01" corQuadro={() => "#6366f1"} onEscolher={() => {}} />
+          <Button variant="secondary" size="sm" onClick={() => setGerirDemo(true)}>
+            Outras agendas (GerirAgendasExternas)
+          </Button>
+          <GerirAgendasExternas
+            aberto={gerirDemo}
+            onFechar={() => setGerirDemo(false)}
+            agendas={[{ id: 1, nome: "Feriados do Estado", url: "https://exemplo.gov.br/feriados.ics", cor: "#0ea5e9", eventos: [], erro: null }]}
+            onMudou={() => {}}
+          />
+          <PaginasAgendamento
+            tarefas={[{ valor: "1", rotulo: "#128 Conferir DFDs" }]}
+            demo={[{ id: 1, usuarioId: 1, tarefaId: 1, slug: "atendimento-pca", titulo: "Atendimento do PCA", descricao: null, duracaoMin: 30, dias: [1, 2, 3, 4, 5], horaInicio: "08:00", horaFim: "12:00", antecedenciaH: 2, janelaDias: 30, ativa: true, tarefaTitulo: "Conferir DFDs" }]}
+          />
+        </div>
+        <AgendarView
+          pagina={{ slug: "atendimento-pca", titulo: "Atendimento do PCA", descricao: "Página pública (/agendar/…)", duracaoMin: 30, responsavel: "Ana Souza" }}
+          livres={[["2026-01-05", ["08:00", "08:30", "09:00"]], ["2026-01-06", ["10:00"]]]}
+          turnstile={{ enabled: false, siteKey: "" }}
+        />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />

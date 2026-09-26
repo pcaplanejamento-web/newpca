@@ -641,7 +641,7 @@ export function proximaOcorrencia(
 
 // ─── Fase 3: NOTIFICAÇÕES de PRAZO (derivadas na leitura — sem cron) ─────────────────────────────────────────
 
-export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete", "convite", "resposta"] as const;
+export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete", "convite", "resposta", "agendamento"] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 
 /** O link que abre a tarefa no quadro. */
@@ -1044,9 +1044,9 @@ export function mascararPrivados(eventos: EventoTarefa[], usuarioId: number, res
 
 /** De onde vem o evento do calendário: o PERÍODO da tarefa (início → prazo), uma OCORRÊNCIA futura da recorrência, um
  * EVENTO cadastrado ou a PREVISÃO DE ENTREGA de um DFD do PCA (o cronograma de contratações). */
-export const TIPOS_EVENTO = ["periodo", "recorrencia", "evento", "pca"] as const;
+export const TIPOS_EVENTO = ["periodo", "recorrencia", "evento", "pca", "externo"] as const;
 export type TipoEvento = (typeof TIPOS_EVENTO)[number];
-export const ROTULO_TIPO_EVENTO: Record<TipoEvento, string> = { periodo: "Período da tarefa", recorrencia: "Recorrência", evento: "Eventos", pca: "Previsão do PCA" };
+export const ROTULO_TIPO_EVENTO: Record<TipoEvento, string> = { periodo: "Período da tarefa", recorrencia: "Recorrência", evento: "Eventos", pca: "Previsão do PCA", externo: "Agendas externas" };
 
 /** O DFD de um evento de PREVISÃO do PCA (o banner mostra; `anual` = previsão ANUAL, repetida em todo mês). */
 export type EventoPca = {
@@ -1092,6 +1092,8 @@ export type EventoCalendario = {
   prevista: boolean;
   /** O DFD (tipo `pca`); nos demais, `null`. */
   pca: EventoPca | null;
+  /** De uma AGENDA EXTERNA (.ics assinado — somente leitura). */
+  externo?: { agendaId: number; agendaNome: string } | null;
   /** Do evento cadastrado (os demais: livre/sem convidados). */
   linkReuniao?: string | null;
   ocupado?: boolean;
@@ -1272,8 +1274,8 @@ export function layoutDoDia<T extends { horaInicio: string | null; horaFim: stri
 
 /** O que fica OCULTO no calendário (preferência da pessoa — `calendario:ocultos`): tarefas, quadros, PCAs, tipos e os
  * feriados. */
-export type OcultosCalendario = { tarefas: number[]; quadros: number[]; pcas: number[]; tipos: TipoEvento[]; feriados: boolean };
-export const OCULTOS_VAZIO: OcultosCalendario = { tarefas: [], quadros: [], pcas: [], tipos: [], feriados: false };
+export type OcultosCalendario = { tarefas: number[]; quadros: number[]; pcas: number[]; externos: number[]; tipos: TipoEvento[]; feriados: boolean };
+export const OCULTOS_VAZIO: OcultosCalendario = { tarefas: [], quadros: [], pcas: [], externos: [], tipos: [], feriados: false };
 export const CHAVE_OCULTOS_CALENDARIO = "calendario:ocultos";
 
 /** Lê a preferência gravada — tolerante (qualquer coisa inválida = nada oculto). */
@@ -1284,14 +1286,16 @@ export function lerOcultos(v: unknown): OcultosCalendario {
     tarefas: ids(o.tarefas),
     quadros: ids(o.quadros),
     pcas: ids(o.pcas),
+    externos: ids(o.externos),
     tipos: Array.isArray(o.tipos) ? TIPOS_EVENTO.filter((t) => (o.tipos as unknown[]).includes(t)) : [],
     feriados: o.feriados === true,
   };
 }
 
 /** Algo oculto? (o "Mostrar todos" da barra). */
-export const temOculto = (o: OcultosCalendario) => o.tarefas.length + o.quadros.length + o.pcas.length + o.tipos.length > 0 || o.feriados;
+export const temOculto = (o: OcultosCalendario) => o.tarefas.length + o.quadros.length + o.pcas.length + o.externos.length + o.tipos.length > 0 || o.feriados;
 
 /** O evento aparece com o que está oculto? (tipo, quadro/tarefa ou — na previsão do PCA — o PCA ocultos escondem). */
-export const eventoVisivel = (e: Pick<EventoCalendario, "tarefaId" | "quadroId" | "tipo" | "pca">, o: OcultosCalendario) =>
-  !o.tipos.includes(e.tipo) && (e.pca ? !o.pcas.includes(e.pca.pcaId) : !o.quadros.includes(e.quadroId) && !o.tarefas.includes(e.tarefaId));
+export const eventoVisivel = (e: Pick<EventoCalendario, "tarefaId" | "quadroId" | "tipo" | "pca" | "externo">, o: OcultosCalendario) =>
+  !o.tipos.includes(e.tipo) &&
+  (e.pca ? !o.pcas.includes(e.pca.pcaId) : e.externo ? !o.externos.includes(e.externo.agendaId) : !o.quadros.includes(e.quadroId) && !o.tarefas.includes(e.tarefaId));

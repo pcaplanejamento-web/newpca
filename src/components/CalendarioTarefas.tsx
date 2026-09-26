@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { diasExibidos, type FeriadoDia, N_DIAS, OPCOES_CALENDARIO_PADRAO, OPCOES_LEMBRETE, type OpcoesCalendario, semanaIso, type VistaCalendario } from "@/lib/calendario-core";
+import { diasExibidos, diferencaFuso, type FeriadoDia, FUSOS_SECUNDARIOS, horaNoFuso, N_DIAS, OPCOES_CALENDARIO_PADRAO, OPCOES_LEMBRETE, type OpcoesCalendario, rotuloGmt, semanaIso, type VistaCalendario } from "@/lib/calendario-core";
 import { dataBR, num } from "@/lib/format";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import {
@@ -388,7 +388,7 @@ function corDoEvento(e: EventoCalendario, hoje: string, corQuadro?: (quadroId: n
 }
 
 /** A origem curta do evento no chip: "#12" (tarefa) ou "PCA" (previsão do PCA). */
-const origemCurta = (e: EventoCalendario) => (e.pca ? "PCA" : rotuloTicket(e.ticket));
+const origemCurta = (e: EventoCalendario) => (e.pca ? "PCA" : e.externo ? e.externo.agendaNome : rotuloTicket(e.ticket));
 /** "09:30–10:00" / "" — o horário no rótulo do evento. */
 const horarioDe = (e: EventoCalendario) => (e.diaInteiro || !e.horaInicio ? "" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`);
 
@@ -419,7 +419,7 @@ function EventoChip({
 }) {
   const { faixa, semaforo } = corDoEvento(e, hoje, corQuadro);
   const hora = horarioDe(e);
-  const titulo = `${e.titulo}${hora ? ` — ${hora}` : ""} · ${e.pca ? e.pca.pcaNome : rotuloTicket(e.ticket)}${e.tipo === "periodo" ? ` — ${ROTULO_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)]}` : ""}${e.tipo === "recorrencia" ? (e.prevista ? " (ocorrência prevista)" : " (próxima ocorrência)") : ""}`;
+  const titulo = `${e.titulo}${hora ? ` — ${hora}` : ""} · ${e.pca ? e.pca.pcaNome : e.externo ? e.externo.agendaNome : rotuloTicket(e.ticket)}${e.tipo === "periodo" ? ` — ${ROTULO_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)]}` : ""}${e.tipo === "recorrencia" ? (e.prevista ? " (ocorrência prevista)" : " (próxima ocorrência)") : ""}`;
   const tracejado = e.tipo === "recorrencia" || e.tipo === "pca";
   const livre = e.ocupado === false;
   return (
@@ -859,14 +859,17 @@ export function CalendarioTarefas({
     const rascTopo = rascunho && !rascunho.hora && dias.includes(rascunho.data) ? rascunho : null;
     const ocupadasTopo = faixas.reduce((m, f) => Math.max(m, f.linha + 1), 0);
     const linhasTopo = ocupadasTopo + (rascTopo ? 1 : 0);
-    const colunas = `3.25rem repeat(${dias.length}, minmax(0, 1fr))`;
+    // Fuso SECUNDÁRIO (opção da pessoa): uma 2ª régua de horas à esquerda da de Brasília.
+    const dif = opcoes.fusoSecundario ? diferencaFuso(opcoes.fusoSecundario, dias[0]) : null;
+    const colunas = `${dif === null ? "3.25rem" : "6.25rem"} repeat(${dias.length}, minmax(0, 1fr))`;
     const ini = opcoes.expedienteInicio ? minutosDe(opcoes.expedienteInicio) : null;
     const fim = opcoes.expedienteFim ? minutosDe(opcoes.expedienteFim) : null;
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="grid shrink-0 border-b border-border" style={{ gridTemplateColumns: colunas }}>
-          <span className="flex items-end justify-end pb-1 pr-1.5 text-[10px] text-faint" title="Horário de Brasília">
-            GMT-03
+          <span className="flex items-end justify-end gap-2 pb-1 pr-1.5 text-[10px] text-faint" title="Horário de Brasília">
+            {dif !== null && <span title={FUSOS_SECUNDARIOS.find((f) => f.tz === opcoes.fusoSecundario)?.rotulo}>{rotuloGmt(dif)}</span>}
+            <span>GMT-03</span>
           </span>
           {dias.map((d) => (
             <button key={d} type="button" onClick={() => trocarVista("dia", d)} className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 py-1" aria-label={`Ver o dia ${dataBR(d)}`}>
@@ -925,8 +928,9 @@ export function CalendarioTarefas({
           <div className="grid" style={{ gridTemplateColumns: colunas, height: 24 * HORA_PX }}>
             <div className="relative">
               {HORAS.slice(1).map((h) => (
-                <span key={h} className="absolute right-1.5 -translate-y-1/2 text-[10.5px] tabular-nums text-faint" style={{ top: h * HORA_PX }}>
-                  {String(h).padStart(2, "0")}:00
+                <span key={h} className="absolute right-1.5 flex -translate-y-1/2 gap-2 text-[10.5px] tabular-nums text-faint" style={{ top: h * HORA_PX }}>
+                  {dif !== null && <span className="opacity-70">{horaNoFuso(`${String(h).padStart(2, "0")}:00`, dif)}</span>}
+                  <span>{String(h).padStart(2, "0")}:00</span>
                 </span>
               ))}
             </div>
@@ -1549,6 +1553,16 @@ export function CalendarioTarefas({
               {OPCOES_LEMBRETE.map((o) => (
                 <option key={o.min} value={String(o.min)}>
                   {o.rotulo}
+                </option>
+              ))}
+            </SelectField>
+          )}
+          {onOpcoes && (
+            <SelectField label="Fuso secundário (grade de horas)" value={opcoes.fusoSecundario ?? ""} onChange={(e) => opcao("fusoSecundario", e.target.value || null)}>
+              <option value="">Nenhum — só Brasília (GMT-03)</option>
+              {FUSOS_SECUNDARIOS.map((f) => (
+                <option key={f.tz} value={f.tz}>
+                  {f.rotulo} ({rotuloGmt(diferencaFuso(f.tz, hoje))})
                 </option>
               ))}
             </SelectField>

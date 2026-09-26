@@ -1038,8 +1038,10 @@ Desfazer; horário de expediente; número da semana; fuso; vista Ano; atalhos C/
 vai, notificação ao criador), link de videoconferência, local com mapa, repetição própria do evento (diária/semanal/mensal/
 anual, até uma data), Ocupado/Livre, evento privado (os outros veem "Ocupado"), "Pesquisar pessoas", ocultar recusados e
 lembrete padrão.
-🔜 **Do Google Agenda — a seguir (Pacote 3):** agendas externas (.ics por URL), busca em todos os meses, página de
-agendamento e fuso secundário; lembrete também por e-mail.
+✅ **Fase 9 — Pacote 3 (migração `0049`):** agendas externas (.ics/webcal por URL, somente leitura, com cor e
+mostrar/ocultar), busca em todos os meses, página pública de agendamento (`/agendar/<endereço>` — horários livres pela agenda
+real, captcha, aviso no sino, evento na tarefa) e fuso secundário na grade de horas.
+🔜 **Do Google Agenda — a seguir:** lembrete e confirmação de agendamento também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

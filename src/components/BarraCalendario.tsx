@@ -13,6 +13,8 @@ export type ConjuntoTarefa = { id: number; ticket: number; titulo: string; event
 export type GrupoConjuntos = { quadro: { id: number; nome: string; cor: string }; tarefas: ConjuntoTarefa[] };
 /** Um PCA com previsões no período (o cronograma de contratações — um conjunto próprio). */
 export type ConjuntoPca = { id: number; nome: string; eventos: number };
+/** Uma AGENDA EXTERNA assinada (.ics por URL — somente leitura); `erro` = a última leitura falhou. */
+export type ConjuntoExterno = { id: number; nome: string; cor: string | null; eventos: number; erro?: string | null };
 
 /** O MINI-MÊS da barra (ir para qualquer data): hoje marcado, os dias À VISTA (a semana/4 dias/o dia) destacados, ponto
  * nos dias com eventos. */
@@ -78,6 +80,8 @@ export function BarraCalendario({
   diasComEvento,
   grupos,
   pcas = [],
+  externos = [],
+  onGerirExternos,
   porTipo,
   feriadosNoPeriodo = 0,
   ocultos,
@@ -89,6 +93,9 @@ export function BarraCalendario({
   diasComEvento: Set<string>;
   grupos: GrupoConjuntos[];
   pcas?: ConjuntoPca[];
+  externos?: ConjuntoExterno[];
+  /** Abre o cadastro das agendas externas (sem = sem a seção). */
+  onGerirExternos?: () => void;
   /** Quantos eventos de cada tipo há no período. */
   porTipo: Record<TipoEvento, number>;
   feriadosNoPeriodo?: number;
@@ -101,7 +108,7 @@ export function BarraCalendario({
   const visiveis = grupos
     .map((g) => ({ ...g, tarefas: casa ? g.tarefas.filter((t) => casa([t.titulo, rotuloTicket(t.ticket), g.quadro.nome])) : g.tarefas }))
     .filter((g) => g.tarefas.length > 0);
-  const alternar = <K extends "tarefas" | "quadros" | "pcas">(k: K, id: number) =>
+  const alternar = <K extends "tarefas" | "quadros" | "pcas" | "externos">(k: K, id: number) =>
     onOcultos({ ...ocultos, [k]: ocultos[k].includes(id) ? ocultos[k].filter((x) => x !== id) : [...ocultos[k], id] });
   const todasIds = grupos.flatMap((g) => g.tarefas.map((t) => t.id));
   const algumOculto = temOculto(ocultos);
@@ -112,7 +119,7 @@ export function BarraCalendario({
       <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComEvento} inicioSemana={inicioSemana} />
       <section className="rounded-card border border-border bg-surface p-2" aria-label="Tipos de evento">
         <p className="px-1 pb-1 text-[12px] font-semibold text-text-2">Tipos</p>
-        {TIPOS_EVENTO.filter((t) => t !== "pca" || pcas.length > 0).map((t) => (
+        {TIPOS_EVENTO.filter((t) => (t !== "pca" || pcas.length > 0) && (t !== "externo" || externos.length > 0)).map((t) => (
           <div key={t} className="flex min-h-11 items-center justify-between gap-2 px-1 lg:min-h-8">
             <Checkbox
               checked={!ocultos.tipos.includes(t)}
@@ -200,6 +207,38 @@ export function BarraCalendario({
           )}
         </div>
       </section>
+      {onGerirExternos && (
+        <section className="rounded-card border border-border bg-surface p-2" aria-label="Outras agendas">
+          <div className="flex items-center justify-between gap-2 px-1 pb-1">
+            <p className="text-[12px] font-semibold text-text-2">Outras agendas</p>
+            <button type="button" onClick={onGerirExternos} className="min-h-11 rounded-control px-1.5 text-[11.5px] font-semibold text-accent hover:bg-surface-2 lg:min-h-7">
+              {externos.length ? "Gerenciar" : "Adicionar"}
+            </button>
+          </div>
+          {externos.length === 0 ? (
+            <p className="px-1 pb-1 text-[12px] text-muted">Assine a agenda de outro sistema pelo link .ics (somente leitura).</p>
+          ) : (
+            <ul>
+              {externos.map((x) => (
+                <li key={x.id} className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
+                  <Checkbox checked={!ocultos.externos.includes(x.id)} onChange={() => alternar("externos", x.id)} label="" aria-label={`Mostrar a agenda ${x.nome}`} />
+                  <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: x.cor ?? "var(--muted)" }} />
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-text-2" title={x.erro ? `${x.nome} — ${x.erro}` : x.nome}>
+                    {x.nome}
+                  </span>
+                  {x.erro ? (
+                    <span className="shrink-0 text-[10.5px] font-semibold text-[var(--warn)]" title={x.erro}>
+                      falhou
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{x.eventos}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

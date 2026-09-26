@@ -145,6 +145,8 @@ export type OpcoesCalendario = {
   ocultarRecusados: boolean;
   /** O lembrete que todo evento NOVO da pessoa já traz (minutos; `null` = sem). */
   lembretePadrao: number | null;
+  /** O FUSO SECUNDÁRIO mostrado ao lado das horas (IANA de `FUSOS_SECUNDARIOS`; `null` = só o de Brasília). */
+  fusoSecundario: string | null;
 };
 export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = {
   inicioSegunda: false,
@@ -155,6 +157,7 @@ export const OPCOES_CALENDARIO_PADRAO: OpcoesCalendario = {
   expedienteFim: "18:00",
   ocultarRecusados: false,
   lembretePadrao: null,
+  fusoSecundario: null,
 };
 export const CHAVE_OPCOES_CALENDARIO = "calendario:opcoes";
 export function lerOpcoesCalendario(v: unknown): OpcoesCalendario {
@@ -171,8 +174,53 @@ export function lerOpcoesCalendario(v: unknown): OpcoesCalendario {
     ...expediente,
     ocultarRecusados: o.ocultarRecusados === true,
     lembretePadrao: typeof o.lembretePadrao === "number" && Number.isInteger(o.lembretePadrao) && o.lembretePadrao >= 0 && o.lembretePadrao <= LEMBRETE_MAX_MIN ? o.lembretePadrao : null,
+    fusoSecundario: FUSOS_SECUNDARIOS.some((f) => f.tz === o.fusoSecundario) ? (o.fusoSecundario as string) : null,
   };
 }
+// ─── Fuso secundário ──────────────────────────────────────────────────────────────────────────────────────────
+
+/** Os fusos que a grade de horas pode mostrar ao lado do de Brasília (GMT-03). */
+export const FUSOS_SECUNDARIOS: { tz: string; rotulo: string }[] = [
+  { tz: "America/Noronha", rotulo: "Fernando de Noronha" },
+  { tz: "America/Manaus", rotulo: "Manaus" },
+  { tz: "America/Rio_Branco", rotulo: "Rio Branco" },
+  { tz: "UTC", rotulo: "UTC" },
+  { tz: "America/New_York", rotulo: "Nova York" },
+  { tz: "Europe/Lisbon", rotulo: "Lisboa" },
+  { tz: "Europe/Madrid", rotulo: "Madri" },
+  { tz: "Asia/Tokyo", rotulo: "Tóquio" },
+];
+
+/** A diferença (minutos) do fuso para Brasília no dia — o horário de verão de fora entra (Brasília é UTC−3 fixo). */
+export function diferencaFuso(tz: string, dia: string): number {
+  try {
+    const t = Date.parse(`${dia}T15:00:00Z`);
+    const partes = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        .formatToParts(new Date(t))
+        .map((p) => [p.type, p.value]),
+    );
+    const local = Date.parse(`${partes.year}-${partes.month}-${partes.day}T${partes.hour}:${partes.minute}:00Z`);
+    return Math.round((local - t) / 60_000) + 180;
+  } catch {
+    return 0;
+  }
+}
+
+/** A hora "HH:MM" de Brasília no fuso secundário (a diferença em minutos; volta ao dia anterior/seguinte). */
+export function horaNoFuso(hora: string, diferencaMin: number): string {
+  const m = (((Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5)) + diferencaMin) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** O rótulo curto do fuso (GMT-04, GMT+01, GMT+05:30). */
+export function rotuloGmt(diferencaParaBrasilia: number): string {
+  const m = diferencaParaBrasilia - 180;
+  const s = m < 0 ? "-" : "+";
+  const a = Math.abs(m);
+  return `GMT${s}${String(Math.floor(a / 60)).padStart(2, "0")}${a % 60 ? `:${String(a % 60).padStart(2, "0")}` : ""}`;
+}
+
 /** Os dias EXIBIDOS de uma semana (sem sábado/domingo quando ocultos). */
 export const diasExibidos = (semana: string[], o: Pick<OpcoesCalendario, "ocultarFimDeSemana">) =>
   o.ocultarFimDeSemana ? semana.filter((d) => ![0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) : semana;

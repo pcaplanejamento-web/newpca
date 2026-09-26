@@ -90,7 +90,9 @@ export function EventoBanner({
         ? e.prevista
           ? "Próxima ocorrência PREVISTA: a repetição conta da conclusão — a data real depende de quando a tarefa for concluída (aqui, se concluída hoje ou no prazo)."
           : "Próxima ocorrência prevista pela recorrência da tarefa — nasce ao concluir a atual."
-        : e.tipo === "pca"
+        : e.tipo === "externo"
+          ? `Da agenda externa "${e.externo?.agendaNome ?? e.tarefaTitulo}" — somente leitura (altere no sistema de origem).`
+          : e.tipo === "pca"
           ? `Previsão de entrega do DFD (seção 5)${e.pca?.anual ? " — ANUAL: aparece em todos os meses do ano" : ""}. O cronograma segue o PCA consolidado.`
           : null;
   return (
@@ -239,7 +241,7 @@ export function EventoBanner({
             </Button>
           )}
         </section>
-      ) : (
+      ) : e.externo ? null : (
         <section className="space-y-2 rounded-card border border-border p-3" aria-label="Tarefa de origem">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
             <IconKanban className="h-3.5 w-3.5" />

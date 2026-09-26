@@ -36,6 +36,8 @@ import {
   type DadosEvento,
   type EventoTarefa,
   lerRecorrenciaEvento,
+  ocorrenciasDoEvento,
+  somarDias,
   type RespostaConvite,
   contagemBlocos,
   lerBlocos,
@@ -1287,4 +1289,56 @@ export async function criarQuadroDoModelo(grupoId: number, d: { nome: string; co
   );
   const [q] = r[r.length - 1] as { id: number }[];
   return q.id;
+}
+
+/** Um resultado da BUSCA do calendário (em todos os meses): o link abre o evento/tarefa no mês dele. */
+export type ResultadoBuscaCalendario = { tipo: "evento" | "tarefa"; chave: string; titulo: string; data: string; hora: string | null; local: string | null; quadroId: number; ticket: number; repete: boolean };
+
+/**
+ * BUSCA do calendário em TODOS os meses (título, local e descrição dos eventos; título e #ticket das tarefas com prazo)
+ * nos quadros da pessoa. O evento PRIVADO de quem não participa (nem criou nem foi convidado) não entra — a busca não pode
+ * revelar o que o "Ocupado" esconde. A série aparece na PRÓXIMA ocorrência (a partir de hoje; senão a 1ª).
+ */
+export async function buscarNoCalendario(quadroIds: number[], termo: string, usuarioId: number, hoje: string): Promise<ResultadoBuscaCalendario[]> {
+  const q = termo.trim().slice(0, 80);
+  if (!quadroIds.length || q.length < 2) return [];
+  const db = getDb();
+  const padrao = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const likeEsc = (col: Parameters<typeof like>[0]) => sql`${col} LIKE ${padrao} ESCAPE '\\'`;
+  const ids = quadroIds.slice(0, 90);
+  const ticket = /^#?\d{1,7}$/.test(q) ? Number(q.replace("#", "")) : null;
+  const [evs, tfs] = await Promise.all([
+    db
+      .select({ id: tarefaEventos.id, titulo: tarefaEventos.titulo, data: tarefaEventos.data, dataFim: tarefaEventos.dataFim, horaInicio: tarefaEventos.horaInicio, local: tarefaEventos.local, recorrencia: tarefaEventos.recorrencia, quadroId: tarefas.quadroId, ticket: tarefas.ticket })
+      .from(tarefaEventos)
+      .innerJoin(tarefas, eq(tarefas.id, tarefaEventos.tarefaId))
+      .where(
+        and(
+          inArray(tarefas.quadroId, ids),
+          eq(tarefas.arquivada, false),
+          or(likeEsc(tarefaEventos.titulo), likeEsc(tarefaEventos.local), likeEsc(tarefaEventos.descricao)),
+          or(
+            eq(tarefaEventos.privado, false),
+            eq(tarefaEventos.criadoPor, usuarioId),
+            sql`EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${usuarioId})`,
+          ),
+        ),
+      )
+      .orderBy(desc(tarefaEventos.data))
+      .limit(40),
+    db
+      .select({ id: tarefas.id, titulo: tarefas.titulo, prazo: tarefas.prazo, quadroId: tarefas.quadroId, ticket: tarefas.ticket })
+      .from(tarefas)
+      .where(and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), sql`${tarefas.prazo} IS NOT NULL`, or(likeEsc(tarefas.titulo), ticket != null ? eq(tarefas.ticket, ticket) : undefined)))
+      .orderBy(desc(tarefas.prazo))
+      .limit(40),
+  ]);
+  const out: ResultadoBuscaCalendario[] = evs.map((e) => {
+    const rec = lerRecorrenciaEvento(e.recorrencia);
+    const d = rec ? (ocorrenciasDoEvento({ data: e.data, dataFim: e.dataFim, recorrencia: rec }, hoje > e.data ? hoje : e.data, somarDias(hoje, 3650), 1)[0] ?? e.data) : e.data;
+    return { tipo: "evento", chave: d === e.data ? `e${e.id}` : `e${e.id}:${d}`, titulo: e.titulo, data: d, hora: e.horaInicio, local: e.local, quadroId: e.quadroId, ticket: e.ticket, repete: !!rec };
+  });
+  for (const t of tfs) if (t.prazo) out.push({ tipo: "tarefa", chave: `p${t.id}`, titulo: t.titulo, data: t.prazo, hora: null, local: null, quadroId: t.quadroId, ticket: t.ticket, repete: false });
+  // Os de hoje em diante primeiro (o mais próximo antes); depois os passados (o mais recente antes).
+  return out.sort((a, b) => (a.data >= hoje) !== (b.data >= hoje) ? (a.data >= hoje ? -1 : 1) : a.data >= hoje ? a.data.localeCompare(b.data) : b.data.localeCompare(a.data)).slice(0, 50);
 }

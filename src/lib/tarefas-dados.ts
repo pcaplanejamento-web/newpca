@@ -170,3 +170,11 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
 }
 
 export type DadosQuadro = NonNullable<Awaited<ReturnType<typeof carregarQuadro>>>;
+
+/** Os quadros (não arquivados) do CALENDÁRIO da pessoa — os do grupo ativo; o ADM sem grupo, todos. */
+export async function quadrosDoCalendario(u: UsuarioSessao): Promise<number[]> {
+  const grupoAtivo = await getGrupoAtivoId(u);
+  const hoje = dataIsoBrasilia(new Date().toISOString());
+  const quadros = await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje);
+  return quadros.filter((q) => !q.arquivado).map((q) => q.id);
+}
