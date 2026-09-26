@@ -6,15 +6,28 @@ import {
   tarefaChecklist,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
+  tarefaEventos,
   tarefaListas,
   tarefaPessoas,
   tarefaQuadros,
   tarefas,
 } from "../db/schema.ts";
-import { type BlocoTarefa, blocosParaGravar, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo } from "./tarefas-core.ts";
+import { type BlocoTarefa, blocosParaGravar, type DadosEvento, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo } from "./tarefas-core.ts";
 import type { AcaoMassaTarefas } from "./tarefas-validation.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
+
+/** Os campos de um evento como a tabela grava (dia inteiro não guarda hora). */
+export const colunasEvento = (e: DadosEvento) => ({
+  titulo: e.titulo,
+  data: e.data,
+  diaInteiro: e.diaInteiro,
+  horaInicio: e.diaInteiro ? null : e.horaInicio,
+  horaFim: e.diaInteiro ? null : e.horaFim,
+  local: e.local,
+  descricao: e.descricao,
+  cor: e.cor,
+});
 
 /**
  * TAREFAS — os comandos de ESCRITA em lote como BUILDERS do Drizzle (sem getDb: testados pelo driver D1 REAL dentro de
@@ -53,6 +66,8 @@ export function comandosCriarTarefa(
     checklist?: string[];
     /** Os blocos da tarefa (a ordem + notas e links). */
     blocos?: BlocoTarefa[] | null;
+    /** Os EVENTOS da tarefa (bloco "Eventos"). */
+    eventos?: DadosEvento[];
   },
 ) {
   return [
@@ -86,6 +101,7 @@ export function comandosCriarTarefa(
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
     ...(d.checklist ?? []).map((texto, i) => db.insert(tarefaChecklist).values({ tarefaId: idDaNova(d.quadroId), texto, ordem: i + 1 })),
+    ...(d.eventos ?? []).map((e) => db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor })),
     db
       .select({ id: tarefas.id, ticket: tarefas.ticket })
       .from(tarefas)

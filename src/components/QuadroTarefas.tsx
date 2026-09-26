@@ -14,6 +14,14 @@ import {
   type FiltroTarefas,
   filtrarTarefas,
   moverCartao,
+  contadoresCalendario,
+  type EventoCalendario,
+  type EventoTarefa,
+  eventosDoCalendario,
+  gradeMes,
+  horaDeMinutos,
+  horaValida,
+  minutosDe,
   prefixoEdicoesTarefas,
   reagendar,
   resumoQuadro,
@@ -78,10 +86,19 @@ export function QuadroTarefas({
   hoje,
   podeEditar,
   usuarioId,
+  eventos = [],
   novaInicial = null,
   prazoInicial = null,
   tarefaInicial = null,
-}: DadosQuadro & { aba: AbaQuadro; usuarioId: number; novaInicial?: VinculoTarefa | null; prazoInicial?: string | null; tarefaInicial?: number | null }) {
+}: DadosQuadro & {
+  aba: AbaQuadro;
+  usuarioId: number;
+  /** Os EVENTOS cadastrados das tarefas deste quadro (só com a aba Calendário aberta). */
+  eventos?: EventoTarefa[];
+  novaInicial?: VinculoTarefa | null;
+  prazoInicial?: string | null;
+  tarefaInicial?: number | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [tarefas, setTarefas] = useState(doServidor);
@@ -161,6 +178,43 @@ export function QuadroTarefas({
     } catch (e) {
       setTarefas(antes);
       toast.error((e as Error).message);
+    }
+  };
+
+  /** O mês à vista na aba Calendário e os EVENTOS dele (período, recorrência e os cadastrados deste quadro). */
+  const [mesCal, setMesCal] = useState(() => ({ ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) }));
+  const eventosCal = useMemo(() => {
+    if (aba !== "calendario") return [];
+    const g = gradeMes(mesCal.ano, mesCal.mes);
+    return eventosDoCalendario(
+      noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
+      eventos,
+      g[0][0],
+      g.at(-1)?.[6] ?? g[0][6],
+    );
+  }, [aba, mesCal, noQuadro, eventos, quadro.id]);
+  /** ARRASTAR no calendário: o período reagenda a tarefa; o evento cadastrado muda de dia (e de hora, na grade). */
+  const moverNoCalendario = async (e: EventoCalendario, dia: string, hora: string | null) => {
+    if (e.tipo === "periodo") {
+      const t = tarefas.find((x) => x.id === e.tarefaId);
+      if (t) await reagendarTarefa(t, dia);
+      return;
+    }
+    const ev = eventos.find((x) => x.id === e.eventoId);
+    if (!ev) return;
+    const dur = !ev.diaInteiro && horaValida(ev.horaInicio) && horaValida(ev.horaFim) ? minutosDe(ev.horaFim) - minutosDe(ev.horaInicio) : null;
+    const comHora = hora && !ev.diaInteiro;
+    try {
+      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", {
+        ...ev,
+        data: dia,
+        horaInicio: comHora ? hora : ev.horaInicio,
+        horaFim: comHora ? (dur != null ? horaDeMinutos(Math.min(minutosDe(hora) + dur, 23 * 60 + 59)) : null) : ev.horaFim,
+      });
+      toast.success(`"${ev.titulo}" movido para ${dataBR(dia)}.`);
+      router.refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
     }
   };
 
@@ -337,11 +391,14 @@ export function QuadroTarefas({
           />
         ) : aba === "calendario" ? (
           <CalendarioTarefas
-            tarefas={noQuadro}
+            eventos={eventosCal}
             hoje={hoje}
-            onAbrir={(t) => setAberto({ tipo: "editar", id: t.id })}
-            onNova={semListas ? undefined : (prazo) => nova(undefined, prazo)}
-            onReagendar={reagendarTarefa}
+            mes={mesCal}
+            onMes={setMesCal}
+            contadores={contadoresCalendario(noQuadro, hoje)}
+            onAbrir={(e) => setAberto({ tipo: "editar", id: e.tarefaId })}
+            onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}
+            onMover={moverNoCalendario}
           />
         ) : (
           <ConfiguracaoQuadro

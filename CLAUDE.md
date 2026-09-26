@@ -110,9 +110,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
-  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
+  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
-  rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o menu lateral soma o **Calendário** — `NAV_CALENDARIO`, com a permissão de Tarefas).
+  rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o **Calendário** é um módulo como os outros, com permissão PRÓPRIA — migração `0046`).
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
   `/api/protocolos*`, `lib/protocolos.ts`) foram REMOVIDOS — `/painel` é só a PORTA DE ENTRADA (redirect no servidor
   para `rotaInicial`: a 1ª aba liberada — a Mesa; sem nenhuma, o Perfil, que AVISA — `PerfilView.semModulos`) e o link
@@ -1826,7 +1826,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`Historico` + `GET /api/tarefas/[id]/historico` = `historicoEntidade("tarefa", id)`, nova em `auditoria.ts`).
     `GET /api/tarefas/[id]` devolve a tarefa (com os `blocos`) + o conteúdo (checklist e comentários).
   - **Cartão** ganhou os ícones checklist `n/m` (verde completo), comentários, notas/links (FASE 4) e vínculo.
-  - **Aba Calendário** (**`CalendarioTarefas`** — ver FASE 4).
+  - **Aba Calendário** (**`CalendarioTarefas`** — ver FASE 5).
   - **Aba Lista**: colunas novas Checklist/Estimativa (faixa)/Vínculo; **seleção** + `BarraSelecao` fixa +
     **`BarraEdicaoMassaTarefas`** (`BarraEdicaoMassa.tsx`, a MESMA `Moldura`) → `POST /api/tarefas/massa` (≤ 50/chamada,
     `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); botão **XLSX** (`exportar-tarefas.ts`:
@@ -1930,14 +1930,40 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     sob o ponteiro destaca; `reagendar` puro — o início anda junto, mesma duração) → `PATCH` otimista, volta se falhar.
     Cabeçalho: ←/→ (mês ou semana), Hoje, os NÚMEROS (atrasadas · hoje · nesta semana · sem prazo — `contadoresCalendario`)
     e a legenda do semáforo. `semanaDe`/`fimDeSemana`/`lerMes`/`somarMes`/`textoMes` puros e testados.
-  - **Tela CALENDÁRIO de TODOS os quadros — ITEM DO MENU** (`/painel/calendario?mes=AAAA-MM`; `NAV_CALENDARIO` em
-    `navModulos.ts`, logo depois de Tarefas no menu lateral e na gaveta do celular — mesma permissão, a aba `tarefas`; fora da
-    barra inferior). **`NavTarefas`** (`TarefasView.tsx`, `Segmented` Quadros | Calendário) liga as duas telas (no celular é
-    o caminho a partir de Tarefas); o antigo `/painel/tarefas?aba=calendario` redireciona. **`CalendarioQuadros`**: o MESMO
-    `CalendarioTarefas` com a COR de cada quadro (faixa; o semáforo vira o ponto) + legenda, os `FiltrosTarefas` + o filtro
-    de **Quadro**; o mês vem do servidor (`carregarCalendario` → `tarefasDoCalendario` — a grade do mês, sem ids em lista;
-    `contadoresDosQuadros`; `etiquetasDosQuadros`). Tocar abre a tarefa no quadro (`?aba=calendario&tarefa=`); "+" num dia
-    escolhe o quadro e abre lá a tarefa nova (`?prazo=AAAA-MM-DD` → `QuadroTarefas.prazoInicial`); arrastar reagenda.
+  - (A tela de TODOS os quadros virou o MÓDULO Calendário — FASE 5.)
+- **FASE 5 — MÓDULO CALENDÁRIO por EVENTOS, estilo Google Agenda (migração `0046`, aditiva):**
+  - **Módulo próprio e independente:** aba `calendario` em `ABA_KEYS`/`ABAS` (ícone `IconCalendar` em `navModulos.ts`) — no
+    menu lateral, na gaveta e na barra inferior (rótulos com `truncate` para 7 itens em 360px); a `0046` concede a aba a toda
+    permissão que tem `tarefas`. Saíram o `NAV_CALENDARIO` e o `NavTarefas` (Tarefas e Calendário não se ligam por abas); o
+    antigo `/painel/tarefas?aba=calendario` segue redirecionando. A aba Calendário DENTRO do quadro permanece (mesmo componente).
+  - **Cada TAREFA é um CONJUNTO de eventos** (núcleo puro `tarefas-core`, testado): `eventosDoCalendario(tarefas, eventos, de,
+    ate)` → `EventoCalendario` de 3 TIPOS (`TIPOS_EVENTO`/`ROTULO_TIPO_EVENTO`): **período** (início → prazo, ou só o prazo;
+    chave `p{id}`), **recorrência** (as próximas ocorrências no intervalo — `ocorrenciasNoIntervalo`, base prazo, teto 60;
+    `r{id}:{data}`) e **evento** cadastrado (`e{id}`). Tabela **`tarefa_eventos`** (tarefa cascade, título, data, `dia_inteiro`,
+    `hora_inicio`/`hora_fim` "HH:MM", local, descrição, `cor` nula = a do quadro). Bloco **"Eventos"** na tarefa
+    (`TIPOS_BLOCO`; **`EventosTarefa`** + o formulário **`EditorEvento`**, `EventosTarefa.tsx`): na tarefa gravada grava na
+    hora (`POST /api/tarefas/[id]/eventos`, `PATCH`/`DELETE /api/tarefas/eventos/[id]` — membro do quadro, auditoria na
+    tarefa, teto `MAX_EVENTOS_TAREFA`=100); na NOVA vai no `POST /api/tarefas` (`eventos`, gravados no MESMO lote —
+    `comandosCriarTarefa`). `TarefaResumo.eventos` = a contagem. `eventoSchema` (fim > início; hex; tetos).
+  - **Escolher os conjuntos** — **`BarraCalendario`** (`BarraCalendario.tsx`): **`MiniMes`** (ir a qualquer data; ponto nos
+    dias com evento), **Tipos** (Período · Recorrência · Eventos) e **Conjuntos** (as tarefas com eventos no período,
+    agrupadas por QUADRO na cor dele; marcar/desmarcar a tarefa ou o quadro inteiro; busca; Mostrar/Ocultar todos). O que
+    fica oculto (`OcultosCalendario` {tarefas, quadros, tipos}, `lerOcultos`/`eventoVisivel`) é preferência da PESSOA
+    (`preferencias_tabela`, chave `calendario:ocultos`, `PUT /api/preferencias/tabela` com espera de 600 ms) — vale em todo
+    aparelho. Desktop = coluna à esquerda; celular/tablet = botão "Conjuntos" → `Modal`.
+  - **`CalendarioTarefas`** (refeito por EVENTOS; o módulo e a aba do quadro): vistas **Dia · Semana · Mês · Agenda**; Dia/
+    Semana = GRADE DE HORAS (rola até 7h, faixa "dia todo", eventos com hora posicionados e LADO A LADO quando se cruzam —
+    `layoutDoDia`; a LINHA DO AGORA no horário de Brasília); Mês = faixas contínuas (`faixasDaSemana` genérica) + horário;
+    celular = mini-grade + a lista do dia. **Criar** tocando num horário vazio (de 30 em 30 min) ou no "+"/"Criar" (escolhe a
+    tarefa — `SeletorBusca` das abertas). **Arrastar** reagenda: o evento (dia e hora, mantendo a duração — `PATCH` do
+    evento) e o período (prazo pela régua `reagendar`); a recorrência não se arrasta. Atalhos **D/S/M/A**, **T** (hoje), ←/→.
+  - **Banner do EVENTO sem sair da tela** (**`EventoBanner`**): título na cor, tipo, quando por extenso, local, descrição e a
+    tarefa de origem (prazo no semáforo) + Editar/Excluir (evento cadastrado). **"Ver tarefa"** abre o `TarefaDetalhe` AO LADO
+    no MESMO `Modal` (prop `esquerda` = o banner do evento; no celular, a tarefa por cima — `principalNoTopo`); o contexto do
+    quadro vem sob demanda por `GET /api/tarefas/[id]?contexto=1` (`contextoTarefa`, `tarefas-dados.ts`).
+  - **Carga:** `carregarCalendario` = as tarefas da grade (`tarefasDoCalendario` — agora também as recorrentes abertas e as
+    com evento no intervalo), os eventos (`eventosDosQuadros`), as abertas leves (`tarefasAbertasLeves`, p/ "Criar") e os
+    ocultos. A aba do quadro busca os eventos só quando é a ativa.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
@@ -2141,6 +2167,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
+  **`CalendarioTarefas`**/**`BarraCalendario`**/**`MiniMes`**/**`EventoBanner`**/**`EventosTarefa`**/**`EditorEvento`** (o
+  Calendário por eventos — ver Tarefas FASE 5),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),

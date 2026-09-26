@@ -2,8 +2,24 @@ import type { UsuarioSessao } from "./auth";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { dataIsoBrasilia } from "./format";
 import { getGrupoAtivoId, gruposDoUsuario } from "./grupos";
-import { contadoresDosQuadros, dadosQuadro, etiquetasDosQuadros, listarAutomacoes, listarModelosQuadro, listarModelosTarefa, listarQuadros, quadroAcessivel, tarefasDoCalendario } from "./tarefas";
-import { gradeMes, lerMes, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+import {
+  contadoresDosQuadros,
+  dadosQuadro,
+  etiquetasDoQuadroTodas,
+  etiquetasDosQuadros,
+  eventosDosQuadros,
+  listasDoQuadro,
+  listarAutomacoes,
+  listarModelosQuadro,
+  listarModelosTarefa,
+  listarQuadros,
+  quadroAcessivel,
+  tarefaAcessivel,
+  tarefasAbertasLeves,
+  tarefasDoCalendario,
+} from "./tarefas";
+import { listarPreferenciasTabela } from "./preferencias-tabela";
+import { CHAVE_OCULTOS_CALENDARIO, gradeMes, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
 /**
@@ -22,25 +38,70 @@ export async function carregarQuadros(u: UsuarioSessao) {
 }
 
 /**
- * O CALENDÁRIO de TODOS os quadros (`/painel/calendario?mes=AAAA-MM`): as tarefas da grade do mês (as semanas inteiras)
- * dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo, todos), as etiquetas deles (filtro), os NÚMEROS do cabeçalho
- * e as PESSOAS responsáveis.
+ * O CALENDÁRIO (módulo `/painel/calendario?mes=AAAA-MM`): dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo,
+ * todos), na grade do mês pedido (as semanas inteiras) — as TAREFAS que aparecem nele, os EVENTOS cadastrados, os NÚMEROS
+ * do cabeçalho, as etiquetas e PESSOAS (filtros), a lista leve das tarefas ABERTAS (o "Criar" escolhe a tarefa) e o que
+ * a pessoa deixou OCULTO (a preferência `calendario:ocultos`).
  */
 export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
   const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const mes = lerMes(mesPedido, hoje);
   const grade = gradeMes(mes.ano, mes.mes);
+  const de = grade[0][0];
+  const ate = grade.at(-1)?.[6] ?? grade[0][6];
   const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
-  const [tarefas, etiquetas, contadores] = await Promise.all([
-    tarefasDoCalendario(ids, grade[0][0], grade.at(-1)?.[6] ?? grade[0][6]),
+  const [tarefas, eventos, etiquetas, contadores, abertas, prefs] = await Promise.all([
+    tarefasDoCalendario(ids, de, ate),
+    eventosDosQuadros(ids, de, ate),
     etiquetasDosQuadros(ids),
     contadoresDosQuadros(ids, hoje, semanaDe(hoje)[6]),
+    tarefasAbertasLeves(ids),
+    listarPreferenciasTabela(u.id, CHAVE_OCULTOS_CALENDARIO),
   ]);
   const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
-  return { tarefas, contadores, mes, hoje, etiquetas, pessoas, quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })) };
+  return {
+    tarefas,
+    eventos,
+    contadores,
+    mes,
+    hoje,
+    etiquetas,
+    pessoas,
+    abertas,
+    ocultos: lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]),
+    quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })),
+  };
 }
+
+/**
+ * O CONTEXTO de um quadro para abrir UMA tarefa fora dele (o banner da tarefa no Calendário): listas, etiquetas, as
+ * pessoas do grupo (+ as designadas na tarefa que estão fora dele) e os modelos de tarefa. `null` = sem acesso.
+ */
+export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
+  const r = await tarefaAcessivel(u, tarefaId);
+  if (!r) return null;
+  const [listas, etiquetas, membros, modelosTarefa] = await Promise.all([
+    listasDoQuadro(r.quadro.id),
+    etiquetasDoQuadroTodas(r.quadro.id),
+    listarPessoasDoGrupo(r.quadro.grupoId),
+    listarModelosTarefa(r.quadro.id),
+  ]);
+  const noGrupo = new Set(membros.map((p) => p.id));
+  const fora = [...r.tarefa.pessoas, ...r.tarefa.observadores].filter((p) => !noGrupo.has(p));
+  return {
+    quadro: { id: r.quadro.id, nome: r.quadro.nome, cor: r.quadro.cor },
+    tarefa: r.tarefa,
+    listas,
+    etiquetas,
+    membros: membros.map((p) => p.id),
+    pessoas: [...membros, ...(fora.length ? await pessoasPorIds(fora) : [])],
+    modelosTarefa,
+    podeEditar: u.role === "admin" || u.role === "gestor",
+  };
+}
+export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTarefa>>>;
 
 /**
  * O ESPAÇO de um quadro (`/painel/tarefas/[id]`) — tudo o que as abas usam, numa carga: listas, cartões (resumo),

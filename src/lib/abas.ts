@@ -1,7 +1,7 @@
 // Abas de módulo que uma PERMISSÃO pode liberar (gate de navegação). Módulo puro (sem deps de servidor) — usado no
 // cliente (navegação, telas de RBAC) e no servidor. A ORDEM é a da navegação: a 1ª liberada é a porta de entrada do
 // painel (`/painel` → a Mesa, onde ficam os protocolos, os DFDs e os itens).
-export const ABA_KEYS = ["dfd", "pca", "catalogo", "orcamento", "tarefas"] as const;
+export const ABA_KEYS = ["dfd", "pca", "catalogo", "orcamento", "tarefas", "calendario"] as const;
 export type AbaKey = (typeof ABA_KEYS)[number];
 
 export const ABAS: { key: AbaKey; label: string; href: string }[] = [
@@ -10,6 +10,7 @@ export const ABAS: { key: AbaKey; label: string; href: string }[] = [
   { key: "catalogo", label: "Catálogo", href: "/painel/catalogo" },
   { key: "orcamento", label: "Orçamento", href: "/painel/orcamento" },
   { key: "tarefas", label: "Tarefas", href: "/painel/tarefas" },
+  { key: "calendario", label: "Calendário", href: "/painel/calendario" },
 ];
 
 const CONHECIDAS = new Set<string>(ABA_KEYS);

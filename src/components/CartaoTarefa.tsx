@@ -17,7 +17,7 @@ import {
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { IconBandeira, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
+import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
 const MAX_AVATARES = 3;
@@ -136,6 +136,12 @@ export function CartaoTarefa({
           <span className="pointer-events-none inline-flex items-center gap-0.5 tabular-nums" title={`${t.comentarios} comentário(s)`}>
             <IconComentario className="h-3.5 w-3.5" />
             {t.comentarios}
+          </span>
+        )}
+        {t.eventos > 0 && (
+          <span className="pointer-events-none inline-flex items-center gap-0.5 tabular-nums" title={`${t.eventos} evento(s)`}>
+            <IconCalendar className="h-3.5 w-3.5" />
+            {t.eventos}
           </span>
         )}
         {t.notas > 0 && (

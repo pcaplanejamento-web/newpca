@@ -44,6 +44,8 @@ export type TarefaResumo = {
   /** Quantas notas e links (blocos) — os ícones do cartão. */
   notas: number;
   links: number;
+  /** Quantos EVENTOS a tarefa tem (bloco "Eventos", migração `0046`). */
+  eventos: number;
   /** A regra de repetição (fase 3); `null` = não se repete. */
   recorrencia: Recorrencia | null;
 };
@@ -318,24 +320,22 @@ export function reagendar(t: { inicio: string | null; prazo: string | null }, di
 }
 
 /**
- * As FAIXAS de uma semana (visão Mês/Semana): cada tarefa com prazo ocupa de max(início, 1º dia) a min(prazo, último dia)
- * — sem início, só o dia do prazo. `coluna`/`span` em dias (0–6) e `linha` = a faixa livre mais alta (empilhamento
- * guloso, sem sobrepor). `continua` marca as pontas cortadas pela semana (a faixa segue antes/depois).
+ * As FAIXAS de uma semana (visão Mês): cada item ocupa de max(início, 1º dia) a min(fim, último dia) — sem início, só o
+ * dia do fim. `coluna`/`span` em dias (0–6) e `linha` = a faixa livre mais alta (empilhamento guloso, sem sobrepor; os
+ * mais longos primeiro, depois a ordem recebida). `antes`/`depois` = as pontas cortadas pela semana (a faixa continua).
  */
-export type FaixaSemana<T> = { tarefa: T; coluna: number; span: number; linha: number; antes: boolean; depois: boolean };
-export function faixasDaSemana<T extends { id: number; inicio: string | null; prazo: string | null; ticket: number }>(tarefas: T[], semana: string[]): FaixaSemana<T>[] {
+export type FaixaSemana<T> = { item: T; coluna: number; span: number; linha: number; antes: boolean; depois: boolean };
+export function faixasDaSemana<T extends { inicio: string | null; fim: string | null }>(itens: T[], semana: string[]): FaixaSemana<T>[] {
   const ini = semana[0];
   const fim = semana[semana.length - 1];
-  const itens = tarefas
-    .filter((t): t is T & { prazo: string } => dataValida(t.prazo))
-    .map((t) => {
-      const comeco = dataValida(t.inicio) && t.inicio < t.prazo ? t.inicio : t.prazo;
-      return { t, comeco, final: t.prazo };
-    })
+  const lista = itens
+    .map((t, ordem) => ({ t, ordem, final: t.fim }))
+    .filter((x): x is { t: T; ordem: number; final: string } => dataValida(x.final))
+    .map((x) => ({ ...x, comeco: dataValida(x.t.inicio) && x.t.inicio < x.final ? x.t.inicio : x.final }))
     .filter((x) => x.final >= ini && x.comeco <= fim)
-    .sort((a, b) => (a.comeco < b.comeco ? -1 : a.comeco > b.comeco ? 1 : diasEntre(b.comeco, b.final) - diasEntre(a.comeco, a.final) || a.t.ticket - b.t.ticket));
-  const ocupadas: number[][] = []; // por linha, a última coluna ocupada
-  return itens.map(({ t, comeco, final }) => {
+    .sort((a, b) => (a.comeco < b.comeco ? -1 : a.comeco > b.comeco ? 1 : diasEntre(b.comeco, b.final) - diasEntre(a.comeco, a.final) || a.ordem - b.ordem));
+  const ocupadas: number[][] = []; // por linha, as colunas ocupadas
+  return lista.map(({ t, comeco, final }) => {
     const a = comeco < ini ? ini : comeco;
     const b = final > fim ? fim : final;
     const coluna = diasEntre(ini, a);
@@ -343,7 +343,7 @@ export function faixasDaSemana<T extends { id: number; inicio: string | null; pr
     let linha = ocupadas.findIndex((l) => l.every((c) => c < coluna || c >= coluna + span));
     if (linha < 0) linha = ocupadas.push([]) - 1;
     for (let c = coluna; c < coluna + span; c++) ocupadas[linha].push(c);
-    return { tarefa: t, coluna, span, linha, antes: comeco < ini, depois: final > fim };
+    return { item: t, coluna, span, linha, antes: comeco < ini, depois: final > fim };
   });
 }
 
@@ -386,13 +386,14 @@ export const textoMes = (ano: number, mes: number) => `${ano}-${String(mes).padS
  * os demais só marcam a POSIÇÃO de um campo que já existe (prazo, pessoas…) — são únicos. Título, lista, prioridade e
  * descrição ficam fixos no topo.
  */
-export const TIPOS_BLOCO = ["nota", "checklist", "link", "prazo", "pessoas", "etiquetas", "vinculo", "estimativa", "recorrencia"] as const;
+export const TIPOS_BLOCO = ["nota", "checklist", "link", "prazo", "eventos", "pessoas", "etiquetas", "vinculo", "estimativa", "recorrencia"] as const;
 export type TipoBloco = (typeof TIPOS_BLOCO)[number];
 export const ROTULO_BLOCO: Record<TipoBloco, string> = {
   nota: "Nota",
   checklist: "Checklist",
   link: "Link",
   prazo: "Prazo",
+  eventos: "Eventos",
   pessoas: "Responsáveis",
   etiquetas: "Etiquetas",
   vinculo: "Vínculo",
@@ -454,6 +455,7 @@ export type DadosBlocos = {
   estimativaH: number | null;
   recorrencia: unknown;
   checklist: number;
+  eventos: number;
 };
 export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
   switch (tipo) {
@@ -471,6 +473,8 @@ export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
       return d.recorrencia != null;
     case "checklist":
       return d.checklist > 0;
+    case "eventos":
+      return d.eventos > 0;
     default:
       return false;
   }
@@ -929,3 +933,212 @@ export function coerceModeloTarefa(v: unknown): ModeloTarefa {
 
 /** O prazo de uma tarefa criada HOJE por um modelo (prazo relativo). */
 export const prazoDoModelo = (m: Pick<ModeloTarefa, "prazoDias">, hoje: string) => (m.prazoDias == null ? null : somarDias(hoje, m.prazoDias));
+
+// ─── CALENDÁRIO por EVENTOS (migração `0046`) ────────────────────────────────────────────────────────────────
+
+/** Um EVENTO cadastrado numa tarefa (o bloco "Eventos"). Hora "HH:MM"; sem hora = dia inteiro. */
+export type EventoTarefa = {
+  id: number;
+  tarefaId: number;
+  titulo: string;
+  data: string;
+  diaInteiro: boolean;
+  horaInicio: string | null;
+  horaFim: string | null;
+  local: string | null;
+  descricao: string | null;
+  cor: string | null;
+};
+
+/** Os dados de um EVENTO a gravar (sem id nem tarefa). */
+export type DadosEvento = Omit<EventoTarefa, "id" | "tarefaId">;
+
+/** De onde vem o evento do calendário: o PERÍODO da tarefa (início → prazo), uma OCORRÊNCIA futura da recorrência ou um
+ * EVENTO cadastrado. */
+export const TIPOS_EVENTO = ["periodo", "recorrencia", "evento"] as const;
+export type TipoEvento = (typeof TIPOS_EVENTO)[number];
+export const ROTULO_TIPO_EVENTO: Record<TipoEvento, string> = { periodo: "Período da tarefa", recorrencia: "Recorrência", evento: "Eventos" };
+
+/** Um evento como o CALENDÁRIO desenha (a mesma forma para os três tipos). `chave` é única na tela. */
+export type EventoCalendario = {
+  chave: string;
+  tipo: TipoEvento;
+  tarefaId: number;
+  quadroId: number;
+  ticket: number;
+  titulo: string;
+  /** O título e o prazo da TAREFA de origem (o banner do evento). */
+  tarefaTitulo: string;
+  tarefaPrazo: string | null;
+  /** Datas "AAAA-MM-DD" (o período pode durar vários dias; os demais começam e terminam no mesmo dia). */
+  inicio: string;
+  fim: string;
+  diaInteiro: boolean;
+  horaInicio: string | null;
+  horaFim: string | null;
+  local: string | null;
+  descricao: string | null;
+  /** A cor do evento (a própria, se cadastrada); `null` = a do quadro. */
+  cor: string | null;
+  concluida: boolean;
+  recorrente: boolean;
+  /** Do evento cadastrado. */
+  eventoId: number | null;
+};
+
+export const horaValida = (h: string | null | undefined): h is string => !!h && /^([01]\d|2[0-3]):[0-5]\d$/.test(h);
+/** "HH:MM" → minutos do dia. */
+export const minutosDe = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+/** Minutos do dia → "HH:MM" (preso entre 00:00 e 23:59). */
+export const horaDeMinutos = (m: number) => {
+  const v = Math.max(0, Math.min(23 * 60 + 59, Math.round(m)));
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+};
+
+/**
+ * As próximas OCORRÊNCIAS de uma tarefa recorrente (depois do prazo atual) que caem entre `de` e `ate` — só a regra que
+ * conta do PRAZO tem agenda fixa (a que conta da conclusão depende de quando for concluída). Teto de 60.
+ */
+export function ocorrenciasNoIntervalo(r: Recorrencia, prazo: string | null, de: string, ate: string, max = 60): string[] {
+  if (r.base !== "prazo" || !dataValida(prazo)) return [];
+  const diaAlvo = Number(prazo.slice(8, 10));
+  const out: string[] = [];
+  let d = prazo;
+  for (let i = 0; i < 5000 && out.length < max; i++) {
+    d = passo(r, d, diaAlvo);
+    if (d > ate) break;
+    if (d >= de) out.push(d);
+  }
+  return out;
+}
+
+/**
+ * Os EVENTOS do calendário entre `de` e `ate`: o PERÍODO de cada tarefa com prazo (início → prazo; sem início, só o
+ * prazo), as OCORRÊNCIAS futuras das recorrentes ainda abertas e os EVENTOS cadastrados. Ordem: data, dia inteiro antes,
+ * hora, ticket.
+ */
+export function eventosDoCalendario(
+  tarefas: (Pick<TarefaResumo, "id" | "ticket" | "titulo" | "inicio" | "prazo" | "concluidaEm" | "recorrencia"> & { quadroId: number })[],
+  eventos: EventoTarefa[],
+  de: string,
+  ate: string,
+): EventoCalendario[] {
+  const porId = new Map(tarefas.map((t) => [t.id, t]));
+  const out: EventoCalendario[] = [];
+  const base = (t: (typeof tarefas)[number]) => ({
+    tarefaId: t.id,
+    quadroId: t.quadroId,
+    ticket: t.ticket,
+    tarefaTitulo: t.titulo,
+    tarefaPrazo: t.prazo,
+    concluida: t.concluidaEm != null,
+    recorrente: t.recorrencia != null,
+    diaInteiro: true,
+    horaInicio: null,
+    horaFim: null,
+    local: null,
+    descricao: null,
+    cor: null,
+    eventoId: null,
+  });
+  for (const t of tarefas) {
+    if (!dataValida(t.prazo)) continue;
+    const inicio = dataValida(t.inicio) && t.inicio < t.prazo ? t.inicio : t.prazo;
+    if (t.prazo >= de && inicio <= ate) out.push({ ...base(t), chave: `p${t.id}`, tipo: "periodo", titulo: t.titulo, inicio, fim: t.prazo });
+    if (t.recorrencia && t.concluidaEm == null)
+      for (const d of ocorrenciasNoIntervalo(t.recorrencia, t.prazo, de, ate))
+        out.push({ ...base(t), chave: `r${t.id}:${d}`, tipo: "recorrencia", titulo: t.titulo, inicio: d, fim: d, concluida: false });
+  }
+  for (const e of eventos) {
+    const t = porId.get(e.tarefaId);
+    if (!t || !dataValida(e.data) || e.data < de || e.data > ate) continue;
+    const comHora = !e.diaInteiro && horaValida(e.horaInicio);
+    out.push({
+      ...base(t),
+      chave: `e${e.id}`,
+      tipo: "evento",
+      titulo: e.titulo,
+      inicio: e.data,
+      fim: e.data,
+      diaInteiro: !comHora,
+      horaInicio: comHora ? e.horaInicio : null,
+      horaFim: comHora && horaValida(e.horaFim) ? e.horaFim : null,
+      local: e.local,
+      descricao: e.descricao,
+      cor: e.cor,
+      eventoId: e.id,
+    });
+  }
+  return out.sort(
+    (a, b) =>
+      (a.inicio < b.inicio ? -1 : a.inicio > b.inicio ? 1 : 0) ||
+      Number(!a.diaInteiro) - Number(!b.diaInteiro) ||
+      (a.horaInicio ?? "").localeCompare(b.horaInicio ?? "") ||
+      a.ticket - b.ticket,
+  );
+}
+
+/** Os eventos que acontecem no DIA (o período cobre o dia). */
+export const eventosDoDia = (eventos: EventoCalendario[], dia: string) => eventos.filter((e) => e.inicio <= dia && e.fim >= dia);
+
+/** Duração padrão de um evento com início e sem fim (a caixa na grade de horas). */
+export const DURACAO_PADRAO_MIN = 60;
+
+/**
+ * A POSIÇÃO dos eventos COM HORA de um dia na grade de horas: `topo`/`altura` em minutos (fim ausente ou antes do
+ * início = `DURACAO_PADRAO_MIN`; mínimo 15) e as COLUNAS lado a lado dos que se cruzam (`coluna` de `colunas`, por grupo
+ * de sobreposição — como o Google Agenda).
+ */
+export function layoutDoDia<T extends { horaInicio: string | null; horaFim: string | null }>(
+  eventos: T[],
+): { evento: T; topo: number; altura: number; coluna: number; colunas: number }[] {
+  const itens = eventos
+    .filter((e): e is T & { horaInicio: string } => horaValida(e.horaInicio))
+    .map((e) => {
+      const topo = minutosDe(e.horaInicio);
+      const fimMin = horaValida(e.horaFim) && minutosDe(e.horaFim) > topo ? minutosDe(e.horaFim) : topo + DURACAO_PADRAO_MIN;
+      return { evento: e as T, topo, fim: Math.min(24 * 60, Math.max(fimMin, topo + 15)) };
+    })
+    .sort((a, b) => a.topo - b.topo || b.fim - a.fim);
+  const out: { evento: T; topo: number; altura: number; coluna: number; colunas: number }[] = [];
+  let grupo: { evento: T; topo: number; fim: number; coluna: number }[] = [];
+  let fimGrupo = -1;
+  const fechar = () => {
+    const n = grupo.reduce((m, g) => Math.max(m, g.coluna + 1), 0);
+    for (const g of grupo) out.push({ evento: g.evento, topo: g.topo, altura: g.fim - g.topo, coluna: g.coluna, colunas: n });
+    grupo = [];
+  };
+  for (const it of itens) {
+    if (it.topo >= fimGrupo) {
+      fechar();
+      fimGrupo = -1;
+    }
+    const usadas = new Set(grupo.filter((g) => g.fim > it.topo).map((g) => g.coluna));
+    let coluna = 0;
+    while (usadas.has(coluna)) coluna++;
+    grupo.push({ ...it, coluna });
+    fimGrupo = Math.max(fimGrupo, it.fim);
+  }
+  fechar();
+  return out;
+}
+
+/** O que fica OCULTO no calendário (preferência da pessoa — `calendario:ocultos`). */
+export type OcultosCalendario = { tarefas: number[]; quadros: number[]; tipos: TipoEvento[] };
+export const OCULTOS_VAZIO: OcultosCalendario = { tarefas: [], quadros: [], tipos: [] };
+export const CHAVE_OCULTOS_CALENDARIO = "calendario:ocultos";
+
+/** Lê a preferência gravada — tolerante (qualquer coisa inválida = nada oculto). */
+export function lerOcultos(v: unknown): OcultosCalendario {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const ids = (x: unknown) => (Array.isArray(x) ? [...new Set(x.filter((n): n is number => Number.isInteger(n) && n > 0))].slice(0, 2000) : []);
+  return {
+    tarefas: ids(o.tarefas),
+    quadros: ids(o.quadros),
+    tipos: Array.isArray(o.tipos) ? TIPOS_EVENTO.filter((t) => (o.tipos as unknown[]).includes(t)) : [],
+  };
+}
+
+/** O evento aparece com o que está oculto? (quadro, tarefa ou tipo ocultos escondem). */
+export const eventoVisivel = (e: Pick<EventoCalendario, "tarefaId" | "quadroId" | "tipo">, o: OcultosCalendario) =>
+  !o.tipos.includes(e.tipo) && !o.quadros.includes(e.quadroId) && !o.tarefas.includes(e.tarefaId);

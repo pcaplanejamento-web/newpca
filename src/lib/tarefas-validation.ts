@@ -69,6 +69,31 @@ export const blocosSchema = z
     return new Set(unicos).size === unicos.length;
   }, "Bloco repetido.");
 
+const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM).");
+/** Um EVENTO da tarefa (bloco "Eventos"): dia inteiro ou com horário (o fim, se houver, depois do início). */
+export const eventoSchema = z
+  .object({
+    titulo: z.string().trim().min(1, "Dê um título ao evento.").max(120, "Título com até 120 caracteres."),
+    data,
+    diaInteiro: z.boolean(),
+    horaInicio: hora.nullable(),
+    horaFim: hora.nullable(),
+    local: z.string().trim().max(120, "Local com até 120 caracteres.").nullable(),
+    descricao: z.string().trim().max(2000, "Descrição com até 2.000 caracteres.").nullable(),
+    cor: cor.nullable(),
+  })
+  .refine((e) => e.diaInteiro || e.horaInicio != null, { message: "Informe a hora de início (ou marque dia inteiro).", path: ["horaInicio"] })
+  .refine((e) => e.diaInteiro || !e.horaInicio || !e.horaFim || e.horaFim > e.horaInicio, { message: "O fim tem de ser depois do início.", path: ["horaFim"] })
+  .transform((e) => ({
+    ...e,
+    horaInicio: e.diaInteiro ? null : e.horaInicio,
+    horaFim: e.diaInteiro ? null : e.horaFim,
+    local: e.local || null,
+    descricao: e.descricao || null,
+  }));
+/** Teto de eventos por tarefa. */
+export const MAX_EVENTOS_TAREFA = 100;
+
 const camposTarefa = {
   titulo: z.string().trim().min(1, "Dê um título à tarefa.").max(200, "Título com até 200 caracteres."),
   descricao: z.string().max(10_000, "Descrição com até 10.000 caracteres.").nullable().optional(),
@@ -87,7 +112,13 @@ const inicioAntesDoPrazo = (v: { inicio?: string | null; prazo?: string | null }
 const MSG_DATAS = { message: "O início não pode ser depois do prazo.", path: ["prazo"] };
 
 export const criarTarefaSchema = z
-  .object({ quadroId: id, listaId: id, ...camposTarefa, checklist: z.array(checklistTexto).max(100).optional() })
+  .object({
+    quadroId: id,
+    listaId: id,
+    ...camposTarefa,
+    checklist: z.array(checklistTexto).max(100).optional(),
+    eventos: z.array(eventoSchema).max(MAX_EVENTOS_TAREFA).optional(),
+  })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
 export const editarTarefaSchema = z
   .object({ ...camposTarefa, titulo: camposTarefa.titulo.optional(), listaId: id.optional(), arquivada: z.boolean().optional() })

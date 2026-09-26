@@ -393,9 +393,9 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     d.exec(sql); // idempotente: rodar de novo não duplica a aba
     for (const arq of arquivos.slice(i36 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
     const abas = (id: number) => JSON.parse((d.prepare("SELECT abas FROM permissoes WHERE id = ?").get(id) as { abas: string }).abas);
-    // (a 0042 depois concede as Tarefas a quem tem a Mesa)
-    assert.deepEqual(abas(901), ["dashboard", "protocolos", "dfd", "tarefas"]);
-    assert.deepEqual(abas(902), ["protocolos", "dfd", "tarefas"]);
+    // (a 0042 depois concede as Tarefas a quem tem a Mesa; a 0046, o Calendário a quem tem as Tarefas)
+    assert.deepEqual(abas(901), ["dashboard", "protocolos", "dfd", "tarefas", "calendario"]);
+    assert.deepEqual(abas(902), ["protocolos", "dfd", "tarefas", "calendario"]);
     assert.deepEqual(abas(903), ["pca"]);
     assert.deepEqual(abas(904), ["dashboard"]);
   });
@@ -501,6 +501,27 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(new Set(b1.map((b) => b.id)).size, 2);
     assert.equal(linhas[1].blocos, null);
     assert.equal(linhas[2].blocos, null);
+  });
+
+  it("0046 calendário: tabela de eventos (cascade com a tarefa) e a aba para quem tem as Tarefas", () => {
+    const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
+    assert.ok(tabelas.includes("tarefa_eventos"));
+    const a = aplicarTudo();
+    a.exec("INSERT INTO permissoes (id, nome, abas) VALUES (9460, 'Com tarefas', '[\"dfd\",\"tarefas\"]'), (9461, 'Sem', '[\"pca\"]')");
+    const sql = readFileSync(join(DIR, arquivos.find((f) => f.startsWith("0046")) ?? ""), "utf8").split("--> statement-breakpoint").at(-1) as string;
+    a.exec(sql);
+    a.exec(sql); // idempotente
+    const abas = (id: number) => JSON.parse((a.prepare("SELECT abas FROM permissoes WHERE id = ?").get(id) as { abas: string }).abas);
+    assert.deepEqual(abas(9460), ["dfd", "tarefas", "calendario"]);
+    assert.deepEqual(abas(9461), ["pca"]);
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9460, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9460, 9460, 'Q')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9460, 9460, 'L')");
+    a.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9460, 9460, 9460, 1, 'T')");
+    a.exec("INSERT INTO tarefa_eventos (tarefa_id, titulo, data) VALUES (9460, 'Reunião', '2026-10-01')");
+    a.exec("DELETE FROM tarefas WHERE id = 9460");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM tarefa_eventos").get() as { n: number }).n, 0);
   });
 
   it("índice único de e-mail existe", () => {

@@ -10,7 +10,6 @@ import { Button } from "./Button";
 import { SelectField } from "./Field";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { Segmented } from "./Segmented";
 import { CamposQuadro, type CamposQuadroValor, QuadroCard, QuadroNovoCard } from "./QuadroCard";
 
 const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
@@ -19,27 +18,8 @@ const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
 
 /**
- * QUADROS | CALENDÁRIO — a troca entre as duas telas de Tarefas (`/painel/tarefas` e `/painel/calendario`, também no menu
- * lateral). No celular é o caminho para o Calendário (a barra inferior não o tem).
- */
-export function NavTarefas({ atual }: { atual: "quadros" | "calendario" }) {
-  const router = useRouter();
-  return (
-    <Segmented<"quadros" | "calendario">
-      ariaLabel="Tarefas"
-      value={atual}
-      onChange={(v) => v !== atual && router.push(v === "quadros" ? "/painel/tarefas" : "/painel/calendario")}
-      options={[
-        { value: "quadros", label: "Quadros" },
-        { value: "calendario", label: "Calendário" },
-      ]}
-    />
-  );
-}
-
-/**
  * Módulo TAREFAS — os QUADROS do grupo ativo (cards 4:5) + o card "+" (editor) que cria um quadro (em branco ou de um
- * MODELO) no grupo ativo e o ABRE; `NavTarefas` leva ao Calendário de todos os quadros. 100% design-system.
+ * MODELO) no grupo ativo e o ABRE. O Calendário é um módulo à parte (`/painel/calendario`). 100% design-system.
  */
 export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: QuadroCardDados[]; podeCriar: boolean; modelos?: ModeloQuadroOpcao[] }) {
   const router = useRouter();
@@ -80,7 +60,6 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
         </p>
       </div>
 
-      <NavTarefas atual="quadros" />
       {quadros.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
           <IconInbox className="h-10 w-10 text-faint" />

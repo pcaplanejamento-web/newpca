@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  eventoVisivel,
+  eventosDoCalendario,
+  eventosDoDia,
+  horaDeMinutos,
+  layoutDoDia,
+  lerOcultos,
+  ocorrenciasNoIntervalo,
   adicionarBloco,
   blocosDaTarefa,
   blocosDisponiveis,
@@ -77,6 +84,7 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   recorrencia: null,
   notas: 0,
   links: 0,
+  eventos: 0,
   ...x,
 });
 const LISTAS = [
@@ -374,9 +382,9 @@ describe("tarefas — calendário profissional", () => {
 
   it("faixasDaSemana: início → prazo contínuo, cortado na semana, empilhado sem sobrepor", () => {
     const sem = semanaDe("2026-09-23");
-    const t = (id: number, inicio: string | null, prazo: string | null) => ({ id, ticket: id, inicio, prazo });
+    const t = (id: number, inicio: string | null, fim: string | null) => ({ id, inicio, fim });
     const f = faixasDaSemana([t(1, "2026-09-15", "2026-09-22"), t(2, null, "2026-09-22"), t(3, "2026-09-24", "2026-10-02"), t(4, null, null), t(5, null, "2026-10-10")], sem);
-    const por = new Map(f.map((x) => [x.tarefa.id, x]));
+    const por = new Map(f.map((x) => [x.item.id, x]));
     assert.equal(por.size, 3);
     assert.deepEqual([por.get(1)?.coluna, por.get(1)?.span, por.get(1)?.antes, por.get(1)?.depois], [0, 3, true, false]);
     assert.deepEqual([por.get(3)?.coluna, por.get(3)?.span, por.get(3)?.depois], [4, 3, true]);
@@ -411,7 +419,7 @@ describe("tarefas — calendário profissional", () => {
 });
 
 describe("tarefas — blocos", () => {
-  const vazio: DadosBlocos = { inicio: null, prazo: null, pessoas: [], observadores: [], etiquetas: [], vinculo: null, estimativaH: null, recorrencia: null, checklist: 0 };
+  const vazio: DadosBlocos = { inicio: null, prazo: null, pessoas: [], observadores: [], etiquetas: [], vinculo: null, estimativaH: null, recorrencia: null, checklist: 0, eventos: 0 };
 
   it("lerBlocos é tolerante: inválido sai, bloco único não repete, JSON quebrado = null", () => {
     assert.equal(lerBlocos(null), null);
@@ -493,5 +501,75 @@ describe("tarefas — blocos", () => {
     assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "prazo" }, { id: "b", tipo: "prazo" }]).success);
     assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "nota", texto: "" }, { id: "a", tipo: "nota", texto: "" }]).success);
     assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", blocos: [{ id: "a", tipo: "estimativa" }] }).success);
+  });
+});
+
+describe("calendário por eventos", () => {
+  const t = (id: number, extra: Record<string, unknown> = {}) => ({
+    id,
+    quadroId: 1,
+    ticket: id,
+    titulo: `T${id}`,
+    inicio: null as string | null,
+    prazo: null as string | null,
+    concluidaEm: null as string | null,
+    recorrencia: null as null | { freq: "semanal"; intervalo: number; base: "prazo" | "conclusao" },
+    ...extra,
+  });
+
+  it("ocorrências da recorrência: só a base prazo, depois do prazo, dentro do intervalo, com teto", () => {
+    const r = { freq: "semanal" as const, intervalo: 1, base: "prazo" as const };
+    assert.deepEqual(ocorrenciasNoIntervalo(r, "2026-09-01", "2026-09-01", "2026-09-30"), ["2026-09-08", "2026-09-15", "2026-09-22", "2026-09-29"]);
+    assert.deepEqual(ocorrenciasNoIntervalo({ ...r, base: "conclusao" }, "2026-09-01", "2026-09-01", "2026-09-30"), []);
+    assert.deepEqual(ocorrenciasNoIntervalo(r, null, "2026-09-01", "2026-09-30"), []);
+    assert.equal(ocorrenciasNoIntervalo({ freq: "diaria" as never, intervalo: 1, base: "prazo" }, "2026-01-01", "2026-01-01", "2026-12-31").length, 60);
+  });
+
+  it("eventosDoCalendario: período, recorrência (só aberta), eventos cadastrados; fora do intervalo sai", () => {
+    const tarefas = [
+      t(1, { inicio: "2026-09-10", prazo: "2026-09-12" }),
+      t(2, { prazo: "2026-09-05", recorrencia: { freq: "semanal", intervalo: 1, base: "prazo" } }),
+      t(3, { prazo: "2026-09-05", concluidaEm: "2026-09-05", recorrencia: { freq: "semanal", intervalo: 1, base: "prazo" } }),
+      t(4, { prazo: "2026-11-01" }),
+    ];
+    const eventos = [
+      { id: 7, tarefaId: 4, titulo: "Reunião", data: "2026-09-20", diaInteiro: false, horaInicio: "09:30", horaFim: "10:00", local: "Sala 2", descricao: null, cor: "#16a34a" },
+      { id: 8, tarefaId: 4, titulo: "Fora", data: "2026-10-20", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null },
+      { id: 9, tarefaId: 99, titulo: "Órfão", data: "2026-09-20", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null },
+    ];
+    const ev = eventosDoCalendario(tarefas, eventos, "2026-09-01", "2026-09-30");
+    const chaves = ev.map((e) => e.chave);
+    assert.ok(chaves.includes("p1") && chaves.includes("p2") && chaves.includes("p3"));
+    assert.ok(!chaves.includes("p4"));
+    assert.deepEqual(chaves.filter((c) => c.startsWith("r2:")), ["r2:2026-09-12", "r2:2026-09-19", "r2:2026-09-26"]);
+    assert.ok(!chaves.some((c) => c.startsWith("r3:")));
+    assert.deepEqual(chaves.filter((c) => c.startsWith("e")), ["e7"]);
+    const e7 = ev.find((e) => e.chave === "e7");
+    assert.equal(e7?.diaInteiro, false);
+    assert.equal(e7?.horaInicio, "09:30");
+    assert.equal(ev.find((e) => e.chave === "p1")?.inicio, "2026-09-10");
+    assert.equal(eventosDoDia(ev, "2026-09-11").map((e) => e.chave).join(), "p1");
+  });
+
+  it("layoutDoDia: sobrepostos lado a lado, sem fim = 60 min, separados em coluna única", () => {
+    const e = (h: string, f: string | null) => ({ horaInicio: h, horaFim: f });
+    const l = layoutDoDia([e("09:00", "10:00"), e("09:30", null), e("11:00", "11:30"), e("09:45", "10:15")]);
+    const por = (h: string) => l.find((x) => x.evento.horaInicio === h);
+    assert.equal(por("09:00")?.colunas, 3);
+    assert.notEqual(por("09:00")?.coluna, por("09:30")?.coluna);
+    assert.equal(por("09:30")?.altura, 60);
+    assert.equal(por("11:00")?.colunas, 1);
+    assert.equal(por("11:00")?.topo, 660);
+    assert.equal(horaDeMinutos(605), "10:05");
+  });
+
+  it("ocultos: leitura tolerante e visibilidade por tarefa, quadro e tipo", () => {
+    assert.deepEqual(lerOcultos(null), { tarefas: [], quadros: [], tipos: [] });
+    const o = lerOcultos({ tarefas: [2, 2, "x"], quadros: [5], tipos: ["recorrencia", "nada"] });
+    assert.deepEqual(o, { tarefas: [2], quadros: [5], tipos: ["recorrencia"] });
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "periodo" }, o), true);
+    assert.equal(eventoVisivel({ tarefaId: 2, quadroId: 1, tipo: "periodo" }, o), false);
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 5, tipo: "periodo" }, o), false);
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "recorrencia" }, o), false);
   });
 });

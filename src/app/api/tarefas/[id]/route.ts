@@ -16,17 +16,25 @@ import {
   vinculoAcessivel,
 } from "@/lib/tarefas";
 import { lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
+import { contextoTarefa } from "@/lib/tarefas-dados";
 import { editarTarefaSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** A tarefa COMPLETA (com a descrição) + o CONTEÚDO (checklist e comentários) — o detalhe do cartão. */
-export async function GET(_req: Request, ctx: Ctx) {
+/**
+ * A tarefa COMPLETA (com a descrição) + o CONTEÚDO (checklist, comentários e eventos) — o detalhe do cartão. `?contexto=1`
+ * = o CONTEXTO do quadro dela (listas, etiquetas, pessoas, modelos) para abrir a tarefa fora do quadro (o Calendário).
+ */
+export async function GET(req: Request, ctx: Ctx) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
+  if (id && new URL(req.url).searchParams.get("contexto") === "1") {
+    const c = await contextoTarefa(a.u, id);
+    return c ? ok({ contexto: c }) : erro("Tarefa não encontrada.", 404);
+  }
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!r) return erro("Tarefa não encontrada.", 404);
   return ok({ tarefa: r.tarefa, ...(await conteudoTarefa(r.tarefa.id)) });

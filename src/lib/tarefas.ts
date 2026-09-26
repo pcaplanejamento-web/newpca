@@ -8,6 +8,7 @@ import {
   tarefaAutomacoes,
   tarefaChecklist,
   tarefaComentarios,
+  tarefaEventos,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
   tarefaListas,
@@ -29,6 +30,8 @@ import {
   type AcaoAutomacao,
   type BlocoTarefa,
   blocosParaGravar,
+  type DadosEvento,
+  type EventoTarefa,
   contagemBlocos,
   lerBlocos,
   type Automacao,
@@ -59,7 +62,14 @@ import {
   ehTipoVinculo,
   type VinculoTarefa,
 } from "./tarefas-core";
-import { comandosCriarQuadroDoModelo, comandosCriarTarefa, comandosMassa, comandosMover, comandosVinculos } from "./tarefas-sql";
+import {
+  colunasEvento,
+  comandosCriarQuadroDoModelo,
+  comandosCriarTarefa,
+  comandosMassa,
+  comandosMover,
+  comandosVinculos,
+} from "./tarefas-sql";
 import type { AcaoMassaTarefas } from "./tarefas-validation";
 
 /**
@@ -124,30 +134,44 @@ export async function pessoasValidas(grupoId: number, ids: number[], atuais: num
   return ids.every((i) => membros.has(i) || atuais.includes(i));
 }
 
+/** As LISTAS do quadro, na ordem (inclusive as arquivadas). */
+export function listasDoQuadro(quadroId: number): Promise<ListaTarefas[]> {
+  return getDb()
+    .select({
+      id: tarefaListas.id,
+      nome: tarefaListas.nome,
+      ordem: tarefaListas.ordem,
+      limiteWip: tarefaListas.limiteWip,
+      concluida: tarefaListas.concluida,
+      arquivada: tarefaListas.arquivada,
+    })
+    .from(tarefaListas)
+    .where(eq(tarefaListas.quadroId, quadroId))
+    .orderBy(asc(tarefaListas.ordem), asc(tarefaListas.id));
+}
+
+/** As ETIQUETAS do quadro, na ordem. */
+export function etiquetasDoQuadroTodas(quadroId: number): Promise<EtiquetaTarefa[]> {
+  return getDb()
+    .select({ id: tarefaEtiquetas.id, nome: tarefaEtiquetas.nome, cor: tarefaEtiquetas.cor })
+    .from(tarefaEtiquetas)
+    .where(eq(tarefaEtiquetas.quadroId, quadroId))
+    .orderBy(asc(tarefaEtiquetas.ordem), asc(tarefaEtiquetas.id));
+}
+
 /** Listas + cartões (resumo, sem descrição) + etiquetas do quadro — consultas de UM parâmetro (o quadro) cada. */
 export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTarefas[]; tarefas: TarefaResumo[]; etiquetas: EtiquetaTarefa[] }> {
   const db = getDb();
   const doQuadro = eq(tarefas.quadroId, quadroId);
-  const contar = (tabela: typeof tarefaComentarios) =>
+  const contar = (tabela: typeof tarefaComentarios | typeof tarefaEventos) =>
     db
       .select({ tarefaId: tabela.tarefaId, n: sql<number>`COUNT(*)` })
       .from(tabela)
       .innerJoin(tarefas, eq(tarefas.id, tabela.tarefaId))
       .where(doQuadro)
       .groupBy(tabela.tarefaId);
-  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios] = await Promise.all([
-    db
-      .select({
-        id: tarefaListas.id,
-        nome: tarefaListas.nome,
-        ordem: tarefaListas.ordem,
-        limiteWip: tarefaListas.limiteWip,
-        concluida: tarefaListas.concluida,
-        arquivada: tarefaListas.arquivada,
-      })
-      .from(tarefaListas)
-      .where(eq(tarefaListas.quadroId, quadroId))
-      .orderBy(asc(tarefaListas.ordem), asc(tarefaListas.id)),
+  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos] = await Promise.all([
+    listasDoQuadro(quadroId),
     db
       .select({
         id: tarefas.id,
@@ -181,11 +205,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .from(tarefaEtiquetaLinks)
       .innerJoin(tarefas, eq(tarefas.id, tarefaEtiquetaLinks.tarefaId))
       .where(doQuadro),
-    db
-      .select({ id: tarefaEtiquetas.id, nome: tarefaEtiquetas.nome, cor: tarefaEtiquetas.cor })
-      .from(tarefaEtiquetas)
-      .where(eq(tarefaEtiquetas.quadroId, quadroId))
-      .orderBy(asc(tarefaEtiquetas.ordem), asc(tarefaEtiquetas.id)),
+    etiquetasDoQuadroTodas(quadroId),
     db
       .select({
         tarefaId: tarefaChecklist.tarefaId,
@@ -197,6 +217,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .where(doQuadro)
       .groupBy(tarefaChecklist.tarefaId),
     contar(tarefaComentarios),
+    contar(tarefaEventos),
   ]);
   const agrupar = (pares: { tarefaId: number; v: number }[]) => {
     const m = new Map<number, number[]>();
@@ -208,6 +229,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
   const porEtiqueta = agrupar(links.map((l) => ({ tarefaId: l.tarefaId, v: l.etiquetaId })));
   const porCheck = new Map(checks.map((c) => [c.tarefaId, { feitos: Number(c.feitos), total: Number(c.total) }]));
   const porComentario = new Map(comentarios.map((c) => [c.tarefaId, Number(c.n)]));
+  const porEvento = new Map(nEventos.map((c) => [c.tarefaId, Number(c.n)]));
   const rotulos = await rotulosVinculos(cartoes.map((t) => vinculoDe(t.vinculoTipo, t.vinculoId)).filter((v): v is VinculoTarefa => !!v));
   return {
     listas,
@@ -225,6 +247,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         comentarios: porComentario.get(t.id) ?? 0,
         notas: Number(t.notas),
         links: Number(t.links),
+        eventos: porEvento.get(t.id) ?? 0,
         recorrencia: lerRecorrencia(t.recorrencia),
       };
     }),
@@ -274,7 +297,15 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
     eq(tarefas.arquivada, false),
     sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
   );
-  const noIntervalo = and(visivel, sql`${tarefas.prazo} >= ${de}`, sql`(${tarefas.prazo} <= ${ate} OR ${tarefas.inicio} <= ${ate})`);
+  // O período cruza o intervalo, OU a recorrente aberta ainda cai nele, OU a tarefa tem um EVENTO no intervalo.
+  const noIntervalo = and(
+    visivel,
+    or(
+      and(sql`${tarefas.prazo} >= ${de}`, sql`(${tarefas.prazo} <= ${ate} OR ${tarefas.inicio} <= ${ate})`),
+      and(sql`${tarefas.recorrencia} IS NOT NULL`, sql`${tarefas.concluidaEm} IS NULL`, sql`${tarefas.prazo} <= ${ate}`),
+      sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND e.data >= ${de} AND e.data <= ${ate})`,
+    ),
+  );
   const [linhas, pessoas, etiquetas] = await Promise.all([
     db
       .select({
@@ -353,11 +384,12 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
   const db = getDb();
   const [t] = await db.select().from(tarefas).where(eq(tarefas.id, id));
   if (!t) return null;
-  const [pessoas, links, checks, com] = await Promise.all([
+  const [pessoas, links, checks, com, ev] = await Promise.all([
     db.select({ u: tarefaPessoas.usuarioId, papel: tarefaPessoas.papel }).from(tarefaPessoas).where(eq(tarefaPessoas.tarefaId, id)),
     db.select({ e: tarefaEtiquetaLinks.etiquetaId }).from(tarefaEtiquetaLinks).where(eq(tarefaEtiquetaLinks.tarefaId, id)),
     db.select({ feito: tarefaChecklist.feito }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)),
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)),
+    db.select({ n: sql<number>`COUNT(*)` }).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)),
   ]);
   const v = vinculoDe(t.vinculoTipo, t.vinculoId);
   const rotulo = v ? (await rotulosVinculos([v])).get(`${v.tipo}:${v.id}`) : null;
@@ -385,6 +417,7 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     checklist: { feitos: checks.filter((c) => c.feito).length, total: checks.length },
     comentarios: Number(com[0]?.n ?? 0),
     ...contagemBlocos(blocos),
+    eventos: Number(ev[0]?.n ?? 0),
     recorrencia: lerRecorrencia(t.recorrencia),
     blocos,
   };
@@ -588,18 +621,20 @@ export const lerMencoes = (v: string | null): number[] => {
 };
 
 /** O CONTEÚDO do cartão (checklist e comentários — mais antigo primeiro). */
-export async function conteudoTarefa(id: number): Promise<{ checklist: ItemChecklist[]; comentarios: ComentarioTarefa[] }> {
+export async function conteudoTarefa(id: number): Promise<{ checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] }> {
   const db = getDb();
-  const [checklist, comentarios] = await Promise.all([
+  const [checklist, comentarios, eventos] = await Promise.all([
     db
       .select({ id: tarefaChecklist.id, texto: tarefaChecklist.texto, feito: tarefaChecklist.feito, ordem: tarefaChecklist.ordem })
       .from(tarefaChecklist)
       .where(eq(tarefaChecklist.tarefaId, id))
       .orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id)),
     db.select().from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)).orderBy(asc(tarefaComentarios.id)),
+    db.select(COLS_EVENTO).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)).orderBy(asc(tarefaEventos.data), asc(tarefaEventos.horaInicio)),
   ]);
   return {
     checklist,
+    eventos,
     comentarios: comentarios.map((c) => ({
       id: c.id,
       usuarioId: c.usuarioId,
@@ -610,6 +645,87 @@ export async function conteudoTarefa(id: number): Promise<{ checklist: ItemCheck
       editadoEm: c.editadoEm,
     })),
   };
+}
+
+// ─── EVENTOS da tarefa (migração `0046`) ─────────────────────────────────────────────────────────────────────
+
+const COLS_EVENTO = {
+  id: tarefaEventos.id,
+  tarefaId: tarefaEventos.tarefaId,
+  titulo: tarefaEventos.titulo,
+  data: tarefaEventos.data,
+  diaInteiro: tarefaEventos.diaInteiro,
+  horaInicio: tarefaEventos.horaInicio,
+  horaFim: tarefaEventos.horaFim,
+  local: tarefaEventos.local,
+  descricao: tarefaEventos.descricao,
+  cor: tarefaEventos.cor,
+};
+
+export async function getEvento(id: number): Promise<EventoTarefa | null> {
+  const [e] = await getDb().select(COLS_EVENTO).from(tarefaEventos).where(eq(tarefaEventos.id, id));
+  return e ?? null;
+}
+
+export async function contarEventos(tarefaId: number): Promise<number> {
+  const [r] = await getDb().select({ n: sql<number>`COUNT(*)` }).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, tarefaId));
+  return Number(r?.n ?? 0);
+}
+
+export async function criarEvento(tarefaId: number, d: DadosEvento, usuarioId: number): Promise<number> {
+  const [e] = await getDb()
+    .insert(tarefaEventos)
+    .values({ tarefaId, ...colunasEvento(d), criadoPor: usuarioId })
+    .returning({ id: tarefaEventos.id });
+  return e.id;
+}
+
+export async function atualizarEvento(id: number, d: DadosEvento) {
+  await getDb()
+    .update(tarefaEventos)
+    .set({ ...colunasEvento(d), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(tarefaEventos.id, id));
+}
+
+export async function excluirEvento(id: number) {
+  await getDb().delete(tarefaEventos).where(eq(tarefaEventos.id, id));
+}
+
+/** Os EVENTOS das tarefas (não arquivadas) dos quadros dados, entre `de` e `ate` (sem intervalo = todos) — o calendário. */
+export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: string): Promise<EventoTarefa[]> {
+  if (!quadroIds.length) return [];
+  return getDb()
+    .select(COLS_EVENTO)
+    .from(tarefaEventos)
+    .innerJoin(tarefas, eq(tarefas.id, tarefaEventos.tarefaId))
+    .where(
+      and(
+        inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
+        eq(tarefas.arquivada, false),
+        de ? sql`${tarefaEventos.data} >= ${de}` : undefined,
+        ate ? sql`${tarefaEventos.data} <= ${ate}` : undefined,
+      ),
+    )
+    .orderBy(asc(tarefaEventos.data))
+    .limit(5000);
+}
+
+/** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário. */
+export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: number; quadroId: number; ticket: number; titulo: string }[]> {
+  if (!quadroIds.length) return [];
+  return getDb()
+    .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo })
+    .from(tarefas)
+    .where(
+      and(
+        inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
+        eq(tarefas.arquivada, false),
+        sql`${tarefas.concluidaEm} IS NULL`,
+        sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
+      ),
+    )
+    .orderBy(asc(tarefas.quadroId), desc(tarefas.ticket))
+    .limit(3000);
 }
 
 export async function getItemChecklist(id: number) {

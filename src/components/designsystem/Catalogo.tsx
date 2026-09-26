@@ -107,8 +107,10 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
+import { BarraCalendario } from "@/components/BarraCalendario";
 import { MolduraBloco, PaletaBlocos } from "@/components/BlocosTarefa";
-import { NavTarefas } from "@/components/TarefasView";
+import { EventoBanner } from "@/components/EventoBanner";
+import { EventosTarefa } from "@/components/EventosTarefa";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
 import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
@@ -123,7 +125,18 @@ import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { QuadroCard, QuadroNovoCard } from "@/components/QuadroCard";
 import { ColunaTarefas } from "@/components/QuadroKanban";
 import { SeletorPessoas } from "@/components/SeletorPessoas";
-import { adicionarBloco, type BlocoTarefa, blocosDisponiveis, FILTRO_TAREFAS_PADRAO, moverBloco, type Recorrencia, removerBloco, type TarefaResumo } from "@/lib/tarefas-core";
+import {
+  adicionarBloco,
+  type BlocoTarefa,
+  blocosDisponiveis,
+  eventosDoCalendario,
+  FILTRO_TAREFAS_PADRAO,
+  moverBloco,
+  OCULTOS_VAZIO,
+  type Recorrencia,
+  removerBloco,
+  type TarefaResumo,
+} from "@/lib/tarefas-core";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -1822,7 +1835,7 @@ function TarefasDemo() {
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
     arquivada: false, pessoas: [], observadores: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
-    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, recorrencia: null,
+    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, eventos: 0, recorrencia: null,
   };
   const cartoes: TarefaResumo[] = [
     { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculo: { tipo: "protocolo", id: 1, rotulo: "144756/2026" } },
@@ -1832,6 +1845,14 @@ function TarefasDemo() {
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
   const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
+  const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null };
+  const eventosDemo = eventosDoCalendario(
+    cartoes.map((t) => ({ ...t, quadroId: 1 })),
+    [{ id: 1, tarefaId: 1, ...eventoDemo }],
+    "2025-12-28",
+    "2026-02-07",
+  );
+  const [ocultosDemo, setOcultosDemo] = useState(OCULTOS_VAZIO);
   const [checkDemo, setCheckDemo] = useState(["Abrir o PDF do protocolo", "Conferir os itens com o catálogo"]);
   const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const listasDemo = [
@@ -1845,7 +1866,6 @@ function TarefasDemo() {
         <QuadroCard href="#" quadro={{ id: 1, grupoId: 1, grupoNome: "Planejamento", nome: "Planejamento do PCA 2027", cor: "#6366f1", descricao: null, arquivado: false, abertas: 12, atrasadas: 3, concluidas: 40 }} />
         <QuadroNovoCard onClick={() => {}} />
       </div>
-      <NavTarefas atual="quadros" />
       <div className="flex flex-wrap items-center gap-2">
         <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} />
       </div>
@@ -1898,7 +1918,31 @@ function TarefasDemo() {
           />
         </div>
       </div>
-      <CalendarioTarefas tarefas={cartoes} hoje="2026-01-01" onAbrir={() => {}} onNova={() => {}} onReagendar={() => {}} />
+      <CalendarioTarefas
+        eventos={eventosDemo}
+        hoje="2026-01-01"
+        contadores={{ atrasadas: 1, hoje: 0, naSemana: 0, semPrazo: 1 }}
+        onAbrir={() => {}}
+        onCriar={() => {}}
+        onMover={() => {}}
+        lateral={(nav) => (
+          <BarraCalendario
+            nav={nav}
+            hoje="2026-01-01"
+            diasComEvento={new Set(["2026-01-02"])}
+            grupos={[{ quadro: { id: 1, nome: "Planejamento", cor: "#6366f1" }, tarefas: [{ id: 1, ticket: 128, titulo: "Conferir DFDs", eventos: 2 }] }]}
+            porTipo={{ periodo: 2, recorrencia: 0, evento: 1 }}
+            ocultos={ocultosDemo}
+            onOcultos={setOcultosDemo}
+          />
+        )}
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-card border border-border p-3">
+          <EventoBanner evento={eventosDemo[0]} cor="#6366f1" quadroNome="Planejamento" hoje="2026-01-01" onVerTarefa={() => {}} onEditar={() => {}} onExcluir={() => {}} />
+        </div>
+        <EventosTarefa eventos={[{ id: 1, ...eventoDemo }]} hoje="2026-01-01" onSalvar={async () => true} onExcluir={() => {}} />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />
         <div className="max-w-sm space-y-1 rounded-card border border-border p-2">
@@ -3073,7 +3117,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), NavTarefas (Quadros | Calendário), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (Mês com faixas início → prazo · Semana · Agenda; reagendar arrastando; mini-grade no celular), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário; arrastar reagenda; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos, conjuntos por tarefa) + EventoBanner (o banner do evento) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

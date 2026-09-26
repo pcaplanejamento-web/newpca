@@ -7,7 +7,7 @@ import { NAV_MODULOS } from "./navModulos";
 
 type ItemNav = { href: string; label: string; Icon: typeof IconUser; /** Aba de módulo exigida (permissão). */ aba?: string };
 
-// Os módulos (Mesa, PCA, Catálogo, Orçamento — a MESMA fonte da sidebar) + o Perfil, sempre visível.
+// Os módulos (Mesa, PCA, Catálogo, Orçamento, Tarefas, Calendário — a MESMA fonte da sidebar) + o Perfil, sempre visível.
 const ITENS: ItemNav[] = [...NAV_MODULOS, { href: "/painel/perfil", label: "Perfil", Icon: IconUser }];
 
 /** Barra de navegação inferior (mobile). No desktop usa-se a sidebar. Mostra só as abas que o grupo ativo
@@ -23,12 +23,12 @@ export function BottomNav({ abas }: { abas: Set<string> }) {
             <Link
               key={href}
               href={href}
-              className={`flex min-h-[44px] flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+              className={`flex min-h-[44px] min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-2.5 text-[11px] font-medium transition-colors max-[400px]:text-[10px] ${
                 active ? "text-accent" : "text-faint hover:text-text-2"
               }`}
             >
-              <Icon className="h-[22px] w-[22px]" />
-              {label}
+              <Icon className="h-[22px] w-[22px] shrink-0" />
+              <span className="max-w-full truncate">{label}</span>
             </Link>
           );
         })}

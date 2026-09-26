@@ -28,6 +28,7 @@ export const ICONE_BLOCO: Record<TipoBloco, ComponentType<{ className?: string }
   checklist: IconChecklist,
   link: IconWeb,
   prazo: IconCalendar,
+  eventos: IconClock,
   pessoas: IconAtribuir,
   etiquetas: IconEtiqueta,
   vinculo: IconLink,

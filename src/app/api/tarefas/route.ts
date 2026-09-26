@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     recorrencia: d.recorrencia ?? null,
     checklist: d.checklist ?? [],
     blocos: d.blocos ? lerBlocos(d.blocos) : null,
+    eventos: d.eventos ?? [],
   });
   await registrarAuditoria({
     usuario: a.u,

@@ -6,7 +6,7 @@ import { type ReactNode, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
-import { NAV_CALENDARIO, NAV_MODULOS } from "./navModulos";
+import { NAV_MODULOS } from "./navModulos";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -52,7 +52,7 @@ type NavSecao = { titulo: string; itens: NavItem[] };
 
 const SECOES: NavSecao[] = [
   // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
-  { titulo: "Módulos", itens: [...NAV_MODULOS, NAV_CALENDARIO] },
+  { titulo: "Módulos", itens: NAV_MODULOS },
   {
     titulo: "Administração",
     itens: [

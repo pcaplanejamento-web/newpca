@@ -5,6 +5,8 @@ import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { Pessoa } from "@/lib/pessoa";
 import type { ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
 import {
+  type DadosEvento,
+  type EventoTarefa,
   adicionarBloco,
   type BlocoTarefa,
   blocosDaTarefa,
@@ -46,7 +48,8 @@ import { SelectField, TextArea, TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
 import { LinkExterno } from "./LinkExterno";
 import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconModelo, IconTrash } from "./icons";
-import { Modal } from "./Modal";
+import { EventosTarefa } from "./EventosTarefa";
+import { Modal, type ModalPainel } from "./Modal";
 import { RecorrenciaTarefa } from "./RecorrenciaTarefa";
 import { Segmented } from "./Segmented";
 import { SeletorPessoas } from "./SeletorPessoas";
@@ -76,19 +79,21 @@ type Rascunho = {
   recorrencia: Recorrencia | null;
   /** O checklist da tarefa NOVA (textos — vão junto no POST; um modelo o preenche). */
   checklist: string[];
+  /** Os EVENTOS da tarefa NOVA (vão junto no POST; na gravada, gravam na hora). */
+  eventos: DadosEvento[];
   /** Os BLOCOS, na ordem (a paleta). */
   blocos: BlocoTarefa[];
 };
 /** Um modelo de tarefa do quadro (o seletor "Usar modelo"). */
 export type ModeloTarefaOpcao = { id: number; nome: string; conteudo: ModeloTarefa };
-type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[] };
+type Conteudo = { checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
 const mesmoVinculo = (a: Vinculo | null, b: Vinculo | null) => (a?.tipo ?? null) === (b?.tipo ?? null) && (a?.id ?? null) === (b?.id ?? null);
 const numEstimativa = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
 
 /** O que decide se um bloco de campo tem dado — a partir do rascunho. */
-const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number): DadosBlocos => ({
+const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos: number): DadosBlocos => ({
   inicio: r.inicio || null,
   prazo: r.prazo || null,
   pessoas: r.pessoas,
@@ -98,6 +103,7 @@ const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number): DadosB
   estimativaH: r.estimativa.trim() ? 1 : null,
   recorrencia: r.recorrencia,
   checklist,
+  eventos,
 });
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -132,6 +138,7 @@ export function TarefaDetalhe({
   modelos = [],
   onFechar,
   onSalvo,
+  esquerda,
 }: {
   aberto: AberturaTarefa | null;
   quadroId: number;
@@ -152,6 +159,9 @@ export function TarefaDetalhe({
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
+  /** Painéis À ESQUERDA do banner (ex.: o evento do Calendário que abriu a tarefa) — o banner da tarefa fica por cima no
+   * celular e o Esc volta a eles. */
+  esquerda?: ModalPainel[];
 }) {
   const existente = aberto?.tipo === "editar" ? tarefas.find((t) => t.id === aberto.id) : undefined;
   const idAberto = aberto?.tipo === "editar" ? aberto.id : null;
@@ -159,6 +169,7 @@ export function TarefaDetalhe({
   const [r, setR] = useState<Rascunho | null>(null);
   const [conteudo, setConteudo] = useState<Conteudo | null>(null);
   const [salvando, setSalvando] = useState<null | "salvar" | "arquivar" | "excluir">(null);
+  const [gravandoEvento, setGravandoEvento] = useState(false);
   const [atividade, setAtividade] = useState(false);
   // Desktop: a Atividade é um banner AO LADO; no celular (um banner por vez), uma aba "Tarefa | Atividade" no próprio corpo.
   const [desk, setDesk] = useState(true);
@@ -175,10 +186,10 @@ export function TarefaDetalhe({
     try {
       const j = await chamar<{ tarefa: { descricao: string | null; blocos: BlocoTarefa[] | null } } & Conteudo>(`/api/tarefas/${id}`);
       if (n !== pedido.current) return;
-      setConteudo({ checklist: j.checklist, comentarios: j.comentarios });
+      setConteudo({ checklist: j.checklist, comentarios: j.comentarios, eventos: j.eventos });
       if (primeira) {
         const descricao = j.tarefa.descricao ?? "";
-        const comBlocos = (x: Rascunho | null) => (x ? { ...x, descricao, blocos: blocosDaTarefa(j.tarefa.blocos, dadosDoRascunho(x, j.checklist.length)) } : x);
+        const comBlocos = (x: Rascunho | null) => (x ? { ...x, descricao, blocos: blocosDaTarefa(j.tarefa.blocos, dadosDoRascunho(x, j.checklist.length, j.eventos.length)) } : x);
         setR(comBlocos);
         setInicial(comBlocos);
       }
@@ -212,6 +223,7 @@ export function TarefaDetalhe({
           descricao: "",
           recorrencia: existente.recorrencia,
           checklist: [],
+          eventos: [],
           blocos: [],
         }
       : {
@@ -228,9 +240,10 @@ export function TarefaDetalhe({
           descricao: "",
           recorrencia: null,
           checklist: [],
+          eventos: [],
           blocos: [],
         };
-    base.blocos = blocosDaTarefa(existente ? null : [], dadosDoRascunho(base, existente?.checklist.total ?? 0));
+    base.blocos = blocosDaTarefa(existente ? null : [], dadosDoRascunho(base, existente?.checklist.total ?? 0, existente?.eventos ?? 0));
     setR(base);
     setInicial(base);
     setDesk(ehDesktop());
@@ -304,6 +317,7 @@ export function TarefaDetalhe({
           vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
           recorrencia: r.recorrencia,
           checklist: r.checklist.map((c) => c.trim()).filter(Boolean),
+          eventos: r.eventos,
           blocos: blocosParaGravar(r.blocos),
         });
         toast.success("Tarefa criada.");
@@ -391,7 +405,7 @@ export function TarefaDetalhe({
             // Os blocos do modelo + os de campo que o modelo preenche.
             blocos: blocosDaTarefa(
               m.blocos ?? [],
-              dadosDoRascunho({ ...x, estimativa: m.estimativaH == null ? "" : "1", prazo: prazoDoModelo(m, hoje) ?? "", etiquetas: m.etiquetas, recorrencia: m.recorrencia }, m.checklist.length),
+              dadosDoRascunho({ ...x, estimativa: m.estimativaH == null ? "" : "1", prazo: prazoDoModelo(m, hoje) ?? "", etiquetas: m.etiquetas, recorrencia: m.recorrencia }, m.checklist.length, 0),
             ),
           }
         : x,
@@ -414,6 +428,23 @@ export function TarefaDetalhe({
 
   const acoesChecklist = nova ? acoesChecklistRascunho(r.checklist, (v) => set("checklist", v)) : checklistServidor;
   const nChecklist = acoesChecklist?.itens.length ?? existente?.checklist.total ?? 0;
+  const eventosVisiveis = nova ? r.eventos.map((e, i) => ({ ...e, id: i + 1 })) : (conteudo?.eventos ?? []);
+  const nEventos = nova ? r.eventos.length : (conteudo?.eventos.length ?? existente?.eventos ?? 0);
+  /** Grava UM evento: na tarefa nova, no rascunho; na gravada, na hora (e recarrega o conteúdo). */
+  const salvarEvento = async (id: number | null, d: DadosEvento): Promise<boolean> => {
+    if (nova) {
+      setR((x) => (x ? { ...x, eventos: id == null ? [...x.eventos, d] : x.eventos.map((e, i) => (i === id - 1 ? d : e)) } : x));
+      return true;
+    }
+    setGravandoEvento(true);
+    const okGravou = await agir(() => (id == null ? chamar(`${base}/eventos`, "POST", d) : chamar(`/api/tarefas/eventos/${id}`, "PATCH", d)));
+    setGravandoEvento(false);
+    return okGravou;
+  };
+  const excluirEventoDaTarefa = async (e: { id: number; titulo: string }) => {
+    if (nova) return setR((x) => (x ? { ...x, eventos: x.eventos.filter((_, i) => i !== e.id - 1) } : x));
+    if (await confirmar({ titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true })) agir(() => chamar(`/api/tarefas/eventos/${e.id}`, "DELETE"));
+  };
   const setBlocos = (fn: (l: BlocoTarefa[]) => BlocoTarefa[]) => setR((x) => (x ? { ...x, blocos: fn(x.blocos) } : x));
   const setBloco = (id: string, patch: Partial<{ texto: string; url: string; titulo: string }>) =>
     setBlocos((l) => l.map((b) => (b.id === id ? ({ ...b, ...patch } as BlocoTarefa) : b)));
@@ -421,17 +452,20 @@ export function TarefaDetalhe({
   /** REMOVER um bloco: o de campo limpa o campo (com dado, pede confirmação; o checklist gravado exclui os itens). */
   const tirarBloco = async (b: BlocoTarefa) => {
     const temDado =
-      b.tipo === "nota" ? b.texto.trim() !== "" : b.tipo === "link" ? b.url.trim() !== "" : blocoTemDado(b.tipo, dadosDoRascunho(r, nChecklist));
+      b.tipo === "nota" ? b.texto.trim() !== "" : b.tipo === "link" ? b.url.trim() !== "" : blocoTemDado(b.tipo, dadosDoRascunho(r, nChecklist, nEventos));
     if (temDado) {
       const texto =
         b.tipo === "checklist" && !nova
           ? `Os ${nChecklist} itens do checklist serão excluídos agora.`
+          : b.tipo === "eventos" && !nova
+            ? `Os ${nEventos} eventos serão excluídos agora.`
           : b.tipo === "nota" || b.tipo === "link"
             ? "O conteúdo sai da tarefa ao salvar."
             : "O campo fica vazio ao salvar.";
       if (!(await confirmar({ titulo: `Remover o bloco ${ROTULO_BLOCO[b.tipo]}?`, texto, confirmar: "Remover", perigo: true }))) return;
     }
     if (b.tipo === "checklist" && !nova) for (const i of acoesChecklist?.itens ?? []) acoesChecklist?.remover(i.id);
+    if (b.tipo === "eventos" && !nova) for (const e of conteudo?.eventos ?? []) await agir(() => chamar(`/api/tarefas/eventos/${e.id}`, "DELETE"));
     setR((x) => {
       if (!x) return x;
       const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
@@ -442,6 +476,7 @@ export function TarefaDetalhe({
       else if (b.tipo === "estimativa") y.estimativa = "";
       else if (b.tipo === "recorrencia") y.recorrencia = null;
       else if (b.tipo === "checklist") y.checklist = [];
+      else if (b.tipo === "eventos") y.eventos = [];
       return y;
     });
   };
@@ -556,6 +591,12 @@ export function TarefaDetalhe({
             onChange={(e) => set("estimativa", e.target.value)}
           />
         );
+      case "eventos":
+        return carregando ? (
+          <p className="text-[12.5px] text-muted">Carregando…</p>
+        ) : (
+          <EventosTarefa eventos={eventosVisiveis} hoje={hoje} onSalvar={salvarEvento} onExcluir={excluirEventoDaTarefa} ocupado={gravandoEvento} />
+        );
       case "recorrencia":
         return <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />;
     }
@@ -615,6 +656,8 @@ export function TarefaDetalhe({
         size="lg"
         larguraPrincipal={44}
         paineis={desk ? painelAtividade : undefined}
+        esquerda={esquerda}
+        principalNoTopo={!!esquerda?.length}
         bloqueado={salvando != null}
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">

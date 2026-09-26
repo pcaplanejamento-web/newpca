@@ -902,6 +902,31 @@ export const tarefaChecklist = sqliteTable(
   (t) => [index("tarefa_checklist_tarefa_idx").on(t.tarefaId, t.ordem)],
 );
 
+/** EVENTOS de uma tarefa (migração `0046`) — o bloco "Eventos": data, dia inteiro ou horário ("HH:MM"), local, cor. */
+export const tarefaEventos = sqliteTable(
+  "tarefa_eventos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    titulo: text("titulo").notNull(),
+    /** "AAAA-MM-DD". */
+    data: text("data").notNull(),
+    diaInteiro: integer("dia_inteiro", { mode: "boolean" }).notNull().default(true),
+    horaInicio: text("hora_inicio"),
+    horaFim: text("hora_fim"),
+    local: text("local"),
+    descricao: text("descricao"),
+    /** Hex; NULL = a cor do quadro. */
+    cor: text("cor"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_eventos_tarefa_idx").on(t.tarefaId), index("tarefa_eventos_data_idx").on(t.data)],
+);
+
 export const tarefaComentarios = sqliteTable(
   "tarefa_comentarios",
   {

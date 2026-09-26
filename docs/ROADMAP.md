@@ -1016,6 +1016,17 @@ o lugar ou toque para acrescentar, reordene pela alça ou ↑/↓; **anexos remo
 nova; **calendário profissional** (Mês com faixas início → prazo · Semana · Agenda, reagendar arrastando, números do
 período, legenda, teclado, mini-grade no celular) e a tela **Calendário** — item próprio do menu (`/painel/calendario`) — com as tarefas de TODOS os quadros do
 grupo (cor de cada quadro, filtros + filtro de quadro, criar num dia escolhendo o quadro).
+✅ **Fase 5 (migração `0046`) — módulo Calendário:** módulo PRÓPRIO (permissão `calendario`, independente de Tarefas);
+cada TAREFA é um CONJUNTO de eventos (período início → prazo, ocorrências da recorrência e os eventos do bloco **Eventos**);
+a barra escolhe os conjuntos/tipos a ver (preferência da pessoa); tocar num evento abre o **banner do evento** ali mesmo e
+"Ver tarefa" abre a tarefa ao lado. **Do Google Agenda — implementado:** vistas Dia · Semana · Mês · Agenda; grade de horas
+com a linha do agora; eventos de dia inteiro, com hora e de vários dias; eventos simultâneos lado a lado; mini-mês; agendas
+(conjuntos) com cor e mostrar/ocultar; criar clicando no horário; arrastar para mover; busca; atalhos (D/S/M/A/T/←/→).
+🔜 **Do Google Agenda — a seguir:** vistas Ano e "N dias"; redimensionar a duração arrastando a borda; lembretes antes do
+evento (sino/e-mail); convidados e confirmação de presença; videoconferência; local com mapa; repetição própria do evento;
+horário de trabalho e ocultar fim de semana; semana começando na segunda; número da semana; fuso secundário; feriados
+nacionais/municipais; disponibilidade (horários livres); agenda compartilhada/assinatura ICS; exportar/importar `.ics`;
+impressão; duplicar evento; desfazer.
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
