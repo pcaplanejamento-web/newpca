@@ -24,6 +24,14 @@ export function eventoMovido(ev: EventoTarefa, dia: string, hora: string | null)
   return out;
 }
 
+/**
+ * A OCORRÊNCIA `ocorrencia` (a data da célula arrastada) de um evento solta em `dia`: a SÉRIE anda a MESMA distância (a
+ * data-base muda pelos dias entre a ocorrência e o destino) — nunca salta para o dia solto. Sem repetição, a ocorrência é
+ * o próprio evento.
+ */
+export const eventoArrastado = (ev: EventoTarefa, ocorrencia: string, dia: string, hora: string | null): DadosEvento =>
+  eventoMovido(ev, somarDias(ev.data, diasEntre(ocorrencia, dia)), hora);
+
 /** Os dados a gravar do evento com o FIM novo (a borda arrastada). */
 export const eventoComFim = (ev: EventoTarefa, horaFim: string): DadosEvento => ({ ...dadosDoEventoGravado(ev), horaFim });
 
@@ -71,8 +79,6 @@ const FIXOS: [string, string, TipoFeriado][] = [
   ["12-25", "Natal", "nacional"],
 ];
 
-/** A data existe de fato (29/02 só em ano bissexto — o `Date` "rolaria" para 01/03). */
-const dataReal = (d: string) => dataValida(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 
 /** Os feriados NACIONAIS (e pontos facultativos federais) do ano — os fixos + os móveis pela Páscoa. */
 export function feriadosNacionais(ano: number): FeriadoDia[] {
@@ -107,7 +113,7 @@ export function feriadosNoIntervalo(cadastrados: FeriadoCadastro[], de: string, 
     for (const c of cadastrados)
       if (c.anual && dataValida(c.data)) {
         const d = `${ano}-${c.data.slice(5)}`;
-        if (dataReal(d)) por({ id: c.id, data: d, nome: c.nome, tipo: c.tipo });
+        if (dataValida(d)) por({ id: c.id, data: d, nome: c.nome, tipo: c.tipo });
       }
   }
   for (const c of cadastrados) if (!c.anual && dataValida(c.data)) por({ id: c.id, data: c.data, nome: c.nome, tipo: c.tipo });
@@ -370,7 +376,7 @@ const utc = (data: string, hora: string) => {
 };
 const dataIcs = (d: string) => d.replace(/-/g, "");
 /** Escapa o texto do .ics (\ ; , e quebras). */
-export const escaparIcs = (t: string) => t.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+export const escaparIcs = (t: string) => t.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 /** Dobra a linha em 75 octetos (RFC 5545 §3.1) — continuação começa com espaço. */
 export function dobrarIcs(linha: string): string {
   const enc = new TextEncoder();
@@ -402,14 +408,19 @@ export function gerarIcs(eventos: EventoCalendario[], opts: { nome: string; agor
   const l: string[] = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Plataforma PCA//Calendario//PT-BR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${escaparIcs(opts.nome)}`, "X-WR-TIMEZONE:America/Sao_Paulo"];
   for (const e of eventos) {
     const comHora = !e.diaInteiro && horaValida(e.horaInicio) && e.inicio === e.fim;
+    // Com hora em VÁRIOS dias (início num dia, fim noutro): exporta o início e o fim reais.
+    const variosDias = !e.diaInteiro && horaValida(e.horaInicio) && horaValida(e.horaFim) && e.fim > e.inicio;
     const desc = e.pca
       ? `${e.pca.pcaNome} · DFD ${e.pca.numero}${e.pca.planejamento ? ` (Planej. ${e.pca.planejamento})` : ""}${e.pca.sigla ? ` · ${e.pca.sigla}` : ""}`
       : `${rotuloTicket(e.ticket)} ${e.tarefaTitulo}${e.descricao ? `\n\n${e.descricao}` : ""}`;
     l.push("BEGIN:VEVENT", `UID:${e.chave}@${dom}`, `DTSTAMP:${opts.agora}`);
     if (comHora) {
       const fim = horaValida(e.horaFim) && minutosDe(e.horaFim) > minutosDe(e.horaInicio as string) ? e.horaFim : null;
-      l.push(`DTSTART:${utc(e.inicio, e.horaInicio as string)}`, `DTEND:${fim ? utc(e.inicio, fim) : utc(e.inicio, menosMinutos(`${e.inicio}T${e.horaInicio}`, -60).slice(11))}`);
-    } else l.push(`DTSTART;VALUE=DATE:${dataIcs(e.inicio)}`, `DTEND;VALUE=DATE:${dataIcs(somarDias(e.fim, 1))}`);
+      // Sem fim = +1 h, somada à DATA e à hora juntas (23:30 termina 00:30 do dia seguinte, nunca antes do início).
+      const umaHora = menosMinutos(`${e.inicio}T${e.horaInicio}`, -60);
+      l.push(`DTSTART:${utc(e.inicio, e.horaInicio as string)}`, `DTEND:${fim ? utc(e.inicio, fim) : utc(umaHora.slice(0, 10), umaHora.slice(11))}`);
+    } else if (variosDias) l.push(`DTSTART:${utc(e.inicio, e.horaInicio as string)}`, `DTEND:${utc(e.fim, e.horaFim as string)}`);
+    else l.push(`DTSTART;VALUE=DATE:${dataIcs(e.inicio)}`, `DTEND;VALUE=DATE:${dataIcs(somarDias(e.fim, 1))}`);
     l.push(`SUMMARY:${escaparIcs(e.titulo)}`, `DESCRIPTION:${escaparIcs(desc)}`);
     if (e.local) l.push(`LOCATION:${escaparIcs(e.local)}`);
     const url = opts.url?.(e);

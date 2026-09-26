@@ -1,7 +1,7 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarEtiqueta, quadroAcessivel } from "@/lib/tarefas";
+import { criarEtiqueta, MSG_QUADRO_ARQUIVADO, quadroAcessivel } from "@/lib/tarefas";
 import { etiquetaSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!q) return erro("Quadro não encontrado.", 404);
+  if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(etiquetaSchema, req);
   if ("resp" in p) return p.resp;
   const eid = await criarEtiqueta(q.id, p.data);

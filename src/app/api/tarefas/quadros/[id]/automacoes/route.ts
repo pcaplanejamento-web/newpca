@@ -1,7 +1,7 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { acaoValida, criarAutomacao, getLista, listarAutomacoes, quadroAcessivel } from "@/lib/tarefas";
+import { acaoValida, criarAutomacao, getLista, listarAutomacoes, MSG_QUADRO_ARQUIVADO, quadroAcessivel } from "@/lib/tarefas";
 import { MAX_AUTOMACOES } from "@/lib/tarefas-core";
 import { automacaoSchema } from "@/lib/tarefas-validation";
 
@@ -14,13 +14,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!q) return erro("Quadro não encontrado.", 404);
+  if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(automacaoSchema, req);
   if ("resp" in p) return p.resp;
   const d = p.data;
   if ((await listarAutomacoes(q.id)).length >= MAX_AUTOMACOES) return erro(`Até ${MAX_AUTOMACOES} automações por quadro.`, 409);
   if (d.gatilho === "entrar_lista") {
     const l = d.listaId ? await getLista(d.listaId) : null;
-    if (!l || l.quadroId !== q.id) return erro("Lista inválida.", 422);
+    if (!l || l.quadroId !== q.id || l.arquivada) return erro("Lista inválida.", 422);
   }
   if (d.acao.tipo === "mover_lista" && d.gatilho === "entrar_lista" && d.acao.listaId === d.listaId) return erro("A regra moveria a tarefa para a mesma lista.", 422);
   if (!(await acaoValida(q, d.acao))) return erro("A ação aponta uma lista, etiqueta ou pessoa que não é deste quadro.", 422);

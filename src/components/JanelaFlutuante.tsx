@@ -56,6 +56,22 @@ export function JanelaFlutuante({
     setPos({ x, y });
   }, [aberta, desk, ancora, largura]);
 
+  // A janela CRESCE (escolher "Tarefa", "Adicionar horário"…): volta para dentro da tela — o rodapé com "Salvar" nunca
+  // fica abaixo da dobra.
+  useEffect(() => {
+    const el = ref.current;
+    if (!aberta || !desk || !el || typeof ResizeObserver === "undefined") return;
+    const obs = new ResizeObserver(() => {
+      setPos((p) => {
+        if (!p) return p;
+        const y = Math.max(8, Math.min(p.y, window.innerHeight - el.offsetHeight - 8));
+        return y === p.y ? p : { ...p, y };
+      });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [aberta, desk]);
+
   // Esc e o toque FORA fecham (um Modal aberto por cima — "Mais opções" — tem precedência).
   useEffect(() => {
     if (!aberta || !desk) return;
@@ -107,8 +123,11 @@ export function JanelaFlutuante({
       </Modal>
     );
   return createPortal(
+    // `role="dialog"` (não modal): os atalhos do calendário ficam em pausa enquanto a janela está aberta.
     <section
       ref={ref}
+      role="dialog"
+      aria-modal="false"
       aria-label={titulo}
       className="fixed z-[150] flex max-h-[calc(100dvh-16px)] flex-col rounded-card border border-border bg-surface shadow-soft animate-fade-in-up"
       style={{ left: pos?.x ?? -9999, top: pos?.y ?? 0, width: Math.min(largura, typeof window === "undefined" ? largura : window.innerWidth - 16) }}

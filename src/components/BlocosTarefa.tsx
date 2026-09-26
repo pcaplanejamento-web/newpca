@@ -268,7 +268,7 @@ export function MolduraBloco({
             role="presentation"
             title="Arrastar para reordenar"
             onPointerDown={onPegar}
-            className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center text-faint hover:text-text-2 active:cursor-grabbing lg:h-[var(--h-control-sm)]"
+            className="flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center text-faint hover:text-text-2 active:cursor-grabbing lg:h-[var(--h-control-sm)] lg:w-9"
           >
             <IconGrip className="h-4 w-4" />
           </span>

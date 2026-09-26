@@ -441,9 +441,12 @@ export function TarefaDetalhe({
     setGravandoEvento(false);
     return okGravou;
   };
-  const excluirEventoDaTarefa = async (e: { id: number; titulo: string }) => {
+  const excluirEventoDaTarefa = async (e: { id: number; titulo: string; recorrencia?: unknown }) => {
     if (nova) return setR((x) => (x ? { ...x, eventos: x.eventos.filter((_, i) => i !== e.id - 1) } : x));
-    if (await confirmar({ titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true })) agir(() => chamar(`/api/tarefas/eventos/${e.id}`, "DELETE"));
+    const pergunta = e.recorrencia
+      ? { titulo: `Excluir TODA a série "${e.titulo}"?`, texto: "O evento se repete — todas as ocorrências saem do calendário.", confirmar: "Excluir a série", perigo: true }
+      : { titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true };
+    if (await confirmar(pergunta)) agir(() => chamar(`/api/tarefas/eventos/${e.id}`, "DELETE"));
   };
   const setBlocos = (fn: (l: BlocoTarefa[]) => BlocoTarefa[]) => setR((x) => (x ? { ...x, blocos: fn(x.blocos) } : x));
   const setBloco = (id: string, patch: Partial<{ texto: string; url: string; titulo: string }>) =>

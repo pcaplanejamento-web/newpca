@@ -51,9 +51,13 @@ export function GerirAgendasExternas({ aberto, onFechar, agendas, onMudou }: { a
   const [cor, setCor] = useState("#0ea5e9");
   const [ocupado, setOcupado] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
+  /** Trava de envio: dois toques rápidos em "Assinar" assinam UMA vez. */
+  const enviando = useRef(false);
   const { confirmar, confirmacao } = useConfirmacao();
 
   const adicionar = async () => {
+    if (enviando.current) return;
+    enviando.current = true;
     setOcupado(true);
     setFalha(null);
     try {
@@ -65,6 +69,7 @@ export function GerirAgendasExternas({ aberto, onFechar, agendas, onMudou }: { a
     } catch (e) {
       setFalha((e as Error).message);
     } finally {
+      enviando.current = false;
       setOcupado(false);
     }
   };
@@ -113,7 +118,7 @@ export function GerirAgendasExternas({ aberto, onFechar, agendas, onMudou }: { a
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!cheio && nome.trim() && url.trim()) void adicionar();
+            if (!cheio && !ocupado && nome.trim() && url.trim()) void adicionar();
           }}
         >
           <p className="text-[13px] font-semibold text-text">Assinar uma agenda</p>

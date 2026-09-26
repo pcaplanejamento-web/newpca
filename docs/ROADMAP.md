@@ -1043,6 +1043,20 @@ mostrar/ocultar), busca ÚNICA (filtra a vista e lista os de todos os meses) e f
 pública de agendamento foi REMOVIDA (migração `0050`) — o Calendário é só interno.
 ✅ **Revisão do Calendário:** sem funções repetidas (uma busca só; opções de exibição só no menu de vistas; Tipos sem
 PCA/agendas externas, que têm seção própria; pessoas pelo "Pesquisar pessoas") e a lateral com o respiro correto.
+✅ **Auditoria de Calendário e Tarefas — achados corrigidos:** privacidade (o evento PRIVADO não vai mais ao histórico da
+tarefa com título/local — nem nas linhas antigas —, o lembrete dele não chega ao observador, a máscara esconde quem criou e a
+busca o mostra aos responsáveis); agendas externas (redirecionamento revalidado a cada salto, host com ponto final e faixas
+reservadas recusados; TZID entre aspas e fusos conhecidos convertidos; BYDAY acompanha a troca de dia; regra não suportada
+aparece uma vez); integridade (evento com 34+ convidados gravado em lote atômico ≤ 100 parâmetros; convidados de evento criado
+junto com a tarefa gravados e avisados; quadros além do 90º não somem; datas impossíveis recusadas; evento com hora em vários
+dias aceito e exportado com início/fim reais; lista arquivada fora do calendário, da busca e dos avisos; quadro arquivado não
+aceita criação); cálculo (série antiga salta direto ao período — nada some depois de 5.000 passos; recorrente atrasada sem
+ocorrências passadas; .ics das 23:30 sem fim termina no dia seguinte; "Próximos 7 dias" = 7 dias); telas (o clique após
+arrastar/redimensionar abre; kanban FILTRADO solta o cartão no lugar certo; arrastar ocorrência na aba do quadro move a série
+pela distância; botão carregando fica desabilitado + trava de envio — duplo clique cria uma vez; banner do evento relido dos
+dados atuais; busca limpa sem resultados antigos; atalhos pausados com a janela de criação aberta, que se reposiciona ao
+crescer; folha "sem prazo" não abre sozinha no celular; vista Ano no quadro com o ano inteiro; excluir série avisa; alvos de
+toque de 44px).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

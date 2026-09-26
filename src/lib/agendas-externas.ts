@@ -5,7 +5,7 @@ import { type AgendaExterna, lerIcs, MAX_BYTES_ICS, urlAgendaValida } from "./ic
 
 /**
  * AGENDAS EXTERNAS (migração `0049`) — acesso ao D1 + a LEITURA do `.ics` (só escopo de request). A agenda é da PESSOA
- * (somente leitura). O arquivo é baixado sob demanda, só por HTTPS e fora da rede interna (`urlAgendaValida`), com tempo
+ * (somente leitura). O arquivo é baixado sob demanda, só por HTTPS e fora da rede interna (`urlAgendaValida` — também em cada redirecionamento), com tempo
  * e tamanho limitados, e fica 10 minutos em memória (a mesma agenda aberta por várias pessoas/meses não é baixada de novo).
  */
 
@@ -38,6 +38,7 @@ export async function excluirExterno(usuarioId: number, id: number) {
 }
 
 const TEMPO_MS = 8000;
+const MAX_REDIRECIONAMENTOS = 3;
 const CACHE_MS = 10 * 60_000;
 const cache = new Map<string, { em: number; eventos: AgendaExterna["eventos"] }>();
 
@@ -51,7 +52,19 @@ export async function lerAgendaExterna(bruta: string): Promise<AgendaExterna["ev
   const t = setTimeout(() => ctl.abort(), TEMPO_MS);
   let texto = "";
   try {
-    const r = await fetch(url, { signal: ctl.signal, headers: { accept: "text/calendar, text/plain;q=0.9, */*;q=0.1" }, redirect: "follow" });
+    // Redirecionamento seguido À MÃO: cada destino passa de novo por `urlAgendaValida` (um link público não pode levar a
+    // um endereço interno).
+    let destino = url;
+    let r: Response | null = null;
+    for (let salto = 0; ; salto++) {
+      r = await fetch(destino, { signal: ctl.signal, headers: { accept: "text/calendar, text/plain;q=0.9, */*;q=0.1" }, redirect: "manual" });
+      if (r.status < 300 || r.status >= 400) break;
+      const local = r.headers.get("location");
+      const proximo = local ? urlAgendaValida(new URL(local, destino).toString()) : null;
+      if (!proximo) throw new Error("A agenda redireciona para um endereço não permitido.");
+      if (salto >= MAX_REDIRECIONAMENTOS) throw new Error("A agenda redireciona demais.");
+      destino = proximo;
+    }
     if (!r.ok) throw new Error(`A agenda respondeu ${r.status}.`);
     if (Number(r.headers.get("content-length") ?? 0) > MAX_BYTES_ICS) throw new Error("A agenda é grande demais (máx. 2 MB).");
     const leitor = r.body?.getReader();

@@ -70,7 +70,8 @@ export function Button({
     );
   }
   return (
-    <button className={cls} type={type ?? "button"} {...rest}>
+    // Carregando = desabilitado: um 2º toque durante o envio nunca dispara a ação de novo.
+    <button className={cls} type={type ?? "button"} {...rest} disabled={rest.disabled || loading} aria-busy={loading || undefined}>
       {inner}
     </button>
   );

@@ -1,7 +1,7 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarLista, ordenarListas, quadroAcessivel } from "@/lib/tarefas";
+import { criarLista, MSG_QUADRO_ARQUIVADO, ordenarListas, quadroAcessivel } from "@/lib/tarefas";
 import { listaSchema, ordemListasSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ async function quadroDoEditor(ctx: Ctx) {
 export async function POST(req: Request, ctx: Ctx) {
   const r = await quadroDoEditor(ctx);
   if ("resp" in r) return r.resp;
+  if (r.q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(listaSchema, req);
   if ("resp" in p) return p.resp;
   const id = await criarLista(r.q.id, p.data);

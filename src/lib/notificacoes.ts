@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { notificacoes, tarefaEventos, tarefaPessoas, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
@@ -54,6 +54,9 @@ export async function notificar(linhas: NovaNotificacao[], atorId?: number | nul
 /** O autor (snapshot) de uma notificação de evento. */
 export const atorDe = (u: UsuarioSessao) => ({ atorId: u.id, atorNome: nomeExibicao(u) });
 
+/** A lista da tarefa não está arquivada (a tarefa de lista arquivada não avisa). */
+const listaAtiva = sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`;
+
 /**
  * DERIVA as notificações de PRAZO da pessoa (tarefas abertas em que é responsável, nos quadros dos grupos dela — o ADM,
  * todos; prazo entre 30 dias atrás e amanhã) e grava as que faltam (a chave repetida é ignorada). Nunca lança.
@@ -75,6 +78,7 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
           isNull(tarefas.concluidaEm),
           eq(tarefas.arquivada, false),
           eq(tarefaQuadros.arquivado, false),
+          listaAtiva,
           gte(tarefas.prazo, somarDias(hoje, -30)),
           lte(tarefas.prazo, somarDias(hoje, 1)),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
@@ -144,10 +148,14 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           sql`(${tarefaEventos.data} >= ${hoje} OR (${tarefaEventos.recorrencia} IS NOT NULL AND COALESCE(json_extract(${tarefaEventos.recorrencia}, '$.ate'), '9999-12-31') >= ${hoje}))`,
           eq(tarefas.arquivada, false),
           eq(tarefaQuadros.arquivado, false),
+          listaAtiva,
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
-          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id}) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
+          // Quem criou, os convidados que não recusaram e as pessoas da tarefa — o OBSERVADOR só no evento NÃO privado
+          // (o privado é só de quem participa: `participaDoEvento`).
+          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id} AND (${tarefaEventos.privado} = 0 OR p.papel = 'responsavel')) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
         ),
       )
+      .orderBy(asc(tarefaEventos.data))
       .limit(200);
     const novas: NovaNotificacao[] = [];
     for (const e of linhas)

@@ -137,7 +137,12 @@ export const COR_ESTADO_PRAZO: Record<EstadoPrazo, string> = {
 
 const diaMs = 86_400_000;
 export const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / diaMs);
-export const dataValida = (d: string | null | undefined): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
+/** "AAAA-MM-DD" que EXISTE (31/02 é recusado — o `Date` "rolaria" para março). */
+export const dataValida = (d: string | null | undefined): d is string => {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+};
 
 /** O estado do prazo HOJE (`hoje` = "AAAA-MM-DD" no fuso de Brasília). */
 export function estadoPrazo(prazo: string | null, hoje: string, concluida: boolean): EstadoPrazo {
@@ -176,6 +181,21 @@ export function vizinhos(tarefas: TarefaResumo[], id: number, listaId: number, i
   const lista = cartoesDaLista(tarefas, listaId).filter((t) => t.id !== id);
   const i = Math.max(0, Math.min(indice, lista.length));
   return { anteriorId: lista[i - 1]?.id ?? null, proximoId: lista[i]?.id ?? null };
+}
+
+/**
+ * A posição na lista COMPLETA de um cartão solto na posição `indice` entre os cartões VISÍVEIS (com filtro, o quadro
+ * mostra só parte da lista): no meio, logo antes do cartão visível que ficou embaixo; no topo, o topo da lista; depois do
+ * último visível (ou lista sem visíveis), o fim. Sem filtro, é o próprio índice.
+ */
+export function indiceReal(todas: TarefaResumo[], visiveis: TarefaResumo[], id: number, listaId: number, indice: number): number {
+  const cheia = cartoesDaLista(todas, listaId).filter((t) => t.id !== id);
+  const vis = cartoesDaLista(visiveis, listaId).filter((t) => t.id !== id);
+  if (vis.length === cheia.length) return indice;
+  const i = Math.max(0, Math.min(indice, vis.length));
+  if (i >= vis.length) return cheia.length;
+  if (i === 0) return 0;
+  return cheia.findIndex((t) => t.id === vis[i].id);
 }
 
 /**
@@ -221,7 +241,8 @@ export type TarefaFiltravel = Pick<TarefaResumo, "pessoas" | "prioridade" | "eti
 /** Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). */
 export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): T[] {
   const casa = predicadoBusca(f.busca);
-  const fimSemana = somarDias(ctx.hoje, 7);
+  // "Próximos 7 dias" = hoje + os 6 seguintes.
+  const fimSemana = somarDias(ctx.hoje, 6);
   return tarefas.filter((t) => {
     if (f.responsavel === "eu" ? ctx.usuarioId == null || !t.pessoas.includes(ctx.usuarioId) : f.responsavel === "sem" ? t.pessoas.length > 0 : f.responsavel !== "todos" && !t.pessoas.includes(f.responsavel))
       return false;
@@ -620,6 +641,25 @@ function passo(r: Recorrencia, base: string, diaAlvo: number): string {
 }
 
 /**
+ * SALTA a série para perto de `alvo` sem andar passo a passo (uma série de 2010 vista em 2026 teria milhares de passos):
+ * devolve uma data DA SÉRIE (a base + N períodos inteiros) pelo menos um período ANTES de `alvo` — seguir com `passo` a
+ * partir dela dá as mesmas datas que andar desde a base.
+ */
+function saltar(r: Recorrencia, base: string, diaAlvo: number, alvo: string): string {
+  if (alvo <= base) return base;
+  if (r.freq === "diaria" || r.freq === "semanal") {
+    const periodo = r.freq === "diaria" ? r.intervalo : 7 * r.intervalo;
+    const k = Math.floor(diasEntre(base, alvo) / periodo) - 1;
+    return k > 0 ? somarDias(base, k * periodo) : base;
+  }
+  const meses = (r.freq === "anual" ? 12 : 1) * r.intervalo;
+  const [a0, m0] = base.split("-").map(Number);
+  const [a1, m1] = alvo.split("-").map(Number);
+  const k = Math.floor(((a1 - a0) * 12 + (m1 - m0)) / meses) - 1;
+  return k > 0 ? somarMeses(base, k * meses, diaAlvo) : base;
+}
+
+/**
  * A PRÓXIMA ocorrência de uma tarefa recorrente concluída: o novo prazo (e o início, mantendo a duração início → prazo).
  * Conta do PRAZO atual (base "prazo"; sem prazo, da conclusão) ou da CONCLUSÃO (`concluidaEm` = "AAAA-MM-DD"); um prazo que
  * ficou para trás avança até cair em `hoje` ou depois (nunca nasce atrasada). Sem prazo na atual, conta da conclusão —
@@ -634,6 +674,7 @@ export function proximaOcorrencia(
   const base = r.base === "prazo" && dataValida(atual.prazo) ? atual.prazo : concluidaEm;
   const diaAlvo = Number(base.slice(8, 10));
   let prazo = passo(r, base, diaAlvo);
+  if (prazo < hoje) prazo = passo(r, saltar(r, base, diaAlvo, hoje), diaAlvo);
   for (let i = 0; prazo < hoje && i < 5000; i++) prazo = passo(r, prazo, diaAlvo);
   const duracao = dataValida(atual.inicio) && dataValida(atual.prazo) ? diasEntre(atual.inicio, atual.prazo) : null;
   return { inicio: duracao != null ? somarDias(prazo, -duracao) : null, prazo };
@@ -1013,7 +1054,7 @@ export function ocorrenciasDoEvento(e: Pick<EventoTarefa, "data" | "dataFim" | "
   const fimSerie = e.recorrencia.ate && e.recorrencia.ate < ate ? e.recorrencia.ate : ate;
   const out = cruza(e.data) ? [e.data] : [];
   const diaAlvo = Number(e.data.slice(8, 10));
-  let d = e.data;
+  let d = saltar(r, e.data, diaAlvo, somarDias(de, -dur));
   for (let i = 0; i < 5000 && out.length < max; i++) {
     d = passo(r, d, diaAlvo);
     if (d > fimSerie) break;
@@ -1037,9 +1078,53 @@ export const participaDoEvento = (e: Pick<EventoTarefa, "criadoPor" | "convidado
 export function mascararPrivados(eventos: EventoTarefa[], usuarioId: number, responsaveisPorTarefa: Map<number, number[]>): EventoTarefa[] {
   return eventos.map((e) =>
     e.privado && !participaDoEvento(e, usuarioId, responsaveisPorTarefa.get(e.tarefaId))
-      ? { ...e, titulo: "Ocupado", local: null, descricao: null, linkReuniao: null, convidados: [], lembreteMin: null }
+      ? { ...e, titulo: "Ocupado", local: null, descricao: null, linkReuniao: null, convidados: [], lembreteMin: null, criadoPor: null }
       : e,
   );
+}
+
+/**
+ * O evento como vai ao HISTÓRICO (auditoria): o PRIVADO nunca grava título, local, descrição, link nem convidados — o
+ * histórico da tarefa é visto por todo o grupo. `titulo` = o que o resumo pode citar.
+ */
+export function eventoParaAuditoria<T extends { titulo: string; data: string; privado?: boolean }>(d: T): { titulo: string; dados: Record<string, unknown> } {
+  if (!d.privado) return { titulo: d.titulo, dados: d as Record<string, unknown> };
+  return { titulo: "evento privado", dados: { titulo: "Evento privado", data: d.data, privado: true } };
+}
+
+/**
+ * O HISTÓRICO da tarefa SEM o conteúdo dos eventos privados — vale também para as linhas gravadas antes da máscara na
+ * gravação: se o diff (antes/depois, ou um evento da tarefa criada) é privado, ele vira "Evento privado" e o título some
+ * do resumo.
+ */
+export function historicoSemPrivados<T extends { resumo: string | null; antes: string | null; depois: string | null }>(linhas: T[]): T[] {
+  const ler = (v: string | null): unknown => {
+    if (!v) return null;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return null;
+    }
+  };
+  const objeto = (o: unknown): o is Record<string, unknown> => !!o && typeof o === "object" && !Array.isArray(o);
+  const ehPrivado = (o: unknown) => objeto(o) && o.privado === true;
+  const soData = (o: Record<string, unknown>) => ({ titulo: "Evento privado", data: o.data ?? null, privado: true });
+  return linhas.map((l) => {
+    const a = ler(l.antes);
+    const d = ler(l.depois);
+    // O EVENTO privado (antes ou depois): os dois lados viram só a data — o título não aparece nem no resumo.
+    if (ehPrivado(a) || ehPrivado(d))
+      return {
+        ...l,
+        antes: objeto(a) ? JSON.stringify(soData(a)) : l.antes,
+        depois: objeto(d) ? JSON.stringify(soData(d)) : l.depois,
+        resumo: l.resumo ? l.resumo.replace(/evento "[^"]*"/, 'evento "evento privado"') : l.resumo,
+      };
+    // A TAREFA criada com eventos: só os privados são mascarados.
+    if (objeto(d) && Array.isArray(d.eventos) && d.eventos.some(ehPrivado))
+      return { ...l, depois: JSON.stringify({ ...d, eventos: d.eventos.map((e) => (ehPrivado(e) ? soData(e as Record<string, unknown>) : e)) }) };
+    return l;
+  });
 }
 
 /** De onde vem o evento do calendário: o PERÍODO da tarefa (início → prazo), uma OCORRÊNCIA futura da recorrência, um
@@ -1123,7 +1208,7 @@ export function ocorrenciasNoIntervalo(r: Recorrencia, prazo: string | null, de:
   if (r.base !== "prazo" || !dataValida(prazo)) return [];
   const diaAlvo = Number(prazo.slice(8, 10));
   const out: string[] = [];
-  let d = prazo;
+  let d = saltar(r, prazo, diaAlvo, de);
   for (let i = 0; i < 5000 && out.length < max; i++) {
     d = passo(r, d, diaAlvo);
     if (d > ate) break;
@@ -1183,8 +1268,10 @@ export function eventosDoCalendario(
     if (!dataValida(t.prazo)) continue;
     const inicio = dataValida(t.inicio) && t.inicio < t.prazo ? t.inicio : t.prazo;
     if (t.prazo >= de && inicio <= ate) out.push({ ...base(t), chave: `p${t.id}`, tipo: "periodo", titulo: t.titulo, inicio, fim: t.prazo });
+    // As ocorrências de hoje em diante: uma recorrente atrasada, ao ser concluída, pula as que ficaram para trás
+    // (`proximaOcorrencia`) — elas nunca vão existir.
     if (t.recorrencia && t.concluidaEm == null)
-      for (const d of ocorrenciasNoIntervalo(t.recorrencia, t.prazo, de, ate))
+      for (const d of ocorrenciasNoIntervalo(t.recorrencia, t.prazo, hoje && hoje > de ? hoje : de, ate))
         out.push({ ...base(t), chave: `r${t.id}:${d}`, tipo: "recorrencia", titulo: t.titulo, inicio: d, fim: d, concluida: false });
   }
   for (const e of eventos) {
@@ -1236,9 +1323,9 @@ export const eventosDoDia = (eventos: EventoCalendario[], dia: string) => evento
 export const DURACAO_PADRAO_MIN = 60;
 
 /**
- * A POSIÇÃO dos eventos COM HORA de um dia na grade de horas: `topo`/`altura` em minutos (fim ausente ou antes do
- * início = `DURACAO_PADRAO_MIN`; mínimo 15) e as COLUNAS lado a lado dos que se cruzam (`coluna` de `colunas`, por grupo
- * de sobreposição — como o Google Agenda).
+ * A POSIÇÃO dos eventos COM HORA de um dia na grade de horas: `topo`/`altura` em minutos (fim ausente =
+ * `DURACAO_PADRAO_MIN`; mínimo 15) e as COLUNAS lado a lado dos que se cruzam (`coluna` de `colunas`, por grupo
+ * de sobreposição — como o Google Agenda). Fim antes do início = atravessa a meia-noite (até 24:00).
  */
 export function layoutDoDia<T extends { horaInicio: string | null; horaFim: string | null }>(
   eventos: T[],
@@ -1247,7 +1334,8 @@ export function layoutDoDia<T extends { horaInicio: string | null; horaFim: stri
     .filter((e): e is T & { horaInicio: string } => horaValida(e.horaInicio))
     .map((e) => {
       const topo = minutosDe(e.horaInicio);
-      const fimMin = horaValida(e.horaFim) && minutosDe(e.horaFim) > topo ? minutosDe(e.horaFim) : topo + DURACAO_PADRAO_MIN;
+      // Fim antes do início = atravessa a meia-noite (vai até o fim do dia); sem fim = a duração padrão.
+      const fimMin = !horaValida(e.horaFim) ? topo + DURACAO_PADRAO_MIN : minutosDe(e.horaFim) > topo ? minutosDe(e.horaFim) : 24 * 60;
       return { evento: e as T, topo, fim: Math.min(24 * 60, Math.max(fimMin, topo + 15)) };
     })
     .sort((a, b) => a.topo - b.topo || b.fim - a.fim);

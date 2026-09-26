@@ -255,6 +255,9 @@ function useArrastoEventos(onSoltar?: (e: EventoCalendario, dia: string, hora: s
       if (ev.pointerId !== ponteiro) return;
       limpar();
       setArrasto(null);
+      // O clique que vem LOGO depois do arrasto é ignorado (`foiArrasto`); depois disso a bandeira some — senão o próximo
+      // clique num evento que não se arrasta (ou um toque fora da alça) seria engolido.
+      if (ativo) window.setTimeout(() => (arrastou.current = false), 0);
       if (!ativo || ev.type !== "pointerup" || !dia) return;
       const mudouDia = e.tipo === "periodo" ? dia !== e.fim : dia !== e.inicio;
       const mudouHora = hora != null && e.tipo === "evento" && hora !== e.horaInicio;
@@ -316,6 +319,8 @@ function useRedimensionar(onSoltar?: (e: EventoCalendario, horaFim: string) => v
       limpar();
       setPrevia(null);
       if (ev.type === "pointerup" && redimensionou.current) onSoltar(e, horaDeMinutos(fim));
+      // O clique que vem logo depois é ignorado (`foiRedimensionar`); o seguinte volta a abrir o evento.
+      window.setTimeout(() => (redimensionou.current = false), 0);
     };
     encerrar.current = limpar;
     window.addEventListener("pointermove", mover, { passive: false });
@@ -338,10 +343,13 @@ function useRedimensionar(onSoltar?: (e: EventoCalendario, horaFim: string) => v
 function useCriarArrastando(onCriar?: (slot: SlotCriar) => void) {
   const [selecao, setSelecao] = useState<{ dia: string; ini: number; fim: number } | null>(null);
   const toque = useRef(false);
+  const encerrar = useRef<(() => void) | null>(null);
+  useEffect(() => () => encerrar.current?.(), []);
   const iniciar = (ev0: ReactPointerEvent<HTMLElement>, dia: string) => {
     toque.current = ev0.pointerType === "touch";
     if (!onCriar || ev0.pointerType === "touch" || ev0.button > 0 || ev0.target !== ev0.currentTarget) return;
     ev0.preventDefault();
+    encerrar.current?.();
     const coluna = ev0.currentTarget;
     const r0 = coluna.getBoundingClientRect();
     const minDe = (y: number) => Math.max(0, Math.min(24 * 60, Math.trunc(((y - r0.top) / r0.height) * 1440)));
@@ -356,18 +364,30 @@ function useCriarArrastando(onCriar?: (slot: SlotCriar) => void) {
       fim = Math.max(ini + 15, m);
       setSelecao({ dia, ini, fim });
     };
-    const soltar = () => {
+    const limpar = () => {
       window.removeEventListener("pointermove", mover);
       window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", cancelar);
       soltarCursor();
+      encerrar.current = null;
+    };
+    // Cancelado (o navegador tomou o ponteiro): sai sem criar — e sem deixar ouvintes presos na janela.
+    const cancelar = () => {
+      limpar();
+      setSelecao(null);
+    };
+    const soltar = () => {
+      limpar();
       const i = moveu ? ini : Math.floor(ini / 30) * 30;
       const f = moveu ? Math.min(fim, 24 * 60 - 1) : Math.min(i + 60, 24 * 60 - 1);
       const r = coluna.getBoundingClientRect();
       setSelecao(null);
       onCriar({ data: dia, hora: horaDeMinutos(i), horaFim: horaDeMinutos(f), ancora: { x: r.left, y: r.top + (i / 1440) * r.height, w: r.width, h: ((f - i) / 1440) * r.height } });
     };
+    encerrar.current = cancelar;
     window.addEventListener("pointermove", mover);
     window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", cancelar);
   };
   /** O toque simples na grade (o mouse já tratou no pointerdown). */
   const tocar = (ev: { clientY: number; currentTarget: HTMLElement; target: EventTarget }, dia: string) => {
@@ -432,7 +452,7 @@ function EventoChip({
           onClick={onConcluir}
           aria-label={e.concluida ? `Reabrir ${e.titulo}` : `Concluir ${e.titulo}`}
           title={e.concluida ? "Reabrir a tarefa" : "Concluir a tarefa"}
-          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5" : "w-11 lg:w-7"}`}
+          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5 any-pointer-coarse:w-8" : "w-11 lg:w-7"}`}
           style={{ color: e.concluida ? "var(--ok)" : semaforo }}
         >
           {e.concluida ? <IconCirculoCheck className="h-3.5 w-3.5" /> : <IconCirculo className="h-3.5 w-3.5" />}
@@ -516,7 +536,7 @@ function EventoCaixa({
           role="presentation"
           title="Arrastar para mudar a duração"
           onPointerDown={onRedimensionar}
-          className="absolute inset-x-1 bottom-0 flex h-2 cursor-ns-resize touch-none items-end justify-center any-pointer-coarse:h-4"
+          className="absolute inset-x-1 bottom-0 flex h-2 cursor-ns-resize touch-none items-end justify-center any-pointer-coarse:h-6"
         >
           <span aria-hidden className="mb-0.5 h-1 w-6 rounded-full bg-[color-mix(in_srgb,var(--text)_30%,transparent)]" />
         </span>
@@ -658,6 +678,8 @@ export function CalendarioTarefas({
   const [ajuda, setAjuda] = useState(false);
   const [irData, setIrData] = useState<string | null>(null);
   const [painel, setPainel] = useState(false);
+  /** No celular/tablet o painel sem prazo é uma FOLHA aberta só pelo toque (não é lembrada — nunca abre sozinha). */
+  const [folhaSemPrazo, setFolhaSemPrazo] = useState(false);
   const inicioSemana = opcoes.inicioSegunda ? 1 : 0;
   const grade = useMemo(() => gradeMes(mes.ano, mes.mes, inicioSemana), [mes.ano, mes.mes, inicioSemana]);
   const semana = useMemo(() => semanaDe(foco, inicioSemana), [foco, inicioSemana]);
@@ -738,6 +760,7 @@ export function CalendarioTarefas({
     }
   }
   const alternarPainel = () => {
+    if (!ehDesktopSeguro()) return setFolhaSemPrazo((f) => !f);
     setPainel((p) => {
       gravarLocal(CHAVE_PAINEL, p ? "0" : "1");
       return !p;
@@ -1209,7 +1232,7 @@ export function CalendarioTarefas({
           const pre = `${mes.ano}-${String(m).padStart(2, "0")}`;
           return (
             <section key={m} aria-label={`${NOMES_MES[m - 1]} de ${mes.ano}`}>
-              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-9 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent">
+              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-11 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent lg:min-h-9">
                 {NOMES_MES[m - 1]}
               </button>
               <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-faint">
@@ -1227,7 +1250,7 @@ export function CalendarioTarefas({
                         onClick={() => trocarVista("dia", d)}
                         aria-label={`${dataBR(d)}${comEvento.has(d) ? " — com eventos" : ""}`}
                         title={nomeFeriado(d)}
-                        className={`relative mx-auto grid h-9 w-full max-w-9 place-items-center rounded-full text-[12px] tabular-nums lg:h-7 lg:max-w-7 ${
+                        className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums lg:h-7 lg:max-w-7 ${
                           d === hoje ? "bg-accent font-bold text-white" : feriadoDe(d) ? "text-[var(--warn)] hover:bg-surface-2" : "text-text-2 hover:bg-surface-2"
                         }`}
                       >
@@ -1523,7 +1546,7 @@ export function CalendarioTarefas({
         </Modal>
       )}
       {semPrazo && (
-        <Modal open={painel && !ehDesktopSeguro()} onClose={alternarPainel} titulo="Tarefas sem prazo" size="md">
+        <Modal open={folhaSemPrazo} onClose={() => setFolhaSemPrazo(false)} titulo="Tarefas sem prazo" size="md">
           <div className="h-[60dvh]">{conteudoPainel}</div>
         </Modal>
       )}

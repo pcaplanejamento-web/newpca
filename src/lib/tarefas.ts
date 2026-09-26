@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import {
   dfdProtocolos,
   dfds,
@@ -70,7 +70,8 @@ import {
   type VinculoTarefa,
 } from "./tarefas-core";
 import {
-  colunasEvento,
+  comandosAtualizarEvento,
+  comandosCriarEvento,
   comandosCriarQuadroDoModelo,
   comandosCriarTarefa,
   comandosMassa,
@@ -120,6 +121,9 @@ export async function getQuadro(id: number): Promise<Quadro | null> {
   return q ?? null;
 }
 
+/** O quadro arquivado é SÓ LEITURA para criar: nada de tarefa, lista, etiqueta ou automação nova até desarquivar. */
+export const MSG_QUADRO_ARQUIVADO = "Quadro arquivado — desarquive-o na Configuração para criar.";
+
 /** O quadro, se o usuário pode vê-lo (membro do grupo do quadro — o ADM, qualquer um); senão `null`. */
 export async function quadroAcessivel(u: UsuarioSessao, id: number): Promise<Quadro | null> {
   const q = await getQuadro(id);
@@ -157,14 +161,30 @@ export function listasDoQuadro(quadroId: number): Promise<ListaTarefas[]> {
     .orderBy(asc(tarefaListas.ordem), asc(tarefaListas.id));
 }
 
+/** Lote de QUADROS por consulta (≤ 80 — as consultas do calendário somam ~10 parâmetros além da lista; o D1 aceita 100). */
+const LOTE_QUADROS = 80;
+/** Roda a consulta por LOTES de quadros e junta os resultados — nenhum quadro some além do 80º (o ADM e o feed .ics
+ * podem ter centenas). */
+async function porLotesDeQuadros<T>(quadroIds: number[], f: (lote: number[]) => Promise<T[]>): Promise<T[]> {
+  const ids = [...new Set(quadroIds)];
+  if (!ids.length) return [];
+  if (ids.length <= LOTE_QUADROS) return f(ids);
+  const lotes: number[][] = [];
+  for (let i = 0; i < ids.length; i += LOTE_QUADROS) lotes.push(ids.slice(i, i + LOTE_QUADROS));
+  return (await Promise.all(lotes.map(f))).flat();
+}
+/** A lista de uma tarefa NÃO está arquivada (a tarefa de lista arquivada some do calendário, da busca e dos avisos). */
+const listaAtiva = sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`;
+
 /** As LISTAS ATIVAS dos quadros (o Calendário: concluir/reabrir e criar tarefa pelo próprio calendário). */
 export async function listasDosQuadros(quadroIds: number[]): Promise<(Pick<ListaTarefas, "id" | "nome" | "concluida"> & { quadroId: number })[]> {
-  if (!quadroIds.length) return [];
-  return getDb()
-    .select({ id: tarefaListas.id, nome: tarefaListas.nome, concluida: tarefaListas.concluida, quadroId: tarefaListas.quadroId })
-    .from(tarefaListas)
-    .where(and(inArray(tarefaListas.quadroId, quadroIds.slice(0, 90)), eq(tarefaListas.arquivada, false)))
-    .orderBy(asc(tarefaListas.quadroId), asc(tarefaListas.ordem), asc(tarefaListas.id));
+  return porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select({ id: tarefaListas.id, nome: tarefaListas.nome, concluida: tarefaListas.concluida, quadroId: tarefaListas.quadroId })
+      .from(tarefaListas)
+      .where(and(inArray(tarefaListas.quadroId, ids), eq(tarefaListas.arquivada, false)))
+      .orderBy(asc(tarefaListas.quadroId), asc(tarefaListas.ordem), asc(tarefaListas.id)),
+  );
 }
 
 /** As ETIQUETAS do quadro, na ordem. */
@@ -306,14 +326,11 @@ export async function rotulosVinculos(vinculos: VinculoTarefa[]): Promise<Map<st
  * lista de ids — uma consulta cada).
  */
 export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: string): Promise<(TarefaCalendario & { quadroId: number })[]> {
-  if (!quadroIds.length) return [];
+  return (await porLotesDeQuadros(quadroIds, (ids) => tarefasDoCalendarioLote(ids, de, ate))).slice(0, LIMITE_TAREFAS_CALENDARIO);
+}
+async function tarefasDoCalendarioLote(ids: number[], de: string, ate: string): Promise<(TarefaCalendario & { quadroId: number })[]> {
   const db = getDb();
-  const ids = quadroIds.slice(0, 90);
-  const visivel = and(
-    inArray(tarefas.quadroId, ids),
-    eq(tarefas.arquivada, false),
-    sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
-  );
+  const visivel = and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), listaAtiva);
   // O período cruza o intervalo, OU a recorrente aberta ainda cai nele (a que conta da conclusão, mesmo sem prazo — a
   // ocorrência PREVISTA), OU a tarefa tem um EVENTO que cruza o intervalo.
   const noIntervalo = and(
@@ -367,34 +384,30 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
 
 /** Os NÚMEROS do cabeçalho do calendário de todos os quadros (tarefas abertas): atrasadas, hoje, nesta semana, sem prazo. */
 export async function contadoresDosQuadros(quadroIds: number[], hoje: string, fimSemana: string) {
-  if (!quadroIds.length) return { atrasadas: 0, hoje: 0, naSemana: 0, semPrazo: 0 };
-  const [r] = await getDb()
-    .select({
-      atrasadas: sql<number>`COALESCE(SUM(${tarefas.prazo} < ${hoje}), 0)`,
-      hoje: sql<number>`COALESCE(SUM(${tarefas.prazo} = ${hoje}), 0)`,
-      naSemana: sql<number>`COALESCE(SUM(${tarefas.prazo} >= ${hoje} AND ${tarefas.prazo} <= ${fimSemana}), 0)`,
-      semPrazo: sql<number>`COALESCE(SUM(${tarefas.prazo} IS NULL), 0)`,
-    })
-    .from(tarefas)
-    .where(
-      and(
-        inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
-        eq(tarefas.arquivada, false),
-        sql`${tarefas.concluidaEm} IS NULL`,
-        sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
-      ),
-    );
-  return { atrasadas: Number(r?.atrasadas ?? 0), hoje: Number(r?.hoje ?? 0), naSemana: Number(r?.naSemana ?? 0), semPrazo: Number(r?.semPrazo ?? 0) };
+  const partes = await porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select({
+        atrasadas: sql<number>`COALESCE(SUM(${tarefas.prazo} < ${hoje}), 0)`,
+        hoje: sql<number>`COALESCE(SUM(${tarefas.prazo} = ${hoje}), 0)`,
+        naSemana: sql<number>`COALESCE(SUM(${tarefas.prazo} >= ${hoje} AND ${tarefas.prazo} <= ${fimSemana}), 0)`,
+        semPrazo: sql<number>`COALESCE(SUM(${tarefas.prazo} IS NULL), 0)`,
+      })
+      .from(tarefas)
+      .where(and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), sql`${tarefas.concluidaEm} IS NULL`, listaAtiva)),
+  );
+  const soma = (k: "atrasadas" | "hoje" | "naSemana" | "semPrazo") => partes.reduce((n, r) => n + Number(r[k] ?? 0), 0);
+  return { atrasadas: soma("atrasadas"), hoje: soma("hoje"), naSemana: soma("naSemana"), semPrazo: soma("semPrazo") };
 }
 
 /** As etiquetas dos quadros dados (os filtros do calendário de todos os quadros). */
 export async function etiquetasDosQuadros(quadroIds: number[]): Promise<(EtiquetaTarefa & { quadroId: number })[]> {
-  if (!quadroIds.length) return [];
-  return getDb()
-    .select({ id: tarefaEtiquetas.id, nome: tarefaEtiquetas.nome, cor: tarefaEtiquetas.cor, quadroId: tarefaEtiquetas.quadroId })
-    .from(tarefaEtiquetas)
-    .where(inArray(tarefaEtiquetas.quadroId, quadroIds.slice(0, 90)))
-    .orderBy(asc(tarefaEtiquetas.quadroId), asc(tarefaEtiquetas.ordem));
+  return porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select({ id: tarefaEtiquetas.id, nome: tarefaEtiquetas.nome, cor: tarefaEtiquetas.cor, quadroId: tarefaEtiquetas.quadroId })
+      .from(tarefaEtiquetas)
+      .where(inArray(tarefaEtiquetas.quadroId, ids))
+      .orderBy(asc(tarefaEtiquetas.quadroId), asc(tarefaEtiquetas.ordem)),
+  );
 }
 
 const prioridadeValida = (p: string): Prioridade => ((PRIORIDADES as readonly string[]).includes(p) ? (p as Prioridade) : "media");
@@ -720,28 +733,13 @@ export async function contarEventos(tarefaId: number): Promise<number> {
 
 export async function criarEvento(tarefaId: number, d: DadosEvento, usuarioId: number): Promise<number> {
   const db = getDb();
-  const [e] = await db
-    .insert(tarefaEventos)
-    .values({ tarefaId, ...colunasEvento(d), criadoPor: usuarioId })
-    .returning({ id: tarefaEventos.id });
-  if (d.convidados.length) await db.insert(tarefaEventoConvidados).values(d.convidados.map((u) => ({ eventoId: e.id, usuarioId: u }))).onConflictDoNothing();
-  return e.id;
+  const r = await db.batch(comandosCriarEvento(db, tarefaId, d, usuarioId));
+  return (r.at(-1) as { id: number }[])[0].id;
 }
 
-/** Grava o evento e os CONVIDADOS num lote: os que saíram são tirados; os que ficam mantêm a resposta; os novos entram
- * "pendente". */
 export async function atualizarEvento(id: number, d: DadosEvento) {
   const db = getDb();
-  const cmds = [
-    db
-      .update(tarefaEventos)
-      .set({ ...colunasEvento(d), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
-      .where(eq(tarefaEventos.id, id)),
-    db
-      .delete(tarefaEventoConvidados)
-      .where(and(eq(tarefaEventoConvidados.eventoId, id), d.convidados.length ? notInArray(tarefaEventoConvidados.usuarioId, d.convidados) : undefined)),
-    ...(d.convidados.length ? [db.insert(tarefaEventoConvidados).values(d.convidados.map((u) => ({ eventoId: id, usuarioId: u }))).onConflictDoNothing()] : []),
-  ];
+  const cmds = comandosAtualizarEvento(db, id, d);
   await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
 }
 
@@ -764,15 +762,19 @@ export const LIMITE_TAREFAS_CALENDARIO = 3000;
 /** Os EVENTOS das tarefas (não arquivadas) dos quadros dados que CRUZAM `de`–`ate` (o de vários dias pela data final;
  * sem intervalo = todos) — o calendário. */
 export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: string): Promise<EventoTarefa[]> {
-  if (!quadroIds.length) return [];
-  const linhas = await getDb()
+  const linhas = await porLotesDeQuadros(quadroIds, (ids) => eventosDoLote(ids, de, ate));
+  return comConvidados(linhas.sort((a, b) => a.data.localeCompare(b.data)).slice(0, LIMITE_EVENTOS_CALENDARIO));
+}
+function eventosDoLote(ids: number[], de?: string, ate?: string) {
+  return getDb()
     .select(COLS_EVENTO)
     .from(tarefaEventos)
     .innerJoin(tarefas, eq(tarefas.id, tarefaEventos.tarefaId))
     .where(
       and(
-        inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
+        inArray(tarefas.quadroId, ids),
         eq(tarefas.arquivada, false),
+        listaAtiva,
         // A SÉRIE (repetição) entra se começou até o fim do intervalo e não terminou antes dele.
         de
           ? sql`(COALESCE(${tarefaEventos.dataFim}, ${tarefaEventos.data}) >= ${de} OR (${tarefaEventos.recorrencia} IS NOT NULL AND COALESCE(json_extract(${tarefaEventos.recorrencia}, '$.ate'), '9999-12-31') >= ${de}))`
@@ -782,26 +784,20 @@ export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: 
     )
     .orderBy(asc(tarefaEventos.data))
     .limit(LIMITE_EVENTOS_CALENDARIO);
-  return comConvidados(linhas);
 }
 
 /** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário
  * e o painel das tarefas SEM PRAZO (arrastar até um dia). */
 export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null }[]> {
-  if (!quadroIds.length) return [];
-  return getDb()
-    .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo, prazo: tarefas.prazo })
-    .from(tarefas)
-    .where(
-      and(
-        inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
-        eq(tarefas.arquivada, false),
-        sql`${tarefas.concluidaEm} IS NULL`,
-        sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
-      ),
-    )
-    .orderBy(asc(tarefas.quadroId), desc(tarefas.ticket))
-    .limit(LIMITE_TAREFAS_CALENDARIO);
+  const linhas = await porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo, prazo: tarefas.prazo })
+      .from(tarefas)
+      .where(and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), sql`${tarefas.concluidaEm} IS NULL`, listaAtiva))
+      .orderBy(asc(tarefas.quadroId), desc(tarefas.ticket))
+      .limit(LIMITE_TAREFAS_CALENDARIO),
+  );
+  return linhas.slice(0, LIMITE_TAREFAS_CALENDARIO);
 }
 
 export async function getItemChecklist(id: number) {
@@ -959,7 +955,14 @@ export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: 
     .from(tarefas)
     .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
     .innerJoin(tarefaListas, eq(tarefaListas.id, tarefas.listaId))
-    .where(and(eq(tarefas.vinculoTipo, tipo), eq(tarefas.vinculoId, id), grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined))
+    .where(
+      and(
+        eq(tarefas.vinculoTipo, tipo),
+        eq(tarefas.vinculoId, id),
+        eq(tarefaQuadros.arquivado, false),
+        grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+      ),
+    )
     .orderBy(tarefas.arquivada, desc(tarefas.id))
     .limit(200);
 }
@@ -1197,8 +1200,9 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
         origem: "recorrencia",
         resumo: `Tarefa ${rotuloTicket(nova.ticket)} "${t.titulo}" criada pela recorrência de ${rotuloTicket(t.ticket)} (prazo ${prazo})`,
       });
-    } catch {
-      // Outra requisição já gerou a próxima (a anterior é ÚNICA) — nada a fazer.
+    } catch (e) {
+      // Outra requisição já gerou a próxima (a anterior é ÚNICA) — nada a fazer. Qualquer outra falha fica registrada.
+      if (!/UNIQUE/i.test(String((e as Error)?.message ?? e))) console.error("recorrência: falha ao gerar a próxima de", id, e);
     }
   }
   return n;
@@ -1302,10 +1306,16 @@ export type ResultadoBuscaCalendario = { tipo: "evento" | "tarefa"; chave: strin
 export async function buscarNoCalendario(quadroIds: number[], termo: string, usuarioId: number, hoje: string): Promise<ResultadoBuscaCalendario[]> {
   const q = termo.trim().slice(0, 80);
   if (!quadroIds.length || q.length < 2) return [];
+  const partes = await porLotesDeQuadros(quadroIds, (ids) => buscarNoLote(ids, q, usuarioId, hoje));
+  // Os de hoje em diante primeiro (o mais próximo antes); depois os passados (o mais recente antes).
+  return partes
+    .sort((a, b) => ((a.data >= hoje) !== (b.data >= hoje) ? (a.data >= hoje ? -1 : 1) : a.data >= hoje ? a.data.localeCompare(b.data) : b.data.localeCompare(a.data)))
+    .slice(0, 50);
+}
+async function buscarNoLote(ids: number[], q: string, usuarioId: number, hoje: string): Promise<ResultadoBuscaCalendario[]> {
   const db = getDb();
   const padrao = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const likeEsc = (col: Parameters<typeof like>[0]) => sql`${col} LIKE ${padrao} ESCAPE '\\'`;
-  const ids = quadroIds.slice(0, 90);
   const ticket = /^#?\d{1,7}$/.test(q) ? Number(q.replace("#", "")) : null;
   const [evs, tfs] = await Promise.all([
     db
@@ -1316,11 +1326,15 @@ export async function buscarNoCalendario(quadroIds: number[], termo: string, usu
         and(
           inArray(tarefas.quadroId, ids),
           eq(tarefas.arquivada, false),
+          listaAtiva,
           or(likeEsc(tarefaEventos.titulo), likeEsc(tarefaEventos.local), likeEsc(tarefaEventos.descricao)),
+          // O privado só para quem PARTICIPA (a mesma régua de `participaDoEvento`): quem criou, os convidados e os
+          // responsáveis da tarefa.
           or(
             eq(tarefaEventos.privado, false),
             eq(tarefaEventos.criadoPor, usuarioId),
             sql`EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${usuarioId})`,
+            sql`EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${usuarioId} AND p.papel = 'responsavel')`,
           ),
         ),
       )
@@ -1329,7 +1343,7 @@ export async function buscarNoCalendario(quadroIds: number[], termo: string, usu
     db
       .select({ id: tarefas.id, titulo: tarefas.titulo, prazo: tarefas.prazo, quadroId: tarefas.quadroId, ticket: tarefas.ticket })
       .from(tarefas)
-      .where(and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), sql`${tarefas.prazo} IS NOT NULL`, or(likeEsc(tarefas.titulo), ticket != null ? eq(tarefas.ticket, ticket) : undefined)))
+      .where(and(inArray(tarefas.quadroId, ids), eq(tarefas.arquivada, false), listaAtiva, sql`${tarefas.prazo} IS NOT NULL`, or(likeEsc(tarefas.titulo), ticket != null ? eq(tarefas.ticket, ticket) : undefined)))
       .orderBy(desc(tarefas.prazo))
       .limit(40),
   ]);
@@ -1339,6 +1353,5 @@ export async function buscarNoCalendario(quadroIds: number[], termo: string, usu
     return { tipo: "evento", chave: d === e.data ? `e${e.id}` : `e${e.id}:${d}`, titulo: e.titulo, data: d, hora: e.horaInicio, local: e.local, quadroId: e.quadroId, ticket: e.ticket, repete: !!rec };
   });
   for (const t of tfs) if (t.prazo) out.push({ tipo: "tarefa", chave: `p${t.id}`, titulo: t.titulo, data: t.prazo, hora: null, local: null, quadroId: t.quadroId, ticket: t.ticket, repete: false });
-  // Os de hoje em diante primeiro (o mais próximo antes); depois os passados (o mais recente antes).
-  return out.sort((a, b) => (a.data >= hoje) !== (b.data >= hoje) ? (a.data >= hoje ? -1 : 1) : a.data >= hoje ? a.data.localeCompare(b.data) : b.data.localeCompare(a.data)).slice(0, 50);
+  return out;
 }

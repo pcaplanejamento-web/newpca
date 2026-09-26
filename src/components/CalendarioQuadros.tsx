@@ -109,14 +109,21 @@ function gravarPreferencia(chave: string, valor: unknown, sair = false) {
  * O CONTEXTO do quadro de uma tarefa (o banner da tarefa aberto no Calendário) — lido sob demanda, UMA vez por tarefa;
  * depois de salvar, `atualizarTarefa` relê SÓ o resumo da tarefa (`?contexto=tarefa` — listas/etiquetas/pessoas ficam).
  */
-function useContextoTarefa(tarefaId: number | null) {
+function useContextoTarefa(tarefaId: number | null, aoFalhar: () => void) {
   const [ctx, setCtx] = useState<ContextoTarefa | null>(null);
+  const falhou = useRef(aoFalhar);
+  falhou.current = aoFalhar;
   useEffect(() => {
     if (tarefaId == null) return setCtx(null);
     let vivo = true;
     chamar<{ contexto: ContextoTarefa }>(`/api/tarefas/${tarefaId}?contexto=1`)
       .then((j) => vivo && setCtx(j.contexto))
-      .catch((e) => vivo && toast.error((e as Error).message));
+      .catch((e) => {
+        if (!vivo) return;
+        toast.error((e as Error).message);
+        // Fecha a tarefa que não carregou: tocar de novo tenta outra vez (senão o mesmo id não pediria de novo).
+        falhou.current();
+      });
     return () => {
       vivo = false;
     };
@@ -171,18 +178,23 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   useEffect(() => setEventosDb(dados.eventos), [dados.eventos]);
   const [ocultos, setOcultos] = useState(dados.ocultos);
   const [opcoes, setOpcoes] = useState(dados.opcoes);
-  const [aberto, setAberto] = useState<EventoCalendario | null>(null);
+  const [abertoSel, setAberto] = useState<EventoCalendario | null>(null);
   const [verTarefa, setVerTarefa] = useState(false);
   /** Uma tarefa aberta SEM evento (o painel das sem prazo, a tarefa recém-criada por "Mais opções"). */
   const [tarefaSolta, setTarefaSolta] = useState<number | null>(null);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [criacao, setCriacao] = useState<Criacao | null>(null);
   const [salvando, setSalvando] = useState(false);
+  /** Trava de envio (dois toques rápidos em "Salvar" nunca criam duas vezes — o estado só muda no próximo render). */
+  const enviando = useRef(false);
   /** "PESQUISAR PESSOAS" (como no Google): só os eventos em que alguma delas está (responsável, convidada ou autora). */
   const [pessoasVer, setPessoasVer] = useState<number[]>([]);
   const { confirmar, confirmacao } = useConfirmacao();
-  const idTarefa = tarefaSolta ?? (aberto && verTarefa && !aberto.pca ? aberto.tarefaId : null);
-  const { ctx, atualizarTarefa } = useContextoTarefa(idTarefa);
+  const idTarefa = tarefaSolta ?? (abertoSel && verTarefa && !abertoSel.pca ? abertoSel.tarefaId : null);
+  const { ctx, atualizarTarefa } = useContextoTarefa(idTarefa, () => {
+    setTarefaSolta(null);
+    setVerTarefa(false);
+  });
 
   const porQuadro = useMemo(() => new Map(dados.quadros.map((q) => [q.id, q])), [dados.quadros]);
   const membros = useMemo(() => dados.pessoas.filter((p) => dados.membros.includes(p.id)), [dados.pessoas, dados.membros]);
@@ -226,6 +238,9 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     );
   }, [tarefas, eventosDb, filtro, filtrando, usuarioId, dados.hoje, dados.pca.dfds, de, ate, pessoasVer, responsaveis, externas.agendas]);
   const visiveis = useMemo(() => todos.filter((e) => eventoVisivel(e, ocultos)), [todos, ocultos]);
+  /** O evento ABERTO relido dos dados ATUAIS (a tarefa salva ao lado, a resposta ao convite, a recarga) — o banner nunca
+   * mostra uma cópia velha; se ele saiu da vista (filtro), fica a última cópia. */
+  const aberto = abertoSel && (todos.find((e) => e.chave === abertoSel.chave) ?? abertoSel);
   const grupos = useMemo<GrupoConjuntos[]>(() => {
     const m = new Map<number, Map<number, { id: number; ticket: number; titulo: string; eventos: number }>>();
     for (const e of todos) {
@@ -403,8 +418,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     const antes = eventosDb;
     const troca = (lista: typeof eventosDb) =>
       lista.map((x) => (x.id === e.eventoId ? { ...x, convidados: x.convidados.map((c) => (c.usuarioId === usuarioId ? { ...c, resposta } : c)) } : x));
+    // O banner relê o evento dos dados (`aberto`): a resposta aparece e, se falhar, volta junto.
     setEventosDb(troca);
-    setAberto((a) => (a && a.eventoId === e.eventoId ? { ...a, convidados: a.convidados?.map((c) => (c.usuarioId === usuarioId ? { ...c, resposta } : c)) } : a));
     try {
       await chamar(`/api/tarefas/eventos/${e.eventoId}/resposta`, "POST", { resposta });
       toast.success("Resposta enviada.");
@@ -490,7 +505,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   };
   /** Grava a criação rápida; `abrir` = "Mais opções" da TAREFA (cria e abre a tarefa ao lado). */
   const salvarCriacao = async (abrir = false) => {
-    if (!criacao || problemaCriacao(criacao)) return;
+    if (!criacao || problemaCriacao(criacao) || enviando.current) return;
+    enviando.current = true;
     setSalvando(true);
     try {
       if (criacao.tipo === "evento") {
@@ -507,6 +523,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
+      enviando.current = false;
       setSalvando(false);
     }
   };
@@ -519,7 +536,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   };
 
   const salvarEdicao = async () => {
-    if (!edicao || Object.keys(problemasEvento(edicao.r)).length || (!edicao.eventoId && !edicao.tarefaId)) return;
+    if (!edicao || Object.keys(problemasEvento(edicao.r)).length || (!edicao.eventoId && !edicao.tarefaId) || enviando.current) return;
+    enviando.current = true;
     setSalvando(true);
     try {
       const d = dadosDoEvento(edicao.r);
@@ -532,12 +550,21 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
+      enviando.current = false;
       setSalvando(false);
     }
   };
   const excluir = async (e: EventoCalendario) => {
     const ev = eventosDb.find((x) => x.id === e.eventoId);
-    if (!ev || !(await confirmar({ titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true }))) return;
+    if (
+      !ev ||
+      !(await confirmar(
+        ev.recorrencia
+          ? { titulo: `Excluir TODA a série "${e.titulo}"?`, texto: "O evento se repete — todas as ocorrências saem do calendário.", confirmar: "Excluir a série", perigo: true }
+          : { titulo: `Excluir o evento "${e.titulo}"?`, confirmar: "Excluir", perigo: true },
+      ))
+    )
+      return;
     try {
       await chamar(`/api/tarefas/eventos/${ev.id}`, "DELETE");
       setEventosDb((l) => l.filter((x) => x.id !== ev.id));

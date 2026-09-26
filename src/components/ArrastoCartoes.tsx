@@ -141,6 +141,8 @@ export function useArrastoCartoes({
     const fim = (ev: PointerEvent) => {
       if (ev.pointerId !== ponteiro) return;
       limpar();
+      // Só o clique LOGO depois do arrasto é ignorado — o próximo toque (num cartão sem alça, no celular) abre normalmente.
+      if (ativo) window.setTimeout(() => (arrastou.current = false), 0);
       if (!ativo || ev.type !== "pointerup" || destino.indice < 0) return setArrasto(null);
       const final = destino;
       const aplicar = () => {

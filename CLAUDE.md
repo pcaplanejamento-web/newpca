@@ -2069,6 +2069,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cortado.
   - **Fuso secundário** (`OpcoesCalendario.fusoSecundario`, lista `FUSOS_SECUNDARIOS`): a grade de horas ganha a 2ª régua
     (`diferencaFuso` via `Intl` — o horário de verão de fora entra; `horaNoFuso`, `rotuloGmt`); escolhido nas Configurações.
+- **Garantias da AUDITORIA (Calendário e Tarefas):**
+  - **Privacidade:** o histórico da tarefa nunca mostra o conteúdo de evento PRIVADO — `eventoParaAuditoria` (gravação) e
+    `historicoSemPrivados` (leitura, cobre as linhas antigas) em `tarefas-core`; o lembrete do privado só chega a quem
+    participa (o observador, não); `mascararPrivados` também zera `criadoPor`; a busca acha o privado para os responsáveis.
+  - **Agendas externas:** redirecionamento seguido À MÃO (`redirect:"manual"`, até 3 saltos, cada `Location` revalidado por
+    `urlAgendaValida`, que também tira o ponto final do host e recusa 198.18/15, 192.0.0/24, TEST-NETs); `lerProp` respeita
+    aspas; TZID conhecido pelo `Intl` → Brasília (desconhecido = como escrito); BYDAY anda com a troca de dia; regra mensal/
+    anual com BYDAY/BYMONTHDAY/BYSETPOS = uma ocorrência (nunca datas erradas).
+  - **D1:** convidados em INSERTs de ≤ 30 (`comandosConvidados`/`comandosCriarEvento`/`comandosAtualizarEvento` em
+    `tarefas-sql`, testados no driver real com 40 convidados); as consultas do calendário por LOTES de 80 quadros
+    (`porLotesDeQuadros`) — nada some além do 90º; `listaAtiva` (lista não arquivada) em eventos, busca e avisos; quadro
+    arquivado recusa criar tarefa/lista/etiqueta/automação (409 `MSG_QUADRO_ARQUIVADO`).
+  - **Cálculo:** `dataValida` recusa data inexistente; `saltar` leva a série para perto do intervalo (sem teto de passos);
+    a recorrente atrasada mostra ocorrências de hoje em diante; evento com hora em vários dias é aceito e o `.ics` sai com o
+    início e o fim reais; fim antes do início na grade = até 24:00; `eventoArrastado` (a ocorrência move a série pela
+    distância — módulo e aba do quadro); `indiceReal` (kanban filtrado: topo/fim reais, meio antes do visível de baixo).
+  - **Telas:** `Button loading` = desabilitado; travas de envio por ref; as bandeiras "foi arrasto/redimensionamento" duram
+    só o clique seguinte; o banner do evento é relido dos dados; `JanelaFlutuante` é `role="dialog"` (atalhos pausados) e se
+    reposiciona ao crescer; a folha "sem prazo" do celular não é lembrada. Testes em `tests/auditoria-calendario.test.ts`.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

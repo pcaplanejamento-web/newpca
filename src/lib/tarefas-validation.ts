@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
-import { FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { dataValida, FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -8,7 +8,7 @@ const cor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida.");
 const data = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
-  .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)), "Data inválida.");
+  .refine((d) => dataValida(d), "Data inválida.");
 const id = z.number().int().positive();
 const checklistTexto = z.string().trim().min(1, "Escreva o item.").max(300, "Item com até 300 caracteres.");
 const ids = (max: number) => z.array(id).max(max).transform((v) => [...new Set(v)]);
@@ -109,7 +109,11 @@ export const eventoSchema = z
   .refine((e) => !e.recorrencia?.ate || e.recorrencia.ate >= e.data, { message: "A repetição termina antes do evento.", path: ["recorrencia"] })
   .refine((e) => !e.dataFim || e.dataFim >= e.data, { message: "A data final tem de ser igual ou depois da data.", path: ["dataFim"] })
   .refine((e) => e.diaInteiro || e.horaInicio != null, { message: "Informe a hora de início (ou marque dia inteiro).", path: ["horaInicio"] })
-  .refine((e) => e.diaInteiro || !e.horaInicio || !e.horaFim || e.horaFim > e.horaInicio, { message: "O fim tem de ser depois do início.", path: ["horaFim"] })
+  // No MESMO dia o fim vem depois do início; em vários dias (data final depois da data) qualquer hora de fim vale.
+  .refine((e) => e.diaInteiro || !e.horaInicio || !e.horaFim || (e.dataFim != null && e.dataFim > e.data) || e.horaFim > e.horaInicio, {
+    message: "O fim tem de ser depois do início.",
+    path: ["horaFim"],
+  })
   .transform((e) => ({
     ...e,
     horaInicio: e.diaInteiro ? null : e.horaInicio,

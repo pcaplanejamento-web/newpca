@@ -36,7 +36,10 @@ export function BuscaCalendario({
   useEffect(() => {
     const termo = q.trim();
     if (termo.length < 2) {
+      // Invalida o pedido em curso: a resposta atrasada não traz os resultados de volta com o campo vazio.
+      pedido.current++;
       setRes(null);
+      setBuscando(false);
       return;
     }
     const n = ++pedido.current;

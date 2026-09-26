@@ -7,6 +7,8 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { coerceModeloQuadro } from "../src/lib/tarefas-core.ts";
 import {
+  comandosAtualizarEvento,
+  comandosCriarEvento,
   comandosCriarQuadroDoModelo,
   comandosCriarTarefa,
   comandosMassa,
@@ -134,5 +136,30 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     await orm.batch(comandosNotificacoes(orm, [{ usuarioId: 9502, tipo: "atrasada", titulo: "A", chave: "k" }, { usuarioId: 9501, tipo: "atrasada", titulo: "A", chave: "k" }]) as never);
     const n = (u: number) => (db.prepare("SELECT COUNT(*) AS n FROM notificacoes WHERE usuario_id = ?").get(u) as { n: number }).n;
     assert.deepEqual([n(9501), n(9502)], [21, 1]);
+  });
+  it("evento com 40 CONVIDADOS: INSERTs de até 30 (≤ 100 parâmetros), tudo num lote; editar mantém as respostas", async () => {
+    const ids = Array.from({ length: 40 }, (_, i) => 9600 + i);
+    db.exec(`INSERT INTO usuarios (id, nome, email, senha_hash) VALUES ${ids.map((u) => `(${u}, 'P${u}', 'p${u}@x', 'h')`).join(", ")}`);
+    const ev = { titulo: "Reunião", data: "2026-09-10", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, convidados: ids };
+    const cmds = comandosCriarEvento(orm, 1, ev, 9501);
+    for (const c of cmds) assert.ok(c.toSQL().params.length <= 100, `${c.toSQL().params.length} parâmetros`);
+    const r = await orm.batch(cmds);
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const n = () => (db.prepare("SELECT COUNT(*) AS n FROM tarefa_evento_convidados WHERE evento_id = ?").get(id) as { n: number }).n;
+    assert.equal(n(), 40);
+    db.exec(`UPDATE tarefa_evento_convidados SET resposta = 'sim' WHERE evento_id = ${id} AND usuario_id = 9600`);
+    const upd = comandosAtualizarEvento(orm, id, { ...ev, convidados: [...ids.slice(0, 35), 9501] });
+    for (const c of upd) assert.ok(c.toSQL().params.length <= 100);
+    await orm.batch(upd as never);
+    assert.equal(n(), 36);
+    assert.equal((db.prepare("SELECT resposta AS r FROM tarefa_evento_convidados WHERE evento_id = ? AND usuario_id = 9600").get(id) as { r: string }).r, "sim");
+  });
+
+  it("tarefa NOVA com evento e convidados: os convidados entram no mesmo lote", async () => {
+    const ev = { titulo: "Visita", data: "2026-09-11", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, convidados: [9502] };
+    const r = await orm.batch(comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Com evento", pessoas: [], etiquetas: [], eventos: [ev] }));
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const c = db.prepare("SELECT c.usuario_id AS u FROM tarefa_evento_convidados c JOIN tarefa_eventos e ON e.id = c.evento_id WHERE e.tarefa_id = ?").all(id) as { u: number }[];
+    assert.deepEqual(c.map((x) => x.u), [9502]);
   });
 });

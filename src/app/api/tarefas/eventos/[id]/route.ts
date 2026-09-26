@@ -3,7 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { dataBR } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarEvento, avisarConvite, excluirEvento, getEvento, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
-import { participaDoEvento, rotuloTicket } from "@/lib/tarefas-core";
+import { eventoParaAuditoria, participaDoEvento, rotuloTicket } from "@/lib/tarefas-core";
 import { eventoSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +31,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const atuais = x.evento.convidados.map((c) => c.usuarioId);
   if (!(await pessoasValidas(x.r.quadro.grupoId, p.data.convidados, atuais))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
   await atualizarEvento(x.evento.id, p.data);
+  // O PRIVADO (antes OU depois) não vai ao histórico com o conteúdo.
+  const privado = x.evento.privado || p.data.privado;
+  const antes = eventoParaAuditoria({ ...x.evento, privado });
+  const depois = eventoParaAuditoria({ ...p.data, privado });
   await registrarAuditoria({
     usuario: x.u,
     acao: "editar",
     entidade: "tarefa",
     entidadeId: x.r.tarefa.id,
-    resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: evento "${p.data.titulo}" alterado (${dataBR(p.data.data)}${p.data.horaInicio ? ` ${p.data.horaInicio}` : ""})`,
-    antes: x.evento,
-    depois: p.data,
+    resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: evento "${depois.titulo}" alterado (${dataBR(p.data.data)}${p.data.horaInicio ? ` ${p.data.horaInicio}` : ""})`,
+    antes: antes.dados,
+    depois: depois.dados,
   });
   await avisarConvite(
     x.u,
@@ -54,13 +58,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   const x = await eventoAcessivel(ctx);
   if ("resp" in x) return x.resp;
   await excluirEvento(x.evento.id);
+  const hist = eventoParaAuditoria(x.evento);
   await registrarAuditoria({
     usuario: x.u,
     acao: "editar",
     entidade: "tarefa",
     entidadeId: x.r.tarefa.id,
-    resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: evento "${x.evento.titulo}" excluído`,
-    antes: x.evento,
+    resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: evento "${hist.titulo}" excluído`,
+    antes: hist.dados,
   });
   return ok();
 }

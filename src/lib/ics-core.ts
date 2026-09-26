@@ -3,13 +3,16 @@
  * o transforma nos eventos do calendário, SOMENTE LEITURA. Tolerante: o que não entende é ignorado (nunca lança).
  *
  * - Linhas dobradas (espaço/tab no início) são desdobradas; texto com `\n`, `\,`, `\;` e `\\` volta ao normal.
- * - DTSTART/DTEND com `VALUE=DATE` = dia inteiro (o DTEND é EXCLUSIVO — o último dia é o anterior); com `Z` = UTC, levado
- *   a Brasília (UTC−3, sem horário de verão desde 2019); com TZID ou sem fuso = o horário como está escrito.
- * - RRULE: FREQ (DAILY/WEEKLY/MONTHLY/YEARLY), INTERVAL, UNTIL, COUNT e BYDAY (na semanal) — a MESMA expansão dos eventos
- *   do sistema (`ocorrenciasDoEvento`); EXDATE e as ocorrências alteradas (RECURRENCE-ID) saem da série.
+ * - DTSTART/DTEND com `VALUE=DATE` = dia inteiro (o DTEND é EXCLUSIVO — o último dia é o anterior); com `Z` (UTC) ou um
+ *   TZID que o `Intl` conhece, levado a Brasília (UTC−3, sem horário de verão desde 2019); sem fuso ou com fuso
+ *   desconhecido (nomes do Windows) = o horário como está escrito. Parâmetros entre aspas podem ter ":" e ";".
+ * - RRULE: FREQ (DAILY/WEEKLY/MONTHLY/YEARLY), INTERVAL, UNTIL, COUNT e BYDAY (na semanal; anda junto quando o fuso muda
+ *   o dia) — a MESMA expansão dos eventos do sistema (`ocorrenciasDoEvento`); regra que o sistema não reproduz ("2ª terça
+ *   do mês", BYMONTHDAY/BYSETPOS…) = o evento aparece uma vez. EXDATE e as ocorrências alteradas (RECURRENCE-ID) saem da
+ *   série.
  * - STATUS:CANCELLED some. Teto de `MAX_EVENTOS_ICS` eventos por agenda.
  */
-import { type EventoCalendario, ocorrenciasDoEvento, type RecorrenciaEvento, somarDias } from "./tarefas-core.ts";
+import { dataValida, diasEntre, type EventoCalendario, ocorrenciasDoEvento, type RecorrenciaEvento, somarDias } from "./tarefas-core.ts";
 
 export const MAX_EVENTOS_ICS = 3000;
 /** Tamanho máximo do arquivo baixado (bytes). */
@@ -38,35 +41,80 @@ export type AgendaExterna = { id: number; nome: string; cor: string | null; even
 const desescapar = (t: string) => t.replace(/\\([nN,;\\])/g, (_, c: string) => (c === "n" || c === "N" ? "\n" : c)).trim();
 
 type Prop = { nome: string; params: Record<string, string>; valor: string };
+/** "NOME;PARAM=valor;PARAM="valor com ; e :":VALOR" — os valores entre aspas podem ter ":" e ";" (o TZID do Outlook). */
 function lerProp(linha: string): Prop | null {
-  const m = /^([A-Za-z0-9-]+)((?:;[^:]*)?):(.*)$/.exec(linha);
+  const m = /^[A-Za-z0-9-]+/.exec(linha);
   if (!m) return null;
   const params: Record<string, string> = {};
-  for (const p of m[2].split(";").slice(1)) {
-    const i = p.indexOf("=");
-    if (i > 0) params[p.slice(0, i).toUpperCase()] = p.slice(i + 1).replace(/^"|"$/g, "");
+  let i = m[0].length;
+  while (linha[i] === ";") {
+    const igual = linha.indexOf("=", i + 1);
+    if (igual < 0) return null;
+    const nome = linha.slice(i + 1, igual).toUpperCase();
+    let valor = "";
+    i = igual + 1;
+    while (i < linha.length && linha[i] !== ";" && linha[i] !== ":") {
+      if (linha[i] === '"') {
+        const fecha = linha.indexOf('"', i + 1);
+        if (fecha < 0) return null;
+        valor += linha.slice(i + 1, fecha);
+        i = fecha + 1;
+      } else valor += linha[i++];
+    }
+    params[nome] = valor;
   }
-  return { nome: m[1].toUpperCase(), params, valor: m[3] };
+  if (linha[i] !== ":") return null;
+  return { nome: m[0].toUpperCase(), params, valor: linha.slice(i + 1) };
 }
 
-/** "20260925" / "20260925T130000[Z]" → data + hora de Brasília (`null` = dia inteiro). */
+/** Diferença (min) entre o relógio do fuso e o UTC no instante `t` — `null` = fuso que o `Intl` não conhece (ex.: os
+ * nomes do Windows), aí o horário vale como está escrito. Formatador em cache por fuso (milhares de eventos). */
+const formatadores = new Map<string, Intl.DateTimeFormat | null>();
+function deslocamentoMin(tz: string, t: number): number | null {
+  if (!formatadores.has(tz)) {
+    try {
+      formatadores.set(tz, new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }));
+    } catch {
+      formatadores.set(tz, null);
+    }
+  }
+  const f = formatadores.get(tz);
+  if (!f) return null;
+  const v: Record<string, number> = {};
+  for (const p of f.formatToParts(new Date(t))) if (p.type !== "literal") v[p.type] = Number(p.value);
+  return Math.round((Date.UTC(v.year, v.month - 1, v.day, v.hour % 24, v.minute) - Math.floor(t / 60_000) * 60_000) / 60_000);
+}
+
+/** O instante (ms UTC) do horário de parede `data hora` no fuso `tz` (`null` = fuso desconhecido). */
+function instanteNoFuso(data: string, hora: string, tz: string): number | null {
+  const parede = Date.parse(`${data}T${hora}:00Z`);
+  const d1 = deslocamentoMin(tz, parede);
+  if (d1 == null) return null;
+  const d2 = deslocamentoMin(tz, parede - d1 * 60_000) ?? d1;
+  return parede - d2 * 60_000;
+}
+
+/** "20260925" / "20260925T130000[Z]" → data + hora de Brasília (`null` = dia inteiro). UTC (`Z`) e TZID conhecido são
+ * convertidos para Brasília (UTC−3); sem fuso ou com um fuso desconhecido, o horário vale como está escrito. */
 export function dataHoraIcs(p: Pick<Prop, "params" | "valor">): { data: string; hora: string | null } | null {
   const v = p.valor.trim();
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(v);
   if (!m) return null;
   const data = `${m[1]}-${m[2]}-${m[3]}`;
-  if (Number.isNaN(Date.parse(`${data}T00:00:00Z`))) return null;
+  if (!dataValida(data)) return null;
   if (!m[4] || p.params.VALUE === "DATE") return { data, hora: null };
-  const utc = m[7] === "Z" || /^(utc|gmt|etc\/utc)$/i.test(p.params.TZID ?? "");
-  if (!utc) return { data, hora: `${m[4]}:${m[5]}` };
-  const t = new Date(Date.parse(`${data}T${m[4]}:${m[5]}:00Z`) - 3 * 3600_000).toISOString();
+  const hora = `${m[4]}:${m[5]}`;
+  const tz = (p.params.TZID ?? "").trim();
+  const instante = m[7] === "Z" || /^(utc|gmt|etc\/utc|z)$/i.test(tz) ? Date.parse(`${data}T${hora}:00Z`) : tz ? instanteNoFuso(data, hora, tz) : null;
+  if (instante == null) return { data, hora };
+  const t = new Date(instante - 3 * 3600_000).toISOString();
   return { data: t.slice(0, 10), hora: t.slice(11, 16) };
 }
 
 const DIAS_ICS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 const FREQ_ICS: Record<string, RecorrenciaEvento["freq"]> = { DAILY: "diaria", WEEKLY: "semanal", MONTHLY: "mensal", YEARLY: "anual" };
 
-/** A RRULE → a regra do sistema (+ COUNT); `null` = frequência que o sistema não repete (horária etc.). */
+/** A RRULE → a regra do sistema (+ COUNT); `null` = regra que o sistema não repete (horária, "2ª terça do mês" etc.). */
 export function regraIcs(valor: string): { recorrencia: RecorrenciaEvento; total: number | null } | null {
   const o: Record<string, string> = {};
   for (const par of valor.split(";")) {
@@ -75,6 +123,9 @@ export function regraIcs(valor: string): { recorrencia: RecorrenciaEvento; total
   }
   const freq = FREQ_ICS[(o.FREQ ?? "").toUpperCase()];
   if (!freq) return null;
+  // Regras que o sistema não repete com fidelidade ("2ª terça do mês", dia do mês/posição/semana do ano): o evento
+  // aparece UMA vez (a data de início) — nunca em datas erradas.
+  if (o.BYSETPOS || o.BYMONTHDAY || o.BYYEARDAY || o.BYWEEKNO || o.BYHOUR || o.BYMINUTE || (freq !== "semanal" && o.BYDAY)) return null;
   const intervalo = Math.min(365, Math.max(1, Number.parseInt(o.INTERVAL ?? "1", 10) || 1));
   const dias = freq === "semanal" && o.BYDAY ? [...new Set(o.BYDAY.split(",").map((d) => DIAS_ICS.indexOf(d.trim().slice(-2).toUpperCase())).filter((d) => d >= 0))].sort() : [];
   const ate = o.UNTIL ? (dataHoraIcs({ params: {}, valor: o.UNTIL })?.data ?? null) : null;
@@ -132,7 +183,12 @@ function eventoDe(props: Prop[], alteradas: Map<string, string[]>): EventoIcs | 
     if (ultimo > ini.data) dataFim = ultimo;
     if (!diaInteiro && fimP.hora && (fimP.data > ini.data || fimP.hora > (ini.hora ?? ""))) horaFim = fimP.hora;
   }
-  const regra = !rid && um("RRULE") ? regraIcs((um("RRULE") as Prop).valor) : null;
+  let regra = !rid && um("RRULE") ? regraIcs((um("RRULE") as Prop).valor) : null;
+  // A conversão de fuso pode MUDAR O DIA (terça 01:00 UTC = segunda 22:00 em Brasília): os dias da semana andam junto.
+  const escrito = /^(\d{4})(\d{2})(\d{2})/.exec((um("DTSTART") as Prop).valor.trim());
+  const desloc = escrito ? diasEntre(`${escrito[1]}-${escrito[2]}-${escrito[3]}`, ini.data) : 0;
+  if (regra && desloc && regra.recorrencia.dias.length)
+    regra = { ...regra, recorrencia: { ...regra.recorrencia, dias: [...new Set(regra.recorrencia.dias.map((d) => (((d + desloc) % 7) + 7) % 7))].sort() } };
   const excecoes = props
     .filter((p) => p.nome === "EXDATE")
     .flatMap((p) => p.valor.split(",").map((v) => dataHoraIcs({ params: p.params, valor: v })?.data))
@@ -211,14 +267,30 @@ export function urlAgendaValida(bruta: string): string | null {
     return null;
   }
   if (u.protocol !== "https:" || u.username || u.password) return null;
-  const h = u.hostname.toLowerCase();
+  // O ponto final ("localhost.", "x.internal.") é o MESMO nome — sai antes das checagens.
+  const h = u.hostname.toLowerCase().replace(/\.+$/, "");
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || !h.includes(".")) return null;
   // IP literal: recusa os privados/reservados (v4) e todo IPv6 literal.
   if (h.startsWith("[")) return null;
   const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
   if (ip) {
     const [a, b] = [Number(ip[1]), Number(ip[2])];
-    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return null;
+    const c = Number(ip[3]);
+    if (
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      (a === 198 && b === 51 && c === 100) ||
+      (a === 203 && b === 0 && c === 113) ||
+      a >= 224
+    )
+      return null;
   }
   return u.toString().slice(0, 1000);
 }

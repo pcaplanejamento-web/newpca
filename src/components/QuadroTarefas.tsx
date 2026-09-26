@@ -10,6 +10,7 @@ import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
 import {
   cartoesDaLista,
+  indiceReal,
   FILTRO_TAREFAS_PADRAO,
   type FiltroTarefas,
   filtrarTarefas,
@@ -32,7 +33,7 @@ import { Badge } from "./Badge";
 import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
 import { BarraSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
-import { CHAVE_OPCOES_CALENDARIO, eventoComFim, intervaloCalendario, eventoMovido, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
+import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalendario, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
@@ -167,7 +168,8 @@ export function QuadroTarefas({
     const t = antes.find((x) => x.id === id);
     if (!t) return;
     const lista = cartoesDaLista(antes, listaId).filter((x) => x.id !== id);
-    const pos = Math.max(0, Math.min(indice, lista.length));
+    // O quadro FILTRADO mostra só parte da lista: o índice solto é entre os visíveis.
+    const pos = Math.max(0, Math.min(indiceReal(antes, noQuadro, id, listaId, indice), lista.length));
     if (listaId === t.listaId && pos === cartoesDaLista(antes, listaId).findIndex((x) => x.id === id)) return; // mesmo lugar
     const viz = vizinhos(antes, id, listaId, pos);
     setTarefas(moverCartao(antes, listas, id, listaId, pos, new Date().toISOString()));
@@ -183,6 +185,8 @@ export function QuadroTarefas({
 
   /** O mês à vista na aba Calendário e os EVENTOS dele (período, recorrência e os cadastrados deste quadro). */
   const [mesCal, setMesCal] = useState(() => ({ ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) }));
+  /** A vista ANO pede o ano inteiro (os pontos de todos os meses). */
+  const [anualCal, setAnualCal] = useState(false);
   const [opcoesCal, setOpcoesCal] = useState(calendario?.opcoes ?? OPCOES_CALENDARIO_PADRAO);
   useEffect(() => {
     if (calendario) setOpcoesCal(calendario.opcoes);
@@ -219,7 +223,7 @@ export function QuadroTarefas({
   );
   const { eventosCal, feriadosCal } = useMemo(() => {
     if (aba !== "calendario") return { eventosCal: [], feriadosCal: undefined };
-    const { de, ate } = intervaloCalendario(mesCal, opcoesCal.inicioSegunda ? 1 : 0);
+    const { de, ate } = intervaloCalendario(mesCal, opcoesCal.inicioSegunda ? 1 : 0, anualCal);
     return {
       eventosCal: eventosDoCalendario(
         noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
@@ -230,7 +234,7 @@ export function QuadroTarefas({
       ),
       feriadosCal: feriadosNoIntervalo(calendario?.feriados ?? [], de, ate),
     };
-  }, [aba, mesCal, noQuadro, eventos, quadro.id, hoje, opcoesCal.inicioSegunda, calendario?.feriados]);
+  }, [aba, mesCal, anualCal, noQuadro, eventos, quadro.id, hoje, opcoesCal.inicioSegunda, calendario?.feriados]);
   /** ARRASTAR no calendário: o período reagenda a tarefa; o evento cadastrado muda de dia (e de hora, na grade). */
   const moverNoCalendario = async (e: EventoCalendario, dia: string, hora: string | null) => {
     if (e.tipo === "periodo") {
@@ -241,7 +245,8 @@ export function QuadroTarefas({
     const ev = eventos.find((x) => x.id === e.eventoId);
     if (!ev) return;
     try {
-      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoMovido(ev, dia, hora));
+      // Uma OCORRÊNCIA da série move a série inteira pela mesma distância (não salta para o dia solto).
+      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoArrastado(ev, e.inicio, dia, hora));
       toast.success(`"${ev.titulo}" movido para ${dataBR(dia)}.`);
       router.refresh();
     } catch (err) {
@@ -438,6 +443,7 @@ export function QuadroTarefas({
             hoje={hoje}
             mes={mesCal}
             onMes={setMesCal}
+            onAno={setAnualCal}
             contadores={contadoresCalendario(noQuadro, hoje, opcoesCal.inicioSegunda ? 1 : 0)}
             onAbrir={(e) => setAberto({ tipo: "editar", id: e.tarefaId })}
             onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}

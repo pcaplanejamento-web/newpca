@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import {
@@ -6,6 +6,7 @@ import {
   tarefaChecklist,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
+  tarefaEventoConvidados,
   tarefaEventos,
   tarefaListas,
   tarefaPessoas,
@@ -34,6 +35,48 @@ export const colunasEvento = (e: DadosEvento) => ({
   ocupado: e.ocupado,
   privado: e.privado,
 });
+
+/** Convidados por INSERT: cada linha liga 3 parâmetros (evento, pessoa, resposta padrão) — 30 × 3 = 90 < 100 do D1. */
+export const LOTE_CONVIDADOS = 30;
+/** O evento recém-inserido NO MESMO lote (o `db.batch` do D1 é uma transação sequencial). */
+const ultimoEvento = sql`(SELECT MAX(id) FROM tarefa_eventos)`;
+
+/** Liga os CONVIDADOS ao evento em INSERTs de até `LOTE_CONVIDADOS` (quem já está mantém a resposta). */
+export function comandosConvidados(db: Db, eventoId: number | SQL, ids: number[]) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += LOTE_CONVIDADOS)
+    out.push(
+      db
+        .insert(tarefaEventoConvidados)
+        .values(ids.slice(i, i + LOTE_CONVIDADOS).map((usuarioId) => ({ eventoId, usuarioId })))
+        .onConflictDoNothing(),
+    );
+  return out;
+}
+
+/** CRIA o evento e os convidados num lote ATÔMICO (nada fica pela metade); o último comando devolve `{ id }`. */
+export function comandosCriarEvento(db: Db, tarefaId: number, d: DadosEvento, criadoPor: number) {
+  return [
+    db.insert(tarefaEventos).values({ tarefaId, ...colunasEvento(d), criadoPor }),
+    ...comandosConvidados(db, ultimoEvento, d.convidados),
+    db.select({ id: tarefaEventos.id }).from(tarefaEventos).where(eq(tarefaEventos.id, ultimoEvento)),
+  ] as const;
+}
+
+/** GRAVA o evento e os convidados num lote: os que saíram são tirados; os que ficam mantêm a resposta; os novos entram
+ * "pendente". */
+export function comandosAtualizarEvento(db: Db, id: number, d: DadosEvento) {
+  return [
+    db
+      .update(tarefaEventos)
+      .set({ ...colunasEvento(d), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(tarefaEventos.id, id)),
+    db
+      .delete(tarefaEventoConvidados)
+      .where(and(eq(tarefaEventoConvidados.eventoId, id), d.convidados.length ? notInArray(tarefaEventoConvidados.usuarioId, d.convidados) : undefined)),
+    ...comandosConvidados(db, id, d.convidados),
+  ];
+}
 
 /**
  * TAREFAS — os comandos de ESCRITA em lote como BUILDERS do Drizzle (sem getDb: testados pelo driver D1 REAL dentro de
@@ -107,7 +150,10 @@ export function comandosCriarTarefa(
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
     ...(d.checklist ?? []).map((texto, i) => db.insert(tarefaChecklist).values({ tarefaId: idDaNova(d.quadroId), texto, ordem: i + 1 })),
-    ...(d.eventos ?? []).map((e) => db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor })),
+    ...(d.eventos ?? []).flatMap((e) => [
+      db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
+      ...comandosConvidados(db, ultimoEvento, e.convidados ?? []),
+    ]),
     db
       .select({ id: tarefas.id, ticket: tarefas.ticket })
       .from(tarefas)

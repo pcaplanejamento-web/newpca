@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { OPCOES_LEMBRETE, rotuloLembrete } from "@/lib/calendario-core";
 import { dataBR } from "@/lib/format";
 import type { Pessoa } from "@/lib/pessoa";
@@ -289,9 +289,16 @@ export function EventosTarefa({
 }) {
   const [editando, setEditando] = useState<{ id: number | null; r: RascunhoEvento } | null>(null);
   const ordenados = [...eventos].sort((a, b) => a.data.localeCompare(b.data) || (a.horaInicio ?? "").localeCompare(b.horaInicio ?? ""));
+  // Trava de envio: dois toques rápidos em "Adicionar" gravam UMA vez.
+  const enviando = useRef(false);
   const salvar = async () => {
-    if (!editando || Object.keys(problemasEvento(editando.r)).length) return;
-    if (await onSalvar(editando.id, dadosDoEvento(editando.r))) setEditando(null);
+    if (!editando || Object.keys(problemasEvento(editando.r)).length || enviando.current) return;
+    enviando.current = true;
+    try {
+      if (await onSalvar(editando.id, dadosDoEvento(editando.r))) setEditando(null);
+    } finally {
+      enviando.current = false;
+    }
   };
   const form = editando && (
     <div className="space-y-3 rounded-card border border-accent/40 bg-surface p-3">

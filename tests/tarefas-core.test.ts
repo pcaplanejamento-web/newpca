@@ -160,7 +160,7 @@ describe("tarefas-core", () => {
   it("validação: título, datas (início ≤ prazo), mover e ordem sem repetição", () => {
     assert.equal(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: " " }).success, false);
     assert.equal(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "X", inicio: "2026-10-02", prazo: "2026-10-01" }).success, false);
-    assert.equal(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "X", prazo: "2026-02-30" }).success, true); // Date.parse aceita; a data vira "sem" se inválida
+    assert.equal(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "X", prazo: "2026-02-30" }).success, false); // data que não existe é recusada (o Date "rolaria" para março)
     assert.equal(editarTarefaSchema.safeParse({ prioridade: "critica" }).success, false);
     assert.deepEqual(criarTarefaSchema.parse({ quadroId: 1, listaId: 1, titulo: "X", pessoas: [2, 2, 3] }).pessoas, [2, 3]);
     assert.equal(moverTarefaSchema.safeParse({ listaId: 1, anteriorId: null, proximoId: 4 }).success, true);
