@@ -2058,6 +2058,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     título/#ticket das tarefas com prazo, nos quadros do calendário — `quadrosDoCalendario`; o PRIVADO de quem não participa
     NÃO entra; a série aparece na próxima ocorrência; de hoje em diante primeiro). No período à vista abre na hora; fora dele
     vai ao mês (`linkEvento`) e abre lá (o `?evento=` vale a cada navegação).
+  - **Sem redundâncias (revisão):** a lateral tem UM bloco "busca + filtros + chips" (`FiltrosTarefas semBusca
+    semResponsavel` — as pessoas se filtram pelo "Pesquisar pessoas", mais amplo; `ChipsFiltrosTarefas semBusca` — sem o
+    chip da busca e o "Limpar filtros" mantém o texto); a busca dos conjuntos e a do painel sem prazo saíram (os conjuntos
+    saem dos eventos já filtrados; a lista sem prazo é filtrada pelo host); as opções de exibição (fins de semana,
+    concluídas, recusados, nº da semana) ficam SÓ no menu de vistas e as Configurações ficam com as preferências (segunda,
+    lembrete, fuso, expediente, exportar); a seção Tipos tem só Período · Recorrência · Eventos · Feriados
+    (`TIPOS_COM_CONTROLE`; `lerOcultos` descarta `pca`/`externo`) — o PCA (caixa "todos" no título) e as agendas externas
+    se controlam nas seções deles. O `aside` da lateral tem respiro (`-mx-1 px-1`, largura 16,5rem) — o anel de foco não é
+    cortado.
   - **Fuso secundário** (`OpcoesCalendario.fusoSecundario`, lista `FUSOS_SECUNDARIOS`): a grade de horas ganha a 2ª régua
     (`diferencaFuso` via `Intl` — o horário de verão de fora entra; `horaNoFuso`, `rotuloGmt`); escolhido nas Configurações.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.

@@ -39,6 +39,7 @@ export function FiltrosTarefas({
   etiquetas,
   usuarioId,
   semBusca = false,
+  semResponsavel = false,
 }: {
   filtro: FiltroTarefas;
   onChange: (f: FiltroTarefas) => void;
@@ -47,6 +48,8 @@ export function FiltrosTarefas({
   usuarioId: number;
   /** Sem o campo de busca (quem usa já tem a sua — o Calendário). */
   semBusca?: boolean;
+  /** Sem o filtro de Responsável (o Calendário filtra pessoas pelo "Pesquisar pessoas", mais amplo). */
+  semResponsavel?: boolean;
 }) {
   const pessoa = typeof filtro.responsavel === "number" ? pessoas.find((p) => p.id === filtro.responsavel) : undefined;
   const eu = pessoas.find((p) => p.id === usuarioId);
@@ -66,6 +69,7 @@ export function FiltrosTarefas({
         />
       </div>
       )}
+      {!semResponsavel && (
       <SeletorFiltro
         icone={
           pessoa || (filtro.responsavel === "eu" && eu) ? (
@@ -87,6 +91,7 @@ export function FiltrosTarefas({
           ...pessoas.filter((p) => p.id !== usuarioId).map((p) => ({ valor: String(p.id), rotulo: rotuloOpcaoPessoa(p, usuarioId) })),
         ]}
       />
+      )}
       <SeletorFiltro
         icone={<IconClock className="h-4 w-4" />}
         rotulo="Prazo"
@@ -127,20 +132,23 @@ export function ChipsFiltrosTarefas({
   pessoas,
   etiquetas,
   usuarioId,
+  semBusca = false,
 }: {
   filtro: FiltroTarefas;
   onChange: (f: FiltroTarefas) => void;
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
   usuarioId: number;
+  /** Sem o chip da busca (a busca do host já mostra o texto) — "Limpar filtros" mantém a busca. */
+  semBusca?: boolean;
 }) {
-  if (!filtroTarefasAtivo(filtro)) return null;
+  if (!filtroTarefasAtivo(semBusca ? { ...filtro, busca: "" } : filtro)) return null;
   const nome = (id: number) => {
     const p = pessoas.find((x) => x.id === id);
     return p ? nomeExibicao(p) : `Pessoa #${id}`;
   };
   const chips: { chave: string; rotulo: string; limpar: Partial<FiltroTarefas> }[] = [];
-  if (filtro.busca.trim()) chips.push({ chave: "busca", rotulo: `Busca: ${filtro.busca.trim()}`, limpar: { busca: "" } });
+  if (!semBusca && filtro.busca.trim()) chips.push({ chave: "busca", rotulo: `Busca: ${filtro.busca.trim()}`, limpar: { busca: "" } });
   if (filtro.responsavel !== "todos")
     chips.push({
       chave: "resp",
@@ -170,7 +178,7 @@ export function ChipsFiltrosTarefas({
           <IconClose className="h-3.5 w-3.5 shrink-0" />
         </button>
       ))}
-      <Button variant="ghost" size="sm" onClick={() => onChange(FILTRO_TAREFAS_PADRAO)}>
+      <Button variant="ghost" size="sm" onClick={() => onChange(semBusca ? { ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca } : FILTRO_TAREFAS_PADRAO)}>
         Limpar filtros
       </Button>
     </section>

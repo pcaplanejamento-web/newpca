@@ -101,7 +101,7 @@ describe("agendas externas (.ics)", () => {
     const [e] = eventosExternos([{ id: 3, nome: "A", cor: null, eventos: evs.slice(0, 1) }], "2026-09-01", "2026-09-30");
     assert.equal(eventoVisivel(e, OCULTOS_VAZIO), true);
     assert.equal(eventoVisivel(e, lerOcultos({ externos: [3] })), false);
-    assert.equal(eventoVisivel(e, lerOcultos({ tipos: ["externo"] })), false);
+    assert.equal(eventoVisivel(e, lerOcultos({ tipos: ["externo"] })), true); // o tipo "externo" não se oculta em Tipos — cada agenda tem a sua caixa
     assert.deepEqual(lerOcultos({ externos: ["x", 2, 2] }).externos, [2]);
   });
 });

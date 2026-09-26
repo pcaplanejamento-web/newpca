@@ -13,7 +13,6 @@ import {
 } from "react";
 import { diasExibidos, diferencaFuso, type FeriadoDia, FUSOS_SECUNDARIOS, horaNoFuso, N_DIAS, OPCOES_CALENDARIO_PADRAO, OPCOES_LEMBRETE, type OpcoesCalendario, rotuloGmt, semanaIso, type VistaCalendario } from "@/lib/calendario-core";
 import { dataBR, num } from "@/lib/format";
-import { predicadoBusca } from "@/lib/tabela-filtros";
 import {
   COR_ESTADO_PRAZO,
   DURACAO_PADRAO_MIN,
@@ -40,7 +39,7 @@ import { ChipPreso } from "./BlocosTarefa";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { ehDesktop } from "./espacamento";
-import { SearchField, SelectField, TextField } from "./Field";
+import { SelectField, TextField } from "./Field";
 import {
   IconCalendar,
   IconCheck,
@@ -659,7 +658,6 @@ export function CalendarioTarefas({
   const [ajuda, setAjuda] = useState(false);
   const [irData, setIrData] = useState<string | null>(null);
   const [painel, setPainel] = useState(false);
-  const [buscaSemPrazo, setBuscaSemPrazo] = useState("");
   const inicioSemana = opcoes.inicioSegunda ? 1 : 0;
   const grade = useMemo(() => gradeMes(mes.ano, mes.mes, inicioSemana), [mes.ano, mes.mes, inicioSemana]);
   const semana = useMemo(() => semanaDe(foco, inicioSemana), [foco, inicioSemana]);
@@ -1419,8 +1417,7 @@ export function CalendarioTarefas({
     </div>
   );
 
-  const casaSemPrazo = predicadoBusca(buscaSemPrazo);
-  const listaSemPrazo = (semPrazo ?? []).filter((t) => !casaSemPrazo || casaSemPrazo([t.titulo, rotuloTicket(t.ticket), nomeQuadro?.(t.quadroId) ?? ""]));
+  const listaSemPrazo = semPrazo ?? [];
   const pseudo = (t: TarefaSemPrazo): EventoCalendario => ({
     chave: `s${t.id}`,
     tipo: "periodo",
@@ -1452,7 +1449,6 @@ export function CalendarioTarefas({
           Tarefas sem prazo <span className="font-normal tabular-nums text-muted">({num(semPrazo?.length ?? 0)})</span>
         </p>
         <p className="text-[11.5px] text-muted">Arraste até um dia para definir o prazo.</p>
-        {(semPrazo?.length ?? 0) > 6 && <SearchField compacto value={buscaSemPrazo} onChange={(e) => setBuscaSemPrazo(e.target.value)} placeholder="Buscar" aria-label="Buscar tarefa sem prazo" />}
       </div>
       <ul className="relative min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
         {listaSemPrazo.map((t) => (
@@ -1481,7 +1477,7 @@ export function CalendarioTarefas({
             )}
           </li>
         ))}
-        {!listaSemPrazo.length && <li className="px-1 py-6 text-center text-[12.5px] text-muted">{semPrazo?.length ? "Nada encontrado." : "Todas as tarefas abertas têm prazo."}</li>}
+        {!listaSemPrazo.length && <li className="px-1 py-6 text-center text-[12.5px] text-muted">Nenhuma tarefa sem prazo.</li>}
       </ul>
     </div>
   );
@@ -1491,7 +1487,7 @@ export function CalendarioTarefas({
       {barra}
       <div className="flex min-h-0 flex-1 gap-[var(--gap-block)]">
         {lateral && (
-          <aside className="relative hidden w-[16rem] shrink-0 overflow-y-auto overscroll-contain lg:block print:hidden" aria-label={rotuloLateral}>
+          <aside className="relative -mx-1 hidden w-[16.5rem] shrink-0 overflow-y-auto overscroll-contain px-1 pb-1 lg:block print:hidden" aria-label={rotuloLateral}>
             {comNumeros(lateral(nav))}
           </aside>
         )}
@@ -1533,16 +1529,7 @@ export function CalendarioTarefas({
       )}
       <Modal open={config} onClose={() => setConfig(false)} titulo="Configurações do calendário" size="md">
         <div className="space-y-5">
-          {onOpcoes && (
-            <section className="space-y-1" aria-label="Exibição">
-              <p className="pb-1 text-[12.5px] font-semibold text-text-2">Exibição</p>
-              <Switch checked={opcoes.inicioSegunda} onChange={(v) => opcao("inicioSegunda", v)} label="Semana começa na segunda" />
-              <Switch checked={!opcoes.ocultarFimDeSemana} onChange={(v) => opcao("ocultarFimDeSemana", !v)} label="Mostrar fins de semana" />
-              <Switch checked={!opcoes.ocultarConcluidas} onChange={(v) => opcao("ocultarConcluidas", !v)} label="Mostrar tarefas concluídas" />
-              {usuarioId != null && <Switch checked={!opcoes.ocultarRecusados} onChange={(v) => opcao("ocultarRecusados", !v)} label="Mostrar eventos recusados" />}
-              <Switch checked={opcoes.numeroSemana} onChange={(v) => opcao("numeroSemana", v)} label="Mostrar número da semana" />
-            </section>
-          )}
+          {onOpcoes && <Switch checked={opcoes.inicioSegunda} onChange={(v) => opcao("inicioSegunda", v)} label="Semana começa na segunda" />}
           {onOpcoes && (
             <SelectField
               label="Lembrete padrão dos eventos novos"

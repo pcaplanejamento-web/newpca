@@ -1046,6 +1046,8 @@ export function mascararPrivados(eventos: EventoTarefa[], usuarioId: number, res
  * EVENTO cadastrado ou a PREVISÃO DE ENTREGA de um DFD do PCA (o cronograma de contratações). */
 export const TIPOS_EVENTO = ["periodo", "recorrencia", "evento", "pca", "externo"] as const;
 export type TipoEvento = (typeof TIPOS_EVENTO)[number];
+/** Os tipos que se ocultam na seção "Tipos" (o PCA e as agendas externas têm a própria seção). */
+export const TIPOS_COM_CONTROLE = ["periodo", "recorrencia", "evento"] as const satisfies readonly TipoEvento[];
 export const ROTULO_TIPO_EVENTO: Record<TipoEvento, string> = { periodo: "Período da tarefa", recorrencia: "Recorrência", evento: "Eventos", pca: "Previsão do PCA", externo: "Agendas externas" };
 
 /** O DFD de um evento de PREVISÃO do PCA (o banner mostra; `anual` = previsão ANUAL, repetida em todo mês). */
@@ -1287,7 +1289,8 @@ export function lerOcultos(v: unknown): OcultosCalendario {
     quadros: ids(o.quadros),
     pcas: ids(o.pcas),
     externos: ids(o.externos),
-    tipos: Array.isArray(o.tipos) ? TIPOS_EVENTO.filter((t) => (o.tipos as unknown[]).includes(t)) : [],
+    // Só os tipos com controle na tela (um "pca"/"externo" antigo não fica oculto sem como reexibir).
+    tipos: Array.isArray(o.tipos) ? TIPOS_COM_CONTROLE.filter((t) => (o.tipos as unknown[]).includes(t)) : [],
     feriados: o.feriados === true,
   };
 }

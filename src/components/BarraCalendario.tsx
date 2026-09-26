@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { dataBR, num } from "@/lib/format";
-import { diasSemanaCurtos, gradeMes, NOMES_MES, type OcultosCalendario, OCULTOS_VAZIO, ROTULO_TIPO_EVENTO, rotuloTicket, somarMes, TIPOS_EVENTO, type TipoEvento, temOculto } from "@/lib/tarefas-core";
-import { predicadoBusca } from "@/lib/tabela-filtros";
+import { diasSemanaCurtos, gradeMes, NOMES_MES, type OcultosCalendario, OCULTOS_VAZIO, ROTULO_TIPO_EVENTO, rotuloTicket, somarMes, TIPOS_COM_CONTROLE, type TipoEvento, temOculto } from "@/lib/tarefas-core";
 import type { MesCalendario, NavCalendario } from "./CalendarioTarefas";
-import { Checkbox, SearchField } from "./Field";
+import { Checkbox } from "./Field";
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
 /** Um CONJUNTO de eventos = uma tarefa (com quantos eventos ela tem no período). */
@@ -103,23 +102,21 @@ export function BarraCalendario({
   onOcultos: (o: OcultosCalendario) => void;
   inicioSemana?: 0 | 1;
 }) {
-  const [busca, setBusca] = useState("");
-  const casa = predicadoBusca(busca);
-  const visiveis = grupos
-    .map((g) => ({ ...g, tarefas: casa ? g.tarefas.filter((t) => casa([t.titulo, rotuloTicket(t.ticket), g.quadro.nome])) : g.tarefas }))
-    .filter((g) => g.tarefas.length > 0);
+  // Os conjuntos já vêm filtrados pela busca ÚNICA do host (saem dos eventos à vista).
+  const visiveis = grupos.filter((g) => g.tarefas.length > 0);
   const alternar = <K extends "tarefas" | "quadros" | "pcas" | "externos">(k: K, id: number) =>
     onOcultos({ ...ocultos, [k]: ocultos[k].includes(id) ? ocultos[k].filter((x) => x !== id) : [...ocultos[k], id] });
   const todasIds = grupos.flatMap((g) => g.tarefas.map((t) => t.id));
   const algumOculto = temOculto(ocultos);
-  const pcasVisiveis = casa ? pcas.filter((p) => casa([p.nome])) : pcas;
+  const pcasVisiveis = pcas;
+  const pcasOcultos = pcas.length > 0 && pcas.every((p) => ocultos.pcas.includes(p.id));
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComEvento} inicioSemana={inicioSemana} />
       <section className="rounded-card border border-border bg-surface p-2" aria-label="Tipos de evento">
         <p className="px-1 pb-1 text-[12px] font-semibold text-text-2">Tipos</p>
-        {TIPOS_EVENTO.filter((t) => (t !== "pca" || pcas.length > 0) && (t !== "externo" || externos.length > 0)).map((t) => (
+        {TIPOS_COM_CONTROLE.map((t) => (
           <div key={t} className="flex min-h-11 items-center justify-between gap-2 px-1 lg:min-h-8">
             <Checkbox
               checked={!ocultos.tipos.includes(t)}
@@ -145,11 +142,6 @@ export function BarraCalendario({
             {algumOculto ? "Mostrar todos" : "Ocultar todos"}
           </button>
         </div>
-        {grupos.length > 6 || grupos.reduce((s, g) => s + g.tarefas.length, 0) + pcas.length > 8 ? (
-          <div className="px-1 pb-1">
-            <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar tarefa" aria-label="Buscar tarefa nos conjuntos" />
-          </div>
-        ) : null}
         {visiveis.length === 0 && pcasVisiveis.length === 0 && (
           <p className="px-1 py-3 text-[12px] text-muted">{grupos.length || pcas.length ? "Nada encontrado." : "Nenhum evento no período."}</p>
         )}
@@ -188,11 +180,17 @@ export function BarraCalendario({
           })}
           {pcasVisiveis.length > 0 && (
             <div>
-              <p className="flex min-h-11 items-center gap-1.5 px-1 text-[12.5px] font-semibold text-text lg:min-h-8">
+              <div className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
+                <Checkbox
+                  checked={!pcasOcultos}
+                  onChange={() => onOcultos({ ...ocultos, pcas: pcasOcultos ? [] : pcas.map((p) => p.id) })}
+                  label=""
+                  aria-label="Mostrar o cronograma do PCA"
+                />
                 <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[var(--info)]" />
-                Cronograma do PCA
-              </p>
-              <ul className="ml-4 border-l border-border pl-1.5">
+                <span className="text-[12.5px] font-semibold text-text">Cronograma do PCA</span>
+              </div>
+              <ul className={`ml-4 border-l border-border pl-1.5 ${pcasOcultos ? "opacity-50" : ""}`}>
                 {pcasVisiveis.map((p) => (
                   <li key={p.id} className="flex min-h-11 items-center gap-1.5 lg:min-h-8">
                     <Checkbox checked={!ocultos.pcas.includes(p.id)} onChange={() => alternar("pcas", p.id)} label="" aria-label={`Mostrar a previsão do ${p.nome}`} />

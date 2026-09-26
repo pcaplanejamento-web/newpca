@@ -258,7 +258,11 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     return s;
   }, [visiveis]);
   const nOcultos = ocultos.tarefas.length + ocultos.quadros.length + ocultos.pcas.length + ocultos.externos.length + ocultos.tipos.length + Number(ocultos.feriados);
-  const semPrazo = useMemo(() => dados.abertas.filter((t) => !t.prazo), [dados.abertas]);
+  // A lista "sem prazo" obedece à busca ÚNICA da lateral.
+  const semPrazo = useMemo(() => {
+    const casa = predicadoBusca(filtro.busca);
+    return dados.abertas.filter((t) => !t.prazo && (!casa || casa([t.titulo, rotuloTicket(t.ticket), `${t.ticket}`, porQuadro.get(t.quadroId)?.nome ?? ""])));
+  }, [dados.abertas, filtro.busca, porQuadro]);
 
   // O que fica OCULTO é a preferência da pessoa (gravada ~0,6 s depois da última mudança — marcar vários não vira vários
   // PUT). Fechar/sair da página com uma gravação pendente GRAVA na hora (`keepalive`) — nada se perde.
@@ -626,11 +630,14 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
         rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
           <div className="space-y-[var(--gap-block)]">
-            <BuscaCalendario valor={filtro.busca} onChange={(busca) => setFiltro({ ...filtro, busca })} hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca />
+            {/* Busca ÚNICA + filtros das tarefas + os ativos em chips — um bloco só. */}
+            <div className="space-y-2">
+              <BuscaCalendario valor={filtro.busca} onChange={(busca) => setFiltro({ ...filtro, busca })} hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca semResponsavel />
+              </div>
+              <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca />
             </div>
-            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
             {membros.length > 1 && (
               <details className="rounded-card border border-border bg-surface p-2" open={pessoasVer.length > 0}>
                 <summary className="flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-[12px] font-semibold text-text-2 lg:min-h-8">

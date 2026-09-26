@@ -1041,6 +1041,8 @@ lembrete padrão.
 ✅ **Fase 9 — Pacote 3 (migração `0049`):** agendas externas (.ics/webcal por URL, somente leitura, com cor e
 mostrar/ocultar), busca ÚNICA (filtra a vista e lista os de todos os meses) e fuso secundário na grade de horas. A página
 pública de agendamento foi REMOVIDA (migração `0050`) — o Calendário é só interno.
+✅ **Revisão do Calendário:** sem funções repetidas (uma busca só; opções de exibição só no menu de vistas; Tipos sem
+PCA/agendas externas, que têm seção própria; pessoas pelo "Pesquisar pessoas") e a lateral com o respiro correto.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

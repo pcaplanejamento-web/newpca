@@ -575,6 +575,7 @@ describe("calendário por eventos", () => {
     assert.deepEqual(lerOcultos(null), { tarefas: [], quadros: [], pcas: [], externos: [], tipos: [], feriados: false });
     const o = lerOcultos({ tarefas: [2, 2, "x"], quadros: [5], pcas: [3], tipos: ["recorrencia", "nada"], feriados: true });
     assert.deepEqual(o, { tarefas: [2], quadros: [5], pcas: [3], externos: [], tipos: ["recorrencia"], feriados: true });
+    assert.deepEqual(lerOcultos({ tipos: ["pca", "externo", "periodo"] }).tipos, ["periodo"]);
     assert.equal(temOculto(lerOcultos({})), false);
     assert.equal(temOculto(lerOcultos({ feriados: true })), true);
     assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "periodo", pca: null }, o), true);
