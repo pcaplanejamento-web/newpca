@@ -2040,7 +2040,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `EventoBanner` com a repetição, "Abrir no mapa", "Entrar na reunião", os convidados com a resposta e **"Você vai?"** (Vai ·
   Talvez · Não vai, otimista); lateral do módulo com **"Pesquisar pessoas"** (ver só os eventos delas) e a opção "Ocultar
   recusados"; o **lembrete padrão** (Configurações do calendário) preenche o evento novo.
-- **FASE 9 — AGENDAS EXTERNAS, BUSCA, PÁGINA DE AGENDAMENTO e FUSO SECUNDÁRIO (migração `0049`, aditiva):**
+- **FASE 9 — AGENDAS EXTERNAS, BUSCA e FUSO SECUNDÁRIO (migração `0049`; a `0050` removeu a página pública de agendamento — o Calendário é SÓ INTERNO):**
   - **Agendas externas** (`calendario_externos`: da PESSOA — nome, URL, cor; até `MAX_AGENDAS_EXTERNAS`=10): núcleo puro
     **`ics-core.ts`** (testado) — `lerIcs` (RFC 5545 tolerante: linhas dobradas, texto desescapado, VALARM pulado, `Z` → Brasília,
     DTEND exclusivo no dia inteiro, RRULE FREQ/INTERVAL/UNTIL/COUNT/BYDAY na MESMA expansão dos eventos — `ocorrenciasDoEvento` —,
@@ -2052,21 +2052,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     auditoria `agenda_externa`). Tela: **`useAgendasExternas`** carrega DEPOIS da página (o calendário nunca espera um servidor de
     fora), seção **"Outras agendas"** na `BarraCalendario` (mostrar/ocultar — `OcultosCalendario.externos` —, "falhou" com o
     motivo) e o modal **`GerirAgendasExternas`** (assinar/cor/remover). Somente leitura: não arrasta, sem tarefa no banner.
-  - **Busca em todos os meses** (`BuscaCalendario`, no topo da lateral — a tecla **/** foca): `GET /api/calendario/busca?q=` →
-    `buscarNoCalendario` (título/local/descrição dos eventos + título/#ticket das tarefas com prazo, nos quadros do calendário
-    — `quadrosDoCalendario`; o PRIVADO de quem não participa NÃO entra; a série aparece na próxima ocorrência; de hoje em
-    diante primeiro). No período à vista abre na hora; fora dele vai ao mês (`linkEvento`) e abre lá (o `?evento=` agora vale
-    a cada navegação, não só uma vez).
-  - **Página de agendamento** (`agenda_paginas`: tarefa destino, endereço ÚNICO, título, duração 15–120, dias, das/às,
-    antecedência, janela ≤ 90 dias, ativa; até 5 por pessoa): núcleo puro **`agendamento-core.ts`** (`horariosLivres` = a
-    janela − os blocos OCUPADOS − feriados − antes da antecedência; `horarioLivre`, `slugDe`/`slugValido`); D1 em
-    **`agendamento.ts`** (`agendaOcupada` = os eventos "Ocupado", com hora, que a pessoa criou ou em que foi convidada e não
-    recusou — as séries expandidas). Página PÚBLICA **`/agendar/[slug]`** (sem login, `noindex`) → **`AgendarView`** (dias com
-    horário livre · horários · nome/e-mail/observação · Turnstile se ativo · "Adicionar à minha agenda" .ics); `POST
-    /api/agendar/[slug]` reconfere o horário (409 se ocupado), limita 3 agendamentos futuros por e-mail, grava o EVENTO na
-    tarefa (autor = quem atende — passa a ocupar a agenda dele) e avisa no sino (notificação **`agendamento`**). Cadastro nas
-    Configurações do calendário (**`PaginasAgendamento`**: lista com link copiável, liga/desliga, editar, excluir) — rotas
-    `GET/POST /api/calendario/agendamento` e `PATCH/DELETE …/[id]` (auditoria `pagina_agendamento`).
+  - **Busca ÚNICA** (`BuscaCalendario`, CONTROLADA pelo `filtro.busca` — no topo da lateral, a tecla **/** foca; o
+    `FiltrosTarefas` do Calendário vem `semBusca`): o texto filtra os eventos À VISTA e, com 2+ letras, lista também os de
+    TODOS os meses — `GET /api/calendario/busca?q=` → `buscarNoCalendario` (título/local/descrição dos eventos +
+    título/#ticket das tarefas com prazo, nos quadros do calendário — `quadrosDoCalendario`; o PRIVADO de quem não participa
+    NÃO entra; a série aparece na próxima ocorrência; de hoje em diante primeiro). No período à vista abre na hora; fora dele
+    vai ao mês (`linkEvento`) e abre lá (o `?evento=` vale a cada navegação).
   - **Fuso secundário** (`OpcoesCalendario.fusoSecundario`, lista `FUSOS_SECUNDARIOS`): a grade de horas ganha a 2ª régua
     (`diferencaFuso` via `Intl` — o horário de verão de fora entra; `horaNoFuso`, `rotuloGmt`); escolhido nas Configurações.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.

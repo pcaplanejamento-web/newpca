@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { fimDoHorario, horarioLivre, horariosLivres, slugDe, slugValido } from "../src/lib/agendamento-core.ts";
 import { diferencaFuso, horaNoFuso, lerOpcoesCalendario, rotuloGmt } from "../src/lib/calendario-core.ts";
 import { dataHoraIcs, datasDoEventoIcs, eventosExternos, lerIcs, regraIcs, urlAgendaValida } from "../src/lib/ics-core.ts";
 import { eventoVisivel, lerOcultos, OCULTOS_VAZIO } from "../src/lib/tarefas-core.ts";
@@ -107,31 +106,6 @@ describe("agendas externas (.ics)", () => {
   });
 });
 
-describe("página de agendamento", () => {
-  const p = { duracaoMin: 30, dias: [1, 2, 3, 4, 5], horaInicio: "08:00", horaFim: "10:00", antecedenciaH: 2, janelaDias: 7 };
-  it("horários livres: dias da semana, antecedência, ocupados e feriados", () => {
-    // Agora: sexta 25/09/2026 07:30 → antecedência de 2 h tira 08:00–09:00 de hoje.
-    const m = horariosLivres(p, [{ data: "2026-09-28", horaInicio: "08:15", horaFim: "09:00" }], "2026-09-25T07:30", new Set(["2026-09-29"]));
-    assert.deepEqual(m.get("2026-09-25"), ["09:30"]);
-    assert.equal(m.has("2026-09-26"), false); // sábado
-    assert.deepEqual(m.get("2026-09-28"), ["09:00", "09:30"]); // 08:00 e 08:30 cruzam 08:15–09:00
-    assert.equal(m.has("2026-09-29"), false); // feriado
-    assert.equal([...m.keys()].at(-1), "2026-10-01"); // janela de 7 dias
-  });
-  it("bloco sem fim ocupa 1 hora; conferência do horário", () => {
-    const o = [{ data: "2026-09-28", horaInicio: "08:00", horaFim: null }];
-    assert.deepEqual(horariosLivres(p, o, "2026-09-25T00:00").get("2026-09-28"), ["09:00", "09:30"]);
-    assert.equal(horarioLivre(p, o, "2026-09-25T00:00", new Set(), "2026-09-28", "08:30"), false);
-    assert.equal(horarioLivre(p, o, "2026-09-25T00:00", new Set(), "2026-09-28", "09:30"), true);
-    assert.equal(fimDoHorario("09:30", 45), "10:15");
-  });
-  it("endereço (slug)", () => {
-    assert.equal(slugDe("Atendimento do PCA — Sala 2"), "atendimento-do-pca-sala-2");
-    assert.equal(slugValido("atendimento-pca"), true);
-    for (const s of ["ab", "-ab", "ab-", "Ab c", "a".repeat(41)]) assert.equal(slugValido(s), false, s);
-  });
-});
-
 describe("fuso secundário", () => {
   it("diferença para Brasília e a hora no outro fuso", () => {
     assert.equal(diferencaFuso("America/Manaus", "2026-09-25"), -60);
@@ -149,22 +123,10 @@ describe("fuso secundário", () => {
   });
 });
 
-describe("validação (agendas e agendamento)", async () => {
-  const { agendarSchema, externoSchema, paginaAgendamentoSchema } = await import("../src/lib/tarefas-validation.ts");
-  it("página: endereço, dias, horário e duração", () => {
-    const base = { tarefaId: 1, slug: "Atendimento-PCA", titulo: "Atendimento", duracaoMin: 30, dias: [5, 1, 1], horaInicio: "08:00", horaFim: "12:00", antecedenciaH: 2, janelaDias: 30 };
-    const ok = paginaAgendamentoSchema.safeParse(base);
-    assert.equal(ok.success, true);
-    if (ok.success) assert.deepEqual([ok.data.slug, ok.data.dias, ok.data.ativa], ["atendimento-pca", [1, 5], true]);
-    assert.equal(paginaAgendamentoSchema.safeParse({ ...base, horaFim: "07:00" }).success, false);
-    assert.equal(paginaAgendamentoSchema.safeParse({ ...base, duracaoMin: 20 }).success, false);
-    assert.equal(paginaAgendamentoSchema.safeParse({ ...base, dias: [] }).success, false);
-    assert.equal(paginaAgendamentoSchema.safeParse({ ...base, slug: "a b" }).success, false);
-  });
-  it("agendar: nome, e-mail e horário", () => {
-    assert.equal(agendarSchema.safeParse({ data: "2026-09-28", hora: "09:00", nome: "Ana", email: "ANA@X.COM" }).success, true);
-    assert.equal(agendarSchema.safeParse({ data: "2026-09-28", hora: "9:00", nome: "Ana", email: "a@x.com" }).success, false);
-    assert.equal(agendarSchema.safeParse({ data: "2026-09-28", hora: "09:00", nome: "A", email: "a@x.com" }).success, false);
+describe("validação (agendas externas)", async () => {
+  const { externoSchema } = await import("../src/lib/tarefas-validation.ts");
+  it("nome e link obrigatórios", () => {
     assert.equal(externoSchema.safeParse({ nome: "", url: "https://x.com/a.ics" }).success, false);
+    assert.equal(externoSchema.safeParse({ nome: "Feriados", url: "https://x.com/a.ics" }).success, true);
   });
 });

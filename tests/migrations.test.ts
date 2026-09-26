@@ -559,21 +559,12 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM tarefa_evento_convidados").get() as { n: number }).n, 0);
   });
 
-  it("0049 agendas externas e páginas de agendamento (slug único; cascade com a tarefa e o usuário)", () => {
+  it("0049/0050 agendas externas (cascade com o usuário); a página de agendamento saiu", () => {
     const a = aplicarTudo();
     a.exec("PRAGMA foreign_keys = ON");
-    a.exec("INSERT INTO grupos (id, nome) VALUES (9490, 'G')");
-    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9490, 9490, 'Q')");
-    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9490, 9490, 'L')");
-    a.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9490, 9490, 9490, 1, 'T')");
     a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9490, 'U', 'u9490@x', 'h')");
     a.exec("INSERT INTO calendario_externos (usuario_id, nome, url) VALUES (9490, 'Feriados', 'https://x.gov.br/a.ics')");
-    a.exec("INSERT INTO agenda_paginas (usuario_id, tarefa_id, slug, titulo) VALUES (9490, 9490, 'atendimento', 'Atendimento')");
-    const p = a.prepare("SELECT duracao_min, dias, ativa FROM agenda_paginas").get() as { duracao_min: number; dias: string; ativa: number };
-    assert.deepEqual([p.duracao_min, p.dias, p.ativa], [30, "[1,2,3,4,5]", 1]);
-    assert.throws(() => a.exec("INSERT INTO agenda_paginas (usuario_id, tarefa_id, slug, titulo) VALUES (9490, 9490, 'atendimento', 'B')"));
-    a.exec("DELETE FROM tarefas WHERE id = 9490");
-    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM agenda_paginas").get() as { n: number }).n, 0);
+    assert.equal(nomes(a, "SELECT name FROM sqlite_master WHERE type='table'").includes("agenda_paginas"), false);
     a.exec("DELETE FROM usuarios WHERE id = 9490");
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM calendario_externos").get() as { n: number }).n, 0);
   });

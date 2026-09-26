@@ -38,12 +38,15 @@ export function FiltrosTarefas({
   pessoas,
   etiquetas,
   usuarioId,
+  semBusca = false,
 }: {
   filtro: FiltroTarefas;
   onChange: (f: FiltroTarefas) => void;
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
   usuarioId: number;
+  /** Sem o campo de busca (quem usa já tem a sua — o Calendário). */
+  semBusca?: boolean;
 }) {
   const pessoa = typeof filtro.responsavel === "number" ? pessoas.find((p) => p.id === filtro.responsavel) : undefined;
   const eu = pessoas.find((p) => p.id === usuarioId);
@@ -51,6 +54,7 @@ export function FiltrosTarefas({
   const set = (p: Partial<FiltroTarefas>) => onChange({ ...filtro, ...p });
   return (
     <>
+      {!semBusca && (
       <div className="min-w-[10rem] flex-1 sm:max-w-[16rem]">
         <SearchField
           compacto
@@ -61,6 +65,7 @@ export function FiltrosTarefas({
           onClear={() => set({ busca: "" })}
         />
       </div>
+      )}
       <SeletorFiltro
         icone={
           pessoa || (filtro.responsavel === "eu" && eu) ? (

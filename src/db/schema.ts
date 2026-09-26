@@ -1016,33 +1016,6 @@ export const calendarioExternos = sqliteTable(
   (t) => [index("calendario_externos_usuario_idx").on(t.usuarioId)],
 );
 
-/** As PÁGINAS DE AGENDAMENTO (`/agendar/<slug>`): o horário marcado vira um evento na tarefa (migração `0049`). */
-export const agendaPaginas = sqliteTable(
-  "agenda_paginas",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    usuarioId: integer("usuario_id")
-      .notNull()
-      .references(() => usuarios.id, { onDelete: "cascade" }),
-    tarefaId: integer("tarefa_id")
-      .notNull()
-      .references(() => tarefas.id, { onDelete: "cascade" }),
-    slug: text("slug").notNull(),
-    titulo: text("titulo").notNull(),
-    descricao: text("descricao"),
-    duracaoMin: integer("duracao_min").notNull().default(30),
-    /** JSON number[] (0 = domingo). */
-    dias: text("dias").notNull().default("[1,2,3,4,5]"),
-    horaInicio: text("hora_inicio").notNull().default("08:00"),
-    horaFim: text("hora_fim").notNull().default("17:00"),
-    antecedenciaH: integer("antecedencia_h").notNull().default(2),
-    janelaDias: integer("janela_dias").notNull().default(30),
-    ativa: integer("ativa", { mode: "boolean" }).notNull().default(true),
-    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  },
-  (t) => [uniqueIndex("agenda_paginas_slug_uq").on(t.slug), index("agenda_paginas_usuario_idx").on(t.usuarioId)],
-);
-
 /** FERIADOS e pontos facultativos cadastrados pelo ADM (migração `0047`; os nacionais são calculados no código).
  * `anual` = repete todo ano no mesmo dia/mês (o ano de `data` é só o do cadastro). */
 export const feriados = sqliteTable(

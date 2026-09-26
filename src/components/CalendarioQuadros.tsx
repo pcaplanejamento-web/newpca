@@ -50,7 +50,6 @@ import { AssinaturaCalendario } from "./AssinaturaCalendario";
 import { GerirAgendasExternas, useAgendasExternas } from "./AgendasExternas";
 import { BarraCalendario, type ConjuntoExterno, type ConjuntoPca, type GrupoConjuntos } from "./BarraCalendario";
 import { BuscaCalendario, type ResultadoBusca } from "./BuscaCalendario";
-import { PaginasAgendamento } from "./PaginasAgendamento";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CalendarioTarefas, type SlotCriar } from "./CalendarioTarefas";
@@ -623,18 +622,13 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           setAberto(null);
           setTarefaSolta(id);
         }}
-        configuracoes={
-          <>
-            <AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />
-            <PaginasAgendamento tarefas={opcoesTarefas} />
-          </>
-        }
+        configuracoes={<AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />}
         rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
           <div className="space-y-[var(--gap-block)]">
-            <BuscaCalendario hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
+            <BuscaCalendario valor={filtro.busca} onChange={(busca) => setFiltro({ ...filtro, busca })} hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
             <div className="flex flex-wrap items-center gap-1.5">
-              <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+              <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca />
             </div>
             <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
             {membros.length > 1 && (

@@ -641,7 +641,7 @@ export function proximaOcorrencia(
 
 // ─── Fase 3: NOTIFICAÇÕES de PRAZO (derivadas na leitura — sem cron) ─────────────────────────────────────────
 
-export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete", "convite", "resposta", "agendamento"] as const;
+export const TIPOS_NOTIFICACAO = ["atribuida", "mencionada", "comentario", "vence_amanha", "atrasada", "automacao", "lembrete", "convite", "resposta"] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 
 /** O link que abre a tarefa no quadro. */

@@ -12,12 +12,24 @@ const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 const dataCurta = (d: string, hoje: string) => `${Number(d.slice(8))} ${MESES[Number(d.slice(5, 7)) - 1]}${d.slice(0, 4) !== hoje.slice(0, 4) ? ` ${d.slice(0, 4)}` : ""}`;
 
 /**
- * BUSCA EM TODOS OS MESES (como a lupa do Google Agenda): eventos (título, local, descrição) e tarefas com prazo (título,
- * #ticket) dos quadros da pessoa — do servidor, com pausa de 300 ms entre as letras. Os de hoje em diante vêm primeiro.
- * Tocar num resultado abre o evento/tarefa no mês dele (`onEscolher`).
+ * A BUSCA ÚNICA do Calendário (como a lupa do Google Agenda), CONTROLADA pelo host: o texto filtra os eventos À VISTA e,
+ * com 2+ letras, lista também os de TODOS os meses — eventos (título, local, descrição) e tarefas com prazo (título,
+ * #ticket) dos quadros da pessoa, do servidor, com pausa de 300 ms. Os de hoje em diante vêm primeiro; tocar num resultado
+ * abre o evento/tarefa no mês dele (`onEscolher`).
  */
-export function BuscaCalendario({ hoje, corQuadro, onEscolher }: { hoje: string; corQuadro: (id: number) => string | undefined; onEscolher: (r: ResultadoBusca) => void }) {
-  const [q, setQ] = useState("");
+export function BuscaCalendario({
+  valor: q,
+  onChange: setQ,
+  hoje,
+  corQuadro,
+  onEscolher,
+}: {
+  valor: string;
+  onChange: (v: string) => void;
+  hoje: string;
+  corQuadro: (id: number) => string | undefined;
+  onEscolher: (r: ResultadoBusca) => void;
+}) {
   const [res, setRes] = useState<ResultadoBusca[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const pedido = useRef(0);
@@ -44,9 +56,17 @@ export function BuscaCalendario({ hoje, corQuadro, onEscolher }: { hoje: string;
 
   return (
     <div className="space-y-1.5">
-      <SearchField compacto value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar em todos os meses" aria-label="Pesquisar eventos e tarefas em todos os meses" />
+      <SearchField
+        compacto
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onClear={() => setQ("")}
+        placeholder="Pesquisar eventos e tarefas"
+        aria-label="Pesquisar eventos e tarefas (em todos os meses)"
+      />
       {res && (
         <div className="relative max-h-72 overflow-y-auto rounded-card border border-border bg-surface" aria-live="polite">
+          <p className="border-b border-border px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-faint">Em todos os meses</p>
           {res.length === 0 ? (
             <p className="px-3 py-3 text-[12px] text-muted">{buscando ? "Pesquisando…" : "Nada encontrado."}</p>
           ) : (

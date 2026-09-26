@@ -216,7 +216,7 @@ export const automacaoSchema = z
   .refine((v) => v.gatilho !== "entrar_lista" || v.listaId != null, { message: "Escolha a lista.", path: ["listaId"] });
 export const editarAutomacaoSchema = z.object({ ativa: z.boolean() });
 
-// ─── Agendas externas e páginas de agendamento (migração `0049`) ────────────────────────────────────────────────
+// ─── Agendas externas (migração `0049`) ─────────────────────────────────────────────────────────────────────
 
 export const externoSchema = z.object({
   nome: z.string().trim().min(1, "Dê um nome à agenda.").max(60, "Nome com até 60 caracteres."),
@@ -224,33 +224,3 @@ export const externoSchema = z.object({
   cor: cor.nullable().default(null),
 });
 export const editarExternoSchema = z.object({ nome: externoSchema.shape.nome.optional(), cor: cor.nullable().optional() }).refine((v) => v.nome !== undefined || v.cor !== undefined, "Nada a alterar.");
-
-export const paginaAgendamentoSchema = z
-  .object({
-    tarefaId: id,
-    slug: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, "Endereço: 3 a 40 letras minúsculas, números ou hífen (sem hífen nas pontas)."),
-    titulo: z.string().trim().min(1, "Dê um título à página.").max(80, "Título com até 80 caracteres."),
-    descricao: z.string().trim().max(1000, "Descrição com até 1000 caracteres.").nullable().default(null),
-    duracaoMin: z.number().int().refine((v) => [15, 30, 45, 60, 90, 120].includes(v), "Duração inválida."),
-    dias: z.array(z.number().int().min(0).max(6)).min(1, "Escolha ao menos um dia da semana.").max(7).transform((v) => [...new Set(v)].sort()),
-    horaInicio: hora,
-    horaFim: hora,
-    antecedenciaH: z.number().int().min(0).max(168),
-    janelaDias: z.number().int().min(1).max(90),
-    ativa: z.boolean().default(true),
-  })
-  .refine((v) => v.horaFim > v.horaInicio, { message: "O fim precisa ser depois do início.", path: ["horaFim"] });
-export const editarPaginaSchema = z.object({ ativa: z.boolean() }).or(paginaAgendamentoSchema);
-
-export const agendarSchema = z.object({
-  data,
-  hora,
-  nome: z.string().trim().min(2, "Informe seu nome.").max(80, "Nome com até 80 caracteres."),
-  email: z.string().trim().toLowerCase().email("E-mail inválido.").max(120),
-  observacao: z.string().trim().max(500, "Observação com até 500 caracteres.").default(""),
-  captchaToken: z.string().max(4096).optional(),
-});
