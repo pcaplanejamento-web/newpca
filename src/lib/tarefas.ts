@@ -297,13 +297,14 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
     eq(tarefas.arquivada, false),
     sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tarefas.listaId} AND l.arquivada = 0)`,
   );
-  // O período cruza o intervalo, OU a recorrente aberta ainda cai nele, OU a tarefa tem um EVENTO no intervalo.
+  // O período cruza o intervalo, OU a recorrente aberta ainda cai nele (a que conta da conclusão, mesmo sem prazo — a
+  // ocorrência PREVISTA), OU a tarefa tem um EVENTO que cruza o intervalo.
   const noIntervalo = and(
     visivel,
     or(
       and(sql`${tarefas.prazo} >= ${de}`, sql`(${tarefas.prazo} <= ${ate} OR ${tarefas.inicio} <= ${ate})`),
-      and(sql`${tarefas.recorrencia} IS NOT NULL`, sql`${tarefas.concluidaEm} IS NULL`, sql`${tarefas.prazo} <= ${ate}`),
-      sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND e.data >= ${de} AND e.data <= ${ate})`,
+      and(sql`${tarefas.recorrencia} IS NOT NULL`, sql`${tarefas.concluidaEm} IS NULL`, sql`(${tarefas.prazo} IS NULL OR ${tarefas.prazo} <= ${ate})`),
+      sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND COALESCE(e.data_fim, e.data) >= ${de} AND e.data <= ${ate})`,
     ),
   );
   const [linhas, pessoas, etiquetas] = await Promise.all([
@@ -321,7 +322,7 @@ export async function tarefasDoCalendario(quadroIds: number[], de: string, ate: 
       })
       .from(tarefas)
       .where(noIntervalo)
-      .limit(3000),
+      .limit(LIMITE_TAREFAS_CALENDARIO),
     db
       .select({ tarefaId: tarefaPessoas.tarefaId, usuarioId: tarefaPessoas.usuarioId })
       .from(tarefaPessoas)
@@ -654,12 +655,14 @@ const COLS_EVENTO = {
   tarefaId: tarefaEventos.tarefaId,
   titulo: tarefaEventos.titulo,
   data: tarefaEventos.data,
+  dataFim: tarefaEventos.dataFim,
   diaInteiro: tarefaEventos.diaInteiro,
   horaInicio: tarefaEventos.horaInicio,
   horaFim: tarefaEventos.horaFim,
   local: tarefaEventos.local,
   descricao: tarefaEventos.descricao,
   cor: tarefaEventos.cor,
+  lembreteMin: tarefaEventos.lembreteMin,
 };
 
 export async function getEvento(id: number): Promise<EventoTarefa | null> {
@@ -691,7 +694,12 @@ export async function excluirEvento(id: number) {
   await getDb().delete(tarefaEventos).where(eq(tarefaEventos.id, id));
 }
 
-/** Os EVENTOS das tarefas (não arquivadas) dos quadros dados, entre `de` e `ate` (sem intervalo = todos) — o calendário. */
+/** Tetos das cargas do calendário (a tela avisa quando algum é atingido — nada some em silêncio). */
+export const LIMITE_EVENTOS_CALENDARIO = 5000;
+export const LIMITE_TAREFAS_CALENDARIO = 3000;
+
+/** Os EVENTOS das tarefas (não arquivadas) dos quadros dados que CRUZAM `de`–`ate` (o de vários dias pela data final;
+ * sem intervalo = todos) — o calendário. */
 export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: string): Promise<EventoTarefa[]> {
   if (!quadroIds.length) return [];
   return getDb()
@@ -702,12 +710,12 @@ export async function eventosDosQuadros(quadroIds: number[], de?: string, ate?: 
       and(
         inArray(tarefas.quadroId, quadroIds.slice(0, 90)),
         eq(tarefas.arquivada, false),
-        de ? sql`${tarefaEventos.data} >= ${de}` : undefined,
+        de ? sql`COALESCE(${tarefaEventos.dataFim}, ${tarefaEventos.data}) >= ${de}` : undefined,
         ate ? sql`${tarefaEventos.data} <= ${ate}` : undefined,
       ),
     )
     .orderBy(asc(tarefaEventos.data))
-    .limit(5000);
+    .limit(LIMITE_EVENTOS_CALENDARIO);
 }
 
 /** As tarefas ABERTAS (não arquivadas, em lista ativa) dos quadros — a escolha da tarefa ao CRIAR um evento no calendário. */
@@ -725,7 +733,7 @@ export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: nu
       ),
     )
     .orderBy(asc(tarefas.quadroId), desc(tarefas.ticket))
-    .limit(3000);
+    .limit(LIMITE_TAREFAS_CALENDARIO);
 }
 
 export async function getItemChecklist(id: number) {

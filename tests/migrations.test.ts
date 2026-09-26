@@ -524,6 +524,21 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM tarefa_eventos").get() as { n: number }).n, 0);
   });
 
+  it("0047 calendário profissional: data final e lembrete do evento, feriados e o hash único do link de assinatura", () => {
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('tarefa_eventos')").includes("data_fim"));
+    assert.ok(nomes(db, "SELECT name FROM pragma_table_info('tarefa_eventos')").includes("lembrete_min"));
+    const a = aplicarTudo();
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO feriados (data, nome) VALUES ('2026-08-05', 'Aniversário da cidade')");
+    const f = a.prepare("SELECT tipo, anual FROM feriados").get() as { tipo: string; anual: number };
+    assert.deepEqual([f.tipo, f.anual], ["municipal", 0]);
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9470, 'U', 'u9470@x', 'h'), (9471, 'V', 'v9471@x', 'h')");
+    a.exec("INSERT INTO calendario_tokens (usuario_id, token_hash) VALUES (9470, 'abc')");
+    assert.throws(() => a.exec("INSERT INTO calendario_tokens (usuario_id, token_hash) VALUES (9471, 'abc')"));
+    a.exec("DELETE FROM usuarios WHERE id = 9470");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM calendario_tokens").get() as { n: number }).n, 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

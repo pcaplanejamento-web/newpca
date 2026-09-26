@@ -8,7 +8,7 @@ import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { TipoNotificacao } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { Dropdown } from "./Dropdown";
-import { IconAtribuir, IconAutomacao, IconBell, IconComentario, IconMencao, IconPrazo, IconSpinner } from "./icons";
+import { IconAtribuir, IconAutomacao, IconBell, IconCalendar, IconComentario, IconMencao, IconPrazo, IconSpinner } from "./icons";
 
 /** Ícone e cor (token) de cada tipo — a cor do semáforo nas de prazo. */
 const VISUAL: Record<TipoNotificacao, { Icone: ComponentType<{ className?: string }>; cor: string }> = {
@@ -18,6 +18,7 @@ const VISUAL: Record<TipoNotificacao, { Icone: ComponentType<{ className?: strin
   vence_amanha: { Icone: IconPrazo, cor: "var(--warn)" },
   atrasada: { Icone: IconPrazo, cor: "var(--danger)" },
   automacao: { Icone: IconAutomacao, cor: "var(--accent)" },
+  lembrete: { Icone: IconCalendar, cor: "var(--info)" },
 };
 
 /** Uma notificação da lista: o autor (foto) ou o ícone do tipo, título, texto, data; ponto accent = não lida. */

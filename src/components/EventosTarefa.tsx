@@ -1,33 +1,50 @@
 "use client";
 
 import { useState } from "react";
+import { OPCOES_LEMBRETE, rotuloLembrete } from "@/lib/calendario-core";
 import { dataBR } from "@/lib/format";
 import { type DadosEvento, horaValida, rotuloData } from "@/lib/tarefas-core";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
-import { TextArea, TextField } from "./Field";
-import { IconCalendar, IconClock, IconPencil, IconPlus, IconTrash } from "./icons";
+import { SelectField, TextArea, TextField } from "./Field";
+import { IconBell, IconCalendar, IconClock, IconCopy, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Switch } from "./Switch";
 
 /** Um evento em edição (os campos como o formulário os mostra — texto vazio = sem valor). */
-export type RascunhoEvento = { titulo: string; data: string; diaInteiro: boolean; horaInicio: string; horaFim: string; local: string; descricao: string; cor: string | null };
+export type RascunhoEvento = {
+  titulo: string;
+  data: string;
+  /** Último dia (evento de vários dias); vazio = um dia só. */
+  dataFim: string;
+  diaInteiro: boolean;
+  horaInicio: string;
+  horaFim: string;
+  local: string;
+  descricao: string;
+  cor: string | null;
+  /** Minutos antes (texto do `<select>`); vazio = sem lembrete. */
+  lembrete: string;
+};
 
 export const rascunhoEvento = (e?: Partial<DadosEvento> & { data?: string }): RascunhoEvento => ({
   titulo: e?.titulo ?? "",
   data: e?.data ?? "",
+  dataFim: e?.dataFim ?? "",
   diaInteiro: e?.diaInteiro ?? !e?.horaInicio,
   horaInicio: e?.horaInicio ?? "",
   horaFim: e?.horaFim ?? "",
   local: e?.local ?? "",
   descricao: e?.descricao ?? "",
   cor: e?.cor ?? null,
+  lembrete: e?.lembreteMin == null ? "" : String(e.lembreteMin),
 });
 
 /** O que falta/está errado no rascunho (a mesma régua do `eventoSchema`); vazio = pode gravar. */
-export function problemasEvento(r: RascunhoEvento): { titulo?: string; data?: string; horaInicio?: string; horaFim?: string } {
-  const p: { titulo?: string; data?: string; horaInicio?: string; horaFim?: string } = {};
+export function problemasEvento(r: RascunhoEvento): { titulo?: string; data?: string; dataFim?: string; horaInicio?: string; horaFim?: string } {
+  const p: { titulo?: string; data?: string; dataFim?: string; horaInicio?: string; horaFim?: string } = {};
   if (!r.titulo.trim()) p.titulo = "Dê um título ao evento.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.data)) p.data = "Escolha a data.";
+  if (r.dataFim && (!/^\d{4}-\d{2}-\d{2}$/.test(r.dataFim) || r.dataFim < r.data)) p.dataFim = "A data final tem de ser igual ou depois da data.";
   if (!r.diaInteiro) {
     if (!horaValida(r.horaInicio)) p.horaInicio = "Informe a hora de início.";
     if (r.horaFim && (!horaValida(r.horaFim) || (horaValida(r.horaInicio) && r.horaFim <= r.horaInicio))) p.horaFim = "O fim tem de ser depois do início.";
@@ -39,21 +56,24 @@ export function problemasEvento(r: RascunhoEvento): { titulo?: string; data?: st
 export const dadosDoEvento = (r: RascunhoEvento): DadosEvento => ({
   titulo: r.titulo.trim(),
   data: r.data,
+  dataFim: r.dataFim && r.dataFim > r.data ? r.dataFim : null,
   diaInteiro: r.diaInteiro,
   horaInicio: r.diaInteiro ? null : r.horaInicio || null,
   horaFim: r.diaInteiro ? null : r.horaFim || null,
   local: r.local.trim() || null,
   descricao: r.descricao.trim() || null,
   cor: r.cor,
+  lembreteMin: r.lembrete === "" ? null : Number(r.lembrete),
 });
 
-/** "25/09/2026 · 09:30–10:00" / "25/09/2026 · dia inteiro". */
-export const quandoEvento = (e: Pick<DadosEvento, "data" | "diaInteiro" | "horaInicio" | "horaFim">) =>
-  `${dataBR(e.data)} · ${e.diaInteiro || !e.horaInicio ? "dia inteiro" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`}`;
+/** "25/09/2026 · 09:30–10:00" / "25/09/2026 · dia inteiro" / "25/09 → 27/09/2026 · dia inteiro". */
+export const quandoEvento = (e: Pick<DadosEvento, "data" | "dataFim" | "diaInteiro" | "horaInicio" | "horaFim">) =>
+  `${e.dataFim && e.dataFim > e.data ? `${dataBR(e.data).slice(0, 5)} → ${dataBR(e.dataFim)}` : dataBR(e.data)} · ${e.diaInteiro || !e.horaInicio ? "dia inteiro" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`}`;
 
 /**
- * O FORMULÁRIO de um evento (o bloco "Eventos" da tarefa e o "Criar"/"Editar" do Calendário): título, data, DIA INTEIRO ou
- * início/fim, local, descrição e a cor (sem cor própria = a do quadro). Controlado — quem usa grava.
+ * O FORMULÁRIO de um evento (o bloco "Eventos" da tarefa e o "Criar"/"Editar" do Calendário): título, data e data FINAL
+ * (vários dias), DIA INTEIRO ou início/fim, LEMBRETE (no sino), local, descrição e a cor (sem cor própria = a do quadro).
+ * Controlado — quem usa grava.
  */
 export function EditorEvento({ valor, onChange, disabled = false }: { valor: RascunhoEvento; onChange: (v: RascunhoEvento) => void; disabled?: boolean }) {
   const set = <K extends keyof RascunhoEvento>(k: K, v: RascunhoEvento[K]) => onChange({ ...valor, [k]: v });
@@ -61,11 +81,12 @@ export function EditorEvento({ valor, onChange, disabled = false }: { valor: Ras
   return (
     <div className="space-y-3">
       <TextField label="Título" value={valor.titulo} maxLength={120} disabled={disabled} placeholder="Ex.: Reunião com a unidade" onChange={(e) => set("titulo", e.target.value)} />
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-2">
         <TextField label="Data" type="date" value={valor.data} disabled={disabled} error={valor.data ? p.data : undefined} onChange={(e) => set("data", e.target.value)} />
-        <div className="flex min-h-11 items-center">
-          <Switch checked={valor.diaInteiro} disabled={disabled} onChange={(v) => set("diaInteiro", v)} label="Dia inteiro" />
-        </div>
+        <TextField label="Até (vários dias — opcional)" type="date" value={valor.dataFim} min={valor.data || undefined} disabled={disabled} error={p.dataFim} onChange={(e) => set("dataFim", e.target.value)} />
+      </div>
+      <div className="flex min-h-11 items-center">
+        <Switch checked={valor.diaInteiro} disabled={disabled} onChange={(v) => set("diaInteiro", v)} label="Dia inteiro" />
       </div>
       {!valor.diaInteiro && (
         <div className="grid grid-cols-2 gap-3">
@@ -73,6 +94,14 @@ export function EditorEvento({ valor, onChange, disabled = false }: { valor: Ras
           <TextField label="Fim (opcional)" type="time" value={valor.horaFim} disabled={disabled} error={p.horaFim} onChange={(e) => set("horaFim", e.target.value)} />
         </div>
       )}
+      <SelectField label="Lembrete (no sino)" value={valor.lembrete} disabled={disabled} onChange={(e) => set("lembrete", e.target.value)}>
+        <option value="">Sem lembrete</option>
+        {OPCOES_LEMBRETE.map((o) => (
+          <option key={o.min} value={String(o.min)}>
+            {o.rotulo}
+          </option>
+        ))}
+      </SelectField>
       <TextField label="Local (opcional)" value={valor.local} maxLength={120} disabled={disabled} onChange={(e) => set("local", e.target.value)} />
       <TextArea label="Descrição (opcional)" rows={3} value={valor.descricao} maxLength={2000} disabled={disabled} onChange={(e) => set("descricao", e.target.value)} />
       <div className="space-y-2">
@@ -141,14 +170,22 @@ export function EventosTarefa({
                   <p className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted">
                     <span className="inline-flex items-center gap-1">
                       {e.diaInteiro ? <IconCalendar className="h-3 w-3" /> : <IconClock className="h-3 w-3" />}
-                      {rotuloData(e.data, hoje)} · {e.diaInteiro || !e.horaInicio ? "dia inteiro" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`}
+                      {rotuloData(e.data, hoje)}
+                      {e.dataFim && e.dataFim > e.data ? ` → ${rotuloData(e.dataFim, hoje)}` : ""} · {e.diaInteiro || !e.horaInicio ? "dia inteiro" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`}
                     </span>
+                    {e.lembreteMin != null && (
+                      <span className="inline-flex items-center gap-1" title={rotuloLembrete(e.lembreteMin)}>
+                        <IconBell className="h-3 w-3" />
+                        {rotuloLembrete(e.lembreteMin)}
+                      </span>
+                    )}
                     {e.local && <span className="truncate">{e.local}</span>}
                   </p>
                 </div>
                 {!disabled && (
                   <div className="flex shrink-0 gap-0.5">
                     <Button variant="ghost" size="xs" aria-label={`Editar ${e.titulo}`} icon={<IconPencil className="h-4 w-4" />} onClick={() => setEditando({ id: e.id, r: rascunhoEvento(e) })} />
+                    <Button variant="ghost" size="xs" aria-label={`Duplicar ${e.titulo}`} title="Duplicar" icon={<IconCopy className="h-4 w-4" />} onClick={() => setEditando({ id: null, r: rascunhoEvento(e) })} />
                     <Button variant="ghost" size="xs" aria-label={`Excluir ${e.titulo}`} style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} onClick={() => onExcluir(e)} />
                   </div>
                 )}

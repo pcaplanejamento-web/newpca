@@ -19,9 +19,6 @@ import {
   type EventoTarefa,
   eventosDoCalendario,
   gradeMes,
-  horaDeMinutos,
-  horaValida,
-  minutosDe,
   prefixoEdicoesTarefas,
   reagendar,
   resumoQuadro,
@@ -36,6 +33,7 @@ import { Badge } from "./Badge";
 import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
 import { BarraSelecao } from "./BarraSelecao";
 import { Button } from "./Button";
+import { eventoComFim, eventoMovido, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
@@ -87,6 +85,7 @@ export function QuadroTarefas({
   podeEditar,
   usuarioId,
   eventos = [],
+  calendario,
   novaInicial = null,
   prazoInicial = null,
   tarefaInicial = null,
@@ -95,6 +94,8 @@ export function QuadroTarefas({
   usuarioId: number;
   /** Os EVENTOS cadastrados das tarefas deste quadro (só com a aba Calendário aberta). */
   eventos?: EventoTarefa[];
+  /** As OPÇÕES da pessoa e os FERIADOS cadastrados (só com a aba Calendário aberta). */
+  calendario?: { opcoes: OpcoesCalendario; feriados: FeriadoCadastro[] };
   novaInicial?: VinculoTarefa | null;
   prazoInicial?: string | null;
   tarefaInicial?: number | null;
@@ -183,16 +184,23 @@ export function QuadroTarefas({
 
   /** O mês à vista na aba Calendário e os EVENTOS dele (período, recorrência e os cadastrados deste quadro). */
   const [mesCal, setMesCal] = useState(() => ({ ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) }));
-  const eventosCal = useMemo(() => {
-    if (aba !== "calendario") return [];
-    const g = gradeMes(mesCal.ano, mesCal.mes);
-    return eventosDoCalendario(
-      noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
-      eventos,
-      g[0][0],
-      g.at(-1)?.[6] ?? g[0][6],
-    );
-  }, [aba, mesCal, noQuadro, eventos, quadro.id]);
+  const opcoesCal = calendario?.opcoes ?? OPCOES_CALENDARIO_PADRAO;
+  const { eventosCal, feriadosCal } = useMemo(() => {
+    if (aba !== "calendario") return { eventosCal: [], feriadosCal: undefined };
+    const g = gradeMes(mesCal.ano, mesCal.mes, opcoesCal.inicioSegunda ? 1 : 0);
+    const de = g[0][0];
+    const ate = g.at(-1)?.[6] ?? g[0][6];
+    return {
+      eventosCal: eventosDoCalendario(
+        noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
+        eventos,
+        de,
+        ate,
+        hoje,
+      ),
+      feriadosCal: feriadosNoIntervalo(calendario?.feriados ?? [], de, ate),
+    };
+  }, [aba, mesCal, noQuadro, eventos, quadro.id, hoje, opcoesCal.inicioSegunda, calendario?.feriados]);
   /** ARRASTAR no calendário: o período reagenda a tarefa; o evento cadastrado muda de dia (e de hora, na grade). */
   const moverNoCalendario = async (e: EventoCalendario, dia: string, hora: string | null) => {
     if (e.tipo === "periodo") {
@@ -202,16 +210,21 @@ export function QuadroTarefas({
     }
     const ev = eventos.find((x) => x.id === e.eventoId);
     if (!ev) return;
-    const dur = !ev.diaInteiro && horaValida(ev.horaInicio) && horaValida(ev.horaFim) ? minutosDe(ev.horaFim) - minutosDe(ev.horaInicio) : null;
-    const comHora = hora && !ev.diaInteiro;
     try {
-      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", {
-        ...ev,
-        data: dia,
-        horaInicio: comHora ? hora : ev.horaInicio,
-        horaFim: comHora ? (dur != null ? horaDeMinutos(Math.min(minutosDe(hora) + dur, 23 * 60 + 59)) : null) : ev.horaFim,
-      });
+      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoMovido(ev, dia, hora));
       toast.success(`"${ev.titulo}" movido para ${dataBR(dia)}.`);
+      router.refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+  /** A BORDA arrastada: o fim do evento com hora. */
+  const redimensionarNoCalendario = async (e: EventoCalendario, horaFim: string) => {
+    const ev = eventos.find((x) => x.id === e.eventoId);
+    if (!ev || ev.horaFim === horaFim) return;
+    try {
+      await chamar(`/api/tarefas/eventos/${ev.id}`, "PATCH", eventoComFim(ev, horaFim));
+      toast.success(`"${ev.titulo}" agora vai até ${horaFim}.`);
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
@@ -395,10 +408,13 @@ export function QuadroTarefas({
             hoje={hoje}
             mes={mesCal}
             onMes={setMesCal}
-            contadores={contadoresCalendario(noQuadro, hoje)}
+            contadores={contadoresCalendario(noQuadro, hoje, opcoesCal.inicioSegunda ? 1 : 0)}
             onAbrir={(e) => setAberto({ tipo: "editar", id: e.tarefaId })}
             onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}
             onMover={moverNoCalendario}
+            onRedimensionar={redimensionarNoCalendario}
+            opcoes={opcoesCal}
+            feriados={feriadosCal}
           />
         ) : (
           <ConfiguracaoQuadro

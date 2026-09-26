@@ -1,10 +1,12 @@
 "use client";
 
 import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { diasExibidos, type FeriadoDia, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario, ROTULO_TIPO_FERIADO } from "@/lib/calendario-core";
 import { dataBR, num } from "@/lib/format";
 import {
   COR_ESTADO_PRAZO,
   DIAS_SEMANA_CURTOS,
+  DURACAO_PADRAO_MIN,
   type EstadoPrazo,
   type EventoCalendario,
   estadoPrazo,
@@ -13,7 +15,9 @@ import {
   fimDeSemana,
   gradeMes,
   horaDeMinutos,
+  horaValida,
   layoutDoDia,
+  minutosDe,
   NOMES_MES,
   ROTULO_ESTADO_PRAZO,
   rotuloTicket,
@@ -162,11 +166,72 @@ function useArrastoEventos(onSoltar?: (e: EventoCalendario, dia: string, hora: s
   return { arrasto, fantasma, iniciar, foiArrasto };
 }
 
+/**
+ * REDIMENSIONAR (a duração, como no Google Agenda): arrastar a BORDA de baixo de um evento com hora na grade — o fim anda
+ * de 15 em 15 min (no mínimo 15 min depois do início); ao soltar, `onSoltar(e, horaFim)`. `previa` = o fim enquanto arrasta.
+ */
+function useRedimensionar(onSoltar?: (e: EventoCalendario, horaFim: string) => void) {
+  const [previa, setPrevia] = useState<{ chave: string; fim: number } | null>(null);
+  const encerrar = useRef<(() => void) | null>(null);
+  const redimensionou = useRef(false);
+  useEffect(() => () => encerrar.current?.(), []);
+  const iniciar = (ev0: ReactPointerEvent<HTMLElement>, e: EventoCalendario) => {
+    if (!onSoltar || !ev0.isPrimary || ev0.button > 0 || !horaValida(e.horaInicio)) return;
+    ev0.preventDefault();
+    ev0.stopPropagation();
+    const coluna = ev0.currentTarget.closest<HTMLElement>("[data-grade]");
+    if (!coluna) return;
+    encerrar.current?.();
+    redimensionou.current = false;
+    const ponteiro = ev0.pointerId;
+    const topo = minutosDe(e.horaInicio);
+    let fim = horaValida(e.horaFim) && minutosDe(e.horaFim) > topo ? minutosDe(e.horaFim) : topo + DURACAO_PADRAO_MIN;
+    const soltarCursor = segurar("ns-resize");
+    const mover = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
+      if (ev.cancelable) ev.preventDefault();
+      const r = coluna.getBoundingClientRect();
+      const min = Math.round((((ev.clientY - r.top) / r.height) * 1440) / 15) * 15;
+      fim = Math.min(24 * 60 - 1, Math.max(topo + 15, min));
+      redimensionou.current = true;
+      setPrevia({ chave: e.chave, fim });
+    };
+    const limpar = () => {
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", soltar);
+      soltarCursor();
+      encerrar.current = null;
+    };
+    const soltar = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
+      limpar();
+      setPrevia(null);
+      if (ev.type === "pointerup" && redimensionou.current) onSoltar(e, horaDeMinutos(fim));
+    };
+    encerrar.current = limpar;
+    window.addEventListener("pointermove", mover, { passive: false });
+    window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", soltar);
+  };
+  /** O clique que vem depois de redimensionar não abre o evento. */
+  const foiRedimensionar = () => {
+    const f = redimensionou.current;
+    redimensionou.current = false;
+    return f;
+  };
+  return { previa, iniciar, foiRedimensionar };
+}
+
 /** A cor de um evento: a própria, senão a do QUADRO; o período da tarefa sem quadro com cor usa o SEMÁFORO do prazo. */
 function corDoEvento(e: EventoCalendario, hoje: string, corQuadro?: (quadroId: number) => string | undefined) {
   const semaforo = COR_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)];
+  if (e.pca) return { faixa: "var(--info)", semaforo };
   return { faixa: e.cor ?? corQuadro?.(e.quadroId) ?? (e.tipo === "periodo" ? semaforo : "var(--accent)"), semaforo };
 }
+
+/** A origem curta do evento no chip: "#12" (tarefa) ou "PCA" (previsão do PCA). */
+const origemCurta = (e: EventoCalendario) => (e.pca ? "PCA" : rotuloTicket(e.ticket));
 
 /** "09:30–10:00 · " / "" — o horário no rótulo do evento. */
 const horarioDe = (e: EventoCalendario) => (e.diaInteiro || !e.horaInicio ? "" : `${e.horaInicio}${e.horaFim ? `–${e.horaFim}` : ""}`);
@@ -193,7 +258,7 @@ function EventoChip({
 }) {
   const { faixa, semaforo } = corDoEvento(e, hoje, corQuadro);
   const hora = horarioDe(e);
-  const titulo = `${e.titulo}${hora ? ` — ${hora}` : ""} · ${rotuloTicket(e.ticket)}${e.tipo === "periodo" ? ` — ${ROTULO_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)]}` : ""}${e.tipo === "recorrencia" ? " (próxima ocorrência)" : ""}`;
+  const titulo = `${e.titulo}${hora ? ` — ${hora}` : ""} · ${e.pca ? e.pca.pcaNome : rotuloTicket(e.ticket)}${e.tipo === "periodo" ? ` — ${ROTULO_ESTADO_PRAZO[estadoPrazo(e.fim, hoje, e.concluida)]}` : ""}${e.tipo === "recorrencia" ? (e.prevista ? " (ocorrência prevista)" : " (próxima ocorrência)") : ""}`;
   return (
     <div className="relative flex min-w-0 items-stretch">
       <button
@@ -204,14 +269,14 @@ function EventoChip({
         className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-[6px] px-1.5 text-left leading-tight text-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
           compacta ? "h-full text-[11px]" : "min-h-11 text-[12px] lg:min-h-8"
         } ${onPegar ? "cursor-grab active:cursor-grabbing" : ""} ${e.concluida ? "text-muted line-through decoration-faint" : ""} ${
-          e.tipo === "recorrencia" ? "border border-dashed" : ""
+          e.tipo === "recorrencia" || e.tipo === "pca" ? "border border-dashed" : ""
         }`}
-        style={{ background: `color-mix(in srgb, ${faixa} 14%, var(--surface))`, boxShadow: `inset 3px 0 0 ${faixa}`, borderColor: e.tipo === "recorrencia" ? faixa : undefined }}
+        style={{ background: `color-mix(in srgb, ${faixa} 14%, var(--surface))`, boxShadow: `inset 3px 0 0 ${faixa}`, borderColor: e.tipo === "recorrencia" || e.tipo === "pca" ? faixa : undefined }}
       >
         {e.tipo === "periodo" && <span aria-hidden className="ml-0.5 h-2 w-2 shrink-0 rounded-full" style={{ background: semaforo }} />}
         {hora && <span className="shrink-0 pl-0.5 font-semibold tabular-nums text-text-2">{e.horaInicio}</span>}
         <span className="truncate">{e.titulo}</span>
-        {!compacta && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-faint">{rotuloTicket(e.ticket)}</span>}
+        {!compacta && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-faint">{origemCurta(e)}</span>}
         {e.recorrente && <IconRepetir aria-label="Recorrente" className={`${compacta ? "ml-auto" : ""} h-3 w-3 shrink-0 text-faint`} />}
       </button>
       {onPegar && !compacta && (
@@ -237,9 +302,12 @@ function EventoChip({
  * - **Mês**: a grade com as FAIXAS (início → fim contínuos — `faixasDaSemana`), "+N" abre a semana, o nº do dia abre o DIA;
  *   setas movem entre os dias. No celular: a mini-grade (pontos) + a lista do dia tocado;
  * - **Agenda**: os dias do mês com eventos.
- * ARRASTAR reagenda (`onMover` — dia, e a hora na grade; a recorrência não se arrasta). Cabeçalho: navegação, "Criar",
- * os NÚMEROS e a legenda. `lateral` = a barra (mini-mês + conjuntos) — coluna à esquerda no desktop, folha no celular.
- * Recebe os eventos JÁ FILTRADOS/VISÍVEIS. `mes`/`onMes` = mês controlado pelo host (o servidor carrega o mês pedido).
+ * ARRASTAR reagenda (`onMover` — dia, e a hora na grade; a recorrência e o PCA não se arrastam); a BORDA de baixo de um
+ * evento com hora muda a DURAÇÃO (`onRedimensionar`). Na grade de horas, o TECLADO também cria: foco na coluna do dia,
+ * ↑/↓ escolhem a hora (de 30 em 30 min) e Enter cria ali. `opcoes` = a semana começa na segunda / sem o fim de semana;
+ * `feriados` = os dias com feriado (sombreados, com o nome). Cabeçalho: navegação, "Criar", os NÚMEROS e a legenda.
+ * `lateral` = a barra (mini-mês + conjuntos) — coluna à esquerda no desktop, folha no celular. Recebe os eventos JÁ
+ * FILTRADOS/VISÍVEIS. `mes`/`onMes` = mês controlado pelo host (o servidor carrega o mês pedido).
  */
 export function CalendarioTarefas({
   eventos,
@@ -248,12 +316,15 @@ export function CalendarioTarefas({
   onAbrir,
   onCriar,
   onMover,
+  onRedimensionar,
   corQuadro,
   mes: mesControlado,
   onMes,
   legenda,
   lateral,
   rotuloLateral = "Filtros",
+  opcoes = OPCOES_CALENDARIO_PADRAO,
+  feriados,
 }: {
   eventos: EventoCalendario[];
   hoje: string;
@@ -262,12 +333,15 @@ export function CalendarioTarefas({
   /** Criar no dia (e na hora, na grade). */
   onCriar?: (slot: { data: string; hora: string | null }) => void;
   onMover?: (e: EventoCalendario, dia: string, hora: string | null) => void;
+  onRedimensionar?: (e: EventoCalendario, horaFim: string) => void;
   corQuadro?: (quadroId: number) => string | undefined;
   mes?: MesCalendario;
   onMes?: (m: MesCalendario) => void;
   legenda?: ReactNode;
   lateral?: (nav: NavCalendario) => ReactNode;
   rotuloLateral?: string;
+  opcoes?: OpcoesCalendario;
+  feriados?: Map<string, FeriadoDia[]>;
 }) {
   const [mesLocal, setMesLocal] = useState<MesCalendario>(() => mesControlado ?? mesDoDia(hoje));
   const mes = mesControlado ?? mesLocal;
@@ -276,15 +350,24 @@ export function CalendarioTarefas({
   const [diaAberto, setDiaAberto] = useState<string | null>(null);
   const [semanaAberta, setSemanaAberta] = useState<string | null>(null);
   const [lateralAberta, setLateralAberta] = useState(false);
-  const grade = useMemo(() => gradeMes(mes.ano, mes.mes), [mes.ano, mes.mes]);
-  const semana = useMemo(() => semanaDe(foco), [foco]);
+  const inicioSemana = opcoes.inicioSegunda ? 1 : 0;
+  const grade = useMemo(() => gradeMes(mes.ano, mes.mes, inicioSemana), [mes.ano, mes.mes, inicioSemana]);
+  const semana = useMemo(() => semanaDe(foco, inicioSemana), [foco, inicioSemana]);
+  /** Os dias EXIBIDOS de cada semana (sem o fim de semana, se a pessoa o ocultou). */
+  const exibir = (sem: string[]) => diasExibidos(sem, opcoes);
+  const nCols = opcoes.ocultarFimDeSemana ? 5 : 7;
+  const colunasSemana = { gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` };
   const prefixo = prefixoMes(mes);
   const dnd = useArrastoEventos(onMover);
+  const rd = useRedimensionar(onRedimensionar);
   const agoraMin = useAgoraMin();
-  const pegar = (e: EventoCalendario) => (onMover && e.tipo !== "recorrencia" ? (ev: ReactPointerEvent<HTMLElement>) => dnd.iniciar(ev, e) : undefined);
+  const [slot, setSlot] = useState<{ dia: string; min: number } | null>(null);
+  const pegar = (e: EventoCalendario) => (onMover && (e.tipo === "periodo" || e.tipo === "evento") ? (ev: ReactPointerEvent<HTMLElement>) => dnd.iniciar(ev, e) : undefined);
   const abrir = (e: EventoCalendario) => {
-    if (!dnd.foiArrasto()) onAbrir(e);
+    if (!dnd.foiArrasto() && !rd.foiRedimensionar()) onAbrir(e);
   };
+  const feriadoDe = (d: string) => feriados?.get(d);
+  const nomeFeriado = (d: string) => feriadoDe(d)?.map((f) => f.nome).join(", ");
 
   // O mês mudou por fora (o servidor carregou outro): o foco e o dia aberto acompanham.
   // biome-ignore lint/correctness/useExhaustiveDependencies: acompanha só a troca de mês.
@@ -343,7 +426,7 @@ export function CalendarioTarefas({
     vista === "dia"
       ? `${nomeDia(foco)}, ${dataBR(foco)}`
       : vista === "semana"
-        ? `${dataBR(semana[0]).slice(0, 5)} – ${dataBR(semana[6])}`
+        ? `${dataBR(exibir(semana)[0]).slice(0, 5)} – ${dataBR(exibir(semana).at(-1) ?? semana[6])}`
         : `${NOMES_MES[mes.mes - 1]} ${mes.ano}`;
   const passo = vista === "dia" ? "Dia" : vista === "semana" ? "Semana" : "Mês";
 
@@ -356,6 +439,8 @@ export function CalendarioTarefas({
     document.querySelector<HTMLButtonElement>(`[data-dia-btn="${somarDias(d, p)}"]`)?.focus();
   };
   const alvoDrop = (d: string) => (dnd.arrasto?.dia === d ? "ring-2 ring-inset ring-accent bg-accent-soft" : "");
+  /** O fundo do dia: feriado em âmbar suave; fim de semana sombreado. */
+  const fundoDia = (d: string) => (feriadoDe(d) ? "bg-[color-mix(in_srgb,var(--warn)_9%,transparent)]" : fimDeSemana(d) ? "bg-surface-2/35" : "");
   const doDia = (d: string) => eventosDoDia(eventos, d);
 
   const numeros = [
@@ -375,6 +460,7 @@ export function CalendarioTarefas({
             {nomeDia(d)}, {dataBR(d)}
             {d === hoje ? " · hoje" : ""}
             <span className="ml-1.5 font-normal text-muted">{lista.length ? `${num(lista.length)} evento${lista.length === 1 ? "" : "s"}` : "sem eventos"}</span>
+            {nomeFeriado(d) && <span className="ml-1.5 block truncate text-[11.5px] font-semibold text-[var(--warn)]">{nomeFeriado(d)}</span>}
           </h3>
           {onCriar && <Button variant="ghost" size="sm" aria-label={`Criar em ${dataBR(d)}`} icon={<IconPlus className="h-4 w-4" />} onClick={() => onCriar({ data: d, hora: null })} />}
           {fechar && <Button variant="ghost" size="sm" aria-label="Fechar o dia" icon={<IconClose className="h-4 w-4" />} onClick={fechar} />}
@@ -414,9 +500,19 @@ export function CalendarioTarefas({
                 <span className={`grid h-7 min-w-7 place-items-center rounded-full px-1 text-[13px] tabular-nums ${d === hoje ? "bg-accent font-bold text-white" : "text-text"}`}>
                   {Number(d.slice(8))}
                 </span>
+                {nomeFeriado(d) && (
+                  <span className="max-w-full truncate px-1 text-[10px] font-semibold text-[var(--warn)]" title={nomeFeriado(d)}>
+                    {nomeFeriado(d)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
+        )}
+        {dias.length === 1 && nomeFeriado(dias[0]) && (
+          <p className="border-b border-border bg-surface-2 px-3 py-1.5 text-[12px] font-semibold text-[var(--warn)]">
+            {feriadoDe(dias[0])?.map((f) => `${f.nome} (${ROTULO_TIPO_FERIADO[f.tipo].toLowerCase()})`).join(" · ")}
+          </p>
         )}
         {/* Dia inteiro (e os de vários dias) — as faixas no topo. */}
         <div className="grid border-b border-border" style={{ gridTemplateColumns: colunas, gridTemplateRows: `repeat(${Math.max(1, linhasTopo)}, minmax(1.75rem, auto))` }}>
@@ -424,7 +520,7 @@ export function CalendarioTarefas({
             dia todo
           </span>
           {dias.map((d, i) => (
-            <div key={`t${d}`} data-dia={d} style={{ gridColumn: i + 2, gridRow: "1 / -1" }} className={`border-l border-border ${fimDeSemana(d) ? "bg-surface-2/35" : ""} ${alvoDrop(d)}`} />
+            <div key={`t${d}`} data-dia={d} style={{ gridColumn: i + 2, gridRow: "1 / -1" }} className={`border-l border-border ${fundoDia(d)} ${alvoDrop(d)}`} />
           ))}
           {faixas.map((f) => (
             <div
@@ -438,6 +534,7 @@ export function CalendarioTarefas({
         </div>
         {/* As horas: rola por dentro (abre nas 7h). */}
         <div
+          data-rolador=""
           className="max-h-[62dvh] overflow-y-auto"
           ref={(el) => {
             if (el && !el.dataset.rolou) {
@@ -457,27 +554,64 @@ export function CalendarioTarefas({
             {dias.map((d) => {
               const layout = layoutDoDia(doDia(d).filter((e) => !e.diaInteiro && e.inicio === e.fim));
               return (
-                <div
+                <fieldset
                   key={d}
                   data-dia={d}
                   data-grade=""
+                  tabIndex={onCriar ? 0 : undefined}
+                  aria-label={`Horários de ${nomeDia(d)}, ${dataBR(d)}${onCriar ? " — ↑/↓ escolhem a hora, Enter cria um evento" : ""}`}
+                  onFocus={(ev) => onCriar && ev.target === ev.currentTarget && setSlot((x) => (x?.dia === d ? x : { dia: d, min: agoraMin != null && d === hoje ? Math.ceil(agoraMin / 30) * 30 : 9 * 60 }))}
+                  onBlur={(ev) => ev.target === ev.currentTarget && setSlot(null)}
+                  onKeyDown={(ev) => {
+                    if (!onCriar || ev.target !== ev.currentTarget || !slot) return;
+                    const passo = { ArrowUp: -30, ArrowDown: 30 }[ev.key];
+                    if (passo) {
+                      ev.preventDefault();
+                      const min = Math.max(0, Math.min(23 * 60 + 30, slot.min + passo));
+                      setSlot({ dia: d, min });
+                      const rolador = ev.currentTarget.closest<HTMLElement>("[data-rolador]");
+                      if (rolador) {
+                        const y = (min / 60) * HORA_PX;
+                        if (y < rolador.scrollTop || y > rolador.scrollTop + rolador.clientHeight - HORA_PX) rolador.scrollTop = y - rolador.clientHeight / 2;
+                      }
+                    } else if (ev.key === "Enter" || ev.key === " ") {
+                      ev.preventDefault();
+                      onCriar({ data: d, hora: horaDeMinutos(slot.min) });
+                    }
+                  }}
                   onClick={(ev) => {
                     if (!onCriar || ev.target !== ev.currentTarget) return;
                     const r = ev.currentTarget.getBoundingClientRect();
                     onCriar({ data: d, hora: horaDeMinutos(Math.floor((((ev.clientY - r.top) / r.height) * 1440) / 30) * 30) });
                   }}
-                  className={`relative border-l border-border ${fimDeSemana(d) ? "bg-surface-2/35" : ""} ${onCriar ? "cursor-cell" : ""} ${dnd.arrasto?.dia === d ? "bg-accent-soft" : ""}`}
+                  className={`relative min-w-0 border-l border-border focus-visible:outline-none ${fundoDia(d)} ${onCriar ? "cursor-cell" : ""} ${dnd.arrasto?.dia === d ? "bg-accent-soft" : ""}`}
                   style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${HORA_PX - 1}px, var(--border) ${HORA_PX - 1}px, var(--border) ${HORA_PX}px)` }}
                 >
-                  {layout.map((l) => (
-                    <div
-                      key={l.evento.chave}
-                      className={`absolute z-[1] p-px ${dnd.arrasto ? "pointer-events-none" : ""} ${dnd.arrasto?.chave === l.evento.chave ? "opacity-40" : ""}`}
-                      style={{ top: (l.topo / 60) * HORA_PX, height: (l.altura / 60) * HORA_PX, left: `${(l.coluna / l.colunas) * 100}%`, width: `${100 / l.colunas}%` }}
-                    >
-                      <EventoCaixa e={l.evento} hoje={hoje} corQuadro={corQuadro} onAbrir={() => abrir(l.evento)} onPegar={pegar(l.evento)} />
+                  {slot?.dia === d && (
+                    <div aria-hidden className="pointer-events-none absolute inset-x-0 z-[2] rounded-[4px] ring-2 ring-accent" style={{ top: (slot.min / 60) * HORA_PX, height: HORA_PX / 2 }}>
+                      <span className="absolute left-1 top-0.5 rounded bg-accent px-1 text-[10.5px] font-semibold text-white">{horaDeMinutos(slot.min)} — Enter cria</span>
                     </div>
-                  ))}
+                  )}
+                  {layout.map((l) => {
+                    const fimPrevia = rd.previa?.chave === l.evento.chave ? rd.previa.fim : null;
+                    return (
+                      <div
+                        key={l.evento.chave}
+                        className={`absolute z-[1] p-px ${dnd.arrasto ? "pointer-events-none" : ""} ${dnd.arrasto?.chave === l.evento.chave ? "opacity-40" : ""}`}
+                        style={{ top: (l.topo / 60) * HORA_PX, height: (((fimPrevia ?? l.topo + l.altura) - l.topo) / 60) * HORA_PX, left: `${(l.coluna / l.colunas) * 100}%`, width: `${100 / l.colunas}%` }}
+                      >
+                        <EventoCaixa
+                          e={l.evento}
+                          hoje={hoje}
+                          corQuadro={corQuadro}
+                          onAbrir={() => abrir(l.evento)}
+                          onPegar={pegar(l.evento)}
+                          fimPrevia={fimPrevia}
+                          onRedimensionar={onRedimensionar && l.evento.tipo === "evento" ? (ev) => rd.iniciar(ev, l.evento) : undefined}
+                        />
+                      </div>
+                    );
+                  })}
                   {d === hoje && agoraMin != null && (
                     <div aria-hidden className="pointer-events-none absolute inset-x-0 z-[2] h-0.5 bg-[var(--danger)]" style={{ top: (agoraMin / 60) * HORA_PX }}>
                       <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-[var(--danger)]" />
@@ -488,7 +622,7 @@ export function CalendarioTarefas({
                       {dnd.arrasto.hora}
                     </span>
                   )}
-                </div>
+                </fieldset>
               );
             })}
           </div>
@@ -564,14 +698,15 @@ export function CalendarioTarefas({
         <>
           {/* Desktop: a grade do mês com as faixas. */}
           <div className="hidden overflow-hidden rounded-card border border-border bg-surface lg:block">
-            <div className="grid grid-cols-7 border-b border-border bg-surface-2">
-              {DIAS_SEMANA_CURTOS.map((d, i) => (
-                <div key={d} className={`py-1.5 text-center text-[11px] font-semibold ${i === 0 || i === 6 ? "text-faint" : "text-muted"}`}>
-                  {d}
+            <div className="grid border-b border-border bg-surface-2" style={colunasSemana}>
+              {exibir(grade[0]).map((d) => (
+                <div key={d} className={`py-1.5 text-center text-[11px] font-semibold ${fimDeSemana(d) ? "text-faint" : "text-muted"}`}>
+                  {nomeDia(d)}
                 </div>
               ))}
             </div>
-            {grade.map((sem) => {
+            {grade.map((semCompleta) => {
+              const sem = exibir(semCompleta);
               const faixas = faixasDaSemana(eventos, sem);
               const linhas = faixas.reduce((m, f) => Math.max(m, f.linha + 1), 0);
               const aberta = semanaAberta === sem[0];
@@ -580,19 +715,24 @@ export function CalendarioTarefas({
               return (
                 <div
                   key={sem[0]}
-                  className="grid min-h-28 grid-cols-7 border-b border-border last:border-b-0"
-                  style={{ gridTemplateRows: `2rem ${mostrar ? `repeat(${mostrar}, 1.5rem) ` : ""}minmax(1.5rem, 1fr)` }}
+                  className="grid min-h-28 border-b border-border last:border-b-0"
+                  style={{ ...colunasSemana, gridTemplateRows: `2rem ${mostrar ? `repeat(${mostrar}, 1.5rem) ` : ""}minmax(1.5rem, 1fr)` }}
                 >
                   {sem.map((d, i) => (
                     <div
                       key={`f${d}`}
                       data-dia={d}
                       style={{ gridColumn: i + 1, gridRow: "1 / -1" }}
-                      className={`border-r border-border transition-colors last:border-r-0 ${!d.startsWith(prefixo) ? "bg-surface-2/70" : fimDeSemana(d) ? "bg-surface-2/35" : ""} ${alvoDrop(d)}`}
+                      className={`border-r border-border transition-colors last:border-r-0 ${!d.startsWith(prefixo) ? "bg-surface-2/70" : fundoDia(d)} ${alvoDrop(d)}`}
                     />
                   ))}
                   {sem.map((d, i) => (
-                    <div key={`n${d}`} style={{ gridColumn: i + 1, gridRow: 1 }} className="group/dia pointer-events-none z-[1] flex items-center justify-end gap-0.5 px-1">
+                    <div key={`n${d}`} style={{ gridColumn: i + 1, gridRow: 1 }} className="group/dia pointer-events-none z-[1] flex min-w-0 items-center justify-end gap-0.5 px-1">
+                      {nomeFeriado(d) && (
+                        <span className="mr-auto min-w-0 truncate text-[10.5px] font-semibold text-[var(--warn)]" title={nomeFeriado(d)}>
+                          {nomeFeriado(d)}
+                        </span>
+                      )}
                       {onCriar && (
                         <button
                           type="button"
@@ -659,16 +799,16 @@ export function CalendarioTarefas({
 
           {/* Celular e tablet: a mini-grade (pontos); a lista do dia tocado vem logo abaixo. */}
           <div className="overflow-hidden rounded-card border border-border bg-surface lg:hidden">
-            <div className="grid grid-cols-7 border-b border-border bg-surface-2">
-              {DIAS_SEMANA_CURTOS.map((d) => (
+            <div className="grid border-b border-border bg-surface-2" style={colunasSemana}>
+              {exibir(grade[0]).map((d) => (
                 <div key={d} className="py-1 text-center text-[10.5px] font-semibold text-muted">
-                  {d.slice(0, 1)}
+                  {nomeDia(d).slice(0, 1)}
                 </div>
               ))}
             </div>
             {grade.map((sem) => (
-              <div key={sem[0]} className="grid grid-cols-7">
-                {sem.map((d) => {
+              <div key={sem[0]} className="grid" style={colunasSemana}>
+                {exibir(sem).map((d) => {
                   const lista = doDia(d);
                   const sel = (diaAberto ?? foco) === d;
                   return (
@@ -681,8 +821,8 @@ export function CalendarioTarefas({
                         setFoco(d);
                       }}
                       aria-pressed={sel}
-                      aria-label={`${dataBR(d)} — ${num(lista.length)} evento(s)`}
-                      className={`flex h-12 flex-col items-center justify-center gap-1 transition-colors ${!d.startsWith(prefixo) ? "text-faint" : "text-text-2"} ${fimDeSemana(d) && d.startsWith(prefixo) ? "bg-surface-2/35" : ""} ${alvoDrop(d)}`}
+                      aria-label={`${dataBR(d)}${nomeFeriado(d) ? ` (${nomeFeriado(d)})` : ""} — ${num(lista.length)} evento(s)`}
+                      className={`flex h-12 flex-col items-center justify-center gap-1 transition-colors ${!d.startsWith(prefixo) ? "text-faint" : nomeFeriado(d) ? "text-[var(--warn)]" : "text-text-2"} ${d.startsWith(prefixo) ? fundoDia(d) : ""} ${alvoDrop(d)}`}
                     >
                       <span className={`grid h-7 min-w-7 place-items-center rounded-full px-1 text-[12.5px] tabular-nums ${d === hoje ? "bg-accent font-bold text-white" : sel ? "bg-accent-soft font-semibold text-accent" : ""}`}>
                         {Number(d.slice(8))}
@@ -705,9 +845,9 @@ export function CalendarioTarefas({
 
       {vista === "semana" && (
         <>
-          <div className="hidden lg:block">{gradeHoras(semana)}</div>
+          <div className="hidden lg:block">{gradeHoras(exibir(semana))}</div>
           <div className="space-y-2 lg:hidden">
-            {semana.map((d) => (
+            {exibir(semana).map((d) => (
               <div key={d}>{listaDoDia(d)}</div>
             ))}
           </div>
@@ -718,7 +858,7 @@ export function CalendarioTarefas({
 
       {vista === "agenda" &&
         (() => {
-          const dias = grade.flat().filter((d) => d.startsWith(prefixo) && doDia(d).length > 0);
+          const dias = grade.flat().filter((d) => d.startsWith(prefixo) && (doDia(d).length > 0 || !!nomeFeriado(d)));
           return dias.length ? (
             <div className="space-y-2">
               {dias.map((d) => (
@@ -760,28 +900,47 @@ function EventoCaixa({
   corQuadro,
   onAbrir,
   onPegar,
+  onRedimensionar,
+  fimPrevia = null,
 }: {
   e: EventoCalendario;
   hoje: string;
   corQuadro?: (quadroId: number) => string | undefined;
   onAbrir: () => void;
   onPegar?: (ev: ReactPointerEvent<HTMLElement>) => void;
+  /** A BORDA de baixo muda a duração (arrastar). */
+  onRedimensionar?: (ev: ReactPointerEvent<HTMLElement>) => void;
+  /** O fim (minutos) enquanto redimensiona. */
+  fimPrevia?: number | null;
 }) {
   const { faixa } = corDoEvento(e, hoje, corQuadro);
+  const horario = fimPrevia != null ? `${e.horaInicio}–${horaDeMinutos(fimPrevia)}` : horarioDe(e);
   return (
-    <button
-      type="button"
-      onClick={onAbrir}
-      onPointerDown={(ev) => onPegar?.(ev)}
-      title={`${e.titulo} — ${horarioDe(e)} · ${rotuloTicket(e.ticket)}${e.local ? ` · ${e.local}` : ""}`}
-      className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab touch-none active:cursor-grabbing" : ""} ${e.concluida ? "text-muted line-through" : ""}`}
-      style={{ background: `color-mix(in srgb, ${faixa} 22%, var(--surface))`, boxShadow: `inset 3px 0 0 ${faixa}` }}
-    >
-      <span className="truncate font-semibold">{e.titulo}</span>
-      <span className="truncate tabular-nums text-text-2">
-        {horarioDe(e)}
-        {e.local ? ` · ${e.local}` : ""}
-      </span>
-    </button>
+    <div className="relative h-full w-full">
+      <button
+        type="button"
+        onClick={onAbrir}
+        onPointerDown={(ev) => onPegar?.(ev)}
+        title={`${e.titulo} — ${horario} · ${origemCurta(e)}${e.local ? ` · ${e.local}` : ""}`}
+        className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab touch-none active:cursor-grabbing" : ""} ${e.concluida ? "text-muted line-through" : ""}`}
+        style={{ background: `color-mix(in srgb, ${faixa} 22%, var(--surface))`, boxShadow: `inset 3px 0 0 ${faixa}` }}
+      >
+        <span className="truncate font-semibold">{e.titulo}</span>
+        <span className="truncate tabular-nums text-text-2">
+          {horario}
+          {e.local ? ` · ${e.local}` : ""}
+        </span>
+      </button>
+      {onRedimensionar && (
+        <span
+          role="presentation"
+          title="Arrastar para mudar a duração"
+          onPointerDown={onRedimensionar}
+          className="absolute inset-x-1 bottom-0 flex h-2 cursor-ns-resize touch-none items-end justify-center any-pointer-coarse:h-4"
+        >
+          <span aria-hidden className="mb-0.5 h-1 w-6 rounded-full bg-[color-mix(in_srgb,var(--text)_30%,transparent)]" />
+        </span>
+      )}
+    </div>
   );
 }

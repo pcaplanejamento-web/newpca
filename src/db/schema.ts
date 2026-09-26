@@ -913,6 +913,8 @@ export const tarefaEventos = sqliteTable(
     titulo: text("titulo").notNull(),
     /** "AAAA-MM-DD". */
     data: text("data").notNull(),
+    /** "AAAA-MM-DD" — evento de VÁRIOS dias (migração `0047`); NULL = um dia só. */
+    dataFim: text("data_fim"),
     diaInteiro: integer("dia_inteiro", { mode: "boolean" }).notNull().default(true),
     horaInicio: text("hora_inicio"),
     horaFim: text("hora_fim"),
@@ -920,6 +922,8 @@ export const tarefaEventos = sqliteTable(
     descricao: text("descricao"),
     /** Hex; NULL = a cor do quadro. */
     cor: text("cor"),
+    /** Minutos ANTES do início para o lembrete no sino (migração `0047`); NULL = sem lembrete. */
+    lembreteMin: integer("lembrete_min"),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -969,6 +973,34 @@ export const notificacoes = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id), uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave)],
+);
+
+/** FERIADOS e pontos facultativos cadastrados pelo ADM (migração `0047`; os nacionais são calculados no código).
+ * `anual` = repete todo ano no mesmo dia/mês (o ano de `data` é só o do cadastro). */
+export const feriados = sqliteTable(
+  "feriados",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    data: text("data").notNull(),
+    nome: text("nome").notNull(),
+    tipo: text("tipo").notNull().default("municipal"),
+    anual: integer("anual", { mode: "boolean" }).notNull().default(false),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("feriados_data_idx").on(t.data)],
+);
+
+/** O HASH do link de ASSINATURA (.ics) do calendário de cada pessoa (migração `0047`). */
+export const calendarioTokens = sqliteTable(
+  "calendario_tokens",
+  {
+    usuarioId: integer("usuario_id")
+      .primaryKey()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("calendario_tokens_hash_uq").on(t.tokenHash)],
 );
 
 /** MODELOS de quadro (`grupo_id`) e de tarefa (`quadro_id`) — `conteudo` JSON (`tarefas-core`). */

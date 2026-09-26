@@ -25,7 +25,8 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * A tarefa COMPLETA (com a descrição) + o CONTEÚDO (checklist, comentários e eventos) — o detalhe do cartão. `?contexto=1`
- * = o CONTEXTO do quadro dela (listas, etiquetas, pessoas, modelos) para abrir a tarefa fora do quadro (o Calendário).
+ * = o CONTEXTO do quadro dela (listas, etiquetas, pessoas, modelos) para abrir a tarefa fora do quadro (o Calendário);
+ * `?contexto=tarefa` = só o resumo atualizado da tarefa (o Calendário depois de salvar — sem reler o quadro).
  */
 export async function GET(req: Request, ctx: Ctx) {
   const a = await exigirUsuario();
@@ -37,6 +38,7 @@ export async function GET(req: Request, ctx: Ctx) {
   }
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!r) return erro("Tarefa não encontrada.", 404);
+  if (new URL(req.url).searchParams.get("contexto") === "tarefa") return ok({ tarefa: r.tarefa });
   return ok({ tarefa: r.tarefa, ...(await conteudoTarefa(r.tarefa.id)) });
 }
 

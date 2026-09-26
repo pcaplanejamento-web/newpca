@@ -3,7 +3,7 @@ import { type AbaQuadro, QuadroTarefas } from "@/components/QuadroTarefas";
 import { getUsuarioAtual } from "@/lib/auth";
 import { eventosDosQuadros, rotulosVinculos } from "@/lib/tarefas";
 import { lerVinculo } from "@/lib/tarefas-core";
-import { carregarQuadro } from "@/lib/tarefas-dados";
+import { carregarQuadro, preferenciasCalendario } from "@/lib/tarefas-dados";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ export default async function QuadroTarefasPage({
   const novaInicial = nova ? { ...nova, rotulo: (await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) ?? null } : null;
   const tarefaInicial = dados.tarefas.find((t) => String(t.id) === sp.tarefa)?.id ?? null;
   const prazoInicial = /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
-  // Os eventos cadastrados só com a aba Calendário aberta (as demais abas não os usam).
-  const eventos = aba === "calendario" ? await eventosDosQuadros([dados.quadro.id]) : [];
-  return <QuadroTarefas {...dados} aba={aba} eventos={eventos} usuarioId={u.id} novaInicial={novaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />;
+  // Os eventos cadastrados, as opções da pessoa e os feriados só com a aba Calendário aberta (as demais abas não os usam).
+  const [eventos, calendario] = aba === "calendario" ? await Promise.all([eventosDosQuadros([dados.quadro.id]), preferenciasCalendario(u.id)]) : [[], undefined];
+  return <QuadroTarefas {...dados} aba={aba} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />;
 }

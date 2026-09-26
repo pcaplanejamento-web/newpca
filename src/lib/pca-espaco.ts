@@ -13,6 +13,7 @@ import {
   unidades,
 } from "@/db/schema";
 import { historicoDfd, historicoProtocolo } from "./auditoria";
+import type { DfdPrevisao } from "./calendario-core";
 import type { LinhaHistorico } from "./auditoria-core";
 import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
 import { getDb } from "./db";
@@ -898,4 +899,60 @@ export async function dfdsDosProtocolos(protocoloIds: number[]): Promise<{ id: n
     for (const r of rows) if (r.protocoloId != null) out.push({ id: r.id, protocoloId: r.protocoloId });
   }
   return out;
+}
+
+/**
+ * O CRONOGRAMA DE CONTRATAÇÕES para o Calendário (migração `0047`): dos PCAs de fonte protocolo cujo ANO cruza `de`–`ate`,
+ * os DFDs VIGENTES (consolidados — o mesmo critério do Dashboard) com a PREVISÃO DE ENTREGA (seção 5; `previsaoDoDfd`).
+ * Sem previsão, o DFD fica de fora. Falha = lista vazia (o calendário segue sem o PCA).
+ */
+export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: { id: number; nome: string; ano: number }[]; dfds: DfdPrevisao[] }> {
+  try {
+    const db = getDb();
+    const a0 = Number(de.slice(0, 4));
+    const a1 = Number(ate.slice(0, 4));
+    const lista = (await db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano, fonte: pcas.fonte }).from(pcas)).filter(
+      (p): p is typeof p & { ano: number } => coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1,
+    );
+    if (!lista.length) return { pcas: [], dfds: [] };
+    const vs = await vinculos(lista.map((p) => p.id));
+    const out: DfdPrevisao[] = [];
+    for (const p of lista) {
+      const vig = consolidarPca(vs.filter((v) => v.pcaId === p.id)).vigentes;
+      for (const lote of lotesDeIds(vig)) {
+        const ds = await db
+          .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, secoes: dfds.secoes, anoPca: dfds.anoPca, valor: dfds.valorTotal, sigla: reparticoes.codigo })
+          .from(dfds)
+          .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
+          .where(inArray(dfds.id, lote));
+        for (const d of ds) {
+          let secoes: { titulo?: string | null; texto?: string | null }[] = [];
+          try {
+            secoes = d.secoes ? JSON.parse(d.secoes) : [];
+          } catch {
+            secoes = [];
+          }
+          const pv = previsaoDoDfd(secoes, d.anoPca ?? p.ano);
+          if (!pv) continue;
+          out.push({
+            pcaId: p.id,
+            pcaNome: p.nome,
+            dfdId: d.id,
+            numero: d.numero,
+            planejamento: d.planejamento,
+            objeto: d.objeto,
+            sigla: d.sigla,
+            valor: Number(d.valor ?? 0),
+            ano: pv.ano,
+            mes: "mes" in pv ? pv.mes : null,
+            anual: "anual" in pv,
+          });
+        }
+      }
+    }
+    return { pcas: lista.map((p) => ({ id: p.id, nome: p.nome, ano: p.ano })), dfds: out };
+  } catch (e) {
+    console.error("cronograma do PCA falhou", e);
+    return { pcas: [], dfds: [] };
+  }
 }

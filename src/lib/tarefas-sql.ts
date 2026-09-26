@@ -21,12 +21,14 @@ type Db = DrizzleD1Database<typeof schema>;
 export const colunasEvento = (e: DadosEvento) => ({
   titulo: e.titulo,
   data: e.data,
+  dataFim: e.dataFim && e.dataFim > e.data ? e.dataFim : null,
   diaInteiro: e.diaInteiro,
   horaInicio: e.diaInteiro ? null : e.horaInicio,
   horaFim: e.diaInteiro ? null : e.horaFim,
   local: e.local,
   descricao: e.descricao,
   cor: e.cor,
+  lembreteMin: e.lembreteMin,
 });
 
 /**

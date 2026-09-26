@@ -1,7 +1,7 @@
 import type { UsuarioSessao } from "./auth";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { dataIsoBrasilia } from "./format";
-import { getGrupoAtivoId, gruposDoUsuario } from "./grupos";
+import { abasPermitidas, getGrupoAtivo, getGrupoAtivoId, gruposDoUsuario } from "./grupos";
 import {
   contadoresDosQuadros,
   dadosQuadro,
@@ -14,12 +14,27 @@ import {
   listarModelosTarefa,
   listarQuadros,
   quadroAcessivel,
+  LIMITE_EVENTOS_CALENDARIO,
+  LIMITE_TAREFAS_CALENDARIO,
   tarefaAcessivel,
   tarefasAbertasLeves,
   tarefasDoCalendario,
 } from "./tarefas";
+import { assinaturaDaPessoa } from "./calendario-assinatura";
+import { CHAVE_OPCOES_CALENDARIO, lerOpcoesCalendario } from "./calendario-core";
+import { listarFeriados } from "./feriados";
+import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { CHAVE_OCULTOS_CALENDARIO, gradeMes, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+
+/** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
+const PREFIXO_CALENDARIO = "calendario:";
+
+/** As preferências do CALENDÁRIO da pessoa (ocultos + opções) e os FERIADOS cadastrados — o módulo e a aba do quadro. */
+export async function preferenciasCalendario(usuarioId: number) {
+  const [prefs, feriados] = await Promise.all([listarPreferenciasTabela(usuarioId, PREFIXO_CALENDARIO), listarFeriados()]);
+  return { ocultos: lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]), opcoes: lerOpcoesCalendario(prefs[CHAVE_OPCOES_CALENDARIO]), feriados };
+}
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
 /**
@@ -39,26 +54,31 @@ export async function carregarQuadros(u: UsuarioSessao) {
 
 /**
  * O CALENDÁRIO (módulo `/painel/calendario?mes=AAAA-MM`): dos quadros NÃO arquivados do grupo ativo (o ADM sem grupo,
- * todos), na grade do mês pedido (as semanas inteiras) — as TAREFAS que aparecem nele, os EVENTOS cadastrados, os NÚMEROS
- * do cabeçalho, as etiquetas e PESSOAS (filtros), a lista leve das tarefas ABERTAS (o "Criar" escolhe a tarefa) e o que
- * a pessoa deixou OCULTO (a preferência `calendario:ocultos`).
+ * todos), na grade do mês pedido (as semanas inteiras — pela semana que a PESSOA escolheu) — as TAREFAS que aparecem nele,
+ * os EVENTOS cadastrados, os NÚMEROS do cabeçalho, as etiquetas e PESSOAS (filtros), a lista leve das tarefas ABERTAS (o
+ * "Criar" escolhe a tarefa), as preferências (ocultos + opções), os FERIADOS cadastrados, o CRONOGRAMA do PCA (quem vê o
+ * módulo PCA), se a pessoa tem LINK DE ASSINATURA e `truncado` (alguma carga bateu no teto — a tela avisa).
  */
 export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
-  const grupoAtivo = await getGrupoAtivoId(u);
+  const grupo = await getGrupoAtivo(u);
+  const grupoAtivo = grupo?.id ?? null;
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const mes = lerMes(mesPedido, hoje);
-  const grade = gradeMes(mes.ano, mes.mes);
+  const [prefs, abas] = await Promise.all([preferenciasCalendario(u.id), abasPermitidas(u, grupo)]);
+  const inicio = prefs.opcoes.inicioSegunda ? 1 : 0;
+  const grade = gradeMes(mes.ano, mes.mes, inicio);
   const de = grade[0][0];
   const ate = grade.at(-1)?.[6] ?? grade[0][6];
   const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
-  const [tarefas, eventos, etiquetas, contadores, abertas, prefs] = await Promise.all([
+  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
     eventosDosQuadros(ids, de, ate),
     etiquetasDosQuadros(ids),
-    contadoresDosQuadros(ids, hoje, semanaDe(hoje)[6]),
+    contadoresDosQuadros(ids, hoje, semanaDe(hoje, inicio)[6]),
     tarefasAbertasLeves(ids),
-    listarPreferenciasTabela(u.id, CHAVE_OCULTOS_CALENDARIO),
+    assinaturaDaPessoa(u.id),
+    abas.has("pca") ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
   ]);
   const pessoas = await pessoasPorIds([u.id, ...tarefas.flatMap((t) => t.pessoas)]);
   return {
@@ -70,7 +90,10 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string) {
     etiquetas,
     pessoas,
     abertas,
-    ocultos: lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]),
+    ...prefs,
+    pca,
+    assinatura: assinatura != null,
+    truncado: tarefas.length >= LIMITE_TAREFAS_CALENDARIO || eventos.length >= LIMITE_EVENTOS_CALENDARIO || abertas.length >= LIMITE_TAREFAS_CALENDARIO,
     quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })),
   };
 }

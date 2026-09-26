@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  diasSemanaCurtos,
+
+  ocorrenciaPrevista,
+  temOculto,
   eventoVisivel,
   eventosDoCalendario,
   eventosDoDia,
@@ -533,9 +537,10 @@ describe("calendário por eventos", () => {
       t(4, { prazo: "2026-11-01" }),
     ];
     const eventos = [
-      { id: 7, tarefaId: 4, titulo: "Reunião", data: "2026-09-20", diaInteiro: false, horaInicio: "09:30", horaFim: "10:00", local: "Sala 2", descricao: null, cor: "#16a34a" },
-      { id: 8, tarefaId: 4, titulo: "Fora", data: "2026-10-20", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null },
-      { id: 9, tarefaId: 99, titulo: "Órfão", data: "2026-09-20", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null },
+      { id: 7, tarefaId: 4, titulo: "Reunião", data: "2026-09-20", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:00", local: "Sala 2", descricao: null, cor: "#16a34a", lembreteMin: 30 },
+      { id: 8, tarefaId: 4, titulo: "Fora", data: "2026-10-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
+      { id: 9, tarefaId: 99, titulo: "Órfão", data: "2026-09-20", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
+      { id: 10, tarefaId: 4, titulo: "Viagem", data: "2026-08-30", dataFim: "2026-09-02", diaInteiro: true, horaInicio: null, horaFim: null, local: null, descricao: null, cor: null, lembreteMin: null },
     ];
     const ev = eventosDoCalendario(tarefas, eventos, "2026-09-01", "2026-09-30");
     const chaves = ev.map((e) => e.chave);
@@ -543,7 +548,10 @@ describe("calendário por eventos", () => {
     assert.ok(!chaves.includes("p4"));
     assert.deepEqual(chaves.filter((c) => c.startsWith("r2:")), ["r2:2026-09-12", "r2:2026-09-19", "r2:2026-09-26"]);
     assert.ok(!chaves.some((c) => c.startsWith("r3:")));
-    assert.deepEqual(chaves.filter((c) => c.startsWith("e")), ["e7"]);
+    assert.deepEqual(chaves.filter((c) => c.startsWith("e")).sort(), ["e10", "e7"]);
+    // Evento de VÁRIOS dias: começa antes do intervalo e termina dentro — entra, com o fim.
+    assert.deepEqual([ev.find((e) => e.chave === "e10")?.inicio, ev.find((e) => e.chave === "e10")?.fim], ["2026-08-30", "2026-09-02"]);
+    assert.equal(ev.find((e) => e.chave === "e7")?.lembreteMin, 30);
     const e7 = ev.find((e) => e.chave === "e7");
     assert.equal(e7?.diaInteiro, false);
     assert.equal(e7?.horaInicio, "09:30");
@@ -563,13 +571,41 @@ describe("calendário por eventos", () => {
     assert.equal(horaDeMinutos(605), "10:05");
   });
 
-  it("ocultos: leitura tolerante e visibilidade por tarefa, quadro e tipo", () => {
-    assert.deepEqual(lerOcultos(null), { tarefas: [], quadros: [], tipos: [] });
-    const o = lerOcultos({ tarefas: [2, 2, "x"], quadros: [5], tipos: ["recorrencia", "nada"] });
-    assert.deepEqual(o, { tarefas: [2], quadros: [5], tipos: ["recorrencia"] });
-    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "periodo" }, o), true);
-    assert.equal(eventoVisivel({ tarefaId: 2, quadroId: 1, tipo: "periodo" }, o), false);
-    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 5, tipo: "periodo" }, o), false);
-    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "recorrencia" }, o), false);
+  it("ocultos: leitura tolerante e visibilidade por tarefa, quadro, PCA e tipo", () => {
+    assert.deepEqual(lerOcultos(null), { tarefas: [], quadros: [], pcas: [], tipos: [], feriados: false });
+    const o = lerOcultos({ tarefas: [2, 2, "x"], quadros: [5], pcas: [3], tipos: ["recorrencia", "nada"], feriados: true });
+    assert.deepEqual(o, { tarefas: [2], quadros: [5], pcas: [3], tipos: ["recorrencia"], feriados: true });
+    assert.equal(temOculto(lerOcultos({})), false);
+    assert.equal(temOculto(lerOcultos({ feriados: true })), true);
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "periodo", pca: null }, o), true);
+    assert.equal(eventoVisivel({ tarefaId: 2, quadroId: 1, tipo: "periodo", pca: null }, o), false);
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 5, tipo: "periodo", pca: null }, o), false);
+    assert.equal(eventoVisivel({ tarefaId: 1, quadroId: 1, tipo: "recorrencia", pca: null }, o), false);
+    const pca = (pcaId: number) => ({ pcaId, pcaNome: "PCA", dfdId: 1, numero: "1", planejamento: null, objeto: null, sigla: null, valor: 0, anual: false });
+    assert.equal(eventoVisivel({ tarefaId: 0, quadroId: 0, tipo: "pca", pca: pca(3) }, o), false);
+    assert.equal(eventoVisivel({ tarefaId: 0, quadroId: 0, tipo: "pca", pca: pca(4) }, o), true);
+  });
+
+  it("recorrência que conta da CONCLUSÃO: a próxima ocorrência PREVISTA (se concluída hoje ou no prazo futuro)", () => {
+    const r = { freq: "semanal" as const, intervalo: 1, base: "conclusao" as const };
+    assert.equal(ocorrenciaPrevista({ inicio: null, prazo: "2026-09-20", concluidaEm: null, recorrencia: r }, "2026-09-25"), "2026-10-02");
+    assert.equal(ocorrenciaPrevista({ inicio: null, prazo: "2026-09-30", concluidaEm: null, recorrencia: r }, "2026-09-25"), "2026-10-07");
+    assert.equal(ocorrenciaPrevista({ inicio: null, prazo: "2026-09-30", concluidaEm: "2026-09-24", recorrencia: r }, "2026-09-25"), null);
+    assert.equal(ocorrenciaPrevista({ inicio: null, prazo: "2026-09-30", concluidaEm: null, recorrencia: { ...r, base: "prazo" } }, "2026-09-25"), null);
+    const ev = eventosDoCalendario([t(5, { prazo: "2026-09-20", recorrencia: r })], [], "2026-09-01", "2026-10-31", "2026-09-25");
+    const prev = ev.find((e) => e.chave === "r5:prev");
+    assert.equal(prev?.inicio, "2026-10-02");
+    assert.equal(prev?.prevista, true);
+  });
+
+  it("semana começando na SEGUNDA e faixas só nos dias exibidos (fim de semana oculto)", () => {
+    assert.deepEqual(semanaDe("2026-09-27", 1)[0], "2026-09-21");
+    assert.equal(semanaDe("2026-09-27", 1)[6], "2026-09-27");
+    assert.equal(gradeMes(2026, 9, 1)[0][0], "2026-08-31");
+    assert.deepEqual(diasSemanaCurtos(1), ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]);
+    const uteis = semanaDe("2026-09-23").filter((d) => !fimDeSemana(d));
+    const f = faixasDaSemana([{ inicio: "2026-09-19", fim: "2026-09-22" }, { inicio: "2026-09-26", fim: "2026-09-26" }], uteis);
+    assert.equal(f.length, 1);
+    assert.deepEqual([f[0].coluna, f[0].span, f[0].antes], [0, 2, true]);
   });
 });

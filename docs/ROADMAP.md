@@ -1022,11 +1022,16 @@ a barra escolhe os conjuntos/tipos a ver (preferência da pessoa); tocar num eve
 "Ver tarefa" abre a tarefa ao lado. **Do Google Agenda — implementado:** vistas Dia · Semana · Mês · Agenda; grade de horas
 com a linha do agora; eventos de dia inteiro, com hora e de vários dias; eventos simultâneos lado a lado; mini-mês; agendas
 (conjuntos) com cor e mostrar/ocultar; criar clicando no horário; arrastar para mover; busca; atalhos (D/S/M/A/T/←/→).
-🔜 **Do Google Agenda — a seguir:** vistas Ano e "N dias"; redimensionar a duração arrastando a borda; lembretes antes do
-evento (sino/e-mail); convidados e confirmação de presença; videoconferência; local com mapa; repetição própria do evento;
-horário de trabalho e ocultar fim de semana; semana começando na segunda; número da semana; fuso secundário; feriados
-nacionais/municipais; disponibilidade (horários livres); agenda compartilhada/assinatura ICS; exportar/importar `.ics`;
-impressão; duplicar evento; desfazer.
+✅ **Fase 6 (migração `0047`) — calendário profissional:** evento de vários dias; lembrete no sino (até 1 semana antes, o
+link abre o evento); duplicar evento; redimensionar a duração arrastando a borda; criar pelo teclado na grade de horas;
+ocorrência PREVISTA da recorrência que conta da conclusão; feriados nacionais calculados (Páscoa) + os do ADM
+(Configurações → Feriados) na grade e no aviso de prazo em dia não útil; semana começando na segunda e ocultar o fim de
+semana (preferência da pessoa); o CRONOGRAMA DO PCA (previsão de entrega dos DFDs vigentes) como conjunto; exportar `.ics`
+e link de ASSINATURA (Google Agenda/Outlook/celular); aviso quando a carga do mês bate no teto; a preferência de ocultos
+grava ao sair da página.
+🔜 **Do Google Agenda — a seguir:** vistas Ano e "N dias"; lembrete também por e-mail; convidados e confirmação de presença;
+videoconferência; local com mapa; repetição própria do evento; horário de trabalho; número da semana; fuso secundário;
+disponibilidade (horários livres); importar `.ics`; impressão; desfazer.
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

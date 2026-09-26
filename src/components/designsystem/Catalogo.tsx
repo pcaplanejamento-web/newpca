@@ -107,9 +107,11 @@ import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
 import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
+import { AssinaturaCalendario } from "@/components/AssinaturaCalendario";
 import { BarraCalendario } from "@/components/BarraCalendario";
 import { MolduraBloco, PaletaBlocos } from "@/components/BlocosTarefa";
 import { EventoBanner } from "@/components/EventoBanner";
+import { eventosPca, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO } from "@/lib/calendario-core";
 import { EventosTarefa } from "@/components/EventosTarefa";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
 import { CalendarioTarefas } from "@/components/CalendarioTarefas";
@@ -1845,14 +1847,19 @@ function TarefasDemo() {
   const [sel, setSel] = useState<number[]>([1]);
   const [filtro, setFiltro] = useState(FILTRO_TAREFAS_PADRAO);
   const [rec, setRec] = useState<Recorrencia | null>({ freq: "semanal", intervalo: 1, dias: [1, 3], base: "prazo" });
-  const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null };
-  const eventosDemo = eventosDoCalendario(
-    cartoes.map((t) => ({ ...t, quadroId: 1 })),
-    [{ id: 1, tarefaId: 1, ...eventoDemo }],
+  const eventoDemo = { titulo: "Reunião com a unidade", data: "2026-01-02", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: "10:30", local: "Sala 2", descricao: null, cor: null, lembreteMin: 30 };
+  const pcaDemo = eventosPca(
+    [{ pcaId: 1, pcaNome: "PCA 2026", dfdId: 9, numero: "1234", planejamento: "1509", objeto: "Material de limpeza", sigla: "SME", valor: 125000, ano: 2026, mes: 1, anual: false }],
     "2025-12-28",
     "2026-02-07",
   );
+  const eventosDemo = [
+    ...eventosDoCalendario(cartoes.map((t) => ({ ...t, quadroId: 1 })), [{ id: 1, tarefaId: 1, ...eventoDemo }], "2025-12-28", "2026-02-07"),
+    ...pcaDemo,
+  ];
   const [ocultosDemo, setOcultosDemo] = useState(OCULTOS_VAZIO);
+  const [opcoesDemo, setOpcoesDemo] = useState(OPCOES_CALENDARIO_PADRAO);
+  const feriadosDemo = feriadosNoIntervalo([{ id: 1, data: "2026-01-20", nome: "Feriado municipal", tipo: "municipal", anual: false }], "2025-12-28", "2026-02-07");
   const [checkDemo, setCheckDemo] = useState(["Abrir o PDF do protocolo", "Conferir os itens com o catálogo"]);
   const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const listasDemo = [
@@ -1925,22 +1932,45 @@ function TarefasDemo() {
         onAbrir={() => {}}
         onCriar={() => {}}
         onMover={() => {}}
+        onRedimensionar={() => {}}
+        opcoes={opcoesDemo}
+        feriados={ocultosDemo.feriados ? undefined : feriadosDemo}
         lateral={(nav) => (
           <BarraCalendario
             nav={nav}
             hoje="2026-01-01"
             diasComEvento={new Set(["2026-01-02"])}
             grupos={[{ quadro: { id: 1, nome: "Planejamento", cor: "#6366f1" }, tarefas: [{ id: 1, ticket: 128, titulo: "Conferir DFDs", eventos: 2 }] }]}
-            porTipo={{ periodo: 2, recorrencia: 0, evento: 1 }}
+            pcas={[{ id: 1, nome: "PCA 2026", eventos: 1 }]}
+            porTipo={{ periodo: 2, recorrencia: 0, evento: 1, pca: 1 }}
+            feriadosNoPeriodo={feriadosDemo.size}
             ocultos={ocultosDemo}
             onOcultos={setOcultosDemo}
+            opcoes={opcoesDemo}
+            onOpcoes={setOpcoesDemo}
+            extras={<AssinaturaCalendario ativa={false} onExportar={() => {}} nEventos={eventosDemo.length} />}
           />
         )}
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-card border border-border p-3">
-          <EventoBanner evento={eventosDemo[0]} cor="#6366f1" quadroNome="Planejamento" hoje="2026-01-01" onVerTarefa={() => {}} onEditar={() => {}} onExcluir={() => {}} />
+          <EventoBanner
+            evento={eventosDemo.find((e) => e.tipo === "evento") ?? eventosDemo[0]}
+            cor="#6366f1"
+            quadroNome="Planejamento"
+            hoje="2026-01-01"
+            avisoPrazo="cai num sábado"
+            onVerTarefa={() => {}}
+            onEditar={() => {}}
+            onDuplicar={() => {}}
+            onExcluir={() => {}}
+          />
         </div>
+        {pcaDemo[0] && (
+          <div className="rounded-card border border-border p-3">
+            <EventoBanner evento={pcaDemo[0]} cor="var(--info)" hoje="2026-01-01" onAbrirPca={() => {}} />
+          </div>
+        )}
         <EventosTarefa eventos={[{ id: 1, ...eventoDemo }]} hoje="2026-01-01" onSalvar={async () => true} onExcluir={() => {}} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -3117,7 +3147,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário; arrastar reagenda; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos, conjuntos por tarefa) + EventoBanner (o banner do evento) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas, CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

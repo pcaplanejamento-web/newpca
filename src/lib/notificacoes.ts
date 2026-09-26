@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { notificacoes, tarefaPessoas, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
+import { notificacoes, tarefaEventos, tarefaPessoas, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
+import { LEMBRETE_MAX_MIN, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
@@ -13,6 +14,8 @@ import { comandosNotificacoes, type NovaNotificacao } from "./tarefas-sql";
  * comentário, automação) são gravadas por `notificar` (BEST-EFFORT: nunca derruba a ação que as gerou; nunca avisa o
  * próprio autor). As de PRAZO (vence amanhã, atrasada) são DERIVADAS NA LEITURA — sem cron: a cada contagem/lista, as
  * tarefas abertas da pessoa viram linhas com uma CHAVE única (tarefa + prazo), então o "lida" persiste e nada repete.
+ * Os LEMBRETES dos eventos do Calendário (migração `0047`) seguem a mesma ideia: devidos (do momento do aviso até o fim
+ * do dia do evento) viram linhas com a chave evento + início + antecedência.
  */
 
 export type Notificacao = {
@@ -91,12 +94,79 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
   }
 }
 
+/** "AAAA-MM-DDTHH:MM" de agora em Brasília. */
+function agoraBrasilia(): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
+      .formatToParts(new Date())
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
+}
+
+/**
+ * DERIVA os LEMBRETES devidos dos EVENTOS em que a pessoa está (responsável/observadora da tarefa ou quem criou o
+ * evento), nos quadros dos grupos dela (o ADM, todos) — eventos de hoje até 1 semana à frente (o maior lembrete). Nunca
+ * lança.
+ */
+async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Promise<void> {
+  if (grupoIds && !grupoIds.length) return;
+  try {
+    const db = getDb();
+    const agora = agoraBrasilia();
+    const hoje = agora.slice(0, 10);
+    const linhas = await db
+      .select({
+        id: tarefaEventos.id,
+        titulo: tarefaEventos.titulo,
+        data: tarefaEventos.data,
+        diaInteiro: tarefaEventos.diaInteiro,
+        horaInicio: tarefaEventos.horaInicio,
+        horaFim: tarefaEventos.horaFim,
+        lembreteMin: tarefaEventos.lembreteMin,
+        local: tarefaEventos.local,
+        tarefaId: tarefas.id,
+        ticket: tarefas.ticket,
+        tarefaTitulo: tarefas.titulo,
+        quadroId: tarefas.quadroId,
+      })
+      .from(tarefaEventos)
+      .innerJoin(tarefas, eq(tarefas.id, tarefaEventos.tarefaId))
+      .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
+      .where(
+        and(
+          sql`${tarefaEventos.lembreteMin} IS NOT NULL`,
+          gte(tarefaEventos.data, hoje),
+          lte(tarefaEventos.data, somarDias(hoje, Math.ceil(LEMBRETE_MAX_MIN / 1440) + 1)),
+          eq(tarefas.arquivada, false),
+          eq(tarefaQuadros.arquivado, false),
+          grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id}))`,
+        ),
+      )
+      .limit(200);
+    const novas: NovaNotificacao[] = [];
+    for (const e of linhas)
+      if (lembreteDevido(e, agora)) novas.push({ usuarioId: u.id, ...notificacaoDeLembrete(e, { ticket: e.ticket, titulo: e.tarefaTitulo }, hoje), tarefaId: e.tarefaId, quadroId: e.quadroId });
+    if (!novas.length) return;
+    const cmds = comandosNotificacoes(db, novas);
+    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  } catch (e) {
+    console.error("derivar lembretes falhou", e);
+  }
+}
+
+/** As notificações DERIVADAS (prazos + lembretes) — em paralelo. */
+const derivar = async (u: UsuarioSessao, grupoIds: number[] | null) => {
+  await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds)]);
+};
+
 const gruposDe = async (u: UsuarioSessao, grupoIds?: number[]) => (u.role === "admin" ? null : (grupoIds ?? (await gruposDoUsuario(u.id)).map((g) => g.id)));
 
 /** Quantas NÃO LIDAS (o número do sino — o layout passa os grupos que já carregou). Falha = 0. */
 export async function contarNaoLidas(u: UsuarioSessao, grupoIds?: number[]): Promise<number> {
   try {
-    await derivarPrazos(u, await gruposDe(u, grupoIds));
+    await derivar(u, await gruposDe(u, grupoIds));
     const [r] = await getDb()
       .select({ n: sql<number>`COUNT(*)` })
       .from(notificacoes)
@@ -110,7 +180,7 @@ export async function contarNaoLidas(u: UsuarioSessao, grupoIds?: number[]): Pro
 /** As últimas notificações (não lidas primeiro) + a contagem de não lidas. */
 export async function listarNotificacoes(u: UsuarioSessao, limite = 50): Promise<{ itens: Notificacao[]; naoLidas: number }> {
   const db = getDb();
-  await derivarPrazos(u, await gruposDe(u));
+  await derivar(u, await gruposDe(u));
   await db
     .delete(notificacoes)
     .where(and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, true), sql`${notificacoes.criadoEm} < datetime('now', ${`-${DIAS_GUARDAR_LIDAS} days`})`));

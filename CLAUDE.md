@@ -1964,6 +1964,40 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Carga:** `carregarCalendario` = as tarefas da grade (`tarefasDoCalendario` — agora também as recorrentes abertas e as
     com evento no intervalo), os eventos (`eventosDosQuadros`), as abertas leves (`tarefasAbertasLeves`, p/ "Criar") e os
     ocultos. A aba do quadro busca os eventos só quando é a ativa.
+- **FASE 6 — CALENDÁRIO profissional (migração `0047`, aditiva):** núcleo PURO **`calendario-core.ts`** (testado em
+  `tests/calendario-core.test.ts`) + D1 em `feriados.ts`/`calendario-assinatura.ts` + Zod em `calendario-validation.ts`.
+  - **Evento de VÁRIOS dias** (`tarefa_eventos.data_fim`; `fimDoEvento`) — vira faixa como o período; as consultas usam
+    `COALESCE(data_fim, data) >= de`. **Lembrete** (`lembrete_min`, `OPCOES_LEMBRETE` até 1 semana; dia inteiro = 08:00):
+    notificação `lembrete` no SINO, DERIVADA NA LEITURA como as de prazo (`derivarLembretes` em `notificacoes.ts`:
+    responsável/observador da tarefa ou quem criou o evento; devido do momento do aviso até o fim do dia; chave evento +
+    início + antecedência) — o link (`linkEvento`) abre o evento no Calendário (`?evento=<chave>` → `eventoInicial`).
+    `EditorEvento` ganhou "Até (vários dias)" + "Lembrete"; `EventosTarefa` e o banner ganharam **Duplicar**.
+  - **Recorrência que conta da CONCLUSÃO:** a próxima ocorrência PREVISTA (`ocorrenciaPrevista` — se concluída hoje ou no
+    prazo futuro; chave `r{id}:prev`, selo "Prevista").
+  - **Arrastar/redimensionar:** `eventoMovido` (o de vários dias anda inteiro; o com hora mantém a duração) e
+    `eventoComFim` — a BORDA de baixo de um evento com hora na grade muda a duração (`useRedimensionar`, 15 em 15 min).
+    O módulo e a aba do quadro usam as MESMAS funções.
+  - **Criar pelo TECLADO** na grade de horas: cada coluna do dia é um `fieldset` focável (↑/↓ de 30 em 30 min, Enter cria).
+  - **FERIADOS:** nacionais CALCULADOS (`feriadosNacionais` — fixos + os móveis pela Páscoa `pascoa`: Carnaval, Sexta-feira
+    Santa, Corpus Christi) + os do ADM (**Configurações → Feriados**, `FeriadosAdmin`, tabela `feriados`, "todo ano" repete
+    o dia/mês — 29/02 só em ano bissexto; rotas `/api/admin/feriados*` `exigirAdmin` + auditoria `feriado`). A grade
+    sombreia o dia e mostra o nome; o banner avisa o PRAZO em dia não útil (`avisoDiaNaoUtil`) e o arrasto também;
+    "Feriados" liga/desliga na barra (`ocultos.feriados`).
+  - **Opções da pessoa** (`calendario:opcoes` — `lerOpcoesCalendario`): semana começando na SEGUNDA (`gradeMes`/`semanaDe`/
+    `diasSemanaCurtos` com `inicioSemana`) e OCULTAR sábado/domingo (`diasExibidos`; `faixasDaSemana` agora posiciona pelas
+    POSIÇÕES dos dias exibidos).
+  - **Cronograma do PCA:** quem vê o módulo PCA vê a PREVISÃO DE ENTREGA dos DFDs vigentes (`cronogramaPcas` em
+    `pca-espaco.ts` = `consolidarPca` + `previsaoDoDfd`) como eventos do tipo `pca` no dia 1 do mês (ANUAL = todo mês;
+    `eventosPca`), um conjunto por PCA na barra (`ocultos.pcas`); o banner mostra o DFD (planejamento, objeto, unidade,
+    valor) e "Abrir o PCA". Filtros de TAREFA ligados escondem a previsão (não se aplicam a DFD).
+  - **Exportar e assinar** (`AssinaturaCalendario`): "Baixar .ics" (os eventos à vista — `gerarIcs`, RFC 5545: dia inteiro
+    com fim exclusivo, hora em UTC, VALARM do lembrete, escape e dobra de 75 octetos) e o **link de assinatura**
+    (`POST`/`DELETE /api/calendario/assinatura`; o token de 32 bytes aparece UMA vez, o banco guarda o SHA-256 —
+    `calendario_tokens`) servido por **`GET /api/calendario/ics/[token]`** (sem sessão; pessoa ATIVA; os quadros dos grupos
+    dela, sem o que ocultou; 60 dias atrás a 1 ano à frente).
+  - **Robustez:** a preferência de ocultos pendente grava ao sair da página (`keepalive`); o contêiner avisa (`truncado`)
+    quando uma carga bate no teto (`LIMITE_EVENTOS_CALENDARIO`/`LIMITE_TAREFAS_CALENDARIO`); depois de salvar a tarefa
+    aberta ao lado, só o resumo dela é relido (`GET /api/tarefas/[id]?contexto=tarefa`).
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
@@ -2206,7 +2240,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   tabelas da Mesa abrem — 30/50/100/200; slot `tabelas` do mesmo `aparenciaSchema`, `linhasTabela`), **PCAs** (cadastrar/editar/ativar/excluir
   via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
   de DFD e categoria de protocolo; ver "Avaliação configurável"), **Situações** (`SituacoesAdmin` — as situações do
-  protocolo: nome + cor + ordem; ver "Gestão do protocolo") e **Mais** (`LinkCard` →
+  protocolo: nome + cor + ordem; ver "Gestão do protocolo"), **Feriados** (`FeriadosAdmin` — os estaduais/municipais/pontos
+  facultativos do Calendário; os nacionais são calculados — ver Tarefas FASE 6) e **Mais** (`LinkCard` →
   aparência/repartições/grupos/permissões/usuários). A **identidade
   renderiza** de fato: `generateMetadata` (título/descrição/favicon), `Brand` do `AppShell` (logo+nome+subtítulo) e o
   cabeçalho público (`/`), todos com `getAparencia()` (cache 60s) e **fallback** aos textos padrão. Nav item

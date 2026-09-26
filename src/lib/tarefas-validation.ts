@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
 import { FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
@@ -75,21 +76,26 @@ export const eventoSchema = z
   .object({
     titulo: z.string().trim().min(1, "Dê um título ao evento.").max(120, "Título com até 120 caracteres."),
     data,
+    dataFim: data.nullable().optional(),
     diaInteiro: z.boolean(),
     horaInicio: hora.nullable(),
     horaFim: hora.nullable(),
     local: z.string().trim().max(120, "Local com até 120 caracteres.").nullable(),
     descricao: z.string().trim().max(2000, "Descrição com até 2.000 caracteres.").nullable(),
     cor: cor.nullable(),
+    lembreteMin: z.number().int().min(0).max(LEMBRETE_MAX_MIN, "Lembrete de até 1 semana antes.").nullable().optional(),
   })
+  .refine((e) => !e.dataFim || e.dataFim >= e.data, { message: "A data final tem de ser igual ou depois da data.", path: ["dataFim"] })
   .refine((e) => e.diaInteiro || e.horaInicio != null, { message: "Informe a hora de início (ou marque dia inteiro).", path: ["horaInicio"] })
   .refine((e) => e.diaInteiro || !e.horaInicio || !e.horaFim || e.horaFim > e.horaInicio, { message: "O fim tem de ser depois do início.", path: ["horaFim"] })
   .transform((e) => ({
     ...e,
     horaInicio: e.diaInteiro ? null : e.horaInicio,
     horaFim: e.diaInteiro ? null : e.horaFim,
+    dataFim: e.dataFim && e.dataFim > e.data ? e.dataFim : null,
     local: e.local || null,
     descricao: e.descricao || null,
+    lembreteMin: e.lembreteMin ?? null,
   }));
 /** Teto de eventos por tarefa. */
 export const MAX_EVENTOS_TAREFA = 100;
