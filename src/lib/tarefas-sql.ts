@@ -435,6 +435,26 @@ export function comandosMover(db: Db, id: number, listaId: number, ordem: number
 }
 
 /**
+ * ESVAZIA a lista `origem` em `destino` (antes de excluir a lista): TODOS os cartões (inclusive os arquivados) vão para o
+ * FIM do destino, na ordem que tinham, e a conclusão segue a lista (`conclusaoAoMoverSql`). Dois UPDATEs em sequência: a
+ * ordem é deslocada ainda na origem (o MAX lido é só o do destino), depois muda a lista.
+ */
+export function comandosEsvaziarLista(db: Db, origem: number, destino: number, destinoConcluida: boolean) {
+  return [
+    db
+      .update(tarefas)
+      .set({
+        ordem: sql`${tarefas.ordem} - (SELECT MIN(t.ordem) FROM tarefas t WHERE t.lista_id = ${origem}) + 1 + (SELECT COALESCE(MAX(t.ordem), 0) FROM tarefas t WHERE t.lista_id = ${destino})`,
+      })
+      .where(eq(tarefas.listaId, origem)),
+    db
+      .update(tarefas)
+      .set({ listaId: destino, concluidaEm: conclusaoAoMoverSql(destinoConcluida), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(tarefas.listaId, origem)),
+  ];
+}
+
+/**
  * A CONCLUSÃO ao mudar de lista, em SQL (a régua de `conclusaoAoMover`): entrar numa lista de concluídas conclui; sair
  * DELA reabre; entre listas comuns, fica (o SET lê a lista de ANTES da mudança).
  */

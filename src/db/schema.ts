@@ -778,6 +778,8 @@ export const tarefaQuadros = sqliteTable(
     proxTicket: integer("prox_ticket").notNull().default(1),
     /** O TÍTULO AUTOMÁTICO das tarefas (migração `0056`): "{Campo} - {Outro}" — NULL = sem. */
     formatoTitulo: text("formato_titulo"),
+    /** IMAGEM DE FUNDO por link (migração `0058`; NULL = sem). */
+    fundoUrl: text("fundo_url"),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),

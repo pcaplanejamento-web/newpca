@@ -682,6 +682,15 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_vinculos"), 0);
   });
 
+  it("0058 imagem de fundo do quadro: coluna fundo_url (nula = sem fundo)", () => {
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9580, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9581, 9580, 'Q')");
+    assert.equal((db.prepare("SELECT fundo_url AS f FROM tarefa_quadros WHERE id = 9581").get() as { f: string | null }).f, null);
+    db.exec("UPDATE tarefa_quadros SET fundo_url = 'https://i.pinimg.com/x.jpg' WHERE id = 9581");
+    db.exec("DELETE FROM tarefa_quadros WHERE id = 9581");
+    db.exec("DELETE FROM grupos WHERE id = 9580");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

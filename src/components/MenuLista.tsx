@@ -8,7 +8,9 @@ import { Button } from "./Button";
 import { buscarDestinos, type DestinoCopia } from "./CopiarMoverTarefa";
 import { Dropdown } from "./Dropdown";
 import { SelectField, TextField } from "./Field";
-import { IconArquivar, IconArrowRight, IconCopy, IconMais, IconPlus, IconSort } from "./icons";
+import { Callout } from "./Callout";
+import { Segmented } from "./Segmented";
+import { IconArquivar, IconArrowRight, IconCopy, IconMais, IconPlus, IconSort, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Skeleton } from "./Skeleton";
@@ -20,7 +22,7 @@ export type ModoLista = "copiar" | "mover";
 /**
  * O MENU "…" de uma LISTA do quadro (como o do Trello): adicionar tarefa · ordenar por (prazo, criação, título,
  * prioridade) · mover todos os cartões para outra lista · arquivar todos os cartões · e, para editores, copiar a lista,
- * movê-la para outro quadro e arquivá-la. As ações ficam com o host (o quadro).
+ * movê-la para outro quadro, arquivá-la e EXCLUÍ-LA. As ações ficam com o host (o quadro).
  */
 export function MenuLista({
   lista,
@@ -34,6 +36,7 @@ export function MenuLista({
   onArquivarCartoes,
   onCopiarMover,
   onArquivarLista,
+  onExcluirLista,
 }: {
   lista: ListaTarefas;
   /** As OUTRAS listas ativas do quadro (destino de "mover todos os cartões"). */
@@ -48,6 +51,8 @@ export function MenuLista({
   onArquivarCartoes: () => void;
   onCopiarMover: (modo: ModoLista) => void;
   onArquivarLista: () => void;
+  /** Abre a exclusão da lista (`ExcluirLista`). */
+  onExcluirLista?: () => void;
 }) {
   const [secao, setSecao] = useState<null | "ordenar" | "mover">(null);
   return (
@@ -105,6 +110,7 @@ export function MenuLista({
                 {item("Copiar lista…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover("copiar"))}
                 {item("Mover lista para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover("mover"))}
                 {item("Arquivar lista", <IconArquivar className="h-4 w-4 text-muted" />, onArquivarLista)}
+                {onExcluirLista && item("Excluir lista…", <IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />, onExcluirLista)}
               </>
             )}
           </div>
@@ -246,6 +252,115 @@ export function CopiarMoverLista({
             {destino !== quadroId ? " Em outro quadro, as etiquetas casam pelo nome (as que faltam são criadas) e ficam só as pessoas do grupo dele." : ""}
           </p>
           {andamento && <Progress value={andamento.total ? (andamento.feito / andamento.total) * 100 : 100} label={`${andamento.feito} de ${andamento.total} cartões`} />}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * EXCLUIR uma lista (editores) — qualquer uma, como no Trello. Com cartões, escolhe-se na hora: MOVÊ-LOS (todos, inclusive
+ * os arquivados) para outra lista e excluir, ou EXCLUIR TUDO junto (checklists, comentários e eventos dos cartões saem
+ * também). A contagem vem do servidor (os arquivados não estão no quadro).
+ */
+export function ExcluirLista({
+  lista,
+  outras,
+  onFechar,
+  onFeito,
+}: {
+  lista: ListaTarefas | null;
+  /** As OUTRAS listas ativas do quadro (destino dos cartões). */
+  outras: ListaTarefas[];
+  onFechar: () => void;
+  onFeito: (atualizar: boolean) => void;
+}) {
+  const [n, setN] = useState<number | null>(null);
+  const [modo, setModo] = useState<"mover" | "excluir">("mover");
+  const [destino, setDestino] = useState("");
+  const [gravando, setGravando] = useState(false);
+  const id = lista?.id;
+  useEffect(() => {
+    setN(null);
+    setGravando(false);
+    if (id == null) return;
+    let vivo = true;
+    chamar<{ cartoes: number }>(`/api/tarefas/listas/${id}`)
+      .then((r) => vivo && setN(r.cartoes))
+      .catch((e) => vivo && toast.error((e as Error).message));
+    return () => {
+      vivo = false;
+    };
+  }, [id]);
+  // Ao abrir (ou mudar as listas): "mover" para a 1ª outra, quando existe.
+  const primeira = outras[0]?.id ?? null;
+  useEffect(() => {
+    if (id == null) return;
+    setModo(primeira != null ? "mover" : "excluir");
+    setDestino(primeira != null ? String(primeira) : "");
+  }, [id, primeira]);
+  if (!lista) return null;
+  const mover = !!n && modo === "mover";
+  const excluir = async () => {
+    if (gravando || (mover && !destino)) return;
+    setGravando(true);
+    try {
+      const r = await chamar<{ atualizar: boolean }>(`/api/tarefas/listas/${lista.id}${mover ? `?moverPara=${destino}` : ""}`, "DELETE");
+      toast.success(mover ? `Lista excluída — ${num(n ?? 0)} cartão(ões) movido(s).` : "Lista excluída.");
+      onFeito(r.atualizar);
+    } catch (e) {
+      toast.error((e as Error).message);
+      setGravando(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={() => !gravando && onFechar()}
+      titulo={`Excluir a lista "${lista.nome}"`}
+      size="md"
+      bloqueado={gravando}
+      rodape={
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" disabled={gravando} onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button variant="danger" loading={gravando} disabled={n == null || (mover && !destino)} icon={<IconTrash className="h-4 w-4" />} onClick={excluir}>
+            Excluir lista
+          </Button>
+        </div>
+      }
+    >
+      {n == null ? (
+        <Skeleton className="h-16 w-full" />
+      ) : n === 0 ? (
+        <p className="text-[13.5px] text-text">A lista está vazia — ela sai do quadro.</p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-[13.5px] text-text">
+            A lista tem <strong>{num(n)} cartão(ões)</strong> (contando os arquivados). O que fazer com eles?
+          </p>
+          <Segmented
+            ariaLabel="Os cartões da lista"
+            value={modo}
+            disabled={gravando}
+            onChange={setModo}
+            options={[
+              ...(outras.length ? [{ value: "mover" as const, label: "Mover para outra lista" }] : []),
+              { value: "excluir" as const, label: "Excluir tudo junto" },
+            ]}
+          />
+          {mover ? (
+            <SelectField label="Mover os cartões para" value={destino} disabled={gravando} onChange={(e) => setDestino(e.target.value)}>
+              {outras.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome}
+                </option>
+              ))}
+            </SelectField>
+          ) : (
+            <Callout kind="danger">Os {num(n)} cartão(ões) serão excluídos definitivamente — com checklists, comentários e eventos.</Callout>
+          )}
         </div>
       )}
     </Modal>

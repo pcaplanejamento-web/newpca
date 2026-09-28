@@ -20,9 +20,8 @@ import {
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { ChipsCamposCartao } from "./CamposTarefa";
-import { CelulaCopiavel } from "./BotaoCopiar";
 import { CirculoConcluir } from "./CirculoConcluir";
-import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconDescricao, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
+import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconCopy, IconDescricao, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
 const MAX_AVATARES = 3;
@@ -66,7 +65,7 @@ export function useEtiquetasComNome(): [boolean, () => void] {
 
 /**
  * CARTÃO de uma tarefa no quadro (como no Trello): as etiquetas em FAIXAS na cor (tocar mostra/esconde os nomes em todos
- * os cartões — `useEtiquetasComNome`), o círculo de concluir + o título, e na base o nº do TICKET (copiável), a
+ * os cartões — `useEtiquetasComNome`), o círculo de concluir + o título, e na base o nº do TICKET + DUPLICAR o cartão (`onDuplicar`), a
  * PRIORIDADE (bandeira na cor), o PRAZO no semáforo (verde · âmbar · vermelho) e os RESPONSÁVEIS (fotos). O cartão todo é
  * o botão que abre o detalhe (camada que cobre o cartão — os controles de dentro ficam por cima); no mouse/caneta o próprio
  * cartão arrasta, no toque a ALÇA (o dedo no cartão rola a tela) e o menu `acoes` (mover/concluir/arquivar sem arrastar).
@@ -82,6 +81,7 @@ export function CartaoTarefa({
   onTeclaMover,
   acoes,
   onConcluir,
+  onDuplicar,
   oculto = false,
   campos = [],
 }: {
@@ -100,6 +100,8 @@ export function CartaoTarefa({
   oculto?: boolean;
   /** Menu de ações no TOQUE (ao lado da alça): mover para outra lista, topo/fim, concluir, arquivar. */
   acoes?: ReactNode;
+  /** DUPLICA o cartão (o ícone de cópia ao lado do nº do ticket — como o "Copiar cartão" do Trello). */
+  onDuplicar?: () => void;
   /** O CÍRCULO antes do título: conclui/reabre NO LUGAR. Ausente = sem círculo. */
   onConcluir?: () => void;
 }) {
@@ -169,11 +171,18 @@ export function CartaoTarefa({
         </span>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
-        <span className="relative z-10 font-mono tabular-nums">
-          <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
-            {rotuloTicket(t.ticket)}
-          </CelulaCopiavel>
-        </span>
+        <span className="pointer-events-none font-mono tabular-nums">{rotuloTicket(t.ticket)}</span>
+        {onDuplicar && (
+          <button
+            type="button"
+            onClick={onDuplicar}
+            aria-label={`Duplicar o cartão ${rotuloTicket(t.ticket)}`}
+            title="Duplicar cartão"
+            className="relative z-10 -my-1 inline-flex h-6 w-6 items-center justify-center rounded-control text-faint opacity-60 transition-opacity hover:bg-surface-2 hover:text-accent focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 group-hover/cartao:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:-my-3 pointer-coarse:opacity-100"
+          >
+            <IconCopy className="h-3.5 w-3.5" />
+          </button>
+        )}
         {t.template && (
           <span className="pointer-events-none">
             <Badge tone="violet">Template</Badge>

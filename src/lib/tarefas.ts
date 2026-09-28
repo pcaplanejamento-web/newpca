@@ -97,6 +97,7 @@ import {
   comandosComentariosImportados,
   comandosCriarTarefa,
   comandosEquipe,
+  comandosEsvaziarLista,
   comandosMassa,
   comandosMover,
   comandosMoverQuadro,
@@ -123,6 +124,8 @@ export type Quadro = {
   arquivado: boolean;
   /** O formato do TÍTULO AUTOMÁTICO (`{Campo} - {Campo}`; null = desligado — migração `0056`). */
   formatoTitulo: string | null;
+  /** A imagem de fundo (link; migração `0058`). */
+  fundoUrl: string | null;
 };
 export type QuadroCard = Quadro & { abertas: number; atrasadas: number; concluidas: number };
 export type TarefaCompleta = TarefaResumo & { quadroId: number; descricao: string | null; blocos: BlocoTarefa[] | null };
@@ -136,6 +139,7 @@ const COLS_QUADRO = {
   descricao: tarefaQuadros.descricao,
   arquivado: tarefaQuadros.arquivado,
   formatoTitulo: tarefaQuadros.formatoTitulo,
+  fundoUrl: tarefaQuadros.fundoUrl,
 };
 
 /** Os quadros dos GRUPOS dados (`null` = todos — o ADM sem grupo), com as contagens do card. `hoje` = "AAAA-MM-DD". */
@@ -604,7 +608,7 @@ export async function criarQuadro(grupoId: number, d: { nome: string; cor?: stri
   return q.id;
 }
 
-export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null }) {
+export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null; fundoUrl?: string | null }) {
   await getDb()
     .update(tarefaQuadros)
     .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
@@ -638,14 +642,26 @@ export async function atualizarLista(id: number, d: { nome?: string; limiteWip?:
   await getDb().update(tarefaListas).set(d).where(eq(tarefaListas.id, id));
 }
 
-/** Quantos cartões (inclusive arquivados) a lista tem — só a vazia é excluída. */
+/** Quantos cartões (inclusive arquivados) a lista tem — a contagem da exclusão. */
 export async function cartoesNaLista(id: number): Promise<number> {
   const [r] = await getDb().select({ n: sql<number>`COUNT(*)` }).from(tarefas).where(eq(tarefas.listaId, id));
   return Number(r?.n ?? 0);
 }
 
-export async function excluirLista(id: number) {
-  await getDb().delete(tarefaListas).where(eq(tarefaListas.id, id));
+/** Os ids dos cartões (inclusive arquivados) da lista. */
+export async function idsNaLista(id: number): Promise<number[]> {
+  return (await getDb().select({ id: tarefas.id }).from(tarefas).where(eq(tarefas.listaId, id))).map((t) => t.id);
+}
+
+/**
+ * Exclui a lista. Com `destino`, os cartões (inclusive os arquivados) vão antes para o fim dele — no MESMO lote atômico;
+ * sem, saem junto com a lista (cascade: checklists, comentários, eventos, vínculos).
+ */
+export async function excluirLista(id: number, destino?: { id: number; concluida: boolean }) {
+  const db = getDb();
+  const apagar = db.delete(tarefaListas).where(eq(tarefaListas.id, id));
+  if (!destino) return void (await apagar);
+  await db.batch([...comandosEsvaziarLista(db, id, destino.id, destino.concluida), apagar] as unknown as Parameters<typeof db.batch>[0]);
 }
 
 /** Grava a ORDEM das listas (as de fora do quadro são ignoradas). */
@@ -979,6 +995,18 @@ export async function moverTarefa(id: number, listaId: number, anteriorId: numbe
   }
   await db.batch(comandosMover(db, id, listaId, ordem, concluida, ordens) as [ReturnType<typeof comandosMover>[number], ...ReturnType<typeof comandosMover>]);
   return { ordem, ordens };
+}
+
+/** Põe o cartão `id` logo DEPOIS de `aposId` na lista (o "Duplicar": a cópia fica embaixo do original). */
+export async function colocarTarefaApos(id: number, listaId: number, aposId: number, concluida: boolean) {
+  const lista = await getDb()
+    .select({ id: tarefas.id })
+    .from(tarefas)
+    .where(and(eq(tarefas.listaId, listaId), eq(tarefas.arquivada, false), sql`${tarefas.id} <> ${id}`))
+    .orderBy(asc(tarefas.ordem), asc(tarefas.ticket));
+  const i = lista.findIndex((t) => t.id === aposId);
+  if (i < 0) return;
+  await moverTarefa(id, listaId, aposId, lista[i + 1]?.id ?? null, concluida);
 }
 
 /** O último cartão (não arquivado) da lista, sem contar `exceto` — mover "para o fim". */

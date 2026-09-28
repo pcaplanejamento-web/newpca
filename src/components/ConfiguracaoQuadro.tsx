@@ -17,6 +17,8 @@ import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
 import { IconCalendar, IconCheck, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { ImportarTrello } from "./ImportarTrello";
+import { FundoQuadro } from "./FundoQuadro";
+import { ExcluirLista } from "./MenuLista";
 import { Modal } from "./Modal";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro } from "./QuadroCard";
@@ -32,7 +34,7 @@ type RascunhoEquipe = { id: number | null; nome: string; cor: string; membros: n
 /**
  * A aba CONFIGURAÇÃO do quadro (editores; os demais só consultam): os dados do quadro (nome · cor · descrição), arquivar
  * e excluir; as LISTAS (ordem ↑/↓, nome, limite de cartões — WIP —, "lista de concluídas" — entrar nela conclui a tarefa —,
- * arquivar; excluir só a vazia), as ETIQUETAS (nome + cor), as EQUIPES (nome + cor + pessoas — a tarefa com a equipe
+ * arquivar; excluir — `ExcluirLista`: mover os cartões ou excluir tudo), a IMAGEM DE FUNDO (`FundoQuadro`), as ETIQUETAS (nome + cor), as EQUIPES (nome + cor + pessoas — a tarefa com a equipe
  * envolve todos os membros), os CAMPOS personalizados (+ o formato do título automático), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
  * recarrega o quadro.
  */
@@ -77,6 +79,7 @@ export function ConfiguracaoQuadro({
   const [equipe, setEquipe] = useState<RascunhoEquipe | null>(null);
   const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
   const [trello, setTrello] = useState(false);
+  const [excluindoLista, setExcluindoLista] = useState<number | null>(null);
   const porId = new Map(todas.map((p) => [p.id, p]));
   const [ordem, setOrdem] = useState<number[] | null>(null);
   // A ordem otimista vale até as listas do servidor chegarem.
@@ -170,12 +173,6 @@ export function ConfiguracaoQuadro({
       lista.id == null ? "Lista criada." : "Lista salva.",
     );
     if (ok) setLista(null);
-  };
-
-  const excluirLista = async (l: ListaTarefas) => {
-    if (!(await confirmar({ titulo: `Excluir a lista "${l.nome}"?`, texto: "Só uma lista VAZIA pode ser excluída — com cartões, arquive-a.", confirmar: "Excluir", perigo: true })))
-      return;
-    await gravar(`lista-${l.id}`, () => chamar(`/api/tarefas/listas/${l.id}`, "DELETE"), "Lista excluída.");
   };
 
   const salvarEtiqueta = async () => {
@@ -276,12 +273,16 @@ export function ConfiguracaoQuadro({
                     disabled={ocupado != null}
                     onMover={(d) => moverLista(i, d)}
                     onEditar={() => setLista({ id: l.id, nome: l.nome, limiteWip: l.limiteWip == null ? "" : String(l.limiteWip), concluida: l.concluida, arquivada: l.arquivada })}
-                    onExcluir={() => excluirLista(l)}
+                    onExcluir={() => setExcluindoLista(l.id)}
                   />
                 )}
               </li>
             ))}
           </ul>
+        </Secao>
+
+        <Secao titulo="Imagem de fundo">
+          <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
         </Secao>
 
         <Secao
@@ -530,6 +531,15 @@ export function ConfiguracaoQuadro({
         )}
       </Modal>
       <ImportarTrello aberto={trello} quadroId={quadro.id} pessoas={pessoas} onFechar={() => setTrello(false)} onFeito={onMudou} />
+      <ExcluirLista
+        lista={listas.find((l) => l.id === excluindoLista) ?? null}
+        outras={listas.filter((l) => l.id !== excluindoLista && !l.arquivada)}
+        onFechar={() => setExcluindoLista(null)}
+        onFeito={() => {
+          setExcluindoLista(null);
+          onMudou();
+        }}
+      />
       {confirmacao}
     </div>
   );

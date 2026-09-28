@@ -1,7 +1,7 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aposMovimento, copiarTarefa, getLista, MSG_QUADRO_ARQUIVADO, quadroAcessivel, tarefaAcessivel } from "@/lib/tarefas";
+import { aposMovimento, colocarTarefaApos, copiarTarefa, getLista, MSG_QUADRO_ARQUIVADO, quadroAcessivel, tarefaAcessivel } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { copiarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -26,6 +26,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const lista = await getLista(d.listaId);
   if (!lista || lista.quadroId !== destino.id || lista.arquivada) return erro("Lista inválida.", 422);
   const nova = await copiarTarefa(a.u, r, destino, lista, d);
+  if (d.aposId) await colocarTarefaApos(nova.id, lista.id, d.aposId, lista.concluida);
   await registrarAuditoria({
     usuario: a.u,
     acao: "criar",

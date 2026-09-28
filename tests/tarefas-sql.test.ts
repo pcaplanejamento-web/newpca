@@ -14,6 +14,7 @@ import {
   comandosComentariosImportados,
   comandosCriarTarefa,
   comandosEquipe,
+  comandosEsvaziarLista,
   comandosMassa,
   comandosMover,
   comandosMoverQuadro,
@@ -343,5 +344,27 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.deepEqual(db.prepare("SELECT etiqueta_id AS e FROM tarefa_etiqueta_links WHERE tarefa_id = ?").all(origem).map((x) => (x as { e: number }).e), [500]);
     // O checklist foi junto (é da tarefa).
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = ?").get(origem) as { n: number }).n, 2);
+  });
+});
+
+describe("tarefas — excluir lista movendo os cartões (comandosEsvaziarLista no db.batch do D1)", () => {
+  it("move TODOS (inclusive arquivados) ao fim do destino, na ordem, com a conclusão pela lista; depois a lista sai", async () => {
+    const db = aplicarTudo();
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9600, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (1, 9600, 'Q')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem, concluida) VALUES (1, 1, 'Origem', 1, 1), (2, 1, 'Destino', 2, 0)");
+    db.exec(`INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo, ordem, arquivada, concluida_em) VALUES
+      (1, 1, 2, 1, 'D1', 5, 0, NULL),
+      (2, 1, 1, 2, 'O-b', 0.5, 0, '2026-01-01 00:00:00'),
+      (3, 1, 1, 3, 'O-a', -2, 1, '2026-01-01 00:00:00')`);
+    await orm.batch([...comandosEsvaziarLista(orm, 1, 2, false), orm.delete(schema.tarefaListas).where(eq(schema.tarefaListas.id, 1))] as never);
+    const ts = db.prepare("SELECT id, lista_id AS l, ordem AS o, concluida_em AS c FROM tarefas ORDER BY ordem").all() as { id: number; l: number; o: number; c: string | null }[];
+    assert.deepEqual(ts.map((t) => t.id), [1, 3, 2]);
+    assert.ok(ts.every((t) => t.l === 2));
+    assert.ok(ts[1].o > 5);
+    // Saíram de uma lista de CONCLUÍDAS para uma comum: reabrem.
+    assert.deepEqual(ts.map((t) => t.c), [null, null, null]);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_listas").get() as { n: number }).n, 1);
   });
 });

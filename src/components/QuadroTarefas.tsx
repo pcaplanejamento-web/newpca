@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
@@ -39,13 +39,14 @@ import { Button } from "./Button";
 import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalendario, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
+import { FundoDoQuadro } from "./FundoQuadro";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconChevronLeft, IconDownload, IconPlus } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
-import { CopiarMoverLista, MenuLista, type ModoLista } from "./MenuLista";
+import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./MenuLista";
 import { useConfirmacao } from "./Confirmacao";
 import { EstrelaFavorito, useFavoritosQuadros } from "./FavoritosQuadros";
 import { QuadroKanban } from "./QuadroKanban";
@@ -120,6 +121,7 @@ export function QuadroTarefas({
   const arquivadas = mostrar === "arquivadas";
   const [copia, setCopia] = useState<{ modo: ModoCopia; id: number } | null>(null);
   const [copiaLista, setCopiaLista] = useState<{ modo: ModoLista; listaId: number } | null>(null);
+  const [excluindoLista, setExcluindoLista] = useState<number | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const favs = useFavoritosQuadros(favoritos);
   const [aberto, setAberto] = useState<AberturaTarefa | null>(null);
@@ -377,6 +379,34 @@ export function QuadroTarefas({
     }
   };
 
+  /** DUPLICAR o cartão (como o "Copiar cartão" do Trello): a cópia entra logo abaixo, na mesma lista — com Desfazer. */
+  const duplicando = useRef(false);
+  const duplicar = async (id: number) => {
+    const t = tarefas.find((x) => x.id === id);
+    if (!t || duplicando.current) return;
+    duplicando.current = true;
+    try {
+      const r = await chamar<{ id: number; ticket: number }>(`/api/tarefas/${id}/copiar`, "POST", {
+        quadroId: quadro.id,
+        listaId: t.listaId,
+        aposId: id,
+        // O título AUTOMÁTICO (campos personalizados) segue automático; os demais ganham "Cópia de".
+        titulo: quadro.formatoTitulo && !t.tituloManual ? undefined : `Cópia de ${t.titulo}`.slice(0, 200),
+      });
+      router.refresh();
+      toast.desfazer(`${rotuloTicket(r.ticket)} criada — cópia de ${rotuloTicket(t.ticket)}.`, () => {
+        // Excluir é do editor; os demais desfazem ARQUIVANDO a cópia.
+        chamar(`/api/tarefas/${r.id}`, podeEditar ? "DELETE" : "PATCH", podeEditar ? undefined : { arquivada: true })
+          .then(() => router.refresh())
+          .catch((err) => toast.error((err as Error).message));
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      duplicando.current = false;
+    }
+  };
+
   const arquivar = async (id: number) => {
     const antes = tarefas;
     setTarefas(antes.map((t) => (t.id === id ? { ...t, arquivada: true } : t)));
@@ -411,7 +441,8 @@ export function QuadroTarefas({
   };
 
   return (
-    <div className="space-y-[var(--gap-block)]">
+    <div className="relative isolate space-y-[var(--gap-block)]">
+      <FundoDoQuadro url={quadro.fundoUrl} />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
@@ -528,6 +559,7 @@ export function QuadroTarefas({
               onNova={(listaId) => nova(listaId)}
               onArquivar={arquivar}
               onConcluir={concluir}
+              onDuplicar={quadro.arquivado ? undefined : duplicar}
               templates={templates}
               onDoTemplate={doTemplate}
               onCopiarMover={(id, modo) => setCopia({ id, modo })}
@@ -544,6 +576,7 @@ export function QuadroTarefas({
                   onArquivarCartoes={() => arquivarCartoesDaLista(l)}
                   onCopiarMover={(modo) => setCopiaLista({ modo, listaId: l.id })}
                   onArquivarLista={() => arquivarLista(l)}
+                  onExcluirLista={() => setExcluindoLista(l.id)}
                 />
               )}
             />
@@ -640,6 +673,7 @@ export function QuadroTarefas({
         usuarioId={usuarioId}
         podeExcluir={podeEditar}
         onCopiarMover={(id, modo) => setCopia({ id, modo })}
+        onDuplicar={quadro.arquivado ? undefined : duplicar}
         onFechar={() => setAberto(null)}
         onSalvo={() => router.refresh()}
       />
@@ -660,6 +694,15 @@ export function QuadroTarefas({
         onFechar={() => setCopiaLista(null)}
         onFeito={() => {
           setCopiaLista(null);
+          router.refresh();
+        }}
+      />
+      <ExcluirLista
+        lista={listas.find((x) => x.id === excluindoLista) ?? null}
+        outras={ativas.filter((x) => x.id !== excluindoLista)}
+        onFechar={() => setExcluindoLista(null)}
+        onFeito={() => {
+          setExcluindoLista(null);
           router.refresh();
         }}
       />

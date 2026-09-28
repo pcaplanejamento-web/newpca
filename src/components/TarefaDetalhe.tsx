@@ -152,6 +152,7 @@ export function TarefaDetalhe({
   usuarioId,
   podeExcluir,
   onCopiarMover,
+  onDuplicar,
   onFechar,
   onSalvo,
   esquerda,
@@ -178,6 +179,8 @@ export function TarefaDetalhe({
   podeExcluir: boolean;
   /** Copiar · Mover para outro quadro · Criar template (o host abre o diálogo). */
   onCopiarMover?: (id: number, modo: ModoCopia) => void;
+  /** DUPLICA a tarefa logo abaixo, na mesma lista. */
+  onDuplicar?: (id: number) => void;
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
@@ -788,6 +791,7 @@ export function TarefaDetalhe({
         const off = sujo || salvando != null;
         return (
           <div className="space-y-0.5">
+            {onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id), off)}
             {onCopiarMover && item("Copiar…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "copiar"), off)}
             {onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
             {onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}

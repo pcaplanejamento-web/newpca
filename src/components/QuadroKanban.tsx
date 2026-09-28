@@ -35,6 +35,7 @@ export function QuadroKanban({
   templates = [],
   onDoTemplate,
   onCopiarMover,
+  onDuplicar,
   menuLista,
   onNovaLista,
 }: {
@@ -60,6 +61,8 @@ export function QuadroKanban({
   onDoTemplate?: (templateId: number, listaId: number) => void;
   /** Abre Copiar · Mover para outro quadro · Criar template. */
   onCopiarMover?: (id: number, modo: ModoCopia) => void;
+  /** DUPLICA o cartão logo abaixo (o ícone de cópia do cartão e o menu do toque); ausente = sem a ação. */
+  onDuplicar?: (id: number) => void;
   /** O menu "…" de cada lista (`MenuLista`, montado pelo host — as ações são dele). */
   menuLista?: (l: ListaTarefas) => ReactNode;
   /** Cria uma LISTA no fim do quadro (a coluna "Adicionar outra lista"); ausente = sem a coluna. */
@@ -119,6 +122,7 @@ export function QuadroKanban({
         return (
           <div className="space-y-0.5">
             {item("Abrir", <IconPencil className="h-4 w-4 text-muted" />, () => onAbrir(t.id))}
+            {onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id))}
             {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
             {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
             {!t.template && item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
@@ -213,6 +217,7 @@ export function QuadroKanban({
                     onTeclaMover={(d) => teclaMover(t, d)}
                     acoes={menu(t, l, pos, cartoes.length)}
                     onConcluir={t.template ? undefined : () => onConcluir(t.id)}
+                    onDuplicar={onDuplicar && (() => onDuplicar(t.id))}
                   />
                 </Fragment>
               );

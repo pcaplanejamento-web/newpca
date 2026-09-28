@@ -1,12 +1,13 @@
 import { and, asc, eq } from "drizzle-orm";
 import { calendarioExternos } from "@/db/schema";
 import { getDb } from "./db";
+import { baixarSeguro } from "./busca-segura";
 import { type AgendaExterna, lerIcs, MAX_BYTES_ICS, urlAgendaValida } from "./ics-core";
 
 /**
  * AGENDAS EXTERNAS (migração `0049`) — acesso ao D1 + a LEITURA do `.ics` (só escopo de request). A agenda é da PESSOA
- * (somente leitura). O arquivo é baixado sob demanda, só por HTTPS e fora da rede interna (`urlAgendaValida` — também em cada redirecionamento), com tempo
- * e tamanho limitados, e fica 10 minutos em memória (a mesma agenda aberta por várias pessoas/meses não é baixada de novo).
+ * (somente leitura). O arquivo é baixado sob demanda pela BUSCA SEGURA (`baixarSeguro`: só HTTPS, fora da rede interna, tempo e tamanho
+ * limitados), e fica 10 minutos em memória (a mesma agenda aberta por várias pessoas/meses não é baixada de novo).
  */
 
 export type CadastroExterno = { id: number; nome: string; url: string; cor: string | null };
@@ -37,8 +38,6 @@ export async function excluirExterno(usuarioId: number, id: number) {
     .where(and(eq(calendarioExternos.id, id), eq(calendarioExternos.usuarioId, usuarioId)));
 }
 
-const TEMPO_MS = 8000;
-const MAX_REDIRECIONAMENTOS = 3;
 const CACHE_MS = 10 * 60_000;
 const cache = new Map<string, { em: number; eventos: AgendaExterna["eventos"] }>();
 
@@ -48,47 +47,7 @@ export async function lerAgendaExterna(bruta: string): Promise<AgendaExterna["ev
   if (!url) throw new Error("Link inválido: use um endereço https:// (ou webcal://) público.");
   const c = cache.get(url);
   if (c && Date.now() - c.em < CACHE_MS) return c.eventos;
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), TEMPO_MS);
-  let texto = "";
-  try {
-    // Redirecionamento seguido À MÃO: cada destino passa de novo por `urlAgendaValida` (um link público não pode levar a
-    // um endereço interno).
-    let destino = url;
-    let r: Response | null = null;
-    for (let salto = 0; ; salto++) {
-      r = await fetch(destino, { signal: ctl.signal, headers: { accept: "text/calendar, text/plain;q=0.9, */*;q=0.1" }, redirect: "manual" });
-      if (r.status < 300 || r.status >= 400) break;
-      const local = r.headers.get("location");
-      const proximo = local ? urlAgendaValida(new URL(local, destino).toString()) : null;
-      if (!proximo) throw new Error("A agenda redireciona para um endereço não permitido.");
-      if (salto >= MAX_REDIRECIONAMENTOS) throw new Error("A agenda redireciona demais.");
-      destino = proximo;
-    }
-    if (!r.ok) throw new Error(`A agenda respondeu ${r.status}.`);
-    if (Number(r.headers.get("content-length") ?? 0) > MAX_BYTES_ICS) throw new Error("A agenda é grande demais (máx. 2 MB).");
-    const leitor = r.body?.getReader();
-    if (!leitor) throw new Error("A agenda veio vazia.");
-    const dec = new TextDecoder();
-    let lidos = 0;
-    for (;;) {
-      const { done, value } = await leitor.read();
-      if (done) break;
-      lidos += value.byteLength;
-      if (lidos > MAX_BYTES_ICS) {
-        await leitor.cancel();
-        throw new Error("A agenda é grande demais (máx. 2 MB).");
-      }
-      texto += dec.decode(value, { stream: true });
-    }
-    texto += dec.decode();
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") throw new Error("A agenda demorou demais para responder.");
-    if (e instanceof Error && /^(A agenda|Link)/.test(e.message)) throw e;
-    throw new Error("Não foi possível baixar a agenda.");
-  } finally {
-    clearTimeout(t);
-  }
+  const { texto } = await baixarSeguro(url, { accept: "text/calendar, text/plain;q=0.9, */*;q=0.1", maxBytes: MAX_BYTES_ICS, quem: "A agenda" });
   if (!/BEGIN:VCALENDAR/i.test(texto)) throw new Error("O link não é uma agenda .ics.");
   const eventos = lerIcs(texto);
   if (cache.size > 30) cache.delete(cache.keys().next().value as string);

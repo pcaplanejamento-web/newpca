@@ -1796,7 +1796,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Lista** = **`TabelaTarefas`** (`DataTable scrollInterno density="compact"` + **edições salvas** — chave
     `tarefas:<quadro>:lista`; Ativas | Arquivadas — restaurar pelo detalhe).
   - **Configuração** = **`ConfiguracaoQuadro`** (editores; os demais consultam): `CamposQuadro` + arquivar (`Switch`) + excluir;
-    listas (`AcoesCadastro` ↑/↓ · editar [nome, WIP, "de concluídas", arquivada] · excluir SÓ vazia → 409); etiquetas (nome +
+    listas (`AcoesCadastro` ↑/↓ · editar [nome, WIP, "de concluídas", arquivada] · excluir qualquer uma — `ExcluirLista`); etiquetas (nome +
     `ColorField`).
   - **Detalhe** = **`TarefaDetalhe`** (`Modal`, criar/editar): título, lista, prioridade (`Segmented`), início/prazo (data +
     semáforo), responsáveis (**`SeletorPessoas`** — chips com foto), etiquetas, descrição (lazy: `GET /api/tarefas/[id]`);
@@ -2271,6 +2271,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     mostra só essa coluna. **Qualquer membro do grupo** cria (`POST /api/tarefas/quadros/[id]/listas` com `exigirUsuario` +
     `quadroAcessivel`); o limite de cartões, "de concluídas" e a posição (`aposId`) seguem só dos editores, assim como
     editar/arquivar/excluir/ordenar listas.
+  - **DUPLICAR cartão · EXCLUIR QUALQUER LISTA · IMAGEM DE FUNDO por link (migração `0058`, aditiva):**
+    - **Duplicar** (o "Copiar cartão" do Trello): o ícone de cópia ao lado do `#ticket` do `CartaoTarefa` (`onDuplicar`), o
+      "Duplicar" do menu "⋯" do toque e do "…" do detalhe → `POST /api/tarefas/[id]/copiar` com **`aposId`** (a cópia entra
+      logo ABAIXO do original — `colocarTarefaApos` pelos vizinhos, `moverTarefa`), título "Cópia de …" (o AUTOMÁTICO segue
+      automático), com Desfazer (editor exclui; os demais arquivam a cópia).
+    - **Excluir qualquer lista** (editores): **`ExcluirLista`** (`MenuLista.tsx`; no "…" da lista e na Configuração) conta os
+      cartões no servidor (`GET /api/tarefas/listas/[id]`, inclusive arquivados) e escolhe: **mover para outra lista**
+      (`DELETE …?moverPara=` → `comandosEsvaziarLista` + a exclusão num lote atômico: todos ao FIM do destino, na ordem, a
+      conclusão pela lista — testado no driver D1 real; as automações do destino rodam) ou **excluir tudo junto** (cascade).
+    - **Imagem de fundo** (`tarefa_quadros.fundo_url`): só o LINK é guardado — a imagem fica no site de origem (sem upload).
+      Configuração → **`FundoQuadro`** (prévia 16:9, Aplicar/Remover, aviso se o site bloquear). Aceita o link DIRETO da
+      imagem ou o de uma PÁGINA (pin do Pinterest, `pin.it`): o `PATCH /api/tarefas/quadros/[id]` `{fundoUrl}` resolve
+      (`resolverImagemFundo`, `imagem-fundo.ts`) pela **busca segura** (`busca-segura.ts` `baixarSeguro` — a MESMA das
+      agendas externas: só HTTPS público, redirecionamento revalidado, tempo/tamanho limitados) e tira o `og:image`/
+      `twitter:image` (núcleo puro `imagem-fundo-core.ts`: `fundoUrlValida`, `pareceImagem`, `imagemDaPagina`,
+      `urlFundoCss` — testado). **`FundoDoQuadro`** põe a imagem atrás do espaço do quadro (host `relative isolate`, camada
+      `-z-10` até a margem do display) com um véu na cor do tema — só depois de carregar; o `QuadroCard` mostra a imagem na
+      faixa (a cor por baixo).
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

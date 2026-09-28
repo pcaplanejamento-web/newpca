@@ -1096,6 +1096,9 @@ comentários (autor e data), links e vínculos entre cartões; os membros são c
 importação é em lotes, com progresso, e retoma de onde parou.
 ✅ **Tarefas — "+ Adicionar outra lista":** a última coluna do quadro cria listas na hora (qualquer membro do grupo; Enter
 cria e segue para a próxima), como no Trello.
+✅ **Tarefas — duplicar cartão, excluir qualquer lista e imagem de fundo:** o ícone de cópia do cartão o DUPLICA logo abaixo
+(com Desfazer); qualquer lista pode ser excluída (mover os cartões para outra ou excluir tudo); o quadro ganha imagem de
+fundo por LINK — imagem ou pin do Pinterest, sem enviar arquivo (migração `0058`).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

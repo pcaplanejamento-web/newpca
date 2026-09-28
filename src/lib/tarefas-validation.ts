@@ -33,7 +33,9 @@ const formatoTitulo = z
   .max(200, "Formato com até 200 caracteres.")
   .nullable()
   .transform((v) => v || null);
-export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional() });
+/** A imagem de fundo: o LINK (de imagem ou de página — o servidor resolve); null = tirar. */
+const fundoUrl = z.string().trim().min(1, "Informe o link.").max(1000, "Link com até 1000 caracteres.").nullable();
+export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional(), fundoUrl: fundoUrl.optional() });
 
 /** Um CAMPO personalizado do quadro (as opções só valem para o tipo lista). */
 export const campoSchema = z
@@ -291,6 +293,8 @@ export const copiarTarefaSchema = z.object({
   listaId: id,
   titulo: z.string().trim().max(200, "Título com até 200 caracteres.").optional(),
   noInicio: z.boolean().optional(),
+  /** "Duplicar": a cópia entra logo depois deste cartão (da MESMA lista). */
+  aposId: id.optional(),
   template: z.boolean().optional(),
   checklists: z.boolean().default(true),
   etiquetas: z.boolean().default(true),

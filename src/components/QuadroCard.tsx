@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { urlFundoCss } from "@/lib/imagem-fundo-core";
 import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { Badge } from "./Badge";
@@ -19,11 +20,16 @@ export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: 
     <Link
       href={href}
       aria-label={`Abrir o quadro ${q.nome}`}
-      className={`group relative flex aspect-[4/5] w-full flex-col overflow-hidden rounded-card border border-border bg-surface p-3 pt-4 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:p-4 sm:pt-5 ${
+      className={`group relative flex aspect-[4/5] w-full flex-col overflow-hidden rounded-card border border-border bg-surface p-3 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:p-4 ${q.fundoUrl ? "pt-12 sm:pt-14" : "pt-4 sm:pt-5"} ${
         q.arquivado ? "opacity-60" : ""
       }`}
     >
-      <span aria-hidden className="absolute inset-x-0 top-0 h-1.5" style={{ background: q.cor }} />
+      {/* A FAIXA na cor do quadro — com imagem de fundo, a imagem (a cor por baixo, se ela não carregar). */}
+      <span
+        aria-hidden
+        className={`absolute inset-x-0 top-0 ${q.fundoUrl ? "h-9 border-b-4 sm:h-10" : "h-1.5"}`}
+        style={q.fundoUrl ? { background: `${urlFundoCss(q.fundoUrl)} center / cover no-repeat, ${q.cor}`, borderColor: q.cor } : { background: q.cor }}
+      />
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-faint" title={q.grupoNome}>
           {q.grupoNome}
