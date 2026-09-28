@@ -7,20 +7,21 @@ import { listasDoPeriodo } from "@/lib/calendario-core";
 import { listarFeriados } from "@/lib/feriados";
 import { dataIsoBrasilia } from "@/lib/format";
 import { atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarQuadros, modeloQuadroDe, quadroAcessivel } from "@/lib/tarefas";
+import { conjuntosDaPessoa } from "@/lib/tarefas-dados";
 import { criarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Os QUADROS ativos que a pessoa vê (de TODOS os grupos dela — o ADM, todos; o privado só do dono), com as contagens do
- * card — o "Mudar de quadros" usa o MESMO `QuadroCard` da tela de Tarefas.
+ * card, e os CONJUNTOS da pessoa — o "Mudar de quadros" usa o MESMO `QuadroCard` e as MESMAS seções da tela de Tarefas.
  */
 export async function GET() {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const grupos = a.u.role === "admin" ? null : (await gruposDoUsuario(a.u.id)).map((g) => g.id);
-  const quadros = await listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id);
-  return ok({ quadros: quadros.filter((q) => !q.arquivado) });
+  const [quadros, conjuntos] = await Promise.all([listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id), conjuntosDaPessoa(a.u.id)]);
+  return ok({ quadros: quadros.filter((q) => !q.arquivado), conjuntos });
 }
 
 /**

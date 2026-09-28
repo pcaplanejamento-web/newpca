@@ -54,7 +54,8 @@ import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./Men
 import { useConfirmacao } from "./Confirmacao";
 import { EstrelaFavorito, useFavoritosQuadros } from "./FavoritosQuadros";
 import { QuadroKanban } from "./QuadroKanban";
-import { registrarQuadroRecente, TrocarQuadro } from "./TrocarQuadro";
+import { registrarQuadroRecente } from "./SecoesQuadros";
+import { TrocarQuadro } from "./TrocarQuadro";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";

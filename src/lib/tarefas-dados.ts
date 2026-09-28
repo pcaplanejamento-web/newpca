@@ -28,7 +28,7 @@ import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { mascararPrivados } from "./tarefas-core";
-import { CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, favoritosPrimeiro, lerFavoritos, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+import { CHAVE_CONJUNTOS_TAREFAS, CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, type ConjuntoQuadros, favoritosPrimeiro, lerConjuntos, lerFavoritos, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
 const PREFIXO_CALENDARIO = "calendario:";
@@ -43,17 +43,31 @@ import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 /**
  * A LISTA de quadros (`/painel/tarefas`): os do GRUPO ATIVO do cabeçalho; o ADM sem grupo ativo vê todos. `grupoAtivo`
  * = onde um quadro NOVO nasce (sem grupo, não se cria). `modelos` = os modelos de quadro dos grupos da pessoa (o ADM,
- * todos) — o "Novo quadro" pode partir de um deles. Os FAVORITOS da pessoa vêm primeiro.
+ * todos) — o "Novo quadro" pode partir de um deles. Os FAVORITOS da pessoa vêm primeiro; `conjuntos` = as grades
+ * nomeadas dela.
  */
 export async function carregarQuadros(u: UsuarioSessao) {
   const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
-  const [quadros, modelos, favoritos] = await Promise.all([
+  const [quadros, modelos, favoritos, conjuntos] = await Promise.all([
     listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id),
     u.role === "admin" ? listarModelosQuadro(null) : gruposDoUsuario(u.id).then((g) => listarModelosQuadro(g.map((x) => x.id))),
     favoritosDaPessoa(u.id),
+    conjuntosDaPessoa(u.id),
   ]);
-  return { quadros: favoritosPrimeiro(quadros, favoritos), favoritos, grupoAtivo, modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })) };
+  return {
+    quadros: favoritosPrimeiro(quadros, favoritos),
+    favoritos,
+    conjuntos,
+    grupoAtivo,
+    modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })),
+  };
+}
+
+/** Os CONJUNTOS de quadros da pessoa (as grades nomeadas da tela de Tarefas e do "Mudar de quadros"). */
+export async function conjuntosDaPessoa(usuarioId: number): Promise<ConjuntoQuadros[]> {
+  const prefs = await listarPreferenciasTabela(usuarioId, CHAVE_CONJUNTOS_TAREFAS);
+  return lerConjuntos(prefs[CHAVE_CONJUNTOS_TAREFAS]);
 }
 
 /** Os QUADROS FAVORITOS da pessoa (a estrela do card e do cabeçalho do quadro). */

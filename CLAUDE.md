@@ -2338,7 +2338,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       detalhe (os 10 tons normais da `PALETA_ETIQUETAS` + "Remover a capa"; grava na hora, `PATCH /api/tarefas/[id]`
       `{capa}`); a cópia do cartão leva a capa.
     - Listas **RECOLHÍVEIS** (botão no cabeçalho, com o mouse sobre a lista; no toque, sempre): vira uma faixa estreita com
-      o nome na vertical — tocar expande; guardadas no aparelho (`tarefas:recolhidas:<quadro>`, `useRecolhidas`). Com
+      o nome na vertical — tocar expande; guardadas no aparelho (`tarefas:recolhidas:<quadro>`, `useSetLocal` — o hook genérico de ids no aparelho). Com
       filtro ligado, a contagem da lista mostra **"N de M"** (`QuadroKanban.totais`).
     - Título do quadro inteiro: o `TextoNoLugar ajustar` não usa margem negativa nem `max-width` (cortavam a largura
       intrínseca — "tes…"); Dashboard e Configuração ficam "vazados" (`PainelMoldura vazado`: os quadros/seções delas já são
@@ -2367,13 +2367,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **"MUDAR DE QUADROS" no padrão do Trello (sem migração):** o **`TrocarQuadro`** (o item da `PilulaVistas`) abre um
     `Modal` (bottom-sheet no celular) com o **`PainelQuadros`**: `SearchField` "Pesquisar seus quadros" (nome ou grupo —
     `predicadoBusca`), **`ChipsEscolha`** por GRUPO (Tudo · grupo…; só com 2+ grupos — o componente novo de chips de
-    escolha que QUEBRAM linha, também usado nas pesquisas sugeridas do `SeletorFundo`), as seções **Favoritos** e
-    **Recentes** (os abertos por último NESTE aparelho — `registrarQuadroRecente`, chamado pelo espaço do quadro;
-    `localStorage` `tarefas:quadros-recentes`, até 8) e cada GRUPO recolhível (um grupo só, ou o escolhido nos chips, já
-    abre). Tudo com o MESMO **`QuadroCard`** da tela de Tarefas (capa 16:9, grupo, nome em até 2 linhas, contagens, a
+    escolha que QUEBRAM linha, também usado nas pesquisas sugeridas do `SeletorFundo`) e as MESMAS seções da tela de
+    Tarefas (`SecoesDeQuadros` — ver "SEÇÕES DE QUADROS + CONJUNTOS"; os recentes em `localStorage`
+    `tarefas:quadros-recentes`, até 8). Tudo com o MESMO **`QuadroCard`** da tela de Tarefas (capa 16:9, grupo, nome em até 2 linhas, contagens, a
     estrela de favorito — `onFavorito` — e, no aberto agora, `atual`: contorno accent + selo "Atual"; `onAbrir` fecha o
     painel ao navegar). Os quadros (de TODOS os grupos da pessoa, sem os arquivados; o privado só do dono) vêm só ao abrir
     por **`GET /api/tarefas/quadros`** (`listarQuadros`). Saíram o `Dropdown` + `SeletorBusca` do trocar de quadro.
+  - **SEÇÕES DE QUADROS + CONJUNTOS (sem migração):** a tela de Tarefas e o "Mudar de quadros" usam o MESMO
+    **`SecoesDeQuadros`** (`SecoesQuadros.tsx`): **Favoritos** · **Visualizados recentemente** (deste aparelho —
+    `registrarQuadroRecente`/`useQuadrosRecentes`) · cada **CONJUNTO** · cada **GRUPO** (o card "Novo quadro" entra no
+    último). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (seta + `aria-expanded`; o que está
+    minimizado fica neste aparelho — `useSecoesRecolhidas`, `useSetLocal` — e vale nas DUAS telas), com a
+    **`GradeQuadros`**: o `QuadroCard` INALTERADO numa grade `auto-fill` de colunas ≥ 15rem (o card nunca muda de forma —
+    sobra espaço, não encolhe; o painel do "Mudar de quadros" virou `Modal size="full"`). **CONJUNTOS** (como as
+    coleções/áreas de trabalho do Trello): grades NOMEADAS da pessoa, com cor — preferência `tarefas:conjuntos` (`{lista}`;
+    núcleo puro `lerConjuntos`/`quadrosDoConjunto`/`salvarConjunto`, `MAX_CONJUNTOS` 30, até 100 quadros cada — testados);
+    "Novo conjunto" na tela de Tarefas → **`EditorConjunto`** (nome, cor da paleta em círculos, os quadros por busca +
+    caixas de marcar); editar/excluir no **`MenuConjunto`** "…" da seção (excluir não toca nos quadros); gravação otimista
+    em fila (`useConjuntosQuadros`, como os favoritos). Um quadro pode estar em vários conjuntos; o que sumiu/arquivou/perdeu
+    acesso não aparece. O painel mostra os conjuntos só para navegar (`GET /api/tarefas/quadros` devolve `conjuntos`).
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

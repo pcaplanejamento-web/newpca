@@ -1113,6 +1113,8 @@ com a chave —, degradês em círculos, degradê próprio e "Sem fundo" = padr�
 Configuração; cards dos quadros com a capa 16:9; quadros privados (só quem criou vê).
 ✅ **Tarefas — "Mudar de quadros" como o do Trello:** busca, chips por grupo, Favoritos, Recentes e grupos recolhíveis,
 em miniaturas com a capa 16:9 de cada quadro.
+✅ **Tarefas — seções e conjuntos de quadros:** Favoritos, Recentes, CONJUNTOS (grades nomeadas pela pessoa, com cor) e
+grupos — todas minimizáveis — na tela de Tarefas e no "Mudar de quadros", com o mesmo card e a mesma grade.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

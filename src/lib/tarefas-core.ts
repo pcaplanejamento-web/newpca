@@ -1177,6 +1177,49 @@ export function favoritosPrimeiro<Q extends { id: number }>(quadros: Q[], favori
   return [...quadros.filter((q) => f.has(q.id)), ...quadros.filter((q) => !f.has(q.id))];
 }
 
+/**
+ * CONJUNTOS de quadros (como as áreas de trabalho/coleções do Trello): grupos de quadros NOMEADOS pela pessoa, cada um com
+ * uma cor — preferência `tarefas:conjuntos` (`{ lista }`, por pessoa; sem migração). Um quadro pode estar em vários.
+ */
+export const CHAVE_CONJUNTOS_TAREFAS = "tarefas:conjuntos";
+export type ConjuntoQuadros = { id: string; nome: string; cor: string; quadros: number[] };
+export const MAX_CONJUNTOS = 30;
+export const MAX_QUADROS_CONJUNTO = 100;
+export const MAX_NOME_CONJUNTO = 40;
+const HEX_CONJUNTO = /^#[0-9a-f]{6}$/i;
+
+/** Qualquer JSON → os conjuntos válidos (id e nome não vazios, cor hex, quadros inteiros positivos sem repetir). */
+export function lerConjuntos(v: unknown): ConjuntoQuadros[] {
+  const l = Array.isArray(v) ? v : v && typeof v === "object" && Array.isArray((v as { lista?: unknown }).lista) ? (v as { lista: unknown[] }).lista : [];
+  const vistos = new Set<string>();
+  const saida: ConjuntoQuadros[] = [];
+  for (const x of l) {
+    if (!x || typeof x !== "object") continue;
+    const c = x as Record<string, unknown>;
+    const id = typeof c.id === "string" ? c.id.trim().slice(0, 40) : "";
+    const nome = typeof c.nome === "string" ? c.nome.trim().slice(0, MAX_NOME_CONJUNTO) : "";
+    if (!id || !nome || vistos.has(id)) continue;
+    vistos.add(id);
+    const quadros = Array.isArray(c.quadros) ? [...new Set(c.quadros.filter((q): q is number => Number.isInteger(q) && (q as number) > 0))].slice(0, MAX_QUADROS_CONJUNTO) : [];
+    saida.push({ id, nome, cor: typeof c.cor === "string" && HEX_CONJUNTO.test(c.cor) ? c.cor.toLowerCase() : "#579dff", quadros });
+    if (saida.length >= MAX_CONJUNTOS) break;
+  }
+  return saida;
+}
+
+/** Os quadros de um conjunto, NA ORDEM do conjunto — só os que existem (o quadro excluído/arquivado/sem acesso some). */
+export function quadrosDoConjunto<Q extends { id: number }>(c: ConjuntoQuadros, quadros: Q[]): Q[] {
+  const porId = new Map(quadros.map((q) => [q.id, q]));
+  return c.quadros.map((id) => porId.get(id)).filter((q): q is Q => !!q);
+}
+
+/** Cria/atualiza um conjunto (pelo id) — o nome aparado; a lista nova, pronta para gravar. */
+export function salvarConjunto(lista: ConjuntoQuadros[], c: ConjuntoQuadros): ConjuntoQuadros[] {
+  const novo = lerConjuntos([c])[0];
+  if (!novo) return lista;
+  return lista.some((x) => x.id === novo.id) ? lista.map((x) => (x.id === novo.id ? novo : x)) : [...lista, novo].slice(0, MAX_CONJUNTOS);
+}
+
 // ─── CAMPOS PERSONALIZADOS e TÍTULO AUTOMÁTICO (migração `0056`) ────────────────────────────────────────────
 
 export const TIPOS_CAMPO = ["texto", "numero", "data", "lista", "checkbox"] as const;

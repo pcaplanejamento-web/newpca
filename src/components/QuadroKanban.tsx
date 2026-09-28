@@ -12,6 +12,7 @@ import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
 import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconExpandir, IconGrip, IconMais, IconRecolher, IconModelo, IconPencil, IconPlus } from "./icons";
 import { TextoNoLugar } from "./TextoNoLugar";
 import { toast } from "./Toast";
+import { useSetLocal } from "./useSetLocal";
 
 /**
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
@@ -87,7 +88,7 @@ export function QuadroKanban({
   /** Chave (no aparelho) das listas RECOLHIDAS deste quadro; ausente = sem recolher. */
   chaveRecolhidas?: string;
 }) {
-  const [recolhidas, alternarRecolhida] = useRecolhidas(chaveRecolhidas);
+  const [recolhidas, alternarRecolhida] = useSetLocal<number>(chaveRecolhidas);
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true, reservaInferior);
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoCartoes({ quadro: rolo, onMover });
@@ -296,36 +297,6 @@ export function QuadroKanban({
     </div>
     </>
   );
-}
-
-/**
- * As listas RECOLHIDAS de um quadro, guardadas NO APARELHO (conveniência — `localStorage`, lido depois da montagem, com
- * try/catch). Sem `chave`, nada recolhe.
- */
-function useRecolhidas(chave: string | undefined): [Set<number>, (id: number) => void] {
-  const [ids, setIds] = useState<Set<number>>(new Set());
-  useEffect(() => {
-    if (!chave) return;
-    try {
-      const v = JSON.parse(localStorage.getItem(chave) ?? "[]");
-      if (Array.isArray(v)) setIds(new Set(v.filter((x): x is number => typeof x === "number")));
-    } catch {
-      // sem armazenamento: nada recolhido
-    }
-  }, [chave]);
-  const alternar = (id: number) =>
-    setIds((atual) => {
-      const n = new Set(atual);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      try {
-        if (chave) localStorage.setItem(chave, JSON.stringify([...n]));
-      } catch {
-        // sem armazenamento: vale só nesta tela
-      }
-      return n;
-    });
-  return [ids, alternar];
 }
 
 /**

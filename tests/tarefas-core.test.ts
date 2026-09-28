@@ -64,6 +64,9 @@ import {
   type ListaTarefas,
   type RecorteTarefas,
   PALETA_ETIQUETAS,
+  lerConjuntos,
+  quadrosDoConjunto,
+  salvarConjunto,
 } from "../src/lib/tarefas-core.ts";
 import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
@@ -666,5 +669,34 @@ describe("paleta de etiquetas (a do Trello)", () => {
     assert.equal(corEtiquetaSugerida(0), PALETA_ETIQUETAS[10]);
     assert.equal(corEtiquetaSugerida(13), PALETA_ETIQUETAS[13]);
     assert.equal(corEtiquetaSugerida(-1), PALETA_ETIQUETAS[19]);
+  });
+});
+
+describe("conjuntos de quadros (como as coleções do Trello)", () => {
+  it("lê tolerante: sem id/nome some, cor inválida vira o padrão, quadros sem repetir", () => {
+    const l = lerConjuntos({
+      lista: [
+        { id: "a", nome: " PCA 2026 ", cor: "#ABCDEF", quadros: [3, 3, 1, -2, "x"] },
+        { id: "a", nome: "repetido", quadros: [] },
+        { id: "", nome: "sem id" },
+        { id: "b", nome: "Geral", cor: "red" },
+        null,
+      ],
+    });
+    assert.deepEqual(l, [
+      { id: "a", nome: "PCA 2026", cor: "#abcdef", quadros: [3, 1] },
+      { id: "b", nome: "Geral", cor: "#579dff", quadros: [] },
+    ]);
+    assert.deepEqual(lerConjuntos("lixo"), []);
+  });
+
+  it("quadros do conjunto na ordem dele, só os que existem; salvar cria ou substitui", () => {
+    const c = { id: "a", nome: "X", cor: "#579dff", quadros: [5, 9, 2] };
+    assert.deepEqual(quadrosDoConjunto(c, [{ id: 2 }, { id: 5 }]), [{ id: 5 }, { id: 2 }]);
+    const l1 = salvarConjunto([], c);
+    assert.equal(l1.length, 1);
+    const l2 = salvarConjunto(l1, { ...c, nome: "Y" });
+    assert.deepEqual(l2.map((x) => x.nome), ["Y"]);
+    assert.deepEqual(salvarConjunto(l2, { ...c, id: "b", nome: "  " }), l2);
   });
 });
