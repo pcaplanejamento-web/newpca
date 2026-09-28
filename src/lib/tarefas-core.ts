@@ -35,6 +35,8 @@ export type TarefaResumo = {
   arquivada: boolean;
   /** O cartão é um TEMPLATE (criar a partir dele = copiar) — fora das contagens, do painel e dos filtros ativos. */
   template: boolean;
+  /** Tem DESCRIÇÃO (o ícone do cartão — o texto não vai ao quadro). */
+  temDescricao?: boolean;
   /** Responsáveis (ids de usuário). */
   pessoas: number[];
   /** Observadores (acompanham, sem ser responsáveis). */
@@ -515,20 +517,24 @@ export const textoMes = (ano: number, mes: number) => `${ano}-${String(mes).padS
  * os demais só marcam a POSIÇÃO de um campo que já existe (prazo, pessoas…) — são únicos. Título, lista, prioridade e
  * descrição ficam fixos no topo.
  */
-export const TIPOS_BLOCO = ["nota", "checklist", "link", "prazo", "eventos", "pessoas", "etiquetas", "vinculo", "estimativa", "recorrencia"] as const;
+/**
+ * Os BLOCOS do CORPO da tarefa (a ordem é da pessoa — arrastáveis): nota e link (repetíveis), checklists, eventos e
+ * vínculo. Responsáveis, etiquetas, datas, prioridade, estimativa e recorrência são METADADOS (a faixa do topo do
+ * detalhe, como no Trello) — os blocos antigos desses tipos são ignorados na leitura (o dado mora nas colunas).
+ */
+export const TIPOS_BLOCO = ["nota", "checklist", "link", "eventos", "vinculo"] as const;
 export type TipoBloco = (typeof TIPOS_BLOCO)[number];
 export const ROTULO_BLOCO: Record<TipoBloco, string> = {
   nota: "Nota",
   checklist: "Checklist",
   link: "Link",
-  prazo: "Prazo",
   eventos: "Eventos",
-  pessoas: "Responsáveis",
-  etiquetas: "Etiquetas",
   vinculo: "Vínculo",
-  estimativa: "Estimativa",
-  recorrencia: "Recorrência",
 };
+/** Os METADADOS da tarefa (a faixa do topo do detalhe — aparecem quando têm dado ou foram acrescentados). */
+export const TIPOS_METADADO = ["membros", "etiquetas", "datas", "prioridade", "estimativa"] as const;
+export type TipoMetadado = (typeof TIPOS_METADADO)[number];
+export const ROTULO_METADADO: Record<TipoMetadado, string> = { membros: "Membros", etiquetas: "Etiquetas", datas: "Datas", prioridade: "Prioridade", estimativa: "Estimativa" };
 export const BLOCOS_REPETIVEIS: readonly TipoBloco[] = ["nota", "link"];
 export const MAX_BLOCOS = 30;
 export const MAX_NOTA = 5000;
@@ -574,40 +580,38 @@ export function lerBlocos(v: unknown): BlocoTarefa[] | null {
 }
 
 /** O que diz se um bloco de CAMPO tem dado (um bloco com dado nunca some da tarefa). */
-export type DadosBlocos = {
-  inicio: string | null;
-  prazo: string | null;
+export type DadosBlocos = { vinculo: unknown; checklist: number; eventos: number };
+export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
+  if (tipo === "vinculo") return d.vinculo != null;
+  if (tipo === "checklist") return d.checklist > 0;
+  if (tipo === "eventos") return d.eventos > 0;
+  return false;
+}
+
+/** O que diz se um METADADO tem dado (aparece na faixa). A prioridade "média" é o padrão — só aparece quando outra. */
+export type DadosMetadados = {
   pessoas: number[];
   observadores: number[];
-  /** As equipes (o bloco Responsáveis também as guarda). */
-  equipes?: number[];
+  equipes: number[];
   etiquetas: number[];
-  vinculo: unknown;
-  estimativaH: number | null;
+  inicio: string | null;
+  prazo: string | null;
   recorrencia: unknown;
-  checklist: number;
-  eventos: number;
+  prioridade: Prioridade;
+  estimativaH: number | null;
 };
-export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
+export function metadadoTemDado(tipo: TipoMetadado, d: DadosMetadados): boolean {
   switch (tipo) {
-    case "prazo":
-      return !!(d.inicio || d.prazo);
-    case "pessoas":
-      return d.pessoas.length > 0 || d.observadores.length > 0 || (d.equipes?.length ?? 0) > 0;
+    case "membros":
+      return d.pessoas.length + d.observadores.length + d.equipes.length > 0;
     case "etiquetas":
       return d.etiquetas.length > 0;
-    case "vinculo":
-      return d.vinculo != null;
+    case "datas":
+      return !!(d.inicio || d.prazo || d.recorrencia);
+    case "prioridade":
+      return d.prioridade !== "media";
     case "estimativa":
       return d.estimativaH != null;
-    case "recorrencia":
-      return d.recorrencia != null;
-    case "checklist":
-      return d.checklist > 0;
-    case "eventos":
-      return d.eventos > 0;
-    default:
-      return false;
   }
 }
 

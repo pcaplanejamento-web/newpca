@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { ChecklistNomeado, ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
@@ -14,6 +14,16 @@ import {
   blocosParaGravar,
   blocoTemDado,
   type DadosBlocos,
+  metadadoTemDado,
+  TIPOS_METADADO,
+  ROTULO_METADADO,
+  type TipoMetadado,
+  estadoPrazo,
+  horaAgoraBrasilia,
+  rotuloData,
+  COR_ESTADO_PRAZO,
+  ROTULO_ESTADO_PRAZO,
+  rotuloRecorrencia,
   type EquipeQuadro,
   MAX_NOTA,
   MAX_TITULO_LINK,
@@ -37,13 +47,15 @@ import {
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { ChipPreso, GuiaBloco, MolduraBloco, PaletaBlocos, useArrastoBlocos } from "./BlocosTarefa";
+import { ChipPreso, GuiaBloco, ICONE_METADADO, MenuAdicionarCartao, MolduraBloco, useArrastoBlocos } from "./BlocosTarefa";
+import { CirculoConcluir } from "./CirculoConcluir";
+import { CampoTextoFormatado } from "./TextoFormatado";
 import { acoesChecklistRascunho, type ChecklistRascunho, ChecklistTarefa, useChecklistServidor } from "./ChecklistTarefa";
-import { ComentariosTarefa } from "./ComentariosTarefa";
+import { AtividadeTarefa } from "./AtividadeTarefa";
 import { useConfirmacao } from "./Confirmacao";
 import { ehDesktop } from "./espacamento";
-import { SelectField, TextArea, TextField } from "./Field";
-import { Historico, useHistorico } from "./Historico";
+import { SelectField, TextField } from "./Field";
+import { useHistorico } from "./Historico";
 import { LinkExterno } from "./LinkExterno";
 import type { ModoCopia } from "./CopiarMoverTarefa";
 import { Dropdown } from "./Dropdown";
@@ -87,7 +99,7 @@ type Rascunho = {
   checklists: ChecklistRascunho[];
   /** Os EVENTOS da tarefa NOVA (vão junto no POST; na gravada, gravam na hora). */
   eventos: DadosEvento[];
-  /** Os BLOCOS, na ordem (a paleta). */
+  /** Os BLOCOS do corpo, na ordem. */
   blocos: BlocoTarefa[];
 };
 type Conteudo = { checklists: ChecklistNomeado[]; checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] };
@@ -96,20 +108,8 @@ const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x
 const mesmoVinculo = (a: Vinculo | null, b: Vinculo | null) => (a?.tipo ?? null) === (b?.tipo ?? null) && (a?.id ?? null) === (b?.id ?? null);
 const numEstimativa = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
 
-/** O que decide se um bloco de campo tem dado — a partir do rascunho. */
-const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos: number): DadosBlocos => ({
-  inicio: r.inicio || null,
-  prazo: r.prazo || null,
-  pessoas: r.pessoas,
-  observadores: r.observadores,
-  equipes: r.equipes,
-  etiquetas: r.etiquetas,
-  vinculo: r.vinculo,
-  estimativaH: r.estimativa.trim() ? 1 : null,
-  recorrencia: r.recorrencia,
-  checklist,
-  eventos,
-});
+/** O que decide se um bloco do corpo tem dado — a partir do rascunho. */
+const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos: number): DadosBlocos => ({ vinculo: r.vinculo, checklist, eventos });
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -121,11 +121,12 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /**
- * DETALHE de uma tarefa (criar e editar) num banner. Fixos no topo: título, lista, prioridade e descrição. O resto é
- * montado por BLOCOS (a paleta — arraste até o lugar ou toque para acrescentar): Nota, Checklist, Link, Prazo (início +
- * prazo com o semáforo), Responsáveis (+ observadores), Etiquetas, Vínculo, Estimativa e Recorrência — na ordem escolhida
- * (alça, ↑/↓). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista, em fila). No painel
- * da direita, a ATIVIDADE — comentários com @menção | histórico. O menu "…" do cabeçalho: Copiar · Mover para outro quadro
+ * DETALHE de uma tarefa (criar e editar) num banner — a distribuição do TRELLO: o CÍRCULO de concluir + o TÍTULO no
+ * lugar, a lista, a fileira **+ Adicionar** (`MenuAdicionarCartao`), a FAIXA DE METADADOS (Membros · Etiquetas · Datas ·
+ * Prioridade · Estimativa — aparecem quando têm dado ou foram acrescentadas; tocar abre o editor logo abaixo), a
+ * DESCRIÇÃO formatada (lida formatada, editada no lugar) e os BLOCOS do corpo (Checklists · Notas · Links · Eventos ·
+ * Vínculo — alça e ↑/↓ reordenam). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista,
+ * em fila). No painel da direita, **Comentários e atividade** num fluxo só (`AtividadeTarefa`). O menu "…" do cabeçalho: Copiar · Mover para outro quadro
  * · Criar template (`onCopiarMover` — o diálogo é do host) · Copiar link. Arquivar/restaurar (qualquer pessoa do grupo) e
  * excluir (editores). O TEMPLATE não se conclui. Fechar com alterações pede confirmação.
  */
@@ -181,11 +182,15 @@ export function TarefaDetalhe({
   const [atividade, setAtividade] = useState(false);
   // Desktop: a Atividade é um banner AO LADO; no celular (um banner por vez), uma aba "Tarefa | Atividade" no próprio corpo.
   const [desk, setDesk] = useState(true);
-  const [abaAtividade, setAbaAtividade] = useState<"comentarios" | "historico">("comentarios");
+  // Os DETALHES (histórico) no fluxo de atividade — o histórico só é buscado com eles à vista.
+  const [detalhesHist, setDetalhesHist] = useState(false);
   const [versaoHist, setVersaoHist] = useState(0);
+  // Os METADADOS acrescentados pelo "+ Adicionar" (ainda sem dado) e o que tem o EDITOR aberto.
+  const [metaExtras, setMetaExtras] = useState<TipoMetadado[]>([]);
+  const [metaEditando, setMetaEditando] = useState<TipoMetadado | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const pedido = useRef(0);
-  const historico = useHistorico(atividade && abaAtividade === "historico" && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
+  const historico = useHistorico(atividade && detalhesHist && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
 
   /** O conteúdo da tarefa aberta (descrição + blocos + checklist + comentários). Só a resposta MAIS RECENTE vale. */
   const carregar = useCallback(async (id: number, primeira: boolean) => {
@@ -261,7 +266,8 @@ export function TarefaDetalhe({
     setInicial(base);
     setDesk(ehDesktop());
     setAtividade(aberto.tipo === "editar" && ehDesktop());
-    setAbaAtividade("comentarios");
+    setMetaExtras([]);
+    setMetaEditando(null);
     if (aberto.tipo === "editar") carregar(aberto.id, true);
   }, [aberto?.tipo, idAberto, aberto?.tipo === "nova" ? aberto.listaId : null]);
 
@@ -269,8 +275,7 @@ export function TarefaDetalhe({
   const checklistsGravados = useMemo(() => (conteudo ? { checklists: conteudo.checklists, itens: conteudo.checklist } : null), [conteudo]);
   const checklistServidor = useChecklistServidor(idAberto ? `/api/tarefas/${idAberto}` : null, checklistsGravados, onSalvo);
   const listaBlocos = useRef<HTMLDivElement>(null);
-  const soltarBloco = (carga: { tipo: "novo"; bloco: BlocoTarefa["tipo"] } | { tipo: "mover"; id: string }, indice: number) =>
-    setR((x) => (x ? { ...x, blocos: carga.tipo === "novo" ? adicionarBloco(x.blocos, carga.bloco, indice) : moverBloco(x.blocos, carga.id, indice) } : x));
+  const soltarBloco = (carga: { id: string }, indice: number) => setR((x) => (x ? { ...x, blocos: moverBloco(x.blocos, carga.id, indice) } : x));
   const arrastoBlocos = useArrastoBlocos(listaBlocos, soltarBloco);
 
   if (!aberto || !r || !inicial) return <>{confirmacao}</>;
@@ -462,7 +467,7 @@ export function TarefaDetalhe({
             ? `Os ${nEventos} eventos serão excluídos agora.`
           : b.tipo === "nota" || b.tipo === "link"
             ? "O conteúdo sai da tarefa ao salvar."
-            : "O campo fica vazio ao salvar.";
+            : "O vínculo sai da tarefa ao salvar.";
       if (!(await confirmar({ titulo: `Remover o bloco ${ROTULO_BLOCO[b.tipo]}?`, texto, confirmar: "Remover", perigo: true }))) return;
     }
     if (b.tipo === "checklist" && !nova) for (const c of acoesChecklist?.checklists ?? []) acoesChecklist?.removerChecklist(c.id);
@@ -470,12 +475,7 @@ export function TarefaDetalhe({
     setR((x) => {
       if (!x) return x;
       const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
-      if (b.tipo === "prazo") Object.assign(y, { inicio: "", prazo: "", prazoHora: "", lembreteMin: null });
-      else if (b.tipo === "pessoas") Object.assign(y, { pessoas: [], observadores: [], equipes: [] });
-      else if (b.tipo === "etiquetas") y.etiquetas = [];
-      else if (b.tipo === "vinculo") y.vinculo = null;
-      else if (b.tipo === "estimativa") y.estimativa = "";
-      else if (b.tipo === "recorrencia") y.recorrencia = null;
+      if (b.tipo === "vinculo") y.vinculo = null;
       else if (b.tipo === "checklist") y.checklists = [];
       else if (b.tipo === "eventos") y.eventos = [];
       return y;
@@ -487,7 +487,14 @@ export function TarefaDetalhe({
     switch (b.tipo) {
       case "nota":
         return (
-          <TextArea label="" aria-label="Nota" rows={4} value={b.texto} maxLength={MAX_NOTA} placeholder="Escreva a nota" onChange={(e) => setBloco(b.id, { texto: e.target.value })} />
+          <CampoTextoFormatado
+            valor={b.texto}
+            onChange={(texto) => setBloco(b.id, { texto })}
+            rotulo="Nota"
+            vazio="Escreva a nota…"
+            maxLength={MAX_NOTA}
+            iniciarEditando={!b.texto.trim()}
+          />
         );
       case "link": {
         const erro = b.url.trim() && !urlValida(b.url) ? "Informe um endereço http(s)." : undefined;
@@ -519,9 +526,109 @@ export function TarefaDetalhe({
         ) : (
           <p className="text-[12.5px] text-muted">Carregando…</p>
         );
-      case "prazo":
-        return <DatasTarefa valor={r} hoje={hoje} concluida={concluida} onChange={(patch) => setR((x) => (x ? { ...x, ...patch } : x))} />;
-      case "pessoas":
+      case "vinculo":
+        return <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />;
+      case "eventos":
+        return carregando ? (
+          <p className="text-[12.5px] text-muted">Carregando…</p>
+        ) : (
+          <EventosTarefa
+            eventos={eventosVisiveis}
+            hoje={hoje}
+            onSalvar={salvarEvento}
+            onExcluir={excluirEventoDaTarefa}
+            ocupado={gravandoEvento}
+            pessoas={nova ? undefined : pessoas}
+            usuarioId={usuarioId}
+          />
+        );
+    }
+  };
+  const arrasto = arrastoBlocos.arrasto;
+  const movendo = arrasto?.carga.id ?? null;
+  const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
+  const listaAtual = listas.find((l) => l.id === r.listaId);
+
+  // ── A FAIXA DE METADADOS (como no Trello) ──
+  const dadosMeta = {
+    pessoas: r.pessoas,
+    observadores: r.observadores,
+    equipes: r.equipes,
+    etiquetas: r.etiquetas,
+    inicio: r.inicio || null,
+    prazo: r.prazo || null,
+    recorrencia: r.recorrencia,
+    prioridade: r.prioridade,
+    estimativaH: r.estimativa.trim() ? 1 : null,
+  };
+  const metaVisiveis = TIPOS_METADADO.filter((t) => metaExtras.includes(t) || metadadoTemDado(t, dadosMeta));
+  const alternarEditor = (t: TipoMetadado) => setMetaEditando((m) => (m === t ? null : t));
+  const estadoDatas = estadoPrazo(r.prazo || null, hoje, concluida, r.prazoHora || null, horaAgoraBrasilia());
+  /** O botão de um metadado na faixa (tocar abre o editor logo abaixo). */
+  const chipMeta = (t: TipoMetadado, conteudo: ReactNode, rotulo: string) => (
+    <button
+      type="button"
+      aria-expanded={metaEditando === t}
+      aria-label={rotulo}
+      onClick={() => alternarEditor(t)}
+      className={`inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-control px-2 text-[13px] font-semibold text-text-2 transition-colors hover:bg-surface-2 lg:min-h-[var(--h-control-sm)] ${metaEditando === t ? "bg-surface-2 ring-2 ring-accent/30" : "bg-surface-2/60"}`}
+    >
+      {conteudo}
+    </button>
+  );
+  const envolvidosRasc = [...new Set([...r.pessoas, ...pelaEquipe.map((p) => p.id)])].map((id) => todas.find((p) => p.id === id)).filter((p): p is Pessoa => !!p);
+  const valorMetadado = (t: TipoMetadado): ReactNode => {
+    switch (t) {
+      case "membros":
+        return chipMeta(
+          t,
+          envolvidosRasc.length ? (
+            <span className="flex -space-x-1.5">
+              {envolvidosRasc.slice(0, 6).map((p) => (
+                <Avatar key={p.id} nome={p.nome} foto={p.foto} size="sm" className="ring-2 ring-surface" />
+              ))}
+              {envolvidosRasc.length > 6 && <span className="pl-2 text-[12px] text-muted">+{envolvidosRasc.length - 6}</span>}
+            </span>
+          ) : (
+            <span className="text-muted">Ninguém</span>
+          ),
+          `Membros: ${envolvidosRasc.map((p) => nomeExibicao(p)).join(", ") || "ninguém"} — editar`,
+        );
+      case "etiquetas":
+        return <SeletorEtiquetas etiquetas={etiquetas} marcados={r.etiquetas} onChange={(v) => set("etiquetas", v)} quadroId={quadroId} podeEditar={podeExcluir} onMudouEtiquetas={onSalvo} />;
+      case "datas": {
+        const texto = [r.inicio ? `${rotuloData(r.inicio, hoje)} –` : "", r.prazo ? rotuloData(r.prazo, hoje, r.prazoHora || null) : r.inicio ? "sem prazo" : ""].filter(Boolean).join(" ");
+        return chipMeta(
+          t,
+          <>
+            <span className="tabular-nums">{texto || "Sem datas"}</span>
+            {r.prazo && (
+              <span className="rounded-full px-1.5 text-[11px]" style={{ color: COR_ESTADO_PRAZO[estadoDatas], background: `color-mix(in srgb, ${COR_ESTADO_PRAZO[estadoDatas]} 14%, var(--surface))` }}>
+                {concluida ? "Concluída" : ROTULO_ESTADO_PRAZO[estadoDatas]}
+              </span>
+            )}
+            {r.recorrencia && <span className="text-[11.5px] font-normal text-muted">· {rotuloRecorrencia(r.recorrencia)}</span>}
+          </>,
+          `Datas: ${texto || "sem datas"} — editar`,
+        );
+      }
+      case "prioridade":
+        return chipMeta(
+          t,
+          <>
+            <IconBandeira className="h-4 w-4" style={{ color: COR_PRIORIDADE[r.prioridade] }} />
+            {ROTULO_PRIORIDADE[r.prioridade]}
+          </>,
+          `Prioridade ${ROTULO_PRIORIDADE[r.prioridade]} — editar`,
+        );
+      case "estimativa":
+        return chipMeta(t, <span className="tabular-nums">{r.estimativa.trim() ? `${r.estimativa} h` : "Sem estimativa"}</span>, `Estimativa: ${r.estimativa || "nenhuma"} — editar`);
+    }
+  };
+  /** O EDITOR de um metadado (logo abaixo da faixa). */
+  const editorMetadado = (t: TipoMetadado): ReactNode => {
+    switch (t) {
+      case "membros":
         return (
           <div className="space-y-4">
             <Secao titulo="Responsáveis">
@@ -554,14 +661,33 @@ export function TarefaDetalhe({
             </Secao>
           </div>
         );
-      case "etiquetas":
-        return <SeletorEtiquetas etiquetas={etiquetas} marcados={r.etiquetas} onChange={(v) => set("etiquetas", v)} quadroId={quadroId} podeEditar={podeExcluir} onMudouEtiquetas={onSalvo} />;
-      case "vinculo":
-        return <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />;
+      case "datas":
+        return (
+          <div className="space-y-4">
+            <DatasTarefa valor={r} hoje={hoje} concluida={concluida} onChange={(patch) => setR((x) => (x ? { ...x, ...patch } : x))} />
+            <Secao titulo="Repetir">
+              <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />
+            </Secao>
+            {(r.inicio || r.prazo || r.recorrencia) && (
+              <Button variant="ghost" size="sm" onClick={() => setR((x) => (x ? { ...x, inicio: "", prazo: "", prazoHora: "", lembreteMin: null, recorrencia: null } : x))}>
+                Remover as datas
+              </Button>
+            )}
+          </div>
+        );
+      case "prioridade":
+        return (
+          <Segmented<Prioridade>
+            ariaLabel="Prioridade"
+            value={r.prioridade}
+            onChange={(v) => set("prioridade", v)}
+            options={PRIORIDADES.map((p) => ({ value: p, label: ROTULO_PRIORIDADE[p], icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} /> }))}
+          />
+        );
       case "estimativa":
         return (
           <TextField
-            label="Horas"
+            label="Estimativa (horas)"
             inputMode="decimal"
             value={r.estimativa}
             placeholder="Ex.: 4 ou 1,5"
@@ -569,28 +695,10 @@ export function TarefaDetalhe({
             onChange={(e) => set("estimativa", e.target.value)}
           />
         );
-      case "eventos":
-        return carregando ? (
-          <p className="text-[12.5px] text-muted">Carregando…</p>
-        ) : (
-          <EventosTarefa
-            eventos={eventosVisiveis}
-            hoje={hoje}
-            onSalvar={salvarEvento}
-            onExcluir={excluirEventoDaTarefa}
-            ocupado={gravandoEvento}
-            pessoas={nova ? undefined : pessoas}
-            usuarioId={usuarioId}
-          />
-        );
-      case "recorrencia":
-        return <RecorrenciaTarefa valor={r.recorrencia} onChange={(v) => set("recorrencia", v)} prazo={r.prazo || null} inicio={r.inicio || null} hoje={hoje} />;
+      default:
+        return null;
     }
   };
-  const arrasto = arrastoBlocos.arrasto;
-  const movendo = arrasto?.carga.tipo === "mover" ? arrasto.carga.id : null;
-  const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
-  const listaAtual = listas.find((l) => l.id === r.listaId);
 
   const painelAtividade = idAberto
     ? [
@@ -598,35 +706,22 @@ export function TarefaDetalhe({
           id: "atividade",
           aberto: atividade,
           largura: 30,
-          titulo: "Atividade",
+          titulo: "Comentários e atividade",
           onClose: () => setAtividade(false),
-          cabecalho: (
-            <Segmented<"comentarios" | "historico">
-              ariaLabel="Atividade da tarefa"
-              value={abaAtividade}
-              onChange={setAbaAtividade}
-              options={[
-                { value: "comentarios", label: `Comentários${nComentarios ? ` (${nComentarios})` : ""}` },
-                { value: "historico", label: "Histórico" },
-              ]}
+          children: (
+            <AtividadeTarefa
+              comentarios={conteudo?.comentarios ?? []}
+              historico={{ linhas: historico.linhas, erro: historico.erro, onDetalhes: setDetalhesHist }}
+              pessoas={todas}
+              usuarioId={usuarioId}
+              podeModerar={podeExcluir}
+              onEnviar={(texto) => agir(() => chamar(`${base}/comentarios`, "POST", { texto }))}
+              onEditar={(c, texto) => agir(() => chamar(`${base}/comentarios/${c.id}`, "PATCH", { texto }))}
+              onExcluir={async (c) => {
+                if (await confirmar({ titulo: "Excluir o comentário?", confirmar: "Excluir", perigo: true })) agir(() => chamar(`${base}/comentarios/${c.id}`, "DELETE"));
+              }}
             />
           ),
-          children:
-            abaAtividade === "comentarios" ? (
-              <ComentariosTarefa
-                comentarios={conteudo?.comentarios ?? []}
-                pessoas={todas}
-                usuarioId={usuarioId}
-                podeModerar={podeExcluir}
-                onEnviar={(texto) => agir(() => chamar(`${base}/comentarios`, "POST", { texto }))}
-                onEditar={(c, texto) => agir(() => chamar(`${base}/comentarios/${c.id}`, "PATCH", { texto }))}
-                onExcluir={async (c) => {
-                  if (await confirmar({ titulo: "Excluir o comentário?", confirmar: "Excluir", perigo: true })) agir(() => chamar(`${base}/comentarios/${c.id}`, "DELETE"));
-                }}
-              />
-            ) : (
-              <Historico entradas={historico.linhas ?? []} carregando={!historico.linhas && !historico.erro} erro={historico.erro} vazio="Nenhuma alteração registrada." />
-            ),
         },
       ]
     : undefined;
@@ -766,24 +861,31 @@ export function TarefaDetalhe({
         )}
         {!desk && atividade && painelAtividade ? (
           <div className="flex min-h-[60dvh] flex-col gap-3">
-            {painelAtividade[0].cabecalho}
             <div className="flex min-h-0 flex-1 flex-col">{painelAtividade[0].children}</div>
           </div>
         ) : (
         <div className="space-y-4">
-          <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova || (aberto.tipo === "editar" && aberto.focoTitulo)}
-            onFocus={(e) => {
-              // Criada de um TEMPLATE: o cursor no FIM do título (completa-se o "2. Protocolo - FALTA - ").
-              if (aberto.tipo === "editar" && aberto.focoTitulo) e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length);
-            }}
-            onChange={(e) => set("titulo", e.target.value)}
-          />
-          <SelectField
-            label="Lista"
-            value={String(r.listaId)}
-            hint={!nova && r.listaId !== inicial.listaId ? "Ao salvar, a tarefa vai para o fim desta lista." : undefined}
-            onChange={(e) => set("listaId", Number(e.target.value))}
-          >
+          {/* CÍRCULO de concluir + TÍTULO no lugar (como no Trello). */}
+          <div className="flex items-start gap-2">
+            {existente && !existente.template && !existente.arquivada && (
+              <span className="mt-1.5">
+                <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode} onAlternar={() => salvar(!concluida)} />
+              </span>
+            )}
+            <TituloNoLugar
+              valor={r.titulo}
+              focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
+              cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
+              onChange={(v) => set("titulo", v)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-1">
+            <SelectField
+              label="Na lista"
+              compacto
+              value={String(r.listaId)}
+              onChange={(e) => set("listaId", Number(e.target.value))}
+            >
               {listas.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.nome}
@@ -791,28 +893,56 @@ export function TarefaDetalhe({
                 </option>
               ))}
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
-          </SelectField>
-          <Secao titulo="Prioridade">
-            <Segmented<Prioridade>
-              ariaLabel="Prioridade"
-              value={r.prioridade}
-              onChange={(v) => set("prioridade", v)}
-              options={PRIORIDADES.map((p) => ({
-                value: p,
-                label: ROTULO_PRIORIDADE[p],
-                icone: <IconBandeira className="h-3.5 w-3.5" style={{ color: COR_PRIORIDADE[p] }} />,
-              }))}
+            </SelectField>
+            <MenuAdicionarCartao
+              metadados={TIPOS_METADADO.filter((t) => !metaVisiveis.includes(t))}
+              blocos={blocosDisponiveis(r.blocos)}
+              disabled={carregando}
+              onMetadado={(t) => {
+                setMetaExtras((m) => [...m, t]);
+                setMetaEditando(t);
+              }}
+              onBloco={(t) => setBlocos((l) => adicionarBloco(l, t))}
+            />
+            {!nova && r.listaId !== inicial.listaId && <p className="w-full text-[12px] text-muted">Ao salvar, a tarefa vai para o fim desta lista.</p>}
+          </div>
+          {metaVisiveis.length > 0 && (
+            <div className="flex flex-wrap gap-x-5 gap-y-3 pl-1">
+              {metaVisiveis.map((t) => (
+                <div key={t} className="min-w-0">
+                  <p className="mb-1 flex items-center gap-1 text-[12px] font-semibold text-muted">
+                    {(() => {
+                      const Icone = ICONE_METADADO[t];
+                      return <Icone className="h-3.5 w-3.5" />;
+                    })()}
+                    {ROTULO_METADADO[t]}
+                  </p>
+                  {valorMetadado(t)}
+                </div>
+              ))}
+            </div>
+          )}
+          {metaEditando && metaVisiveis.includes(metaEditando) && metaEditando !== "etiquetas" && (
+            <div className="animate-fade-in-up rounded-card border border-border bg-surface-2/50 p-[var(--pad-card)]">
+              {editorMetadado(metaEditando)}
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" variant="secondary" onClick={() => setMetaEditando(null)}>
+                  Pronto
+                </Button>
+              </div>
+            </div>
+          )}
+          <Secao titulo="Descrição">
+            <CampoTextoFormatado
+              key={carregando ? "carregando" : "pronto"}
+              valor={r.descricao}
+              onChange={(v) => set("descricao", v)}
+              rotulo="Descrição"
+              vazio={carregando ? "Carregando…" : "Adicione uma descrição mais detalhada…"}
+              maxLength={10_000}
+              disabled={carregando}
             />
           </Secao>
-          <TextArea
-            label="Descrição"
-            rows={4}
-            value={r.descricao}
-            maxLength={10_000}
-            disabled={carregando}
-            placeholder={carregando ? "Carregando…" : "Detalhes, passos, contexto (opcional)"}
-            onChange={(e) => set("descricao", e.target.value)}
-          />
           <div ref={listaBlocos} className="space-y-3">
             {r.blocos.map((b, i) => (
               <Fragment key={b.id}>
@@ -824,7 +954,7 @@ export function TarefaDetalhe({
                   ultimo={i === r.blocos.length - 1}
                   disabled={carregando}
                   arrastando={b.id === movendo}
-                  onPegar={(e) => arrastoBlocos.iniciar(e, { tipo: "mover", id: b.id }, ROTULO_BLOCO[b.tipo])}
+                  onPegar={(e) => arrastoBlocos.iniciar(e, { id: b.id }, ROTULO_BLOCO[b.tipo])}
                   onMover={(d) => setBlocos((l) => moverBloco(l, b.id, i + d))}
                   onRemover={() => tirarBloco(b)}
                 >
@@ -834,12 +964,6 @@ export function TarefaDetalhe({
             ))}
             {arrasto && arrasto.indice >= r.blocos.length - (movendo ? 1 : 0) && <GuiaBloco />}
           </div>
-          <PaletaBlocos
-            disponiveis={blocosDisponiveis(r.blocos)}
-            disabled={carregando}
-            onIniciar={(e, t) => arrastoBlocos.iniciar(e, { tipo: "novo", bloco: t }, ROTULO_BLOCO[t], () => setBlocos((l) => adicionarBloco(l, t)))}
-            onAdicionar={(t) => setBlocos((l) => adicionarBloco(l, t))}
-          />
           {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={arrastoBlocos.fantasma} />}
         </div>
         )}
@@ -889,5 +1013,36 @@ export function ChipsAlternar({
         );
       })}
     </div>
+  );
+}
+
+/** O TÍTULO da tarefa editado NO LUGAR (grande, cresce com o texto; Enter não quebra linha). */
+function TituloNoLugar({ valor, focar, cursorNoFim, onChange }: { valor: string; focar: boolean; cursorNoFim: boolean; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reajusta a altura a cada mudança do texto.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [valor]);
+  return (
+    <textarea
+      ref={ref}
+      value={valor}
+      rows={1}
+      maxLength={200}
+      aria-label="Título"
+      placeholder="O que precisa ser feito"
+      // biome-ignore lint/a11y/noAutofocus: tarefa nova e a criada de um template abrem para escrever o título.
+      autoFocus={focar}
+      onFocus={(e) => {
+        // Criada de um TEMPLATE: o cursor no FIM do título (completa-se o "2. Protocolo - FALTA - ").
+        if (cursorNoFim) e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length);
+      }}
+      onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+      onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
+      className="min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[17px] font-bold leading-snug text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
+    />
   );
 }

@@ -228,6 +228,12 @@ function Meta({ l, escopo, protocoloId, anonimo }: { l: LinhaHistorico; escopo: 
   );
 }
 
+/** UMA linha do histórico como um cartão de evento (o fluxo "Comentários e atividade" da tarefa a intercala nos comentários). */
+export function EventoHistorico({ linha, anonimo = false }: { linha: LinhaHistorico; anonimo?: boolean }) {
+  const linhas = useMemo<Linha[]>(() => [{ ...linha, alt: interpretarAlteracao(linha) }], [linha]);
+  return <CartaoEvento linhas={linhas} escopo="global" protocoloId={null} anonimo={anonimo} />;
+}
+
 /** UM evento (uma ou mais alterações feitas juntas) — cada alteração numa linha recolhível. */
 function CartaoEvento({
   linhas,

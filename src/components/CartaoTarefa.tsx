@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from "react";
+import { type KeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent, useSyncExternalStore } from "react";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
   COR_ESTADO_PRAZO,
@@ -20,13 +20,51 @@ import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CirculoConcluir } from "./CirculoConcluir";
-import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
+import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconDescricao, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
 const MAX_AVATARES = 3;
 
 /**
- * CARTÃO de uma tarefa no quadro: as etiquetas (faixas na cor), o título, e na base o nº do TICKET (copiável), a
+ * As ETIQUETAS dos cartões em FAIXAS (padrão, como no Trello) ou com o NOME — tocar numa faixa alterna TODOS os cartões;
+ * a escolha fica no aparelho (conveniência; sem armazenamento, vale só na tela).
+ */
+const CHAVE_ETIQUETAS = "tarefas:etiquetas-nome";
+const ouvintes = new Set<() => void>();
+let comNome: boolean | null = null;
+const lerComNome = () => {
+  if (comNome == null)
+    try {
+      comNome = localStorage.getItem(CHAVE_ETIQUETAS) === "1";
+    } catch {
+      comNome = false;
+    }
+  return comNome;
+};
+export function useEtiquetasComNome(): [boolean, () => void] {
+  const v = useSyncExternalStore(
+    (cb) => {
+      ouvintes.add(cb);
+      return () => ouvintes.delete(cb);
+    },
+    lerComNome,
+    () => false,
+  );
+  const alternar = () => {
+    comNome = !lerComNome();
+    try {
+      localStorage.setItem(CHAVE_ETIQUETAS, comNome ? "1" : "0");
+    } catch {
+      // sem armazenamento: vale só nesta tela
+    }
+    for (const f of ouvintes) f();
+  };
+  return [v, alternar];
+}
+
+/**
+ * CARTÃO de uma tarefa no quadro (como no Trello): as etiquetas em FAIXAS na cor (tocar mostra/esconde os nomes em todos
+ * os cartões — `useEtiquetasComNome`), o círculo de concluir + o título, e na base o nº do TICKET (copiável), a
  * PRIORIDADE (bandeira na cor), o PRAZO no semáforo (verde · âmbar · vermelho) e os RESPONSÁVEIS (fotos). O cartão todo é
  * o botão que abre o detalhe (camada que cobre o cartão — os controles de dentro ficam por cima); no mouse/caneta o próprio
  * cartão arrasta, no toque a ALÇA (o dedo no cartão rola a tela) e o menu `acoes` (mover/concluir/arquivar sem arrastar).
@@ -60,6 +98,7 @@ export function CartaoTarefa({
   /** O CÍRCULO antes do título: conclui/reabre NO LUGAR. Ausente = sem círculo. */
   onConcluir?: () => void;
 }) {
+  const [nomes, alternarNomes] = useEtiquetasComNome();
   const estado = estadoPrazo(t.prazo, hoje, t.concluidaEm != null, t.prazoHora, horaAgoraBrasilia());
   // No toque, a alça (e o menu) ocupam o canto de cima: o texto não passa por baixo deles.
   const toque = onPegar || acoes ? (acoes && onPegar ? "any-pointer-coarse:pr-[5.25rem]" : "any-pointer-coarse:pr-10") : "";
@@ -89,18 +128,27 @@ export function CartaoTarefa({
         className="absolute inset-0 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       />
       {marcas.length > 0 && (
-        <div className={`pointer-events-none mb-1.5 flex flex-wrap gap-1 ${toque}`}>
-          {marcas.map((e) => (
-            <span
-              key={e.id}
-              title={e.nome}
-              className="max-w-[9rem] truncate rounded-full px-2 py-px text-[10.5px] font-semibold"
-              style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${e.cor} 30%, transparent)` }}
-            >
-              {e.nome}
-            </span>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={alternarNomes}
+          aria-label={nomes ? "Esconder os nomes das etiquetas" : "Mostrar os nomes das etiquetas"}
+          title={marcas.map((e) => e.nome).join(", ")}
+          className={`relative z-10 mb-1.5 flex max-w-full flex-wrap gap-1 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${toque}`}
+        >
+          {marcas.map((e) =>
+            nomes ? (
+              <span
+                key={e.id}
+                className="max-w-[9rem] truncate rounded-control px-2 py-px text-[10.5px] font-semibold"
+                style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 16%, var(--surface))`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${e.cor} 35%, transparent)` }}
+              >
+                {e.nome}
+              </span>
+            ) : (
+              <span key={e.id} className="h-2 w-10 rounded-full" style={{ background: e.cor }} />
+            ),
+          )}
+        </button>
       )}
       <div className={`flex items-start gap-1.5 pr-6 ${toque}`}>
         {onConcluir && !t.template && (
@@ -139,6 +187,11 @@ export function CartaoTarefa({
         {t.recorrencia && (
           <span className="pointer-events-none inline-flex" title={`Recorrente: ${rotuloRecorrencia(t.recorrencia)}`}>
             <IconRepetir className="h-3.5 w-3.5" aria-label="Recorrente" />
+          </span>
+        )}
+        {t.temDescricao && (
+          <span className="pointer-events-none inline-flex" title="Tem descrição">
+            <IconDescricao className="h-3.5 w-3.5" aria-label="Tem descrição" />
           </span>
         )}
         {t.checklist.total > 0 && (

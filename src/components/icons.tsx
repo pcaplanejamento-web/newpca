@@ -94,6 +94,15 @@ import {
   MapPin,
   Printer,
   Video,
+  Bold,
+  Italic,
+  Heading,
+  List,
+  ListOrdered,
+  Quote,
+  Code,
+  Hourglass,
+  AlignLeft,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -198,3 +207,12 @@ export const IconTeclado = Keyboard;
 export const IconMapa = MapPin;
 export const IconImprimir = Printer;
 export const IconVideo = Video;
+export const IconBold = Bold;
+export const IconItalic = Italic;
+export const IconHeading = Heading;
+export const IconList = List;
+export const IconListOrdered = ListOrdered;
+export const IconQuote = Quote;
+export const IconCode = Code;
+export const IconEstimativa = Hourglass;
+export const IconDescricao = AlignLeft;

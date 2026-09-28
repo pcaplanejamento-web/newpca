@@ -1079,8 +1079,11 @@ para outro quadro, arquivar), quadro do mês com uma lista por dia útil (no "No
 mês", com os templates de outro quadro), quadros favoritos (estrela) e troca de quadro pelo nome no cabeçalho.
 ✅ **Tarefas no padrão Trello — F5:** painel "Filtrar" com vários valores (pessoas, status, prazo até amanhã/7/30 dias,
 prioridade, etiquetas e "sem etiqueta") e o seletor de etiquetas no detalhe (buscar, marcar, criar e editar).
-🔜 **Tarefas no padrão Trello — próximas fases:** F6 comentários e
-atividade num fluxo, descrição formatada e o detalhe na distribuição do Trello · F7 campos personalizados com título
+✅ **Tarefas no padrão Trello — F6:** detalhe da tarefa na distribuição do Trello (círculo + título no lugar, "+ Adicionar",
+faixa de membros/etiquetas/datas/prioridade/estimativa, descrição formatada, blocos do corpo), texto formatado (negrito,
+listas, links, @menção) na descrição, notas e comentários, comentários e atividade num fluxo só e o cartão com as faixas de
+etiqueta.
+🔜 **Tarefas no padrão Trello — próximas fases:** F7 campos personalizados com título
 automático · F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.

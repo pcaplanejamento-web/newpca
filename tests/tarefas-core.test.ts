@@ -429,7 +429,7 @@ describe("tarefas — calendário profissional", () => {
 });
 
 describe("tarefas — blocos", () => {
-  const vazio: DadosBlocos = { inicio: null, prazo: null, pessoas: [], observadores: [], etiquetas: [], vinculo: null, estimativaH: null, recorrencia: null, checklist: 0, eventos: 0 };
+  const vazio: DadosBlocos = { vinculo: null, checklist: 0, eventos: 0 };
 
   it("lerBlocos é tolerante: inválido sai, bloco único não repete, JSON quebrado = null", () => {
     assert.equal(lerBlocos(null), null);
@@ -437,50 +437,51 @@ describe("tarefas — blocos", () => {
     const l = lerBlocos(
       JSON.stringify([
         { id: "a", tipo: "nota", texto: " oi " },
-        { id: "b", tipo: "prazo" },
-        { id: "c", tipo: "prazo" },
+        { id: "b", tipo: "checklist" },
+        { id: "c", tipo: "checklist" },
         { id: "d", tipo: "xyz" },
+        { id: "f", tipo: "prazo" },
         { id: "e", tipo: "link", url: "javascript:alert(1)", titulo: "x" },
         { id: "a", tipo: "nota", texto: "dup id" },
       ]),
     );
     assert.deepEqual(l, [
       { id: "a", tipo: "nota", texto: "oi" },
-      { id: "b", tipo: "prazo" },
+      { id: "b", tipo: "checklist" },
       { id: "e", tipo: "link", url: "", titulo: "x" },
     ]);
   });
 
   it("blocosDaTarefa: tarefa antiga deriva dos campos; bloco com dado nunca some; ordem gravada é mantida", () => {
     assert.deepEqual(blocosDaTarefa(null, vazio), []);
-    const d = { ...vazio, prazo: "2026-09-30", pessoas: [1], checklist: 2 };
+    const d = { ...vazio, vinculo: { tipo: "pca", id: 1 }, checklist: 2 };
     assert.deepEqual(
       blocosDaTarefa(null, d).map((b) => b.tipo),
-      ["checklist", "prazo", "pessoas"],
+      ["checklist", "vinculo"],
     );
-    const g = blocosDaTarefa([{ id: "b1", tipo: "pessoas" }, { id: "b2", tipo: "nota", texto: "x" }], d);
+    const g = blocosDaTarefa([{ id: "b1", tipo: "vinculo" }, { id: "b2", tipo: "nota", texto: "x" }], d);
     assert.deepEqual(
       g.map((b) => b.tipo),
-      ["pessoas", "nota", "checklist", "prazo"],
+      ["vinculo", "nota", "checklist"],
     );
     assert.equal(new Set(g.map((b) => b.id)).size, g.length);
   });
 
   it("adicionar / mover / remover / disponíveis", () => {
     let l = adicionarBloco([], "nota");
-    l = adicionarBloco(l, "prazo", 0);
-    l = adicionarBloco(l, "prazo"); // único: não repete
+    l = adicionarBloco(l, "eventos", 0);
+    l = adicionarBloco(l, "eventos"); // único: não repete
     l = adicionarBloco(l, "nota");
     assert.deepEqual(
       l.map((b) => b.tipo),
-      ["prazo", "nota", "nota"],
+      ["eventos", "nota", "nota"],
     );
-    assert.ok(!blocosDisponiveis(l).includes("prazo"));
+    assert.ok(!blocosDisponiveis(l).includes("eventos"));
     assert.ok(blocosDisponiveis(l).includes("nota"));
     const movido = moverBloco(l, l[0].id, 2);
     assert.deepEqual(
       movido.map((b) => b.tipo),
-      ["nota", "nota", "prazo"],
+      ["nota", "nota", "eventos"],
     );
     assert.equal(removerBloco(l, l[1].id).length, 2);
     let cheio: ReturnType<typeof adicionarBloco> = [];
@@ -508,9 +509,11 @@ describe("tarefas — blocos", () => {
   it("blocosSchema recusa link não-http, bloco único repetido e id repetido", () => {
     assert.ok(blocosSchema.safeParse([{ id: "a", tipo: "nota", texto: "x" }, { id: "b", tipo: "link", url: "https://ex.com", titulo: "" }]).success);
     assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "link", url: "ftp://ex.com", titulo: "" }]).success);
-    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "prazo" }, { id: "b", tipo: "prazo" }]).success);
+    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "eventos" }, { id: "b", tipo: "eventos" }]).success);
     assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "nota", texto: "" }, { id: "a", tipo: "nota", texto: "" }]).success);
-    assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", blocos: [{ id: "a", tipo: "estimativa" }] }).success);
+    assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", blocos: [{ id: "a", tipo: "vinculo" }] }).success);
+    // Os antigos blocos-metadado (prazo, pessoas…) não são mais blocos.
+    assert.ok(!blocosSchema.safeParse([{ id: "a", tipo: "prazo" }]).success);
   });
 });
 

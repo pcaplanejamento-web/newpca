@@ -246,6 +246,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         recorrencia: tarefas.recorrencia,
         notas: contarBlocos("nota"),
         links: contarBlocos("link"),
+        temDescricao: sql<number>`(${tarefas.descricao} IS NOT NULL AND trim(${tarefas.descricao}) <> '')`,
       })
       .from(tarefas)
       .where(doQuadro),
@@ -296,6 +297,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       const equipesT = eqs.porTarefa.get(t.id) ?? [];
       return {
         ...t,
+        temDescricao: !!Number(t.temDescricao),
         prioridade: prioridadeValida(t.prioridade),
         pessoas: resp,
         observadores: porObservador.get(t.id) ?? [],

@@ -2189,7 +2189,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pessoa quando há UMA escolhida. **`SeletorEtiquetas`** (+ **`ChipEtiqueta`**) no bloco Etiquetas do detalhe: as marcadas
     em chips + o "+" (busca, caixas na cor, "Mostrar mais" acima de 12; editores: lápis — nome + cor da paleta — e **"Criar
     etiqueta"**, que já a marca na tarefa; grava pelas rotas de etiqueta do quadro e o quadro recarrega).
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F6…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 16 / F6 — DETALHE NO PADRÃO TRELLO + TEXTO FORMATADO + ATIVIDADE NUM FLUXO (sem migração):**
+    - **Texto formatado** — núcleo PURO **`texto-formatado.ts`** (testado): markdown RESTRITO → árvore (`lerTextoFormatado`:
+      títulos `#`, listas `-`/`1.`, citação `>`, separador `---`, parágrafos com quebra; `lerInline`: `**negrito**`,
+      `*itálico*`/`_itálico_`, `` `código` ``, `[texto](https://…)`, URLs soltas e `@menção` — links SÓ http/https),
+      `textoPlano` e `aplicarAcaoTexto` (a barra do editor). Componentes (`TextoFormatado.tsx`): **`TextoFormatado`**
+      (desenha por elementos React — nunca HTML cru), **`EditorTexto`** (barra título · negrito · itálico · listas ·
+      citação · código · link, Ctrl+B/I, **Escrever | Visualizar**) e **`CampoTextoFormatado`** (lido formatado; tocar ou o
+      lápis edita no lugar; "Pronto" volta) — na DESCRIÇÃO, nas NOTAS e nos COMENTÁRIOS.
+    - **`AtividadeTarefa`** (ex-`ComentariosTarefa`): **Comentários e atividade** num fluxo só — escrever no TOPO (@menção,
+      Ctrl/⌘+Enter), os comentários do mais novo ao mais antigo e, com **Mostrar detalhes** (lembrado no aparelho,
+      `tarefas:atividade-detalhes`), as alterações do histórico intercaladas (`EventoHistorico`, exportado do `Historico`;
+      o histórico só é buscado com os detalhes à vista). Saíram as abas Comentários | Histórico.
+    - **`TarefaDetalhe` na distribuição do Trello:** o **círculo de concluir + o TÍTULO no lugar** (`TituloNoLugar`, cresce
+      com o texto), "Na lista", **+ Adicionar** (**`MenuAdicionarCartao`**, `BlocosTarefa.tsx`: metadados + blocos do corpo;
+      substitui a antiga `PaletaBlocos`), a **faixa de METADADOS** (`TIPOS_METADADO`: Membros · Etiquetas · Datas ·
+      Prioridade · Estimativa — `metadadoTemDado`; aparecem com dado ou acrescentados; tocar abre o editor logo abaixo —
+      membros/equipes/observadores, datas + REPETIR + "Remover as datas", prioridade, estimativa; etiquetas pelo
+      `SeletorEtiquetas`), a **descrição** formatada e os **blocos do CORPO** (`TIPOS_BLOCO` = nota · checklist · link ·
+      eventos · vínculo; alça e ↑/↓). Prazo/responsáveis/etiquetas/estimativa/recorrência deixaram de ser blocos
+      (`lerBlocos` ignora os gravados — o dado mora nas colunas; `DadosBlocos` só vínculo/checklist/eventos).
+    - **`CartaoTarefa`:** etiquetas em **FAIXAS** na cor — tocar alterna faixa ↔ nome em TODOS os cartões
+      (`useEtiquetasComNome`, `tarefas:etiquetas-nome` no aparelho) — e o ícone de **descrição** (`TarefaResumo.temDescricao`,
+      calculado no banco em `dadosQuadro`).
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F7…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

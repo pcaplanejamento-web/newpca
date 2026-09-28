@@ -2,8 +2,9 @@
 
 import { type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ROTULO_BLOCO, type TipoBloco } from "@/lib/tarefas-core";
+import { ROTULO_BLOCO, ROTULO_METADADO, type TipoBloco, type TipoMetadado } from "@/lib/tarefas-core";
 import { Button } from "./Button";
+import { Dropdown } from "./Dropdown";
 import {
   IconArrowDown,
   IconArrowUp,
@@ -16,28 +17,32 @@ import {
   IconLink,
   IconNota,
   IconPlus,
-  IconRepetir,
+  IconBandeira,
+  IconEstimativa,
   IconTrash,
   IconWeb,
 } from "./icons";
 import { segurar } from "./segurar";
 
-/** O ícone de cada bloco — o mesmo na paleta, na moldura e no cartão. */
+/** O ícone de cada bloco do corpo — o mesmo no menu "+ Adicionar", na moldura e no cartão. */
 export const ICONE_BLOCO: Record<TipoBloco, ComponentType<{ className?: string }>> = {
   nota: IconNota,
   checklist: IconChecklist,
   link: IconWeb,
-  prazo: IconCalendar,
   eventos: IconClock,
-  pessoas: IconAtribuir,
-  etiquetas: IconEtiqueta,
   vinculo: IconLink,
-  estimativa: IconClock,
-  recorrencia: IconRepetir,
+};
+/** O ícone de cada METADADO (a faixa do topo do detalhe). */
+export const ICONE_METADADO: Record<TipoMetadado, ComponentType<{ className?: string }>> = {
+  membros: IconAtribuir,
+  etiquetas: IconEtiqueta,
+  datas: IconCalendar,
+  prioridade: IconBandeira,
+  estimativa: IconEstimativa,
 };
 
-/** O que está sendo arrastado: um bloco NOVO (da paleta) ou um bloco da tarefa (reordenar). */
-export type CargaBloco = { tipo: "novo"; bloco: TipoBloco } | { tipo: "mover"; id: string };
+/** O bloco da tarefa sendo arrastado (reordenar). */
+export type CargaBloco = { id: string };
 type Arrasto = { carga: CargaBloco; rotulo: string; x: number; y: number; indice: number };
 
 const LIMIAR = 6;
@@ -54,8 +59,7 @@ function rolagemDe(el: HTMLElement | null): HTMLElement | null {
 }
 
 /**
- * ARRASTAR blocos para a lista da tarefa (o padrão do arrasto de cartões): um chip da PALETA entra na posição em que for
- * solto; a ALÇA de um bloco o reordena. Ouvintes na JANELA, começa depois de 6px, a lista (`[data-bloco]` dentro de
+ * ARRASTAR blocos da tarefa (o padrão do arrasto de cartões): a ALÇA de um bloco o reordena. Ouvintes na JANELA, começa depois de 6px, a lista (`[data-bloco]` dentro de
  * `lista`) só re-renderiza quando o DESTINO muda (a linha-guia), o banner rola sozinho perto das bordas e o chip preso
  * segue o ponteiro. Sem arrastar (clique/toque) = `onToque`.
  */
@@ -84,7 +88,7 @@ export function useArrastoBlocos(lista: RefObject<HTMLElement | null>, onSoltar:
     const rolo = rolagemDe(alvo);
 
     const calcular = () => {
-      const blocos = [...alvo.querySelectorAll<HTMLElement>("[data-bloco]")].filter((b) => carga.tipo !== "mover" || b.dataset.bloco !== carga.id);
+      const blocos = [...alvo.querySelectorAll<HTMLElement>("[data-bloco]")].filter((b) => b.dataset.bloco !== carga.id);
       const i = blocos.findIndex((b) => {
         const r = b.getBoundingClientRect();
         return ultimo.y < r.top + r.height / 2;
@@ -165,63 +169,61 @@ export function GuiaBloco() {
 }
 
 /**
- * A PALETA de blocos da tarefa: um chip por bloco que ainda pode entrar — ARRASTE (mouse/caneta) até o lugar na tarefa
- * ou TOQUE para acrescentar no fim. No celular fica recolhida em "Adicionar bloco".
+ * O MENU "+ Adicionar" do detalhe (o "Adicionar ao cartão" do Trello): os METADADOS que ainda não estão na faixa
+ * (membros, etiquetas, datas, prioridade, estimativa) e os BLOCOS do corpo que ainda cabem (nota e link sempre; checklist,
+ * eventos e vínculo uma vez). Escolher = o host acrescenta.
  */
-export function PaletaBlocos({
-  disponiveis,
+export function MenuAdicionarCartao({
+  metadados,
+  blocos,
   disabled = false,
-  onIniciar,
-  onAdicionar,
+  onMetadado,
+  onBloco,
 }: {
-  disponiveis: TipoBloco[];
+  metadados: TipoMetadado[];
+  blocos: TipoBloco[];
   disabled?: boolean;
-  /** Começo do arrasto de um chip (o `iniciar` de `useArrastoBlocos`). */
-  onIniciar?: (e: ReactPointerEvent<HTMLElement>, tipo: TipoBloco) => void;
-  /** Toque/clique/Enter = acrescentar no fim. */
-  onAdicionar: (tipo: TipoBloco) => void;
+  onMetadado: (t: TipoMetadado) => void;
+  onBloco: (t: TipoBloco) => void;
 }) {
-  const [aberta, setAberta] = useState(false);
-  const ponteiro = useRef("");
-  if (!disponiveis.length) return null;
+  if (!metadados.length && !blocos.length) return null;
   return (
-    <div className="rounded-card border border-dashed border-border-2 bg-surface-2/40 p-2">
-      <button
-        type="button"
-        aria-expanded={aberta}
-        onClick={() => setAberta((a) => !a)}
-        className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] font-semibold text-text-2 sm:hidden"
-      >
-        <IconPlus className="h-4 w-4" />
-        Adicionar bloco
-      </button>
-      <p className="mb-1.5 hidden px-1 text-[12px] text-muted sm:block">Arraste um bloco para a tarefa ou clique para acrescentar no fim.</p>
-      <div className={`flex-wrap gap-1.5 ${aberta ? "flex max-sm:pt-1" : "hidden sm:flex"}`}>
-        {disponiveis.map((t) => {
-          const Icone = ICONE_BLOCO[t];
-          return (
-            <button
-              key={t}
-              type="button"
-              disabled={disabled}
-              onPointerDown={(e) => {
-                ponteiro.current = e.pointerType;
-                if (e.pointerType !== "touch") onIniciar?.(e, t);
-              }}
-              onClick={() => {
-                // Mouse/caneta: o `pointerup` do arrasto já acrescentou (sem mover). Toque e teclado: acrescenta aqui.
-                if (!onIniciar || ponteiro.current === "touch" || ponteiro.current === "") onAdicionar(t);
-                ponteiro.current = "";
-              }}
-              className="inline-flex h-11 cursor-grab items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-[12.5px] font-semibold text-text-2 transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-50 active:cursor-grabbing lg:h-[var(--h-control-sm)]"
-            >
-              <Icone className="h-3.5 w-3.5" />
-              {ROTULO_BLOCO[t]}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <Dropdown
+      width={250}
+      ariaLabel="Adicionar ao cartão"
+      triggerClassName={`h-11 gap-1.5 rounded-control border border-border bg-surface-2 px-3 text-[13px] font-semibold text-text-2 hover:bg-surface lg:h-[var(--h-control-sm)] ${disabled ? "pointer-events-none opacity-50" : ""}`}
+      trigger={
+        <>
+          <IconPlus className="h-4 w-4" />
+          Adicionar
+        </>
+      }
+    >
+      {(fechar) => {
+        const item = (chave: string, rotulo: string, Icone: ComponentType<{ className?: string }>, fn: () => void) => (
+          <button
+            key={chave}
+            type="button"
+            onClick={() => {
+              fechar();
+              fn();
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+          >
+            <Icone className="h-4 w-4 text-muted" />
+            {rotulo}
+          </button>
+        );
+        return (
+          <div className="space-y-0.5">
+            <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">Adicionar ao cartão</p>
+            {metadados.map((t) => item(`m-${t}`, ROTULO_METADADO[t], ICONE_METADADO[t], () => onMetadado(t)))}
+            {metadados.length > 0 && blocos.length > 0 && <div className="my-1 border-t border-border" />}
+            {blocos.map((t) => item(`b-${t}`, ROTULO_BLOCO[t], ICONE_BLOCO[t], () => onBloco(t)))}
+          </div>
+        );
+      }}
+    </Dropdown>
   );
 }
 
