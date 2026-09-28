@@ -2469,7 +2469,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pasta NO LUGAR: o painel (`PainelPasta`) entra no fim da LINHA da pasta (colunas medidas por `ResizeObserver`), anima a
     altura (`grid-template-rows` 0fr ↔ 1fr — os cards de baixo deslizam) e os internos entram em sequência; uma aberta por
     vez (lembrada no aparelho, `tarefas:pasta-aberta`). **Arrasto** — hook **`useArrastoGrade`** (o padrão do
-    `ArrastoCartoes`: janela, 6px, `segurar`, o card PRESO no `CartaoPreso`, a SOMBRA no destino, rolagem nas bordas da
+    `ArrastoCartoes`: janela, 6px, `segurar`, o card PRESO no `CartaoPreso`, o ESPAÇO VAZIO no destino — sem contorno —, rolagem nas bordas da
     página/modal, clique pós-arrasto engolido; no TOQUE, segurar ~400 ms — deslizar antes rola; o card arrastado segue no
     DOM, oculto, para o toque não perder o alvo): soltar entre cards reordena (pousa na sombra); sobre o MEIO de uma pasta
     ("Soltar na pasta") o card ENCOLHE para dentro dela (`CartaoPreso.entrando`) e ela pulsa (`animate-pasta-recebe`) — a

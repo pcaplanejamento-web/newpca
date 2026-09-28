@@ -353,9 +353,9 @@ export function useArrastoGrade({
   return { arrasto, fantasma, iniciar, foiArrasto };
 }
 
-/** O LUGAR onde o card vai cair (a sombra, no tamanho da célula). */
+/** O LUGAR onde o card vai cair: só o ESPAÇO vazio, no tamanho da célula (sem contorno nem fundo). */
 function SombraGrade({ altura }: { altura: number }) {
-  return <div data-sombra-grade aria-hidden className="rounded-card bg-accent/10 ring-1 ring-accent/30 ring-inset" style={{ minHeight: altura }} />;
+  return <div data-sombra-grade aria-hidden style={{ minHeight: altura }} />;
 }
 
 /** A pasta ABERTA por último neste aparelho (conveniência — `localStorage`, com try/catch). */
