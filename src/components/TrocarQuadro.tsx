@@ -1,15 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { favoritosPrimeiro } from "@/lib/tarefas-core";
 import { ChipsEscolha } from "./ChipsEscolha";
-import { buscarDestinos, type DestinoCopia } from "./CopiarMoverTarefa";
 import { SearchField } from "./Field";
-import { IconCheck, IconChevronRight, IconClock, IconEstrela, IconLock } from "./icons";
+import { IconChevronRight, IconClock, IconEstrela } from "./icons";
 import { Modal } from "./Modal";
-import { CapaQuadro } from "./QuadroCard";
+import { QuadroCard } from "./QuadroCard";
+import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
+import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { Skeleton } from "./Skeleton";
 import { toast } from "./Toast";
 
@@ -40,19 +40,23 @@ function lerRecentes(): number[] {
 /**
  * MUDAR DE QUADROS (como o do Trello): o gatilho (o "Mudar de quadros" da pílula de vistas) abre o painel com a BUSCA
  * dos quadros, os CHIPS por grupo (Tudo · grupo…), as seções **Favoritos** e **Recentes** (os abertos por último NESTE
- * aparelho) e cada GRUPO recolhível — tudo em MINIATURAS com a capa 16:9 do quadro (`CapaQuadro`: imagem, degradê ou a
- * superfície). Escolher leva ao quadro na MESMA aba; o atual fica marcado. Os quadros vêm só ao abrir.
+ * aparelho) e cada GRUPO recolhível — tudo com o MESMO `QuadroCard` da tela de Tarefas (capa 16:9, grupo, nome inteiro
+ * em até 2 linhas, contagens e a estrela). Escolher leva ao quadro na MESMA aba; o atual fica marcado. Os quadros (de
+ * todos os grupos da pessoa) vêm só ao abrir — `GET /api/tarefas/quadros`.
  */
 export function TrocarQuadro({
   quadro,
   aba,
   favoritos,
+  onFavorito,
   gatilho,
   triggerClassName = "",
 }: {
   quadro: { id: number; nome: string };
   aba: string;
   favoritos: number[];
+  /** Marca/desmarca o favorito (a estrela dos cards do painel). */
+  onFavorito?: (id: number) => void;
   gatilho: ReactNode;
   triggerClassName?: string;
 }) {
@@ -63,48 +67,26 @@ export function TrocarQuadro({
         {gatilho}
       </button>
       <Modal open={aberto} onClose={() => setAberto(false)} titulo="Mudar de quadros" size="lg">
-        {aberto && <PainelQuadros atual={quadro.id} aba={aba} favoritos={favoritos} onEscolhido={() => setAberto(false)} />}
+        {aberto && <PainelQuadros atual={quadro.id} aba={aba} favoritos={favoritos} onFavorito={onFavorito} onEscolhido={() => setAberto(false)} />}
       </Modal>
     </>
   );
 }
 
-/** A MINIATURA de um quadro: a capa 16:9 + o nome (cadeado no privado; o atual marcado). */
-function MiniaturaQuadro({ q, atual, onAbrir }: { q: DestinoCopia; atual: boolean; onAbrir: () => void }) {
+/** A grade de quadros do painel — o MESMO `QuadroCard` da tela de Tarefas (capa 16:9, grupo, nome e contagens). */
+function Grade({ quadros, atual, favoritos, onFavorito, onAbrir, aba }: { quadros: QuadroCardDados[]; atual: number; favoritos: number[]; onFavorito?: (id: number) => void; onAbrir: () => void; aba: string }) {
   return (
-    <button
-      type="button"
-      onClick={onAbrir}
-      aria-current={atual ? "page" : undefined}
-      aria-label={`Abrir o quadro ${q.nome}${q.privado ? " (privado)" : ""}${atual ? " — o atual" : ""}`}
-      className={`group flex flex-col overflow-hidden rounded-lg bg-surface text-left shadow-[var(--sombra-cartao)] transition-shadow hover:ring-2 hover:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        atual ? "ring-2 ring-accent" : ""
-      }`}
-    >
-      <CapaQuadro quadro={q} semRaio>
-        {q.privado && (
-          <span className="absolute top-1.5 left-1.5 grid h-6 w-6 place-items-center rounded-full bg-[var(--scrim)] text-white" title="Privado">
-            <IconLock className="h-3 w-3" />
-          </span>
-        )}
-        {atual && (
-          <span className="absolute top-1.5 right-1.5 grid h-6 w-6 place-items-center rounded-full bg-accent text-white" title="O quadro atual">
-            <IconCheck className="h-3.5 w-3.5" />
-          </span>
-        )}
-      </CapaQuadro>
-      <span className="line-clamp-2 min-h-[3.25em] px-2.5 py-2 text-[13.5px] leading-snug text-text" title={q.nome}>
-        {q.nome}
-      </span>
-    </button>
-  );
-}
-
-function Grade({ quadros, atual, onAbrir }: { quadros: DestinoCopia[]; atual: number; onAbrir: (id: number) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {quadros.map((q) => (
-        <MiniaturaQuadro key={q.id} q={q} atual={q.id === atual} onAbrir={() => onAbrir(q.id)} />
+        <QuadroCard
+          key={q.id}
+          quadro={q}
+          href={`/painel/tarefas/${q.id}?aba=${aba}`}
+          atual={q.id === atual}
+          favorito={favoritos.includes(q.id)}
+          onFavorito={onFavorito && (() => onFavorito(q.id))}
+          onAbrir={onAbrir}
+        />
       ))}
     </div>
   );
@@ -119,33 +101,40 @@ function Titulo({ icone, children }: { icone: ReactNode; children: ReactNode }) 
   );
 }
 
-function PainelQuadros({ atual, aba, favoritos, onEscolhido }: { atual: number; aba: string; favoritos: number[]; onEscolhido: () => void }) {
-  const router = useRouter();
-  const [quadros, setQuadros] = useState<DestinoCopia[] | null>(null);
+function PainelQuadros({
+  atual,
+  aba,
+  favoritos,
+  onFavorito,
+  onEscolhido,
+}: {
+  atual: number;
+  aba: string;
+  favoritos: number[];
+  onFavorito?: (id: number) => void;
+  onEscolhido: () => void;
+}) {
+  const [quadros, setQuadros] = useState<QuadroCardDados[] | null>(null);
   const [busca, setBusca] = useState("");
   const [grupo, setGrupo] = useState("__tudo");
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const [recentes] = useState(lerRecentes);
   useEffect(() => {
     let vivo = true;
-    buscarDestinos()
-      .then((q) => vivo && setQuadros(q))
+    chamar<{ quadros: QuadroCardDados[] }>("/api/tarefas/quadros")
+      .then((j) => vivo && setQuadros(j.quadros))
       .catch((e) => vivo && toast.error((e as Error).message));
     return () => {
       vivo = false;
     };
   }, []);
   const grupos = useMemo(() => [...new Set((quadros ?? []).map((q) => q.grupoNome))].sort((a, b) => a.localeCompare(b, "pt-BR")), [quadros]);
-  const abrir = (id: number) => {
-    onEscolhido();
-    if (id !== atual) router.push(`/painel/tarefas/${id}?aba=${aba}`);
-  };
 
   if (!quadros)
     return (
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4" aria-busy="true">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-busy="true">
         {Array.from({ length: 8 }, (_, i) => (
-          <Skeleton key={i} className="aspect-[4/3] w-full" />
+          <Skeleton key={i} className="h-56 w-full" />
         ))}
       </div>
     );
@@ -154,7 +143,8 @@ function PainelQuadros({ atual, aba, favoritos, onEscolhido }: { atual: number; 
   const doGrupo = grupo === "__tudo" ? quadros : quadros.filter((q) => q.grupoNome === grupo);
   const porId = new Map(quadros.map((q) => [q.id, q]));
   const favs = favoritosPrimeiro(doGrupo, favoritos).filter((q) => favoritos.includes(q.id));
-  const recs = recentes.map((id) => porId.get(id)).filter((q): q is DestinoCopia => !!q && doGrupo.includes(q));
+  const recs = recentes.map((id) => porId.get(id)).filter((q): q is QuadroCardDados => !!q && doGrupo.includes(q));
+  const grade = { atual, favoritos, onFavorito, onAbrir: onEscolhido, aba };
   const alternar = (g: string) =>
     setAbertos((a) => {
       const n = new Set(a);
@@ -180,20 +170,20 @@ function PainelQuadros({ atual, aba, favoritos, onEscolhido }: { atual: number; 
       {casa ? (
         (() => {
           const achados = doGrupo.filter((q) => casa([q.nome, q.grupoNome]));
-          return achados.length ? <Grade quadros={achados} atual={atual} onAbrir={abrir} /> : <p className="py-8 text-center text-[13px] text-muted">Nenhum quadro com “{busca}”.</p>;
+          return achados.length ? <Grade quadros={achados} {...grade} /> : <p className="py-8 text-center text-[13px] text-muted">Nenhum quadro com “{busca}”.</p>;
         })()
       ) : (
         <>
           {favs.length > 0 && (
             <section>
               <Titulo icone={<IconEstrela className="h-4 w-4" style={{ color: "var(--warn)" }} fill="currentColor" />}>Favoritos</Titulo>
-              <Grade quadros={favs} atual={atual} onAbrir={abrir} />
+              <Grade quadros={favs} {...grade} />
             </section>
           )}
           {recs.length > 0 && (
             <section>
               <Titulo icone={<IconClock className="h-4 w-4" />}>Recentes</Titulo>
-              <Grade quadros={recs} atual={atual} onAbrir={abrir} />
+              <Grade quadros={recs} {...grade} />
             </section>
           )}
           {(grupo === "__tudo" ? grupos : [grupo]).map((g) => {
@@ -212,7 +202,7 @@ function PainelQuadros({ atual, aba, favoritos, onEscolhido }: { atual: number; 
                   <span className="min-w-0 flex-1 truncate">{g}</span>
                   <span className="text-[12px] font-normal text-muted tabular-nums">{lista.length}</span>
                 </button>
-                {aberto && <Grade quadros={lista} atual={atual} onAbrir={abrir} />}
+                {aberto && <Grade quadros={lista} {...grade} />}
               </section>
             );
           })}

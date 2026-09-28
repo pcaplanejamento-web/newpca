@@ -15,18 +15,7 @@ import { toast } from "./Toast";
 /** O que o diálogo faz: COPIAR (outra tarefa igual), MOVER para outro quadro ou CRIAR TEMPLATE (uma cópia-modelo). */
 export type ModoCopia = "copiar" | "mover" | "template";
 /** Um quadro de destino (os ativos que a pessoa vê) com as listas ativas. */
-export type DestinoCopia = {
-  id: number;
-  nome: string;
-  cor: string;
-  grupoNome: string;
-  /** O fundo (a capa da miniatura no "Mudar de quadros"). */
-  fundoUrl: string | null;
-  fundoAjuste: string | null;
-  fundoGradiente: string | null;
-  privado: boolean;
-  listas: { id: number; nome: string; concluida: boolean }[];
-};
+export type DestinoCopia = { id: number; nome: string; cor: string; grupoNome: string; listas: { id: number; nome: string; concluida: boolean }[] };
 /** O resultado: a tarefa criada (cópia/template) ou a movida, e o quadro onde ficou. */
 export type ResultadoCopia = { modo: ModoCopia; id: number; ticket: number; quadroId: number };
 

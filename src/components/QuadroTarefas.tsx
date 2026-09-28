@@ -581,6 +581,7 @@ export function QuadroTarefas({
                 quadro={quadro}
                 aba={aba}
                 favoritos={favs.favoritos}
+                onFavorito={favs.alternar}
                 triggerClassName="h-11 shrink-0 gap-1.5 rounded-lg px-3 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 lg:h-10"
                 gatilho={
                   <>

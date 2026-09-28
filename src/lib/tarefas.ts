@@ -1875,23 +1875,13 @@ export async function moverTarefaDeQuadro(r: { tarefa: TarefaCompleta; quadro: Q
   return x;
 }
 
-/** Os QUADROS de destino de copiar/mover e do "Mudar de quadros": os ativos que o usuário vê, com as listas ativas, o grupo e o fundo. */
+/** Os QUADROS de destino de copiar/mover: os ativos que o usuário vê, com as listas ativas (e o grupo). */
 export async function destinosDeTarefa(u: UsuarioSessao) {
   const grupoIds = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
   if (grupoIds && !grupoIds.length) return [];
   const db = getDb();
   const qs = await db
-    .select({
-      id: tarefaQuadros.id,
-      nome: tarefaQuadros.nome,
-      cor: tarefaQuadros.cor,
-      grupoNome: grupos.nome,
-      // O FUNDO (a capa das miniaturas do "Mudar de quadros") e o privado (o cadeado).
-      fundoUrl: tarefaQuadros.fundoUrl,
-      fundoAjuste: tarefaQuadros.fundoAjuste,
-      fundoGradiente: tarefaQuadros.fundoGradiente,
-      privado: tarefaQuadros.privado,
-    })
+    .select({ id: tarefaQuadros.id, nome: tarefaQuadros.nome, cor: tarefaQuadros.cor, grupoNome: grupos.nome })
     .from(tarefaQuadros)
     .innerJoin(grupos, eq(grupos.id, tarefaQuadros.grupoId))
     .where(and(eq(tarefaQuadros.arquivado, false), grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined, quadroVisivel(u.id)))

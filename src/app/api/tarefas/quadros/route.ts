@@ -1,14 +1,27 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getGrupoAtivoId, gruposDoUsuario } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { resolverImagemFundo } from "@/lib/imagem-fundo";
 import { listasDoPeriodo } from "@/lib/calendario-core";
 import { listarFeriados } from "@/lib/feriados";
-import { atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, modeloQuadroDe, quadroAcessivel } from "@/lib/tarefas";
+import { dataIsoBrasilia } from "@/lib/format";
+import { atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarQuadros, modeloQuadroDe, quadroAcessivel } from "@/lib/tarefas";
 import { criarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Os QUADROS ativos que a pessoa vê (de TODOS os grupos dela — o ADM, todos; o privado só do dono), com as contagens do
+ * card — o "Mudar de quadros" usa o MESMO `QuadroCard` da tela de Tarefas.
+ */
+export async function GET() {
+  const a = await exigirUsuario();
+  if ("erro" in a) return a.erro;
+  const grupos = a.u.role === "admin" ? null : (await gruposDoUsuario(a.u.id)).map((g) => g.id);
+  const quadros = await listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id);
+  return ok({ quadros: quadros.filter((q) => !q.arquivado) });
+}
 
 /**
  * Cria um QUADRO de tarefas no GRUPO ATIVO do cabeçalho — em branco (nasce com as listas A fazer · Em andamento ·

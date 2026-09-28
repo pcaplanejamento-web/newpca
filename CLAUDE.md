@@ -2370,10 +2370,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     escolha que QUEBRAM linha, também usado nas pesquisas sugeridas do `SeletorFundo`), as seções **Favoritos** e
     **Recentes** (os abertos por último NESTE aparelho — `registrarQuadroRecente`, chamado pelo espaço do quadro;
     `localStorage` `tarefas:quadros-recentes`, até 8) e cada GRUPO recolhível (um grupo só, ou o escolhido nos chips, já
-    abre). Tudo em MINIATURAS (`MiniaturaQuadro`: a **`CapaQuadro semRaio`** 16:9 — imagem com enquadramento, degradê ou a
-    superfície — + o nome; cadeado no privado; o atual marcado com ✓). `destinosDeTarefa` passou a trazer o fundo
-    (`fundoUrl`/`fundoAjuste`/`fundoGradiente`) e o `privado` (`DestinoCopia`); os quadros vêm só ao abrir. Saíram o
-    `Dropdown` + `SeletorBusca` do trocar de quadro.
+    abre). Tudo com o MESMO **`QuadroCard`** da tela de Tarefas (capa 16:9, grupo, nome em até 2 linhas, contagens, a
+    estrela de favorito — `onFavorito` — e, no aberto agora, `atual`: contorno accent + selo "Atual"; `onAbrir` fecha o
+    painel ao navegar). Os quadros (de TODOS os grupos da pessoa, sem os arquivados; o privado só do dono) vêm só ao abrir
+    por **`GET /api/tarefas/quadros`** (`listarQuadros`). Saíram o `Dropdown` + `SeletorBusca` do trocar de quadro.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

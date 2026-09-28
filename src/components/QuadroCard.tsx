@@ -10,27 +10,18 @@ import { ColorField } from "./ColorField";
 import { EstrelaFavorito } from "./FavoritosQuadros";
 import { Checkbox, SelectField, TextArea, TextField } from "./Field";
 import { MESES } from "@/lib/normalize";
-import { IconLock, IconPlus } from "./icons";
+import { IconCheck, IconLock, IconPlus } from "./icons";
 
 /**
  * A CAPA 16:9 de um quadro (dentro do card, como no Trello): a imagem de fundo (com o enquadramento), o degradê, ou — sem
  * nenhum — a superfície do sistema com a cor do quadro num traço. `children` = o que vai por cima (selos).
  */
-export function CapaQuadro({
-  quadro: q,
-  semRaio = false,
-  children,
-}: {
-  quadro: Pick<QuadroCardDados, "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente">;
-  /** Sem os cantos arredondados (a capa encostada no topo de uma miniatura — o "Mudar de quadros"). */
-  semRaio?: boolean;
-  children?: ReactNode;
-}) {
+export function CapaQuadro({ quadro: q, children }: { quadro: Pick<QuadroCardDados, "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente">; children?: ReactNode }) {
   const [falhou, setFalhou] = useState(false);
   const g = lerGradiente(q.fundoGradiente);
   const imagem = q.fundoUrl && !falhou ? q.fundoUrl : null;
   return (
-    <div className={`relative aspect-video w-full overflow-hidden bg-surface-2 ${semRaio ? "" : "rounded-lg"}`} style={!imagem && g ? { background: cssGradiente(g) } : undefined}>
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface-2" style={!imagem && g ? { background: cssGradiente(g) } : undefined}>
       {imagem && (
         // biome-ignore lint/performance/noImgElement: imagem externa por link (não passa pelo otimizador).
         <img alt="" src={imagem} loading="lazy" referrerPolicy="no-referrer" onError={() => setFalhou(true)} className="h-full w-full object-cover transition-transform duration-[var(--motion-duration)] group-hover:scale-[1.03]" style={estiloFundo(lerAjusteFundo(q.fundoAjuste))} />
@@ -43,23 +34,47 @@ export function CapaQuadro({
 
 /**
  * Card de um QUADRO de tarefas (tela `/painel/tarefas`) — a CAPA 16:9 dentro do card (imagem, degradê ou a superfície com a
- * cor), o grupo, o nome e as contagens (abertas · atrasadas em vermelho · concluídas). Privado = cadeado na capa;
+ * cor), o grupo, o nome e as contagens (abertas · atrasadas em vermelho · concluídas). Privado = cadeado na capa; `atual`
+ * = o aberto agora (o "Mudar de quadros" usa o MESMO card);
  * arquivado = esmaecido com o selo. Clicar abre o quadro. A ESTRELA (fora do link, sobre a capa) marca o FAVORITO.
  */
-export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: QuadroCardDados; href: string; favorito?: boolean; onFavorito?: () => void }) {
+export function QuadroCard({
+  quadro: q,
+  href,
+  favorito,
+  onFavorito,
+  atual = false,
+  onAbrir,
+}: {
+  quadro: QuadroCardDados;
+  href: string;
+  favorito?: boolean;
+  onFavorito?: () => void;
+  /** O quadro ABERTO agora (o "Mudar de quadros"): contorno accent + ✓ na capa. */
+  atual?: boolean;
+  /** Ao abrir (antes de navegar — ex.: fechar o painel que o mostra). */
+  onAbrir?: () => void;
+}) {
   return (
     <div className="relative h-full">
       <Link
         href={href}
-        aria-label={`Abrir o quadro ${q.nome}${q.privado ? " (privado)" : ""}`}
-        className={`group flex h-full w-full flex-col overflow-hidden rounded-card border border-border bg-surface p-2 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
-          q.arquivado ? "opacity-60" : ""
-        }`}
+        onClick={onAbrir}
+        aria-current={atual ? "page" : undefined}
+        aria-label={`Abrir o quadro ${q.nome}${q.privado ? " (privado)" : ""}${atual ? " — o atual" : ""}`}
+        className={`group flex h-full w-full flex-col overflow-hidden rounded-card border bg-surface p-2 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
+          atual ? "border-accent ring-2 ring-accent" : "border-border"
+        } ${q.arquivado ? "opacity-60" : ""}`}
       >
         <CapaQuadro quadro={q}>
           {q.privado && (
             <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white" title="Quadro privado — só você o vê">
               <IconLock className="h-3 w-3" /> Privado
+            </span>
+          )}
+          {atual && (
+            <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">
+              <IconCheck className="h-3 w-3" /> Atual
             </span>
           )}
         </CapaQuadro>
