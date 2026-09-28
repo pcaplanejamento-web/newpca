@@ -69,7 +69,7 @@ export function PastaQuadro({
         {/* A ABA. */}
         <span
           aria-hidden
-          className={`relative z-30 flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
+          className={`flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
           style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
         >
           <Icone className="h-3.5 w-3.5 shrink-0" />
