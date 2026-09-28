@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
+  type CampoTarefa,
   COR_ESTADO_PRAZO,
   COR_PRIORIDADE,
   type EquipeQuadro,
@@ -15,6 +16,7 @@ import {
   ROTULO_PRIORIDADE,
   ROTULO_VINCULO,
   rotuloRecorrencia,
+  rotuloValorCampo,
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
@@ -32,6 +34,7 @@ export function TabelaTarefas({
   listas,
   etiquetas,
   equipes = [],
+  campos = [],
   pessoas,
   hoje,
   ativa,
@@ -47,6 +50,8 @@ export function TabelaTarefas({
   etiquetas: EtiquetaTarefa[];
   /** As EQUIPES do quadro (a coluna "Equipes"). */
   equipes?: EquipeQuadro[];
+  /** Os CAMPOS personalizados do quadro (uma coluna cada, no fim). */
+  campos?: CampoTarefa[];
   pessoas: Pessoa[];
   hoje: string;
   ativa: number | null;
@@ -261,8 +266,30 @@ export function TabelaTarefas({
         value: (t) => dataIsoBrasilia(t.concluidaEm),
         render: (t) => (t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : <span className="text-faint">—</span>),
       },
+      ...campos.map(
+        (c): Column<TarefaResumo> => ({
+          key: `campo-${c.id}`,
+          header: c.nome,
+          nowrap: c.tipo !== "texto",
+          align: c.tipo === "texto" ? "left" : "center",
+          minWidth: c.tipo === "texto" ? 160 : undefined,
+          ...(c.tipo === "data" ? { filter: "date" as const } : {}),
+          ...(c.tipo === "numero" ? { filter: "range" as const, numero: (t: TarefaResumo) => (t.campos?.[c.id] ? Number(t.campos[c.id]) : null), formatarFaixa: (n: number) => num(n) } : {}),
+          value: (t) => (c.tipo === "data" ? (t.campos?.[c.id] ?? "") : rotuloValorCampo(c, t.campos?.[c.id]) || "—"),
+          render: (t) => {
+            const v = rotuloValorCampo(c, t.campos?.[c.id]);
+            return v ? (
+              <span className="line-clamp-1" title={v}>
+                {v}
+              </span>
+            ) : (
+              <span className="text-faint">—</span>
+            );
+          },
+        }),
+      ),
     ];
-  }, [listas, pessoas, etiquetas, equipes, hoje]);
+  }, [listas, pessoas, etiquetas, equipes, campos, hoje]);
 
   return (
     <DataTable

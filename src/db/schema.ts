@@ -776,6 +776,8 @@ export const tarefaQuadros = sqliteTable(
     descricao: text("descricao"),
     arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),
     proxTicket: integer("prox_ticket").notNull().default(1),
+    /** O TÍTULO AUTOMÁTICO das tarefas (migração `0056`): "{Campo} - {Outro}" — NULL = sem. */
+    formatoTitulo: text("formato_titulo"),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -824,6 +826,8 @@ export const tarefas = sqliteTable(
     lembreteMin: integer("lembrete_min"),
     /** O cartão é um TEMPLATE (migração `0055`): fora de contagens, filtros de prazo, Dashboard, Calendário e avisos. */
     template: integer("template", { mode: "boolean" }).notNull().default(false),
+    /** A pessoa editou o TÍTULO à mão — o automático do quadro não o sobrescreve (migração `0056`). */
+    tituloManual: integer("titulo_manual", { mode: "boolean" }).notNull().default(false),
     /** A tarefa de ORIGEM quando esta é uma cópia. */
     copiadaDe: integer("copiada_de").references((): AnySQLiteColumn => tarefas.id, { onDelete: "set null" }),
     /** Ordem FRACIONÁRIA na lista (soltar entre dois cartões sem renumerar a lista). */
@@ -934,6 +938,38 @@ export const tarefaEquipesLinks = sqliteTable(
       .references(() => tarefaEquipes.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.tarefaId, t.equipeId] }), index("tarefa_equipes_links_equipe_idx").on(t.equipeId)],
+);
+
+/** Os CAMPOS PERSONALIZADOS do quadro (migração `0056`): texto · número · data · lista (as `opcoes`) · caixa. */
+export const tarefaCampos = sqliteTable(
+  "tarefa_campos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    tipo: text("tipo").notNull().default("texto"),
+    opcoes: text("opcoes"),
+    ordem: integer("ordem").notNull().default(0),
+    noCartao: integer("no_cartao", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [index("tarefa_campos_quadro_idx").on(t.quadroId)],
+);
+
+/** O VALOR de um campo personalizado numa tarefa (um por par tarefa + campo). */
+export const tarefaCampoValores = sqliteTable(
+  "tarefa_campo_valores",
+  {
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    campoId: integer("campo_id")
+      .notNull()
+      .references(() => tarefaCampos.id, { onDelete: "cascade" }),
+    valor: text("valor").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tarefaId, t.campoId] }), index("tarefa_campo_valores_campo_idx").on(t.campoId)],
 );
 
 /** Os CHECKLISTS NOMEADOS de uma tarefa (migração `0054`). */

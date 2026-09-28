@@ -5,12 +5,13 @@ import { type ReactNode, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { Quadro } from "@/lib/tarefas";
-import type { Automacao, EquipeQuadro, EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
+import type { Automacao, CampoTarefa, EquipeQuadro, EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { AutomacoesQuadro, ModelosQuadro } from "./AutomacoesQuadro";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { CamposPersonalizadosQuadro } from "./CamposTarefa";
 import { ColorField } from "./ColorField";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
@@ -31,7 +32,7 @@ type RascunhoEquipe = { id: number | null; nome: string; cor: string; membros: n
  * A aba CONFIGURAÇÃO do quadro (editores; os demais só consultam): os dados do quadro (nome · cor · descrição), arquivar
  * e excluir; as LISTAS (ordem ↑/↓, nome, limite de cartões — WIP —, "lista de concluídas" — entrar nela conclui a tarefa —,
  * arquivar; excluir só a vazia), as ETIQUETAS (nome + cor), as EQUIPES (nome + cor + pessoas — a tarefa com a equipe
- * envolve todos os membros), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
+ * envolve todos os membros), os CAMPOS personalizados (+ o formato do título automático), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
  * recarrega o quadro.
  */
 export function ConfiguracaoQuadro({
@@ -39,6 +40,7 @@ export function ConfiguracaoQuadro({
   listas,
   etiquetas,
   equipes = [],
+  campos: camposQuadro = [],
   automacoes,
   pessoas,
   todas = pessoas,
@@ -52,6 +54,8 @@ export function ConfiguracaoQuadro({
   listas: ListaTarefas[];
   etiquetas: EtiquetaTarefa[];
   equipes?: EquipeQuadro[];
+  /** Os CAMPOS personalizados do quadro (migração `0056`). */
+  campos?: CampoTarefa[];
   automacoes: Automacao[];
   /** As pessoas do grupo (alvo de "atribuir" e membros das equipes). */
   pessoas: Pessoa[];
@@ -365,6 +369,18 @@ export function ConfiguracaoQuadro({
             })}
           </ul>
         )}
+      </Secao>
+
+      <Secao titulo="Campos personalizados">
+        <CamposPersonalizadosQuadro
+          quadroId={quadro.id}
+          formatoTitulo={quadro.formatoTitulo}
+          campos={camposQuadro}
+          podeEditar={podeEditar && !quadro.arquivado}
+          ocupado={ocupado != null}
+          gravar={gravar}
+          confirmar={confirmar}
+        />
       </Secao>
 
       <Secao titulo="Automações">

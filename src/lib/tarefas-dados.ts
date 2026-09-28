@@ -11,6 +11,7 @@ import {
   listasDoQuadro,
   listasDosQuadros,
   listarAutomacoes,
+  listarCampos,
   listarEquipes,
   listarModelosQuadro,
   listarQuadros,
@@ -123,20 +124,22 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
 export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
   const r = await tarefaAcessivel(u, tarefaId);
   if (!r) return null;
-  const [listas, etiquetas, membros, equipes] = await Promise.all([
+  const [listas, etiquetas, membros, equipes, campos] = await Promise.all([
     listasDoQuadro(r.quadro.id),
     etiquetasDoQuadroTodas(r.quadro.id),
     listarPessoasDoGrupo(r.quadro.grupoId),
     listarEquipes([r.quadro.id]),
+    listarCampos([r.quadro.id]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...r.tarefa.envolvidos, ...r.tarefa.observadores, ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
   return {
-    quadro: { id: r.quadro.id, nome: r.quadro.nome, cor: r.quadro.cor },
+    quadro: { id: r.quadro.id, nome: r.quadro.nome, cor: r.quadro.cor, formatoTitulo: r.quadro.formatoTitulo },
     tarefa: r.tarefa,
     listas,
     etiquetas,
     equipes,
+    campos,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...(fora.length ? await pessoasPorIds(fora) : [])],
     podeEditar: u.role === "admin" || u.role === "gestor",
@@ -153,7 +156,7 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
 export async function carregarQuadro(u: UsuarioSessao, id: number) {
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos] = await Promise.all([
     dadosQuadro(id),
     listarPessoasDoGrupo(quadro.grupoId),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
@@ -161,6 +164,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     listarModelosQuadro([quadro.grupoId]),
     listarEquipes([id]),
     favoritosDaPessoa(u.id),
+    listarCampos([id]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
@@ -171,6 +175,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...extras],
     equipes,
+    campos,
     edicoes,
     automacoes,
     favoritos,

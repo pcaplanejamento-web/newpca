@@ -1083,8 +1083,11 @@ prioridade, etiquetas e "sem etiqueta") e o seletor de etiquetas no detalhe (bus
 faixa de membros/etiquetas/datas/prioridade/estimativa, descrição formatada, blocos do corpo), texto formatado (negrito,
 listas, links, @menção) na descrição, notas e comentários, comentários e atividade num fluxo só e o cartão com as faixas de
 etiqueta.
-🔜 **Tarefas no padrão Trello — próximas fases:** F7 campos personalizados com título
-automático · F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
+✅ **Tarefas no padrão Trello — F7 (migração `0056`):** CAMPOS PERSONALIZADOS por quadro (texto, número, data, lista de
+opções, caixa de marcar; "mostrar no cartão"), preenchidos no detalhe, com colunas na Lista/.xlsx e filtros no painel, e o
+TÍTULO AUTOMÁTICO pelo formato do quadro (`{Categoria} - {Tipo} - {Nº protocolo}` — campo vazio some com o separador; o
+título escrito à mão prevalece). Copiar, template, mover e recorrência levam os valores.
+🔜 **Tarefas no padrão Trello — próximas fases:** F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

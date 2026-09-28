@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
-import { dataValida, FREQUENCIAS, GATILHOS, ORDENACOES_LISTA, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { dataValida, FREQUENCIAS, GATILHOS, ORDENACOES_LISTA, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, MAX_VALOR_CAMPO, PRIORIDADES, TIPOS_BLOCO, TIPOS_CAMPO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -26,7 +26,37 @@ export const periodoSchema = z.object({ ano: z.number().int().min(2000).max(2100
  * `templatesDe` = copia os TEMPLATES daquele quadro.
  */
 export const criarQuadroSchema = quadroSchema.extend({ modeloId: id.nullable().optional(), periodo: periodoSchema.nullable().optional(), templatesDe: id.nullable().optional() });
-export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional() });
+/** O FORMATO do título automático (`{Campo} - {Campo}`; vazio/null = desligado). */
+const formatoTitulo = z
+  .string()
+  .trim()
+  .max(200, "Formato com até 200 caracteres.")
+  .nullable()
+  .transform((v) => v || null);
+export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional() });
+
+/** Um CAMPO personalizado do quadro (as opções só valem para o tipo lista). */
+export const campoSchema = z
+  .object({
+    nome: z
+      .string()
+      .trim()
+      .min(1, "Dê um nome ao campo.")
+      .max(40, "Nome com até 40 caracteres.")
+      .refine((n) => !/[{}]/.test(n), "O nome não pode ter chaves { }."),
+    tipo: z.enum(TIPOS_CAMPO),
+    opcoes: z.array(z.string().trim().min(1).max(60, "Opção com até 60 caracteres.")).max(50, "Até 50 opções.").default([]),
+    noCartao: z.boolean().default(false),
+  })
+  .refine((c) => c.tipo !== "lista" || c.opcoes.length > 0, { message: "Informe as opções da lista.", path: ["opcoes"] })
+  .transform((c) => ({ ...c, opcoes: c.tipo === "lista" ? [...new Set(c.opcoes)] : [] }));
+/** A ordem NOVA dos campos do quadro (todos, sem repetir). */
+export const ordemCamposSchema = z.object({ ids: z.array(id).min(1).max(50) }).refine((v) => new Set(v.ids).size === v.ids.length, "Campo repetido.");
+/** Os VALORES dos campos numa tarefa (`null` = tira) — conferidos contra os campos do quadro na rota. */
+const valoresCampos = z
+  .array(z.object({ campoId: id, valor: z.string().max(MAX_VALOR_CAMPO).nullable() }))
+  .max(50)
+  .refine((l) => new Set(l.map((v) => v.campoId)).size === l.length, "Campo repetido.");
 
 export const listaSchema = z.object({
   nome: z.string().trim().min(1, "Dê um nome à lista.").max(60, "Nome com até 60 caracteres."),
@@ -168,6 +198,9 @@ const camposTarefa = {
   vinculo: z.object({ tipo: z.enum(TIPOS_VINCULO), id }).nullable().optional(),
   recorrencia: recorrenciaSchema.nullable().optional(),
   blocos: blocosSchema.optional(),
+  campos: valoresCampos.optional(),
+  /** true = o título foi escrito à mão (o automático não o troca); false = volta ao automático. */
+  tituloManual: z.boolean().optional(),
 };
 const inicioAntesDoPrazo = (v: { inicio?: string | null; prazo?: string | null }) => !v.inicio || !v.prazo || v.inicio <= v.prazo;
 const MSG_DATAS = { message: "O início não pode ser depois do prazo.", path: ["prazo"] };

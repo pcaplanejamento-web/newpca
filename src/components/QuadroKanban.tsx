@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Pessoa } from "@/lib/pessoa";
-import { cartoesDaLista, type EtiquetaTarefa, excedeWip, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
+import { type CampoTarefa, cartoesDaLista, type EtiquetaTarefa, excedeWip, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { CartaoPreso, SombraCartao, useArrastoCartoes } from "./ArrastoCartoes";
 import { Button } from "./Button";
@@ -23,6 +23,7 @@ export function QuadroKanban({
   listas,
   tarefas,
   etiquetas,
+  campos = [],
   pessoas,
   hoje,
   onAbrir,
@@ -40,6 +41,8 @@ export function QuadroKanban({
   /** Os cartões JÁ FILTRADOS (sem arquivados). */
   tarefas: TarefaResumo[];
   etiquetas: EtiquetaTarefa[];
+  /** Os campos personalizados do quadro (os "no cartão" aparecem nos cartões). */
+  campos?: CampoTarefa[];
   pessoas: Pessoa[];
   hoje: string;
   onAbrir: (id: number) => void;
@@ -186,6 +189,7 @@ export function QuadroKanban({
                   <CartaoTarefa
                     tarefa={t}
                     etiquetas={mEtiquetas}
+                    campos={campos}
                     pessoas={mPessoas}
                     hoje={hoje}
                     oculto={arrasto?.id === t.id}
@@ -204,7 +208,7 @@ export function QuadroKanban({
       })}
       {arrasto && preso && (
         <CartaoPreso arrasto={arrasto} fantasma={fantasma}>
-          <CartaoTarefa tarefa={preso} etiquetas={mEtiquetas} pessoas={mPessoas} hoje={hoje} />
+          <CartaoTarefa tarefa={preso} etiquetas={mEtiquetas} campos={campos} pessoas={mPessoas} hoje={hoje} />
         </CartaoPreso>
       )}
     </div>

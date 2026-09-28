@@ -3,6 +3,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import {
   notificacoes,
+  tarefaCampoValores,
   tarefaChecklist,
   tarefaChecklists,
   tarefaEquipeMembros,
@@ -17,7 +18,7 @@ import {
   tarefaQuadros,
   tarefas,
 } from "../db/schema.ts";
-import { type BlocoTarefa, blocosParaGravar, type DadosEvento, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo } from "./tarefas-core.ts";
+import { type BlocoTarefa, blocosParaGravar, type DadosEvento, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo, type ValorCampoNovo } from "./tarefas-core.ts";
 import type { AcaoMassaTarefas } from "./tarefas-validation.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
@@ -133,6 +134,10 @@ export function comandosCriarTarefa(
     copiadaDe?: number | null;
     /** No TOPO da lista (senão no fim). */
     noInicio?: boolean;
+    /** Os valores dos CAMPOS personalizados (migração `0056`). */
+    campos?: { campoId: number; valor: string }[];
+    /** O título foi escrito à mão (o automático não o troca). */
+    tituloManual?: boolean;
   },
 ) {
   return [
@@ -164,6 +169,7 @@ export function comandosCriarTarefa(
       recorrencia: d.recorrencia ? JSON.stringify(d.recorrencia) : null,
       recorrenciaAnteriorId: d.recorrenciaAnteriorId ?? null,
       blocos: d.blocos ? JSON.stringify(blocosParaGravar(d.blocos)) : null,
+      tituloManual: d.tituloManual ?? false,
     }),
     ...d.pessoas.map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u })),
     // Observador que também é responsável fica só responsável (a chave é tarefa + pessoa).
@@ -174,6 +180,7 @@ export function comandosCriarTarefa(
     ...(d.equipes ?? []).map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: idDaNova(d.quadroId), equipeId: e })),
     ...comandosNovasEtiquetas(db, d.quadroId, idDaNova(d.quadroId), d.novasEtiquetas ?? []),
     ...(d.checklists ?? []).flatMap((c, k) => comandosChecklistNovo(db, idDaNova(d.quadroId), c, k + 1)),
+    ...comandosValoresCampos(db, idDaNova(d.quadroId), d.campos ?? []),
     ...(d.eventos ?? []).flatMap((e) => [
       db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
       ...comandosConvidados(db, ultimoEvento, e.convidados ?? []),
@@ -206,7 +213,18 @@ function comandosNovasEtiquetas(db: Db, quadroId: number, tarefaId: number | SQL
  */
 export function comandosMoverQuadro(
   db: Db,
-  d: { id: number; quadroId: number; listaId: number; concluida: boolean; etiquetas: number[]; novasEtiquetas: { nome: string; cor: string }[]; pessoas: number[]; equipes: number[] },
+  d: {
+    id: number;
+    quadroId: number;
+    listaId: number;
+    concluida: boolean;
+    etiquetas: number[];
+    novasEtiquetas: { nome: string; cor: string }[];
+    pessoas: number[];
+    equipes: number[];
+    /** Os valores dos campos já MAPEADOS para os campos do destino (`mapearCampos`). */
+    campos: { campoId: number; valor: string }[];
+  },
 ) {
   return [
     db
@@ -232,6 +250,8 @@ export function comandosMoverQuadro(
       .where(d.pessoas.length ? and(eq(tarefaPessoas.tarefaId, d.id), notInArray(tarefaPessoas.usuarioId, d.pessoas)) : eq(tarefaPessoas.tarefaId, d.id)),
     db.delete(tarefaEquipesLinks).where(eq(tarefaEquipesLinks.tarefaId, d.id)),
     ...d.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: d.id, equipeId: e })),
+    db.delete(tarefaCampoValores).where(eq(tarefaCampoValores.tarefaId, d.id)),
+    ...comandosValoresCampos(db, d.id, d.campos),
     db.select({ id: tarefas.id, ticket: tarefas.ticket }).from(tarefas).where(eq(tarefas.id, d.id)),
   ] as const;
 }
@@ -272,6 +292,29 @@ export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number
           ...v.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId, equipeId: e })),
         ]
       : []),
+  ];
+}
+
+/** Linhas de valor por INSERT (4 parâmetros cada com o id da tarefa nova em subconsulta — ≤ 100). */
+export const LOTE_VALORES_CAMPO = 20;
+
+/**
+ * GRAVA os valores dos CAMPOS de uma tarefa: `null` tira o valor; os demais entram ou trocam (a chave é tarefa + campo).
+ * `tarefaId` pode ser a subconsulta da tarefa recém-criada (lote sequencial).
+ */
+export function comandosValoresCampos(db: Db, tarefaId: number | SQL<number>, valores: ValorCampoNovo[]) {
+  const tirar = valores.filter((v) => v.valor == null).map((v) => v.campoId);
+  const novos = valores.filter((v): v is { campoId: number; valor: string } => v.valor != null);
+  const lotes: (typeof novos)[] = [];
+  for (let i = 0; i < novos.length; i += LOTE_VALORES_CAMPO) lotes.push(novos.slice(i, i + LOTE_VALORES_CAMPO));
+  return [
+    ...(tirar.length ? [db.delete(tarefaCampoValores).where(and(eq(tarefaCampoValores.tarefaId, tarefaId), inArray(tarefaCampoValores.campoId, tirar.slice(0, 90))))] : []),
+    ...lotes.map((l) =>
+      db
+        .insert(tarefaCampoValores)
+        .values(l.map((v) => ({ tarefaId, campoId: v.campoId, valor: v.valor })))
+        .onConflictDoUpdate({ target: [tarefaCampoValores.tarefaId, tarefaCampoValores.campoId], set: { valor: sql`excluded.valor` } }),
+    ),
   ];
 }
 

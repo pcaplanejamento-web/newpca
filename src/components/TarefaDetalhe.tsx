@@ -18,6 +18,8 @@ import {
   TIPOS_METADADO,
   ROTULO_METADADO,
   type TipoMetadado,
+  type CampoTarefa,
+  montarTitulo,
   estadoPrazo,
   horaAgoraBrasilia,
   rotuloData,
@@ -47,6 +49,7 @@ import {
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { CamposDaTarefa } from "./CamposTarefa";
 import { ChipPreso, GuiaBloco, ICONE_METADADO, MenuAdicionarCartao, MolduraBloco, useArrastoBlocos } from "./BlocosTarefa";
 import { CirculoConcluir } from "./CirculoConcluir";
 import { CampoTextoFormatado } from "./TextoFormatado";
@@ -101,6 +104,10 @@ type Rascunho = {
   eventos: DadosEvento[];
   /** Os BLOCOS do corpo, na ordem. */
   blocos: BlocoTarefa[];
+  /** Os valores dos CAMPOS personalizados (id → valor). */
+  campos: Record<number, string>;
+  /** O título foi escrito à mão (o automático não o troca). */
+  tituloManual: boolean;
 };
 type Conteudo = { checklists: ChecklistNomeado[]; checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] };
 
@@ -137,6 +144,8 @@ export function TarefaDetalhe({
   listas,
   etiquetas,
   equipes = [],
+  campos = [],
+  formatoTitulo = null,
   pessoas,
   todas,
   hoje,
@@ -155,6 +164,10 @@ export function TarefaDetalhe({
   etiquetas: EtiquetaTarefa[];
   /** As EQUIPES do quadro (os membros de cada uma passam a ser da tarefa). */
   equipes?: EquipeQuadro[];
+  /** Os CAMPOS personalizados do quadro. */
+  campos?: CampoTarefa[];
+  /** O formato do TÍTULO AUTOMÁTICO do quadro (null = desligado). */
+  formatoTitulo?: string | null;
   /** As pessoas do GRUPO (podem ser escolhidas). */
   pessoas: Pessoa[];
   /** Todas as conhecidas (as designadas fora do grupo seguem visíveis). */
@@ -240,6 +253,8 @@ export function TarefaDetalhe({
           checklists: [],
           eventos: [],
           blocos: [],
+          campos: existente.campos ?? {},
+          tituloManual: !!existente.tituloManual,
         }
       : {
           titulo: "",
@@ -260,6 +275,8 @@ export function TarefaDetalhe({
           checklists: [],
           eventos: [],
           blocos: [],
+          campos: {},
+          tituloManual: false,
         };
     base.blocos = blocosDaTarefa(existente ? null : [], dadosDoRascunho(base, existente?.checklist.total ?? 0, existente?.eventos ?? 0));
     setR(base);
@@ -295,6 +312,20 @@ export function TarefaDetalhe({
     .map((id) => todas.find((p) => p.id === id))
     .filter((p): p is Pessoa => !!p);
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setR((x) => (x ? { ...x, [k]: v } : x));
+  /** O título que o formato do quadro dá aos valores (vazio = nenhum). */
+  const automatico = (valores: Record<number, string>) => (formatoTitulo ? montarTitulo(formatoTitulo, campos, valores) : "");
+  /** Um CAMPO muda: com o título automático (não manual), o título acompanha. */
+  const setCampo = (id: number, v: string | null) =>
+    setR((x) => {
+      if (!x) return x;
+      const valores = { ...x.campos };
+      if (v == null) delete valores[id];
+      else valores[id] = v;
+      const t = x.tituloManual ? "" : automatico(valores);
+      return { ...x, campos: valores, titulo: t || x.titulo };
+    });
+  const setTitulo = (v: string) => setR((x) => (x ? { ...x, titulo: v, tituloManual: x.tituloManual || !!formatoTitulo } : x));
+  const voltarAoAutomatico = () => setR((x) => (x ? { ...x, tituloManual: false, titulo: automatico(x.campos) || x.titulo } : x));
 
   /** CONVERTE um item do checklist numa TAREFA (na mesma lista; o texto vira o título, com o prazo e o responsável dele). */
   const converterItem = async (i: ItemChecklist) => {
@@ -359,6 +390,8 @@ export function TarefaDetalhe({
           checklists: r.checklists.map((c) => ({ nome: c.nome.trim() || "Checklist", itens: c.itens.map((t) => t.trim()).filter(Boolean) })),
           eventos: r.eventos,
           blocos: blocosParaGravar(r.blocos),
+          campos: Object.entries(r.campos).map(([c, v]) => ({ campoId: Number(c), valor: v })),
+          tituloManual: r.tituloManual,
         });
         toast.success("Tarefa criada.");
       } else if (existente) {
@@ -380,6 +413,12 @@ export function TarefaDetalhe({
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
         if (JSON.stringify(r.blocos) !== JSON.stringify(inicial.blocos)) d.blocos = blocosParaGravar(r.blocos);
+        const mudouCampos = [...new Set([...Object.keys(r.campos), ...Object.keys(inicial.campos)])]
+          .map(Number)
+          .filter((c) => (r.campos[c] ?? null) !== (inicial.campos[c] ?? null))
+          .map((c) => ({ campoId: c, valor: r.campos[c] ?? null }));
+        if (mudouCampos.length) d.campos = mudouCampos;
+        if (r.tituloManual !== inicial.tituloManual) d.tituloManual = r.tituloManual;
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
         toast.success(concluir == null ? "Tarefa salva." : concluir ? "Tarefa concluída." : "Tarefa reaberta.");
       }
@@ -876,9 +915,19 @@ export function TarefaDetalhe({
               valor={r.titulo}
               focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
               cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
-              onChange={(v) => set("titulo", v)}
+              onChange={setTitulo}
             />
           </div>
+          {formatoTitulo && (
+            <p className="flex flex-wrap items-center gap-2 pl-1 text-[12px] text-muted">
+              {r.tituloManual ? "Título escrito à mão — os campos não o mudam." : "Título automático — segue os campos da tarefa."}
+              {r.tituloManual && automatico(r.campos) && (
+                <Button variant="ghost" size="xs" onClick={voltarAoAutomatico}>
+                  Usar o automático
+                </Button>
+              )}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2 pl-1">
             <SelectField
               label="Na lista"
@@ -931,6 +980,11 @@ export function TarefaDetalhe({
                 </Button>
               </div>
             </div>
+          )}
+          {campos.length > 0 && (
+            <Secao titulo="Campos personalizados">
+              <CamposDaTarefa campos={campos} valores={r.campos} onChange={setCampo} disabled={carregando} />
+            </Secao>
           )}
           <Secao titulo="Descrição">
             <CampoTextoFormatado

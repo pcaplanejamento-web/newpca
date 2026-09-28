@@ -37,6 +37,10 @@ export type TarefaResumo = {
   template: boolean;
   /** Tem DESCRIÇÃO (o ícone do cartão — o texto não vai ao quadro). */
   temDescricao?: boolean;
+  /** Os valores dos CAMPOS PERSONALIZADOS (id do campo → valor normalizado). */
+  campos?: Record<number, string>;
+  /** O título foi editado à mão (o automático do quadro não o sobrescreve). */
+  tituloManual?: boolean;
   /** Responsáveis (ids de usuário). */
   pessoas: number[];
   /** Observadores (acompanham, sem ser responsáveis). */
@@ -301,12 +305,20 @@ export type FiltroTarefas = {
   /** Etiquetas (ids) e/ou "sem" (sem etiqueta). */
   etiquetas: (number | "sem")[];
   status: StatusFiltro;
+  /** Os campos personalizados do tipo LISTA: id do campo → as opções escolhidas. */
+  campos: Record<number, string[]>;
   busca: string;
 };
-export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", busca: "" };
+export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, busca: "" };
 /** Quantos filtros estão ligados (cada valor conta; a busca conta 1) — o número do botão "Filtrar". */
 export const contarFiltros = (f: FiltroTarefas) =>
-  f.responsaveis.length + f.prazos.length + f.prioridades.length + f.etiquetas.length + (f.status !== "todas" ? 1 : 0) + (f.busca.trim() ? 1 : 0);
+  f.responsaveis.length +
+  f.prazos.length +
+  f.prioridades.length +
+  f.etiquetas.length +
+  Object.values(f.campos).reduce((n, v) => n + v.length, 0) +
+  (f.status !== "todas" ? 1 : 0) +
+  (f.busca.trim() ? 1 : 0);
 export const filtroTarefasAtivo = (f: FiltroTarefas) => contarFiltros(f) > 0;
 /** O filtro de TAREFA está ligado (fora a busca) — o Calendário esconde a previsão do PCA/agendas externas. */
 export const filtroDeTarefaAtivo = (f: FiltroTarefas) => filtroTarefasAtivo({ ...f, busca: "" });
@@ -314,7 +326,10 @@ export const filtroDeTarefaAtivo = (f: FiltroTarefas) => filtroTarefasAtivo({ ..
 export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v]);
 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
-export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & { template?: boolean };
+export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & {
+  template?: boolean;
+  campos?: Record<number, string>;
+};
 
 /** O cartão cai no recorte de prazo? (atrasadas/hoje pelo semáforo; os "vencem em" contam só as abertas, de hoje em diante). */
 function casaPrazo(t: TarefaFiltravel, p: FiltroPrazo, hoje: string): boolean {
@@ -345,6 +360,7 @@ export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: Filtr
     if (f.status === "abertas" && t.concluidaEm != null) return false;
     if (f.status === "concluidas" && t.concluidaEm == null) return false;
     if (f.prazos.length && !f.prazos.some((p) => casaPrazo(t, p, ctx.hoje))) return false;
+    for (const [id, vals] of Object.entries(f.campos)) if (vals.length && !vals.includes(t.campos?.[Number(id)] ?? "")) return false;
     return !casa || casa([t.titulo, rotuloTicket(t.ticket), String(t.ticket)]);
   });
 }
@@ -1114,6 +1130,141 @@ export function lerFavoritos(v: unknown): number[] {
 export function favoritosPrimeiro<Q extends { id: number }>(quadros: Q[], favoritos: number[]): Q[] {
   const f = new Set(favoritos);
   return [...quadros.filter((q) => f.has(q.id)), ...quadros.filter((q) => !f.has(q.id))];
+}
+
+// ─── CAMPOS PERSONALIZADOS e TÍTULO AUTOMÁTICO (migração `0056`) ────────────────────────────────────────────
+
+export const TIPOS_CAMPO = ["texto", "numero", "data", "lista", "checkbox"] as const;
+export type TipoCampo = (typeof TIPOS_CAMPO)[number];
+export const ROTULO_TIPO_CAMPO: Record<TipoCampo, string> = { texto: "Texto", numero: "Número", data: "Data", lista: "Lista de opções", checkbox: "Caixa de marcar" };
+/** Um CAMPO personalizado do quadro (`opcoes` = as da lista). */
+export type CampoTarefa = { id: number; nome: string; tipo: TipoCampo; opcoes: string[]; ordem: number; noCartao: boolean };
+export const MAX_CAMPOS = 20;
+export const MAX_OPCOES_CAMPO = 50;
+export const MAX_VALOR_CAMPO = 200;
+export const coerceTipoCampo = (v: unknown): TipoCampo => ((TIPOS_CAMPO as readonly unknown[]).includes(v) ? (v as TipoCampo) : "texto");
+
+/** As opções de uma lista gravadas (JSON ou array) — sem vazias, sem repetir, até 50. */
+export function lerOpcoesCampo(v: unknown): string[] {
+  let l: unknown = v;
+  if (typeof v === "string") {
+    try {
+      l = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(l)) return [];
+  return [...new Set(l.filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, 60)).filter(Boolean))].slice(0, MAX_OPCOES_CAMPO);
+}
+
+/**
+ * O VALOR de um campo NORMALIZADO para gravar (texto aparado; número com ponto; data AAAA-MM-DD válida; opção da lista;
+ * caixa "1") — `null` = vazio ou inválido (o valor sai da tarefa).
+ */
+export function valorCampo(c: Pick<CampoTarefa, "tipo" | "opcoes">, v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  switch (c.tipo) {
+    case "texto":
+      return s.slice(0, MAX_VALOR_CAMPO);
+    case "numero": {
+      const n = Number(s.replace(/\./g, "").replace(",", "."));
+      const direto = Number(s);
+      const x = Number.isFinite(direto) ? direto : n;
+      return Number.isFinite(x) ? String(x) : null;
+    }
+    case "data":
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) && dataValida(s) ? s : null;
+    case "lista":
+      return c.opcoes.includes(s) ? s : null;
+    case "checkbox":
+      return s === "1" || s === "true" ? "1" : null;
+  }
+}
+
+/** O valor para MOSTRAR (a data em dd/mm/aaaa, o número em pt-BR, a caixa marcada = o nome do campo — `nome`). */
+export function rotuloValorCampo(c: Pick<CampoTarefa, "tipo" | "nome">, v: string | undefined | null): string {
+  if (!v) return "";
+  if (c.tipo === "data") return `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}`;
+  if (c.tipo === "numero") return Number(v).toLocaleString("pt-BR");
+  if (c.tipo === "checkbox") return v === "1" ? c.nome : "";
+  return v;
+}
+
+const chaveCampo = (s: string) => stripAccents(s.trim().toLocaleLowerCase("pt-BR"));
+/** Os nomes de campo citados no formato ("{Tipo} - {Nº}" → ["Tipo", "Nº"]). */
+export const camposDoFormato = (formato: string) => [...formato.matchAll(/\{([^{}]{1,60})\}/g)].map((m) => m[1].trim());
+
+/**
+ * O TÍTULO AUTOMÁTICO: o formato com os campos trocados pelos VALORES ("{Categoria} - {Tipo} - {Nº protocolo}"). Campo
+ * vazio SOME junto do separador que o liga ao anterior (ou ao seguinte, se for o primeiro) — nunca sobra " - - ". Nome de
+ * campo sem acento/caixa; um nome que não existe fica vazio. Até 200 caracteres.
+ */
+export function montarTitulo(formato: string, campos: Pick<CampoTarefa, "id" | "nome" | "tipo">[], valores: Record<number, string>): string {
+  const porNome = new Map(campos.map((c) => [chaveCampo(c.nome), c]));
+  const partes = formato.split(/(\{[^{}]{1,60}\})/g).filter((p) => p !== "");
+  type Parte = { campo: boolean; v: string };
+  const res: Parte[] = partes.map((p) => {
+    const m = /^\{([^{}]{1,60})\}$/.exec(p);
+    if (!m) return { campo: false, v: p };
+    const c = porNome.get(chaveCampo(m[1]));
+    return { campo: true, v: c ? rotuloValorCampo({ tipo: c.tipo, nome: c.nome }, valores[c.id]) : "" };
+  });
+  const separador = (s: string) => /^[\s\-–—|/·,:;]*$/.test(s);
+  const out: Parte[] = [];
+  for (let i = 0; i < res.length; i++) {
+    const p = res[i];
+    if (p.campo && !p.v) {
+      // Tira o separador ANTES (se houver um campo cheio antes dele); senão, o separador DEPOIS.
+      const ant = out[out.length - 1];
+      if (ant && !ant.campo && separador(ant.v) && out.length > 1) out.pop();
+      else if (res[i + 1] && !res[i + 1].campo && separador(res[i + 1].v)) i++;
+      continue;
+    }
+    out.push(p);
+  }
+  return out
+    .map((p) => p.v)
+    .join("")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s\-–—|/·,:;]+|[\s\-–—|/·,:;]+$/g, "")
+    .slice(0, 200);
+}
+
+/** Um valor de campo a GRAVAR (`null` = tira o valor da tarefa). */
+export type ValorCampoNovo = { campoId: number; valor: string | null };
+
+/**
+ * Os VALORES de uma tarefa num quadro de DESTINO (copiar/mover): no mesmo quadro, os mesmos; em outro, pelo NOME do campo
+ * (sem acento/caixa) e o MESMO tipo — e o valor tem de valer lá (a opção da lista existir). O que não casa fica de fora.
+ */
+export function mapearCampos(
+  origem: Pick<CampoTarefa, "id" | "nome" | "tipo">[],
+  destino: Pick<CampoTarefa, "id" | "nome" | "tipo" | "opcoes">[],
+  valores: Record<number, string>,
+): { campoId: number; valor: string }[] {
+  const porNome = new Map(destino.map((c) => [`${chaveCampo(c.nome)}|${c.tipo}`, c]));
+  const out: { campoId: number; valor: string }[] = [];
+  for (const c of origem) {
+    const v = valores[c.id];
+    if (v == null) continue;
+    const d = porNome.get(`${chaveCampo(c.nome)}|${c.tipo}`);
+    const val = d ? valorCampo(d, v) : null;
+    if (d && val != null) out.push({ campoId: d.id, valor: val });
+  }
+  return out;
+}
+
+/** Os valores da tarefa depois das MUDANÇAS (`null` tira) — a base do título automático. */
+export function valoresAposMudar(atuais: Record<number, string>, mudancas: ValorCampoNovo[]): Record<number, string> {
+  const r = { ...atuais };
+  for (const m of mudancas) {
+    if (m.valor == null) delete r[m.campoId];
+    else r[m.campoId] = m.valor;
+  }
+  return r;
 }
 
 // ─── COPIAR / MOVER entre quadros e TEMPLATES (migração `0055`) ───────────────────────────────────────────────

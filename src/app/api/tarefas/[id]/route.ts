@@ -10,14 +10,17 @@ import {
   etiquetasDoQuadro,
   excluirTarefa,
   getLista,
+  listarCampos,
   membrosDasEquipes,
   moverTarefa,
   pessoasValidas,
   tarefaAcessivel,
+  tituloAutomatico,
   ultimoDaLista,
+  valoresValidos,
   vinculoAcessivel,
 } from "@/lib/tarefas";
-import { lerBlocos, mascararPrivados, rotuloTicket } from "@/lib/tarefas-core";
+import { lerBlocos, mascararPrivados, rotuloTicket, type ValorCampoNovo, valoresAposMudar } from "@/lib/tarefas-core";
 import { contextoTarefa } from "@/lib/tarefas-dados";
 import { editarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -54,7 +57,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
   const p = await parseCorpo(editarTarefaSchema, req);
   if ("resp" in p) return p.resp;
-  const { listaId, pessoas, observadores, etiquetas, equipes: equipesPedidas, blocos: blocosPedidos, ...campos } = p.data;
+  const { listaId, pessoas, observadores, etiquetas, equipes: equipesPedidas, blocos: blocosPedidos, campos: valoresPedidos, ...campos } = p.data;
   const blocos = blocosPedidos === undefined ? undefined : (lerBlocos(blocosPedidos) ?? []);
   const atuais = [...r.tarefa.pessoas, ...r.tarefa.observadores];
   if (!(await pessoasValidas(r.quadro.grupoId, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
@@ -63,6 +66,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return erro("Vínculo não encontrado.", 422);
   if (campos.concluida === true && r.tarefa.template) return erro("Um template não se conclui — crie uma tarefa a partir dele.", 422);
   const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
+  // CAMPOS personalizados + o TÍTULO AUTOMÁTICO (quando os valores mudam ou a pessoa volta ao automático).
+  let valores: ValorCampoNovo[] = [];
+  if (valoresPedidos || campos.tituloManual === false) {
+    const defs = await listarCampos([r.quadro.id]);
+    const v = valoresValidos(defs, valoresPedidos ?? []);
+    if (!v) return erro("Campo de outro quadro.", 422);
+    valores = v;
+    const manual = campos.tituloManual ?? !!r.tarefa.tituloManual;
+    const auto = campos.titulo == null ? tituloAutomatico(r.quadro, defs, valoresAposMudar(r.tarefa.campos ?? {}, v), manual) : null;
+    if (auto) campos.titulo = auto;
+  }
   // Concluir/reabrir NO LUGAR: só conta a mudança de fato (concluir uma concluída não dispara nada de novo).
   const concluiu = campos.concluida === true && r.tarefa.concluidaEm == null;
   const reabriu = campos.concluida === false && r.tarefa.concluidaEm != null;
@@ -73,7 +87,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     await moverTarefa(id, lista.id, await ultimoDaLista(lista.id, id), null, lista.concluida);
     entrou = lista;
   }
-  await atualizarTarefa(id, { ...campos, blocos }, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined, equipes });
+  await atualizarTarefa(
+    id,
+    { ...campos, blocos },
+    { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined, equipes },
+    valores,
+  );
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",
@@ -93,7 +112,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // Entrou noutra lista: automações e, concluída, a próxima ocorrência (depois de gravar a regra nova, se veio junto).
   // Concluída no lugar: as regras "ao concluir" e a recorrência.
   const atualizar = entrou ? await aposMovimento(a.u, r.quadro, [id], entrou) : concluiu ? await aposMovimento(a.u, r.quadro, [id], { id: null, concluida: true }) : false;
-  return ok({ atualizar });
+  return ok({ atualizar, titulo: campos.titulo ?? r.tarefa.titulo });
 }
 
 /** Exclui a tarefa (editores) — no dia a dia, prefira arquivar. */

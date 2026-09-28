@@ -17,6 +17,7 @@ import {
   comandosMover,
   comandosMoverQuadro,
   comandosNotificacoes,
+  comandosValoresCampos,
   comandosVinculos,
   pessoaNaTarefa,
 } from "../src/lib/tarefas-sql.ts";
@@ -222,6 +223,35 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_equipes_links").get() as { n: number }).n, 0);
   });
 
+  it("CAMPOS: 45 valores em INSERTs de até 20 (≤ 100 parâmetros) na tarefa nova; trocar/tirar num lote; mover troca pelos do destino", async () => {
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (60, 9500, 'Campos')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem) VALUES (600, 60, 'A fazer', 1)");
+    const ids = Array.from({ length: 45 }, (_, i) => 600 + i);
+    db.exec(`INSERT INTO tarefa_campos (id, quadro_id, nome) VALUES ${ids.map((i) => `(${i}, 60, 'C${i}')`).join(", ")}`);
+    const cmds = comandosCriarTarefa(orm, { ...base, quadroId: 60, listaId: 600, titulo: "Com campos", pessoas: [], etiquetas: [], campos: ids.map((c) => ({ campoId: c, valor: `v${c}` })) });
+    for (const c of cmds) assert.ok(c.toSQL().params.length <= 100);
+    const r = await orm.batch(cmds);
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const contar = () => (db.prepare("SELECT COUNT(*) AS n FROM tarefa_campo_valores WHERE tarefa_id = ?").get(id) as { n: number }).n;
+    assert.equal(contar(), 45);
+    const troca = comandosValoresCampos(orm, id, [
+      { campoId: 600, valor: "novo" },
+      { campoId: 601, valor: null },
+    ]);
+    await orm.batch(troca as never);
+    assert.equal(contar(), 44);
+    assert.equal((db.prepare("SELECT valor FROM tarefa_campo_valores WHERE tarefa_id = ? AND campo_id = 600").get(id) as { valor: string }).valor, "novo");
+    // Mover para outro quadro: os valores antigos saem e entram os mapeados.
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (61, 9500, 'Destino')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem) VALUES (610, 61, 'A fazer', 1)");
+    db.exec("INSERT INTO tarefa_campos (id, quadro_id, nome) VALUES (700, 61, 'C600')");
+    await orm.batch(comandosMoverQuadro(orm, { id, quadroId: 61, listaId: 610, concluida: false, etiquetas: [], novasEtiquetas: [], pessoas: [], equipes: [], campos: [{ campoId: 700, valor: "novo" }] }) as never);
+    assert.deepEqual(db.prepare("SELECT campo_id AS c, valor AS v FROM tarefa_campo_valores WHERE tarefa_id = ?").all(id).map((x) => ({ ...(x as object) })), [{ c: 700, v: "novo" }]);
+    // Excluir o campo tira o valor (cascade).
+    db.exec("DELETE FROM tarefa_campos WHERE id = 700");
+    assert.equal(contar(), 0);
+  });
+
   it("COPIAR para outro quadro (template, no topo, etiqueta nova criada) e MOVER entre quadros (ticket novo, pessoas filtradas)", async () => {
     db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (50, 9500, 'Outubro')");
     db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem, concluida) VALUES (500, 50, 'TEMPLATES', 1, 0), (501, 50, 'Concluído', 2, 1)");
@@ -256,7 +286,7 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = ?").get(nova) as { n: number }).n, 2);
     // MOVER a origem para o quadro 2 (lista de concluídas): ticket do destino, conclui, etiquetas trocadas, só a pessoa que fica.
     db.exec(`INSERT INTO tarefa_pessoas (tarefa_id, usuario_id, papel) VALUES (${origem}, 9502, 'observador')`);
-    const mover = comandosMoverQuadro(orm, { id: origem, quadroId: 50, listaId: 501, concluida: true, etiquetas: [500], novasEtiquetas: [], pessoas: [9502], equipes: [] });
+    const mover = comandosMoverQuadro(orm, { id: origem, quadroId: 50, listaId: 501, concluida: true, etiquetas: [500], novasEtiquetas: [], pessoas: [9502], equipes: [], campos: [] });
     for (const c of mover) assert.ok(c.toSQL().params.length <= 100);
     const rm = await orm.batch(mover as never);
     assert.deepEqual((rm as unknown[]).at(-1), [{ id: origem, ticket: 3 }]);

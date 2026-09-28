@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aposMovimento, avisarAtribuicao, avisarConvite, conteudoTarefa, criarTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, membrosDasEquipes, MSG_QUADRO_ARQUIVADO, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
+import { aposMovimento, avisarAtribuicao, avisarConvite, conteudoTarefa, criarTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, listarCampos, membrosDasEquipes, MSG_QUADRO_ARQUIVADO, pessoasValidas, quadroAcessivel, tituloAutomatico, valoresValidos, vinculoAcessivel } from "@/lib/tarefas";
 import { eventoParaAuditoria, lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
 import { criarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -27,10 +27,15 @@ export async function POST(req: Request) {
   const eventos = d.eventos ?? [];
   const convidados = [...new Set(eventos.flatMap((e) => e.convidados ?? []))];
   if (convidados.length && !(await pessoasValidas(q.grupoId, convidados))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
+  const campos = await listarCampos([q.id]);
+  const valores = valoresValidos(campos, d.campos ?? []);
+  if (!valores) return erro("Campo de outro quadro.", 422);
+  const valoresFinais = valores.filter((v): v is { campoId: number; valor: string } => v.valor != null);
+  const titulo = tituloAutomatico(q, campos, Object.fromEntries(valoresFinais.map((v) => [v.campoId, v.valor])), !!d.tituloManual) ?? d.titulo;
   const nova = await criarTarefa({
     quadroId: q.id,
     listaId: lista.id,
-    titulo: d.titulo,
+    titulo,
     descricao: d.descricao ?? null,
     prioridade: d.prioridade ?? "media",
     inicio: d.inicio ?? null,
@@ -49,22 +54,24 @@ export async function POST(req: Request) {
     checklists: d.checklists ?? [],
     blocos: d.blocos ? lerBlocos(d.blocos) : null,
     eventos,
+    campos: valoresFinais,
+    tituloManual: !!d.tituloManual,
   });
   await registrarAuditoria({
     usuario: a.u,
     acao: "criar",
     entidade: "tarefa",
     entidadeId: nova.id,
-    resumo: `Tarefa ${rotuloTicket(nova.ticket)} "${d.titulo}" criada no quadro "${q.nome}"`,
+    resumo: `Tarefa ${rotuloTicket(nova.ticket)} "${titulo}" criada no quadro "${q.nome}"`,
     // Os eventos PRIVADOS não vão ao histórico com o conteúdo.
     depois: { ...d, eventos: eventos.map((e) => eventoParaAuditoria(e).dados) },
   });
   // Os responsáveis e os membros das EQUIPES recebem "tarefa atribuída".
-  await avisarAtribuicao(a.u, [], [...pessoas, ...(await membrosDasEquipes(equipes))], { ...nova, titulo: d.titulo }, q);
+  await avisarAtribuicao(a.u, [], [...pessoas, ...(await membrosDasEquipes(equipes))], { ...nova, titulo }, q);
   // Os CONVIDADOS dos eventos criados junto com a tarefa recebem o convite.
   if (convidados.length)
     for (const e of (await conteudoTarefa(nova.id)).eventos)
-      await avisarConvite(a.u, e.convidados.map((c) => c.usuarioId), { id: e.id, titulo: e.titulo, data: e.data }, { ...nova, titulo: d.titulo }, q);
+      await avisarConvite(a.u, e.convidados.map((c) => c.usuarioId), { id: e.id, titulo: e.titulo, data: e.data }, { ...nova, titulo }, q);
   // Criar numa lista também é "entrar" nela (automações; criada já concluída e recorrente gera a próxima).
   const atualizar = await aposMovimento(a.u, q, [nova.id], lista);
   return ok({ ...nova, atualizar });

@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { lembreteDaTarefa, listasDoPeriodo, mesSeguinte, nomeListaDoDia } from "../src/lib/calendario-core.ts";
 import {
+  camposDoFormato,
+  lerOpcoesCampo,
+  mapearCampos,
+  montarTitulo,
+  rotuloValorCampo,
+  valorCampo,
+  valoresAposMudar,
   automacoesDoEvento,
   conclusaoAoMover,
   estadoPrazo,
@@ -20,7 +27,7 @@ import {
   rotuloData,
   type Automacao,
 } from "../src/lib/tarefas-core.ts";
-import { checklistSchema, copiarTarefaSchema, criarListaSchema, criarQuadroSchema, ordenarListaSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema, modeloSchema } from "../src/lib/tarefas-validation.ts";
+import { campoSchema, editarQuadroSchema, checklistSchema, copiarTarefaSchema, criarListaSchema, criarQuadroSchema, ordenarListaSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema, modeloSchema } from "../src/lib/tarefas-validation.ts";
 
 // As funcionalidades do padrão Trello (FASE 11+): concluir no lugar, prazo com hora e lembrete.
 describe("tarefas — padrão Trello", () => {
@@ -204,5 +211,85 @@ describe("tarefas — padrão Trello", () => {
     assert.equal(contarFiltros({ ...FILTRO_TAREFAS_PADRAO, prazos: ["dia", "mes"], status: "abertas" }), 3);
     assert.deepEqual(alternarValor([1, 2], 2), [1]);
     assert.deepEqual(alternarValor([1], 2), [1, 2]);
+  });
+
+  it("F7 TÍTULO AUTOMÁTICO: campos trocados pelos valores; campo vazio some com o separador (sem ' - - ')", () => {
+    const campos = [
+      { id: 1, nome: "Categoria", tipo: "lista" as const },
+      { id: 2, nome: "Tipo", tipo: "texto" as const },
+      { id: 3, nome: "Nº protocolo", tipo: "texto" as const },
+      { id: 4, nome: "Data", tipo: "data" as const },
+    ];
+    const f = "{Categoria} - {Tipo} - {Nº protocolo}";
+    assert.equal(montarTitulo(f, campos, { 1: "2. Protocolo", 2: "FALTA", 3: "144756" }), "2. Protocolo - FALTA - 144756");
+    assert.equal(montarTitulo(f, campos, { 1: "2. Protocolo", 3: "144756" }), "2. Protocolo - 144756");
+    assert.equal(montarTitulo(f, campos, { 2: "FALTA", 3: "144756" }), "FALTA - 144756");
+    assert.equal(montarTitulo(f, campos, { 1: "2. Protocolo" }), "2. Protocolo");
+    assert.equal(montarTitulo(f, campos, {}), "");
+    // Nome sem acento/caixa; data em dd/mm/aaaa; campo inexistente some.
+    assert.equal(montarTitulo("{categoria} | {DATA} | {Nada}", campos, { 1: "A", 4: "2026-10-05" }), "A | 05/10/2026");
+    assert.deepEqual(camposDoFormato(f), ["Categoria", "Tipo", "Nº protocolo"]);
+    assert.ok(montarTitulo("{Tipo}", campos, { 2: "x".repeat(300) }).length <= 200);
+  });
+
+  it("F7 VALOR por tipo: número, data válida, opção da lista, caixa; inválido = null", () => {
+    assert.equal(valorCampo({ tipo: "texto", opcoes: [] }, "  oi  "), "oi");
+    assert.equal(valorCampo({ tipo: "texto", opcoes: [] }, "   "), null);
+    assert.equal(valorCampo({ tipo: "numero", opcoes: [] }, "1.234,5"), "1234.5");
+    assert.equal(valorCampo({ tipo: "numero", opcoes: [] }, "12.5"), "12.5");
+    assert.equal(valorCampo({ tipo: "numero", opcoes: [] }, "abc"), null);
+    assert.equal(valorCampo({ tipo: "data", opcoes: [] }, "2026-02-30"), null);
+    assert.equal(valorCampo({ tipo: "data", opcoes: [] }, "2026-02-28"), "2026-02-28");
+    assert.equal(valorCampo({ tipo: "lista", opcoes: ["A", "B"] }, "C"), null);
+    assert.equal(valorCampo({ tipo: "lista", opcoes: ["A", "B"] }, "B"), "B");
+    assert.equal(valorCampo({ tipo: "checkbox", opcoes: [] }, "true"), "1");
+    assert.equal(valorCampo({ tipo: "checkbox", opcoes: [] }, "0"), null);
+    assert.equal(rotuloValorCampo({ tipo: "checkbox", nome: "Urgente" }, "1"), "Urgente");
+    assert.equal(rotuloValorCampo({ tipo: "numero", nome: "N" }, "1234.5"), "1.234,5");
+    assert.deepEqual(lerOpcoesCampo('["A"," A ","", 3, "B"]'), ["A", "B"]);
+    assert.deepEqual(lerOpcoesCampo("lixo"), []);
+    assert.deepEqual(valoresAposMudar({ 1: "a", 2: "b" }, [{ campoId: 1, valor: null }, { campoId: 3, valor: "c" }]), { 2: "b", 3: "c" });
+  });
+
+  it("F7 COPIAR/MOVER entre quadros: valores pelo NOME e MESMO tipo; opção que não existe no destino fica de fora", () => {
+    const origem = [
+      { id: 1, nome: "Categoria", tipo: "lista" as const },
+      { id: 2, nome: "Nº", tipo: "texto" as const },
+      { id: 3, nome: "Qtd", tipo: "numero" as const },
+    ];
+    const destino = [
+      { id: 10, nome: "categoria", tipo: "lista" as const, opcoes: ["A"] },
+      { id: 20, nome: "Nº", tipo: "texto" as const, opcoes: [] },
+      { id: 30, nome: "Qtd", tipo: "texto" as const, opcoes: [] },
+    ];
+    assert.deepEqual(mapearCampos(origem, destino, { 1: "A", 2: "144", 3: "5" }), [
+      { campoId: 10, valor: "A" },
+      { campoId: 20, valor: "144" },
+    ]);
+    assert.deepEqual(mapearCampos(origem, destino, { 1: "B" }), []);
+  });
+
+  it("F7 SCHEMAS: lista exige opções (sem repetir), nome sem chaves; formato vazio = desligado; valores sem repetir o campo", () => {
+    assert.equal(campoSchema.safeParse({ nome: "Tipo", tipo: "lista", opcoes: [] }).success, false);
+    assert.deepEqual(campoSchema.parse({ nome: "Tipo", tipo: "lista", opcoes: ["A", "A", "B"] }).opcoes, ["A", "B"]);
+    assert.deepEqual(campoSchema.parse({ nome: "Nº", tipo: "texto", opcoes: ["x"] }).opcoes, []);
+    assert.equal(campoSchema.safeParse({ nome: "{x}", tipo: "texto" }).success, false);
+    assert.equal(editarQuadroSchema.parse({ formatoTitulo: "  " }).formatoTitulo, null);
+    assert.equal(editarTarefaSchema.safeParse({ campos: [{ campoId: 1, valor: "a" }, { campoId: 1, valor: null }] }).success, false);
+    assert.equal(editarTarefaSchema.safeParse({ campos: [{ campoId: 1, valor: null }], tituloManual: false }).success, true);
+  });
+
+  it("F7 FILTRO por campo de lista: valor escolhido ou sem valor (\"\"); conta no botão", () => {
+    const base = { ticket: 1, titulo: "x", prioridade: "media" as const, etiquetas: [] as number[], envolvidos: [] as number[], prazo: null, concluidaEm: null };
+    const ts = [
+      { ...base, id: 1, campos: { 5: "A" } },
+      { ...base, id: 2, campos: { 5: "B" } },
+      { ...base, id: 3 },
+    ];
+    const f = (campos: Record<number, string[]>) => filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, campos }, { usuarioId: 1, hoje: "2026-09-25" }).map((t) => t.id);
+    assert.deepEqual(f({ 5: ["A"] }), [1]);
+    assert.deepEqual(f({ 5: ["A", ""] }), [1, 3]);
+    assert.deepEqual(f({ 5: [] }), [1, 2, 3]);
+    assert.equal(contarFiltros({ ...FILTRO_TAREFAS_PADRAO, campos: { 5: ["A", ""] } }), 2);
   });
 });

@@ -646,6 +646,23 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = '_modelos_para_template'"), 0);
   });
 
+  it("0056 campos personalizados: um valor por tarefa + campo; excluir o campo ou a tarefa leva os valores", () => {
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9560, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, formato_titulo) VALUES (9561, 9560, 'Q', '{Tipo} - {Nº}')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9562, 9561, 'L')");
+    db.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9563, 9561, 9562, 1, 'A')");
+    db.exec("INSERT INTO tarefa_campos (id, quadro_id, nome, tipo, opcoes) VALUES (9564, 9561, 'Tipo', 'lista', '[\"FALTA\"]'), (9565, 9561, 'Nº', 'texto', NULL)");
+    db.exec("INSERT INTO tarefa_campo_valores (tarefa_id, campo_id, valor) VALUES (9563, 9564, 'FALTA'), (9563, 9565, '12')");
+    assert.throws(() => db.exec("INSERT INTO tarefa_campo_valores (tarefa_id, campo_id, valor) VALUES (9563, 9564, 'x')"));
+    const n = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+    assert.equal(n("SELECT titulo_manual AS n FROM tarefas WHERE id = 9563"), 0);
+    db.exec("DELETE FROM tarefa_campos WHERE id = 9564");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_campo_valores WHERE tarefa_id = 9563"), 1);
+    db.exec("DELETE FROM tarefas WHERE id = 9563");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_campo_valores"), 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

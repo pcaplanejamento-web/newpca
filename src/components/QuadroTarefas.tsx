@@ -84,6 +84,7 @@ export function QuadroTarefas({
   tarefas: doServidor,
   etiquetas,
   equipes,
+  campos,
   membros,
   pessoas,
   edicoes,
@@ -187,7 +188,7 @@ export function QuadroTarefas({
   };
 
   const exportar = () =>
-    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje, equipes })).catch(() => toast.error("Não foi possível exportar."));
+    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje, equipes, campos })).catch(() => toast.error("Não foi possível exportar."));
 
   const mover = async (id: number, listaId: number, indice: number) => {
     const antes = tarefas;
@@ -445,7 +446,7 @@ export function QuadroTarefas({
       >
         {aba !== "configuracao" && (
           <FerramentasAba>
-            <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} />
             {aba === "lista" && (
               <>
                 <SeletorFiltro
@@ -474,7 +475,7 @@ export function QuadroTarefas({
         )}
         {aba !== "configuracao" && (
           <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2 empty:hidden">
-            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} />
+            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} />
             {aba === "lista" && arquivadas && (
               <span className="text-[12.5px] text-muted">Mostrando as ARQUIVADAS — restaure pelo detalhe da tarefa ou pela edição em massa.</span>
             )}
@@ -512,6 +513,7 @@ export function QuadroTarefas({
               listas={ativas}
               tarefas={noQuadro}
               etiquetas={etiquetas}
+              campos={campos}
               pessoas={pessoas}
               hoje={hoje}
               onAbrir={(id) => setAberto({ tipo: "editar", id })}
@@ -545,6 +547,7 @@ export function QuadroTarefas({
             listas={listas}
             etiquetas={etiquetas}
             equipes={equipes}
+            campos={campos}
             pessoas={pessoas}
             hoje={hoje}
             ativa={aberto?.tipo === "editar" ? aberto.id : null}
@@ -579,6 +582,7 @@ export function QuadroTarefas({
             listas={listas}
             etiquetas={etiquetas}
             equipes={equipes}
+            campos={campos}
             automacoes={automacoes}
             pessoas={doGrupo}
             todas={pessoas}
@@ -621,6 +625,8 @@ export function QuadroTarefas({
         listas={ativas}
         etiquetas={etiquetas}
         equipes={equipes}
+        campos={campos}
+        formatoTitulo={quadro.formatoTitulo}
         pessoas={doGrupo}
         todas={pessoas}
         hoje={hoje}

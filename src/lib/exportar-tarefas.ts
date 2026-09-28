@@ -1,12 +1,14 @@
 import { dataBR, dataIsoBrasilia } from "./format.ts";
 import { nomeExibicao, type Pessoa } from "./pessoa.ts";
 import {
+  type CampoTarefa,
   type EtiquetaTarefa,
   estadoPrazo,
   type ListaTarefas,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   ROTULO_VINCULO,
+  rotuloValorCampo,
   rotuloRecorrencia,
   rotuloTicket,
   type TarefaResumo,
@@ -15,15 +17,16 @@ import {
 /** As LINHAS da planilha de tarefas (cabeçalho + uma por tarefa) — puro, testável. */
 export function linhasPlanilhaTarefas(
   tarefas: TarefaResumo[],
-  ctx: { listas: ListaTarefas[]; etiquetas: EtiquetaTarefa[]; pessoas: Pessoa[]; hoje: string; equipes?: { id: number; nome: string }[] },
+  ctx: { listas: ListaTarefas[]; etiquetas: EtiquetaTarefa[]; pessoas: Pessoa[]; hoje: string; equipes?: { id: number; nome: string }[]; campos?: CampoTarefa[] },
 ): (string | number)[][] {
+  const campos = ctx.campos ?? [];
   const lista = new Map(ctx.listas.map((l) => [l.id, l.nome]));
   const etq = new Map(ctx.etiquetas.map((e) => [e.id, e.nome]));
   const pes = new Map(ctx.pessoas.map((p) => [p.id, nomeExibicao(p)]));
   const eqs = new Map((ctx.equipes ?? []).map((e) => [e.id, e.nome]));
   const nomes = (ids: number[], m: Map<number, string>) => ids.map((i) => m.get(i) ?? `#${i}`).join(", ");
   return [
-    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada", "Equipes"],
+    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada", "Equipes", ...campos.map((c) => c.nome)],
     ...tarefas.map((t) => [
       rotuloTicket(t.ticket),
       t.titulo,
@@ -43,6 +46,7 @@ export function linhasPlanilhaTarefas(
       t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : "",
       t.arquivada ? "Sim" : "",
       nomes(t.equipes, eqs),
+      ...campos.map((c) => rotuloValorCampo(c, t.campos?.[c.id])),
     ]),
   ];
 }

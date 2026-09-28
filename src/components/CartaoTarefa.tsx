@@ -15,9 +15,11 @@ import {
   ROTULO_VINCULO,
   rotuloTicket,
   type TarefaResumo,
+  type CampoTarefa,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
+import { ChipsCamposCartao } from "./CamposTarefa";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CirculoConcluir } from "./CirculoConcluir";
 import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconDescricao, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
@@ -81,8 +83,11 @@ export function CartaoTarefa({
   acoes,
   onConcluir,
   oculto = false,
+  campos = [],
 }: {
   tarefa: TarefaResumo;
+  /** Os campos personalizados do quadro (os marcados "no cartão" aparecem em selos). */
+  campos?: CampoTarefa[];
   etiquetas: Map<number, EtiquetaTarefa>;
   pessoas: Map<number, Pessoa>;
   hoje: string;
@@ -158,6 +163,11 @@ export function CartaoTarefa({
         )}
         <p className={`pointer-events-none line-clamp-3 min-w-0 flex-1 text-[13px] font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
       </div>
+      {campos.length > 0 && (
+        <span className={`pointer-events-none mt-1.5 block ${toque}`}>
+          <ChipsCamposCartao campos={campos} valores={t.campos} />
+        </span>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
         <span className="relative z-10 font-mono tabular-nums">
           <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">

@@ -6,6 +6,8 @@ import {
   orcamentos,
   pcas,
   tarefaAutomacoes,
+  tarefaCampos,
+  tarefaCampoValores,
   tarefaChecklist,
   tarefaChecklists,
   tarefaComentarios,
@@ -78,6 +80,13 @@ import {
   mapearPorNome,
   OPCOES_COPIA_PADRAO,
   type OpcoesCopia,
+  type CampoTarefa,
+  coerceTipoCampo,
+  lerOpcoesCampo,
+  mapearCampos,
+  montarTitulo,
+  type ValorCampoNovo,
+  valorCampo,
 } from "./tarefas-core";
 import {
   comandosAtualizarEvento,
@@ -88,6 +97,7 @@ import {
   comandosMassa,
   comandosMover,
   comandosMoverQuadro,
+  comandosValoresCampos,
   comandosVinculos,
   type ChecklistNovo,
   pessoaNaTarefa,
@@ -99,7 +109,17 @@ import type { AcaoMassaTarefas } from "./tarefas-validation";
  * grupo (o ADM, todos).
  */
 
-export type Quadro = { id: number; grupoId: number; grupoNome: string; nome: string; cor: string; descricao: string | null; arquivado: boolean };
+export type Quadro = {
+  id: number;
+  grupoId: number;
+  grupoNome: string;
+  nome: string;
+  cor: string;
+  descricao: string | null;
+  arquivado: boolean;
+  /** O formato do TÍTULO AUTOMÁTICO (`{Campo} - {Campo}`; null = desligado — migração `0056`). */
+  formatoTitulo: string | null;
+};
 export type QuadroCard = Quadro & { abertas: number; atrasadas: number; concluidas: number };
 export type TarefaCompleta = TarefaResumo & { quadroId: number; descricao: string | null; blocos: BlocoTarefa[] | null };
 
@@ -111,6 +131,7 @@ const COLS_QUADRO = {
   cor: tarefaQuadros.cor,
   descricao: tarefaQuadros.descricao,
   arquivado: tarefaQuadros.arquivado,
+  formatoTitulo: tarefaQuadros.formatoTitulo,
 };
 
 /** Os quadros dos GRUPOS dados (`null` = todos — o ADM sem grupo), com as contagens do card. `hoje` = "AAAA-MM-DD". */
@@ -221,7 +242,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .innerJoin(tarefas, eq(tarefas.id, tabela.tarefaId))
       .where(doQuadro)
       .groupBy(tabela.tarefaId);
-  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos, equipes] = await Promise.all([
+  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos, equipes, valores] = await Promise.all([
     listasDoQuadro(quadroId),
     db
       .select({
@@ -238,6 +259,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         concluidaEm: tarefas.concluidaEm,
         arquivada: tarefas.arquivada,
         template: tarefas.template,
+        tituloManual: tarefas.tituloManual,
         criadoEm: tarefas.criadoEm,
         atualizadoEm: tarefas.atualizadoEm,
         estimativaH: tarefas.estimativaH,
@@ -274,7 +296,14 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
     contar(tarefaComentarios),
     contar(tarefaEventos),
     linhasEquipes(doQuadro),
+    db
+      .select({ tarefaId: tarefaCampoValores.tarefaId, campoId: tarefaCampoValores.campoId, valor: tarefaCampoValores.valor })
+      .from(tarefaCampoValores)
+      .innerJoin(tarefas, eq(tarefas.id, tarefaCampoValores.tarefaId))
+      .where(doQuadro),
   ]);
+  const porCampos = new Map<number, Record<number, string>>();
+  for (const v of valores) porCampos.set(v.tarefaId, { ...(porCampos.get(v.tarefaId) ?? {}), [v.campoId]: v.valor });
   const agrupar = (pares: { tarefaId: number; v: number }[]) => {
     const m = new Map<number, number[]>();
     for (const p of pares) m.set(p.tarefaId, [...(m.get(p.tarefaId) ?? []), p.v]);
@@ -311,6 +340,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         links: Number(t.links),
         eventos: porEvento.get(t.id) ?? 0,
         recorrencia: lerRecorrencia(t.recorrencia),
+        campos: porCampos.get(t.id) ?? {},
       };
     }),
   };
@@ -463,13 +493,14 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
   const db = getDb();
   const [t] = await db.select().from(tarefas).where(eq(tarefas.id, id));
   if (!t) return null;
-  const [pessoas, links, checks, com, ev, equipes] = await Promise.all([
+  const [pessoas, links, checks, com, ev, equipes, campos] = await Promise.all([
     db.select({ u: tarefaPessoas.usuarioId, papel: tarefaPessoas.papel }).from(tarefaPessoas).where(eq(tarefaPessoas.tarefaId, id)),
     db.select({ e: tarefaEtiquetaLinks.etiquetaId }).from(tarefaEtiquetaLinks).where(eq(tarefaEtiquetaLinks.tarefaId, id)),
     db.select({ feito: tarefaChecklist.feito }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)),
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)),
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)),
     linhasEquipes(eq(tarefas.id, id)),
+    valoresDaTarefa(id),
   ]);
   const v = vinculoDe(t.vinculoTipo, t.vinculoId);
   const eqs = equipesDasLinhas(equipes);
@@ -493,6 +524,8 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     concluidaEm: t.concluidaEm,
     arquivada: t.arquivada,
     template: t.template,
+    tituloManual: t.tituloManual,
+    campos,
     pessoas: resp,
     observadores: pessoas.filter((p) => p.papel === "observador").map((p) => p.u),
     equipes: equipesT,
@@ -528,7 +561,7 @@ export async function criarQuadro(grupoId: number, d: { nome: string; cor?: stri
   return q.id;
 }
 
-export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean }) {
+export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null }) {
   await getDb()
     .update(tarefaQuadros)
     .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
@@ -719,6 +752,113 @@ export async function membrosDasEquipes(ids: number[]): Promise<number[]> {
   return [...new Set(r.map((x) => x.u))];
 }
 
+// ─── CAMPOS PERSONALIZADOS (migração `0056`) ──────────────────────────────────────────────────────────────
+
+/** Os campos dos quadros dados, na ordem de cada quadro. */
+export async function listarCampos(quadroIds: number[]): Promise<(CampoTarefa & { quadroId: number })[]> {
+  const r = await porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select()
+      .from(tarefaCampos)
+      .where(inArray(tarefaCampos.quadroId, ids))
+      .orderBy(asc(tarefaCampos.quadroId), asc(tarefaCampos.ordem), asc(tarefaCampos.id)),
+  );
+  return r.map((c) => ({ id: c.id, quadroId: c.quadroId, nome: c.nome, tipo: coerceTipoCampo(c.tipo), opcoes: lerOpcoesCampo(c.opcoes), ordem: c.ordem, noCartao: c.noCartao }));
+}
+
+export async function getCampo(id: number): Promise<(CampoTarefa & { quadroId: number }) | null> {
+  const [c] = await getDb().select({ quadroId: tarefaCampos.quadroId }).from(tarefaCampos).where(eq(tarefaCampos.id, id));
+  if (!c) return null;
+  return (await listarCampos([c.quadroId])).find((x) => x.id === id) ?? null;
+}
+
+type DadosCampo = { nome: string; tipo: CampoTarefa["tipo"]; opcoes: string[]; noCartao: boolean };
+
+export async function criarCampo(quadroId: number, d: DadosCampo): Promise<number> {
+  const [c] = await getDb()
+    .insert(tarefaCampos)
+    .values({
+      quadroId,
+      nome: d.nome,
+      tipo: d.tipo,
+      opcoes: d.opcoes.length ? JSON.stringify(d.opcoes) : null,
+      noCartao: d.noCartao,
+      ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_campos WHERE quadro_id = ${quadroId})`,
+    })
+    .returning({ id: tarefaCampos.id });
+  return c.id;
+}
+
+/**
+ * Atualiza o campo. Trocar o TIPO apaga os valores (não se convertem); tirar OPÇÕES da lista apaga os valores que ficaram
+ * sem opção — nada fica gravado fora do que o campo aceita.
+ */
+export async function atualizarCampo(id: number, antes: CampoTarefa, d: DadosCampo) {
+  const db = getDb();
+  const limpar =
+    antes.tipo !== d.tipo
+      ? [db.delete(tarefaCampoValores).where(eq(tarefaCampoValores.campoId, id))]
+      : d.tipo === "lista"
+        ? [db.delete(tarefaCampoValores).where(and(eq(tarefaCampoValores.campoId, id), sql`${tarefaCampoValores.valor} NOT IN (SELECT value FROM json_each(${JSON.stringify(d.opcoes)}))`))]
+        : [];
+  await db.batch([
+    db
+      .update(tarefaCampos)
+      .set({ nome: d.nome, tipo: d.tipo, opcoes: d.opcoes.length ? JSON.stringify(d.opcoes) : null, noCartao: d.noCartao })
+      .where(eq(tarefaCampos.id, id)),
+    ...limpar,
+  ]);
+}
+
+export async function excluirCampo(id: number) {
+  await getDb().delete(tarefaCampos).where(eq(tarefaCampos.id, id));
+}
+
+export async function ordenarCampos(quadroId: number, ids: number[]) {
+  const db = getDb();
+  const [primeiro, ...resto] = ids.map((c, i) => db.update(tarefaCampos).set({ ordem: i + 1 }).where(and(eq(tarefaCampos.id, c), eq(tarefaCampos.quadroId, quadroId))));
+  await db.batch([primeiro, ...resto]);
+}
+
+/** Os valores dos campos de UMA tarefa (id do campo → valor). */
+export async function valoresDaTarefa(tarefaId: number): Promise<Record<number, string>> {
+  const r = await getDb().select({ c: tarefaCampoValores.campoId, v: tarefaCampoValores.valor }).from(tarefaCampoValores).where(eq(tarefaCampoValores.tarefaId, tarefaId));
+  return Object.fromEntries(r.map((x) => [x.c, x.v]));
+}
+
+/**
+ * CONFERE e NORMALIZA os valores pedidos contra os campos do quadro: campo de outro quadro → `null` (recusa); valor
+ * inválido para o tipo vira "tirar" (`valorCampo` = null).
+ */
+export function valoresValidos(campos: CampoTarefa[], pedidos: { campoId: number; valor: string | null }[]): ValorCampoNovo[] | null {
+  const porId = new Map(campos.map((c) => [c.id, c]));
+  const out: ValorCampoNovo[] = [];
+  for (const p of pedidos) {
+    const c = porId.get(p.campoId);
+    if (!c) return null;
+    out.push({ campoId: c.id, valor: valorCampo(c, p.valor) });
+  }
+  return out;
+}
+
+/**
+ * O TÍTULO que a tarefa deve ter: com o formato do quadro ligado e o título NÃO manual, o automático (se sair algo); senão
+ * `null` (fica o que há).
+ */
+export function tituloAutomatico(quadro: Quadro, campos: CampoTarefa[], valores: Record<number, string>, manual: boolean): string | null {
+  if (!quadro.formatoTitulo || manual) return null;
+  return montarTitulo(quadro.formatoTitulo, campos, valores) || null;
+}
+
+/** Os valores de uma tarefa num quadro de DESTINO (copiar/mover — pelo nome do campo em outro quadro). */
+async function camposNoDestino(t: TarefaCompleta, origem: Quadro, destino: Quadro): Promise<{ campoId: number; valor: string }[]> {
+  const valores = t.campos ?? {};
+  if (!Object.keys(valores).length) return [];
+  if (origem.id === destino.id) return Object.entries(valores).map(([c, v]) => ({ campoId: Number(c), valor: v }));
+  const [co, cd] = await Promise.all([listarCampos([origem.id]), listarCampos([destino.id])]);
+  return mapearCampos(co, cd, valores);
+}
+
 /** CRIA a tarefa (ticket + fim da lista + responsáveis + etiquetas, num lote atômico). */
 export async function criarTarefa(d: Parameters<typeof comandosCriarTarefa>[1]): Promise<{ id: number; ticket: number }> {
   const db = getDb();
@@ -745,8 +885,10 @@ export async function atualizarTarefa(
     blocos?: BlocoTarefa[];
     /** Concluir/reabrir NO LUGAR. */
     concluida?: boolean;
+    tituloManual?: boolean;
   },
   vinculos: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[]; equipes?: number[] },
+  valores: ValorCampoNovo[] = [],
 ) {
   const db = getDb();
   const { vinculo, recorrencia, blocos, concluida, ...resto } = campos;
@@ -765,6 +907,7 @@ export async function atualizarTarefa(
       })
       .where(eq(tarefas.id, id)),
     ...comandosVinculos(db, id, vinculos),
+    ...comandosValoresCampos(db, id, valores),
   ]);
 }
 
@@ -1457,6 +1600,8 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
         recorrenciaAnteriorId: id,
         checklists,
         blocos: t.blocos,
+        campos: Object.entries(t.campos ?? {}).map(([c, v]) => ({ campoId: Number(c), valor: v })),
+        tituloManual: t.tituloManual,
       });
       n++;
       await registrarAuditoria({
@@ -1519,7 +1664,11 @@ export async function copiarTarefa(
   o: OpcoesCopia & { titulo?: string; noInicio?: boolean; template?: boolean },
 ): Promise<{ id: number; ticket: number }> {
   const t = r.tarefa;
-  const [v, checklists] = await Promise.all([vinculosNoDestino(t, r.quadro, destino), o.checklists ? checklistsParaCopiar(t.id) : Promise.resolve([])]);
+  const [v, checklists, campos] = await Promise.all([
+    vinculosNoDestino(t, r.quadro, destino),
+    o.checklists ? checklistsParaCopiar(t.id) : Promise.resolve([]),
+    camposNoDestino(t, r.quadro, destino),
+  ]);
   return criarTarefa({
     quadroId: destino.id,
     listaId: lista.id,
@@ -1545,6 +1694,9 @@ export async function copiarTarefa(
     template: o.template ?? false,
     copiadaDe: t.id,
     noInicio: o.noInicio,
+    campos,
+    // Um título dado na cópia é escolha da pessoa; senão, segue como era na origem.
+    tituloManual: o.titulo?.trim() ? true : t.tituloManual,
   });
 }
 
@@ -1583,7 +1735,7 @@ export async function copiarTemplatesDe(u: UsuarioSessao, origem: Quadro, destin
 
 /** MOVE a tarefa para OUTRO quadro (ticket novo do destino; checklists, comentários, eventos e histórico vão junto). */
 export async function moverTarefaDeQuadro(r: { tarefa: TarefaCompleta; quadro: Quadro }, destino: Quadro, lista: { id: number; concluida: boolean }): Promise<{ id: number; ticket: number }> {
-  const v = await vinculosNoDestino(r.tarefa, r.quadro, destino);
+  const [v, campos] = await Promise.all([vinculosNoDestino(r.tarefa, r.quadro, destino), camposNoDestino(r.tarefa, r.quadro, destino)]);
   const db = getDb();
   const res = await db.batch(
     comandosMoverQuadro(db, {
@@ -1595,6 +1747,7 @@ export async function moverTarefaDeQuadro(r: { tarefa: TarefaCompleta; quadro: Q
       novasEtiquetas: v.novasEtiquetas,
       pessoas: [...v.pessoas, ...v.observadores],
       equipes: v.equipes,
+      campos,
     }),
   );
   const [x] = res[res.length - 1] as { id: number; ticket: number }[];

@@ -98,6 +98,7 @@ import {
   Italic,
   Heading,
   List,
+  SlidersHorizontal,
   ListOrdered,
   Quote,
   Code,
@@ -216,3 +217,5 @@ export const IconQuote = Quote;
 export const IconCode = Code;
 export const IconEstimativa = Hourglass;
 export const IconDescricao = AlignLeft;
+/** CAMPOS PERSONALIZADOS da tarefa. */
+export const IconCampos = SlidersHorizontal;

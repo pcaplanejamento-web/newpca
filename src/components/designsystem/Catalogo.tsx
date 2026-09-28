@@ -135,6 +135,7 @@ import { CamposPeriodo, QuadroCard, QuadroNovoCard } from "@/components/QuadroCa
 import { EstrelaFavorito } from "@/components/FavoritosQuadros";
 import { MenuLista } from "@/components/MenuLista";
 import { SeletorEtiquetas } from "@/components/SeletorEtiquetas";
+import { CamposDaTarefa, CamposPersonalizadosQuadro, ChipsCamposCartao } from "@/components/CamposTarefa";
 import { ColunaTarefas } from "@/components/QuadroKanban";
 import { SeletorPessoas } from "@/components/SeletorPessoas";
 import {
@@ -148,6 +149,7 @@ import {
   type Recorrencia,
   removerBloco,
   type TarefaResumo,
+  type CampoTarefa,
 } from "@/lib/tarefas-core";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
@@ -1844,6 +1846,13 @@ function TarefasDemo() {
   ];
   const mEt = new Map(etiquetas.map((e) => [e.id, e]));
   const mPe = new Map(pessoas.map((p) => [p.id, p]));
+  const camposDemo: CampoTarefa[] = [
+    { id: 1, nome: "Categoria", tipo: "lista", opcoes: ["1. Demanda", "2. Protocolo"], ordem: 1, noCartao: true },
+    { id: 2, nome: "Tipo", tipo: "texto", opcoes: [], ordem: 2, noCartao: true },
+    { id: 3, nome: "Nº protocolo", tipo: "numero", opcoes: [], ordem: 3, noCartao: false },
+    { id: 4, nome: "Urgente", tipo: "checkbox", opcoes: [], ordem: 4, noCartao: true },
+  ];
+  const [valoresDemo, setValoresDemo] = useState<Record<number, string>>({ 1: "2. Protocolo", 2: "FALTA", 4: "1" });
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
     arquivada: false, template: false, prazoHora: null, lembreteMin: null, pessoas: [], observadores: [], equipes: [], envolvidos: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
@@ -1887,7 +1896,7 @@ function TarefasDemo() {
           href="#"
           favorito
           onFavorito={() => {}}
-          quadro={{ id: 1, grupoId: 1, grupoNome: "Planejamento", nome: "Planejamento do PCA 2027", cor: "#6366f1", descricao: null, arquivado: false, abertas: 12, atrasadas: 3, concluidas: 40 }}
+          quadro={{ id: 1, grupoId: 1, grupoNome: "Planejamento", nome: "Planejamento do PCA 2027", cor: "#6366f1", descricao: null, arquivado: false, formatoTitulo: null, abertas: 12, atrasadas: 3, concluidas: 40 }}
         />
         <QuadroNovoCard onClick={() => {}} />
       </div>
@@ -1915,7 +1924,15 @@ function TarefasDemo() {
       {/* SELETOR DE ETIQUETAS (as marcadas + o "+": busca, marcar, criar/editar para editores). */}
       <SeletorEtiquetas etiquetas={etiquetas} marcados={etiquetas.slice(0, 1).map((e) => e.id)} onChange={() => {}} quadroId={1} podeEditar onMudouEtiquetas={() => {}} />
       <div className="flex flex-wrap items-center gap-2">
-        <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} />
+        <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={camposDemo} usuarioId={1} />
+      </div>
+      {/* CAMPOS PERSONALIZADOS: o cadastro do quadro (+ formato do título), os editores na tarefa e os selos do cartão. */}
+      <div className="grid max-w-3xl gap-4 md:grid-cols-2">
+        <CamposPersonalizadosQuadro quadroId={1} formatoTitulo="{Categoria} - {Tipo} - {Nº protocolo}" campos={camposDemo} podeEditar ocupado={false} gravar={async () => true} confirmar={async () => false} />
+        <div className="space-y-3">
+          <CamposDaTarefa campos={camposDemo} valores={valoresDemo} onChange={(id, v) => setValoresDemo((x) => ({ ...x, [id]: v ?? "" }))} />
+          <ChipsCamposCartao campos={camposDemo} valores={valoresDemo} />
+        </div>
       </div>
       <div className="flex flex-wrap items-start gap-3">
         <ColunaTarefas lista={{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: 2, concluida: false, arquivada: false }} qtd={3} onNova={() => {}}>
@@ -3238,7 +3255,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (card 4:5 do quadro), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover a lista) + CopiarMoverLista, CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o nome do quadro troca de quadro, favoritos primeiro), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (card 4:5 do quadro), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover a lista) + CopiarMoverLista, CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o nome do quadro troca de quadro, favoritos primeiro), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

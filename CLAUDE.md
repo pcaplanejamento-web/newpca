@@ -2212,7 +2212,29 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     - **`CartaoTarefa`:** etiquetas em **FAIXAS** na cor — tocar alterna faixa ↔ nome em TODOS os cartões
       (`useEtiquetasComNome`, `tarefas:etiquetas-nome` no aparelho) — e o ícone de **descrição** (`TarefaResumo.temDescricao`,
       calculado no banco em `dadosQuadro`).
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F7…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 17 / F7 — CAMPOS PERSONALIZADOS + TÍTULO AUTOMÁTICO (migração `0056`, aditiva):** tabelas `tarefa_campos`
+    (quadro cascade, nome, `tipo` texto|numero|data|lista|checkbox, `opcoes` JSON, ordem, `no_cartao`) e
+    `tarefa_campo_valores` (PK tarefa + campo, ambos cascade) + `tarefa_quadros.formato_titulo` e `tarefas.titulo_manual`.
+    Núcleo puro (`tarefas-core`, testado): `valorCampo` (normaliza por tipo — número pt-BR/en, data válida, opção da lista,
+    caixa "1"; inválido = null = tira), `rotuloValorCampo`, `lerOpcoesCampo`, **`montarTitulo`** (o formato
+    `{Categoria} - {Tipo} - {Nº protocolo}` com os valores; campo vazio SOME com o separador; nome sem acento/caixa; ≤ 200),
+    `camposDoFormato`, **`mapearCampos`** (copiar/mover entre quadros: pelo NOME + MESMO tipo, o valor tem de valer no
+    destino), `valoresAposMudar`; `FiltroTarefas.campos` (campo de lista/caixa → valores; "" = sem valor). D1: builder
+    **`comandosValoresCampos`** (null tira; INSERTs de ≤ 20 linhas com upsert — testado no driver D1 real, também dentro de
+    `comandosCriarTarefa` e `comandosMoverQuadro`), `listarCampos`/`criarCampo`/`atualizarCampo` (trocar o TIPO apaga os
+    valores; tirar OPÇÕES apaga os valores sem opção)/`excluirCampo`/`ordenarCampos`, `valoresValidos` (campo de outro
+    quadro = 422) e **`tituloAutomatico`** (formato ligado e título não manual). `TarefaResumo.campos`/`tituloManual` vêm em
+    `dadosQuadro`/`getTarefa`; `carregarQuadro`/`contextoTarefa` trazem os `campos` e o formato. **Título automático no
+    SERVIDOR**: `POST /api/tarefas` e o `PATCH` (quando os valores mudam ou `tituloManual:false`) recalculam o título;
+    escrever o título à mão marca `tituloManual` ("Usar o automático" volta). Copiar, template, mover de quadro e a
+    recorrência levam os valores. Rotas `POST`/`PATCH /api/tarefas/quadros/[id]/campos` (criar até `MAX_CAMPOS`=20, nome
+    único / ordem) e `PATCH`/`DELETE /api/tarefas/campos/[id]` (editor, auditoria `tarefa_campo`); o formato vai no `PATCH`
+    do quadro. Tela (`CamposTarefa.tsx`): **`CamposPersonalizadosQuadro`** (Configuração: ↑/↓, tipo, opções em
+    `CampoLista`, "Mostrar no cartão" + o **Formato do título** com atalhos "+ Campo" e a prévia), **`CamposDaTarefa`**
+    (editores por tipo no detalhe, seção "Campos personalizados"; o título acompanha ao vivo) e **`ChipsCamposCartao`**
+    (os "no cartão" com valor); colunas na Lista (data = filtro de data, número = faixa) e no .xlsx; seções no painel
+    Filtrar (lista e caixa) + chips.
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F8…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

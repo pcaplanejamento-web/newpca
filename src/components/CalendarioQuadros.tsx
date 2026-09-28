@@ -814,6 +814,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           listas={ctx.listas.filter((l) => !l.arquivada)}
           etiquetas={ctx.etiquetas}
           equipes={ctx.equipes}
+          campos={ctx.campos}
+          formatoTitulo={ctx.quadro.formatoTitulo}
           pessoas={ctx.pessoas.filter((p) => ctx.membros.includes(p.id))}
           todas={ctx.pessoas}
           hoje={dados.hoje}

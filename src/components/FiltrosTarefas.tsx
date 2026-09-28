@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
   alternarValor,
+  type CampoTarefa,
   COR_PRIORIDADE,
   contarFiltros,
   type EtiquetaTarefa,
@@ -41,6 +42,7 @@ export function FiltrosTarefas({
   onChange,
   pessoas,
   etiquetas,
+  campos = [],
   usuarioId,
   semBusca = false,
   semResponsavel = false,
@@ -50,6 +52,8 @@ export function FiltrosTarefas({
   onChange: (f: FiltroTarefas) => void;
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
+  /** Os campos personalizados do quadro (os de LISTA e CAIXA viram seções do painel). */
+  campos?: CampoTarefa[];
   usuarioId: number;
   /** Sem o campo de busca (quem usa já tem a sua — o Calendário). */
   semBusca?: boolean;
@@ -89,7 +93,7 @@ export function FiltrosTarefas({
           </>
         }
       >
-        <PainelFiltro filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
+        <PainelFiltro filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
       </Dropdown>
     </>
   );
@@ -119,6 +123,7 @@ function PainelFiltro({
   onLimpar,
   pessoas,
   etiquetas,
+  campos,
   usuarioId,
   semResponsavel,
   semStatus,
@@ -128,6 +133,7 @@ function PainelFiltro({
   onLimpar: () => void;
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
+  campos: CampoTarefa[];
   usuarioId: number;
   semResponsavel: boolean;
   semStatus: boolean;
@@ -219,8 +225,29 @@ function PainelFiltro({
           )}
         </Secao>
       )}
+      {camposFiltraveis(campos).map((c) => (
+        <Secao key={c.id} titulo={c.nome}>
+          {opcoesDoCampo(c).map((o) => (
+            <Opcao key={o.valor} marcado={(filtro.campos[c.id] ?? []).includes(o.valor)} onAlternar={() => set({ campos: { ...filtro.campos, [c.id]: alternarValor(filtro.campos[c.id] ?? [], o.valor) } })}>
+              <span className="truncate">{o.rotulo}</span>
+            </Opcao>
+          ))}
+        </Secao>
+      ))}
     </div>
   );
+}
+
+/** Os campos que FILTRAM (lista de opções e caixa de marcar — os de valor livre ficam de fora). */
+const camposFiltraveis = (campos: CampoTarefa[]) => campos.filter((c) => c.tipo === "lista" || c.tipo === "checkbox");
+/** As opções de filtro de um campo ("" = sem valor / não marcado). */
+function opcoesDoCampo(c: CampoTarefa): { valor: string; rotulo: string }[] {
+  if (c.tipo === "checkbox")
+    return [
+      { valor: "1", rotulo: "Marcado" },
+      { valor: "", rotulo: "Não marcado" },
+    ];
+  return [...c.opcoes.map((o) => ({ valor: o, rotulo: o })), { valor: "", rotulo: "Sem valor" }];
 }
 
 /**
@@ -232,6 +259,7 @@ export function ChipsFiltrosTarefas({
   onChange,
   pessoas,
   etiquetas,
+  campos = [],
   usuarioId,
   semBusca = false,
 }: {
@@ -239,6 +267,7 @@ export function ChipsFiltrosTarefas({
   onChange: (f: FiltroTarefas) => void;
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
+  campos?: CampoTarefa[];
   usuarioId: number;
   /** Sem o chip da busca (a busca do host já mostra o texto) — "Limpar filtros" mantém a busca. */
   semBusca?: boolean;
@@ -266,6 +295,15 @@ export function ChipsFiltrosTarefas({
       rotulo: e === "sem" ? "Sem etiqueta" : `Etiqueta: ${etiquetas.find((x) => x.id === e)?.nome ?? "—"}`,
       limpar: { etiquetas: filtro.etiquetas.filter((x) => x !== e) },
     });
+  for (const [id, vals] of Object.entries(filtro.campos)) {
+    const c = campos.find((x) => x.id === Number(id));
+    for (const v of vals)
+      chips.push({
+        chave: `campo-${id}-${v}`,
+        rotulo: `${c?.nome ?? "Campo"}: ${(c && opcoesDoCampo(c).find((o) => o.valor === v)?.rotulo) || v}`,
+        limpar: { campos: { ...filtro.campos, [id]: vals.filter((x) => x !== v) } },
+      });
+  }
   return (
     <section className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
       {chips.map((c) => (
