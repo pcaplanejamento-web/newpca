@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { navegarRef, noPeriodo, PERIODOS_METRICAS, type PeriodoMetricas, rotuloPeriodo } from "@/lib/mesa-metricas";
 import { NOMES_MES, semanaDe } from "@/lib/tarefas-core";
 import { MiniMes } from "./BarraCalendario";
@@ -21,8 +21,8 @@ const botaoSeta = "grid h-11 w-11 place-items-center rounded-control text-muted 
  * NAVEGADOR DE PERÍODO — `Tudo | Ano | Mês | Semana | Dia` e, fora do Tudo, `‹ rótulo ›` + "Hoje": escolhe a JANELA e
  * anda por ela (o passo segue o período; a semana vai de segunda a domingo; o dia fica preso ao fim do mês). O RÓTULO
  * abre o seletor para SALTAR a qualquer data: o mini-mês do calendário (dia ou semana — a janela destacada), a grade dos
- * meses ou a dos anos, com um ponto onde há dados (`diasComDados`). O rótulo é anunciado (`aria-live`); "Hoje" só
- * aparece fora do período atual. Controlado; alvos de 44px no toque.
+ * meses ou a dos anos, com um ponto onde há dados (`diasComDados`); escolher (ou Esc) devolve o foco ao rótulo. O rótulo
+ * é anunciado (`aria-live`); "Hoje" só aparece fora do período atual. Controlado; alvos de 44px no toque.
  */
 export function NavegadorPeriodo({
   periodo,
@@ -42,6 +42,8 @@ export function NavegadorPeriodo({
 }) {
   const passo = periodo === "tudo" ? null : periodo;
   const rotulo = rotuloPeriodo(periodo, data, hoje);
+  const idRotulo = useId();
+  const voltarFoco = () => document.getElementById(idRotulo)?.focus();
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <Segmented<PeriodoMetricas>
@@ -61,6 +63,7 @@ export function NavegadorPeriodo({
             onClick={() => onChange({ periodo, data: navegarRef(data, periodo, -1) })}
           />
           <Dropdown
+            id={idRotulo}
             ariaLabel={`${ESCOLHER[passo]} — ${rotulo}`}
             width={288}
             triggerClassName="h-11 min-w-[8.5rem] justify-center gap-1 rounded-control px-2 text-[13px] font-semibold text-text tabular-nums transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
@@ -75,22 +78,31 @@ export function NavegadorPeriodo({
               const escolher = (d: string) => {
                 onChange({ periodo, data: d });
                 fechar();
+                voltarFoco();
               };
-              if (passo === "dia" || passo === "semana") {
-                // O MINI-MÊS do calendário, com a janela à vista destacada (a semana inteira, de segunda a domingo).
-                const nav: NavCalendario = {
-                  foco: data,
-                  irPara: escolher,
-                  mes: { ano: Number(data.slice(0, 4)), mes: Number(data.slice(5, 7)) },
-                  vista: passo,
-                  destaque: passo === "semana" ? semanaDe(data, 1) : [data],
-                };
-                return <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComDados} inicioSemana={1} />;
-              }
-              return passo === "mes" ? (
-                <GradeMeses data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
-              ) : (
-                <GradeAnos data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
+              // O MINI-MÊS do calendário no dia/semana (a janela à vista destacada — a semana inteira, de segunda a
+              // domingo); as grades de meses e de anos nos demais. Esc (o Dropdown fecha) devolve o foco ao rótulo.
+              const nav: NavCalendario = {
+                foco: data,
+                irPara: escolher,
+                mes: { ano: Number(data.slice(0, 4)), mes: Number(data.slice(5, 7)) },
+                vista: passo === "semana" ? "semana" : "dia",
+                destaque: passo === "semana" ? semanaDe(data, 1) : [data],
+              };
+              return (
+                <div
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") voltarFoco();
+                  }}
+                >
+                  {passo === "dia" || passo === "semana" ? (
+                    <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComDados} inicioSemana={1} />
+                  ) : passo === "mes" ? (
+                    <GradeMeses data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
+                  ) : (
+                    <GradeAnos data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
+                  )}
+                </div>
               );
             }}
           </Dropdown>
