@@ -16,7 +16,7 @@ import { toast } from "./Toast";
 const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
 
 /** Os ângulos das FOLHAS em leque (a de trás primeiro). */
-const LEQUE = [-4, 3, 0];
+const LEQUE = [-2.5, 2, 0];
 
 /**
  * Uma PASTA de quadros — o desenho de uma pasta de arquivos, na MESMA célula/altura do `QuadroCard`: a ABA no topo com o
@@ -54,7 +54,7 @@ export function PastaQuadro({
   const folhas = quadros.slice(0, 3);
   // Quanto a pasta abre: fechada (entreabre no hover/foco), aberta, alvo de um arrasto.
   const frente = alvo ? "[transform:rotateX(-26deg)]" : aberta ? "[transform:rotateX(-18deg)]" : "group-hover:[transform:rotateX(-10deg)] group-focus-visible:[transform:rotateX(-10deg)]";
-  const sobe = alvo || aberta ? "-translate-y-3" : "group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5";
+  const sobe = alvo ? "-translate-y-5" : aberta ? "-translate-y-4" : "group-hover:-translate-y-2 group-focus-visible:-translate-y-2";
   const destaque = alvo || aberta;
   const mov = "transition-transform duration-[var(--motion-duration)] ease-[var(--motion-ease)]";
   return (
@@ -69,7 +69,7 @@ export function PastaQuadro({
         {/* A ABA. */}
         <span
           aria-hidden
-          className={`flex h-6 w-[42%] min-w-24 items-start gap-1.5 pt-1 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
+          className={`relative z-30 flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
           style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
         >
           <Icone className="h-3.5 w-3.5 shrink-0" />
@@ -77,13 +77,13 @@ export function PastaQuadro({
         </span>
         {/* O corpo em CAMADAS (sem corte): as COSTAS atrás, as FOLHAS por cima — ultrapassando o contorno de cima das
             costas, o efeito 3D — e a FRENTE na frente. */}
-        <span className="relative flex-1">
+        <span className="relative flex-1 [perspective:900px]">
           <span
             aria-hidden
             className={`absolute inset-0 rounded-card rounded-tl-none shadow-ring ${destaque ? "ring-2 ring-accent" : ""}`}
             style={{ background: `color-mix(in srgb, ${pasta.cor} 55%, var(--surface))` }}
           />
-          <span aria-hidden className={`absolute inset-x-[8%] -top-2 z-10 h-[58%] ${mov} ${sobe}`}>
+          <span aria-hidden className={`absolute inset-x-[10%] top-1 z-10 h-[58%] ${mov} ${sobe}`}>
             {(folhas.length ? folhas : [null, null]).map((q, i, l) => (
               <span
                 key={q ? q.id : `v${i}`}
