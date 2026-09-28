@@ -1,8 +1,8 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarLista, MSG_QUADRO_ARQUIVADO, ordenarListas, quadroAcessivel } from "@/lib/tarefas";
-import { listaSchema, ordemListasSchema } from "@/lib/tarefas-validation";
+import { colocarListaApos, criarLista, MSG_QUADRO_ARQUIVADO, ordenarListas, quadroAcessivel } from "@/lib/tarefas";
+import { criarListaSchema, ordemListasSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +17,16 @@ async function quadroDoEditor(ctx: Ctx) {
   return { u: a.u, q };
 }
 
-/** Cria uma LISTA no fim do quadro. */
+/** Cria uma LISTA no fim do quadro (ou logo depois de `aposId` — a cópia de uma lista). */
 export async function POST(req: Request, ctx: Ctx) {
   const r = await quadroDoEditor(ctx);
   if ("resp" in r) return r.resp;
   if (r.q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
-  const p = await parseCorpo(listaSchema, req);
+  const p = await parseCorpo(criarListaSchema, req);
   if ("resp" in p) return p.resp;
-  const id = await criarLista(r.q.id, p.data);
+  const { aposId, ...d } = p.data;
+  const id = await criarLista(r.q.id, d);
+  if (aposId) await colocarListaApos(r.q.id, id, aposId);
   await registrarAuditoria({ usuario: r.u, acao: "criar", entidade: "tarefa_lista", entidadeId: id, resumo: `Lista "${p.data.nome}" criada no quadro "${r.q.nome}"` });
   return ok({ id });
 }

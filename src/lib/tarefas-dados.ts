@@ -27,7 +27,7 @@ import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { mascararPrivados } from "./tarefas-core";
-import { CHAVE_OCULTOS_CALENDARIO, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+import { CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, favoritosPrimeiro, lerFavoritos, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
 const PREFIXO_CALENDARIO = "calendario:";
@@ -42,16 +42,23 @@ import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 /**
  * A LISTA de quadros (`/painel/tarefas`): os do GRUPO ATIVO do cabeçalho; o ADM sem grupo ativo vê todos. `grupoAtivo`
  * = onde um quadro NOVO nasce (sem grupo, não se cria). `modelos` = os modelos de quadro dos grupos da pessoa (o ADM,
- * todos) — o "Novo quadro" pode partir de um deles.
+ * todos) — o "Novo quadro" pode partir de um deles. Os FAVORITOS da pessoa vêm primeiro.
  */
 export async function carregarQuadros(u: UsuarioSessao) {
   const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
-  const [quadros, modelos] = await Promise.all([
+  const [quadros, modelos, favoritos] = await Promise.all([
     listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje),
     u.role === "admin" ? listarModelosQuadro(null) : gruposDoUsuario(u.id).then((g) => listarModelosQuadro(g.map((x) => x.id))),
+    favoritosDaPessoa(u.id),
   ]);
-  return { quadros, grupoAtivo, modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })) };
+  return { quadros: favoritosPrimeiro(quadros, favoritos), favoritos, grupoAtivo, modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })) };
+}
+
+/** Os QUADROS FAVORITOS da pessoa (a estrela do card e do cabeçalho do quadro). */
+export async function favoritosDaPessoa(usuarioId: number): Promise<number[]> {
+  const prefs = await listarPreferenciasTabela(usuarioId, CHAVE_FAVORITOS_TAREFAS);
+  return lerFavoritos(prefs[CHAVE_FAVORITOS_TAREFAS]);
 }
 
 /**
@@ -146,13 +153,14 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
 export async function carregarQuadro(u: UsuarioSessao, id: number) {
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos] = await Promise.all([
     dadosQuadro(id),
     listarPessoasDoGrupo(quadro.grupoId),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
     listarAutomacoes(id),
     listarModelosQuadro([quadro.grupoId]),
     listarEquipes([id]),
+    favoritosDaPessoa(u.id),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
@@ -165,6 +173,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     equipes,
     edicoes,
     automacoes,
+    favoritos,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),
     hoje: dataIsoBrasilia(new Date().toISOString()),
     podeEditar: u.role === "admin" || u.role === "gestor",

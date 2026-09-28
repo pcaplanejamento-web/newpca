@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { TarefasView } from "@/components/TarefasView";
 import { getUsuarioAtual } from "@/lib/auth";
+import { dataIsoBrasilia } from "@/lib/format";
 import { carregarQuadros } from "@/lib/tarefas-dados";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,14 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
   if (!u) redirect("/login");
   const sp = await searchParams;
   if (sp.aba === "calendario") redirect(sp.mes ? `/painel/calendario?mes=${encodeURIComponent(sp.mes)}` : "/painel/calendario");
-  const { quadros, grupoAtivo, modelos } = await carregarQuadros(u);
-  return <TarefasView quadros={quadros} modelos={modelos} podeCriar={(u.role === "admin" || u.role === "gestor") && grupoAtivo != null} />;
+  const { quadros, grupoAtivo, modelos, favoritos } = await carregarQuadros(u);
+  return (
+    <TarefasView
+      quadros={quadros}
+      modelos={modelos}
+      favoritos={favoritos}
+      hoje={dataIsoBrasilia(new Date().toISOString())}
+      podeCriar={(u.role === "admin" || u.role === "gestor") && grupoAtivo != null}
+    />
+  );
 }

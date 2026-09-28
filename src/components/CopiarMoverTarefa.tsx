@@ -19,6 +19,9 @@ export type DestinoCopia = { id: number; nome: string; cor: string; grupoNome: s
 /** O resultado: a tarefa criada (cópia/template) ou a movida, e o quadro onde ficou. */
 export type ResultadoCopia = { modo: ModoCopia; id: number; ticket: number; quadroId: number };
 
+/** Os QUADROS de destino (ativos, que a pessoa vê, com as listas) — buscados só quando um diálogo/seletor abre. */
+export const buscarDestinos = () => chamar<{ quadros: DestinoCopia[] }>("/api/tarefas/destinos").then((j) => j.quadros);
+
 const TITULO: Record<ModoCopia, string> = { copiar: "Copiar tarefa", mover: "Mover para outro quadro", template: "Criar template" };
 const OPCOES: { k: keyof OpcoesCopia; rotulo: string }[] = [
   { k: "checklists", rotulo: "Checklists (desmarcados)" },
@@ -59,11 +62,11 @@ export function CopiarMoverTarefa({
     setNoInicio(false);
     setOpcoes(aberto.modo === "template" ? { ...OPCOES_COPIA_PADRAO, datas: false, pessoas: false } : OPCOES_COPIA_PADRAO);
     let vivo = true;
-    chamar<{ quadros: DestinoCopia[] }>("/api/tarefas/destinos")
-      .then((j) => {
+    buscarDestinos()
+      .then((quadros) => {
         if (!vivo) return;
-        setDestinos(j.quadros);
-        const q = aberto.modo === "mover" ? j.quadros.find((x) => x.id !== aberto.quadroId) : (j.quadros.find((x) => x.id === aberto.quadroId) ?? j.quadros[0]);
+        setDestinos(quadros);
+        const q = aberto.modo === "mover" ? quadros.find((x) => x.id !== aberto.quadroId) : (quadros.find((x) => x.id === aberto.quadroId) ?? quadros[0]);
         escolherQuadro(q ?? null, aberto.modo, aberto.tarefa.listaId);
       })
       .catch((e) => vivo && toast.error((e as Error).message));

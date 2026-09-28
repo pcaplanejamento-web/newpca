@@ -4,6 +4,7 @@
  * ADM), LEMBRETES dos eventos (o momento de avisar e a notificação do sino), as OPÇÕES da pessoa (semana começando na
  * segunda, ocultar o fim de semana), a PREVISÃO do PCA como eventos e a exportação/assinatura `.ics` (RFC 5545).
  */
+import { MESES } from "./normalize.ts";
 import { type DadosEvento, dadosDoEventoGravado, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, linkTarefa, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
 
 // ─── Mover um evento cadastrado (arrastar no calendário) ─────────────────────────────────────────────────────
@@ -92,6 +93,34 @@ export function feriadosNacionais(ano: number): FeriadoDia[] {
   return [...FIXOS.filter(([md]) => ano >= 2024 || md !== "11-20").map(([md, nome, tipo]) => ({ id: null, data: `${ano}-${md}`, nome, tipo })), ...moveis].sort((a, b) =>
     a.data.localeCompare(b.data),
   );
+}
+
+/** O mês SEGUINTE ao de `hoje` — o quadro do período costuma ser montado antes de o mês começar. */
+export const mesSeguinte = (hoje: string) => {
+  const a = Number(hoje.slice(0, 4));
+  const m = Number(hoje.slice(5, 7));
+  return m === 12 ? { ano: a + 1, mes: 1 } : { ano: a, mes: m + 1 };
+};
+
+/** O nome da lista de UM DIA no quadro do período (o padrão do quadro mensal — "05 - OUTUBRO - 2026"). */
+export const nomeListaDoDia = (data: string) => `${data.slice(8, 10)} - ${MESES[Number(data.slice(5, 7)) - 1]} - ${data.slice(0, 4)}`;
+
+/**
+ * As LISTAS do quadro do PERÍODO (um mês): uma por dia, na ordem — só os DIAS ÚTEIS (sem sábado, domingo, feriados nem
+ * pontos facultativos — nacionais calculados + os do ADM) quando `diasUteis`.
+ */
+export function listasDoPeriodo(ano: number, mes: number, cadastrados: FeriadoCadastro[], diasUteis: boolean): { data: string; nome: string }[] {
+  if (!Number.isInteger(ano) || !Number.isInteger(mes) || mes < 1 || mes > 12) return [];
+  const de = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  if (!dataValida(de)) return [];
+  const out: { data: string; nome: string }[] = [];
+  const feriados = diasUteis ? feriadosNoIntervalo(cadastrados, de, somarDias(de, 31)) : new Map();
+  for (let d = de; d.slice(5, 7) === de.slice(5, 7); d = somarDias(d, 1)) {
+    const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
+    if (diasUteis && (dow === 0 || dow === 6 || feriados.has(d))) continue;
+    out.push({ data: d, nome: nomeListaDoDia(d) });
+  }
+  return out;
 }
 
 /**

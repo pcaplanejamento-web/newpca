@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { lembreteDaTarefa } from "../src/lib/calendario-core.ts";
+import { lembreteDaTarefa, listasDoPeriodo, mesSeguinte, nomeListaDoDia } from "../src/lib/calendario-core.ts";
 import {
   automacoesDoEvento,
   conclusaoAoMover,
   estadoPrazo,
   eventosDoCalendario,
+  favoritosPrimeiro,
   filtrarTarefas,
+  lerFavoritos,
+  ordenarCartoes,
   FILTRO_TAREFAS_PADRAO,
   listaDeTemplates,
   mapearEtiquetas,
@@ -15,7 +18,7 @@ import {
   rotuloData,
   type Automacao,
 } from "../src/lib/tarefas-core.ts";
-import { checklistSchema, copiarTarefaSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema, modeloSchema } from "../src/lib/tarefas-validation.ts";
+import { checklistSchema, copiarTarefaSchema, criarListaSchema, criarQuadroSchema, ordenarListaSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema, modeloSchema } from "../src/lib/tarefas-validation.ts";
 
 // As funcionalidades do padrão Trello (FASE 11+): concluir no lugar, prazo com hora e lembrete.
 describe("tarefas — padrão Trello", () => {
@@ -126,5 +129,56 @@ describe("tarefas — padrão Trello", () => {
     assert.equal(copiarTarefaSchema.safeParse({ quadroId: 1, listaId: 2, titulo: "x".repeat(201) }).success, false);
     assert.equal(modeloSchema.safeParse({ tipo: "tarefa", nome: "M", tarefaId: 1 }).success, false);
     assert.equal(modeloSchema.safeParse({ tipo: "quadro", nome: "M", quadroId: 1 }).success, true);
+  });
+
+  it("F4 QUADRO DO PERÍODO: uma lista por dia; só dias úteis tira fins de semana, feriados e pontos facultativos", () => {
+    assert.equal(nomeListaDoDia("2026-10-05"), "05 - OUTUBRO - 2026");
+    const todos = listasDoPeriodo(2026, 10, [], false);
+    assert.equal(todos.length, 31);
+    const uteis = listasDoPeriodo(2026, 10, [], true).map((d) => d.data);
+    // Out/2026: 22 dias de semana, menos 12/10 (Aparecida, segunda) e 28/10 (Servidor Público, quarta) = 20.
+    assert.equal(uteis.length, 20);
+    assert.ok(!uteis.includes("2026-10-12") && !uteis.includes("2026-10-28") && !uteis.includes("2026-10-03"));
+    // Feriado do ADM (anual) também sai; fevereiro bissexto tem 29 dias.
+    assert.ok(!listasDoPeriodo(2026, 10, [{ id: 1, data: "2020-10-27", nome: "Aniversário", tipo: "municipal", anual: true }], true).some((d) => d.data === "2026-10-27"));
+    assert.equal(listasDoPeriodo(2028, 2, [], false).length, 29);
+    assert.deepEqual(listasDoPeriodo(2026, 13, [], false), []);
+    assert.deepEqual(mesSeguinte("2026-12-10"), { ano: 2027, mes: 1 });
+  });
+
+  it("F4 ORDENAR a lista: prazo (sem prazo no fim, a hora desempata), título natural, prioridade; o empate mantém a ordem", () => {
+    const t = (id: number, o: Partial<{ prazo: string | null; prazoHora: string | null; titulo: string; prioridade: "baixa" | "media" | "alta" | "urgente"; criadoEm: string }>) => ({
+      id,
+      ordem: id,
+      prazo: null,
+      prazoHora: null,
+      titulo: "",
+      prioridade: "media" as const,
+      criadoEm: `2026-01-0${id}`,
+      ...o,
+    });
+    const ts = [t(1, { prazo: null, titulo: "10. Z" }), t(2, { prazo: "2026-03-02", titulo: "2. A", prioridade: "baixa" }), t(3, { prazo: "2026-03-02", prazoHora: "09:00", titulo: "1. B", prioridade: "urgente" })];
+    assert.deepEqual(ordenarCartoes(ts, "prazo"), [3, 2, 1]);
+    assert.deepEqual(ordenarCartoes(ts, "titulo"), [3, 2, 1]);
+    assert.deepEqual(ordenarCartoes(ts, "prioridade"), [3, 1, 2]);
+    assert.deepEqual(ordenarCartoes(ts, "criacao"), [1, 2, 3]);
+  });
+
+  it("F4 FAVORITOS: leitura tolerante e os favoritos primeiro (a ordem de cada grupo se mantém)", () => {
+    assert.deepEqual(lerFavoritos({ ids: [3, 3, -1, "x", 5] }), [3, 5]);
+    assert.deepEqual(lerFavoritos(null), []);
+    assert.deepEqual(
+      favoritosPrimeiro([{ id: 1 }, { id: 2 }, { id: 3 }], [3]).map((q) => q.id),
+      [3, 1, 2],
+    );
+  });
+
+  it("F4 schemas: quadro com período/templates, lista depois de outra, ordenar", () => {
+    const q = criarQuadroSchema.parse({ nome: "Outubro", periodo: { ano: 2026, mes: 10 } });
+    assert.equal(q.periodo?.diasUteis, true);
+    assert.equal(criarQuadroSchema.safeParse({ nome: "X", periodo: { ano: 2026, mes: 13 } }).success, false);
+    assert.equal(criarListaSchema.parse({ nome: "L", aposId: 3 }).aposId, 3);
+    assert.equal(ordenarListaSchema.safeParse({ por: "prazo" }).success, true);
+    assert.equal(ordenarListaSchema.safeParse({ por: "cor" }).success, false);
   });
 });

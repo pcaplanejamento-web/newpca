@@ -2158,7 +2158,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     copiar/mover pedem as alterações salvas) e no menu do cartão; diálogo **`CopiarMoverTarefa`**; ícone de template no pé de
     cada lista (**`SeletorTemplates`**, com a prévia) — cria a tarefa naquela lista e abre com o cursor no FIM do título
     (`AberturaTarefa.focoTitulo`); Lista com **Ativas · Templates · Arquivadas**.
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F4…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 14 / F4 — LISTAS, QUADRO DO PERÍODO, FAVORITOS e TROCA DE QUADRO (sem migração):** **`MenuLista`** (o "…" no
+    cabeçalho de cada lista — `ColunaTarefas.menu`, `QuadroKanban.menuLista`): Adicionar tarefa · **Ordenar por** prazo/
+    criação/título/prioridade (`ordenarCartoes`, puro; `POST /api/tarefas/listas/[id]/ordenar` — qualquer membro, renumera os
+    ativos em lotes de 100 — `renumerarCartoes`) · **Mover todos os cartões para…** e **Arquivar todos os cartões** (a MESMA
+    massa `POST /api/tarefas/massa`, `executarMassa` do quadro) e, para editores, **Copiar lista** / **Mover lista para
+    outro quadro** (**`CopiarMoverLista`**: cria a lista no destino — `POST …/listas` com `aposId` = a cópia fica ao lado da
+    original, `colocarListaApos` — e passa CARTÃO A CARTÃO pelas rotas de copiar/mover tarefa da F3, com o andamento; mover
+    leva também os arquivados e só exclui a original vazia; o que falhar fica nela) e **Arquivar lista**. **Quadro do
+    PERÍODO:** `listasDoPeriodo(ano, mês, feriados, diasUteis)` (`calendario-core`, uma lista por dia "05 - OUTUBRO - 2026" —
+    `nomeListaDoDia`; só dias úteis tira sábado, domingo, feriados nacionais calculados + os do ADM e pontos facultativos)
+    no **"Novo quadro"** (`criarQuadroSchema.periodo`, padrão = o mês seguinte — `mesSeguinte`) e na Configuração → Listas →
+    **"Listas do mês"** (`POST /api/tarefas/quadros/[id]/listas/periodo`, editor): `gerarListasDoPeriodo` cria SÓ as que
+    faltam (pelo nome), depois das listas comuns e antes das de concluídas. O "Novo quadro" também **copia os TEMPLATES**
+    de outro quadro (`templatesDe` → `copiarTemplatesDe`: até 30, numa lista TEMPLATES criada como a 1ª). Campos em
+    **`CamposPeriodo`** (`QuadroCard.tsx`). **Favoritos** (preferência `tarefas:favoritos` → `{ids}`, `lerFavoritos`/
+    `favoritosPrimeiro`; `favoritosDaPessoa` em `carregarQuadros`/`carregarQuadro`): **`EstrelaFavorito`** no `QuadroCard`
+    (fora do link, no canto) e no cabeçalho do quadro, hook **`useFavoritosQuadros`** (otimista, em fila; falha volta);
+    os favoritos vêm primeiro na lista de quadros. **`TrocarQuadro`**: o nome do quadro no cabeçalho abre a lista com busca
+    dos quadros ativos (favoritos primeiro — `buscarDestinos`, `GET /api/tarefas/destinos`, só ao abrir) e leva ao escolhido
+    na MESMA aba.
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F5…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

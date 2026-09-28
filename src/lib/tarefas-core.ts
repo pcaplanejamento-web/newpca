@@ -1035,6 +1035,50 @@ export function coerceModeloQuadro(v: unknown): ModeloQuadro {
   };
 }
 
+// ─── LISTAS: ordenar, favoritos (F4) ─────────────────────────────────────────────────────────────────────────
+
+export const ORDENACOES_LISTA = ["prazo", "criacao", "titulo", "prioridade"] as const;
+export type OrdenacaoLista = (typeof ORDENACOES_LISTA)[number];
+export const ROTULO_ORDENACAO: Record<OrdenacaoLista, string> = {
+  prazo: "Prazo (mais próximo primeiro)",
+  criacao: "Criação (mais antiga primeiro)",
+  titulo: "Título (A → Z)",
+  prioridade: "Prioridade (urgente primeiro)",
+};
+const collTitulo = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
+/**
+ * A NOVA ORDEM dos cartões de uma lista pelo critério (os ids, do topo ao fim): prazo — os sem prazo no fim, a hora
+ * desempata (sem hora = fim do dia); criação; título (natural, "2." antes de "10."); prioridade (urgente → baixa). O
+ * empate mantém a ordem atual (estável).
+ */
+export function ordenarCartoes(tarefas: Pick<TarefaResumo, "id" | "ordem" | "prazo" | "prazoHora" | "criadoEm" | "titulo" | "prioridade">[], por: OrdenacaoLista): number[] {
+  const peso = (p: Prioridade) => PRIORIDADES.indexOf(p);
+  const cmp = (a: (typeof tarefas)[number], b: (typeof tarefas)[number]) => {
+    if (por === "prazo") {
+      if (!a.prazo || !b.prazo) return a.prazo ? -1 : b.prazo ? 1 : 0;
+      return `${a.prazo} ${a.prazoHora ?? "99:99"}`.localeCompare(`${b.prazo} ${b.prazoHora ?? "99:99"}`);
+    }
+    if (por === "criacao") return (a.criadoEm ?? "").localeCompare(b.criadoEm ?? "") || a.id - b.id;
+    if (por === "titulo") return collTitulo.compare(a.titulo, b.titulo);
+    return peso(b.prioridade) - peso(a.prioridade);
+  };
+  return [...tarefas].sort((a, b) => cmp(a, b) || a.ordem - b.ordem || a.id - b.id).map((t) => t.id);
+}
+
+/** A preferência dos QUADROS FAVORITOS da pessoa (`preferencias_tabela`). */
+export const CHAVE_FAVORITOS_TAREFAS = "tarefas:favoritos";
+/** Qualquer JSON → os ids favoritos (inteiros positivos, sem repetir, até 200). */
+export function lerFavoritos(v: unknown): number[] {
+  const l = Array.isArray(v) ? v : v && typeof v === "object" && Array.isArray((v as { ids?: unknown }).ids) ? (v as { ids: unknown[] }).ids : [];
+  return [...new Set(l.filter((x): x is number => Number.isInteger(x) && (x as number) > 0))].slice(0, 200);
+}
+/** Os quadros com os FAVORITOS primeiro (a ordem de cada grupo se mantém). */
+export function favoritosPrimeiro<Q extends { id: number }>(quadros: Q[], favoritos: number[]): Q[] {
+  const f = new Set(favoritos);
+  return [...quadros.filter((q) => f.has(q.id)), ...quadros.filter((q) => !f.has(q.id))];
+}
+
 // ─── COPIAR / MOVER entre quadros e TEMPLATES (migração `0055`) ───────────────────────────────────────────────
 
 /** O que vai junto na CÓPIA de uma tarefa (o título, a descrição, a prioridade, os blocos e o vínculo vão sempre). */

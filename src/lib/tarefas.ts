@@ -73,8 +73,10 @@ import {
   type TipoVinculo,
   ehTipoVinculo,
   type VinculoTarefa,
+  listaDeTemplates,
   mapearEtiquetas,
   mapearPorNome,
+  OPCOES_COPIA_PADRAO,
   type OpcoesCopia,
 } from "./tarefas-core";
 import {
@@ -573,6 +575,58 @@ export async function ordenarListas(quadroId: number, ids: number[]) {
   const db = getDb();
   const cmds = ids.map((id, i) => db.update(tarefaListas).set({ ordem: i + 1 }).where(and(eq(tarefaListas.id, id), eq(tarefaListas.quadroId, quadroId))));
   if (cmds.length) await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+}
+
+/** Põe a lista `id` logo DEPOIS de `aposId` (as demais na ordem de antes) — a cópia de uma lista fica ao lado dela. */
+export async function colocarListaApos(quadroId: number, id: number, aposId: number) {
+  const ids = (await listasDoQuadro(quadroId)).map((l) => l.id).filter((x) => x !== id);
+  const i = ids.indexOf(aposId);
+  if (i < 0) return;
+  ids.splice(i + 1, 0, id);
+  await ordenarListas(quadroId, ids);
+}
+
+/** Quantos comandos por lote ao RENUMERAR cartões (um UPDATE de 2 parâmetros cada). */
+const LOTE_ORDEM = 100;
+
+/** RENUMERA os cartões na ordem dada (1, 2, 3…) — "Ordenar por" da lista. */
+export async function renumerarCartoes(ids: number[]) {
+  const db = getDb();
+  for (let i = 0; i < ids.length; i += LOTE_ORDEM) {
+    const cmds = ids.slice(i, i + LOTE_ORDEM).map((id, k) => db.update(tarefas).set({ ordem: i + k + 1 }).where(eq(tarefas.id, id)));
+    if (cmds.length) await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  }
+}
+
+/** Os cartões ATIVOS (não arquivados) da lista, na ordem — o que "Ordenar por" considera. */
+export async function cartoesAtivosDaLista(listaId: number) {
+  const l = await getDb()
+    .select({ id: tarefas.id, ordem: tarefas.ordem, prazo: tarefas.prazo, prazoHora: tarefas.prazoHora, criadoEm: tarefas.criadoEm, titulo: tarefas.titulo, prioridade: tarefas.prioridade })
+    .from(tarefas)
+    .where(and(eq(tarefas.listaId, listaId), eq(tarefas.arquivada, false)))
+    .orderBy(asc(tarefas.ordem), asc(tarefas.id));
+  return l.map((t) => ({ ...t, prioridade: prioridadeValida(t.prioridade) }));
+}
+
+/**
+ * As LISTAS DOS DIAS no quadro (o quadro do período): cria SÓ as que faltam (pelo nome) e as põe depois das listas
+ * comuns que já existem e ANTES das de concluídas. Devolve quantas nasceram.
+ */
+export async function gerarListasDoPeriodo(quadroId: number, dias: { nome: string }[]): Promise<number> {
+  const db = getDb();
+  const antes = await listasDoQuadro(quadroId);
+  const existe = new Set(antes.map((l) => l.nome.trim().toLocaleUpperCase("pt-BR")));
+  const novas = dias.filter((d) => !existe.has(d.nome.toLocaleUpperCase("pt-BR")));
+  if (!novas.length) return 0;
+  const cmds = novas.map((d) => db.insert(tarefaListas).values({ quadroId, nome: d.nome, ordem: 0 }));
+  await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  const depois = await listasDoQuadro(quadroId);
+  const nomes = new Set(novas.map((d) => d.nome));
+  const criadas = depois.filter((l) => !antes.some((a) => a.id === l.id) && nomes.has(l.nome));
+  // A ordem dos dias = a pedida (o `id` cresce na ordem de inserção).
+  criadas.sort((a, b) => a.id - b.id);
+  await ordenarListas(quadroId, [...antes.filter((l) => !l.concluida).map((l) => l.id), ...criadas.map((l) => l.id), ...antes.filter((l) => l.concluida).map((l) => l.id)]);
+  return criadas.length;
 }
 
 export async function criarEtiqueta(quadroId: number, d: { nome: string; cor: string }): Promise<number> {
@@ -1490,6 +1544,39 @@ export async function copiarTarefa(
     copiadaDe: t.id,
     noInicio: o.noInicio,
   });
+}
+
+/** Até quantos TEMPLATES um quadro novo copia de outro. */
+const MAX_TEMPLATES_COPIA = 30;
+
+/**
+ * Copia os TEMPLATES ativos de `origem` para a lista "TEMPLATES" de `destino` (criada como a 1ª lista, se não existir) —
+ * o quadro do mês seguinte nasce com os mesmos templates. Devolve quantos vieram.
+ */
+export async function copiarTemplatesDe(u: UsuarioSessao, origem: Quadro, destino: Quadro): Promise<number> {
+  const ids = (
+    await getDb()
+      .select({ id: tarefas.id })
+      .from(tarefas)
+      .where(and(eq(tarefas.quadroId, origem.id), eq(tarefas.template, true), eq(tarefas.arquivada, false)))
+      .orderBy(asc(tarefas.ordem), asc(tarefas.id))
+      .limit(MAX_TEMPLATES_COPIA)
+  ).map((x) => x.id);
+  if (!ids.length) return 0;
+  const listas = await listasDoQuadro(destino.id);
+  let lista = listaDeTemplates(listas, 0);
+  if (!lista) {
+    lista = await criarLista(destino.id, { nome: "TEMPLATES" });
+    await ordenarListas(destino.id, [lista, ...listas.map((l) => l.id)]);
+  }
+  let n = 0;
+  for (const id of ids) {
+    const tarefa = await getTarefa(id);
+    if (!tarefa) continue;
+    await copiarTarefa(u, { tarefa, quadro: origem }, destino, { id: lista, concluida: false }, { ...OPCOES_COPIA_PADRAO, datas: false, template: true });
+    n++;
+  }
+  return n;
 }
 
 /** MOVE a tarefa para OUTRO quadro (ticket novo do destino; checklists, comentários, eventos e histórico vão junto). */

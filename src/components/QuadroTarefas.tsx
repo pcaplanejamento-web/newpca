@@ -11,6 +11,9 @@ import type { DadosQuadro } from "@/lib/tarefas-dados";
 import {
   cartoesDaLista,
   indiceReal,
+  type ListaTarefas,
+  type OrdenacaoLista,
+  ROTULO_ORDENACAO,
   FILTRO_TAREFAS_PADRAO,
   type FiltroTarefas,
   filtrarTarefas,
@@ -42,7 +45,11 @@ import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconChevronLeft, IconDownload, IconPlus } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
+import { CopiarMoverLista, MenuLista, type ModoLista } from "./MenuLista";
+import { useConfirmacao } from "./Confirmacao";
+import { EstrelaFavorito, useFavoritosQuadros } from "./FavoritosQuadros";
 import { QuadroKanban } from "./QuadroKanban";
+import { TrocarQuadro } from "./TrocarQuadro";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
@@ -81,6 +88,7 @@ export function QuadroTarefas({
   pessoas,
   edicoes,
   automacoes,
+  favoritos,
   modelosQuadro,
   hoje,
   podeEditar,
@@ -110,6 +118,9 @@ export function QuadroTarefas({
   const [mostrar, setMostrar] = useState<"ativas" | "arquivadas" | "templates">("ativas");
   const arquivadas = mostrar === "arquivadas";
   const [copia, setCopia] = useState<{ modo: ModoCopia; id: number } | null>(null);
+  const [copiaLista, setCopiaLista] = useState<{ modo: ModoLista; listaId: number } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
+  const favs = useFavoritosQuadros(favoritos);
   const [aberto, setAberto] = useState<AberturaTarefa | null>(null);
   const [ed, setEd] = useState(edicoes);
   const [sel, setSel] = useState<Set<number>>(new Set());
@@ -150,7 +161,13 @@ export function QuadroTarefas({
   }, []);
 
   const aplicarMassa = async (acao: AcaoMassaTarefas) => {
-    const ids = [...sel];
+    await executarMassa([...sel], acao);
+    setSel(new Set());
+  };
+
+  /** A EDIÇÃO EM MASSA de VÁRIAS tarefas (a seleção da Lista e as ações da lista do Quadro), em fatias de 50. */
+  const executarMassa = async (ids: number[], acao: AcaoMassaTarefas) => {
+    if (!ids.length) return;
     setAplicando(true);
     let alterados = 0;
     const falhas: string[] = [];
@@ -164,7 +181,6 @@ export function QuadroTarefas({
       }
     }
     setAplicando(false);
-    setSel(new Set());
     router.refresh();
     if (falhas.length) toast.warning(`${num(alterados)} alterada(s); não foi possível: ${falhas.slice(0, 4).join("; ")}${falhas.length > 4 ? "…" : ""}`, 8000);
     else toast.success(`${num(alterados)} tarefa(s) alterada(s).`);
@@ -328,6 +344,38 @@ export function QuadroTarefas({
     else router.refresh();
   };
 
+  /** Os cartões ATIVOS (não arquivados) de uma lista, na ordem — o que as ações do menu da lista consideram. */
+  const ativosDaLista = (listaId: number) => cartoesDaLista(tarefas, listaId).filter((t) => !t.arquivada);
+
+  /** ORDENAR a lista por um critério (o servidor renumera; o quadro recarrega). */
+  const ordenarLista = async (l: ListaTarefas, por: OrdenacaoLista) => {
+    try {
+      await chamar(`/api/tarefas/listas/${l.id}/ordenar`, "POST", { por });
+      toast.success(`“${l.nome}” ordenada por ${ROTULO_ORDENACAO[por].toLowerCase()}.`);
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const arquivarCartoesDaLista = async (l: ListaTarefas) => {
+    const ids = ativosDaLista(l.id).map((t) => t.id);
+    if (!ids.length) return;
+    if (!(await confirmar({ titulo: `Arquivar os ${num(ids.length)} cartões de “${l.nome}”?`, texto: "Restaure pela aba Lista (Arquivadas).", confirmar: "Arquivar" }))) return;
+    await executarMassa(ids, { campo: "arquivar", arquivada: true });
+  };
+
+  const arquivarLista = async (l: ListaTarefas) => {
+    if (!(await confirmar({ titulo: `Arquivar a lista “${l.nome}”?`, texto: "Ela some do quadro com os cartões; reexiba na Configuração.", confirmar: "Arquivar" }))) return;
+    try {
+      await chamar(`/api/tarefas/listas/${l.id}`, "PATCH", { arquivada: true });
+      toast.success("Lista arquivada.");
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const arquivar = async (id: number) => {
     const antes = tarefas;
     setTarefas(antes.map((t) => (t.id === id ? { ...t, arquivada: true } : t)));
@@ -366,10 +414,10 @@ export function QuadroTarefas({
           >
             <IconChevronLeft className="h-4 w-4" />
           </Link>
-          <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: quadro.cor }} />
-          <h1 className="min-w-0 truncate text-lg font-bold text-text" title={quadro.nome}>
-            {quadro.nome}
+          <h1 className="min-w-0">
+            <TrocarQuadro quadro={quadro} aba={aba} favoritos={favs.favoritos} />
           </h1>
+          <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
           <Badge>{quadro.grupoNome}</Badge>
           {quadro.arquivado && <Badge tone="amber">Arquivado</Badge>}
         </div>
@@ -474,6 +522,21 @@ export function QuadroTarefas({
               templates={templates}
               onDoTemplate={doTemplate}
               onCopiarMover={(id, modo) => setCopia({ id, modo })}
+              menuLista={(l) => (
+                <MenuLista
+                  lista={l}
+                  outras={ativas.filter((x) => x.id !== l.id)}
+                  qtd={ativosDaLista(l.id).length}
+                  podeEditar={podeEditar && !quadro.arquivado}
+                  disabled={aplicando}
+                  onNova={() => nova(l.id)}
+                  onOrdenar={(por) => ordenarLista(l, por)}
+                  onMoverCartoes={(dest) => executarMassa(ativosDaLista(l.id).map((t) => t.id), { campo: "lista", listaId: dest })}
+                  onArquivarCartoes={() => arquivarCartoesDaLista(l)}
+                  onCopiarMover={(modo) => setCopiaLista({ modo, listaId: l.id })}
+                  onArquivarLista={() => arquivarLista(l)}
+                />
+              )}
             />
           )
         ) : aba === "lista" ? (
@@ -575,6 +638,19 @@ export function QuadroTarefas({
         onFechar={() => setCopia(null)}
         onFeito={aposCopia}
       />
+      <CopiarMoverLista
+        aberto={(() => {
+          const l = copiaLista && listas.find((x) => x.id === copiaLista.listaId);
+          return copiaLista && l ? { modo: copiaLista.modo, lista: l, cartoes: tarefas.filter((t) => t.listaId === l.id) } : null;
+        })()}
+        quadroId={quadro.id}
+        onFechar={() => setCopiaLista(null)}
+        onFeito={() => {
+          setCopiaLista(null);
+          router.refresh();
+        }}
+      />
+      {confirmacao}
     </div>
   );
 }

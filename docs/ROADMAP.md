@@ -1074,8 +1074,10 @@ equipes e observadores; o prazo com hora vira horário no calendário.
 ✅ **Tarefas no padrão Trello — F3 (migração `0055`):** copiar tarefa (neste ou em outro quadro, escolhendo o que vai
 junto), mover para outro quadro (ticket novo; etiquetas pelo nome) e TEMPLATES — os modelos de tarefa viraram cartões-template
 numa lista "TEMPLATES"; criar a partir do template pelo ícone no pé da lista, com o cursor no fim do título.
-🔜 **Tarefas no padrão Trello — próximas fases:** F4 menu da lista, copiar/mover lista, quadro do
-mês com listas por dia útil, favoritos, trocar de quadro · F5 etiquetas no seletor e filtros completos · F6 comentários e
+✅ **Tarefas no padrão Trello — F4:** menu "…" da lista (ordenar, mover/arquivar todos os cartões, copiar e mover a lista
+para outro quadro, arquivar), quadro do mês com uma lista por dia útil (no "Novo quadro" e em Configuração → "Listas do
+mês", com os templates de outro quadro), quadros favoritos (estrela) e troca de quadro pelo nome no cabeçalho.
+🔜 **Tarefas no padrão Trello — próximas fases:** F5 etiquetas no seletor e filtros completos · F6 comentários e
 atividade num fluxo, descrição formatada e o detalhe na distribuição do Trello · F7 campos personalizados com título
 automático · F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).

@@ -14,10 +14,12 @@ import { Button } from "./Button";
 import { ColorField } from "./ColorField";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
-import { IconCheck, IconPencil, IconPlus, IconTrash } from "./icons";
+import { IconCalendar, IconCheck, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { SeletorPessoas } from "./SeletorPessoas";
-import { CamposQuadro, type CamposQuadroValor } from "./QuadroCard";
+import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro } from "./QuadroCard";
+import { mesSeguinte } from "@/lib/calendario-core";
+import { dataIsoBrasilia } from "@/lib/format";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
@@ -68,6 +70,7 @@ export function ConfiguracaoQuadro({
   const [lista, setLista] = useState<RascunhoLista | null>(null);
   const [etiqueta, setEtiqueta] = useState<RascunhoEtiqueta | null>(null);
   const [equipe, setEquipe] = useState<RascunhoEquipe | null>(null);
+  const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
   const porId = new Map(todas.map((p) => [p.id, p]));
   const [ordem, setOrdem] = useState<number[] | null>(null);
   // A ordem otimista vale até as listas do servidor chegarem.
@@ -90,6 +93,22 @@ export function ConfiguracaoQuadro({
     } finally {
       setOcupado(null);
       onMudou();
+    }
+  };
+
+  const gerarPeriodo = async () => {
+    if (!periodo) return;
+    let criadas = 0;
+    const okGravou = await gravar(
+      "periodo",
+      async () => {
+        criadas = (await chamar<{ criadas: number }>(`/api/tarefas/quadros/${quadro.id}/listas/periodo`, "POST", periodo)).criadas;
+      },
+      "Listas do mês atualizadas.",
+    );
+    if (okGravou) {
+      setPeriodo(null);
+      if (!criadas) toast.info("Todas as listas desse mês já existiam.");
     }
   };
 
@@ -219,9 +238,14 @@ export function ConfiguracaoQuadro({
           titulo="Listas"
           acao={
             podeEditar && (
-              <Button size="sm" variant="secondary" icon={<IconPlus className="h-4 w-4" />} onClick={() => setLista({ id: null, nome: "", limiteWip: "", concluida: false, arquivada: false })}>
-                Nova lista
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="ghost" icon={<IconCalendar className="h-4 w-4" />} disabled={quadro.arquivado} onClick={() => setPeriodo({ ...mesSeguinte(dataIsoBrasilia(new Date().toISOString())), diasUteis: true })}>
+                  Listas do mês
+                </Button>
+                <Button size="sm" variant="secondary" icon={<IconPlus className="h-4 w-4" />} onClick={() => setLista({ id: null, nome: "", limiteWip: "", concluida: false, arquivada: false })}>
+                  Nova lista
+                </Button>
+              </div>
             )
           }
         >
@@ -367,6 +391,31 @@ export function ConfiguracaoQuadro({
           gravar={gravar}
         />
       </Secao>
+
+      <Modal
+        open={periodo != null}
+        onClose={() => ocupado == null && setPeriodo(null)}
+        titulo="Listas dos dias do mês"
+        size="md"
+        bloqueado={ocupado === "periodo"}
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" disabled={ocupado != null} onClick={() => setPeriodo(null)}>
+              Cancelar
+            </Button>
+            <Button loading={ocupado === "periodo"} disabled={ocupado != null} onClick={gerarPeriodo}>
+              Gerar listas
+            </Button>
+          </div>
+        }
+      >
+        {periodo && (
+          <div className="space-y-3">
+            <CamposPeriodo valor={periodo} onChange={setPeriodo} disabled={ocupado != null} />
+            <p className="text-[12.5px] text-muted">Cria uma lista por dia (ex.: “05 - OUTUBRO - 2026”) depois das listas atuais e antes da de concluídas — só as que ainda não existem.</p>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={lista != null}

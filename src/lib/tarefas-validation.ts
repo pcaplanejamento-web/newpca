@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
-import { dataValida, FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { dataValida, FREQUENCIAS, GATILHOS, ORDENACOES_LISTA, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -19,8 +19,13 @@ export const quadroSchema = z.object({
   cor: cor.optional(),
   descricao: z.string().trim().max(500, "Descrição com até 500 caracteres.").nullable().optional(),
 });
-/** Criar um quadro — em branco ou a partir de um MODELO de quadro (`modeloId`). */
-export const criarQuadroSchema = quadroSchema.extend({ modeloId: id.nullable().optional() });
+/** O PERÍODO de um quadro mensal: as listas de um dia (só os dias úteis, se pedido). */
+export const periodoSchema = z.object({ ano: z.number().int().min(2000).max(2100), mes: z.number().int().min(1).max(12), diasUteis: z.boolean().default(true) });
+/**
+ * Criar um quadro — em branco ou a partir de um MODELO de quadro (`modeloId`); `periodo` = as listas dos dias do mês;
+ * `templatesDe` = copia os TEMPLATES daquele quadro.
+ */
+export const criarQuadroSchema = quadroSchema.extend({ modeloId: id.nullable().optional(), periodo: periodoSchema.nullable().optional(), templatesDe: id.nullable().optional() });
 export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional() });
 
 export const listaSchema = z.object({
@@ -28,6 +33,10 @@ export const listaSchema = z.object({
   limiteWip: z.number().int().min(1).max(999).nullable().optional(),
   concluida: z.boolean().optional(),
 });
+/** Criar uma lista — no fim do quadro, ou logo depois de outra (`aposId` — a cópia de uma lista fica ao lado dela). */
+export const criarListaSchema = listaSchema.extend({ aposId: id.optional() });
+/** ORDENAR os cartões de uma lista por um critério (renumera a lista). */
+export const ordenarListaSchema = z.object({ por: z.enum(ORDENACOES_LISTA) });
 export const editarListaSchema = listaSchema.partial().extend({ arquivada: z.boolean().optional() });
 /** A ordem NOVA das listas do quadro (todas, sem repetir). */
 export const ordemListasSchema = z.object({ ids: z.array(id).min(1).max(100) }).refine((v) => new Set(v.ids).size === v.ids.length, "Lista repetida.");

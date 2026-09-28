@@ -33,6 +33,7 @@ export function QuadroKanban({
   templates = [],
   onDoTemplate,
   onCopiarMover,
+  menuLista,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -54,6 +55,8 @@ export function QuadroKanban({
   onDoTemplate?: (templateId: number, listaId: number) => void;
   /** Abre Copiar · Mover para outro quadro · Criar template. */
   onCopiarMover?: (id: number, modo: ModoCopia) => void;
+  /** O menu "…" de cada lista (`MenuLista`, montado pelo host — as ações são dele). */
+  menuLista?: (l: ListaTarefas) => ReactNode;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
@@ -172,6 +175,7 @@ export function QuadroKanban({
             lista={l}
             qtd={cartoes.filter((c) => !c.template).length}
             onNova={() => onNova(l.id)}
+            menu={menuLista?.(l)}
             extra={onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
           >
             {cartoes.map((t, pos) => {
@@ -218,12 +222,15 @@ export function ColunaTarefas({
   qtd,
   onNova,
   extra,
+  menu,
   children,
 }: {
   lista: ListaTarefas;
   qtd: number;
   onNova?: () => void;
   extra?: ReactNode;
+  /** O menu "…" da lista, no cabeçalho. */
+  menu?: ReactNode;
   children: ReactNode;
 }) {
   const passou = excedeWip(qtd, l.limiteWip);
@@ -245,6 +252,7 @@ export function ColunaTarefas({
         >
           {l.limiteWip ? `${qtd}/${l.limiteWip}` : qtd}
         </span>
+        {menu}
       </header>
       <div data-cartoes className="flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         {children}

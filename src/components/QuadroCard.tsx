@@ -3,15 +3,19 @@ import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { Badge } from "./Badge";
 import { ColorField } from "./ColorField";
-import { TextArea, TextField } from "./Field";
+import { EstrelaFavorito } from "./FavoritosQuadros";
+import { Checkbox, SelectField, TextArea, TextField } from "./Field";
+import { MESES } from "@/lib/normalize";
 import { IconPlus } from "./icons";
 
 /**
  * Card 4:5 de um QUADRO de tarefas (tela `/painel/tarefas`) — a faixa na COR do quadro, o grupo, o nome e as contagens
- * (abertas em destaque; atrasadas em vermelho; concluídas). Arquivado = esmaecido com o selo. Clicar abre o quadro.
+ * (abertas em destaque; atrasadas em vermelho; concluídas). Arquivado = esmaecido com o selo. Clicar abre o quadro. A
+ * ESTRELA (fora do link, por cima do canto) marca o quadro como FAVORITO.
  */
-export function QuadroCard({ quadro: q, href }: { quadro: QuadroCardDados; href: string }) {
+export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: QuadroCardDados; href: string; favorito?: boolean; onFavorito?: () => void }) {
   return (
+    <div className="relative">
     <Link
       href={href}
       aria-label={`Abrir o quadro ${q.nome}`}
@@ -25,8 +29,9 @@ export function QuadroCard({ quadro: q, href }: { quadro: QuadroCardDados; href:
           {q.grupoNome}
         </span>
         {q.arquivado && <Badge>Arquivado</Badge>}
+        {onFavorito && <span aria-hidden className="h-8 w-8 shrink-0" />}
       </div>
-      <h3 className="mt-1 line-clamp-3 text-sm font-semibold leading-snug text-text group-hover:text-accent" title={q.nome}>
+      <h3 className={`mt-1 line-clamp-3 text-sm ${onFavorito ? "pr-6 lg:pr-0" : ""} font-semibold leading-snug text-text group-hover:text-accent`} title={q.nome}>
         {q.nome}
       </h3>
       <div className="mt-auto">
@@ -46,6 +51,8 @@ export function QuadroCard({ quadro: q, href }: { quadro: QuadroCardDados; href:
         </dl>
       </div>
     </Link>
+    {onFavorito && <EstrelaFavorito ativo={!!favorito} nome={q.nome} onAlternar={onFavorito} className="absolute top-1.5 right-1.5 lg:top-3 lg:right-2" />}
+    </div>
   );
 }
 
@@ -90,6 +97,39 @@ export function CamposQuadro({
         onChange={(e) => onChange({ ...valor, descricao: e.target.value })}
       />
       {!disabled && <ColorField label="Cor do quadro" value={valor.cor} onChange={(cor) => onChange({ ...valor, cor })} />}
+    </div>
+  );
+}
+
+/** O PERÍODO de um quadro mensal (as listas dos dias): mês · ano · só dias úteis. */
+export type PeriodoQuadro = { ano: number; mes: number; diasUteis: boolean };
+
+/** Os CAMPOS do período — os mesmos no "Novo quadro" e no "Listas do mês" da Configuração. */
+export function CamposPeriodo({ valor, onChange, disabled = false }: { valor: PeriodoQuadro; onChange: (v: PeriodoQuadro) => void; disabled?: boolean }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <SelectField label="Mês" value={valor.mes} disabled={disabled} onChange={(e) => onChange({ ...valor, mes: Number(e.target.value) })}>
+        {MESES.map((m, i) => (
+          <option key={m} value={i + 1}>
+            {m.charAt(0) + m.slice(1).toLowerCase()}
+          </option>
+        ))}
+      </SelectField>
+      <TextField
+        label="Ano"
+        type="number"
+        min={2000}
+        max={2100}
+        value={valor.ano}
+        disabled={disabled}
+        onChange={(e) => {
+          const ano = Number(e.target.value);
+          if (Number.isInteger(ano) && ano >= 2000 && ano <= 2100) onChange({ ...valor, ano });
+        }}
+      />
+      <div className="col-span-2 flex min-h-11 items-center lg:min-h-9">
+        <Checkbox label="Só dias úteis (sem fins de semana, feriados e pontos facultativos)" checked={valor.diasUteis} disabled={disabled} onChange={(e) => onChange({ ...valor, diasUteis: e.target.checked })} />
+      </div>
     </div>
   );
 }

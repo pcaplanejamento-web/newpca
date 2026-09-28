@@ -1,16 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
+import { favoritosPrimeiro } from "@/lib/tarefas-core";
+import { MESES } from "@/lib/normalize";
+import { mesSeguinte } from "@/lib/calendario-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { SelectField } from "./Field";
+import { Checkbox, SelectField } from "./Field";
+import { useFavoritosQuadros } from "./FavoritosQuadros";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { CamposQuadro, type CamposQuadroValor, QuadroCard, QuadroNovoCard } from "./QuadroCard";
+import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro, QuadroCard, QuadroNovoCard } from "./QuadroCard";
 
 const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 
@@ -18,11 +22,29 @@ const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
 
 /**
- * Módulo TAREFAS — os QUADROS do grupo ativo (cards 4:5) + o card "+" (editor) que cria um quadro (em branco ou de um
- * MODELO) no grupo ativo e o ABRE. O Calendário é um módulo à parte (`/painel/calendario`). 100% design-system.
+ * Módulo TAREFAS — os QUADROS do grupo ativo (cards 4:5, os FAVORITOS primeiro — a estrela do card) + o card "+"
+ * (editor) que cria um quadro (em branco ou de um MODELO; com as LISTAS DOS DIAS de um mês e os TEMPLATES de outro quadro)
+ * no grupo ativo e o ABRE. O Calendário é um módulo à parte (`/painel/calendario`). 100% design-system.
  */
-export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: QuadroCardDados[]; podeCriar: boolean; modelos?: ModeloQuadroOpcao[] }) {
+export function TarefasView({
+  quadros: doServidor,
+  podeCriar,
+  modelos = [],
+  favoritos: favIniciais = [],
+  hoje,
+}: {
+  quadros: QuadroCardDados[];
+  podeCriar: boolean;
+  modelos?: ModeloQuadroOpcao[];
+  favoritos?: number[];
+  hoje: string;
+}) {
   const router = useRouter();
+  const { favoritos, alternar } = useFavoritosQuadros(favIniciais);
+  const quadros = useMemo(() => favoritosPrimeiro(doServidor, favoritos), [doServidor, favoritos]);
+  // O quadro do PERÍODO: um mês (o seguinte, por padrão — o quadro do mês é montado antes de ele começar).
+  const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
+  const [templatesDe, setTemplatesDe] = useState("");
   const [novo, setNovo] = useState<CamposQuadroValor | null>(null);
   const [modeloId, setModeloId] = useState("");
   const modelo = modelos.find((m) => String(m.id) === modeloId);
@@ -30,6 +52,12 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
   const [falha, setFalha] = useState<string | null>(null);
   const abertas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.abertas), 0);
   const atrasadas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.atrasadas), 0);
+
+  const abrirNovo = () => {
+    setNovo(NOVO);
+    setPeriodo(null);
+    setTemplatesDe("");
+  };
 
   async function criar() {
     if (!novo?.nome.trim()) return;
@@ -41,6 +69,8 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
         cor: novo.cor,
         descricao: novo.descricao.trim() || null,
         modeloId: modelo?.id ?? null,
+        periodo,
+        templatesDe: templatesDe ? Number(templatesDe) : null,
       });
       setNovo(null);
       router.push(`/painel/tarefas/${j.id}`);
@@ -68,9 +98,9 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {quadros.map((q) => (
-            <QuadroCard key={q.id} quadro={q} href={`/painel/tarefas/${q.id}`} />
+            <QuadroCard key={q.id} quadro={q} href={`/painel/tarefas/${q.id}`} favorito={favoritos.includes(q.id)} onFavorito={() => alternar(q.id)} />
           ))}
-          {podeCriar && <QuadroNovoCard onClick={() => setNovo(NOVO)} />}
+          {podeCriar && <QuadroNovoCard onClick={abrirNovo} />}
         </div>
       )}
 
@@ -103,9 +133,27 @@ export function TarefasView({ quadros, podeCriar, modelos = [] }: { quadros: Qua
           </div>
         )}
         {novo && <CamposQuadro valor={novo} onChange={setNovo} />}
+        <div className="mt-4 space-y-3 border-t border-border pt-3">
+          <div className="flex min-h-11 items-center lg:min-h-9">
+            <Checkbox label="Listas dos dias de um mês (quadro do período)" checked={periodo != null} disabled={salvando} onChange={(e) => setPeriodo(e.target.checked ? { ...mesSeguinte(hoje), diasUteis: true } : null)} />
+          </div>
+          {periodo && <CamposPeriodo valor={periodo} onChange={setPeriodo} disabled={salvando} />}
+          {quadros.length > 0 && (
+            <SelectField label="Copiar os templates de" value={templatesDe} disabled={salvando} onChange={(e) => setTemplatesDe(e.target.value)}>
+              <option value="">Nenhum quadro</option>
+              {quadros.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.nome}
+                </option>
+              ))}
+            </SelectField>
+          )}
+        </div>
         <p className="mt-3 text-[12px] text-muted">
           Nasce com as listas {(modelo?.listas ?? ["A fazer", "Em andamento", "Concluído"]).join(" · ")}
-          {modelo ? " e as etiquetas do modelo" : ""} — mude na Configuração do quadro.
+          {modelo ? " e as etiquetas do modelo" : ""}
+          {periodo ? `, mais uma lista por ${periodo.diasUteis ? "dia útil" : "dia"} de ${MESES[periodo.mes - 1].toLowerCase()}/${periodo.ano}` : ""}
+          {templatesDe ? " e os templates do quadro escolhido" : ""} — mude na Configuração do quadro.
         </p>
       </Modal>
       {falha && (
