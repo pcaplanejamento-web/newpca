@@ -29,6 +29,13 @@ describe("trello-api — cliente", () => {
     assert.match(String((f.chamadas[0].init?.headers as Record<string, string> | undefined)?.Authorization), /oauth_consumer_key="k1", oauth_token="t1"/);
   });
 
+  it("pede redirect manual (o Workers recusa \"error\") e não segue redirecionamento", async () => {
+    const f = falso([new Response(null, { status: 302, headers: { location: "https://evil.com" } })]);
+    const c = clienteTrello({ apiKey: "k", token: "t", fetch: f.fetch });
+    await assert.rejects(c.eu(), (e: unknown) => e instanceof ErroTrello && e.status === 302);
+    assert.equal(f.chamadas[0].init?.redirect, "manual");
+  });
+
   it("recusa caminho estranho (sem SSRF) e usuário inválido", async () => {
     const c = clienteTrello({ apiKey: "k", token: "t", fetch: falso([]).fetch });
     await assert.rejects(c.get("https://evil.com/x"), ErroTrello);

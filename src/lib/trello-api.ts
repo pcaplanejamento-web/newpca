@@ -49,7 +49,7 @@ export function queryTrello(p: Parametros = {}): string {
 
 export type ClienteTrello = ReturnType<typeof clienteTrello>;
 
-export function clienteTrello({ apiKey, token, fetch: buscar = globalThis.fetch }: { apiKey: string; token: string; fetch?: FetchLike }) {
+export function clienteTrello({ apiKey, token, fetch: buscar = (url, init) => fetch(url, init) }: { apiKey: string; token: string; fetch?: FetchLike }) {
   const auth = `OAuth oauth_consumer_key="${apiKey}", oauth_token="${token}"`;
   async function chamar<T>(metodo: "GET" | "POST" | "PUT" | "DELETE", caminho: string, params?: Parametros, corpo?: unknown): Promise<T> {
     if (!CAMINHO.test(caminho) || caminho.includes("//")) throw new ErroTrello("Caminho inválido para o Trello.", 400);
@@ -62,13 +62,16 @@ export function clienteTrello({ apiKey, token, fetch: buscar = globalThis.fetch 
         headers: { Authorization: auth, Accept: "application/json", ...(corpo !== undefined ? { "Content-Type": "application/json" } : {}) },
         body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
         signal: ctl.signal,
-        redirect: "error",
+        // "manual" (o Workers não aceita "error"): um redirecionamento NÃO é seguido — vira erro abaixo.
+        redirect: "manual",
       });
-    } catch {
+    } catch (e) {
+      console.error("[trello] falha de rede:", (e as Error)?.message);
       throw new ErroTrello("Sem resposta do Trello (rede ou tempo esgotado).", 0);
     } finally {
       clearTimeout(tempo);
     }
+    if (r.status >= 300 && r.status < 400) throw new ErroTrello(`O Trello redirecionou a chamada (${r.status}).`, r.status);
     if (!r.ok) {
       const texto = await r.text().catch(() => "");
       const espera = r.status === 429 ? Math.min(60, Math.max(1, Number(r.headers.get("retry-after")) || 10)) : null;
