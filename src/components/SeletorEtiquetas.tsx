@@ -8,7 +8,7 @@ import { alternarValor, corEtiquetaSugerida, type EtiquetaTarefa, PALETA_ETIQUET
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField, TextField } from "./Field";
-import { IconPencil, IconPlus } from "./icons";
+import { IconPencil, IconPlus, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
 /** As CORES sugeridas para uma etiqueta (dados — a etiqueta guarda a cor escolhida). */
@@ -30,7 +30,8 @@ export function ChipEtiqueta({ etiqueta: e }: { etiqueta: Pick<EtiquetaTarefa, "
 
 /**
  * SELETOR DE ETIQUETAS (como o do Trello): as marcadas em chips + o "+" que abre o painel — busca, caixas de marcar na cor
- * de cada etiqueta, "Mostrar mais" acima de 12 e, para editores, o lápis (renomear/recolorir) e "Criar etiqueta" (já
+ * de cada etiqueta, "Mostrar mais" acima de 12 e, para editores, o lápis (renomear/recolorir/EXCLUIR — do quadro todo, com
+ * confirmação) e "Criar etiqueta" (já
  * marcada na tarefa). Marcar muda só o rascunho da tarefa (`onChange`); criar/editar grava na hora e o quadro recarrega
  * (`onMudouEtiquetas`).
  */
@@ -90,6 +91,8 @@ function PainelEtiquetas({
   const [mais, setMais] = useState(false);
   const [edicao, setEdicao] = useState<{ id: number | null; nome: string; cor: string } | null>(null);
   const [gravando, setGravando] = useState(false);
+  // Excluir pede um 2º toque (a confirmação fica no próprio painel — um aviso flutuante fecharia o menu).
+  const [confirmaExcluir, setConfirmaExcluir] = useState(false);
   const casa = predicadoBusca(busca);
   const lista = casa ? etiquetas.filter((e) => casa([e.nome])) : etiquetas;
   const visiveis = mais || casa ? lista : lista.slice(0, VISIVEIS);
@@ -109,6 +112,24 @@ function PainelEtiquetas({
       toast.error((e as Error).message);
     } finally {
       setGravando(false);
+    }
+  };
+
+  const excluir = async () => {
+    if (edicao?.id == null || gravando) return;
+    if (!confirmaExcluir) return setConfirmaExcluir(true);
+    setGravando(true);
+    try {
+      await chamar(`/api/tarefas/etiquetas/${edicao.id}`, "DELETE");
+      onChange(marcados.filter((x) => x !== edicao.id));
+      toast.success(`Etiqueta “${edicao.nome}” excluída de todo o quadro.`);
+      setEdicao(null);
+      onMudouEtiquetas();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGravando(false);
+      setConfirmaExcluir(false);
     }
   };
 
@@ -136,8 +157,30 @@ function PainelEtiquetas({
             ))}
           </div>
         </fieldset>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" disabled={gravando} onClick={() => setEdicao(null)}>
+        {confirmaExcluir && <p className="text-[12.5px] text-muted">A etiqueta sai de todas as tarefas do quadro. Toque de novo para confirmar.</p>}
+        <div className="flex flex-wrap justify-end gap-2">
+          {edicao.id != null && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mr-auto"
+              disabled={gravando}
+              style={{ color: "var(--danger)" }}
+              icon={<IconTrash className="h-4 w-4" />}
+              onClick={excluir}
+            >
+              {confirmaExcluir ? "Confirmar exclusão" : "Excluir"}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={gravando}
+            onClick={() => {
+              setConfirmaExcluir(false);
+              setEdicao(null);
+            }}
+          >
             Voltar
           </Button>
           <Button size="sm" loading={gravando} disabled={!edicao.nome.trim()} onClick={gravar}>

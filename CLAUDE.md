@@ -1862,9 +1862,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     refresh; falhou ⇒ volta).
   - **Lista** = **`TabelaTarefas`** (`DataTable scrollInterno density="compact"` + **edições salvas** — chave
     `tarefas:<quadro>:lista`; Ativas | Arquivadas — restaurar pelo detalhe).
-  - **Configuração** = **`ConfiguracaoQuadro`** (editores; os demais consultam): `CamposQuadro` + arquivar (`Switch`) + excluir;
-    listas (`AcoesCadastro` ↑/↓ · editar [nome, WIP, "de concluídas", arquivada] · excluir qualquer uma — `ExcluirLista`); etiquetas (nome +
-    `ColorField`).
+  - **Configuração** = **`ConfiguracaoQuadro`** (editores; os demais consultam) — SÓ o que não se faz no quadro: cor e
+    descrição (`CamposQuadro semNome` — o nome é editado no cabeçalho), arquivar/privado (`Switch`), importar do Trello,
+    excluir; Equipes, Campos personalizados, Automações, Trello e Modelos. Listas (menu "…" da lista: limite de cartões —
+    `LimiteLista` —, "lista de concluídas", arquivar/excluir; arrastar; "Adicionar outra lista"), etiquetas (`SeletorEtiquetas`,
+    no cartão — criar, editar e EXCLUIR), o fundo (menu do quadro → `Modal` com o `FundoQuadro`) e as listas do mês (menu do
+    quadro → `ListasDoMes`) ficam no próprio quadro.
   - **Detalhe** = **`TarefaDetalhe`** (`Modal`, criar/editar): título, lista, prioridade (`Segmented`), início/prazo (data +
     semáforo), responsáveis (**`SeletorPessoas`** — chips com foto), etiquetas, descrição (lazy: `GET /api/tarefas/[id]`);
     salva SÓ o que mudou; arquivar/restaurar; excluir (editor); fechar com alteração confirma (`useConfirmacao`).

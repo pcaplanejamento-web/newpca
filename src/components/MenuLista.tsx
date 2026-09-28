@@ -1,7 +1,8 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-import { num } from "@/lib/format";
+import { mesSeguinte } from "@/lib/calendario-core";
+import { dataIsoBrasilia, num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { type ListaTarefas, ORDENACOES_LISTA, type OrdenacaoLista, ROTULO_ORDENACAO, type TarefaResumo } from "@/lib/tarefas-core";
 import { Button } from "./Button";
@@ -10,7 +11,8 @@ import { Dropdown } from "./Dropdown";
 import { SelectField, TextField } from "./Field";
 import { Callout } from "./Callout";
 import { Segmented } from "./Segmented";
-import { IconArquivar, IconArrowRight, IconCopy, IconMais, IconPlus, IconSort, IconTrash } from "./icons";
+import { IconArquivar, IconArrowRight, IconCheck, IconCopy, IconMais, IconPlus, IconSort, IconTrash } from "./icons";
+import { CamposPeriodo, type PeriodoQuadro } from "./QuadroCard";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Skeleton } from "./Skeleton";
@@ -21,8 +23,9 @@ export type ModoLista = "copiar" | "mover";
 
 /**
  * O MENU "…" de uma LISTA do quadro (como o do Trello): adicionar tarefa · ordenar por (prazo, criação, título,
- * prioridade) · mover todos os cartões para outra lista · arquivar todos os cartões · e, para editores, copiar a lista,
- * movê-la para outro quadro, arquivá-la e EXCLUÍ-LA. As ações ficam com o host (o quadro).
+ * prioridade) · mover todos os cartões para outra lista · arquivar todos os cartões · e, para editores, o LIMITE de
+ * cartões (WIP), marcar como LISTA DE CONCLUÍDAS (o cartão que entra nela é concluído), copiar a lista, movê-la para outro
+ * quadro, arquivá-la e EXCLUÍ-LA. As ações ficam com o host (o quadro).
  */
 export function MenuLista({
   lista,
@@ -37,6 +40,8 @@ export function MenuLista({
   onCopiarMover,
   onArquivarLista,
   onExcluirLista,
+  onLimite,
+  onConcluidas,
 }: {
   lista: ListaTarefas;
   /** As OUTRAS listas ativas do quadro (destino de "mover todos os cartões"). */
@@ -53,6 +58,10 @@ export function MenuLista({
   onArquivarLista: () => void;
   /** Abre a exclusão da lista (`ExcluirLista`). */
   onExcluirLista?: () => void;
+  /** Abre o limite de cartões da lista (`LimiteLista`). */
+  onLimite?: () => void;
+  /** Liga/desliga "lista de concluídas". */
+  onConcluidas?: () => void;
 }) {
   const [secao, setSecao] = useState<null | "ordenar" | "mover">(null);
   return (
@@ -107,6 +116,9 @@ export function MenuLista({
             {podeEditar && (
               <>
                 <div className="my-1 border-t border-border" />
+                {onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
+                {onConcluidas &&
+                  item(lista.concluida ? "Deixar de ser lista de concluídas" : "Marcar como lista de concluídas", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, onConcluidas)}
                 {item("Copiar lista…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover("copiar"))}
                 {item("Mover lista para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover("mover"))}
                 {item("Arquivar lista", <IconArquivar className="h-4 w-4 text-muted" />, onArquivarLista)}
@@ -363,6 +375,109 @@ export function ExcluirLista({
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+/**
+ * O LIMITE de cartões (WIP) de uma lista: passando dele, a contagem da lista fica em âmbar. Vazio = sem limite.
+ */
+export function LimiteLista({ lista, onFechar, onFeito }: { lista: ListaTarefas | null; onFechar: () => void; onFeito: () => void }) {
+  const [valor, setValor] = useState("");
+  const [gravando, setGravando] = useState(false);
+  useEffect(() => setValor(lista?.limiteWip == null ? "" : String(lista.limiteWip)), [lista]);
+  if (!lista) return null;
+  const v = valor.trim();
+  const valido = !v || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 999);
+  const salvar = async () => {
+    if (!valido || gravando) return;
+    setGravando(true);
+    try {
+      await chamar(`/api/tarefas/listas/${lista.id}`, "PATCH", { limiteWip: v ? Number(v) : null });
+      toast.success(v ? `Limite de ${v} cartões.` : "Sem limite de cartões.");
+      onFeito();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGravando(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={() => !gravando && onFechar()}
+      titulo={`Limite de cartões — ${lista.nome}`}
+      size="md"
+      bloqueado={gravando}
+      rodape={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={gravando} onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button loading={gravando} disabled={!valido} onClick={salvar}>
+            Salvar
+          </Button>
+        </div>
+      }
+    >
+      <TextField
+        label="Limite de cartões (WIP)"
+        inputMode="numeric"
+        value={valor}
+        placeholder="Sem limite"
+        autoFocus
+        error={valido ? undefined : "Um número de 1 a 999 (ou vazio = sem limite)."}
+        hint="Passando do limite, a contagem da lista fica em âmbar."
+        onChange={(e) => setValor(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && salvar()}
+      />
+    </Modal>
+  );
+}
+
+/**
+ * LISTAS DO MÊS: uma lista por dia ("05 - OUTUBRO - 2026"; só dias úteis, se pedido) depois das listas atuais e antes da de
+ * concluídas — só as que ainda não existem.
+ */
+export function ListasDoMes({ quadroId, aberto, onFechar, onFeito }: { quadroId: number; aberto: boolean; onFechar: () => void; onFeito: () => void }) {
+  const [periodo, setPeriodo] = useState<PeriodoQuadro>(() => ({ ...mesSeguinte(dataIsoBrasilia(new Date().toISOString())), diasUteis: true }));
+  const [gravando, setGravando] = useState(false);
+  const gerar = async () => {
+    if (gravando) return;
+    setGravando(true);
+    try {
+      const r = await chamar<{ criadas: number }>(`/api/tarefas/quadros/${quadroId}/listas/periodo`, "POST", periodo);
+      if (r.criadas) toast.success(`${num(r.criadas)} lista(s) criada(s).`);
+      else toast.info("Todas as listas desse mês já existiam.");
+      onFeito();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGravando(false);
+    }
+  };
+  return (
+    <Modal
+      open={aberto}
+      onClose={() => !gravando && onFechar()}
+      titulo="Listas dos dias do mês"
+      size="md"
+      bloqueado={gravando}
+      rodape={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={gravando} onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button loading={gravando} onClick={gerar}>
+            Gerar listas
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <CamposPeriodo valor={periodo} onChange={setPeriodo} disabled={gravando} />
+        <p className="text-[12.5px] text-muted">Cria uma lista por dia (ex.: “05 - OUTUBRO - 2026”) depois das listas atuais e antes da de concluídas — só as que ainda não existem.</p>
+      </div>
     </Modal>
   );
 }

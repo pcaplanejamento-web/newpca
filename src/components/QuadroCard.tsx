@@ -129,19 +129,24 @@ export function QuadroNovoCard({ onClick, rotulo = "Novo quadro" }: { onClick: (
 
 export type CamposQuadroValor = { nome: string; cor: string; descricao: string };
 
-/** Os CAMPOS de um quadro (nome · cor · descrição) — os mesmos ao criar (card "+") e na aba Configuração. */
+/**
+ * Os CAMPOS de um quadro (nome · cor · descrição) — os mesmos ao criar (card "+") e na aba Configuração (`semNome`: lá o nome
+ * é editado no próprio cabeçalho do quadro).
+ */
 export function CamposQuadro({
   valor,
   onChange,
   disabled = false,
+  semNome = false,
 }: {
   valor: CamposQuadroValor;
   onChange: (v: CamposQuadroValor) => void;
   disabled?: boolean;
+  semNome?: boolean;
 }) {
   return (
     <div className="space-y-4">
-      <TextField label="Nome" value={valor.nome} maxLength={80} disabled={disabled} onChange={(e) => onChange({ ...valor, nome: e.target.value })} />
+      {!semNome && <TextField label="Nome" value={valor.nome} maxLength={80} disabled={disabled} onChange={(e) => onChange({ ...valor, nome: e.target.value })} />}
       <TextArea
         label="Descrição"
         rows={3}
@@ -159,7 +164,7 @@ export function CamposQuadro({
 /** O PERÍODO de um quadro mensal (as listas dos dias): mês · ano · só dias úteis. */
 export type PeriodoQuadro = { ano: number; mes: number; diasUteis: boolean };
 
-/** Os CAMPOS do período — os mesmos no "Novo quadro" e no "Listas do mês" da Configuração. */
+/** Os CAMPOS do período — os mesmos no "Novo quadro" e no "Listas do mês" do menu do quadro. */
 export function CamposPeriodo({ valor, onChange, disabled = false }: { valor: PeriodoQuadro; onChange: (v: PeriodoQuadro) => void; disabled?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-3">

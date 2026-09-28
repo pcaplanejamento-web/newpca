@@ -214,7 +214,7 @@ export function TarefasView({
           Nasce com as listas {(modelo?.listas ?? ["A fazer", "Em andamento", "Concluído"]).join(" · ")}
           {modelo ? " e as etiquetas do modelo" : ""}
           {periodo ? `, mais uma lista por ${periodo.diasUteis ? "dia útil" : "dia"} de ${MESES[periodo.mes - 1].toLowerCase()}/${periodo.ano}` : ""}
-          {templatesDe ? " e os templates do quadro escolhido" : ""} — mude na Configuração do quadro.
+          {templatesDe ? " e os templates do quadro escolhido" : ""} — ajuste depois no próprio quadro.
         </p>
       </Modal>
       {falha && (

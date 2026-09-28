@@ -1166,6 +1166,9 @@ excluídos acompanham; indicador do Trello na faixa do quadro e "Abrir no Trello
 grandes:** cada cartão numa chamada só e, com muitos na fila, o board inteiro lido de uma vez; "Sincronizar agora" vai
 até o fim com a barra de andamento; "Tentar de novo" para os campos personalizados que o Trello recusou. ✅ **Sem duplicar:** uma sincronização por vez em cada
 quadro e o vínculo de um item do Trello nunca vai para dois itens daqui (corrige "UNIQUE constraint failed").
+✅ **Tarefas — Configuração enxuta:** só o que não se faz no quadro (cor/descrição, arquivar, privado, equipes, campos,
+automações, Trello, modelos); limite de cartões e "lista de concluídas" no menu da lista, fundo e listas do mês no menu do
+quadro, excluir etiqueta direto no cartão.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

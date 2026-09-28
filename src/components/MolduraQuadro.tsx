@@ -8,7 +8,7 @@ import { Avatar } from "./Avatar";
 import { useAlturaTela } from "./AlturaCheia";
 import { Dropdown } from "./Dropdown";
 import { useImagemCarrega } from "./FundoQuadro";
-import { IconArquivar, IconImage, IconLink, IconAutomacao, IconMais, IconSettings } from "./icons";
+import { IconArquivar, IconAutomacao, IconCalendar, IconImage, IconLink, IconMais, IconSettings } from "./icons";
 import { toast } from "./Toast";
 
 /** O espaço (px) que a PÍLULA de vistas ocupa no rodapé da moldura — o conteúdo termina acima dela. */
@@ -137,8 +137,22 @@ export function PilulaVistas<T extends string>({ opcoes, valor, onTrocar, extra 
   );
 }
 
-/** O MENU "…" do quadro (como o do Trello): itens arquivados, imagem de fundo, automações, configurações, copiar o link. */
-export function MenuQuadro({ onArquivados, onConfiguracao, podeEditar }: { onArquivados: () => void; onConfiguracao: (secao?: "fundo" | "automacoes" | "trello") => void; podeEditar: boolean }) {
+/** O MENU "…" do quadro (como o do Trello): itens arquivados, fundo do quadro, listas do mês, automações, configurações, copiar o link. */
+export function MenuQuadro({
+  onArquivados,
+  onConfiguracao,
+  onFundo,
+  onListasDoMes,
+  podeEditar,
+}: {
+  onArquivados: () => void;
+  onConfiguracao: (secao?: "automacoes" | "trello") => void;
+  /** Abre o fundo do quadro (`FundoQuadro` num modal). */
+  onFundo: () => void;
+  /** Abre as listas dos dias do mês (`ListasDoMes`). */
+  onListasDoMes: () => void;
+  podeEditar: boolean;
+}) {
   return (
     <Dropdown
       align="end"
@@ -166,7 +180,8 @@ export function MenuQuadro({ onArquivados, onConfiguracao, podeEditar }: { onArq
           <div className="space-y-0.5">
             <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">Menu do quadro</p>
             {item("Itens arquivados", <IconArquivar className="h-4 w-4 text-muted" />, onArquivados)}
-            {podeEditar && item("Fundo do quadro", <IconImage className="h-4 w-4 text-muted" />, () => onConfiguracao("fundo"))}
+            {podeEditar && item("Fundo do quadro", <IconImage className="h-4 w-4 text-muted" />, onFundo)}
+            {podeEditar && item("Listas do mês", <IconCalendar className="h-4 w-4 text-muted" />, onListasDoMes)}
             {podeEditar && item("Automações", <IconAutomacao className="h-4 w-4 text-muted" />, () => onConfiguracao("automacoes"))}
             {item("Configurações", <IconSettings className="h-4 w-4 text-muted" />, () => onConfiguracao())}
             {item("Copiar link do quadro", <IconLink className="h-4 w-4 text-muted" />, () =>

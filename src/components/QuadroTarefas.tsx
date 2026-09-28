@@ -51,7 +51,9 @@ import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconDownload, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
-import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./MenuLista";
+import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista } from "./MenuLista";
+import { FundoQuadro } from "./FundoQuadro";
+import { Modal } from "./Modal";
 import { useConfirmacao } from "./Confirmacao";
 import { EstrelaFavorito, useFavoritosQuadros } from "./FavoritosQuadros";
 import { QuadroKanban } from "./QuadroKanban";
@@ -136,8 +138,8 @@ export function QuadroTarefas({
   // A vista (a pílula) e o lugar das ferramentas da vista (na faixa do topo).
   const { aba: abaAtual, trocar: trocarAba } = useTrocaAba(aba);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  /** Configuração (a aba), rolando até a seção pedida (imagem de fundo ou automações). */
-  const irConfiguracao = (secao?: "fundo" | "automacoes" | "trello") => {
+  /** Configuração (a aba), rolando até a seção pedida (automações ou Trello). */
+  const irConfiguracao = (secao?: "automacoes" | "trello") => {
     trocarAba("configuracao");
     if (!secao) return;
     let n = 0;
@@ -155,6 +157,9 @@ export function QuadroTarefas({
   const [copia, setCopia] = useState<{ modo: ModoCopia; id: number } | null>(null);
   const [copiaLista, setCopiaLista] = useState<{ modo: ModoLista; listaId: number } | null>(null);
   const [excluindoLista, setExcluindoLista] = useState<number | null>(null);
+  const [limiteLista, setLimiteLista] = useState<number | null>(null);
+  const [verFundo, setVerFundo] = useState(false);
+  const [listasDoMes, setListasDoMes] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const favs = useFavoritosQuadros(favoritos);
   const [aberto, setAberto] = useState<AberturaTarefa | null>(null);
@@ -409,10 +414,21 @@ export function QuadroTarefas({
   };
 
   const arquivarLista = async (l: ListaTarefas) => {
-    if (!(await confirmar({ titulo: `Arquivar a lista “${l.nome}”?`, texto: "Ela some do quadro com os cartões; reexiba na Configuração.", confirmar: "Arquivar" }))) return;
+    if (!(await confirmar({ titulo: `Arquivar a lista “${l.nome}”?`, texto: "Ela some do quadro com os cartões; reexiba em Itens arquivados (menu do quadro).", confirmar: "Arquivar" }))) return;
     try {
       await chamar(`/api/tarefas/listas/${l.id}`, "PATCH", { arquivada: true });
       toast.success("Lista arquivada.");
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  /** Liga/desliga "lista de concluídas" — o cartão que entra nela é concluído. */
+  const alternarConcluidas = async (l: ListaTarefas) => {
+    try {
+      await chamar(`/api/tarefas/listas/${l.id}`, "PATCH", { concluida: !l.concluida });
+      toast.success(l.concluida ? `“${l.nome}” deixou de ser a lista de concluídas.` : `“${l.nome}” agora conclui os cartões que entram nela.`);
       router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -555,7 +571,13 @@ export function QuadroTarefas({
                 )}
                 <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
                 {trello && <IndicadorTrello ligacao={trello} onAbrir={() => irConfiguracao("trello")} />}
-                <MenuQuadro podeEditar={podeEditar && !quadro.arquivado} onArquivados={() => setVerArquivados(true)} onConfiguracao={irConfiguracao} />
+                <MenuQuadro
+                  podeEditar={podeEditar && !quadro.arquivado}
+                  onArquivados={() => setVerArquivados(true)}
+                  onConfiguracao={irConfiguracao}
+                  onFundo={() => setVerFundo(true)}
+                  onListasDoMes={() => setListasDoMes(true)}
+                />
               </>
             }
             abaixo={
@@ -678,6 +700,8 @@ export function QuadroTarefas({
                   onCopiarMover={(modo) => setCopiaLista({ modo, listaId: l.id })}
                   onArquivarLista={() => arquivarLista(l)}
                   onExcluirLista={() => setExcluindoLista(l.id)}
+                  onLimite={() => setLimiteLista(l.id)}
+                  onConcluidas={() => alternarConcluidas(l)}
                 />
               )}
             />
@@ -825,6 +849,33 @@ export function QuadroTarefas({
           router.refresh();
         }}
       />
+      <LimiteLista
+        lista={listas.find((x) => x.id === limiteLista) ?? null}
+        onFechar={() => setLimiteLista(null)}
+        onFeito={() => {
+          setLimiteLista(null);
+          router.refresh();
+        }}
+      />
+      <ListasDoMes
+        quadroId={quadro.id}
+        aberto={listasDoMes}
+        onFechar={() => setListasDoMes(false)}
+        onFeito={() => {
+          setListasDoMes(false);
+          router.refresh();
+        }}
+      />
+      <Modal open={verFundo} onClose={() => setVerFundo(false)} titulo="Fundo do quadro" size="lg">
+        <FundoQuadro
+          quadroId={quadro.id}
+          fundoUrl={quadro.fundoUrl}
+          fundoAjuste={quadro.fundoAjuste}
+          fundoGradiente={quadro.fundoGradiente}
+          podeEditar={podeEditar && !quadro.arquivado}
+          onMudou={() => router.refresh()}
+        />
+      </Modal>
       {confirmacao}
     </div>
   );

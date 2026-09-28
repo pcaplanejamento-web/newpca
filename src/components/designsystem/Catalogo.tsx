@@ -2034,6 +2034,8 @@ function TarefasDemo() {
           onCopiarMover={() => {}}
           onArquivarLista={() => {}}
           onExcluirLista={() => {}}
+          onLimite={() => {}}
+          onConcluidas={() => {}}
         />
         Menu da lista
       </div>
@@ -2058,7 +2060,7 @@ function TarefasDemo() {
               <>
                 <MembrosQuadro pessoas={pessoas} filtro={filtro} onFiltro={setFiltro} />
                 <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} usuarioId={1} buscaNoPainel />
-                <MenuQuadro podeEditar onArquivados={() => {}} onConfiguracao={() => {}} />
+                <MenuQuadro podeEditar onArquivados={() => {}} onConfiguracao={() => {}} onFundo={() => {}} onListasDoMes={() => {}} />
               </>
             }
           />
