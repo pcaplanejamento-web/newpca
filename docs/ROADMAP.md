@@ -1057,6 +1057,8 @@ pela distância; botão carregando fica desabilitado + trava de envio — duplo 
 dados atuais; busca limpa sem resultados antigos; atalhos pausados com a janela de criação aberta, que se reposiciona ao
 crescer; folha "sem prazo" não abre sozinha no celular; vista Ano no quadro com o ano inteiro; excluir série avisa; alvos de
 toque de 44px).
+✅ **Calendário Institucional PCA 2026/2027 cadastrado (migração `0051`):** quadro do grupo Planejamento e Custos com as
+8 etapas + os avisos (9 tarefas) e as 72 datas do documento como eventos no Calendário (27/07 a 01/12/2026).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

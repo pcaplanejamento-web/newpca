@@ -2088,6 +2088,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Telas:** `Button loading` = desabilitado; travas de envio por ref; as bandeiras "foi arrasto/redimensionamento" duram
     só o clique seguinte; o banner do evento é relido dos dados; `JanelaFlutuante` é `role="dialog"` (atalhos pausados) e se
     reposiciona ao crescer; a folha "sem prazo" do celular não é lembrada. Testes em `tests/auditoria-calendario.test.ts`.
+- **Carga de DADOS — Calendário Institucional PCA 2026/2027 (migração `0051`, só dados):** no grupo "Planejamento e
+  Custos" (casado por `lower(trim(nome))`; sem ele, nada entra), o quadro "Calendário Institucional PCA 2026/2027" (listas A
+  fazer · Em andamento · Concluído) com 9 tarefas — as 8 etapas do documento da Coordenação + "Avisos / Notificações" — no
+  período de cada etapa, e as 72 atividades/avisos como EVENTOS (cor por etapa, datas/períodos do PDF, o aviso de 31/08 às
+  15h, lembrete de 1 dia nos marcos futuros; Etapa 1 concluída). Idempotente (NOT EXISTS em tudo); gerada por script a
+  partir do PDF; testada em `tests/migrations.test.ts`.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
