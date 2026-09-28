@@ -18,7 +18,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!id || !q) return erro("Quadro não encontrado.", 404);
   const p = await parseCorpo(editarQuadroSchema, req);
   if ("resp" in p) return p.resp;
-  const d = { ...p.data };
+  const { fundoAjuste, ...resto } = p.data;
+  const d: Parameters<typeof atualizarQuadro>[1] = {
+    ...resto,
+    ...(fundoAjuste !== undefined ? { fundoAjuste: fundoAjuste ? JSON.stringify(fundoAjuste) : null } : {}),
+    // Uma imagem NOVA começa centralizada (o enquadramento da anterior não vale para ela).
+    ...(resto.fundoUrl !== undefined && fundoAjuste === undefined ? { fundoAjuste: null } : {}),
+  };
   if (d.fundoUrl) {
     try {
       d.fundoUrl = await resolverImagemFundo(d.fundoUrl);

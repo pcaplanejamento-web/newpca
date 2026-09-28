@@ -60,3 +60,71 @@ export function imagemDaPagina(html: string, base: string): string | null {
 
 /** O valor CSS `url("…")` de um link já validado (aspas, parênteses e barras invertidas codificados). */
 export const urlFundoCss = (url: string) => `url("${url.replace(/["\\\n\r]/g, (c) => encodeURIComponent(c))}")`;
+
+/**
+ * O ENQUADRAMENTO da imagem de fundo: o PONTO FOCAL (`x`,`y` em % — o que fica sempre à vista quando a moldura corta a
+ * imagem) e o ZOOM (1 = a imagem cobre a moldura; até `ZOOM_FUNDO_MAX`). A moldura muda de proporção com a tela — por
+ * isso o enquadramento é um ponto + zoom, não um recorte fixo.
+ */
+export type AjusteFundo = { x: number; y: number; zoom: number };
+export const AJUSTE_FUNDO_PADRAO: AjusteFundo = { x: 50, y: 50, zoom: 1 };
+export const ZOOM_FUNDO_MAX = 3;
+/** A proporção IDEAL da imagem (a da moldura num monitor comum) e a resolução mínima recomendada. */
+export const PROPORCAO_FUNDO = 16 / 9;
+export const LARGURA_MIN_FUNDO = 1920;
+export const ALTURA_MIN_FUNDO = 1080;
+
+const lim = (v: unknown, a: number, b: number, padrao: number) => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.min(b, Math.max(a, n)) : padrao;
+};
+
+/** Lê o enquadramento gravado (JSON ou objeto) — qualquer coisa inválida vira o padrão, campo a campo. */
+export function lerAjusteFundo(v: unknown): AjusteFundo {
+  let o: unknown = v;
+  if (typeof v === "string")
+    try {
+      o = JSON.parse(v);
+    } catch {
+      return AJUSTE_FUNDO_PADRAO;
+    }
+  if (!o || typeof o !== "object") return AJUSTE_FUNDO_PADRAO;
+  const a = o as Record<string, unknown>;
+  return { x: lim(a.x, 0, 100, 50), y: lim(a.y, 0, 100, 50), zoom: lim(a.zoom, 1, ZOOM_FUNDO_MAX, 1) };
+}
+
+/** O estilo da `<img>` de fundo (`object-fit: cover` + o ponto focal + o zoom a partir dele). */
+export function estiloFundo(a: AjusteFundo) {
+  const pos = `${a.x}% ${a.y}%`;
+  return { objectPosition: pos, transformOrigin: pos, transform: a.zoom > 1 ? `scale(${a.zoom})` : undefined };
+}
+
+/**
+ * ARRASTAR a imagem na prévia (px): o conteúdo acompanha o dedo — arrastar para a direita mostra mais da ESQUERDA (o
+ * ponto focal anda para a esquerda). `larguraImg`/`alturaImg` = o tamanho que a imagem COBRE na prévia (com o zoom);
+ * `larguraBox`/`alturaBox` = a prévia. Sem sobra num eixo, ele não anda.
+ */
+export function arrastarFundo(a: AjusteFundo, dx: number, dy: number, box: { w: number; h: number }, img: { w: number; h: number }): AjusteFundo {
+  if (img.w <= 0 || img.h <= 0 || box.w <= 0 || box.h <= 0) return a;
+  // O tamanho da imagem "cover" na prévia, com o zoom.
+  const escala = Math.max(box.w / img.w, box.h / img.h) * a.zoom;
+  const sobraX = img.w * escala - box.w;
+  const sobraY = img.h * escala - box.h;
+  return {
+    ...a,
+    x: sobraX > 0 ? lim(a.x - (dx / sobraX) * 100, 0, 100, 50) : a.x,
+    y: sobraY > 0 ? lim(a.y - (dy / sobraY) * 100, 0, 100, 50) : a.y,
+  };
+}
+
+/** A imagem serve de fundo? Avisos da proporção (retrato/muito estreita) e da resolução (pequena demais = borrada). */
+export function avaliarImagemFundo(w: number, h: number): string[] {
+  if (w <= 0 || h <= 0) return [];
+  const avisos: string[] = [];
+  const p = w / h;
+  if (p < 1) avisos.push("A imagem é em RETRATO — no quadro (paisagem) ela será bem cortada em cima e embaixo. Prefira paisagem 16:9.");
+  else if (p < 1.3 || p > 2.4) avisos.push(`A proporção é ${p.toFixed(2).replace(".", ",")}:1 — o ideal é 16:9 (1,78:1); parte da imagem será cortada.`);
+  if (w < LARGURA_MIN_FUNDO * 0.75 || h < ALTURA_MIN_FUNDO * 0.75)
+    avisos.push(`Resolução baixa (${w}×${h} px) — em telas grandes ficará borrada. O ideal é ${LARGURA_MIN_FUNDO}×${ALTURA_MIN_FUNDO} px ou mais.`);
+  return avisos;
+}

@@ -45,6 +45,7 @@ import {
   type Recorrencia,
   type TarefaResumo,
   type VinculoTarefa as Vinculo,
+  PALETA_ETIQUETAS,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
@@ -768,7 +769,18 @@ export function TarefaDetalhe({
       ]
     : undefined;
 
-  /** O menu "…" do cabeçalho (como o do Trello): copiar, mover para outro quadro, criar template e copiar o link. */
+  /** A CAPA colorida do cartão (grava na hora — não entra no rascunho). */
+  const definirCapa = async (id: number, capa: string | null) => {
+    try {
+      await chamar(`/api/tarefas/${id}`, "PATCH", { capa });
+      toast.success(capa ? "Capa aplicada." : "Capa removida.");
+      onSalvo();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  /** O menu "…" do cabeçalho (como o do Trello): duplicar, copiar, mover para outro quadro, criar template, copiar o link e a CAPA. */
   const menuTarefa = (t: TarefaResumo) => (
     <Dropdown align="end" width={250} ariaLabel="Mais ações da tarefa" triggerClassName="h-11 w-11 justify-center text-muted lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
       {(fecharMenu) => {
@@ -803,6 +815,41 @@ export function TarefaDetalhe({
               );
             })}
             {off && onCopiarMover && <p className="px-2 pb-1 text-[11.5px] text-muted">Salve as alterações para copiar ou mover.</p>}
+            {!t.template && (
+              <fieldset className="border-t border-border px-2 pt-2 pb-1">
+                <legend className="sr-only">Capa do cartão</legend>
+                <p className="mb-1.5 text-[12px] font-semibold text-muted">Capa do cartão</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {PALETA_ETIQUETAS.slice(10, 20).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Capa na cor ${c}`}
+                      aria-pressed={t.capa === c}
+                      onClick={() => {
+                        fecharMenu();
+                        definirCapa(t.id, c);
+                      }}
+                      className="h-8 rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                      style={{ background: c, boxShadow: t.capa === c ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
+                    />
+                  ))}
+                </div>
+                {t.capa && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 w-full"
+                    onClick={() => {
+                      fecharMenu();
+                      definirCapa(t.id, null);
+                    }}
+                  >
+                    Remover a capa
+                  </Button>
+                )}
+              </fieldset>
+            )}
           </div>
         );
       }}

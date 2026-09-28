@@ -282,7 +282,7 @@ export function ConfiguracaoQuadro({
         </Secao>
 
         <Secao id="secao-fundo" titulo="Imagem de fundo">
-          <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
+          <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} fundoAjuste={quadro.fundoAjuste} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
         </Secao>
 
         <Secao

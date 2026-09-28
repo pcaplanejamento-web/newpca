@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useRef } from "react";
-import { urlFundoCss } from "@/lib/imagem-fundo-core";
+import { AJUSTE_FUNDO_PADRAO, type AjusteFundo, estiloFundo } from "@/lib/imagem-fundo-core";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { alternarValor, type FiltroTarefas } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
@@ -23,6 +23,7 @@ export const RESERVA_PILULA = 68;
 export function MolduraQuadro({
   cor,
   fundoUrl,
+  ajuste = AJUSTE_FUNDO_PADRAO,
   faixa,
   pilula,
   alturaFixa,
@@ -30,6 +31,8 @@ export function MolduraQuadro({
 }: {
   cor: string;
   fundoUrl: string | null;
+  /** O ENQUADRAMENTO da imagem (ponto focal + zoom — `lerAjusteFundo`). */
+  ajuste?: AjusteFundo;
   faixa: ReactNode;
   pilula: ReactNode;
   /** Altura fixa (px) em vez de ir até o fim do display (a demonstração no catálogo). */
@@ -41,9 +44,8 @@ export function MolduraQuadro({
   const altura = alturaFixa ?? medida;
   const carregou = useImagemCarrega(fundoUrl);
   const comImagem = !!fundoUrl && carregou === true;
-  const fundo = comImagem
-    ? { backgroundImage: urlFundoCss(fundoUrl), backgroundSize: "cover", backgroundPosition: "center" }
-    : { background: `linear-gradient(135deg, color-mix(in srgb, ${cor} 55%, var(--surface-2)), color-mix(in srgb, ${cor} 20%, var(--surface-2)))` };
+  // Sem imagem (ou enquanto carrega / se falhar), um degradê da cor do quadro.
+  const fundo = { background: `linear-gradient(135deg, color-mix(in srgb, ${cor} 55%, var(--surface-2)), color-mix(in srgb, ${cor} 20%, var(--surface-2)))` };
   return (
     <div
       ref={raiz}
@@ -51,6 +53,11 @@ export function MolduraQuadro({
       style={{ ...fundo, ...(altura ? { height: altura } : {}) }}
       className="group/moldura relative isolate flex min-h-[420px] flex-col overflow-hidden rounded-2xl shadow-ring"
     >
+      {comImagem && (
+        // A imagem NÍTIDA (cover + ponto focal + zoom); o degradê fica por baixo.
+        // biome-ignore lint/performance/noImgElement: imagem externa por link (não passa pelo otimizador).
+        <img aria-hidden alt="" src={fundoUrl} referrerPolicy="no-referrer" className="pointer-events-none absolute inset-0 -z-10 h-full w-full select-none object-cover" style={estiloFundo(ajuste)} />
+      )}
       {faixa}
       <div className="relative min-h-0 flex-1 overflow-y-auto">{children}</div>
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3">
@@ -60,10 +67,13 @@ export function MolduraQuadro({
   );
 }
 
-/** Um PAINEL OPACO dentro da moldura (Lista, Calendário, Dashboard, Configuração) — a foto aparece em volta. */
-export function PainelMoldura({ children }: { children: ReactNode }) {
+/**
+ * Um PAINEL OPACO dentro da moldura (Lista, Calendário) — a foto aparece em volta. `vazado` = sem o fundo (Dashboard e
+ * Configuração: os quadros/seções delas já são ilhas opacas — sem painel dentro de painel).
+ */
+export function PainelMoldura({ vazado = false, children }: { vazado?: boolean; children: ReactNode }) {
   return (
-    <div className="m-3 rounded-xl bg-surface p-3 shadow-soft" style={{ marginBottom: RESERVA_PILULA }}>
+    <div className={vazado ? "m-3" : "m-3 rounded-xl bg-surface p-3 shadow-soft"} style={{ marginBottom: RESERVA_PILULA }}>
       {children}
     </div>
   );

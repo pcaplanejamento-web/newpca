@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
+import { lerAjusteFundo } from "@/lib/imagem-fundo-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
 import {
@@ -174,6 +175,13 @@ export function QuadroTarefas({
     [filtradas, mostrar],
   );
   const nArquivadas = useMemo(() => tarefas.filter((t) => t.arquivada).length, [tarefas]);
+  /** Os cartões de cada lista SEM os filtros (só com filtro ligado — a coluna mostra "N de M"). */
+  const totaisListas = useMemo(() => {
+    if (!contarFiltros(filtro)) return undefined;
+    const m = new Map<number, number>();
+    for (const t of tarefas) if (!t.arquivada && !t.template) m.set(t.listaId, (m.get(t.listaId) ?? 0) + 1);
+    return m;
+  }, [tarefas, filtro]);
   const templates = useMemo(() => tarefas.filter((t) => t.template && !t.arquivada), [tarefas]);
   /** O TRABALHO à vista (sem os templates) — Dashboard e Calendário. */
   const trabalho = useMemo(() => noQuadro.filter((t) => !t.template), [noQuadro]);
@@ -503,6 +511,7 @@ export function QuadroTarefas({
       <MolduraQuadro
         cor={quadro.cor}
         fundoUrl={quadro.fundoUrl}
+        ajuste={lerAjusteFundo(quadro.fundoAjuste)}
         faixa={
           <FaixaQuadro
             esquerda={
@@ -603,7 +612,7 @@ export function QuadroTarefas({
             </FerramentasAba>
           )}
         {aba === "dashboard" ? (
-          <PainelMoldura>
+          <PainelMoldura vazado>
           <DashboardTarefas
             tarefas={trabalho}
             listas={listas}
@@ -623,6 +632,8 @@ export function QuadroTarefas({
             <QuadroKanban
               naMoldura
               reservaInferior={RESERVA_PILULA}
+              chaveRecolhidas={`tarefas:recolhidas:${quadro.id}`}
+              totais={totaisListas}
               onNovaLista={quadro.arquivado ? undefined : novaLista}
               onMoverLista={podeEditar && !quadro.arquivado ? moverLista : undefined}
               onRenomearLista={podeEditar && !quadro.arquivado ? renomearLista : undefined}
@@ -700,7 +711,7 @@ export function QuadroTarefas({
           />
           </PainelMoldura>
         ) : (
-          <PainelMoldura>
+          <PainelMoldura vazado>
           <ConfiguracaoQuadro
             quadro={quadro}
             listas={listas}

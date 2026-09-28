@@ -126,6 +126,8 @@ export type Quadro = {
   formatoTitulo: string | null;
   /** A imagem de fundo (link; migração `0058`). */
   fundoUrl: string | null;
+  /** O ENQUADRAMENTO da imagem (JSON `{x,y,zoom}` — `lerAjusteFundo`; migração `0059`). */
+  fundoAjuste: string | null;
 };
 export type QuadroCard = Quadro & { abertas: number; atrasadas: number; concluidas: number };
 export type TarefaCompleta = TarefaResumo & { quadroId: number; descricao: string | null; blocos: BlocoTarefa[] | null };
@@ -140,6 +142,7 @@ const COLS_QUADRO = {
   arquivado: tarefaQuadros.arquivado,
   formatoTitulo: tarefaQuadros.formatoTitulo,
   fundoUrl: tarefaQuadros.fundoUrl,
+  fundoAjuste: tarefaQuadros.fundoAjuste,
 };
 
 /** Os quadros dos GRUPOS dados (`null` = todos — o ADM sem grupo), com as contagens do card. `hoje` = "AAAA-MM-DD". */
@@ -263,6 +266,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         prazo: tarefas.prazo,
         prazoHora: tarefas.prazoHora,
         lembreteMin: tarefas.lembreteMin,
+        capa: tarefas.capa,
         ordem: tarefas.ordem,
         concluidaEm: tarefas.concluidaEm,
         arquivada: tarefas.arquivada,
@@ -567,6 +571,7 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     prazo: t.prazo,
     prazoHora: t.prazoHora,
     lembreteMin: t.lembreteMin,
+    capa: t.capa,
     ordem: t.ordem,
     concluidaEm: t.concluidaEm,
     arquivada: t.arquivada,
@@ -608,7 +613,7 @@ export async function criarQuadro(grupoId: number, d: { nome: string; cor?: stri
   return q.id;
 }
 
-export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null; fundoUrl?: string | null }) {
+export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null; fundoUrl?: string | null; fundoAjuste?: string | null }) {
   await getDb()
     .update(tarefaQuadros)
     .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
@@ -937,6 +942,7 @@ export async function atualizarTarefa(
     prazo?: string | null;
     prazoHora?: string | null;
     lembreteMin?: number | null;
+    capa?: string | null;
     arquivada?: boolean;
     estimativaH?: number | null;
     vinculos?: { tipo: TipoVinculo; id: number }[];
@@ -1764,7 +1770,7 @@ export async function copiarTarefa(
     o.checklists ? checklistsParaCopiar(t.id) : Promise.resolve([]),
     camposNoDestino(t, r.quadro, destino),
   ]);
-  return criarTarefa({
+  const nova = await criarTarefa({
     quadroId: destino.id,
     listaId: lista.id,
     titulo: o.titulo?.trim() || t.titulo,
@@ -1793,6 +1799,9 @@ export async function copiarTarefa(
     // Um título dado na cópia é escolha da pessoa; senão, segue como era na origem.
     tituloManual: o.titulo?.trim() ? true : t.tituloManual,
   });
+  // A CAPA colorida vai junto (não é dado do lote de criação).
+  if (t.capa) await getDb().update(tarefas).set({ capa: t.capa }).where(eq(tarefas.id, nova.id));
+  return nova;
 }
 
 /** Até quantos TEMPLATES um quadro novo copia de outro. */

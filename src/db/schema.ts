@@ -780,6 +780,8 @@ export const tarefaQuadros = sqliteTable(
     formatoTitulo: text("formato_titulo"),
     /** IMAGEM DE FUNDO por link (migração `0058`; NULL = sem). */
     fundoUrl: text("fundo_url"),
+    /** O ENQUADRAMENTO da imagem de fundo (JSON `{x,y,zoom}` — migração `0059`; NULL = centro, sem zoom). */
+    fundoAjuste: text("fundo_ajuste"),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -824,6 +826,8 @@ export const tarefas = sqliteTable(
     prazo: text("prazo"),
     /** Hora do prazo "HH:MM" (migração `0053`; NULL = o dia inteiro). */
     prazoHora: text("prazo_hora"),
+    /** A CAPA colorida do cartão (hex; migração `0059`; NULL = sem capa). */
+    capa: text("capa"),
     /** Lembrete: minutos antes do prazo (NULL = sem lembrete). */
     lembreteMin: integer("lembrete_min"),
     /** O cartão é um TEMPLATE (migração `0055`): fora de contagens, filtros de prazo, Dashboard, Calendário e avisos. */

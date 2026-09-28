@@ -35,7 +35,11 @@ const formatoTitulo = z
   .transform((v) => v || null);
 /** A imagem de fundo: o LINK (de imagem ou de página — o servidor resolve); null = tirar. */
 const fundoUrl = z.string().trim().min(1, "Informe o link.").max(1000, "Link com até 1000 caracteres.").nullable();
-export const editarQuadroSchema = quadroSchema.partial().extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional(), fundoUrl: fundoUrl.optional() });
+/** O ENQUADRAMENTO da imagem de fundo: o ponto focal (%) e o zoom; null = o padrão (centro, sem zoom). */
+const fundoAjuste = z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100), zoom: z.number().min(1).max(3) }).nullable();
+export const editarQuadroSchema = quadroSchema
+  .partial()
+  .extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional(), fundoUrl: fundoUrl.optional(), fundoAjuste: fundoAjuste.optional() });
 
 /** Um CAMPO personalizado do quadro (as opções só valem para o tipo lista). */
 export const campoSchema = z
@@ -229,6 +233,8 @@ export const editarTarefaSchema = z
     arquivada: z.boolean().optional(),
     /** Concluir/reabrir NO LUGAR (sem mudar de lista). */
     concluida: z.boolean().optional(),
+    /** A CAPA colorida do cartão (null = tira). */
+    capa: cor.nullable().optional(),
   })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
 

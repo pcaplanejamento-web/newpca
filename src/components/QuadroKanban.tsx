@@ -9,7 +9,7 @@ import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
 import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
-import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconGrip, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
+import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconExpandir, IconGrip, IconMais, IconRecolher, IconModelo, IconPencil, IconPlus } from "./icons";
 import { TextoNoLugar } from "./TextoNoLugar";
 import { toast } from "./Toast";
 
@@ -43,6 +43,8 @@ export function QuadroKanban({
   onRenomearLista,
   naMoldura = false,
   reservaInferior = 0,
+  totais,
+  chaveRecolhidas,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -80,7 +82,12 @@ export function QuadroKanban({
   naMoldura?: boolean;
   /** Espaço (px) a deixar embaixo — a pílula de vistas da moldura. */
   reservaInferior?: number;
+  /** Quantos cartões cada lista tem SEM os filtros (a contagem vira "N de M" quando o filtro esconde algum). */
+  totais?: Map<number, number>;
+  /** Chave (no aparelho) das listas RECOLHIDAS deste quadro; ausente = sem recolher. */
+  chaveRecolhidas?: string;
 }) {
+  const [recolhidas, alternarRecolhida] = useRecolhidas(chaveRecolhidas);
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true, reservaInferior);
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoCartoes({ quadro: rolo, onMover });
@@ -173,6 +180,9 @@ export function QuadroKanban({
       <ColunaTarefas
         lista={l}
         qtd={cartoes.filter((c) => !c.template).length}
+        total={totais?.get(l.id)}
+        recolhida={!presa && recolhidas.has(l.id)}
+        onRecolher={presa || !chaveRecolhidas ? undefined : () => alternarRecolhida(l.id)}
         oculto={!presa && arrastoL.arrasto?.id === l.id}
         onPegar={presa || !onMoverLista ? undefined : (e) => arrastoL.iniciar(e, l.id)}
         onRenomear={presa || !onRenomearLista ? undefined : (nome) => onRenomearLista(l.id, nome)}
@@ -289,6 +299,36 @@ export function QuadroKanban({
 }
 
 /**
+ * As listas RECOLHIDAS de um quadro, guardadas NO APARELHO (conveniência — `localStorage`, lido depois da montagem, com
+ * try/catch). Sem `chave`, nada recolhe.
+ */
+function useRecolhidas(chave: string | undefined): [Set<number>, (id: number) => void] {
+  const [ids, setIds] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    if (!chave) return;
+    try {
+      const v = JSON.parse(localStorage.getItem(chave) ?? "[]");
+      if (Array.isArray(v)) setIds(new Set(v.filter((x): x is number => typeof x === "number")));
+    } catch {
+      // sem armazenamento: nada recolhido
+    }
+  }, [chave]);
+  const alternar = (id: number) =>
+    setIds((atual) => {
+      const n = new Set(atual);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      try {
+        if (chave) localStorage.setItem(chave, JSON.stringify([...n]));
+      } catch {
+        // sem armazenamento: vale só nesta tela
+      }
+      return n;
+    });
+  return [ids, alternar];
+}
+
+/**
  * "+ ADICIONAR OUTRA LISTA" — a última coluna do quadro (como no Trello): tocar abre o campo do nome; Enter cria a lista no
  * fim e o campo segue aberto (e vazio) para a próxima; Esc, "X" ou tocar fora fecha. Uma gravação por vez.
  */
@@ -383,6 +423,9 @@ export function ColunaTarefas({
   onPegar,
   onRenomear,
   oculto = false,
+  total,
+  recolhida = false,
+  onRecolher,
   children,
 }: {
   lista: ListaTarefas;
@@ -396,14 +439,37 @@ export function ColunaTarefas({
   /** Renomeia a lista (o nome vira campo com um clique). Ausente = só leitura. */
   onRenomear?: (nome: string) => Promise<boolean>;
   oculto?: boolean;
+  /** Os cartões da lista SEM os filtros — com filtro que esconde algum, a contagem mostra "N de M". */
+  total?: number;
+  /** RECOLHIDA: vira uma faixa estreita com o nome na vertical (tocar expande). */
+  recolhida?: boolean;
+  /** Recolher/expandir a lista (o botão do cabeçalho); ausente = sem o botão. */
+  onRecolher?: () => void;
   children: ReactNode;
 }) {
   const passou = excedeWip(qtd, l.limiteWip);
+  const filtrado = total != null && total !== qtd;
+  if (recolhida)
+    return (
+      <section data-lista={l.id} aria-label={`Lista ${l.nome} (recolhida)`} className={`shrink-0 ${oculto ? "hidden" : ""}`}>
+        <button
+          type="button"
+          onClick={onRecolher}
+          title={`Expandir a lista ${l.nome}`}
+          aria-label={`Expandir a lista ${l.nome}`}
+          className="flex min-h-40 w-11 flex-col items-center gap-2 rounded-xl bg-[var(--lista-quadro)] py-3 text-text shadow-[var(--sombra-cartao)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <IconExpandir className="h-4 w-4 shrink-0 text-text-2" />
+          <span className="max-h-[60vh] truncate text-[14px] font-semibold [writing-mode:vertical-rl]">{l.nome}</span>
+          <span className="text-[12px] font-semibold text-muted tabular-nums">{qtd}</span>
+        </button>
+      </section>
+    );
   return (
     <section
       data-lista={l.id}
       aria-label={`Lista ${l.nome}`}
-      className={`flex w-[min(85vw,17rem)] shrink-0 snap-center flex-col rounded-xl bg-[var(--lista-quadro)] shadow-[var(--sombra-cartao)] lg:max-h-full lg:w-[17rem] ${oculto ? "hidden" : ""}`}
+      className={`group/lista flex w-[min(85vw,17rem)] shrink-0 snap-center flex-col rounded-xl bg-[var(--lista-quadro)] shadow-[var(--sombra-cartao)] lg:max-h-full lg:w-[17rem] ${oculto ? "hidden" : ""}`}
     >
       <header
         onPointerDown={(e) => {
@@ -419,11 +485,29 @@ export function ColunaTarefas({
         </h2>
         <span
           className="shrink-0 rounded-full px-1.5 py-px text-[12px] font-semibold tabular-nums"
-          title={l.limiteWip ? `Limite de ${l.limiteWip} cartões nesta lista${passou ? " — passou do limite" : ""}` : `${qtd} cartões`}
+          title={
+            l.limiteWip
+              ? `Limite de ${l.limiteWip} cartões nesta lista${passou ? " — passou do limite" : ""}`
+              : filtrado
+                ? `${qtd} cartão(ões) à vista com os filtros, de ${total}`
+                : `${qtd} cartões`
+          }
           style={passou ? { color: "var(--warn)", background: "color-mix(in srgb, var(--warn) 14%, var(--surface))" } : { color: "var(--muted)" }}
         >
-          {l.limiteWip ? `${qtd}/${l.limiteWip}` : qtd}
+          {l.limiteWip ? `${qtd}/${l.limiteWip}` : filtrado ? `${qtd} de ${total}` : qtd}
         </span>
+        {onRecolher && (
+          <button
+            type="button"
+            data-sem-arrasto
+            onClick={onRecolher}
+            title="Recolher a lista"
+            aria-label={`Recolher a lista ${l.nome}`}
+            className="grid h-11 w-9 shrink-0 place-items-center rounded-control text-text-2 opacity-0 transition-opacity hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] group-hover/lista:opacity-100 focus-visible:opacity-100 any-pointer-coarse:opacity-100 lg:h-8 lg:w-8"
+          >
+            <IconRecolher className="h-4 w-4" />
+          </button>
+        )}
         {onPegar && (
           <span
             role="presentation"

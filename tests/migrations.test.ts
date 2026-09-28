@@ -691,6 +691,17 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("DELETE FROM grupos WHERE id = 9580");
   });
 
+  it("0059 enquadramento do fundo e capa do cartão: colunas nulas por padrão", () => {
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9590, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, fundo_ajuste) VALUES (9591, 9590, 'Q', '{\"x\":20,\"y\":40,\"zoom\":1.5}')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9592, 9591, 'L')");
+    db.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9593, 9591, 9592, 1, 'T')");
+    assert.equal((db.prepare("SELECT capa AS c FROM tarefas WHERE id = 9593").get() as { c: string | null }).c, null);
+    db.exec("UPDATE tarefas SET capa = '#579dff' WHERE id = 9593");
+    db.exec("DELETE FROM tarefa_quadros WHERE id = 9591");
+    db.exec("DELETE FROM grupos WHERE id = 9590");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

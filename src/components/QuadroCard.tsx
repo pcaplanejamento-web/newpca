@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { urlFundoCss } from "@/lib/imagem-fundo-core";
+import { lerAjusteFundo, urlFundoCss } from "@/lib/imagem-fundo-core";
 import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { Badge } from "./Badge";
@@ -28,7 +28,14 @@ export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: 
       <span
         aria-hidden
         className={`absolute inset-x-0 top-0 ${q.fundoUrl ? "h-9 border-b-4 sm:h-10" : "h-1.5"}`}
-        style={q.fundoUrl ? { background: `${urlFundoCss(q.fundoUrl)} center / cover no-repeat, ${q.cor}`, borderColor: q.cor } : { background: q.cor }}
+        style={
+          q.fundoUrl
+            ? (() => {
+                const a = lerAjusteFundo(q.fundoAjuste);
+                return { background: `${urlFundoCss(q.fundoUrl)} ${a.x}% ${a.y}% / cover no-repeat, ${q.cor}`, borderColor: q.cor };
+              })()
+            : { background: q.cor }
+        }
       />
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-faint" title={q.grupoNome}>

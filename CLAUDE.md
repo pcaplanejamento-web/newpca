@@ -2210,7 +2210,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       eventos · vínculo; alça e ↑/↓). Prazo/responsáveis/etiquetas/estimativa/recorrência deixaram de ser blocos
       (`lerBlocos` ignora os gravados — o dado mora nas colunas; `DadosBlocos` só vínculo/checklist/eventos).
     - **`CartaoTarefa`:** etiquetas em **FAIXAS** na cor — tocar alterna faixa ↔ nome em TODOS os cartões
-      (`useEtiquetasComNome`, `tarefas:etiquetas-nome` no aparelho) — e o ícone de **descrição** (`TarefaResumo.temDescricao`,
+      (`useEtiquetasComNome`, `tarefas:etiquetas-nome-v2` no aparelho — padrão: com o nome) — e o ícone de **descrição** (`TarefaResumo.temDescricao`,
       calculado no banco em `dadosQuadro`).
   - **FASE 17 / F7 — CAMPOS PERSONALIZADOS + TÍTULO AUTOMÁTICO (migração `0056`, aditiva):** tabelas `tarefa_campos`
     (quadro cascade, nome, `tipo` texto|numero|data|lista|checkbox, `opcoes` JSON, ordem, `no_cartao`) e
@@ -2326,6 +2326,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       da lista = **`IconCartaoMais`**; a paleta de etiquetas é a do Trello (**`PALETA_ETIQUETAS`**, 10 cores × 3 tons, e
       `corEtiquetaSugerida` — `tarefas-core`, testados). Saíram `FundoDoQuadro` (véu), o `TrocarQuadro soSeta` e o botão
       "Arquivados" solto (foi para o menu "…").
+  - **ENQUADRAR O FUNDO · CAPA DO CARTÃO · RECOLHER LISTA (migração `0059`, aditiva):**
+    - `tarefa_quadros.fundo_ajuste` (JSON `{x,y,zoom}`): o PONTO FOCAL (%) e o ZOOM (1–3) da imagem — a moldura muda de
+      proporção com a tela, então o enquadramento é ponto + zoom, não recorte. Núcleo puro em `imagem-fundo-core.ts`
+      (`lerAjusteFundo`, `estiloFundo` → `object-position` + `scale` a partir do ponto, `arrastarFundo`, `avaliarImagemFundo`
+      — avisa retrato/proporção fora de 16:9 e resolução abaixo de 1920×1080 —; `PROPORCAO_FUNDO`, testados). A moldura
+      desenha a imagem numa `<img object-cover>` (`estiloFundo`) e o `QuadroCard` usa o mesmo ponto. **`FundoQuadro`**:
+      prévia 16:9 ARRASTÁVEL (setas também) + zoom + "Centralizar"/"Salvar enquadramento" (`PATCH` do quadro
+      `{fundoAjuste}`; trocar a imagem zera o enquadramento), o tamanho da imagem com a recomendação (paisagem 16:9, ≥
+      1920×1080) e **Fotos sugeridas** (Unsplash, só o link).
+    - `tarefas.capa` (hex): a CAPA colorida do cartão (faixa de 32px no topo, como no Trello) — escolhida no menu "…" do
+      detalhe (os 10 tons normais da `PALETA_ETIQUETAS` + "Remover a capa"; grava na hora, `PATCH /api/tarefas/[id]`
+      `{capa}`); a cópia do cartão leva a capa.
+    - Listas **RECOLHÍVEIS** (botão no cabeçalho, com o mouse sobre a lista; no toque, sempre): vira uma faixa estreita com
+      o nome na vertical — tocar expande; guardadas no aparelho (`tarefas:recolhidas:<quadro>`, `useRecolhidas`). Com
+      filtro ligado, a contagem da lista mostra **"N de M"** (`QuadroKanban.totais`).
+    - Título do quadro inteiro: o `TextoNoLugar ajustar` não usa margem negativa nem `max-width` (cortavam a largura
+      intrínseca — "tes…"); Dashboard e Configuração ficam "vazados" (`PainelMoldura vazado`: os quadros/seções delas já são
+      ilhas opacas).
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

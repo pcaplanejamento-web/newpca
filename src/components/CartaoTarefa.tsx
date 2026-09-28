@@ -30,7 +30,8 @@ const MAX_AVATARES = 3;
  * As ETIQUETAS dos cartões com o NOME (padrão, como no Trello — cheias na cor) ou em FAIXAS — tocar nelas alterna TODOS os cartões;
  * a escolha fica no aparelho (conveniência; sem armazenamento, vale só na tela).
  */
-const CHAVE_ETIQUETAS = "tarefas:etiquetas-nome";
+// v2: o padrão virou "com o nome" (como no Trello) — a escolha antiga (de quando o padrão era faixa) não vale mais.
+const CHAVE_ETIQUETAS = "tarefas:etiquetas-nome-v2";
 const ouvintes = new Set<() => void>();
 let comNome: boolean | null = null;
 const lerComNome = () => {
@@ -145,6 +146,8 @@ export function CartaoTarefa({
         aria-label={`${rotuloTicket(t.ticket)} ${t.titulo}${onTeclaMover ? " — Alt + setas move o cartão" : ""}`}
         className="absolute inset-0 rounded-lg transition-shadow duration-[var(--motion-duration)] group-hover/cartao:ring-2 group-hover/cartao:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
+      {/* A CAPA colorida (como a do Trello) — a faixa de cor no topo do cartão. */}
+      {t.capa && <div aria-hidden className="-mx-3 -mt-2 mb-2 h-8 rounded-t-lg" style={{ background: t.capa }} />}
       {/* Com o mouse sobre o cartão: EDITAR (abre) e DUPLICAR — no toque, o menu "⋯". */}
       {(onAbrir || onDuplicar) && (
         <div className="absolute top-1.5 right-1.5 z-10 flex gap-1 opacity-0 transition-opacity duration-[var(--motion-duration)] group-hover/cartao:opacity-100 focus-within:opacity-100 any-pointer-coarse:hidden">

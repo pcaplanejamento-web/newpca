@@ -105,6 +105,10 @@ import {
   Hourglass,
   AlignLeft,
   SquarePlus,
+  Move,
+  ZoomIn,
+  FoldHorizontal,
+  UnfoldHorizontal,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -187,6 +191,13 @@ export function IconSpinner({ className, ...props }: LucideProps) {
 export const IconKanban = SquareKanban;
 /** Cartão com "+" (criar a partir de TEMPLATE — o ícone do pé da lista, como no Trello). */
 export const IconCartaoMais = SquarePlus;
+/** Mover/arrastar (enquadrar a imagem de fundo). */
+export const IconMove = Move;
+/** Zoom (aproximar a imagem de fundo). */
+export const IconZoom = ZoomIn;
+/** Recolher / expandir uma lista do quadro (como no Trello). */
+export const IconRecolher = FoldHorizontal;
+export const IconExpandir = UnfoldHorizontal;
 export const IconArquivar = Archive;
 export const IconDesarquivar = ArchiveRestore;
 export const IconEtiqueta = Tag;

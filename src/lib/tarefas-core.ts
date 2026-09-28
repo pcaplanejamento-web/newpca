@@ -30,6 +30,8 @@ export type TarefaResumo = {
   prazoHora: string | null;
   /** Lembrete: minutos antes do prazo (`null` = sem lembrete). */
   lembreteMin: number | null;
+  /** A CAPA colorida do cartão (hex; `null`/ausente = sem capa — migração `0059`). */
+  capa?: string | null;
   ordem: number;
   concluidaEm: string | null;
   arquivada: boolean;
