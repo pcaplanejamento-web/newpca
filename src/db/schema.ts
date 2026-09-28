@@ -764,6 +764,25 @@ export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
 // TAREFAS (migração `0042`) — quadro estilo Trello: QUADROS por grupo, LISTAS (colunas) e CARTÕES com nº de TICKET
 // sequencial por quadro, responsáveis (pessoas do grupo), prazo, prioridade e ETIQUETAS.
 // ---------------------------------------------------------------------------
+/** PASTAS de quadros (migração `0061`): a PÚBLICA é do grupo; a PRIVADA só do dono (os quadros dela ficam privados). */
+export const tarefaPastas = sqliteTable(
+  "tarefa_pastas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    grupoId: integer("grupo_id")
+      .notNull()
+      .references(() => grupos.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull().default("#579dff"),
+    privado: integer("privado", { mode: "boolean" }).notNull().default(false),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    ordem: real("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_pastas_grupo_idx").on(t.grupoId)],
+);
+
 export const tarefaQuadros = sqliteTable(
   "tarefa_quadros",
   {
@@ -787,10 +806,13 @@ export const tarefaQuadros = sqliteTable(
     /** PRIVADO: só quem criou (`criado_por`) vê o quadro (migração `0060`). */
     privado: integer("privado", { mode: "boolean" }).notNull().default(false),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    /** A PASTA do quadro (migração `0061`; NULL = solto) e o lugar dele dentro dela. */
+    pastaId: integer("pasta_id").references(() => tarefaPastas.id, { onDelete: "set null" }),
+    pastaOrdem: real("pasta_ordem").notNull().default(0),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("tarefa_quadros_grupo_idx").on(t.grupoId)],
+  (t) => [index("tarefa_quadros_grupo_idx").on(t.grupoId), index("tarefa_quadros_pasta_idx").on(t.pastaId)],
 );
 
 export const tarefaListas = sqliteTable(

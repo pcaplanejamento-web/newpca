@@ -1903,7 +1903,15 @@ function TarefasDemo() {
   const [checkDemo, setCheckDemo] = useState([{ nome: "SERVIDORES COM FALTA", itens: ["3009540 - STELLA PAULINA DA SILVA: 24 DIAS", "3009865 - THIAGO OLIVEIRA: 2 DIAS"] }]);
   const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const [textoDemo, setTextoDemo] = useState("## Passos\n- Conferir o **DFD**\n- Falar com @Ana");
-  const [pastasDemo, setPastasDemo] = useState<PastasQuadros>({ lista: [{ id: "demo", nome: "PCA 2027", cor: "#579dff", quadros: [2, 3] }], ordem: [] });
+  // Uma pasta PÚBLICA do grupo e uma PRIVADA (só a dona vê; os quadros dela são privados).
+  const [pastasDemo, setPastasDemo] = useState<PastasQuadros>({
+    lista: [
+      { id: "demo", nome: "PCA 2027", cor: "#579dff", quadros: [2, 3], privado: false, criadoPor: 2, grupoId: 1 },
+      { id: "priv", nome: "Minhas rotinas", cor: "#9f8fef", quadros: [1], privado: true, criadoPor: 1, grupoId: 1 },
+    ],
+    ordem: [],
+  });
+  const atorDemo = { id: 1, editor: true };
   const quadroDemo = {
     id: 1,
     grupoId: 1,
@@ -1918,6 +1926,8 @@ function TarefasDemo() {
     fundoGradiente: '{"cores":["#6cc3e0","#9f8fef"],"angulo":135}',
     privado: true,
     criadoPor: 1,
+    pastaId: null,
+    pastaOrdem: 0,
     abertas: 12,
     atrasadas: 3,
     concluidas: 40,
@@ -1926,7 +1936,7 @@ function TarefasDemo() {
     quadroDemo,
     { ...quadroDemo, id: 2, nome: "Rotinas do setor", privado: false, fundoGradiente: '{"cores":["#4bce97","#1f845a"],"angulo":135}', atrasadas: 0 },
     { ...quadroDemo, id: 3, nome: "Protocolos", privado: false, fundoGradiente: '{"cores":["#f87168","#ae2e24"],"angulo":135}', atrasadas: 1 },
-    { ...quadroDemo, id: 4, nome: "Compras", privado: false, fundoGradiente: null, cor: "#e2b203", atrasadas: 0 },
+    { ...quadroDemo, id: 4, nome: "Compras", privado: false, criadoPor: 2, fundoGradiente: null, cor: "#e2b203", atrasadas: 0 },
   ];
   const listasDemo = [
     { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
@@ -1945,13 +1955,15 @@ function TarefasDemo() {
         onMover={(raiz, chave, d) => setPastasDemo((e) => moverNaGrade(e, raiz, chave, d))}
         onEditarPasta={() => {}}
         onExcluirPasta={(id, raiz) => setPastasDemo((e) => excluirPasta(e, raiz, id))}
+        ator={atorDemo}
+        novoNaPasta={() => <QuadroNovoCard rotulo="Novo quadro nesta pasta" onClick={() => {}} />}
         extraFinal={<QuadroNovoCard onClick={() => {}} />}
       />
-      {/* A PASTA sozinha: fechada · aberta · ALVO de um quadro arrastado (soltar põe dentro). */}
+      {/* A PASTA sozinha: fechada (do grupo) · PRIVADA aberta (cadeado + selo) · ALVO de um quadro arrastado (soltar põe dentro). */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
-        <PastaQuadro pasta={pastasDemo.lista[0] ?? { id: "x", nome: "PCA 2027", cor: "#579dff", quadros: [] }} quadros={quadrosDemo.slice(1)} />
-        <PastaQuadro pasta={{ id: "y", nome: "Rotinas", cor: "#4bce97", quadros: [] }} quadros={quadrosDemo} aberta />
-        <PastaQuadro pasta={{ id: "z", nome: "Vazia", cor: "#f87168", quadros: [] }} quadros={[]} alvo />
+        <PastaQuadro pasta={{ id: "x", nome: "PCA 2027", cor: "#579dff", quadros: [], privado: false, criadoPor: 2, grupoId: 1 }} quadros={quadrosDemo.slice(1)} />
+        <PastaQuadro pasta={{ id: "y", nome: "Minhas rotinas", cor: "#9f8fef", quadros: [], privado: true, criadoPor: 1, grupoId: 1 }} quadros={quadrosDemo.slice(0, 1)} aberta />
+        <PastaQuadro pasta={{ id: "z", nome: "Vazia", cor: "#f87168", quadros: [], privado: false, criadoPor: 2, grupoId: 1 }} quadros={[]} alvo />
       </div>
       {/* FAVORITO (estrela), o MENU "…" da lista e os campos do QUADRO DO PERÍODO (listas dos dias do mês). */}
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">

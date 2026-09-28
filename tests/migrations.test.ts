@@ -712,6 +712,52 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("DELETE FROM grupos WHERE id = 9595");
   });
 
+  it("0061 pastas no banco: as antigas viram PÚBLICAS do grupo do 1º quadro público; um quadro em uma pasta; a preferência fica só com a ordem", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0061")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9610, 'Ana', 'a9610@x', 'h'), (9611, 'Bia', 'b9611@x', 'h')");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9612, 'G1'), (9613, 'G2')");
+    a.exec(
+      "INSERT INTO tarefa_quadros (id, grupo_id, nome, privado, criado_por) VALUES (1, 9612, 'Priv', 1, 9610), (2, 9612, 'A', 0, 9610), (3, 9612, 'B', 0, 9610), (4, 9613, 'Outro grupo', 0, 9610), (5, 9612, 'C', 0, 9610)",
+    );
+    const ana = JSON.stringify({
+      lista: [
+        { id: "x", nome: " PCA ", cor: "#ABCDEF", quadros: [1, 3, 4, 2] },
+        { id: "y", nome: "Só privado", cor: "red", quadros: [1] },
+      ],
+      ordem: ["q:5", "p:x"],
+    });
+    const bia = JSON.stringify({ lista: [{ id: "z", nome: "", cor: "#123456", quadros: [2, 5] }], ordem: [] });
+    a.exec(`INSERT INTO preferencias_tabela (usuario_id, chave, valor) VALUES (9610, 'tarefas:conjuntos', '${ana}'), (9611, 'tarefas:conjuntos', '${bia}'), (9611, 'outra', '{"lista":[1]}')`);
+    a.exec(readFileSync(join(DIR, "0061_tarefa_pastas.sql"), "utf8"));
+    const pastas = a.prepare("SELECT id, grupo_id AS g, nome, cor, privado AS p, criado_por AS dono FROM tarefa_pastas ORDER BY id").all() as {
+      id: number;
+      g: number;
+      nome: string;
+      cor: string;
+      p: number;
+      dono: number;
+    }[];
+    assert.deepEqual(
+      pastas.map((x) => [x.g, x.nome, x.cor, x.p, x.dono]),
+      [
+        [9612, "PCA", "#abcdef", 0, 9610],
+        [9612, "Pasta", "#123456", 0, 9611],
+      ],
+    );
+    const q = (id: number) => a.prepare("SELECT pasta_id AS p, pasta_ordem AS o FROM tarefa_quadros WHERE id = ?").get(id) as { p: number | null; o: number };
+    assert.equal(q(1).p, null); // privado fica solto
+    assert.equal(q(4).p, null); // outro grupo fica solto
+    assert.deepEqual([q(3).p, q(2).p, q(5).p], [pastas[0].id, pastas[0].id, pastas[1].id]); // 2 fica na 1ª pasta
+    assert.ok(q(3).o < q(2).o);
+    const pref = (u: number) => (a.prepare("SELECT valor AS v FROM preferencias_tabela WHERE usuario_id = ? AND chave = 'tarefas:conjuntos'").get(u) as { v: string }).v;
+    assert.deepEqual(JSON.parse(pref(9610)), { ordem: ["q:5", "p:x"] });
+    assert.equal((a.prepare("SELECT valor AS v FROM preferencias_tabela WHERE chave = 'outra'").get() as { v: string }).v, '{"lista":[1]}');
+    a.exec(`DELETE FROM tarefa_pastas WHERE id = ${pastas[0].id}`);
+    assert.equal(q(3).p, null);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

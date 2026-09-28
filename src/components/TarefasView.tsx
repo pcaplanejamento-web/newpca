@@ -5,7 +5,7 @@ import { useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
-import { type ConjuntoQuadros, MAX_CONJUNTOS, PALETA_ETIQUETAS, type PastasQuadros } from "@/lib/tarefas-core";
+import { type AtorPasta, type ConjuntoQuadros, MAX_CONJUNTOS, type PastasQuadros } from "@/lib/tarefas-core";
 import { MESES } from "@/lib/normalize";
 import { mesSeguinte } from "@/lib/calendario-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -18,9 +18,10 @@ import { SeletorFundo } from "./SeletorFundo";
 import { Switch } from "./Switch";
 import { corpoFundo, type FundoEscolha } from "@/lib/imagem-fundo-core";
 import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro, QuadroNovoCard } from "./QuadroCard";
-import { EditorConjunto, SecoesDeQuadros, useConjuntosQuadros } from "./SecoesQuadros";
+import { EditorConjunto, pastaEmBranco, SecoesDeQuadros, useConjuntosQuadros } from "./SecoesQuadros";
 
 const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
+const VAZIO: PastasQuadros = { lista: [], ordem: [] };
 
 /** Um MODELO de quadro que o "Novo quadro" pode usar (as listas, para a prévia). */
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
@@ -36,7 +37,8 @@ export function TarefasView({
   podeCriar,
   modelos = [],
   favoritos: favIniciais = [],
-  conjuntos: conjIniciais = { lista: [], ordem: [] },
+  conjuntos: conjIniciais = VAZIO,
+  ator,
   hoje,
 }: {
   quadros: QuadroCardDados[];
@@ -44,12 +46,16 @@ export function TarefasView({
   modelos?: ModeloQuadroOpcao[];
   favoritos?: number[];
   hoje: string;
-  /** As PASTAS de quadros da pessoa + a ordem da grade. */
+  /** As PASTAS que a pessoa vê (públicas do grupo + as privadas dela) + a ordem pessoal da grade. */
   conjuntos?: PastasQuadros;
+  /** Quem vê (as regras das pastas). */
+  ator: AtorPasta;
 }) {
   const router = useRouter();
   const { favoritos, alternar } = useFavoritosQuadros(favIniciais);
-  const conj = useConjuntosQuadros(conjIniciais);
+  const conj = useConjuntosQuadros(conjIniciais, { quadros, ator, aoMudar: () => router.refresh() });
+  // O quadro novo criado DENTRO de uma pasta (na privada, nasce privado).
+  const [naPasta, setNaPasta] = useState<ConjuntoQuadros | null>(null);
   const [editando, setEditando] = useState<ConjuntoQuadros | null>(null);
   // O quadro do PERÍODO: um mês (o seguinte, por padrão — o quadro do mês é montado antes de ele começar).
   const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
@@ -64,10 +70,11 @@ export function TarefasView({
   const abertas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.abertas), 0);
   const atrasadas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.atrasadas), 0);
 
-  const abrirNovo = () => {
+  const abrirNovo = (pasta: ConjuntoQuadros | null = null) => {
     setNovo(NOVO);
+    setNaPasta(pasta);
     setFundo({ tipo: "nenhum" });
-    setPrivado(false);
+    setPrivado(!!pasta?.privado);
     setPeriodo(null);
     setTemplatesDe("");
   };
@@ -85,7 +92,8 @@ export function TarefasView({
         periodo,
         templatesDe: templatesDe ? Number(templatesDe) : null,
         ...corpoFundo(fundo),
-        privado,
+        privado: naPasta ? naPasta.privado : privado,
+        pastaId: naPasta && !naPasta.id.startsWith("novo-") ? Number(naPasta.id) : null,
       });
       setNovo(null);
       router.push(`/painel/tarefas/${j.id}`);
@@ -110,7 +118,7 @@ export function TarefasView({
             size="sm"
             variant="secondary"
             icon={<IconPasta className="h-4 w-4" />}
-            onClick={() => setEditando({ id: `c${Date.now().toString(36)}`, nome: "", cor: PALETA_ETIQUETAS[15], quadros: [] })}
+            onClick={() => setEditando(pastaEmBranco(ator))}
           >
             Nova pasta
           </Button>
@@ -131,15 +139,18 @@ export function TarefasView({
           onMover={conj.mover}
           onEditarPasta={setEditando}
           onExcluirPasta={conj.excluir}
-          extraFinal={podeCriar && <QuadroNovoCard onClick={abrirNovo} />}
+          ator={ator}
+          novoNaPasta={podeCriar ? (c) => <QuadroNovoCard rotulo="Novo quadro nesta pasta" onClick={() => abrirNovo(c)} /> : undefined}
+          extraFinal={podeCriar && <QuadroNovoCard onClick={() => abrirNovo()} />}
         />
       )}
 
-      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
+      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} ator={ator} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
+      {conj.confirmacao}
       <Modal
         open={novo != null}
         onClose={() => !salvando && setNovo(null)}
-        titulo="Novo quadro"
+        titulo={naPasta ? `Novo quadro na pasta "${naPasta.nome}"` : "Novo quadro"}
         bloqueado={salvando}
         rodape={
           <div className="flex justify-end gap-2">
@@ -170,13 +181,15 @@ export function TarefasView({
         {novo && <CamposQuadro valor={novo} onChange={setNovo} />}
         <div className="mt-4">
           <Switch
-            checked={privado}
+            checked={naPasta ? naPasta.privado : privado}
             onChange={setPrivado}
-            disabled={salvando}
+            disabled={salvando || !!naPasta}
             label={
               <span>
                 <span className="block font-semibold text-text">Quadro privado</span>
-                <span className="block text-[12px] text-muted">Só você vê o quadro — nem o grupo nem os administradores.</span>
+                <span className="block text-[12px] text-muted">
+                  {naPasta ? (naPasta.privado ? "Na pasta privada, o quadro nasce privado — só você o vê." : "Na pasta do grupo, o quadro é de todo o grupo.") : "Só você vê o quadro — nem o grupo nem os administradores."}
+                </span>
               </span>
             }
           />

@@ -6,10 +6,11 @@ import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { type ConjuntoQuadros, type DestinoGrade, type ItemGrade, itensDaGrade, type PastasQuadros } from "@/lib/tarefas-core";
 import { CartaoPreso } from "./ArrastoCartoes";
-import { IconClose, IconPasta, IconPastaAberta } from "./icons";
+import { IconClose, IconLock, IconNenhum, IconPasta, IconPastaAberta } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { CapaQuadro, QuadroCard } from "./QuadroCard";
 import { segurar } from "./segurar";
+import { toast } from "./Toast";
 
 /** A grade das pastas/quadros: colunas de no mínimo 15rem (a MESMA da `GradeQuadros` — o card nunca muda de forma). */
 const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
@@ -22,14 +23,16 @@ const LEQUE = [-4, 3, 0];
  * ícone, as COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros dela, em leque; vazia = folhas lisas) e a
  * FRENTE na cor, com "Pasta · N quadros", o nome e as contagens (abertas; atrasadas em vermelho, só quando há). Com o
  * mouse/foco a pasta ENTREABRE (a frente inclina e as folhas sobem); aberta, abre mais com o contorno accent; `alvo` = um
- * quadro arrastado sobre ela (abre de vez + "Soltar na pasta"); `recebeu` = o pulso de quando um quadro entra. Tocar
- * ABRE/FECHA a pasta no lugar. `menu` = as ações (editar/excluir), fora do botão.
+ * quadro arrastado sobre ela (abre de vez + "Soltar na pasta"; `recusa` = o que não pode entrar, em vermelho); `recebeu` = o pulso de quando um quadro entra. Tocar
+ * ABRE/FECHA a pasta no lugar. `menu` = as ações (editar/excluir), fora do botão. A PRIVADA leva o cadeado na aba e o selo
+ * "Privada" na frente.
  */
 export function PastaQuadro({
   pasta,
   quadros,
   aberta = false,
   alvo = false,
+  recusa = false,
   recebeu = false,
   onAlternar,
   menu,
@@ -38,6 +41,8 @@ export function PastaQuadro({
   quadros: Pick<QuadroCardDados, "id" | "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente" | "abertas" | "atrasadas" | "arquivado">[];
   aberta?: boolean;
   alvo?: boolean;
+  /** O item arrastado sobre ela NÃO pode entrar (o aviso vermelho no lugar do "Soltar na pasta"). */
+  recusa?: boolean;
   recebeu?: boolean;
   onAlternar?: () => void;
   menu?: ReactNode;
@@ -58,7 +63,7 @@ export function PastaQuadro({
         type="button"
         onClick={onAlternar}
         aria-expanded={aberta}
-        aria-label={`${aberta ? "Fechar" : "Abrir"} a pasta ${pasta.nome} (${quadros.length} ${quadros.length === 1 ? "quadro" : "quadros"})`}
+        aria-label={`${aberta ? "Fechar" : "Abrir"} a pasta ${pasta.privado ? "privada " : ""}${pasta.nome} (${quadros.length} ${quadros.length === 1 ? "quadro" : "quadros"})`}
         className="group flex h-full min-h-[14rem] w-full flex-col rounded-card text-left [perspective:900px] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/30"
       >
         {/* A ABA. */}
@@ -68,6 +73,7 @@ export function PastaQuadro({
           style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
         >
           <Icone className="h-3.5 w-3.5 shrink-0" />
+          {pasta.privado && <IconLock className="h-3 w-3 shrink-0" />}
         </span>
         {/* As COSTAS, com as folhas e a frente. */}
         <span
@@ -85,9 +91,12 @@ export function PastaQuadro({
               </span>
             ))}
           </span>
-          {alvo && (
-            <span className="absolute inset-x-0 top-3 z-10 text-center text-[12px] font-semibold text-accent">
-              <span className="rounded-full bg-surface px-2 py-0.5 shadow-soft">Soltar na pasta</span>
+          {(alvo || recusa) && (
+            <span className="absolute top-3 right-12 left-2 z-10 text-center text-[12px] font-semibold" style={{ color: recusa ? "var(--danger)" : "var(--accent)" }}>
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 shadow-soft">
+                {recusa && <IconNenhum className="h-3.5 w-3.5" />}
+                {recusa ? "Não pode entrar" : "Soltar na pasta"}
+              </span>
             </span>
           )}
           {/* A FRENTE (na cor), com a etiqueta. */}
@@ -95,8 +104,15 @@ export function PastaQuadro({
             className={`absolute inset-x-0 bottom-0 flex h-[58%] origin-bottom flex-col rounded-card px-3 pt-2.5 pb-2 shadow-[0_-6px_14px_-8px_rgba(0,0,0,0.35)] ${mov} ${frente}`}
             style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${pasta.cor} 82%, #fff), ${pasta.cor})`, color: tinta }}
           >
-            <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
-              Pasta · {num(quadros.length)} {quadros.length === 1 ? "quadro" : "quadros"}
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+              <span className="opacity-80">
+                Pasta · {num(quadros.length)} {quadros.length === 1 ? "quadro" : "quadros"}
+              </span>
+              {pasta.privado && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/20 px-1.5 py-px normal-case tracking-normal">
+                  <IconLock className="h-3 w-3" /> Privada
+                </span>
+              )}
             </span>
             <span className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug" title={pasta.nome}>
               {pasta.nome}
@@ -155,7 +171,16 @@ function rolagemDe(el: HTMLElement): HTMLElement | null {
  * do arrasto é engolido. O DOM: `[data-grade-area]` (a raiz = "", a pasta aberta = o id) › `[data-grade-item]`;
  * `[data-pasta-id]` = o card da pasta; `[data-painel-pasta]` = o painel da pasta aberta.
  */
-export function useArrastoGrade({ raiz, onSoltar }: { raiz: RefObject<HTMLElement | null>; onSoltar?: (chave: string, destino: DestinoArrasto) => void }) {
+export function useArrastoGrade({
+  raiz,
+  onSoltar,
+  aceitaDentro,
+}: {
+  raiz: RefObject<HTMLElement | null>;
+  onSoltar?: (chave: string, destino: DestinoArrasto) => void;
+  /** A pasta ACEITA o item? Sobre a que recusa, soltar não pousa dentro (quem chama nega o arrasto). */
+  aceitaDentro?: (chave: string, pastaId: string) => boolean;
+}) {
   const [arrasto, setArrasto] = useState<ArrastoGrade | null>(null);
   const fantasma = useRef<HTMLDivElement>(null);
   const encerrar = useRef<(() => void) | null>(null);
@@ -288,6 +313,11 @@ export function useArrastoGrade({ raiz, onSoltar }: { raiz: RefObject<HTMLElemen
       const final = destino;
       // Soltou onde estava: nada muda.
       if (!final.dentro && chaveDestino(final) === inicial) return setArrasto(null);
+      // A pasta RECUSA o item: nada de pousar dentro dela (quem chama nega o arrasto).
+      if (final.dentro && aceitaDentro && !aceitaDentro(chave, final.dentro)) {
+        setArrasto(null);
+        return onSoltar(chave, final);
+      }
       const aplicar = () => {
         setArrasto(null);
         onSoltar(chave, final);
@@ -359,6 +389,7 @@ function PainelPasta({ pasta, aberto, onFechado, onFechar, children }: { pasta: 
             >
               <IconPastaAberta className="h-4 w-4 shrink-0" />
               <span className="truncate text-[14px] font-semibold">{pasta.nome}</span>
+              {pasta.privado && <IconLock aria-label="Privada" className="h-3.5 w-3.5 shrink-0" />}
             </span>
             <button
               type="button"
@@ -386,6 +417,8 @@ function PainelPasta({ pasta, aberto, onFechado, onFechar, children }: { pasta: 
  * ORDEM da pessoa (`itensDaGrade`). Tocar numa pasta a ABRE no lugar (o painel entra abaixo da linha dela, empurrando os
  * cards); ARRASTAR (`useArrastoGrade`) reordena, põe um quadro numa pasta (soltar sobre ela, ou dentro da aberta) e o tira
  * dela; Alt+←/→ reordenam pelo teclado. `onMover` ausente = só leitura. `extra` = o último item (o card "Novo quadro").
+ * `podeMover` = a REGRA das pastas (pública × privada): a pasta que recusa o quadro não vira alvo e soltar onde não pode
+ * dá o ARRASTO NEGADO (o card sacode e o motivo aparece). `extraPasta` = o último item DENTRO da pasta aberta.
  */
 export function GradePastas({
   quadros,
@@ -399,6 +432,8 @@ export function GradePastas({
   extra,
   onMover,
   menuPasta,
+  podeMover,
+  extraPasta,
 }: {
   quadros: QuadroCardDados[];
   estado: PastasQuadros;
@@ -413,6 +448,9 @@ export function GradePastas({
   /** `raiz` = as chaves da raiz como estão na tela (a base de `moverNaGrade`). */
   onMover?: (raiz: string[], chave: string, destino: DestinoGrade) => void;
   menuPasta?: (c: ConjuntoQuadros) => ReactNode;
+  /** Por que o item NÃO pode ir para o destino (`null` = pode). */
+  podeMover?: (chave: string, destino: DestinoGrade) => string | null;
+  extraPasta?: (c: ConjuntoQuadros) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const itens = itensDaGrade(quadros, estado, ocultarVazias);
@@ -460,11 +498,23 @@ export function GradePastas({
     return () => ro.disconnect();
   }, []);
 
+  // O ARRASTO NEGADO: o card que não pode ir para onde foi solto sacode e o motivo aparece.
+  const [negado, setNegado] = useState<string | null>(null);
+  const negar = (chave: string, motivo: string) => {
+    setNegado(null);
+    requestAnimationFrame(() => setNegado(chave));
+    window.setTimeout(() => setNegado((n) => (n === chave ? null : n)), 900);
+    toast.error(motivo);
+  };
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoGrade({
     raiz: ref,
+    aceitaDentro: podeMover && ((chave, id) => podeMover(chave, { pasta: id }) == null),
     onSoltar:
       onMover &&
       ((chave, d) => {
+        const destino: DestinoGrade = d.dentro ? { pasta: d.dentro } : { pasta: d.area, antesDe: d.antesDe, depoisDe: d.depoisDe };
+        const motivo = podeMover?.(chave, destino);
+        if (motivo) return negar(chave, motivo);
         if (d.dentro) {
           onMover(raizChaves, chave, { pasta: d.dentro });
           setRecebeu(d.dentro);
@@ -480,7 +530,10 @@ export function GradePastas({
     const j = e.key === "ArrowLeft" ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= lista.length) return;
     e.preventDefault();
-    onMover(raizChaves, chave, e.key === "ArrowLeft" ? { pasta: area, antesDe: lista[j] } : { pasta: area, depoisDe: lista[j] });
+    const destino: DestinoGrade = e.key === "ArrowLeft" ? { pasta: area, antesDe: lista[j] } : { pasta: area, depoisDe: lista[j] };
+    const motivo = podeMover?.(chave, destino);
+    if (motivo) return negar(chave, motivo);
+    onMover(raizChaves, chave, destino);
   };
 
   const cardQuadro = (q: QuadroCardDados) => (
@@ -498,7 +551,8 @@ export function GradePastas({
       pasta={it.pasta}
       quadros={it.quadros}
       aberta={aberta === it.pasta.id}
-      alvo={arrasto?.destino.dentro === it.pasta.id && !arrasto.pousando}
+      alvo={arrasto?.destino.dentro === it.pasta.id && !arrasto.pousando && !podeMover?.(arrasto.chave, { pasta: it.pasta.id })}
+      recusa={arrasto?.destino.dentro === it.pasta.id && !arrasto.pousando && !!podeMover?.(arrasto.chave, { pasta: it.pasta.id })}
       recebeu={recebeu === it.pasta.id}
       onAlternar={() => alternar(it.pasta.id)}
       menu={menuPasta?.(it.pasta)}
@@ -510,7 +564,7 @@ export function GradePastas({
       key={chave}
       data-grade-item={chave}
       data-pasta-id={extraAttrs.pastaId}
-      className={`${arrasto?.chave === chave ? "hidden" : ""} ${onMover ? "touch-manipulation select-none [-webkit-touch-callout:none]" : ""} ${extraAttrs.indice != null ? "animate-fade-in-up" : ""}`}
+      className={`${arrasto?.chave === chave ? "hidden" : ""} ${onMover ? "touch-manipulation select-none [-webkit-touch-callout:none]" : ""} ${negado === chave ? "animate-negar-arrasto" : extraAttrs.indice != null ? "animate-fade-in-up" : ""}`}
       style={extraAttrs.indice != null ? { animationDelay: `${Math.min(extraAttrs.indice, 12) * 30}ms` } : undefined}
       onPointerDown={onMover ? (e) => iniciar(e, chave) : undefined}
       onClickCapture={(e) => {
@@ -556,7 +610,8 @@ export function GradePastas({
             );
             return [...a.nos, a.oculto];
           })()}
-          {!it.quadros.length && !sombra(it.pasta.id) && (
+          {extraPasta && !arrasto && <div key="__extra-pasta">{extraPasta(it.pasta)}</div>}
+          {!it.quadros.length && !sombra(it.pasta.id) && !extraPasta && (
             <p className="col-span-full px-1 py-6 text-center text-[13px] text-muted">{onMover ? "Pasta vazia — arraste quadros para cá." : "Pasta vazia."}</p>
           )}
         </div>

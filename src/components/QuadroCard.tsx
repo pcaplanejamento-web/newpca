@@ -112,7 +112,7 @@ export function QuadroCard({
 }
 
 /** Card "+" (a mesma altura dos cards na grade) — cria um quadro novo. */
-export function QuadroNovoCard({ onClick }: { onClick: () => void }) {
+export function QuadroNovoCard({ onClick, rotulo = "Novo quadro" }: { onClick: () => void; rotulo?: string }) {
   return (
     <button
       type="button"
@@ -122,7 +122,7 @@ export function QuadroNovoCard({ onClick }: { onClick: () => void }) {
       <span className="grid h-10 w-10 place-items-center rounded-control bg-surface-2 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
         <IconPlus className="h-5 w-5" />
       </span>
-      <span className="text-sm font-semibold">Novo quadro</span>
+      <span className="text-sm font-semibold">{rotulo}</span>
     </button>
   );
 }

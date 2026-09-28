@@ -1122,6 +1122,9 @@ abre no lugar com animação, arrastar para reordenar e para dentro/fora — tam
 contagens; entreabre ao passar o mouse e abre mais quando aberta ou ao receber um quadro arrastado.
 ✅ **Tarefas — arrasto negado em Favoritos/Recentes:** tentar arrastar ali sacode o card e avisa que a organização é
 feita em "Seus quadros" (sem a imagem de arrasto do navegador).
+✅ **Tarefas — pastas PÚBLICAS do grupo e PRIVADAS:** a pasta pública é de todo o grupo (os editores organizam); a
+privada só o dono vê e tudo dentro dela é privado (o quadro vira privado ao entrar; ao sair, o dono escolhe se volta ao
+grupo). As pastas antigas viraram pastas públicas do grupo.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

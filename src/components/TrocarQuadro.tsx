@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import type { ConjuntoQuadros, PastasQuadros } from "@/lib/tarefas-core";
+import type { AtorPasta, ConjuntoQuadros, PastasQuadros } from "@/lib/tarefas-core";
 import { SearchField } from "./Field";
 import { Modal } from "./Modal";
 import { EditorConjunto, GradeQuadros, SecoesDeQuadros, useConjuntosQuadros } from "./SecoesQuadros";
@@ -10,6 +10,9 @@ import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { Skeleton } from "./Skeleton";
 import { toast } from "./Toast";
+
+/** O que o painel carrega: os quadros, as PASTAS que a pessoa vê (+ a ordem dela) e quem ela é (as regras das pastas). */
+type Dados = { quadros: QuadroCardDados[]; conjuntos: PastasQuadros; ator: AtorPasta };
 
 /**
  * MUDAR DE QUADROS (como o do Trello): o gatilho (o "Mudar de quadros" da pílula de vistas) abre o painel com a BUSCA
@@ -60,16 +63,21 @@ function PainelQuadros({
   onFavorito?: (id: number) => void;
   onEscolhido: () => void;
 }) {
-  const [dados, setDados] = useState<{ quadros: QuadroCardDados[]; conjuntos: PastasQuadros } | null>(null);
-  useEffect(() => {
-    let vivo = true;
-    chamar<{ quadros: QuadroCardDados[]; conjuntos: PastasQuadros }>("/api/tarefas/quadros")
-      .then((j) => vivo && setDados(j))
-      .catch((e) => vivo && toast.error((e as Error).message));
-    return () => {
-      vivo = false;
-    };
+  const [dados, setDados] = useState<Dados | null>(null);
+  const vivo = useRef(true);
+  // Carrega (e RECARREGA depois de mexer nas pastas — a privacidade dos quadros muda).
+  const carregar = useCallback(() => {
+    chamar<Dados>("/api/tarefas/quadros")
+      .then((j) => vivo.current && setDados(j))
+      .catch((e) => vivo.current && toast.error((e as Error).message));
   }, []);
+  useEffect(() => {
+    vivo.current = true;
+    carregar();
+    return () => {
+      vivo.current = false;
+    };
+  }, [carregar]);
 
   if (!dados)
     return (
@@ -79,21 +87,25 @@ function PainelQuadros({
         ))}
       </div>
     );
-  return <ConteudoPainel quadros={dados.quadros} pastasIniciais={dados.conjuntos} grade={{ favoritos, onFavorito, atual, aba, onAbrir: onEscolhido }} />;
+  return <ConteudoPainel quadros={dados.quadros} pastasIniciais={dados.conjuntos} ator={dados.ator} aoMudar={carregar} grade={{ favoritos, onFavorito, atual, aba, onAbrir: onEscolhido }} />;
 }
 
 /** O conteúdo do painel já carregado: a busca (resultados achatados) ou as SEÇÕES com as PASTAS — o mesmo da tela de Tarefas. */
 function ConteudoPainel({
   quadros,
   pastasIniciais,
+  ator,
+  aoMudar,
   grade,
 }: {
   quadros: QuadroCardDados[];
   pastasIniciais: PastasQuadros;
+  ator: AtorPasta;
+  aoMudar: () => void;
   grade: { favoritos: number[]; onFavorito?: (id: number) => void; atual: number; aba: string; onAbrir: () => void };
 }) {
   const [busca, setBusca] = useState("");
-  const conj = useConjuntosQuadros(pastasIniciais);
+  const conj = useConjuntosQuadros(pastasIniciais, { quadros, ator, aoMudar });
   const [editando, setEditando] = useState<ConjuntoQuadros | null>(null);
   const casa = predicadoBusca(busca);
   const achados = casa ? quadros.filter((q) => casa([q.nome, q.grupoNome])) : null;
@@ -115,9 +127,10 @@ function ConteudoPainel({
           <p className="py-8 text-center text-[13px] text-muted">Nenhum quadro com “{busca}”.</p>
         )
       ) : (
-        <SecoesDeQuadros quadros={quadros} pastas={conj.estado} onMover={conj.mover} onEditarPasta={setEditando} onExcluirPasta={conj.excluir} {...grade} />
+        <SecoesDeQuadros quadros={quadros} pastas={conj.estado} onMover={conj.mover} onEditarPasta={setEditando} onExcluirPasta={conj.excluir} ator={ator} {...grade} />
       )}
-      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
+      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} ator={ator} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
+      {conj.confirmacao}
     </div>
   );
 }

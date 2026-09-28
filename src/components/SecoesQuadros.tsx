@@ -5,6 +5,7 @@ import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import {
+  type AtorPasta,
   CHAVE_CONJUNTOS_TAREFAS,
   type ConjuntoQuadros,
   type DestinoGrade,
@@ -12,21 +13,23 @@ import {
   itensDaGrade,
   MAX_NOME_CONJUNTO,
   MAX_QUADROS_CONJUNTO,
+  motivoNaoMoverParaPasta,
   moverNaGrade,
   PALETA_ETIQUETAS,
   type PastasQuadros,
-  salvarConjunto,
+  podeEditarPasta,
 } from "@/lib/tarefas-core";
 import { Button } from "./Button";
 import { ChipsEscolha } from "./ChipsEscolha";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField, TextField } from "./Field";
-import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconMais, IconNenhum, IconPencil, IconTrash } from "./icons";
+import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconLock, IconMais, IconNenhum, IconPencil, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { GradePastas } from "./PastasQuadros";
 import { QuadroCard } from "./QuadroCard";
 import { segurar } from "./segurar";
+import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { useSetLocal } from "./useSetLocal";
 
@@ -274,6 +277,8 @@ export function SecoesDeQuadros({
   onMover,
   onEditarPasta,
   onExcluirPasta,
+  ator,
+  novoNaPasta,
   atual,
   aba,
   onAbrir,
@@ -286,6 +291,10 @@ export function SecoesDeQuadros({
   onMover?: (raiz: string[], chave: string, destino: DestinoGrade) => void;
   onEditarPasta?: (c: ConjuntoQuadros) => void;
   onExcluirPasta?: (id: string, raiz: string[]) => void;
+  /** Quem vê (as regras das pastas: a pública só editores organizam; a privada, o dono). */
+  ator: AtorPasta;
+  /** O card "Novo quadro" DENTRO de uma pasta que a pessoa organiza (`undefined` = sem). */
+  novoNaPasta?: (c: ConjuntoQuadros) => ReactNode;
   atual?: number;
   aba?: string;
   onAbrir?: () => void;
@@ -307,6 +316,17 @@ export function SecoesDeQuadros({
     </SecaoQuadros>
   );
   const raizTodos = itensDaGrade(quadros, pastas).map((i) => i.chave);
+  // A REGRA das pastas na tela (o servidor confere de novo): quem pode tirar/pôr cada quadro.
+  const podeMover = (chave: string, destino: DestinoGrade): string | null => {
+    if (!chave.startsWith("q:")) return null;
+    const q = porId.get(Number(chave.slice(2)));
+    if (!q) return null;
+    const origem = pastas.lista.find((c) => c.quadros.includes(q.id)) ?? null;
+    const alvo = destino.pasta != null ? (pastas.lista.find((c) => c.id === destino.pasta) ?? null) : null;
+    if (!origem && !alvo) return null;
+    // Da privada para fora, o dono decide ao soltar (tornar visível) — a confirmação vem depois.
+    return motivoNaoMoverParaPasta(q, origem, alvo, ator, !!origem?.privado && !alvo?.privado);
+  };
   return (
     <div className="space-y-5">
       {favs.length > 0 && secao("fav", "Favoritos", <IconEstrela className="h-4 w-4 shrink-0" style={{ color: "var(--warn)" }} fill="currentColor" />, favs.length, <GradeQuadros quadros={favs} {...grade} />)}
@@ -327,8 +347,12 @@ export function SecoesDeQuadros({
             {...grade}
             extra={extraFinal}
             onMover={onMover}
+            podeMover={podeMover}
+            extraPasta={novoNaPasta && ((c) => (podeEditarPasta(c, ator) ? novoNaPasta(c) : null))}
             menuPasta={
-              onEditarPasta && onExcluirPasta ? (c) => <MenuConjunto conjunto={c} onEditar={() => onEditarPasta(c)} onExcluir={() => onExcluirPasta(c.id, raizTodos)} /> : undefined
+              onEditarPasta && onExcluirPasta
+                ? (c) => (podeEditarPasta(c, ator) ? <MenuConjunto conjunto={c} onEditar={() => onEditarPasta(c)} onExcluir={() => onExcluirPasta(c.id, raizTodos)} /> : null)
+                : undefined
             }
           />
         </div>,
@@ -337,38 +361,143 @@ export function SecoesDeQuadros({
   );
 }
 
+/** Uma pasta NOVA ainda sem id do servidor (`novo-…`). */
+export const PASTA_NOVA = "novo-";
+/** A pasta em branco do "Nova pasta" — a pública só para editores (os demais criam a privada). */
+export const pastaEmBranco = (ator: AtorPasta): ConjuntoQuadros => ({
+  id: `${PASTA_NOVA}${Date.now().toString(36)}`,
+  nome: "",
+  cor: PALETA_ETIQUETAS[15],
+  quadros: [],
+  privado: !ator.editor,
+  criadoPor: ator.id,
+  grupoId: 0,
+});
+
 /**
- * As PASTAS da pessoa (preferência `tarefas:conjuntos` = `{lista, ordem}`): salvar/excluir/MOVER é otimista e grava em
- * FILA (como os favoritos); falhou ⇒ volta ao último estado gravado e avisa.
+ * As PASTAS vistas pela pessoa (do banco — públicas do grupo + as privadas dela) e a ORDEM pessoal da raiz (preferência
+ * `tarefas:conjuntos` = `{ordem}`). Tudo OTIMISTA e em FILA: mover na raiz grava só a ordem; mudar um quadro de pasta vai a
+ * `POST /api/tarefas/pastas/mover` (entrar na PRIVADA confirma "vira privado"; sair dela pergunta se volta ao grupo);
+ * salvar/excluir vão às rotas da pasta. Falhou ⇒ volta ao último estado gravado e avisa. `aoMudar` = recarregar os
+ * quadros (a privacidade deles muda). Um `inicial` novo (recarga) vale quando a fila está parada.
  */
-export function useConjuntosQuadros(inicial: PastasQuadros) {
+export function useConjuntosQuadros(inicial: PastasQuadros, { quadros, ator, aoMudar }: { quadros: QuadroCardDados[]; ator: AtorPasta; aoMudar?: () => void }) {
   const [estado, setEstado] = useState(inicial);
   const atual = useRef(inicial);
   const gravado = useRef(inicial);
   const fila = useRef<Promise<void>>(Promise.resolve());
-  const gravar = (novo: PastasQuadros) => {
-    if (novo === atual.current) return;
+  const pendentes = useRef(0);
+  const reais = useRef(new Map<string, string>());
+  const ctx = useRef({ quadros, aoMudar });
+  ctx.current = { quadros, aoMudar };
+  const { confirmar, confirmacao } = useConfirmacao();
+  useEffect(() => {
+    if (pendentes.current) return;
+    atual.current = inicial;
+    gravado.current = inicial;
+    setEstado(inicial);
+  }, [inicial]);
+  // O id REAL de uma pasta criada nesta tela (a fila roda depois da criação).
+  const real = (id: string) => reais.current.get(id) ?? id;
+  const ordemReal = (ordem: string[]) => ordem.map((k) => (k.startsWith("p:") ? `p:${real(k.slice(2))}` : k));
+  const gravarOrdem = (ordem: string[]) => chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_CONJUNTOS_TAREFAS, valor: { ordem: ordemReal(ordem) } });
+  const trocarId = (e: PastasQuadros, de: string, para: string): PastasQuadros => ({
+    lista: e.lista.map((c) => (c.id === de ? { ...c, id: para } : c)),
+    ordem: e.ordem.map((k) => (k === `p:${de}` ? `p:${para}` : k)),
+  });
+  const enfileirar = (novo: PastasQuadros, tarefa: () => Promise<unknown>) => {
     atual.current = novo;
     setEstado(novo);
-    fila.current = fila.current.then(() =>
-      chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_CONJUNTOS_TAREFAS, valor: novo }).then(
+    pendentes.current++;
+    fila.current = fila.current
+      .then(tarefa)
+      .then(
         () => {
-          gravado.current = novo;
+          gravado.current = atual.current;
         },
         (e) => {
           atual.current = gravado.current;
           setEstado(gravado.current);
           toast.error((e as Error).message);
         },
-      ),
-    );
+      )
+      .finally(() => {
+        pendentes.current--;
+      });
   };
-  return {
-    estado,
-    salvar: (c: ConjuntoQuadros) => gravar({ ...atual.current, lista: salvarConjunto(atual.current.lista, c) }),
-    excluir: (id: string, raiz: string[]) => gravar(excluirPasta(atual.current, raiz, id)),
-    mover: (raiz: string[], chave: string, destino: DestinoGrade) => gravar(moverNaGrade(atual.current, raiz, chave, destino)),
+  const mesmaOrdem = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
+
+  const mover = async (raiz: string[], chave: string, destino: DestinoGrade) => {
+    const antes = atual.current;
+    const novo = moverNaGrade(antes, raiz, chave, destino);
+    if (novo === antes) return;
+    if (chave.startsWith("p:")) return enfileirar(novo, () => gravarOrdem(novo.ordem));
+    const qid = Number(chave.slice(2));
+    const origem = antes.lista.find((c) => c.quadros.includes(qid)) ?? null;
+    const alvo = destino.pasta != null ? (antes.lista.find((c) => c.id === destino.pasta) ?? null) : null;
+    if (!origem && !alvo) return enfileirar(novo, () => gravarOrdem(novo.ordem));
+    const q = ctx.current.quadros.find((x) => x.id === qid);
+    if (!q) return;
+    let tornarPublico = false;
+    if (origem?.privado && !alvo?.privado && q.privado && q.criadoPor === ator.id)
+      tornarPublico = await confirmar({
+        titulo: "Tornar o quadro visível ao grupo?",
+        texto: alvo ? `Ele sai da pasta privada para a pasta pública "${alvo.nome}" — só entra nela visível ao grupo.` : "Ele saiu da pasta privada. Confirme para o grupo voltar a vê-lo; ou mantenha-o só seu.",
+        confirmar: "Tornar visível",
+        cancelar: alvo ? "Cancelar" : "Manter privado",
+      });
+    const motivo = motivoNaoMoverParaPasta(q, origem, alvo, ator, tornarPublico);
+    if (motivo) return void toast.error(motivo);
+    if (alvo?.privado && !q.privado && origem?.id !== alvo.id) {
+      const ok = await confirmar({
+        titulo: `O quadro "${q.nome}" vira privado`,
+        texto: "Na pasta privada ele fica só seu: as outras pessoas saem das tarefas, equipes, eventos e checklists dele.",
+        confirmar: "Pôr na pasta",
+        perigo: true,
+      });
+      if (!ok) return;
+    }
+    // A fila pode ter mudado o estado enquanto a pergunta estava aberta: aplica sobre o ATUAL.
+    const final = moverNaGrade(atual.current, raiz, chave, destino);
+    const qidDe = (k: string | null | undefined) => (k?.startsWith("q:") ? Number(k.slice(2)) : null);
+    enfileirar(final, async () => {
+      await chamar("/api/tarefas/pastas/mover", "POST", {
+        quadroId: qid,
+        pastaId: alvo ? Number(real(alvo.id)) : null,
+        antesDe: alvo ? qidDe(destino.antesDe) : null,
+        depoisDe: alvo ? qidDe(destino.depoisDe) : null,
+        tornarPublico,
+      });
+      if (!mesmaOrdem(final.ordem, antes.ordem)) await gravarOrdem(final.ordem);
+      ctx.current.aoMudar?.();
+    });
   };
+
+  const salvar = (c: ConjuntoQuadros) => {
+    const dele = new Set(c.quadros);
+    const nova = c.id.startsWith(PASTA_NOVA);
+    const lista = atual.current.lista.map((x) => (x.id === c.id ? c : { ...x, quadros: x.quadros.filter((q) => !dele.has(q)) }));
+    enfileirar({ ...atual.current, lista: nova ? [...lista, c] : lista }, async () => {
+      if (nova) {
+        const j = await chamar<{ id: string }>("/api/tarefas/pastas", "POST", { nome: c.nome, cor: c.cor, privado: c.privado, quadros: c.quadros, grupoId: c.grupoId || null });
+        reais.current.set(c.id, j.id);
+        atual.current = trocarId(atual.current, c.id, j.id);
+        setEstado(atual.current);
+      } else await chamar(`/api/tarefas/pastas/${real(c.id)}`, "PATCH", { nome: c.nome, cor: c.cor, quadros: c.quadros });
+      ctx.current.aoMudar?.();
+    });
+  };
+
+  const excluir = (id: string, raiz: string[]) => {
+    const novo = excluirPasta(atual.current, raiz, id);
+    enfileirar(novo, async () => {
+      await chamar(`/api/tarefas/pastas/${real(id)}`, "DELETE");
+      await gravarOrdem(novo.ordem);
+      ctx.current.aoMudar?.();
+    });
+  };
+
+  return { estado, salvar, excluir, mover, confirmacao };
 }
 
 /** O menu "…" de uma PASTA: editar e excluir (com confirmação — os quadros voltam à grade, nenhum é tocado). */
@@ -393,7 +522,14 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
               type="button"
               onClick={async () => {
                 fechar();
-                if (await confirmar({ titulo: `Excluir a pasta "${conjunto.nome}"?`, texto: "Só a pasta sai — os quadros dela voltam para a grade, como estão.", confirmar: "Excluir", perigo: true }))
+                if (
+                  await confirmar({
+                    titulo: `Excluir a pasta "${conjunto.nome}"?`,
+                    texto: conjunto.privado ? "Só a pasta sai — os quadros dela voltam para a grade e continuam privados." : "Só a pasta sai — os quadros dela voltam para a grade, como estão (para todo o grupo).",
+                    confirmar: "Excluir",
+                    perigo: true,
+                  })
+                )
                   onExcluir();
               }}
               className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 lg:min-h-9"
@@ -410,14 +546,16 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
 }
 
 /**
- * O EDITOR de uma PASTA (criar/editar): o NOME, a COR (os tons da paleta, em círculos) e os QUADROS (busca + caixas de
- * marcar, com o grupo de cada um — o quadro que está em OUTRA pasta mostra que sai de lá). `quadros` = os que a pessoa pode
- * pôr (os da tela). Gravar devolve a pasta pronta.
+ * O EDITOR de uma PASTA (criar/editar): o NOME, a COR (os tons da paleta, em círculos), na CRIAÇÃO se é PRIVADA (os não
+ * editores só criam a privada) e os QUADROS — só os que podem entrar (`motivoNaoMoverParaPasta`: na pública, os não
+ * privados do grupo; na privada, os criados pela pessoa — os públicos avisam que viram privados), com o grupo de cada um;
+ * o que está em OUTRA pasta mostra que sai de lá. Gravar devolve a pasta pronta.
  */
 export function EditorConjunto({
   aberto,
   quadros,
   pastas = [],
+  ator,
   onFechar,
   onSalvar,
 }: {
@@ -426,12 +564,13 @@ export function EditorConjunto({
   quadros: QuadroCardDados[];
   /** Todas as pastas (o aviso "sai da pasta X"). */
   pastas?: ConjuntoQuadros[];
+  ator: AtorPasta;
   onFechar: () => void;
   onSalvar: (c: ConjuntoQuadros) => void;
 }) {
   return (
-    <Modal open={aberto != null} onClose={onFechar} titulo={aberto?.nome ? "Editar pasta" : "Nova pasta"} size="md">
-      {aberto && <FormConjunto key={aberto.id} inicial={aberto} quadros={quadros} pastas={pastas} onFechar={onFechar} onSalvar={onSalvar} />}
+    <Modal open={aberto != null} onClose={onFechar} titulo={aberto && !aberto.id.startsWith(PASTA_NOVA) ? "Editar pasta" : "Nova pasta"} size="md">
+      {aberto && <FormConjunto key={aberto.id} inicial={aberto} quadros={quadros} pastas={pastas} ator={ator} onFechar={onFechar} onSalvar={onSalvar} />}
     </Modal>
   );
 }
@@ -440,33 +579,62 @@ function FormConjunto({
   inicial,
   quadros,
   pastas,
+  ator,
   onFechar,
   onSalvar,
 }: {
   inicial: ConjuntoQuadros;
   quadros: QuadroCardDados[];
   pastas: ConjuntoQuadros[];
+  ator: AtorPasta;
   onFechar: () => void;
   onSalvar: (c: ConjuntoQuadros) => void;
 }) {
+  const nova = inicial.id.startsWith(PASTA_NOVA);
   // Em que OUTRA pasta cada quadro está (um quadro fica em uma pasta só).
-  const outraPasta = new Map(pastas.filter((p) => p.id !== inicial.id).flatMap((p) => p.quadros.map((q) => [q, p.nome] as const)));
+  const outra = new Map(pastas.filter((p) => p.id !== inicial.id).flatMap((p) => p.quadros.map((q) => [q, p] as const)));
   const [c, setC] = useState(inicial);
   const [busca, setBusca] = useState("");
+  // O GRUPO da pasta: o dela; na nova, o do 1º quadro marcado (todos os quadros de uma pasta são do mesmo grupo).
+  const grupoId = c.grupoId || quadros.find((q) => c.quadros.includes(q.id))?.grupoId || 0;
+  const pode = (q: QuadroCardDados) => c.quadros.includes(q.id) || motivoNaoMoverParaPasta(q, outra.get(q.id) ?? null, { ...c, grupoId: grupoId || q.grupoId }, ator) == null;
+  const elegiveis = quadros.filter(pode);
   const casa = predicadoBusca(busca);
-  const visiveis = casa ? quadros.filter((q) => casa([q.nome, q.grupoNome])) : quadros;
+  const visiveis = casa ? elegiveis.filter((q) => casa([q.nome, q.grupoNome])) : elegiveis;
   const marcar = (id: number) => setC((x) => ({ ...x, quadros: x.quadros.includes(id) ? x.quadros.filter((q) => q !== id) : [...x.quadros, id].slice(0, MAX_QUADROS_CONJUNTO) }));
+  // Trocar pública ↔ privada (só na criação) tira os quadros que deixam de caber.
+  const tipo = (privado: boolean) => setC((x) => ({ ...x, privado, quadros: [] }));
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (!c.nome.trim()) return;
-        onSalvar({ ...c, nome: c.nome.trim() });
+        onSalvar({ ...c, nome: c.nome.trim(), grupoId });
         onFechar();
       }}
     >
       <TextField label="Nome da pasta" autoFocus value={c.nome} maxLength={MAX_NOME_CONJUNTO} placeholder="Ex.: PCA 2026, Rotinas, Protocolos" onChange={(e) => setC({ ...c, nome: e.target.value })} />
+      {nova ? (
+        <Switch
+          checked={c.privado}
+          onChange={tipo}
+          disabled={!ator.editor}
+          label={
+            <span>
+              <span className="block font-semibold text-text">Pasta privada</span>
+              <span className="block text-[12px] text-muted">
+                {ator.editor ? "Só você vê a pasta; os quadros que entrarem ficam privados. Desligada, a pasta é de todo o grupo." : "Só você vê a pasta; os quadros que entrarem ficam privados. Pastas do grupo só os editores criam."}
+              </span>
+            </span>
+          }
+        />
+      ) : (
+        <p className="flex items-center gap-2 text-[13px] text-muted">
+          {c.privado ? <IconLock className="h-4 w-4 shrink-0" /> : <IconUsers className="h-4 w-4 shrink-0" />}
+          {c.privado ? "Pasta privada — só você a vê; os quadros dela são privados." : "Pasta do grupo — todos os membros a veem; os editores a organizam."}
+        </p>
+      )}
       <fieldset>
         <legend className="mb-1.5 text-[13.5px] font-bold text-text">Cor</legend>
         <div className="flex flex-wrap gap-2">
@@ -490,28 +658,33 @@ function FormConjunto({
         <SearchField compacto placeholder="Buscar quadro" value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} aria-label="Buscar quadro" />
         <div className="max-h-[40vh] space-y-0.5 overflow-y-auto rounded-control border border-border p-1">
           {visiveis.length ? (
-            visiveis.map((q) => (
-              <div key={q.id} className="flex min-h-11 items-center rounded-control px-2 hover:bg-surface-2 lg:min-h-9">
-                <Checkbox
-                  checked={c.quadros.includes(q.id)}
-                  onChange={() => marcar(q.id)}
-                  label={
-                    <span className="flex min-w-0 items-center gap-2 text-[13px]">
-                      <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: q.cor }} />
-                      <span className="truncate text-text">{q.nome}</span>
-                      <span className="shrink-0 text-[11.5px] text-muted">{q.grupoNome}</span>
-                      {outraPasta.has(q.id) && (
-                        <span className="shrink-0 text-[11.5px]" style={{ color: "var(--warn)" }}>
-                          {c.quadros.includes(q.id) ? `sai da pasta ${outraPasta.get(q.id)}` : `na pasta ${outraPasta.get(q.id)}`}
-                        </span>
-                      )}
-                    </span>
-                  }
-                />
-              </div>
-            ))
+            visiveis.map((q) => {
+              const dentro = c.quadros.includes(q.id);
+              const aviso = outra.has(q.id) ? (dentro ? `sai da pasta ${outra.get(q.id)?.nome}` : `na pasta ${outra.get(q.id)?.nome}`) : c.privado && !q.privado && dentro && !inicial.quadros.includes(q.id) ? "vira privado" : null;
+              return (
+                <div key={q.id} className="flex min-h-11 items-center rounded-control px-2 hover:bg-surface-2 lg:min-h-9">
+                  <Checkbox
+                    checked={dentro}
+                    onChange={() => marcar(q.id)}
+                    label={
+                      <span className="flex min-w-0 items-center gap-2 text-[13px]">
+                        <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: q.cor }} />
+                        <span className="truncate text-text">{q.nome}</span>
+                        {q.privado && <IconLock aria-label="Privado" className="h-3.5 w-3.5 shrink-0 text-muted" />}
+                        <span className="shrink-0 text-[11.5px] text-muted">{q.grupoNome}</span>
+                        {aviso && (
+                          <span className="shrink-0 text-[11.5px]" style={{ color: "var(--warn)" }}>
+                            {aviso}
+                          </span>
+                        )}
+                      </span>
+                    }
+                  />
+                </div>
+              );
+            })
           ) : (
-            <p className="px-2 py-4 text-center text-[13px] text-muted">Nenhum quadro.</p>
+            <p className="px-2 py-4 text-center text-[13px] text-muted">{c.privado ? "Nenhum quadro criado por você." : "Nenhum quadro."}</p>
           )}
         </div>
       </fieldset>

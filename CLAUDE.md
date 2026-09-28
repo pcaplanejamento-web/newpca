@@ -2371,7 +2371,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       quadro privado (`quadros[].dono`). TORNAR PRIVADO (só o dono; confirma — `useConfirmacao`) é um lote atômico
       **`comandosTornarPrivado`** (`tarefas-sql`, testado no D1 real): liga `privado` e tira os OUTROS de `tarefa_pessoas`,
       `tarefa_equipe_membros`, `tarefa_evento_convidados`, `tarefa_checklist.responsavel_id` e das `notificacoes` do
-      quadro (tarefas, eventos, equipes e histórico ficam; auditoria diz o que saiu).
+      quadro (tarefas, eventos, equipes e histórico ficam; auditoria diz o que saiu). Pôr o quadro numa PASTA PRIVADA o torna privado pelo MESMO lote (ver "PASTAS PÚBLICAS/PRIVADAS").
   - **"MUDAR DE QUADROS" no padrão do Trello (sem migração):** o **`TrocarQuadro`** (o item da `PilulaVistas`) abre um
     `Modal` (bottom-sheet no celular) com o **`PainelQuadros`**: `SearchField` "Pesquisar seus quadros" (nome ou grupo —
     `predicadoBusca`), **`ChipsEscolha`** por GRUPO (Tudo · grupo…; só com 2+ grupos — o componente novo de chips de
@@ -2381,7 +2381,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     estrela de favorito — `onFavorito` — e, no aberto agora, `atual`: contorno accent + selo "Atual"; `onAbrir` fecha o
     painel ao navegar). Os quadros (de TODOS os grupos da pessoa, sem os arquivados; o privado só do dono) vêm só ao abrir
     por **`GET /api/tarefas/quadros`** (`listarQuadros`). Saíram o `Dropdown` + `SeletorBusca` do trocar de quadro.
-  - **SEÇÕES DE QUADROS + PASTAS (sem migração):** a tela de Tarefas e o "Mudar de quadros" usam o MESMO
+  - **SEÇÕES DE QUADROS + PASTAS PÚBLICAS/PRIVADAS (migração `0061`):** a tela de Tarefas e o "Mudar de quadros" usam o MESMO
     **`SecoesDeQuadros`** (`SecoesQuadros.tsx`): **Favoritos** · **Visualizados recentemente** (deste aparelho —
     `registrarQuadroRecente`/`useQuadrosRecentes`) · **Seus quadros** (com 2+ grupos, `ChipsEscolha` por grupo; o card
     "Novo quadro" no fim). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (guardado neste aparelho —
@@ -2402,14 +2402,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     DOM, oculto, para o toque não perder o alvo): soltar entre cards reordena (pousa na sombra); sobre o MEIO de uma pasta
     ("Soltar na pasta") o card ENCOLHE para dentro dela (`CartaoPreso.entrando`) e ela pulsa (`animate-pasta-recebe`) — a
     sombra fica parada enquanto o dedo está sobre a pasta; dentro da aberta reordena; arrastar para fora a tira; pasta não
-    entra em pasta; Alt+←/→ reordenam pelo teclado. Estado = preferência `tarefas:conjuntos` = **`{lista, ordem}`** (`ordem`
-    com `p:<pasta>`/`q:<quadro solto>`) — núcleo puro testado em `tarefas-core`: `lerPastas`, `lerConjuntos` (**um quadro em
-    UMA pasta** — o formato antigo mantém a 1ª), `salvarConjunto` (tira os quadros das outras pastas), `itensDaGrade`,
-    `moverNaGrade` (destino relativo ao vizinho VISÍVEL; a ordem COMPLETA preserva o lugar dos quadros que a tela não mostra
-    — o grupo ativo), `excluirPasta` (os quadros voltam no lugar dela). Hook `useConjuntosQuadros` (`estado`/`salvar`/
-    `excluir`/`mover`, otimista em fila). "Nova pasta" → **`EditorConjunto`** (nome, cor, quadros — avisa "sai da pasta
-    X"). O painel do "Mudar de quadros" tem as MESMAS pastas, arrasto e edição (`GET /api/tarefas/quadros` devolve
-    `conjuntos` = `{lista, ordem}`).
+    entra em pasta; Alt+←/→ reordenam pelo teclado. **As pastas moram no BANCO** (`tarefa_pastas`: grupo cascade, nome, cor,
+    `privado`, `criado_por`, ordem; `tarefa_quadros.pasta_id` set null + `pasta_ordem` — um quadro em UMA pasta): a **PÚBLICA**
+    é do GRUPO (todos os membros a veem; só EDITORES criam/organizam/movem quadros nela; só quadros NÃO privados do mesmo
+    grupo); a **PRIVADA** é do DONO (só ele a vê — nem o grupo nem o ADM; qualquer membro cria) e **tudo dentro dela é
+    privado**: só entram quadros criados por ele, que VIRAM privados ao entrar (`comandosTornarPrivado` no mesmo lote — a
+    tela confirma antes), o quadro criado dentro dela nasce privado e, ao arrastá-lo para fora, o dono escolhe se ele volta ao
+    grupo ("Tornar visível" | "Manter privado"). Trocar a privacidade do quadro na Configuração o tira da pasta que não
+    combina (`soltarSeIncompativel`). A migração converteu as pastas antigas (preferência de cada pessoa) em pastas PÚBLICAS
+    do grupo do 1º quadro público delas. A ORDEM da RAIZ segue PESSOAL — preferência `tarefas:conjuntos` = **`{ordem}`**
+    (`p:<pasta>`/`q:<quadro solto>`). Núcleo puro testado em `tarefas-core`: `pastasDosQuadros` (as pastas com os quadros
+    pela `pastaOrdem`), **`podeEditarPasta`**/**`motivoNaoMoverParaPasta`** (as regras, a mesma na tela e no servidor),
+    `lerOrdemGrade`, `itensDaGrade`, `moverNaGrade` (destino relativo ao vizinho VISÍVEL; a ordem COMPLETA preserva o lugar
+    dos quadros que a tela não mostra), `excluirPasta`. Builders (`tarefas-sql`, testados no D1 real): `comandosMoverParaPasta`,
+    `comandosQuadrosDaPasta`, `comandosExcluirPasta`, `pastaVisivel`. Rotas: `POST /api/tarefas/pastas` (`{nome, cor,
+    privado, quadros, grupoId?}` — a pública exige editor), `PATCH`/`DELETE /api/tarefas/pastas/[id]` (quem organiza; a
+    privacidade é fixa), `POST /api/tarefas/pastas/mover` (o arrasto: `{quadroId, pastaId|null, antesDe, depoisDe,
+    tornarPublico}` — `pasta_ordem` pelos vizinhos, `ordemEntre`) e `POST /api/tarefas/quadros` com `pastaId` (criado dentro;
+    na privada nasce privado); auditoria `tarefa_pasta`. Na tela: `GradePastas.podeMover` — a pasta que recusa o quadro
+    arrastado mostra "Não pode entrar" em vermelho e soltar dá o ARRASTO NEGADO (sacode + o motivo); a PRIVADA leva o
+    cadeado na aba e o selo "Privada"; o menu "…" só para quem organiza; `extraPasta` = o card "Novo quadro nesta pasta"
+    (editor). Hook `useConjuntosQuadros(inicial, {quadros, ator, aoMudar})` (`estado`/`salvar`/`excluir`/`mover`/
+    `confirmacao`, otimista em FILA; ids provisórios `novo-…` até o POST; recarrega os quadros depois). "Nova pasta" →
+    **`EditorConjunto`** (nome, cor, o `Switch` "Pasta privada" na criação — travado ligado para quem não é editor — e só os
+    quadros que podem entrar; avisa "sai da pasta X"/"vira privado"). O painel do "Mudar de quadros" tem as MESMAS pastas,
+    regras e edição (`GET /api/tarefas/quadros` devolve `conjuntos` = `{lista, ordem}` + `ator`).
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
@@ -2625,7 +2642,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nome com a coluna presa ao cursor e a SOMBRA do destino, alfinete, olho e largura pela borda; o Comparativo do orçamento),
   **`Ajuda`**/`TopicoAjuda` (o "(?)" — botão discreto que abre a explicação de uma tela num painel; tira o texto de
   instrução da tela), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
-  SALVAS de uma tabela: pessoais ou públicas — quantas quiserem; todos veem e usam as públicas, até como a sua padrão; só o dono ou o ADM altera —, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — a
+  SALVAS de uma tabela: pessoais ou públicas — quantas quiserem; todos veem e usam as públicas, até como a sua padrão; só o dono ou o ADM altera —, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — `cancelar` = o rótulo do "não"; a
   CONFIRMAÇÃO do sistema num `AvisoFlutuante` com Cancelar/Confirmar, no lugar do `confirm()` do navegador; o
   `AvisoFlutuante` ganhou `acoes`),
   **`PlanilhaDfds`** (planilha de DFDs; `unica` = tabela única do gravado; `LinhaDfd.processando` = spinner + o que está

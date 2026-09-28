@@ -20,6 +20,10 @@ import {
   comandosMoverQuadro,
   comandosNotificacoes,
   comandosTornarPrivado,
+  comandosMoverParaPasta,
+  comandosQuadrosDaPasta,
+  comandosExcluirPasta,
+  pastaVisivel,
   comandosValoresCampos,
   comandosVinculos,
   comandosVinculosTarefa,
@@ -412,5 +416,44 @@ describe("tarefas — TORNAR PRIVADO (comandosTornarPrivado no db.batch do D1)",
     assert.deepEqual(col("SELECT evento_id, usuario_id FROM tarefa_evento_convidados ORDER BY 1, 2"), ["1:9801", "2:9803"]);
     assert.deepEqual(col("SELECT texto, COALESCE(responsavel_id, 0) FROM tarefa_checklist ORDER BY texto"), ["a:0", "b:9801", "c:9802"]);
     assert.deepEqual(col("SELECT titulo FROM notificacoes ORDER BY titulo"), ["y", "z"]);
+  });
+});
+
+describe("tarefas — PASTAS (builders no db.batch do D1)", () => {
+  it("pública recebe, privada torna privado, sair torna público; definir os quadros; excluir solta; visibilidade", async () => {
+    const db = aplicarTudo();
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9901, 'Ana', 'a@x', 'h'), (9902, 'Bia', 'b@x', 'h')");
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9900, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, criado_por) VALUES (1, 9900, 'A', 9901), (2, 9900, 'B', 9901), (3, 9900, 'C', 9902)");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem) VALUES (1, 1, 'L', 1)");
+    db.exec("INSERT INTO tarefa_pastas (id, grupo_id, nome, privado, criado_por) VALUES (1, 9900, 'Pub', 0, 9902), (2, 9900, 'Priv', 1, 9901)");
+    const base = { descricao: null, prioridade: "media" as const, inicio: null, prazo: null, concluida: false, criadoPor: 9901, etiquetas: [] };
+    await orm.batch(comandosCriarTarefa(orm, { ...base, quadroId: 1, listaId: 1, titulo: "T", pessoas: [9901, 9902] }));
+    const q = (id: number) => db.prepare("SELECT pasta_id AS p, pasta_ordem AS o, privado AS v FROM tarefa_quadros WHERE id = ?").get(id) as { p: number | null; o: number; v: number };
+
+    await orm.batch(comandosMoverParaPasta(orm, { quadroId: 1, pastaId: 1, pastaOrdem: 1 }) as never);
+    assert.deepEqual({ ...q(1) }, { p: 1, o: 1, v: 0 });
+    await orm.batch(comandosMoverParaPasta(orm, { quadroId: 1, pastaId: 2, pastaOrdem: 1, tornarPrivadoDe: 9901 }) as never);
+    assert.deepEqual({ ...q(1) }, { p: 2, o: 1, v: 1 });
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_pessoas").get() as { n: number }).n, 1);
+    await orm.batch(comandosMoverParaPasta(orm, { quadroId: 1, pastaId: null, pastaOrdem: 0, tornarPublico: true }) as never);
+    assert.deepEqual({ ...q(1) }, { p: null, o: 0, v: 0 });
+
+    await orm.batch(comandosQuadrosDaPasta(orm, 1, [3, 1], null) as never);
+    assert.deepEqual([q(3).p, q(3).o, q(1).p, q(1).o], [1, 1, 1, 2]);
+    await orm.batch(comandosQuadrosDaPasta(orm, 1, [1], null) as never);
+    assert.equal(q(3).p, null);
+    await orm.batch(comandosQuadrosDaPasta(orm, 2, [2, 1], { dono: 9901, ids: [2, 1] }) as never);
+    assert.deepEqual([q(1).p, q(1).v, q(2).p, q(2).v], [2, 1, 2, 1]);
+
+    await orm.batch(comandosExcluirPasta(orm, 2) as never);
+    assert.deepEqual([q(1).p, q(1).v, q(2).p], [null, 1, null]);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_pastas").get() as { n: number }).n, 1);
+
+    db.exec("INSERT INTO tarefa_pastas (id, grupo_id, nome, privado, criado_por) VALUES (3, 9900, 'Da Bia', 1, 9902)");
+    const vis = async (u: number) => (await orm.select({ id: schema.tarefaPastas.id }).from(schema.tarefaPastas).where(pastaVisivel(u, false)).orderBy(schema.tarefaPastas.id)).map((x) => x.id);
+    assert.deepEqual(await vis(9901), [1]);
+    assert.deepEqual(await vis(9902), [1, 3]);
   });
 });

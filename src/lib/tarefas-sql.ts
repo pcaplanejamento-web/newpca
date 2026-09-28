@@ -15,6 +15,7 @@ import {
   tarefaEventoConvidados,
   tarefaEventos,
   tarefaListas,
+  tarefaPastas,
   tarefaPessoas,
   tarefaQuadros,
   tarefaVinculos,
@@ -453,6 +454,44 @@ export function comandosEsvaziarLista(db: Db, origem: number, destino: number, d
       .where(eq(tarefas.listaId, origem)),
   ];
 }
+
+/**
+ * PÕE O QUADRO NA PASTA (`pastaId` null = solto) no lugar `pastaOrdem` — num lote atômico com a privacidade: entrando numa
+ * pasta PRIVADA, o quadro vira privado do `dono` (`comandosTornarPrivado`); `tornarPublico` = volta a ser do grupo.
+ */
+export function comandosMoverParaPasta(db: Db, d: { quadroId: number; pastaId: number | null; pastaOrdem: number; tornarPrivadoDe?: number | null; tornarPublico?: boolean }) {
+  return [
+    db
+      .update(tarefaQuadros)
+      .set({ pastaId: d.pastaId, pastaOrdem: d.pastaOrdem, ...(d.tornarPublico ? { privado: false } : {}), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .where(eq(tarefaQuadros.id, d.quadroId)),
+    ...(d.tornarPrivadoDe != null ? comandosTornarPrivado(db, d.quadroId, d.tornarPrivadoDe) : []),
+  ];
+}
+
+/**
+ * Os QUADROS DA PASTA passam a ser EXATAMENTE `ids`, nessa ordem: os que saíram ficam soltos (a privacidade não muda), os
+ * que entraram vêm de onde estavam; na pasta PRIVADA, os públicos que entram viram privados do `dono`.
+ */
+export function comandosQuadrosDaPasta(db: Db, pastaId: number, ids: number[], tornarPrivados: { dono: number; ids: number[] } | null) {
+  return [
+    db
+      .update(tarefaQuadros)
+      .set({ pastaId: null, pastaOrdem: 0 })
+      .where(and(eq(tarefaQuadros.pastaId, pastaId), ids.length ? notInArray(tarefaQuadros.id, ids) : undefined)),
+    ...ids.map((id, i) => db.update(tarefaQuadros).set({ pastaId, pastaOrdem: i + 1 }).where(eq(tarefaQuadros.id, id))),
+    ...(tornarPrivados ? tornarPrivados.ids.flatMap((id) => comandosTornarPrivado(db, id, tornarPrivados.dono)) : []),
+  ];
+}
+
+/** EXCLUI a pasta: os quadros ficam soltos (sem depender da FK) — a privacidade deles não muda. */
+export function comandosExcluirPasta(db: Db, pastaId: number) {
+  return [db.update(tarefaQuadros).set({ pastaId: null, pastaOrdem: 0 }).where(eq(tarefaQuadros.pastaId, pastaId)), db.delete(tarefaPastas).where(eq(tarefaPastas.id, pastaId))];
+}
+
+/** A PASTA é visível à pessoa? A pública (do grupo — o grupo é filtrado por quem chama) ou a privada DELA (a órfã, só o ADM). */
+export const pastaVisivel = (usuarioId: number, admin: boolean) =>
+  admin ? sql`(${tarefaPastas.privado} = 0 OR ${tarefaPastas.criadoPor} = ${usuarioId} OR ${tarefaPastas.criadoPor} IS NULL)` : sql`(${tarefaPastas.privado} = 0 OR ${tarefaPastas.criadoPor} = ${usuarioId})`;
 
 /**
  * TORNA O QUADRO PRIVADO (só o DONO dentro — num lote atômico): liga `privado` e tira as OUTRAS pessoas das tarefas

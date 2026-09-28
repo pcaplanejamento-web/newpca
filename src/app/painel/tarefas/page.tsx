@@ -14,13 +14,14 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
   if (!u) redirect("/login");
   const sp = await searchParams;
   if (sp.aba === "calendario") redirect(sp.mes ? `/painel/calendario?mes=${encodeURIComponent(sp.mes)}` : "/painel/calendario");
-  const { quadros, grupoAtivo, modelos, favoritos, conjuntos } = await carregarQuadros(u);
+  const { quadros, grupoAtivo, modelos, favoritos, conjuntos, ator } = await carregarQuadros(u);
   return (
     <TarefasView
       quadros={quadros}
       modelos={modelos}
       favoritos={favoritos}
       conjuntos={conjuntos}
+      ator={ator}
       hoje={dataIsoBrasilia(new Date().toISOString())}
       podeCriar={(u.role === "admin" || u.role === "gestor") && grupoAtivo != null}
     />

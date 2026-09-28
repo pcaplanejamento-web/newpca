@@ -20,6 +20,7 @@ import {
   tarefaEtiquetas,
   tarefaListas,
   tarefaModelos,
+  tarefaPastas,
   tarefaPessoas,
   tarefaQuadros,
   tarefaVinculos,
@@ -69,6 +70,13 @@ import {
   type ListaTarefas,
   ordemEntre,
   ordemEntre as ordemItem,
+  type AtorPasta,
+  type ConjuntoQuadros,
+  MAX_CONJUNTOS,
+  motivoNaoMoverParaPasta,
+  type PastaGravada,
+  pastasDosQuadros,
+  podeEditarPasta,
   type Prioridade,
   PRIORIDADES,
   type TarefaCalendario,
@@ -99,6 +107,10 @@ import {
   comandosEquipe,
   comandosEsvaziarLista,
   comandosTornarPrivado,
+  comandosExcluirPasta,
+  comandosMoverParaPasta,
+  comandosQuadrosDaPasta,
+  pastaVisivel,
   comandosMassa,
   comandosMover,
   comandosMoverQuadro,
@@ -136,6 +148,9 @@ export type Quadro = {
   privado: boolean;
   /** Quem criou (o dono do quadro privado). */
   criadoPor: number | null;
+  /** A PASTA do quadro (null = solto) e o lugar dele nela (migração `0061`). */
+  pastaId: number | null;
+  pastaOrdem: number;
 };
 export type QuadroCard = Quadro & { abertas: number; atrasadas: number; concluidas: number };
 export type TarefaCompleta = TarefaResumo & { quadroId: number; descricao: string | null; blocos: BlocoTarefa[] | null };
@@ -154,6 +169,8 @@ const COLS_QUADRO = {
   fundoGradiente: tarefaQuadros.fundoGradiente,
   privado: tarefaQuadros.privado,
   criadoPor: tarefaQuadros.criadoPor,
+  pastaId: tarefaQuadros.pastaId,
+  pastaOrdem: tarefaQuadros.pastaOrdem,
 };
 
 /** Os quadros dos GRUPOS dados (`null` = todos — o ADM sem grupo), com as contagens do card. `hoje` = "AAAA-MM-DD". */
@@ -659,6 +676,138 @@ export async function tornarQuadroPrivado(id: number, dono: number) {
   const db = getDb();
   await db.batch(comandosTornarPrivado(db, id, dono) as unknown as Parameters<typeof db.batch>[0]);
 }
+
+// ─── PASTAS de quadros (migração `0061`) ────────────────────────────────────────────────────────────────────
+
+/** Quem mexe nas pastas (a regra pura `motivoNaoMoverParaPasta`). */
+export const atorPasta = (u: UsuarioSessao): AtorPasta => ({ id: u.id, editor: u.role !== "membro", admin: u.role === "admin" });
+
+const COLS_PASTA = { id: tarefaPastas.id, nome: tarefaPastas.nome, cor: tarefaPastas.cor, privado: tarefaPastas.privado, criadoPor: tarefaPastas.criadoPor, grupoId: tarefaPastas.grupoId };
+
+/** As PASTAS dos grupos (`null` = todos — o ADM) que a pessoa vê: as públicas + as privadas DELA. */
+export async function listarPastas(grupoIds: number[] | null, u: UsuarioSessao): Promise<PastaGravada[]> {
+  if (grupoIds && grupoIds.length === 0) return [];
+  return getDb()
+    .select(COLS_PASTA)
+    .from(tarefaPastas)
+    .where(and(grupoIds ? inArray(tarefaPastas.grupoId, grupoIds) : undefined, pastaVisivel(u.id, u.role === "admin")))
+    .orderBy(asc(tarefaPastas.ordem), asc(tarefaPastas.id));
+}
+
+/** As pastas prontas para a grade (com os quadros visíveis de cada uma, na ordem de dentro). */
+export async function pastasDaGrade(grupoIds: number[] | null, u: UsuarioSessao, quadros: Pick<Quadro, "id" | "pastaId" | "pastaOrdem">[]): Promise<ConjuntoQuadros[]> {
+  return pastasDosQuadros(await listarPastas(grupoIds, u), quadros);
+}
+
+/** A pasta (com os quadros dela, na ordem), se a pessoa a vê (membro do grupo — o ADM, qualquer um); senão `null`. */
+export async function pastaAcessivel(u: UsuarioSessao, id: number): Promise<ConjuntoQuadros | null> {
+  const [p] = await getDb().select(COLS_PASTA).from(tarefaPastas).where(and(eq(tarefaPastas.id, id), pastaVisivel(u.id, u.role === "admin")));
+  if (!p) return null;
+  if (u.role !== "admin" && !(await gruposDoUsuario(u.id)).some((g) => g.id === p.grupoId)) return null;
+  const qs = await getDb().select({ id: tarefaQuadros.id, pastaId: tarefaQuadros.pastaId, pastaOrdem: tarefaQuadros.pastaOrdem }).from(tarefaQuadros).where(eq(tarefaQuadros.pastaId, id));
+  return pastasDosQuadros([p], qs)[0];
+}
+
+/** Quantas pastas o grupo já tem que a pessoa vê (o teto `MAX_CONJUNTOS`). */
+export async function cabeMaisPasta(grupoId: number, u: UsuarioSessao): Promise<boolean> {
+  return (await listarPastas([grupoId], u)).length < MAX_CONJUNTOS;
+}
+
+export async function criarPasta(grupoId: number, d: { nome: string; cor: string; privado: boolean }, usuarioId: number): Promise<number> {
+  const [p] = await getDb()
+    .insert(tarefaPastas)
+    .values({ grupoId, nome: d.nome, cor: d.cor, privado: d.privado, criadoPor: usuarioId, ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_pastas WHERE grupo_id = ${grupoId})` })
+    .returning({ id: tarefaPastas.id });
+  return p.id;
+}
+
+export async function atualizarPasta(id: number, d: { nome?: string; cor?: string }) {
+  if (d.nome === undefined && d.cor === undefined) return;
+  await getDb()
+    .update(tarefaPastas)
+    .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(tarefaPastas.id, id));
+}
+
+export async function excluirPastaDoBanco(id: number) {
+  const db = getDb();
+  await db.batch(comandosExcluirPasta(db, id) as unknown as Parameters<typeof db.batch>[0]);
+}
+
+/**
+ * Os QUADROS DA PASTA passam a ser `ids` (nessa ordem) — cada quadro NOVO nela passa pela regra (`motivoNaoMoverParaPasta`,
+ * saindo da pasta em que estava); na PRIVADA, os públicos viram privados do dono. Os que saem ficam soltos. Devolve o
+ * motivo da recusa (nada gravado) ou `null`.
+ */
+export async function definirQuadrosDaPasta(u: UsuarioSessao, pasta: ConjuntoQuadros, ids: number[]): Promise<string | null> {
+  const ator = atorPasta(u);
+  const novos = ids.filter((id) => !pasta.quadros.includes(id));
+  const qs = new Map<number, Quadro>();
+  for (const lote of lotesDeIds(novos)) {
+    const r = await getDb().select(COLS_QUADRO).from(tarefaQuadros).innerJoin(grupos, eq(grupos.id, tarefaQuadros.grupoId)).where(and(inArray(tarefaQuadros.id, lote), quadroVisivel(u.id)));
+    for (const q of r) qs.set(q.id, q);
+  }
+  const origens = new Map<number, ConjuntoQuadros | null>();
+  for (const id of novos) {
+    const q = qs.get(id);
+    if (!q) return "Quadro não encontrado.";
+    if (q.pastaId != null && !origens.has(q.pastaId)) origens.set(q.pastaId, await pastaAcessivel(u, q.pastaId));
+    const motivo = motivoNaoMoverParaPasta(q, q.pastaId != null ? (origens.get(q.pastaId) ?? { id: String(q.pastaId), privado: true, criadoPor: null }) : null, pasta, ator);
+    if (motivo) return `${q.nome}: ${motivo}`;
+  }
+  const publicos = pasta.privado && pasta.criadoPor != null ? novos.filter((id) => !qs.get(id)?.privado) : [];
+  const db = getDb();
+  await db.batch(comandosQuadrosDaPasta(db, Number(pasta.id), ids, publicos.length ? { dono: pasta.criadoPor as number, ids: publicos } : null) as unknown as Parameters<typeof db.batch>[0]);
+  return null;
+}
+
+/**
+ * MOVE o quadro para a pasta `destino` (`null` = a raiz), entre os VIZINHOS de dentro dela (ids de quadro — a ordem pelo
+ * meio, `ordemEntre`). Entrando na PRIVADA o quadro vira privado; `tornarPublico` = saindo da privada, volta ao grupo.
+ * Devolve o motivo da recusa ou `null`.
+ */
+export async function moverQuadroParaPasta(
+  u: UsuarioSessao,
+  q: Quadro,
+  destino: ConjuntoQuadros | null,
+  vizinhos: { antesDe?: number | null; depoisDe?: number | null },
+  tornarPublico: boolean,
+): Promise<string | null> {
+  const origem = q.pastaId != null ? ((await pastaAcessivel(u, q.pastaId)) ?? { id: String(q.pastaId), privado: true, criadoPor: null, nome: "", cor: "", quadros: [], grupoId: q.grupoId }) : null;
+  const publicar = tornarPublico && !!origem?.privado && !destino?.privado && q.criadoPor === u.id;
+  const motivo = motivoNaoMoverParaPasta(q, origem, destino, atorPasta(u), publicar);
+  if (motivo) return motivo;
+  let pastaOrdem = 0;
+  if (destino) {
+    const ordem = async (id: number | null | undefined) => {
+      if (id == null || id === q.id) return null;
+      const [r] = await getDb().select({ o: tarefaQuadros.pastaOrdem }).from(tarefaQuadros).where(and(eq(tarefaQuadros.id, id), eq(tarefaQuadros.pastaId, Number(destino.id))));
+      return r?.o ?? null;
+    };
+    const antes = await ordem(vizinhos.antesDe);
+    const depois = await ordem(vizinhos.depoisDe);
+    // `antesDe` = o quadro que fica DEPOIS do movido; `depoisDe` = o que fica ANTES.
+    if (antes != null || depois != null) pastaOrdem = ordemEntre(depois, antes).ordem;
+    else {
+      const [m] = await getDb().select({ m: sql<number>`COALESCE(MAX(${tarefaQuadros.pastaOrdem}), 0)` }).from(tarefaQuadros).where(eq(tarefaQuadros.pastaId, Number(destino.id)));
+      pastaOrdem = (m?.m ?? 0) + 1;
+    }
+  }
+  const db = getDb();
+  const privar = destino?.privado && !q.privado && destino.criadoPor != null ? destino.criadoPor : null;
+  await db.batch(comandosMoverParaPasta(db, { quadroId: q.id, pastaId: destino ? Number(destino.id) : null, pastaOrdem, tornarPrivadoDe: privar, tornarPublico: publicar }) as unknown as Parameters<typeof db.batch>[0]);
+  return null;
+}
+
+/** A pasta do quadro deixa de combinar com a privacidade dele (trocada na Configuração)? Então ele sai da pasta. */
+export async function soltarSeIncompativel(q: Pick<Quadro, "id" | "pastaId">, privado: boolean) {
+  if (q.pastaId == null) return;
+  const [p] = await getDb().select({ privado: tarefaPastas.privado }).from(tarefaPastas).where(eq(tarefaPastas.id, q.pastaId));
+  if (p && p.privado !== privado) await getDb().update(tarefaQuadros).set({ pastaId: null, pastaOrdem: 0 }).where(eq(tarefaQuadros.id, q.id));
+}
+
+/** Pode ORGANIZAR a pasta? (a regra pura, com o usuário da sessão) */
+export const podeOrganizarPasta = (u: UsuarioSessao, p: Pick<ConjuntoQuadros, "privado" | "criadoPor">) => podeEditarPasta(p, atorPasta(u));
 
 export async function excluirQuadro(id: number) {
   await getDb().delete(tarefaQuadros).where(eq(tarefaQuadros.id, id));

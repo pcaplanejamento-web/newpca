@@ -1178,40 +1178,17 @@ export function favoritosPrimeiro<Q extends { id: number }>(quadros: Q[], favori
 }
 
 /**
- * PASTAS de quadros (os CONJUNTOS — como as pastas da tela inicial do celular): grupos de quadros NOMEADOS pela pessoa,
- * cada um com uma cor — preferência `tarefas:conjuntos` (`{ lista, ordem }`, por pessoa; sem migração). Um quadro fica em
- * UMA pasta só (o formato antigo, que permitia vários, é lido mantendo a 1ª).
+ * PASTAS de quadros (migração `0061` — no banco): a PÚBLICA é do GRUPO (todos os membros a veem; só EDITORES a organizam)
+ * e a PRIVADA é do DONO (só ele a vê; TUDO dentro dela é privado — só entram quadros criados por ele, que viram privados).
+ * Um quadro fica em UMA pasta só (`tarefa_quadros.pasta_id`). A ORDEM da RAIZ (pastas e quadros soltos) é pessoal —
+ * preferência `tarefas:conjuntos` (`{ ordem }`).
  */
 export const CHAVE_CONJUNTOS_TAREFAS = "tarefas:conjuntos";
-export type ConjuntoQuadros = { id: string; nome: string; cor: string; quadros: number[] };
+/** Uma pasta: `id` = o nº dela (texto — a chave da grade), os quadros NA ORDEM de dentro. */
+export type ConjuntoQuadros = { id: string; nome: string; cor: string; quadros: number[]; privado: boolean; criadoPor: number | null; grupoId: number };
 export const MAX_CONJUNTOS = 30;
 export const MAX_QUADROS_CONJUNTO = 100;
 export const MAX_NOME_CONJUNTO = 40;
-const HEX_CONJUNTO = /^#[0-9a-f]{6}$/i;
-
-/** Qualquer JSON → os conjuntos válidos (id e nome não vazios, cor hex, quadros inteiros positivos sem repetir). */
-export function lerConjuntos(v: unknown): ConjuntoQuadros[] {
-  const l = Array.isArray(v) ? v : v && typeof v === "object" && Array.isArray((v as { lista?: unknown }).lista) ? (v as { lista: unknown[] }).lista : [];
-  const vistos = new Set<string>();
-  const usados = new Set<number>();
-  const saida: ConjuntoQuadros[] = [];
-  for (const x of l) {
-    if (!x || typeof x !== "object") continue;
-    const c = x as Record<string, unknown>;
-    const id = typeof c.id === "string" ? c.id.trim().slice(0, 40) : "";
-    const nome = typeof c.nome === "string" ? c.nome.trim().slice(0, MAX_NOME_CONJUNTO) : "";
-    if (!id || !nome || vistos.has(id)) continue;
-    vistos.add(id);
-    // Um quadro em UMA pasta só: o que já está numa pasta anterior sai desta.
-    const quadros = Array.isArray(c.quadros)
-      ? [...new Set(c.quadros.filter((q): q is number => Number.isInteger(q) && (q as number) > 0 && !usados.has(q as number)))].slice(0, MAX_QUADROS_CONJUNTO)
-      : [];
-    for (const q of quadros) usados.add(q);
-    saida.push({ id, nome, cor: typeof c.cor === "string" && HEX_CONJUNTO.test(c.cor) ? c.cor.toLowerCase() : "#579dff", quadros });
-    if (saida.length >= MAX_CONJUNTOS) break;
-  }
-  return saida;
-}
 
 /** Os quadros de um conjunto, NA ORDEM do conjunto — só os que existem (o quadro excluído/arquivado/sem acesso some). */
 export function quadrosDoConjunto<Q extends { id: number }>(c: ConjuntoQuadros, quadros: Q[]): Q[] {
@@ -1219,27 +1196,70 @@ export function quadrosDoConjunto<Q extends { id: number }>(c: ConjuntoQuadros, 
   return c.quadros.map((id) => porId.get(id)).filter((q): q is Q => !!q);
 }
 
-/** Cria/atualiza um conjunto (pelo id) — o nome aparado; os quadros dele SAEM das outras pastas; a lista nova, pronta para gravar. */
-export function salvarConjunto(lista: ConjuntoQuadros[], c: ConjuntoQuadros): ConjuntoQuadros[] {
-  const novo = lerConjuntos([c])[0];
-  if (!novo) return lista;
-  const dele = new Set(novo.quadros);
-  const outras = lista.map((x) => (x.id === novo.id ? novo : { ...x, quadros: x.quadros.filter((q) => !dele.has(q)) }));
-  return lista.some((x) => x.id === novo.id) ? outras : [...outras, novo].slice(0, MAX_CONJUNTOS);
+/** Uma pasta como vem do banco. */
+export type PastaGravada = { id: number; nome: string; cor: string; privado: boolean; criadoPor: number | null; grupoId: number };
+/**
+ * As pastas com os quadros de cada uma (pela `pastaOrdem`, empate pelo id) — só os quadros recebidos (os visíveis). Na
+ * ordem das pastas recebida.
+ */
+export function pastasDosQuadros(pastas: PastaGravada[], quadros: { id: number; pastaId: number | null; pastaOrdem: number }[]): ConjuntoQuadros[] {
+  const porPasta = new Map<number, { id: number; pastaOrdem: number }[]>();
+  for (const q of quadros) if (q.pastaId != null) porPasta.set(q.pastaId, [...(porPasta.get(q.pastaId) ?? []), q]);
+  return pastas.map((p) => ({
+    id: String(p.id),
+    nome: p.nome,
+    cor: p.cor,
+    privado: p.privado,
+    criadoPor: p.criadoPor,
+    grupoId: p.grupoId,
+    quadros: (porPasta.get(p.id) ?? []).sort((a, b) => a.pastaOrdem - b.pastaOrdem || a.id - b.id).map((q) => q.id),
+  }));
 }
 
-/** O estado das PASTAS da pessoa: as pastas + a ORDEM da grade (`p:<pasta>` e `q:<quadro solto>`). */
+/** Quem mexe nas pastas: o id e se é EDITOR (ADM/gestor) — ou ADM (entra na pasta privada órfã). */
+export type AtorPasta = { id: number; editor: boolean; admin?: boolean };
+/** O quadro que entra/sai de uma pasta. */
+export type QuadroPasta = { grupoId: number; privado: boolean; criadoPor: number | null };
+
+/** Pode ORGANIZAR a pasta (nome, cor, quadros, excluir)? A pública: editores; a privada: o dono (a órfã: o ADM). */
+export function podeEditarPasta(p: Pick<ConjuntoQuadros, "privado" | "criadoPor">, ator: AtorPasta): boolean {
+  if (p.privado) return p.criadoPor === ator.id || (p.criadoPor == null && !!ator.admin);
+  return ator.editor;
+}
+
+/**
+ * Por que o quadro NÃO pode sair de `origem` e ir para `destino` (`null` = a raiz)? `null` = pode. Pública: só editores,
+ * só quadro NÃO privado, do MESMO grupo. Privada: só o dono, só quadro criado por ELE, do mesmo grupo. Tirar: quem pode
+ * organizar a pasta de origem. `tornarPublico` = o dono tira o quadro da privada deixando-o visível ao grupo.
+ */
+export function motivoNaoMoverParaPasta(
+  q: QuadroPasta,
+  origem: Pick<ConjuntoQuadros, "id" | "privado" | "criadoPor"> | null,
+  destino: Pick<ConjuntoQuadros, "id" | "privado" | "criadoPor" | "grupoId"> | null,
+  ator: AtorPasta,
+  tornarPublico = false,
+): string | null {
+  const falta = (p: Pick<ConjuntoQuadros, "privado">) => (p.privado ? "Só o dono organiza a pasta privada." : "Só editores organizam a pasta pública.");
+  if (origem && !podeEditarPasta(origem, ator)) return falta(origem);
+  if (!destino) return null;
+  if (!podeEditarPasta(destino, ator)) return falta(destino);
+  if (q.grupoId !== destino.grupoId) return "A pasta é de outro grupo.";
+  if (destino.privado) return q.criadoPor === destino.criadoPor ? null : "Só quadros criados por você entram na sua pasta privada.";
+  const privado = q.privado && !(tornarPublico && origem?.privado && origem.id !== destino.id);
+  return privado ? "Quadro privado só entra em pasta privada." : null;
+}
+
+/** O estado das PASTAS visto pela pessoa: as pastas (do banco) + a ORDEM pessoal da grade (`p:<pasta>` e `q:<quadro solto>`). */
 export type PastasQuadros = { lista: ConjuntoQuadros[]; ordem: string[] };
 export const MAX_ORDEM_GRADE = 2000;
 export const chavePasta = (id: string) => `p:${id}`;
 export const chaveQuadro = (id: number) => `q:${id}`;
 const CHAVE_GRADE = /^(p:[^\s]{1,40}|q:[1-9]\d{0,9})$/;
 
-/** Qualquer JSON → o estado das pastas (a ordem só com chaves válidas, sem repetir). */
-export function lerPastas(v: unknown): PastasQuadros {
+/** Qualquer JSON → a ORDEM pessoal da raiz (só chaves válidas, sem repetir) — as pastas vêm do banco. */
+export function lerOrdemGrade(v: unknown): string[] {
   const bruta = v && typeof v === "object" && Array.isArray((v as { ordem?: unknown }).ordem) ? (v as { ordem: unknown[] }).ordem : [];
-  const ordem = [...new Set(bruta.filter((x): x is string => typeof x === "string" && CHAVE_GRADE.test(x)))].slice(0, MAX_ORDEM_GRADE);
-  return { lista: lerConjuntos(v), ordem };
+  return [...new Set(bruta.filter((x): x is string => typeof x === "string" && CHAVE_GRADE.test(x)))].slice(0, MAX_ORDEM_GRADE);
 }
 
 /** Um item da GRADE: uma pasta (com os quadros dela, na ordem) ou um quadro solto. */

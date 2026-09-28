@@ -36,6 +36,23 @@ export const criarQuadroSchema = quadroSchema.extend({
   fundoGradiente: fundoGradiente.optional(),
   /** PRIVADO: só quem cria vê. */
   privado: z.boolean().optional(),
+  /** Criado DENTRO desta pasta (na privada, nasce privado). */
+  pastaId: id.nullable().optional(),
+});
+
+/** PASTA de quadros (migração `0061`): nome, cor e — só na criação — se é PRIVADA; `quadros` = os de dentro, NA ORDEM. */
+const nomePasta = z.string().trim().min(1, "Informe o nome da pasta.").max(40, "Nome com até 40 caracteres.");
+const corPasta = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida.").transform((c) => c.toLowerCase());
+const quadrosPasta = z.array(id).max(100, "Até 100 quadros por pasta.").refine((l) => new Set(l).size === l.length, "Quadro repetido.");
+export const criarPastaSchema = z.object({ nome: nomePasta, cor: corPasta, privado: z.boolean().default(false), quadros: quadrosPasta.default([]), grupoId: id.nullable().optional() });
+export const editarPastaSchema = z.object({ nome: nomePasta.optional(), cor: corPasta.optional(), quadros: quadrosPasta.optional() });
+/** O ARRASTO: o quadro vai para a pasta (`null` = a raiz) entre os vizinhos de dentro dela. */
+export const moverParaPastaSchema = z.object({
+  quadroId: id,
+  pastaId: id.nullable(),
+  antesDe: id.nullable().optional(),
+  depoisDe: id.nullable().optional(),
+  tornarPublico: z.boolean().optional(),
 });
 /** O FORMATO do título automático (`{Campo} - {Campo}`; vazio/null = desligado). */
 const formatoTitulo = z

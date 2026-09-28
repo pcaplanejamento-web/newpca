@@ -2,7 +2,7 @@ import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { resolverImagemFundo } from "@/lib/imagem-fundo";
-import { atualizarQuadro, excluirQuadro, quadroAcessivel, tornarQuadroPrivado } from "@/lib/tarefas";
+import { atualizarQuadro, excluirQuadro, quadroAcessivel, soltarSeIncompativel, tornarQuadroPrivado } from "@/lib/tarefas";
 import { editarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     delete d.privado;
   }
   await atualizarQuadro(id, d);
+  // A pasta segue a privacidade: o quadro que ficou privado sai da pasta pública (e o público sai da privada).
+  if (p.data.privado !== undefined && p.data.privado !== q.privado) await soltarSeIncompativel(q, p.data.privado);
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

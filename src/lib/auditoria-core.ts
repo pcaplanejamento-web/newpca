@@ -39,6 +39,7 @@ export type EntidadeAuditoria =
   | "classificacao_item"
   | "tarefa"
   | "tarefa_quadro"
+  | "tarefa_pasta"
   | "tarefa_lista"
   | "tarefa_etiqueta"
   | "tarefa_equipe"
@@ -85,6 +86,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   classificacao_item: "Classificação de item",
   tarefa: "Tarefa",
   tarefa_quadro: "Quadro de tarefas",
+  tarefa_pasta: "Pasta de quadros",
   tarefa_lista: "Lista de tarefas",
   tarefa_etiqueta: "Etiqueta de tarefa",
   tarefa_equipe: "Equipe de tarefas",

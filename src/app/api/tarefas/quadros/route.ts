@@ -6,29 +6,32 @@ import { resolverImagemFundo } from "@/lib/imagem-fundo";
 import { listasDoPeriodo } from "@/lib/calendario-core";
 import { listarFeriados } from "@/lib/feriados";
 import { dataIsoBrasilia } from "@/lib/format";
-import { atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarQuadros, modeloQuadroDe, quadroAcessivel } from "@/lib/tarefas";
-import { conjuntosDaPessoa } from "@/lib/tarefas-dados";
+import { atorPasta, atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarPastas, listarQuadros, modeloQuadroDe, moverQuadroParaPasta, pastaAcessivel, quadroAcessivel } from "@/lib/tarefas";
+import { ordemDaGrade } from "@/lib/tarefas-dados";
+import { pastasDosQuadros } from "@/lib/tarefas-core";
 import { criarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Os QUADROS ativos que a pessoa vê (de TODOS os grupos dela — o ADM, todos; o privado só do dono), com as contagens do
- * card, e os CONJUNTOS da pessoa — o "Mudar de quadros" usa o MESMO `QuadroCard` e as MESMAS seções da tela de Tarefas.
+ * card, as PASTAS que ela vê e a ORDEM pessoal da grade — o "Mudar de quadros" usa o MESMO `QuadroCard` e as MESMAS seções da tela de Tarefas.
  */
 export async function GET() {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const grupos = a.u.role === "admin" ? null : (await gruposDoUsuario(a.u.id)).map((g) => g.id);
-  const [quadros, conjuntos] = await Promise.all([listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id), conjuntosDaPessoa(a.u.id)]);
-  return ok({ quadros: quadros.filter((q) => !q.arquivado), conjuntos });
+  const [quadros, ordem, pastas] = await Promise.all([listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id), ordemDaGrade(a.u.id), listarPastas(grupos, a.u)]);
+  // As pastas levam também os arquivados (editar a pasta aqui não os tira dela).
+  return ok({ quadros: quadros.filter((q) => !q.arquivado), conjuntos: { lista: pastasDosQuadros(pastas, quadros), ordem }, ator: atorPasta(a.u) });
 }
 
 /**
  * Cria um QUADRO de tarefas no GRUPO ATIVO do cabeçalho — em branco (nasce com as listas A fazer · Em andamento ·
  * Concluído) ou a partir de um MODELO de quadro de um grupo do usuário (listas + etiquetas). `periodo` acrescenta as
  * listas dos DIAS do mês (antes da de concluídas); `templatesDe` copia os TEMPLATES daquele quadro (que o usuário vê);
- * `fundoUrl`/`fundoGradiente` = o FUNDO escolhido (um ou outro; nenhum = o padrão do sistema); `privado` = só quem cria vê.
+ * `fundoUrl`/`fundoGradiente` = o FUNDO escolhido (um ou outro; nenhum = o padrão do sistema); `privado` = só quem cria vê;
+ * `pastaId` = criado DENTRO da pasta (na privada, nasce privado).
  */
 export async function POST(req: Request) {
   const a = await exigirEditor();
@@ -37,7 +40,11 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const grupoId = await getGrupoAtivoId(a.u);
   if (grupoId == null) return erro("Escolha um grupo no cabeçalho para criar o quadro.", 422);
-  const { modeloId, periodo, templatesDe, fundoUrl, fundoGradiente, privado, ...d } = p.data;
+  const { modeloId, periodo, templatesDe, fundoUrl, fundoGradiente, pastaId, ...d } = p.data;
+  // Criado DENTRO de uma pasta: a pasta tem de ser do grupo e organizável por quem cria; na PRIVADA, nasce privado.
+  const pasta = pastaId ? await pastaAcessivel(a.u, pastaId) : null;
+  if (pastaId && (!pasta || pasta.grupoId !== grupoId)) return erro("Pasta não encontrada.", 404);
+  const privado = pasta ? pasta.privado : p.data.privado;
   // O FUNDO escolhido (a imagem por link é resolvida ANTES — um link sem imagem não cria o quadro pela metade).
   let imagem: string | null = null;
   if (fundoUrl && !fundoGradiente)
@@ -60,6 +67,11 @@ export async function POST(req: Request) {
   if (periodo) await gerarListasDoPeriodo(id, listasDoPeriodo(periodo.ano, periodo.mes, periodo.diasUteis ? await listarFeriados() : [], periodo.diasUteis));
   const novo = origem ? await getQuadro(id) : null;
   if (origem && novo) await copiarTemplatesDe(a.u, origem, novo);
+  const criado = pasta ? await getQuadro(id) : null;
+  if (pasta && criado) {
+    const motivo = await moverQuadroParaPasta(a.u, criado, pasta, {}, false);
+    if (motivo) return ok({ id, aviso: motivo });
+  }
   await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "tarefa_quadro", entidadeId: id, resumo: `Quadro "${p.data.nome}" criado${privado ? " (privado)" : ""}` });
   return ok({ id });
 }

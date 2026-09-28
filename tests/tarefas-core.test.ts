@@ -64,13 +64,16 @@ import {
   type ListaTarefas,
   type RecorteTarefas,
   PALETA_ETIQUETAS,
-  lerConjuntos,
-  lerPastas,
+  lerOrdemGrade,
+  type ConjuntoQuadros,
+  type PastasQuadros,
+  motivoNaoMoverParaPasta,
+  pastasDosQuadros,
+  podeEditarPasta,
   itensDaGrade,
   moverNaGrade,
   excluirPasta,
   quadrosDoConjunto,
-  salvarConjunto,
 } from "../src/lib/tarefas-core.ts";
 import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
@@ -676,45 +679,60 @@ describe("paleta de etiquetas (a do Trello)", () => {
   });
 });
 
-describe("conjuntos de quadros (como as coleções do Trello)", () => {
-  it("lê tolerante: sem id/nome some, cor inválida vira o padrão, quadros sem repetir", () => {
-    const l = lerConjuntos({
-      lista: [
-        { id: "a", nome: " PCA 2026 ", cor: "#ABCDEF", quadros: [3, 3, 1, -2, "x"] },
-        { id: "a", nome: "repetido", quadros: [] },
-        { id: "", nome: "sem id" },
-        { id: "b", nome: "Geral", cor: "red" },
-        null,
+describe("pastas de quadros — públicas do grupo e privadas do dono", () => {
+  const pub = { id: "1", privado: false, criadoPor: 7, grupoId: 10 };
+  const priv = { id: "2", privado: true, criadoPor: 7, grupoId: 10 };
+  const editor = { id: 8, editor: true };
+  const membro = { id: 9, editor: false };
+  const dono = { id: 7, editor: false };
+
+  it("monta as pastas pelos quadros, na ordem de dentro — só os quadros recebidos", () => {
+    const l = pastasDosQuadros(
+      [
+        { id: 1, nome: "A", cor: "#579dff", privado: false, criadoPor: 7, grupoId: 10 },
+        { id: 2, nome: "B", cor: "#123456", privado: true, criadoPor: 7, grupoId: 10 },
       ],
-    });
-    assert.deepEqual(l, [
-      { id: "a", nome: "PCA 2026", cor: "#abcdef", quadros: [3, 1] },
-      { id: "b", nome: "Geral", cor: "#579dff", quadros: [] },
-    ]);
-    assert.deepEqual(lerConjuntos("lixo"), []);
+      [
+        { id: 5, pastaId: 1, pastaOrdem: 2 },
+        { id: 3, pastaId: 1, pastaOrdem: 1 },
+        { id: 4, pastaId: null, pastaOrdem: 0 },
+        { id: 6, pastaId: 9, pastaOrdem: 1 },
+      ],
+    );
+    assert.deepEqual(l.map((c) => [c.id, c.quadros, c.privado]), [["1", [3, 5], false], ["2", [], true]]);
+    assert.deepEqual(quadrosDoConjunto(l[0], [{ id: 5 }]), [{ id: 5 }]);
   });
 
-  it("quadros do conjunto na ordem dele, só os que existem; salvar cria ou substitui", () => {
-    const c = { id: "a", nome: "X", cor: "#579dff", quadros: [5, 9, 2] };
-    assert.deepEqual(quadrosDoConjunto(c, [{ id: 2 }, { id: 5 }]), [{ id: 5 }, { id: 2 }]);
-    const l1 = salvarConjunto([], c);
-    assert.equal(l1.length, 1);
-    const l2 = salvarConjunto(l1, { ...c, nome: "Y" });
-    assert.deepEqual(l2.map((x) => x.nome), ["Y"]);
-    assert.deepEqual(salvarConjunto(l2, { ...c, id: "b", nome: "  " }), l2);
+  it("quem organiza: a pública, os editores; a privada, só o dono (a órfã, o ADM)", () => {
+    assert.equal(podeEditarPasta(pub, editor), true);
+    assert.equal(podeEditarPasta(pub, membro), false);
+    assert.equal(podeEditarPasta(priv, dono), true);
+    assert.equal(podeEditarPasta(priv, editor), false);
+    assert.equal(podeEditarPasta({ privado: true, criadoPor: null }, { id: 1, editor: true, admin: true }), true);
   });
 
-  it("um quadro em UMA pasta só: o formato antigo mantém a 1ª; salvar tira os quadros das outras pastas", () => {
-    const l = lerConjuntos({ lista: [{ id: "a", nome: "A", quadros: [1, 2] }, { id: "b", nome: "B", quadros: [2, 3] }] });
-    assert.deepEqual(l.map((c) => c.quadros), [[1, 2], [3]]);
-    const s2 = salvarConjunto(l, { id: "b", nome: "B", cor: "#579dff", quadros: [1, 3] });
-    assert.deepEqual(s2.map((c) => c.quadros), [[2], [1, 3]]);
+  it("regras de mover: pública só quadro público do grupo; privada só quadro do dono; tirar exige poder na origem", () => {
+    const q = { grupoId: 10, privado: false, criadoPor: 7 };
+    assert.equal(motivoNaoMoverParaPasta(q, null, pub, editor), null);
+    assert.match(motivoNaoMoverParaPasta(q, null, pub, membro) ?? "", /editores/);
+    assert.match(motivoNaoMoverParaPasta({ ...q, grupoId: 11 }, null, pub, editor) ?? "", /outro grupo/);
+    assert.match(motivoNaoMoverParaPasta({ ...q, privado: true }, null, pub, editor) ?? "", /privada/);
+    assert.equal(motivoNaoMoverParaPasta(q, null, priv, dono), null);
+    assert.match(motivoNaoMoverParaPasta({ ...q, criadoPor: 8 }, null, priv, dono) ?? "", /criados por você/);
+    assert.match(motivoNaoMoverParaPasta(q, null, priv, editor) ?? "", /dono/);
+    assert.match(motivoNaoMoverParaPasta(q, pub, null, membro) ?? "", /editores/);
+    assert.equal(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, null, dono), null);
+    // Da privada direto para a pública: só tornando público (o dono, editor).
+    const donoEditor = { id: 7, editor: true };
+    assert.match(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, pub, donoEditor) ?? "", /privada/);
+    assert.equal(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, pub, donoEditor, true), null);
   });
 });
 
 describe("pastas de quadros — a grade (ordem, mover, excluir)", () => {
   const qs = [1, 2, 3, 4, 5].map((id) => ({ id }));
-  const est = lerPastas({ lista: [{ id: "a", nome: "A", quadros: [2, 3] }], ordem: ["q:4", "p:a", "q:9", "x", "q:4"] });
+  const pastaA: ConjuntoQuadros = { id: "a", nome: "A", cor: "#579dff", quadros: [2, 3], privado: false, criadoPor: 1, grupoId: 1 };
+  const est: PastasQuadros = { lista: [pastaA], ordem: lerOrdemGrade({ ordem: ["q:4", "p:a", "q:9", "x", "q:4"] }) };
   const raiz = (e: typeof est) => itensDaGrade(qs, e).map((i) => i.chave);
 
   it("lê tolerante e monta a grade: a ordem gravada, depois o que falta (pastas, quadros soltos); sumidos fora", () => {
@@ -723,7 +741,7 @@ describe("pastas de quadros — a grade (ordem, mover, excluir)", () => {
     const pasta = itensDaGrade(qs, est).find((i) => i.tipo === "pasta");
     assert.deepEqual(pasta?.tipo === "pasta" && pasta.quadros.map((q) => q.id), [2, 3]);
     assert.deepEqual(itensDaGrade([{ id: 1 }], est, true).map((i) => i.chave), ["q:1"]);
-    assert.deepEqual(lerPastas("lixo"), { lista: [], ordem: [] });
+    assert.deepEqual(lerOrdemGrade("lixo"), []);
   });
 
   it("reordena na raiz, põe na pasta, tira da pasta, reordena dentro — pasta não entra em pasta", () => {
@@ -753,7 +771,7 @@ describe("pastas de quadros — a grade (ordem, mover, excluir)", () => {
   });
 
   it("a tela com PARTE dos quadros (o grupo ativo) não apaga o lugar dos outros", () => {
-    const e = lerPastas({ lista: [], ordem: ["q:10", "q:4"] });
+    const e: PastasQuadros = { lista: [], ordem: lerOrdemGrade({ ordem: ["q:10", "q:4"] }) };
     const vis = [{ id: 4 }, { id: 5 }];
     const r = itensDaGrade(vis, e).map((i) => i.chave);
     assert.deepEqual(moverNaGrade(e, r, "q:5", { pasta: null, antesDe: "q:4" }).ordem, ["q:10", "q:5", "q:4"]);
