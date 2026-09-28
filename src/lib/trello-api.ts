@@ -30,7 +30,13 @@ export class ErroTrello extends Error {
 
 /** A mensagem legível de um status do Trello. */
 export function mensagemStatusTrello(status: number, corpo: string): string {
-  if (status === 401) return "O Trello recusou a chave ou o token (inválido ou expirado).";
+  if (status === 401) {
+    // O Trello responde 401 tanto para o token inválido quanto para um item que a conta NÃO PODE ver ("unauthorized …
+    // permission requested") — o motivo de lá distingue os dois.
+    const motivo = corpo.trim().slice(0, 160);
+    if (!motivo || /invalid|expired|token/i.test(motivo)) return `O Trello recusou a chave ou o token (inválido ou expirado)${motivo ? ` (Trello: ${motivo})` : ""}.`;
+    return `A conta do Trello não tem acesso a este item (Trello: ${motivo}).`;
+  }
   if (status === 403) {
     const motivo = corpo.trim().slice(0, 160);
     return `A conta do Trello não tem permissão para isso${motivo ? ` (Trello: ${motivo})` : ""}.`;

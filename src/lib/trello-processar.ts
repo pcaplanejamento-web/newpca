@@ -82,6 +82,9 @@ type LoteBoard = Map<string, CartaoLido>;
 /** Acima de quantos cartões pendentes (entrada ou saída) vale ler o board inteiro (2 chamadas) em vez de cartão a cartão. */
 const MIN_LOTE = 5;
 
+/** O nome de cada tipo de item da fila (nas mensagens de erro). */
+const ROTULO_ITEM_FILA: Record<string, string> = { tarefa: "Cartão", lista: "Lista", etiqueta: "Etiqueta", campo: "Campo", quadro: "Quadro" };
+
 /** Adiar sem erro (o quadro está pausado/ainda sendo criado, ou outra passada está nele). */
 class Adiar extends Error {
   readonly segundos: number;
@@ -136,7 +139,8 @@ export async function processarFila(limite = 5, quadroId?: number): Promise<{ fe
         const tr = e instanceof ErroTrello && e.transitorio;
         const espera = e instanceof ErroTrello && e.esperarS ? e.esperarS : Math.min(3600, 60 * 2 ** Math.max(0, item.tentativas));
         const esgotou = item.tentativas + 1 >= MAX_TENTATIVAS && !tr;
-        const msg = (e as Error).message.slice(0, 500);
+        // Diz QUAL item falhou (o cartão/lista/etiqueta) — sem isso o erro do quadro não aponta a causa.
+        const msg = `${ROTULO_ITEM_FILA[item.tipo] ?? item.tipo} ${item.direcao === "saida" ? `#${item.alvo} daqui` : `${item.alvo} do Trello`}: ${(e as Error).message}`.slice(0, 500);
         await db
           .update(trelloFila)
           .set({ erro: msg, proximaEm: sql`datetime('now', ${`+${esgotou ? 86400 : espera} seconds`})` })

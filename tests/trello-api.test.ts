@@ -54,6 +54,8 @@ describe("trello-api — cliente", () => {
     await assert.rejects(c429.eu(), (e: ErroTrello) => e.status === 429 && e.esperarS === 7 && e.transitorio);
     const c401 = clienteTrello({ apiKey: "k", token: "t", fetch: falso([new Response("invalid token", { status: 401 })]).fetch });
     await assert.rejects(c401.eu(), (e: ErroTrello) => e.status === 401 && !e.transitorio && /token/.test(e.message));
+    const semAcesso = clienteTrello({ apiKey: "k", token: "t", fetch: falso([new Response("unauthorized card permission requested", { status: 401 })]).fetch });
+    await assert.rejects(semAcesso.eu(), (e: ErroTrello) => e.status === 401 && /não tem acesso a este item/.test(e.message) && /unauthorized card/.test(e.message));
     const cRede = clienteTrello({ apiKey: "k", token: "t", fetch: falso([]).fetch });
     await assert.rejects(cRede.eu(), (e: ErroTrello) => e.status === 0 && e.transitorio);
   });
