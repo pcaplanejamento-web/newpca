@@ -169,3 +169,74 @@ describe("trello-sync-core — campos e retrato", () => {
     assert.equal(lerRetratoCartao('{"v":{"name":"x"},"url":"u","anexos":[]}')?.url, "u");
   });
 });
+
+describe("trello-sync-core — a volta (cartão → tarefa)", () => {
+  const m: MapaQuadro = {
+    listas: new Map([[1, "L1"], [2, "L2"]]),
+    etiquetas: new Map([[10, "E10"], [11, "E11"]]),
+    membros: new Map([[7, "M7"], [8, "M8"]]),
+    campos: lerCamposBoard({ prioridade: "CP", estimativa: "CE", ticket: "CT", porCampo: { 5: "CF5" }, opcoes: { CP: { o1: "Baixa", o3: "Urgente" } } }),
+  };
+  it("só os campos pedidos; prazo 12:00 = dia inteiro; pessoas/etiquetas sem ligação ficam", async () => {
+    const { patchDoCartao } = await import("../src/lib/trello-sync-core.ts");
+    const v = {
+      name: "  Novo  ",
+      desc: `Texto${"\n\n---\n**Notas (PCA)**\n"}\nN1`,
+      idList: "L2",
+      start: "2026-10-01T15:00:00.000Z",
+      due: "2026-10-05T15:00:00.000Z",
+      dueComplete: true,
+      dueReminder: 30,
+      closed: false,
+      isTemplate: false,
+      cover: "red_dark",
+      idLabels: ["E11", "EX"],
+      idMembers: ["M8", "MX"],
+      campos: { CP: "Urgente", CE: "3", CF5: "x" },
+    };
+    const todos = ["name", "desc", "idList", "start", "due", "dueComplete", "dueReminder", "cover", "idLabels", "idMembers", "campos"] as const;
+    const p = patchDoCartao([...todos], v, m, { pessoas: [7, 99], etiquetas: [10, 50] }, P);
+    assert.equal(p.titulo, "Novo");
+    assert.deepEqual([p.descricao, p.notas], ["Texto", ["N1"]]);
+    assert.equal(p.listaId, 2);
+    assert.deepEqual([p.inicio, p.prazo, p.prazoHora], ["2026-10-01", "2026-10-05", null]);
+    assert.equal(p.concluida, true);
+    assert.equal(p.capa, "#c9372c");
+    assert.deepEqual(p.etiquetas, [50, 11]);
+    assert.deepEqual(p.pessoas, [99, 8]);
+    assert.deepEqual([p.prioridade, p.estimativaH, p.campos], ["urgente", 3, { 5: "x" }]);
+    assert.deepEqual(patchDoCartao(["name"], v, m, { pessoas: [], etiquetas: [] }, P), { titulo: "Novo" });
+    const hora = patchDoCartao(["due"], { ...v, due: "2026-10-05T12:30:00.000Z" }, m, { pessoas: [], etiquetas: [] }, P);
+    assert.equal(hora.prazoHora, "09:30");
+  });
+});
+
+describe("trello-sync-core — avisos do Trello (webhook)", () => {
+  it("assinatura HMAC-SHA1 (corpo + URL); errada/ausente = inválida", async () => {
+    const { assinaturaWebhookValida } = await import("../src/lib/trello-sync-core.ts");
+    const { createHmac } = await import("node:crypto");
+    const corpo = '{"action":{"type":"updateCard"}}';
+    const url = "https://governarv.com.br/api/integracoes/trello/webhook/abc";
+    const certa = createHmac("sha1", "segredo").update(corpo + url).digest("base64");
+    assert.equal(await assinaturaWebhookValida("segredo", corpo, url, certa), true);
+    assert.equal(await assinaturaWebhookValida("outro", corpo, url, certa), false);
+    assert.equal(await assinaturaWebhookValida("segredo", `${corpo} `, url, certa), false);
+    assert.equal(await assinaturaWebhookValida("segredo", corpo, url, null), false);
+  });
+  it("token: o hash é estável (64 hex) e o token novo é aleatório", async () => {
+    const { hashToken, novoToken } = await import("../src/lib/trello-sync-core.ts");
+    assert.match(await hashToken("x"), /^[0-9a-f]{64}$/);
+    assert.equal(await hashToken("x"), await hashToken("x"));
+    assert.notEqual(novoToken(), novoToken());
+  });
+  it("o que o aviso pede: cartão, lista, etiqueta; eco da conta institucional = nada", async () => {
+    const { alvoDoAviso } = await import("../src/lib/trello-sync-core.ts");
+    assert.deepEqual(alvoDoAviso({ type: "updateCard", idMemberCreator: "u1", data: { card: { id: "c1" }, list: { id: "l1" } } }, "conta"), { tipo: "tarefa", alvo: "c1" });
+    assert.deepEqual(alvoDoAviso({ type: "addLabelToCard", idMemberCreator: "u1", data: { card: { id: "c1" }, label: { id: "e1" } } }, "conta"), { tipo: "tarefa", alvo: "c1" });
+    assert.deepEqual(alvoDoAviso({ type: "updateLabel", idMemberCreator: "u1", data: { label: { id: "e1" } } }, "conta"), { tipo: "etiqueta", alvo: "e1" });
+    assert.deepEqual(alvoDoAviso({ type: "updateList", idMemberCreator: "u1", data: { list: { id: "l1" } } }, "conta"), { tipo: "lista", alvo: "l1" });
+    assert.equal(alvoDoAviso({ type: "updateCard", idMemberCreator: "conta", data: { card: { id: "c1" } } }, "conta"), null);
+    assert.equal(alvoDoAviso({ type: "updateBoard", idMemberCreator: "u1", data: {} }, "conta"), null);
+    assert.equal(alvoDoAviso(null, "conta"), null);
+  });
+});

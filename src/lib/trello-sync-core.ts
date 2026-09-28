@@ -255,6 +255,10 @@ export type CamposBoard = {
   opcoes: Record<string, Record<string, string>>;
   /** Os membros do Trello já postos no board. */
   membrosBoard?: string[];
+  /** Campo do Trello → o tipo na API (text/number/date/list/checkbox). */
+  tipos?: Record<string, string>;
+  /** O endereço do sistema (os links dos vínculos nos anexos — o processador roda sem requisição). */
+  origem?: string;
 };
 export const CAMPOS_BOARD_VAZIO: CamposBoard = { porCampo: {}, opcoes: {} };
 export function lerCamposBoard(v: unknown): CamposBoard {
@@ -269,6 +273,8 @@ export function lerCamposBoard(v: unknown): CamposBoard {
       porCampo: o.porCampo && typeof o.porCampo === "object" ? { ...o.porCampo } : {},
       opcoes: o.opcoes && typeof o.opcoes === "object" ? { ...o.opcoes } : {},
       membrosBoard: Array.isArray(o.membrosBoard) ? o.membrosBoard.filter((x): x is string => typeof x === "string") : [],
+      origem: s(o.origem),
+      tipos: o.tipos && typeof o.tipos === "object" ? { ...o.tipos } : {},
     };
   } catch {
     return { ...CAMPOS_BOARD_VAZIO };
@@ -410,4 +416,148 @@ export function corpoValorCampo(tipo: string, valor: string | null, opcoes: Reco
   if (tipo === "date") return { value: { date: dataParaTrello(valor) } };
   if (tipo === "checkbox") return { value: { checked: valor === "1" ? "true" : "false" } };
   return { value: { text: valor } };
+}
+
+// ─── A VOLTA: o que veio do Trello vira alteração na tarefa ────────────────────────────────────────────────
+
+/** As alterações que o cartão do Trello pede na tarefa daqui (só os campos pedidos). */
+export type PatchTarefa = {
+  titulo?: string;
+  descricao?: string | null;
+  notas?: string[];
+  listaId?: number;
+  inicio?: string | null;
+  prazo?: string | null;
+  prazoHora?: string | null;
+  lembreteMin?: number | null;
+  concluida?: boolean;
+  arquivada?: boolean;
+  template?: boolean;
+  capa?: string | null;
+  etiquetas?: number[];
+  pessoas?: number[];
+  prioridade?: keyof typeof PRIORIDADE_TRELLO;
+  estimativaH?: number | null;
+  /** Campo daqui → valor (`null` = limpar). */
+  campos?: Record<number, string | null>;
+};
+
+const inverso = <K>(m: Map<K, string>) => new Map([...m].map(([k, v]) => [v, k]));
+
+/**
+ * Os `campos` do cartão (os que o Trello mudou) viram o PATCH da tarefa. Etiqueta/membro/lista sem ligação ficam de fora;
+ * as pessoas daqui SEM membro do Trello continuam (o Trello não as conhece); o Ticket é só de ida.
+ */
+export function patchDoCartao(
+  campos: CampoCartao[],
+  v: ValoresCartao,
+  m: MapaQuadro,
+  atual: { pessoas: number[]; etiquetas: number[] },
+  paleta: readonly string[],
+): PatchTarefa {
+  const p: PatchTarefa = {};
+  for (const k of campos) {
+    if (k === "name") p.titulo = v.name.trim().slice(0, 200) || "Sem título";
+    else if (k === "desc") {
+      const s = separarNotas(v.desc);
+      p.descricao = s.descricao || null;
+      p.notas = s.notas;
+    } else if (k === "idList") {
+      const l = inverso(m.listas).get(v.idList);
+      if (l != null) p.listaId = l;
+    } else if (k === "start") p.inicio = dataDoTrello(v.start)?.data ?? null;
+    else if (k === "due") {
+      const d = dataDoTrello(v.due);
+      p.prazo = d?.data ?? null;
+      p.prazoHora = d && d.hora !== HORA_DIA_INTEIRO ? d.hora : null;
+    } else if (k === "dueComplete") p.concluida = v.dueComplete;
+    else if (k === "dueReminder") p.lembreteMin = v.dueReminder;
+    else if (k === "closed") p.arquivada = v.closed;
+    else if (k === "isTemplate") p.template = v.isTemplate;
+    else if (k === "cover") p.capa = hexDeCorTrello(v.cover, paleta);
+    else if (k === "idLabels") {
+      const inv = inverso(m.etiquetas);
+      const doTrello = v.idLabels.flatMap((x) => (inv.has(x) ? [inv.get(x) as number] : []));
+      p.etiquetas = [...new Set([...atual.etiquetas.filter((e) => !m.etiquetas.has(e)), ...doTrello])];
+    } else if (k === "idMembers") {
+      const inv = inverso(m.membros);
+      const doTrello = v.idMembers.flatMap((x) => (inv.has(x) ? [inv.get(x) as number] : []));
+      p.pessoas = [...new Set([...atual.pessoas.filter((u) => !m.membros.has(u)), ...doTrello])];
+    } else if (k === "campos") {
+      const c = m.campos;
+      if (c.prioridade) {
+        const texto = v.campos[c.prioridade];
+        const pr = (Object.entries(PRIORIDADE_TRELLO).find(([, t]) => t === texto)?.[0] ?? "media") as keyof typeof PRIORIDADE_TRELLO;
+        p.prioridade = pr;
+      }
+      if (c.estimativa) {
+        const n = Number(v.campos[c.estimativa]);
+        p.estimativaH = v.campos[c.estimativa] != null && Number.isFinite(n) ? n : null;
+      }
+      const valores: Record<number, string | null> = {};
+      for (const [local, cf] of Object.entries(c.porCampo)) valores[Number(local)] = v.campos[cf] ?? null;
+      p.campos = valores;
+    }
+  }
+  return p;
+}
+
+/** O ITEM de checklist comparável (os dois lados e o retrato). */
+export type ValoresItem = { name: string; state: "complete" | "incomplete"; due: string | null; idMember: string | null };
+export const itemIgual = (a: ValoresItem, b: ValoresItem | null) => !!b && a.name === b.name && a.state === b.state && (a.due ?? null) === (b.due ?? null) && (a.idMember ?? null) === (b.idMember ?? null);
+
+/** Rótulos dos campos (o histórico dos conflitos). */
+export const ROTULO_CAMPO_CARTAO: Record<CampoCartao, string> = {
+  name: "Título",
+  desc: "Descrição",
+  idList: "Lista",
+  start: "Início",
+  due: "Prazo",
+  dueComplete: "Concluída",
+  dueReminder: "Lembrete",
+  closed: "Arquivada",
+  isTemplate: "Template",
+  cover: "Capa",
+  idLabels: "Etiquetas",
+  idMembers: "Responsáveis",
+  campos: "Campos personalizados",
+};
+
+// ─── WEBHOOK (os avisos do Trello) ─────────────────────────────────────────────────────────────────────────
+
+const b64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/** A ASSINATURA do aviso do Trello: base64(HMAC-SHA1(segredo da aplicação, corpo + URL do callback)). Comparação em tempo constante. */
+export async function assinaturaWebhookValida(segredo: string, corpo: string, urlCallback: string, assinatura: string | null): Promise<boolean> {
+  if (!segredo || !assinatura) return false;
+  const chave = await crypto.subtle.importKey("raw", new TextEncoder().encode(segredo), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const esperado = b64(await crypto.subtle.sign("HMAC", chave, new TextEncoder().encode(corpo + urlCallback)));
+  if (esperado.length !== assinatura.length) return false;
+  let dif = 0;
+  for (let i = 0; i < esperado.length; i++) dif |= esperado.charCodeAt(i) ^ assinatura.charCodeAt(i);
+  return dif === 0;
+}
+
+/** O hash (SHA-256 hex) do token do caminho do callback — o banco guarda só o hash. */
+export async function hashToken(token: string): Promise<string> {
+  return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
+}
+/** Um token novo (32 bytes, hex) para o caminho do callback. */
+export function novoToken(): string {
+  return hex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+}
+
+/** O que um aviso do Trello pede: qual item sincronizar (ou nada). As ações da conta institucional = eco (ignoradas). */
+export function alvoDoAviso(
+  acao: { type?: string; idMemberCreator?: string; data?: { card?: { id?: string }; list?: { id?: string }; label?: { id?: string } } } | null | undefined,
+  contaId: string,
+): { tipo: "tarefa" | "lista" | "etiqueta"; alvo: string } | null {
+  if (!acao?.type || (contaId && acao.idMemberCreator === contaId)) return null;
+  const d = acao.data ?? {};
+  if (/Label$/.test(acao.type) && !d.card && d.label?.id) return { tipo: "etiqueta", alvo: d.label.id };
+  if (d.card?.id) return { tipo: "tarefa", alvo: d.card.id };
+  if (/List$/.test(acao.type) && d.list?.id) return { tipo: "lista", alvo: d.list.id };
+  if (d.label?.id) return { tipo: "etiqueta", alvo: d.label.id };
+  return null;
 }

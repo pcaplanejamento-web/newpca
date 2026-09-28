@@ -2726,6 +2726,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   origem `trello`). Tela: Configuração → seção **"Trello"** = **`SincronizacaoTrello`** (contêiner: estado — `seloTrello`
   —, "Criar no Trello" com o `Progress` por tipo, "Continuar", "Abrir no Trello", "Desligar" com confirmação, aviso do
   quadro privado e a lista do que NÃO sincroniza — `NAO_SINCRONIZA`).
+  **FASES 3–4 (entregues) — SAÍDA e ENTRADA contínuas, pela MESMA régua (sincronização por ESTADO):** gancho ÚNICO no
+  `registrarAuditoria` (`auditoria.ts` → `marcarSaidaTrello`, `trello-fila.ts`): a auditoria de `tarefa`/`tarefa_lista`/
+  `tarefa_etiqueta`/`tarefa_quadro`/`tarefa_campo` de um quadro LIGADO (pelo vínculo — vale depois de excluído — ou pela
+  tabela; `quadroLigadoDe`) com origem ≠ `trello` entra na **`trello_fila`** e o processador roda DEPOIS da resposta
+  (`depoisDaResposta` = `ctx.waitUntil`) — nenhuma das 30 rotas mudou. Builders em **`trello-sql.ts`** (testados no D1
+  real): `comandoEnfileirar` (UM item por alvo; renovar muda o `criado_em` em ms), `comandoReivindicar` (UPDATE … WHERE id
+  = (subconsulta) RETURNING — dois processamentos nunca pegam o mesmo item; adia 2 min), `comandoConcluir` (só apaga se nada
+  novo chegou no meio), `comandoVinculo`. **`trello-processar.ts`** (`processarFila(limite, quadro?)`, orçamento de 30
+  chamadas por passada — `contado`): falha = espera crescente (429: a do Trello), depois de 6 fica com o erro à vista;
+  quadro `vinculando`/`pausado` = adia. **Cartão ⇄ tarefa** (`sincronizarCartao`): criada aqui → cria o cartão (lista sem
+  vínculo → a lista primeiro); criada lá → cria a tarefa (`criarTarefaDoCartao`, "Criada pelo Trello"); excluída aqui →
+  exclui o cartão; excluída/levada a outro board LÁ → ARQUIVA aqui (nada daqui é apagado por uma exclusão de lá); movida
+  para outro quadro aqui → sai deste board; com os dois → **`reconciliar`** (retrato × daqui × de lá; `empurrar` = PUT dos
+  campos + capa + os campos personalizados que mudaram; `trazer` = `patchDoCartao` → `atualizarTarefa` + notas nos blocos +
+  template + `moverTarefa` ao fim da lista nova) e o histórico: "Atualizada pelo Trello: …" e cada CONFLITO ("ficou a
+  alteração mais recente …; a outra foi descartada", com o antes/depois) — tudo com origem `trello`. **Conteúdo**
+  (`sincronizarConteudo`): checklists (nome pelo retrato), ITENS (`ValoresItem`: texto, feito, prazo, responsável — o lado
+  que mudou vai ao outro; criar/excluir dos dois lados), COMENTÁRIOS (os daqui vão como "**Nome (PCA):**"; os de lá vêm com
+  o nome "(Trello)" e o autor pela ligação — edição/exclusão de comentário não sincroniza) e ANEXOS de URL × blocos Link
+  (novo lá = bloco Link aqui; saiu lá = sai o bloco; vínculos viram anexos). Listas (nome, arquivada; excluída aqui =
+  ARQUIVADA lá — o Trello não exclui listas; nova lá = lista nova aqui), etiquetas (nome e cor pela paleta; excluída de um
+  lado = do outro) e o board (nome/descrição do quadro). **ENTRADA:** `HEAD`/`POST /api/integracoes/trello/webhook/[token]`
+  (sem sessão): o token do caminho acha o quadro (o banco guarda só o HASH — `hashToken`), a assinatura `X-Trello-Webhook`
+  (`assinaturaWebhookValida`: HMAC-SHA1 do corpo + URL com o segredo da aplicação, comparação em tempo constante) prova a
+  origem, `alvoDoAviso` diz o que sincronizar (as ações da CONTA INSTITUCIONAL = eco, ignoradas) → fila de entrada.
+  `garantirWebhook` (`trello-vincular.ts`) cria o aviso ao terminar de ligar e no "Sincronizar agora" (sem o segredo, só a
+  saída funciona — a tela avisa). A rota do quadro ganhou `sincronizar` (reativa os com erro e processa já), `pausar` e
+  `retomar`; a seção Trello, os botões.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

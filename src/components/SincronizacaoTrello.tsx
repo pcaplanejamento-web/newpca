@@ -65,18 +65,33 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
     try {
       let a: "criar" | "etapa" = acao;
       for (let i = 0; i < 500 && vivo.current; i++) {
-        const r = await chamar<{ progresso: Progresso; restante: number; ligacao: EstadoTrello }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao: a });
+        const r = await chamar<{ progresso: Progresso; restante: number; ligacao: EstadoTrello; aviso?: string | null }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao: a });
         a = "etapa";
         setProgresso(r.progresso);
         setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
         if (!r.restante) {
           toast.success("Quadro criado no Trello.");
+          if (r.aviso) toast.warning(r.aviso);
           break;
         }
       }
     } catch (e) {
       toast.error(`${(e as Error).message} — use "Continuar" para retomar de onde parou.`);
       carregar();
+    } finally {
+      if (vivo.current) setRodando(false);
+    }
+  };
+
+  /** Sincronizar agora / pausar / retomar. */
+  const acaoSimples = async (acao: "sincronizar" | "pausar" | "retomar") => {
+    setRodando(true);
+    try {
+      const r = await chamar<{ ligacao: EstadoTrello; feitos?: number; falhas?: number }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao });
+      setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
+      if (acao === "sincronizar") toast[r.falhas ? "warning" : "success"](r.falhas ? `${r.feitos ?? 0} sincronizado(s); ${r.falhas} com erro.` : "Sincronizado.");
+    } catch (e) {
+      toast.error((e as Error).message);
     } finally {
       if (vivo.current) setRodando(false);
     }
@@ -108,6 +123,16 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
             <Button size="sm" onClick={() => executar("etapa")}>
               Continuar
             </Button>
+          )}
+          {dados.pode && l && l.estado !== "vinculando" && (
+            <>
+              <Button size="sm" variant="secondary" disabled={rodando || l.estado === "pausado"} loading={rodando} onClick={() => acaoSimples("sincronizar")}>
+                Sincronizar agora
+              </Button>
+              <Button size="sm" variant="ghost" disabled={rodando} onClick={() => acaoSimples(l.estado === "pausado" ? "retomar" : "pausar")}>
+                {l.estado === "pausado" ? "Retomar" : "Pausar"}
+              </Button>
+            </>
           )}
           {dados.pode && l && (
             <Button

@@ -135,7 +135,7 @@ export async function mapaDoQuadro(quadroId: number, campos: CamposBoard): Promi
 }
 
 /** CRIA o board adaptado e liga o quadro (a 1ª etapa). */
-export async function criarBoard(cliente: ClienteTrello, q: Quadro, usuarioId: number): Promise<Ligacao> {
+export async function criarBoard(cliente: ClienteTrello, q: Quadro, usuarioId: number, origem: string): Promise<Ligacao> {
   const grad = lerGradiente(q.fundoGradiente);
   const b = await cliente.post<{ id: string; url: string }>("/boards", {
     name: q.nome.slice(0, 16384),
@@ -145,7 +145,7 @@ export async function criarBoard(cliente: ClienteTrello, q: Quadro, usuarioId: n
     prefs_permissionLevel: "private",
     prefs_background: fundoTrello(q.cor, grad),
   });
-  await getDb().insert(trelloQuadros).values({ quadroId: q.id, boardId: b.id, boardUrl: b.url, estado: "vinculando", criadoPor: usuarioId, campos: JSON.stringify({ porCampo: {}, opcoes: {} }) });
+  await getDb().insert(trelloQuadros).values({ quadroId: q.id, boardId: b.id, boardUrl: b.url, estado: "vinculando", criadoPor: usuarioId, campos: JSON.stringify({ porCampo: {}, opcoes: {}, origem }) });
   return (await ligacaoDoQuadro(q.id)) as Ligacao;
 }
 
@@ -197,6 +197,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
         }),
       );
       if (r.options?.length) campos.opcoes[r.id] = Object.fromEntries(r.options.map((o) => [o.id, o.value.text]));
+      campos.tipos = { ...(campos.tipos ?? {}), [r.id]: tipo };
       camposMudaram = true;
       return r.id;
     };
@@ -270,7 +271,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       );
       if (val.cover) await chamada(() => cliente.put(`/cards/${vc.trelloId}`, undefined, { cover: { color: val.cover, size: "normal" } }));
       for (const [cf, valor] of camposComValor) {
-        const tipo = campos.opcoes[cf] ? "list" : tipoDoCampo(cf, campos, camposLocais as CampoTarefa[]);
+        const tipo = campos.tipos?.[cf] ?? (campos.opcoes[cf] ? "list" : "text");
         await chamada(() => cliente.put(`/cards/${vc.trelloId}/customField/${cf}/item`, undefined, corpoValorCampo(tipo, valor, campos.opcoes[cf])));
       }
       for (const a of anexos) await chamada(() => cliente.post(`/cards/${vc.trelloId}/attachments`, { url: a.url, name: a.name.slice(0, 256) }));
@@ -324,14 +325,6 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
   return { progresso, restante };
 }
 
-/** O tipo (na API) de um campo do board. */
-function tipoDoCampo(cf: string, campos: CamposBoard, locais: CampoTarefa[]): string {
-  if (cf === campos.estimativa) return "number";
-  if (cf === campos.ticket) return "text";
-  const local = locais.find((c) => campos.porCampo[c.id] === cf);
-  return local ? TIPO_CAMPO_TRELLO[local.tipo] : "text";
-}
-
 /** DESLIGA o quadro do Trello: tira o aviso (webhook) e os vínculos; os dois lados ficam como estão. */
 export async function desligarQuadro(cliente: ClienteTrello | null, quadroId: number) {
   const lig = await ligacaoDoQuadro(quadroId);
@@ -348,4 +341,21 @@ export async function estadoTrello(quadroId: number) {
     .from(trelloFila)
     .where(eq(trelloFila.quadroId, quadroId));
   return { estado: lig.estado, boardUrl: lig.boardUrl, sincronizadoEm: lig.sincronizadoEm, ultimoErro: lig.ultimoErro, pendentes: p?.n ?? 0, erros: p?.erros ?? 0 };
+}
+
+/**
+ * GARANTE o aviso (webhook) do board: sem segredo da aplicação, não cria (não daria para conferir a assinatura). O caminho
+ * leva um token aleatório — o banco guarda só o hash. O Trello confere o endereço (HEAD) ao criar.
+ */
+export async function garantirWebhook(cliente: ClienteTrello, lig: Ligacao, origem: string, temSegredo: boolean): Promise<string | null> {
+  if (lig.webhookId || !temSegredo) return lig.webhookId;
+  const { hashToken, novoToken } = await import("./trello-sync-core");
+  const token = novoToken();
+  const w = await cliente.post<{ id: string }>("/webhooks", undefined, {
+    callbackURL: `${origem}/api/integracoes/trello/webhook/${token}`,
+    idModel: lig.boardId,
+    description: `PCA — quadro ${lig.quadroId}`,
+  });
+  await getDb().update(trelloQuadros).set({ webhookId: w.id, webhookTokenHash: await hashToken(token) }).where(eq(trelloQuadros.quadroId, lig.quadroId));
+  return w.id;
 }

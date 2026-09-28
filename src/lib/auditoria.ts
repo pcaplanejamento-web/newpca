@@ -11,6 +11,7 @@ import {
   semDuplicatas,
 } from "./auditoria-core";
 import { getDb } from "./db";
+import { marcarSaidaTrello, TIPO_DA_ENTIDADE } from "./trello-fila";
 
 /**
  * Acesso ao D1 da AUDITORIA (append-only). Registrar 1 linha por mutação + consultas (histórico
@@ -70,6 +71,8 @@ export async function registrarAuditoria(e: EntradaAuditoria): Promise<void> {
   } catch (err) {
     console.error("[auditoria] falha ao registrar:", err);
   }
+  // A alteração de um quadro de Tarefas LIGADO ao Trello vai para a fila de saída (o que veio do Trello não volta — sem eco).
+  if (e.origem !== "trello" && TIPO_DA_ENTIDADE[e.entidade]) await marcarSaidaTrello(e.entidade, e.entidadeId);
 }
 
 /** Linha de auditoria (histórico) + o e-mail do ator (tela ADM). */
