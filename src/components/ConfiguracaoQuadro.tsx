@@ -41,7 +41,6 @@ export function ConfiguracaoQuadro({
   pessoas,
   todas = pessoas,
   modelosQuadro,
-  modelosTarefa,
   usuarioId,
   podeEditar,
   onMudou,
@@ -57,7 +56,6 @@ export function ConfiguracaoQuadro({
   /** Todas as pessoas conhecidas (as de fora do grupo que já estão numa equipe seguem visíveis). */
   todas?: Pessoa[];
   modelosQuadro: { id: number; nome: string; criadoPor: number | null; listas: string[] }[];
-  modelosTarefa: { id: number; nome: string; criadoPor: number | null }[];
   usuarioId: number;
   podeEditar: boolean;
   onMudou: () => void;
@@ -363,7 +361,6 @@ export function ConfiguracaoQuadro({
           quadroId={quadro.id}
           quadroNome={quadro.nome}
           modelosQuadro={modelosQuadro.map((m) => ({ ...m, detalhe: m.listas.join(" · ") }))}
-          modelosTarefa={modelosTarefa.map((m) => ({ ...m, detalhe: "" }))}
           usuarioId={usuarioId}
           podeEditar={podeEditar}
           ocupado={ocupado != null}

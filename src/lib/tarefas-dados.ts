@@ -13,7 +13,6 @@ import {
   listarAutomacoes,
   listarEquipes,
   listarModelosQuadro,
-  listarModelosTarefa,
   listarQuadros,
   quadroAcessivel,
   LIMITE_EVENTOS_CALENDARIO,
@@ -112,16 +111,15 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
 
 /**
  * O CONTEXTO de um quadro para abrir UMA tarefa fora dele (o banner da tarefa no Calendário): listas, etiquetas, as
- * pessoas do grupo (+ as designadas na tarefa que estão fora dele) e os modelos de tarefa. `null` = sem acesso.
+ * pessoas do grupo (+ as designadas na tarefa que estão fora dele) e as equipes. `null` = sem acesso.
  */
 export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
   const r = await tarefaAcessivel(u, tarefaId);
   if (!r) return null;
-  const [listas, etiquetas, membros, modelosTarefa, equipes] = await Promise.all([
+  const [listas, etiquetas, membros, equipes] = await Promise.all([
     listasDoQuadro(r.quadro.id),
     etiquetasDoQuadroTodas(r.quadro.id),
     listarPessoasDoGrupo(r.quadro.grupoId),
-    listarModelosTarefa(r.quadro.id),
     listarEquipes([r.quadro.id]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
@@ -134,7 +132,6 @@ export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
     equipes,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...(fora.length ? await pessoasPorIds(fora) : [])],
-    modelosTarefa,
     podeEditar: u.role === "admin" || u.role === "gestor",
   };
 }
@@ -143,18 +140,17 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
 /**
  * O ESPAÇO de um quadro (`/painel/tarefas/[id]`) — tudo o que as abas usam, numa carga: listas, cartões (resumo),
  * etiquetas, as PESSOAS do grupo do quadro (+ as designadas que hoje estão fora dele — seguem visíveis) e as edições
- * salvas da aba Lista, as AUTOMAÇÕES e os MODELOS (de tarefa deste quadro; de quadro do grupo dele). `null` = sem acesso
+ * salvas da aba Lista, as AUTOMAÇÕES e os MODELOS de quadro do grupo dele. `null` = sem acesso
  * (ou inexistente).
  */
 export async function carregarQuadro(u: UsuarioSessao, id: number) {
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosTarefa, modelosQuadro, equipes] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes] = await Promise.all([
     dadosQuadro(id),
     listarPessoasDoGrupo(quadro.grupoId),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
     listarAutomacoes(id),
-    listarModelosTarefa(id),
     listarModelosQuadro([quadro.grupoId]),
     listarEquipes([id]),
   ]);
@@ -169,7 +165,6 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     equipes,
     edicoes,
     automacoes,
-    modelosTarefa,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),
     hoje: dataIsoBrasilia(new Date().toISOString()),
     podeEditar: u.role === "admin" || u.role === "gestor",

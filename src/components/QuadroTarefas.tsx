@@ -41,6 +41,7 @@ import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconChevronLeft, IconDownload, IconPlus } from "./icons";
+import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
 import { QuadroKanban } from "./QuadroKanban";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
@@ -80,7 +81,6 @@ export function QuadroTarefas({
   pessoas,
   edicoes,
   automacoes,
-  modelosTarefa,
   modelosQuadro,
   hoje,
   podeEditar,
@@ -106,7 +106,10 @@ export function QuadroTarefas({
   const [tarefas, setTarefas] = useState(doServidor);
   useEffect(() => setTarefas(doServidor), [doServidor]);
   const [filtro, setFiltro] = useState<FiltroTarefas>(FILTRO_TAREFAS_PADRAO);
-  const [arquivadas, setArquivadas] = useState(false);
+  // A aba Lista mostra as ativas, as arquivadas ou os TEMPLATES.
+  const [mostrar, setMostrar] = useState<"ativas" | "arquivadas" | "templates">("ativas");
+  const arquivadas = mostrar === "arquivadas";
+  const [copia, setCopia] = useState<{ modo: ModoCopia; id: number } | null>(null);
   const [aberto, setAberto] = useState<AberturaTarefa | null>(null);
   const [ed, setEd] = useState(edicoes);
   const [sel, setSel] = useState<Set<number>>(new Set());
@@ -114,7 +117,7 @@ export function QuadroTarefas({
   const [alturaBarra, setAlturaBarra] = useState(0);
   // Trocar de aba ou de Ativas/Arquivadas limpa a seleção (a barra só vale para o que está à vista).
   // biome-ignore lint/correctness/useExhaustiveDependencies: zera quando a aba/visão muda.
-  useEffect(() => setSel(new Set()), [aba, arquivadas]);
+  useEffect(() => setSel(new Set()), [aba, mostrar]);
 
   const ativas = useMemo(() => listas.filter((l) => !l.arquivada), [listas]);
   const doGrupo = useMemo(() => {
@@ -125,8 +128,14 @@ export function QuadroTarefas({
   const listasAtivas = useMemo(() => new Set(ativas.map((l) => l.id)), [ativas]);
   const filtradas = useMemo(() => filtrarTarefas(tarefas, filtro, { usuarioId, hoje }), [tarefas, filtro, usuarioId, hoje]);
   const noQuadro = useMemo(() => filtradas.filter((t) => !t.arquivada && listasAtivas.has(t.listaId)), [filtradas, listasAtivas]);
-  const naLista = useMemo(() => filtradas.filter((t) => t.arquivada === arquivadas), [filtradas, arquivadas]);
+  const naLista = useMemo(
+    () => filtradas.filter((t) => (mostrar === "arquivadas" ? t.arquivada : !t.arquivada && t.template === (mostrar === "templates"))),
+    [filtradas, mostrar],
+  );
   const nArquivadas = useMemo(() => tarefas.filter((t) => t.arquivada).length, [tarefas]);
+  const templates = useMemo(() => tarefas.filter((t) => t.template && !t.arquivada), [tarefas]);
+  /** O TRABALHO à vista (sem os templates) — Dashboard e Calendário. */
+  const trabalho = useMemo(() => noQuadro.filter((t) => !t.template), [noQuadro]);
   /** Abre o banner de uma tarefa NOVA (a lista de onde se pediu; o prazo do dia do calendário). */
   const nova = (listaId = ativas[0]?.id, prazo?: string) => listaId && setAberto({ tipo: "nova", listaId, prazo });
 
@@ -224,15 +233,15 @@ export function QuadroTarefas({
   /** O CÍRCULO do período no calendário: o MESMO concluir no lugar do cartão. */
   const concluirNoCalendario = (e: EventoCalendario) => concluir(e.tarefaId);
   const semPrazoCal = useMemo(
-    () => (aba === "calendario" ? noQuadro.filter((t) => !t.prazo && t.concluidaEm == null).map((t) => ({ id: t.id, quadroId: quadro.id, ticket: t.ticket, titulo: t.titulo })) : []),
-    [aba, noQuadro, quadro.id],
+    () => (aba === "calendario" ? trabalho.filter((t) => !t.prazo && t.concluidaEm == null).map((t) => ({ id: t.id, quadroId: quadro.id, ticket: t.ticket, titulo: t.titulo })) : []),
+    [aba, trabalho, quadro.id],
   );
   const { eventosCal, feriadosCal } = useMemo(() => {
     if (aba !== "calendario") return { eventosCal: [], feriadosCal: undefined };
     const { de, ate } = intervaloCalendario(mesCal, opcoesCal.inicioSegunda ? 1 : 0, anualCal);
     return {
       eventosCal: eventosDoCalendario(
-        noQuadro.map((t) => ({ ...t, quadroId: quadro.id })),
+        trabalho.map((t) => ({ ...t, quadroId: quadro.id })),
         eventos,
         de,
         ate,
@@ -240,7 +249,7 @@ export function QuadroTarefas({
       ),
       feriadosCal: feriadosNoIntervalo(calendario?.feriados ?? [], de, ate),
     };
-  }, [aba, mesCal, anualCal, noQuadro, eventos, quadro.id, hoje, opcoesCal.inicioSegunda, calendario?.feriados]);
+  }, [aba, mesCal, anualCal, trabalho, eventos, quadro.id, hoje, opcoesCal.inicioSegunda, calendario?.feriados]);
   /** ARRASTAR no calendário: o período reagenda a tarefa; o evento cadastrado muda de dia (e de hora, na grade). */
   const moverNoCalendario = async (e: EventoCalendario, dia: string, hora: string | null) => {
     if (e.tipo === "periodo") {
@@ -284,6 +293,39 @@ export function QuadroTarefas({
       setTarefas(antes);
       toast.error((e as Error).message);
     }
+  };
+
+  /** Abre a tarefa recém-criada (cópia no quadro, template) já no estado local — o resumo vem da rota; o quadro recarrega. */
+  const abrirNova = async (id: number, focoTitulo: boolean) => {
+    try {
+      const j = await chamar<{ tarefa: DadosQuadro["tarefas"][number] }>(`/api/tarefas/${id}?contexto=tarefa`);
+      setTarefas((ts) => (ts.some((t) => t.id === id) ? ts : [...ts, j.tarefa]));
+      setAberto({ tipo: "editar", id, focoTitulo });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+    router.refresh();
+  };
+
+  /** CRIAR A PARTIR DE TEMPLATE (o ícone no pé da lista): copia o template para a lista e abre com o foco no fim do título. */
+  const doTemplate = async (templateId: number, listaId: number) => {
+    try {
+      const r = await chamar<{ id: number }>(`/api/tarefas/${templateId}/copiar`, "POST", { quadroId: quadro.id, listaId });
+      await abrirNova(r.id, true);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  /** Depois de copiar/mover/criar template: a cópia NESTE quadro abre; o que foi movido para outro quadro sai daqui. */
+  const aposCopia = (r: ResultadoCopia) => {
+    setCopia(null);
+    if (r.modo === "mover") {
+      setAberto(null);
+      setTarefas((ts) => ts.filter((t) => t.id !== r.id));
+      router.refresh();
+    } else if (r.quadroId === quadro.id) abrirNova(r.id, r.modo === "copiar");
+    else router.refresh();
   };
 
   const arquivar = async (id: number) => {
@@ -361,18 +403,19 @@ export function QuadroTarefas({
                 <SeletorFiltro
                   icone={<IconArquivar className="h-4 w-4" />}
                   rotulo="Mostrar"
-                  valor={arquivadas ? "arquivadas" : "ativas"}
-                  ativo={arquivadas}
-                  onChange={(v) => setArquivadas(v === "arquivadas")}
+                  valor={mostrar}
+                  ativo={mostrar !== "ativas"}
+                  onChange={(v) => setMostrar(v as typeof mostrar)}
                   opcoes={[
                     { valor: "ativas", rotulo: "Tarefas ativas" },
+                    { valor: "templates", rotulo: `Templates (${num(templates.length)})` },
                     { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
                   ]}
                 />
                 <Button size="sm" variant="secondary" className="max-sm:w-11 max-sm:px-0" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
                   <span className="max-sm:hidden">XLSX</span>
                 </Button>
-                {!arquivadas && (
+                {mostrar === "ativas" && (
                   <Button size="sm" variant="accent" className="max-sm:w-11 max-sm:px-0" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
                     <span className="max-sm:hidden">Adicionar tarefa</span>
                   </Button>
@@ -391,7 +434,7 @@ export function QuadroTarefas({
               <button
                 type="button"
                 onClick={() => {
-                  setArquivadas(true);
+                  setMostrar("arquivadas");
                   router.push(`${pathname}?aba=lista`, { scroll: false });
                 }}
                 className="ml-auto min-h-11 rounded-control px-2 text-[12.5px] text-muted underline-offset-2 hover:text-text-2 hover:underline lg:min-h-[var(--h-control-sm)]"
@@ -403,7 +446,7 @@ export function QuadroTarefas({
         )}
         {aba === "dashboard" ? (
           <DashboardTarefas
-            tarefas={noQuadro}
+            tarefas={trabalho}
             listas={listas}
             pessoas={pessoas}
             hoje={hoje}
@@ -428,6 +471,9 @@ export function QuadroTarefas({
               onNova={(listaId) => nova(listaId)}
               onArquivar={arquivar}
               onConcluir={concluir}
+              templates={templates}
+              onDoTemplate={doTemplate}
+              onCopiarMover={(id, modo) => setCopia({ id, modo })}
             />
           )
         ) : aba === "lista" ? (
@@ -452,7 +498,7 @@ export function QuadroTarefas({
             mes={mesCal}
             onMes={setMesCal}
             onAno={setAnualCal}
-            contadores={contadoresCalendario(noQuadro, hoje, opcoesCal.inicioSegunda ? 1 : 0)}
+            contadores={contadoresCalendario(trabalho, hoje, opcoesCal.inicioSegunda ? 1 : 0)}
             onAbrir={(e) => setAberto({ tipo: "editar", id: e.tarefaId })}
             onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}
             onMover={moverNoCalendario}
@@ -474,7 +520,6 @@ export function QuadroTarefas({
             pessoas={doGrupo}
             todas={pessoas}
             modelosQuadro={modelosQuadro}
-            modelosTarefa={modelosTarefa}
             usuarioId={usuarioId}
             podeEditar={podeEditar}
             onMudou={() => router.refresh()}
@@ -518,9 +563,17 @@ export function QuadroTarefas({
         hoje={hoje}
         usuarioId={usuarioId}
         podeExcluir={podeEditar}
-        modelos={modelosTarefa}
+        onCopiarMover={(id, modo) => setCopia({ id, modo })}
         onFechar={() => setAberto(null)}
         onSalvo={() => router.refresh()}
+      />
+      <CopiarMoverTarefa
+        aberto={(() => {
+          const t = copia && tarefas.find((x) => x.id === copia.id);
+          return copia && t ? { modo: copia.modo, tarefa: t, quadroId: quadro.id } : null;
+        })()}
+        onFechar={() => setCopia(null)}
+        onFeito={aposCopia}
       />
     </div>
   );

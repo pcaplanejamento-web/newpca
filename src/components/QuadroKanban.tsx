@@ -8,15 +8,16 @@ import { CartaoPreso, SombraCartao, useArrastoCartoes } from "./ArrastoCartoes";
 import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
-import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconMais, IconPencil, IconPlus } from "./icons";
+import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
+import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconCopy, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
 
 /**
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
  * no desktop ocupa até o fim do display e cada lista rola por dentro. Arrastar move o cartão (`useArrastoCartoes`) — a
  * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista abre o BANNER da tarefa nova naquela
  * lista (`onNova` — o mesmo formulário de toda criação). O CÍRCULO do cartão conclui/reabre NO LUGAR (`onConcluir`). No
- * TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
- * sem arrastar) e, no celular, os PONTOS acima do quadro dizem em qual coluna se está (tocar leva a ela).
+ * TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/copiar/outro quadro/template/arquivar —
+ * sem arrastar); no pé da lista, o ícone de TEMPLATE cria a tarefa a partir de um template (`onDoTemplate`) e, no celular, os PONTOS acima do quadro dizem em qual coluna se está (tocar leva a ela).
  */
 export function QuadroKanban({
   listas,
@@ -29,6 +30,9 @@ export function QuadroKanban({
   onNova,
   onArquivar,
   onConcluir,
+  templates = [],
+  onDoTemplate,
+  onCopiarMover,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -44,6 +48,12 @@ export function QuadroKanban({
   onArquivar: (id: number) => void;
   /** Conclui/reabre NO LUGAR (o círculo do cartão e o menu do toque). */
   onConcluir: (id: number) => void;
+  /** Os TEMPLATES do quadro (o seletor do pé da lista). */
+  templates?: TarefaResumo[];
+  /** Cria a tarefa a partir do template, na lista. */
+  onDoTemplate?: (templateId: number, listaId: number) => void;
+  /** Abre Copiar · Mover para outro quadro · Criar template. */
+  onCopiarMover?: (id: number, modo: ModoCopia) => void;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
@@ -101,10 +111,13 @@ export function QuadroKanban({
             {item("Abrir", <IconPencil className="h-4 w-4 text-muted" />, () => onAbrir(t.id))}
             {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
             {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
-            {item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
+            {!t.template && item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
             {listas
               .filter((x) => x.id !== l.id)
               .map((x) => item(`Mover para “${x.nome}”`, <IconArrowRight className="h-4 w-4 text-muted" />, () => onMover(t.id, x.id, Number.MAX_SAFE_INTEGER)))}
+            {onCopiarMover && item("Copiar…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "copiar"))}
+            {onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"))}
+            {onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"))}
             {item("Arquivar", <IconArquivar className="h-4 w-4 text-muted" />, () => onArquivar(t.id))}
           </div>
         );
@@ -154,7 +167,13 @@ export function QuadroKanban({
         const destinoAqui = arrasto?.listaId === l.id ? arrasto.indice : -1;
         let j = 0;
         return (
-          <ColunaTarefas key={l.id} lista={l} qtd={cartoes.length} onNova={() => onNova(l.id)}>
+          <ColunaTarefas
+            key={l.id}
+            lista={l}
+            qtd={cartoes.filter((c) => !c.template).length}
+            onNova={() => onNova(l.id)}
+            extra={onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
+          >
             {cartoes.map((t, pos) => {
               const sombra = arrasto && t.id !== arrasto.id && j++ === destinoAqui;
               return (
@@ -170,7 +189,7 @@ export function QuadroKanban({
                     onPegar={(e) => iniciar(e, t.id, l.id)}
                     onTeclaMover={(d) => teclaMover(t, d)}
                     acoes={menu(t, l, pos, cartoes.length)}
-                    onConcluir={() => onConcluir(t.id)}
+                    onConcluir={t.template ? undefined : () => onConcluir(t.id)}
                   />
                 </Fragment>
               );
@@ -191,17 +210,20 @@ export function QuadroKanban({
 
 /**
  * UMA LISTA do quadro: o nome, a contagem (com o LIMITE — WIP — em âmbar quando passa), a pilha de cartões (rola por
- * dentro no desktop) e, no pé, "Adicionar tarefa" — abre o banner da tarefa nova nesta lista (`onNova`).
+ * dentro no desktop) e, no pé, "Adicionar tarefa" — abre o banner da tarefa nova nesta lista (`onNova`) — e o `extra` (o
+ * seletor de templates).
  */
 export function ColunaTarefas({
   lista: l,
   qtd,
   onNova,
+  extra,
   children,
 }: {
   lista: ListaTarefas;
   qtd: number;
   onNova?: () => void;
+  extra?: ReactNode;
   children: ReactNode;
 }) {
   const passou = excedeWip(qtd, l.limiteWip);
@@ -228,10 +250,11 @@ export function ColunaTarefas({
         {children}
       </div>
       {onNova && (
-        <div className="px-2 pb-2">
-          <Button variant="ghost" size="sm" className="w-full !justify-start text-muted" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar tarefa em ${l.nome}`} onClick={onNova}>
+        <div className="flex items-center gap-1 px-2 pb-2">
+          <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-muted" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar tarefa em ${l.nome}`} onClick={onNova}>
             Adicionar tarefa
           </Button>
+          {extra}
         </div>
       )}
     </section>

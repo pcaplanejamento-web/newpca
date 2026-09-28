@@ -189,14 +189,13 @@ type ModeloLinha = { id: number; nome: string; criadoPor: number | null; detalhe
 
 /**
  * MODELOS na Configuração do quadro: "Salvar este quadro como modelo" (editores — listas + etiquetas, para o grupo do quadro;
- * o "Novo quadro" parte dele) e as listas dos modelos de QUADRO do grupo e de TAREFA deste quadro (excluir: quem salvou ou
- * um editor). Modelos de tarefa nascem pelo botão "Salvar como modelo" do detalhe da tarefa.
+ * o "Novo quadro" parte dele) e os modelos de QUADRO do grupo (excluir: quem salvou ou um editor). As TAREFAS-modelo são os
+ * cartões-TEMPLATE (menu "…" da tarefa → "Criar template").
  */
 export function ModelosQuadro({
   quadroId,
   quadroNome,
   modelosQuadro,
-  modelosTarefa,
   usuarioId,
   podeEditar,
   ocupado,
@@ -205,7 +204,6 @@ export function ModelosQuadro({
   quadroId: number;
   quadroNome: string;
   modelosQuadro: ModeloLinha[];
-  modelosTarefa: ModeloLinha[];
   usuarioId: number;
   podeEditar: boolean;
   ocupado: boolean;
@@ -262,7 +260,6 @@ export function ModelosQuadro({
         </div>
       )}
       {lista("Modelos de quadro do grupo", modelosQuadro, "Nenhum — salve este quadro como modelo para reaproveitar as listas e etiquetas.")}
-      {lista("Modelos de tarefa deste quadro", modelosTarefa, "Nenhum — abra uma tarefa e toque em “Salvar como modelo”.")}
     </div>
   );
 }

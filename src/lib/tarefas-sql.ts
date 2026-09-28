@@ -125,6 +125,14 @@ export function comandosCriarTarefa(
     blocos?: BlocoTarefa[] | null;
     /** Os EVENTOS da tarefa (bloco "Eventos"). */
     eventos?: DadosEvento[];
+    /** Etiquetas a CRIAR no quadro e ligar à tarefa (a cópia para outro quadro — `mapearEtiquetas`). */
+    novasEtiquetas?: { nome: string; cor: string }[];
+    /** O cartão nasce TEMPLATE (migração `0055`). */
+    template?: boolean;
+    /** A tarefa de origem (cópia). */
+    copiadaDe?: number | null;
+    /** No TOPO da lista (senão no fim). */
+    noInicio?: boolean;
   },
 ) {
   return [
@@ -143,8 +151,12 @@ export function comandosCriarTarefa(
       prazo: d.prazo,
       prazoHora: d.prazo ? (d.prazoHora ?? null) : null,
       lembreteMin: d.prazo ? (d.lembreteMin ?? null) : null,
-      ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefas WHERE lista_id = ${d.listaId})`,
-      concluidaEm: d.concluida ? sql`(CURRENT_TIMESTAMP)` : null,
+      ordem: d.noInicio
+        ? sql`(SELECT COALESCE(MIN(ordem), 1) - 1 FROM tarefas WHERE lista_id = ${d.listaId})`
+        : sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefas WHERE lista_id = ${d.listaId})`,
+      concluidaEm: d.concluida && !d.template ? sql`(CURRENT_TIMESTAMP)` : null,
+      template: d.template ?? false,
+      copiadaDe: d.copiadaDe ?? null,
       criadoPor: d.criadoPor,
       estimativaH: d.estimativaH ?? null,
       vinculoTipo: d.vinculo?.tipo ?? null,
@@ -160,6 +172,7 @@ export function comandosCriarTarefa(
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
     ...(d.equipes ?? []).map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: idDaNova(d.quadroId), equipeId: e })),
+    ...comandosNovasEtiquetas(db, d.quadroId, idDaNova(d.quadroId), d.novasEtiquetas ?? []),
     ...(d.checklists ?? []).flatMap((c, k) => comandosChecklistNovo(db, idDaNova(d.quadroId), c, k + 1)),
     ...(d.eventos ?? []).flatMap((e) => [
       db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
@@ -169,6 +182,57 @@ export function comandosCriarTarefa(
       .select({ id: tarefas.id, ticket: tarefas.ticket })
       .from(tarefas)
       .where(and(eq(tarefas.quadroId, d.quadroId), eq(tarefas.ticket, sql`(SELECT prox_ticket - 1 FROM tarefa_quadros WHERE id = ${d.quadroId})`))),
+  ] as const;
+}
+
+/** CRIA etiquetas no quadro (no fim da ordem) e liga cada uma à tarefa (a recém-criada — `MAX(id)`, lote sequencial). */
+function comandosNovasEtiquetas(db: Db, quadroId: number, tarefaId: number | SQL<number>, novas: { nome: string; cor: string }[]) {
+  return novas.flatMap((e) => [
+    db.insert(tarefaEtiquetas).values({
+      quadroId,
+      nome: e.nome,
+      cor: e.cor,
+      ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_etiquetas WHERE quadro_id = ${quadroId})`,
+    }),
+    db.insert(tarefaEtiquetaLinks).values({ tarefaId, etiquetaId: sql`(SELECT MAX(id) FROM tarefa_etiquetas WHERE quadro_id = ${quadroId})` }),
+  ]);
+}
+
+/**
+ * MOVE a tarefa para OUTRO quadro num lote atômico: ganha o próximo TICKET do destino, vai ao FIM da lista escolhida (a
+ * conclusão segue a lista, como no movimento), troca as etiquetas pelas do destino (`etiquetas` + `novasEtiquetas` — o
+ * mapeamento por nome), fica só com as PESSOAS que ficam (`pessoas` — as do grupo do destino) e as EQUIPES de mesmo nome.
+ * Checklists, comentários, eventos e o histórico vão junto (são da tarefa).
+ */
+export function comandosMoverQuadro(
+  db: Db,
+  d: { id: number; quadroId: number; listaId: number; concluida: boolean; etiquetas: number[]; novasEtiquetas: { nome: string; cor: string }[]; pessoas: number[]; equipes: number[] },
+) {
+  return [
+    db
+      .update(tarefaQuadros)
+      .set({ proxTicket: sql`${tarefaQuadros.proxTicket} + 1` })
+      .where(eq(tarefaQuadros.id, d.quadroId)),
+    db
+      .update(tarefas)
+      .set({
+        quadroId: d.quadroId,
+        listaId: d.listaId,
+        ticket: sql`(SELECT prox_ticket - 1 FROM tarefa_quadros WHERE id = ${d.quadroId})`,
+        ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefas WHERE lista_id = ${d.listaId})`,
+        concluidaEm: conclusaoAoMoverSql(d.concluida),
+        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      })
+      .where(eq(tarefas.id, d.id)),
+    db.delete(tarefaEtiquetaLinks).where(eq(tarefaEtiquetaLinks.tarefaId, d.id)),
+    ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: d.id, etiquetaId: e })),
+    ...comandosNovasEtiquetas(db, d.quadroId, d.id, d.novasEtiquetas),
+    db
+      .delete(tarefaPessoas)
+      .where(d.pessoas.length ? and(eq(tarefaPessoas.tarefaId, d.id), notInArray(tarefaPessoas.usuarioId, d.pessoas)) : eq(tarefaPessoas.tarefaId, d.id)),
+    db.delete(tarefaEquipesLinks).where(eq(tarefaEquipesLinks.tarefaId, d.id)),
+    ...d.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: d.id, equipeId: e })),
+    db.select({ id: tarefas.id, ticket: tarefas.ticket }).from(tarefas).where(eq(tarefas.id, d.id)),
   ] as const;
 }
 

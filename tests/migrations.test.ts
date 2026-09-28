@@ -617,6 +617,35 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = 9543"), 0);
   });
 
+  it("0055 modelos de tarefa viram cartões-TEMPLATE na lista TEMPLATES (ticket, etiquetas e checklist); os de quadro ficam", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0055")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9550, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, prox_ticket) VALUES (9551, 9550, 'Q', 8)");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem) VALUES (9552, 9551, 'Dia 1', 1)");
+    a.exec("INSERT INTO tarefa_etiquetas (id, quadro_id, nome, cor) VALUES (9553, 9551, 'FALTAS', '#f59e0b')");
+    const conteudo = JSON.stringify({ titulo: "2. Protocolo - FALTA - ", descricao: "STATUS:", prioridade: "alta", etiquetas: [9553, 999], checklist: ["SERVIDORES", " "], estimativaH: 2 });
+    a.exec(`INSERT INTO tarefa_modelos (id, tipo, quadro_id, nome, conteudo) VALUES (9554, 'tarefa', 9551, 'Falta', '${conteudo}'), (9555, 'tarefa', 9551, 'Vazio', '{}'), (9556, 'quadro', NULL, 'Mensal', '{}')`);
+    a.exec(readFileSync(join(DIR, "0055_templates_copia.sql"), "utf8"));
+    const n = (sql: string) => (a.prepare(sql).get() as { n: number | string }).n;
+    const t = a.prepare("SELECT t.ticket, t.titulo, t.prioridade, t.template, l.nome AS lista, l.ordem AS lordem FROM tarefas t JOIN tarefa_listas l ON l.id = t.lista_id ORDER BY t.ticket").all() as {
+      ticket: number;
+      titulo: string;
+      prioridade: string;
+      template: number;
+      lista: string;
+      lordem: number;
+    }[];
+    assert.deepEqual(t.map((x) => [x.ticket, x.titulo, x.prioridade, x.template, x.lista]), [[8, "2. Protocolo - FALTA - ", "alta", 1, "TEMPLATES"], [9, "Vazio", "media", 1, "TEMPLATES"]]);
+    assert.ok(t[0].lordem < 1);
+    assert.equal(n("SELECT prox_ticket AS n FROM tarefa_quadros WHERE id = 9551"), 10);
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_etiqueta_links"), 1);
+    assert.equal(n("SELECT group_concat(texto) AS n FROM tarefa_checklist"), "SERVIDORES");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_modelos WHERE tipo = 'tarefa'"), 0);
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_modelos WHERE tipo = 'quadro'"), 1);
+    assert.equal(n("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = '_modelos_para_template'"), 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { lembreteDaTarefa } from "../src/lib/calendario-core.ts";
-import { automacoesDoEvento, conclusaoAoMover, estadoPrazo, eventosDoCalendario, notificacaoDePrazoItem, rotuloData, type Automacao } from "../src/lib/tarefas-core.ts";
-import { checklistSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema } from "../src/lib/tarefas-validation.ts";
+import {
+  automacoesDoEvento,
+  conclusaoAoMover,
+  estadoPrazo,
+  eventosDoCalendario,
+  filtrarTarefas,
+  FILTRO_TAREFAS_PADRAO,
+  listaDeTemplates,
+  mapearEtiquetas,
+  mapearPorNome,
+  notificacaoDePrazoItem,
+  rotuloData,
+  type Automacao,
+} from "../src/lib/tarefas-core.ts";
+import { checklistSchema, copiarTarefaSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema, modeloSchema } from "../src/lib/tarefas-validation.ts";
 
 // As funcionalidades do padrão Trello (FASE 11+): concluir no lugar, prazo com hora e lembrete.
 describe("tarefas — padrão Trello", () => {
@@ -74,5 +87,44 @@ describe("tarefas — padrão Trello", () => {
     assert.ok(!editarChecklistSchema.safeParse({}).success);
     assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", checklists: [{ nome: "SERVIDORES", itens: ["a"] }] }).success);
     assert.ok(!criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", checklists: [{ nome: "", itens: [] }] }).success);
+  });
+
+  it("F3 copiar entre quadros: etiquetas pelo NOME (sem caixa/acento; as que faltam são criadas, sem repetir); equipes de mesmo nome", () => {
+    const origem = [
+      { id: 1, nome: "Urgência", cor: "#f00" },
+      { id: 2, nome: "E-mail", cor: "#0f0" },
+      { id: 3, nome: " e-mail ", cor: "#00f" },
+    ];
+    const destino = [{ id: 10, nome: "URGENCIA", cor: "#111" }];
+    assert.deepEqual(mapearEtiquetas(origem, destino), { ids: [10], criar: [{ nome: "E-mail", cor: "#0f0" }] });
+    assert.deepEqual(mapearEtiquetas([], destino), { ids: [], criar: [] });
+    assert.deepEqual(mapearPorNome([{ nome: "Compras" }, { nome: "Jurídico" }], [{ id: 7, nome: "compras" }]), [7]);
+  });
+
+  it("F3 TEMPLATES: nascem na lista 'Templates' (se houver); ficam fora das contagens e dos filtros ativos", () => {
+    assert.equal(
+      listaDeTemplates(
+        [
+          { id: 1, nome: "A fazer", arquivada: false },
+          { id: 2, nome: "TEMPLATES", arquivada: false },
+        ],
+        1,
+      ),
+      2,
+    );
+    assert.equal(listaDeTemplates([{ id: 2, nome: "Templates", arquivada: true }], 1), 1);
+    const base = { envolvidos: [], prioridade: "media" as const, etiquetas: [], prazo: null, concluidaEm: null, titulo: "Protocolo", ticket: 1 };
+    const ts = [{ ...base, template: true }, { ...base, ticket: 2 }];
+    const ctx = { usuarioId: 1, hoje: "2026-03-21" };
+    assert.equal(filtrarTarefas(ts, FILTRO_TAREFAS_PADRAO, ctx).length, 2);
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, busca: "protocolo" }, ctx).map((t) => t.ticket), [2]);
+  });
+
+  it("F3 schemas: copiar leva tudo por padrão; o modelo agora é só de QUADRO", () => {
+    const c = copiarTarefaSchema.parse({ quadroId: 1, listaId: 2 });
+    assert.deepEqual([c.checklists, c.etiquetas, c.pessoas, c.datas], [true, true, true, true]);
+    assert.equal(copiarTarefaSchema.safeParse({ quadroId: 1, listaId: 2, titulo: "x".repeat(201) }).success, false);
+    assert.equal(modeloSchema.safeParse({ tipo: "tarefa", nome: "M", tarefaId: 1 }).success, false);
+    assert.equal(modeloSchema.safeParse({ tipo: "quadro", nome: "M", quadroId: 1 }).success, true);
   });
 });

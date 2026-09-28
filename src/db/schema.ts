@@ -822,6 +822,10 @@ export const tarefas = sqliteTable(
     prazoHora: text("prazo_hora"),
     /** Lembrete: minutos antes do prazo (NULL = sem lembrete). */
     lembreteMin: integer("lembrete_min"),
+    /** O cartão é um TEMPLATE (migração `0055`): fora de contagens, filtros de prazo, Dashboard, Calendário e avisos. */
+    template: integer("template", { mode: "boolean" }).notNull().default(false),
+    /** A tarefa de ORIGEM quando esta é uma cópia. */
+    copiadaDe: integer("copiada_de").references((): AnySQLiteColumn => tarefas.id, { onDelete: "set null" }),
     /** Ordem FRACIONÁRIA na lista (soltar entre dois cartões sem renumerar a lista). */
     ordem: real("ordem").notNull().default(0),
     concluidaEm: text("concluida_em"),

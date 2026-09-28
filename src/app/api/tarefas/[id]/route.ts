@@ -61,6 +61,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
   if (campos.vinculo && !(campos.vinculo.tipo === r.tarefa.vinculo?.tipo && campos.vinculo.id === r.tarefa.vinculo.id) && !(await vinculoAcessivel(a.u, campos.vinculo)))
     return erro("Vínculo não encontrado.", 422);
+  if (campos.concluida === true && r.tarefa.template) return erro("Um template não se conclui — crie uma tarefa a partir dele.", 422);
   const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
   // Concluir/reabrir NO LUGAR: só conta a mudança de fato (concluir uma concluída não dispara nada de novo).
   const concluiu = campos.concluida === true && r.tarefa.concluidaEm == null;

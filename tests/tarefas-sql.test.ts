@@ -15,6 +15,7 @@ import {
   comandosEquipe,
   comandosMassa,
   comandosMover,
+  comandosMoverQuadro,
   comandosNotificacoes,
   comandosVinculos,
   pessoaNaTarefa,
@@ -219,5 +220,52 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     // Excluir a equipe tira das tarefas (cascade).
     await orm.delete(schema.tarefaEquipes).where(eq(schema.tarefaEquipes.id, eqId));
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_equipes_links").get() as { n: number }).n, 0);
+  });
+
+  it("COPIAR para outro quadro (template, no topo, etiqueta nova criada) e MOVER entre quadros (ticket novo, pessoas filtradas)", async () => {
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (50, 9500, 'Outubro')");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem, concluida) VALUES (500, 50, 'TEMPLATES', 1, 0), (501, 50, 'Concluído', 2, 1)");
+    db.exec("INSERT INTO tarefa_etiquetas (id, quadro_id, nome, cor) VALUES (500, 50, 'urgente', '#ff0000')");
+    const r = await orm.batch(comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Origem", pessoas: [9501], etiquetas: [1], checklists: [{ nome: "Passos", itens: ["a", "b"] }] }));
+    const [{ id: origem }] = r.at(-1) as { id: number }[];
+    await orm.batch(comandosCriarTarefa(orm, { ...base, quadroId: 50, listaId: 500, titulo: "Existente", pessoas: [], etiquetas: [] }));
+    const copia = comandosCriarTarefa(orm, {
+      ...base,
+      quadroId: 50,
+      listaId: 500,
+      titulo: "Origem",
+      concluida: true,
+      pessoas: [9501],
+      etiquetas: [500],
+      novasEtiquetas: [{ nome: "Canal", cor: "#00ff00" }],
+      checklists: [{ nome: "Passos", itens: ["a", "b"] }],
+      template: true,
+      copiadaDe: origem,
+      noInicio: true,
+    });
+    for (const c of copia) assert.ok(c.toSQL().params.length <= 100);
+    const rc = await orm.batch(copia);
+    const [{ id: nova, ticket }] = rc.at(-1) as { id: number; ticket: number }[];
+    assert.equal(ticket, 2);
+    const t = db.prepare("SELECT template, copiada_de AS c, concluida_em AS ce, ordem FROM tarefas WHERE id = ?").get(nova) as { template: number; c: number; ce: string | null; ordem: number };
+    // O template nunca nasce concluído; no TOPO (antes do "Existente", ordem 1).
+    assert.deepEqual([t.template, t.c, t.ce, t.ordem], [1, origem, null, 0]);
+    const nomes = (db.prepare("SELECT e.nome AS n FROM tarefa_etiqueta_links l JOIN tarefa_etiquetas e ON e.id = l.etiqueta_id WHERE l.tarefa_id = ? ORDER BY e.nome").all(nova) as { n: string }[]).map((x) => x.n);
+    assert.deepEqual(nomes, ["Canal", "urgente"]);
+    assert.equal((db.prepare("SELECT quadro_id AS q FROM tarefa_etiquetas WHERE nome = 'Canal'").get() as { q: number }).q, 50);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = ?").get(nova) as { n: number }).n, 2);
+    // MOVER a origem para o quadro 2 (lista de concluídas): ticket do destino, conclui, etiquetas trocadas, só a pessoa que fica.
+    db.exec(`INSERT INTO tarefa_pessoas (tarefa_id, usuario_id, papel) VALUES (${origem}, 9502, 'observador')`);
+    const mover = comandosMoverQuadro(orm, { id: origem, quadroId: 50, listaId: 501, concluida: true, etiquetas: [500], novasEtiquetas: [], pessoas: [9502], equipes: [] });
+    for (const c of mover) assert.ok(c.toSQL().params.length <= 100);
+    const rm = await orm.batch(mover as never);
+    assert.deepEqual((rm as unknown[]).at(-1), [{ id: origem, ticket: 3 }]);
+    const m = db.prepare("SELECT quadro_id AS q, lista_id AS l, concluida_em AS ce FROM tarefas WHERE id = ?").get(origem) as { q: number; l: number; ce: string | null };
+    assert.deepEqual([m.q, m.l], [50, 501]);
+    assert.ok(m.ce);
+    assert.deepEqual(db.prepare("SELECT usuario_id AS u FROM tarefa_pessoas WHERE tarefa_id = ?").all(origem).map((x) => (x as { u: number }).u), [9502]);
+    assert.deepEqual(db.prepare("SELECT etiqueta_id AS e FROM tarefa_etiqueta_links WHERE tarefa_id = ?").all(origem).map((x) => (x as { e: number }).e), [500]);
+    // O checklist foi junto (é da tarefa).
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = ?").get(origem) as { n: number }).n, 2);
   });
 });

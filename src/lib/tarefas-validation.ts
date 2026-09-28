@@ -233,11 +233,26 @@ export type AcaoMassaTarefas = z.infer<typeof massaTarefasSchema>["acao"];
 export const notificacoesPatchSchema = z.union([z.object({ ids: z.array(id).min(1).max(90) }), z.object({ todas: z.literal(true) })]);
 
 const nomeModelo = z.string().trim().min(1, "Dê um nome ao modelo.").max(80, "Nome com até 80 caracteres.");
-/** Salvar um MODELO: de quadro (retrato das listas/etiquetas do quadro) ou de tarefa (os campos da tarefa). */
-export const modeloSchema = z.discriminatedUnion("tipo", [
-  z.object({ tipo: z.literal("quadro"), nome: nomeModelo, quadroId: id }),
-  z.object({ tipo: z.literal("tarefa"), nome: nomeModelo, tarefaId: id, prazoDias: z.number().int().min(0).max(3650).nullable().optional() }),
-]);
+/** Salvar um MODELO de quadro (retrato das listas/etiquetas do quadro). Os de TAREFA viraram cartões-TEMPLATE (`0055`). */
+export const modeloSchema = z.object({ tipo: z.literal("quadro"), nome: nomeModelo, quadroId: id });
+
+/**
+ * COPIAR uma tarefa (também "Criar template" e "Criar a partir do template"): o quadro e a lista de destino, a posição, o
+ * título (vazio = o da origem) e o que vai junto.
+ */
+export const copiarTarefaSchema = z.object({
+  quadroId: id,
+  listaId: id,
+  titulo: z.string().trim().max(200, "Título com até 200 caracteres.").optional(),
+  noInicio: z.boolean().optional(),
+  template: z.boolean().optional(),
+  checklists: z.boolean().default(true),
+  etiquetas: z.boolean().default(true),
+  pessoas: z.boolean().default(true),
+  datas: z.boolean().default(true),
+});
+/** MOVER uma tarefa para OUTRO quadro (a lista de destino). */
+export const moverQuadroSchema = z.object({ quadroId: id, listaId: id });
 
 /** Uma AUTOMAÇÃO do quadro ("quando X, fazer Y"). */
 export const automacaoSchema = z

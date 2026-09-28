@@ -52,12 +52,10 @@ import {
   vizinhos,
   automacoesDoEvento,
   coerceModeloQuadro,
-  coerceModeloTarefa,
   lerAcaoAutomacao,
   lerRecorrencia,
   notificacaoDePrazo,
   painelTarefas,
-  prazoDoModelo,
   proximaOcorrencia,
   rotuloRecorrencia,
   tarefasDoRecorte,
@@ -81,6 +79,7 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   ordem,
   concluidaEm: null,
   arquivada: false,
+  template: false,
   pessoas: [],
   observadores: [],
   etiquetas: [],
@@ -368,12 +367,6 @@ describe("tarefas — fase 3: automações e modelos", () => {
     assert.deepEqual(q.listas, [{ nome: "Fila", limiteWip: 3, concluida: false }, { nome: "OK", limiteWip: null, concluida: true }]);
     assert.equal(q.etiquetas[0].cor, "#6366f1");
     assert.equal(coerceModeloQuadro(null).listas.length, 1);
-    const t = coerceModeloTarefa({ titulo: "", checklist: ["a", "", 3], prazoDias: 5, recorrencia: { freq: "diaria", intervalo: 1 } });
-    assert.equal(t.titulo, "Nova tarefa");
-    assert.deepEqual(t.checklist, ["a"]);
-    assert.equal(prazoDoModelo(t, "2026-09-25"), "2026-09-30");
-    assert.equal(t.recorrencia?.freq, "diaria");
-    assert.equal(prazoDoModelo(coerceModeloTarefa({}), "2026-09-25"), null);
   });
 });
 

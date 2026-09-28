@@ -33,6 +33,8 @@ export type TarefaResumo = {
   ordem: number;
   concluidaEm: string | null;
   arquivada: boolean;
+  /** O cartão é um TEMPLATE (criar a partir dele = copiar) — fora das contagens, do painel e dos filtros ativos. */
+  template: boolean;
   /** Responsáveis (ids de usuário). */
   pessoas: number[];
   /** Observadores (acompanham, sem ser responsáveis). */
@@ -285,14 +287,17 @@ export const filtroTarefasAtivo = (f: FiltroTarefas) =>
   f.responsavel !== "todos" || f.prazo !== "todos" || f.prioridade !== "todas" || f.etiqueta != null || f.busca.trim() !== "";
 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
-export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket">;
+export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & { template?: boolean };
 
 /** Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). */
 export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): T[] {
   const casa = predicadoBusca(f.busca);
   // "Próximos 7 dias" = hoje + os 6 seguintes.
   const fimSemana = somarDias(ctx.hoje, 6);
+  const ativo = filtroTarefasAtivo(f);
   return tarefas.filter((t) => {
+    // O TEMPLATE só aparece sem filtro (não é trabalho de ninguém).
+    if (t.template && ativo) return false;
     const quem = t.envolvidos;
     if (f.responsavel === "eu" ? ctx.usuarioId == null || !quem.includes(ctx.usuarioId) : f.responsavel === "sem" ? quem.length > 0 : f.responsavel !== "todos" && !quem.includes(f.responsavel))
       return false;
@@ -315,7 +320,7 @@ export function resumoQuadro(tarefas: TarefaResumo[], hoje: string) {
   let atrasadas = 0;
   let concluidas = 0;
   for (const t of tarefas) {
-    if (t.arquivada) continue;
+    if (t.arquivada || t.template) continue;
     if (t.concluidaEm) concluidas++;
     else {
       abertas++;
@@ -802,7 +807,7 @@ const segundaDe = (iso: string) => {
   return isoNum(n - ((n + 3) % 7));
 };
 const aberta = (t: TarefaResumo) => !t.arquivada && !t.concluidaEm;
-const valida = (t: TarefaResumo) => !t.arquivada;
+const valida = (t: TarefaResumo) => !t.arquivada && !t.template;
 
 /** Um recorte do Dashboard (o que foi tocado) — `tarefasDoRecorte` usa a MESMA regra da agregação. */
 export type RecorteTarefas =
@@ -1002,20 +1007,7 @@ export function automacoesDoEvento(regras: Automacao[], evento: { listaId: numbe
 // ─── Fase 3: MODELOS ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type ModeloQuadro = { cor?: string; descricao?: string | null; listas: { nome: string; limiteWip: number | null; concluida: boolean }[]; etiquetas: { nome: string; cor: string }[] };
-export type ModeloTarefa = {
-  titulo: string;
-  descricao: string | null;
-  prioridade: Prioridade;
-  etiquetas: number[];
-  checklist: string[];
-  estimativaH: number | null;
-  /** Prazo RELATIVO: dias depois de criar (`null` = sem prazo). */
-  prazoDias: number | null;
-  recorrencia: Recorrencia | null;
-  /** Os blocos da tarefa (notas, links e a ordem) — `null` = modelo antigo. */
-  blocos: BlocoTarefa[] | null;
-};
-export type ModeloResumo = { id: number; tipo: "quadro" | "tarefa"; nome: string; grupoId: number | null; quadroId: number | null; criadoPor: number | null };
+export type ModeloResumo = { id: number; tipo: "quadro"; nome: string; grupoId: number | null; quadroId: number | null; criadoPor: number | null };
 
 const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const corHex = (v: unknown) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
@@ -1043,26 +1035,42 @@ export function coerceModeloQuadro(v: unknown): ModeloQuadro {
   };
 }
 
-/** Qualquer JSON → um modelo de TAREFA válido. */
-export function coerceModeloTarefa(v: unknown): ModeloTarefa {
-  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  const n = Number(o.prazoDias);
-  const est = Number(o.estimativaH);
-  return {
-    titulo: texto(o.titulo, 200) || "Nova tarefa",
-    descricao: texto(o.descricao, 10_000) || null,
-    prioridade: (PRIORIDADES as readonly unknown[]).includes(o.prioridade) ? (o.prioridade as Prioridade) : "media",
-    etiquetas: Array.isArray(o.etiquetas) ? o.etiquetas.filter((e): e is number => Number.isInteger(e) && e > 0).slice(0, 20) : [],
-    checklist: Array.isArray(o.checklist) ? o.checklist.map((c) => texto(c, 300)).filter(Boolean).slice(0, 100) : [],
-    estimativaH: o.estimativaH != null && Number.isFinite(est) && est >= 0 && est <= 9999 ? est : null,
-    prazoDias: o.prazoDias != null && Number.isInteger(n) && n >= 0 && n <= 3650 ? n : null,
-    recorrencia: lerRecorrencia(o.recorrencia),
-    blocos: lerBlocos(o.blocos),
-  };
+// ─── COPIAR / MOVER entre quadros e TEMPLATES (migração `0055`) ───────────────────────────────────────────────
+
+/** O que vai junto na CÓPIA de uma tarefa (o título, a descrição, a prioridade, os blocos e o vínculo vão sempre). */
+export type OpcoesCopia = { checklists: boolean; etiquetas: boolean; pessoas: boolean; datas: boolean };
+export const OPCOES_COPIA_PADRAO: OpcoesCopia = { checklists: true, etiquetas: true, pessoas: true, datas: true };
+
+const chaveNome = (s: string) => stripAccents(s.trim().toLocaleLowerCase("pt-BR")).replace(/\s+/g, " ");
+
+/**
+ * As etiquetas da ORIGEM no quadro de DESTINO, casadas pelo NOME (sem caixa/acento/espaços extras): as que existem viram
+ * os ids do destino; as que faltam vão em `criar` (nome + cor da origem), sem repetir.
+ */
+export function mapearEtiquetas<E extends { id: number; nome: string; cor: string }>(origem: E[], destino: E[]): { ids: number[]; criar: { nome: string; cor: string }[] } {
+  const porNome = new Map(destino.map((e) => [chaveNome(e.nome), e.id]));
+  const ids = new Set<number>();
+  const criar = new Map<string, { nome: string; cor: string }>();
+  for (const e of origem) {
+    const k = chaveNome(e.nome);
+    if (!k) continue;
+    const alvo = porNome.get(k);
+    if (alvo != null) ids.add(alvo);
+    else if (!criar.has(k)) criar.set(k, { nome: e.nome.trim(), cor: e.cor });
+  }
+  return { ids: [...ids], criar: [...criar.values()] };
 }
 
-/** O prazo de uma tarefa criada HOJE por um modelo (prazo relativo). */
-export const prazoDoModelo = (m: Pick<ModeloTarefa, "prazoDias">, hoje: string) => (m.prazoDias == null ? null : somarDias(hoje, m.prazoDias));
+/** Os ids da origem que têm um de MESMO NOME no destino (as equipes ao trocar de quadro) — os demais caem. */
+export function mapearPorNome(origem: { nome: string }[], destino: { id: number; nome: string }[]): number[] {
+  const porNome = new Map(destino.map((e) => [chaveNome(e.nome), e.id]));
+  return [...new Set(origem.map((e) => porNome.get(chaveNome(e.nome))).filter((x): x is number => x != null))];
+}
+
+/** A lista onde nasce um TEMPLATE: a lista chamada "Templates" (ativa), senão a dada. */
+export function listaDeTemplates(listas: { id: number; nome: string; arquivada: boolean }[], padrao: number): number {
+  return listas.find((l) => !l.arquivada && chaveNome(l.nome) === "templates")?.id ?? padrao;
+}
 
 // ─── CALENDÁRIO por EVENTOS (migração `0046`) ────────────────────────────────────────────────────────────────
 

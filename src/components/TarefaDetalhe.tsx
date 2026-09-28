@@ -24,10 +24,9 @@ import {
   urlValida,
   COR_PRIORIDADE,
   type EtiquetaTarefa,
+  linkTarefa,
   type ListaTarefas,
-  type ModeloTarefa,
   type Prioridade,
-  prazoDoModelo,
   PRIORIDADES,
   ROTULO_PRIORIDADE,
   rotuloTicket,
@@ -46,7 +45,9 @@ import { ehDesktop } from "./espacamento";
 import { SelectField, TextArea, TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
 import { LinkExterno } from "./LinkExterno";
-import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconModelo, IconTrash } from "./icons";
+import type { ModoCopia } from "./CopiarMoverTarefa";
+import { Dropdown } from "./Dropdown";
+import { IconArquivar, IconArrowRight, IconBandeira, IconCheck, IconComentario, IconCopy, IconDesarquivar, IconLink, IconMais, IconModelo, IconTrash } from "./icons";
 import { EventosTarefa } from "./EventosTarefa";
 import { DatasTarefa } from "./DatasTarefa";
 import { Modal, type ModalPainel } from "./Modal";
@@ -62,7 +63,7 @@ import { VinculoTarefa } from "./VinculoTarefa";
  */
 export type AberturaTarefa =
   | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string }
-  | { tipo: "editar"; id: number };
+  | { tipo: "editar"; id: number; focoTitulo?: boolean };
 
 type Rascunho = {
   titulo: string;
@@ -81,15 +82,13 @@ type Rascunho = {
   vinculo: Vinculo | null;
   descricao: string;
   recorrencia: Recorrencia | null;
-  /** Os checklists da tarefa NOVA (nome + textos — vão junto no POST; um modelo os preenche). */
+  /** Os checklists da tarefa NOVA (nome + textos — vão junto no POST). */
   checklists: ChecklistRascunho[];
   /** Os EVENTOS da tarefa NOVA (vão junto no POST; na gravada, gravam na hora). */
   eventos: DadosEvento[];
   /** Os BLOCOS, na ordem (a paleta). */
   blocos: BlocoTarefa[];
 };
-/** Um modelo de tarefa do quadro (o seletor "Usar modelo"). */
-export type ModeloTarefaOpcao = { id: number; nome: string; conteudo: ModeloTarefa };
 type Conteudo = { checklists: ChecklistNomeado[]; checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -125,9 +124,9 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
  * montado por BLOCOS (a paleta — arraste até o lugar ou toque para acrescentar): Nota, Checklist, Link, Prazo (início +
  * prazo com o semáforo), Responsáveis (+ observadores), Etiquetas, Vínculo, Estimativa e Recorrência — na ordem escolhida
  * (alça, ↑/↓). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista, em fila). No painel
- * da direita, a ATIVIDADE — comentários com @menção | histórico. Na criação, "Usar modelo" preenche o rascunho; a
- * existente vira MODELO. Arquivar/restaurar (qualquer pessoa do grupo) e excluir (editores). Fechar com alterações pede
- * confirmação.
+ * da direita, a ATIVIDADE — comentários com @menção | histórico. O menu "…" do cabeçalho: Copiar · Mover para outro quadro
+ * · Criar template (`onCopiarMover` — o diálogo é do host) · Copiar link. Arquivar/restaurar (qualquer pessoa do grupo) e
+ * excluir (editores). O TEMPLATE não se conclui. Fechar com alterações pede confirmação.
  */
 export function TarefaDetalhe({
   aberto,
@@ -141,7 +140,7 @@ export function TarefaDetalhe({
   hoje,
   usuarioId,
   podeExcluir,
-  modelos = [],
+  onCopiarMover,
   onFechar,
   onSalvo,
   esquerda,
@@ -162,8 +161,8 @@ export function TarefaDetalhe({
   usuarioId: number;
   /** Editor (admin/gestor): exclui a tarefa e modera comentários. */
   podeExcluir: boolean;
-  /** Os MODELOS de tarefa do quadro. */
-  modelos?: ModeloTarefaOpcao[];
+  /** Copiar · Mover para outro quadro · Criar template (o host abre o diálogo). */
+  onCopiarMover?: (id: number, modo: ModoCopia) => void;
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
@@ -183,7 +182,6 @@ export function TarefaDetalhe({
   const [desk, setDesk] = useState(true);
   const [abaAtividade, setAbaAtividade] = useState<"comentarios" | "historico">("comentarios");
   const [versaoHist, setVersaoHist] = useState(0);
-  const [modeloNovo, setModeloNovo] = useState<{ nome: string; prazoDias: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const pedido = useRef(0);
   const historico = useHistorico(atividade && abaAtividade === "historico" && idAberto ? `/api/tarefas/${idAberto}/historico?v=${versaoHist}` : null);
@@ -425,46 +423,6 @@ export function TarefaDetalhe({
     }
   };
 
-  /** "Usar modelo": o rascunho da tarefa NOVA recebe os campos do modelo (as etiquetas que ainda existem; o prazo relativo). */
-  const usarModelo = (id: string) => {
-    const m = modelos.find((x) => String(x.id) === id)?.conteudo;
-    if (!m) return;
-    setR((x) =>
-      x
-        ? {
-            ...x,
-            titulo: m.titulo,
-            descricao: m.descricao ?? "",
-            prioridade: m.prioridade,
-            etiquetas: m.etiquetas.filter((e) => etiquetas.some((y) => y.id === e)),
-            estimativa: m.estimativaH == null ? "" : String(m.estimativaH).replace(".", ","),
-            prazo: prazoDoModelo(m, hoje) ?? "",
-            recorrencia: m.recorrencia,
-            checklists: m.checklist.length ? [{ nome: "Checklist", itens: m.checklist }] : [],
-            // Os blocos do modelo + os de campo que o modelo preenche.
-            blocos: blocosDaTarefa(
-              m.blocos ?? [],
-              dadosDoRascunho({ ...x, estimativa: m.estimativaH == null ? "" : "1", prazo: prazoDoModelo(m, hoje) ?? "", etiquetas: m.etiquetas, recorrencia: m.recorrencia }, m.checklist.length, 0),
-            ),
-          }
-        : x,
-    );
-  };
-
-  const salvarComoModelo = async () => {
-    if (!existente || !modeloNovo?.nome.trim()) return;
-    const dias = modeloNovo.prazoDias.trim() === "" ? null : Number(modeloNovo.prazoDias);
-    if (dias != null && (!Number.isInteger(dias) || dias < 0 || dias > 3650)) return toast.error("Prazo: dias inteiros de 0 a 3650.");
-    try {
-      await chamar("/api/tarefas/modelos", "POST", { tipo: "tarefa", nome: modeloNovo.nome.trim(), tarefaId: existente.id, prazoDias: dias });
-      toast.success("Modelo salvo — use em “Nova tarefa”.");
-      setModeloNovo(null);
-      onSalvo();
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
   const acoesChecklist = nova ? acoesChecklistRascunho(r.checklists, (v) => set("checklists", v)) : checklistServidor;
   const nChecklist = acoesChecklist?.itens.length ?? existente?.checklist.total ?? 0;
   const eventosVisiveis = nova ? r.eventos.map((e, i) => ({ ...e, id: i + 1, convidados: e.convidados.map((u) => ({ usuarioId: u, resposta: "pendente" as const })) })) : (conteudo?.eventos ?? []);
@@ -676,6 +634,46 @@ export function TarefaDetalhe({
       ]
     : undefined;
 
+  /** O menu "…" do cabeçalho (como o do Trello): copiar, mover para outro quadro, criar template e copiar o link. */
+  const menuTarefa = (t: TarefaResumo) => (
+    <Dropdown align="end" width={250} ariaLabel="Mais ações da tarefa" triggerClassName="h-11 w-11 justify-center text-muted lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
+      {(fecharMenu) => {
+        const item = (rotulo: string, icone: ReactNode, fn: () => void, off = false) => (
+          <button
+            key={rotulo}
+            type="button"
+            disabled={off}
+            onClick={() => {
+              fecharMenu();
+              fn();
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40"
+          >
+            {icone}
+            <span className="truncate">{rotulo}</span>
+          </button>
+        );
+        // Copiar/mover levam o que está GRAVADO — com alterações por salvar, salve antes.
+        const off = sujo || salvando != null;
+        return (
+          <div className="space-y-0.5">
+            {onCopiarMover && item("Copiar…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "copiar"), off)}
+            {onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
+            {onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}
+            {item("Copiar link", <IconLink className="h-4 w-4 text-muted" />, () => {
+              const url = `${window.location.origin}${linkTarefa(quadroId, t.id)}`;
+              navigator.clipboard?.writeText(url).then(
+                () => toast.success("Link copiado."),
+                () => toast.error("Não foi possível copiar o link."),
+              );
+            })}
+            {off && onCopiarMover && <p className="px-2 pb-1 text-[11.5px] text-muted">Salve as alterações para copiar ou mover.</p>}
+          </div>
+        );
+      }}
+    </Dropdown>
+  );
+
   return (
     <>
       <Modal
@@ -688,11 +686,13 @@ export function TarefaDetalhe({
         esquerda={esquerda}
         principalNoTopo={!!esquerda?.length}
         bloqueado={salvando != null}
+        acoesCabecalho={existente && menuTarefa(existente)}
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}
             <h2 className="min-w-0 truncate text-base font-semibold text-text">{nova ? "Nova tarefa" : existente?.titulo}</h2>
             {existente?.arquivada && <Badge>Arquivada</Badge>}
+            {existente?.template && <Badge tone="violet">Template</Badge>}
             {concluida && (
               <Badge tone="emerald">
                 <IconCheck className="h-3 w-3" />
@@ -728,17 +728,6 @@ export function TarefaDetalhe({
                 onClick={excluir}
               />
             )}
-            {existente && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={salvando != null}
-                aria-label="Salvar como modelo"
-                title="Salvar como modelo"
-                icon={<IconModelo className="h-4 w-4" />}
-                onClick={() => setModeloNovo({ nome: existente.titulo, prazoDias: "" })}
-              />
-            )}
             {existente && desk && (
               <Button variant={atividade ? "secondary" : "ghost"} size="sm" aria-pressed={atividade} icon={<IconComentario className="h-4 w-4" />} onClick={() => setAtividade((a) => !a)}>
                 Atividade{nComentarios ? ` (${nComentarios})` : ""}
@@ -748,7 +737,7 @@ export function TarefaDetalhe({
               <Button variant="ghost" disabled={salvando != null} onClick={fechar}>
                 {sujo ? "Cancelar" : "Fechar"}
               </Button>
-              {existente && !existente.arquivada && (
+              {existente && !existente.arquivada && !existente.template && (
                 <Button
                   variant="secondary"
                   disabled={!pode}
@@ -785,17 +774,13 @@ export function TarefaDetalhe({
           </div>
         ) : (
         <div className="space-y-4">
-          {nova && modelos.length > 0 && (
-            <SelectField label="Usar modelo" value="" onChange={(e) => usarModelo(e.target.value)}>
-              <option value="">Escolha um modelo para preencher…</option>
-              {modelos.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nome}
-                </option>
-              ))}
-            </SelectField>
-          )}
-          <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova} onChange={(e) => set("titulo", e.target.value)} />
+          <TextField label="Título" value={r.titulo} maxLength={200} placeholder="O que precisa ser feito" autoFocus={nova || (aberto.tipo === "editar" && aberto.focoTitulo)}
+            onFocus={(e) => {
+              // Criada de um TEMPLATE: o cursor no FIM do título (completa-se o "2. Protocolo - FALTA - ").
+              if (aberto.tipo === "editar" && aberto.focoTitulo) e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length);
+            }}
+            onChange={(e) => set("titulo", e.target.value)}
+          />
           <SelectField
             label="Lista"
             value={String(r.listaId)}
@@ -860,36 +845,6 @@ export function TarefaDetalhe({
           />
           {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={arrastoBlocos.fantasma} />}
         </div>
-        )}
-      </Modal>
-      <Modal
-        open={modeloNovo != null}
-        onClose={() => setModeloNovo(null)}
-        titulo="Salvar como modelo"
-        size="md"
-        rodape={
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setModeloNovo(null)}>
-              Cancelar
-            </Button>
-            <Button disabled={!modeloNovo?.nome.trim()} onClick={salvarComoModelo}>
-              Salvar modelo
-            </Button>
-          </div>
-        }
-      >
-        {modeloNovo && (
-          <div className="space-y-4">
-            <TextField label="Nome do modelo" value={modeloNovo.nome} maxLength={80} onChange={(e) => setModeloNovo({ ...modeloNovo, nome: e.target.value })} />
-            <TextField
-              label="Prazo (dias depois de criar)"
-              inputMode="numeric"
-              value={modeloNovo.prazoDias}
-              placeholder="Vazio = sem prazo"
-              onChange={(e) => setModeloNovo({ ...modeloNovo, prazoDias: e.target.value })}
-            />
-            <p className="text-[12.5px] text-muted">Guarda título, descrição, prioridade, etiquetas, estimativa, recorrência e o checklist (desmarcado) — sem responsáveis nem vínculo.</p>
-          </div>
         )}
       </Modal>
       {confirmacao}

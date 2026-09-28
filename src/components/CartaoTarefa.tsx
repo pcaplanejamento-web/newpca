@@ -17,6 +17,7 @@ import {
   type TarefaResumo,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CirculoConcluir } from "./CirculoConcluir";
 import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
@@ -102,7 +103,7 @@ export function CartaoTarefa({
         </div>
       )}
       <div className={`flex items-start gap-1.5 pr-6 ${toque}`}>
-        {onConcluir && (
+        {onConcluir && !t.template && (
           <span className="mt-px">
             <CirculoConcluir concluida={t.concluidaEm != null} onAlternar={onConcluir} rotulo={`${rotuloTicket(t.ticket)} ${t.titulo}`} discreto />
           </span>
@@ -115,6 +116,11 @@ export function CartaoTarefa({
             {rotuloTicket(t.ticket)}
           </CelulaCopiavel>
         </span>
+        {t.template && (
+          <span className="pointer-events-none">
+            <Badge tone="violet">Template</Badge>
+          </span>
+        )}
         {t.prioridade !== "media" && (
           <span className="pointer-events-none inline-flex items-center" title={`Prioridade ${ROTULO_PRIORIDADE[t.prioridade]}`} style={{ color: COR_PRIORIDADE[t.prioridade] }}>
             <IconBandeira className="h-3.5 w-3.5" aria-label={`Prioridade ${ROTULO_PRIORIDADE[t.prioridade]}`} />

@@ -1877,9 +1877,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     N" + dias da semana em chips + base; mostra a próxima data); `IconRepetir` no cartão e no calendário, coluna
     "Recorrência" na Lista e no .xlsx.
   - **Modelos:** "Novo quadro" com **"Começar de"** (modelos de quadro dos grupos da pessoa — `POST /api/tarefas/quadros`
-    `{modeloId}` → `criarQuadroDoModelo`); o detalhe da tarefa NOVA tem **"Usar modelo"** (preenche o rascunho; o checklist
-    vai no `POST /api/tarefas` `checklist`) e a existente, **"Salvar como modelo"** (nome + prazo relativo). Rotas `POST
-    /api/tarefas/modelos` (quadro = editor; tarefa = membro) e `DELETE /api/tarefas/modelos/[id]` (quem salvou ou editor).
+    `{modeloId}` → `criarQuadroDoModelo`). Os modelos de TAREFA viraram cartões-TEMPLATE na F3 (migração `0055`). Rotas `POST
+    /api/tarefas/modelos` (só quadro, editor) e `DELETE /api/tarefas/modelos/[id]` (quem salvou ou editor).
   - **Configuração:** seções **Automações** (`AutomacoesQuadro`: as regras em FRASE — `fraseAutomacao` —, a da recorrência
     fixa como "Nativa", liga/desliga, excluir, e o formulário Quando · Fazer · Com; até `MAX_AUTOMACOES`=20) e **Modelos**
     (`ModelosQuadro`). Rotas `POST /api/tarefas/quadros/[id]/automacoes` e `PATCH`/`DELETE /api/tarefas/automacoes/[id]`
@@ -1914,8 +1913,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `lerBlocos` (tolerante), `blocosDaTarefa` (gravados + os de campo COM DADO que faltam — um bloco com dado nunca some),
     `adicionarBloco`/`moverBloco`/`removerBloco`/`blocosDisponiveis` (teto `MAX_BLOCOS`=30), `blocosParaGravar` (sem nota vazia
     nem link sem endereço), `contagemBlocos`, `urlValida` (link inválido trava o Salvar). Zod `blocosSchema` (sem id nem bloco
-    único repetido; link só http/s) em `POST`/`PATCH /api/tarefas`; a recorrência e o "Salvar como modelo" levam os blocos
-    (`ModeloTarefa.blocos`). O cartão mostra os ícones **Nota**/**Link** (`TarefaResumo.notas`/`links`, contados no banco por
+    único repetido; link só http/s) em `POST`/`PATCH /api/tarefas`; a recorrência e a cópia/template levam os blocos. O cartão mostra os ícones **Nota**/**Link** (`TarefaResumo.notas`/`links`, contados no banco por
     `json_each` — o texto das notas não vai ao quadro).
   - **Checklist corrigido** (`ChecklistTarefa`): as ações vêm de **`useChecklistServidor`** (tarefa gravada — OTIMISTA e em
     FILA serial: dois toques rápidos nunca se atropelam; item novo com id provisório até o POST devolver o real, e as ações
@@ -2141,7 +2139,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     responsável novo é avisado) e `POST /api/tarefas/[id]/checklist/[itemId]/converter` (nova tarefa na MESMA lista com o
     texto, o prazo e o responsável; o item sai). A recorrência copia os checklists com os nomes (`checklistsParaCopiar`).
     Aviso de prazo do ITEM ao responsável (`notificacaoDePrazoItem`, derivado com os prazos).
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F2…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 13 / F3 — COPIAR, MOVER ENTRE QUADROS e TEMPLATES (migração `0055`, aditiva):** `tarefas.template` (0/1) +
+    `copiada_de` (FK set null). A migração converte cada MODELO DE TAREFA num cartão-template (título como estava, descrição,
+    prioridade, estimativa, recorrência, blocos, etiquetas que existem e o checklist → "Checklist") numa lista **TEMPLATES**
+    (a 1ª do quadro) e apaga os modelos de tarefa (`ModeloTarefa`/"Usar modelo"/"Salvar como modelo" saíram; os de QUADRO
+    ficam). O TEMPLATE fica FORA de: contagens (card do quadro, `resumoQuadro`, WIP da coluna), Dashboard (`valida`),
+    Calendário (grade, sem prazo, contadores, feed), avisos de prazo/lembrete, busca, "Tarefas" da Mesa, automações e
+    recorrência (`aposMovimento` filtra) e dos filtros ATIVOS (`filtrarTarefas`); não se conclui (422 no `PATCH`; sem
+    círculo — selo "Template"). Núcleo: `mapearEtiquetas` (pelo NOME, sem caixa/acento — as que faltam são criadas),
+    `mapearPorNome` (equipes), `listaDeTemplates`, `OpcoesCopia`. Builders (`tarefas-sql`, testados no D1 real):
+    `comandosCriarTarefa` + `template`/`copiadaDe`/`noInicio`/`novasEtiquetas` e **`comandosMoverQuadro`** (ticket do
+    destino, fim da lista, conclusão pela lista, etiquetas trocadas, só as pessoas do grupo do destino, equipes de mesmo
+    nome; checklists/comentários/eventos/histórico vão junto). `tarefas.ts`: `copiarTarefa`, `moverTarefaDeQuadro`,
+    `destinosDeTarefa`. Rotas `POST /api/tarefas/[id]/copiar` (`copiarTarefaSchema`: quadro, lista, título, topo/fim,
+    template, checklists/etiquetas/pessoas/datas), `POST /api/tarefas/[id]/mover-quadro` e `GET /api/tarefas/destinos`
+    (quadros ativos acessíveis + listas, só ao abrir o diálogo) — destino acessível, arquivado = 409, auditoria, automações
+    do destino. Tela: menu **"…"** no cabeçalho do detalhe (Copiar · Mover para outro quadro · Criar template · Copiar link —
+    copiar/mover pedem as alterações salvas) e no menu do cartão; diálogo **`CopiarMoverTarefa`**; ícone de template no pé de
+    cada lista (**`SeletorTemplates`**, com a prévia) — cria a tarefa naquela lista e abre com o cursor no FIM do título
+    (`AberturaTarefa.focoTitulo`); Lista com **Ativas · Templates · Arquivadas**.
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F4…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

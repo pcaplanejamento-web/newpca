@@ -822,7 +822,6 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           hoje={dados.hoje}
           usuarioId={usuarioId}
           podeExcluir={ctx.podeEditar}
-          modelos={ctx.modelosTarefa}
           onFechar={() => {
             setVerTarefa(false);
             setTarefaSolta(null);
