@@ -105,7 +105,7 @@ import {
   IconTrash,
   IconUndo,
   IconUpload,
-  IconUser,
+  IconUsers,
   IconUserX,
   IconWallet,
 } from "@/components/icons";
@@ -159,6 +159,8 @@ import { SeletorEtiquetas } from "@/components/SeletorEtiquetas";
 import { CamposDaTarefa, CamposPersonalizadosQuadro, ChipsCamposCartao } from "@/components/CamposTarefa";
 import { ColunaTarefas, NovaLista } from "@/components/QuadroKanban";
 import { SeletorPessoas } from "@/components/SeletorPessoas";
+import { type ExtraPessoa, SeletorPessoa } from "@/components/SeletorPessoa";
+import type { Pessoa } from "@/lib/pessoa";
 import {
   adicionarBloco,
   type BlocoTarefa,
@@ -723,12 +725,18 @@ function AvisoFlutuanteDemo() {
   );
 }
 
-// Pessoas (Perfil → apelido + foto): a lista nativa mostra "apelido — nome"; a célula, a FOTO + o APELIDO.
-const PESSOAS_DEMO = [
-  { id: 1, nome: "Ana — Ana Souza", pessoa: { id: 1, nome: "Ana Souza", apelido: "Ana", foto: null } },
-  { id: 4, nome: "Carlão — Carlos Lima", pessoa: { id: 4, nome: "Carlos Lima", apelido: "Carlão", foto: null } },
-  { id: 7, nome: "Thamires Rocha", pessoa: { id: 7, nome: "Thamires Rocha", apelido: null, foto: null } },
+// Pessoas (Perfil → apelido + foto): os seletores e as células mostram a FOTO + o APELIDO (o nome completo embaixo, na
+// lista do SeletorPessoa).
+const PESSOAS_DEMO: Pessoa[] = [
+  { id: 1, nome: "Ana Souza", apelido: "Ana", foto: null },
+  { id: 4, nome: "Carlos Lima", apelido: "Carlão", foto: null },
+  { id: 7, nome: "Thamires Rocha", apelido: null, foto: null },
 ];
+const EXTRAS_FILTRO_DEMO: ExtraPessoa[] = [
+  { valor: "todos", rotulo: "Todos", icone: <IconUsers className="h-4 w-4" /> },
+  { valor: "sem", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> },
+];
+const EXTRAS_CELULA_DEMO: ExtraPessoa[] = [{ valor: "", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> }];
 const SITUACOES_DEMO = [
   { id: 1, nome: "Recebido", cor: "#64748b" },
   { id: 2, nome: "Em análise", cor: "#2563eb" },
@@ -739,7 +747,7 @@ const SITUACOES_DEMO = [
 // Dashboard de governança da Mesa — dados de exemplo RELATIVOS a hoje (a série semanal e o tempo na Mesa sempre
 // preenchidos); montados só no navegador (as datas dependem do relógio).
 const SITUACOES_DASH = SITUACOES_DEMO.map((x, i) => ({ ...x, ordem: i + 1 }));
-const PESSOAS_DASH = new Map(PESSOAS_DEMO.map((x) => [x.id, x.pessoa]));
+const PESSOAS_DASH = new Map(PESSOAS_DEMO.map((x) => [x.id, x]));
 const ESTADOS_DASH: EstadoPainel[] = ["regular", "regular", "regular", "atencao", "erro", "regular", "atencao", "conferindo"];
 const ASSUNTOS_DASH = ["INCLUSÃO NO PCA", "INCLUSÃO NO PCA", "EXCLUSÃO DE DEMANDA", "ALTERAÇÃO NÃO ONEROSA", "COMUNICAÇÃO INTERNA"];
 const TIPOS_DASH = ["DFD-S", "DFD-R", "DFD-O", "DFD-S", "DFD-E", null];
@@ -798,11 +806,14 @@ function DashboardMesaDemo() {
     setFiltro(filtroMetricasPadrao(d.hoje));
   }, []);
   if (!dados || !filtro) return <Skeleton className="h-72 w-full rounded-card" />;
+  // As KPIs = a Mesa com o filtro do topo; as métricas = o universo (todos os dados), com o responsável como FOCO.
   const protocolos = resp === "todos" ? dados.protocolos : dados.protocolos.filter((x) => (resp === "sem" ? x.responsavelId == null : x.responsavelId === resp));
+  const ids = new Set(protocolos.map((x) => x.id));
   return (
     <DashboardMesa
       protocolos={protocolos}
-      dfds={dados.dfds}
+      dfds={resp === "todos" ? dados.dfds : dados.dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId))}
+      universo={dados}
       situacoes={SITUACOES_DASH}
       pessoas={PESSOAS_DASH}
       regras={regrasPadrao()}
@@ -823,12 +834,18 @@ function MetricasMesaDemo() {
     setFiltro(filtroMetricasPadrao(h));
   }, []);
   if (!hoje || !filtro) return <Skeleton className="h-40 w-full rounded-card" />;
-  const v = (dia: number, mes: number, ano: number, tudo: number) => ({ dia, mes, ano, tudo });
+  const v = (dia: number, semana: number, mes: number, ano: number, tudo: number) => ({ dia, semana, mes, ano, tudo });
   return (
     <div className="space-y-5">
       <div className="space-y-1.5">
-        <p className="text-[12px] font-medium text-muted">NavegadorPeriodo — Tudo | Ano | Mês | Dia, ‹ › e “Hoje”</p>
-        <NavegadorPeriodo periodo={filtro.periodo} data={filtro.ref} hoje={hoje} onChange={({ periodo, data }) => setFiltro({ ...filtro, periodo, ref: data })} />
+        <p className="text-[12px] font-medium text-muted">NavegadorPeriodo — Tudo | Ano | Mês | Semana | Dia, ‹ ›, “Hoje” e o salto (toque no período)</p>
+        <NavegadorPeriodo
+          periodo={filtro.periodo}
+          data={filtro.ref}
+          hoje={hoje}
+          diasComDados={new Set([hoje])}
+          onChange={({ periodo, data }) => setFiltro({ ...filtro, periodo, ref: data })}
+        />
       </div>
       <div className="space-y-1.5">
         <p className="text-[12px] font-medium text-muted">BarraMetricas — período, medida, pessoa, natureza e tipo de DFD (+ Limpar e Ajuda)</p>
@@ -848,11 +865,11 @@ function MetricasMesaDemo() {
           colunas={colunasMetricas(filtro.ref, hoje)}
           destaque={filtro.periodo}
           linhas={[
-            { chave: "naty", rotulo: "Naty", titulo: "Naty", valores: v(0, 29, 77, 40) },
-            { chave: "cris", rotulo: "Cris", titulo: "Cris", valores: v(0, 31, 65, 38) },
+            { chave: "naty", rotulo: "Naty", titulo: "Naty", valores: v(0, 6, 29, 77, 40) },
+            { chave: "cris", rotulo: "Cris", titulo: "Cris", valores: v(0, 8, 31, 65, 38) },
           ]}
-          total={{ chave: "total", rotulo: "Total", titulo: "Total", valores: v(0, 60, 142, 78) }}
-          extras={[{ chave: "correcoes", rotulo: "Correções (reenvios)", titulo: "Correções", valores: v(0, 1, 4, 2) }]}
+          total={{ chave: "total", rotulo: "Total", titulo: "Total", valores: v(0, 14, 60, 142, 78) }}
+          extras={[{ chave: "correcoes", rotulo: "Correções (reenvios)", titulo: "Correções", valores: v(0, 0, 1, 4, 2) }]}
           formatar={(n) => num(n)}
           onEscolher={(l, c) => toast(`Origem: ${l.titulo} · ${c.titulo}`)}
         />
@@ -1278,7 +1295,8 @@ function SeletoresDemo() {
   const [resp, setResp] = useState("todos");
   const [assunto, setAssunto] = useState("todos");
   const [situacao, setSituacao] = useState<number | null>(2);
-  const [pessoa, setPessoa] = useState<number | null>(null);
+  const [pessoa, setPessoa] = useState("");
+  const [padrao, setPadrao] = useState("4");
   const [vista, setVista] = useState("protocolos");
   const [modoItens, setModoItens] = useState("normal");
   return (
@@ -1309,16 +1327,16 @@ function SeletoresDemo() {
           />
         )}
         <div className="ml-auto flex items-center gap-2">
-          <SeletorFiltro
-            icone={(() => {
-              const p = PESSOAS_DEMO.find((x) => String(x.id) === resp)?.pessoa;
-              return p ? <Avatar nome={p.nome} foto={p.foto} size="xs" /> : resp === "sem" ? <IconUserX className="h-4 w-4" /> : <IconUser className="h-4 w-4" />;
-            })()}
+          <SeletorPessoa
+            variante="filtro"
             rotulo="Responsável"
+            ariaLabel="Filtro: Responsável"
+            pessoas={PESSOAS_DEMO}
+            usuarioId={1}
             valor={resp}
-            onChange={setResp}
             ativo={resp !== "todos"}
-            opcoes={[{ valor: "todos", rotulo: "Todos" }, { valor: "sem", rotulo: "Sem responsável" }, ...PESSOAS_DEMO.map((p) => ({ valor: String(p.id), rotulo: p.nome }))]}
+            extras={EXTRAS_FILTRO_DEMO}
+            onChange={setResp}
           />
           <SeletorFiltro
             icone={<IconFilter className="h-4 w-4" />}
@@ -1337,9 +1355,31 @@ function SeletoresDemo() {
       </div>
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-border p-2">
         <SeletorCelula ariaLabel="Situação do protocolo" valor={situacao} opcoes={SITUACOES_DEMO} onChange={setSituacao} vazio="Sem situação" />
-        <SeletorCelula ariaLabel="Responsável pelo protocolo" valor={pessoa} opcoes={PESSOAS_DEMO} onChange={setPessoa} vazio="Sem responsável" />
-        <SeletorCelula ariaLabel="Responsável (salvando)" valor={4} opcoes={PESSOAS_DEMO} onChange={() => undefined} salvando />
+        <SeletorPessoa
+          variante="celula"
+          rotulo="Responsável"
+          ariaLabel="Responsável pelo protocolo"
+          pessoas={PESSOAS_DEMO}
+          usuarioId={1}
+          valor={pessoa}
+          extras={EXTRAS_CELULA_DEMO}
+          onChange={setPessoa}
+        />
+        <SeletorPessoa variante="celula" rotulo="Responsável (salvando)" pessoas={PESSOAS_DEMO} valor="4" extras={EXTRAS_CELULA_DEMO} onChange={() => undefined} salvando />
+        <SeletorPessoa variante="celula" rotulo="Responsável (sem permissão)" pessoas={PESSOAS_DEMO} valor="7" extras={EXTRAS_CELULA_DEMO} />
         <SeletorCelula ariaLabel="Situação (sem permissão)" valor={4} opcoes={SITUACOES_DEMO} />
+      </div>
+      <div className="max-w-sm space-y-1.5">
+        <p className="text-[12px] font-medium text-muted">SeletorPessoa — campo de formulário (Perfil → Responsável padrão; edição em massa)</p>
+        <SeletorPessoa
+          variante="campo"
+          rotulo="Responsável padrão ao protocolar"
+          pessoas={PESSOAS_DEMO}
+          usuarioId={1}
+          valor={padrao}
+          extras={[{ valor: "", rotulo: "Nenhum (definir na Mesa)", icone: <IconUserX className="h-4 w-4" /> }]}
+          onChange={setPadrao}
+        />
       </div>
       <p className="text-[12px] text-faint">
         As situações são cadastradas pelo ADM em Configurações → Situações (nome + cor + ordem); o responsável padrão
@@ -2684,11 +2724,11 @@ export function Catalogo() {
         <GraficosGovernancaDemo />
       </Secao>
 
-      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens: KPIs, a barra de métricas, a distribuição por pessoa/natureza/tipo, o desempenho por pessoa e os quadros sobre o recorte)">
+      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens: KPIs, a barra de métricas, a distribuição por pessoa/natureza/tipo, o desempenho por pessoa e os quadros sobre o recorte; o Responsável do topo é o FOCO — a linha da pessoa na visão da equipe)">
         <DashboardMesaDemo />
       </Secao>
 
-      <Secao titulo="Métricas da Mesa — NavegadorPeriodo · BarraMetricas · TabelaPeriodo (a planilha de distribuição: Hoje | Mês | Ano | Na Mesa)">
+      <Secao titulo="Métricas da Mesa — NavegadorPeriodo (Tudo | Ano | Mês | Semana | Dia + o salto a qualquer data) · BarraMetricas · TabelaPeriodo (a planilha de distribuição: Hoje | Semana | Mês | Ano | Na Mesa)">
         <MetricasMesaDemo />
       </Secao>
 
@@ -2710,7 +2750,7 @@ export function Catalogo() {
       <Secao titulo="PessoaTag (FOTO + APELIDO — colunas Responsável e Distribuição da Mesa; nome completo no title)">
         <div className="flex flex-wrap items-center gap-4">
           {PESSOAS_DEMO.map((p) => (
-            <PessoaTag key={p.id} pessoa={p.pessoa} />
+            <PessoaTag key={p.id} pessoa={p} />
           ))}
           <PessoaTag pessoa={null} vazio="Sem responsável" />
         </div>
@@ -3267,7 +3307,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Barra da Mesa — Dashboard (só ícone) + visões + filtros de HIERARQUIA à direita; dropdown DENTRO da célula (Situação · Responsável)">
+      <Secao titulo="Barra da Mesa — Dashboard (só ícone) + visões + filtros de HIERARQUIA à direita (o Responsável = SeletorPessoa: a foto da escolhida; a lista com FOTO + APELIDO, busca e teclado); dropdown DENTRO da célula (Situação — SeletorCelula · Responsável — SeletorPessoa) e o SeletorPessoa como campo de formulário">
         <SeletoresDemo />
       </Secao>
 

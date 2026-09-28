@@ -29,10 +29,12 @@ import {
   diaDoProtocolo,
   evolucaoMetricas,
   type FiltroMetricas,
+  frasePeriodo,
   type LinhaDesempenho,
   MEDIDAS_METRICAS,
   type MedidaMetricas,
   naturezaDoProtocolo,
+  noFoco,
   type OrigemMetricas,
   opcoesNatureza,
   origemCorrecoes,
@@ -114,11 +116,13 @@ const COLS_DFD: Column<DfdPainel>[] = [
 
 /**
  * DASHBOARD DE GOVERNANÇA da Mesa (o ícone à esquerda de Protocolos · DFDs · Itens), SÓ sobre a execução da Mesa (os
- * protocolos/DFDs dela, já filtrados pelo Responsável/Assunto do topo, + o histórico de execução deles):
- * - KPIs — a Mesa AGORA;
- * - a BARRA DE MÉTRICAS (período · medida · pessoa · natureza · tipo de DFD) — vale para tudo abaixo dela;
- * - as tabelas por período da distribuição (pessoa, natureza e tipo × Hoje | Mês | Ano | Na Mesa + as correções) e o
- *   DESEMPENHO POR PESSOA (conformidade, tempo, correções e ações — como cada usuário está se saindo);
+ * protocolos/DFDs dela + o histórico de execução deles):
+ * - KPIs — a Mesa AGORA (as listas com os filtros Responsável/Assunto do topo);
+ * - a BARRA DE MÉTRICAS (período · medida · pessoa · natureza · tipo de DFD) — vale para tudo abaixo dela, sobre o
+ *   UNIVERSO (a Mesa com o Assunto do topo) com o Responsável do topo como FOCO: numa pessoa, só ela, no papel escolhido —
+ *   os mesmos números da linha dela na visão da equipe;
+ * - as tabelas por período da distribuição (pessoa, natureza e tipo × Hoje | Semana | Mês | Ano | Na Mesa + as correções)
+ *   e o DESEMPENHO POR PESSOA (conformidade, correções, ações e tempo — como cada usuário está se saindo);
  * - os quadros da Mesa sobre o recorte: evolução, saúde, situação, tempo na Mesa, carga por pessoa (estado ou situação;
  *   pelo Responsável, tocar filtra a Mesa) e valor por unidade.
  * Agregação PURA (`painelMesa` + `mesa-metricas`); toda célula/coluna abre a ORIGEM dos dados (Σ = o número).
@@ -126,6 +130,7 @@ const COLS_DFD: Column<DfdPainel>[] = [
 export function DashboardMesa({
   protocolos,
   dfds,
+  universo,
   situacoes,
   pessoas,
   regras,
@@ -134,14 +139,17 @@ export function DashboardMesa({
   onAbrir,
   metricas,
 }: {
+  /** A Mesa agora (com os filtros do topo) — as KPIs. */
   protocolos: ProtocoloPainel[];
   dfds: DfdPainel[];
+  /** O UNIVERSO das métricas: a Mesa só com o Assunto do topo (sem foco, os mesmos arrays de `protocolos`/`dfds`). */
+  universo: { protocolos: ProtocoloPainel[]; dfds: DfdPainel[] };
   /** As situações cadastradas pelo ADM (ordem + nome + cor). */
   situacoes: SituacaoCadastrada[];
   /** Foto + apelido de quem aparece (responsáveis, quem protocolou e quem agiu). */
   pessoas: ReadonlyMap<number, Pessoa>;
   regras: RegrasAvaliacao;
-  /** O filtro de Responsável do topo (a linha dele fica marcada). */
+  /** O filtro de Responsável do topo — o FOCO das métricas (e a linha marcada na carga). */
   responsavel: FiltroMesa["responsavel"];
   onResponsavel: (v: FiltroMesa["responsavel"]) => void;
   /** Abre o banner do protocolo/DFD de uma linha da ORIGEM dos dados (a pilha da Mesa). */
@@ -160,21 +168,29 @@ export function DashboardMesa({
   const idsSituacoes = useMemo(() => situacoes.map((s) => s.id), [situacoes]);
   // KPIs = a Mesa AGORA (todos os protocolos/DFDs em escopo), como sempre.
   const pMesa = useMemo(() => painelMesa({ protocolos, dfds, situacoes: idsSituacoes }, new Date()), [protocolos, dfds, idsSituacoes]);
-  // O RECORTE da barra de métricas — a fonte única dos quadros abaixo dela.
-  const rec = useMemo(() => recorteMetricas(protocolos, dfds, metricas.atividades, filtro, hoje), [protocolos, dfds, metricas.atividades, filtro, hoje]);
+  // O RECORTE da barra de métricas — a fonte única dos quadros abaixo dela: o universo com o FOCO do topo.
+  const rec = useMemo(
+    () => recorteMetricas(universo.protocolos, universo.dfds, metricas.atividades, filtro, hoje, responsavel),
+    [universo, metricas.atividades, filtro, hoje, responsavel],
+  );
   // Nos quadros da Mesa a PESSOA segue a dimensão escolhida (a Carga agrupa pela Distribuição quando é ela).
   const protosQ = useMemo(
     () => (filtro.pessoa === "distribuicao" ? rec.coorte.map((x) => ({ ...x, responsavelId: x.distribuidorId ?? null })) : rec.coorte),
     [rec, filtro.pessoa],
   );
-  const dfdsQ = useMemo(() => dfdsDoRecorteMetricas(dfds, rec), [dfds, rec]);
+  const dfdsQ = useMemo(() => dfdsDoRecorteMetricas(universo.dfds, rec), [universo, rec]);
   const p = useMemo(() => painelMesa({ protocolos: protosQ, dfds: dfdsQ, situacoes: idsSituacoes }, new Date()), [protosQ, dfdsQ, idsSituacoes]);
   const tabelas = useMemo(() => ({ pessoa: tabelaMetricas(rec, "pessoa"), natureza: tabelaMetricas(rec, "natureza"), tipo: tabelaMetricas(rec, "tipo") }), [rec]);
   const desempenho = useMemo(() => desempenhoPorPessoa(rec), [rec]);
   const resumo = useMemo(() => resumoMetricas(rec), [rec]);
   const baldes = useMemo(() => baldesEvolucao(filtro.periodo, filtro.ref, hoje), [filtro.periodo, filtro.ref, hoje]);
   const evolucao = useMemo(() => evolucaoMetricas(rec, baldes), [rec, baldes]);
-  const naturezas = useMemo(() => opcoesNatureza(protocolos), [protocolos]);
+  // As naturezas do FOCO (antes da natureza/tipo) e os dias com protocolação (os pontos do seletor de data).
+  const naturezas = useMemo(
+    () => opcoesNatureza(responsavel === "todos" ? universo.protocolos : universo.protocolos.filter((p) => noFoco(p, responsavel, filtro.pessoa))),
+    [universo, responsavel, filtro.pessoa],
+  );
+  const diasComDados = useMemo(() => new Set([...rec.dia.values()].filter((d): d is string => d != null)), [rec]);
   const sitPorPessoa = useMemo(() => situacoesPorPessoa(protosQ, "responsavel", idsSituacoes), [protosQ, idsSituacoes]);
   const cores = useMemo<Record<EstadoPainel, string>>(
     () => ({
@@ -323,18 +339,34 @@ export function DashboardMesa({
   );
 
   // ---- Desempenho por pessoa ----
+  // Governança primeiro (volume → qualidade → retrabalho → execução → tempo); os totais dos DFDs no fim.
+  const contagem = (key: string, header: string, v: (l: LinhaDesempenho) => number): Column<LinhaDesempenho> => ({
+    key,
+    header,
+    nowrap: true,
+    filter: "range",
+    numero: v,
+    formatarFaixa: (n) => num(n),
+    render: (l) => num(v(l)),
+  });
+  // Correções e ações vêm do histórico ("…" carregando; "—" se falhou). A linha SEM pessoa ("Sem responsável"/sem
+  // registro) não tem ações — "—".
+  const doHistorico = (key: string, header: string, v: (l: LinhaDesempenho) => number | null, semPessoa: boolean): Column<LinhaDesempenho> => ({
+    key,
+    header,
+    nowrap: true,
+    filter: "range",
+    numero: (l) => (semPessoa && l.pessoaId == null ? null : v(l)),
+    formatarFaixa: (n) => num(n),
+    render: (l) => {
+      if (semPessoa && l.pessoaId == null) return "—";
+      const x = v(l);
+      return x == null ? (metricas.erro ? "—" : "…") : num(x);
+    },
+  });
   const colsDesempenho: Column<LinhaDesempenho>[] = [
     { key: "pessoa", header: rotuloDimensao, align: "left", nowrap: true, value: (l) => nomePessoa(l.pessoaId), render: (l) => rotuloPessoa(l.pessoaId) },
-    ...(
-      [
-        ["protocolos", "Protocolos", (l) => l.protocolos],
-        ["dfds", "DFDs", (l) => l.dfds],
-        ["itens", "Itens", (l) => l.itens],
-      ] as [string, string, (l: LinhaDesempenho) => number][]
-    ).map(
-      ([key, header, v]): Column<LinhaDesempenho> => ({ key, header, nowrap: true, filter: "range", numero: v, formatarFaixa: (n) => num(n), render: (l) => num(v(l)) }),
-    ),
-    { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.valor, render: (l) => <span className="tabular-nums">{brlCompact(l.valor)}</span> },
+    contagem("protocolos", "Protocolos", (l) => l.protocolos),
     {
       key: "regulares",
       header: "Regulares",
@@ -354,15 +386,6 @@ export function DashboardMesa({
       render: (l) => <span style={l.erro > 0 ? { color: cores.erro, fontWeight: 600 } : undefined}>{num(l.erro)}</span>,
     },
     {
-      key: "dfdsErro",
-      header: "DFDs c/ erro",
-      nowrap: true,
-      filter: "range",
-      numero: (l) => l.dfdsErro,
-      formatarFaixa: (n) => num(n),
-      render: (l) => <span style={l.dfdsErro > 0 ? { color: cores.erro } : undefined}>{num(l.dfdsErro)}</span>,
-    },
-    {
       key: "atencao",
       header: "Em atenção",
       nowrap: true,
@@ -371,6 +394,8 @@ export function DashboardMesa({
       formatarFaixa: (n) => num(n),
       render: (l) => <span style={l.atencao > 0 ? { color: cores.atencao } : undefined}>{num(l.atencao)}</span>,
     },
+    doHistorico("correcoes", "Correções", (l) => l.correcoes, false),
+    doHistorico("acoes", "Ações", (l) => l.acoes, true),
     {
       key: "tempo",
       header: "Tempo médio",
@@ -389,25 +414,18 @@ export function DashboardMesa({
       formatarFaixa: (n) => num(n),
       render: (l) => <span style={l.acimaAlerta > 0 ? { color: "var(--warn)", fontWeight: 600 } : undefined}>{num(l.acimaAlerta)}</span>,
     },
-    ...(
-      [
-        ["correcoes", "Correções", (l) => l.correcoes],
-        ["acoes", "Ações", (l) => l.acoes],
-      ] as [string, string, (l: LinhaDesempenho) => number | null][]
-    ).map(
-      ([key, header, v]): Column<LinhaDesempenho> => ({
-        key,
-        header,
-        nowrap: true,
-        filter: "range",
-        numero: v,
-        formatarFaixa: (n) => num(n),
-        render: (l) => {
-          const x = v(l);
-          return x == null ? (metricas.erro ? "—" : "…") : num(x);
-        },
-      }),
-    ),
+    contagem("dfds", "DFDs", (l) => l.dfds),
+    {
+      key: "dfdsErro",
+      header: "DFDs c/ erro",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.dfdsErro,
+      formatarFaixa: (n) => num(n),
+      render: (l) => <span style={l.dfdsErro > 0 ? { color: cores.erro } : undefined}>{num(l.dfdsErro)}</span>,
+    },
+    contagem("itens", "Itens", (l) => l.itens),
+    { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.valor, render: (l) => <span className="tabular-nums">{brlCompact(l.valor)}</span> },
   ];
 
   // ---- Quadros da Mesa (sobre o recorte) ----
@@ -521,7 +539,7 @@ export function DashboardMesa({
         ? `${rotuloMedida} por mês de protocolação em ${filtro.ref.slice(0, 4)}`
         : filtro.periodo === "mes"
           ? `${rotuloMedida} por dia de protocolação — ${janela("mes").toLowerCase()}`
-          : `${rotuloMedida} por dia — a semana de ${dataBR(baldes[0]?.de).slice(0, 5)} a ${dataBR(baldes.at(-1)?.ate).slice(0, 5)}`;
+          : `${rotuloMedida} por dia de protocolação — a semana de ${dataBR(baldes[0]?.de).slice(0, 5)} a ${dataBR(baldes.at(-1)?.ate).slice(0, 5)}`;
   const textoMedida = (n: number) =>
     filtro.medida === "protocolos"
       ? plural(n, "protocolo", "protocolos")
@@ -544,7 +562,9 @@ export function DashboardMesa({
   ) : (
     <span>
       {plural(resumo.correcoes, "correção", "correções")}
-      {resumo.corrigidos ? ` (${plural(resumo.corrigidos, "protocolo", "protocolos")})` : ""} · {plural(resumo.acoes ?? 0, "ação", "ações")}
+      {resumo.corrigidos ? ` (${plural(resumo.corrigidos, "protocolo", "protocolos")})` : ""}
+      {/* Sem ninguém no recorte (os sem responsável) não há de quem contar ações. */}
+      {resumo.acoes != null && ` · ${plural(resumo.acoes, "ação", "ações")}`}
     </span>
   );
   const linhaRecorte = (
@@ -556,12 +576,15 @@ export function DashboardMesa({
       {execucao}
     </>
   );
+  // O FOCO do topo: a pessoa no PAPEL escolhido na barra (os números = a linha dela na visão da equipe).
   const aviso =
     responsavel !== "todos" ? (
       <span className="inline-flex items-center gap-1.5 text-text-2">
         <IconInfo className="h-3.5 w-3.5 shrink-0 text-accent" />
-        {responsavel === "sem" ? "Só os protocolos sem responsável" : `Só os protocolos de ${nomeExibicao(pessoas.get(responsavel) ?? { nome: `Pessoa #${responsavel}` })}`} (filtro
-        Responsável do topo) — escolha “Todos” para comparar a equipe.
+        {responsavel === "sem"
+          ? "Só os protocolos sem responsável"
+          : `Só ${nomeExibicao(pessoas.get(responsavel) ?? { nome: `Pessoa #${responsavel}` })}, ${porDistribuicao ? "como quem protocolou" : "como responsável"}`}{" "}
+        (filtro Responsável do topo) — escolha “Todos” para comparar a equipe.
       </span>
     ) : null;
 
@@ -605,7 +628,7 @@ export function DashboardMesa({
         />
       </div>
 
-      <BarraMetricas filtro={filtro} onFiltro={metricas.onFiltro} hoje={hoje} naturezas={naturezas} resumo={linhaRecorte} aviso={aviso} />
+      <BarraMetricas filtro={filtro} onFiltro={metricas.onFiltro} hoje={hoje} naturezas={naturezas} diasComDados={diasComDados} resumo={linhaRecorte} aviso={aviso} />
 
       <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-2 xl:grid-cols-3">
         {tabela("pessoa", "Distribuição por pessoa", rotuloDimensao, `${rotuloMedida} por ${rotuloDimensao.toLowerCase()} — toque num número para ver a origem`)}
@@ -624,8 +647,8 @@ export function DashboardMesa({
             Desempenho por pessoa
           </h3>
           <p className="mt-0.5 text-xs text-muted">
-            {filtro.periodo === "tudo" ? "Os protocolos na Mesa" : `Os protocolados em ${janela(filtro.periodo).replace(/^Hoje, /, "")}`} por{" "}
-            {rotuloDimensao.toLowerCase()}: conformidade, tempo na Mesa, correções recebidas e ações feitas — toque numa linha para ver os protocolos.
+            {filtro.periodo === "tudo" ? "Os protocolos na Mesa" : `Os protocolados ${frasePeriodo(filtro.periodo, filtro.ref)}`} por{" "}
+            {rotuloDimensao.toLowerCase()}: conformidade, correções recebidas, ações feitas e tempo na Mesa — toque numa linha para ver os protocolos.
           </p>
         </div>
         <DataTable

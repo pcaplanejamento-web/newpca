@@ -3,26 +3,34 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-// Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período).
+// Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
 // O painel é renderizado em PORTAL (position: fixed no body) para NUNCA ser
 // recortado por containers com overflow (ex.: cabeçalho de tabela) e é mantido
-// dentro da tela. Fecha no clique-fora e no Esc; sombra suave.
+// dentro da tela. Fecha no clique-fora e no Esc; sombra suave. `className` = o
+// invólucro (ex.: largura toda num formulário); `id`/`title` = os do gatilho
+// (`<label htmlFor>`; a dica de um gatilho só-ícone).
 export function Dropdown({
   trigger,
   children,
   align = "start",
+  className = "inline-block max-w-full",
   triggerClassName = "",
   panelClassName = "",
   width,
   ariaLabel,
+  id,
+  title,
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
   align?: "start" | "end";
+  className?: string;
   triggerClassName?: string;
   panelClassName?: string;
   width?: number;
   ariaLabel?: string;
+  id?: string;
+  title?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
@@ -91,10 +99,12 @@ export function Dropdown({
   }, [open]);
 
   return (
-    <div className="inline-block max-w-full">
+    <div className={className}>
       <button
         ref={triggerRef}
+        id={id}
         type="button"
+        title={title}
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="true"

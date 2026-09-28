@@ -2,6 +2,13 @@
 
 import type { ReactNode } from "react";
 
+/** O QUADRADO só-ícone dos filtros de hierarquia (na altura dos controles; 44px no toque) — accent quando ativo. O mesmo
+ * no `SeletorPessoa` (o filtro Responsável, com a foto da escolhida). */
+export const classeQuadradoFiltro = (ativo: boolean) =>
+  `relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-within:ring-2 focus-within:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+    ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
+  }`;
+
 /**
  * SELETOR DE FILTRO de hierarquia (na linha das visões da Mesa — Responsável e Assunto): SÓ O ÍCONE, num quadrado na
  * ALTURA PADRÃO dos controles (`--h-control-sm` no desktop — a do `Segmented` ao lado; 44px no celular, o alvo de toque).
@@ -30,11 +37,7 @@ export function SeletorFiltro({
   const lista = opcoes.some((o) => o.valor === valor) ? opcoes : [...opcoes, { valor, rotulo: valor }];
   const atual = lista.find((o) => o.valor === valor)?.rotulo ?? "";
   return (
-    <span
-      className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-within:ring-2 focus-within:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
-        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
-      }`}
-    >
+    <span className={classeQuadradoFiltro(ativo)}>
       {icone}
       <select
         aria-label={`Filtro: ${rotulo} — ${atual}`}

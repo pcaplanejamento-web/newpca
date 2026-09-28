@@ -4,14 +4,15 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
 import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
-import { APELIDO_MAX, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
+import { APELIDO_MAX, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
 import { Segmented } from "./Segmented";
+import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { ThemeToggle } from "./ThemeToggle";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 
@@ -34,6 +35,8 @@ function Aviso({ msg }: { msg: Msg }) {
 }
 
 const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
+/** Responsável padrão: "" = nenhum (definir na Mesa). */
+const EXTRAS_PADRAO: ExtraPessoa[] = [{ valor: "", rotulo: "Nenhum (definir na Mesa)", icone: <IconUserX className="h-4 w-4" /> }];
 
 export function PerfilView({
   usuario,
@@ -44,7 +47,7 @@ export function PerfilView({
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
    * PESSOAS DO GRUPO ativo (`foraDoGrupo` = nome do padrão gravado que não é mais do grupo). */
-  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: string | null } | null;
+  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null } | null;
   /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa; `null` = sem o card). */
   mesaResponsavel?: MesaResponsavel | null;
   /** O grupo ativo não libera nenhum módulo (Mesa, PCA, Catálogo, Orçamento): avisa o que fazer. */
@@ -339,26 +342,23 @@ export function PerfilView({
             <label className={labelCls} htmlFor="p-resp-padrao">
               Responsável padrão ao protocolar
             </label>
-            <select
+            {/* FOTO + APELIDO de cada pessoa do grupo; o padrão gravado que saiu do grupo continua visível (só pode ser
+                trocado ou removido). */}
+            <SeletorPessoa
               id="p-resp-padrao"
-              className={inputCls}
-              value={respPadrao ?? ""}
-              onChange={(e) => setRespPadrao(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">— Nenhum (definir na Mesa) —</option>
-              {/* O padrão gravado que deixou de ser do grupo continua visível (só pode ser trocado/removido). */}
-              {respPadrao != null && !protocolacao.pessoas.some((p) => p.id === respPadrao) && (
-                <option value={respPadrao} disabled>
-                  {protocolacao.foraDoGrupo ?? `#${respPadrao}`} (fora do grupo)
-                </option>
-              )}
-              {protocolacao.pessoas.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {rotuloOpcaoPessoa(p, usuario.id)}
-                </option>
-              ))}
-            </select>
+              variante="campo"
+              rotulo="Responsável padrão ao protocolar"
+              pessoas={protocolacao.pessoas}
+              usuarioId={usuario.id}
+              valor={respPadrao == null ? "" : String(respPadrao)}
+              atual={protocolacao.foraDoGrupo ?? null}
+              extras={EXTRAS_PADRAO}
+              onChange={(v) => setRespPadrao(v ? Number(v) : null)}
+            />
             <p className="mt-1.5 text-[12px] text-muted">
+              {respPadrao != null && !protocolacao.pessoas.some((p) => p.id === respPadrao)
+                ? "Esta pessoa não está mais no seu grupo ativo — troque ou remova o padrão. "
+                : ""}
               Todo protocolo novo que você protocolar já sai com este responsável — dá para trocar depois na coluna Responsável
               da Mesa. Só as pessoas do seu grupo ativo podem ser escolhidas.
             </p>

@@ -160,6 +160,20 @@ página; as preferências do Perfil não gravam pela metade; o seletor só apare
 controles do cabeçalho com 44px no celular e no tablet (o menu não encolhe em telas de 360px) e o nome acessível diz o valor
 escolhido; o cadastro de PCAs é lido uma vez por página.
 
+### Mesa: filtro por pessoa sem dados quebrados, seletor de pessoa com foto e período por semana/qualquer data — entregue
+✅ **Filtrar pela pessoa = a linha dela na visão da equipe.** Com o Responsável do topo numa pessoa, o Dashboard mostra só
+ela, no papel escolhido na barra (pelo Responsável, os protocolos dela; pela **Distribuição, os que ela protocolou**) — os
+mesmos números da linha dela em "Todos" (coberto por teste para cada pessoa, papel, período e natureza). Saíram as linhas de
+quem só mexeu nos protocolos dela (com 0 protocolos e "—"); as **ações** de cada pessoa contam em toda a Mesa (nunca dependem
+desse filtro) e o "N ações" do resumo é a soma das linhas. As colunas do Desempenho vêm na ordem da governança
+(protocolos, regulares, com erro, em atenção, **correções**, **ações**, tempo) — antes as correções/ações ficavam fora da
+tela. ✅ **Seletor de pessoa com FOTO e APELIDO** (`SeletorPessoa`): no filtro Responsável da Mesa, na célula Responsável,
+na edição em massa e no Perfil → Responsável padrão — a lista mostra a foto e o apelido de cada um (o nome completo embaixo),
+o próprio usuário primeiro, busca por apelido ou nome, teclado e 44px no toque. ✅ **Período por Semana e salto a qualquer
+data:** Tudo · Ano · Mês · **Semana** (segunda a domingo) · Dia; tocar no período abre o calendário (o mini-mês do
+calendário no Dia/Semana, a grade de meses e a de anos, com um ponto onde há protocolação); as tabelas ganham a coluna
+**Semana** (Hoje | Semana | Mês | Ano | Na Mesa).
+
 ### Mesa: métricas de governança por usuário (a planilha de distribuição no Dashboard) — entregue
 ✅ **Barra de métricas** logo abaixo das KPIs do Dashboard da Mesa — vale para todos os quadros abaixo: **período**
 (Tudo · Ano · Mês · Dia, com ‹ › e "Hoje"), **medida** (protocolos, DFDs, itens ou valor), **pessoa** (Responsável ou

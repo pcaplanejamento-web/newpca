@@ -6,16 +6,20 @@ import { type AcaoMassa, buildPrevisao, type CampoMassa } from "@/lib/dfd-tratam
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import type { AcaoMassaItem, CampoMassaItem } from "@/lib/massa-itens";
 import { MESES, type Prioridade, parseNumberBR } from "@/lib/normalize";
-import { nomeExibicao } from "@/lib/pessoa";
+import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { Lado } from "@/lib/sobrescrita-dfd";
 import { type EtiquetaTarefa, type ListaTarefas, PRIORIDADES as PRIORIDADES_TAREFA, type Prioridade as PrioridadeTarefa, ROTULO_PRIORIDADE } from "@/lib/tarefas-core";
 import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
 import { Button } from "./Button";
 import { Checkbox, TextField } from "./Field";
 import { inputCls } from "./formStyles";
+import { IconUserX } from "./icons";
 import { Segmented } from "./Segmented";
+import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 
 type Rep = { id: number; codigo: string; nome: string; oculto?: boolean | null };
+/** Responsável em massa: "0" = LIMPAR (sem responsável). */
+const EXTRAS_RESPONSAVEL: ExtraPessoa[] = [{ valor: "0", rotulo: "Sem responsável (limpar)", icone: <IconUserX className="h-4 w-4" /> }];
 
 /**
  * Moldura COMUM dos editores de massa: em cima o controle do valor (altura fixa — não "pula" ao trocar
@@ -269,14 +273,17 @@ type CampoProto = AcaoMassaProtocolo["campo"];
 export function BarraEdicaoMassaProtocolos({
   reparticoes,
   pessoas = [],
+  usuarioId = null,
   situacoes = [],
   regras = regrasPadrao(),
   aplicando = false,
   onAplicar,
 }: {
   reparticoes: Rep[];
-  /** Usuários ativos (responsável). */
-  pessoas?: { id: number; nome: string }[];
+  /** As pessoas do grupo (o responsável — escolhido pela FOTO e o APELIDO). */
+  pessoas?: Pessoa[];
+  /** O usuário da sessão ("(eu)", primeiro da lista). */
+  usuarioId?: number | null;
   /** Situações cadastradas pelo ADM. */
   situacoes?: { id: number; nome: string }[];
   regras?: RegrasAvaliacao;
@@ -326,21 +333,17 @@ export function BarraEdicaoMassaProtocolos({
       onAplicar={() => acao && onAplicar(acao)}
       controle={
         campo === "responsavel" ? (
-          <select
-            aria-label="Responsável"
-            className={inputCls}
-            style={{ width: "auto", minWidth: 220, flex: "1 1 220px" }}
-            value={pessoa}
-            onChange={(e) => setPessoa(e.target.value)}
-          >
-            <option value="">— Responsável —</option>
-            <option value="0">Sem responsável (limpar)</option>
-            {pessoas.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
+          <SeletorPessoa
+            variante="campo"
+            rotulo="Responsável"
+            className="min-w-[220px] flex-[1_1_220px]"
+            pessoas={pessoas}
+            usuarioId={usuarioId}
+            valor={pessoa}
+            vazio="Escolha o responsável"
+            extras={EXTRAS_RESPONSAVEL}
+            onChange={setPessoa}
+          />
         ) : campo === "situacao" ? (
           <select
             aria-label="Situação"

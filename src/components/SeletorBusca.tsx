@@ -1,12 +1,13 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { num } from "@/lib/format";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { SearchField } from "./Field";
 import { IconCheck } from "./icons";
 
-export type OpcaoBusca = { valor: string; rotulo: string; detalhe?: string };
+/** `icone` = o que vem antes do texto (ex.: a FOTO da pessoa). */
+export type OpcaoBusca = { valor: string; rotulo: string; detalhe?: string; icone?: ReactNode };
 
 /** Máximo de opções renderizadas de uma vez (a busca restringe o resto) — leve com milhares. */
 const MAX_VISIVEIS = 200;
@@ -16,6 +17,8 @@ const MAX_VISIVEIS = 200;
  * opções que casam (rótulo + detalhe), a escolhida destacada. Teclado no campo: ↑/↓ percorrem, Enter escolhe.
  * Alvos ≥ 44px; renderiza até 200 (a busca restringe o resto). Ex.: o protocolo de destino ao mover/vincular um DFD.
  * `onBusca` = a busca vai TAMBÉM ao servidor (quem usa troca as `opcoes` pelo resultado — ex.: o vínculo de uma tarefa).
+ * `autoFoco` = o campo de busca já recebe o foco (dentro de um painel que acabou de abrir); `compacto` = a busca na altura
+ * das barras de ferramentas.
  */
 export function SeletorBusca({
   opcoes,
@@ -26,6 +29,8 @@ export function SeletorBusca({
   vazio = "Nada encontrado",
   disabled = false,
   onBusca,
+  autoFoco = false,
+  compacto = false,
 }: {
   opcoes: OpcaoBusca[];
   valor: string;
@@ -36,6 +41,8 @@ export function SeletorBusca({
   disabled?: boolean;
   /** O texto digitado (a cada mudança) — para buscar no servidor. */
   onBusca?: (q: string) => void;
+  autoFoco?: boolean;
+  compacto?: boolean;
 }) {
   const id = useId();
   const [busca, setBusca] = useState("");
@@ -86,6 +93,8 @@ export function SeletorBusca({
         aria-label={ariaLabel}
         placeholder={placeholder}
         disabled={disabled}
+        autoFocus={autoFoco}
+        compacto={compacto}
       />
       <div id={`${id}-lista`} role="listbox" aria-label={ariaLabel} className="max-h-72 overflow-y-auto rounded-card border border-border bg-surface">
         {visiveis.map((o, i) => {
@@ -106,6 +115,7 @@ export function SeletorBusca({
                 escolhida ? "bg-accent-soft" : i === ativo ? "bg-surface-2" : "hover:bg-surface-2"
               } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
             >
+              {o.icone && <span className="flex shrink-0 items-center">{o.icone}</span>}
               <span className="min-w-0 flex-1">
                 <span className={`block truncate text-sm font-semibold ${escolhida ? "text-accent" : "text-text"}`}>{o.rotulo}</span>
                 {o.detalhe && <span className="block truncate text-xs text-muted">{o.detalhe}</span>}

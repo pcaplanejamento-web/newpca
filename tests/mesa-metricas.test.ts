@@ -13,6 +13,7 @@ import {
   evolucaoMetricas,
   type FiltroMetricas,
   filtroMetricasPadrao,
+  frasePeriodo,
   naturezaDoProtocolo,
   navegarRef,
   noPeriodo,
@@ -23,6 +24,7 @@ import {
   protocolosDaPessoa,
   recorteFiltrado,
   recorteMetricas,
+  noFoco,
   resumoMetricas,
   rotuloPeriodo,
   situacoesPorPessoa,
@@ -103,9 +105,32 @@ describe("natureza, período e navegação", () => {
     assert.equal(rotuloPeriodo("tudo", HOJE, HOJE), "Tudo na Mesa");
     assert.deepEqual(
       colunasMetricas(HOJE, HOJE).map((c) => c.rotulo),
-      ["Hoje", "set/26", "2026", "Na Mesa"],
+      ["Hoje", "Semana", "set/26", "2026", "Na Mesa"],
     );
     assert.equal(colunasMetricas("2026-09-27", HOJE)[0].rotulo, "27/09");
+  });
+
+  it("semana de segunda a domingo: janela, navegação, rótulos e frase", () => {
+    // Hoje (segunda 28/09) → a semana vai até domingo 04/10 (vira o mês).
+    assert.equal(noPeriodo("2026-10-04", "semana", HOJE), true);
+    assert.equal(noPeriodo("2026-09-28", "semana", "2026-10-04"), true);
+    assert.equal(noPeriodo("2026-09-27", "semana", HOJE), false);
+    assert.equal(noPeriodo("2026-10-05", "semana", HOJE), false);
+    assert.equal(noPeriodo(null, "semana", HOJE), false);
+    assert.equal(navegarRef(HOJE, "semana", 1), "2026-10-05");
+    assert.equal(navegarRef(HOJE, "semana", -1), "2026-09-21");
+    assert.equal(navegarRef("2026-12-30", "semana", 1), "2027-01-06");
+    assert.equal(rotuloPeriodo("semana", HOJE, HOJE), "Esta semana, 28/09 a 04/10");
+    assert.equal(rotuloPeriodo("semana", "2026-10-01", HOJE), "Esta semana, 28/09 a 04/10");
+    assert.equal(rotuloPeriodo("semana", "2026-09-21", HOJE), "21/09 a 27/09/2026");
+    assert.equal(rotuloPeriodo("semana", "2025-12-31", HOJE), "29/12/2025 a 04/01/2026");
+    assert.equal(colunasMetricas("2026-09-21", HOJE)[1].rotulo, "Sem. 21/09");
+    assert.equal(colunasMetricas("2026-09-21", HOJE)[1].titulo, "Protocolados na semana de 21/09/2026 a 27/09/2026");
+    assert.equal(frasePeriodo("semana", HOJE), "na semana de 28/09 a 04/10/2026");
+    assert.equal(frasePeriodo("mes", HOJE), "em setembro de 2026");
+    assert.equal(frasePeriodo("dia", HOJE), "em 28/09/2026");
+    assert.equal(frasePeriodo("ano", HOJE), "em 2026");
+    assert.equal(frasePeriodo("tudo", HOJE), "na Mesa");
   });
 
   it("padrão e recorte filtrado", () => {
@@ -140,9 +165,9 @@ describe("tabelas por período (a planilha)", () => {
     const rec = recorteMetricas(protos, dfds, null, F({ periodo: "mes" }), HOJE);
     const t = tabelaMetricas(rec, "pessoa");
     const por = Object.fromEntries(t.linhas.map((l) => [l.chave, l.valores]));
-    assert.deepEqual(por["1"], { dia: 1, mes: 2, ano: 2, tudo: 3 });
-    assert.deepEqual(por["2"], { dia: 0, mes: 1, ano: 2, tudo: 2 });
-    assert.deepEqual(por.sem, { dia: 0, mes: 0, ano: 0, tudo: 1 });
+    assert.deepEqual(por["1"], { dia: 1, semana: 1, mes: 2, ano: 2, tudo: 3 });
+    assert.deepEqual(por["2"], { dia: 0, semana: 0, mes: 1, ano: 2, tudo: 2 });
+    assert.deepEqual(por.sem, { dia: 0, semana: 0, mes: 0, ano: 0, tudo: 1 });
     assert.equal(t.linhas.at(-1)?.chave, "sem");
     for (const c of COLUNAS_METRICAS)
       assert.equal(
@@ -218,7 +243,7 @@ describe("tabelas por período (a planilha)", () => {
       { protocoloId: jan2.id, usuarioId: 2, dia: HOJE, tipo: "acao", n: 7 },
     ];
     const rec = recorteMetricas(protos, dfds, at, F(), HOJE);
-    assert.deepEqual(correcoesPorColuna(rec), { dia: 1, mes: 1, ano: 3, tudo: 3 });
+    assert.deepEqual(correcoesPorColuna(rec), { dia: 1, semana: 1, mes: 1, ano: 3, tudo: 3 });
     assert.equal(soma(origemCorrecoes(rec, "ano")), 3);
     // Medida valor: cada reenvio conta o processo de novo.
     const recV = recorteMetricas(protos, dfds, at, F({ medida: "valor" }), HOJE);
@@ -226,7 +251,7 @@ describe("tabelas por período (a planilha)", () => {
     assert.equal(soma(origemCorrecoes(recV, "tudo")), 50 + 2 * 500);
     // Filtro de natureza: o reenvio de outra natureza sai.
     const exc = recorteMetricas(protos, dfds, at, F({ natureza: "EXCLUSÃO 2026" }), HOJE);
-    assert.deepEqual(correcoesPorColuna(exc), { dia: 1, mes: 1, ano: 1, tudo: 1 });
+    assert.deepEqual(correcoesPorColuna(exc), { dia: 1, semana: 1, mes: 1, ano: 1, tudo: 1 });
   });
 });
 
@@ -246,6 +271,35 @@ describe("evolução", () => {
       ["2026-09-28", "2026-10-04"],
     );
     assert.ok(semana.find((b) => b.de === "2026-10-01")?.atual);
+    // Semana: os mesmos 7 dias; o cheio é HOJE (como no Mês).
+    const daSemana = baldesEvolucao("semana", "2026-10-01", HOJE);
+    assert.deepEqual(
+      daSemana.map((b) => b.de),
+      semana.map((b) => b.de),
+    );
+    assert.deepEqual(
+      daSemana.filter((b) => b.atual).map((b) => b.de),
+      [HOJE],
+    );
+  });
+
+  it("a soma dos baldes da semana = a coluna Semana (as bordas pelo dia de Brasília)", () => {
+    // A semana de 21/09 a 27/09: 28/09 às 02h UTC ainda é domingo 27/09 em Brasília (dentro); 28/09 às 04h UTC já é
+    // segunda (fora); 20/09 é o domingo anterior (fora).
+    const protos = [P("2026-09-21 15:00:00"), P("2026-09-27 20:00:00"), P("2026-09-28 02:00:00"), P("2026-09-20 15:00:00"), P("2026-09-28 04:00:00")];
+    const ref = "2026-09-23";
+    const rec = recorteMetricas(protos, [], null, F({ periodo: "semana", ref }), HOJE);
+    const b = baldesEvolucao("semana", ref, HOJE);
+    const v = evolucaoMetricas(rec, b);
+    assert.equal(tabelaMetricas(rec, "pessoa").total.semana, 3);
+    assert.equal(
+      v.reduce((s, x) => s + x, 0),
+      3,
+    );
+    assert.equal(rec.coorte.length, 3);
+    b.forEach((balde, i) => {
+      assert.equal(soma(origemDoBalde(rec, balde)), v[i]);
+    });
   });
 
   it("a soma dos baldes do ano = a coluna Ano; a origem de cada balde = o balde", () => {
@@ -332,10 +386,120 @@ describe("desempenho por pessoa (governança)", () => {
     assert.equal(dfdsDoRecorteMetricas([...dfds, D(null, "DFD-S", 1, 1)], tudo).length, 4); // o Dashboard de sempre
   });
 
+  it("foco no DFD: sem período nem filtro, os DFDs da pessoa (os sem protocolo só no foco 'sem')", () => {
+    const todos = [...dfds, D(null, "DFD-S", 1, 1)];
+    const doFoco = (foco: "todos" | "sem" | number) => dfdsDoRecorteMetricas(todos, recorteMetricas(protos, todos, at, F(), HOJE, foco));
+    assert.equal(doFoco("todos").length, 4);
+    assert.deepEqual(
+      doFoco(1).map((x) => x.protocoloId),
+      [a.id, b.id],
+    );
+    assert.deepEqual(
+      doFoco("sem").map((x) => x.protocoloId),
+      [null], // d não tem DFD; o avulso entra (como a lista da visão DFDs no "Sem responsável")
+    );
+  });
+
   it("situações por pessoa (a desconhecida = sem situação)", () => {
     const m = situacoesPorPessoa([{ ...a, situacaoId: 7 }, { ...b, situacaoId: 99 }, c], "responsavel", [7]);
     assert.equal(m.get(1)?.get(7), 1);
     assert.equal(m.get(1)?.get(null), 1);
     assert.equal(m.get(2)?.get(null), 1);
+  });
+});
+
+describe("foco numa pessoa = a linha dela na visão da equipe", () => {
+  // NATY = 1, MARIA = 2, CRIS = 3 (só protocola), JHONE = 9 (só executa).
+  const a = P("2026-09-01 15:00:00", { responsavelId: 1, distribuidorId: 3, estado: "regular" });
+  const b = P("2026-09-02 15:00:00", { responsavelId: 1, distribuidorId: 3, estado: "erro", dfdsErro: 2 });
+  const c = P("2026-07-01 15:00:00", { responsavelId: 2, distribuidorId: 3, estado: "atencao" });
+  const d = P("2026-09-20 15:00:00", { responsavelId: null, estado: "atencao" });
+  const e = P("2026-09-25 15:00:00", { responsavelId: 2, distribuidorId: 1, assunto: "EXCLUSÃO", anoPca: 2026 });
+  const f = P("2026-09-26 15:00:00", { responsavelId: null, distribuidorId: 3 });
+  const protos = [a, b, c, d, e, f];
+  const dfds = [D(a.id, "DFD-S", 2, 10), D(b.id, "DFD-R", 3, 20), D(c.id, "DFD-S", 1, 5), D(e.id, "DFD-O", 4, 40)];
+  const at: Atividade[] = [
+    { protocoloId: b.id, usuarioId: 2, dia: "2026-09-15", tipo: "reenvio", n: 1 },
+    { protocoloId: c.id, usuarioId: 2, dia: "2026-07-03", tipo: "reenvio", n: 1 },
+    { protocoloId: a.id, usuarioId: 2, dia: "2026-09-20", tipo: "acao", n: 4 }, // Maria nos protocolos da Naty
+    { protocoloId: b.id, usuarioId: 9, dia: "2026-09-21", tipo: "acao", n: 2 }, // Jhone só executa
+    { protocoloId: b.id, usuarioId: null, dia: "2026-09-21", tipo: "acao", n: 5 },
+    { protocoloId: c.id, usuarioId: 1, dia: "2026-09-22", tipo: "acao", n: 3 }, // Naty nos protocolos da Maria
+    { protocoloId: e.id, usuarioId: 1, dia: "2026-09-23", tipo: "acao", n: 1 },
+    { protocoloId: c.id, usuarioId: 3, dia: "2026-09-24", tipo: "acao", n: 5 },
+  ];
+  const rec = (filtro: Partial<FiltroMetricas>, foco: "todos" | "sem" | number = "todos") => recorteMetricas(protos, dfds, at, F(filtro), HOJE, foco);
+  const somaAcoes = (ls: { acoes: number | null }[]) => ls.reduce((s, l) => s + (l.acoes ?? 0), 0);
+
+  it("noFoco: a pessoa no papel escolhido; 'sem' = sem responsável", () => {
+    assert.equal(noFoco(a, 1, "responsavel"), true);
+    assert.equal(noFoco(a, 3, "responsavel"), false);
+    assert.equal(noFoco(a, 3, "distribuicao"), true);
+    assert.equal(noFoco(f, "sem", "distribuicao"), true);
+    assert.equal(noFoco(a, "todos", "responsavel"), true);
+  });
+
+  it("o desempenho e a tabela da pessoa no foco = a linha dela na equipe (Responsável e Distribuição, qualquer período)", () => {
+    for (const pessoa of ["responsavel", "distribuicao"] as const)
+      for (const periodo of ["tudo", "ano", "mes", "semana", "dia"] as const)
+        for (const natureza of [null, "EXCLUSÃO 2026"]) {
+          const filtro = { pessoa, periodo, ref: "2026-09-22", natureza };
+          const equipe = desempenhoPorPessoa(rec(filtro));
+          const tabelaEquipe = tabelaMetricas(rec(filtro), "pessoa");
+          for (const x of [1, 2, 3, 9]) {
+            const ctx = `${pessoa}/${periodo}/${natureza}/${x}`;
+            const r = rec(filtro, x);
+            const linha = equipe.find((l) => l.pessoaId === x);
+            assert.deepEqual(desempenhoPorPessoa(r), linha ? [linha] : [], ctx);
+            const lt = tabelaEquipe.linhas.find((l) => l.pessoaId === x);
+            assert.deepEqual(tabelaMetricas(r, "pessoa").linhas, lt ? [lt] : [], ctx);
+            assert.equal(resumoMetricas(r).acoes, linha?.acoes ?? 0, ctx);
+          }
+          assert.equal(resumoMetricas(rec(filtro)).acoes, somaAcoes(equipe), `${pessoa}/${periodo}/${natureza}/equipe`);
+        }
+  });
+
+  it("no foco, só a pessoa: sem linhas de quem só mexeu nos protocolos dela; as ações dela contam em toda a Mesa", () => {
+    const naty = desempenhoPorPessoa(rec({ periodo: "mes" }, 1));
+    assert.deepEqual(
+      naty.map((l) => l.chave),
+      ["1"],
+    );
+    assert.equal(naty[0].protocolos, 2);
+    assert.equal(naty[0].acoes, 4); // 3 nos protocolos da Maria + 1 no da Maria (e)
+    assert.equal(naty[0].correcoes, 1);
+    // Na equipe, quem só executou aparece (Jhone) — com a linha dele intacta.
+    const equipe = desempenhoPorPessoa(rec({ periodo: "mes" }));
+    assert.equal(equipe.find((l) => l.pessoaId === 9)?.acoes, 2);
+    assert.equal(equipe.find((l) => l.pessoaId === 9)?.protocolos, 0);
+    // Distribuição: a Cris vê o que ELA protocolou (a, b em setembro; c em julho fica fora do mês).
+    const cris = desempenhoPorPessoa(rec({ periodo: "mes", pessoa: "distribuicao" }, 3));
+    assert.deepEqual(
+      cris.map((l) => [l.chave, l.protocolos, l.correcoes, l.acoes]),
+      [["3", 3, 1, 5]], // a, b, f (setembro) · o reenvio de b · as ações dela em c
+    );
+    // A natureza vale para as ações: a Naty só tem a ação em "e" (EXCLUSÃO 2026).
+    assert.equal(desempenhoPorPessoa(rec({ natureza: "EXCLUSÃO 2026" }, 1))[0]?.acoes, 1);
+  });
+
+  it("foco 'sem': nenhuma linha de ator; pelo Responsável não há pessoa (ações = null no resumo)", () => {
+    const r = rec({ periodo: "mes" }, "sem");
+    assert.deepEqual(
+      desempenhoPorPessoa(r).map((l) => l.chave),
+      ["sem"],
+    );
+    assert.equal(desempenhoPorPessoa(r)[0].protocolos, 2); // d, f
+    assert.equal(resumoMetricas(r).acoes, null);
+    assert.equal(resumoMetricas(r).correcoes, 0);
+    // Pela Distribuição, a Cris (quem protocolou f) tem linha — com as ações dela; o Jhone não.
+    const rd = rec({ periodo: "mes", pessoa: "distribuicao" }, "sem");
+    assert.deepEqual(
+      desempenhoPorPessoa(rd).map((l) => [l.chave, l.protocolos, l.acoes]),
+      [
+        ["3", 1, 5],
+        ["sem", 1, 0],
+      ],
+    );
+    assert.equal(resumoMetricas(rd).acoes, 5);
   });
 });

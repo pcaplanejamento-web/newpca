@@ -49,7 +49,6 @@ import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { nomeExibicao, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "./BarraEdicaoMassa";
-import { Avatar } from "./Avatar";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
@@ -65,7 +64,7 @@ import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
-import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUser, IconUserX } from "./icons";
+import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
 import { CelulaPca, CelulaPrioridade, colunaPlanejamento, colunaTipoDfd, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
@@ -75,6 +74,7 @@ import { Segmented } from "./Segmented";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
+import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -169,6 +169,12 @@ const chaveProto = (p: ProtocoloResumo) =>
 const FATIA_PROTOCOLOS = 50;
 /** Estado do protocolo cuja conferência dos DFDs falhou (neutro — nunca um "Regular" falso). */
 const NAO_CONFERIDO = "Não conferido";
+/** As opções especiais do seletor de pessoa: o filtro Responsável (todos · sem) e a célula (sem responsável). */
+const EXTRAS_FILTRO: ExtraPessoa[] = [
+  { valor: "todos", rotulo: "Todos", icone: <IconUsers className="h-4 w-4" /> },
+  { valor: "sem", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> },
+];
+const EXTRAS_CELULA: ExtraPessoa[] = [{ valor: "", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> }];
 /** O valor de GESTÃO do protocolo `id` (o editado na célula, se houver; senão o do servidor). */
 function valorGestao<K extends keyof Gestao>(g: Map<number, Gestao>, id: number | null, k: K, base: number | null): number | null {
   const v = id != null ? g.get(id)?.[k] : undefined;
@@ -608,7 +614,6 @@ export function DfdsView({
   const pessoaDe = (id: number | null | undefined, nomeGravado?: string | null): Pessoa | null =>
     id == null ? null : (dirPessoas.get(id) ?? { id, nome: nomeGravado || `#${id}`, apelido: null, foto: null });
   /** Opções do Responsável (célula): só as pessoas DO GRUPO — foto + apelido na célula, "apelido — nome" na lista. */
-  const opcoesPessoas = useMemo(() => pessoas.map((p) => ({ id: p.id, nome: rotuloOpcaoPessoa(p, usuarioId), pessoa: p })), [pessoas, usuarioId]);
 
   const atualizarListas = () => router.refresh();
 
@@ -861,13 +866,20 @@ export function DfdsView({
     const id = valorGestao(gestao, r.id, "responsavelId", r.responsavelId);
     return pessoaDe(id, id === r.responsavelId ? r.responsavelNome : null);
   };
-  // DASHBOARD de governança: as MESMAS listas filtradas da Mesa, com a GESTÃO otimista (responsável/situação) e o
-  // estado agregado da conferência (o cache da coluna Estado) — só montado com o Dashboard aberto.
+  // DASHBOARD de governança — só montado com o Dashboard aberto. As KPIs usam as MESMAS listas filtradas da Mesa; as
+  // MÉTRICAS usam o UNIVERSO = a Mesa só com o Assunto do topo (o Responsável do topo vira o FOCO delas: a pessoa no papel
+  // escolhido na barra, com os mesmos números da linha dela na visão da equipe). Com a GESTÃO otimista
+  // (responsável/situação) e o estado agregado da conferência (o cache da coluna Estado, que cobre TODOS os protocolos).
   // biome-ignore lint/correctness/useExhaustiveDependencies: estadoDoProtocolo/responsavelDe/situacaoDe leem o cache (confProtoVersao/ctxConf), a gestão e o diretório listados.
   const dash = useMemo(() => {
     if (vista !== "dashboard") return null;
+    // Sem foco numa pessoa, o universo É a lista filtrada (os mesmos arrays — nada é mapeado duas vezes).
+    const focado = filtro.responsavel !== "todos";
+    const soAssunto: FiltroMesa = { ...FILTRO_MESA_TODOS, assunto: filtro.assunto };
+    const protocolosU = focado ? protocolos.filter((p) => passaFiltroMesa({ responsavelId: p.responsavelId, assunto: p.assunto }, soAssunto)) : protocolosF;
+    const dfdsU = focado ? dfds.filter((d) => passaFiltroMesa({ responsavelId: d.protocoloResponsavelId, assunto: d.protocoloAssunto }, soAssunto)) : dfdsF;
     const pessoasDash = new Map<number, Pessoa>();
-    const protocolosDash = protocolosF.map((p): ProtocoloPainel => {
+    const universoP = protocolosU.map((p): ProtocoloPainel => {
       const resp = responsavelDe(p);
       if (resp) pessoasDash.set(resp.id, resp);
       const dist = pessoaDe(p.distribuidorId, p.distribuidorNome);
@@ -892,22 +904,27 @@ export function DfdsView({
     });
     // Quem AGIU (o histórico): o diretório da Mesa primeiro; o do servidor completa quem não está nele.
     for (const pe of pessoasExec) if (!pessoasDash.has(pe.id)) pessoasDash.set(pe.id, dirPessoas.get(pe.id) ?? pe);
-    const dfdsDash = dfdsF.map(
-      (d): DfdPainel => ({
-        id: d.id,
-        numero: d.numero,
-        planejamento: d.planejamento,
-        unidadeId: d.reparticaoId,
-        unidade: d.reparticaoCodigo,
-        unidadeNome: d.reparticaoNome,
-        valor: d.valorTotal,
-        itens: d.totalItens,
-        protocoloId: d.protocoloId,
-        tipo: d.tipo,
-      }),
-    );
-    return { protocolos: protocolosDash, dfds: dfdsDash, pessoas: pessoasDash };
-  }, [vista, protocolosF, dfdsF, gestao, dirPessoas, pessoasExec, confProtoVersao, ctxConf, regras]);
+    const paraPainel = (d: DfdResumo): DfdPainel => ({
+      id: d.id,
+      numero: d.numero,
+      planejamento: d.planejamento,
+      unidadeId: d.reparticaoId,
+      unidade: d.reparticaoCodigo,
+      unidadeNome: d.reparticaoNome,
+      valor: d.valorTotal,
+      itens: d.totalItens,
+      protocoloId: d.protocoloId,
+      tipo: d.tipo,
+    });
+    const universoD = dfdsU.map(paraPainel);
+    const idsMesa = focado ? new Set(protocolosF.map((p) => p.id)) : null;
+    return {
+      protocolos: idsMesa ? universoP.filter((p) => idsMesa.has(p.id)) : universoP,
+      dfds: focado ? dfdsF.map(paraPainel) : universoD,
+      universo: { protocolos: universoP, dfds: universoD },
+      pessoas: pessoasDash,
+    };
+  }, [vista, filtro, protocolos, dfds, protocolosF, dfdsF, gestao, dirPessoas, pessoasExec, confProtoVersao, ctxConf, regras]);
 
   const travaResp = filtro.responsavel !== "todos" ? "Filtrado pelo seletor de responsável acima da tabela" : undefined;
   const travaAssunto = filtro.assunto != null ? "Filtrado pelo seletor de assunto acima da tabela" : undefined;
@@ -971,18 +988,22 @@ export function DfdsView({
         const p = responsavelDe(r);
         return p ? rotuloOpcaoPessoa(p) : "Sem responsável";
       },
-      // FOTO + APELIDO na célula; a troca é só entre as pessoas DO GRUPO (o atual de fora aparece, sem re-escolha).
+      // FOTO + APELIDO na célula (e na lista do seletor); a troca é só entre as pessoas DO GRUPO (o atual de fora aparece,
+      // sem re-escolha).
       render: (r) => {
         const p = responsavelDe(r);
         return (
-          <SeletorCelula
-            valor={p?.id ?? null}
-            opcoes={opcoesPessoas}
-            atual={p ? { id: p.id, nome: rotuloOpcaoPessoa(p, usuarioId), pessoa: p } : null}
-            onChange={podeEditar ? (v) => alterarGestao(r, "responsavelId", v) : undefined}
-            vazio="Sem responsável"
-            salvando={salvandoGestao.has(`${r.id}:responsavelId`)}
+          <SeletorPessoa
+            variante="celula"
+            rotulo="Responsável"
             ariaLabel={`Responsável pelo protocolo ${r.numero}`}
+            pessoas={pessoas}
+            usuarioId={usuarioId}
+            valor={p ? String(p.id) : ""}
+            atual={p}
+            extras={EXTRAS_CELULA}
+            salvando={salvandoGestao.has(`${r.id}:responsavelId`)}
+            onChange={podeEditar ? (v) => alterarGestao(r, "responsavelId", v ? Number(v) : null) : undefined}
           />
         );
       },
@@ -1897,7 +1918,8 @@ export function DfdsView({
             {progressoMassa}
             <BarraEdicaoMassaProtocolos
               reparticoes={reparticoes}
-              pessoas={opcoesPessoas}
+              pessoas={pessoas}
+              usuarioId={usuarioId}
               situacoes={situacoes}
               regras={regras}
               aplicando={!!aplicandoMassa}
@@ -1973,25 +1995,17 @@ export function DfdsView({
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
-          <SeletorFiltro
-            icone={
-              typeof filtro.responsavel === "number" ? (
-                <Avatar nome={pessoaDe(filtro.responsavel)?.nome ?? "?"} foto={pessoaDe(filtro.responsavel)?.foto} size="xs" />
-              ) : filtro.responsavel === "sem" ? (
-                <IconUserX className="h-4 w-4" />
-              ) : (
-                <IconUser className="h-4 w-4" />
-              )
-            }
+          {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
+          <SeletorPessoa
+            variante="filtro"
             rotulo="Responsável"
+            ariaLabel="Filtro: Responsável"
+            pessoas={opcoesResponsavel}
+            usuarioId={usuarioId}
             valor={String(filtro.responsavel)}
             ativo={filtro.responsavel !== "todos"}
+            extras={EXTRAS_FILTRO}
             onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
-            opcoes={[
-              { valor: "todos", rotulo: "Todos" },
-              { valor: "sem", rotulo: "Sem responsável" },
-              ...opcoesResponsavel.map((x) => ({ valor: String(x.id), rotulo: rotuloOpcaoPessoa(x, usuarioId) })),
-            ]}
           />
           <SeletorFiltro
             icone={<IconFilter className="h-4 w-4" />}
@@ -2020,6 +2034,7 @@ export function DfdsView({
             <DashboardMesa
               protocolos={dash.protocolos}
               dfds={dash.dfds}
+              universo={dash.universo}
               pessoas={dash.pessoas}
               situacoes={situacoes}
               regras={regras}

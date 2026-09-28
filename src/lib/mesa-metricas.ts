@@ -8,23 +8,26 @@ import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
  * Mesa: os protocolos e DFDs que ela já carregou (com os filtros do topo) + o HISTÓRICO de execução deles
  * (`/api/mesa/execucao`: reenvios e ações). Nada de fora da Mesa (PCA, orçamento, tarefas, calendário).
  *
- * - PERÍODO (dia/mês/ano da data de referência, ou tudo) pela data da PROTOCOLAÇÃO (dia de Brasília); correções e ações
- *   pela data do EVENTO no histórico.
+ * - PERÍODO (dia/semana/mês/ano da data de referência, ou tudo) pela data da PROTOCOLAÇÃO (dia de Brasília); correções
+ *   e ações pela data do EVENTO no histórico. A semana vai de segunda a domingo.
  * - PESSOA = o Responsável (padrão) ou a Distribuição (quem protocolou); as AÇÕES são de quem as fez (o ator).
+ * - FOCO = o Responsável do topo da Mesa: numa pessoa, só ela, no papel escolhido — a MESMA linha dela na visão da
+ *   equipe. As ações de cada pessoa contam em todo o recorte (nunca dependem desse filtro).
  * - NATUREZA = a categoria do assunto (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, senão OUTROS) + o ano do PCA.
  * - CORREÇÃO = o REENVIO do protocolo (o processo devolvido volta corrigido).
  * - Toda célula/coluna tem a sua ORIGEM: a soma da lista = o número tocado (as MESMAS contas).
  */
 
-export type PeriodoMetricas = "tudo" | "ano" | "mes" | "dia";
+export type PeriodoMetricas = "tudo" | "ano" | "mes" | "semana" | "dia";
 export const PERIODOS_METRICAS: readonly { value: PeriodoMetricas; label: string }[] = [
   { value: "tudo", label: "Tudo" },
   { value: "ano", label: "Ano" },
   { value: "mes", label: "Mês" },
+  { value: "semana", label: "Semana" },
   { value: "dia", label: "Dia" },
 ];
 /** As colunas das tabelas por período, da menor janela à Mesa inteira. */
-export const COLUNAS_METRICAS: readonly PeriodoMetricas[] = ["dia", "mes", "ano", "tudo"];
+export const COLUNAS_METRICAS: readonly PeriodoMetricas[] = ["dia", "semana", "mes", "ano", "tudo"];
 export type Valores = Record<PeriodoMetricas, number>;
 
 export type MedidaMetricas = "protocolos" | "dfds" | "itens" | "valor";
@@ -55,7 +58,7 @@ export const CHAVE_SEM_DFDS = "sem-dfds";
 
 export type FiltroMetricas = {
   periodo: PeriodoMetricas;
-  /** Data de referência (AAAA-MM-DD, Brasília): o dia, o mês e o ano à vista. */
+  /** Data de referência (AAAA-MM-DD, Brasília): o dia, a semana, o mês e o ano à vista. */
   ref: string;
   medida: MedidaMetricas;
   pessoa: PessoaMetricas;
@@ -75,6 +78,9 @@ export const filtroMetricasPadrao = (hoje: string): FiltroMetricas => ({
 });
 /** Algum filtro de RECORTE ligado (natureza/tipo) — o "Limpar" da barra. */
 export const recorteFiltrado = (f: FiltroMetricas) => f.natureza != null || f.tipo != null;
+
+/** O FOCO das métricas = o Responsável do topo da Mesa: "todos" (a equipe), "sem" (os sem responsável) ou uma pessoa. */
+export type FocoMetricas = "todos" | "sem" | number;
 
 // ---------------------------------------------------------------------------
 // Histórico de execução (as tuplas compactas de `/api/mesa/execucao`).
@@ -110,20 +116,34 @@ const segunda = (n: number) => n - ((((n + 3) % 7) + 7) % 7);
 /** Dia (Brasília) da protocolação — `null` sem data. */
 export const diaDoProtocolo = (criadoEm: string | null | undefined): string | null => dataIsoBrasilia(criadoEm) || null;
 
-/** O dia está na janela (`tudo` = sempre; ano/mês/dia = o da data de referência). */
+/** O dia está na janela (`tudo` = sempre; ano/mês/dia = o da data de referência; semana = a dela, de segunda a domingo). */
 export function noPeriodo(dia: string | null | undefined, periodo: PeriodoMetricas, ref: string): boolean {
   if (periodo === "tudo") return true;
   if (!dia) return false;
+  if (periodo === "semana") {
+    const n = numDia(dia);
+    const r = numDia(ref);
+    return n != null && r != null && segunda(n) === segunda(r);
+  }
   const n = periodo === "ano" ? 4 : periodo === "mes" ? 7 : 10;
   return dia.slice(0, n) === ref.slice(0, n);
 }
 
-/** Anda um passo (dia, mês ou ano) a partir da referência — o dia fica preso ao fim do mês (31/01 +1 mês = 28/02). */
+/** A semana (segunda → domingo) do dia: [início, fim] (AAAA-MM-DD) — `null` com data inválida. */
+function semanaDoDia(ref: string): [string, string] | null {
+  const n = numDia(ref);
+  if (n == null) return null;
+  const ini = segunda(n);
+  return [isoDoNum(ini), isoDoNum(ini + 6)];
+}
+
+/** Anda um passo (dia, semana, mês ou ano) a partir da referência — o dia fica preso ao fim do mês (31/01 +1 mês =
+ * 28/02). */
 export function navegarRef(ref: string, periodo: PeriodoMetricas, passo: number): string {
   const p = partesIso(ref);
   if (!p || periodo === "tudo" || passo === 0) return ref;
   const [a, m, d] = p;
-  if (periodo === "dia") return isoUtc(a, m, d + passo);
+  if (periodo === "dia" || periodo === "semana") return isoUtc(a, m, d + passo * (periodo === "semana" ? 7 : 1));
   const meses = periodo === "mes" ? passo : passo * 12;
   const total = a * 12 + (m - 1) + meses;
   const a2 = Math.floor(total / 12);
@@ -140,21 +160,45 @@ const diaSemanaCurto = (iso: string) => {
   return p ? _diaSemana.format(new Date(Date.UTC(p[0], p[1] - 1, p[2]))).replace(".", "") : "";
 };
 
-/** O rótulo da janela à vista: "Tudo na Mesa", "2026", "Setembro de 2026", "Hoje, 28/09/2026". */
+/** "28/09 a 04/10/2026" (o ano uma vez) ou, na virada do ano, "29/12/2025 a 04/01/2026". */
+const textoSemana = (de: string, ate: string) => (de.slice(0, 4) === ate.slice(0, 4) ? `${dataBR(de).slice(0, 5)} a ${dataBR(ate)}` : `${dataBR(de)} a ${dataBR(ate)}`);
+
+/** O rótulo da janela à vista: "Tudo na Mesa", "2026", "Setembro de 2026", "Esta semana, 28/09 a 04/10" (outra semana:
+ * "21/09 a 27/09/2026"), "Hoje, 28/09/2026". */
 export function rotuloPeriodo(periodo: PeriodoMetricas, ref: string, hoje: string): string {
   const p = partesIso(ref);
-  if (periodo === "tudo" || !p) return "Tudo na Mesa";
+  const s = semanaDoDia(ref);
+  if (periodo === "tudo" || !p || !s) return "Tudo na Mesa";
   if (periodo === "ano") return String(p[0]);
   if (periodo === "mes") return maiuscula(_mesAno.format(new Date(Date.UTC(p[0], p[1] - 1, 1))));
+  if (periodo === "semana") return noPeriodo(hoje, "semana", ref) ? `Esta semana, ${dataBR(s[0]).slice(0, 5)} a ${dataBR(s[1]).slice(0, 5)}` : textoSemana(s[0], s[1]);
   return ref === hoje ? `Hoje, ${dataBR(ref)}` : dataBR(ref);
+}
+
+/** A janela numa FRASE ("Os protocolados …"): "na Mesa", "em 2026", "em setembro de 2026", "na semana de 28/09 a
+ * 04/10/2026", "em 28/09/2026". */
+export function frasePeriodo(periodo: PeriodoMetricas, ref: string): string {
+  const p = partesIso(ref);
+  const s = semanaDoDia(ref);
+  if (periodo === "tudo" || !p || !s) return "na Mesa";
+  if (periodo === "ano") return `em ${p[0]}`;
+  if (periodo === "mes") return `em ${_mesAno.format(new Date(Date.UTC(p[0], p[1] - 1, 1)))}`;
+  if (periodo === "semana") return `na semana de ${textoSemana(s[0], s[1])}`;
+  return `em ${dataBR(ref)}`;
 }
 
 /** As colunas das tabelas por período (rótulo curto no cabeçalho + o título completo na dica). */
 export function colunasMetricas(ref: string, hoje: string): { chave: PeriodoMetricas; rotulo: string; titulo: string }[] {
   const p = partesIso(ref) ?? partesIso(hoje) ?? [1970, 1, 1];
   const [a, m] = p;
+  const [seg, dom] = semanaDoDia(ref) ?? semanaDoDia(hoje) ?? [ref, ref];
   return [
     { chave: "dia", rotulo: ref === hoje ? "Hoje" : dataBR(ref).slice(0, 5), titulo: `Protocolados em ${dataBR(ref)}` },
+    {
+      chave: "semana",
+      rotulo: noPeriodo(hoje, "semana", ref) ? "Semana" : `Sem. ${dataBR(seg).slice(0, 5)}`,
+      titulo: `Protocolados na semana de ${dataBR(seg)} a ${dataBR(dom)}`,
+    },
     { chave: "mes", rotulo: mesLabel(m, a), titulo: `Protocolados em ${_mesAno.format(new Date(Date.UTC(a, m - 1, 1)))}` },
     { chave: "ano", rotulo: String(a), titulo: `Protocolados em ${a}` },
     { chave: "tudo", rotulo: "Na Mesa", titulo: "Todos os protocolos na Mesa agora" },
@@ -192,6 +236,14 @@ export const pessoaDoProtocolo = (p: ProtocoloPainel, pessoa: PessoaMetricas): n
 /** Chave da pessoa nas linhas (o id, ou "sem"). */
 export const chavePessoa = (id: number | null) => (id != null ? String(id) : "sem");
 
+/** O protocolo está no FOCO? Uma pessoa, no PAPEL escolhido (Responsável = responde por ele; Distribuição = protocolou);
+ * "sem" = sem responsável (em qualquer papel); "todos" = todos. */
+export function noFoco(p: ProtocoloPainel, foco: FocoMetricas, pessoa: PessoaMetricas): boolean {
+  if (foco === "todos") return true;
+  if (foco === "sem") return p.responsavelId == null;
+  return pessoaDoProtocolo(p, pessoa) === foco;
+}
+
 export type Totais = { dfds: number; itens: number; valor: number };
 export type IndiceProtocolo = { total: Totais; porTipo: Map<TipoDfdMetricas, Totais> };
 const numero = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -228,47 +280,57 @@ const valorDaMedida = (t: Totais, medida: MedidaMetricas) =>
 export type RecorteMetricas<P extends ProtocoloPainel> = {
   filtro: FiltroMetricas;
   hoje: string;
+  foco: FocoMetricas;
   indice: Map<number, IndiceProtocolo>;
-  /** Protocolos que passam na natureza e no tipo (sem o período) — as colunas Dia/Mês/Ano/Na Mesa. */
+  /** Protocolos que passam na natureza, no tipo e no foco (sem o período) — as colunas Dia/Semana/Mês/Ano/Na Mesa. */
   base: P[];
   /** A base no PERÍODO escolhido (pela protocolação) — os quadros da Mesa e o desempenho. */
   coorte: P[];
   /** Dia (Brasília) da protocolação de cada protocolo da base (preso a hoje — a MESMA régua do Dashboard). */
   dia: Map<number, string | null>;
   porId: Map<number, P>;
-  /** O histórico de execução dos protocolos da BASE (todas as datas — o período vale por métrica); `null` = carregando
-   * ou indisponível. */
+  /** O histórico de execução (todas as datas — o período vale por métrica): os REENVIOS dos protocolos da base e as AÇÕES
+   * de todo o recorte de natureza/tipo (a execução da pessoa não depende do foco); `null` = carregando ou indisponível. */
   atividades: Atividade[] | null;
 };
 
+/**
+ * O recorte sobre o UNIVERSO das métricas (a Mesa com o Assunto do topo): natureza e tipo da barra + o FOCO (o
+ * Responsável do topo, no papel escolhido). Com o foco numa pessoa, cada número é o MESMO da linha dela na visão da
+ * equipe.
+ */
 export function recorteMetricas<P extends ProtocoloPainel>(
   protocolos: readonly P[],
   dfds: readonly DfdPainel[],
   atividades: readonly Atividade[] | null,
   filtro: FiltroMetricas,
   hoje: string,
+  foco: FocoMetricas = "todos",
 ): RecorteMetricas<P> {
   const indice = indicePorProtocolo(dfds);
-  const base = protocolos.filter(
+  const doRecorte = protocolos.filter(
     (p) =>
       (filtro.natureza == null || naturezaDoProtocolo(p.assunto, p.anoPca).rotulo === filtro.natureza) &&
       (filtro.tipo == null || indice.get(p.id)?.porTipo.has(filtro.tipo) === true),
   );
+  const base = foco === "todos" ? doRecorte : doRecorte.filter((p) => noFoco(p, foco, filtro.pessoa));
   const dia = new Map<number, string | null>();
   for (const p of base) {
     const d = diaDoProtocolo(p.criadoEm);
     dia.set(p.id, d != null && d > hoje ? hoje : d);
   }
   const porId = new Map(base.map((p) => [p.id, p]));
+  const comAcoes: { has(id: number): boolean } = foco === "todos" ? porId : new Set(doRecorte.map((p) => p.id));
   return {
     filtro,
     hoje,
+    foco,
     indice,
     base,
     coorte: base.filter((p) => noPeriodo(dia.get(p.id), filtro.periodo, filtro.ref)),
     dia,
     porId,
-    atividades: atividades ? atividades.filter((a) => porId.has(a.protocoloId)) : null,
+    atividades: atividades ? atividades.filter((a) => (a.tipo === "reenvio" ? porId : comAcoes).has(a.protocoloId)) : null,
   };
 }
 
@@ -281,12 +343,17 @@ export function totaisNoRecorte(rec: RecorteMetricas<ProtocoloPainel>, id: numbe
 /** O valor do protocolo na MEDIDA escolhida (protocolos = 1). */
 export const medidaNoRecorte = (rec: RecorteMetricas<ProtocoloPainel>, id: number) => valorDaMedida(totaisNoRecorte(rec, id), rec.filtro.medida);
 
-/** Os DFDs do recorte para os quadros da Mesa (valor por unidade). Sem período nem filtro = TODOS (o Dashboard de
- * sempre, inclusive os DFDs sem protocolo); com recorte, os DFDs dos protocolos da coorte (do tipo filtrado). */
+/** Os DFDs do recorte para os quadros da Mesa (valor por unidade). Sem período, natureza/tipo nem foco = TODOS (o
+ * Dashboard de sempre, inclusive os DFDs sem protocolo); senão, os DFDs dos protocolos da coorte (do tipo filtrado) — e,
+ * no foco "sem" sem período nem natureza/tipo, também os sem protocolo (como a lista da visão DFDs). */
 export function dfdsDoRecorteMetricas<D extends DfdPainel>(dfds: readonly D[], rec: RecorteMetricas<ProtocoloPainel>): D[] {
-  if (rec.filtro.periodo === "tudo" && !recorteFiltrado(rec.filtro)) return [...dfds];
+  const livre = rec.filtro.periodo === "tudo" && !recorteFiltrado(rec.filtro);
+  if (livre && rec.foco === "todos") return [...dfds];
   const ids = new Set(rec.coorte.map((p) => p.id));
-  return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId) && (rec.filtro.tipo == null || tipoDfdMetricas(d.tipo) === rec.filtro.tipo));
+  const avulsos = livre && rec.foco === "sem";
+  return dfds.filter((d) =>
+    d.protocoloId == null ? avulsos : ids.has(d.protocoloId) && (rec.filtro.tipo == null || tipoDfdMetricas(d.tipo) === rec.filtro.tipo),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +368,7 @@ export type TabelaMetricas = {
   /** Os REENVIOS (correções) em cada janela — pessoa e natureza; `null` enquanto o histórico carrega (e no tipo). */
   correcoes: Valores | null;
 };
-const zeros = (): Valores => ({ dia: 0, mes: 0, ano: 0, tudo: 0 });
+const zeros = (): Valores => ({ dia: 0, semana: 0, mes: 0, ano: 0, tudo: 0 });
 
 type Contribuicao = { chave: string; rotulo: string; pessoaId: number | null; ordem: number; valor: number };
 const ORDEM_TIPO = new Map<string, number>([...TIPOS_DFD_METRICAS.map((t, i) => [t, i] as [string, number]), [CHAVE_SEM_DFDS, TIPOS_DFD_METRICAS.length]]);
@@ -409,7 +476,7 @@ export function origemCorrecoes<P extends ProtocoloPainel>(rec: RecorteMetricas<
 }
 
 // ---------------------------------------------------------------------------
-// EVOLUÇÃO: Tudo = 12 semanas · Ano = meses · Mês = dias · Dia = a semana.
+// EVOLUÇÃO: Tudo = 12 semanas · Ano = meses · Mês = dias · Semana e Dia = os dias da semana.
 // ---------------------------------------------------------------------------
 
 export type BaldeMetricas = { chave: string; rotulo: string; dica: string; de: string; ate: string; atual: boolean };
@@ -442,10 +509,12 @@ export function baldesEvolucao(periodo: PeriodoMetricas, ref: string, hoje: stri
       return { chave: iso, rotulo: String(i + 1), dica: `${maiuscula(diaSemanaCurto(iso))}, ${dataBR(iso)}`, de: iso, ate: iso, atual: iso === hoje };
     });
   }
+  // Semana e Dia: os 7 dias da semana (segunda → domingo); no Dia, o escolhido fica cheio; na Semana, hoje.
   const ini = segunda(numDia(ref) ?? nHoje);
+  const cheio = periodo === "dia" ? ref : hoje;
   return Array.from({ length: 7 }, (_, i) => {
     const iso = isoDoNum(ini + i);
-    return { chave: iso, rotulo: `${diaSemanaCurto(iso)} ${iso.slice(8)}`, dica: `${maiuscula(diaSemanaCurto(iso))}, ${dataBR(iso)}`, de: iso, ate: iso, atual: iso === ref };
+    return { chave: iso, rotulo: `${diaSemanaCurto(iso)} ${iso.slice(8)}`, dica: `${maiuscula(diaSemanaCurto(iso))}, ${dataBR(iso)}`, de: iso, ate: iso, atual: iso === cheio };
   });
 }
 
@@ -496,11 +565,35 @@ export type LinhaDesempenho = {
   acimaAlerta: number;
   /** Reenvios dos protocolos dela no período (pela data do reenvio) — `null` enquanto o histórico carrega. */
   correcoes: number | null;
-  /** Ações de execução FEITAS por ela no período (sobre os protocolos da base) — `null` enquanto carrega. */
+  /** Ações de execução FEITAS por ela no período (em todo o recorte de natureza/tipo) — `null` enquanto carrega. */
   acoes: number | null;
 };
+
+/**
+ * De quem as AÇÕES contam (o desempenho e o resumo — a MESMA régua): na visão da equipe, de todos (`null`); com o foco
+ * numa pessoa, só dela; no foco "sem", só de quem já tem linha (dono de protocolo da coorte ou de reenvio no período) —
+ * nunca uma linha feita só das ações de terceiros.
+ */
+function atoresContados(rec: RecorteMetricas<ProtocoloPainel>): Set<number> | null {
+  if (rec.foco === "todos") return null;
+  if (typeof rec.foco === "number") return new Set([rec.foco]);
+  const s = new Set<number>();
+  for (const p of rec.coorte) {
+    const id = pessoaDoProtocolo(p, rec.filtro.pessoa);
+    if (id != null) s.add(id);
+  }
+  for (const a of rec.atividades ?? []) {
+    if (a.tipo !== "reenvio" || !noPeriodo(a.dia, rec.filtro.periodo, rec.filtro.ref)) continue;
+    const p = rec.porId.get(a.protocoloId);
+    const id = p ? pessoaDoProtocolo(p, rec.filtro.pessoa) : null;
+    if (id != null) s.add(id);
+  }
+  return s;
+}
+
 export function desempenhoPorPessoa(rec: RecorteMetricas<ProtocoloPainel>): LinhaDesempenho[] {
   const nHoje = numDia(rec.hoje) ?? 0;
+  const atores = atoresContados(rec);
   const linhas = new Map<string, LinhaDesempenho & { somaDias: number; comData: number }>();
   const linha = (id: number | null) => {
     const k = chavePessoa(id);
@@ -561,7 +654,7 @@ export function desempenhoPorPessoa(rec: RecorteMetricas<ProtocoloPainel>): Linh
         const l = linha(pessoaDoProtocolo(p, rec.filtro.pessoa));
         l.correcoes = (l.correcoes ?? 0) + a.n;
       }
-    } else if (a.usuarioId != null) {
+    } else if (a.usuarioId != null && (atores == null || atores.has(a.usuarioId))) {
       const l = linha(a.usuarioId);
       l.acoes = (l.acoes ?? 0) + a.n;
     }
@@ -612,7 +705,8 @@ export type ResumoMetricas = {
   dfds: number;
   itens: number;
   valor: number;
-  /** Reenvios no período e quantos protocolos eles tocaram; ações de execução — `null` enquanto o histórico carrega. */
+  /** Reenvios no período e quantos protocolos eles tocaram; ações de execução (Σ das linhas do desempenho) — `null`
+   * enquanto o histórico carrega (as ações também quando o recorte não tem pessoa: o foco "sem" pelo Responsável). */
   correcoes: number | null;
   corrigidos: number | null;
   acoes: number | null;
@@ -626,6 +720,7 @@ export function resumoMetricas(rec: RecorteMetricas<ProtocoloPainel>): ResumoMet
     r.valor += t.valor;
   }
   if (rec.atividades) {
+    const atores = atoresContados(rec);
     let correcoes = 0;
     let acoes = 0;
     const corrigidos = new Set<number>();
@@ -634,9 +729,9 @@ export function resumoMetricas(rec: RecorteMetricas<ProtocoloPainel>): ResumoMet
       if (a.tipo === "reenvio") {
         correcoes += a.n;
         corrigidos.add(a.protocoloId);
-      } else if (a.usuarioId != null) acoes += a.n; // a MESMA régua do desempenho (ator removido não conta)
+      } else if (a.usuarioId != null && (atores == null || atores.has(a.usuarioId))) acoes += a.n; // a MESMA régua do desempenho
     }
-    Object.assign(r, { correcoes, corrigidos: corrigidos.size, acoes });
+    Object.assign(r, { correcoes, corrigidos: corrigidos.size, acoes: atores != null && atores.size === 0 ? null : acoes });
   }
   return r;
 }

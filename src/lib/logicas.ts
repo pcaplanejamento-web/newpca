@@ -222,8 +222,8 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Responsável só entre as pessoas do grupo; foto + apelido nas colunas",
     descricao:
-      "O responsável de um protocolo é escolhido SÓ entre as pessoas ativas do GRUPO ATIVO de quem está na Mesa (sem grupo, todas as pessoas ativas) — na célula, na edição em massa e no responsável padrão do Perfil; o servidor recusa outra pessoa. Um responsável já gravado que hoje é de outro grupo continua aparecendo, mas não pode ser re-escolhido. As colunas Responsável e Distribuição mostram a FOTO e o APELIDO (nome completo no passar do mouse).",
-    fonte: "listarPessoasDoGrupo / pessoaDoGrupo (usuarios) + PessoaTag",
+      "O responsável de um protocolo é escolhido SÓ entre as pessoas ativas do GRUPO ATIVO de quem está na Mesa (sem grupo, todas as pessoas ativas) — na célula, na edição em massa e no responsável padrão do Perfil; o servidor recusa outra pessoa. Um responsável já gravado que hoje é de outro grupo continua aparecendo, mas não pode ser re-escolhido. As colunas Responsável e Distribuição mostram a FOTO e o APELIDO (nome completo no passar do mouse) e o seletor de pessoa lista a foto e o apelido de cada um, com busca.",
+    fonte: "listarPessoasDoGrupo / pessoaDoGrupo (usuarios) + PessoaTag + SeletorPessoa",
     configuravelEm: { rotulo: "Grupos", href: "/painel/grupos" },
   },
   {
@@ -264,7 +264,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Filtros de hierarquia da Mesa: Responsável e Assunto",
     descricao:
-      "Na MESMA linha de Protocolos · DFDs · Itens, à direita, dois seletores SÓ COM O ÍCONE filtram as visões — e o Dashboard — pelo responsável (escolhida uma pessoa, o ícone vira a foto dela) e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda. A Mesa ABRE com o responsável escolhido no Perfil → Mesa: só os protocolos do próprio usuário (o padrão), todos ou os sem responsável.",
+      "Na MESMA linha de Protocolos · DFDs · Itens, à direita, dois seletores SÓ COM O ÍCONE filtram as visões — e o Dashboard — pelo responsável (escolhida uma pessoa, o ícone vira a foto dela; a lista mostra a foto e o apelido de cada um) e pelo assunto do protocolo (o DFD e o item herdam os do protocolo de origem). Enquanto ativos, travam as colunas correspondentes da tabela de protocolos — a hierarquia manda. A Mesa ABRE com o responsável escolhido no Perfil → Mesa: só os protocolos do próprio usuário (o padrão), todos ou os sem responsável.",
     fonte: "passaFiltroMesa / filtroInicialMesa (mesa-filtros)",
     configuravelEm: { rotulo: "Perfil → Mesa", href: "/painel/perfil" },
   },
@@ -288,7 +288,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Dashboard de governança da Mesa",
     descricao:
-      "O ícone à esquerda de Protocolos · DFDs · Itens abre o Dashboard da Mesa, calculado sobre os MESMOS protocolos e DFDs da Mesa (com os filtros de Responsável/Assunto do topo): KPIs da Mesa agora (protocolos, valor, conformidade, com responsável, tempo médio na Mesa), a barra de métricas logo abaixo (ver “Métricas de governança por usuário”) e os quadros sobre o recorte dela — evolução (Tudo = 12 semanas; Ano = meses; Mês = dias; Dia = a semana), saúde (o estado agregado da conferência: capa + DFDs + itens, nas cores das importâncias do ADM), situação (as cadastradas pelo ADM, com as cores dele), tempo na Mesa (dias desde a protocolação), carga por pessoa (por estado ou situação; pelo Responsável, tocar numa pessoa filtra a Mesa) e valor por unidade requisitante.",
+      "O ícone à esquerda de Protocolos · DFDs · Itens abre o Dashboard da Mesa, calculado sobre os MESMOS protocolos e DFDs da Mesa: KPIs da Mesa agora (com os filtros de Responsável/Assunto do topo — protocolos, valor, conformidade, com responsável, tempo médio na Mesa), a barra de métricas logo abaixo (ver “Métricas de governança por usuário”) e os quadros sobre o recorte dela — evolução (Tudo = 12 semanas; Ano = meses; Mês = dias; Semana e Dia = os dias da semana), saúde (o estado agregado da conferência: capa + DFDs + itens, nas cores das importâncias do ADM), situação (as cadastradas pelo ADM, com as cores dele), tempo na Mesa (dias desde a protocolação), carga por pessoa (por estado ou situação; pelo Responsável, tocar numa pessoa filtra a Mesa) e valor por unidade requisitante.",
     detalhes: [
       "Os KPIs e os quadros usam as listas já carregadas e o MESMO cache da coluna Estado; só o histórico de execução (correções e ações) é pedido ao abrir o Dashboard.",
       "Datas em dias de calendário de Brasília; o KPI de tempo alerta os protocolos há mais de 30 dias na Mesa.",
@@ -303,12 +303,14 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Métricas de governança por usuário (Dashboard da Mesa)",
     descricao:
-      "Abaixo das KPIs do Dashboard, uma barra escolhe o período (Tudo, Ano, Mês ou Dia — com as setas e “Hoje”), a medida (protocolos, DFDs, itens ou valor), a pessoa (Responsável ou Distribuição = quem protocolou) e filtra por natureza e tipo de DFD. Ela alimenta a planilha de distribuição em três tabelas — por pessoa, por natureza e por tipo de DFD — com Hoje, o mês, o ano e a Mesa lado a lado (o período escolhido em destaque), o total e as correções, e o desempenho de cada pessoa: protocolos, DFDs, itens, valor, conformidade, erros, atenção, tempo na Mesa, correções e ações.",
+      "Abaixo das KPIs do Dashboard, uma barra escolhe o período (Tudo, Ano, Mês, Semana ou Dia — com as setas, “Hoje” e o salto a qualquer dia, semana, mês ou ano tocando no período), a medida (protocolos, DFDs, itens ou valor), a pessoa (Responsável ou Distribuição = quem protocolou) e filtra por natureza e tipo de DFD. Ela alimenta a planilha de distribuição em três tabelas — por pessoa, por natureza e por tipo de DFD — com Hoje, a semana, o mês, o ano e a Mesa lado a lado (o período escolhido em destaque), o total e as correções, e o desempenho de cada pessoa: protocolos, conformidade, erros, atenção, correções, ações, tempo na Mesa, DFDs, itens e valor.",
     detalhes: [
-      "Só a execução da Mesa: protocolos enviados a um PCA e DFDs sem protocolo ficam de fora; nada de PCA, orçamento, tarefas ou calendário. Os filtros Responsável e Assunto do topo continuam valendo.",
+      "Só a execução da Mesa: protocolos enviados a um PCA e DFDs sem protocolo ficam de fora; nada de PCA, orçamento, tarefas ou calendário. O Assunto do topo continua valendo.",
+      "Com o Responsável do topo numa pessoa, as métricas mostram só ela, no papel escolhido (pelo Responsável, os protocolos dela; pela Distribuição, os que ela protocolou) — os mesmos números da linha dela com “Todos”; ninguém mais ganha linha. Quem só executou (sem protocolos) aparece na visão da equipe.",
+      "A semana vai de segunda a domingo (dia de Brasília).",
       "Natureza = a categoria do assunto (Inclusão, Exclusão, Alteração não onerosa ou Outros) + o ano do PCA — “INCLUSÃO 2027”.",
       "Datas em dias de Brasília: os protocolos pela protocolação; correções e ações pela data em que aconteceram.",
-      "Correção = o REENVIO do protocolo (o processo devolvido que volta corrigido), atribuída à pessoa do protocolo. Ação = a execução que cada pessoa fez nos protocolos da Mesa (edições no banner, em massa e na tabela, vínculos, exclusões e sobrescritas de DFD), pelo histórico.",
+      "Correção = o REENVIO do protocolo (o processo devolvido que volta corrigido), atribuída à pessoa do protocolo. Ação = a execução que cada pessoa fez nos protocolos da Mesa (edições no banner, em massa e na tabela, vínculos, exclusões e sobrescritas de DFD), pelo histórico — contada em toda a Mesa, qualquer que seja o responsável do protocolo; o resumo soma as ações das linhas.",
       "Na medida Protocolos, a tabela por tipo conta o protocolo em cada tipo de DFD que ele tem (o total é de protocolos distintos); nas demais medidas, cada reenvio conta o processo de novo.",
       "Toque em qualquer número para ver a origem dele (a soma da lista = o número).",
     ],
@@ -621,7 +623,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "identidade",
     titulo: "Apelido e foto de cada pessoa",
     descricao:
-      "No Perfil, cada pessoa cadastra um APELIDO (até 40 caracteres) — o nome de exibição no sistema: cabeçalho, colunas Responsável/Distribuição e seletores (a lista mostra 'apelido — nome completo'). Sem apelido, vale o nome. A foto é servida com cache e só é baixada de novo quando o perfil muda.",
+      "No Perfil, cada pessoa cadastra um APELIDO (até 40 caracteres) — o nome de exibição no sistema: cabeçalho, colunas Responsável/Distribuição e seletores (a lista mostra a foto, o apelido e, embaixo, o nome completo; busca por qualquer um dos dois). Sem apelido, vale o nome. A foto é servida com cache e só é baixada de novo quando o perfil muda.",
     fonte: "pessoa (nomeExibicao / urlFoto) + /api/usuarios/[id]/foto",
     configuravelEm: { rotulo: "Perfil", href: "/painel/perfil" },
   },

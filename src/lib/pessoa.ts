@@ -33,8 +33,9 @@ export function urlFoto(id: number, temFoto: boolean, versao: string | null | un
   return `/api/usuarios/${id}/foto${v ? `?v=${v}` : ""}`;
 }
 
-/** Rótulo da pessoa numa lista de OPÇÕES (`<select>` nativo, que não mostra foto): o apelido e, quando
- * ele difere do nome, o nome completo para identificar; "(eu)" para o próprio usuário. */
+/** Rótulo da pessoa em TEXTO (o valor de filtro/ordem das colunas Responsável/Distribuição — os seletores
+ * mostram a foto): o apelido e, quando ele difere do nome, o nome completo para identificar (dois "Ana" não
+ * se fundem); "(eu)" para o próprio usuário. */
 export function rotuloOpcaoPessoa(p: { id: number; nome: string; apelido?: string | null }, euId?: number | null): string {
   const exib = nomeExibicao(p);
   const completo = p.nome.trim();
