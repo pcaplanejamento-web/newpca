@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { clienteTrello, ErroTrello, queryTrello } from "../src/lib/trello-api.ts";
+import { clienteTrello, ErroTrello, mensagemStatusTrello, queryTrello } from "../src/lib/trello-api.ts";
 import { sugerirMembros } from "../src/lib/trello-sync-core.ts";
 import { coerceIntegracoes, toView, trelloConfigurado } from "../src/lib/integracoes-core.ts";
 import { integracoesSchema } from "../src/lib/integracoes-validation.ts";
@@ -34,6 +34,11 @@ describe("trello-api — cliente", () => {
     const c = clienteTrello({ apiKey: "k", token: "t", fetch: f.fetch });
     await assert.rejects(c.eu(), (e: unknown) => e instanceof ErroTrello && e.status === 302);
     assert.equal(f.chamadas[0].init?.redirect, "manual");
+  });
+
+  it("403 traz o motivo que o Trello deu", () => {
+    assert.match(mensagemStatusTrello(403, "unauthorized card permission requested"), /permissão.*unauthorized card permission/);
+    assert.equal(mensagemStatusTrello(403, ""), "A conta do Trello não tem permissão para isso.");
   });
 
   it("recusa caminho estranho (sem SSRF) e usuário inválido", async () => {

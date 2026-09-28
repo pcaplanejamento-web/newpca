@@ -262,6 +262,10 @@ export type CamposBoard = {
   origem?: string;
   /** Ligado a um board EXISTENTE: falta a FUSÃO inicial (casar pelo nome). */
   fundir?: boolean;
+  /** Membros que o Trello RECUSOU pôr no board (não são tentados de novo nem atribuídos aos cartões). */
+  membrosRecusados?: string[];
+  /** Os membros do board já foram conferidos no próprio Trello (corrige ligações antigas). */
+  membrosConferidos?: boolean;
 };
 export const CAMPOS_BOARD_VAZIO: CamposBoard = { porCampo: {}, opcoes: {} };
 export function lerCamposBoard(v: unknown): CamposBoard {
@@ -279,6 +283,8 @@ export function lerCamposBoard(v: unknown): CamposBoard {
       origem: s(o.origem),
       tipos: o.tipos && typeof o.tipos === "object" ? { ...o.tipos } : {},
       ...(o.fundir === true ? { fundir: true } : {}),
+      membrosRecusados: Array.isArray(o.membrosRecusados) ? o.membrosRecusados.filter((x): x is string => typeof x === "string") : [],
+      ...(o.membrosConferidos === true ? { membrosConferidos: true } : {}),
     };
   } catch {
     return { ...CAMPOS_BOARD_VAZIO };

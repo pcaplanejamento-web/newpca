@@ -289,6 +289,12 @@ describe("trello-sync-core — fusão com um board existente", () => {
     assert.equal(campoDoBoard("Prioridade", "list", la, new Set())?.id, "2");
     assert.equal(campoDoBoard("Prioridade", "list", la, new Set(["2"])), null);
   });
+  it("lerCamposBoard guarda os membros recusados e a conferência", () => {
+    const c = lerCamposBoard('{"membrosRecusados":["m1",2],"membrosConferidos":true}');
+    assert.deepEqual(c.membrosRecusados, ["m1"]);
+    assert.equal(c.membrosConferidos, true);
+    assert.equal(lerCamposBoard("{}").membrosConferidos, undefined);
+  });
   it("lerCamposBoard guarda a marca da fusão", () => {
     assert.equal(lerCamposBoard('{"fundir":true}').fundir, true);
     assert.equal(lerCamposBoard("{}").fundir, undefined);

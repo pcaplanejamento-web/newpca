@@ -142,7 +142,9 @@ function cartaoNovo(retrato: string | null | undefined) {
 export async function mapaDoQuadro(quadroId: number, campos: CamposBoard): Promise<MapaQuadro> {
   const v = await vinculosDoQuadro(quadroId);
   const ids = (tipo: string) => new Map([...v(tipo)].map(([k, x]) => [k, x.trelloId]));
-  const membros = new Map((await listarLigacoesMembros()).map((l) => [l.usuarioId, l.membroId]));
+  // Só os membros que ESTÃO no board: atribuir um cartão a quem não está nele o Trello recusa.
+  const noBoard = campos.membrosConferidos ? new Set(campos.membrosBoard ?? []) : null;
+  const membros = new Map((await listarLigacoesMembros()).filter((l) => !noBoard || noBoard.has(l.membroId)).map((l) => [l.usuarioId, l.membroId]));
   return { listas: ids("lista"), etiquetas: ids("etiqueta"), membros, campos };
 }
 
@@ -180,14 +182,17 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
   const [dados, camposLocais, pessoas, ligacoes] = await Promise.all([dadosQuadro(q.id), listarCampos([q.id]), pessoasDoQuadro(q), listarLigacoesMembros()]);
   const conteudo = await conteudoDoQuadro(q.id, dados.tarefas.map((t) => t.id));
   let camposMudaram = false;
+  let etapa = "ao começar";
   try {
     // 0) FUSÃO com o board EXISTENTE (uma vez): casa pelo NOME; o que só existe lá entra na fila de ENTRADA.
     if (campos.fundir) {
+      etapa = "ao ler o quadro existente";
       await fundirBoard(chamada, cliente, q, lig, campos, dados, camposLocais as CampoTarefa[], conteudo.descr);
       camposMudaram = true;
       await getDb().update(trelloQuadros).set({ campos: JSON.stringify(campos) }).where(eq(trelloQuadros.quadroId, q.id));
       v = await vinculosDoQuadro(q.id);
     }
+    etapa = "ao criar as listas";
     // 1) LISTAS (na ordem; as arquivadas nascem fechadas).
     for (const l of dados.listas) {
       if (tem("lista", l.id)) continue;
@@ -196,12 +201,14 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       if (l.arquivada) await chamada(() => cliente.put(`/lists/${r.id}/closed`, { value: true }));
       novos.push({ tipo: "lista", localId: l.id, trelloId: r.id });
     }
+    etapa = "ao criar as etiquetas";
     // 2) ETIQUETAS (a cor da paleta = a do Trello).
     for (const e of dados.etiquetas) {
       if (tem("etiqueta", e.id) || !cabe()) continue;
       const r = await chamada(() => cliente.post<{ id: string }>("/labels", { name: e.nome, color: corTrelloDeHex(e.cor, PALETA_ETIQUETAS) ?? "blue", idBoard: lig.boardId }));
       novos.push({ tipo: "etiqueta", localId: e.id, trelloId: r.id });
     }
+    etapa = "ao criar os campos personalizados";
     // 3) CAMPOS PERSONALIZADOS: Prioridade (lista), Estimativa (número), Ticket (texto) + os do quadro, no MESMO tipo.
     const criarCampo = async (nome: string, tipo: string, opcoes: string[] = []) => {
       const r = await chamada(() =>
@@ -228,19 +235,32 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       campos.porCampo[c.id] = await criarCampo(c.nome, TIPO_CAMPO_TRELLO[c.tipo], c.opcoes);
     }
     // 4) MEMBROS do board: as pessoas do quadro ligadas a um membro (no quadro privado, só o dono).
-    const noQuadro = new Set(pessoas.map((p) => p.id));
-    const noBoard = new Set(campos.membrosBoard ?? []);
-    for (const l of ligacoes) {
-      if (!noQuadro.has(l.usuarioId) || noBoard.has(l.membroId) || !cabe()) continue;
-      try {
-        await chamada(() => cliente.put(`/boards/${lig.boardId}/members/${l.membroId}`, { type: "normal" }));
-      } catch (e) {
-        if (!(e instanceof ErroTrello) || e.transitorio) throw e;
-      }
-      noBoard.add(l.membroId);
-      campos.membrosBoard = [...noBoard];
+    etapa = "ao pôr os membros no quadro";
+    if (!campos.membrosConferidos && cabe()) {
+      // Confere no Trello quem ESTÁ no board (uma ligação antiga podia marcar como posto quem o Trello recusou).
+      const ms = await chamada(() => cliente.get<{ id: string }[]>(`/boards/${lig.boardId}/members`, { fields: "id" }));
+      campos.membrosBoard = ms.map((m) => m.id);
+      campos.membrosConferidos = true;
       camposMudaram = true;
     }
+    const noQuadro = new Set(pessoas.map((p) => p.id));
+    const noBoard = new Set(campos.membrosBoard ?? []);
+    const recusados = new Set(campos.membrosRecusados ?? []);
+    for (const l of ligacoes) {
+      if (!campos.membrosConferidos || !noQuadro.has(l.usuarioId) || noBoard.has(l.membroId) || recusados.has(l.membroId) || !cabe()) continue;
+      try {
+        await chamada(() => cliente.put(`/boards/${lig.boardId}/members/${l.membroId}`, { type: "normal" }));
+        noBoard.add(l.membroId);
+        campos.membrosBoard = [...noBoard];
+      } catch (e) {
+        if (!(e instanceof ErroTrello) || e.transitorio) throw e;
+        // O Trello recusou (ex.: a pessoa não é da área de trabalho): segue sem ela — fica só aqui.
+        recusados.add(l.membroId);
+        campos.membrosRecusados = [...recusados];
+      }
+      camposMudaram = true;
+    }
+    etapa = "ao criar os cartões";
     // 5) CARTÕES (só o essencial; o resto vai no passo 6). Na ordem das listas e dos cartões.
     const ordemLista = new Map(dados.listas.map((l, i) => [l.id, i]));
     const cartoes = [...dados.tarefas].sort((a, b) => (ordemLista.get(a.listaId) ?? 0) - (ordemLista.get(b.listaId) ?? 0) || a.ordem - b.ordem);
@@ -252,6 +272,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       novos.push({ tipo: "tarefa", localId: t.id, trelloId: r.id, retrato: JSON.stringify({ pendente: true, url: r.shortUrl }) });
     }
     if (novos.length) await gravarVinculos(q.id, novos.splice(0));
+    etapa = "ao preencher os cartões";
     // 6) DETALHES de cada cartão criado: valores, campos, anexos (links, vínculos) → o RETRATO.
     const mapa = await mapaDoQuadro(q.id, campos);
     const vv = await vinculosDoQuadro(q.id);
@@ -296,6 +317,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       for (const a of anexos) await chamada(() => cliente.post(`/cards/${vc.trelloId}/attachments`, { url: a.url, name: a.name.slice(0, 256) }));
       novos.push({ tipo: "tarefa", localId: t.id, trelloId: vc.trelloId, retrato: JSON.stringify({ v: val, url, anexos: anexos.map((a) => a.url), nova: true } satisfies RetratoCartao) });
     }
+    etapa = "ao criar os checklists";
     // 7) CHECKLISTS e ITENS (feito, prazo, responsável) — só dos cartões CRIADOS agora (os casados na fusão acertam o
     // conteúdo pela sincronização, casando pelo nome).
     const ehNova = (tarefaId: number) => cartaoNovo(vv("tarefa").get(tarefaId)?.retrato);
@@ -319,6 +341,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       );
       novos.push({ tipo: "item", localId: i.id, trelloId: r.id });
     }
+    etapa = "ao copiar os comentários";
     // 8) COMENTÁRIOS (pela conta institucional, com o nome de quem escreveu aqui).
     for (const c of conteudo.comentarios) {
       const card = vv("tarefa").get(c.tarefaId);
@@ -326,6 +349,10 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       const r = await chamada(() => cliente.post<{ id: string }>(`/cards/${card.trelloId}/actions/comments`, { text: `**${c.usuarioNome ?? "PCA"} (PCA):** ${c.texto}`.slice(0, 16384) }));
       novos.push({ tipo: "comentario", localId: c.id, trelloId: r.id });
     }
+  } catch (e) {
+    // Diz ONDE parou (o Trello só devolve o status).
+    if (e instanceof ErroTrello) throw new ErroTrello(`Parou ${etapa}: ${e.message}`, e.status, e.esperarS);
+    throw e;
   } finally {
     await gravarVinculos(q.id, novos);
     if (camposMudaram) await getDb().update(trelloQuadros).set({ campos: JSON.stringify(campos) }).where(eq(trelloQuadros.quadroId, q.id));
@@ -422,6 +449,7 @@ async function fundirBoard(
     if (id) campos.porCampo[c.id] = id;
   }
   campos.membrosBoard = [...new Set([...(campos.membrosBoard ?? []), ...membros.map((m) => m.id)])];
+  campos.membrosConferidos = true;
   // Cartões: pelo título DENTRO da lista casada.
   const listaDe = new Map(cl.pares.map(([l, x]) => [x.id, l.id]));
   const cc = casarPorNome(dados.tarefas, cards, (t) => t.titulo, (c) => c.name, (t) => t.listaId, (c) => listaDe.get(c.idList) ?? null);
