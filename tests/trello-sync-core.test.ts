@@ -294,6 +294,9 @@ describe("trello-sync-core — fusão com um board existente", () => {
     assert.deepEqual(c.membrosRecusados, ["m1"]);
     assert.equal(c.membrosConferidos, true);
     assert.equal(lerCamposBoard("{}").membrosConferidos, undefined);
+    const p = lerCamposBoard('{"pluginCampos":true,"semCampos":true}');
+    assert.equal(p.pluginCampos, true);
+    assert.equal(p.semCampos, true);
   });
   it("lerCamposBoard guarda a marca da fusão", () => {
     assert.equal(lerCamposBoard('{"fundir":true}').fundir, true);

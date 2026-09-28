@@ -652,6 +652,7 @@ async function sincronizarCampo(ctx: Ctx, localId: number) {
     delete campos.opcoes[cf];
     if (campos.tipos) delete campos.tipos[cf];
   };
+  if (campos.semCampos || !campos.pluginCampos) return; // o board não usa campos personalizados (o Trello não deixou)
   let cf: string | undefined = campos.porCampo[localId];
   if (!c || c.quadroId !== ctx.lig.quadroId) {
     if (cf) {

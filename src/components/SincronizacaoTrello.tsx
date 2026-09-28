@@ -17,7 +17,16 @@ import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 
 /** O estado da ligação que a rota devolve. */
-export type EstadoTrello = { estado: string; boardUrl: string | null; sincronizadoEm: string | null; ultimoErro: string | null; pendentes: number; erros: number };
+export type EstadoTrello = {
+  estado: string;
+  boardUrl: string | null;
+  sincronizadoEm: string | null;
+  ultimoErro: string | null;
+  pendentes: number;
+  erros: number;
+  /** O Trello não deixou usar campos personalizados neste board. */
+  semCampos?: boolean;
+};
 type BoardTrello = { id: string; nome: string; url: string; ultimaAtividade: string | null; ligado: boolean };
 type Progresso = Record<"listas" | "etiquetas" | "cartoes" | "checklists" | "comentarios", [number, number]>;
 
@@ -198,6 +207,11 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
       {!dados.configurado && !l && <Callout kind="info">A integração com o Trello não está ativa. O administrador a configura em Administração → Integrações.</Callout>}
       {privado && dados.pode && !l && <Callout kind="warn">Quadro privado: no Trello ele fica num board privado, visível também à conta institucional da integração.</Callout>}
       {l?.ultimoErro && <Callout kind="danger">{l.ultimoErro}</Callout>}
+      {l?.semCampos && (
+        <Callout kind="warn">
+          O Trello não liberou os campos personalizados neste quadro: Prioridade, Estimativa, Ticket e os campos do quadro ficam só aqui. O resto sincroniza normalmente.
+        </Callout>
+      )}
       {progresso && (rodando || feito < total) && (
         <div className="space-y-2">
           <Progress value={total ? (feito / total) * 100 : 0} label="Ligando ao Trello" />

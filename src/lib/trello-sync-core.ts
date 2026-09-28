@@ -266,6 +266,10 @@ export type CamposBoard = {
   membrosRecusados?: string[];
   /** Os membros do board já foram conferidos no próprio Trello (corrige ligações antigas). */
   membrosConferidos?: boolean;
+  /** O Power-Up "Campos personalizados" já está ligado no board. */
+  pluginCampos?: boolean;
+  /** O Trello não deixou usar campos personalizados neste board: seguem só aqui (Prioridade, Estimativa, Ticket…). */
+  semCampos?: boolean;
 };
 export const CAMPOS_BOARD_VAZIO: CamposBoard = { porCampo: {}, opcoes: {} };
 export function lerCamposBoard(v: unknown): CamposBoard {
@@ -285,6 +289,8 @@ export function lerCamposBoard(v: unknown): CamposBoard {
       ...(o.fundir === true ? { fundir: true } : {}),
       membrosRecusados: Array.isArray(o.membrosRecusados) ? o.membrosRecusados.filter((x): x is string => typeof x === "string") : [],
       ...(o.membrosConferidos === true ? { membrosConferidos: true } : {}),
+      ...(o.pluginCampos === true ? { pluginCampos: true } : {}),
+      ...(o.semCampos === true ? { semCampos: true } : {}),
     };
   } catch {
     return { ...CAMPOS_BOARD_VAZIO };
@@ -621,3 +627,6 @@ export function retratoDaFusao(local: ValoresCartao, trello: ValoresCartao, loca
 export function campoDoBoard<C extends { id: string; name: string; type: string }>(nome: string, tipo: string, deLa: C[], usados: Set<string>): C | null {
   return deLa.find((c) => !usados.has(c.id) && c.type === tipo && norm(c.name).trim() === norm(nome).trim()) ?? null;
 }
+
+/** O id do Power-Up "Custom Fields" do Trello (o mesmo em todos os boards). */
+export const PLUGIN_CAMPOS_TRELLO = "56d5e249a98895a9797bebb9";

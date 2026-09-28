@@ -21,6 +21,7 @@ import {
   fundoTrello,
   lerCamposBoard,
   type MapaQuadro,
+  PLUGIN_CAMPOS_TRELLO,
   PRIORIDADE_TRELLO,
   TIPO_CAMPO_TRELLO,
   corpoValorCampo,
@@ -227,12 +228,33 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       camposMudaram = true;
       return r.id;
     };
-    if (!campos.prioridade && cabe()) campos.prioridade = await criarCampo(CAMPO_PRIORIDADE, "list", Object.values(PRIORIDADE_TRELLO));
-    if (!campos.estimativa && cabe()) campos.estimativa = await criarCampo(CAMPO_ESTIMATIVA, "number");
-    if (!campos.ticket && cabe()) campos.ticket = await criarCampo(CAMPO_TICKET, "text");
-    for (const c of camposLocais as CampoTarefa[]) {
-      if (campos.porCampo[c.id] || !cabe()) continue;
-      campos.porCampo[c.id] = await criarCampo(c.nome, TIPO_CAMPO_TRELLO[c.tipo], c.opcoes);
+    // O Power-Up "Campos personalizados" precisa estar LIGADO no board: liga uma vez; se o Trello não deixar, os campos
+    // ficam só aqui (a ligação segue — nada trava por eles).
+    const faltaAlgum = !campos.prioridade || !campos.estimativa || !campos.ticket || (camposLocais as CampoTarefa[]).some((c) => !campos.porCampo[c.id]);
+    if (faltaAlgum && !campos.semCampos && !campos.pluginCampos && cabe()) {
+      campos.pluginCampos = await ligarPluginCampos(chamada, cliente, lig.boardId);
+      if (!campos.pluginCampos) campos.semCampos = true;
+      camposMudaram = true;
+    }
+    if (!campos.semCampos && campos.pluginCampos) {
+      const criarOuDesistir = async (f: () => Promise<string>) => {
+        try {
+          return await f();
+        } catch (e) {
+          if (!(e instanceof ErroTrello) || e.transitorio || e.status !== 403) throw e;
+          campos.semCampos = true;
+          camposMudaram = true;
+          return undefined;
+        }
+      };
+      if (!campos.prioridade && cabe()) campos.prioridade = await criarOuDesistir(() => criarCampo(CAMPO_PRIORIDADE, "list", Object.values(PRIORIDADE_TRELLO)));
+      if (!campos.semCampos && !campos.estimativa && cabe()) campos.estimativa = await criarOuDesistir(() => criarCampo(CAMPO_ESTIMATIVA, "number"));
+      if (!campos.semCampos && !campos.ticket && cabe()) campos.ticket = await criarOuDesistir(() => criarCampo(CAMPO_TICKET, "text"));
+      for (const c of camposLocais as CampoTarefa[]) {
+        if (campos.semCampos || campos.porCampo[c.id] || !cabe()) continue;
+        const id = await criarOuDesistir(() => criarCampo(c.nome, TIPO_CAMPO_TRELLO[c.tipo], c.opcoes));
+        if (id) campos.porCampo[c.id] = id;
+      }
     }
     // 4) MEMBROS do board: as pessoas do quadro ligadas a um membro (no quadro privado, só o dono).
     etapa = "ao pôr os membros no quadro";
@@ -282,7 +304,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
       const url = (JSON.parse(vc.retrato) as { url: string }).url;
       const d = conteudo.descr.get(t.id);
       const val = valoresDaTarefa(tarefaParaCartao(t, d), mapa, PALETA_ETIQUETAS);
-      const camposComValor = Object.entries(val.campos).filter(([, x]) => x != null);
+      const camposComValor = campos.semCampos ? [] : Object.entries(val.campos).filter(([, x]) => x != null);
       const anexos = [
         ...(d?.links ?? []).map((l) => ({ url: l.url, name: l.titulo || l.url })),
         ...t.vinculos.flatMap((vi) => {
@@ -378,7 +400,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
     checklists: [clA + itA, clB + itB],
     comentarios: conta(conteudo.comentarios, "comentario"),
   };
-  const faltaCampos = !campos.prioridade || !campos.estimativa || !campos.ticket || (camposLocais as CampoTarefa[]).some((c) => !campos.porCampo[c.id]);
+  const faltaCampos = !campos.semCampos && (!campos.prioridade || !campos.estimativa || !campos.ticket || (camposLocais as CampoTarefa[]).some((c) => !campos.porCampo[c.id]));
   const restante = Object.values(progresso).reduce((s, [a, b]) => s + Math.max(0, b - a), 0) + (faltaCampos ? 1 : 0);
   if (!restante) await getDb().update(trelloQuadros).set({ estado: "ativo", sincronizadoEm: sql`(CURRENT_TIMESTAMP)`, ultimoErro: null }).where(eq(trelloQuadros.quadroId, q.id));
   return { progresso, restante };
@@ -418,7 +440,13 @@ async function fundirBoard(
   const b = lig.boardId;
   const listas = await chamada(() => cliente.get<{ id: string; name: string; closed: boolean }[]>(`/boards/${b}/lists`, { filter: "all", fields: "name,closed" }));
   const etiquetas = await chamada(() => cliente.get<{ id: string; name: string; color: string | null }[]>(`/boards/${b}/labels`, { fields: "name,color", limit: 1000 }));
-  const cfs = await chamada(() => cliente.get<{ id: string; name: string; type: string; options?: { id: string; value: { text: string } }[] }[]>(`/boards/${b}/customFields`));
+  type CampoApi = { id: string; name: string; type: string; options?: { id: string; value: { text: string } }[] };
+  // Sem o Power-Up de campos no board, o Trello recusa a leitura: não há campos a casar.
+  const cfs = await chamada(() => cliente.get<CampoApi[]>(`/boards/${b}/customFields`)).catch((e) => {
+    if (e instanceof ErroTrello && !e.transitorio) return [] as CampoApi[];
+    throw e;
+  });
+  if (cfs.length) campos.pluginCampos = true;
   const cards = await chamada(() => cliente.get<CartaoFusao[]>(`/boards/${b}/cards/all`, { fields: CAMPOS_CARTAO_API, customFieldItems: true }));
   const membros = await chamada(() => cliente.get<{ id: string }[]>(`/boards/${b}/members`, { fields: "id" }));
   // Listas e etiquetas.
@@ -478,6 +506,20 @@ export async function boardsDaConta(cliente: ClienteTrello) {
   return bs.map((x) => ({ id: x.id, nome: x.name, url: x.url, ultimaAtividade: x.dateLastActivity, ligado: ligados.has(x.id) }));
 }
 
+/** Liga o Power-Up "Campos personalizados" no board (já ligado = ok). `false` = o Trello não deixou. */
+async function ligarPluginCampos(chamada: <T>(f: () => Promise<T>) => Promise<T>, cliente: ClienteTrello, boardId: string): Promise<boolean> {
+  try {
+    const ligados = await chamada(() => cliente.get<{ idPlugin: string }[]>(`/boards/${boardId}/boardPlugins`));
+    if (ligados.some((p) => p.idPlugin === PLUGIN_CAMPOS_TRELLO)) return true;
+    await chamada(() => cliente.post(`/boards/${boardId}/boardPlugins`, { idPlugin: PLUGIN_CAMPOS_TRELLO }));
+    return true;
+  } catch (e) {
+    if (e instanceof ErroTrello && e.transitorio) throw e;
+    console.error("[trello] não deu para ligar os campos personalizados:", (e as Error).message);
+    return false;
+  }
+}
+
 /** DESLIGA o quadro do Trello: tira o aviso (webhook) e os vínculos; os dois lados ficam como estão. */
 export async function desligarQuadro(cliente: ClienteTrello | null, quadroId: number) {
   const lig = await ligacaoDoQuadro(quadroId);
@@ -493,7 +535,15 @@ export async function estadoTrello(quadroId: number) {
     .select({ n: sql<number>`COUNT(*)`, erros: sql<number>`COALESCE(SUM(CASE WHEN ${trelloFila.erro} IS NOT NULL THEN 1 ELSE 0 END), 0)` })
     .from(trelloFila)
     .where(eq(trelloFila.quadroId, quadroId));
-  return { estado: lig.estado, boardUrl: lig.boardUrl, sincronizadoEm: lig.sincronizadoEm, ultimoErro: lig.ultimoErro, pendentes: p?.n ?? 0, erros: p?.erros ?? 0 };
+  return {
+    estado: lig.estado,
+    boardUrl: lig.boardUrl,
+    sincronizadoEm: lig.sincronizadoEm,
+    ultimoErro: lig.ultimoErro,
+    pendentes: p?.n ?? 0,
+    erros: p?.erros ?? 0,
+    semCampos: !!lerCamposBoard(lig.campos).semCampos,
+  };
 }
 
 /**
