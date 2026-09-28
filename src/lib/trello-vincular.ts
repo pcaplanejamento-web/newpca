@@ -7,6 +7,7 @@ import { type CampoTarefa, hrefVinculo, lerBlocos, PALETA_ETIQUETAS, type Tarefa
 import { dadosQuadro, listarCampos, pessoasDoQuadro, type Quadro } from "./tarefas";
 import { type ClienteTrello, ErroTrello } from "./trello-api";
 import { enfileirar } from "./trello-fila";
+import { comandosVinculo } from "./trello-sql";
 import { listarLigacoesMembros } from "./trello-sync";
 import {
   CAMPO_ESTIMATIVA,
@@ -66,15 +67,8 @@ export async function vinculosDoQuadro(quadroId: number) {
 export async function gravarVinculos(quadroId: number, vs: { tipo: string; localId: number; trelloId: string; retrato?: string | null }[]) {
   if (!vs.length) return;
   const db = getDb();
-  const cmds = vs.map((v) =>
-    db
-      .insert(trelloVinculos)
-      .values({ quadroId, tipo: v.tipo, localId: v.localId, trelloId: v.trelloId, retrato: v.retrato ?? null })
-      .onConflictDoUpdate({
-        target: [trelloVinculos.tipo, trelloVinculos.localId],
-        set: { trelloId: v.trelloId, retrato: v.retrato ?? null, sincronizadoEm: sql`(CURRENT_TIMESTAMP)` },
-      }),
-  );
+  // Tolerante: um id do Trello já ligado a OUTRO item daqui não muda nada (nunca derruba a etapa — `comandosVinculo`).
+  const cmds = vs.flatMap((v) => comandosVinculo(db, quadroId, v.tipo, v.localId, v.trelloId, v.retrato ?? null));
   await db.batch(cmds as unknown as Parameters<typeof db.batch>[0]);
 }
 

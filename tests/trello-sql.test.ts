@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandoConcluir, comandoEnfileirar, comandoReivindicar, comandoVinculo } from "../src/lib/trello-sql.ts";
+import { comandoConcluir, comandoEnfileirar, comandoReivindicar, comandoSoltarQuadro, comandosVinculo, comandoTravarQuadro } from "../src/lib/trello-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // A FILA e os VÍNCULOS do Trello pelos MESMOS builders do servidor, no driver `drizzle-orm/d1` REAL.
@@ -58,13 +58,33 @@ describe("trello — fila e vínculos (builders no D1)", () => {
     assert.deepEqual(ordem, ["quadro:1", "lista:l1", "etiqueta:e1", "tarefa:c1", "tarefa:c2"]);
   });
 
-  it("vínculo: grava e atualiza pelo (tipo, id daqui); o id do Trello é único por tipo", async () => {
+  it("vínculo: grava e atualiza pelo (tipo, id daqui); o id do Trello de OUTRO item não muda nada e nunca lança", async () => {
     const { db, orm } = banco();
-    await comandoVinculo(orm, 1, "tarefa", 5, "c5", '{"v":1}');
-    await comandoVinculo(orm, 1, "tarefa", 5, "c5", '{"v":2}');
-    await comandoVinculo(orm, 1, "lista", 5, "l5", null);
-    const r = db.prepare("SELECT tipo, trello_id AS t, retrato AS r FROM trello_vinculos ORDER BY tipo").all() as { tipo: string; t: string; r: string | null }[];
-    assert.deepEqual(r.map((x) => [x.tipo, x.t, x.r]), [["lista", "l5", null], ["tarefa", "c5", '{"v":2}']]);
-    await assert.rejects(comandoVinculo(orm, 1, "tarefa", 6, "c5", null));
+    const grava = (q: number, tipo: string, l: number, t: string, r: string | null) => orm.batch(comandosVinculo(orm, q, tipo, l, t, r) as never);
+    await grava(1, "tarefa", 5, "c5", '{"v":1}');
+    await grava(1, "tarefa", 5, "c5", '{"v":2}');
+    await grava(1, "lista", 5, "l5", null);
+    const linhas = () => db.prepare("SELECT tipo, local_id AS l, trello_id AS t, retrato AS r FROM trello_vinculos ORDER BY tipo, local_id").all() as { tipo: string; l: number; t: string; r: string | null }[];
+    assert.deepEqual(linhas().map((x) => [x.tipo, x.t, x.r]), [["lista", "l5", null], ["tarefa", "c5", '{"v":2}']]);
+    // Outro item daqui com o MESMO id do Trello: nada muda (antes: UNIQUE constraint failed).
+    await grava(1, "tarefa", 6, "c5", null);
+    assert.deepEqual(linhas().map((x) => [x.tipo, x.l, x.t]), [["lista", 5, "l5"], ["tarefa", 5, "c5"]]);
+    // O próprio item trocando para um id já usado por outro: também nada muda; para um id livre, muda.
+    await grava(1, "tarefa", 7, "c7", null);
+    await grava(1, "tarefa", 7, "c5", null);
+    assert.equal(linhas().find((x) => x.l === 7 && x.tipo === "tarefa")?.t, "c7");
+    await grava(1, "tarefa", 7, "c8", '{"v":3}');
+    assert.equal(linhas().find((x) => x.l === 7 && x.tipo === "tarefa")?.t, "c8");
+  });
+
+  it("trava do quadro: uma passada por vez; a segunda espera, vale de novo depois de soltar ou vencer", async () => {
+    const { db, orm } = banco();
+    assert.equal((await comandoTravarQuadro(orm, 1)).length, 1);
+    assert.equal((await comandoTravarQuadro(orm, 1)).length, 0);
+    assert.equal((await comandoTravarQuadro(orm, 2)).length, 1); // outro quadro, livre
+    await comandoSoltarQuadro(orm, 1);
+    assert.equal((await comandoTravarQuadro(orm, 1)).length, 1);
+    db.exec("UPDATE trello_quadros SET processando_ate = datetime('now', '-1 seconds') WHERE quadro_id = 1");
+    assert.equal((await comandoTravarQuadro(orm, 1)).length, 1); // vencida
   });
 });

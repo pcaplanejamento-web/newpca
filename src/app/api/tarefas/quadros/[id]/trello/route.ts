@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { trelloFila, trelloQuadros } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import { processarFila } from "@/lib/trello-processar";
+import { comTravaDoQuadro, processarFila } from "@/lib/trello-processar";
 import { lerCamposBoard } from "@/lib/trello-sync-core";
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 
 /** Itens por chamada do "Sincronizar agora" (a tela repete até zerar); com o board lido em lote, cada cartão custa só o D1. */
 const LOTE_SINCRONIZAR = 25;
+/** Outra sincronização está no quadro (a trava — uma coisa por vez). */
+const MSG_OCUPADO = "Há uma sincronização em andamento neste quadro — tente de novo em instantes.";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -96,7 +98,9 @@ export async function POST(req: Request, ctx: Ctx) {
     const lig = await ligacaoDoQuadro(r.q.id);
     if (!lig) return erro("Este quadro não está ligado ao Trello.", 409);
     try {
-      const ok_ = await tentarCamposDeNovo(t.cliente, r.q, lig, new URL(req.url).origin);
+      const travado = await comTravaDoQuadro(r.q.id, () => tentarCamposDeNovo(t.cliente, r.q, lig, new URL(req.url).origin));
+      if (!travado) return erro(MSG_OCUPADO, 409);
+      const ok_ = travado.valor;
       await registrarAuditoria({ usuario: r.u, acao: "editar", entidade: "tarefa_quadro", entidadeId: r.q.id, origem: "trello", resumo: ok_ ? "Campos personalizados criados no Trello" : "Campos personalizados: o Trello ainda não deixou" });
       if (ok_) depoisDaResposta(processarFila(8, r.q.id));
       return ok({ campos: ok_, ligacao: await estadoTrello(r.q.id) });
@@ -120,7 +124,10 @@ export async function POST(req: Request, ctx: Ctx) {
     }
     if (!lig) return erro("Este quadro não está ligado ao Trello.", 409);
     const origem = new URL(req.url).origin;
-    const { progresso, restante } = await avancarCriacao(t.cliente, r.q, lig, origem);
+    const ligado = lig;
+    const travado = await comTravaDoQuadro(r.q.id, () => avancarCriacao(t.cliente, r.q, ligado, origem));
+    if (!travado) return erro(MSG_OCUPADO, 409);
+    const { progresso, restante } = travado.valor;
     // Pronto: liga os AVISOS do Trello (a entrada) — sem o segredo da aplicação, só a saída funciona.
     let aviso: string | null = null;
     if (!restante) {

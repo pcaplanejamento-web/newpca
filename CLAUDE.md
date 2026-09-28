@@ -2841,7 +2841,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `comandoReivindicar`); o "Sincronizar agora" processa DENTRO da requisição (lotes de 25; `continuar` não reativa os com
   erro) e a tela repete até zerar com o `Progress`; logo depois de ligar, roda sozinho. **Campos recusados** (`semCampos`):
   "Tentar de novo" (`acao:"campos"` → `tentarCamposDeNovo`: esquece a recusa, roda a etapa dos campos e, dando certo, põe
-  todos os cartões ligados na fila de saída). Fila `campo` = **`sincronizarCampo`** (novo = cria no mesmo tipo;
+  todos os cartões ligados na fila de saída). **Uma coisa por vez por quadro (migração `0064`,
+  `trello_quadros.processando_ate`):** `comandoTravarQuadro`/`comandoRenovarTrava`/`comandoSoltarQuadro` (`trello-sql.ts`,
+  validade `TRAVA_S`=90 s) — `processarFila` só trata o item com a trava do quadro (outra passada nele ⇒ o item é ADIADO,
+  `adiados`) e a rota usa `comTravaDoQuadro` em criar/ligar/etapa/campos (espera ~10 s; senão 409); o "Sincronizar agora"
+  espera e tenta de novo quando o lote volta todo adiado. **Vínculo tolerante:** `comandosVinculo` = INSERT que não faz
+  nada em conflito + UPDATE do próprio vínculo só com o id do Trello livre (nunca o "UNIQUE constraint failed … trello_id");
+  `gravarVinculo` devolve se ligou e o item criado AQUI a partir do Trello (tarefa, checklist, item, comentário, lista,
+  etiqueta) é excluído quando o id de lá já estava ligado a outro; `criarTarefaDoCartao` grava o vínculo LOGO após criar a
+  tarefa (retrato = como nasceu aqui — nova tentativa nunca cria outra tarefa para o mesmo cartão). Fila `campo` = **`sincronizarCampo`** (novo = cria no mesmo tipo;
   renomeado; tipo trocado = recria; opção nova na lista = acrescenta; excluído = exclui lá). **`IndicadorTrello`** (ícone +
   ponto do estado na `FaixaQuadro` do quadro ligado — `carregarQuadro` traz `trello` = `estadoTrello`; tocar leva a
   Configuração → `#secao-trello`) e **"Abrir no Trello"** no "…" do detalhe da tarefa (`GET /api/tarefas/[id]` devolve

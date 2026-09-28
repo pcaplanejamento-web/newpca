@@ -139,9 +139,10 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
     let feitos = 0;
     let falhas = 0;
     let total = 0;
+    let esperas = 0;
     try {
       for (let i = 0; i < 400 && vivo.current; i++) {
-        const r = await chamar<{ ligacao: EstadoTrello; feitos: number; falhas: number }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", {
+        const r = await chamar<{ ligacao: EstadoTrello; feitos: number; falhas: number; adiados?: number }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", {
           acao: "sincronizar",
           continuar: continuar || i > 0,
         });
@@ -151,7 +152,12 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
         total = Math.max(total, feitos + pendentes);
         setSinc({ feito: feitos, total });
         setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
-        if (!pendentes || !r.feitos) break;
+        if (!pendentes) break;
+        if (!r.feitos) {
+          // Outra sincronização está no quadro (a trava): espera um pouco e tenta de novo, em vez de parar.
+          if (!r.adiados || ++esperas > 20) break;
+          await new Promise((ok) => setTimeout(ok, 3000));
+        }
       }
       if (!vivo.current) return;
       const resta = total - feitos;

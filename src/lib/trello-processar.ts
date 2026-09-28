@@ -23,7 +23,7 @@ import {
 import { type ClienteTrello, ErroTrello } from "./trello-api";
 import { trelloDaConfig } from "./trello-config";
 import { enfileirar } from "./trello-fila";
-import { comandoConcluir, comandoReivindicar, comandoVinculo } from "./trello-sql";
+import { comandoConcluir, comandoReivindicar, comandoRenovarTrava, comandoSoltarQuadro, comandosVinculo, comandoTravarQuadro } from "./trello-sql";
 import { pessoaDoMembro } from "./trello-sync";
 import {
   type CampoCartao,
@@ -82,56 +82,90 @@ type LoteBoard = Map<string, CartaoLido>;
 /** Acima de quantos cartões pendentes (entrada ou saída) vale ler o board inteiro (2 chamadas) em vez de cartão a cartão. */
 const MIN_LOTE = 5;
 
-/** Adiar sem erro (o quadro está pausado/ainda sendo criado). */
-class Adiar extends Error {}
+/** Adiar sem erro (o quadro está pausado/ainda sendo criado, ou outra passada está nele). */
+class Adiar extends Error {
+  readonly segundos: number;
+  constructor(segundos = 60) {
+    super("adiado");
+    this.segundos = segundos;
+  }
+}
 
 /**
  * PROCESSA a fila: até `limite` itens (de um quadro, ou de todos), cada um REIVINDICADO atomicamente (dois processamentos
  * nunca pegam o mesmo item). Sucesso = sai da fila (se nada novo chegou no meio); falha = tenta de novo com espera crescente
  * (429/5xx/rede: a espera do Trello) e, depois de `MAX_TENTATIVAS`, fica com o erro à vista.
  */
-export async function processarFila(limite = 5, quadroId?: number): Promise<{ feitos: number; falhas: number }> {
+export async function processarFila(limite = 5, quadroId?: number): Promise<{ feitos: number; falhas: number; adiados: number }> {
   const t = await trelloDaConfig();
-  if ("erro" in t) return { feitos: 0, falhas: 0 };
+  if ("erro" in t) return { feitos: 0, falhas: 0, adiados: 0 };
   const { cliente, usadas } = contado(t.cliente);
   const db = getDb();
   let feitos = 0;
   let falhas = 0;
+  let adiados = 0;
   const lotes = new Map<number, LoteBoard | null>();
-  for (let i = 0; i < limite && usadas() < ORCAMENTO_PASSADA; i++) {
-    const [item] = await comandoReivindicar(db, quadroId);
-    if (!item) break;
-    try {
-      const lig = await ligacaoDoQuadro(item.quadroId);
-      if (lig) {
-        if (lig.estado !== "ativo" && lig.estado !== "erro") throw new Adiar();
-        const campos = lerCamposBoard(lig.campos);
-        if (item.tipo === "tarefa" && !lotes.has(lig.quadroId)) lotes.set(lig.quadroId, await loteDoBoard(cliente, lig));
-        const ctx: Ctx = { cliente, lig, campos, mapa: await mapaDoQuadro(lig.quadroId, campos), contaId: t.membroId, lote: lotes.get(lig.quadroId) };
-        await processarItem(ctx, item.direcao, item.tipo, item.alvo);
-        await db.update(trelloQuadros).set({ estado: "ativo", ultimoErro: null, sincronizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(trelloQuadros.quadroId, lig.quadroId));
+  // As TRAVAS que esta passada tem: uma coisa por vez em cada quadro (duas passadas juntas criavam o mesmo item duas vezes).
+  const travas = new Set<number>();
+  try {
+    for (let i = 0; i < limite && usadas() < ORCAMENTO_PASSADA; i++) {
+      const [item] = await comandoReivindicar(db, quadroId);
+      if (!item) break;
+      try {
+        const lig = await ligacaoDoQuadro(item.quadroId);
+        if (lig) {
+          if (lig.estado !== "ativo" && lig.estado !== "erro") throw new Adiar();
+          if (travas.has(lig.quadroId)) await comandoRenovarTrava(db, lig.quadroId);
+          else if ((await comandoTravarQuadro(db, lig.quadroId)).length) travas.add(lig.quadroId);
+          else throw new Adiar(30);
+          const campos = lerCamposBoard(lig.campos);
+          if (item.tipo === "tarefa" && !lotes.has(lig.quadroId)) lotes.set(lig.quadroId, await loteDoBoard(cliente, lig));
+          const ctx: Ctx = { cliente, lig, campos, mapa: await mapaDoQuadro(lig.quadroId, campos), contaId: t.membroId, lote: lotes.get(lig.quadroId) };
+          await processarItem(ctx, item.direcao, item.tipo, item.alvo);
+          await db.update(trelloQuadros).set({ estado: "ativo", ultimoErro: null, sincronizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(trelloQuadros.quadroId, lig.quadroId));
+        }
+        await comandoConcluir(db, item.id, item.criadoEm);
+        feitos++;
+      } catch (e) {
+        if (e instanceof Adiar) {
+          adiados++;
+          await db.update(trelloFila).set({ proximaEm: sql`datetime('now', ${`+${e.segundos} seconds`})`, tentativas: 0 }).where(eq(trelloFila.id, item.id));
+          continue;
+        }
+        falhas++;
+        const tr = e instanceof ErroTrello && e.transitorio;
+        const espera = e instanceof ErroTrello && e.esperarS ? e.esperarS : Math.min(3600, 60 * 2 ** Math.max(0, item.tentativas));
+        const esgotou = item.tentativas + 1 >= MAX_TENTATIVAS && !tr;
+        const msg = (e as Error).message.slice(0, 500);
+        await db
+          .update(trelloFila)
+          .set({ erro: msg, proximaEm: sql`datetime('now', ${`+${esgotou ? 86400 : espera} seconds`})` })
+          .where(eq(trelloFila.id, item.id));
+        await db.update(trelloQuadros).set({ ultimoErro: msg }).where(eq(trelloQuadros.quadroId, item.quadroId));
+        if (e instanceof ErroTrello && e.status === 429) break;
       }
-      await comandoConcluir(db, item.id, item.criadoEm);
-      feitos++;
-    } catch (e) {
-      if (e instanceof Adiar) {
-        await db.update(trelloFila).set({ proximaEm: sql`datetime('now', '+60 seconds')`, tentativas: 0 }).where(eq(trelloFila.id, item.id));
-        continue;
-      }
-      falhas++;
-      const tr = e instanceof ErroTrello && e.transitorio;
-      const espera = e instanceof ErroTrello && e.esperarS ? e.esperarS : Math.min(3600, 60 * 2 ** Math.max(0, item.tentativas));
-      const esgotou = item.tentativas + 1 >= MAX_TENTATIVAS && !tr;
-      const msg = (e as Error).message.slice(0, 500);
-      await db
-        .update(trelloFila)
-        .set({ erro: msg, proximaEm: sql`datetime('now', ${`+${esgotou ? 86400 : espera} seconds`})` })
-        .where(eq(trelloFila.id, item.id));
-      await db.update(trelloQuadros).set({ ultimoErro: msg }).where(eq(trelloQuadros.quadroId, item.quadroId));
-      if (e instanceof ErroTrello && e.status === 429) break;
     }
+  } finally {
+    for (const q of travas) await comandoSoltarQuadro(db, q).catch(() => null);
   }
-  return { feitos, falhas };
+  return { feitos, falhas, adiados };
+}
+
+/**
+ * Roda `f` com a TRAVA do quadro (a mesma das passadas da fila): espera até ~10 s por ela; sem conseguir, `null` (outra
+ * sincronização está no quadro — a tela pede para tentar em instantes). Solta sempre no fim.
+ */
+export async function comTravaDoQuadro<T>(quadroId: number, f: () => Promise<T>): Promise<{ valor: T } | null> {
+  const db = getDb();
+  for (let i = 0; !(await comandoTravarQuadro(db, quadroId)).length; i++) {
+    if (i >= 10) return null;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  try {
+    return { valor: await f() };
+  } finally {
+    await comandoSoltarQuadro(db, quadroId).catch(() => null);
+  }
 }
 
 async function processarItem(ctx: Ctx, direcao: string, tipo: string, alvo: string) {
@@ -151,8 +185,18 @@ async function vinculo(tipo: string, por: { localId?: number; trelloId?: string 
     .where(and(eq(trelloVinculos.tipo, tipo), por.localId != null ? eq(trelloVinculos.localId, por.localId) : eq(trelloVinculos.trelloId, por.trelloId ?? "")));
   return v ?? null;
 }
-async function gravarVinculo(quadroId: number, tipo: string, localId: number, trelloId: string, retrato: unknown) {
-  await comandoVinculo(getDb(), quadroId, tipo, localId, trelloId, retrato == null ? null : JSON.stringify(retrato));
+/**
+ * Grava o vínculo; `false` = o id do Trello já está ligado a OUTRO item daqui (nada mudou — `comandosVinculo` nunca lança).
+ * Quem acabou de criar o item daqui a partir do Trello o exclui nesse caso (não fica duplicado).
+ */
+async function gravarVinculo(quadroId: number, tipo: string, localId: number, trelloId: string, retrato: unknown): Promise<boolean> {
+  const db = getDb();
+  await db.batch(comandosVinculo(db, quadroId, tipo, localId, trelloId, retrato == null ? null : JSON.stringify(retrato)) as unknown as Parameters<typeof db.batch>[0]);
+  const [v] = await db
+    .select({ t: trelloVinculos.trelloId })
+    .from(trelloVinculos)
+    .where(and(eq(trelloVinculos.tipo, tipo), eq(trelloVinculos.localId, localId)));
+  return v?.t === trelloId;
 }
 async function tirarVinculo(tipo: string, localId: number) {
   await getDb().delete(trelloVinculos).where(and(eq(trelloVinculos.tipo, tipo), eq(trelloVinculos.localId, localId)));
@@ -414,6 +458,13 @@ async function criarTarefaDoCartao(ctx: Ctx, card: CartaoLido) {
   });
   const t = await getTarefa(nova.id);
   if (!t) return;
+  // O vínculo vai LOGO (retrato = como nasceu aqui): numa nova tentativa, o Trello é que "mudou" e a reconciliação traz os
+  // dados — nunca outra tarefa para o mesmo cartão. Cartão já ligado a outra tarefa ⇒ esta sai (não fica duplicada).
+  if (!(await gravarVinculo(ctx.lig.quadroId, "tarefa", t.id, card.id, { v: valoresLocais(ctx, t), url: card.shortUrl, anexos: [] } satisfies RetratoCartao))) {
+    const { excluirTarefa } = await import("./tarefas");
+    await excluirTarefa(t.id);
+    return;
+  }
   await trazer(ctx, t, valTrello, ["desc", "start", "due", "dueComplete", "dueReminder", "closed", "isTemplate", "cover", "idLabels", "idMembers", "campos"]);
   await historico(t.id, "Criada pelo Trello");
   const atual = (await getTarefa(t.id)) as TarefaCompleta;
@@ -481,7 +532,10 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: Pick<Carta
   for (const la of lados)
     if (!vClT.has(la.id) && !localPorTrelloCl.has(la.id)) {
       const id = await criarChecklist(t.id, la.name.slice(0, 80) || "Checklist");
-      await gravarVinculo(q, "checklist", id, la.id, { name: la.name });
+      if (!(await gravarVinculo(q, "checklist", id, la.id, { name: la.name }))) {
+        await excluirChecklist(id);
+        continue;
+      }
       localPorTrelloCl.set(la.id, id);
     }
   // Itens.
@@ -547,7 +601,8 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: Pick<Carta
       if (!novo) continue;
       const inv = [...ctx.mapa.membros].find(([, m]) => m === la.idMember)?.[0] ?? null;
       if (la.state === "complete" || la.due || inv) await atualizarItemChecklist({ id: novo.id, tarefaId: t.id, checklistId: clLocal }, { feito: la.state === "complete", prazo: dataDoTrello(la.due)?.data ?? null, responsavelId: inv });
-      await gravarVinculo(q, "item", novo.id, la.id, { name: la.name, state: la.state, due: la.due ? new Date(la.due).toISOString() : null, idMember: la.idMember ?? null });
+      if (!(await gravarVinculo(q, "item", novo.id, la.id, { name: la.name, state: la.state, due: la.due ? new Date(la.due).toISOString() : null, idMember: la.idMember ?? null })))
+        await excluirItemChecklist(novo.id);
     }
   // COMENTÁRIOS: os daqui sem vínculo vão (com o nome); os de lá sem vínculo vêm (quem escreveu, pela ligação).
   const vCo = vPor("comentario");
@@ -574,7 +629,7 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: Pick<Carta
       .insert(tarefaComentarios)
       .values({ tarefaId: t.id, usuarioId: autor, usuarioNome: `${a.memberCreator?.fullName ?? "Trello"} (Trello)`.slice(0, 120), texto: a.data.text.slice(0, 5000), criadoEm: a.date.replace("T", " ").slice(0, 19) })
       .returning({ id: tarefaComentarios.id });
-    await gravarVinculo(q, "comentario", novo.id, a.id, null);
+    if (!(await gravarVinculo(q, "comentario", novo.id, a.id, null))) await getDb().delete(tarefaComentarios).where(eq(tarefaComentarios.id, novo.id));
   }
   // ANEXOS (URL): os que a tarefa pede × os do cartão, pelo retrato.
   const querAqui = await anexosDaTarefa(ctx, t);
@@ -612,10 +667,10 @@ async function sincronizarLista(ctx: Ctx, alvo: { localId?: number; trelloId?: s
       if (l.arquivada) await ctx.cliente.put(`/lists/${r.id}/closed`, { value: true });
       await gravarVinculo(ctx.lig.quadroId, "lista", l.id, r.id, { name: l.nome, closed: l.arquivada });
     } else if (la && la.idBoard === ctx.lig.boardId) {
-      const { criarLista, atualizarLista } = await import("./tarefas");
+      const { criarLista, atualizarLista, excluirLista } = await import("./tarefas");
       const id = await criarLista(ctx.lig.quadroId, { nome: la.name.slice(0, 60) || "Lista" });
       if (la.closed) await atualizarLista(id, { arquivada: true });
-      await gravarVinculo(ctx.lig.quadroId, "lista", id, la.id, { name: la.name, closed: la.closed });
+      if (!(await gravarVinculo(ctx.lig.quadroId, "lista", id, la.id, { name: la.name, closed: la.closed }))) await excluirLista(id);
     }
     return;
   }
@@ -662,7 +717,7 @@ async function sincronizarEtiqueta(ctx: Ctx, alvo: { localId?: number; trelloId?
       await gravarVinculo(ctx.lig.quadroId, "etiqueta", e.id, r.id, { name: e.nome, color: corTrelloDeHex(e.cor, PALETA_ETIQUETAS) });
     } else if (la && la.idBoard === ctx.lig.boardId) {
       const id = await criarEtiqueta(ctx.lig.quadroId, { nome: la.name.slice(0, 30) || "Etiqueta", cor: hexDeCorTrello(la.color, PALETA_ETIQUETAS) ?? "#8590a2" });
-      await gravarVinculo(ctx.lig.quadroId, "etiqueta", id, la.id, { name: la.name, color: la.color });
+      if (!(await gravarVinculo(ctx.lig.quadroId, "etiqueta", id, la.id, { name: la.name, color: la.color }))) await excluirEtiqueta(id);
     }
     return;
   }

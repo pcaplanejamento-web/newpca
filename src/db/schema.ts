@@ -1252,6 +1252,8 @@ export const trelloQuadros = sqliteTable(
     estado: text("estado").notNull().default("ativo"),
     ultimoErro: text("ultimo_erro"),
     sincronizadoEm: text("sincronizado_em"),
+    /** A TRAVA da sincronização (migração `0064`): até quando uma passada trabalha no quadro; NULL/vencida = livre. */
+    processandoAte: text("processando_ate"),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

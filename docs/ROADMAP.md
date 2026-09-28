@@ -1159,7 +1159,8 @@ alteração mais recente e o que só existe de um lado vai ao outro. ✅ **Fase 
 (cron do próprio Worker) — o que um aviso perdido deixou para trás entra na fila; campos personalizados novos/renomeados/
 excluídos acompanham; indicador do Trello na faixa do quadro e "Abrir no Trello" no detalhe da tarefa. ✅ **Quadros
 grandes:** cada cartão numa chamada só e, com muitos na fila, o board inteiro lido de uma vez; "Sincronizar agora" vai
-até o fim com a barra de andamento; "Tentar de novo" para os campos personalizados que o Trello recusou.
+até o fim com a barra de andamento; "Tentar de novo" para os campos personalizados que o Trello recusou. ✅ **Sem duplicar:** uma sincronização por vez em cada
+quadro e o vínculo de um item do Trello nunca vai para dois itens daqui (corrige "UNIQUE constraint failed").
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
