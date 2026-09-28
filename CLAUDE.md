@@ -2754,6 +2754,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `garantirWebhook` (`trello-vincular.ts`) cria o aviso ao terminar de ligar e no "Sincronizar agora" (sem o segredo, só a
   saída funciona — a tela avisa). A rota do quadro ganhou `sincronizar` (reativa os com erro e processa já), `pausar` e
   `retomar`; a seção Trello, os botões.
+  **LIGAR A UM BOARD EXISTENTE (fusão):** `GET /api/integracoes/trello/boards` (`boardsDaConta` — os abertos da conta, os
+  já ligados marcados) + `POST …/trello {acao:"ligar", boardId}` → **`ligarBoard`** (recusa board fechado ou já ligado;
+  `campos.fundir`) e, na 1ª etapa, **`fundirBoard`** (5 leituras): casa LISTAS e ETIQUETAS pelo nome, os CAMPOS pelo nome +
+  tipo (`campoDoBoard` — os nossos três e os do quadro) e os CARTÕES pelo título DENTRO da lista casada (**`casarPorNome`**,
+  puro: sem acento/caixa, um a um, por grupo); cada par ganha o vínculo com o RETRATO do lado MAIS ANTIGO
+  (**`retratoDaFusao`** — a reconciliação leva o mais recente ao outro) e entra na fila; o que só existe lá entra na fila de
+  ENTRADA (vira item daqui quando a ligação termina); o que só existe aqui as etapas criam lá. Checklists/itens/comentários
+  só vão na criação para os cartões CRIADOS (`RetratoCartao.nova`); nos casados, `sincronizarConteudo` casa pelo texto
+  (`mesmoTexto`) o checklist, o item (marcado de um lado = marcado nos dois) e o comentário sem vínculo antes de criar.
+  Terminada a ligação, a rota já processa a fila (`depoisDaResposta`). Tela: "Ligar a um quadro existente" (`Modal` +
+  `SeletorBusca` dos boards livres).
+  **FASE 5 (entregue) — robustez:** **`worker.ts`** na raiz = o Worker do OpenNext (`.open-next/worker.js`, reexporta o
+  `fetch`) + o **`scheduled`** (`wrangler.jsonc`: `main: "worker.ts"`, `triggers.crons ["*/5 * * * *"]`; `worker.ts` fora do
+  `tsconfig`), que chama DIRETO no handler a rota interna **`POST /api/integracoes/trello/cron`** (cabeçalho `x-cron-trello` =
+  SHA-256 de `INTEGRACOES_CHAVE:cron`, comparação em tempo constante; 401 sem ele) → **`reconciliarQuadros(10)`** (por
+  quadro ligado ativo, UMA leitura dos cartões do board — só `dateLastActivity` — × os vínculos: cartão novo/alterado depois
+  da última sincronização (1 s de folga), cartão que sumiu, tarefa criada/alterada/excluída aqui e campo sem par entram na
+  fila; liga o webhook que falta) + `processarFila(10)`. Fila `campo` = **`sincronizarCampo`** (novo = cria no mesmo tipo;
+  renomeado; tipo trocado = recria; opção nova na lista = acrescenta; excluído = exclui lá). **`IndicadorTrello`** (ícone +
+  ponto do estado na `FaixaQuadro` do quadro ligado — `carregarQuadro` traz `trello` = `estadoTrello`; tocar leva a
+  Configuração → `#secao-trello`) e **"Abrir no Trello"** no "…" do detalhe da tarefa (`GET /api/tarefas/[id]` devolve
+  `trelloUrl` — `urlDoCartao`, só `https://trello.com/`).
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
