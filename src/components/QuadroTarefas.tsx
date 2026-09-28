@@ -498,8 +498,8 @@ export function QuadroTarefas({
             listas={listas}
             pessoas={pessoas}
             hoje={hoje}
-            responsavel={filtro.responsavel}
-            onResponsavel={(r) => setFiltro((f) => ({ ...f, responsavel: r }))}
+            responsavel={filtro.responsaveis.length === 1 ? filtro.responsaveis[0] : "todos"}
+            onResponsavel={(r) => setFiltro((f) => ({ ...f, responsaveis: r === "todos" ? [] : [r] }))}
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
           />
         ) : aba === "quadro" ? (

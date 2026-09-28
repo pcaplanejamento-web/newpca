@@ -1077,7 +1077,9 @@ numa lista "TEMPLATES"; criar a partir do template pelo ícone no pé da lista, 
 ✅ **Tarefas no padrão Trello — F4:** menu "…" da lista (ordenar, mover/arquivar todos os cartões, copiar e mover a lista
 para outro quadro, arquivar), quadro do mês com uma lista por dia útil (no "Novo quadro" e em Configuração → "Listas do
 mês", com os templates de outro quadro), quadros favoritos (estrela) e troca de quadro pelo nome no cabeçalho.
-🔜 **Tarefas no padrão Trello — próximas fases:** F5 etiquetas no seletor e filtros completos · F6 comentários e
+✅ **Tarefas no padrão Trello — F5:** painel "Filtrar" com vários valores (pessoas, status, prazo até amanhã/7/30 dias,
+prioridade, etiquetas e "sem etiqueta") e o seletor de etiquetas no detalhe (buscar, marcar, criar e editar).
+🔜 **Tarefas no padrão Trello — próximas fases:** F6 comentários e
 atividade num fluxo, descrição formatada e o detalhe na distribuição do Trello · F7 campos personalizados com título
 automático · F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).

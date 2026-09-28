@@ -2178,7 +2178,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     os favoritos vêm primeiro na lista de quadros. **`TrocarQuadro`**: o nome do quadro no cabeçalho abre a lista com busca
     dos quadros ativos (favoritos primeiro — `buscarDestinos`, `GET /api/tarefas/destinos`, só ao abrir) e leva ao escolhido
     na MESMA aba.
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F5…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 15 / F5 — ETIQUETAS no seletor + FILTROS completos (sem migração):** `FiltroTarefas` virou o do Trello — em cada
+    dimensão VÁRIOS valores = QUALQUER um (vazio = sem filtro): `responsaveis` ("eu" · "sem" · pessoa), `prazos`
+    (`FILTROS_PRAZO`: atrasadas · hoje · **até amanhã** · **7 dias** · **30 dias** — os "vencem em" só as abertas, de hoje em
+    diante — · sem prazo), `prioridades`, `etiquetas` (ids + "sem") e `status` (todas · não concluídas · concluídas); a busca
+    segue. Núcleo: `filtrarTarefas`, `contarFiltros` (o número do botão), `filtroDeTarefaAtivo` (o Calendário esconde a
+    previsão do PCA/agendas externas), `alternarValor`. **`FiltrosTarefas`** = busca + o botão **Filtrar** (com o número) que
+    abre o PAINEL (Pessoas com a foto e "Mostrar mais" · Status · Prazo · Prioridade · Etiquetas na cor); `semStatus`/
+    `semResponsavel`/`semBusca` para o Calendário. `ChipsFiltrosTarefas` = um chip por VALOR. O Dashboard marca a carga pela
+    pessoa quando há UMA escolhida. **`SeletorEtiquetas`** (+ **`ChipEtiqueta`**) no bloco Etiquetas do detalhe: as marcadas
+    em chips + o "+" (busca, caixas na cor, "Mostrar mais" acima de 12; editores: lápis — nome + cor da paleta — e **"Criar
+    etiqueta"**, que já a marca na tarefa; grava pelas rotas de etiqueta do quadro e o quadro recarrega).
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F6…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

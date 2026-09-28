@@ -91,7 +91,7 @@ describe("auditoria — datas e recorrência", () => {
     const hoje = "2026-09-26";
     const T = (id: number, prazo: string) => ({ id, prazo, pessoas: [], envolvidos: [], prioridade: "media" as const, etiquetas: [], concluidaEm: null, titulo: "x", ticket: id });
     const ts = [T(1, "2026-10-02"), T(2, "2026-10-03")];
-    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, prazo: "semana" }, { usuarioId: null, hoje }).map((t) => t.id), [1]);
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, prazos: ["semana"] }, { usuarioId: null, hoje }).map((t) => t.id), [1]);
   });
 
   it("kanban FILTRADO: o índice entre os visíveis vira a posição certa na lista completa", () => {

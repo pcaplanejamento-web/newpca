@@ -144,14 +144,19 @@ describe("tarefas-core", () => {
       T(4, 1, 4, { pessoas: [7], prazo: "2026-09-20", concluidaEm: "x" }),
     ];
     const f = (x: Partial<typeof FILTRO_TAREFAS_PADRAO>) => filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, ...x }, { usuarioId: 7, hoje }).map((t) => t.id);
-    assert.deepEqual(f({ responsavel: "eu" }), [1, 4]);
-    assert.deepEqual(f({ responsavel: "sem" }), [2]);
-    assert.deepEqual(f({ responsavel: 8 }), [3]);
-    assert.deepEqual(f({ prazo: "atrasadas" }), [1]);
-    assert.deepEqual(f({ prazo: "hoje" }), [2]);
-    assert.deepEqual(f({ prazo: "semana" }), [2, 3]);
-    assert.deepEqual(f({ prioridade: "alta" }), [1]);
-    assert.deepEqual(f({ etiqueta: 3 }), [1]);
+    assert.deepEqual(f({ responsaveis: ["eu"] }), [1, 4]);
+    assert.deepEqual(f({ responsaveis: ["sem"] }), [2]);
+    assert.deepEqual(f({ responsaveis: [8] }), [3]);
+    assert.deepEqual(f({ responsaveis: [8, "sem"] }), [2, 3]);
+    assert.deepEqual(f({ prazos: ["atrasadas"] }), [1]);
+    assert.deepEqual(f({ prazos: ["hoje"] }), [2]);
+    assert.deepEqual(f({ prazos: ["semana"] }), [2, 3]);
+    assert.deepEqual(f({ prazos: ["atrasadas", "hoje"] }), [1, 2]);
+    assert.deepEqual(f({ prioridades: ["alta"] }), [1]);
+    assert.deepEqual(f({ etiquetas: [3] }), [1]);
+    assert.deepEqual(f({ etiquetas: ["sem"] }), [2, 3, 4]);
+    assert.deepEqual(f({ status: "concluidas" }), [4]);
+    assert.deepEqual(f({ status: "abertas", responsaveis: ["eu"] }), [1]);
     assert.deepEqual(f({ busca: "relatorio" }), [3]);
     assert.deepEqual(f({ busca: "#2:#4" }), [2, 4]);
   });
@@ -631,8 +636,8 @@ describe("calendário por eventos", () => {
     const daEquipe = T(1, 1, 1, { pessoas: [], equipes: [10], envolvidos: [7, 8] });
     const semNinguem = T(2, 1, 2);
     const ts = [daEquipe, semNinguem];
-    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsavel: "eu" }, { usuarioId: 7, hoje }).map((t) => t.id), [1]);
-    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsavel: "sem" }, { usuarioId: 7, hoje }).map((t) => t.id), [2]);
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsaveis: ["eu"] }, { usuarioId: 7, hoje }).map((t) => t.id), [1]);
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsaveis: ["sem"] }, { usuarioId: 7, hoje }).map((t) => t.id), [2]);
     const p = painelTarefas(ts, LISTAS, hoje);
     assert.deepEqual(p.carga.map((c) => c.id).sort(), [7, 8, null].sort());
     assert.deepEqual(tarefasDoRecorte(ts, { dim: "pessoa", id: 8 } as RecorteTarefas, hoje).map((t) => t.id), [1]);

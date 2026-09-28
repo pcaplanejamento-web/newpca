@@ -6,6 +6,8 @@ import {
   conclusaoAoMover,
   estadoPrazo,
   eventosDoCalendario,
+  alternarValor,
+  contarFiltros,
   favoritosPrimeiro,
   filtrarTarefas,
   lerFavoritos,
@@ -180,5 +182,27 @@ describe("tarefas — padrão Trello", () => {
     assert.equal(criarListaSchema.parse({ nome: "L", aposId: 3 }).aposId, 3);
     assert.equal(ordenarListaSchema.safeParse({ por: "prazo" }).success, true);
     assert.equal(ordenarListaSchema.safeParse({ por: "cor" }).success, false);
+  });
+
+  it("F5 FILTRO completo: prazo até amanhã/30 dias (só abertas), vários valores = qualquer um, contagem do botão", () => {
+    const hoje = "2026-09-25";
+    const T = (id: number, o: Partial<{ prazo: string | null; concluidaEm: string | null; etiquetas: number[]; envolvidos: number[] }>) => ({
+      id,
+      ticket: id,
+      titulo: "x",
+      prioridade: "media" as const,
+      etiquetas: [] as number[],
+      envolvidos: [] as number[],
+      prazo: null as string | null,
+      concluidaEm: null as string | null,
+      ...o,
+    });
+    const ts = [T(1, { prazo: "2026-09-26" }), T(2, { prazo: "2026-10-20" }), T(3, { prazo: "2026-09-26", concluidaEm: "x" }), T(4, { prazo: "2026-11-30" })];
+    const f = (x: Partial<typeof FILTRO_TAREFAS_PADRAO>) => filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, ...x }, { usuarioId: 1, hoje }).map((t) => t.id);
+    assert.deepEqual(f({ prazos: ["dia"] }), [1]);
+    assert.deepEqual(f({ prazos: ["mes"] }), [1, 2]);
+    assert.equal(contarFiltros({ ...FILTRO_TAREFAS_PADRAO, prazos: ["dia", "mes"], status: "abertas" }), 3);
+    assert.deepEqual(alternarValor([1, 2], 2), [1]);
+    assert.deepEqual(alternarValor([1], 2), [1, 2]);
   });
 });

@@ -273,43 +273,76 @@ export function conclusaoAoMover(atual: string | null, deConcluidas: boolean, pa
 /** A lista passou do limite de cartões (WIP)? */
 export const excedeWip = (qtd: number, limite: number | null) => limite != null && limite > 0 && qtd > limite;
 
-export type FiltroPrazo = "todos" | "atrasadas" | "hoje" | "semana" | "sem";
+/** Os recortes de PRAZO do filtro (como o "Vencimento" do Trello) — vários juntos = qualquer um. */
+export const FILTROS_PRAZO = ["atrasadas", "hoje", "dia", "semana", "mes", "sem"] as const;
+export type FiltroPrazo = (typeof FILTROS_PRAZO)[number];
+export const ROTULO_FILTRO_PRAZO: Record<FiltroPrazo, string> = {
+  atrasadas: "Atrasadas",
+  hoje: "Vencem hoje",
+  dia: "Vencem até amanhã",
+  semana: "Vencem nos próximos 7 dias",
+  mes: "Vencem nos próximos 30 dias",
+  sem: "Sem prazo",
+};
+/** Uma escolha de pessoa no filtro: "eu" (as minhas), "sem" (sem responsável) ou o id de uma pessoa. */
+export type FiltroPessoa = "eu" | "sem" | number;
+export type StatusFiltro = "todas" | "abertas" | "concluidas";
+export const ROTULO_STATUS_FILTRO: Record<StatusFiltro, string> = { todas: "Todas", abertas: "Não concluídas", concluidas: "Concluídas" };
+/**
+ * O FILTRO das tarefas (o painel "Filtrar" — o do Trello): em cada dimensão, VÁRIOS valores = QUALQUER um; lista vazia =
+ * sem filtro. As dimensões se combinam (E).
+ */
 export type FiltroTarefas = {
-  /** "todos" · "eu" (as do usuário) · "sem" (sem responsável) · id de uma pessoa. */
-  responsavel: "todos" | "eu" | "sem" | number;
-  prazo: FiltroPrazo;
-  prioridade: "todas" | Prioridade;
-  etiqueta: number | null;
+  responsaveis: FiltroPessoa[];
+  prazos: FiltroPrazo[];
+  prioridades: Prioridade[];
+  /** Etiquetas (ids) e/ou "sem" (sem etiqueta). */
+  etiquetas: (number | "sem")[];
+  status: StatusFiltro;
   busca: string;
 };
-export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsavel: "todos", prazo: "todos", prioridade: "todas", etiqueta: null, busca: "" };
-export const filtroTarefasAtivo = (f: FiltroTarefas) =>
-  f.responsavel !== "todos" || f.prazo !== "todos" || f.prioridade !== "todas" || f.etiqueta != null || f.busca.trim() !== "";
+export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", busca: "" };
+/** Quantos filtros estão ligados (cada valor conta; a busca conta 1) — o número do botão "Filtrar". */
+export const contarFiltros = (f: FiltroTarefas) =>
+  f.responsaveis.length + f.prazos.length + f.prioridades.length + f.etiquetas.length + (f.status !== "todas" ? 1 : 0) + (f.busca.trim() ? 1 : 0);
+export const filtroTarefasAtivo = (f: FiltroTarefas) => contarFiltros(f) > 0;
+/** O filtro de TAREFA está ligado (fora a busca) — o Calendário esconde a previsão do PCA/agendas externas. */
+export const filtroDeTarefaAtivo = (f: FiltroTarefas) => filtroTarefasAtivo({ ...f, busca: "" });
+/** Liga/desliga UM valor numa lista do filtro. */
+export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v]);
 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
 export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & { template?: boolean };
 
-/** Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). */
+/** O cartão cai no recorte de prazo? (atrasadas/hoje pelo semáforo; os "vencem em" contam só as abertas, de hoje em diante). */
+function casaPrazo(t: TarefaFiltravel, p: FiltroPrazo, hoje: string): boolean {
+  if (p === "sem") return !dataValida(t.prazo);
+  if (!dataValida(t.prazo)) return false;
+  const e = estadoPrazo(t.prazo, hoje, t.concluidaEm != null);
+  if (p === "atrasadas") return e === "atrasada";
+  if (p === "hoje") return e === "hoje";
+  const dias = p === "dia" ? 1 : p === "semana" ? 6 : 29;
+  return t.concluidaEm == null && t.prazo >= hoje && t.prazo <= somarDias(hoje, dias);
+}
+
+/**
+ * Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). Pessoas pelos ENVOLVIDOS
+ * (responsáveis + equipes).
+ */
 export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): T[] {
   const casa = predicadoBusca(f.busca);
-  // "Próximos 7 dias" = hoje + os 6 seguintes.
-  const fimSemana = somarDias(ctx.hoje, 6);
   const ativo = filtroTarefasAtivo(f);
   return tarefas.filter((t) => {
     // O TEMPLATE só aparece sem filtro (não é trabalho de ninguém).
     if (t.template && ativo) return false;
     const quem = t.envolvidos;
-    if (f.responsavel === "eu" ? ctx.usuarioId == null || !quem.includes(ctx.usuarioId) : f.responsavel === "sem" ? quem.length > 0 : f.responsavel !== "todos" && !quem.includes(f.responsavel))
+    if (f.responsaveis.length && !f.responsaveis.some((r) => (r === "eu" ? ctx.usuarioId != null && quem.includes(ctx.usuarioId) : r === "sem" ? quem.length === 0 : quem.includes(r))))
       return false;
-    if (f.prioridade !== "todas" && t.prioridade !== f.prioridade) return false;
-    if (f.etiqueta != null && !t.etiquetas.includes(f.etiqueta)) return false;
-    if (f.prazo !== "todos") {
-      const e = estadoPrazo(t.prazo, ctx.hoje, t.concluidaEm != null);
-      if (f.prazo === "sem" && e !== "sem") return false;
-      if (f.prazo === "atrasadas" && e !== "atrasada") return false;
-      if (f.prazo === "hoje" && e !== "hoje") return false;
-      if (f.prazo === "semana" && (t.concluidaEm != null || !dataValida(t.prazo) || t.prazo < ctx.hoje || t.prazo > fimSemana)) return false;
-    }
+    if (f.prioridades.length && !f.prioridades.includes(t.prioridade)) return false;
+    if (f.etiquetas.length && !f.etiquetas.some((e) => (e === "sem" ? t.etiquetas.length === 0 : t.etiquetas.includes(e)))) return false;
+    if (f.status === "abertas" && t.concluidaEm != null) return false;
+    if (f.status === "concluidas" && t.concluidaEm == null) return false;
+    if (f.prazos.length && !f.prazos.some((p) => casaPrazo(t, p, ctx.hoje))) return false;
     return !casa || casa([t.titulo, rotuloTicket(t.ticket), String(t.ticket)]);
   });
 }

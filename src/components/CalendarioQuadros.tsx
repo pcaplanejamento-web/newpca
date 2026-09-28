@@ -31,6 +31,7 @@ import {
   eventosDoCalendario,
   eventoVisivel,
   FILTRO_TAREFAS_PADRAO,
+  filtroDeTarefaAtivo,
   type FiltroTarefas,
   filtrarTarefas,
   horaDeMinutos,
@@ -213,11 +214,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   /** As AGENDAS EXTERNAS (.ics assinados) — carregadas depois da tela, no intervalo à vista. */
   const externas = useAgendasExternas(de, ate);
   const [gerirExternas, setGerirExternas] = useState(false);
-  const filtrando =
-    filtro.responsavel !== FILTRO_TAREFAS_PADRAO.responsavel ||
-    filtro.prazo !== FILTRO_TAREFAS_PADRAO.prazo ||
-    filtro.prioridade !== FILTRO_TAREFAS_PADRAO.prioridade ||
-    filtro.etiqueta !== FILTRO_TAREFAS_PADRAO.etiqueta;
+  const filtrando = filtroDeTarefaAtivo(filtro);
 
   // Os eventos do período: as tarefas passam pelos filtros da lateral; a PREVISÃO do PCA só quando nenhum filtro de
   // TAREFA está ligado (responsável/prazo/prioridade/etiqueta não se aplicam a um DFD). A busca vale em todos.
@@ -658,7 +655,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
             <div className="space-y-2">
               <BuscaCalendario valor={filtro.busca} onChange={(busca) => setFiltro({ ...filtro, busca })} hoje={dados.hoje} corQuadro={(id) => porQuadro.get(id)?.cor} onEscolher={irParaResultado} />
               <div className="flex flex-wrap items-center gap-1.5">
-                <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca semResponsavel />
+                <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca semResponsavel semStatus />
               </div>
               <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={dados.pessoas} etiquetas={etiquetas} usuarioId={usuarioId} semBusca />
             </div>

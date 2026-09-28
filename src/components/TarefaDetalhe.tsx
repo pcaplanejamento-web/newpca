@@ -53,6 +53,7 @@ import { DatasTarefa } from "./DatasTarefa";
 import { Modal, type ModalPainel } from "./Modal";
 import { RecorrenciaTarefa } from "./RecorrenciaTarefa";
 import { Segmented } from "./Segmented";
+import { SeletorEtiquetas } from "./SeletorEtiquetas";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
 import { VinculoTarefa } from "./VinculoTarefa";
@@ -554,11 +555,7 @@ export function TarefaDetalhe({
           </div>
         );
       case "etiquetas":
-        return etiquetas.length ? (
-          <ChipsAlternar itens={etiquetas} marcados={r.etiquetas} onChange={(v) => set("etiquetas", v)} rotulo="Etiqueta" />
-        ) : (
-          <p className="text-[12.5px] text-muted">O quadro ainda não tem etiquetas — crie na aba Configuração.</p>
-        );
+        return <SeletorEtiquetas etiquetas={etiquetas} marcados={r.etiquetas} onChange={(v) => set("etiquetas", v)} quadroId={quadroId} podeEditar={podeExcluir} onMudouEtiquetas={onSalvo} />;
       case "vinculo":
         return <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />;
       case "estimativa":
