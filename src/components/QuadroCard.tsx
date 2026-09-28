@@ -16,12 +16,21 @@ import { IconLock, IconPlus } from "./icons";
  * A CAPA 16:9 de um quadro (dentro do card, como no Trello): a imagem de fundo (com o enquadramento), o degradê, ou — sem
  * nenhum — a superfície do sistema com a cor do quadro num traço. `children` = o que vai por cima (selos).
  */
-export function CapaQuadro({ quadro: q, children }: { quadro: Pick<QuadroCardDados, "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente">; children?: ReactNode }) {
+export function CapaQuadro({
+  quadro: q,
+  semRaio = false,
+  children,
+}: {
+  quadro: Pick<QuadroCardDados, "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente">;
+  /** Sem os cantos arredondados (a capa encostada no topo de uma miniatura — o "Mudar de quadros"). */
+  semRaio?: boolean;
+  children?: ReactNode;
+}) {
   const [falhou, setFalhou] = useState(false);
   const g = lerGradiente(q.fundoGradiente);
   const imagem = q.fundoUrl && !falhou ? q.fundoUrl : null;
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface-2" style={!imagem && g ? { background: cssGradiente(g) } : undefined}>
+    <div className={`relative aspect-video w-full overflow-hidden bg-surface-2 ${semRaio ? "" : "rounded-lg"}`} style={!imagem && g ? { background: cssGradiente(g) } : undefined}>
       {imagem && (
         // biome-ignore lint/performance/noImgElement: imagem externa por link (não passa pelo otimizador).
         <img alt="" src={imagem} loading="lazy" referrerPolicy="no-referrer" onError={() => setFalhou(true)} className="h-full w-full object-cover transition-transform duration-[var(--motion-duration)] group-hover:scale-[1.03]" style={estiloFundo(lerAjusteFundo(q.fundoAjuste))} />

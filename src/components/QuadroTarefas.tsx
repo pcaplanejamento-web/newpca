@@ -54,7 +54,7 @@ import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./Men
 import { useConfirmacao } from "./Confirmacao";
 import { EstrelaFavorito, useFavoritosQuadros } from "./FavoritosQuadros";
 import { QuadroKanban } from "./QuadroKanban";
-import { TrocarQuadro } from "./TrocarQuadro";
+import { registrarQuadroRecente, TrocarQuadro } from "./TrocarQuadro";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
@@ -128,6 +128,8 @@ export function QuadroTarefas({
     [listasDoServidor, ordemListas],
   );
   const [verArquivados, setVerArquivados] = useState(false);
+  // O "Mudar de quadros" mostra os RECENTES deste aparelho.
+  useEffect(() => registrarQuadroRecente(quadro.id), [quadro.id]);
   // A vista (a pílula) e o lugar das ferramentas da vista (na faixa do topo).
   const { aba: abaAtual, trocar: trocarAba } = useTrocaAba(aba);
   const [slot, setSlot] = useState<HTMLElement | null>(null);

@@ -1111,6 +1111,8 @@ proporção ideal indicada (16:9, ≥ 1920×1080) e fotos sugeridas; cartões co
 ✅ **Tarefas — fundo por foto/degradê e quadro privado:** seletor de fundo como o do Trello (fotos com pesquisa — Unsplash
 com a chave —, degradês em círculos, degradê próprio e "Sem fundo" = padrão do sistema) no Novo quadro e na
 Configuração; cards dos quadros com a capa 16:9; quadros privados (só quem criou vê).
+✅ **Tarefas — "Mudar de quadros" como o do Trello:** busca, chips por grupo, Favoritos, Recentes e grupos recolhíveis,
+em miniaturas com a capa 16:9 de cada quadro.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

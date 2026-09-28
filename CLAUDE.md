@@ -2175,9 +2175,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`CamposPeriodo`** (`QuadroCard.tsx`). **Favoritos** (preferência `tarefas:favoritos` → `{ids}`, `lerFavoritos`/
     `favoritosPrimeiro`; `favoritosDaPessoa` em `carregarQuadros`/`carregarQuadro`): **`EstrelaFavorito`** no `QuadroCard`
     (fora do link, no canto) e no cabeçalho do quadro, hook **`useFavoritosQuadros`** (otimista, em fila; falha volta);
-    os favoritos vêm primeiro na lista de quadros. **`TrocarQuadro`**: o nome do quadro no cabeçalho abre a lista com busca
-    dos quadros ativos (favoritos primeiro — `buscarDestinos`, `GET /api/tarefas/destinos`, só ao abrir) e leva ao escolhido
-    na MESMA aba.
+    os favoritos vêm primeiro na lista de quadros. **`TrocarQuadro`** ("Mudar de quadros" — ver o bullet do painel no
+    padrão Trello abaixo) leva ao escolhido na MESMA aba.
   - **FASE 15 / F5 — ETIQUETAS no seletor + FILTROS completos (sem migração):** `FiltroTarefas` virou o do Trello — em cada
     dimensão VÁRIOS valores = QUALQUER um (vazio = sem filtro): `responsaveis` ("eu" · "sem" · pessoa), `prazos`
     (`FILTROS_PRAZO`: atrasadas · hoje · **até amanhã** · **7 dias** · **30 dias** — os "vencem em" só as abertas, de hoje em
@@ -2365,6 +2364,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       busca do calendário, `.ics`, "Tarefas" da Mesa), `buscarVinculos` (tarefa), `tarefasDoVinculo`, `destinosDeTarefa` e
       os avisos derivados do sino. "Quadro privado" no Novo quadro; na Configuração, só o DONO liga/desliga (403 aos
       demais). Cadeado na capa do card e na faixa do quadro. Criar quadro segue só para editores.
+  - **"MUDAR DE QUADROS" no padrão do Trello (sem migração):** o **`TrocarQuadro`** (o item da `PilulaVistas`) abre um
+    `Modal` (bottom-sheet no celular) com o **`PainelQuadros`**: `SearchField` "Pesquisar seus quadros" (nome ou grupo —
+    `predicadoBusca`), **`ChipsEscolha`** por GRUPO (Tudo · grupo…; só com 2+ grupos — o componente novo de chips de
+    escolha que QUEBRAM linha, também usado nas pesquisas sugeridas do `SeletorFundo`), as seções **Favoritos** e
+    **Recentes** (os abertos por último NESTE aparelho — `registrarQuadroRecente`, chamado pelo espaço do quadro;
+    `localStorage` `tarefas:quadros-recentes`, até 8) e cada GRUPO recolhível (um grupo só, ou o escolhido nos chips, já
+    abre). Tudo em MINIATURAS (`MiniaturaQuadro`: a **`CapaQuadro semRaio`** 16:9 — imagem com enquadramento, degradê ou a
+    superfície — + o nome; cadeado no privado; o atual marcado com ✓). `destinosDeTarefa` passou a trazer o fundo
+    (`fundoUrl`/`fundoAjuste`/`fundoGradiente`) e o `privado` (`DestinoCopia`); os quadros vêm só ao abrir. Saíram o
+    `Dropdown` + `SeletorBusca` do trocar de quadro.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

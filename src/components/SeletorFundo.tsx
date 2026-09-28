@@ -4,6 +4,7 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import { ANGULOS_GRADIENTE, cssGradiente, type FotoFundo, type FundoEscolha, type Gradiente, GRADIENTES_PADRAO, mesmoGradiente, PESQUISAS_SUGERIDAS } from "@/lib/imagem-fundo-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { Button } from "./Button";
+import { ChipsEscolha } from "./ChipsEscolha";
 import { ColorField } from "./ColorField";
 import { SearchField } from "./Field";
 import { IconCheck, IconChevronLeft, IconMais, IconNenhum, IconPlus } from "./icons";
@@ -171,13 +172,7 @@ export function SeletorFundo({ valor, onChange, disabled = false, previa = true 
         {!busca && (
           <div>
             <p className="mb-1.5 text-[12.5px] font-semibold text-muted">Pesquisas sugeridas</p>
-            <div className="flex flex-wrap gap-1.5">
-              {PESQUISAS_SUGERIDAS.map((s) => (
-                <button key={s} type="button" onClick={() => setBusca(s)} className="min-h-11 rounded-control border border-border-2 px-3 text-[13px] text-text-2 hover:bg-surface-2 lg:min-h-8">
-                  {s}
-                </button>
-              ))}
-            </div>
+            <ChipsEscolha ariaLabel="Pesquisas sugeridas" opcoes={PESQUISAS_SUGERIDAS.map((p) => ({ value: p, label: p }))} onEscolher={setBusca} />
           </div>
         )}
         <p className="text-[12.5px] font-semibold text-muted">{busca ? `Resultados para “${busca}”` : "Principais fotos"}</p>
