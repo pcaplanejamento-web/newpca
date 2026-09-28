@@ -104,6 +104,7 @@ import {
   Code,
   Hourglass,
   AlignLeft,
+  SquarePlus,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -184,6 +185,8 @@ export function IconSpinner({ className, ...props }: LucideProps) {
   return <Loader2 {...props} className={`animate-spin ${className ?? ""}`} />;
 }
 export const IconKanban = SquareKanban;
+/** Cartão com "+" (criar a partir de TEMPLATE — o ícone do pé da lista, como no Trello). */
+export const IconCartaoMais = SquarePlus;
 export const IconArquivar = Archive;
 export const IconDesarquivar = ArchiveRestore;
 export const IconEtiqueta = Tag;

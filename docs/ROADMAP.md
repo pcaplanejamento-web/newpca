@@ -1102,6 +1102,9 @@ fundo por LINK — imagem ou pin do Pinterest, sem enviar arquivo (migração `0
 ✅ **Tarefas — visual do Trello:** cartões com etiquetas cheias, prazo/checklist em selo e, com o mouse, contorno + círculo +
 editar/duplicar; listas arrastáveis pelo cabeçalho; nomes do quadro e da lista editáveis com um clique; botão "Arquivados"
 (cartões e listas — restaurar/excluir).
+✅ **Tarefas — quadro no padrão do Trello:** moldura arredondada com a imagem nítida, faixa translúcida no topo (título
+inteiro, fotos dos membros, filtro e menu "…"), listas e painéis opacos e a pílula de vistas flutuante no rodapé (com
+"Mudar de quadros"); cartões mais limpos e a paleta de etiquetas do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

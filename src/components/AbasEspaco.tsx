@@ -21,6 +21,44 @@ export function FerramentasAba({ children }: { children: ReactNode }) {
 }
 
 /**
+ * A TROCA DE ABA de um espaço (a mesma do `AbasEspaco` e da pílula de vistas do quadro): a aba pedida (clique) vale até o
+ * servidor devolvê-la (`?aba=`); depois, a do servidor (voltar/avançar do navegador seguem a aba do servidor).
+ */
+export function useTrocaAba<T extends string>(abaServidor: T) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const [pedida, setPedida] = useState<T | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera a pendência quando a aba do SERVIDOR muda.
+  useEffect(() => setPedida(null), [abaServidor]);
+  const aba = pedida ?? abaServidor;
+  const trocar = (a: T) => {
+    if (a === aba) return;
+    setPedida(a);
+    const p = new URLSearchParams(sp.toString());
+    p.set("aba", a);
+    router.push(`${pathname}?${p.toString()}`, { scroll: false });
+  };
+  return { aba, trocar };
+}
+
+/** O CONTEÚDO da aba (com o morph) — ou o esqueleto até a aba pedida chegar; `slot` = onde vão as `FerramentasAba`. */
+export function ConteudoAba({ aba, abaServidor, slot, children }: { aba: string; abaServidor: string; slot: HTMLElement | null; children: ReactNode }) {
+  return aba === abaServidor ? (
+    <SlotFerramentas.Provider value={slot}>
+      <div key={aba} className="animate-cat-morph">
+        {children}
+      </div>
+    </SlotFerramentas.Provider>
+  ) : (
+    <div className="space-y-[var(--gap-block)]" aria-busy="true">
+      <Skeleton className="h-24 w-full" />
+      <SkeletonLinhas linhas={8} />
+    </div>
+  );
+}
+
+/**
  * ABAS de um ESPAÇO (PCA, Orçamento…): UMA barra (as abas à esquerda; à direita, as `FerramentasAba` da aba ativa) +
  * o conteúdo da aba no MESMO espaço, com o morph. O servidor monta SÓ a aba ativa (`?aba=`): trocar de aba navega e,
  * até ela chegar, mostra o esqueleto (voltar/avançar do navegador seguem a aba do servidor).
@@ -36,42 +74,17 @@ export function AbasEspaco<T extends string>({
   opcoes: { value: T; label: string; curto?: string }[];
   children: ReactNode;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const sp = useSearchParams();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  // A aba pedida (clique) até o servidor devolvê-la; depois vale a do servidor.
-  const [pedida, setPedida] = useState<T | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: zera a pendência quando a aba do SERVIDOR muda.
-  useEffect(() => setPedida(null), [abaServidor]);
-  const aba = pedida ?? abaServidor;
-
-  const trocarAba = (a: T) => {
-    if (a === aba) return;
-    setPedida(a);
-    const p = new URLSearchParams(sp.toString());
-    p.set("aba", a);
-    router.push(`${pathname}?${p.toString()}`, { scroll: false });
-  };
-
+  const { aba, trocar } = useTrocaAba(abaServidor);
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented<T> value={aba} onChange={trocarAba} options={opcoes} />
+        <Segmented<T> value={aba} onChange={trocar} options={opcoes} />
         <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
       </div>
-      {aba === abaServidor ? (
-        <SlotFerramentas.Provider value={slot}>
-          <div key={aba} className="animate-cat-morph">
-            {children}
-          </div>
-        </SlotFerramentas.Provider>
-      ) : (
-        <div className="space-y-[var(--gap-block)]" aria-busy="true">
-          <Skeleton className="h-24 w-full" />
-          <SkeletonLinhas linhas={8} />
-        </div>
-      )}
+      <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot}>
+        {children}
+      </ConteudoAba>
     </>
   );
 }

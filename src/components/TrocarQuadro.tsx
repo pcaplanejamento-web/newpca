@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { favoritosPrimeiro } from "@/lib/tarefas-core";
 import { buscarDestinos, type DestinoCopia } from "./CopiarMoverTarefa";
 import { Dropdown } from "./Dropdown";
@@ -11,25 +11,32 @@ import { Skeleton } from "./Skeleton";
 import { toast } from "./Toast";
 
 /**
- * TROCAR DE QUADRO (como o do Trello): o nome é o gatilho — ou só a SETA (`soSeta`, quando o nome é editável no lugar ao
- * lado); abre a lista com BUSCA dos quadros
+ * TROCAR DE QUADRO (como o do Trello): o nome é o gatilho — ou outro (`gatilho`: o "Mudar de quadros" da pílula de
+ * vistas); abre a lista com BUSCA dos quadros
  * ativos que a pessoa vê — os FAVORITOS primeiro (marcados) — e escolher leva ao quadro na MESMA aba. Os quadros vêm só
  * ao abrir.
  */
-export function TrocarQuadro({ quadro, aba, favoritos, soSeta = false }: { quadro: { id: number; nome: string; cor: string }; aba: string; favoritos: number[]; soSeta?: boolean }) {
+export function TrocarQuadro({
+  quadro,
+  aba,
+  favoritos,
+  gatilho,
+  triggerClassName,
+}: {
+  quadro: { id: number; nome: string; cor: string };
+  aba: string;
+  favoritos: number[];
+  /** Outro gatilho (ex.: "Mudar de quadros" na pílula de vistas). Ausente = o nome do quadro. */
+  gatilho?: ReactNode;
+  triggerClassName?: string;
+}) {
   return (
     <Dropdown
       width={320}
       ariaLabel={`Trocar de quadro — atual: ${quadro.nome}`}
-      triggerClassName={
-        soSeta
-          ? "h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-          : "min-h-11 min-w-0 gap-1.5 rounded-control px-1.5 hover:bg-surface-2 lg:min-h-[var(--h-control-sm)]"
-      }
+      triggerClassName={triggerClassName ?? "min-h-11 min-w-0 gap-1.5 rounded-control px-1.5 hover:bg-surface-2 lg:min-h-[var(--h-control-sm)]"}
       trigger={
-        soSeta ? (
-          <IconChevronDown className="h-4 w-4" />
-        ) : (
+        gatilho ?? (
           <>
             <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: quadro.cor }} />
             <span className="min-w-0 truncate text-lg font-bold text-text" title={quadro.nome}>

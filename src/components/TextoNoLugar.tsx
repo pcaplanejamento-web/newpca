@@ -14,6 +14,7 @@ export function TextoNoLugar({
   ariaLabel,
   maxLength = 60,
   className = "",
+  ajustar = false,
 }: {
   valor: string;
   onSalvar?: (novo: string) => Promise<boolean>;
@@ -22,7 +23,10 @@ export function TextoNoLugar({
   maxLength?: number;
   /** A tipografia (a mesma no texto e no campo). */
   className?: string;
+  /** Na LARGURA DO TEXTO (o título do quadro) em vez da largura toda — trunca só no limite do pai. */
+  ajustar?: boolean;
 }) {
+  const largura = ajustar ? "inline-block max-w-full align-middle" : "block w-full";
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(valor);
   const [gravando, setGravando] = useState(false);
@@ -84,7 +88,7 @@ export function TextoNoLugar({
           }
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        className={`-mx-1.5 min-h-11 w-full min-w-0 rounded-control border-2 border-accent bg-surface px-1.5 outline-none lg:min-h-8 ${className}`}
+        className={`-mx-1.5 min-h-11 ${ajustar ? "w-[min(100%,32rem)]" : "w-full"} min-w-0 rounded-control border-2 border-accent bg-surface px-1.5 outline-none lg:min-h-8 ${className}`}
       />
     );
   return (
@@ -96,7 +100,7 @@ export function TextoNoLugar({
         feito.current = false;
         setEditando(true);
       }}
-      className={`-mx-1.5 block min-h-11 w-full min-w-0 truncate rounded-control px-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 lg:min-h-8 ${className}`}
+      className={`-mx-1.5 min-h-11 ${largura} min-w-0 truncate rounded-control px-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 lg:min-h-8 ${className}`}
     >
       {valor}
     </button>

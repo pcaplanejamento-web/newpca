@@ -4,7 +4,7 @@ import { textoSobre } from "@/lib/color";
 import { useMemo, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import { alternarValor, type EtiquetaTarefa } from "@/lib/tarefas-core";
+import { alternarValor, corEtiquetaSugerida, type EtiquetaTarefa, PALETA_ETIQUETAS } from "@/lib/tarefas-core";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField, TextField } from "./Field";
@@ -12,7 +12,6 @@ import { IconPencil, IconPlus } from "./icons";
 import { toast } from "./Toast";
 
 /** As CORES sugeridas para uma etiqueta (dados — a etiqueta guarda a cor escolhida). */
-const CORES_ETIQUETA = ["#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#9333ea", "#2563eb", "#0891b2", "#65a30d", "#db2777", "#64748b"];
 /** Quantas etiquetas aparecem antes do "Mostrar mais". */
 const VISIVEIS = 12;
 
@@ -124,14 +123,14 @@ function PainelEtiquetas({
         <fieldset>
           <legend className="mb-1 text-[12px] font-semibold text-muted">Cor</legend>
           <div className="grid grid-cols-5 gap-1.5">
-            {CORES_ETIQUETA.map((c) => (
+            {PALETA_ETIQUETAS.map((c) => (
               <button
                 key={c}
                 type="button"
                 aria-label={`Cor ${c}`}
                 aria-pressed={edicao.cor === c}
                 onClick={() => setEdicao({ ...edicao, cor: c })}
-                className="h-9 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="h-8 rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 style={{ background: c, boxShadow: edicao.cor === c ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
               />
             ))}
@@ -177,7 +176,7 @@ function PainelEtiquetas({
         </Button>
       )}
       {podeEditar && (
-        <Button variant="secondary" size="sm" className="w-full" icon={<IconPlus className="h-4 w-4" />} onClick={() => setEdicao({ id: null, nome: busca.trim(), cor: CORES_ETIQUETA[etiquetas.length % CORES_ETIQUETA.length] })}>
+        <Button variant="secondary" size="sm" className="w-full" icon={<IconPlus className="h-4 w-4" />} onClick={() => setEdicao({ id: null, nome: busca.trim(), cor: corEtiquetaSugerida(etiquetas.length) })}>
           Criar etiqueta
         </Button>
       )}

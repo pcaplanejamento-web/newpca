@@ -67,7 +67,7 @@ export function useEtiquetasComNome(): [boolean, () => void] {
  * CARTÃO de uma tarefa no quadro (no visual do Trello): as ETIQUETAS cheias na cor com o nome (tocar alterna para faixas
  * em todos os cartões — `useEtiquetasComNome`), o selo "Este cartão é um template.", o título e, na base, o PRAZO em selo
  * (concluída = verde cheio; atrasada = vermelho; vence = âmbar), a prioridade, os ícones (descrição, checklist — verde
- * cheio quando completo —, comentários, eventos, notas, links, vínculos), o nº do ticket e as FOTOS. Com o MOUSE sobre o
+ * cheio quando completo —, comentários, eventos, notas, links, vínculos) e as FOTOS — o nº do ticket fica só na dica e no detalhe (a face do cartão é limpa, como no Trello). Com o MOUSE sobre o
  * cartão aparecem o CONTORNO de seleção, o CÍRCULO de concluir (o título abre espaço) e os botões EDITAR e DUPLICAR
  * (`onDuplicar`); no toque ficam à vista o círculo, a ALÇA e o menu `acoes`. O cartão todo abre o detalhe; o mouse/caneta
  * arrasta o próprio cartão.
@@ -134,7 +134,8 @@ export function CartaoTarefa({
     <article
       data-cartao={t.id}
       onPointerDown={(e) => e.pointerType !== "touch" && onPegar?.(e)}
-      className={`group/cartao relative shrink-0 rounded-[10px] bg-surface p-2.5 shadow-ring ${onPegar ? "lg:cursor-grab" : ""} ${oculto ? "hidden" : ""}`}
+      title={`${rotuloTicket(t.ticket)} ${t.titulo}`}
+      className={`group/cartao relative shrink-0 rounded-lg bg-surface px-3 py-2 shadow-[var(--sombra-cartao)] ${onPegar ? "lg:cursor-grab" : ""} ${oculto ? "hidden" : ""}`}
     >
       {/* A camada que ABRE o cartão — e o CONTORNO de seleção (só com o mouse sobre o cartão ou no foco). */}
       <button
@@ -142,7 +143,7 @@ export function CartaoTarefa({
         onClick={onAbrir}
         onKeyDown={tecla}
         aria-label={`${rotuloTicket(t.ticket)} ${t.titulo}${onTeclaMover ? " — Alt + setas move o cartão" : ""}`}
-        className="absolute inset-0 rounded-[10px] transition-shadow duration-[var(--motion-duration)] group-hover/cartao:ring-2 group-hover/cartao:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="absolute inset-0 rounded-lg transition-shadow duration-[var(--motion-duration)] group-hover/cartao:ring-2 group-hover/cartao:ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
       {/* Com o mouse sobre o cartão: EDITAR (abre) e DUPLICAR — no toque, o menu "⋯". */}
       {(onAbrir || onDuplicar) && (
@@ -208,7 +209,7 @@ export function CartaoTarefa({
           <ChipsCamposCartao campos={campos} valores={t.campos} />
         </span>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px] text-muted">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px] text-muted empty:hidden">
         {t.prazo && (
           <span
             className="pointer-events-none inline-flex items-center gap-1 rounded-[4px] py-0.5 font-medium tabular-nums"
@@ -274,9 +275,6 @@ export function CartaoTarefa({
             {t.vinculos.length > 1 && t.vinculos.length}
           </span>
         )}
-        <span className="pointer-events-none font-mono text-[11px] text-faint tabular-nums" title="Nº do ticket">
-          {rotuloTicket(t.ticket)}
-        </span>
         {resp.length > 0 && (
           <span className="pointer-events-none ml-auto flex -space-x-1.5" title={resp.map((p) => nomeExibicao(p)).join(", ")}>
             {resp.slice(0, MAX_AVATARES).map((p) => (

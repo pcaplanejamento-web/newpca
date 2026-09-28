@@ -9,8 +9,8 @@ import { TextField } from "./Field";
 import { IconImage, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
-/** A imagem carregou? (`null` = ainda carregando; sem link = `false`). */
-function useImagemCarrega(url: string | null): boolean | null {
+/** A imagem carregou? (`null` = ainda carregando; sem link = `false`). A moldura do quadro só a mostra depois. */
+export function useImagemCarrega(url: string | null): boolean | null {
   const [ok, setOk] = useState<boolean | null>(url ? null : false);
   useEffect(() => {
     if (!url) return setOk(false);
@@ -26,22 +26,6 @@ function useImagemCarrega(url: string | null): boolean | null {
     };
   }, [url]);
   return ok;
-}
-
-/**
- * O FUNDO do quadro (a imagem escolhida na Configuração): uma camada atrás do conteúdo, cobrindo a área do quadro até a
- * margem do display (o host é `relative isolate` — a camada fica ATRÁS do conteúdo dele), com um VÉU na cor do tema por cima (o texto do cabeçalho continua legível no claro e no escuro).
- * Só aparece depois que a imagem carrega — se o site de origem bloquear, o quadro fica como sempre.
- */
-export function FundoDoQuadro({ url }: { url: string | null }) {
-  const ok = useImagemCarrega(url);
-  if (!url || !ok) return null;
-  return (
-    <div aria-hidden className="pointer-events-none absolute -inset-[var(--pad-canvas)] -z-10 overflow-hidden animate-fade-in-up">
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: urlFundoCss(url) }} />
-      <div className="absolute inset-0" style={{ background: "color-mix(in srgb, var(--bg) 45%, transparent)" }} />
-    </div>
-  );
 }
 
 /**

@@ -41,6 +41,8 @@ export function QuadroKanban({
   onNovaLista,
   onMoverLista,
   onRenomearLista,
+  naMoldura = false,
+  reservaInferior = 0,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -74,9 +76,13 @@ export function QuadroKanban({
   onMoverLista?: (id: number, indice: number) => void;
   /** Renomeia a lista NO LUGAR (clique no nome); ausente = só leitura. */
   onRenomearLista?: (id: number, nome: string) => Promise<boolean>;
+  /** Dentro da MOLDURA do quadro (sem a margem negativa da página; respiro próprio e a rolagem fina). */
+  naMoldura?: boolean;
+  /** Espaço (px) a deixar embaixo — a pílula de vistas da moldura. */
+  reservaInferior?: number;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
-  const altura = useAlturaAteOFim(rolo, true);
+  const altura = useAlturaAteOFim(rolo, true, reservaInferior);
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoCartoes({ quadro: rolo, onMover });
   const arrastoL = useArrastoListas({ quadro: rolo, onMover: onMoverLista });
   const presaL = arrastoL.arrasto ? listas.find((l) => l.id === arrastoL.arrasto?.id) : undefined;
@@ -208,7 +214,7 @@ export function QuadroKanban({
   return (
     <>
     {listas.length + (onNovaLista ? 1 : 0) > 1 && (
-      <nav aria-label="Colunas do quadro" className="-mt-1 flex gap-1.5 overflow-x-auto lg:hidden">
+      <nav aria-label="Colunas do quadro" className={`flex gap-1.5 overflow-x-auto lg:hidden ${naMoldura ? "px-3 pt-3" : "-mt-1"}`}>
         {listas.map((l, i) => (
           <button
             key={l.id}
@@ -239,8 +245,10 @@ export function QuadroKanban({
     <div
       ref={rolo}
       suppressHydrationWarning
-      style={altura ? { height: altura } : undefined}
-      className="-mx-[var(--pad-canvas)] flex items-start snap-x snap-mandatory gap-[var(--gap-block)] overflow-x-auto px-[var(--pad-canvas)] pb-2 lg:snap-none"
+      style={altura ? { height: altura } : naMoldura ? { paddingBottom: reservaInferior } : undefined}
+      className={`flex items-start snap-x snap-mandatory overflow-x-auto lg:snap-none ${
+        naMoldura ? "rolagem-fina gap-3 px-3 pt-3 pb-2" : "-mx-[var(--pad-canvas)] gap-[var(--gap-block)] px-[var(--pad-canvas)] pb-2"
+      }`}
     >
       <AlturaNoHtml />
       {(() => {
@@ -319,9 +327,9 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
     }
   };
   return (
-    <div ref={caixa} data-lista="nova" className="w-[min(85vw,17.5rem)] shrink-0 snap-center lg:w-[17.5rem]">
+    <div ref={caixa} data-lista="nova" className="w-[min(85vw,17rem)] shrink-0 snap-center lg:w-[17rem]">
       {aberta ? (
-        <div className="space-y-2 rounded-card border border-border bg-surface-2 p-2">
+        <div className="space-y-2 rounded-xl bg-[var(--lista-quadro)] p-2 shadow-[var(--sombra-cartao)]">
           <input
             // biome-ignore lint/a11y/noAutofocus: abre para digitar depois do toque em "Adicionar outra lista".
             autoFocus
@@ -350,7 +358,7 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
         <button
           type="button"
           onClick={() => setAberta(true)}
-          className="flex min-h-11 w-full items-center gap-2 rounded-card bg-surface-2/60 px-3 py-2.5 text-left text-[13px] font-semibold text-text-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--lista-quadro)_70%,transparent)] px-3 py-2.5 text-left text-[14px] font-semibold text-text-2 backdrop-blur-sm transition-colors hover:bg-[var(--lista-quadro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 group-data-[com-imagem]/moldura:bg-white/25 group-data-[com-imagem]/moldura:text-white group-data-[com-imagem]/moldura:hover:bg-white/35"
         >
           <IconPlus className="h-4 w-4" />
           Adicionar outra lista
@@ -395,7 +403,7 @@ export function ColunaTarefas({
     <section
       data-lista={l.id}
       aria-label={`Lista ${l.nome}`}
-      className={`flex w-[min(85vw,17.5rem)] shrink-0 snap-center flex-col rounded-xl bg-surface-2 shadow-ring lg:max-h-full lg:w-[17.5rem] ${oculto ? "hidden" : ""}`}
+      className={`flex w-[min(85vw,17rem)] shrink-0 snap-center flex-col rounded-xl bg-[var(--lista-quadro)] shadow-[var(--sombra-cartao)] lg:max-h-full lg:w-[17rem] ${oculto ? "hidden" : ""}`}
     >
       <header
         onPointerDown={(e) => {

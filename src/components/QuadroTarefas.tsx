@@ -17,6 +17,7 @@ import {
   FILTRO_TAREFAS_PADRAO,
   type FiltroTarefas,
   filtrarTarefas,
+  contarFiltros,
   moverCartao,
   contadoresCalendario,
   type EventoCalendario,
@@ -31,7 +32,7 @@ import {
   vizinhos,
 } from "@/lib/tarefas-core";
 import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
-import { AbasEspaco, FerramentasAba } from "./AbasEspaco";
+import { ConteudoAba, FerramentasAba, useTrocaAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
 import { BarraSelecao } from "./BarraSelecao";
@@ -39,14 +40,14 @@ import { Button } from "./Button";
 import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalendario, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
-import { FundoDoQuadro } from "./FundoQuadro";
+import { FaixaQuadro, MembrosQuadro, MenuQuadro, MolduraQuadro, PainelMoldura, PilulaVistas, RESERVA_PILULA } from "./MolduraQuadro";
 import { ItensArquivados } from "./ItensArquivados";
 import { TextoNoLugar } from "./TextoNoLugar";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
-import { IconArquivar, IconChevronLeft, IconDownload, IconPlus } from "./icons";
+import { IconArquivar, IconCalendar, IconChevronLeft, IconDashboard, IconDownload, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
 import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./MenuLista";
 import { useConfirmacao } from "./Confirmacao";
@@ -126,6 +127,21 @@ export function QuadroTarefas({
     [listasDoServidor, ordemListas],
   );
   const [verArquivados, setVerArquivados] = useState(false);
+  // A vista (a pílula) e o lugar das ferramentas da vista (na faixa do topo).
+  const { aba: abaAtual, trocar: trocarAba } = useTrocaAba(aba);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  /** Configuração (a aba), rolando até a seção pedida (imagem de fundo ou automações). */
+  const irConfiguracao = (secao?: "fundo" | "automacoes") => {
+    trocarAba("configuracao");
+    if (!secao) return;
+    let n = 0;
+    const rolar = () => {
+      const el = document.getElementById(`secao-${secao}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      else if (n++ < 40) window.setTimeout(rolar, 100);
+    };
+    rolar();
+  };
   const [filtro, setFiltro] = useState<FiltroTarefas>(FILTRO_TAREFAS_PADRAO);
   // A aba Lista mostra as ativas, as arquivadas ou os TEMPLATES.
   const [mostrar, setMostrar] = useState<"ativas" | "arquivadas" | "templates">("ativas");
@@ -438,13 +454,9 @@ export function QuadroTarefas({
     onMudar: (lista, padroes) => setEd({ lista, padroes }),
   };
 
-  const indicadores = [
-    { rotulo: "Abertas", valor: num(resumo.abertas) },
-    { rotulo: "Atrasadas", valor: num(resumo.atrasadas), cor: resumo.atrasadas ? "var(--danger)" : undefined },
-    { rotulo: "Concluídas", valor: num(resumo.concluidas) },
-  ];
+  // Os NÚMEROS do quadro ficam na dica do título (a faixa do topo é minimalista, como no Trello).
+  const dicaQuadro = `${quadro.grupoNome} · Abertas ${num(resumo.abertas)} · Atrasadas ${num(resumo.atrasadas)} · Concluídas ${num(resumo.concluidas)}`;
   const semListas = ativas.length === 0;
-  /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
   /**
    * REORDENA as listas (arrastar pelo cabeçalho): `indice` = a posição entre as ATIVAS sem a própria. As arquivadas ficam
    * nos lugares delas (a ordem gravada é a de TODAS). Otimista; falhou = volta.
@@ -479,6 +491,7 @@ export function QuadroTarefas({
     return true;
   };
 
+  /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
   const novaLista = async (nome: string) => {
     await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "POST", { nome });
     router.refresh();
@@ -486,103 +499,111 @@ export function QuadroTarefas({
   };
 
   return (
-    <div className="relative isolate space-y-[var(--gap-block)]">
-      <FundoDoQuadro url={quadro.fundoUrl} />
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Link
-            href="/painel/tarefas"
-            aria-label="Voltar para Tarefas"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-          >
-            <IconChevronLeft className="h-4 w-4" />
-          </Link>
-          <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: quadro.cor }} />
-          <h1 className="min-w-0">
-            <TextoNoLugar
-              valor={quadro.nome}
-              onSalvar={podeEditar && !quadro.arquivado ? renomearQuadro : undefined}
-              ariaLabel="Nome do quadro"
-              maxLength={80}
-              className="text-lg font-bold text-text"
-            />
-          </h1>
-          <TrocarQuadro quadro={quadro} aba={aba} favoritos={favs.favoritos} soSeta />
-          <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
-          <Badge>{quadro.grupoNome}</Badge>
-          {quadro.arquivado && <Badge tone="amber">Arquivado</Badge>}
-          <Button
-            size="sm"
-            variant="secondary"
-            className="max-sm:w-11 max-sm:px-0"
-            icon={<IconArquivar className="h-4 w-4" />}
-            aria-label="Itens arquivados"
-            title="Itens arquivados — cartões e listas"
-            onClick={() => setVerArquivados(true)}
-          >
-            <span className="max-sm:hidden">Arquivados</span>
-          </Button>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-          {indicadores.map((i) => (
-            <div key={i.rotulo} className="flex items-baseline gap-1.5">
-              <dt className="text-muted">{i.rotulo}</dt>
-              <dd className="font-semibold tabular-nums text-text" style={i.cor ? { color: i.cor } : undefined}>
-                {i.valor}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <AbasEspaco<AbaQuadro>
-        aba={aba}
-        opcoes={[
-          { value: "quadro", label: "Quadro" },
-          { value: "lista", label: "Lista" },
-          { value: "calendario", label: "Calendário", curto: "Agenda" },
-          { value: "dashboard", label: "Dashboard", curto: "Painel" },
-          { value: "configuracao", label: "Configuração", curto: "Config." },
-        ]}
-      >
-        {aba !== "configuracao" && (
-          <FerramentasAba>
-            <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} />
-            {aba === "lista" && (
+    <div>
+      <MolduraQuadro
+        cor={quadro.cor}
+        fundoUrl={quadro.fundoUrl}
+        faixa={
+          <FaixaQuadro
+            esquerda={
               <>
-                <SeletorFiltro
-                  icone={<IconArquivar className="h-4 w-4" />}
-                  rotulo="Mostrar"
-                  valor={mostrar}
-                  ativo={mostrar !== "ativas"}
-                  onChange={(v) => setMostrar(v as typeof mostrar)}
-                  opcoes={[
-                    { valor: "ativas", rotulo: "Tarefas ativas" },
-                    { valor: "templates", rotulo: `Templates (${num(templates.length)})` },
-                    { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
-                  ]}
-                />
-                <Button size="sm" variant="secondary" className="max-sm:w-11 max-sm:px-0" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
-                  <span className="max-sm:hidden">XLSX</span>
-                </Button>
-                {mostrar === "ativas" && (
-                  <Button size="sm" variant="accent" className="max-sm:w-11 max-sm:px-0" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
-                    <span className="max-sm:hidden">Adicionar tarefa</span>
-                  </Button>
-                )}
+                <Link
+                  href="/painel/tarefas"
+                  aria-label="Voltar para Tarefas"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9"
+                >
+                  <IconChevronLeft className="h-4 w-4" />
+                </Link>
+                <h1 className="min-w-0 max-w-[min(100%,32rem)]" title={dicaQuadro}>
+                  <TextoNoLugar
+                    valor={quadro.nome}
+                    onSalvar={podeEditar && !quadro.arquivado ? renomearQuadro : undefined}
+                    ariaLabel="Nome do quadro"
+                    maxLength={80}
+                    ajustar
+                    className="text-lg font-bold text-text"
+                  />
+                </h1>
+                <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
+                {quadro.arquivado && <Badge tone="amber">Arquivado</Badge>}
               </>
-            )}
-          </FerramentasAba>
-        )}
-        {aba !== "configuracao" && (
-          <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2 empty:hidden">
-            <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} />
-            {aba === "lista" && arquivadas && (
-              <span className="text-[12.5px] text-muted">Mostrando as ARQUIVADAS — restaure pelo detalhe da tarefa ou pela edição em massa.</span>
-            )}
-          </div>
-        )}
+            }
+            direita={
+              <>
+                <MembrosQuadro pessoas={doGrupo} filtro={filtro} onFiltro={setFiltro} />
+                {abaAtual !== "configuracao" && (
+                  <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} buscaNoPainel />
+                )}
+                <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
+                <MenuQuadro podeEditar={podeEditar && !quadro.arquivado} onArquivados={() => setVerArquivados(true)} onConfiguracao={irConfiguracao} />
+              </>
+            }
+            abaixo={
+              abaAtual !== "configuracao" &&
+              (contarFiltros(filtro) > 0 || (abaAtual === "lista" && mostrar !== "ativas")) && (
+                <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+                  {abaAtual === "lista" && mostrar !== "ativas" && <Badge tone="amber">{mostrar === "arquivadas" ? "Mostrando as arquivadas" : "Mostrando os templates"}</Badge>}
+                  <ChipsFiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} />
+                </div>
+              )
+            }
+          />
+        }
+        pilula={
+          <PilulaVistas<AbaQuadro>
+            valor={abaAtual}
+            onTrocar={trocarAba}
+            opcoes={[
+              { value: "quadro", label: "Quadro", icone: <IconKanban className="h-4 w-4" /> },
+              { value: "lista", label: "Lista", icone: <IconList className="h-4 w-4" /> },
+              { value: "calendario", label: "Calendário", icone: <IconCalendar className="h-4 w-4" /> },
+              { value: "dashboard", label: "Dashboard", icone: <IconDashboard className="h-4 w-4" /> },
+              { value: "configuracao", label: "Configuração", icone: <IconSettings className="h-4 w-4" /> },
+            ]}
+            extra={
+              <TrocarQuadro
+                quadro={quadro}
+                aba={aba}
+                favoritos={favs.favoritos}
+                triggerClassName="h-11 shrink-0 gap-1.5 rounded-lg px-3 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 lg:h-10"
+                gatilho={
+                  <>
+                    <IconTrocar className="h-4 w-4" />
+                    <span className="max-md:hidden">Mudar de quadros</span>
+                  </>
+                }
+              />
+            }
+          />
+        }
+      >
+        <ConteudoAba aba={abaAtual} abaServidor={aba} slot={slot}>
+          {aba === "lista" && (
+            <FerramentasAba>
+              <SeletorFiltro
+                icone={<IconArquivar className="h-4 w-4" />}
+                rotulo="Mostrar"
+                valor={mostrar}
+                ativo={mostrar !== "ativas"}
+                onChange={(v) => setMostrar(v as typeof mostrar)}
+                opcoes={[
+                  { valor: "ativas", rotulo: "Tarefas ativas" },
+                  { valor: "templates", rotulo: `Templates (${num(templates.length)})` },
+                  { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
+                ]}
+              />
+              <Button size="sm" variant="secondary" className="w-11 px-0 lg:w-auto lg:px-3" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
+                <span className="max-lg:hidden">XLSX</span>
+              </Button>
+              {mostrar === "ativas" && (
+                <Button size="sm" variant="accent" className="w-11 px-0 lg:w-auto lg:px-3" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
+                  <span className="max-lg:hidden">Adicionar tarefa</span>
+                </Button>
+              )}
+            </FerramentasAba>
+          )}
         {aba === "dashboard" ? (
+          <PainelMoldura>
           <DashboardTarefas
             tarefas={trabalho}
             listas={listas}
@@ -592,13 +613,16 @@ export function QuadroTarefas({
             onResponsavel={(r) => setFiltro((f) => ({ ...f, responsaveis: r === "todos" ? [] : [r] }))}
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
           />
+          </PainelMoldura>
         ) : aba === "quadro" ? (
           semListas && quadro.arquivado ? (
-            <p className="rounded-card border border-dashed border-border-2 bg-surface px-6 py-12 text-center text-sm text-muted">
-              Nenhuma lista ativa — o quadro está arquivado.
-            </p>
+            <PainelMoldura>
+              <p className="py-12 text-center text-sm text-muted">Nenhuma lista ativa — o quadro está arquivado.</p>
+            </PainelMoldura>
           ) : (
             <QuadroKanban
+              naMoldura
+              reservaInferior={RESERVA_PILULA}
               onNovaLista={quadro.arquivado ? undefined : novaLista}
               onMoverLista={podeEditar && !quadro.arquivado ? moverLista : undefined}
               onRenomearLista={podeEditar && !quadro.arquivado ? renomearLista : undefined}
@@ -636,6 +660,7 @@ export function QuadroTarefas({
             />
           )
         ) : aba === "lista" ? (
+          <PainelMoldura>
           <TabelaTarefas
             tarefas={naLista}
             listas={listas}
@@ -649,10 +674,13 @@ export function QuadroTarefas({
             edicoes={edicoesLista}
             selecao={sel}
             onSelecao={setSel}
-            reservaInferior={alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0}
+            reservaInferior={RESERVA_PILULA + 12 + (alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0)}
           />
+          </PainelMoldura>
         ) : aba === "calendario" ? (
+          <PainelMoldura>
           <CalendarioTarefas
+            reservaInferior={RESERVA_PILULA + 12}
             eventos={eventosCal}
             hoje={hoje}
             mes={mesCal}
@@ -670,7 +698,9 @@ export function QuadroTarefas({
             semPrazo={semPrazoCal}
             onAbrirTarefa={(id) => setAberto({ tipo: "editar", id })}
           />
+          </PainelMoldura>
         ) : (
+          <PainelMoldura>
           <ConfiguracaoQuadro
             quadro={quadro}
             listas={listas}
@@ -685,8 +715,10 @@ export function QuadroTarefas({
             podeEditar={podeEditar}
             onMudou={() => router.refresh()}
           />
+          </PainelMoldura>
         )}
-      </AbasEspaco>
+        </ConteudoAba>
+      </MolduraQuadro>
 
       {aba === "lista" && (sel.size > 0 || aplicando) && (
         <BarraSelecao

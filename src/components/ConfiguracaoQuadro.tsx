@@ -281,7 +281,7 @@ export function ConfiguracaoQuadro({
           </ul>
         </Secao>
 
-        <Secao titulo="Imagem de fundo">
+        <Secao id="secao-fundo" titulo="Imagem de fundo">
           <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
         </Secao>
 
@@ -389,7 +389,7 @@ export function ConfiguracaoQuadro({
         />
       </Secao>
 
-      <Secao titulo="Automações">
+      <Secao id="secao-automacoes" titulo="Automações">
         <AutomacoesQuadro
           quadroId={quadro.id}
           automacoes={automacoes}
@@ -545,9 +545,9 @@ export function ConfiguracaoQuadro({
   );
 }
 
-function Secao({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
+function Secao({ id, titulo, acao, children }: { id?: string; titulo: string; acao?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+    <section id={id} className="scroll-mt-3 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="flex-1 text-[14px] font-semibold text-text">{titulo}</h2>
         {acao}

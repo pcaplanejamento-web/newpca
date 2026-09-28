@@ -354,6 +354,18 @@ export const filtroTarefasAtivo = (f: FiltroTarefas) => contarFiltros(f) > 0;
 /** O filtro de TAREFA está ligado (fora a busca) — o Calendário esconde a previsão do PCA/agendas externas. */
 export const filtroDeTarefaAtivo = (f: FiltroTarefas) => filtroTarefasAtivo({ ...f, busca: "" });
 /** Liga/desliga UM valor numa lista do filtro. */
+/**
+ * A PALETA de ETIQUETAS (a do Trello): 10 cores × 3 tons — suave, normal e forte — em ordem de tom (as 10 suaves, as 10
+ * normais, as 10 fortes). Sugestões ao criar/editar uma etiqueta; a cor livre continua valendo.
+ */
+export const PALETA_ETIQUETAS: readonly string[] = [
+  "#baf3db", "#f8e6a0", "#fedec8", "#ffd5d2", "#dfd8fd", "#cce0ff", "#c6edfb", "#d3f1a7", "#fdd0ec", "#dcdfe4",
+  "#4bce97", "#f5cd47", "#fea362", "#f87168", "#9f8fef", "#579dff", "#6cc3e0", "#94c748", "#e774bb", "#8590a2",
+  "#1f845a", "#946f00", "#c25100", "#c9372c", "#6e5dc6", "#0c66e4", "#227d9b", "#5b7f24", "#ae4787", "#626f86",
+];
+/** A cor SUGERIDA para a n-ésima etiqueta nova (os tons normais, em ciclo). */
+export const corEtiquetaSugerida = (n: number) => PALETA_ETIQUETAS[10 + (((n % 10) + 10) % 10)];
+
 export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v]);
 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */

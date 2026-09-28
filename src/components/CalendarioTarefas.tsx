@@ -34,7 +34,7 @@ import {
   somarDias,
   somarMes,
 } from "@/lib/tarefas-core";
-import { FOLGA, topoNoDocumento } from "./AlturaCheia";
+import { useAlturaTela } from "./AlturaCheia";
 import { ChipPreso } from "./BlocosTarefa";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
@@ -110,33 +110,6 @@ const retangulo = (el: Element): Retangulo => {
 };
 /** Desktop? (seguro no servidor — lá, `true`: o HTML nasce no layout do desktop). */
 const ehDesktopSeguro = () => (typeof window === "undefined" ? true : ehDesktop());
-
-/**
- * ALTURA ATÉ O FIM DA TELA (celular e desktop): do topo do bloco até a borda de baixo do display, menos o respiro de
- * baixo do `<main>` (no celular ele já soma a navegação inferior) — o calendário nunca faz a página rolar; tudo rola por
- * dentro. Mínimo de 460px (uma tela muito baixa rola um pouco, sem esmagar a grade).
- */
-function useAlturaTela(ref: RefObject<HTMLElement | null>): number | null {
-  const [h, setH] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const calc = () => {
-      const el = ref.current;
-      if (!el) return;
-      const main = el.closest("main");
-      const pb = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 16;
-      setH(Math.max(460, Math.floor(window.innerHeight - topoNoDocumento(el) - pb - FOLGA)));
-    };
-    calc();
-    window.addEventListener("resize", calc);
-    const ro = new ResizeObserver(calc);
-    ro.observe(document.body);
-    return () => {
-      window.removeEventListener("resize", calc);
-      ro.disconnect();
-    };
-  }, [ref]);
-  return h;
-}
 
 /** A altura (px) de um elemento, acompanhando o redimensionamento. */
 function useAltura(ref: RefObject<HTMLElement | null>, chave: string): number {
@@ -637,6 +610,7 @@ export function CalendarioTarefas({
   nomeQuadro,
   onAbrirTarefa,
   usuarioId = null,
+  reservaInferior = 0,
 }: {
   eventos: EventoCalendario[];
   hoje: string;
@@ -665,9 +639,11 @@ export function CalendarioTarefas({
   onAbrirTarefa?: (id: number) => void;
   /** Quem vê (os convites que RECUSOU ficam riscados — ou somem, com "Mostrar eventos recusados" desligado). */
   usuarioId?: number | null;
+  /** Espaço (px) a deixar embaixo, além do respiro do `<main>` (a pílula de vistas da moldura do quadro). */
+  reservaInferior?: number;
 }) {
   const raiz = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(raiz);
+  const altura = useAlturaTela(raiz, 460, reservaInferior);
   const [mesLocal, setMesLocal] = useState<MesCalendario>(() => mesControlado ?? mesDoDia(hoje));
   const mes = mesControlado ?? mesLocal;
   const [vista, setVista] = useState<VistaCalendario>("mes");

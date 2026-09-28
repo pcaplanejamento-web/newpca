@@ -47,6 +47,7 @@ export function FiltrosTarefas({
   semBusca = false,
   semResponsavel = false,
   semStatus = false,
+  buscaNoPainel = false,
 }: {
   filtro: FiltroTarefas;
   onChange: (f: FiltroTarefas) => void;
@@ -61,12 +62,14 @@ export function FiltrosTarefas({
   semResponsavel?: boolean;
   /** Sem a seção Status (o Calendário mostra/esconde as concluídas no menu de vistas). */
   semStatus?: boolean;
+  /** A BUSCA dentro do painel e o gatilho SÓ ÍCONE (a faixa do quadro, como no Trello); o contador inclui a busca. */
+  buscaNoPainel?: boolean;
 }) {
   const set = (p: Partial<FiltroTarefas>) => onChange({ ...filtro, ...p });
-  const n = contarFiltros({ ...filtro, busca: "" });
+  const n = contarFiltros(buscaNoPainel ? filtro : { ...filtro, busca: "" });
   return (
     <>
-      {!semBusca && (
+      {!semBusca && !buscaNoPainel && (
         <div className="min-w-[10rem] flex-1 sm:max-w-[16rem]">
           <SearchField
             compacto
@@ -82,18 +85,22 @@ export function FiltrosTarefas({
         align="end"
         width={320}
         ariaLabel={n ? `Filtrar — ${n} filtro(s) ligado(s)` : "Filtrar"}
-        triggerClassName={`h-11 gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors lg:h-[var(--h-control-sm)] ${
-          n ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-text-2 hover:bg-surface-2"
-        }`}
+        triggerClassName={
+          buscaNoPainel
+            ? `h-11 min-w-11 justify-center gap-1 rounded-control px-2 transition-colors lg:h-9 lg:min-w-9 ${n ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)]"}`
+            : `h-11 gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors lg:h-[var(--h-control-sm)] ${
+                n ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-text-2 hover:bg-surface-2"
+              }`
+        }
         trigger={
           <>
             <IconFilter className="h-4 w-4" />
-            <span className="max-sm:hidden">Filtrar</span>
+            {!buscaNoPainel && <span className="max-sm:hidden">Filtrar</span>}
             {n > 0 && <span className="rounded-full bg-accent px-1.5 text-[11px] leading-5 text-white tabular-nums">{n}</span>}
           </>
         }
       >
-        <PainelFiltro filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
+        <PainelFiltro comBusca={buscaNoPainel} filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
       </Dropdown>
     </>
   );
@@ -127,7 +134,9 @@ function PainelFiltro({
   usuarioId,
   semResponsavel,
   semStatus,
+  comBusca = false,
 }: {
+  comBusca?: boolean;
   filtro: FiltroTarefas;
   set: (p: Partial<FiltroTarefas>) => void;
   onLimpar: () => void;
@@ -155,6 +164,16 @@ function PainelFiltro({
           </Button>
         )}
       </div>
+      {comBusca && (
+        <SearchField
+          compacto
+          value={filtro.busca}
+          placeholder="Buscar título ou #ticket"
+          aria-label="Buscar tarefas por título ou nº do ticket"
+          onChange={(e) => set({ busca: e.target.value })}
+          onClear={() => set({ busca: "" })}
+        />
+      )}
       {!semResponsavel && (
         <Secao titulo="Pessoas">
           <Opcao marcado={filtro.responsaveis.includes("sem")} onAlternar={() => alt("sem")}>

@@ -6,7 +6,7 @@ import { type EtiquetaTarefa, listaDeTemplates, OPCOES_COPIA_PADRAO, type Opcoes
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SelectField, TextField } from "./Field";
-import { IconChecklist, IconModelo } from "./icons";
+import { IconCartaoMais, IconChecklist } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { Skeleton } from "./Skeleton";
@@ -219,8 +219,8 @@ export function SeletorTemplates({
       align="end"
       width={280}
       ariaLabel={`Criar a partir de template em ${lista}`}
-      triggerClassName="h-11 w-11 shrink-0 justify-center text-muted lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-      trigger={<IconModelo className="h-4 w-4" aria-hidden />}
+      triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      trigger={<IconCartaoMais className="h-4 w-4" aria-hidden />}
     >
       {(fechar) => (
         <div className="space-y-1">

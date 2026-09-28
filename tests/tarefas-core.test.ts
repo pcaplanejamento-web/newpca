@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  corEtiquetaSugerida,
   diasSemanaCurtos,
   envolvidosDe,
   equipesDasLinhas,
@@ -62,6 +63,7 @@ import {
   type Automacao,
   type ListaTarefas,
   type RecorteTarefas,
+  PALETA_ETIQUETAS,
 } from "../src/lib/tarefas-core.ts";
 import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
@@ -653,5 +655,16 @@ describe("calendário por eventos", () => {
     const env = new Map([[1, daEquipe.envolvidos]]);
     assert.equal(mascararPrivados([privado], 7, env)[0].titulo, "Segredo");
     assert.equal(mascararPrivados([privado], 50, env)[0].titulo, "Ocupado");
+  });
+});
+
+describe("paleta de etiquetas (a do Trello)", () => {
+  it("30 cores hex válidas, sem repetir; a sugerida é um tom normal em ciclo", () => {
+    assert.equal(PALETA_ETIQUETAS.length, 30);
+    assert.ok(PALETA_ETIQUETAS.every((c) => /^#[0-9a-f]{6}$/.test(c)));
+    assert.equal(new Set(PALETA_ETIQUETAS).size, 30);
+    assert.equal(corEtiquetaSugerida(0), PALETA_ETIQUETAS[10]);
+    assert.equal(corEtiquetaSugerida(13), PALETA_ETIQUETAS[13]);
+    assert.equal(corEtiquetaSugerida(-1), PALETA_ETIQUETAS[19]);
   });
 });

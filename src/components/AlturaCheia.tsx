@@ -83,3 +83,31 @@ export function AlturaNoHtml() {
   // biome-ignore lint/security/noDangerouslySetInnerHtml: trecho FIXO (constante acima, sem dados do usuário) — a altura cheia no HTML do servidor.
   return <script dangerouslySetInnerHTML={{ __html: ALTURA_NO_HTML }} />;
 }
+
+/**
+ * ALTURA ATÉ O FIM DA TELA (celular e desktop): do topo do bloco até a borda de baixo do display, menos o respiro de
+ * baixo do `<main>` (no celular ele já soma a navegação inferior) e a `reserva` (o que fica embaixo, dentro do bloco
+ * pai — ex.: a pílula de vistas do quadro). O bloco nunca faz a página rolar; tudo rola por dentro. `minimo` = a altura
+ * mínima (uma tela muito baixa rola um pouco, sem esmagar o conteúdo). O calendário e a moldura do quadro.
+ */
+export function useAlturaTela(ref: RefObject<HTMLElement | null>, minimo = 460, reserva = 0): number | null {
+  const [h, setH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const calc = () => {
+      const el = ref.current;
+      if (!el) return;
+      const main = el.closest("main");
+      const pb = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 16;
+      setH(Math.max(minimo, Math.floor(window.innerHeight - topoNoDocumento(el) - pb - FOLGA - reserva)));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    const ro = new ResizeObserver(calc);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [ref, minimo, reserva]);
+  return h;
+}

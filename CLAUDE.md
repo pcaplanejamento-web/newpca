@@ -2281,14 +2281,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       (`DELETE …?moverPara=` → `comandosEsvaziarLista` + a exclusão num lote atômico: todos ao FIM do destino, na ordem, a
       conclusão pela lista — testado no driver D1 real; as automações do destino rodam) ou **excluir tudo junto** (cascade).
     - **Imagem de fundo** (`tarefa_quadros.fundo_url`): só o LINK é guardado — a imagem fica no site de origem (sem upload).
-      Configuração → **`FundoQuadro`** (prévia 16:9, Aplicar/Remover, aviso se o site bloquear). Aceita o link DIRETO da
+      Configuração → **`FundoQuadro`** (prévia 16:9, Aplicar/Remover, aviso se o site bloquear) — exibida NÍTIDA pela `MolduraQuadro`. Aceita o link DIRETO da
       imagem ou o de uma PÁGINA (pin do Pinterest, `pin.it`): o `PATCH /api/tarefas/quadros/[id]` `{fundoUrl}` resolve
       (`resolverImagemFundo`, `imagem-fundo.ts`) pela **busca segura** (`busca-segura.ts` `baixarSeguro` — a MESMA das
       agendas externas: só HTTPS público, redirecionamento revalidado, tempo/tamanho limitados) e tira o `og:image`/
       `twitter:image` (núcleo puro `imagem-fundo-core.ts`: `fundoUrlValida`, `pareceImagem`, `imagemDaPagina`,
-      `urlFundoCss` — testado). **`FundoDoQuadro`** põe a imagem atrás do espaço do quadro (host `relative isolate`, camada
-      `-z-10` até a margem do display) com um véu na cor do tema — só depois de carregar; o `QuadroCard` mostra a imagem na
-      faixa (a cor por baixo).
+      `urlFundoCss` — testado). A imagem aparece NÍTIDA na `MolduraQuadro` (ver "PADRÃO VISUAL DO TRELLO" abaixo); o
+      `QuadroCard` mostra a imagem na faixa (a cor por baixo).
   - **VISUAL DO TRELLO no quadro + ARRASTAR LISTAS + EDIÇÃO NO LUGAR + ITENS ARQUIVADOS (sem migração):**
     - **`CartaoTarefa`:** etiquetas CHEIAS na cor com o nome (padrão; tocar alterna para faixas — `useEtiquetasComNome`) e
       o texto pelo contraste (`textoSobre`, `color.ts` → tokens `--sobre-claro`/`--sobre-escuro`; o mesmo no `ChipEtiqueta`
@@ -2302,10 +2301,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       (`ArrastoCartoes.tsx`, o padrão do arrasto de cartões — coluna PRESA inclinada no cursor, `SombraLista` no destino,
       rolagem nas bordas, pouso; o clique ao soltar é engolido) → `QuadroTarefas.moverLista` otimista (a ordem de TODAS as
       listas, as arquivadas nos lugares delas) → `PATCH /api/tarefas/quadros/[id]/listas` (editores).
-    - **Quadro:** o NOME no cabeçalho também é `TextoNoLugar` (editores; `PATCH` do quadro) e a troca de quadro virou só a
-      seta (`TrocarQuadro soSeta`). Botão **"Arquivados"** no cabeçalho → **`ItensArquivados`** (`Segmented` Cartões | Listas +
+    - **Quadro:** o NOME no cabeçalho também é `TextoNoLugar` (editores; `PATCH` do quadro). "Itens arquivados" (hoje no
+      menu "…" do quadro) → **`ItensArquivados`** (`Segmented` Cartões | Listas +
       busca; restaurar — o cartão, qualquer membro; a lista, editores — e excluir — o cartão direto, a lista pela
       `ExcluirLista`); saiu o link "N arquivadas — ver na Lista".
+  - **PADRÃO VISUAL DO TRELLO no espaço do quadro (sem migração):** o quadro é UMA **`MolduraQuadro`** (`MolduraQuadro.tsx`)
+    — card grande `rounded-2xl` do topo até o fim do display (`useAlturaTela`, agora exportado por `AlturaCheia.tsx` com
+    `reserva`; o calendário usa o mesmo), com a **imagem de fundo NÍTIDA** (sem véu; só depois de carregar —
+    `useImagemCarrega` de `FundoQuadro.tsx`; sem imagem, degradê da cor do quadro) e, por cima, só **ilhas opacas**:
+    - **`FaixaQuadro`** (topo translúcido com desfoque): voltar · título `TextoNoLugar ajustar` (inteiro; a dica traz grupo
+      e Abertas/Atrasadas/Concluídas — os contadores e o selo do grupo saíram da tela) · favorito; à direita só ícones —
+      **`MembrosQuadro`** (fotos; tocar filtra pela pessoa), `FiltrosTarefas buscaNoPainel` (a busca dentro do painel, gatilho
+      só ícone), as `FerramentasAba` da vista e o **`MenuQuadro`** "…" (Itens arquivados · Imagem de fundo · Automações ·
+      Configurações — rola até `#secao-fundo`/`#secao-automacoes` — · Copiar link); os chips de filtro ativos numa linha
+      fina abaixo, só quando há.
+    - **`PilulaVistas`** (flutuante, opaca, no rodapé — `RESERVA_PILULA`): Quadro · Lista · Calendário · Dashboard ·
+      Configuração | **Mudar de quadros** (`TrocarQuadro` com `gatilho`); troca pela MESMA lógica do `AbasEspaco`
+      (`useTrocaAba` + `ConteudoAba`, exportados).
+    - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 272px, espaço de 12px,
+      `.rolagem-fina`, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
+      `group-data-[com-imagem]/moldura`); Lista/Calendário/Dashboard/Configuração num **`PainelMoldura`** opaco (a tabela e
+      o calendário descontam a pílula no `reservaInferior`).
+    - Cartão sem o nº do ticket na face (fica na dica/detalhe), `rounded-lg` com a sombra do Trello; ícone de template do pé
+      da lista = **`IconCartaoMais`**; a paleta de etiquetas é a do Trello (**`PALETA_ETIQUETAS`**, 10 cores × 3 tons, e
+      `corEtiquetaSugerida` — `tarefas-core`, testados). Saíram `FundoDoQuadro` (véu), o `TrocarQuadro soSeta` e o botão
+      "Arquivados" solto (foi para o menu "…").
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
