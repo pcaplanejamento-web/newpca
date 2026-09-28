@@ -401,6 +401,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   responsável que **pediu a consolidação** no PCA (não quem autoriza), `Solicitante`, com período e ato
   (Portaria/Decreto/Lei) se temporário — com **dois botões `LinkExterno`**: "Verificar autenticidade" (site
   oficial) e "Ver <ato>" (link do ato de nomeação cadastrado).
+- **TEXTO CORRIDO (parágrafos) em TODA importação — núcleo puro `texto-corrido.ts`:** o PDF entrega uma linha por linha
+  VISUAL e o texto das seções era gravado com uma quebra em cada uma ("…MONITORAMENTO REMOTO NO⏎DEPARTAMENTO…").
+  `coletarSecoes(linhas, {direita})` junta as linhas pelo `textoCorrido`: a quebra FICA quando é real — fim de frase
+  (`terminaFrase`, fora de abreviação "SEC."/"LTDA."/inicial), marcador/enumeração/rótulo "Nome:" na seguinte (`lista`: o
+  "- item" seguinte a um parágrafo que abriu com marcador), BLOCO novo pela geometria (vão > 1,4× o corpo da fonte), linha
+  curta — e SOME (espaço; palavra hifenizada junta sem espaço) quando é da LARGURA: palavra de LIGAÇÃO no fim
+  (`terminaEmLigacao`: E/DE/DA/NO/COM/PARA/A/À…, vírgula, " -" — com acento: "É" verbo não é "E"), a seguinte CONTINUA (minúscula,
+  "E"/"DE"/"DA"…) ou a linha vai até ~75% da margem direita (`GeoLinha` do PDF: `x0`/`x1`/`y`/`h` — `geoDaLinha`). Na dúvida,
+  FICA. No PDF (`parse-dfd-pdf-core`) as linhas levam a geometria e o **cabeçalho de página** (as linhas do topo até o
+  "Número DFD", `cabecalhosDePagina` — o ÓRGÃO emissor não é ruído fixo e vazava para a seção que atravessa a página) sai
+  das seções; na planilha (strings) só as pistas do texto decidem. **Cabeçalho:** `juntarContinuacoesCabecalho` (PDF e
+  índice do protocolo) devolve INTEIRO o "Órgão/Entidade"/"Setor Requisitante" quebrado em 2 linhas — até 2 linhas sem
+  rótulo ENTRE o campo e o próximo rótulo do cabeçalho (nunca cola a tabela) —; a `siglaSetor` só vale com ≤ 60 (o servidor
+  recusa acima); **Matrícula/e-mail/telefone** = o valor do 1º rótulo (`buscarPrimeiro` — vazio no PDF ⇒ `null`, nunca o ":"
+  nem os da equipe do §8). Texto gravado (sem geometria): `refluirTexto(texto, larguraVisual(textos))` — a largura visual sai
+  das linhas que terminam em ligação (quebra certamente da largura); sem elas, só as pistas do texto: IDEMPOTENTE (revisar de
+  novo não muda). Validado no `pd101820` real: o texto gravado pela versão anterior, revisado, fica IGUAL à importação nova
+  nos 15 DFDs (129 seções). Testes: `tests/texto-corrido.test.ts` (casos reais medidos no PDF).
 - **Importa `.xlsx` E `.pdf`:** o cabeçalho + seções são **compartilhados** em `src/lib/parse-dfd-comum.ts`
   (`extrairCabecalho`/`coletarSecoes`, agnósticos de formato). **Seções = TÍTULOS PADRONIZADOS** (`SECOES_PADRAO` em
   `parse-dfd-comum`: ÁREA REQUISITANTE · IDENTIFICAÇÃO · JUSTIFICATIVA · QUANTIDADE · PREVISÃO · PRIORIDADE · FUNDAMENTAÇÃO ·
@@ -520,7 +538,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **BARRA DA MESA (uma linha) + visão ÚNICA com `Segmented` + morph:** à esquerda, UM `Segmented` (`vista`) com o
     **Dashboard** primeiro — item SÓ-ÍCONE (`soIcone`, `IconDashboard`; nome acessível "Dashboard de governança") — e
     **Protocolos · DFDs · Itens** (na Mesa do PCA, sem o Dashboard e com a `ferramenta` Todos | Enviados | Incorporados
-    logo depois); à DIREITA, os **filtros de hierarquia** (abaixo). Alternam as visões no **MESMO espaço**, com transição
+    logo depois); à DIREITA, o botão **DADOS COMPLETOS** (`BotaoDadosCompletos`, só o ícone `IconTextoCompleto`, accent quando
+    ligado; fora do Dashboard) e os **filtros de hierarquia** (abaixo). **Dados completos:** o provedor `DadosCompletos` (em volta
+    das visões — os banners e o Dashboard ficam de fora) faz as células mostrarem TUDO dentro da própria tabela: `CelulaTexto`
+    (descrição e assunto sem o corte de uma linha; na Consolidada as descrições diferentes numeradas D1, D2…), `CelulaLista`
+    (todos os valores, sem o "+N") e `EstadoResumo` (todos os problemas); a linha cresce. A escolha é PREFERÊNCIA do usuário
+    (`preferencias_tabela`, chave `PREF_DADOS_COMPLETOS` = `mesa:dados-completos` → `{ligado:true}`; desligar apaga a linha),
+    carregada no servidor por `carregarMesa` (`dadosCompletos` — a Mesa já ABRE assim, sem piscar; a principal e a do PCA);
+    gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões no **MESMO espaço**, com transição
     `animate-cat-morph` (`<div key={vista}>` remonta e replaya). **Importação NA TABELA:** o botão **"Importar protocolo"**
     (visão Protocolos) / **"Importar DFD"** (visão DFDs) fica no **RODAPÉ da tabela, à esquerda do seletor de linhas**
     (`DataTable.acoesRodape`, `Button size="sm"`; no celular o rótulo encolhe para "Importar" — o nome acessível segue
@@ -540,7 +565,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `--h-control-sm` no desktop (segue a densidade do ADM; 44px no celular) e as TRÊS visões usam a MESMA densidade
     **compacta** (`DataTable density="compact"`: TODA linha na altura dos controles, com ou sem controle na célula —
     `SeletorCelula` e as ações de linha `Button size="xs"` cabem nela no desktop e têm 44px no celular — e o cabeçalho
-    ("tópicos") baixo; a descrição do item em UMA linha, o texto inteiro na dica). Sem os cabeçalhos redundantes
+    ("tópicos") baixo; a descrição do item em UMA linha, o texto inteiro na dica — ou na própria célula com os DADOS COMPLETOS ligados). Sem os cabeçalhos redundantes
     "Protocolos (N)"/"DFDs importados (N)" (a contagem fica no rodapé `resumo`). Tabela de **Protocolos**: **Estado**
     (AGREGADO — abaixo) · **Situação** (dropdown na célula) · **Responsável** (dropdown na célula) · **Distribuição** (quem
     protocolou) · **Data** (data/hora da PROTOCOLAÇÃO — `criado_em` em Brasília, `dataHoraBR`/`dataIsoBrasilia`) · Nº processo
@@ -1196,7 +1221,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     lote, auditoria por protocolo/DFD (itens: **antes/depois** por item). No celular a barra pode ser **recolhida** (fica
     o resumo). Enquanto um banner da pilha GRAVA, nada troca/fecha/empilha, e a recarga pós-gravação só vale se o banner
     ainda mostra o mesmo DFD/protocolo (no modo item, reencontra o item EXIBIDO).
-  - **Botão ATUALIZAR** (`IconRefresh`, ao lado do X) nos banners gravados: recarrega do banco (confirma se há rascunho).
+  - **Botão ATUALIZAR = recarregar + REVISAR** (`BotaoAtualizar`, ao lado do X dos banners de DFD, ITEM e protocolo): o
+    ícone GIRA (`useGiro` — ao menos uma volta; um 2º toque enquanto gira é ignorado) enquanto recarrega do banco (confirma se
+    há rascunho) e REVISA o que chegou com os MESMOS tratamentos automáticos da importação — núcleo puro **`revisao-dfd.ts`**:
+    `revisarDfd` (seções em TEXTO CORRIDO + a linha do órgão emissor que o cabeçalho de página deixava fora; campos do
+    cabeçalho limpos — a "Matrícula:" vazia lida como ":" volta a vazia; a padronização do ADM `normalizarSecoesDfd`; DFD-R
+    sem referência lê contrato/ARP/licitação do texto; descrição/unidade dos itens limpas — só se o servidor aceitaria regravar
+    os itens: `podeRevisarItens`) e `revisarCapa` (conteúdo da capa em uma linha limpa). NUNCA mexe em identificadores,
+    valores, quantidades, assinaturas nem na unidade; idempotente. O tratado entra no RASCUNHO (Salvar alterações grava só o
+    que mudou, com o histórico) e o aviso flutuante diz o que foi tratado (`resumoRevisao`; no protocolo, por DFD —
+    `resumoRevisaoLote`). Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que
+    haveria a tratar. Testes: `tests/revisao-dfd.test.ts`.
   - **REENVIAR PROTOCOLO (sobrescrever com comparação)** — botão **"Reenviar protocolo"** no rodapé do protocolo gravado (`useProtocoloGravado`)
     (desabilitado com rascunho pendente) → o **MESMO `ProtocoloUploadForm`** em modo `reenvio` (`BaseReenvio` = protocolo +
     DFDs completos já carregados), com lançador próprio. Núcleo PURO **`comparar-protocolo.ts`** (testado):
@@ -2613,7 +2648,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DFDs e itens) + as fábricas de coluna **`colunaPlanejamento`**/**`colunaTipoDfd`** (as MESMAS "Nº Plan."/"Tipo" na planilha de
   DFDs, no rastro, na tabela de itens e no detalhe da Consolidada), **`ItemCabecalho`** (`DfdView.tsx` — o cabeçalho do banner
   de UM item: "Item N" + `DfdCabecalho`; Mesa e consulta pública), **`CelulaLista`** (VÁRIOS valores numa célula — os primeiros + "+N", a lista na dica — até 30,
-  `dicaLista` —, valor inativo riscado; a visão Consolidada dos itens) + **`MaisN`** (o chip "+N"),
+  `dicaLista` —, valor inativo riscado; a visão Consolidada dos itens) + **`MaisN`** (o chip "+N") + **`CelulaTexto`** (o
+  MESMO arquivo — texto longo da célula em UMA linha com a dica; `outros` = variantes com "+N"; com os dados completos, o
+  texto inteiro — D1, D2… nas variantes), **`DadosCompletos`**/**`BotaoDadosCompletos`** (`DadosCompletos.tsx` — o provedor
+  que faz `CelulaTexto`/`CelulaLista`/`EstadoResumo` mostrarem TUDO na célula e o alternador só-ícone da barra da Mesa),
+  **`BotaoAtualizar`** + hook **`useGiro`** (`BotaoAtualizar.tsx` — o Atualizar dos banners gravados: o ícone gira enquanto
+  recarrega e revisa),
   **`CelulaVariacao`**/**`SeloAbc`**/**`ComposicaoItem`** (`ComposicaoItem.tsx` — a variação dos preços na cor da faixa
   [`nota` na dica], o selo da curva ABC e o detalhe da linha consolidada: KPIs + avisos + a quebra por unidade + as
   ocorrências com o desvio da média e as colunas do host; "Copiar resumo"), **`ConfigTabelas`** (contexto: as linhas por

@@ -26,7 +26,7 @@ import {
 import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, juntarParaCopiar, num, numeroSemAno, pct } from "@/lib/format";
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
-import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, passaFiltroMesa } from "@/lib/mesa-filtros";
+import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, PREF_DADOS_COMPLETOS, passaFiltroMesa } from "@/lib/mesa-filtros";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import {
   chaveUnidade,
@@ -54,7 +54,8 @@ import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
-import { CelulaLista, MaisN } from "./CelulaLista";
+import { CelulaLista, CelulaTexto } from "./CelulaLista";
+import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
@@ -191,6 +192,7 @@ export function DfdsView({
   modoPca,
   edicoes,
   abrirInicial = null,
+  dadosCompletos = false,
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -220,6 +222,8 @@ export function DfdsView({
   edicoes?: { prefixo: string; lista: EdicaoTabela[]; padroes: Record<string, unknown> };
   /** O banner que a Mesa ABRE ao chegar (`?abrir=protocolo:<id>|dfd:<id>` — o link do vínculo de uma tarefa). */
   abrirInicial?: AberturaMesa | null;
+  /** As tabelas abrem com os DADOS COMPLETOS (a preferência do usuário — o botão da barra a troca e a guarda). */
+  dadosCompletos?: boolean;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -236,6 +240,18 @@ export function DfdsView({
       },
     };
   const [erro, setErro] = useState<string | null>(null);
+  // DADOS COMPLETOS nas tabelas (o botão da barra): vale na hora e fica guardado como preferência do usuário — a Mesa
+  // (principal e do PCA) volta a abrir assim. Sem rede, vale só nesta sessão (conveniência, nunca trava nada).
+  const [completo, setCompleto] = useState(dadosCompletos);
+  function alternarCompleto(ligado: boolean) {
+    setCompleto(ligado);
+    void fetch("/api/preferencias/tabela", {
+      method: ligado ? "PUT" : "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ligado ? { chave: PREF_DADOS_COMPLETOS, valor: { ligado: true } } : { chave: PREF_DADOS_COMPLETOS }),
+      keepalive: true,
+    }).catch(() => {});
+  }
   // Banners do GRAVADO — os MESMOS componentes da análise (protocolo / DFD solto).
   const [aberto, setAberto] = useState<AberturaMesa | null>(abrirInicial);
   // O `?abrir=` já foi usado: sai da URL (recarregar não reabre o banner), sem nova renderização.
@@ -963,7 +979,7 @@ export function DfdsView({
       minWidth: 180,
       travado: travaAssunto,
       value: (r) => r.assunto ?? "—",
-      render: (r) => <span className="line-clamp-1">{r.assunto ?? "—"}</span>,
+      render: (r) => <CelulaTexto texto={r.assunto} />,
     },
     {
       key: "reparticao",
@@ -1341,12 +1357,11 @@ export function DfdsView({
       header: "Descrição",
       minWidth: 260,
       value: atributoItem.descricao.valor,
-      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica e no banner do item.
+      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica, no banner do item e com os DADOS
+      // COMPLETOS ligados (o botão da barra).
       render: (r) => (
         <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
-          <span className="line-clamp-1" title={r.descricao ?? undefined}>
-            {r.descricao ?? "—"}
-          </span>
+          <CelulaTexto texto={r.descricao} />
         </CelulaCopiavel>
       ),
     },
@@ -1445,13 +1460,15 @@ export function DfdsView({
       minWidth: 260,
       value: (l) => l.descricoes[0]?.texto ?? "",
       filtroExterno: filtroExterno("descricao"),
-      // A mais frequente numa linha só; "+N" = descrições diferentes (na dica e, numeradas, no detalhe).
+      // A mais frequente numa linha só; "+N" = descrições diferentes (na dica e, numeradas, no detalhe — e na própria
+      // célula com os DADOS COMPLETOS ligados).
       render: (l) => (
         <CelulaCopiavel copiar={l.descricoes[0]?.texto} rotulo="descrição do item">
-          <span className="flex min-w-0 items-center justify-center gap-1" title={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}>
-            <span className="line-clamp-1 min-w-0">{l.descricoes[0]?.texto ?? "—"}</span>
-            {l.descricoes.length > 1 && <MaisN n={l.descricoes.length - 1} />}
-          </span>
+          <CelulaTexto
+            texto={l.descricoes[0]?.texto}
+            outros={l.descricoes.slice(1).map((d) => d.texto)}
+            dica={dicaLista(l.descricoes, (d) => `${d.n}× ${d.texto}`) || undefined}
+          />
         </CelulaCopiavel>
       ),
     },
@@ -1896,6 +1913,8 @@ export function DfdsView({
           />
         )}
         <div className="ml-auto flex items-center gap-2">
+          {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
+          {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
           <SeletorFiltro
             icone={
               typeof filtro.responsavel === "number" ? (
@@ -1935,29 +1954,32 @@ export function DfdsView({
         </div>
       </div>
 
-      {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. */}
-      <div key={vista === "itens" ? `itens-${modoItens}` : vista} className="animate-cat-morph">
-        {vista === "dashboard" && dash ? (
-          <DashboardMesa
-            protocolos={dash.protocolos}
-            dfds={dash.dfds}
-            pessoas={dash.pessoas}
-            situacoes={situacoes}
-            regras={regras}
-            responsavel={filtro.responsavel}
-            onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
-            onAbrir={setAberto}
-          />
-        ) : vista === "protocolos" ? (
-          tabelaProtocolos
-        ) : vista === "dfds" ? (
-          tabelaDfds
-        ) : consolidada ? (
-          tabelaConsolidada
-        ) : (
-          tabelaItens
-        )}
-      </div>
+      {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. As
+          tabelas mostram os DADOS COMPLETOS (texto inteiro, todas as listas) quando o botão da barra está ligado. */}
+      <DadosCompletos value={completo}>
+        <div key={vista === "itens" ? `itens-${modoItens}` : vista} className="animate-cat-morph">
+          {vista === "dashboard" && dash ? (
+            <DashboardMesa
+              protocolos={dash.protocolos}
+              dfds={dash.dfds}
+              pessoas={dash.pessoas}
+              situacoes={situacoes}
+              regras={regras}
+              responsavel={filtro.responsavel}
+              onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
+              onAbrir={setAberto}
+            />
+          ) : vista === "protocolos" ? (
+            tabelaProtocolos
+          ) : vista === "dfds" ? (
+            tabelaDfds
+          ) : consolidada ? (
+            tabelaConsolidada
+          ) : (
+            tabelaItens
+          )}
+        </div>
+      </DadosCompletos>
 
       {/* Formulários de IMPORTAÇÃO (Mesa principal, editores): os botões ficam no rodapé das tabelas; aqui, fora delas e
           em QUALQUER visão, só lançador, análise e avisos (modais/avisos flutuantes — nada no fluxo da página). */}

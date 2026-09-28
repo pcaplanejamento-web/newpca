@@ -26,6 +26,18 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
+✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a
+importação refaz os parágrafos pela geometria (vão entre linhas, até onde a linha vai) e pelo texto (palavra de ligação no
+fim, continuação, fim de frase, listas e rótulos) — na dúvida a quebra fica. O **cabeçalho de página** (órgão emissor) não vaza
+mais para as seções; **Órgão/Setor** em 2 linhas voltam inteiros; Matrícula/e-mail/telefone vazios ficam vazios. Validado no
+protocolo real `pd101820` (15 DFDs). · ✅ **Botão Atualizar** dos banners de DFD, item e protocolo: o ícone **gira** enquanto
+recarrega e **revisa** (`revisao-dfd.ts` — os mesmos tratamentos automáticos da importação: parágrafos, textos limpos,
+padronização do ADM, referências da renovação) no rascunho, para salvar; idempotente; o texto legado revisado fica igual à
+importação nova. · ✅ **Dados completos** na barra da Mesa (um botão): texto inteiro, listas sem "+N" e todos os problemas do
+Estado dentro das tabelas; preferência do usuário (abre assim). 💡 Próximo: revisar em massa (seleção da Mesa → revisar os
+DFDs selecionados de uma vez).
+
 ### Protocolar sem DFD ou item com erro — nada fica para trás — entregue
 ✅ A protocolação avalia as importâncias dos pontos de DFD e de Item e **trava** com qualquer DFD do envio em erro (regra
 FIXA — "Sem DFD ou item com erro" só aceita "bloqueia"): nunca pula um DFD — só fica fora o que o usuário tirou do envio

@@ -23,8 +23,10 @@ import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
+import { type AjusteRevisao, podeRevisarItens, resumoRevisao, resumoRevisaoLote, revisarCapa, revisarDfd } from "@/lib/revisao-dfd";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
+import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { Callout } from "./Callout";
@@ -35,7 +37,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconLock, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLock, IconSpinner, IconUpload } from "./icons";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -44,8 +46,9 @@ import { Progress } from "./Progress";
 import { type BaseReenvio, ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
-import { useConformidade } from "./useConformidade";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { toast } from "./Toast";
+import { useConformidade } from "./useConformidade";
 
 type Rep = {
   id: number;
@@ -158,8 +161,13 @@ export function useProtocoloGravado({
 
   // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (abrir A, fechar e abrir B: uma
   // resposta atrasada de A nunca aparece no banner de B).
+  // Devolve o que aplicou (`null` = falhou ou foi superada) — o Atualizar revisa em cima disso.
   const cargaRef = useRef(0);
-  async function carregar(id: number, abrir: number | null, preservar?: Preservar) {
+  async function carregar(
+    id: number,
+    abrir: number | null,
+    preservar?: Preservar,
+  ): Promise<{ protocolo: ProtocoloDetalhe; lista: DfdDetalhe[]; rascunhos: Map<number, DfdParseado> } | null> {
     const minha = ++cargaRef.current;
     setErro(null);
     try {
@@ -172,7 +180,7 @@ export function useProtocoloGravado({
         unidades?: UnidadeConferencia[];
         sobrescritos?: DfdSobrescrito[];
       };
-      if (minha !== cargaRef.current) return;
+      if (minha !== cargaRef.current) return null;
       if (!r.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
       const lista = j.dfds ?? [];
       const rascunhos = new Map(lista.map((d) => [d.id, detalheParaParseado(d)]));
@@ -202,8 +210,10 @@ export function useProtocoloGravado({
       setPainel(null);
       setAncoraAlvo(null);
       setVersao((v) => v + 1);
+      return { protocolo: j.protocolo, lista, rascunhos };
     } catch (e) {
       if (minha === cargaRef.current) setErro(e instanceof Error ? e.message : "Não foi possível abrir o protocolo.");
+      return null;
     }
   }
 
@@ -354,10 +364,56 @@ export function useProtocoloGravado({
     fecharDfd();
     onFechar();
   }
+  /**
+   * ATUALIZAR (o ícone gira): recarrega do banco e REVISA — a capa (`revisarCapa`) e cada DFD editável (`revisarDfd`:
+   * texto em parágrafos, textos limpos, padronização do ADM, referências da renovação) — no RASCUNHO, para conferir e
+   * gravar em "Salvar alterações". Protocolo incorporado a um PCA / DFD de unidade sem acesso: só recarrega.
+   */
+  const giro = useGiro();
   function atualizar() {
     if (!proto) return;
-    if (sujo && !confirm("Descartar as alterações não salvas e recarregar os dados do banco?")) return;
-    void carregar(proto.id, abertoId);
+    if (sujo && !confirm("Descartar as alterações não salvas, recarregar do banco e revisar os dados?")) return;
+    const id = proto.id;
+    void giro.girar(async () => {
+      const r = await carregar(id, abertoId);
+      if (!r || pedidoRef.current !== id) return;
+      const { protocolo, lista, rascunhos } = r;
+      const podeTratar = podeEditarBase && !estaTravado(protocolo);
+      const cat = classificarAssunto(protocolo.assunto);
+      const revCapa = revisarCapa(capaDe(protocolo));
+      const porDfd: AjusteRevisao[][] = [];
+      const tratados = new Map<number, { d: DfdParseado; itens: boolean }>();
+      for (const o of lista) {
+        const d = rascunhos.get(o.id);
+        if (!d) continue;
+        const rev = revisarDfd(d, { regras, anoPca: d.anoPca ?? protocolo.anoPca ?? null, itens: podeRevisarItens(d, regras, cat) });
+        if (rev.ajustes.length === 0) continue;
+        porDfd.push(rev.ajustes);
+        if (podeTratar && acessivel(o.reparticaoId)) tratados.set(o.id, { d: rev.dfd, itens: rev.itensAlterados });
+      }
+      const partes = [resumoRevisao(revCapa.ajustes), resumoRevisaoLote(porDfd)].filter(Boolean).join("; ");
+      if (!partes) return void toast.success(`Protocolo ${protocolo.numero} atualizado — nada a tratar.`);
+      if (!podeTratar || (tratados.size === 0 && revCapa.ajustes.length === 0))
+        return void toast.warning(
+          `Protocolo ${protocolo.numero} atualizado. Há dados a tratar (${partes}), mas ${podeTratar ? "os DFDs são de unidade sem acesso" : "ele está só-leitura"}.`,
+          8000,
+        );
+      if (revCapa.ajustes.length > 0) setCapa(revCapa.capa);
+      if (tratados.size > 0) {
+        setDfds((m) => {
+          const n = new Map(m);
+          for (const [pid, t] of tratados) n.set(pid, t.d);
+          return n;
+        });
+        setEditados(new Set(tratados.keys()));
+        setItensEditados(new Set([...tratados].filter(([, t]) => t.itens).map(([pid]) => pid)));
+      }
+      const semAcesso = porDfd.length - tratados.size;
+      toast.info(
+        `Protocolo ${protocolo.numero} revisado: ${partes}.${semAcesso > 0 ? ` ${semAcesso} DFD(s) de unidade sem acesso ficaram como estão.` : ""} Confira e clique em "Salvar alterações".`,
+        10000,
+      );
+    });
   }
 
   /** Edição EM MASSA (mesma barra da análise) no RASCUNHO — só nos DFDs editáveis (unidade com acesso). */
@@ -499,12 +555,7 @@ export function useProtocoloGravado({
       ? estadoDeMensagens(mensagensAberto, { editado: editados.has(abertoId) || itensEditados.has(abertoId) })
       : null;
 
-  const botaoAtualizar =
-    proto && !travado ? (
-      <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
-        <IconRefresh className="h-5 w-5" />
-      </Button>
-    ) : undefined;
+  const botaoAtualizar = proto && !travado ? <BotaoAtualizar girando={giro.girando} onClick={atualizar} /> : undefined;
 
   /** Banner do PROTOCOLO (corpo único + seleção/edição em massa + relatório + salvar). */
   const principal: ConteudoBanner = {

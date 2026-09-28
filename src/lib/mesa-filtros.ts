@@ -9,6 +9,10 @@ export type FiltroMesa = { responsavel: "todos" | "sem" | number; assunto: strin
 
 export const FILTRO_MESA_TODOS: FiltroMesa = { responsavel: "todos", assunto: null };
 
+/** Preferência do usuário (`preferencias_tabela`): as tabelas da Mesa abrem com os DADOS COMPLETOS (`{ ligado: true }`;
+ * sem a linha = o resumo de uma linha). A mesma na Mesa principal e na do PCA. */
+export const PREF_DADOS_COMPLETOS = "mesa:dados-completos";
+
 /** Com que RESPONSÁVEL a Mesa abre (preferência do Perfil): "eu" (só os protocolos do usuário — o PADRÃO), "todos"
  * (geral) ou "sem" (os sem responsável). */
 export type MesaResponsavel = "eu" | "todos" | "sem";

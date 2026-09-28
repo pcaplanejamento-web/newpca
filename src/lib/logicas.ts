@@ -318,6 +318,19 @@ export const LOGICAS: LogicaRef[] = [
     fonte: "consolidarItens (itens-consolidados) + ComposicaoItem",
   },
   {
+    id: "mesa-dados-completos",
+    dominio: "protocolo",
+    titulo: "Dados completos nas tabelas da Mesa (um botão)",
+    descricao:
+      "Na barra da Mesa, ao lado dos filtros, o botão de dados completos troca o resumo de uma linha pelo conteúdo INTEIRO dentro das próprias tabelas: a descrição e o assunto sem cortes, as listas da Consolidada sem o \"+N\" (as descrições diferentes numeradas D1, D2…) e todos os problemas na coluna Estado.",
+    detalhes: [
+      "Vale para Protocolos, DFDs e Itens (Normal e Consolidada), na Mesa principal e na do PCA; os banners e o Dashboard não mudam.",
+      "A escolha fica guardada no usuário: a Mesa já abre do jeito escolhido (inclusive em outro aparelho).",
+      "Desligado, a linha volta à altura compacta — o texto inteiro segue na dica e no banner.",
+    ],
+    fonte: "BotaoDadosCompletos + DadosCompletos (CelulaTexto, CelulaLista, EstadoResumo) · preferência mesa:dados-completos",
+  },
+  {
     id: "proto-historico",
     dominio: "protocolo",
     titulo: "Histórico conectado: protocolo › DFD › item",
@@ -396,6 +409,36 @@ export const LOGICAS: LogicaRef[] = [
     descricao:
       "Ao conferir, a PRIORIDADE é reduzida a ALTA/MÉDIA/BAIXA e a PREVISÃO DE ENTREGA vira uma DATA (MÊS/AAAA) OU recorrente (ANUAL, com ou sem ano). O que não dá para padronizar fica para tratar à mão.",
     fonte: "normPrioridade / normPrevisao (normalize)",
+  },
+  {
+    id: "norm-texto-corrido",
+    dominio: "normalizacao",
+    titulo: "Texto do DFD em parágrafos — sem as quebras da linha do PDF",
+    descricao:
+      "No PDF, cada linha VISUAL virava uma quebra no texto das seções (\"…MONITORAMENTO REMOTO NO⏎DEPARTAMENTO…\"). Agora a importação refaz os parágrafos: a quebra FICA quando é real — fim de frase, item de lista, rótulo (\"Nome:\"), bloco novo, linha curta — e SOME quando é só a largura da linha. Na dúvida, a quebra fica.",
+    detalhes: [
+      "Pela GEOMETRIA do PDF: o vão entre as linhas (maior que a entrelinha = bloco novo) e até onde a linha vai (perto da margem direita = quebra da largura).",
+      "Pelo TEXTO: palavra de ligação no fim (\"…PARA GARANTIR A\", \"…E\", \"…,\") ou a seguinte continuando a frase (minúscula, \"E\", \"DE\"…) juntam; ponto final (fora de abreviação como \"SEC.\"), lista e rótulo separam.",
+      "O cabeçalho de página (o órgão emissor repetido no topo de cada página) não vaza mais para a seção que atravessa a página.",
+      "\"Órgão/Entidade\" e \"Setor Requisitante\" que quebram em 2 linhas voltam inteiros; Matrícula/e-mail/telefone vazios no PDF ficam vazios (nunca o \":\" nem os da equipe do §8).",
+      "Validado no protocolo real (15 DFDs): o texto gravado pela versão anterior, revisado pelo botão Atualizar, fica igual à importação nova.",
+    ],
+    fonte: "textoCorrido / refluirTexto (texto-corrido) · coletarSecoes / juntarContinuacoesCabecalho (parse-dfd-comum)",
+  },
+  {
+    id: "norm-revisao-atualizar",
+    dominio: "normalizacao",
+    titulo: "Botão Atualizar: recarrega e revisa o DFD, o item ou o protocolo",
+    descricao:
+      "O botão de atualização (ao lado do X dos banners gravados) GIRA enquanto recarrega do banco e REVISA os dados: aplica ao que já está gravado os MESMOS tratamentos automáticos da importação. O que foi tratado entra no rascunho, para conferir e gravar em \"Salvar alterações\" (com o histórico).",
+    detalhes: [
+      "Seções em parágrafos (sem as quebras da linha do PDF) e sem a linha do cabeçalho de página.",
+      "Textos limpos no cabeçalho do DFD, na descrição/unidade dos itens e na capa do protocolo.",
+      "A padronização automática do ADM (prioridade, previsão, sinônimos) e as referências da renovação lidas do texto (DFD-R sem nenhuma).",
+      "Nunca mexe em identificadores (nº, planejamento, ano do PCA), valores, quantidades, assinaturas nem na unidade; revisar de novo não muda nada.",
+      "Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que haveria a tratar.",
+    ],
+    fonte: "revisarDfd / revisarCapa (revisao-dfd) + BotaoAtualizar (useDfdGravado / useProtocoloGravado)",
   },
   {
     id: "norm-valor",

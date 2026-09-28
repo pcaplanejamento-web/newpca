@@ -1,5 +1,5 @@
 import { parseNumberBR } from "./normalize.ts";
-import { anoPcaDoTexto, type Assinatura, buscar, extrairAssinaturas, extrairCabecalho, norm } from "./parse-dfd-comum.ts";
+import { anoPcaDoTexto, type Assinatura, buscar, extrairAssinaturas, extrairCabecalho, juntarContinuacoesCabecalho, norm } from "./parse-dfd-comum.ts";
 import { agruparLinhas, linhasDeTexto, normalizar, type PdfItem } from "./parse-dfd-pdf-core.ts";
 
 /**
@@ -228,7 +228,7 @@ export function indexarProtocolo(paginas: PaginaTexto[], nomeArquivo: string): P
   }
 
   const dfds: DfdIndexado[] = grupos.map((g) => {
-    const cab = extrairCabecalho(g.lines);
+    const cab = extrairCabecalho(juntarContinuacoesCabecalho(g.lines));
     return {
       numero: g.numero,
       pages: g.pages,

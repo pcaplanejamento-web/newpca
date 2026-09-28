@@ -1,13 +1,17 @@
+"use client";
+
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { type ConferenciaCompacta, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import { corVeredictoCatalogo, type ResumoEstado, rotuloVeredictoCatalogo, veredictoLinhaCatalogo } from "@/lib/dfd-tratamento";
 import { chaveUnidade, motivoClassificacao, NAO_CADASTRADA, NAO_CLASSIFICADO, type ResultadoClassificacao, type UnidadeMedida } from "@/lib/padronizacao-core";
+import { useDadosCompletos } from "./DadosCompletos";
 import { IconAlert, IconSpinner } from "./icons";
 
 /**
  * Célula "Estado" das tabelas (DFDs, itens, protocolos) — UM componente para todas:
  * - `EstadoResumo`: aponta o problema PRINCIPAL (rótulo curto, na cor da importância) + contadores
- *   "+N" (erros em vermelho, atenções em âmbar); o `title` traz a lista completa (tooltip nativo).
+ *   "+N" (erros em vermelho, atenções em âmbar); o `title` traz a lista completa (tooltip nativo). Com os DADOS
+ *   COMPLETOS ligados (`DadosCompletos`), todos os problemas na própria célula.
  * - `EstadoPonto`: ponto + rótulo simples (Regular/Editado/Leitura incompleta/Atenção…).
  * - `EstadoProcessando`: spinner + o que está acontecendo ("Conferindo…", "Lendo o DFD…", "Na fila").
  * - `CelulaCatalogo`: a coluna "Catálogo" dos itens (Conforme / Fora do catálogo / Divergente / Tipo incompatível),
@@ -18,6 +22,21 @@ import { IconAlert, IconSpinner } from "./icons";
  * Sem quebra de linha (a coluna ganha a largura do conteúdo).
  */
 export function EstadoResumo({ res }: { res: ResumoEstado }) {
+  // DADOS COMPLETOS: TODOS os problemas na célula (o principal na cor da importância; os demais a seguir).
+  const completo = useDadosCompletos();
+  const outros = completo ? res.rotulos.filter((r) => r !== res.rotulo) : [];
+  if (outros.length > 0)
+    return (
+      <span className="inline-flex max-w-[22rem] flex-wrap items-center justify-center gap-x-1 whitespace-normal text-[12px] font-medium" title={res.titulo || undefined}>
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.cor }} />
+        <span style={{ color: res.cor }}>{res.rotulo}</span>
+        {outros.map((r) => (
+          <span key={r} className="text-text-2">
+            · {r}
+          </span>
+        ))}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium" title={res.titulo || undefined}>
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.cor }} />

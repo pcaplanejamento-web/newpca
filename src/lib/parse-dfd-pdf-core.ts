@@ -11,12 +11,14 @@ import {
   extrairAssinaturas,
   extrairCabecalho,
   extrairRefsDfd,
+  juntarContinuacoesCabecalho,
   limparDescricaoItem,
   norm,
   numeroDfd,
   TITULO_SECAO_ITENS,
   tituloSecaoPadrao,
 } from "./parse-dfd-comum.ts";
+import type { GeoLinha, LinhaCorrida } from "./texto-corrido.ts";
 
 /**
  * Núcleo PURO do parser de DFD a partir do PDF. Recebe os TRECHOS de texto com
@@ -1101,6 +1103,42 @@ export function lerTabelaItens(
   };
 }
 
+const indices = (de: number, ate: number) => Array.from({ length: Math.max(0, ate - de) }, (_, k) => de + k);
+
+/** Geometria da linha para o TEXTO CORRIDO: início/fim em `x`, base e corpo da fonte (0 = desconhecido). */
+function geoDaLinha(l: PdfLine): GeoLinha {
+  let x0 = Number.POSITIVE_INFINITY;
+  let x1 = 0;
+  let h = 0;
+  for (const i of l.items) {
+    x0 = Math.min(x0, i.x);
+    x1 = Math.max(x1, i.x + (i.w ?? 0));
+    h = Math.max(h, i.h ?? 0);
+  }
+  return { page: l.page, y: l.y, x0: Number.isFinite(x0) ? x0 : 0, x1, h };
+}
+
+/**
+ * Índices (em `linhas`) do CABEÇALHO DE PÁGINA — repetido no topo de cada página: "ESTADO DE GOIÁS" / o ÓRGÃO
+ * emissor / "DOCUMENTO DE FORMALIZAÇÃO…" / "… Número DFD: N / Planejamento: P". Vai até a linha do "Número DFD" (entre
+ * as 6 primeiras da página). O órgão emissor não é ruído fixo ("AMAE - AGENCIA…", "FUNDACAO MUNICIPAL…") e vazava
+ * para o texto da seção que atravessa a página.
+ */
+function cabecalhosDePagina(linhas: PdfLine[]): Set<number> {
+  const fora = new Set<number>();
+  for (let i = 0; i < linhas.length; ) {
+    let fim = i;
+    while (fim < linhas.length && linhas[fim].page === linhas[i].page) fim++;
+    for (let k = i; k < Math.min(fim, i + 6); k++) {
+      if (!/NUMERO DFD\s*:?\s*\d/.test(norm(linhas[k].items.map((t) => t.str).join(" ")))) continue;
+      for (let j = i; j <= k; j++) fora.add(j);
+      break;
+    }
+    i = fim;
+  }
+  return fora;
+}
+
 export function parseDfdFromPdfItems(
   bruto: PdfItem[],
   nomeArquivo: string,
@@ -1120,7 +1158,8 @@ export function parseDfdFromPdfItems(
   const lineTexts = linhas.map((l) => l.items.map((i) => i.str).join(" "));
   const lineTextsBrutos = items.length === normalizados.length ? lineTexts : linhasDeTexto(normalizados);
 
-  const cab = extrairCabecalho(lineTexts);
+  // O "Órgão/Entidade"/"Setor Requisitante" que quebra em 2 linhas volta inteiro (antes a 2ª linha se perdia).
+  const cab = extrairCabecalho(juntarContinuacoesCabecalho(lineTexts));
 
   // ---- Tabela (Seção 4) ----
   const hi = linhas.findIndex(ehCabecalhoItens);
@@ -1148,8 +1187,14 @@ export function parseDfdFromPdfItems(
   // senão o texto de um item (ex.: "…IEC 60601-2-52, SISTEMA DE GESTÃO…") viraria uma
   // "seção 2 - 52…". As seções 1/2/3 ficam antes do cabeçalho da tabela; 5/6/7/8/9
   // depois do fim da tabela. O apoio da Seção 4 (abaixo da tabela) é acrescentado.
-  const linhasFora = hi >= 0 ? [...lineTexts.slice(0, hi), ...lineTexts.slice(tableEndIdx)] : lineTexts;
-  const secoes = coletarSecoes(linhasFora);
+  // Sem o CABEÇALHO DE PÁGINA (o órgão emissor vazava para a seção que atravessa a página) e com a GEOMETRIA de
+  // cada linha — o texto sai CORRIDO (as quebras que eram só a largura da linha somem).
+  const cabPagina = cabecalhosDePagina(linhas);
+  const geos = linhas.map(geoDaLinha);
+  const idxFora = hi >= 0 ? [...indices(0, hi), ...indices(tableEndIdx, linhas.length)] : indices(0, linhas.length);
+  const linhasFora: LinhaCorrida[] = idxFora.filter((i) => !cabPagina.has(i)).map((i) => ({ texto: lineTexts[i], geo: geos[i] }));
+  const direita = geos.reduce((m, g) => Math.max(m, g.x1), 0);
+  const secoes = coletarSecoes(linhasFora, { direita: direita > 0 ? direita : null });
   if (apoioSecao4) secoes.push({ numero: 4, titulo: TITULO_SECAO_ITENS, texto: apoioSecao4 });
   secoes.sort((a, b) => a.numero - b.numero);
 

@@ -31,6 +31,7 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
       pcaFiltro={m.pcaFiltro}
       edicoes={m.edicoes}
       abrirInicial={abrirInicial}
+      dadosCompletos={m.dadosCompletos}
     />
   );
 }

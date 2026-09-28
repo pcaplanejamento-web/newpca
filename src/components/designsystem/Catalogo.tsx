@@ -57,7 +57,9 @@ import {
   propostaUnidade,
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
-import { CelulaLista, MaisN } from "@/components/CelulaLista";
+import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
+import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
+import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
@@ -1095,6 +1097,42 @@ const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
   { id: 3, codigo: "5241947270", descricao: "PAPEL SULFITE A4 BRANCO", unidade: "CX", quantidade: 10, valorUnitario: 139, valorTotal: 1390, dfdNumero: "1300", dfdPlanejamento: "1554", dfdTipo: "DFD-S", protocoloNumero: "97611/2026", sigla: "SMS", item: 12 },
   { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", dfdPlanejamento: "1525", dfdTipo: "DFD-S", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
 ];
+
+/** BotaoAtualizar (banners gravados — o ícone GIRA enquanto recarrega e revisa) + os DADOS COMPLETOS da Mesa
+ * (BotaoDadosCompletos + o provedor DadosCompletos: CelulaTexto, CelulaLista e EstadoResumo inteiros na célula). */
+function AtualizarEDadosCompletosDemo() {
+  const [ligado, setLigado] = useState(false);
+  const giro = useGiro();
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoAtualizar girando={giro.girando} onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))} />
+        <span className="text-[12px] text-faint">BotaoAtualizar — ao lado do X dos banners de DFD, item e protocolo: recarrega e revisa (gira ao menos uma volta).</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
+        <span className="text-[12px] text-faint">BotaoDadosCompletos — na barra da Mesa: o texto inteiro e todas as listas dentro das células.</span>
+      </div>
+      <DadosCompletos value={ligado}>
+        <div className="grid max-w-xl gap-2 rounded-card border border-border p-3 text-[13px] text-text">
+          <CelulaTexto texto="PAINEL DE LED P3 COM TELA DE ALTA DEFINIÇÃO PARA USO OUTDOOR COM ESTRUTURA METÁLICA DE SUSTENTAÇÃO E MÓDULOS COMPATÍVEIS ENTRE SI" />
+          <CelulaTexto texto="PAPEL SULFITE A4 BRANCO" outros={["PAPEL A4 75G BRANCO", "PAPEL SULFITE A4 (RESMA)"]} />
+          <CelulaLista valores={["97600/2026", "97611/2026", "97650/2026", "97701/2026"]} mono />
+          <EstadoResumo
+            res={{
+              rotulo: "Sem prioridade",
+              cor: "var(--danger)",
+              extraErros: 1,
+              extraAtencoes: 1,
+              titulo: "Erro: sem prioridade\nErro: item sem valor\nAtenção: assinatura não conferida",
+              rotulos: ["Sem prioridade", "Item sem valor", "Assinatura não conferida"],
+            }}
+          />
+        </div>
+      </DadosCompletos>
+    </div>
+  );
+}
 
 function ConsolidadosDemo() {
   const linhas = consolidarItens(ITENS_CONSOLIDADOS_DEMO);
@@ -2405,6 +2443,10 @@ export function Catalogo() {
           <Button size="xs" variant="ghost" aria-label="Vincular a protocolo" icon={<IconLayers className="h-4 w-4" />} />
           <Button size="xs" variant="ghost" aria-label="Excluir" icon={<IconTrash className="h-4 w-4" />} style={{ color: "var(--danger)" }} />
         </div>
+      </Secao>
+
+      <Secao titulo="Atualizar e revisar (BotaoAtualizar + useGiro) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
+        <AtualizarEDadosCompletosDemo />
       </Secao>
 
       <Secao titulo="Campos de formulário (ícone + foco accent)">

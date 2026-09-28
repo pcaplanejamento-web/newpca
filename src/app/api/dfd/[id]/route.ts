@@ -235,7 +235,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       acao: "editar",
       entidade: "dfd",
       entidadeId: id,
-      resumo: `DFD ${antes.numero}: ${partes.join(", ") || "salvo sem diferenças"}`.slice(0, 500),
+      // Sem diferença de CONTEÚDO (a comparação ignora espaços e quebras): o que mudou foi a formatação do texto — ex.: as
+      // seções em parágrafos pela revisão do botão Atualizar (o cliente só envia o que mudou).
+      resumo: `DFD ${antes.numero}: ${partes.join(", ") || "formatação do texto (espaços e quebras de linha)"}`.slice(0, 500),
       protocoloId: antes.protocoloId,
       origem: "banner",
       detalhe: c ? { alvo, campos: c.campos, secoes: c.secoes, assinaturas: c.assinaturas, itens: c.itens } : { alvo },

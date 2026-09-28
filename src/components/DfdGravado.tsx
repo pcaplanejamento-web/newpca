@@ -10,6 +10,8 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
+import { podeRevisarItens, resumoRevisao, revisarDfd } from "@/lib/revisao-dfd";
+import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
@@ -17,12 +19,13 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho, ItemCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconLock, IconRefresh, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconLock, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
-import { useConformidade } from "./useConformidade";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { toast } from "./Toast";
+import { useConformidade } from "./useConformidade";
 
 type Rep = {
   id: number;
@@ -124,15 +127,16 @@ export function useDfdGravado({
   // Versão dos dados carregados: remonta o corpo após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
 
-  // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (resposta atrasada é ignorada).
+  // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (resposta atrasada é ignorada). Devolve o que
+  // aplicou (`null` = falhou ou foi superada) — o Atualizar revisa em cima disso.
   const cargaRef = useRef(0);
-  async function carregar(id: number, alvo: ItemRef | null) {
+  async function carregar(id: number, alvo: ItemRef | null): Promise<{ detalhe: DfdDetalhe; d: DfdParseado } | null> {
     const minha = ++cargaRef.current;
     setErro(null);
     try {
       const r = await fetch(`/api/dfd/${id}`);
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe; unidade?: UnidadeConferencia | null };
-      if (minha !== cargaRef.current) return;
+      if (minha !== cargaRef.current) return null;
       if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
       const d = detalheParaParseado(j.dfd);
       setOrig(j.dfd);
@@ -148,8 +152,10 @@ export function useDfdGravado({
         setItemIdx(idx >= 0 ? idx : null);
       }
       setVersao((v) => v + 1);
+      return { detalhe: j.dfd, d };
     } catch (e) {
       if (minha === cargaRef.current) setErro(e instanceof Error ? e.message : "Não foi possível abrir o DFD.");
+      return null;
     }
   }
 
@@ -238,10 +244,33 @@ export function useDfdGravado({
     setPainel(null);
     onFechar();
   }
+  /**
+   * ATUALIZAR (o ícone gira): recarrega do banco e REVISA — os tratamentos automáticos da importação (`revisarDfd`:
+   * texto em parágrafos, textos limpos, padronização do ADM, referências da renovação) entram no RASCUNHO, para
+   * conferir e gravar em "Salvar alterações". DFD só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA)
+   * só recarrega e avisa o que haveria a tratar.
+   */
+  const giro = useGiro();
   function atualizar() {
     if (!orig) return;
-    if (!podeDescartar("Descartar as alterações não salvas e recarregar os dados do banco?")) return;
-    void carregar(orig.id, alvoAtual());
+    if (!podeDescartar("Descartar as alterações não salvas, recarregar do banco e revisar os dados?")) return;
+    const id = orig.id;
+    void giro.girar(async () => {
+      const r = await carregar(id, alvoAtual());
+      if (!r || pedidoRef.current !== id) return;
+      const { detalhe, d } = r;
+      const cat = classificarAssunto(detalhe.protocoloAssunto ?? null);
+      const rev = revisarDfd(d, { regras, anoPca: d.anoPca ?? detalhe.protocoloAnoPca ?? null, itens: podeRevisarItens(d, regras, cat) });
+      const ok = detalhe.reparticaoId == null || reparticoes.some((x) => x.id === detalhe.reparticaoId);
+      const trava = estaTravado({ pcaId: detalhe.protocoloPcaId, pcaIncorporadoEm: detalhe.protocoloPcaIncorporadoEm });
+      if (rev.ajustes.length === 0) return void toast.success(`DFD ${detalhe.numero} atualizado — nada a tratar.`);
+      if (!podeEditar || !ok || trava)
+        return void toast.warning(`DFD ${detalhe.numero} atualizado. Há dados a tratar (${resumoRevisao(rev.ajustes)}), mas ele está só-leitura.`, 8000);
+      setDfd(rev.dfd);
+      setEditado(true);
+      if (rev.itensAlterados) setItensEditados(true);
+      toast.info(`DFD ${detalhe.numero} revisado: ${resumoRevisao(rev.ajustes)}. Confira e clique em "Salvar alterações".`, 9000);
+    });
   }
   function verProtocolo() {
     if (!orig?.protocoloId || !onVerProtocolo) return;
@@ -306,12 +335,7 @@ export function useDfdGravado({
       Salvar alterações
     </Button>
   ) : undefined;
-  const botaoAtualizar =
-    orig && !travado ? (
-      <Button variant="icon" aria-label="Atualizar" title="Recarregar com os dados do banco" onClick={atualizar}>
-        <IconRefresh className="h-5 w-5" />
-      </Button>
-    ) : undefined;
+  const botaoAtualizar = orig && !travado ? <BotaoAtualizar girando={giro.girando} onClick={atualizar} /> : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
   /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever.
    * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */

@@ -1,4 +1,5 @@
 import { limparTexto, stripAccents } from "./normalize.ts";
+import { type LinhaCorrida, type OpcoesCorrido, textoCorrido } from "./texto-corrido.ts";
 
 /**
  * Lógica PURA compartilhada entre os parsers de DFD (planilha `.xlsx` e `.pdf`).
@@ -327,6 +328,13 @@ export function numeroDfd(v: unknown): number | null {
 }
 
 /** Primeiro grupo capturado não-vazio ao aplicar `re` a alguma das linhas. */
+/** Valor do PRIMEIRO rótulo que aparece (o do cabeçalho) — sem valor ⇒ `null` (não segue procurando em outra
+ * seção). */
+function buscarPrimeiro(linhas: string[], rotulo: RegExp, valor: RegExp): string | null {
+  const s = linhas.find((l) => rotulo.test(l));
+  return s?.match(valor)?.[1]?.trim() || null;
+}
+
 export function buscar(linhas: string[], re: RegExp): string | null {
   for (const s of linhas) {
     const m = s.match(re);
@@ -516,9 +524,11 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
     linhas,
     /Respons[áa]vel\s+pela\s+Demanda\s*:?\s*(.+?)(?:\s+Matr[íi]cula\b|$)/i,
   );
-  const matricula = buscar(linhas, /Matr[íi]cula\s*:?\s*(\S+)/i);
-  const email = buscar(linhas, /E-?mail\s*:?\s*([^\s]+@[^\s]+)/i);
-  const telefone = buscar(linhas, /Telefone\s*:?\s*(\S.*)$/i);
+  // Matrícula/e-mail/telefone do RESPONSÁVEL: o valor do 1º rótulo (o do cabeçalho). Vazio no PDF ⇒ `null` — nunca
+  // o ":" solto nem o da equipe de planejamento (§8 "Matrícula: …"/"Email: …", que vem depois).
+  const matricula = buscarPrimeiro(linhas, /Matr[íi]cula/i, /Matr[íi]cula\s*:?\s*([^\s:]\S*)/i);
+  const email = buscarPrimeiro(linhas, /E-?mail\s*:/i, /E-?mail\s*:?\s*([^\s:]+@[^\s]+)/i);
+  const telefone = buscarPrimeiro(linhas, /Telefone/i, /Telefone\s*:?\s*([^\s:].*)$/i);
 
   // objeto = texto antes de "Número DFD" na linha que o contém (ex.: F5).
   const linhaNum = linhas.find((s) => /N[úu]mero\s+DFD/i.test(s));
@@ -529,11 +539,13 @@ export function extrairCabecalho(linhas: string[]): Cabecalho {
         .trim() || null
     : null;
 
-  // sigla do setor = trecho antes de " - " (só quando há separador claro).
+  // sigla do setor = trecho antes de " - " (só quando há separador claro e cabe como sigla — o setor inteiro, em
+  // 2 linhas, pode ter um 1º trecho longo: não é sigla, e o servidor recusaria acima de 60).
   let siglaSetor: string | null = null;
   if (setorRequisitante) {
     const partes = setorRequisitante.split(/\s+[-–—]\s+/);
-    if (partes.length > 1) siglaSetor = norm(partes[0]) || null;
+    const sigla = partes.length > 1 ? norm(partes[0]) : "";
+    if (sigla && sigla.length <= 60) siglaSetor = sigla;
   }
 
   return {
@@ -580,26 +592,68 @@ export function tituloSecaoPadrao(linha: string): { numero: number; titulo: stri
 }
 
 /**
- * Coleta as SEÇÕES ("N - TÍTULO" + texto). Recebe a lista de "linhas iniciais" (1ª célula da linha no
- * `.xlsx` / texto da linha no `.pdf`). Só um TÍTULO PADRONIZADO (`SECOES_PADRAO`) abre seção — qualquer
- * outra linha "N - …" é texto da seção corrente (não cria seções indeterminadamente). Pula a área
- * requisitante (vira campos) e a tabela de itens, e ignora o ruído de página.
+ * Coleta as SEÇÕES ("N - TÍTULO" + texto). Recebe as "linhas iniciais" (1ª célula da linha no `.xlsx` / a linha do
+ * `.pdf`, com a GEOMETRIA). Só um TÍTULO PADRONIZADO (`SECOES_PADRAO`) abre seção — qualquer outra linha "N - …" é
+ * texto da seção corrente (não cria seções indeterminadamente). Pula a área requisitante (vira campos) e a tabela
+ * de itens, e ignora o ruído de página. O texto sai CORRIDO (`textoCorrido`): as quebras que são só a largura da
+ * linha do PDF somem; parágrafos, listas e rótulos ficam.
  */
-export function coletarSecoes(leadings: string[]): DfdSecao[] {
-  const brutas: { numero: number; titulo: string; chave: string; linhas: string[] }[] = [];
-  let atual: { numero: number; titulo: string; chave: string; linhas: string[] } | null = null;
-  for (const cell of leadings) {
-    if (!cell) continue;
-    const t = tituloSecaoPadrao(cell);
+export function coletarSecoes(linhas: ReadonlyArray<string | LinhaCorrida>, opts: OpcoesCorrido = {}): DfdSecao[] {
+  const brutas: { numero: number; titulo: string; chave: string; linhas: LinhaCorrida[] }[] = [];
+  let atual: (typeof brutas)[number] | null = null;
+  for (const l of linhas) {
+    const linha = typeof l === "string" ? { texto: l } : l;
+    if (!linha.texto) continue;
+    const t = tituloSecaoPadrao(linha.texto);
     if (t) {
       atual = { ...t, linhas: [] };
       brutas.push(atual);
       continue;
     }
-    if (atual && !ehRuido(cell)) atual.linhas.push(cell);
+    if (atual && !ehRuido(linha.texto)) atual.linhas.push(linha);
   }
   return brutas
     .filter((s) => s.chave !== "area" && s.chave !== "quantidade")
-    .map((s) => ({ numero: s.numero, titulo: s.titulo, texto: s.linhas.join("\n").trim() }))
+    .map((s) => ({ numero: s.numero, titulo: s.titulo, texto: textoCorrido(s.linhas, opts) }))
     .filter((s) => s.texto.length > 0);
+}
+
+// Campos do cabeçalho que ocupam a linha inteira e QUEBRAM em 2 linhas quando longos ("Setor Requisitante: … DE
+// ÁGUA E" ⏎ "ESGOTO - AMAE") — sem coluna à direita, então a linha seguinte sem rótulo é a continuação do valor.
+const RE_CAMPO_QUEBRAVEL = /^(ORGAO\s*\/?\s*ENTIDADE|SETOR REQUISITANTE)\s*:/;
+// Linha que abre um rótulo ("Xxx:") — não é continuação de valor.
+const RE_ROTULO_CAMPO = /^[\p{L}][\p{L}\p{M} ./-]{0,40}:/u;
+// Linha que abre OUTRO campo do cabeçalho (a continuação de um valor quebrado fica ENTRE dois destes).
+const RE_ROTULO_CABECALHO = /^(ORGAO\s*\/?\s*ENTIDADE|SETOR REQUISITANTE|RESPONSAVEL PELA DEMANDA|E-?MAIL|TELEFONE|MATRICULA|DATA)\s*:/;
+
+/**
+ * Junta ao "Órgão/Entidade:"/"Setor Requisitante:" do cabeçalho a CONTINUAÇÃO do valor quebrado em 2 linhas (antes o
+ * valor ficava cortado: "AGÊNCIA … DE ÁGUA E" sem o "ESGOTO - AMAE"). Só até 2 linhas SEM rótulo, e só quando a
+ * seguinte a elas abre OUTRO campo ("Responsável pela Demanda:") — o valor quebrado fica ENTRE dois rótulos; nunca
+ * cola a tabela de itens nem o texto de uma seção. Só p/ o PDF (linha = linha visual). Puro.
+ */
+export function juntarContinuacoesCabecalho(linhas: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < linhas.length; i++) {
+    out.push(linhas[i]);
+    if (!RE_CAMPO_QUEBRAVEL.test(norm(linhas[i]))) continue;
+    let j = i + 1;
+    while (j < linhas.length && j <= i + 2 && continuacaoCabecalho(linhas[j])) j++;
+    if (j === i + 1 || j >= linhas.length || !RE_ROTULO_CABECALHO.test(norm(linhas[j]))) continue;
+    const alvo = out.length - 1;
+    for (let k = i + 1; k < j; k++) {
+      // A "Data:" da coluna da direita (mesma linha reconstruída) fica DEPOIS do valor inteiro.
+      const d = out[alvo].search(/\s+Data\s*:/i);
+      const t = linhas[k].trim();
+      out[alvo] = d >= 0 ? `${out[alvo].slice(0, d)} ${t}${out[alvo].slice(d)}` : `${out[alvo]} ${t}`;
+    }
+    i = j - 1;
+  }
+  return out;
+}
+
+/** Linha que pode ser a continuação de um valor do cabeçalho: não vazia, sem rótulo, não é título nem ruído. */
+function continuacaoCabecalho(s: string): boolean {
+  const t = s.trim();
+  return !!t && !RE_ROTULO_CAMPO.test(t) && !tituloSecaoPadrao(t) && !ehRuido(t);
 }

@@ -3,10 +3,11 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
-import { FILTRO_MESA_TODOS, filtroInicialMesa } from "./mesa-filtros";
+import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
 import { listarOrgaos } from "./orgaos";
 import { anoMarcadosDoPca } from "./pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "./pca-filtro";
+import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "./reparticoes";
@@ -68,7 +69,7 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const ano = pcaFiltro?.ano ?? null;
   // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
   const anoMarcados = pcaId ? await anoMarcadosDoPca(pcaId) : null;
-  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes] = await Promise.all([
+  const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes, prefCompletos] = await Promise.all([
     pcaId ? listarDfds(undefined, pcaId, null, anoMarcados) : listarDfds(rep?.id, undefined, ano),
     pcaId ? listarProtocolosDoPca(pcaId, anoMarcados) : listarProtocolos(rep?.id, ano),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
@@ -77,6 +78,8 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     listarSituacoes(),
     // As EDIÇÕES SALVAS das tabelas desta Mesa (as do usuário e as públicas) — a do PCA tem as suas (outras colunas).
     carregarEdicoes(u?.id ?? null, prefixoEdicoesMesa(pcaId)),
+    // O botão "Dados completos" da barra (a preferência do usuário — a Mesa já ABRE assim, sem piscar).
+    u ? listarPreferenciasTabela(u.id, PREF_DADOS_COMPLETOS) : Promise.resolve({} as Record<string, unknown>),
   ]);
   const protocolos = pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos;
   const dfds = pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos;
@@ -108,5 +111,7 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     /** Mesa do PCA: o ano dos MARCADOS ainda na Mesa do sistema que ela também mostra (`null` = visão desligada). */
     anoMarcados,
     edicoes: { prefixo: prefixoEdicoesMesa(pcaId), ...edicoes },
+    /** As tabelas abrem com os DADOS COMPLETOS (texto inteiro, todas as listas) — a escolha do usuário no botão da barra. */
+    dadosCompletos: (prefCompletos[PREF_DADOS_COMPLETOS] as { ligado?: unknown } | undefined)?.ligado === true,
   };
 }

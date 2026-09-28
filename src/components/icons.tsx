@@ -112,6 +112,7 @@ import {
   ZoomIn,
   FoldHorizontal,
   UnfoldHorizontal,
+  WrapText,
   Ban,
 } from "lucide-react";
 
@@ -204,6 +205,8 @@ export const IconZoom = ZoomIn;
 /** Recolher / expandir uma lista do quadro (como no Trello). */
 export const IconRecolher = FoldHorizontal;
 export const IconExpandir = UnfoldHorizontal;
+/** Dados COMPLETOS nas células (texto inteiro, todas as linhas) — o alternador da Mesa. */
+export const IconTextoCompleto = WrapText;
 /** "Nenhum" (sem fundo — o padrão do sistema). */
 export const IconNenhum = Ban;
 export const IconArquivar = Archive;
