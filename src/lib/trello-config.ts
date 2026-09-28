@@ -8,7 +8,7 @@ import { type ClienteTrello, clienteTrello } from "./trello-api";
  * por que não dá para falar com o Trello agora (desligado, incompleto, sem a chave mestra).
  */
 export async function trelloDaConfig(): Promise<{ cliente: ClienteTrello; membroId: string; segredo: string | null } | { erro: string }> {
-  const integ = await getIntegracoes();
+  const integ = await getIntegracoes({ fresco: true });
   if (!trelloConfigurado(integ) || !integ.trello) return { erro: "A integração com o Trello não está ativa (Administração → Integrações)." };
   const token = await decifrarSegredo(integ.trello.token);
   if (!token) return { erro: "Não foi possível ler o token do Trello — confira a chave mestra (INTEGRACOES_CHAVE) e salve o token de novo." };

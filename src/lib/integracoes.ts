@@ -18,8 +18,12 @@ export function parseIntegracoes(dados: string | null | undefined): Integracoes 
   }
 }
 
-export async function getIntegracoes(): Promise<Integracoes> {
-  if (cache && Date.now() - cache.at < TTL) return cache.dados;
+/**
+ * A configuração de integrações. `fresco` = lê direto do banco (o cache é POR ISOLATE do Worker: o "Salvar" só limpa o do
+ * isolate que o atendeu — quem precisa do valor recém-gravado, como o teste de conexão e o Trello, pede fresco).
+ */
+export async function getIntegracoes(opcoes: { fresco?: boolean } = {}): Promise<Integracoes> {
+  if (!opcoes.fresco && cache && Date.now() - cache.at < TTL) return cache.dados;
   try {
     const [row] = await getDb()
       .select({ dados: configuracoes.dados })

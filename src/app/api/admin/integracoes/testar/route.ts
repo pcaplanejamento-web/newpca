@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     }
   }
   if (corpo.data.alvo === "turnstile") {
-    const integ = await getIntegracoes();
+    const integ = await getIntegracoes({ fresco: true });
     const r = await testarTurnstile(integ);
     return r.ok ? ok({ detalhe: r.detalhe }) : erro(r.detalhe, 422);
   }

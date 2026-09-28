@@ -34,7 +34,7 @@ async function quadroDoEditor(ctx: Ctx) {
 export async function GET(_req: Request, ctx: Ctx) {
   const r = await quadroDoEditor(ctx);
   if ("resp" in r) return r.resp;
-  return ok({ configurado: trelloConfigurado(await getIntegracoes()), ligacao: await estadoTrello(r.q.id), pode: r.pode });
+  return ok({ configurado: trelloConfigurado(await getIntegracoes({ fresco: true })), ligacao: await estadoTrello(r.q.id), pode: r.pode });
 }
 
 const acaoSchema = z.object({
