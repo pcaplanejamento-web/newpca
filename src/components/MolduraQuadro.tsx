@@ -138,7 +138,7 @@ export function PilulaVistas<T extends string>({ opcoes, valor, onTrocar, extra 
 }
 
 /** O MENU "…" do quadro (como o do Trello): itens arquivados, imagem de fundo, automações, configurações, copiar o link. */
-export function MenuQuadro({ onArquivados, onConfiguracao, podeEditar }: { onArquivados: () => void; onConfiguracao: (secao?: "fundo" | "automacoes") => void; podeEditar: boolean }) {
+export function MenuQuadro({ onArquivados, onConfiguracao, podeEditar }: { onArquivados: () => void; onConfiguracao: (secao?: "fundo" | "automacoes" | "trello") => void; podeEditar: boolean }) {
   return (
     <Dropdown
       align="end"

@@ -78,7 +78,7 @@ import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton"
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
-import { seloTrello } from "@/components/SincronizacaoTrello";
+import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
 import {
   IconAlert,
   IconArrowRight,
@@ -3533,6 +3533,19 @@ export function Catalogo() {
               </Badge>
             );
           })}
+        </div>
+      </Secao>
+
+      <Secao titulo="IndicadorTrello (a faixa do quadro ligado: o ícone + o ponto do estado; tocar leva à seção Trello)">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { estado: "ativo", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 0, erros: 0 },
+            { estado: "ativo", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 2, erros: 0 },
+            { estado: "erro", boardUrl: null, sincronizadoEm: null, ultimoErro: "Falhou", pendentes: 0, erros: 1 },
+            { estado: "pausado", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 0, erros: 0 },
+          ].map((l, i) => (
+            <IndicadorTrello key={i} ligacao={l} onAbrir={() => toast.info(seloTrello(l)[1])} />
+          ))}
         </div>
       </Secao>
     </>

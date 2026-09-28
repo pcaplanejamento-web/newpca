@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { tarefaComentarios, tarefaListas, tarefas, trelloFila, trelloQuadros, trelloVinculos } from "@/db/schema";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
+import { norm } from "./parse-dfd-comum";
 import { type BlocoTarefa, hrefVinculo, PALETA_ETIQUETAS, type TarefaResumo } from "./tarefas-core";
 import {
   atualizarItemChecklist,
@@ -128,7 +129,7 @@ async function processarItem(ctx: Ctx, direcao: string, tipo: string, alvo: stri
   if (tipo === "lista") return sincronizarLista(ctx, direcao === "saida" ? { localId: Number(alvo) } : { trelloId: alvo });
   if (tipo === "etiqueta") return sincronizarEtiqueta(ctx, direcao === "saida" ? { localId: Number(alvo) } : { trelloId: alvo });
   if (tipo === "quadro") return sincronizarBoard(ctx);
-  if (tipo === "campo") return; // campos novos/renomeados entram pela "Continuar" da criação (fase 5 — reconciliação)
+  if (tipo === "campo") return sincronizarCampo(ctx, Number(alvo));
 }
 
 // ─── Vínculos ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -146,6 +147,8 @@ async function gravarVinculo(quadroId: number, tipo: string, localId: number, tr
 async function tirarVinculo(tipo: string, localId: number) {
   await getDb().delete(trelloVinculos).where(and(eq(trelloVinculos.tipo, tipo), eq(trelloVinculos.localId, localId)));
 }
+/** O mesmo texto (sem acento/caixa/espaços extras) — casa o que já existe dos dois lados. */
+const mesmoTexto = (a: string, b: string) => norm(a).replace(/\s+/g, " ").trim() === norm(b).replace(/\s+/g, " ").trim();
 const naoAchou = (e: unknown) => e instanceof ErroTrello && (e.status === 404 || e.status === 400);
 
 // ─── Registro no histórico (origem `trello`) ───────────────────────────────────────────────────────────────
@@ -388,6 +391,13 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: stri
   for (const cl of cls) {
     const vc = vCl.get(cl.id);
     if (!vc) {
+      // Um checklist de MESMO nome lá, ainda sem vínculo (a fusão com um board existente): liga em vez de duplicar.
+      const par = lados.find((l) => !vClT.has(l.id) && !localPorTrelloCl.has(l.id) && mesmoTexto(l.name, cl.nome));
+      if (par) {
+        await gravarVinculo(q, "checklist", cl.id, par.id, { name: par.name });
+        localPorTrelloCl.set(par.id, cl.id);
+        continue;
+      }
       const r = await c.post<{ id: string }>("/checklists", { idCard: card.id, name: cl.nome });
       await gravarVinculo(q, "checklist", cl.id, r.id, { name: cl.nome });
       localPorTrelloCl.set(r.id, cl.id);
@@ -431,6 +441,18 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: stri
     if (!clTrello) continue;
     const meu = valItem(i);
     if (!vi) {
+      // Item de MESMO texto no checklist casado, ainda sem vínculo: liga (marcado de um lado = marcado nos dois).
+      const par = [...itensLa.values()].find((x) => x.idChecklist === clTrello && !vItT.has(x.id) && mesmoTexto(x.name, meu.name));
+      if (par) {
+        const deLa: ValoresItem = { name: par.name, state: par.state, due: par.due ? new Date(par.due).toISOString() : null, idMember: par.idMember ?? null };
+        const junto: ValoresItem = { ...meu, state: meu.state === "complete" || par.state === "complete" ? "complete" : "incomplete" };
+        if (junto.state !== meu.state) await atualizarItemChecklist({ id: i.id, tarefaId: t.id, checklistId: i.checklistId }, { feito: true });
+        if (JSON.stringify(junto) !== JSON.stringify(deLa))
+          await c.put(`/cards/${card.id}/checkItem/${par.id}`, { name: junto.name, state: junto.state, due: junto.due ?? "", idMember: junto.idMember ?? "" });
+        await gravarVinculo(q, "item", i.id, par.id, junto);
+        vItT.set(par.id, { id: 0, quadroId: q, tipo: "item", localId: i.id, trelloId: par.id, retrato: null, sincronizadoEm: null });
+        continue;
+      }
       const r = await c.post<{ id: string }>(`/checklists/${clTrello}/checkItems`, { name: meu.name, checked: meu.state === "complete", pos: "bottom", due: meu.due, idMember: meu.idMember });
       await gravarVinculo(q, "item", i.id, r.id, meu);
       continue;
@@ -476,13 +498,20 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: stri
   const vCo = vPor("comentario");
   const vCoT = vTrello("comentario");
   const comentarios = await getDb().select().from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, t.id)).orderBy(asc(tarefaComentarios.id));
+  const acoes = await c.get<ComentarioApi[]>(`/cards/${card.id}/actions`, { filter: "commentCard", limit: 50 });
   for (const co of comentarios)
     if (!vCo.has(co.id)) {
+      // O MESMO comentário já lá (a fusão, ou um que veio do Trello pela importação): liga em vez de repetir.
+      const par = acoes.find((a) => !vCoT.has(a.id) && (mesmoTexto(a.data.text, co.texto) || mesmoTexto(a.data.text, `**${co.usuarioNome ?? "PCA"} (PCA):** ${co.texto}`)));
+      if (par) {
+        await gravarVinculo(q, "comentario", co.id, par.id, null);
+        vCoT.set(par.id, { id: 0, quadroId: q, tipo: "comentario", localId: co.id, trelloId: par.id, retrato: null, sincronizadoEm: null });
+        continue;
+      }
       const r = await c.post<{ id: string }>(`/cards/${card.id}/actions/comments`, { text: `**${co.usuarioNome ?? "PCA"} (PCA):** ${co.texto}`.slice(0, 16384) });
       await gravarVinculo(q, "comentario", co.id, r.id, null);
       vCoT.set(r.id, { id: 0, quadroId: q, tipo: "comentario", localId: co.id, trelloId: r.id, retrato: null, sincronizadoEm: null });
     }
-  const acoes = await c.get<ComentarioApi[]>(`/cards/${card.id}/actions`, { filter: "commentCard", limit: 50 });
   for (const a of acoes) {
     if (vCoT.has(a.id)) continue;
     const autor = await pessoaDoMembro(a.idMemberCreator);
@@ -604,6 +633,122 @@ async function sincronizarEtiqueta(ctx: Ctx, alvo: { localId?: number; trelloId?
     await atualizarEtiqueta(e.id, { nome: la.name.slice(0, 30) || e.nome, cor: hexDeCorTrello(la.color, PALETA_ETIQUETAS) ?? e.cor });
     await gravarVinculo(ctx.lig.quadroId, "etiqueta", e.id, la.id, deLa);
   }
+}
+
+/**
+ * O CAMPO PERSONALIZADO daqui → o do board (daqui para lá): novo = cria no MESMO tipo; renomeado = renomeia; tipo trocado =
+ * recria (aqui os valores também foram apagados); opção nova numa lista = acrescenta; excluído = exclui lá.
+ */
+async function sincronizarCampo(ctx: Ctx, localId: number) {
+  const { tarefaCampos } = await import("@/db/schema");
+  const { lerOpcoesCampo } = await import("./tarefas-core");
+  const { TIPO_CAMPO_TRELLO } = await import("./trello-sync-core");
+  const [c] = await getDb().select().from(tarefaCampos).where(eq(tarefaCampos.id, localId));
+  const campos = ctx.campos;
+  const salvar = () => getDb().update(trelloQuadros).set({ campos: JSON.stringify(campos) }).where(eq(trelloQuadros.quadroId, ctx.lig.quadroId));
+  const apagarLa = async (cf: string) => {
+    await ctx.cliente.del(`/customFields/${cf}`).catch((e) => (naoAchou(e) ? null : Promise.reject(e)));
+    delete campos.porCampo[localId];
+    delete campos.opcoes[cf];
+    if (campos.tipos) delete campos.tipos[cf];
+  };
+  let cf: string | undefined = campos.porCampo[localId];
+  if (!c || c.quadroId !== ctx.lig.quadroId) {
+    if (cf) {
+      await apagarLa(cf);
+      await salvar();
+    }
+    return;
+  }
+  const tipo = TIPO_CAMPO_TRELLO[c.tipo as keyof typeof TIPO_CAMPO_TRELLO] ?? "text";
+  const opcoes = c.tipo === "lista" ? lerOpcoesCampo(c.opcoes) : [];
+  if (cf && campos.tipos?.[cf] && campos.tipos[cf] !== tipo) {
+    await apagarLa(cf);
+    cf = undefined;
+  }
+  if (!cf) {
+    const r = await ctx.cliente.post<{ id: string; options?: { id: string; value: { text: string } }[] }>("/customFields", undefined, {
+      idModel: ctx.lig.boardId,
+      modelType: "board",
+      name: c.nome,
+      type: tipo,
+      pos: "bottom",
+      display_cardFront: true,
+      ...(tipo === "list" ? { options: opcoes.map((t, i) => ({ value: { text: t }, pos: (i + 1) * 1024 })) } : {}),
+    });
+    campos.porCampo[localId] = r.id;
+    campos.tipos = { ...(campos.tipos ?? {}), [r.id]: tipo };
+    if (r.options?.length) campos.opcoes[r.id] = Object.fromEntries(r.options.map((o) => [o.id, o.value.text]));
+    await salvar();
+    return;
+  }
+  await ctx.cliente.put(`/customFields/${cf}`, undefined, { name: c.nome });
+  if (tipo === "list") {
+    const ja = new Set(Object.values(campos.opcoes[cf] ?? {}));
+    for (const texto of opcoes.filter((o) => !ja.has(o))) {
+      const o = await ctx.cliente.post<{ id: string; value: { text: string } }>(`/customFields/${cf}/options`, undefined, { value: { text: texto }, pos: "bottom" });
+      campos.opcoes[cf] = { ...(campos.opcoes[cf] ?? {}), [o.id]: o.value.text };
+    }
+  }
+  await salvar();
+}
+
+/**
+ * A RECONCILIAÇÃO periódica (o cron — a rede de segurança dos avisos): por quadro ligado, UMA leitura dos cartões do board
+ * (só a data da última atividade) × os vínculos — cartão novo ou alterado depois da última sincronização, cartão que sumiu,
+ * tarefa alterada/criada/excluída aqui e campo personalizado sem par entram na fila. Liga os avisos que faltam.
+ */
+export async function reconciliarQuadros(limite = 10): Promise<number> {
+  const t = await trelloDaConfig();
+  if ("erro" in t) return 0;
+  const db = getDb();
+  const { tarefaCampos } = await import("@/db/schema");
+  const { garantirWebhook } = await import("./trello-vincular");
+  const ligs = await db
+    .select()
+    .from(trelloQuadros)
+    .where(inArray(trelloQuadros.estado, ["ativo", "erro"]))
+    .orderBy(asc(trelloQuadros.sincronizadoEm))
+    .limit(limite);
+  const ms = (x: string | null | undefined) => (x ? Date.parse(x.includes("T") ? x : `${x.replace(" ", "T")}Z`) || 0 : 0);
+  let postos = 0;
+  const por = async (quadroId: number, direcao: "saida" | "entrada", tipo: "tarefa" | "campo", alvo: string) => {
+    await enfileirar(quadroId, direcao, tipo, alvo);
+    postos++;
+  };
+  for (const lig of ligs)
+    try {
+      const campos = lerCamposBoard(lig.campos);
+      if (!lig.webhookId && t.segredo && campos.origem) await garantirWebhook(t.cliente, lig, campos.origem, true).catch(() => null);
+      const cards = await t.cliente.get<{ id: string; dateLastActivity: string | null }[]>(`/boards/${lig.boardId}/cards/all`, { fields: "dateLastActivity" });
+      const vs = await db
+        .select({ localId: trelloVinculos.localId, trelloId: trelloVinculos.trelloId, em: trelloVinculos.sincronizadoEm })
+        .from(trelloVinculos)
+        .where(and(eq(trelloVinculos.quadroId, lig.quadroId), eq(trelloVinculos.tipo, "tarefa")));
+      const porCard = new Map(vs.map((v) => [v.trelloId, v]));
+      const porLocal = new Map(vs.map((v) => [v.localId, v]));
+      const noBoard = new Set(cards.map((c) => c.id));
+      for (const c of cards) {
+        const v = porCard.get(c.id);
+        // 1 s de folga: a data do vínculo não tem milissegundos.
+        if (!v || ms(c.dateLastActivity) > ms(v.em) + 1000) await por(lig.quadroId, "entrada", "tarefa", c.id);
+      }
+      const locais = await db.select({ id: tarefas.id, em: tarefas.atualizadoEm }).from(tarefas).where(eq(tarefas.quadroId, lig.quadroId));
+      const existe = new Set(locais.map((x) => x.id));
+      for (const x of locais) {
+        const v = porLocal.get(x.id);
+        if (!v || ms(x.em) > ms(v.em)) await por(lig.quadroId, "saida", "tarefa", String(x.id));
+      }
+      for (const v of vs) if (!existe.has(v.localId) || !noBoard.has(v.trelloId)) await por(lig.quadroId, "saida", "tarefa", String(v.localId));
+      const cs = await db.select({ id: tarefaCampos.id }).from(tarefaCampos).where(eq(tarefaCampos.quadroId, lig.quadroId));
+      for (const c of cs) if (!campos.porCampo[c.id]) await por(lig.quadroId, "saida", "campo", String(c.id));
+      const vivos = new Set(cs.map((c) => c.id));
+      for (const id of Object.keys(campos.porCampo)) if (!vivos.has(Number(id))) await por(lig.quadroId, "saida", "campo", id);
+    } catch (e) {
+      console.error("[trello] reconciliação:", (e as Error).message);
+      if (e instanceof ErroTrello && e.status === 429) break;
+    }
+  return postos;
 }
 
 /** O board acompanha o NOME e a DESCRIÇÃO do quadro (daqui para lá). */

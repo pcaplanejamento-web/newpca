@@ -1130,8 +1130,11 @@ conexão) e a ligação das pessoas com os membros do Trello. ✅ **Fase 2:** "C
 board adaptado (listas, etiquetas na mesma paleta, campos Prioridade/Estimativa/Ticket e os do quadro, membros, cartões,
 checklists, comentários e anexos), em etapas retomáveis. ✅ **Fases 3–4:** a sincronização contínua nos dois sentidos —
 o que muda aqui vai para o Trello depois da resposta; o que muda no Trello chega pelo aviso (webhook assinado); no mesmo
-campo alterado dos dois lados, vence o mais recente e o outro fica no histórico. 🔜 Fase 5: criar/ligar o quadro no Trello, sincronização de
-saída e de entrada (a alteração mais recente vence, o valor perdido fica no histórico) e a verificação periódica.
+campo alterado dos dois lados, vence o mais recente e o outro fica no histórico. ✅ **Ligar a um quadro existente:**
+a fusão casa listas, etiquetas, campos e cartões pelo nome (o cartão, dentro da lista casada); nas diferenças vale a
+alteração mais recente e o que só existe de um lado vai ao outro. ✅ **Fase 5 (robustez):** verificação a cada 5 minutos
+(cron do próprio Worker) — o que um aviso perdido deixou para trás entra na fila; campos personalizados novos/renomeados/
+excluídos acompanham; indicador do Trello na faixa do quadro e "Abrir no Trello" no detalhe da tarefa.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

@@ -75,3 +75,17 @@ export async function marcarSaidaTrello(entidade: string, id: number | null | un
     console.error("[trello] falha ao pôr na fila:", e);
   }
 }
+
+/** O endereço do CARTÃO da tarefa no Trello (quadro ligado) — "Abrir no Trello" no detalhe. */
+export async function urlDoCartao(tarefaId: number): Promise<string | null> {
+  const [v] = await getDb()
+    .select({ r: trelloVinculos.retrato })
+    .from(trelloVinculos)
+    .where(and(eq(trelloVinculos.tipo, "tarefa"), eq(trelloVinculos.localId, tarefaId)));
+  try {
+    const u = v?.r ? (JSON.parse(v.r) as { url?: unknown }).url : null;
+    return typeof u === "string" && u.startsWith("https://trello.com/") ? u : null;
+  } catch {
+    return null;
+  }
+}

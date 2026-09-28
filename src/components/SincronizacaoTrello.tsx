@@ -10,12 +10,15 @@ import { useConfirmacao } from "./Confirmacao";
 import { ErroCarga } from "./ErroCarga";
 import { IconTrello } from "./icons";
 import { LinkExterno } from "./LinkExterno";
+import { Modal } from "./Modal";
+import { SeletorBusca } from "./SeletorBusca";
 import { Progress } from "./Progress";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 
 /** O estado da ligação que a rota devolve. */
 export type EstadoTrello = { estado: string; boardUrl: string | null; sincronizadoEm: string | null; ultimoErro: string | null; pendentes: number; erros: number };
+type BoardTrello = { id: string; nome: string; url: string; ultimaAtividade: string | null; ligado: boolean };
 type Progresso = Record<"listas" | "etiquetas" | "cartoes" | "checklists" | "comentarios", [number, number]>;
 
 const ROTULO_PROGRESSO: Record<keyof Progresso, string> = { listas: "Listas", etiquetas: "Etiquetas", cartoes: "Cartões", checklists: "Checklists e itens", comentarios: "Comentários" };
@@ -25,24 +28,45 @@ export const NAO_SINCRONIZA = ["observadores", "equipes", "eventos da tarefa", "
 /** O selo do estado (tom + rótulo). */
 export function seloTrello(l: EstadoTrello | null): [Tone, string] {
   if (!l) return ["slate", "Não ligado"];
-  if (l.estado === "vinculando") return ["amber", "Criando no Trello"];
+  if (l.estado === "vinculando") return ["amber", "Ligando ao Trello"];
   if (l.estado === "pausado") return ["slate", "Pausado"];
   if (l.estado === "erro" || l.erros > 0) return ["red", "Com erro"];
   if (l.pendentes > 0) return ["amber", `${l.pendentes} pendente(s)`];
   return ["emerald", "Sincronizado"];
 }
 
+const COR_TOM: Partial<Record<Tone, string>> = { emerald: "var(--ok)", amber: "var(--warn)", red: "var(--danger)" };
+
+/** O INDICADOR do Trello na faixa do quadro ligado: o ícone + o ponto do estado (tocar leva à seção Trello). */
+export function IndicadorTrello({ ligacao, onAbrir }: { ligacao: EstadoTrello; onAbrir: () => void }) {
+  const [tom, rotulo] = seloTrello(ligacao);
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      title={`Trello: ${rotulo}`}
+      aria-label={`Trello: ${rotulo}`}
+      className="relative grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9"
+    >
+      <IconTrello className="h-4 w-4" />
+      <span aria-hidden className="absolute top-2 right-2 h-2 w-2 rounded-full ring-2 ring-surface lg:top-1.5 lg:right-1.5" style={{ background: COR_TOM[tom] ?? "var(--muted)" }} />
+    </button>
+  );
+}
+
 /**
  * A seção TRELLO da Configuração do quadro: sem ligação, "Criar no Trello" (o board ADAPTADO — listas, etiquetas na mesma
  * paleta, campos personalizados Prioridade/Estimativa/Ticket + os do quadro, membros ligados, cartões, checklists,
- * comentários e anexos), em etapas com o PROGRESSO (retomável: parar no meio não duplica nada); ligado, o estado, "Abrir no
- * Trello", "Continuar" (se parou no meio) e "Desligar". Mostra o que NÃO sincroniza.
+ * comentários e anexos) ou "Ligar a um quadro existente" (a FUSÃO: casa pelo nome; o que só existe de um lado vai ao
+ * outro), em etapas com o PROGRESSO (retomável: parar no meio não duplica nada); ligado, o estado, "Abrir no Trello",
+ * "Continuar" (se parou no meio) e "Desligar". Mostra o que NÃO sincroniza.
  */
 export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; privado: boolean }) {
   const [dados, setDados] = useState<{ configurado: boolean; ligacao: EstadoTrello | null; pode: boolean } | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const [rodando, setRodando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
+  const [escolha, setEscolha] = useState<{ boards: BoardTrello[] | null; falha: string | null; valor: string } | null>(null);
   const vivo = useRef(true);
   const { confirmar, confirmacao } = useConfirmacao();
   const carregar = useCallback(() => {
@@ -60,17 +84,20 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
   }, [carregar]);
 
   /** Cria (ou continua) — repete a etapa até não faltar nada; uma falha para e deixa "Continuar". */
-  const executar = async (acao: "criar" | "etapa") => {
+  const executar = async (acao: "criar" | "ligar" | "etapa", boardId?: string) => {
     setRodando(true);
     try {
-      let a: "criar" | "etapa" = acao;
+      let a: "criar" | "ligar" | "etapa" = acao;
       for (let i = 0; i < 500 && vivo.current; i++) {
-        const r = await chamar<{ progresso: Progresso; restante: number; ligacao: EstadoTrello; aviso?: string | null }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao: a });
+        const r = await chamar<{ progresso: Progresso; restante: number; ligacao: EstadoTrello; aviso?: string | null }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", {
+          acao: a,
+          ...(a === "ligar" ? { boardId } : {}),
+        });
         a = "etapa";
         setProgresso(r.progresso);
         setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
         if (!r.restante) {
-          toast.success("Quadro criado no Trello.");
+          toast.success(acao === "ligar" ? "Quadro ligado ao Trello — o que só existe de um lado está sendo levado ao outro." : "Quadro ligado ao Trello.");
           if (r.aviso) toast.warning(r.aviso);
           break;
         }
@@ -81,6 +108,14 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
     } finally {
       if (vivo.current) setRodando(false);
     }
+  };
+
+  /** Abre a escolha do quadro existente (os boards da conta institucional). */
+  const abrirEscolha = () => {
+    setEscolha({ boards: null, falha: null, valor: "" });
+    chamar<{ boards: BoardTrello[] }>("/api/integracoes/trello/boards")
+      .then((r) => vivo.current && setEscolha((e) => (e ? { ...e, boards: r.boards } : e)))
+      .catch((e) => vivo.current && setEscolha((x) => (x ? { ...x, falha: (e as Error).message } : x)));
   };
 
   /** Sincronizar agora / pausar / retomar. */
@@ -115,9 +150,14 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
         <div className="ml-auto flex flex-wrap gap-2">
           {l?.boardUrl && <LinkExterno href={l.boardUrl}>Abrir no Trello</LinkExterno>}
           {dados.pode && !l && (
-            <Button size="sm" disabled={!dados.configurado || rodando} loading={rodando} onClick={() => executar("criar")}>
-              Criar no Trello
-            </Button>
+            <>
+              <Button size="sm" variant="secondary" disabled={!dados.configurado || rodando} onClick={abrirEscolha}>
+                Ligar a um quadro existente
+              </Button>
+              <Button size="sm" disabled={!dados.configurado || rodando} loading={rodando} onClick={() => executar("criar")}>
+                Criar no Trello
+              </Button>
+            </>
           )}
           {dados.pode && l?.estado === "vinculando" && !rodando && (
             <Button size="sm" onClick={() => executar("etapa")}>
@@ -160,7 +200,7 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
       {l?.ultimoErro && <Callout kind="danger">{l.ultimoErro}</Callout>}
       {progresso && (rodando || feito < total) && (
         <div className="space-y-2">
-          <Progress value={total ? (feito / total) * 100 : 0} label="Criando no Trello" />
+          <Progress value={total ? (feito / total) * 100 : 0} label="Ligando ao Trello" />
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px] text-muted sm:grid-cols-3">
             {(Object.keys(ROTULO_PROGRESSO) as (keyof Progresso)[]).map((k) => (
               <li key={k} className="tabular-nums">
@@ -173,6 +213,54 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
       <p className="text-[12px] text-muted">
         Ficam só aqui (o Trello não tem o equivalente): {NAO_SINCRONIZA.join(", ")}.
       </p>
+      <Modal
+        open={!!escolha}
+        onClose={() => setEscolha(null)}
+        titulo="Ligar a um quadro existente do Trello"
+        size="md"
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setEscolha(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!escolha?.valor}
+              onClick={() => {
+                const b = escolha?.valor;
+                setEscolha(null);
+                if (b) void executar("ligar", b);
+              }}
+            >
+              Ligar
+            </Button>
+          </div>
+        }
+      >
+        {escolha && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-muted">
+              Listas, etiquetas e cartões de MESMO nome são casados (o cartão, dentro da lista casada); nas diferenças vale a alteração mais recente. O que só existe
+              de um lado é criado no outro.
+            </p>
+            {escolha.falha ? (
+              <ErroCarga msg={escolha.falha} onTentar={abrirEscolha} />
+            ) : !escolha.boards ? (
+              <SkeletonLinhas linhas={4} />
+            ) : (
+              <SeletorBusca
+                opcoes={escolha.boards
+                  .filter((b) => !b.ligado)
+                  .map((b) => ({ valor: b.id, rotulo: b.nome, detalhe: b.ultimaAtividade ? `Última atividade: ${dataHoraBR(b.ultimaAtividade)}` : undefined }))}
+                valor={escolha.valor}
+                onChange={(v) => setEscolha({ ...escolha, valor: v })}
+                ariaLabel="Quadro do Trello"
+                placeholder="Buscar quadro do Trello"
+                vazio="Nenhum quadro livre na conta do Trello"
+              />
+            )}
+          </div>
+        )}
+      </Modal>
       {confirmacao}
     </div>
   );

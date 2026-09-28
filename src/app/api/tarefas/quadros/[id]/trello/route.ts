@@ -12,7 +12,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { quadroAcessivel } from "@/lib/tarefas";
 import { ErroTrello } from "@/lib/trello-api";
 import { trelloDaConfig } from "@/lib/trello-config";
-import { avancarCriacao, criarBoard, desligarQuadro, estadoTrello, garantirWebhook, ligacaoDoQuadro } from "@/lib/trello-vincular";
+import { depoisDaResposta } from "@/lib/trello-fila";
+import { avancarCriacao, criarBoard, desligarQuadro, estadoTrello, garantirWebhook, ligacaoDoQuadro, ligarBoard } from "@/lib/trello-vincular";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,17 @@ export async function GET(_req: Request, ctx: Ctx) {
   return ok({ configurado: trelloConfigurado(await getIntegracoes()), ligacao: await estadoTrello(r.q.id), pode: r.pode });
 }
 
-const acaoSchema = z.object({ acao: z.enum(["criar", "etapa", "desligar", "sincronizar", "pausar", "retomar"]) });
+const acaoSchema = z.object({
+  acao: z.enum(["criar", "ligar", "etapa", "desligar", "sincronizar", "pausar", "retomar"]),
+  boardId: z
+    .string()
+    .regex(/^[0-9a-f]{24}$/i)
+    .optional(),
+});
 
 /**
- * `criar` = cria o board ADAPTADO no Trello e liga o quadro; `etapa` = continua a criação (listas, etiquetas, campos,
+ * `criar` = cria o board ADAPTADO no Trello e liga o quadro; `ligar` = liga a um board EXISTENTE (`boardId`) — a fusão
+ * casa listas/etiquetas/campos/cartões pelo nome e o resto vai e vem pela fila; `etapa` = continua a criação (listas, etiquetas, campos,
  * membros, cartões, checklists, comentários — até o orçamento de chamadas); `desligar` = tira a ligação (os dois lados
  * ficam como estão); `sincronizar` = processa agora (reativa os itens com erro); `pausar`/`retomar`.
  */
@@ -84,6 +92,12 @@ export async function POST(req: Request, ctx: Ctx) {
       lig = await criarBoard(t.cliente, r.q, r.u.id, new URL(req.url).origin);
       await registrarAuditoria({ usuario: r.u, acao: "criar", entidade: "tarefa_quadro", entidadeId: r.q.id, origem: "trello", resumo: `Quadro "${r.q.nome}" criado no Trello` });
     }
+    if (p.data.acao === "ligar") {
+      if (lig) return erro("Este quadro já está ligado ao Trello.", 409);
+      if (!p.data.boardId) return erro("Escolha o quadro do Trello.", 422);
+      lig = await ligarBoard(t.cliente, r.q, r.u.id, new URL(req.url).origin, p.data.boardId);
+      await registrarAuditoria({ usuario: r.u, acao: "editar", entidade: "tarefa_quadro", entidadeId: r.q.id, origem: "trello", resumo: `Quadro "${r.q.nome}" ligado a um quadro existente do Trello` });
+    }
     if (!lig) return erro("Este quadro não está ligado ao Trello.", 409);
     const origem = new URL(req.url).origin;
     const { progresso, restante } = await avancarCriacao(t.cliente, r.q, lig, origem);
@@ -97,6 +111,8 @@ export async function POST(req: Request, ctx: Ctx) {
       } catch (e) {
         aviso = `Os avisos do Trello não foram ligados: ${(e as Error).message}`;
       }
+      // O que a fusão pôs na fila (os cartões casados e o que só existe lá) começa a andar já.
+      depoisDaResposta(processarFila(8, r.q.id));
     }
     return ok({ progresso, restante, aviso, ligacao: await estadoTrello(r.q.id) });
   } catch (e) {

@@ -63,7 +63,7 @@ import { useHistorico } from "./Historico";
 import { LinkExterno } from "./LinkExterno";
 import type { ModoCopia } from "./CopiarMoverTarefa";
 import { Dropdown } from "./Dropdown";
-import { IconArquivar, IconArrowRight, IconBandeira, IconCheck, IconComentario, IconCopy, IconDesarquivar, IconLink, IconMais, IconModelo, IconTrash } from "./icons";
+import { IconArquivar, IconArrowRight, IconBandeira, IconCheck, IconComentario, IconCopy, IconDesarquivar, IconLink, IconMais, IconModelo, IconTrash, IconTrello } from "./icons";
 import { EventosTarefa } from "./EventosTarefa";
 import { DatasTarefa } from "./DatasTarefa";
 import { Modal, type ModalPainel } from "./Modal";
@@ -194,6 +194,7 @@ export function TarefaDetalhe({
   const [inicial, setInicial] = useState<Rascunho | null>(null);
   const [r, setR] = useState<Rascunho | null>(null);
   const [conteudo, setConteudo] = useState<Conteudo | null>(null);
+  const [trelloUrl, setTrelloUrl] = useState<string | null>(null);
   const [salvando, setSalvando] = useState<null | "salvar" | "arquivar" | "excluir">(null);
   const [gravandoEvento, setGravandoEvento] = useState(false);
   const [atividade, setAtividade] = useState(false);
@@ -213,8 +214,9 @@ export function TarefaDetalhe({
   const carregar = useCallback(async (id: number, primeira: boolean) => {
     const n = ++pedido.current;
     try {
-      const j = await chamar<{ tarefa: { descricao: string | null; blocos: BlocoTarefa[] | null } } & Conteudo>(`/api/tarefas/${id}`);
+      const j = await chamar<{ tarefa: { descricao: string | null; blocos: BlocoTarefa[] | null }; trelloUrl?: string | null } & Conteudo>(`/api/tarefas/${id}`);
       if (n !== pedido.current) return;
+      setTrelloUrl(j.trelloUrl ?? null);
       setConteudo({ checklists: j.checklists, checklist: j.checklist, comentarios: j.comentarios, eventos: j.eventos });
       if (primeira) {
         const descricao = j.tarefa.descricao ?? "";
@@ -232,6 +234,7 @@ export function TarefaDetalhe({
   useEffect(() => {
     pedido.current++;
     setConteudo(null);
+    setTrelloUrl(null);
     if (!aberto) {
       setR(null);
       setInicial(null);
@@ -814,6 +817,7 @@ export function TarefaDetalhe({
                 () => toast.error("Não foi possível copiar o link."),
               );
             })}
+            {trelloUrl && item("Abrir no Trello", <IconTrello className="h-4 w-4 text-muted" />, () => window.open(trelloUrl, "_blank", "noopener,noreferrer"))}
             {off && onCopiarMover && <p className="px-2 pb-1 text-[11.5px] text-muted">Salve as alterações para copiar ou mover.</p>}
             {!t.template && (
               <fieldset className="border-t border-border px-2 pt-2 pb-1">

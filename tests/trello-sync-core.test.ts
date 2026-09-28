@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { PALETA_ETIQUETAS } from "../src/lib/tarefas-core.ts";
 import {
+  campoDoBoard,
+  casarPorNome,
   corCapaTrello,
   corpoValorCampo,
   lerRetratoCartao,
@@ -15,6 +17,7 @@ import {
   lerCamposBoard,
   type MapaQuadro,
   reconciliar,
+  retratoDaFusao,
   separarNotas,
   type TarefaParaCartao,
   valoresDaTarefa,
@@ -238,5 +241,56 @@ describe("trello-sync-core — avisos do Trello (webhook)", () => {
     assert.equal(alvoDoAviso({ type: "updateCard", idMemberCreator: "conta", data: { card: { id: "c1" } } }, "conta"), null);
     assert.equal(alvoDoAviso({ type: "updateBoard", idMemberCreator: "u1", data: {} }, "conta"), null);
     assert.equal(alvoDoAviso(null, "conta"), null);
+  });
+});
+
+describe("trello-sync-core — fusão com um board existente", () => {
+  it("casa pelo nome (sem acento/caixa), um a um, por grupo", () => {
+    const aqui = [
+      { id: 1, n: "A Fazer", g: 10 },
+      { id: 2, n: "Checklist", g: 10 },
+      { id: 3, n: "Checklist", g: 10 },
+      { id: 4, n: "Revisão", g: 20 },
+      { id: 5, n: "", g: 10 },
+    ];
+    const la = [
+      { id: "x", n: "a  fazer", g: 10 },
+      { id: "y", n: "CHECKLIST", g: 10 },
+      { id: "z", n: "revisao", g: 99 },
+      { id: "w", n: "Só lá", g: 10 },
+    ];
+    const r = casarPorNome(aqui, la, (a) => a.n, (b) => b.n, (a) => a.g, (b) => b.g);
+    assert.deepEqual(
+      r.pares.map(([a, b]) => [a.id, b.id]),
+      [
+        [1, "x"],
+        [2, "y"],
+      ],
+    );
+    assert.deepEqual(r.soAqui.map((a) => a.id), [3, 4, 5]);
+    assert.deepEqual(r.soLa.map((b) => b.id), ["z", "w"]);
+  });
+  it("grupo nulo não casa (a lista do cartão sem par)", () => {
+    const r = casarPorNome([{ n: "T" }], [{ n: "T" }], (a) => a.n, (b) => b.n, () => null, () => "l");
+    assert.equal(r.pares.length, 0);
+  });
+  it("retrato da fusão = o lado mais antigo (vence o mais recente; empate = daqui)", () => {
+    const l = { name: "aqui" } as never;
+    const t = { name: "la" } as never;
+    assert.equal(retratoDaFusao(l, t, "2026-09-02T00:00:00Z", "2026-09-01T00:00:00Z"), t);
+    assert.equal(retratoDaFusao(l, t, "2026-09-01T00:00:00Z", "2026-09-02T00:00:00Z"), l);
+    assert.equal(retratoDaFusao(l, t, null, null), t);
+  });
+  it("campo do board: mesmo nome e tipo, sem repetir", () => {
+    const la = [
+      { id: "1", name: "Prioridade", type: "text" },
+      { id: "2", name: "prioridade", type: "list" },
+    ];
+    assert.equal(campoDoBoard("Prioridade", "list", la, new Set())?.id, "2");
+    assert.equal(campoDoBoard("Prioridade", "list", la, new Set(["2"])), null);
+  });
+  it("lerCamposBoard guarda a marca da fusão", () => {
+    assert.equal(lerCamposBoard('{"fundir":true}').fundir, true);
+    assert.equal(lerCamposBoard("{}").fundir, undefined);
   });
 });

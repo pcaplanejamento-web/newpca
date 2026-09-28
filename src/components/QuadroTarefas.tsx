@@ -42,6 +42,7 @@ import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalend
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { FaixaQuadro, MembrosQuadro, MenuQuadro, MolduraQuadro, PainelMoldura, PilulaVistas, RESERVA_PILULA } from "./MolduraQuadro";
+import { IndicadorTrello } from "./SincronizacaoTrello";
 import { ItensArquivados } from "./ItensArquivados";
 import { TextoNoLugar } from "./TextoNoLugar";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
@@ -96,6 +97,7 @@ export function QuadroTarefas({
   edicoes,
   automacoes,
   favoritos,
+  trello,
   modelosQuadro,
   hoje,
   podeEditar,
@@ -135,7 +137,7 @@ export function QuadroTarefas({
   const { aba: abaAtual, trocar: trocarAba } = useTrocaAba(aba);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   /** Configuração (a aba), rolando até a seção pedida (imagem de fundo ou automações). */
-  const irConfiguracao = (secao?: "fundo" | "automacoes") => {
+  const irConfiguracao = (secao?: "fundo" | "automacoes" | "trello") => {
     trocarAba("configuracao");
     if (!secao) return;
     let n = 0;
@@ -552,6 +554,7 @@ export function QuadroTarefas({
                   <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} buscaNoPainel />
                 )}
                 <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
+                {trello && <IndicadorTrello ligacao={trello} onAbrir={() => irConfiguracao("trello")} />}
                 <MenuQuadro podeEditar={podeEditar && !quadro.arquivado} onArquivados={() => setVerArquivados(true)} onConfiguracao={irConfiguracao} />
               </>
             }

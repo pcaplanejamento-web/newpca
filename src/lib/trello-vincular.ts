@@ -6,12 +6,16 @@ import { lotesDeIds } from "./reparticoes";
 import { type CampoTarefa, hrefVinculo, lerBlocos, PALETA_ETIQUETAS, type TarefaResumo } from "./tarefas-core";
 import { dadosQuadro, listarCampos, pessoasDoQuadro, type Quadro } from "./tarefas";
 import { type ClienteTrello, ErroTrello } from "./trello-api";
+import { enfileirar } from "./trello-fila";
 import { listarLigacoesMembros } from "./trello-sync";
 import {
   CAMPO_ESTIMATIVA,
   CAMPO_PRIORIDADE,
   CAMPO_TICKET,
   type CamposBoard,
+  type CartaoApi,
+  campoDoBoard,
+  casarPorNome,
   corTrelloDeHex,
   dataParaTrello,
   fundoTrello,
@@ -21,8 +25,10 @@ import {
   TIPO_CAMPO_TRELLO,
   corpoValorCampo,
   type RetratoCartao,
+  retratoDaFusao,
   type TarefaParaCartao,
   valoresDaTarefa,
+  valoresDoCartao,
 } from "./trello-sync-core";
 
 /**
@@ -76,7 +82,7 @@ async function conteudoDoQuadro(quadroId: number, ids: number[]) {
   const db = getDb();
   const descr = new Map<number, { descricao: string | null; notas: string[]; links: { url: string; titulo: string }[] }>();
   const checklists: { id: number; tarefaId: number; nome: string; ordem: number }[] = [];
-  const itens: { id: number; checklistId: number | null; texto: string; feito: boolean; prazo: string | null; responsavelId: number | null; ordem: number }[] = [];
+  const itens: { id: number; tarefaId: number; checklistId: number | null; texto: string; feito: boolean; prazo: string | null; responsavelId: number | null; ordem: number }[] = [];
   const comentarios: { id: number; tarefaId: number; usuarioNome: string | null; texto: string; criadoEm: string | null }[] = [];
   const rs = await db.select({ id: tarefas.id, descricao: tarefas.descricao, blocos: tarefas.blocos }).from(tarefas).where(eq(tarefas.quadroId, quadroId));
   for (const r of rs) {
@@ -99,6 +105,7 @@ async function conteudoDoQuadro(quadroId: number, ids: number[]) {
       ...(await db
         .select({
           id: tarefaChecklist.id,
+          tarefaId: tarefaChecklist.tarefaId,
           checklistId: tarefaChecklist.checklistId,
           texto: tarefaChecklist.texto,
           feito: tarefaChecklist.feito,
@@ -124,6 +131,11 @@ async function conteudoDoQuadro(quadroId: number, ids: number[]) {
 /** A tarefa no formato da conversão. */
 export function tarefaParaCartao(t: TarefaResumo, d: { descricao: string | null; notas: string[] } | undefined): TarefaParaCartao {
   return { ...t, descricao: d?.descricao ?? null, notas: d?.notas ?? [] };
+}
+
+/** O cartão foi CRIADO pela ligação (o conteúdo dele vai junto na criação) — ou ainda está sendo. */
+function cartaoNovo(retrato: string | null | undefined) {
+  return !!retrato && (retrato.includes('"nova":true') || retrato.includes('"pendente":true'));
 }
 
 /** O MAPA de ids do quadro ligado (listas, etiquetas, membros, campos). */
@@ -161,7 +173,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
   };
   const cabe = (n = 1) => gasto + n <= ORCAMENTO;
   const novos: { tipo: string; localId: number; trelloId: string; retrato?: string | null }[] = [];
-  const v = await vinculosDoQuadro(q.id);
+  let v = await vinculosDoQuadro(q.id);
   const tem = (tipo: string, id: number) => v(tipo).has(id) || novos.some((n) => n.tipo === tipo && n.localId === id);
   const idDe = (tipo: string, id: number) => v(tipo).get(id)?.trelloId ?? novos.find((n) => n.tipo === tipo && n.localId === id)?.trelloId;
   const campos = lerCamposBoard(lig.campos);
@@ -169,6 +181,13 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
   const conteudo = await conteudoDoQuadro(q.id, dados.tarefas.map((t) => t.id));
   let camposMudaram = false;
   try {
+    // 0) FUSÃO com o board EXISTENTE (uma vez): casa pelo NOME; o que só existe lá entra na fila de ENTRADA.
+    if (campos.fundir) {
+      await fundirBoard(chamada, cliente, q, lig, campos, dados, camposLocais as CampoTarefa[], conteudo.descr);
+      camposMudaram = true;
+      await getDb().update(trelloQuadros).set({ campos: JSON.stringify(campos) }).where(eq(trelloQuadros.quadroId, q.id));
+      v = await vinculosDoQuadro(q.id);
+    }
     // 1) LISTAS (na ordem; as arquivadas nascem fechadas).
     for (const l of dados.listas) {
       if (tem("lista", l.id)) continue;
@@ -275,18 +294,20 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
         await chamada(() => cliente.put(`/cards/${vc.trelloId}/customField/${cf}/item`, undefined, corpoValorCampo(tipo, valor, campos.opcoes[cf])));
       }
       for (const a of anexos) await chamada(() => cliente.post(`/cards/${vc.trelloId}/attachments`, { url: a.url, name: a.name.slice(0, 256) }));
-      novos.push({ tipo: "tarefa", localId: t.id, trelloId: vc.trelloId, retrato: JSON.stringify({ v: val, url, anexos: anexos.map((a) => a.url) } satisfies RetratoCartao) });
+      novos.push({ tipo: "tarefa", localId: t.id, trelloId: vc.trelloId, retrato: JSON.stringify({ v: val, url, anexos: anexos.map((a) => a.url), nova: true } satisfies RetratoCartao) });
     }
-    // 7) CHECKLISTS e ITENS (feito, prazo, responsável).
+    // 7) CHECKLISTS e ITENS (feito, prazo, responsável) — só dos cartões CRIADOS agora (os casados na fusão acertam o
+    // conteúdo pela sincronização, casando pelo nome).
+    const ehNova = (tarefaId: number) => cartaoNovo(vv("tarefa").get(tarefaId)?.retrato);
     for (const c of conteudo.checklists) {
       const card = vv("tarefa").get(c.tarefaId);
-      if (!card || tem("checklist", c.id) || !cabe()) continue;
+      if (!card || !ehNova(c.tarefaId) || tem("checklist", c.id) || !cabe()) continue;
       const r = await chamada(() => cliente.post<{ id: string }>("/checklists", { idCard: card.trelloId, name: c.nome }));
       novos.push({ tipo: "checklist", localId: c.id, trelloId: r.id });
     }
     for (const i of conteudo.itens) {
       const cl = i.checklistId != null ? idDe("checklist", i.checklistId) : undefined;
-      if (!cl || tem("item", i.id) || !cabe()) continue;
+      if (!cl || !ehNova(i.tarefaId) || tem("item", i.id) || !cabe()) continue;
       const r = await chamada(() =>
         cliente.post<{ id: string }>(`/checklists/${cl}/checkItems`, {
           name: i.texto.slice(0, 16384),
@@ -301,7 +322,7 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
     // 8) COMENTÁRIOS (pela conta institucional, com o nome de quem escreveu aqui).
     for (const c of conteudo.comentarios) {
       const card = vv("tarefa").get(c.tarefaId);
-      if (!card || tem("comentario", c.id) || !cabe()) continue;
+      if (!card || !ehNova(c.tarefaId) || tem("comentario", c.id) || !cabe()) continue;
       const r = await chamada(() => cliente.post<{ id: string }>(`/cards/${card.trelloId}/actions/comments`, { text: `**${c.usuarioNome ?? "PCA"} (PCA):** ${c.texto}`.slice(0, 16384) }));
       novos.push({ tipo: "comentario", localId: c.id, trelloId: r.id });
     }
@@ -312,17 +333,121 @@ export async function avancarCriacao(cliente: ClienteTrello, q: Quadro, lig: Lig
   // O progresso (pelo que já tem vínculo).
   const f = await vinculosDoQuadro(q.id);
   const prontos = [...f("tarefa").values()].filter((x) => x.retrato && !x.retrato.includes('"pendente":true')).length;
+  // Checklists/itens/comentários contam só os dos cartões CRIADOS (sem vínculo de cartão ainda = também a criar).
+  const aCriar = (tarefaId: number) => !f("tarefa").has(tarefaId) || cartaoNovo(f("tarefa").get(tarefaId)?.retrato);
+  const conta = <T extends { id: number; tarefaId: number }>(xs: T[], tipo: string) => {
+    const ys = xs.filter((x) => aCriar(x.tarefaId));
+    return [ys.filter((x) => f(tipo).has(x.id)).length, ys.length] as [number, number];
+  };
+  const [clA, clB] = conta(conteudo.checklists, "checklist");
+  const [itA, itB] = conta(
+    conteudo.itens.filter((i) => i.checklistId != null),
+    "item",
+  );
   const progresso: Progresso = {
     listas: [f("lista").size, dados.listas.length],
     etiquetas: [f("etiqueta").size, dados.etiquetas.length],
     cartoes: [prontos, dados.tarefas.length],
-    checklists: [f("checklist").size + f("item").size, conteudo.checklists.length + conteudo.itens.filter((i) => i.checklistId != null).length],
-    comentarios: [f("comentario").size, conteudo.comentarios.length],
+    checklists: [clA + itA, clB + itB],
+    comentarios: conta(conteudo.comentarios, "comentario"),
   };
   const faltaCampos = !campos.prioridade || !campos.estimativa || !campos.ticket || (camposLocais as CampoTarefa[]).some((c) => !campos.porCampo[c.id]);
   const restante = Object.values(progresso).reduce((s, [a, b]) => s + Math.max(0, b - a), 0) + (faltaCampos ? 1 : 0);
   if (!restante) await getDb().update(trelloQuadros).set({ estado: "ativo", sincronizadoEm: sql`(CURRENT_TIMESTAMP)`, ultimoErro: null }).where(eq(trelloQuadros.quadroId, q.id));
   return { progresso, restante };
+}
+
+/** LIGA o quadro a um board EXISTENTE da conta (a fusão acontece na 1ª etapa). */
+export async function ligarBoard(cliente: ClienteTrello, q: Quadro, usuarioId: number, origem: string, boardId: string): Promise<Ligacao> {
+  const b = await cliente.get<{ id: string; url: string; closed: boolean }>(`/boards/${boardId}`, { fields: "url,closed" });
+  if (b.closed) throw new ErroTrello("Este quadro está fechado no Trello — reabra-o lá para ligar.", 409);
+  const [outro] = await getDb().select({ q: trelloQuadros.quadroId }).from(trelloQuadros).where(eq(trelloQuadros.boardId, b.id));
+  if (outro) throw new ErroTrello("Este quadro do Trello já está ligado a outro quadro daqui.", 409);
+  await getDb()
+    .insert(trelloQuadros)
+    .values({ quadroId: q.id, boardId: b.id, boardUrl: b.url, estado: "vinculando", criadoPor: usuarioId, campos: JSON.stringify({ porCampo: {}, opcoes: {}, origem, fundir: true }) });
+  return (await ligacaoDoQuadro(q.id)) as Ligacao;
+}
+
+type CartaoFusao = CartaoApi & { shortUrl: string };
+const CAMPOS_CARTAO_API = "name,desc,idList,start,due,dueComplete,dueReminder,closed,isTemplate,cover,idLabels,idMembers,dateLastActivity,shortUrl";
+
+/**
+ * A FUSÃO inicial com um board existente: casa LISTAS e ETIQUETAS pelo nome, os CAMPOS personalizados pelo nome + tipo e os
+ * CARTÕES pelo título dentro da lista casada. Cada par ganha o vínculo com o RETRATO do lado mais ANTIGO (a reconciliação
+ * leva o mais recente ao outro — a regra do conflito) e entra na fila; o que só existe lá entra na fila de ENTRADA (vira
+ * item daqui quando a ligação terminar); o que só existe aqui é criado lá pelas etapas seguintes.
+ */
+async function fundirBoard(
+  chamada: <T>(f: () => Promise<T>) => Promise<T>,
+  cliente: ClienteTrello,
+  q: Quadro,
+  lig: Ligacao,
+  campos: CamposBoard,
+  dados: Awaited<ReturnType<typeof dadosQuadro>>,
+  camposLocais: CampoTarefa[],
+  descr: Map<number, { descricao: string | null; notas: string[] }>,
+) {
+  const b = lig.boardId;
+  const listas = await chamada(() => cliente.get<{ id: string; name: string; closed: boolean }[]>(`/boards/${b}/lists`, { filter: "all", fields: "name,closed" }));
+  const etiquetas = await chamada(() => cliente.get<{ id: string; name: string; color: string | null }[]>(`/boards/${b}/labels`, { fields: "name,color", limit: 1000 }));
+  const cfs = await chamada(() => cliente.get<{ id: string; name: string; type: string; options?: { id: string; value: { text: string } }[] }[]>(`/boards/${b}/customFields`));
+  const cards = await chamada(() => cliente.get<CartaoFusao[]>(`/boards/${b}/cards/all`, { fields: CAMPOS_CARTAO_API, customFieldItems: true }));
+  const membros = await chamada(() => cliente.get<{ id: string }[]>(`/boards/${b}/members`, { fields: "id" }));
+  // Listas e etiquetas.
+  const cl = casarPorNome(dados.listas, listas, (l) => l.nome, (x) => x.name);
+  const ce = casarPorNome(dados.etiquetas, etiquetas, (e) => e.nome, (x) => x.name);
+  await gravarVinculos(q.id, [
+    ...cl.pares.map(([l, x]) => ({ tipo: "lista", localId: l.id, trelloId: x.id, retrato: JSON.stringify({ name: x.name, closed: x.closed }) })),
+    ...ce.pares.map(([e, x]) => ({ tipo: "etiqueta", localId: e.id, trelloId: x.id, retrato: JSON.stringify({ name: x.name, color: x.color }) })),
+  ]);
+  for (const x of cl.soLa) await enfileirar(q.id, "entrada", "lista", x.id);
+  const usadas = new Set(cards.flatMap((c) => c.idLabels));
+  for (const x of ce.soLa) if (x.name.trim() || usadas.has(x.id)) await enfileirar(q.id, "entrada", "etiqueta", x.id);
+  // Campos personalizados (mesmo nome + tipo): os nossos três e os do quadro.
+  const usados = new Set<string>();
+  const adotar = (nome: string, tipo: string) => {
+    const c = campoDoBoard(nome, tipo, cfs, usados);
+    if (!c) return undefined;
+    usados.add(c.id);
+    campos.tipos = { ...(campos.tipos ?? {}), [c.id]: c.type };
+    if (c.options?.length) campos.opcoes[c.id] = Object.fromEntries(c.options.map((o) => [o.id, o.value.text]));
+    return c.id;
+  };
+  campos.prioridade ??= adotar(CAMPO_PRIORIDADE, "list");
+  campos.estimativa ??= adotar(CAMPO_ESTIMATIVA, "number");
+  campos.ticket ??= adotar(CAMPO_TICKET, "text");
+  for (const c of camposLocais) if (!campos.porCampo[c.id]) {
+    const id = adotar(c.nome, TIPO_CAMPO_TRELLO[c.tipo]);
+    if (id) campos.porCampo[c.id] = id;
+  }
+  campos.membrosBoard = [...new Set([...(campos.membrosBoard ?? []), ...membros.map((m) => m.id)])];
+  // Cartões: pelo título DENTRO da lista casada.
+  const listaDe = new Map(cl.pares.map(([l, x]) => [x.id, l.id]));
+  const cc = casarPorNome(dados.tarefas, cards, (t) => t.titulo, (c) => c.name, (t) => t.listaId, (c) => listaDe.get(c.idList) ?? null);
+  const mapa = await mapaDoQuadro(q.id, campos);
+  await gravarVinculos(
+    q.id,
+    cc.pares.map(([t, c]) => {
+      const local = valoresDaTarefa(tarefaParaCartao(t, descr.get(t.id)), mapa, PALETA_ETIQUETAS);
+      const trello = valoresDoCartao(c, mapa);
+      const v = retratoDaFusao(local, trello, t.atualizadoEm ? `${t.atualizadoEm.replace(" ", "T")}Z` : null, c.dateLastActivity ?? null);
+      return { tipo: "tarefa", localId: t.id, trelloId: c.id, retrato: JSON.stringify({ v, url: c.shortUrl, anexos: [] } satisfies RetratoCartao) };
+    }),
+  );
+  for (const [t] of cc.pares) await enfileirar(q.id, "saida", "tarefa", String(t.id));
+  for (const c of cc.soLa) await enfileirar(q.id, "entrada", "tarefa", c.id);
+  campos.fundir = undefined;
+}
+
+/** Os boards ABERTOS da conta institucional (para "ligar"), com os já ligados marcados. */
+export async function boardsDaConta(cliente: ClienteTrello) {
+  const bs = await cliente.get<{ id: string; name: string; url: string; dateLastActivity: string | null; idOrganization: string | null }[]>("/members/me/boards", {
+    filter: "open",
+    fields: "name,url,dateLastActivity,idOrganization",
+  });
+  const ligados = new Set((await getDb().select({ b: trelloQuadros.boardId }).from(trelloQuadros)).map((x) => x.b));
+  return bs.map((x) => ({ id: x.id, nome: x.name, url: x.url, ultimaAtividade: x.dateLastActivity, ligado: ligados.has(x.id) }));
 }
 
 /** DESLIGA o quadro do Trello: tira o aviso (webhook) e os vínculos; os dois lados ficam como estão. */

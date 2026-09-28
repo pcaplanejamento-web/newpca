@@ -69,6 +69,10 @@ Usa UMA conta institucional do Trello (ex.: "PCA Rio Verde"); tudo o que o siste
 4. Ligue as **pessoas** aos membros do Trello (sugestões pelo nome; ou pelo usuário do Trello). Pessoa sem ligação segue
    nas tarefas do sistema, mas não aparece como membro no Trello.
 O token e o segredo ficam cifrados com a `INTEGRACOES_CHAVE` e nunca voltam à tela.
+5. Em cada quadro de Tarefas: **Configuração → Trello** → **Criar no Trello** (um quadro novo, adaptado) ou **Ligar a um
+   quadro existente** (a conta institucional precisa ser membro dele; listas, etiquetas e cartões de mesmo nome são
+   casados). Depois disso, as mudanças vão e voltam sozinhas; a cada 5 minutos o sistema confere os dois lados (cron do
+   Worker — precisa da `INTEGRACOES_CHAVE`). Sem o **segredo**, as mudanças do Trello só chegam nessa conferência.
 
 ## Em breve
 - **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.

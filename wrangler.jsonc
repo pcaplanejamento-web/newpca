@@ -1,12 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "newpca",
-  "main": ".open-next/worker.js",
+  // O Worker do OpenNext + o CRON da sincronização com o Trello (worker.ts reexporta o `fetch` gerado no build).
+  "main": "worker.ts",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   // Workers Logs: logs/traces do Worker no painel da Cloudflare (ajuda a
   // diagnosticar produção). Baixo custo e sem impacto no código.
   "observability": { "enabled": true },
+  // A rede de segurança da sincronização com o Trello: reconcilia os quadros ligados e processa a fila.
+  "triggers": { "crons": ["*/5 * * * *"] },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

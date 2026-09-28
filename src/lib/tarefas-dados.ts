@@ -1,4 +1,5 @@
 import type { UsuarioSessao } from "./auth";
+import { estadoTrello } from "./trello-vincular";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { dataIsoBrasilia } from "./format";
 import { abasPermitidas, getGrupoAtivo, getGrupoAtivoId, gruposDoUsuario } from "./grupos";
@@ -178,7 +179,7 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
 export async function carregarQuadro(u: UsuarioSessao, id: number) {
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello] = await Promise.all([
     dadosQuadro(id),
     pessoasDoQuadro(quadro),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
@@ -187,6 +188,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     listarEquipes([id]),
     favoritosDaPessoa(u.id),
     listarCampos([id]),
+    estadoTrello(id).catch(() => null),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
@@ -201,6 +203,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     edicoes,
     automacoes,
     favoritos,
+    trello,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),
     hoje: dataIsoBrasilia(new Date().toISOString()),
     podeEditar: u.role === "admin" || u.role === "gestor",

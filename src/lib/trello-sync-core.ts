@@ -4,6 +4,7 @@
  * `trello-sync.ts`.
  */
 import { casarMembro } from "./trello-import.ts";
+import { norm } from "./parse-dfd-comum.ts";
 
 // ─── MEMBROS (pessoa do sistema ↔ membro do Trello) ────────────────────────────────────────────────────────
 
@@ -259,6 +260,8 @@ export type CamposBoard = {
   tipos?: Record<string, string>;
   /** O endereço do sistema (os links dos vínculos nos anexos — o processador roda sem requisição). */
   origem?: string;
+  /** Ligado a um board EXISTENTE: falta a FUSÃO inicial (casar pelo nome). */
+  fundir?: boolean;
 };
 export const CAMPOS_BOARD_VAZIO: CamposBoard = { porCampo: {}, opcoes: {} };
 export function lerCamposBoard(v: unknown): CamposBoard {
@@ -275,6 +278,7 @@ export function lerCamposBoard(v: unknown): CamposBoard {
       membrosBoard: Array.isArray(o.membrosBoard) ? o.membrosBoard.filter((x): x is string => typeof x === "string") : [],
       origem: s(o.origem),
       tipos: o.tipos && typeof o.tipos === "object" ? { ...o.tipos } : {},
+      ...(o.fundir === true ? { fundir: true } : {}),
     };
   } catch {
     return { ...CAMPOS_BOARD_VAZIO };
@@ -398,7 +402,7 @@ export function valoresDoCartao(c: CartaoApi, m: MapaQuadro): ValoresCartao {
 }
 
 /** O retrato gravado de um cartão: os valores + o link do cartão + os anexos criados. */
-export type RetratoCartao = { v: ValoresCartao; url: string; anexos: string[] };
+export type RetratoCartao = { v: ValoresCartao; url: string; anexos: string[]; nova?: boolean };
 export function lerRetratoCartao(s: string | null | undefined): RetratoCartao | null {
   try {
     const o = s ? (JSON.parse(s) as RetratoCartao) : null;
@@ -560,4 +564,54 @@ export function alvoDoAviso(
   if (/List$/.test(acao.type) && d.list?.id) return { tipo: "lista", alvo: d.list.id };
   if (d.label?.id) return { tipo: "etiqueta", alvo: d.label.id };
   return null;
+}
+
+// ─── FUSÃO com um board EXISTENTE ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * CASA dois conjuntos pelo NOME (sem acento/caixa/espaços extras) e, opcionalmente, por um GRUPO (ex.: a lista do cartão):
+ * cada item casa no máximo UM do outro lado, na ordem (o 1º "Checklist" daqui com o 1º de lá). Nome vazio não casa.
+ */
+export function casarPorNome<A, B>(
+  aqui: A[],
+  la: B[],
+  nomeA: (a: A) => string,
+  nomeB: (b: B) => string,
+  grupoA: (a: A) => string | number | null = () => "",
+  grupoB: (b: B) => string | number | null = () => "",
+): { pares: [A, B][]; soAqui: A[]; soLa: B[] } {
+  const livres = new Map<string, B[]>();
+  const chave = (g: string | number | null, n: string) => `${g ?? ""}\u0000${norm(n).replace(/\s+/g, " ").trim()}`;
+  for (const b of la) {
+    if (!norm(nomeB(b)).trim()) continue;
+    const k = chave(grupoB(b), nomeB(b));
+    livres.set(k, [...(livres.get(k) ?? []), b]);
+  }
+  const pares: [A, B][] = [];
+  const soAqui: A[] = [];
+  const usados = new Set<B>();
+  for (const a of aqui) {
+    const g = grupoA(a);
+    const fila = norm(nomeA(a)).trim() && g !== null ? livres.get(chave(g, nomeA(a))) : undefined;
+    const b = fila?.shift();
+    if (b === undefined) soAqui.push(a);
+    else {
+      pares.push([a, b]);
+      usados.add(b);
+    }
+  }
+  return { pares, soAqui, soLa: la.filter((b) => !usados.has(b)) };
+}
+
+/**
+ * O RETRATO de um par casado na fusão: o lado MAIS ANTIGO — assim só o lado mais recente aparece como "mudado" e a
+ * reconciliação leva as diferenças dele ao outro (a regra do conflito: vence o mais recente). Empate = vence daqui.
+ */
+export function retratoDaFusao(local: ValoresCartao, trello: ValoresCartao, localEm: string | null, trelloEm: string | null): ValoresCartao {
+  return (Date.parse(localEm ?? "") || 0) >= (Date.parse(trelloEm ?? "") || 0) ? trello : local;
+}
+
+/** O campo do Trello que serve para um campo daqui (mesmo nome e mesmo tipo na API). */
+export function campoDoBoard<C extends { id: string; name: string; type: string }>(nome: string, tipo: string, deLa: C[], usados: Set<string>): C | null {
+  return deLa.find((c) => !usados.has(c.id) && c.type === tipo && norm(c.name).trim() === norm(nome).trim()) ?? null;
 }

@@ -1,4 +1,5 @@
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { urlDoCartao } from "@/lib/trello-fila";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import {
@@ -45,7 +46,7 @@ export async function GET(req: Request, ctx: Ctx) {
   if (!r) return erro("Tarefa não encontrada.", 404);
   if (new URL(req.url).searchParams.get("contexto") === "tarefa") return ok({ tarefa: r.tarefa });
   const conteudo = await conteudoTarefa(r.tarefa.id);
-  return ok({ tarefa: r.tarefa, ...conteudo, eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.envolvidos]])) });
+  return ok({ tarefa: r.tarefa, ...conteudo, trelloUrl: await urlDoCartao(r.tarefa.id), eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.envolvidos]])) });
 }
 
 /** Edita a tarefa (campos, responsáveis, etiquetas, arquivar; trocar de LISTA a leva ao fim da lista nova). */
