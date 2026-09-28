@@ -2460,7 +2460,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`useArrastoNegado`): o card sacode (`animate-negar-arrasto`), cursor "não permitido", vibração no toque e o aviso
     "Para organizar, arraste em “Seus quadros”" por cima; o arrasto nativo do link é bloqueado e o clique seguinte engolido); "Seus quadros" usa a **`GradePastas`** (`PastasQuadros.tsx`): as **PASTAS** (os conjuntos) e os quadros soltos na
     ORDEM da pessoa. **`PastaQuadro`** = o DESENHO DE UMA PASTA na MESMA célula/altura do `QuadroCard`: a ABA com o ícone, as
-    COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros, em leque; vazia = folhas lisas) e a FRENTE na cor
+    COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros, em leque; vazia = folhas lisas — numa camada POR CIMA das costas, sem
+    corte, ULTRAPASSANDO o contorno de cima delas: o efeito 3D) e a FRENTE na cor
     (texto por `textoSobre`) com "Pasta · N quadros", o nome e os chips abertas/atrasadas; ENTREABRE no hover/foco (a frente
     inclina — `rotateX` com perspectiva — e as folhas sobem), abre mais aberta/alvo; menu "…" = **`MenuConjunto`**. O painel
     da pasta aberta tem a MESMA aba colada ao topo (nome + fechar). Tocar ABRE a

@@ -1153,6 +1153,8 @@ feita em "Seus quadros" (sem a imagem de arrasto do navegador).
 ✅ **Tarefas — pastas PÚBLICAS do grupo e PRIVADAS:** a pasta pública é de todo o grupo (os editores organizam); a
 privada só o dono vê e tudo dentro dela é privado (o quadro vira privado ao entrar; ao sair, o dono escolhe se volta ao
 grupo). As pastas antigas viraram pastas públicas do grupo.
+✅ **Tarefas — pasta em 3D:** as folhas (capas dos quadros) ficam numa camada por cima das costas da pasta e passam do
+contorno de cima dela, sem corte.
 ✅ **Trello — fase 1 (base):** a conta institucional do Trello em Integrações (chave, token e segredo cifrados, testar
 conexão) e a ligação das pessoas com os membros do Trello. ✅ **Fase 2:** "Criar no Trello" na Configuração do quadro — o
 board adaptado (listas, etiquetas na mesma paleta, campos Prioridade/Estimativa/Ticket e os do quadro, membros, cartões,
