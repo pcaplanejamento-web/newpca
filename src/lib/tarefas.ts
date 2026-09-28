@@ -226,6 +226,8 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         prioridade: tarefas.prioridade,
         inicio: tarefas.inicio,
         prazo: tarefas.prazo,
+        prazoHora: tarefas.prazoHora,
+        lembreteMin: tarefas.lembreteMin,
         ordem: tarefas.ordem,
         concluidaEm: tarefas.concluidaEm,
         arquivada: tarefas.arquivada,
@@ -379,6 +381,7 @@ async function tarefasDoCalendarioLote(ids: number[], de: string, ate: string): 
         prioridade: tarefas.prioridade,
         inicio: tarefas.inicio,
         prazo: tarefas.prazo,
+        prazoHora: tarefas.prazoHora,
         concluidaEm: tarefas.concluidaEm,
         recorrencia: tarefas.recorrencia,
       })
@@ -475,6 +478,8 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     prioridade: prioridadeValida(t.prioridade),
     inicio: t.inicio,
     prazo: t.prazo,
+    prazoHora: t.prazoHora,
+    lembreteMin: t.lembreteMin,
     ordem: t.ordem,
     concluidaEm: t.concluidaEm,
     arquivada: t.arquivada,
@@ -669,21 +674,28 @@ export async function atualizarTarefa(
     prioridade?: Prioridade;
     inicio?: string | null;
     prazo?: string | null;
+    prazoHora?: string | null;
+    lembreteMin?: number | null;
     arquivada?: boolean;
     estimativaH?: number | null;
     vinculo?: { tipo: TipoVinculo; id: number } | null;
     recorrencia?: Recorrencia | null;
     blocos?: BlocoTarefa[];
+    /** Concluir/reabrir NO LUGAR. */
+    concluida?: boolean;
   },
   vinculos: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[]; equipes?: number[] },
 ) {
   const db = getDb();
-  const { vinculo, recorrencia, blocos, ...resto } = campos;
+  const { vinculo, recorrencia, blocos, concluida, ...resto } = campos;
   await db.batch([
     db
       .update(tarefas)
       .set({
         ...resto,
+        // Sem prazo, a hora e o lembrete não fazem sentido.
+        ...(resto.prazo === null ? { prazoHora: null, lembreteMin: null } : {}),
+        ...(concluida !== undefined ? { concluidaEm: concluida ? sql`COALESCE(${tarefas.concluidaEm}, CURRENT_TIMESTAMP)` : null } : {}),
         ...(vinculo !== undefined ? { vinculoTipo: vinculo?.tipo ?? null, vinculoId: vinculo?.id ?? null } : {}),
         ...(recorrencia !== undefined ? { recorrencia: recorrencia ? JSON.stringify(recorrencia) : null } : {}),
         ...(blocos !== undefined ? { blocos: JSON.stringify(blocosParaGravar(blocos)) } : {}),
@@ -1180,12 +1192,13 @@ export async function acaoValida(quadro: Quadro, a: AcaoAutomacao): Promise<bool
 }
 
 /**
- * Depois que tarefas ENTRARAM numa lista (arrastar, trocar de lista, massa, criar): roda as AUTOMAÇÕES do quadro
+ * Depois que tarefas ENTRARAM numa lista (arrastar, trocar de lista, massa, criar) — ou foram CONCLUÍDAS no lugar
+ * (`lista.id` null): roda as AUTOMAÇÕES do quadro
  * (profundidade 1 — uma ação não dispara outra regra) e, se terminaram CONCLUÍDAS, gera a PRÓXIMA ocorrência das
  * recorrentes. BEST-EFFORT: nunca derruba o movimento que já foi gravado. Devolve se mudou algo além do movimento
  * (a tela recarrega).
  */
-export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, ids: number[], lista: { id: number; concluida: boolean }): Promise<boolean> {
+export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, ids: number[], lista: { id: number | null; concluida: boolean }): Promise<boolean> {
   if (!ids.length) return false;
   let mudou = false;
   let concluida = lista.concluida;
@@ -1226,6 +1239,12 @@ export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, ids: numbe
     console.error("pós-movimento das tarefas falhou", e);
   }
   return mudou;
+}
+
+/** Onde nasce a próxima ocorrência: na MESMA lista (concluída no lugar, lista comum ativa); senão, na 1ª aberta. */
+async function listaDaProxima(atual: number, inicial: number): Promise<number> {
+  const l = await getLista(atual);
+  return l && !l.concluida && !l.arquivada ? l.id : inicial;
 }
 
 /**
@@ -1271,12 +1290,15 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
     try {
       const nova = await criarTarefa({
         quadroId: quadro.id,
-        listaId: inicial.id,
+        // Concluída NO LUGAR (numa lista comum), a próxima nasce na MESMA lista; saindo de uma lista de concluídas, na 1ª aberta.
+        listaId: await listaDaProxima(t.listaId, inicial.id),
         titulo: t.titulo,
         descricao: t.descricao,
         prioridade: t.prioridade,
         inicio,
         prazo,
+        prazoHora: t.prazoHora,
+        lembreteMin: t.lembreteMin,
         concluida: false,
         pessoas: t.pessoas,
         equipes: t.equipes,

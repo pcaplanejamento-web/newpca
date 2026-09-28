@@ -1066,6 +1066,14 @@ de todos os eventos da tarefa, evento privado, lembretes/prazos e avisos) — mu
 com "Equipe" +/−.
 ✅ **Calendário — conjuntos recolhíveis:** a seção "Conjuntos (tarefas)", cada quadro e o cronograma do PCA recolhem na
 lateral (lembrado no aparelho).
+✅ **Tarefas no padrão Trello — F1 (migração `0053`):** concluir NO LUGAR pelo círculo do cartão (a tarefa não sai da
+lista do dia; só a lista de concluídas conclui/reabre ao mover), prazo com HORA e LEMBRETE no sino para responsáveis,
+equipes e observadores; o prazo com hora vira horário no calendário.
+🔜 **Tarefas no padrão Trello — próximas fases:** F2 checklists nomeados (itens com prazo e responsável) · F3 copiar/mover
+entre quadros e TEMPLATES (os modelos de tarefa viram cartões-template) · F4 menu da lista, copiar/mover lista, quadro do
+mês com listas por dia útil, favoritos, trocar de quadro · F5 etiquetas no seletor e filtros completos · F6 comentários e
+atividade num fluxo, descrição formatada e o detalhe na distribuição do Trello · F7 campos personalizados com título
+automático · F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

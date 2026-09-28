@@ -2112,7 +2112,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Dados do Calendário Institucional PCA 2026/2027:** cadastrados em produção (grupo Planejamento e Custos); a antiga carga
   `0051` saiu do repositório (já aplicada — o wrangler só aplica arquivos novos). A `0052` tira o INÍCIO das tarefas 8 (Etapa
   8) e 9 (Avisos) daquele quadro — ficam só no prazo, sem a barra longa em todas as semanas.
-- **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
+- **PADRÃO TRELLO — plano em fases F1…F9** (concluir no lugar e datas · checklists nomeados · copiar/mover/templates ·
+  menu da lista, quadro do período, favoritos · etiquetas e filtros · atividade + texto formatado + tela no padrão Trello ·
+  campos personalizados · vínculos múltiplos · importar do Trello; SEM anexo de arquivo). Entregues:
+  - **FASE 11 / F1 — concluir NO LUGAR + prazo com HORA e LEMBRETE (migração `0053`, aditiva):** `tarefas.prazo_hora`
+    ("HH:MM"; NULL = dia inteiro) + `lembrete_min`. **Concluir não muda a lista**: `PATCH /api/tarefas/[id]` `{concluida}`
+    grava/zera `concluida_em` e, ao concluir, `aposMovimento(…, {id:null, concluida:true})` roda SÓ as regras "ao concluir"
+    (`automacoesDoEvento` com `listaId` null) e a recorrência (a próxima nasce na MESMA lista quando ela é comum —
+    `listaDaProxima`); mover entre listas COMUNS mantém a conclusão, entrar numa lista de concluídas conclui e SAIR dela
+    reabre (`conclusaoAoMover` no núcleo + `conclusaoAoMoverSql` em `comandosMover`/`comandosMassa`). **`CirculoConcluir`**
+    (DS: vazio/verde ✓, `discreto` = aparece com o mouse no cartão, área de toque ≥ 44px) no `CartaoTarefa` (antes do título;
+    `QuadroKanban.onConcluir`, também no menu do toque), no rodapé do detalhe e no calendário (o círculo do período) — tudo
+    pelo MESMO PATCH, otimista, com Desfazer. **`DatasTarefa`** (DS: início, prazo + hora — vazia = "Dia inteiro" —,
+    lembrete `OPCOES_LEMBRETE`; sem prazo, hora e lembrete somem) no bloco Prazo do detalhe. `estadoPrazo(…, hora, agora)`
+    (o de hoje depois da hora = atrasada; `horaAgoraBrasilia`), `rotuloData(d, hoje, hora)`; o calendário mostra o prazo de
+    UM dia com hora como horário na grade (e no `.ics`). Lembrete do prazo DERIVADO no sino (`lembreteDaTarefa`,
+    `calendario-core`: a régua `lembreteDevido`; chave `lembrete-tarefa:id:início:min`) para responsáveis, equipes e
+    observadores (`pessoaNaTarefa(u, true)`). Testes: `tests/tarefas-trello.test.ts`, `tarefas-sql` (mover), migração.
+- **Próximo** (ver `docs/ROADMAP.md`): as fases F2…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.

@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { lembreteDaTarefa } from "../src/lib/calendario-core.ts";
+import { automacoesDoEvento, conclusaoAoMover, estadoPrazo, eventosDoCalendario, rotuloData, type Automacao } from "../src/lib/tarefas-core.ts";
+import { editarTarefaSchema } from "../src/lib/tarefas-validation.ts";
+
+// As funcionalidades do padrão Trello (FASE 11+): concluir no lugar, prazo com hora e lembrete.
+describe("tarefas — padrão Trello", () => {
+  it("F1 prazo com HORA: o de hoje que passou da hora é atrasada; sem hora, vale o dia inteiro", () => {
+    assert.equal(estadoPrazo("2026-03-21", "2026-03-21", false, "09:21", "09:20"), "hoje");
+    assert.equal(estadoPrazo("2026-03-21", "2026-03-21", false, "09:21", "09:22"), "atrasada");
+    assert.equal(estadoPrazo("2026-03-21", "2026-03-21", false, null, "23:59"), "hoje");
+    assert.equal(estadoPrazo("2026-03-21", "2026-03-21", true, "09:21", "10:00"), "concluida");
+    assert.equal(rotuloData("2026-03-21", "2026-01-01", "09:21"), "21/03 09:21");
+    assert.equal(rotuloData("2026-03-21", "2026-01-01"), "21/03");
+  });
+
+  it("F1 concluir NO LUGAR: só a lista de concluídas conclui/reabre ao mover; entre listas comuns a conclusão fica", () => {
+    const agora = "2026-03-21T12:00:00Z";
+    assert.equal(conclusaoAoMover(null, false, true, agora), agora);
+    assert.equal(conclusaoAoMover("2026-03-01", false, true, agora), "2026-03-01");
+    assert.equal(conclusaoAoMover("2026-03-01", true, false, agora), null);
+    assert.equal(conclusaoAoMover("2026-03-01", false, false, agora), "2026-03-01");
+    assert.equal(conclusaoAoMover(null, false, false, agora), null);
+  });
+
+  it("F1 concluir no lugar dispara SÓ as regras 'ao concluir' (nenhuma de entrar na lista)", () => {
+    const regras: Automacao[] = [
+      { id: 1, gatilho: "entrar_lista", listaId: 5, acao: { tipo: "prioridade", prioridade: "alta" }, ativa: true },
+      { id: 2, gatilho: "concluir", listaId: null, acao: { tipo: "notificar" }, ativa: true },
+    ];
+    assert.deepEqual(automacoesDoEvento(regras, { listaId: null, concluida: true }), [{ tipo: "notificar" }]);
+    assert.equal(automacoesDoEvento(regras, { listaId: 5, concluida: false }).length, 1);
+  });
+
+  it("F1 lembrete do PRAZO da tarefa: devido do aviso até o fim do dia; dia inteiro às 08:00", () => {
+    const t = { id: 7, quadroId: 3, ticket: 12, titulo: "Conferir", prazo: "2026-03-21", prazoHora: "09:21", lembreteMin: 60 };
+    assert.equal(lembreteDaTarefa(t, "2026-03-21T08:00", "2026-03-21"), null);
+    const n = lembreteDaTarefa(t, "2026-03-21T08:30", "2026-03-21");
+    assert.ok(n);
+    assert.equal(n.link, "/painel/tarefas/3?tarefa=7");
+    assert.match(n.titulo, /às 09:21/);
+    assert.equal(lembreteDaTarefa({ ...t, prazoHora: null, lembreteMin: 1440 }, "2026-03-20T08:00", "2026-03-20")?.chave, "lembrete-tarefa:7:2026-03-21T08:00:1440");
+    assert.equal(lembreteDaTarefa({ ...t, lembreteMin: null }, "2026-03-21T09:00", "2026-03-21"), null);
+    assert.equal(lembreteDaTarefa(t, "2026-03-22T00:01", "2026-03-22"), null);
+  });
+
+  it("F1 calendário: o prazo de UM dia com hora vira horário na grade; o de vários dias segue faixa", () => {
+    const base = { ticket: 1, titulo: "T", concluidaEm: null, recorrencia: null, quadroId: 1 };
+    const [um] = eventosDoCalendario([{ ...base, id: 1, inicio: null, prazo: "2026-03-21", prazoHora: "09:21" }], [], "2026-03-01", "2026-03-31");
+    assert.deepEqual([um.diaInteiro, um.horaInicio], [false, "09:21"]);
+    const [varios] = eventosDoCalendario([{ ...base, id: 2, inicio: "2026-03-19", prazo: "2026-03-21", prazoHora: "09:21" }], [], "2026-03-01", "2026-03-31");
+    assert.equal(varios.diaInteiro, true);
+  });
+
+  it("F1 schema: concluir no lugar, hora e lembrete", () => {
+    assert.ok(editarTarefaSchema.safeParse({ concluida: true, prazoHora: "09:21", lembreteMin: 60 }).success);
+    assert.ok(!editarTarefaSchema.safeParse({ prazoHora: "25:00" }).success);
+    assert.ok(!editarTarefaSchema.safeParse({ lembreteMin: 99999 }).success);
+  });
+});

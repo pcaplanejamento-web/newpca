@@ -82,7 +82,7 @@ export type DadosCalendarioQuadros = {
   /** Os ids das pessoas do GRUPO ativo (quem pode ser convidado; "pesquisar pessoas"). */
   membros: number[];
   abertas: { id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null }[];
-  /** As listas ativas dos quadros (concluir/reabrir e criar tarefa pelo calendário). */
+  /** As listas ativas dos quadros (criar tarefa pelo calendário). */
   listas: { id: number; nome: string; concluida: boolean; quadroId: number }[];
   ocultos: OcultosCalendario;
   opcoes: OpcoesCalendario;
@@ -391,21 +391,16 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
     }
   };
 
-  /** O CÍRCULO do período: conclui (leva à 1ª lista de concluídas do quadro) ou reabre (1ª lista aberta). */
+  /** O CÍRCULO do período: conclui/reabre NO LUGAR (a tarefa não muda de lista) — o mesmo PATCH do cartão. */
   const concluir = async (e: EventoCalendario) => {
     const t = tarefas.find((x) => x.id === e.tarefaId);
     if (!t) return;
-    const listas = dados.listas.filter((l) => l.quadroId === t.quadroId);
-    const destino = e.concluida ? listas.find((l) => !l.concluida) : listas.find((l) => l.concluida);
-    if (!destino) {
-      toast.info(e.concluida ? "O quadro não tem lista aberta para reabrir a tarefa." : "O quadro não tem lista de concluídas — marque uma na Configuração do quadro.");
-      return;
-    }
+    const concluida = !e.concluida;
     const antes = tarefas;
-    setTarefas(antes.map((x) => (x.id === t.id ? { ...x, concluidaEm: e.concluida ? null : dados.hoje, listaId: destino.id } : x)));
+    setTarefas(antes.map((x) => (x.id === t.id ? { ...x, concluidaEm: concluida ? dados.hoje : null } : x)));
     try {
-      await chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: destino.id });
-      comDesfazer(`${rotuloTicket(t.ticket)} ${e.concluida ? "reaberta" : "concluída"}.`, () => chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: t.listaId }));
+      await chamar(`/api/tarefas/${t.id}`, "PATCH", { concluida });
+      comDesfazer(`${rotuloTicket(t.ticket)} ${concluida ? "concluída" : "reaberta"}.`, () => chamar(`/api/tarefas/${t.id}`, "PATCH", { concluida: !concluida }));
       atualizar();
     } catch (err) {
       setTarefas(antes);

@@ -14,7 +14,8 @@ import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, Ic
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
  * no desktop ocupa até o fim do display e cada lista rola por dentro. Arrastar move o cartão (`useArrastoCartoes`) — a
  * mudança é do host (`onMover`, otimista). "Adicionar tarefa" no pé de cada lista abre o BANNER da tarefa nova naquela
- * lista (`onNova` — o mesmo formulário de toda criação). No TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
+ * lista (`onNova` — o mesmo formulário de toda criação). O CÍRCULO do cartão conclui/reabre NO LUGAR (`onConcluir`). No
+ * TOQUE, cada cartão tem o menu de ações (mover/topo/fim/concluir/arquivar —
  * sem arrastar) e, no celular, os PONTOS acima do quadro dizem em qual coluna se está (tocar leva a ela).
  */
 export function QuadroKanban({
@@ -27,6 +28,7 @@ export function QuadroKanban({
   onMover,
   onNova,
   onArquivar,
+  onConcluir,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -40,6 +42,8 @@ export function QuadroKanban({
   /** Abre o banner de uma tarefa NOVA na lista. */
   onNova: (listaId: number) => void;
   onArquivar: (id: number) => void;
+  /** Conclui/reabre NO LUGAR (o círculo do cartão e o menu do toque). */
+  onConcluir: (id: number) => void;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
@@ -48,7 +52,6 @@ export function QuadroKanban({
   const mPessoas = useMemo(() => new Map(pessoas.map((p) => [p.id, p])), [pessoas]);
   const porLista = useMemo(() => new Map(listas.map((l) => [l.id, cartoesDaLista(tarefas, l.id)])), [listas, tarefas]);
   const preso = arrasto ? tarefas.find((t) => t.id === arrasto.id) : undefined;
-  const concluidas = listas.find((l) => l.concluida);
   // A coluna à vista no celular (uma por vez, com encaixe): a mais próxima da borda esquerda da área rolável.
   const [atual, setAtual] = useState(0);
   useEffect(() => {
@@ -98,9 +101,9 @@ export function QuadroKanban({
             {item("Abrir", <IconPencil className="h-4 w-4 text-muted" />, () => onAbrir(t.id))}
             {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
             {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
-            {concluidas && concluidas.id !== l.id && item("Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onMover(t.id, concluidas.id, Number.MAX_SAFE_INTEGER))}
+            {item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
             {listas
-              .filter((x) => x.id !== l.id && x.id !== concluidas?.id)
+              .filter((x) => x.id !== l.id)
               .map((x) => item(`Mover para “${x.nome}”`, <IconArrowRight className="h-4 w-4 text-muted" />, () => onMover(t.id, x.id, Number.MAX_SAFE_INTEGER)))}
             {item("Arquivar", <IconArquivar className="h-4 w-4 text-muted" />, () => onArquivar(t.id))}
           </div>
@@ -167,6 +170,7 @@ export function QuadroKanban({
                     onPegar={(e) => iniciar(e, t.id, l.id)}
                     onTeclaMover={(d) => teclaMover(t, d)}
                     acoes={menu(t, l, pos, cartoes.length)}
+                    onConcluir={() => onConcluir(t.id)}
                   />
                 </Fragment>
               );

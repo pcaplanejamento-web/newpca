@@ -13,7 +13,6 @@ import {
   blocosDisponiveis,
   blocosParaGravar,
   blocoTemDado,
-  COR_ESTADO_PRAZO,
   type DadosBlocos,
   type EquipeQuadro,
   MAX_NOTA,
@@ -25,13 +24,11 @@ import {
   urlValida,
   COR_PRIORIDADE,
   type EtiquetaTarefa,
-  estadoPrazo,
   type ListaTarefas,
   type ModeloTarefa,
   type Prioridade,
   prazoDoModelo,
   PRIORIDADES,
-  ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   rotuloTicket,
   type Recorrencia,
@@ -51,6 +48,7 @@ import { Historico, useHistorico } from "./Historico";
 import { LinkExterno } from "./LinkExterno";
 import { IconArquivar, IconBandeira, IconCheck, IconComentario, IconDesarquivar, IconModelo, IconTrash } from "./icons";
 import { EventosTarefa } from "./EventosTarefa";
+import { DatasTarefa } from "./DatasTarefa";
 import { Modal, type ModalPainel } from "./Modal";
 import { RecorrenciaTarefa } from "./RecorrenciaTarefa";
 import { Segmented } from "./Segmented";
@@ -72,6 +70,9 @@ type Rascunho = {
   prioridade: Prioridade;
   inicio: string;
   prazo: string;
+  /** "HH:MM" (vazio = o dia inteiro). */
+  prazoHora: string;
+  lembreteMin: number | null;
   estimativa: string;
   pessoas: number[];
   observadores: number[];
@@ -222,6 +223,8 @@ export function TarefaDetalhe({
           prioridade: existente.prioridade,
           inicio: existente.inicio ?? "",
           prazo: existente.prazo ?? "",
+          prazoHora: existente.prazoHora ?? "",
+          lembreteMin: existente.lembreteMin,
           estimativa: existente.estimativaH == null ? "" : String(existente.estimativaH).replace(".", ","),
           pessoas: existente.pessoas,
           observadores: existente.observadores,
@@ -240,6 +243,8 @@ export function TarefaDetalhe({
           prioridade: "media",
           inicio: "",
           prazo: aberto.tipo === "nova" ? (aberto.prazo ?? "") : "",
+          prazoHora: "",
+          lembreteMin: null,
           estimativa: "",
           pessoas: [],
           observadores: [],
@@ -277,7 +282,6 @@ export function TarefaDetalhe({
   const linksOk = r.blocos.every((b) => b.tipo !== "link" || !b.url.trim() || urlValida(b.url));
   const pode = r.titulo.trim().length > 0 && datasOk && estOk && linksOk && !salvando && !carregando;
   const concluida = existente?.concluidaEm != null;
-  const estado = estadoPrazo(r.prazo || null, hoje, concluida);
   const fora = todas.filter((p) => !pessoas.some((x) => x.id === p.id));
   // Quem entra na tarefa PELAS EQUIPES escolhidas (além dos responsáveis) — só leitura.
   const pelaEquipe = [...new Set(equipes.filter((e) => r.equipes.includes(e.id)).flatMap((e) => e.membros))]
@@ -310,8 +314,8 @@ export function TarefaDetalhe({
     onFechar();
   };
 
-  /** Grava; `listaDestino` = também leva a tarefa a essa lista (Concluir/Reabrir — o mesmo caminho: automações e recorrência). */
-  const salvar = async (listaDestino?: number) => {
+  /** Grava; `concluir` = também conclui/reabre NO LUGAR (o mesmo PATCH do cartão: automações e recorrência). */
+  const salvar = async (concluir?: boolean) => {
     if (!pode) return;
     setSalvando("salvar");
     try {
@@ -324,6 +328,8 @@ export function TarefaDetalhe({
           prioridade: r.prioridade,
           inicio: r.inicio || null,
           prazo: r.prazo || null,
+          prazoHora: r.prazo && r.prazoHora ? r.prazoHora : null,
+          lembreteMin: r.prazo ? r.lembreteMin : null,
           estimativaH: est,
           pessoas: r.pessoas,
           observadores: r.observadores,
@@ -339,11 +345,13 @@ export function TarefaDetalhe({
       } else if (existente) {
         const d: Record<string, unknown> = {};
         if (r.titulo.trim() !== inicial.titulo) d.titulo = r.titulo.trim();
-        const lista = listaDestino ?? r.listaId;
-        if (lista !== inicial.listaId) d.listaId = lista;
+        if (r.listaId !== inicial.listaId) d.listaId = r.listaId;
+        if (concluir !== undefined) d.concluida = concluir;
         if (r.prioridade !== inicial.prioridade) d.prioridade = r.prioridade;
         if (r.inicio !== inicial.inicio) d.inicio = r.inicio || null;
         if (r.prazo !== inicial.prazo) d.prazo = r.prazo || null;
+        if (r.prazo && r.prazoHora !== inicial.prazoHora) d.prazoHora = r.prazoHora || null;
+        if (r.prazo && r.lembreteMin !== inicial.lembreteMin) d.lembreteMin = r.lembreteMin;
         if (r.estimativa !== inicial.estimativa) d.estimativaH = est;
         if (!iguais(r.pessoas, inicial.pessoas)) d.pessoas = r.pessoas;
         if (!iguais(r.observadores, inicial.observadores)) d.observadores = r.observadores;
@@ -354,7 +362,7 @@ export function TarefaDetalhe({
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
         if (JSON.stringify(r.blocos) !== JSON.stringify(inicial.blocos)) d.blocos = blocosParaGravar(r.blocos);
         if (Object.keys(d).length) await chamar(`/api/tarefas/${existente.id}`, "PATCH", d);
-        toast.success(listaDestino == null ? "Tarefa salva." : listas.find((l) => l.id === listaDestino)?.concluida ? "Tarefa concluída." : "Tarefa reaberta.");
+        toast.success(concluir == null ? "Tarefa salva." : concluir ? "Tarefa concluída." : "Tarefa reaberta.");
       }
       onSalvo();
       onFechar();
@@ -488,7 +496,7 @@ export function TarefaDetalhe({
     setR((x) => {
       if (!x) return x;
       const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
-      if (b.tipo === "prazo") Object.assign(y, { inicio: "", prazo: "" });
+      if (b.tipo === "prazo") Object.assign(y, { inicio: "", prazo: "", prazoHora: "", lembreteMin: null });
       else if (b.tipo === "pessoas") Object.assign(y, { pessoas: [], observadores: [], equipes: [] });
       else if (b.tipo === "etiquetas") y.etiquetas = [];
       else if (b.tipo === "vinculo") y.vinculo = null;
@@ -534,25 +542,7 @@ export function TarefaDetalhe({
           <p className="text-[12.5px] text-muted">Carregando…</p>
         );
       case "prazo":
-        return (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField label="Início" type="date" value={r.inicio} onChange={(e) => set("inicio", e.target.value)} />
-            <TextField
-              label="Prazo"
-              type="date"
-              value={r.prazo}
-              onChange={(e) => set("prazo", e.target.value)}
-              error={datasOk ? undefined : "O início não pode ser depois do prazo."}
-              hint={
-                r.prazo ? (
-                  <span className="font-semibold" style={{ color: COR_ESTADO_PRAZO[estado] }}>
-                    {ROTULO_ESTADO_PRAZO[estado]}
-                  </span>
-                ) : undefined
-              }
-            />
-          </div>
-        );
+        return <DatasTarefa valor={r} hoje={hoje} concluida={concluida} onChange={(patch) => setR((x) => (x ? { ...x, ...patch } : x))} />;
       case "pessoas":
         return (
           <div className="space-y-4">
@@ -627,8 +617,6 @@ export function TarefaDetalhe({
   const movendo = arrasto?.carga.tipo === "mover" ? arrasto.carga.id : null;
   const nComentarios = conteudo?.comentarios.length ?? existente?.comentarios ?? 0;
   const listaAtual = listas.find((l) => l.id === r.listaId);
-  const listaConcluidas = listas.find((l) => l.concluida);
-  const listaAberta = listas.find((l) => !l.concluida);
 
   const painelAtividade = idAberto
     ? [
@@ -741,12 +729,12 @@ export function TarefaDetalhe({
               <Button variant="ghost" disabled={salvando != null} onClick={fechar}>
                 {sujo ? "Cancelar" : "Fechar"}
               </Button>
-              {existente && !existente.arquivada && listaConcluidas && (concluida ? listaAberta : true) && (
+              {existente && !existente.arquivada && (
                 <Button
                   variant="secondary"
                   disabled={!pode}
                   icon={<IconCheck className="h-4 w-4" style={concluida ? undefined : { color: "var(--ok)" }} />}
-                  onClick={() => salvar(concluida ? listaAberta?.id : listaConcluidas.id)}
+                  onClick={() => salvar(!concluida)}
                 >
                   {concluida ? "Reabrir" : "Concluir"}
                 </Button>

@@ -146,6 +146,10 @@ const camposTarefa = {
   prioridade: z.enum(PRIORIDADES).optional(),
   inicio: data.nullable().optional(),
   prazo: data.nullable().optional(),
+  /** Hora do prazo (NULL = o dia inteiro). */
+  prazoHora: hora.nullable().optional(),
+  /** Lembrete: minutos antes do prazo (NULL = sem lembrete). */
+  lembreteMin: z.number().int().min(0).max(LEMBRETE_MAX_MIN, "Lembrete de até 1 semana antes.").nullable().optional(),
   pessoas: ids(20).optional(),
   observadores: ids(20).optional(),
   etiquetas: ids(20).optional(),
@@ -168,7 +172,14 @@ export const criarTarefaSchema = z
   })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
 export const editarTarefaSchema = z
-  .object({ ...camposTarefa, titulo: camposTarefa.titulo.optional(), listaId: id.optional(), arquivada: z.boolean().optional() })
+  .object({
+    ...camposTarefa,
+    titulo: camposTarefa.titulo.optional(),
+    listaId: id.optional(),
+    arquivada: z.boolean().optional(),
+    /** Concluir/reabrir NO LUGAR (sem mudar de lista). */
+    concluida: z.boolean().optional(),
+  })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
 
 /** MOVER um cartão: a lista de destino e os VIZINHOS onde ele caiu (`null` = ponta) — o servidor calcula a ordem. */

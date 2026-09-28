@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { notificacoes, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
-import { LEMBRETE_MAX_MIN, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
+import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
@@ -162,6 +162,29 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
         const oc = { ...e, data, serieInicio: e.data };
         if (lembreteDevido(oc, agora)) novas.push({ usuarioId: u.id, ...notificacaoDeLembrete(oc, { ticket: e.ticket, titulo: e.tarefaTitulo }, hoje), tarefaId: e.tarefaId, quadroId: e.quadroId });
       }
+    // O LEMBRETE do PRAZO das tarefas abertas em que a pessoa está (responsável, equipe ou observadora).
+    const prazos = await db
+      .select({ id: tarefas.id, quadroId: tarefas.quadroId, ticket: tarefas.ticket, titulo: tarefas.titulo, prazo: tarefas.prazo, prazoHora: tarefas.prazoHora, lembreteMin: tarefas.lembreteMin })
+      .from(tarefas)
+      .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
+      .where(
+        and(
+          sql`${tarefas.lembreteMin} IS NOT NULL`,
+          isNull(tarefas.concluidaEm),
+          eq(tarefas.arquivada, false),
+          eq(tarefaQuadros.arquivado, false),
+          listaAtiva,
+          gte(tarefas.prazo, hoje),
+          lte(tarefas.prazo, ate),
+          grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          pessoaNaTarefa(u.id, true),
+        ),
+      )
+      .limit(200);
+    for (const t of prazos) {
+      const n = lembreteDaTarefa(t, agora, hoje);
+      if (n) novas.push({ usuarioId: u.id, ...n, tarefaId: t.id, quadroId: t.quadroId });
+    }
     if (!novas.length) return;
     const cmds = comandosNotificacoes(db, novas);
     await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);

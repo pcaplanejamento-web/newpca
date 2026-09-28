@@ -67,6 +67,20 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.equal((db.prepare("SELECT ordem AS o FROM tarefas WHERE id = 2").get() as { o: number }).o, 7);
   });
 
+  it("concluir NO LUGAR: entre listas comuns a conclusão fica; sair da lista de concluídas reabre", async () => {
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem, concluida) VALUES (3, 1, 'Dia 2', 3, 0)");
+    const conc = () => (db.prepare("SELECT concluida_em AS c FROM tarefas WHERE id = 2").get() as { c: string | null }).c;
+    db.exec("UPDATE tarefas SET concluida_em = '2026-03-21 09:00:00' WHERE id = 2");
+    await orm.batch(comandosMover(orm, 2, 3, 1, false) as never);
+    assert.equal(conc(), "2026-03-21 09:00:00");
+    await orm.batch(comandosMover(orm, 2, 2, 1, true) as never);
+    assert.equal(conc(), "2026-03-21 09:00:00");
+    await orm.batch(comandosMover(orm, 2, 3, 1, false) as never);
+    assert.equal(conc(), null);
+    await orm.batch(comandosMover(orm, 2, 1, 2, false) as never);
+    db.exec("DELETE FROM tarefa_listas WHERE id = 3");
+  });
+
   it("troca responsáveis e etiquetas (undefined = não mexe)", async () => {
     await orm.batch(comandosVinculos(orm, 1, { pessoas: [9502] }) as never);
     const ps = db.prepare("SELECT usuario_id AS u FROM tarefa_pessoas WHERE tarefa_id = 1").all() as { u: number }[];

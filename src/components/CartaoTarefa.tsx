@@ -7,6 +7,7 @@ import {
   COR_PRIORIDADE,
   type EtiquetaTarefa,
   estadoPrazo,
+  horaAgoraBrasilia,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
   rotuloData,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CirculoConcluir } from "./CirculoConcluir";
 import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconGrip, IconLink, IconNota, IconRepetir, IconWeb } from "./icons";
 
 /** Até quantas pessoas aparecem no cartão (as demais viram "+N"). */
@@ -38,6 +40,7 @@ export function CartaoTarefa({
   onPegar,
   onTeclaMover,
   acoes,
+  onConcluir,
   oculto = false,
 }: {
   tarefa: TarefaResumo;
@@ -53,8 +56,10 @@ export function CartaoTarefa({
   oculto?: boolean;
   /** Menu de ações no TOQUE (ao lado da alça): mover para outra lista, topo/fim, concluir, arquivar. */
   acoes?: ReactNode;
+  /** O CÍRCULO antes do título: conclui/reabre NO LUGAR. Ausente = sem círculo. */
+  onConcluir?: () => void;
 }) {
-  const estado = estadoPrazo(t.prazo, hoje, t.concluidaEm != null);
+  const estado = estadoPrazo(t.prazo, hoje, t.concluidaEm != null, t.prazoHora, horaAgoraBrasilia());
   // No toque, a alça (e o menu) ocupam o canto de cima: o texto não passa por baixo deles.
   const toque = onPegar || acoes ? (acoes && onPegar ? "any-pointer-coarse:pr-[5.25rem]" : "any-pointer-coarse:pr-10") : "";
   const marcas = t.etiquetas.map((e) => etiquetas.get(e)).filter((e): e is EtiquetaTarefa => !!e);
@@ -96,7 +101,14 @@ export function CartaoTarefa({
           ))}
         </div>
       )}
-      <p className={`pointer-events-none line-clamp-3 pr-6 text-[13px] ${toque} font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
+      <div className={`flex items-start gap-1.5 pr-6 ${toque}`}>
+        {onConcluir && (
+          <span className="mt-px">
+            <CirculoConcluir concluida={t.concluidaEm != null} onAlternar={onConcluir} rotulo={`${rotuloTicket(t.ticket)} ${t.titulo}`} discreto />
+          </span>
+        )}
+        <p className={`pointer-events-none line-clamp-3 min-w-0 flex-1 text-[13px] font-medium leading-snug text-text ${t.concluidaEm ? "line-through decoration-faint" : ""}`}>{t.titulo}</p>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
         <span className="relative z-10 font-mono tabular-nums">
           <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
@@ -111,11 +123,11 @@ export function CartaoTarefa({
         {t.prazo && (
           <span
             className="pointer-events-none inline-flex items-center gap-1 rounded-full px-1.5 py-px font-semibold tabular-nums"
-            title={`Prazo ${rotuloData(t.prazo, "")} — ${ROTULO_ESTADO_PRAZO[estado]}`}
+            title={`Prazo ${rotuloData(t.prazo, "", t.prazoHora)} — ${ROTULO_ESTADO_PRAZO[estado]}${t.lembreteMin != null ? " · com lembrete" : ""}`}
             style={{ color: COR_ESTADO_PRAZO[estado], background: `color-mix(in srgb, ${COR_ESTADO_PRAZO[estado]} 12%, var(--surface))` }}
           >
             <IconClock className="h-3 w-3" />
-            {rotuloData(t.prazo, hoje)}
+            {rotuloData(t.prazo, hoje, t.prazoHora)}
           </span>
         )}
         {t.recorrencia && (

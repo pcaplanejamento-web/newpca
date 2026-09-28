@@ -117,6 +117,8 @@ import { eventosPca, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO } from "@/lib
 import { EventosTarefa } from "@/components/EventosTarefa";
 import { BarraEdicaoMassaTarefas } from "@/components/BarraEdicaoMassa";
 import { ChipsAlternar } from "@/components/TarefaDetalhe";
+import { CirculoConcluir } from "@/components/CirculoConcluir";
+import { DatasTarefa } from "@/components/DatasTarefa";
 import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
 import { acoesChecklistRascunho, ChecklistTarefa } from "@/components/ChecklistTarefa";
@@ -1839,7 +1841,7 @@ function TarefasDemo() {
   const mPe = new Map(pessoas.map((p) => [p.id, p]));
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
-    arquivada: false, pessoas: [], observadores: [], equipes: [], envolvidos: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
+    arquivada: false, prazoHora: null, lembreteMin: null, pessoas: [], observadores: [], equipes: [], envolvidos: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
     estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, eventos: 0, recorrencia: null,
   };
   const cartoes: TarefaResumo[] = [
@@ -1884,7 +1886,7 @@ function TarefasDemo() {
       <div className="flex flex-wrap items-start gap-3">
         <ColunaTarefas lista={{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: 2, concluida: false, arquivada: false }} qtd={3} onNova={() => {}}>
           {cartoes.map((t) => (
-            <CartaoTarefa key={t.id} tarefa={t} etiquetas={mEt} pessoas={mPe} hoje="2026-06-01" onAbrir={() => {}} />
+            <CartaoTarefa key={t.id} tarefa={t} etiquetas={mEt} pessoas={mPe} hoje="2026-06-01" onAbrir={() => {}} onConcluir={() => {}} />
           ))}
         </ColunaTarefas>
         <div className="max-w-md">
@@ -1939,6 +1941,12 @@ function TarefasDemo() {
             onChange={() => {}}
             rotulo="Equipe"
           />
+          {/* O CÍRCULO de concluir (no lugar) e as DATAS da tarefa (prazo com hora + lembrete). */}
+          <div className="flex items-center gap-3">
+            <CirculoConcluir concluida={false} onAlternar={() => {}} rotulo="Aberta" tamanho="md" />
+            <CirculoConcluir concluida onAlternar={() => {}} rotulo="Concluída" tamanho="md" />
+          </div>
+          <DatasTarefa valor={{ inicio: "", prazo: "2026-03-21", prazoHora: "09:21", lembreteMin: 1440 }} hoje="2026-03-20" onChange={() => {}} />
         </div>
       </div>
       <CalendarioTarefas
@@ -3184,7 +3192,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard + QuadroNovoCard (card 4:5 do quadro), FiltrosTarefas (responsável com a foto, prazo, prioridade, etiqueta, busca), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), PaletaBlocos + MolduraBloco (os BLOCOS da tarefa — arrastar ou tocar para acrescentar; alça e ↑/↓ reordenam), ComentariosTarefa (@menção), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

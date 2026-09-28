@@ -593,6 +593,12 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_equipe_membros"), 0);
   });
 
+  it("0053 prazo com hora e lembrete da tarefa (colunas novas, vazias)", () => {
+    const a = aplicarTudo();
+    const cols = (a.prepare("PRAGMA table_info(tarefas)").all() as { name: string }[]).map((c) => c.name);
+    assert.ok(cols.includes("prazo_hora") && cols.includes("lembrete_min"));
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

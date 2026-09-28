@@ -184,6 +184,30 @@ export function QuadroTarefas({
     }
   };
 
+  /**
+   * CONCLUI/REABRE no LUGAR (o círculo do cartão, o menu do toque e o calendário): otimista, com Desfazer; as regras
+   * "ao concluir" e a próxima ocorrência da recorrente rodam no servidor (recarrega quando algo mudou).
+   */
+  const concluir = async (id: number) => {
+    const antes = tarefas;
+    const t = antes.find((x) => x.id === id);
+    if (!t) return;
+    const concluida = t.concluidaEm == null;
+    setTarefas(antes.map((x) => (x.id === id ? { ...x, concluidaEm: concluida ? new Date().toISOString() : null } : x)));
+    try {
+      const r = await chamar<{ atualizar: boolean }>(`/api/tarefas/${id}`, "PATCH", { concluida });
+      toast.desfazer(`${rotuloTicket(t.ticket)} ${concluida ? "concluída" : "reaberta"}.`, () => {
+        chamar(`/api/tarefas/${id}`, "PATCH", { concluida: !concluida })
+          .then(() => router.refresh())
+          .catch((err) => toast.error((err as Error).message));
+      });
+      if (r.atualizar) router.refresh();
+    } catch (e) {
+      setTarefas(antes);
+      toast.error((e as Error).message);
+    }
+  };
+
   /** O mês à vista na aba Calendário e os EVENTOS dele (período, recorrência e os cadastrados deste quadro). */
   const [mesCal, setMesCal] = useState(() => ({ ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) }));
   /** A vista ANO pede o ano inteiro (os pontos de todos os meses). */
@@ -197,27 +221,8 @@ export function QuadroTarefas({
     setOpcoesCal(o);
     chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_OPCOES_CALENDARIO, valor: o }).catch(() => toast.error("Não foi possível guardar as opções do calendário."));
   };
-  /** O CÍRCULO do período: conclui (1ª lista de concluídas) ou reabre (1ª lista aberta) — pelo mesmo PATCH do detalhe. */
-  const concluirNoCalendario = async (e: EventoCalendario) => {
-    const destino = e.concluida ? ativas.find((l) => !l.concluida) : ativas.find((l) => l.concluida);
-    const t = tarefas.find((x) => x.id === e.tarefaId);
-    if (!t) return;
-    if (!destino) {
-      toast.info(e.concluida ? "O quadro não tem lista aberta." : "O quadro não tem lista de concluídas — marque uma na Configuração.");
-      return;
-    }
-    try {
-      await chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: destino.id });
-      toast.desfazer(`${rotuloTicket(t.ticket)} ${e.concluida ? "reaberta" : "concluída"}.`, () => {
-        chamar(`/api/tarefas/${t.id}`, "PATCH", { listaId: t.listaId })
-          .then(() => router.refresh())
-          .catch((err) => toast.error((err as Error).message));
-      });
-      router.refresh();
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  };
+  /** O CÍRCULO do período no calendário: o MESMO concluir no lugar do cartão. */
+  const concluirNoCalendario = (e: EventoCalendario) => concluir(e.tarefaId);
   const semPrazoCal = useMemo(
     () => (aba === "calendario" ? noQuadro.filter((t) => !t.prazo && t.concluidaEm == null).map((t) => ({ id: t.id, quadroId: quadro.id, ticket: t.ticket, titulo: t.titulo })) : []),
     [aba, noQuadro, quadro.id],
@@ -422,6 +427,7 @@ export function QuadroTarefas({
               onMover={mover}
               onNova={(listaId) => nova(listaId)}
               onArquivar={arquivar}
+              onConcluir={concluir}
             />
           )
         ) : aba === "lista" ? (

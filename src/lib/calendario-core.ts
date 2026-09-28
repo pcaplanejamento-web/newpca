@@ -4,7 +4,7 @@
  * ADM), LEMBRETES dos eventos (o momento de avisar e a notificação do sino), as OPÇÕES da pessoa (semana começando na
  * segunda, ocultar o fim de semana), a PREVISÃO do PCA como eventos e a exportação/assinatura `.ics` (RFC 5545).
  */
-import { type DadosEvento, dadosDoEventoGravado, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
+import { type DadosEvento, dadosDoEventoGravado, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, linkTarefa, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
 
 // ─── Mover um evento cadastrado (arrastar no calendário) ─────────────────────────────────────────────────────
 
@@ -315,6 +315,28 @@ export function notificacaoDeLembrete(
     texto: `${rotuloTicket(t.ticket)} ${t.titulo}${e.local ? ` · ${e.local}` : ""}`,
     // A ocorrência de uma série abre pela chave dela (a 1ª é a do próprio evento).
     link: linkEvento(e.data, e.serieInicio && e.serieInicio !== e.data ? `e${e.id}:${e.data}` : `e${e.id}`),
+  };
+}
+
+/**
+ * O LEMBRETE do PRAZO de uma tarefa (a mesma régua do evento: `lembreteDevido`; sem hora, o prazo "começa" às 08:00).
+ * `null` = sem lembrete, sem prazo ou fora da janela.
+ */
+export function lembreteDaTarefa(
+  t: { id: number; quadroId: number; ticket: number; titulo: string; prazo: string | null; prazoHora: string | null; lembreteMin: number | null },
+  agora: string,
+  hoje: string,
+): { tipo: "lembrete"; chave: string; titulo: string; texto: string; link: string } | null {
+  if (t.lembreteMin == null || !dataValida(t.prazo)) return null;
+  const e = { data: t.prazo, diaInteiro: !horaValida(t.prazoHora), horaInicio: t.prazoHora, lembreteMin: t.lembreteMin };
+  if (!lembreteDevido(e, agora)) return null;
+  const quando = t.prazo === hoje ? "Hoje" : t.prazo === somarDias(hoje, 1) ? "Amanhã" : `${t.prazo.slice(8)}/${t.prazo.slice(5, 7)}`;
+  return {
+    tipo: "lembrete",
+    chave: `lembrete-tarefa:${t.id}:${inicioDoEvento(e)}:${t.lembreteMin}`,
+    titulo: `Prazo ${quando.toLowerCase()}${e.diaInteiro ? "" : ` às ${t.prazoHora}`}: ${rotuloTicket(t.ticket)} ${t.titulo}`,
+    texto: "Lembrete do prazo da tarefa",
+    link: linkTarefa(t.quadroId, t.id),
   };
 }
 

@@ -104,6 +104,8 @@ export function comandosCriarTarefa(
     prioridade: Prioridade;
     inicio: string | null;
     prazo: string | null;
+    prazoHora?: string | null;
+    lembreteMin?: number | null;
     concluida: boolean;
     pessoas: number[];
     observadores?: number[];
@@ -138,6 +140,8 @@ export function comandosCriarTarefa(
       prioridade: d.prioridade,
       inicio: d.inicio,
       prazo: d.prazo,
+      prazoHora: d.prazo ? (d.prazoHora ?? null) : null,
+      lembreteMin: d.prazo ? (d.lembreteMin ?? null) : null,
       ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefas WHERE lista_id = ${d.listaId})`,
       concluidaEm: d.concluida ? sql`(CURRENT_TIMESTAMP)` : null,
       criadoPor: d.criadoPor,
@@ -251,13 +255,22 @@ export function comandosMover(db: Db, id: number, listaId: number, ordem: number
       .set({
         listaId,
         ordem,
-        concluidaEm: concluida ? sql`COALESCE(${tarefas.concluidaEm}, CURRENT_TIMESTAMP)` : null,
+        concluidaEm: conclusaoAoMoverSql(concluida),
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
       })
       .where(eq(tarefas.id, id)),
     ...ordens.map(([t, o]) => db.update(tarefas).set({ ordem: o }).where(eq(tarefas.id, t))),
   ];
 }
+
+/**
+ * A CONCLUSÃO ao mudar de lista, em SQL (a régua de `conclusaoAoMover`): entrar numa lista de concluídas conclui; sair
+ * DELA reabre; entre listas comuns, fica (o SET lê a lista de ANTES da mudança).
+ */
+const conclusaoAoMoverSql = (paraConcluidas: boolean) =>
+  paraConcluidas
+    ? sql`COALESCE(${tarefas.concluidaEm}, CURRENT_TIMESTAMP)`
+    : sql`CASE WHEN (SELECT l.concluida FROM tarefa_listas l WHERE l.id = ${tarefas.listaId}) = 1 THEN NULL ELSE ${tarefas.concluidaEm} END`;
 
 /**
  * EDIÇÃO EM MASSA de VÁRIAS tarefas (ids já conferidos pelo chamador) num lote atômico. Mover de lista leva cada uma ao
@@ -275,7 +288,7 @@ export function comandosMassa(db: Db, ids: number[], acao: AcaoMassaTarefas, lis
           .set({
             listaId: acao.listaId,
             ordem: sql`(SELECT COALESCE(MAX(t.ordem), 0) + 1 FROM tarefas t WHERE t.lista_id = ${acao.listaId} AND t.id <> ${id})`,
-            concluidaEm: listaConcluida ? sql`COALESCE(${tarefas.concluidaEm}, CURRENT_TIMESTAMP)` : null,
+            concluidaEm: conclusaoAoMoverSql(listaConcluida),
             atualizadoEm: agora,
           })
           .where(and(eq(tarefas.id, id), sql`${tarefas.listaId} <> ${acao.listaId}`)),

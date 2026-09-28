@@ -818,6 +818,10 @@ export const tarefas = sqliteTable(
     /** Datas "AAAA-MM-DD". */
     inicio: text("inicio"),
     prazo: text("prazo"),
+    /** Hora do prazo "HH:MM" (migração `0053`; NULL = o dia inteiro). */
+    prazoHora: text("prazo_hora"),
+    /** Lembrete: minutos antes do prazo (NULL = sem lembrete). */
+    lembreteMin: integer("lembrete_min"),
     /** Ordem FRACIONÁRIA na lista (soltar entre dois cartões sem renumerar a lista). */
     ordem: real("ordem").notNull().default(0),
     concluidaEm: text("concluida_em"),

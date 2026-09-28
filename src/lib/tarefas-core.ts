@@ -26,6 +26,10 @@ export type TarefaResumo = {
   prioridade: Prioridade;
   inicio: string | null;
   prazo: string | null;
+  /** Hora do prazo "HH:MM" (`null` = o dia inteiro). */
+  prazoHora: string | null;
+  /** Lembrete: minutos antes do prazo (`null` = sem lembrete). */
+  lembreteMin: number | null;
   ordem: number;
   concluidaEm: string | null;
   arquivada: boolean;
@@ -177,13 +181,16 @@ export const dataValida = (d: string | null | undefined): d is string => {
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
 };
 
-/** O estado do prazo HOJE (`hoje` = "AAAA-MM-DD" no fuso de Brasília). */
-export function estadoPrazo(prazo: string | null, hoje: string, concluida: boolean): EstadoPrazo {
+/**
+ * O estado do prazo HOJE (`hoje` = "AAAA-MM-DD" no fuso de Brasília). Com a HORA do prazo e a hora de agora ("HH:MM"),
+ * o prazo de hoje que já passou da hora é "atrasada".
+ */
+export function estadoPrazo(prazo: string | null, hoje: string, concluida: boolean, hora?: string | null, agora?: string): EstadoPrazo {
   if (concluida) return "concluida";
   if (!dataValida(prazo)) return "sem";
   const d = diasEntre(hoje, prazo);
   if (d < 0) return "atrasada";
-  if (d === 0) return "hoje";
+  if (d === 0) return hora && agora && agora > hora ? "atrasada" : "hoje";
   return d <= DIAS_AVISO_PRAZO ? "vence" : "ok";
 }
 
@@ -232,8 +239,8 @@ export function indiceReal(todas: TarefaResumo[], visiveis: TarefaResumo[], id: 
 }
 
 /**
- * MOVE um cartão (atualização local, otimista): vai para `listaId` na posição `indice` — a ordem sai de `ordemEntre` e
- * entrar numa lista de CONCLUÍDAS marca a conclusão (`agora`); sair dela a desmarca.
+ * MOVE um cartão (atualização local, otimista): vai para `listaId` na posição `indice` — a ordem sai de `ordemEntre` e a
+ * conclusão segue `conclusaoAoMover`.
  */
 export function moverCartao(
   tarefas: TarefaResumo[],
@@ -246,10 +253,19 @@ export function moverCartao(
   const { anteriorId, proximoId } = vizinhos(tarefas, id, listaId, indice);
   const ordemDe = (x: number | null) => (x == null ? null : (tarefas.find((t) => t.id === x)?.ordem ?? null));
   const { ordem } = ordemEntre(ordemDe(anteriorId), ordemDe(proximoId));
-  const concluida = listas.find((l) => l.id === listaId)?.concluida ?? false;
+  const concluida = (lid: number) => listas.find((l) => l.id === lid)?.concluida ?? false;
   return tarefas.map((t) =>
-    t.id === id ? { ...t, listaId, ordem, concluidaEm: concluida ? (t.concluidaEm ?? agora) : null } : t,
+    t.id === id ? { ...t, listaId, ordem, concluidaEm: conclusaoAoMover(t.concluidaEm, concluida(t.listaId), concluida(listaId), agora) } : t,
   );
+}
+
+/**
+ * A CONCLUSÃO depois de mudar de lista (a conclusão vale NO LUGAR): entrar numa lista de CONCLUÍDAS conclui; sair DELA
+ * reabre; entre listas comuns, fica como estava. A mesma régua do servidor (`comandosMover`/`comandosMassa`).
+ */
+export function conclusaoAoMover(atual: string | null, deConcluidas: boolean, paraConcluidas: boolean, agora: string): string | null {
+  if (paraConcluidas) return atual ?? agora;
+  return deConcluidas ? null : atual;
 }
 
 /** A lista passou do limite de cartões (WIP)? */
@@ -309,11 +325,20 @@ export function resumoQuadro(tarefas: TarefaResumo[], hoje: string) {
   return { abertas, atrasadas, concluidas };
 }
 
-/** A data "AAAA-MM-DD" curta no cartão: "25/09" (o ano só quando difere do de `hoje`). Inválida = "". */
-export function rotuloData(d: string | null, hoje: string): string {
+/** A data "AAAA-MM-DD" curta no cartão: "25/09" (o ano só quando difere do de `hoje`; com a hora, "25/09 09:21"). Inválida = "". */
+export function rotuloData(d: string | null, hoje: string, hora?: string | null): string {
   if (!dataValida(d)) return "";
   const [a, m, dia] = d.split("-");
-  return a === hoje.slice(0, 4) ? `${dia}/${m}` : `${dia}/${m}/${a}`;
+  const data = a === hoje.slice(0, 4) ? `${dia}/${m}` : `${dia}/${m}/${a}`;
+  return hora ? `${data} ${hora}` : data;
+}
+
+/** A hora de AGORA em Brasília ("HH:MM") — compara com a hora do prazo (`estadoPrazo`). */
+export function horaAgoraBrasilia(agora = new Date()): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(agora).map((x) => [x.type, x.value]),
+  );
+  return `${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
 }
 
 /**
@@ -336,7 +361,7 @@ export function gradeMes(ano: number, mes: number, inicioSemana: 0 | 1 = 0): str
 /**
  * Uma tarefa como o CALENDÁRIO a usa (o do quadro e o de todos os quadros do grupo — `quadroId` = de qual quadro).
  */
-export type TarefaCalendario = Pick<TarefaResumo, "id" | "listaId" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "equipes" | "envolvidos" | "etiquetas" | "recorrencia"> & {
+export type TarefaCalendario = Pick<TarefaResumo, "id" | "listaId" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "prazoHora" | "concluidaEm" | "pessoas" | "equipes" | "envolvidos" | "etiquetas" | "recorrencia"> & {
   quadroId?: number;
 };
 
@@ -951,9 +976,10 @@ export function lerAcaoAutomacao(v: unknown): AcaoAutomacao | null {
  * Só as regras ATIVAS; "entrar na lista" casa a lista da regra. Profundidade 1: quem executa NÃO reavalia as regras
  * depois das ações (mover por automação não dispara outra automação — nunca entra em laço).
  */
-export function automacoesDoEvento(regras: Automacao[], evento: { listaId: number; concluida: boolean }): AcaoAutomacao[] {
+export function automacoesDoEvento(regras: Automacao[], evento: { listaId: number | null; concluida: boolean }): AcaoAutomacao[] {
+  // `listaId` null = a tarefa foi concluída NO LUGAR (sem entrar em lista): só as regras "ao concluir".
   return regras
-    .filter((r) => r.ativa && ((r.gatilho === "entrar_lista" && r.listaId === evento.listaId) || (r.gatilho === "concluir" && evento.concluida)))
+    .filter((r) => r.ativa && ((r.gatilho === "entrar_lista" && evento.listaId != null && r.listaId === evento.listaId) || (r.gatilho === "concluir" && evento.concluida)))
     .map((r) => r.acao);
 }
 
@@ -1269,7 +1295,7 @@ export function ocorrenciaPrevista(t: { inicio: string | null; prazo: string | n
 }
 
 export function eventosDoCalendario(
-  tarefas: (Pick<TarefaResumo, "id" | "ticket" | "titulo" | "inicio" | "prazo" | "concluidaEm" | "recorrencia"> & { quadroId: number })[],
+  tarefas: (Pick<TarefaResumo, "id" | "ticket" | "titulo" | "inicio" | "prazo" | "concluidaEm" | "recorrencia"> & { quadroId: number; prazoHora?: string | null })[],
   eventos: EventoTarefa[],
   de: string,
   ate: string,
@@ -1303,7 +1329,9 @@ export function eventosDoCalendario(
     }
     if (!dataValida(t.prazo)) continue;
     const inicio = dataValida(t.inicio) && t.inicio < t.prazo ? t.inicio : t.prazo;
-    if (t.prazo >= de && inicio <= ate) out.push({ ...base(t), chave: `p${t.id}`, tipo: "periodo", titulo: t.titulo, inicio, fim: t.prazo });
+    // O prazo de UM dia com hora vira um horário na grade (o de vários dias segue como faixa).
+    const comHora = inicio === t.prazo && horaValida(t.prazoHora) ? { diaInteiro: false, horaInicio: t.prazoHora } : {};
+    if (t.prazo >= de && inicio <= ate) out.push({ ...base(t), chave: `p${t.id}`, tipo: "periodo", titulo: t.titulo, inicio, fim: t.prazo, ...comHora });
     // As ocorrências de hoje em diante: uma recorrente atrasada, ao ser concluída, pula as que ficaram para trás
     // (`proximaOcorrencia`) — elas nunca vão existir.
     if (t.recorrencia && t.concluidaEm == null)

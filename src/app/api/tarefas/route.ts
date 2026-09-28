@@ -35,6 +35,8 @@ export async function POST(req: Request) {
     prioridade: d.prioridade ?? "media",
     inicio: d.inicio ?? null,
     prazo: d.prazo ?? null,
+    prazoHora: d.prazoHora ?? null,
+    lembreteMin: d.lembreteMin ?? null,
     concluida: lista.concluida,
     pessoas,
     observadores,

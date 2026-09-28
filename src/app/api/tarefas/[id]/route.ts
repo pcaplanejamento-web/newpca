@@ -62,6 +62,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (campos.vinculo && !(campos.vinculo.tipo === r.tarefa.vinculo?.tipo && campos.vinculo.id === r.tarefa.vinculo.id) && !(await vinculoAcessivel(a.u, campos.vinculo)))
     return erro("Vínculo não encontrado.", 422);
   const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
+  // Concluir/reabrir NO LUGAR: só conta a mudança de fato (concluir uma concluída não dispara nada de novo).
+  const concluiu = campos.concluida === true && r.tarefa.concluidaEm == null;
+  const reabriu = campos.concluida === false && r.tarefa.concluidaEm != null;
   let entrou: { id: number; concluida: boolean } | null = null;
   if (listaId != null && listaId !== r.tarefa.listaId) {
     const lista = await getLista(listaId);
@@ -75,7 +78,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     acao: "editar",
     entidade: "tarefa",
     entidadeId: id,
-    resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)} "${r.tarefa.titulo}" ${campos.arquivada === true ? "arquivada" : campos.arquivada === false ? "restaurada" : "editada"}`,
+    resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)} "${r.tarefa.titulo}" ${
+      campos.arquivada === true ? "arquivada" : campos.arquivada === false ? "restaurada" : concluiu ? "concluída" : reabriu ? "reaberta" : "editada"
+    }`,
     antes: r.tarefa,
     depois: p.data,
   });
@@ -85,7 +90,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     await avisarAtribuicao(a.u, r.tarefa.envolvidos, depois, { ...r.tarefa, titulo: campos.titulo ?? r.tarefa.titulo }, r.quadro);
   }
   // Entrou noutra lista: automações e, concluída, a próxima ocorrência (depois de gravar a regra nova, se veio junto).
-  const atualizar = entrou ? await aposMovimento(a.u, r.quadro, [id], entrou) : false;
+  // Concluída no lugar: as regras "ao concluir" e a recorrência.
+  const atualizar = entrou ? await aposMovimento(a.u, r.quadro, [id], entrou) : concluiu ? await aposMovimento(a.u, r.quadro, [id], { id: null, concluida: true }) : false;
   return ok({ atualizar });
 }
 

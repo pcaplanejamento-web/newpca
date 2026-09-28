@@ -125,7 +125,7 @@ export function TabelaTarefas({
           );
         },
       },
-      { key: "prazo", header: "Prazo", nowrap: true, filter: "date", value: (t) => t.prazo ?? "", render: (t) => dataBR(t.prazo) },
+      { key: "prazo", header: "Prazo", nowrap: true, filter: "date", value: (t) => t.prazo ?? "", render: (t) => (t.prazo ? `${dataBR(t.prazo)}${t.prazoHora ? ` ${t.prazoHora}` : ""}` : dataBR(t.prazo)) },
       { key: "inicio", header: "Início", nowrap: true, filter: "date", value: (t) => t.inicio ?? "", render: (t) => dataBR(t.inicio) },
       {
         key: "responsaveis",

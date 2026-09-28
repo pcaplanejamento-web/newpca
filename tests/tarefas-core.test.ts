@@ -76,6 +76,8 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   prioridade: "media",
   inicio: null,
   prazo: null,
+  prazoHora: null,
+  lembreteMin: null,
   ordem,
   concluidaEm: null,
   arquivada: false,
