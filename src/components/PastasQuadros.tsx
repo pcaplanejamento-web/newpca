@@ -1,11 +1,12 @@
 "use client";
 
 import { type KeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { textoSobre } from "@/lib/color";
 import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { type ConjuntoQuadros, type DestinoGrade, type ItemGrade, itensDaGrade, type PastasQuadros } from "@/lib/tarefas-core";
 import { CartaoPreso } from "./ArrastoCartoes";
-import { IconChevronRight, IconPasta, IconClose, IconPastaAberta } from "./icons";
+import { IconClose, IconPasta, IconPastaAberta } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { CapaQuadro, QuadroCard } from "./QuadroCard";
 import { segurar } from "./segurar";
@@ -13,11 +14,16 @@ import { segurar } from "./segurar";
 /** A grade das pastas/quadros: colunas de no mínimo 15rem (a MESMA da `GradeQuadros` — o card nunca muda de forma). */
 const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
 
+/** Os ângulos das FOLHAS em leque (a de trás primeiro). */
+const LEQUE = [-4, 3, 0];
+
 /**
- * O card de uma PASTA de quadros — a MESMA moldura e altura do `QuadroCard` (a capa 16:9 + o bloco de texto): na capa,
- * o MOSAICO das capas de até 4 quadros dela sobre a cor da pasta; embaixo, "Pasta", o nome e as contagens (quadros ·
- * abertas · atrasadas). Tocar ABRE/FECHA a pasta no lugar. `alvo` = um quadro arrastado sobre ela (soltar põe dentro);
- * `recebeu` = o pulso de quando um quadro entra. `menu` = as ações (editar/excluir), fora do botão.
+ * Uma PASTA de quadros — o desenho de uma pasta de arquivos, na MESMA célula/altura do `QuadroCard`: a ABA no topo com o
+ * ícone, as COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros dela, em leque; vazia = folhas lisas) e a
+ * FRENTE na cor, com "Pasta · N quadros", o nome e as contagens (abertas; atrasadas em vermelho, só quando há). Com o
+ * mouse/foco a pasta ENTREABRE (a frente inclina e as folhas sobem); aberta, abre mais com o contorno accent; `alvo` = um
+ * quadro arrastado sobre ela (abre de vez + "Soltar na pasta"); `recebeu` = o pulso de quando um quadro entra. Tocar
+ * ABRE/FECHA a pasta no lugar. `menu` = as ações (editar/excluir), fora do botão.
  */
 export function PastaQuadro({
   pasta,
@@ -38,7 +44,14 @@ export function PastaQuadro({
 }) {
   const abertas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.abertas), 0);
   const atrasadas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.atrasadas), 0);
-  const Icone = aberta ? IconPastaAberta : IconPasta;
+  const Icone = aberta || alvo ? IconPastaAberta : IconPasta;
+  const tinta = textoSobre(pasta.cor);
+  const folhas = quadros.slice(0, 3);
+  // Quanto a pasta abre: fechada (entreabre no hover/foco), aberta, alvo de um arrasto.
+  const frente = alvo ? "[transform:rotateX(-26deg)]" : aberta ? "[transform:rotateX(-18deg)]" : "group-hover:[transform:rotateX(-10deg)] group-focus-visible:[transform:rotateX(-10deg)]";
+  const sobe = alvo || aberta ? "-translate-y-2" : "group-hover:-translate-y-1 group-focus-visible:-translate-y-1";
+  const destaque = alvo || aberta;
+  const mov = "transition-transform duration-[var(--motion-duration)] ease-[var(--motion-ease)]";
   return (
     <div className={`relative h-full ${recebeu ? "animate-pasta-recebe" : ""}`}>
       <button
@@ -46,55 +59,60 @@ export function PastaQuadro({
         onClick={onAlternar}
         aria-expanded={aberta}
         aria-label={`${aberta ? "Fechar" : "Abrir"} a pasta ${pasta.nome} (${quadros.length} ${quadros.length === 1 ? "quadro" : "quadros"})`}
-        className={`group flex h-full w-full flex-col overflow-hidden rounded-card border bg-surface p-2 text-left shadow-ring transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
-          alvo ? "border-accent ring-4 ring-accent/30" : aberta ? "border-accent ring-2 ring-accent" : "border-border"
-        }`}
+        className="group flex h-full min-h-[14rem] w-full flex-col rounded-card text-left [perspective:900px] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/30"
       >
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg p-1.5" style={{ background: `color-mix(in srgb, ${pasta.cor} 24%, var(--surface-2))` }}>
-          <div className="grid h-full grid-cols-2 grid-rows-2 gap-1">
-            {Array.from({ length: 4 }, (_, i) => {
-              const q = quadros[i];
-              return q ? (
-                <div key={q.id} className="min-h-0 overflow-hidden rounded-md [&>div]:!aspect-auto [&>div]:h-full [&>div]:rounded-md">
-                  <CapaQuadro quadro={q} />
-                </div>
-              ) : (
-                <div key={`v${i}`} aria-hidden className="rounded-md border border-dashed" style={{ borderColor: `color-mix(in srgb, ${pasta.cor} 45%, transparent)` }} />
-              );
-            })}
-          </div>
-          <span aria-hidden className="absolute bottom-1.5 left-1.5 grid h-7 w-7 place-items-center rounded-md text-white shadow-soft" style={{ background: pasta.cor }}>
-            <Icone className="h-4 w-4" />
+        {/* A ABA. */}
+        <span
+          aria-hidden
+          className={`flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
+          style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
+        >
+          <Icone className="h-3.5 w-3.5 shrink-0" />
+        </span>
+        {/* As COSTAS, com as folhas e a frente. */}
+        <span
+          className={`relative flex-1 overflow-hidden rounded-card rounded-tl-none shadow-ring ${destaque ? "ring-2 ring-accent" : ""}`}
+          style={{ background: `color-mix(in srgb, ${pasta.cor} 55%, var(--surface))` }}
+        >
+          <span aria-hidden className={`absolute inset-x-[8%] top-3 h-[58%] ${mov} ${sobe}`}>
+            {(folhas.length ? folhas : [null, null]).map((q, i, l) => (
+              <span
+                key={q ? q.id : `v${i}`}
+                className="absolute inset-x-0 top-0 overflow-hidden rounded-md bg-surface p-0.5 shadow-soft"
+                style={{ rotate: `${LEQUE[i + (3 - l.length)]}deg`, top: `${i * 6}px` }}
+              >
+                {q ? <CapaQuadro quadro={q} /> : <span className="block aspect-video w-full rounded-[5px] bg-surface-2" />}
+              </span>
+            ))}
           </span>
-          {alvo && <span className="absolute inset-0 grid place-items-center bg-accent/15 text-[12px] font-semibold text-accent">Soltar na pasta</span>}
-        </div>
-        <div className="flex flex-1 flex-col px-1.5 pt-2 pb-1">
-          <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
-            Pasta
-            <IconChevronRight className={`h-3 w-3 transition-transform duration-[var(--motion-duration)] ${aberta ? "-rotate-90" : "rotate-90"}`} />
+          {alvo && (
+            <span className="absolute inset-x-0 top-3 z-10 text-center text-[12px] font-semibold text-accent">
+              <span className="rounded-full bg-surface px-2 py-0.5 shadow-soft">Soltar na pasta</span>
+            </span>
+          )}
+          {/* A FRENTE (na cor), com a etiqueta. */}
+          <span
+            className={`absolute inset-x-0 bottom-0 flex h-[58%] origin-bottom flex-col rounded-card px-3 pt-2.5 pb-2 shadow-[0_-6px_14px_-8px_rgba(0,0,0,0.35)] ${mov} ${frente}`}
+            style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${pasta.cor} 82%, #fff), ${pasta.cor})`, color: tinta }}
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
+              Pasta · {num(quadros.length)} {quadros.length === 1 ? "quadro" : "quadros"}
+            </span>
+            <span className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug" title={pasta.nome}>
+              {pasta.nome}
+            </span>
+            <span className="mt-auto flex flex-wrap items-center gap-1.5 text-[11.5px] font-semibold">
+              <span className="rounded-full bg-black/15 px-2 py-0.5 tabular-nums">{num(abertas)} abertas</span>
+              {atrasadas > 0 && (
+                <span className="rounded-full bg-surface/90 px-2 py-0.5 tabular-nums" style={{ color: "var(--danger)" }}>
+                  {num(atrasadas)} {atrasadas === 1 ? "atrasada" : "atrasadas"}
+                </span>
+              )}
+            </span>
           </span>
-          <h3 className="mt-0.5 line-clamp-2 min-h-[2.5em] text-[14px] font-semibold leading-snug text-text group-hover:text-accent" title={pasta.nome}>
-            {pasta.nome}
-          </h3>
-          <dl className="mt-auto grid grid-cols-3 gap-x-2 border-t border-border pt-2 text-[11px]">
-            <div className="min-w-0">
-              <dt className="truncate text-muted">Quadros</dt>
-              <dd className="text-[15px] font-bold tabular-nums text-text">{num(quadros.length)}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="truncate text-muted">Abertas</dt>
-              <dd className="text-[15px] font-bold tabular-nums text-text">{num(abertas)}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="truncate text-muted">Atrasadas</dt>
-              <dd className="text-[15px] font-bold tabular-nums" style={{ color: atrasadas ? "var(--danger)" : "var(--text-2)" }}>
-                {num(atrasadas)}
-              </dd>
-            </div>
-          </dl>
-        </div>
+        </span>
       </button>
-      {menu && <div className="absolute top-3 right-3 rounded-control bg-surface/90 shadow-ring backdrop-blur-sm lg:top-3.5 lg:right-3.5">{menu}</div>}
+      {menu && <div className="absolute top-8 right-2 rounded-control bg-surface/90 shadow-ring backdrop-blur-sm">{menu}</div>}
     </div>
   );
 }
@@ -332,26 +350,31 @@ function PainelPasta({ pasta, aberto, onFechado, onFechar, children }: { pasta: 
       onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && !aberto && onFechado()}
     >
       <div className="min-h-0 overflow-hidden">
-        <section
-          aria-label={`Pasta ${pasta.nome}`}
-          className="rounded-card border p-3"
-          style={{ background: `color-mix(in srgb, ${pasta.cor} 10%, var(--surface-2))`, borderColor: `color-mix(in srgb, ${pasta.cor} 35%, var(--border))` }}
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <span aria-hidden className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-white" style={{ background: pasta.cor }}>
-              <IconPastaAberta className="h-3.5 w-3.5" />
+        <section aria-label={`Pasta ${pasta.nome}`}>
+          {/* A ABA da pasta, colada ao topo do painel; o fechar à direita. */}
+          <div className="flex items-end justify-between gap-2">
+            <span
+              className="inline-flex h-9 min-w-0 max-w-[70%] items-center gap-2 rounded-t-lg px-3 text-white"
+              style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
+            >
+              <IconPastaAberta className="h-4 w-4 shrink-0" />
+              <span className="truncate text-[14px] font-semibold">{pasta.nome}</span>
             </span>
-            <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">{pasta.nome}</h3>
             <button
               type="button"
               onClick={onFechar}
               aria-label={`Fechar a pasta ${pasta.nome}`}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-8 lg:w-8"
+              className="mb-1 grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-8 lg:w-8"
             >
               <IconClose className="h-4 w-4" />
             </button>
           </div>
-          {children}
+          <div
+            className="rounded-card rounded-tl-none border p-3"
+            style={{ background: `color-mix(in srgb, ${pasta.cor} 14%, var(--surface-2))`, borderColor: `color-mix(in srgb, ${pasta.cor} 40%, var(--border))` }}
+          >
+            {children}
+          </div>
         </section>
       </div>
     </div>

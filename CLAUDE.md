@@ -2387,8 +2387,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     "Novo quadro" no fim). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (guardado neste aparelho —
     `useSecoesRecolhidas`). Favoritos/Recentes/busca usam a **`GradeQuadros`** (o `QuadroCard` INALTERADO em `auto-fill` ≥
     15rem); "Seus quadros" usa a **`GradePastas`** (`PastasQuadros.tsx`): as **PASTAS** (os conjuntos) e os quadros soltos na
-    ORDEM da pessoa. **`PastaQuadro`** = o card da pasta na MESMA moldura/altura do `QuadroCard` (mosaico das capas de até 4
-    quadros sobre a cor da pasta; "Pasta", nome, quadros · abertas · atrasadas; menu "…" = **`MenuConjunto`**). Tocar ABRE a
+    ORDEM da pessoa. **`PastaQuadro`** = o DESENHO DE UMA PASTA na MESMA célula/altura do `QuadroCard`: a ABA com o ícone, as
+    COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros, em leque; vazia = folhas lisas) e a FRENTE na cor
+    (texto por `textoSobre`) com "Pasta · N quadros", o nome e os chips abertas/atrasadas; ENTREABRE no hover/foco (a frente
+    inclina — `rotateX` com perspectiva — e as folhas sobem), abre mais aberta/alvo; menu "…" = **`MenuConjunto`**. O painel
+    da pasta aberta tem a MESMA aba colada ao topo (nome + fechar). Tocar ABRE a
     pasta NO LUGAR: o painel (`PainelPasta`) entra no fim da LINHA da pasta (colunas medidas por `ResizeObserver`), anima a
     altura (`grid-template-rows` 0fr ↔ 1fr — os cards de baixo deslizam) e os internos entram em sequência; uma aberta por
     vez (lembrada no aparelho, `tarefas:pasta-aberta`). **Arrasto** — hook **`useArrastoGrade`** (o padrão do

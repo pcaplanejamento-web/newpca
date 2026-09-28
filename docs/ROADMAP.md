@@ -1118,6 +1118,8 @@ grupos — todas minimizáveis — na tela de Tarefas e no "Mudar de quadros", c
 ✅ **Tarefas — PASTAS de quadros + quadro privado só do dono:** os conjuntos viraram pastas (card na proporção do quadro,
 abre no lugar com animação, arrastar para reordenar e para dentro/fora — também no toque), iguais na tela de Tarefas e no
 "Mudar de quadros"; no quadro privado só o dono aparece e pode ser escolhido — torná-lo privado tira as outras pessoas.
+✅ **Tarefas — pasta com cara de pasta:** aba, folhas saindo (as capas dos quadros) e a frente na cor com nome e
+contagens; entreabre ao passar o mouse e abre mais quando aberta ou ao receber um quadro arrastado.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
