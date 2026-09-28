@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
-import { dataValida, FREQUENCIAS, GATILHOS, ORDENACOES_LISTA, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, MAX_VALOR_CAMPO, PRIORIDADES, TIPOS_BLOCO, TIPOS_CAMPO, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { dataValida, FREQUENCIAS, GATILHOS, ORDENACOES_LISTA, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, MAX_VALOR_CAMPO, MAX_VINCULOS, PRIORIDADES, TIPOS_BLOCO, TIPOS_CAMPO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -195,7 +195,11 @@ const camposTarefa = {
   etiquetas: ids(20).optional(),
   equipes: ids(MAX_EQUIPES_TAREFA).optional(),
   estimativaH: z.number().min(0).max(9999).nullable().optional(),
-  vinculo: z.object({ tipo: z.enum(TIPOS_VINCULO), id }).nullable().optional(),
+  vinculos: z
+    .array(z.object({ tipo: z.enum(TIPOS_VINCULO), id }))
+    .max(MAX_VINCULOS, `Até ${MAX_VINCULOS} vínculos.`)
+    .transform((l) => l.filter((v, i) => l.findIndex((x) => x.tipo === v.tipo && x.id === v.id) === i))
+    .optional(),
   recorrencia: recorrenciaSchema.nullable().optional(),
   blocos: blocosSchema.optional(),
   campos: valoresCampos.optional(),

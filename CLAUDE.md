@@ -2234,7 +2234,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (editores por tipo no detalhe, seção "Campos personalizados"; o título acompanha ao vivo) e **`ChipsCamposCartao`**
     (os "no cartão" com valor); colunas na Lista (data = filtro de data, número = faixa) e no .xlsx; seções no painel
     Filtrar (lista e caixa) + chips.
-- **Próximo** (ver `docs/ROADMAP.md`): as fases F8…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 18 / F8 — VÍNCULOS MÚLTIPLOS, tarefa ↔ tarefa (migração `0057`, aditiva):** tabela `tarefa_vinculos` (PK
+    tarefa + tipo + alvo, tarefa cascade, índice `tipo, alvo_id`; sem FK no alvo) — a migração copia o vínculo único antigo
+    e `tarefas.vinculo_tipo/vinculo_id` ficam DORMENTES (fora do `schema.ts`). `TIPOS_VINCULO` ganhou **`tarefa`**;
+    `TarefaResumo.vinculo` virou **`vinculos: VinculoTarefa[]`** (até `MAX_VINCULOS`=20; na tarefa vinculada, `detalhe` quadro
+    › lista, `quadroId`, `prazo`, `concluida`). O vínculo entre TAREFAS vale nos DOIS lados: a linha é gravada por uma, e a
+    leitura (`linhasVinculos` — as gravadas pela tarefa + as de outras que apontam para ela) passa por
+    **`vinculosPorTarefa`** (puro/testado: sem repetir, sem a própria); **`comandosVinculosTarefa`** troca o conjunto como a
+    tarefa o vê (apaga as dela e os reversos, grava a partir dela — testado no D1 real). `rotulosVinculos` devolve os dados
+    do alvo (tarefa = "#ticket título"); `rotuloDoVinculo` (core) é o texto único (cartão, Lista, .xlsx). `hrefVinculo` da
+    tarefa = `/painel/tarefas/<quadro>?tarefa=<id>`. `buscarVinculos` busca TAREFAS (título ou nº do ticket) nos quadros dos
+    grupos do usuário; `vinculoAcessivel` da tarefa = `tarefaAcessivel`; as rotas conferem só os vínculos NOVOS e recusam a
+    própria tarefa (422); `tarefasDoVinculo` (o botão "Tarefas" da Mesa) lê a tabela nova. Copiar e a recorrência levam os
+    vínculos. Tela: **`VinculosTarefa`** (ex-`VinculoTarefa`) — a lista de cartões compactos (tarefa com o círculo de
+    conclusão, quadro › lista e o prazo no semáforo; os demais com o rótulo) com Desvincular e "Vincular" (tipo + busca);
+    o bloco do corpo virou "Vínculos"; o cartão mostra o ícone com a contagem; a Lista, a coluna "Vínculos" multi-valor.
+- **Próximo** (ver `docs/ROADMAP.md`): a fase F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

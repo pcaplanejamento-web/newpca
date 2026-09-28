@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { lembreteDaTarefa, listasDoPeriodo, mesSeguinte, nomeListaDoDia } from "../src/lib/calendario-core.ts";
 import {
+  rotuloDoVinculo,
+  vinculosPorTarefa,
   camposDoFormato,
   lerOpcoesCampo,
   mapearCampos,
@@ -291,5 +293,23 @@ describe("tarefas — padrão Trello", () => {
     assert.deepEqual(f({ 5: ["A", ""] }), [1, 3]);
     assert.deepEqual(f({ 5: [] }), [1, 2, 3]);
     assert.equal(contarFiltros({ ...FILTRO_TAREFAS_PADRAO, campos: { 5: ["A", ""] } }), 2);
+  });
+
+  it("F8 VÍNCULOS: o vínculo entre tarefas vale nos DOIS lados, sem repetir e sem a própria; tipo inválido sai", () => {
+    const m = vinculosPorTarefa([
+      { tarefaId: 1, tipo: "tarefa", alvoId: 2 },
+      { tarefaId: 2, tipo: "tarefa", alvoId: 1 },
+      { tarefaId: 1, tipo: "protocolo", alvoId: 44 },
+      { tarefaId: 3, tipo: "tarefa", alvoId: 3 },
+      { tarefaId: 3, tipo: "lixo", alvoId: 1 },
+    ]);
+    assert.deepEqual(m.get(1), [
+      { tipo: "tarefa", id: 2 },
+      { tipo: "protocolo", id: 44 },
+    ]);
+    assert.deepEqual(m.get(2), [{ tipo: "tarefa", id: 1 }]);
+    assert.equal(m.get(3), undefined);
+    assert.equal(rotuloDoVinculo({ tipo: "tarefa", id: 9, rotulo: "#9 Conferir" }), "Tarefa #9 Conferir");
+    assert.equal(rotuloDoVinculo({ tipo: "dfd", id: 9, rotulo: null }), "DFD #9 (excluído)");
   });
 });

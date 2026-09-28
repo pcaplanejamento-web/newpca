@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const tipo = sp.get("tipo");
   const id = intId(sp.get("id") ?? "");
-  if (!ehTipoVinculo(tipo) || !id) return erro("Vínculo inválido.", 422);
+  if (!ehTipoVinculo(tipo) || tipo === "tarefa" || !id) return erro("Vínculo inválido.", 422);
   const grupos = a.u.role === "admin" ? null : (await gruposDoUsuario(a.u.id)).map((g) => g.id);
   const [tarefas, quadros] = await Promise.all([tarefasDoVinculo(a.u, tipo, id), listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()))]);
   return ok({ tarefas, quadros: quadros.filter((q) => !q.arquivado).map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })) });

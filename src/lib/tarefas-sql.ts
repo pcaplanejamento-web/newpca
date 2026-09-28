@@ -16,6 +16,7 @@ import {
   tarefaListas,
   tarefaPessoas,
   tarefaQuadros,
+  tarefaVinculos,
   tarefas,
 } from "../db/schema.ts";
 import { type BlocoTarefa, blocosParaGravar, type DadosEvento, type ModeloQuadro, type Prioridade, type Recorrencia, type TipoNotificacao, type TipoVinculo, type ValorCampoNovo } from "./tarefas-core.ts";
@@ -116,7 +117,8 @@ export function comandosCriarTarefa(
     equipes?: number[];
     criadoPor: number;
     estimativaH?: number | null;
-    vinculo?: { tipo: TipoVinculo; id: number } | null;
+    /** Os VÍNCULOS (migração `0057`). */
+    vinculos?: { tipo: TipoVinculo; id: number }[];
     recorrencia?: Recorrencia | null;
     /** A ocorrência anterior da série (ÚNICA — a 2ª tentativa de gerar a mesma próxima derruba o lote inteiro). */
     recorrenciaAnteriorId?: number | null;
@@ -164,8 +166,6 @@ export function comandosCriarTarefa(
       copiadaDe: d.copiadaDe ?? null,
       criadoPor: d.criadoPor,
       estimativaH: d.estimativaH ?? null,
-      vinculoTipo: d.vinculo?.tipo ?? null,
-      vinculoId: d.vinculo?.id ?? null,
       recorrencia: d.recorrencia ? JSON.stringify(d.recorrencia) : null,
       recorrenciaAnteriorId: d.recorrenciaAnteriorId ?? null,
       blocos: d.blocos ? JSON.stringify(blocosParaGravar(d.blocos)) : null,
@@ -181,6 +181,7 @@ export function comandosCriarTarefa(
     ...comandosNovasEtiquetas(db, d.quadroId, idDaNova(d.quadroId), d.novasEtiquetas ?? []),
     ...(d.checklists ?? []).flatMap((c, k) => comandosChecklistNovo(db, idDaNova(d.quadroId), c, k + 1)),
     ...comandosValoresCampos(db, idDaNova(d.quadroId), d.campos ?? []),
+    ...(d.vinculos ?? []).map((v) => db.insert(tarefaVinculos).values({ tarefaId: idDaNova(d.quadroId), tipo: v.tipo, alvoId: v.id }).onConflictDoNothing()),
     ...(d.eventos ?? []).flatMap((e) => [
       db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
       ...comandosConvidados(db, ultimoEvento, e.convidados ?? []),
@@ -292,6 +293,21 @@ export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number
           ...v.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId, equipeId: e })),
         ]
       : []),
+  ];
+}
+
+/**
+ * TROCA os VÍNCULOS de uma tarefa pelo conjunto dado — como ELA os vê: tira as linhas gravadas por ela e as de outras
+ * tarefas que apontam para ela (o vínculo entre tarefas é dos dois lados) e grava de novo, todas a partir dela. Sem a
+ * própria tarefa.
+ */
+export function comandosVinculosTarefa(db: Db, tarefaId: number, vinculos: { tipo: TipoVinculo; id: number }[]) {
+  return [
+    db.delete(tarefaVinculos).where(eq(tarefaVinculos.tarefaId, tarefaId)),
+    db.delete(tarefaVinculos).where(and(eq(tarefaVinculos.tipo, "tarefa"), eq(tarefaVinculos.alvoId, tarefaId))),
+    ...vinculos
+      .filter((v) => !(v.tipo === "tarefa" && v.id === tarefaId))
+      .map((v) => db.insert(tarefaVinculos).values({ tarefaId, tipo: v.tipo, alvoId: v.id }).onConflictDoNothing()),
   ];
 }
 

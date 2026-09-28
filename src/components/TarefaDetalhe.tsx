@@ -71,7 +71,7 @@ import { Segmented } from "./Segmented";
 import { SeletorEtiquetas } from "./SeletorEtiquetas";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
-import { VinculoTarefa } from "./VinculoTarefa";
+import { VinculosTarefa } from "./VinculosTarefa";
 
 /**
  * Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa; `prazo` = o
@@ -95,7 +95,7 @@ type Rascunho = {
   observadores: number[];
   equipes: number[];
   etiquetas: number[];
-  vinculo: Vinculo | null;
+  vinculos: Vinculo[];
   descricao: string;
   recorrencia: Recorrencia | null;
   /** Os checklists da tarefa NOVA (nome + textos — vão junto no POST). */
@@ -112,11 +112,11 @@ type Rascunho = {
 type Conteudo = { checklists: ChecklistNomeado[]; checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] };
 
 const iguais = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
-const mesmoVinculo = (a: Vinculo | null, b: Vinculo | null) => (a?.tipo ?? null) === (b?.tipo ?? null) && (a?.id ?? null) === (b?.id ?? null);
+const chavesVinculos = (l: Vinculo[]) => l.map((v) => `${v.tipo}:${v.id}`).join("|");
 const numEstimativa = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
 
 /** O que decide se um bloco do corpo tem dado — a partir do rascunho. */
-const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos: number): DadosBlocos => ({ vinculo: r.vinculo, checklist, eventos });
+const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos: number): DadosBlocos => ({ vinculos: r.vinculos.length, checklist, eventos });
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -247,7 +247,7 @@ export function TarefaDetalhe({
           observadores: existente.observadores,
           equipes: existente.equipes,
           etiquetas: existente.etiquetas,
-          vinculo: existente.vinculo,
+          vinculos: existente.vinculos,
           descricao: "",
           recorrencia: existente.recorrencia,
           checklists: [],
@@ -269,7 +269,7 @@ export function TarefaDetalhe({
           observadores: [],
           equipes: [],
           etiquetas: [],
-          vinculo: aberto.tipo === "nova" ? (aberto.vinculo ?? null) : null,
+          vinculos: aberto.tipo === "nova" && aberto.vinculo ? [aberto.vinculo] : [],
           descricao: "",
           recorrencia: null,
           checklists: [],
@@ -385,7 +385,7 @@ export function TarefaDetalhe({
           observadores: r.observadores,
           equipes: r.equipes,
           etiquetas: r.etiquetas,
-          vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
+          vinculos: r.vinculos.map((v) => ({ tipo: v.tipo, id: v.id })),
           recorrencia: r.recorrencia,
           checklists: r.checklists.map((c) => ({ nome: c.nome.trim() || "Checklist", itens: c.itens.map((t) => t.trim()).filter(Boolean) })),
           eventos: r.eventos,
@@ -409,7 +409,7 @@ export function TarefaDetalhe({
         if (!iguais(r.observadores, inicial.observadores)) d.observadores = r.observadores;
         if (!iguais(r.etiquetas, inicial.etiquetas)) d.etiquetas = r.etiquetas;
         if (!iguais(r.equipes, inicial.equipes)) d.equipes = r.equipes;
-        if (!mesmoVinculo(r.vinculo, inicial.vinculo)) d.vinculo = r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null;
+        if (chavesVinculos(r.vinculos) !== chavesVinculos(inicial.vinculos)) d.vinculos = r.vinculos.map((v) => ({ tipo: v.tipo, id: v.id }));
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
         if (JSON.stringify(r.blocos) !== JSON.stringify(inicial.blocos)) d.blocos = blocosParaGravar(r.blocos);
@@ -514,7 +514,7 @@ export function TarefaDetalhe({
     setR((x) => {
       if (!x) return x;
       const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
-      if (b.tipo === "vinculo") y.vinculo = null;
+      if (b.tipo === "vinculo") y.vinculos = [];
       else if (b.tipo === "checklist") y.checklists = [];
       else if (b.tipo === "eventos") y.eventos = [];
       return y;
@@ -566,7 +566,7 @@ export function TarefaDetalhe({
           <p className="text-[12.5px] text-muted">Carregando…</p>
         );
       case "vinculo":
-        return <VinculoTarefa valor={r.vinculo} onChange={(v) => set("vinculo", v)} />;
+        return <VinculosTarefa valor={r.vinculos} onChange={(v) => set("vinculos", v)} tarefaId={idAberto} hoje={hoje} />;
       case "eventos":
         return carregando ? (
           <p className="text-[12.5px] text-muted">Carregando…</p>

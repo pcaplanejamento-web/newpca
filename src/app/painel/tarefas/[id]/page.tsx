@@ -28,7 +28,7 @@ export default async function QuadroTarefasPage({
   const sp = await searchParams;
   const aba: AbaQuadro = ABAS.includes(sp.aba as AbaQuadro) ? (sp.aba as AbaQuadro) : "quadro";
   const nova = lerVinculo(sp.nova);
-  const novaInicial = nova ? { ...nova, rotulo: (await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) ?? null } : null;
+  const novaInicial = nova ? { ...nova, rotulo: null, ...(await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) } : null;
   const tarefaInicial = dados.tarefas.find((t) => String(t.id) === sp.tarefa)?.id ?? null;
   const prazoInicial = /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
   // Os eventos cadastrados, as opções da pessoa e os feriados só com a aba Calendário aberta (as demais abas não os usam).

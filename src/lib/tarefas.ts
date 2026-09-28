@@ -22,6 +22,7 @@ import {
   tarefaModelos,
   tarefaPessoas,
   tarefaQuadros,
+  tarefaVinculos,
   tarefas,
 } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
@@ -73,8 +74,9 @@ import {
   type TarefaCalendario,
   type TarefaResumo,
   type TipoVinculo,
-  ehTipoVinculo,
   type VinculoTarefa,
+  chaveVinculo,
+  vinculosPorTarefa,
   listaDeTemplates,
   mapearEtiquetas,
   mapearPorNome,
@@ -99,6 +101,7 @@ import {
   comandosMoverQuadro,
   comandosValoresCampos,
   comandosVinculos,
+  comandosVinculosTarefa,
   type ChecklistNovo,
   pessoaNaTarefa,
 } from "./tarefas-sql";
@@ -242,7 +245,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .innerJoin(tarefas, eq(tarefas.id, tabela.tarefaId))
       .where(doQuadro)
       .groupBy(tabela.tarefaId);
-  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos, equipes, valores] = await Promise.all([
+  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos, equipes, valores, ligacoes] = await Promise.all([
     listasDoQuadro(quadroId),
     db
       .select({
@@ -263,8 +266,6 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         criadoEm: tarefas.criadoEm,
         atualizadoEm: tarefas.atualizadoEm,
         estimativaH: tarefas.estimativaH,
-        vinculoTipo: tarefas.vinculoTipo,
-        vinculoId: tarefas.vinculoId,
         recorrencia: tarefas.recorrencia,
         notas: contarBlocos("nota"),
         links: contarBlocos("link"),
@@ -301,6 +302,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .from(tarefaCampoValores)
       .innerJoin(tarefas, eq(tarefas.id, tarefaCampoValores.tarefaId))
       .where(doQuadro),
+    linhasVinculos(doQuadro),
   ]);
   const porCampos = new Map<number, Record<number, string>>();
   for (const v of valores) porCampos.set(v.tarefaId, { ...(porCampos.get(v.tarefaId) ?? {}), [v.campoId]: v.valor });
@@ -316,12 +318,11 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
   const porComentario = new Map(comentarios.map((c) => [c.tarefaId, Number(c.n)]));
   const porEvento = new Map(nEventos.map((c) => [c.tarefaId, Number(c.n)]));
   const eqs = equipesDasLinhas(equipes);
-  const rotulos = await rotulosVinculos(cartoes.map((t) => vinculoDe(t.vinculoTipo, t.vinculoId)).filter((v): v is VinculoTarefa => !!v));
+  const vinculos = await vinculosRotulados(vinculosPorTarefa(ligacoes));
   return {
     listas,
     etiquetas,
-    tarefas: cartoes.map(({ vinculoTipo, vinculoId, ...t }) => {
-      const v = vinculoDe(vinculoTipo, vinculoId);
+    tarefas: cartoes.map((t) => {
       const resp = porPessoa.get(t.id) ?? [];
       const equipesT = eqs.porTarefa.get(t.id) ?? [];
       return {
@@ -333,7 +334,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
         equipes: equipesT,
         envolvidos: envolvidosDe(resp, equipesT, eqs.membros),
         etiquetas: porEtiqueta.get(t.id) ?? [],
-        vinculo: v ? { ...v, rotulo: rotulos.get(`${v.tipo}:${v.id}`) ?? null } : null,
+        vinculos: vinculos.get(t.id) ?? [],
         checklist: porCheck.get(t.id) ?? { feitos: 0, total: 0 },
         comentarios: porComentario.get(t.id) ?? 0,
         notas: Number(t.notas),
@@ -363,15 +364,40 @@ function linhasEquipes(cond: SQL | undefined) {
 const contarBlocos = (tipo: "nota" | "link") =>
   sql<number>`CASE WHEN json_valid(${tarefas.blocos}) THEN (SELECT COUNT(*) FROM json_each(${tarefas.blocos}) WHERE json_extract(value, '$.tipo') = ${tipo}) ELSE 0 END`;
 
-const vinculoDe = (tipo: string | null, id: number | null): VinculoTarefa | null => (ehTipoVinculo(tipo) && id ? { tipo, id } : null);
+/**
+ * As LINHAS de vínculo das tarefas que passam em `cond` (sobre `tarefas`): as gravadas por elas + as de outras tarefas que
+ * apontam para elas (o vínculo entre tarefas é dos dois lados) — `vinculosPorTarefa` junta.
+ */
+async function linhasVinculos(cond: SQL | undefined) {
+  const db = getDb();
+  const col = { tarefaId: tarefaVinculos.tarefaId, tipo: tarefaVinculos.tipo, alvoId: tarefaVinculos.alvoId };
+  const [diretas, reversas] = await Promise.all([
+    db.select(col).from(tarefaVinculos).innerJoin(tarefas, eq(tarefas.id, tarefaVinculos.tarefaId)).where(cond),
+    db
+      .select(col)
+      .from(tarefaVinculos)
+      .innerJoin(tarefas, eq(tarefas.id, tarefaVinculos.alvoId))
+      .where(and(eq(tarefaVinculos.tipo, "tarefa"), cond)),
+  ]);
+  return [...diretas, ...reversas];
+}
 
-/** O nº/nome de cada alvo vinculado (protocolo: nº; DFD: nº; PCA/orçamento: nome) — `tipo:id` → rótulo; o excluído some. */
-export async function rotulosVinculos(vinculos: VinculoTarefa[]): Promise<Map<string, string>> {
+/** Os vínculos de cada tarefa com o RÓTULO do alvo (o excluído fica sem rótulo). */
+async function vinculosRotulados(por: Map<number, { tipo: TipoVinculo; id: number }[]>): Promise<Map<number, VinculoTarefa[]>> {
+  const r = await rotulosVinculos([...por.values()].flat());
+  return new Map([...por].map(([t, vs]) => [t, vs.map((v) => ({ ...v, rotulo: null, ...r.get(chaveVinculo(v)) }))]));
+}
+
+/**
+ * O nº/nome de cada alvo vinculado (protocolo: nº; DFD: nº; PCA/orçamento: nome; TAREFA: "#ticket título" + quadro ›
+ * lista, prazo e conclusão) — `tipo:id` → dados; o excluído some.
+ */
+export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number }[]): Promise<Map<string, Partial<VinculoTarefa>>> {
   const db = getDb();
   const ids = (tipo: TipoVinculo) => [...new Set(vinculos.filter((v) => v.tipo === tipo).map((v) => v.id))];
   const em = async <T extends { id: number; r: string }>(lista: number[], ler: (l: number[]) => Promise<T[]>) =>
     (await Promise.all(lotesDeIds(lista).map(ler))).flat();
-  const [ps, ds, pc, oc] = await Promise.all([
+  const [ps, ds, pc, oc, ts] = await Promise.all([
     em(ids("protocolo"), (l) => db.select({ id: dfdProtocolos.id, r: dfdProtocolos.numero }).from(dfdProtocolos).where(inArray(dfdProtocolos.id, l))),
     em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero }).from(dfds).where(inArray(dfds.id, l))),
     em(ids("pca"), (l) => db.select({ id: pcas.id, r: pcas.nome }).from(pcas).where(inArray(pcas.id, l))),
@@ -381,9 +407,25 @@ export async function rotulosVinculos(vinculos: VinculoTarefa[]): Promise<Map<st
         .from(orcamentos)
         .where(inArray(orcamentos.id, l)),
     ),
+    em(ids("tarefa"), (l) =>
+      db
+        .select({
+          id: tarefas.id,
+          r: sql<string>`'#' || ${tarefas.ticket} || ' ' || ${tarefas.titulo}`,
+          detalhe: sql<string>`${tarefaQuadros.nome} || ' › ' || ${tarefaListas.nome}`,
+          quadroId: tarefas.quadroId,
+          prazo: tarefas.prazo,
+          concluidaEm: tarefas.concluidaEm,
+        })
+        .from(tarefas)
+        .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
+        .innerJoin(tarefaListas, eq(tarefaListas.id, tarefas.listaId))
+        .where(inArray(tarefas.id, l)),
+    ),
   ]);
-  const m = new Map<string, string>();
-  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds], ["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, x.r);
+  const m = new Map<string, Partial<VinculoTarefa>>();
+  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds], ["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r });
+  for (const x of ts) m.set(`tarefa:${x.id}`, { rotulo: x.r, detalhe: x.detalhe, quadroId: x.quadroId, prazo: x.prazo, concluida: x.concluidaEm != null });
   return m;
 }
 
@@ -493,7 +535,7 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
   const db = getDb();
   const [t] = await db.select().from(tarefas).where(eq(tarefas.id, id));
   if (!t) return null;
-  const [pessoas, links, checks, com, ev, equipes, campos] = await Promise.all([
+  const [pessoas, links, checks, com, ev, equipes, campos, ligacoes] = await Promise.all([
     db.select({ u: tarefaPessoas.usuarioId, papel: tarefaPessoas.papel }).from(tarefaPessoas).where(eq(tarefaPessoas.tarefaId, id)),
     db.select({ e: tarefaEtiquetaLinks.etiquetaId }).from(tarefaEtiquetaLinks).where(eq(tarefaEtiquetaLinks.tarefaId, id)),
     db.select({ feito: tarefaChecklist.feito }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)),
@@ -501,12 +543,12 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)),
     linhasEquipes(eq(tarefas.id, id)),
     valoresDaTarefa(id),
+    linhasVinculos(eq(tarefas.id, id)),
   ]);
-  const v = vinculoDe(t.vinculoTipo, t.vinculoId);
   const eqs = equipesDasLinhas(equipes);
   const resp = pessoas.filter((p) => p.papel === "responsavel").map((p) => p.u);
   const equipesT = eqs.porTarefa.get(id) ?? [];
-  const rotulo = v ? (await rotulosVinculos([v])).get(`${v.tipo}:${v.id}`) : null;
+  const vinculos = (await vinculosRotulados(vinculosPorTarefa(ligacoes))).get(id) ?? [];
   const blocos = lerBlocos(t.blocos);
   return {
     id: t.id,
@@ -534,7 +576,7 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     criadoEm: t.criadoEm,
     atualizadoEm: t.atualizadoEm,
     estimativaH: t.estimativaH,
-    vinculo: v ? { ...v, rotulo: rotulo ?? null } : null,
+    vinculos,
     checklist: { feitos: checks.filter((c) => c.feito).length, total: checks.length },
     comentarios: Number(com[0]?.n ?? 0),
     ...contagemBlocos(blocos),
@@ -880,7 +922,7 @@ export async function atualizarTarefa(
     lembreteMin?: number | null;
     arquivada?: boolean;
     estimativaH?: number | null;
-    vinculo?: { tipo: TipoVinculo; id: number } | null;
+    vinculos?: { tipo: TipoVinculo; id: number }[];
     recorrencia?: Recorrencia | null;
     blocos?: BlocoTarefa[];
     /** Concluir/reabrir NO LUGAR. */
@@ -891,7 +933,7 @@ export async function atualizarTarefa(
   valores: ValorCampoNovo[] = [],
 ) {
   const db = getDb();
-  const { vinculo, recorrencia, blocos, concluida, ...resto } = campos;
+  const { vinculos: ligacoes, recorrencia, blocos, concluida, ...resto } = campos;
   await db.batch([
     db
       .update(tarefas)
@@ -900,13 +942,13 @@ export async function atualizarTarefa(
         // Sem prazo, a hora e o lembrete não fazem sentido.
         ...(resto.prazo === null ? { prazoHora: null, lembreteMin: null } : {}),
         ...(concluida !== undefined ? { concluidaEm: concluida ? sql`COALESCE(${tarefas.concluidaEm}, CURRENT_TIMESTAMP)` : null } : {}),
-        ...(vinculo !== undefined ? { vinculoTipo: vinculo?.tipo ?? null, vinculoId: vinculo?.id ?? null } : {}),
         ...(recorrencia !== undefined ? { recorrencia: recorrencia ? JSON.stringify(recorrencia) : null } : {}),
         ...(blocos !== undefined ? { blocos: JSON.stringify(blocosParaGravar(blocos)) } : {}),
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
       })
       .where(eq(tarefas.id, id)),
     ...comandosVinculos(db, id, vinculos),
+    ...(ligacoes ? comandosVinculosTarefa(db, id, ligacoes) : []),
     ...comandosValoresCampos(db, id, valores),
   ]);
 }
@@ -1290,11 +1332,33 @@ export async function aplicarMassaTarefas(ids: number[], acao: AcaoMassaTarefas,
 }
 
 /** Opções para VINCULAR uma tarefa (até 50 por busca): protocolos e DFDs no escopo de unidade do usuário; PCAs e
- * orçamentos (globais). `q` casa nº/Id/assunto (protocolo), nº/planejamento (DFD) ou nome/ano (PCA/orçamento). */
+ * orçamentos (globais); TAREFAS dos quadros dos grupos do usuário. `q` casa nº/Id/assunto (protocolo), nº/planejamento (DFD) ou nome/ano (PCA/orçamento). */
 export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: string): Promise<{ id: number; rotulo: string; detalhe: string }[]> {
   const db = getDb();
   const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
   const LIMITE = 50;
+  if (tipo === "tarefa") {
+    // As tarefas (não templates) dos quadros ATIVOS dos grupos do usuário — o ADM, todos; `q` casa o título ou o nº do ticket.
+    const grupoIds = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
+    if (grupoIds && !grupoIds.length) return [];
+    const ticket = /^#?\d{1,9}$/.test(q.trim()) ? Number(q.trim().replace("#", "")) : null;
+    const linhas = await db
+      .select({ id: tarefas.id, ticket: tarefas.ticket, titulo: tarefas.titulo, quadro: tarefaQuadros.nome, lista: tarefaListas.nome })
+      .from(tarefas)
+      .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
+      .innerJoin(tarefaListas, eq(tarefaListas.id, tarefas.listaId))
+      .where(
+        and(
+          eq(tarefas.template, false),
+          eq(tarefaQuadros.arquivado, false),
+          grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          ticket != null ? or(eq(tarefas.ticket, ticket), like(tarefas.titulo, termo)) : like(tarefas.titulo, termo),
+        ),
+      )
+      .orderBy(tarefas.arquivada, desc(tarefas.id))
+      .limit(LIMITE);
+    return linhas.map((l) => ({ id: l.id, rotulo: `#${l.ticket} ${l.titulo}`, detalhe: `${l.quadro} › ${l.lista}` }));
+  }
   if (tipo === "pca" || tipo === "orcamento") {
     const t = tipo === "pca" ? pcas : orcamentos;
     const linhas = await db
@@ -1347,13 +1411,14 @@ export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: 
       quadroCor: tarefaQuadros.cor,
       listaNome: tarefaListas.nome,
     })
-    .from(tarefas)
+    .from(tarefaVinculos)
+    .innerJoin(tarefas, eq(tarefas.id, tarefaVinculos.tarefaId))
     .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
     .innerJoin(tarefaListas, eq(tarefaListas.id, tarefas.listaId))
     .where(
       and(
-        eq(tarefas.vinculoTipo, tipo),
-        eq(tarefas.vinculoId, id),
+        eq(tarefaVinculos.tipo, tipo),
+        eq(tarefaVinculos.alvoId, id),
         eq(tarefas.template, false),
         eq(tarefaQuadros.arquivado, false),
         grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
@@ -1366,6 +1431,7 @@ export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: 
 /** O alvo do vínculo existe e o usuário o vê (protocolo/DFD no escopo de unidade dele; PCA/orçamento, globais). */
 export async function vinculoAcessivel(u: UsuarioSessao, v: { tipo: TipoVinculo; id: number }): Promise<boolean> {
   const db = getDb();
+  if (v.tipo === "tarefa") return (await tarefaAcessivel(u, v.id)) != null;
   if (v.tipo === "pca" || v.tipo === "orcamento") {
     const t = v.tipo === "pca" ? pcas : orcamentos;
     return (await db.select({ id: t.id }).from(t).where(eq(t.id, v.id))).length > 0;
@@ -1595,7 +1661,7 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
         etiquetas: t.etiquetas,
         criadoPor: u.id,
         estimativaH: t.estimativaH,
-        vinculo: t.vinculo,
+        vinculos: t.vinculos.map((v) => ({ tipo: v.tipo, id: v.id })),
         recorrencia: rec,
         recorrenciaAnteriorId: id,
         checklists,
@@ -1687,7 +1753,7 @@ export async function copiarTarefa(
     novasEtiquetas: o.etiquetas ? v.novasEtiquetas : [],
     criadoPor: u.id,
     estimativaH: t.estimativaH,
-    vinculo: t.vinculo ? { tipo: t.vinculo.tipo, id: t.vinculo.id } : null,
+    vinculos: t.vinculos.map((v) => ({ tipo: v.tipo, id: v.id })),
     recorrencia: t.recorrencia,
     checklists,
     blocos: t.blocos,

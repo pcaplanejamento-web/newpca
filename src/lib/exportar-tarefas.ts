@@ -7,7 +7,7 @@ import {
   type ListaTarefas,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
-  ROTULO_VINCULO,
+  rotuloDoVinculo,
   rotuloValorCampo,
   rotuloRecorrencia,
   rotuloTicket,
@@ -26,7 +26,7 @@ export function linhasPlanilhaTarefas(
   const eqs = new Map((ctx.equipes ?? []).map((e) => [e.id, e.nome]));
   const nomes = (ids: number[], m: Map<number, string>) => ids.map((i) => m.get(i) ?? `#${i}`).join(", ");
   return [
-    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada", "Equipes", ...campos.map((c) => c.nome)],
+    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculos", "Recorrência", "Criada em", "Concluída em", "Arquivada", "Equipes", ...campos.map((c) => c.nome)],
     ...tarefas.map((t) => [
       rotuloTicket(t.ticket),
       t.titulo,
@@ -40,7 +40,7 @@ export function linhasPlanilhaTarefas(
       nomes(t.observadores, pes),
       nomes(t.etiquetas, etq),
       t.checklist.total ? `${t.checklist.feitos}/${t.checklist.total}` : "",
-      t.vinculo ? `${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}` : "",
+      t.vinculos.map(rotuloDoVinculo).join("; "),
       t.recorrencia ? rotuloRecorrencia(t.recorrencia) : "",
       t.criadoEm ? dataBR(dataIsoBrasilia(t.criadoEm)) : "",
       t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : "",

@@ -663,6 +663,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_campo_valores"), 0);
   });
 
+  it("0057 vínculos múltiplos: o vínculo único antigo é copiado; único por tarefa + tipo + alvo; excluir a tarefa leva os dela", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0057")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9570, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9571, 9570, 'Q')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9572, 9571, 'L')");
+    a.exec(
+      "INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo, vinculo_tipo, vinculo_id) VALUES (9573, 9571, 9572, 1, 'A', 'protocolo', 44), (9574, 9571, 9572, 2, 'B', NULL, NULL), (9575, 9571, 9572, 3, 'C', 'lixo', 1)",
+    );
+    a.exec(readFileSync(join(DIR, "0057_tarefa_vinculos.sql"), "utf8"));
+    const n = (sql: string) => (a.prepare(sql).get() as { n: number }).n;
+    assert.deepEqual(a.prepare("SELECT tarefa_id AS t, tipo, alvo_id AS a FROM tarefa_vinculos").all().map((x) => ({ ...(x as object) })), [{ t: 9573, tipo: "protocolo", a: 44 }]);
+    a.exec("INSERT INTO tarefa_vinculos (tarefa_id, tipo, alvo_id) VALUES (9573, 'tarefa', 9574)");
+    assert.throws(() => a.exec("INSERT INTO tarefa_vinculos (tarefa_id, tipo, alvo_id) VALUES (9573, 'tarefa', 9574)"));
+    a.exec("DELETE FROM tarefas WHERE id = 9573");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_vinculos"), 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

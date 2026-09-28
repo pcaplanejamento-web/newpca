@@ -53,7 +53,8 @@ export type TarefaResumo = {
   criadoEm: string | null;
   atualizadoEm: string | null;
   estimativaH: number | null;
-  vinculo: VinculoTarefa | null;
+  /** Os VÍNCULOS da tarefa (migração `0057`): protocolos, DFDs, PCAs, orçamentos e OUTRAS TAREFAS (nos dois sentidos). */
+  vinculos: VinculoTarefa[];
   /** Contagens do conteúdo (os ícones do cartão). */
   checklist: { feitos: number; total: number };
   comentarios: number;
@@ -95,17 +96,47 @@ export function equipesDasLinhas(linhas: { tarefaId: number; equipeId: number; u
   return { porTarefa, membros };
 }
 
-/** A que parte do sistema a tarefa se liga. */
-export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento"] as const;
+/** A que parte do sistema a tarefa se liga — também a OUTRA TAREFA (o vínculo entre tarefas vale nos dois sentidos). */
+export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento", "tarefa"] as const;
 export type TipoVinculo = (typeof TIPOS_VINCULO)[number];
-export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", pca: "PCA", orcamento: "Orçamento" };
-/** O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). */
-export type VinculoTarefa = { tipo: TipoVinculo; id: number; rotulo?: string | null };
+export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", pca: "PCA", orcamento: "Orçamento", tarefa: "Tarefa" };
+/**
+ * O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). Na TAREFA vinculada:
+ * `quadroId` (o link), `detalhe` (quadro › lista), `prazo` e `concluida`.
+ */
+export type VinculoTarefa = { tipo: TipoVinculo; id: number; rotulo?: string | null; detalhe?: string | null; quadroId?: number | null; prazo?: string | null; concluida?: boolean };
+/** Teto de vínculos por tarefa. */
+export const MAX_VINCULOS = 20;
+export const chaveVinculo = (v: { tipo: string; id: number }) => `${v.tipo}:${v.id}`;
+/** O rótulo do vínculo ("Protocolo 144756/2026", "Tarefa #12 Conferir"; o alvo excluído depois = "… (excluído)"). */
+export const rotuloDoVinculo = (v: Pick<VinculoTarefa, "tipo" | "id" | "rotulo">) => `${ROTULO_VINCULO[v.tipo]} ${v.rotulo ?? `#${v.id} (excluído)`}`;
+
+/**
+ * Os VÍNCULOS de cada tarefa a partir das LINHAS gravadas (`tarefa_vinculos`): a linha vale para a tarefa que a gravou e,
+ * quando o alvo é outra TAREFA, também para ela (o vínculo entre tarefas é dos dois lados). Sem repetir; sem a própria.
+ */
+export function vinculosPorTarefa(linhas: { tarefaId: number; tipo: string; alvoId: number }[]): Map<number, { tipo: TipoVinculo; id: number }[]> {
+  const m = new Map<number, Map<string, { tipo: TipoVinculo; id: number }>>();
+  const por = (t: number, v: { tipo: TipoVinculo; id: number }) => {
+    if (v.tipo === "tarefa" && v.id === t) return;
+    const x = m.get(t) ?? new Map();
+    x.set(chaveVinculo(v), v);
+    m.set(t, x);
+  };
+  for (const l of linhas) {
+    if (!ehTipoVinculo(l.tipo)) continue;
+    por(l.tarefaId, { tipo: l.tipo, id: l.alvoId });
+    if (l.tipo === "tarefa") por(l.alvoId, { tipo: "tarefa", id: l.tarefaId });
+  }
+  return new Map([...m].map(([t, x]) => [t, [...x.values()]]));
+}
 
 export const ehTipoVinculo = (v: unknown): v is TipoVinculo => typeof v === "string" && (TIPOS_VINCULO as readonly string[]).includes(v);
 
-/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`); PCA e orçamento, o espaço deles. */
-export function hrefVinculo(v: { tipo: TipoVinculo; id: number }): string {
+/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`); PCA e orçamento, o espaço deles; a
+ * tarefa, o quadro dela com a tarefa aberta. */
+export function hrefVinculo(v: { tipo: TipoVinculo; id: number; quadroId?: number | null }): string {
+  if (v.tipo === "tarefa") return v.quadroId ? `/painel/tarefas/${v.quadroId}?tarefa=${v.id}` : "/painel/tarefas";
   if (v.tipo === "pca") return `/painel/pca/${v.id}`;
   if (v.tipo === "orcamento") return `/painel/orcamento/${v.id}`;
   return `/painel/mesa?abrir=${v.tipo}:${v.id}`;
@@ -545,7 +576,7 @@ export const ROTULO_BLOCO: Record<TipoBloco, string> = {
   checklist: "Checklist",
   link: "Link",
   eventos: "Eventos",
-  vinculo: "Vínculo",
+  vinculo: "Vínculos",
 };
 /** Os METADADOS da tarefa (a faixa do topo do detalhe — aparecem quando têm dado ou foram acrescentados). */
 export const TIPOS_METADADO = ["membros", "etiquetas", "datas", "prioridade", "estimativa"] as const;
@@ -596,9 +627,9 @@ export function lerBlocos(v: unknown): BlocoTarefa[] | null {
 }
 
 /** O que diz se um bloco de CAMPO tem dado (um bloco com dado nunca some da tarefa). */
-export type DadosBlocos = { vinculo: unknown; checklist: number; eventos: number };
+export type DadosBlocos = { vinculos: number; checklist: number; eventos: number };
 export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
-  if (tipo === "vinculo") return d.vinculo != null;
+  if (tipo === "vinculo") return d.vinculos > 0;
   if (tipo === "checklist") return d.checklist > 0;
   if (tipo === "eventos") return d.eventos > 0;
   return false;

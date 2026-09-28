@@ -20,7 +20,7 @@ import {
   valoresValidos,
   vinculoAcessivel,
 } from "@/lib/tarefas";
-import { lerBlocos, mascararPrivados, rotuloTicket, type ValorCampoNovo, valoresAposMudar } from "@/lib/tarefas-core";
+import { chaveVinculo, lerBlocos, mascararPrivados, rotuloTicket, type ValorCampoNovo, valoresAposMudar } from "@/lib/tarefas-core";
 import { contextoTarefa } from "@/lib/tarefas-dados";
 import { editarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -62,8 +62,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const atuais = [...r.tarefa.pessoas, ...r.tarefa.observadores];
   if (!(await pessoasValidas(r.quadro.grupoId, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
     return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
-  if (campos.vinculo && !(campos.vinculo.tipo === r.tarefa.vinculo?.tipo && campos.vinculo.id === r.tarefa.vinculo.id) && !(await vinculoAcessivel(a.u, campos.vinculo)))
-    return erro("Vínculo não encontrado.", 422);
+  // Só os vínculos NOVOS são conferidos (um alvo que ficou inacessível depois segue na tarefa); nunca a própria tarefa.
+  if (campos.vinculos) {
+    const antes = new Set(r.tarefa.vinculos.map(chaveVinculo));
+    if (campos.vinculos.some((v) => v.tipo === "tarefa" && v.id === id)) return erro("A tarefa não se vincula a ela mesma.", 422);
+    for (const v of campos.vinculos) if (!antes.has(chaveVinculo(v)) && !(await vinculoAcessivel(a.u, v))) return erro("Vínculo não encontrado.", 422);
+  }
   if (campos.concluida === true && r.tarefa.template) return erro("Um template não se conclui — crie uma tarefa a partir dele.", 422);
   const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
   // CAMPOS personalizados + o TÍTULO AUTOMÁTICO (quando os valores mudam ou a pessoa volta ao automático).

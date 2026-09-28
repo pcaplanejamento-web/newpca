@@ -125,7 +125,7 @@ import { CalendarioTarefas } from "@/components/CalendarioTarefas";
 import { CartaoTarefa } from "@/components/CartaoTarefa";
 import { acoesChecklistRascunho, ChecklistTarefa } from "@/components/ChecklistTarefa";
 import { AtividadeTarefa } from "@/components/AtividadeTarefa";
-import { VinculoTarefa } from "@/components/VinculoTarefa";
+import { VinculosTarefa } from "@/components/VinculosTarefa";
 import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
 import { DashboardTarefas } from "@/components/DashboardTarefas";
 import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
@@ -1856,10 +1856,10 @@ function TarefasDemo() {
   const base: TarefaResumo = {
     id: 0, listaId: 1, ticket: 0, titulo: "", prioridade: "media", inicio: null, prazo: null, ordem: 0, concluidaEm: null,
     arquivada: false, template: false, prazoHora: null, lembreteMin: null, pessoas: [], observadores: [], equipes: [], envolvidos: [], etiquetas: [], criadoEm: null, atualizadoEm: null,
-    estimativaH: null, vinculo: null, checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, eventos: 0, recorrencia: null,
+    estimativaH: null, vinculos: [], checklist: { feitos: 0, total: 0 }, comentarios: 0, notas: 0, links: 0, eventos: 0, recorrencia: null,
   };
   const cartoes: TarefaResumo[] = [
-    { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculo: { tipo: "protocolo", id: 1, rotulo: "144756/2026" } },
+    { ...base, id: 1, ticket: 128, titulo: "Conferir DFDs do protocolo 144756 antes do envio ao PCA", prioridade: "urgente", prazo: "2026-01-02", etiquetas: [1], pessoas: [1, 2], checklist: { feitos: 2, total: 5 }, comentarios: 3, vinculos: [{ tipo: "protocolo", id: 1, rotulo: "144756/2026" }] },
     { ...base, id: 2, ticket: 129, titulo: "Atualizar o catálogo de materiais de limpeza", prioridade: "alta", prazo: "2099-12-31", etiquetas: [2], pessoas: [3], notas: 1, links: 2 },
     { ...base, id: 3, ticket: 130, titulo: "Revisar a classificação dos itens", concluidaEm: "2026-01-01" },
   ];
@@ -1977,7 +1977,14 @@ function TarefasDemo() {
           />
         </div>
         <div className="space-y-3">
-          <VinculoTarefa valor={{ tipo: "protocolo", id: 1, rotulo: "144756/2026" }} onChange={() => {}} />
+          <VinculosTarefa
+            valor={[
+              { tipo: "protocolo", id: 1, rotulo: "144756/2026" },
+              { tipo: "tarefa", id: 2, rotulo: "#12 Conferir o PCA", detalhe: "Outubro › 05 - OUTUBRO - 2026", quadroId: 1, prazo: "2026-01-02", concluida: false },
+            ]}
+            onChange={() => {}}
+            hoje="2026-01-01"
+          />
           <BarraEdicaoMassaTarefas
             listas={[{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }]}
             pessoas={pessoas}
@@ -3255,7 +3262,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (card 4:5 do quadro), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover a lista) + CopiarMoverLista, CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o nome do quadro troca de quadro, favoritos primeiro), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculoTarefa (protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (card 4:5 do quadro), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover a lista) + CopiarMoverLista, CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o nome do quadro troca de quadro, favoritos primeiro), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (WIP em âmbar + Adicionar tarefa), CartaoTarefa (ticket copiável, prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 

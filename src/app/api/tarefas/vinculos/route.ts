@@ -5,7 +5,7 @@ import { ehTipoVinculo } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
 
-/** Opções para VINCULAR uma tarefa (`?tipo=protocolo|dfd|pca|orcamento&q=`) — até 50, no escopo do usuário. */
+/** Opções para VINCULAR uma tarefa (`?tipo=protocolo|dfd|pca|orcamento|tarefa&q=`) — até 50, no escopo do usuário. */
 export async function GET(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;

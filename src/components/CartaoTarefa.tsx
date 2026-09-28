@@ -12,7 +12,7 @@ import {
   ROTULO_PRIORIDADE,
   rotuloData,
   rotuloRecorrencia,
-  ROTULO_VINCULO,
+  rotuloDoVinculo,
   rotuloTicket,
   type TarefaResumo,
   type CampoTarefa,
@@ -238,9 +238,10 @@ export function CartaoTarefa({
             {t.links}
           </span>
         )}
-        {t.vinculo && (
-          <span className="pointer-events-none inline-flex" title={`${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? "(excluído)"}`}>
-            <IconLink className="h-3.5 w-3.5 text-accent" aria-label={`Vinculada a ${ROTULO_VINCULO[t.vinculo.tipo]}`} />
+        {t.vinculos.length > 0 && (
+          <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={t.vinculos.map(rotuloDoVinculo).join("\n")}>
+            <IconLink className="h-3.5 w-3.5" aria-label={`${t.vinculos.length} vínculo(s)`} />
+            {t.vinculos.length > 1 && t.vinculos.length}
           </span>
         )}
         {resp.length > 0 && (

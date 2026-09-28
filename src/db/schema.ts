@@ -839,9 +839,6 @@ export const tarefas = sqliteTable(
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
     /** Estimativa em horas (migração `0043`). */
     estimativaH: real("estimativa_h"),
-    /** VÍNCULO com o sistema (`protocolo`/`dfd`/`pca`/`orcamento` + id) — sem FK: o alvo pode ser excluído depois. */
-    vinculoTipo: text("vinculo_tipo"),
-    vinculoId: integer("vinculo_id"),
     /** RECORRÊNCIA (migração `0044`): JSON `Recorrencia` (`tarefas-core`); NULL = não se repete. */
     recorrencia: text("recorrencia"),
     /** A ocorrência ANTERIOR da série (ÚNICO: concluir de novo nunca gera a próxima duas vezes). */
@@ -854,7 +851,6 @@ export const tarefas = sqliteTable(
     uniqueIndex("tarefas_recorrencia_anterior_uq").on(t.recorrenciaAnteriorId),
     index("tarefas_lista_ordem_idx").on(t.listaId, t.ordem),
     index("tarefas_prazo_idx").on(t.prazo),
-    index("tarefas_vinculo_idx").on(t.vinculoTipo, t.vinculoId),
   ],
 );
 
@@ -938,6 +934,24 @@ export const tarefaEquipesLinks = sqliteTable(
       .references(() => tarefaEquipes.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.tarefaId, t.equipeId] }), index("tarefa_equipes_links_equipe_idx").on(t.equipeId)],
+);
+
+/**
+ * Os VÍNCULOS da tarefa (migração `0057`): protocolo · DFD · PCA · orçamento · OUTRA TAREFA (dos dois lados — a leitura
+ * olha também o alvo). Sem FK no alvo (pode ser excluído depois). As colunas antigas `tarefas.vinculo_tipo/vinculo_id`
+ * ficaram dormentes.
+ */
+export const tarefaVinculos = sqliteTable(
+  "tarefa_vinculos",
+  {
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    tipo: text("tipo").notNull(),
+    alvoId: integer("alvo_id").notNull(),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [primaryKey({ columns: [t.tarefaId, t.tipo, t.alvoId] }), index("tarefa_vinculos_alvo_idx").on(t.tipo, t.alvoId)],
 );
 
 /** Os CAMPOS PERSONALIZADOS do quadro (migração `0056`): texto · número · data · lista (as `opcoes`) · caixa. */

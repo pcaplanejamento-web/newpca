@@ -14,7 +14,7 @@ import {
   PRIORIDADES,
   ROTULO_ESTADO_PRAZO,
   ROTULO_PRIORIDADE,
-  ROTULO_VINCULO,
+  rotuloDoVinculo,
   rotuloRecorrencia,
   rotuloValorCampo,
   rotuloTicket,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaLista } from "./CelulaLista";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { IconBandeira, IconRepetir } from "./icons";
 
@@ -230,10 +231,11 @@ export function TabelaTarefas({
       },
       {
         key: "vinculo",
-        header: "Vínculo",
+        header: "Vínculos",
         nowrap: true,
-        value: (t) => (t.vinculo ? `${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}` : "Sem vínculo"),
-        render: (t) => (t.vinculo ? <span className="text-[12.5px] text-text-2">{`${ROTULO_VINCULO[t.vinculo.tipo]} ${t.vinculo.rotulo ?? `#${t.vinculo.id}`}`}</span> : <span className="text-faint">—</span>),
+        value: (t) => t.vinculos.map(rotuloDoVinculo).join("; ") || "Sem vínculo",
+        valores: (t) => (t.vinculos.length ? t.vinculos.map(rotuloDoVinculo) : ["Sem vínculo"]),
+        render: (t) => (t.vinculos.length ? <CelulaLista valores={t.vinculos.map(rotuloDoVinculo)} /> : <span className="text-faint">—</span>),
       },
       {
         key: "recorrencia",

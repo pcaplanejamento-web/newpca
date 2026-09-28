@@ -19,6 +19,7 @@ import {
   comandosNotificacoes,
   comandosValoresCampos,
   comandosVinculos,
+  comandosVinculosTarefa,
   pessoaNaTarefa,
 } from "../src/lib/tarefas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -250,6 +251,29 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     // Excluir o campo tira o valor (cascade).
     db.exec("DELETE FROM tarefa_campos WHERE id = 700");
     assert.equal(contar(), 0);
+  });
+
+  it("VÍNCULOS múltiplos: a tarefa nova nasce com vários; trocar reescreve os dois lados (a outra tarefa perde o reverso)", async () => {
+    const r = await orm.batch(comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "V1", pessoas: [], etiquetas: [], vinculos: [{ tipo: "protocolo", id: 44 }, { tipo: "pca", id: 2 }] }));
+    const [{ id: a }] = r.at(-1) as { id: number }[];
+    const r2 = await orm.batch(comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "V2", pessoas: [], etiquetas: [], vinculos: [{ tipo: "tarefa", id: a }] }));
+    const [{ id: b }] = r2.at(-1) as { id: number }[];
+    const linhas = () =>
+      db
+        .prepare("SELECT tarefa_id AS t, tipo, alvo_id AS a FROM tarefa_vinculos WHERE tarefa_id IN (?, ?) OR alvo_id IN (?, ?) ORDER BY t, tipo, a")
+        .all(a, b, a, b)
+        .map((x) => ({ ...(x as object) }));
+    assert.equal(linhas().length, 3);
+    // A tarefa A (que vê B pelo reverso) troca os vínculos: fica só com B (e sem a si mesma), gravado a partir dela.
+    const cmds = comandosVinculosTarefa(orm, a, [
+      { tipo: "tarefa", id: b },
+      { tipo: "tarefa", id: a },
+    ]);
+    for (const c of cmds) assert.ok(c.toSQL().params.length <= 100);
+    await orm.batch(cmds as never);
+    assert.deepEqual(linhas(), [{ t: a, tipo: "tarefa", a: b }]);
+    db.exec(`DELETE FROM tarefas WHERE id = ${a}`);
+    assert.deepEqual(linhas(), []);
   });
 
   it("COPIAR para outro quadro (template, no topo, etiqueta nova criada) e MOVER entre quadros (ticket novo, pessoas filtradas)", async () => {

@@ -1087,7 +1087,10 @@ etiqueta.
 opções, caixa de marcar; "mostrar no cartão"), preenchidos no detalhe, com colunas na Lista/.xlsx e filtros no painel, e o
 TÍTULO AUTOMÁTICO pelo formato do quadro (`{Categoria} - {Tipo} - {Nº protocolo}` — campo vazio some com o separador; o
 título escrito à mão prevalece). Copiar, template, mover e recorrência levam os valores.
-🔜 **Tarefas no padrão Trello — próximas fases:** F8 vínculos múltiplos (tarefa ↔ tarefa) · F9 importar do Trello.
+✅ **Tarefas no padrão Trello — F8 (migração `0057`):** VÁRIOS vínculos por tarefa — protocolos, DFDs, PCAs, orçamentos e
+OUTRAS TAREFAS (a ligação entre tarefas aparece nos dois lados, com quadro › lista, prazo e conclusão); o vínculo único
+antigo foi migrado.
+🔜 **Tarefas no padrão Trello — próxima fase:** F9 importar do Trello.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

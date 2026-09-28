@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const pessoas = d.pessoas ?? [];
   const observadores = d.observadores ?? [];
   if (!(await pessoasValidas(q.grupoId, [...pessoas, ...observadores]))) return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
-  if (d.vinculo && !(await vinculoAcessivel(a.u, d.vinculo))) return erro("Vínculo não encontrado.", 422);
+  for (const v of d.vinculos ?? []) if (!(await vinculoAcessivel(a.u, v))) return erro("Vínculo não encontrado.", 422);
   const equipes = await equipesDoQuadro(q.id, d.equipes ?? []);
   const eventos = d.eventos ?? [];
   const convidados = [...new Set(eventos.flatMap((e) => e.convidados ?? []))];
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     equipes,
     criadoPor: a.u.id,
     estimativaH: d.estimativaH ?? null,
-    vinculo: d.vinculo ?? null,
+    vinculos: d.vinculos ?? [],
     recorrencia: d.recorrencia ?? null,
     checklists: d.checklists ?? [],
     blocos: d.blocos ? lerBlocos(d.blocos) : null,

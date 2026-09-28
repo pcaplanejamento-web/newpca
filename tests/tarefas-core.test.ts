@@ -86,7 +86,7 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   criadoEm: null,
   atualizadoEm: null,
   estimativaH: null,
-  vinculo: null,
+  vinculos: [],
   checklist: { feitos: 0, total: 0 },
   comentarios: 0,
   recorrencia: null,
@@ -198,6 +198,8 @@ describe("vínculo, checklist e menções", () => {
     assert.equal(hrefVinculo({ tipo: "dfd", id: 7 }), "/painel/mesa?abrir=dfd:7");
     assert.equal(hrefVinculo({ tipo: "pca", id: 3 }), "/painel/pca/3");
     assert.equal(hrefVinculo({ tipo: "orcamento", id: 4 }), "/painel/orcamento/4");
+    assert.equal(hrefVinculo({ tipo: "tarefa", id: 9, quadroId: 2 }), "/painel/tarefas/2?tarefa=9");
+    assert.deepEqual(lerVinculo("tarefa:5"), { tipo: "tarefa", id: 5 });
   });
   it("progressoChecklist conta os feitos", () => {
     assert.deepEqual(progressoChecklist([{ feito: true }, { feito: false }, { feito: true }]), { feitos: 2, total: 3 });
@@ -236,7 +238,7 @@ describe("calendário", () => {
 
 describe("exportar", () => {
   it("linhasPlanilhaTarefas: cabeçalho + uma linha por tarefa, com nomes e rótulos", () => {
-    const l = linhasPlanilhaTarefas([T(5, 1, 1, { prazo: "2026-09-01", pessoas: [7], etiquetas: [3], checklist: { feitos: 1, total: 2 }, vinculo: { tipo: "dfd", id: 9, rotulo: "1209" } })], {
+    const l = linhasPlanilhaTarefas([T(5, 1, 1, { prazo: "2026-09-01", pessoas: [7], etiquetas: [3], checklist: { feitos: 1, total: 2 }, vinculos: [{ tipo: "dfd", id: 9, rotulo: "1209" }] })], {
       listas: [{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }],
       etiquetas: [{ id: 3, nome: "Licitação", cor: "#000000" }],
       pessoas: [{ id: 7, nome: "Ana Souza", apelido: "Ana", foto: null }],
@@ -429,7 +431,7 @@ describe("tarefas — calendário profissional", () => {
 });
 
 describe("tarefas — blocos", () => {
-  const vazio: DadosBlocos = { vinculo: null, checklist: 0, eventos: 0 };
+  const vazio: DadosBlocos = { vinculos: 0, checklist: 0, eventos: 0 };
 
   it("lerBlocos é tolerante: inválido sai, bloco único não repete, JSON quebrado = null", () => {
     assert.equal(lerBlocos(null), null);
@@ -454,7 +456,7 @@ describe("tarefas — blocos", () => {
 
   it("blocosDaTarefa: tarefa antiga deriva dos campos; bloco com dado nunca some; ordem gravada é mantida", () => {
     assert.deepEqual(blocosDaTarefa(null, vazio), []);
-    const d = { ...vazio, vinculo: { tipo: "pca", id: 1 }, checklist: 2 };
+    const d = { ...vazio, vinculos: 1, checklist: 2 };
     assert.deepEqual(
       blocosDaTarefa(null, d).map((b) => b.tipo),
       ["checklist", "vinculo"],
