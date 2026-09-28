@@ -5,14 +5,14 @@ import { useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
-import { type ConjuntoQuadros, MAX_CONJUNTOS, PALETA_ETIQUETAS } from "@/lib/tarefas-core";
+import { type ConjuntoQuadros, MAX_CONJUNTOS, PALETA_ETIQUETAS, type PastasQuadros } from "@/lib/tarefas-core";
 import { MESES } from "@/lib/normalize";
 import { mesSeguinte } from "@/lib/calendario-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { Checkbox, SelectField } from "./Field";
 import { useFavoritosQuadros } from "./FavoritosQuadros";
-import { IconInbox, IconPlus } from "./icons";
+import { IconInbox, IconPasta } from "./icons";
 import { Modal } from "./Modal";
 import { SeletorFundo } from "./SeletorFundo";
 import { Switch } from "./Switch";
@@ -26,8 +26,8 @@ const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
 export type ModeloQuadroOpcao = { id: number; nome: string; listas: string[] };
 
 /**
- * Módulo TAREFAS — os QUADROS do grupo ativo nas SEÇÕES (`SecoesDeQuadros`: Favoritos · Recentes · os CONJUNTOS da pessoa —
- * "Novo conjunto", editar/excluir no "…" — · o grupo; todas minimizáveis) + o card "+"
+ * Módulo TAREFAS — os QUADROS do grupo ativo nas SEÇÕES (`SecoesDeQuadros`: Favoritos · Recentes · "Seus quadros" com as
+ * PASTAS da pessoa — "Nova pasta", abrir no lugar, arrastar, editar/excluir no "…"; todas minimizáveis) + o card "+"
  * (editor) que cria um quadro (em branco ou de um MODELO; com as LISTAS DOS DIAS de um mês e os TEMPLATES de outro quadro)
  * no grupo ativo e o ABRE. O Calendário é um módulo à parte (`/painel/calendario`). 100% design-system.
  */
@@ -36,7 +36,7 @@ export function TarefasView({
   podeCriar,
   modelos = [],
   favoritos: favIniciais = [],
-  conjuntos: conjIniciais = [],
+  conjuntos: conjIniciais = { lista: [], ordem: [] },
   hoje,
 }: {
   quadros: QuadroCardDados[];
@@ -44,8 +44,8 @@ export function TarefasView({
   modelos?: ModeloQuadroOpcao[];
   favoritos?: number[];
   hoje: string;
-  /** Os CONJUNTOS de quadros da pessoa (as grades nomeadas). */
-  conjuntos?: ConjuntoQuadros[];
+  /** As PASTAS de quadros da pessoa + a ordem da grade. */
+  conjuntos?: PastasQuadros;
 }) {
   const router = useRouter();
   const { favoritos, alternar } = useFavoritosQuadros(favIniciais);
@@ -105,14 +105,14 @@ export function TarefasView({
           {atrasadas > 0 && <span style={{ color: "var(--danger)" }}> · {num(atrasadas)} atrasada{atrasadas === 1 ? "" : "s"}</span>} · do grupo ativo do cabeçalho
         </p>
         </div>
-        {quadros.length > 0 && conj.conjuntos.length < MAX_CONJUNTOS && (
+        {quadros.length > 0 && conj.estado.lista.length < MAX_CONJUNTOS && (
           <Button
             size="sm"
             variant="secondary"
-            icon={<IconPlus className="h-4 w-4" />}
+            icon={<IconPasta className="h-4 w-4" />}
             onClick={() => setEditando({ id: `c${Date.now().toString(36)}`, nome: "", cor: PALETA_ETIQUETAS[15], quadros: [] })}
           >
-            Novo conjunto
+            Nova pasta
           </Button>
         )}
       </div>
@@ -127,14 +127,15 @@ export function TarefasView({
           quadros={quadros}
           favoritos={favoritos}
           onFavorito={alternar}
-          conjuntos={conj.conjuntos}
-          onEditarConjunto={setEditando}
-          onExcluirConjunto={conj.excluir}
+          pastas={conj.estado}
+          onMover={conj.mover}
+          onEditarPasta={setEditando}
+          onExcluirPasta={conj.excluir}
           extraFinal={podeCriar && <QuadroNovoCard onClick={abrirNovo} />}
         />
       )}
 
-      <EditorConjunto aberto={editando} quadros={quadros} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
+      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
       <Modal
         open={novo != null}
         onClose={() => !salvando && setNovo(null)}

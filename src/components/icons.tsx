@@ -28,6 +28,8 @@ import {
   Filter,
   GitCompareArrows,
   GripVertical,
+  Folder,
+  FolderOpen,
   Image as ImageIcon,
   Inbox,
   Info,
@@ -169,6 +171,8 @@ export const IconFixar = Pin;
 export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
+export const IconPasta = Folder;
+export const IconPastaAberta = FolderOpen;
 export const IconAjuda = CircleHelp;
 export const IconEstrela = Star;
 export const IconRefresh = RefreshCw;

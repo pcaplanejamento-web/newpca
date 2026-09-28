@@ -221,9 +221,20 @@ export function ConfiguracaoQuadro({
               <Switch
                 checked={quadro.privado}
                 disabled={ocupado != null}
-                onChange={(privado) =>
-                  gravar("privado", () => chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { privado }), privado ? "Quadro privado — só você o vê." : "Quadro visível ao grupo.")
-                }
+                onChange={async (privado) => {
+                  // Tornar privado tira as outras pessoas de tudo dentro do quadro — confirma antes.
+                  if (
+                    privado &&
+                    !(await confirmar({
+                      titulo: "Tornar o quadro privado?",
+                      texto: "Só você verá este quadro. As outras pessoas saem das tarefas, equipes, eventos e checklists dele.",
+                      confirmar: "Tornar privado",
+                      perigo: true,
+                    }))
+                  )
+                    return;
+                  gravar("privado", () => chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { privado }), privado ? "Quadro privado — só você o vê." : "Quadro visível ao grupo.");
+                }}
                 label="Privado (só você vê)"
               />
             )}

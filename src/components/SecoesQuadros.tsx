@@ -4,13 +4,27 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
-import { CHAVE_CONJUNTOS_TAREFAS, type ConjuntoQuadros, MAX_NOME_CONJUNTO, MAX_QUADROS_CONJUNTO, PALETA_ETIQUETAS, quadrosDoConjunto, salvarConjunto } from "@/lib/tarefas-core";
+import {
+  CHAVE_CONJUNTOS_TAREFAS,
+  type ConjuntoQuadros,
+  type DestinoGrade,
+  excluirPasta,
+  itensDaGrade,
+  MAX_NOME_CONJUNTO,
+  MAX_QUADROS_CONJUNTO,
+  moverNaGrade,
+  PALETA_ETIQUETAS,
+  type PastasQuadros,
+  salvarConjunto,
+} from "@/lib/tarefas-core";
 import { Button } from "./Button";
+import { ChipsEscolha } from "./ChipsEscolha";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField, TextField } from "./Field";
 import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconMais, IconPencil, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { GradePastas } from "./PastasQuadros";
 import { QuadroCard } from "./QuadroCard";
 import { toast } from "./Toast";
 import { useSetLocal } from "./useSetLocal";
@@ -135,18 +149,19 @@ export function SecaoQuadros({
 
 /**
  * As SEÇÕES de quadros (como a página de quadros do Trello) — as MESMAS na tela de Tarefas e no "Mudar de quadros":
- * **Favoritos** · **Recentes** (deste aparelho) · cada **CONJUNTO** da pessoa (com o menu editar/excluir, quando há
- * `onEditarConjunto`) · cada **GRUPO** (o `extraFinal` — ex.: o card "Novo quadro" — entra no último). Toda seção
- * MINIMIZA/MAXIMIZA pelo título (guardado neste aparelho, igual nas duas telas). Seção sem quadro não aparece (o
- * conjunto vazio aparece, com a dica).
+ * **Favoritos** · **Recentes** (deste aparelho) · **Seus quadros** = a `GradePastas` (as PASTAS e os quadros soltos, na
+ * ordem da pessoa — abrir a pasta no lugar, arrastar para reordenar e para dentro/fora das pastas; com 2+ grupos, os chips
+ * filtram por grupo). O `extraFinal` (ex.: o card "Novo quadro") entra no fim da grade. Toda seção MINIMIZA/MAXIMIZA pelo
+ * título (guardado neste aparelho, igual nas duas telas).
  */
 export function SecoesDeQuadros({
   quadros,
   favoritos,
   onFavorito,
-  conjuntos = [],
-  onEditarConjunto,
-  onExcluirConjunto,
+  pastas,
+  onMover,
+  onEditarPasta,
+  onExcluirPasta,
   atual,
   aba,
   onAbrir,
@@ -155,9 +170,10 @@ export function SecoesDeQuadros({
   quadros: QuadroCardDados[];
   favoritos: number[];
   onFavorito?: (id: number) => void;
-  conjuntos?: ConjuntoQuadros[];
-  onEditarConjunto?: (c: ConjuntoQuadros) => void;
-  onExcluirConjunto?: (id: string) => void;
+  pastas: PastasQuadros;
+  onMover?: (raiz: string[], chave: string, destino: DestinoGrade) => void;
+  onEditarPasta?: (c: ConjuntoQuadros) => void;
+  onExcluirPasta?: (id: string, raiz: string[]) => void;
   atual?: number;
   aba?: string;
   onAbrir?: () => void;
@@ -165,74 +181,90 @@ export function SecoesDeQuadros({
 }) {
   const [recolhidas, alternar] = useSecoesRecolhidas();
   const recentes = useQuadrosRecentes();
+  const [grupo, setGrupo] = useState("__tudo");
   const porId = new Map(quadros.map((q) => [q.id, q]));
   const favs = quadros.filter((q) => favoritos.includes(q.id));
   const recs = recentes.map((id) => porId.get(id)).filter((q): q is QuadroCardDados => !!q);
   const grupos = [...new Set(quadros.map((q) => q.grupoNome))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const filtrando = grupo !== "__tudo" && grupos.includes(grupo);
+  const doGrupo = filtrando ? quadros.filter((q) => q.grupoNome === grupo) : quadros;
   const grade = { favoritos, onFavorito, atual, aba, onAbrir };
-  const secao = (id: string, titulo: string, icone: ReactNode, lista: QuadroCardDados[], acoes?: ReactNode, extra?: ReactNode, vazio?: string) => (
-    <SecaoQuadros key={id} titulo={titulo} icone={icone} quantidade={lista.length} recolhida={recolhidas.has(id)} onAlternar={() => alternar(id)} acoes={acoes}>
-      {lista.length || extra ? <GradeQuadros quadros={lista} {...grade} extra={extra} /> : <p className="px-1 py-3 text-[13px] text-muted">{vazio}</p>}
+  const secao = (id: string, titulo: string, icone: ReactNode, quantidade: number, conteudo: ReactNode) => (
+    <SecaoQuadros key={id} titulo={titulo} icone={icone} quantidade={quantidade} recolhida={recolhidas.has(id)} onAlternar={() => alternar(id)}>
+      {conteudo}
     </SecaoQuadros>
   );
+  const raizTodos = itensDaGrade(quadros, pastas).map((i) => i.chave);
   return (
     <div className="space-y-5">
-      {favs.length > 0 && secao("fav", "Favoritos", <IconEstrela className="h-4 w-4 shrink-0" style={{ color: "var(--warn)" }} fill="currentColor" />, favs)}
-      {recs.length > 0 && secao("rec", "Visualizados recentemente", <IconClock className="h-4 w-4 shrink-0 text-muted" />, recs)}
-      {conjuntos.map((c) =>
-        secao(
-          `conj:${c.id}`,
-          c.nome,
-          <span aria-hidden className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[12px] font-bold text-white" style={{ background: c.cor }}>
-            {c.nome.charAt(0).toUpperCase()}
-          </span>,
-          quadrosDoConjunto(c, quadros),
-          onEditarConjunto && onExcluirConjunto ? <MenuConjunto conjunto={c} onEditar={() => onEditarConjunto(c)} onExcluir={() => onExcluirConjunto(c.id)} /> : undefined,
-          undefined,
-          onEditarConjunto ? "Nenhum quadro neste conjunto — use “Editar conjunto” no menu “…”." : "Nenhum quadro deste conjunto aqui.",
-        ),
+      {favs.length > 0 && secao("fav", "Favoritos", <IconEstrela className="h-4 w-4 shrink-0" style={{ color: "var(--warn)" }} fill="currentColor" />, favs.length, <GradeQuadros quadros={favs} {...grade} />)}
+      {recs.length > 0 && secao("rec", "Visualizados recentemente", <IconClock className="h-4 w-4 shrink-0 text-muted" />, recs.length, <GradeQuadros quadros={recs} {...grade} />)}
+      {secao(
+        "todos",
+        "Seus quadros",
+        <IconLayers className="h-4 w-4 shrink-0 text-muted" />,
+        doGrupo.length,
+        <div className="space-y-3">
+          {grupos.length > 1 && (
+            <ChipsEscolha ariaLabel="Grupo" valor={filtrando ? grupo : "__tudo"} onEscolher={setGrupo} opcoes={[{ value: "__tudo", label: "Tudo" }, ...grupos.map((g) => ({ value: g, label: g }))]} />
+          )}
+          <GradePastas
+            quadros={doGrupo}
+            estado={pastas}
+            ocultarVazias={filtrando}
+            {...grade}
+            extra={extraFinal}
+            onMover={onMover}
+            menuPasta={
+              onEditarPasta && onExcluirPasta ? (c) => <MenuConjunto conjunto={c} onEditar={() => onEditarPasta(c)} onExcluir={() => onExcluirPasta(c.id, raizTodos)} /> : undefined
+            }
+          />
+        </div>,
       )}
-      {grupos.map((g, i) => secao(`grupo:${g}`, g, <IconLayers className="h-4 w-4 shrink-0 text-muted" />, quadros.filter((q) => q.grupoNome === g), undefined, i === grupos.length - 1 ? extraFinal : undefined))}
-      {!grupos.length && extraFinal && <GradeQuadros quadros={[]} {...grade} extra={extraFinal} />}
     </div>
   );
 }
 
 /**
- * Os CONJUNTOS da pessoa (preferência `tarefas:conjuntos`): salvar/excluir é otimista e grava em FILA (como os
- * favoritos); falhou ⇒ volta ao último estado gravado e avisa.
+ * As PASTAS da pessoa (preferência `tarefas:conjuntos` = `{lista, ordem}`): salvar/excluir/MOVER é otimista e grava em
+ * FILA (como os favoritos); falhou ⇒ volta ao último estado gravado e avisa.
  */
-export function useConjuntosQuadros(inicial: ConjuntoQuadros[]) {
-  const [conjuntos, setConjuntos] = useState(inicial);
+export function useConjuntosQuadros(inicial: PastasQuadros) {
+  const [estado, setEstado] = useState(inicial);
+  const atual = useRef(inicial);
   const gravado = useRef(inicial);
   const fila = useRef<Promise<void>>(Promise.resolve());
-  const gravar = (novo: ConjuntoQuadros[]) => {
-    setConjuntos(novo);
+  const gravar = (novo: PastasQuadros) => {
+    if (novo === atual.current) return;
+    atual.current = novo;
+    setEstado(novo);
     fila.current = fila.current.then(() =>
-      chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_CONJUNTOS_TAREFAS, valor: { lista: novo } }).then(
+      chamar("/api/preferencias/tabela", "PUT", { chave: CHAVE_CONJUNTOS_TAREFAS, valor: novo }).then(
         () => {
           gravado.current = novo;
         },
         (e) => {
-          setConjuntos(gravado.current);
+          atual.current = gravado.current;
+          setEstado(gravado.current);
           toast.error((e as Error).message);
         },
       ),
     );
   };
   return {
-    conjuntos,
-    salvar: (c: ConjuntoQuadros) => gravar(salvarConjunto(conjuntos, c)),
-    excluir: (id: string) => gravar(conjuntos.filter((c) => c.id !== id)),
+    estado,
+    salvar: (c: ConjuntoQuadros) => gravar({ ...atual.current, lista: salvarConjunto(atual.current.lista, c) }),
+    excluir: (id: string, raiz: string[]) => gravar(excluirPasta(atual.current, raiz, id)),
+    mover: (raiz: string[], chave: string, destino: DestinoGrade) => gravar(moverNaGrade(atual.current, raiz, chave, destino)),
   };
 }
 
-/** O menu "…" de um conjunto: editar e excluir (com confirmação — os quadros não são tocados). */
+/** O menu "…" de uma PASTA: editar e excluir (com confirmação — os quadros voltam à grade, nenhum é tocado). */
 export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: ConjuntoQuadros; onEditar: () => void; onExcluir: () => void }) {
   const { confirmar, confirmacao } = useConfirmacao();
   return (
     <>
-      <Dropdown align="end" width={220} ariaLabel={`Ações do conjunto ${conjunto.nome}`} triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
+      <Dropdown align="end" width={220} ariaLabel={`Ações da pasta ${conjunto.nome}`} triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
         {(fechar) => (
           <div className="space-y-0.5">
             <button
@@ -243,19 +275,19 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
               }}
               className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
             >
-              <IconPencil className="h-4 w-4 text-muted" /> Editar conjunto
+              <IconPencil className="h-4 w-4 text-muted" /> Editar pasta
             </button>
             <button
               type="button"
               onClick={async () => {
                 fechar();
-                if (await confirmar({ titulo: `Excluir o conjunto "${conjunto.nome}"?`, texto: "Só o conjunto sai — os quadros continuam como estão.", confirmar: "Excluir", perigo: true }))
+                if (await confirmar({ titulo: `Excluir a pasta "${conjunto.nome}"?`, texto: "Só a pasta sai — os quadros dela voltam para a grade, como estão.", confirmar: "Excluir", perigo: true }))
                   onExcluir();
               }}
               className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 lg:min-h-9"
               style={{ color: "var(--danger)" }}
             >
-              <IconTrash className="h-4 w-4" /> Excluir conjunto
+              <IconTrash className="h-4 w-4" /> Excluir pasta
             </button>
           </div>
         )}
@@ -266,29 +298,47 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
 }
 
 /**
- * O EDITOR de um conjunto (criar/editar): o NOME, a COR (os tons da paleta, em círculos) e os QUADROS (busca + caixas de
- * marcar, com o grupo de cada um). `quadros` = os que a pessoa pode pôr (os da tela). Gravar devolve o conjunto pronto.
+ * O EDITOR de uma PASTA (criar/editar): o NOME, a COR (os tons da paleta, em círculos) e os QUADROS (busca + caixas de
+ * marcar, com o grupo de cada um — o quadro que está em OUTRA pasta mostra que sai de lá). `quadros` = os que a pessoa pode
+ * pôr (os da tela). Gravar devolve a pasta pronta.
  */
 export function EditorConjunto({
   aberto,
   quadros,
+  pastas = [],
   onFechar,
   onSalvar,
 }: {
-  /** O conjunto em edição (`null` = fechado). */
+  /** A pasta em edição (`null` = fechado). */
   aberto: ConjuntoQuadros | null;
   quadros: QuadroCardDados[];
+  /** Todas as pastas (o aviso "sai da pasta X"). */
+  pastas?: ConjuntoQuadros[];
   onFechar: () => void;
   onSalvar: (c: ConjuntoQuadros) => void;
 }) {
   return (
-    <Modal open={aberto != null} onClose={onFechar} titulo={aberto?.nome ? "Editar conjunto" : "Novo conjunto"} size="md">
-      {aberto && <FormConjunto key={aberto.id} inicial={aberto} quadros={quadros} onFechar={onFechar} onSalvar={onSalvar} />}
+    <Modal open={aberto != null} onClose={onFechar} titulo={aberto?.nome ? "Editar pasta" : "Nova pasta"} size="md">
+      {aberto && <FormConjunto key={aberto.id} inicial={aberto} quadros={quadros} pastas={pastas} onFechar={onFechar} onSalvar={onSalvar} />}
     </Modal>
   );
 }
 
-function FormConjunto({ inicial, quadros, onFechar, onSalvar }: { inicial: ConjuntoQuadros; quadros: QuadroCardDados[]; onFechar: () => void; onSalvar: (c: ConjuntoQuadros) => void }) {
+function FormConjunto({
+  inicial,
+  quadros,
+  pastas,
+  onFechar,
+  onSalvar,
+}: {
+  inicial: ConjuntoQuadros;
+  quadros: QuadroCardDados[];
+  pastas: ConjuntoQuadros[];
+  onFechar: () => void;
+  onSalvar: (c: ConjuntoQuadros) => void;
+}) {
+  // Em que OUTRA pasta cada quadro está (um quadro fica em uma pasta só).
+  const outraPasta = new Map(pastas.filter((p) => p.id !== inicial.id).flatMap((p) => p.quadros.map((q) => [q, p.nome] as const)));
   const [c, setC] = useState(inicial);
   const [busca, setBusca] = useState("");
   const casa = predicadoBusca(busca);
@@ -304,7 +354,7 @@ function FormConjunto({ inicial, quadros, onFechar, onSalvar }: { inicial: Conju
         onFechar();
       }}
     >
-      <TextField label="Nome do conjunto" autoFocus value={c.nome} maxLength={MAX_NOME_CONJUNTO} placeholder="Ex.: PCA 2026, Rotinas, Protocolos" onChange={(e) => setC({ ...c, nome: e.target.value })} />
+      <TextField label="Nome da pasta" autoFocus value={c.nome} maxLength={MAX_NOME_CONJUNTO} placeholder="Ex.: PCA 2026, Rotinas, Protocolos" onChange={(e) => setC({ ...c, nome: e.target.value })} />
       <fieldset>
         <legend className="mb-1.5 text-[13.5px] font-bold text-text">Cor</legend>
         <div className="flex flex-wrap gap-2">
@@ -323,7 +373,7 @@ function FormConjunto({ inicial, quadros, onFechar, onSalvar }: { inicial: Conju
       </fieldset>
       <fieldset className="space-y-2">
         <legend className="mb-1.5 text-[13.5px] font-bold text-text">
-          Quadros <span className="font-normal text-muted">({c.quadros.length} no conjunto)</span>
+          Quadros <span className="font-normal text-muted">({c.quadros.length} na pasta)</span>
         </legend>
         <SearchField compacto placeholder="Buscar quadro" value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} aria-label="Buscar quadro" />
         <div className="max-h-[40vh] space-y-0.5 overflow-y-auto rounded-control border border-border p-1">
@@ -338,6 +388,11 @@ function FormConjunto({ inicial, quadros, onFechar, onSalvar }: { inicial: Conju
                       <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: q.cor }} />
                       <span className="truncate text-text">{q.nome}</span>
                       <span className="shrink-0 text-[11.5px] text-muted">{q.grupoNome}</span>
+                      {outraPasta.has(q.id) && (
+                        <span className="shrink-0 text-[11.5px]" style={{ color: "var(--warn)" }}>
+                          {c.quadros.includes(q.id) ? `sai da pasta ${outraPasta.get(q.id)}` : `na pasta ${outraPasta.get(q.id)}`}
+                        </span>
+                      )}
                     </span>
                   }
                 />
@@ -353,7 +408,7 @@ function FormConjunto({ inicial, quadros, onFechar, onSalvar }: { inicial: Conju
           Cancelar
         </Button>
         <Button type="submit" disabled={!c.nome.trim()}>
-          Salvar conjunto
+          Salvar pasta
         </Button>
       </div>
     </form>

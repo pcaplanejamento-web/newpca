@@ -21,12 +21,12 @@ export async function POST(req: Request) {
   if (!lista || lista.quadroId !== q.id || lista.arquivada) return erro("Lista inválida.", 422);
   const pessoas = d.pessoas ?? [];
   const observadores = d.observadores ?? [];
-  if (!(await pessoasValidas(q.grupoId, [...pessoas, ...observadores]))) return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
+  if (!(await pessoasValidas(q, [...pessoas, ...observadores]))) return erro("Só pessoas do quadro podem ser responsáveis ou observadoras.", 422);
   for (const v of d.vinculos ?? []) if (!(await vinculoAcessivel(a.u, v))) return erro("Vínculo não encontrado.", 422);
   const equipes = await equipesDoQuadro(q.id, d.equipes ?? []);
   const eventos = d.eventos ?? [];
   const convidados = [...new Set(eventos.flatMap((e) => e.convidados ?? []))];
-  if (convidados.length && !(await pessoasValidas(q.grupoId, convidados))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
+  if (convidados.length && !(await pessoasValidas(q, convidados))) return erro("Só pessoas do quadro podem ser convidadas.", 422);
   const campos = await listarCampos([q.id]);
   const valores = valoresValidos(campos, d.campos ?? []);
   if (!valores) return erro("Campo de outro quadro.", 422);

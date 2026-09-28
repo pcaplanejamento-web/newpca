@@ -29,7 +29,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const p = await parseCorpo(eventoSchema, req);
   if ("resp" in p) return p.resp;
   const atuais = x.evento.convidados.map((c) => c.usuarioId);
-  if (!(await pessoasValidas(x.r.quadro.grupoId, p.data.convidados, atuais))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
+  if (!(await pessoasValidas(x.r.quadro, p.data.convidados, atuais))) return erro("Só pessoas do quadro podem ser convidadas.", 422);
   await atualizarEvento(x.evento.id, p.data);
   // O PRIVADO (antes OU depois) não vai ao histórico com o conteúdo.
   const privado = x.evento.privado || p.data.privado;

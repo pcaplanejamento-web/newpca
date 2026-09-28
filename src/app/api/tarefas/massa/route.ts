@@ -44,8 +44,8 @@ export async function POST(req: Request) {
     if (!l || l.quadroId !== quadro.id || l.arquivada) return erro("Lista inválida.", 422);
     destino = l;
   }
-  if (acao.campo === "responsavel" && acao.modo === "adicionar" && !(await pessoasValidas(quadro.grupoId, [acao.usuarioId])))
-    return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
+  if (acao.campo === "responsavel" && acao.modo === "adicionar" && !(await pessoasValidas(quadro, [acao.usuarioId])))
+    return erro("Só pessoas do quadro podem ser responsáveis.", 422);
   if (acao.campo === "etiqueta" && !(await etiquetasDoQuadro(quadro.id, [acao.etiquetaId])).length) return erro("Etiqueta inválida.", 422);
   if (acao.campo === "equipe" && !(await equipesDoQuadro(quadro.id, [acao.equipeId])).length) return erro("Equipe inválida.", 422);
   if (doQuadro.length) {

@@ -33,8 +33,8 @@ import { getReparticaoContexto, gruposDoUsuario } from "./grupos";
 import { lotesDeIds } from "./reparticoes";
 import { linkEvento } from "./calendario-core";
 import { atorDe, notificar } from "./notificacoes";
-import { nomeExibicao } from "./pessoa";
-import { listarPessoasDoGrupo } from "./usuarios";
+import { nomeExibicao, type Pessoa } from "./pessoa";
+import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 import {
   type AcaoAutomacao,
   type BlocoTarefa,
@@ -98,6 +98,7 @@ import {
   comandosCriarTarefa,
   comandosEquipe,
   comandosEsvaziarLista,
+  comandosTornarPrivado,
   comandosMassa,
   comandosMover,
   comandosMoverQuadro,
@@ -199,10 +200,28 @@ export async function tarefaAcessivel(u: UsuarioSessao, id: number): Promise<{ t
   return tarefa && quadro ? { tarefa, quadro } : null;
 }
 
-/** Os responsáveis pedidos são PESSOAS DO GRUPO do quadro (as já designadas antes seguem valendo, mesmo fora dele)? */
-export async function pessoasValidas(grupoId: number, ids: number[], atuais: number[] = []): Promise<boolean> {
+/** O quadro é PRIVADO com dono: dentro dele só existe o DONO (o privado órfão — dono excluído — segue o grupo). */
+export const soDoDono = (q: Pick<Quadro, "privado" | "criadoPor">): q is Pick<Quadro, "privado"> & { criadoPor: number } => q.privado && q.criadoPor != null;
+
+/**
+ * As PESSOAS que podem estar no quadro (responsáveis, observadores, equipes, convidados, menções, filtro): as do GRUPO —
+ * ou, no quadro PRIVADO, só o DONO (a fonte única).
+ */
+export async function pessoasDoQuadro(q: Pick<Quadro, "grupoId" | "privado" | "criadoPor">): Promise<Pessoa[]> {
+  const grupo = await listarPessoasDoGrupo(q.grupoId);
+  if (!soDoDono(q)) return grupo;
+  const dono = grupo.filter((p) => p.id === q.criadoPor);
+  return dono.length ? dono : pessoasPorIds([q.criadoPor]);
+}
+
+/**
+ * As pessoas pedidas podem estar no quadro? Do GRUPO (as já designadas antes seguem valendo, mesmo fora dele) — no quadro
+ * PRIVADO, só o DONO (ninguém mais, nem as de antes).
+ */
+export async function pessoasValidas(q: Pick<Quadro, "grupoId" | "privado" | "criadoPor">, ids: number[], atuais: number[] = []): Promise<boolean> {
+  if (soDoDono(q)) return ids.every((i) => i === q.criadoPor);
   if (ids.every((i) => atuais.includes(i))) return true;
-  const membros = new Set((await listarPessoasDoGrupo(grupoId)).map((p) => p.id));
+  const membros = new Set((await listarPessoasDoGrupo(q.grupoId)).map((p) => p.id));
   return ids.every((i) => membros.has(i) || atuais.includes(i));
 }
 
@@ -633,6 +652,12 @@ export async function atualizarQuadro(id: number, d: { nome?: string; cor?: stri
     .update(tarefaQuadros)
     .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(tarefaQuadros.id, id));
+}
+
+/** Torna o quadro PRIVADO do dono num lote atômico — as outras pessoas saem de tudo dentro dele (`comandosTornarPrivado`). */
+export async function tornarQuadroPrivado(id: number, dono: number) {
+  const db = getDb();
+  await db.batch(comandosTornarPrivado(db, id, dono) as unknown as Parameters<typeof db.batch>[0]);
 }
 
 export async function excluirQuadro(id: number) {
@@ -1591,7 +1616,7 @@ export async function acaoValida(quadro: Quadro, a: AcaoAutomacao): Promise<bool
     return !!l && l.quadroId === quadro.id && !l.arquivada;
   }
   if (a.tipo === "etiquetar") return (await etiquetasDoQuadro(quadro.id, [a.etiquetaId])).length > 0;
-  if (a.tipo === "atribuir") return pessoasValidas(quadro.grupoId, [a.usuarioId]);
+  if (a.tipo === "atribuir") return pessoasValidas(quadro, [a.usuarioId]);
   return true;
 }
 
@@ -1749,7 +1774,7 @@ async function vinculosNoDestino(t: TarefaCompleta, origem: Quadro, destino: Qua
     etiquetasDoQuadroTodas(destino.id),
     listarEquipes([origem.id]),
     listarEquipes([destino.id]),
-    origem.grupoId === destino.grupoId ? null : listarPessoasDoGrupo(destino.grupoId),
+    origem.grupoId === destino.grupoId && !soDoDono(destino) ? null : pessoasDoQuadro(destino),
   ]);
   const { ids, criar } = mapearEtiquetas(
     etO.filter((e) => t.etiquetas.includes(e.id)),

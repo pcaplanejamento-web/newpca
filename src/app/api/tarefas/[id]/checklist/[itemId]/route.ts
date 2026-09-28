@@ -29,8 +29,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const p = await parseCorpo(editarChecklistSchema, req);
   if ("resp" in p) return p.resp;
   const { responsavelId } = p.data;
-  if (responsavelId != null && !(await pessoasValidas(x.r.quadro.grupoId, [responsavelId], x.item.responsavelId != null ? [x.item.responsavelId] : [])))
-    return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
+  if (responsavelId != null && !(await pessoasValidas(x.r.quadro, [responsavelId], x.item.responsavelId != null ? [x.item.responsavelId] : [])))
+    return erro("Só pessoas do quadro podem ser responsáveis.", 422);
   await atualizarItemChecklist(x.item, p.data);
   const mudou =
     p.data.feito === true ? "concluído" : p.data.feito === false ? "reaberto" : p.data.texto != null ? "renomeado" : p.data.prazo !== undefined ? "com prazo alterado" : responsavelId !== undefined ? "com responsável alterado" : null;

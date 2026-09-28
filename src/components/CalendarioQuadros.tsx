@@ -94,7 +94,8 @@ export type DadosCalendarioQuadros = {
   assinatura: boolean;
   /** Alguma carga bateu no teto (a tela avisa). */
   truncado: boolean;
-  quadros: { id: number; nome: string; cor: string }[];
+  /** `dono` = quadro PRIVADO: só o dono pode estar nele (convidados etc.). */
+  quadros: { id: number; nome: string; cor: string; dono: number | null }[];
 };
 
 /** Grava uma preferência do calendário (PUT) — `sair` = a página está sendo fechada (`keepalive`, sem aviso). */
@@ -461,6 +462,13 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   };
 
   // ─── Criação rápida ──────────────────────────────────────────────────────────────────────────────────────────
+  // Quem pode ser convidado ao evento: as pessoas do grupo — no quadro PRIVADO da tarefa, só o dono.
+  const pessoasDoEvento = (tarefaId: string | null) => {
+    const t = tarefaId ? (dados.abertas.find((x) => String(x.id) === tarefaId) ?? dados.tarefas.find((x) => String(x.id) === tarefaId)) : undefined;
+    const dono = t ? porQuadro.get(t.quadroId)?.dono : null;
+    const lista = dono != null ? membros.filter((p) => p.id === dono) : membros;
+    return lista.length ? lista : undefined;
+  };
   const primeiraAberta = (quadroId: number) => dados.listas.find((l) => l.quadroId === quadroId && !l.concluida)?.id ?? null;
   const abrirCriar = (slot: SlotCriar) => {
     setAberto(null);
@@ -868,7 +876,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
                 />
               </div>
             )}
-            <EditorEvento valor={edicao.r} onChange={(r) => setEdicao({ ...edicao, r })} disabled={salvando} pessoas={membros.length ? membros : undefined} usuarioId={usuarioId} />
+            <EditorEvento valor={edicao.r} onChange={(r) => setEdicao({ ...edicao, r })} disabled={salvando} pessoas={pessoasDoEvento(edicao.tarefaId)} usuarioId={usuarioId} />
           </div>
         )}
       </Modal>

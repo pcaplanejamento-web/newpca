@@ -1,9 +1,8 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { etiquetasDoQuadroTodas, importarCartoes, importarEstrutura, importarVinculos, listasDoQuadro, MSG_QUADRO_ARQUIVADO, quadroAcessivel } from "@/lib/tarefas";
+import { etiquetasDoQuadroTodas, importarCartoes, importarEstrutura, importarVinculos, listasDoQuadro, MSG_QUADRO_ARQUIVADO, pessoasDoQuadro, quadroAcessivel } from "@/lib/tarefas";
 import { importarTrelloSchema } from "@/lib/tarefas-validation";
-import { listarPessoasDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +33,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return ok(r);
   }
   if (d.modo === "vinculos") return ok({ vinculados: await importarVinculos(q.id, d.pares) });
-  const [listas, etiquetas, pessoas] = await Promise.all([listasDoQuadro(q.id), etiquetasDoQuadroTodas(q.id), listarPessoasDoGrupo(q.grupoId)]);
+  const [listas, etiquetas, pessoas] = await Promise.all([listasDoQuadro(q.id), etiquetasDoQuadroTodas(q.id), pessoasDoQuadro(q)]);
   const idsListas = new Set(listas.map((l) => l.id));
   if (d.cartoes.some((c) => !idsListas.has(c.listaId))) return erro("Lista inválida.", 422);
   const idsEtq = new Set(etiquetas.map((e) => e.id));

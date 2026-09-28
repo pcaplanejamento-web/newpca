@@ -1115,6 +1115,9 @@ Configuração; cards dos quadros com a capa 16:9; quadros privados (só quem cr
 em miniaturas com a capa 16:9 de cada quadro.
 ✅ **Tarefas — seções e conjuntos de quadros:** Favoritos, Recentes, CONJUNTOS (grades nomeadas pela pessoa, com cor) e
 grupos — todas minimizáveis — na tela de Tarefas e no "Mudar de quadros", com o mesmo card e a mesma grade.
+✅ **Tarefas — PASTAS de quadros + quadro privado só do dono:** os conjuntos viraram pastas (card na proporção do quadro,
+abre no lugar com animação, arrastar para reordenar e para dentro/fora — também no toque), iguais na tela de Tarefas e no
+"Mudar de quadros"; no quadro privado só o dono aparece e pode ser escolhido — torná-lo privado tira as outras pessoas.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

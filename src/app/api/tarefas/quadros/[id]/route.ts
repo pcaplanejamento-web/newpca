@@ -2,7 +2,7 @@ import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { resolverImagemFundo } from "@/lib/imagem-fundo";
-import { atualizarQuadro, excluirQuadro, quadroAcessivel } from "@/lib/tarefas";
+import { atualizarQuadro, excluirQuadro, quadroAcessivel, tornarQuadroPrivado } from "@/lib/tarefas";
 import { editarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +42,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return erro((e as Error).message, 422);
     }
   }
+  // Virar PRIVADO (com dono): só ele fica dentro — as outras pessoas saem das tarefas, equipes, convites e checklists.
+  const privatizar = d.privado === true && !q.privado && q.criadoPor != null;
+  if (privatizar) {
+    await tornarQuadroPrivado(id, q.criadoPor as number);
+    delete d.privado;
+  }
   await atualizarQuadro(id, d);
-  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "tarefa_quadro", entidadeId: id, resumo: `Quadro "${q.nome}" editado`, antes: q, depois: d });
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "editar",
+    entidade: "tarefa_quadro",
+    entidadeId: id,
+    resumo: privatizar ? `Quadro "${q.nome}" tornado privado — as outras pessoas saíram das tarefas, equipes, eventos e checklists` : `Quadro "${q.nome}" editado`,
+    antes: q,
+    depois: privatizar ? { ...d, privado: true } : d,
+  });
   return ok({ fundoUrl: d.fundoUrl });
 }
 

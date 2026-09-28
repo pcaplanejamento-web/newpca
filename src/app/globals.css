@@ -291,6 +291,16 @@
   animation: levantar var(--motion-duration) var(--motion-ease);
 }
 
+/* A PASTA de quadros RECEBE um quadro arrastado (um pulso curto). */
+@keyframes pasta-recebe {
+  40% {
+    scale: 1.05;
+  }
+}
+.animate-pasta-recebe {
+  animation: pasta-recebe var(--motion-duration) var(--motion-ease);
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o

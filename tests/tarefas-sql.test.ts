@@ -19,6 +19,7 @@ import {
   comandosMover,
   comandosMoverQuadro,
   comandosNotificacoes,
+  comandosTornarPrivado,
   comandosValoresCampos,
   comandosVinculos,
   comandosVinculosTarefa,
@@ -382,5 +383,34 @@ describe("tarefas — quadro PRIVADO (quadroVisivel no driver D1 real)", () => {
     assert.deepEqual(await ver(9701), [1, 2]);
     assert.deepEqual(await ver(9702), [1, 3]);
     assert.deepEqual(await ver(1), [1]);
+  });
+});
+
+describe("tarefas — TORNAR PRIVADO (comandosTornarPrivado no db.batch do D1)", () => {
+  it("só o dono fica dentro: sai das tarefas, equipes, convites, checklists e avisos — outro quadro intocado", async () => {
+    const db = aplicarTudo();
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9801, 'Ana', 'a@x', 'h'), (9802, 'Bia', 'b@x', 'h'), (9803, 'Caio', 'c@x', 'h')");
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9800, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, criado_por) VALUES (1, 9800, 'Da Ana', 9801), (2, 9800, 'Outro', 9801)");
+    db.exec("INSERT INTO tarefa_listas (id, quadro_id, nome, ordem) VALUES (1, 1, 'A', 1), (2, 2, 'B', 1)");
+    const base = { descricao: null, prioridade: "media" as const, inicio: null, prazo: null, concluida: false, criadoPor: 9801, etiquetas: [] };
+    await orm.batch(comandosCriarTarefa(orm, { ...base, quadroId: 1, listaId: 1, titulo: "T1", pessoas: [9801, 9802, 9803] }));
+    await orm.batch(comandosCriarTarefa(orm, { ...base, quadroId: 2, listaId: 2, titulo: "T2", pessoas: [9802] }));
+    db.exec("INSERT INTO tarefa_equipes (id, quadro_id, nome, cor) VALUES (1, 1, 'E1', '#000000'), (2, 2, 'E2', '#000000')");
+    db.exec("INSERT INTO tarefa_equipe_membros (equipe_id, usuario_id) VALUES (1, 9801), (1, 9802), (2, 9802)");
+    db.exec("INSERT INTO tarefa_eventos (id, tarefa_id, titulo, data) VALUES (1, 1, 'Ev', '2026-10-01'), (2, 2, 'Ev2', '2026-10-01')");
+    db.exec("INSERT INTO tarefa_evento_convidados (evento_id, usuario_id) VALUES (1, 9801), (1, 9803), (2, 9803)");
+    db.exec("INSERT INTO tarefa_checklist (tarefa_id, texto, ordem, responsavel_id) VALUES (1, 'a', 1, 9802), (1, 'b', 2, 9801), (2, 'c', 1, 9802)");
+    db.exec("INSERT INTO notificacoes (usuario_id, tipo, titulo, tarefa_id, quadro_id) VALUES (9802, 'atribuida', 'x', 1, 1), (9801, 'atribuida', 'y', 1, 1), (9802, 'atribuida', 'z', 2, 2)");
+    await orm.batch(comandosTornarPrivado(orm, 1, 9801) as never);
+    const col = (q: string) => (db.prepare(q).all() as Record<string, number>[]).map((r) => Object.values(r).join(":"));
+    assert.equal((db.prepare("SELECT privado AS p FROM tarefa_quadros WHERE id = 1").get() as { p: number }).p, 1);
+    assert.equal((db.prepare("SELECT privado AS p FROM tarefa_quadros WHERE id = 2").get() as { p: number }).p, 0);
+    assert.deepEqual(col("SELECT tarefa_id, usuario_id FROM tarefa_pessoas ORDER BY tarefa_id, usuario_id"), ["1:9801", "2:9802"]);
+    assert.deepEqual(col("SELECT equipe_id, usuario_id FROM tarefa_equipe_membros ORDER BY 1, 2"), ["1:9801", "2:9802"]);
+    assert.deepEqual(col("SELECT evento_id, usuario_id FROM tarefa_evento_convidados ORDER BY 1, 2"), ["1:9801", "2:9803"]);
+    assert.deepEqual(col("SELECT texto, COALESCE(responsavel_id, 0) FROM tarefa_checklist ORDER BY texto"), ["a:0", "b:9801", "c:9802"]);
+    assert.deepEqual(col("SELECT titulo FROM notificacoes ORDER BY titulo"), ["y", "z"]);
   });
 });

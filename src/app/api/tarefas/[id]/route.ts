@@ -60,8 +60,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const { listaId, pessoas, observadores, etiquetas, equipes: equipesPedidas, blocos: blocosPedidos, campos: valoresPedidos, ...campos } = p.data;
   const blocos = blocosPedidos === undefined ? undefined : (lerBlocos(blocosPedidos) ?? []);
   const atuais = [...r.tarefa.pessoas, ...r.tarefa.observadores];
-  if (!(await pessoasValidas(r.quadro.grupoId, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
-    return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
+  if (!(await pessoasValidas(r.quadro, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
+    return erro("Só pessoas do quadro podem ser responsáveis ou observadoras.", 422);
   // Só os vínculos NOVOS são conferidos (um alvo que ficou inacessível depois segue na tarefa); nunca a própria tarefa.
   if (campos.vinculos) {
     const antes = new Set(r.tarefa.vinculos.map(chaveVinculo));

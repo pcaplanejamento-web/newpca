@@ -1,12 +1,11 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import type { ConjuntoQuadros } from "@/lib/tarefas-core";
-import { ChipsEscolha } from "./ChipsEscolha";
+import type { ConjuntoQuadros, PastasQuadros } from "@/lib/tarefas-core";
 import { SearchField } from "./Field";
 import { Modal } from "./Modal";
-import { GradeQuadros, SecoesDeQuadros } from "./SecoesQuadros";
+import { EditorConjunto, GradeQuadros, SecoesDeQuadros, useConjuntosQuadros } from "./SecoesQuadros";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { Skeleton } from "./Skeleton";
@@ -14,9 +13,9 @@ import { toast } from "./Toast";
 
 /**
  * MUDAR DE QUADROS (como o do Trello): o gatilho (o "Mudar de quadros" da pílula de vistas) abre o painel com a BUSCA
- * dos quadros, os CHIPS por grupo (Tudo · grupo…) e as MESMAS seções da tela de Tarefas (`SecoesDeQuadros`: Favoritos,
- * Recentes, os CONJUNTOS da pessoa e cada GRUPO — minimizáveis), com o MESMO `QuadroCard` na MESMA grade
- * (`GradeQuadros` — o card não muda de forma; o painel é largo). Escolher leva ao quadro na MESMA aba; o atual fica marcado. Os quadros (de
+ * dos quadros e as MESMAS seções da tela de Tarefas (`SecoesDeQuadros`: Favoritos, Recentes e "Seus quadros" com as
+ * PASTAS — abrir no lugar, arrastar, editar; chips por grupo; minimizáveis), com o MESMO `QuadroCard` na MESMA grade
+ * (o card não muda de forma; o painel é largo). Escolher leva ao quadro na MESMA aba; o atual fica marcado. Os quadros (de
  * todos os grupos da pessoa) vêm só ao abrir — `GET /api/tarefas/quadros`.
  */
 export function TrocarQuadro({
@@ -61,19 +60,16 @@ function PainelQuadros({
   onFavorito?: (id: number) => void;
   onEscolhido: () => void;
 }) {
-  const [dados, setDados] = useState<{ quadros: QuadroCardDados[]; conjuntos: ConjuntoQuadros[] } | null>(null);
-  const [busca, setBusca] = useState("");
-  const [grupo, setGrupo] = useState("__tudo");
+  const [dados, setDados] = useState<{ quadros: QuadroCardDados[]; conjuntos: PastasQuadros } | null>(null);
   useEffect(() => {
     let vivo = true;
-    chamar<{ quadros: QuadroCardDados[]; conjuntos: ConjuntoQuadros[] }>("/api/tarefas/quadros")
+    chamar<{ quadros: QuadroCardDados[]; conjuntos: PastasQuadros }>("/api/tarefas/quadros")
       .then((j) => vivo && setDados(j))
       .catch((e) => vivo && toast.error((e as Error).message));
     return () => {
       vivo = false;
     };
   }, []);
-  const grupos = useMemo(() => [...new Set((dados?.quadros ?? []).map((q) => q.grupoNome))].sort((a, b) => a.localeCompare(b, "pt-BR")), [dados]);
 
   if (!dados)
     return (
@@ -83,12 +79,24 @@ function PainelQuadros({
         ))}
       </div>
     );
+  return <ConteudoPainel quadros={dados.quadros} pastasIniciais={dados.conjuntos} grade={{ favoritos, onFavorito, atual, aba, onAbrir: onEscolhido }} />;
+}
 
+/** O conteúdo do painel já carregado: a busca (resultados achatados) ou as SEÇÕES com as PASTAS — o mesmo da tela de Tarefas. */
+function ConteudoPainel({
+  quadros,
+  pastasIniciais,
+  grade,
+}: {
+  quadros: QuadroCardDados[];
+  pastasIniciais: PastasQuadros;
+  grade: { favoritos: number[]; onFavorito?: (id: number) => void; atual: number; aba: string; onAbrir: () => void };
+}) {
+  const [busca, setBusca] = useState("");
+  const conj = useConjuntosQuadros(pastasIniciais);
+  const [editando, setEditando] = useState<ConjuntoQuadros | null>(null);
   const casa = predicadoBusca(busca);
-  const doGrupo = grupo === "__tudo" ? dados.quadros : dados.quadros.filter((q) => q.grupoNome === grupo);
-  const grade = { favoritos, onFavorito, atual, aba, onAbrir: onEscolhido };
-  const achados = casa ? doGrupo.filter((q) => casa([q.nome, q.grupoNome])) : null;
-
+  const achados = casa ? quadros.filter((q) => casa([q.nome, q.grupoNome])) : null;
   return (
     <div className="space-y-4">
       <SearchField
@@ -100,9 +108,6 @@ function PainelQuadros({
         onClear={() => setBusca("")}
         aria-label="Pesquisar seus quadros"
       />
-      {grupos.length > 1 && (
-        <ChipsEscolha ariaLabel="Grupo" valor={grupo} onEscolher={setGrupo} opcoes={[{ value: "__tudo", label: "Tudo" }, ...grupos.map((g) => ({ value: g, label: g }))]} />
-      )}
       {achados ? (
         achados.length ? (
           <GradeQuadros quadros={achados} {...grade} />
@@ -110,8 +115,9 @@ function PainelQuadros({
           <p className="py-8 text-center text-[13px] text-muted">Nenhum quadro com “{busca}”.</p>
         )
       ) : (
-        <SecoesDeQuadros quadros={doGrupo} conjuntos={dados.conjuntos} {...grade} />
+        <SecoesDeQuadros quadros={quadros} pastas={conj.estado} onMover={conj.mover} onEditarPasta={setEditando} onExcluirPasta={conj.excluir} {...grade} />
       )}
+      <EditorConjunto aberto={editando} quadros={quadros} pastas={conj.estado.lista} onFechar={() => setEditando(null)} onSalvar={conj.salvar} />
     </div>
   );
 }

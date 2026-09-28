@@ -25,7 +25,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const p = await parseCorpo(equipeSchema, req);
   if ("resp" in p) return p.resp;
   // Quem já estava na equipe e hoje está fora do grupo pode ficar (ou sair); ninguém de fora ENTRA.
-  if (!(await pessoasValidas(r.q.grupoId, p.data.membros, r.e.membros))) return erro("Só pessoas do grupo do quadro podem estar na equipe.", 422);
+  if (!(await pessoasValidas(r.q, p.data.membros, r.e.membros))) return erro("Só pessoas do quadro podem estar na equipe.", 422);
   await gravarEquipe({ id: r.e.id, quadroId: r.e.quadroId, ...p.data });
   await registrarAuditoria({ usuario: r.u, acao: "editar", entidade: "tarefa_equipe", entidadeId: r.e.id, resumo: `Equipe "${r.e.nome}" editada`, antes: r.e, depois: p.data });
   return ok();

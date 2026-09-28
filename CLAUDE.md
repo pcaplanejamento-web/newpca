@@ -2363,29 +2363,48 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       testado no D1 real) entra em TODA lista: `listarQuadros(grupos, hoje, usuarioId)` (lista de quadros, calendário,
       busca do calendário, `.ics`, "Tarefas" da Mesa), `buscarVinculos` (tarefa), `tarefasDoVinculo`, `destinosDeTarefa` e
       os avisos derivados do sino. "Quadro privado" no Novo quadro; na Configuração, só o DONO liga/desliga (403 aos
-      demais). Cadeado na capa do card e na faixa do quadro. Criar quadro segue só para editores.
+      demais). Cadeado na capa do card e na faixa do quadro. Criar quadro segue só para editores. **Dentro do privado só
+      existe o DONO:** `pessoasDoQuadro(q)` (`tarefas.ts`, a fonte única — `soDoDono`) dá as pessoas do quadro (grupo; no
+      privado, só o dono) para `carregarQuadro`/`contextoTarefa` (fotos do topo, responsáveis, observadores, equipes,
+      convidados, @menção, responsável do checklist, filtro), os comentários e a importação do Trello; `pessoasValidas(q,
+      …)` recusa (422) qualquer outra pessoa no privado; o Calendário só oferece o dono ao convidar num evento de tarefa de
+      quadro privado (`quadros[].dono`). TORNAR PRIVADO (só o dono; confirma — `useConfirmacao`) é um lote atômico
+      **`comandosTornarPrivado`** (`tarefas-sql`, testado no D1 real): liga `privado` e tira os OUTROS de `tarefa_pessoas`,
+      `tarefa_equipe_membros`, `tarefa_evento_convidados`, `tarefa_checklist.responsavel_id` e das `notificacoes` do
+      quadro (tarefas, eventos, equipes e histórico ficam; auditoria diz o que saiu).
   - **"MUDAR DE QUADROS" no padrão do Trello (sem migração):** o **`TrocarQuadro`** (o item da `PilulaVistas`) abre um
     `Modal` (bottom-sheet no celular) com o **`PainelQuadros`**: `SearchField` "Pesquisar seus quadros" (nome ou grupo —
     `predicadoBusca`), **`ChipsEscolha`** por GRUPO (Tudo · grupo…; só com 2+ grupos — o componente novo de chips de
     escolha que QUEBRAM linha, também usado nas pesquisas sugeridas do `SeletorFundo`) e as MESMAS seções da tela de
-    Tarefas (`SecoesDeQuadros` — ver "SEÇÕES DE QUADROS + CONJUNTOS"; os recentes em `localStorage`
+    Tarefas (`SecoesDeQuadros` — ver "SEÇÕES DE QUADROS + PASTAS"; os recentes em `localStorage`
     `tarefas:quadros-recentes`, até 8). Tudo com o MESMO **`QuadroCard`** da tela de Tarefas (capa 16:9, grupo, nome em até 2 linhas, contagens, a
     estrela de favorito — `onFavorito` — e, no aberto agora, `atual`: contorno accent + selo "Atual"; `onAbrir` fecha o
     painel ao navegar). Os quadros (de TODOS os grupos da pessoa, sem os arquivados; o privado só do dono) vêm só ao abrir
     por **`GET /api/tarefas/quadros`** (`listarQuadros`). Saíram o `Dropdown` + `SeletorBusca` do trocar de quadro.
-  - **SEÇÕES DE QUADROS + CONJUNTOS (sem migração):** a tela de Tarefas e o "Mudar de quadros" usam o MESMO
+  - **SEÇÕES DE QUADROS + PASTAS (sem migração):** a tela de Tarefas e o "Mudar de quadros" usam o MESMO
     **`SecoesDeQuadros`** (`SecoesQuadros.tsx`): **Favoritos** · **Visualizados recentemente** (deste aparelho —
-    `registrarQuadroRecente`/`useQuadrosRecentes`) · cada **CONJUNTO** · cada **GRUPO** (o card "Novo quadro" entra no
-    último). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (seta + `aria-expanded`; o que está
-    minimizado fica neste aparelho — `useSecoesRecolhidas`, `useSetLocal` — e vale nas DUAS telas), com a
-    **`GradeQuadros`**: o `QuadroCard` INALTERADO numa grade `auto-fill` de colunas ≥ 15rem (o card nunca muda de forma —
-    sobra espaço, não encolhe; o painel do "Mudar de quadros" virou `Modal size="full"`). **CONJUNTOS** (como as
-    coleções/áreas de trabalho do Trello): grades NOMEADAS da pessoa, com cor — preferência `tarefas:conjuntos` (`{lista}`;
-    núcleo puro `lerConjuntos`/`quadrosDoConjunto`/`salvarConjunto`, `MAX_CONJUNTOS` 30, até 100 quadros cada — testados);
-    "Novo conjunto" na tela de Tarefas → **`EditorConjunto`** (nome, cor da paleta em círculos, os quadros por busca +
-    caixas de marcar); editar/excluir no **`MenuConjunto`** "…" da seção (excluir não toca nos quadros); gravação otimista
-    em fila (`useConjuntosQuadros`, como os favoritos). Um quadro pode estar em vários conjuntos; o que sumiu/arquivou/perdeu
-    acesso não aparece. O painel mostra os conjuntos só para navegar (`GET /api/tarefas/quadros` devolve `conjuntos`).
+    `registrarQuadroRecente`/`useQuadrosRecentes`) · **Seus quadros** (com 2+ grupos, `ChipsEscolha` por grupo; o card
+    "Novo quadro" no fim). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (guardado neste aparelho —
+    `useSecoesRecolhidas`). Favoritos/Recentes/busca usam a **`GradeQuadros`** (o `QuadroCard` INALTERADO em `auto-fill` ≥
+    15rem); "Seus quadros" usa a **`GradePastas`** (`PastasQuadros.tsx`): as **PASTAS** (os conjuntos) e os quadros soltos na
+    ORDEM da pessoa. **`PastaQuadro`** = o card da pasta na MESMA moldura/altura do `QuadroCard` (mosaico das capas de até 4
+    quadros sobre a cor da pasta; "Pasta", nome, quadros · abertas · atrasadas; menu "…" = **`MenuConjunto`**). Tocar ABRE a
+    pasta NO LUGAR: o painel (`PainelPasta`) entra no fim da LINHA da pasta (colunas medidas por `ResizeObserver`), anima a
+    altura (`grid-template-rows` 0fr ↔ 1fr — os cards de baixo deslizam) e os internos entram em sequência; uma aberta por
+    vez (lembrada no aparelho, `tarefas:pasta-aberta`). **Arrasto** — hook **`useArrastoGrade`** (o padrão do
+    `ArrastoCartoes`: janela, 6px, `segurar`, o card PRESO no `CartaoPreso`, a SOMBRA no destino, rolagem nas bordas da
+    página/modal, clique pós-arrasto engolido; no TOQUE, segurar ~400 ms — deslizar antes rola; o card arrastado segue no
+    DOM, oculto, para o toque não perder o alvo): soltar entre cards reordena (pousa na sombra); sobre o MEIO de uma pasta
+    ("Soltar na pasta") o card ENCOLHE para dentro dela (`CartaoPreso.entrando`) e ela pulsa (`animate-pasta-recebe`) — a
+    sombra fica parada enquanto o dedo está sobre a pasta; dentro da aberta reordena; arrastar para fora a tira; pasta não
+    entra em pasta; Alt+←/→ reordenam pelo teclado. Estado = preferência `tarefas:conjuntos` = **`{lista, ordem}`** (`ordem`
+    com `p:<pasta>`/`q:<quadro solto>`) — núcleo puro testado em `tarefas-core`: `lerPastas`, `lerConjuntos` (**um quadro em
+    UMA pasta** — o formato antigo mantém a 1ª), `salvarConjunto` (tira os quadros das outras pastas), `itensDaGrade`,
+    `moverNaGrade` (destino relativo ao vizinho VISÍVEL; a ordem COMPLETA preserva o lugar dos quadros que a tela não mostra
+    — o grupo ativo), `excluirPasta` (os quadros voltam no lugar dela). Hook `useConjuntosQuadros` (`estado`/`salvar`/
+    `excluir`/`mover`, otimista em fila). "Nova pasta" → **`EditorConjunto`** (nome, cor, quadros — avisa "sai da pasta
+    X"). O painel do "Mudar de quadros" tem as MESMAS pastas, arrasto e edição (`GET /api/tarefas/quadros` devolve
+    `conjuntos` = `{lista, ordem}`).
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

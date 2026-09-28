@@ -455,6 +455,42 @@ export function comandosEsvaziarLista(db: Db, origem: number, destino: number, d
 }
 
 /**
+ * TORNA O QUADRO PRIVADO (só o DONO dentro — num lote atômico): liga `privado` e tira as OUTRAS pessoas das tarefas
+ * (responsáveis/observadores), das equipes, dos convites dos eventos, da responsabilidade dos itens de checklist e os
+ * avisos do quadro. Tarefas, eventos, equipes e histórico ficam.
+ */
+export function comandosTornarPrivado(db: Db, quadroId: number, dono: number) {
+  const tarefasDoQuadro = db.select({ id: tarefas.id }).from(tarefas).where(eq(tarefas.quadroId, quadroId));
+  return [
+    db.update(tarefaQuadros).set({ privado: true, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(tarefaQuadros.id, quadroId)),
+    db.delete(tarefaPessoas).where(and(inArray(tarefaPessoas.tarefaId, tarefasDoQuadro), sql`${tarefaPessoas.usuarioId} <> ${dono}`)),
+    db
+      .delete(tarefaEquipeMembros)
+      .where(
+        and(
+          inArray(tarefaEquipeMembros.equipeId, db.select({ id: tarefaEquipes.id }).from(tarefaEquipes).where(eq(tarefaEquipes.quadroId, quadroId))),
+          sql`${tarefaEquipeMembros.usuarioId} <> ${dono}`,
+        ),
+      ),
+    db
+      .delete(tarefaEventoConvidados)
+      .where(
+        and(
+          inArray(tarefaEventoConvidados.eventoId, db.select({ id: tarefaEventos.id }).from(tarefaEventos).where(inArray(tarefaEventos.tarefaId, tarefasDoQuadro))),
+          sql`${tarefaEventoConvidados.usuarioId} <> ${dono}`,
+        ),
+      ),
+    db
+      .update(tarefaChecklist)
+      .set({ responsavelId: null })
+      .where(and(inArray(tarefaChecklist.tarefaId, tarefasDoQuadro), sql`${tarefaChecklist.responsavelId} <> ${dono}`)),
+    db
+      .delete(notificacoes)
+      .where(and(sql`${notificacoes.usuarioId} <> ${dono}`, sql`(${notificacoes.quadroId} = ${quadroId} OR ${notificacoes.tarefaId} IN (SELECT t.id FROM tarefas t WHERE t.quadro_id = ${quadroId}))`)),
+  ];
+}
+
+/**
  * A CONCLUSÃO ao mudar de lista, em SQL (a régua de `conclusaoAoMover`): entrar numa lista de concluídas conclui; sair
  * DELA reabre; entre listas comuns, fica (o SET lê a lista de ANTES da mudança).
  */

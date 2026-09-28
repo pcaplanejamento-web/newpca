@@ -15,6 +15,8 @@ import {
   listarEquipes,
   listarModelosQuadro,
   listarQuadros,
+  pessoasDoQuadro,
+  soDoDono,
   quadroAcessivel,
   LIMITE_EVENTOS_CALENDARIO,
   LIMITE_TAREFAS_CALENDARIO,
@@ -28,7 +30,7 @@ import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { mascararPrivados } from "./tarefas-core";
-import { CHAVE_CONJUNTOS_TAREFAS, CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, type ConjuntoQuadros, favoritosPrimeiro, lerConjuntos, lerFavoritos, lerMes, lerOcultos, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
+import { CHAVE_CONJUNTOS_TAREFAS, CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, favoritosPrimeiro, lerFavoritos, lerPastas, lerMes, lerOcultos, type PastasQuadros, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
 const PREFIXO_CALENDARIO = "calendario:";
@@ -64,10 +66,10 @@ export async function carregarQuadros(u: UsuarioSessao) {
   };
 }
 
-/** Os CONJUNTOS de quadros da pessoa (as grades nomeadas da tela de Tarefas e do "Mudar de quadros"). */
-export async function conjuntosDaPessoa(usuarioId: number): Promise<ConjuntoQuadros[]> {
+/** As PASTAS de quadros da pessoa + a ORDEM da grade (a tela de Tarefas e o "Mudar de quadros"). */
+export async function conjuntosDaPessoa(usuarioId: number): Promise<PastasQuadros> {
   const prefs = await listarPreferenciasTabela(usuarioId, CHAVE_CONJUNTOS_TAREFAS);
-  return lerConjuntos(prefs[CHAVE_CONJUNTOS_TAREFAS]);
+  return lerPastas(prefs[CHAVE_CONJUNTOS_TAREFAS]);
 }
 
 /** Os QUADROS FAVORITOS da pessoa (a estrela do card e do cabeçalho do quadro). */
@@ -127,7 +129,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     pca,
     assinatura: assinatura != null,
     truncado: tarefas.length >= LIMITE_TAREFAS_CALENDARIO || eventos.length >= LIMITE_EVENTOS_CALENDARIO || abertas.length >= LIMITE_TAREFAS_CALENDARIO,
-    quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor })),
+    quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, dono: soDoDono(q) ? q.criadoPor : null })),
   };
 }
 
@@ -141,7 +143,7 @@ export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
   const [listas, etiquetas, membros, equipes, campos] = await Promise.all([
     listasDoQuadro(r.quadro.id),
     etiquetasDoQuadroTodas(r.quadro.id),
-    listarPessoasDoGrupo(r.quadro.grupoId),
+    pessoasDoQuadro(r.quadro),
     listarEquipes([r.quadro.id]),
     listarCampos([r.quadro.id]),
   ]);
@@ -172,7 +174,7 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
   if (!quadro) return null;
   const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos] = await Promise.all([
     dadosQuadro(id),
-    listarPessoasDoGrupo(quadro.grupoId),
+    pessoasDoQuadro(quadro),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
     listarAutomacoes(id),
     listarModelosQuadro([quadro.grupoId]),

@@ -65,6 +65,10 @@ import {
   type RecorteTarefas,
   PALETA_ETIQUETAS,
   lerConjuntos,
+  lerPastas,
+  itensDaGrade,
+  moverNaGrade,
+  excluirPasta,
   quadrosDoConjunto,
   salvarConjunto,
 } from "../src/lib/tarefas-core.ts";
@@ -698,5 +702,60 @@ describe("conjuntos de quadros (como as coleções do Trello)", () => {
     const l2 = salvarConjunto(l1, { ...c, nome: "Y" });
     assert.deepEqual(l2.map((x) => x.nome), ["Y"]);
     assert.deepEqual(salvarConjunto(l2, { ...c, id: "b", nome: "  " }), l2);
+  });
+
+  it("um quadro em UMA pasta só: o formato antigo mantém a 1ª; salvar tira os quadros das outras pastas", () => {
+    const l = lerConjuntos({ lista: [{ id: "a", nome: "A", quadros: [1, 2] }, { id: "b", nome: "B", quadros: [2, 3] }] });
+    assert.deepEqual(l.map((c) => c.quadros), [[1, 2], [3]]);
+    const s2 = salvarConjunto(l, { id: "b", nome: "B", cor: "#579dff", quadros: [1, 3] });
+    assert.deepEqual(s2.map((c) => c.quadros), [[2], [1, 3]]);
+  });
+});
+
+describe("pastas de quadros — a grade (ordem, mover, excluir)", () => {
+  const qs = [1, 2, 3, 4, 5].map((id) => ({ id }));
+  const est = lerPastas({ lista: [{ id: "a", nome: "A", quadros: [2, 3] }], ordem: ["q:4", "p:a", "q:9", "x", "q:4"] });
+  const raiz = (e: typeof est) => itensDaGrade(qs, e).map((i) => i.chave);
+
+  it("lê tolerante e monta a grade: a ordem gravada, depois o que falta (pastas, quadros soltos); sumidos fora", () => {
+    assert.deepEqual(est.ordem, ["q:4", "p:a", "q:9"]);
+    assert.deepEqual(raiz(est), ["q:4", "p:a", "q:1", "q:5"]);
+    const pasta = itensDaGrade(qs, est).find((i) => i.tipo === "pasta");
+    assert.deepEqual(pasta?.tipo === "pasta" && pasta.quadros.map((q) => q.id), [2, 3]);
+    assert.deepEqual(itensDaGrade([{ id: 1 }], est, true).map((i) => i.chave), ["q:1"]);
+    assert.deepEqual(lerPastas("lixo"), { lista: [], ordem: [] });
+  });
+
+  it("reordena na raiz, põe na pasta, tira da pasta, reordena dentro — pasta não entra em pasta", () => {
+    const r = raiz(est);
+    const e1 = moverNaGrade(est, r, "q:5", { pasta: null, antesDe: "q:4" });
+    assert.deepEqual(raiz(e1), ["q:5", "q:4", "p:a", "q:1"]);
+    const e2 = moverNaGrade(e1, raiz(e1), "q:1", { pasta: "a", antesDe: "q:3" });
+    assert.deepEqual(e2.lista[0].quadros, [2, 1, 3]);
+    assert.deepEqual(raiz(e2), ["q:5", "q:4", "p:a"]);
+    const e3 = moverNaGrade(e2, raiz(e2), "q:2", { pasta: null, depoisDe: "p:a" });
+    assert.deepEqual(e3.lista[0].quadros, [1, 3]);
+    assert.deepEqual(raiz(e3), ["q:5", "q:4", "p:a", "q:2"]);
+    const e4 = moverNaGrade(e3, raiz(e3), "q:3", { pasta: "a", antesDe: "q:1" });
+    assert.deepEqual(e4.lista[0].quadros, [3, 1]);
+    assert.equal(moverNaGrade(e4, raiz(e4), "p:a", { pasta: "a" }), e4);
+    assert.equal(moverNaGrade(e4, raiz(e4), "q:1", { pasta: "zz" }), e4);
+  });
+
+  it("com FILTRO: o destino é o vizinho visível — o resto da ordem fica; excluir a pasta devolve os quadros no lugar dela", () => {
+    const r = raiz(est);
+    // Visíveis: q:4 e q:5 — soltar q:4 depois de q:5 (o último visível).
+    const e1 = moverNaGrade(est, r, "q:4", { pasta: null, antesDe: null, depoisDe: "q:5" });
+    assert.deepEqual(raiz(e1), ["p:a", "q:1", "q:5", "q:4"]);
+    const e2 = excluirPasta(e1, raiz(e1), "a");
+    assert.deepEqual(e2.lista, []);
+    assert.deepEqual(raiz(e2), ["q:2", "q:3", "q:1", "q:5", "q:4"]);
+  });
+
+  it("a tela com PARTE dos quadros (o grupo ativo) não apaga o lugar dos outros", () => {
+    const e = lerPastas({ lista: [], ordem: ["q:10", "q:4"] });
+    const vis = [{ id: 4 }, { id: 5 }];
+    const r = itensDaGrade(vis, e).map((i) => i.chave);
+    assert.deepEqual(moverNaGrade(e, r, "q:5", { pasta: null, antesDe: "q:4" }).ordem, ["q:10", "q:5", "q:4"]);
   });
 });

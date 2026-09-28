@@ -22,7 +22,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string; i
   if (r.quadro.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const lista = await getLista(r.tarefa.listaId);
   if (!lista) return erro("Lista inválida.", 422);
-  const pessoas = item.responsavelId != null && (await pessoasValidas(r.quadro.grupoId, [item.responsavelId])) ? [item.responsavelId] : [];
+  const pessoas = item.responsavelId != null && (await pessoasValidas(r.quadro, [item.responsavelId])) ? [item.responsavelId] : [];
   const nova = await criarTarefa({
     quadroId: r.quadro.id,
     listaId: lista.id,

@@ -301,7 +301,8 @@ export function CartaoPreso({
   fantasma,
   children,
 }: {
-  arrasto: Pick<ArrastoCartao, "x" | "y" | "dx" | "dy" | "largura" | "pousando"> & { altura?: number };
+  /** `entrando` = pousa ENCOLHENDO e sumindo (o quadro que entra numa pasta). */
+  arrasto: Pick<ArrastoCartao, "x" | "y" | "dx" | "dy" | "largura" | "pousando"> & { altura?: number; entrando?: boolean };
   fantasma: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
@@ -319,8 +320,8 @@ export function CartaoPreso({
       }}
     >
       <div
-        className={`animate-levantar transition-[rotate,scale,box-shadow] duration-[var(--motion-duration)] ${arrasto.altura ? "h-full [&>*]:!max-h-full [&>*]:h-full" : ""} ${
-          arrasto.pousando ? "rotate-0 scale-100" : "rotate-2 scale-[1.03] [&>*]:shadow-soft"
+        className={`animate-levantar transition-[rotate,scale,box-shadow,opacity] duration-[var(--motion-duration)] ${arrasto.altura ? "h-full [&>*]:!max-h-full [&>*]:h-full" : ""} ${
+          arrasto.pousando ? (arrasto.entrando ? "rotate-0 scale-[0.2] opacity-0" : "rotate-0 scale-100") : "rotate-2 scale-[1.03] [&>*]:shadow-soft"
         }`}
       >
         {children}

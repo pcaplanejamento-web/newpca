@@ -1178,8 +1178,9 @@ export function favoritosPrimeiro<Q extends { id: number }>(quadros: Q[], favori
 }
 
 /**
- * CONJUNTOS de quadros (como as áreas de trabalho/coleções do Trello): grupos de quadros NOMEADOS pela pessoa, cada um com
- * uma cor — preferência `tarefas:conjuntos` (`{ lista }`, por pessoa; sem migração). Um quadro pode estar em vários.
+ * PASTAS de quadros (os CONJUNTOS — como as pastas da tela inicial do celular): grupos de quadros NOMEADOS pela pessoa,
+ * cada um com uma cor — preferência `tarefas:conjuntos` (`{ lista, ordem }`, por pessoa; sem migração). Um quadro fica em
+ * UMA pasta só (o formato antigo, que permitia vários, é lido mantendo a 1ª).
  */
 export const CHAVE_CONJUNTOS_TAREFAS = "tarefas:conjuntos";
 export type ConjuntoQuadros = { id: string; nome: string; cor: string; quadros: number[] };
@@ -1192,6 +1193,7 @@ const HEX_CONJUNTO = /^#[0-9a-f]{6}$/i;
 export function lerConjuntos(v: unknown): ConjuntoQuadros[] {
   const l = Array.isArray(v) ? v : v && typeof v === "object" && Array.isArray((v as { lista?: unknown }).lista) ? (v as { lista: unknown[] }).lista : [];
   const vistos = new Set<string>();
+  const usados = new Set<number>();
   const saida: ConjuntoQuadros[] = [];
   for (const x of l) {
     if (!x || typeof x !== "object") continue;
@@ -1200,7 +1202,11 @@ export function lerConjuntos(v: unknown): ConjuntoQuadros[] {
     const nome = typeof c.nome === "string" ? c.nome.trim().slice(0, MAX_NOME_CONJUNTO) : "";
     if (!id || !nome || vistos.has(id)) continue;
     vistos.add(id);
-    const quadros = Array.isArray(c.quadros) ? [...new Set(c.quadros.filter((q): q is number => Number.isInteger(q) && (q as number) > 0))].slice(0, MAX_QUADROS_CONJUNTO) : [];
+    // Um quadro em UMA pasta só: o que já está numa pasta anterior sai desta.
+    const quadros = Array.isArray(c.quadros)
+      ? [...new Set(c.quadros.filter((q): q is number => Number.isInteger(q) && (q as number) > 0 && !usados.has(q as number)))].slice(0, MAX_QUADROS_CONJUNTO)
+      : [];
+    for (const q of quadros) usados.add(q);
     saida.push({ id, nome, cor: typeof c.cor === "string" && HEX_CONJUNTO.test(c.cor) ? c.cor.toLowerCase() : "#579dff", quadros });
     if (saida.length >= MAX_CONJUNTOS) break;
   }
@@ -1213,11 +1219,118 @@ export function quadrosDoConjunto<Q extends { id: number }>(c: ConjuntoQuadros, 
   return c.quadros.map((id) => porId.get(id)).filter((q): q is Q => !!q);
 }
 
-/** Cria/atualiza um conjunto (pelo id) — o nome aparado; a lista nova, pronta para gravar. */
+/** Cria/atualiza um conjunto (pelo id) — o nome aparado; os quadros dele SAEM das outras pastas; a lista nova, pronta para gravar. */
 export function salvarConjunto(lista: ConjuntoQuadros[], c: ConjuntoQuadros): ConjuntoQuadros[] {
   const novo = lerConjuntos([c])[0];
   if (!novo) return lista;
-  return lista.some((x) => x.id === novo.id) ? lista.map((x) => (x.id === novo.id ? novo : x)) : [...lista, novo].slice(0, MAX_CONJUNTOS);
+  const dele = new Set(novo.quadros);
+  const outras = lista.map((x) => (x.id === novo.id ? novo : { ...x, quadros: x.quadros.filter((q) => !dele.has(q)) }));
+  return lista.some((x) => x.id === novo.id) ? outras : [...outras, novo].slice(0, MAX_CONJUNTOS);
+}
+
+/** O estado das PASTAS da pessoa: as pastas + a ORDEM da grade (`p:<pasta>` e `q:<quadro solto>`). */
+export type PastasQuadros = { lista: ConjuntoQuadros[]; ordem: string[] };
+export const MAX_ORDEM_GRADE = 2000;
+export const chavePasta = (id: string) => `p:${id}`;
+export const chaveQuadro = (id: number) => `q:${id}`;
+const CHAVE_GRADE = /^(p:[^\s]{1,40}|q:[1-9]\d{0,9})$/;
+
+/** Qualquer JSON → o estado das pastas (a ordem só com chaves válidas, sem repetir). */
+export function lerPastas(v: unknown): PastasQuadros {
+  const bruta = v && typeof v === "object" && Array.isArray((v as { ordem?: unknown }).ordem) ? (v as { ordem: unknown[] }).ordem : [];
+  const ordem = [...new Set(bruta.filter((x): x is string => typeof x === "string" && CHAVE_GRADE.test(x)))].slice(0, MAX_ORDEM_GRADE);
+  return { lista: lerConjuntos(v), ordem };
+}
+
+/** Um item da GRADE: uma pasta (com os quadros dela, na ordem) ou um quadro solto. */
+export type ItemGrade<Q> = { tipo: "pasta"; chave: string; pasta: ConjuntoQuadros; quadros: Q[] } | { tipo: "quadro"; chave: string; quadro: Q };
+
+/**
+ * A GRADE na ordem da pessoa: as pastas e os quadros SOLTOS (os que não estão em pasta). O que não está na ordem entra no
+ * fim (as pastas novas, depois os quadros na ordem recebida); quadro sumido/sem acesso não aparece. `ocultarVazias` = sem
+ * as pastas que não têm quadro na lista recebida (com filtro/busca ligados).
+ */
+export function itensDaGrade<Q extends { id: number }>(quadros: Q[], estado: PastasQuadros, ocultarVazias = false): ItemGrade<Q>[] {
+  const porId = new Map(quadros.map((q) => [q.id, q]));
+  const emPasta = new Set(estado.lista.flatMap((c) => c.quadros));
+  const pastas = new Map(estado.lista.map((c) => [chavePasta(c.id), c]));
+  const itens: ItemGrade<Q>[] = [];
+  const vistos = new Set<string>();
+  const porNaGrade = (chave: string) => {
+    if (vistos.has(chave)) return;
+    const c = pastas.get(chave);
+    if (c) {
+      vistos.add(chave);
+      const qs = quadrosDoConjunto(c, quadros);
+      if (!ocultarVazias || qs.length) itens.push({ tipo: "pasta", chave, pasta: c, quadros: qs });
+      return;
+    }
+    const q = chave.startsWith("q:") ? porId.get(Number(chave.slice(2))) : undefined;
+    if (q && !emPasta.has(q.id)) {
+      vistos.add(chave);
+      itens.push({ tipo: "quadro", chave, quadro: q });
+    }
+  };
+  for (const k of estado.ordem) porNaGrade(k);
+  for (const c of estado.lista) porNaGrade(chavePasta(c.id));
+  for (const q of quadros) porNaGrade(chaveQuadro(q.id));
+  return itens;
+}
+
+/** A ordem gravada + as chaves da tela que ainda não estão nela (no fim — é onde `itensDaGrade` as mostra). */
+function ordemCompleta(estado: PastasQuadros, raiz: string[]): string[] {
+  const tem = new Set(estado.ordem);
+  return [...estado.ordem, ...raiz.filter((k) => !tem.has(k))];
+}
+
+/** Para onde um item vai: dentro de uma pasta (`pasta`) ou na raiz (`null`), antes/depois de um item VISÍVEL (ou no fim). */
+export type DestinoGrade = { pasta: string | null; antesDe?: string | null; depoisDe?: string | null };
+
+/**
+ * MOVE um item da grade (a pasta ou o quadro) — reordena na raiz ou dentro de uma pasta, põe o quadro numa pasta ou o tira
+ * dela. `raiz` = as chaves da raiz como estão (as de `itensDaGrade` com TODOS os quadros — a ordem gravada pode estar
+ * incompleta). O destino é relativo a um vizinho VISÍVEL (com filtro, o resto da ordem fica). Uma pasta nunca entra em outra;
+ * pasta cheia não recebe. Devolve o MESMO estado quando nada muda.
+ */
+export function moverNaGrade(estado: PastasQuadros, raiz: string[], chave: string, destino: DestinoGrade): PastasQuadros {
+  const ehPasta = chave.startsWith("p:");
+  if (ehPasta && destino.pasta != null) return estado;
+  const alvo = destino.pasta != null ? estado.lista.find((c) => c.id === destino.pasta) : null;
+  if (destino.pasta != null && !alvo) return estado;
+  const qid = ehPasta ? 0 : Number(chave.slice(2));
+  if (!ehPasta && !(qid > 0)) return estado;
+  if (alvo && !alvo.quadros.includes(qid) && alvo.quadros.length >= MAX_QUADROS_CONJUNTO) return estado;
+  const inserir = <T>(lista: T[], item: T, antes: T | null | undefined, depois: T | null | undefined) => {
+    const i = antes != null ? lista.indexOf(antes) : -1;
+    if (i >= 0) return [...lista.slice(0, i), item, ...lista.slice(i)];
+    const j = depois != null ? lista.indexOf(depois) : -1;
+    if (j >= 0) return [...lista.slice(0, j + 1), item, ...lista.slice(j + 1)];
+    return [...lista, item];
+  };
+  // Tira o item de onde está (a raiz e qualquer pasta). A base é a ordem COMPLETA (a gravada + a da tela) — a tela pode
+  // mostrar só parte dos quadros (o grupo ativo): os lugares dos outros ficam.
+  const semNaRaiz = ordemCompleta(estado, raiz).filter((k) => k !== chave);
+  const lista = ehPasta ? estado.lista : estado.lista.map((c) => (c.quadros.includes(qid) ? { ...c, quadros: c.quadros.filter((q) => q !== qid) } : c));
+  if (alvo) {
+    const id = (k: string | null | undefined) => (k?.startsWith("q:") ? Number(k.slice(2)) : null);
+    return {
+      lista: lista.map((c) => (c.id === alvo.id ? { ...c, quadros: inserir(c.quadros, qid, id(destino.antesDe), id(destino.depoisDe)) } : c)),
+      ordem: semNaRaiz.slice(0, MAX_ORDEM_GRADE),
+    };
+  }
+  return { lista, ordem: inserir(semNaRaiz, chave, destino.antesDe, destino.depoisDe).slice(0, MAX_ORDEM_GRADE) };
+}
+
+/** EXCLUI a pasta: os quadros dela voltam à RAIZ, no lugar dela e na ordem que tinham (nenhum quadro é tocado). */
+export function excluirPasta(estado: PastasQuadros, raiz: string[], id: string): PastasQuadros {
+  const c = estado.lista.find((x) => x.id === id);
+  if (!c) return estado;
+  const k = chavePasta(id);
+  const base = ordemCompleta(estado, raiz);
+  const i = base.indexOf(k);
+  const dela = c.quadros.map(chaveQuadro);
+  const ordem = i >= 0 ? [...base.slice(0, i), ...dela, ...base.slice(i + 1)] : [...base, ...dela];
+  return { lista: estado.lista.filter((x) => x.id !== id), ordem: ordem.slice(0, MAX_ORDEM_GRADE) };
 }
 
 // ─── CAMPOS PERSONALIZADOS e TÍTULO AUTOMÁTICO (migração `0056`) ────────────────────────────────────────────

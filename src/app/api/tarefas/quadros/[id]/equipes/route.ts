@@ -16,7 +16,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(equipeSchema, req);
   if ("resp" in p) return p.resp;
-  if (!(await pessoasValidas(q.grupoId, p.data.membros))) return erro("Só pessoas do grupo do quadro podem estar na equipe.", 422);
+  if (!(await pessoasValidas(q, p.data.membros))) return erro("Só pessoas do quadro podem estar na equipe.", 422);
   const eid = await gravarEquipe({ quadroId: q.id, ...p.data });
   await registrarAuditoria({
     usuario: a.u,

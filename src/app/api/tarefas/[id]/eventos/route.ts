@@ -19,7 +19,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const p = await parseCorpo(eventoSchema, req);
   if ("resp" in p) return p.resp;
   if ((await contarEventos(id)) >= MAX_EVENTOS_TAREFA) return erro(`Até ${MAX_EVENTOS_TAREFA} eventos por tarefa.`, 409);
-  if (!(await pessoasValidas(r.quadro.grupoId, p.data.convidados))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
+  if (!(await pessoasValidas(r.quadro, p.data.convidados))) return erro("Só pessoas do quadro podem ser convidadas.", 422);
   const eventoId = await criarEvento(id, p.data, a.u.id);
   // O PRIVADO não vai ao histórico (visto por todo o grupo): só "evento privado" e a data.
   const hist = eventoParaAuditoria(p.data);

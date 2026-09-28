@@ -137,6 +137,7 @@ import { EstrelaFavorito } from "@/components/FavoritosQuadros";
 import { MenuLista } from "@/components/MenuLista";
 import { FundoQuadro } from "@/components/FundoQuadro";
 import { SecoesDeQuadros } from "@/components/SecoesQuadros";
+import { PastaQuadro } from "@/components/PastasQuadros";
 import { SeletorFundo } from "@/components/SeletorFundo";
 import { ChipsEscolha } from "@/components/ChipsEscolha";
 import type { FundoEscolha } from "@/lib/imagem-fundo-core";
@@ -152,7 +153,10 @@ import {
   type BlocoTarefa,
   blocosDisponiveis,
   eventosDoCalendario,
+  excluirPasta,
   FILTRO_TAREFAS_PADRAO,
+  moverNaGrade,
+  type PastasQuadros,
   moverBloco,
   OCULTOS_VAZIO,
   type Recorrencia,
@@ -1899,6 +1903,7 @@ function TarefasDemo() {
   const [checkDemo, setCheckDemo] = useState([{ nome: "SERVIDORES COM FALTA", itens: ["3009540 - STELLA PAULINA DA SILVA: 24 DIAS", "3009865 - THIAGO OLIVEIRA: 2 DIAS"] }]);
   const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const [textoDemo, setTextoDemo] = useState("## Passos\n- Conferir o **DFD**\n- Falar com @Ana");
+  const [pastasDemo, setPastasDemo] = useState<PastasQuadros>({ lista: [{ id: "demo", nome: "PCA 2027", cor: "#579dff", quadros: [2, 3] }], ordem: [] });
   const quadroDemo = {
     id: 1,
     grupoId: 1,
@@ -1917,6 +1922,12 @@ function TarefasDemo() {
     atrasadas: 3,
     concluidas: 40,
   };
+  const quadrosDemo = [
+    quadroDemo,
+    { ...quadroDemo, id: 2, nome: "Rotinas do setor", privado: false, fundoGradiente: '{"cores":["#4bce97","#1f845a"],"angulo":135}', atrasadas: 0 },
+    { ...quadroDemo, id: 3, nome: "Protocolos", privado: false, fundoGradiente: '{"cores":["#f87168","#ae2e24"],"angulo":135}', atrasadas: 1 },
+    { ...quadroDemo, id: 4, nome: "Compras", privado: false, fundoGradiente: null, cor: "#e2b203", atrasadas: 0 },
+  ];
   const listasDemo = [
     { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
     { id: 2, nome: "Em andamento", ordem: 2, limiteWip: 2, concluida: false, arquivada: false },
@@ -1924,16 +1935,24 @@ function TarefasDemo() {
   ];
   return (
     <div className="space-y-4">
-      {/* As SEÇÕES de quadros (Favoritos · Recentes · CONJUNTOS · grupo — minimizáveis) com o QuadroCard na GradeQuadros. */}
+      {/* As SEÇÕES de quadros (Favoritos · Recentes · "Seus quadros" com as PASTAS — abrir no lugar, arrastar para reordenar
+          e para dentro/fora; minimizáveis) com o QuadroCard. Aqui o arrasto só muda o estado local (sem gravar). */}
       <SecoesDeQuadros
-        quadros={[quadroDemo, { ...quadroDemo, id: 2, nome: "Rotinas do setor", privado: false, fundoGradiente: '{"cores":["#4bce97","#1f845a"],"angulo":135}', atrasadas: 0 }]}
+        quadros={quadrosDemo}
         favoritos={[1]}
         onFavorito={() => {}}
-        conjuntos={[{ id: "demo", nome: "PCA 2027", cor: "#579dff", quadros: [2] }]}
-        onEditarConjunto={() => {}}
-        onExcluirConjunto={() => {}}
+        pastas={pastasDemo}
+        onMover={(raiz, chave, d) => setPastasDemo((e) => moverNaGrade(e, raiz, chave, d))}
+        onEditarPasta={() => {}}
+        onExcluirPasta={(id, raiz) => setPastasDemo((e) => excluirPasta(e, raiz, id))}
         extraFinal={<QuadroNovoCard onClick={() => {}} />}
       />
+      {/* O card da PASTA sozinho: fechada · aberta · ALVO de um quadro arrastado (soltar põe dentro). */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+        <PastaQuadro pasta={pastasDemo.lista[0] ?? { id: "x", nome: "PCA 2027", cor: "#579dff", quadros: [] }} quadros={quadrosDemo.slice(1)} />
+        <PastaQuadro pasta={{ id: "y", nome: "Rotinas", cor: "#4bce97", quadros: [] }} quadros={quadrosDemo} aberta />
+        <PastaQuadro pasta={{ id: "z", nome: "Vazia", cor: "#f87168", quadros: [] }} quadros={[]} alvo />
+      </div>
       {/* FAVORITO (estrela), o MENU "…" da lista e os campos do QUADRO DO PERÍODO (listas dos dias do mês). */}
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
         <EstrelaFavorito ativo={false} nome="Quadro" onAlternar={() => {}} />
@@ -3388,7 +3407,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (o card “Novo quadro”, na altura dos cards), SeletorFundo (o fundo do quadro como o do Trello: prévia, fotos 16:9 + pesquisa com sugestões, DEGRADÊS em círculos — predefinidos, próprio e “Sem fundo”), CapaQuadro (a capa 16:9 no card do quadro), MolduraQuadro + FaixaQuadro + PilulaVistas + MenuQuadro + MembrosQuadro (o quadro no padrão do Trello: moldura arredondada com a imagem NÍTIDA e ENQUADRÁVEL — ponto focal + zoom —, cartão com CAPA colorida, listas RECOLHÍVEIS e contagem “N de M” com filtro, faixa translúcida no topo com as fotos/filtro/menu “…”, a pílula de vistas flutuante no rodapé), TextoNoLugar (o NOME do quadro e da lista: um clique edita no lugar), ItensArquivados (os cartões e as listas arquivados — restaurar/excluir), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover/EXCLUIR a lista) + CopiarMoverLista + ExcluirLista (qualquer lista: mover os cartões para outra ou excluir tudo junto), FundoQuadro (a IMAGEM DE FUNDO do quadro por link — enquadrar arrastando + zoom, avisos de proporção/resolução e fotos sugeridas — imagem ou pin do Pinterest, sem enviar arquivo), CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o “Mudar de quadros” do Trello: busca, chips por grupo e as MESMAS seções da tela de Tarefas) + SecoesDeQuadros/SecaoQuadros/GradeQuadros (Favoritos · Recentes · CONJUNTOS · grupos, minimizáveis, com o QuadroCard) + EditorConjunto/MenuConjunto (os conjuntos de quadros da pessoa) + ChipsEscolha (chips de escolha que quebram linha), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (visual do Trello: nome editável, ARRASTAR pelo cabeçalho, WIP em âmbar + Adicionar um cartão) + NovaLista (a coluna “+ Adicionar outra lista” no fim do quadro), CartaoTarefa (visual do Trello — etiquetas cheias, prazo e checklist em selo; com o mouse: contorno, círculo, editar e DUPLICAR; prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), ImportarTrello (o JSON do Trello → prévia, membros casados com as pessoas, importação em lotes retomável — botão “Importar do Trello” abaixo), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (o card “Novo quadro”, na altura dos cards), SeletorFundo (o fundo do quadro como o do Trello: prévia, fotos 16:9 + pesquisa com sugestões, DEGRADÊS em círculos — predefinidos, próprio e “Sem fundo”), CapaQuadro (a capa 16:9 no card do quadro), MolduraQuadro + FaixaQuadro + PilulaVistas + MenuQuadro + MembrosQuadro (o quadro no padrão do Trello: moldura arredondada com a imagem NÍTIDA e ENQUADRÁVEL — ponto focal + zoom —, cartão com CAPA colorida, listas RECOLHÍVEIS e contagem “N de M” com filtro, faixa translúcida no topo com as fotos/filtro/menu “…”, a pílula de vistas flutuante no rodapé), TextoNoLugar (o NOME do quadro e da lista: um clique edita no lugar), ItensArquivados (os cartões e as listas arquivados — restaurar/excluir), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover/EXCLUIR a lista) + CopiarMoverLista + ExcluirLista (qualquer lista: mover os cartões para outra ou excluir tudo junto), FundoQuadro (a IMAGEM DE FUNDO do quadro por link — enquadrar arrastando + zoom, avisos de proporção/resolução e fotos sugeridas — imagem ou pin do Pinterest, sem enviar arquivo), CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o “Mudar de quadros” do Trello: busca e as MESMAS seções da tela de Tarefas, com as pastas) + SecoesDeQuadros/SecaoQuadros/GradeQuadros (Favoritos · Recentes · “Seus quadros”, minimizáveis, com o QuadroCard) + GradePastas/PastaQuadro (as PASTAS de quadros: o card da pasta na proporção do QuadroCard com o mosaico das capas; abre NO LUGAR empurrando os cards; ARRASTAR reordena e põe/tira quadros da pasta — no toque, segurar ~400 ms; Alt+←/→) + EditorConjunto/MenuConjunto (criar/editar/excluir a pasta) + ChipsEscolha (chips de escolha que quebram linha), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (visual do Trello: nome editável, ARRASTAR pelo cabeçalho, WIP em âmbar + Adicionar um cartão) + NovaLista (a coluna “+ Adicionar outra lista” no fim do quadro), CartaoTarefa (visual do Trello — etiquetas cheias, prazo e checklist em selo; com o mouse: contorno, círculo, editar e DUPLICAR; prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), ImportarTrello (o JSON do Trello → prévia, membros casados com as pessoas, importação em lotes retomável — botão “Importar do Trello” abaixo), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 
