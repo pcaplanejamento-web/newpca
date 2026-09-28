@@ -28,6 +28,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return erro(`Troca bloqueada: o PCA já tem ${t.planilhas > 0 ? `${t.planilhas} planilha(s)` : `${t.dfds} DFD(s)`}.`, 409);
   }
   if (d.orcamentoVisaoId != null && !(await getVisaoOrcamento(d.orcamentoVisaoId))) return erro("Visão do orçamento não encontrada.", 422);
+  // A visão dos MARCADOS (a PRÉVIA) só existe em PREVIEW: ligá-la num PCA publicado é recusado, e PUBLICAR a desliga (a tela
+  // inicial nunca mostra o que não foi incorporado).
+  const publicado = (d.status ?? antes.status) === "publicado";
+  if (publicado && d.mesaMarcados === true)
+    return erro('"Mostrar os marcados da Mesa do sistema" só pode ser ligado com o PCA em Preview (não publicado).', 409);
+  if (publicado && antes.mesaMarcados && d.mesaMarcados === undefined) d.mesaMarcados = false;
   await atualizarPcaEspaco(id, d);
   const semCapa = (o: Record<string, unknown>) => ({ ...o, capa: o.capa ? "(imagem)" : null });
   const dd = diffCampos<Record<string, unknown>>(semCapa(antes), semCapa({ ...antes, ...d }), ["nome", "ano", "fonte", "status", "capa", "orcamentoVisaoId", "mesaMarcados"], {

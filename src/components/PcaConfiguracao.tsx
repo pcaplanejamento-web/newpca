@@ -190,7 +190,13 @@ export function PcaConfiguracao({
             checked={pca.status === "publicado"}
             disabled={ro || salvando != null}
             onChange={(v) =>
-              salvar({ status: v ? "publicado" : "preview" }, "status", v ? "PCA publicado na tela inicial." : "PCA voltou para Preview.")
+              salvar(
+                { status: v ? "publicado" : "preview" },
+                "status",
+                v
+                  ? `PCA publicado na tela inicial.${pca.mesaMarcados ? " A visão dos marcados da Mesa do sistema foi desligada (só vale em Preview)." : ""}`
+                  : "PCA voltou para Preview.",
+              )
             }
             label={pca.status === "publicado" ? "Publicado" : "Preview"}
           />
@@ -203,12 +209,14 @@ export function PcaConfiguracao({
               <p className="text-sm text-muted">
                 {pca.ano == null
                   ? "Defina o ano do PCA para usar esta visão."
-                  : `A Mesa do PCA mostra também os protocolos marcados com ${pca.ano} que ainda estão na Mesa do sistema — com a coluna Local, editáveis e prontos para "Enviar a este PCA". Só uma visão: nada é movido e nada conta no PCA até ser incorporado.`}
+                  : pca.status === "publicado"
+                    ? "Disponível só com o PCA em Preview — volte o PCA para Preview para ligar (a tela inicial nunca mostra o que não foi incorporado)."
+                    : `A Mesa do PCA mostra também os protocolos marcados com ${pca.ano} que ainda estão na Mesa do sistema — com a coluna Local, editáveis e prontos para "Enviar a este PCA" — e o Dashboard e o Orçamento do painel passam a somar, como PRÉVIA, os ainda não incorporados. Nada é movido nem gravado no PCA até ser incorporado; publicar desliga a prévia.`}
               </p>
             </div>
             <Switch
-              checked={pca.mesaMarcados}
-              disabled={ro || salvando != null || pca.ano == null}
+              checked={pca.mesaMarcados && pca.status === "preview"}
+              disabled={ro || salvando != null || pca.ano == null || pca.status === "publicado"}
               onChange={(v) =>
                 salvar(
                   { mesaMarcados: v },

@@ -979,7 +979,11 @@ Em **PCA → Configuração**, o `Switch` **"Mostrar os marcados da Mesa do sist
 do PCA listar também os protocolos marcados com o ano dele que ainda estão na Mesa do sistema — e os DFDs e itens deles.
 A coluna **Local** diz onde cada um está (Mesa do sistema · Mesa do PCA · Enviado · Incorporado), o escopo ganha **"Na Mesa
 do sistema (N)"** e a seleção ganha **"Enviar a este PCA"** (as mesmas travas do envio). É só uma VISÃO: eles seguem na Mesa
-principal, editáveis, e nada conta no PCA até ser incorporado. Desligado (padrão), a Mesa do PCA fica como antes.
+principal, editáveis, e nada é gravado no PCA até ser incorporado. Desligado (padrão), a Mesa do PCA fica como antes.
+✅ **Prévia do PCA (só em Preview):** a opção só liga com o PCA em **Preview** (publicar a desliga — a tela inicial nunca vê o
+que não foi incorporado). Ligada, o **Dashboard, o Orçamento e o card** do PCA no painel somam, como PRÉVIA, os DFDs ainda
+não incorporados (enviados à Mesa do PCA + marcados na Mesa do sistema), pela mesma consolidação da incorporação — com o
+aviso "Prévia do PCA"; os banners de consulta abrem esses protocolos/DFDs. Migração `0064` (desliga nos já publicados).
 
 ### Origem dos dados: linhas do Orçamento do PCA e todos os gráficos dos dashboards — entregue
 Clicar numa **linha do comparativo do Orçamento do PCA** abre o banner **"Origem dos dados"**, com os **lançamentos do CUBO**

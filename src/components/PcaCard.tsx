@@ -57,6 +57,8 @@ export type PcaCardDados = {
   total: number;
   itens: number;
   partes: number;
+  /** PRÉVIA ligada: os números incluem os DFDs ainda não incorporados (enviados + marcados da Mesa do sistema). */
+  previa?: boolean;
 };
 
 /** Card 4:5 do PCA (tela `/painel/pca`): status + fonte no topo; nome, Σ e contagens na base. */
@@ -76,7 +78,7 @@ export function PcaCard({ pca, onClick, href }: { pca: PcaCardDados; onClick?: (
         </div>
         <div className="mt-0.5 text-2xl font-black tracking-tight">{brlCompact(pca.total)}</div>
         <div className="mt-0.5 text-xs text-white/80">
-          {pca.fonte === "lista" ? `${num(pca.itens)} itens · ${parte}` : `${parte} · ${num(pca.itens)} itens`}
+          {pca.fonte === "lista" ? `${num(pca.itens)} itens · ${parte}` : `${parte} · ${num(pca.itens)} itens${pca.previa ? " · prévia" : ""}`}
         </div>
       </div>
     </PcaCapa>

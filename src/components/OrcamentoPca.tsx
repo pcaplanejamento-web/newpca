@@ -50,6 +50,8 @@ export type DadosOrcamentoPca = {
   linhas: LancamentoOrcamentoPca[];
   planejado: PlanejadoOrcamentoPca[];
   unidades: UnidadeRef[];
+  /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados no planejado. */
+  previa?: { dfds: number; protocolos: number } | null;
 };
 
 type Planilha = NonNullable<PlanejadoOrcamentoPca["planilha"]> & { itens: number; valor: number };
@@ -245,6 +247,12 @@ export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcame
       {!dados.orcamento && (
         <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
           Nenhum orçamento de {dados.ano} importado — importe o CUBO em Orçamento para comparar.
+        </Callout>
+      )}
+      {dados.previa && (
+        <Callout kind="info" icon={<IconInfo className="h-4 w-4" />}>
+          <b>Prévia do PCA</b> — o planejado inclui {num(dados.previa.dfds)} DFD(s) de {num(dados.previa.protocolos)} protocolo(s) ainda NÃO
+          incorporados (enviados à Mesa do PCA e marcados na Mesa do sistema). Só no painel, com o PCA em Preview.
         </Callout>
       )}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">

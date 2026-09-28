@@ -35,6 +35,7 @@ export function DashboardPcaCliente({
   totalItens,
   showUnidade,
   consulta,
+  previa = false,
 }: {
   porClassificacao: Fatia[];
   porMes: PontoMensal[];
@@ -45,6 +46,8 @@ export function DashboardPcaCliente({
   totalItens: number;
   showUnidade: boolean;
   consulta?: ConsultaDashboard;
+  /** PRÉVIA ligada: a lista inclui os DFDs ainda não incorporados (a fonte da origem diz). */
+  previa?: boolean;
 }) {
   const [sel, setSel] = useState<Selecao | null>(null);
   const [mostrada, setMostrada] = useState<Selecao | null>(null);
@@ -102,7 +105,7 @@ export function DashboardPcaCliente({
         ]}
         fonte={
           consulta
-            ? "Os itens ATIVOS dos DFDs incorporados a este PCA (a mesma lista da Consulta de Itens), agrupados pela mesma chave do gráfico."
+            ? `Os itens ATIVOS dos DFDs incorporados a este PCA${previa ? " + os da PRÉVIA (ainda não incorporados: enviados e marcados da Mesa do sistema)" : ""} — a mesma lista da Consulta de Itens —, agrupados pela mesma chave do gráfico.`
             : "Os itens das planilhas importadas neste PCA (a mesma lista da Consulta de Itens), agrupados pela mesma chave do gráfico."
         }
         avisos={[

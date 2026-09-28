@@ -108,6 +108,15 @@ export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: s
  */
 export const CAMPOS_LIVRES_TRAVADO = ["responsavelId", "situacaoId"] as const;
 
+/**
+ * A PRÉVIA do PCA está ligada? — a visão dos MARCADOS (Configuração do PCA) SÓ vale num PCA de fonte protocolo, com ano e
+ * em PREVIEW (nunca publicado): a Mesa do PCA mostra os marcados da Mesa do sistema e o Dashboard/Orçamento do PAINEL
+ * somam, como prévia, os enviados ainda não incorporados e esses marcados. A tela inicial (só publicados) nunca a vê.
+ */
+export function previaAtiva(p: { mesaMarcados: boolean; status: StatusPca; fonte: FontePca; ano: number | null }): boolean {
+  return p.mesaMarcados && p.status === "preview" && p.fonte === "protocolo" && p.ano != null;
+}
+
 /** ONDE o protocolo está, visto da Mesa de um PCA: na Mesa do SISTEMA (marcado com o ano, ainda não enviado), ENVIADO à
  * Mesa do PCA ou INCORPORADO a ele — a fonte única da coluna "Local", do escopo e das ações da Mesa do PCA. */
 export type LocalProtocolo = "sistema" | "enviado" | "incorporado";

@@ -1614,9 +1614,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`marcados`): a coluna **Local** (`localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
   da coluna, do escopo e das ações; dica com `motivosNaoEnviar`), o escopo **Todos | Na Mesa do sistema | Enviados |
   Incorporados** e, na seleção, **"Enviar a este PCA (n)"** (o `EnviarAoPca` com **`pcaFixo`** — sem o seletor de PCA);
-  Incorporar/Devolver seguem só para os enviados. Só VISÃO: os da Mesa do sistema seguem na Mesa principal, sem trava
-  (`estaTravado` = só o incorporado), e o Dashboard/Orçamento/numeração contam só o incorporado. `ProtocoloResumo` ganhou
-  `pcaEnviadoEm`.
+  Incorporar/Devolver seguem só para os enviados. Os da Mesa do sistema seguem na Mesa principal, sem trava (`estaTravado`
+  = só o incorporado); a numeração dos itens segue só do incorporado. `ProtocoloResumo` ganhou `pcaEnviadoEm`.
+  - **SÓ EM PREVIEW = PRÉVIA DO PCA (`previaAtiva`, `pca-core.ts` puro):** a visão vale só num PCA de fonte protocolo, com
+    ano e em **Preview** — ligar num PCA publicado → 409; **publicar DESLIGA** (`PATCH /api/pca/[id]`; migração `0064` desliga
+    nos já publicados); o `Switch` fica travado com o PCA publicado. Ligada, o **Dashboard e o Orçamento do PAINEL** (e o card
+    do PCA — "· prévia") somam como PRÉVIA os DFDs ainda não incorporados: **`vinculosPrevia`** (`pca-espaco.ts`) = os DFDs
+    que não estão em NENHUM PCA dos protocolos ENVIADOS a este PCA e não incorporados + dos MARCADOS na Mesa do sistema, com a
+    ação sugerida pelo assunto (`acaoSugerida`) e DEPOIS dos reais na ordem — a MESMA consolidação (`consolidarPca`) dentro de
+    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → `Callout` "Prévia do
+    PCA" no `PainelPca`/`OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
+    protocolos/DFDs da prévia (`escopoConsulta`). Nada é gravado; a tela inicial (só publicados) nunca vê a prévia; o
+    Calendário (`cronogramaPcas`) segue só com o incorporado.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).

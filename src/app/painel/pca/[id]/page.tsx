@@ -124,6 +124,7 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null) {
         filtrado: orc.filtrado,
         linhas: orc.linhas,
         planejado: orc.planejado,
+        previa: orc.previa,
         unidades: orc.unidades,
       }}
       comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}

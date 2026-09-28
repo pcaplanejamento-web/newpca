@@ -242,7 +242,7 @@ function PcaEspacoDemo() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <PcaCard pca={{ id: 1, nome: "PCA 2026", ano: 2026, fonte: "lista", status: "publicado", capa: null, total: 1_390_000_000, itens: 1116, partes: 5 }} onClick={() => {}} />
-        <PcaCard pca={{ id: 2, nome: "PCA 2027", ano: 2027, fonte: "protocolo", status: "preview", capa, total: 412_800_000, itens: 1632, partes: 5 }} onClick={() => {}} />
+        <PcaCard pca={{ id: 2, nome: "PCA 2027", ano: 2027, fonte: "protocolo", status: "preview", capa, total: 412_800_000, itens: 1632, partes: 5, previa: true }} onClick={() => {}} />
         <PcaNovoCard onClick={() => {}} />
         <div>
           <PcaCapa capa={capa} ano={2027} />

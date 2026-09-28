@@ -10,6 +10,7 @@ import {
   estaTravado,
   gravacaoParcial,
   localDoProtocolo,
+  previaAtiva,
   mensagemTravaPca,
   motivoNaoDevolver,
   motivoNaoExcluirDfd,
@@ -152,5 +153,16 @@ describe("localDoProtocolo (coluna Local da Mesa do PCA)", () => {
     assert.equal(localDoProtocolo({ pcaId: 3, pcaIncorporadoEm: "2026-09-01" }), "incorporado");
     // O mesmo critério da trava: só o incorporado a um PCA fica travado.
     assert.equal(estaTravado({ pcaId: null, pcaIncorporadoEm: null }), false);
+  });
+});
+
+describe("previaAtiva (visão dos marcados = prévia do PCA)", () => {
+  const base = { mesaMarcados: true, status: "preview" as const, fonte: "protocolo" as const, ano: 2027 };
+  it("só em Preview, fonte protocolo, com ano e ligada", () => {
+    assert.equal(previaAtiva(base), true);
+    assert.equal(previaAtiva({ ...base, status: "publicado" }), false);
+    assert.equal(previaAtiva({ ...base, mesaMarcados: false }), false);
+    assert.equal(previaAtiva({ ...base, fonte: "lista" }), false);
+    assert.equal(previaAtiva({ ...base, ano: null }), false);
   });
 });

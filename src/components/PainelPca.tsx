@@ -1,6 +1,8 @@
 import { brl, brlCompact, num } from "@/lib/format";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries";
+import { Callout } from "./Callout";
 import { type ConsultaDashboard, DashboardPcaCliente } from "./DashboardPcaCliente";
+import { IconEye } from "./icons";
 import { KpiStat } from "./KpiStat";
 
 export type DadosPainelPca = {
@@ -10,6 +12,8 @@ export type DadosPainelPca = {
   porUnidadeMedida: Fatia[];
   top: TopItem[];
   itens: ItemRow[];
+  /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados que entraram. */
+  previa?: { dfds: number; protocolos: number } | null;
 };
 
 /**
@@ -29,9 +33,16 @@ export function PainelPca({
   /** PCA de fonte protocolo: a consulta Protocolos · DFDs · Itens + banners discretos (`ConsultaPca`). */
   consulta?: ConsultaDashboard;
 }) {
-  const { resumo } = dados;
+  const { resumo, previa } = dados;
   return (
     <div className="space-y-[var(--gap-block)]">
+      {previa && (
+        <Callout kind="info" icon={<IconEye className="h-4 w-4" />}>
+          <b>Prévia do PCA</b> — os números incluem {num(previa.dfds)} DFD(s) de {num(previa.protocolos)} protocolo(s) ainda NÃO incorporados
+          (enviados à Mesa do PCA e marcados na Mesa do sistema), como se fossem incorporados agora. Só aparece no painel, com o PCA em
+          Preview; o que vale é o incorporado.
+        </Callout>
+      )}
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat label="Total Planejado" value={brlCompact(resumo.total)} hint={`em ${num(resumo.count)} itens`} />
         <KpiStat
@@ -53,6 +64,7 @@ export function PainelPca({
         totalItens={resumo.count}
         showUnidade={!unidadeFiltrada}
         consulta={consulta}
+        previa={!!previa}
       />
     </div>
   );
