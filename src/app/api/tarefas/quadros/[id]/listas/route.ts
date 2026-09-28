@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { colocarListaApos, criarLista, MSG_QUADRO_ARQUIVADO, ordenarListas, quadroAcessivel } from "@/lib/tarefas";
@@ -17,17 +17,24 @@ async function quadroDoEditor(ctx: Ctx) {
   return { u: a.u, q };
 }
 
-/** Cria uma LISTA no fim do quadro (ou logo depois de `aposId` — a cópia de uma lista). */
+/**
+ * Cria uma LISTA no fim do quadro (ou logo depois de `aposId` — a cópia de uma lista). Qualquer MEMBRO do grupo do quadro
+ * cria (a coluna "Adicionar outra lista"); limite de cartões, "de concluídas" e a posição são só dos editores.
+ */
 export async function POST(req: Request, ctx: Ctx) {
-  const r = await quadroDoEditor(ctx);
-  if ("resp" in r) return r.resp;
-  if (r.q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
+  const a = await exigirUsuario();
+  if ("erro" in a) return a.erro;
+  const qid = intId((await ctx.params).id);
+  const q = qid ? await quadroAcessivel(a.u, qid) : null;
+  if (!q) return erro("Quadro não encontrado.", 404);
+  if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(criarListaSchema, req);
   if ("resp" in p) return p.resp;
+  const editor = a.u.role === "admin" || a.u.role === "gestor";
   const { aposId, ...d } = p.data;
-  const id = await criarLista(r.q.id, d);
-  if (aposId) await colocarListaApos(r.q.id, id, aposId);
-  await registrarAuditoria({ usuario: r.u, acao: "criar", entidade: "tarefa_lista", entidadeId: id, resumo: `Lista "${p.data.nome}" criada no quadro "${r.q.nome}"` });
+  const id = await criarLista(q.id, editor ? d : { nome: d.nome });
+  if (aposId && editor) await colocarListaApos(q.id, id, aposId);
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "tarefa_lista", entidadeId: id, resumo: `Lista "${p.data.nome}" criada no quadro "${q.nome}"` });
   return ok({ id });
 }
 

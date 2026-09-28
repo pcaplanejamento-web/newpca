@@ -403,6 +403,12 @@ export function QuadroTarefas({
     { rotulo: "Concluídas", valor: num(resumo.concluidas) },
   ];
   const semListas = ativas.length === 0;
+  /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
+  const novaLista = async (nome: string) => {
+    await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "POST", { nome });
+    router.refresh();
+    return true;
+  };
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -504,12 +510,13 @@ export function QuadroTarefas({
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
           />
         ) : aba === "quadro" ? (
-          semListas ? (
+          semListas && quadro.arquivado ? (
             <p className="rounded-card border border-dashed border-border-2 bg-surface px-6 py-12 text-center text-sm text-muted">
-              Nenhuma lista ativa — crie uma na Configuração do quadro.
+              Nenhuma lista ativa — o quadro está arquivado.
             </p>
           ) : (
             <QuadroKanban
+              onNovaLista={quadro.arquivado ? undefined : novaLista}
               listas={ativas}
               tarefas={noQuadro}
               etiquetas={etiquetas}

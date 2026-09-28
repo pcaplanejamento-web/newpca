@@ -9,7 +9,8 @@ import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
 import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
-import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconCopy, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
+import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
+import { toast } from "./Toast";
 
 /**
  * O QUADRO (kanban): as listas lado a lado, roláveis na horizontal (no celular, uma coluna por vez com encaixe — `snap`);
@@ -35,6 +36,7 @@ export function QuadroKanban({
   onDoTemplate,
   onCopiarMover,
   menuLista,
+  onNovaLista,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -60,6 +62,8 @@ export function QuadroKanban({
   onCopiarMover?: (id: number, modo: ModoCopia) => void;
   /** O menu "…" de cada lista (`MenuLista`, montado pelo host — as ações são dele). */
   menuLista?: (l: ListaTarefas) => ReactNode;
+  /** Cria uma LISTA no fim do quadro (a coluna "Adicionar outra lista"); ausente = sem a coluna. */
+  onNovaLista?: (nome: string) => Promise<boolean>;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
@@ -142,7 +146,7 @@ export function QuadroKanban({
 
   return (
     <>
-    {listas.length > 1 && (
+    {listas.length + (onNovaLista ? 1 : 0) > 1 && (
       <nav aria-label="Colunas do quadro" className="-mt-1 flex gap-1.5 overflow-x-auto lg:hidden">
         {listas.map((l, i) => (
           <button
@@ -158,6 +162,17 @@ export function QuadroKanban({
             <span className="tabular-nums opacity-80">{porLista.get(l.id)?.length ?? 0}</span>
           </button>
         ))}
+        {onNovaLista && (
+          <button
+            type="button"
+            aria-label="Ir para Adicionar outra lista"
+            aria-current={atual === listas.length}
+            onClick={() => irPara(listas.length)}
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition-colors ${atual === listas.length ? "bg-accent text-white" : "bg-surface-2 text-text-2"}`}
+          >
+            <IconPlus className="h-4 w-4" />
+          </button>
+        )}
       </nav>
     )}
     <div
@@ -206,6 +221,7 @@ export function QuadroKanban({
           </ColunaTarefas>
         );
       })}
+      {onNovaLista && <NovaLista onCriar={onNovaLista} />}
       {arrasto && preso && (
         <CartaoPreso arrasto={arrasto} fantasma={fantasma}>
           <CartaoTarefa tarefa={preso} etiquetas={mEtiquetas} campos={campos} pessoas={mPessoas} hoje={hoje} />
@@ -213,6 +229,86 @@ export function QuadroKanban({
       )}
     </div>
     </>
+  );
+}
+
+/**
+ * "+ ADICIONAR OUTRA LISTA" — a última coluna do quadro (como no Trello): tocar abre o campo do nome; Enter cria a lista no
+ * fim e o campo segue aberto (e vazio) para a próxima; Esc, "X" ou tocar fora fecha. Uma gravação por vez.
+ */
+export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<boolean> }) {
+  const [aberta, setAberta] = useState(false);
+  const [nome, setNome] = useState("");
+  const [gravando, setGravando] = useState(false);
+  const trava = useRef(false);
+  const caixa = useRef<HTMLDivElement>(null);
+  const fechar = () => {
+    if (trava.current) return;
+    setAberta(false);
+    setNome("");
+  };
+  // Tocar fora fecha (sem nome digitado ou já gravado — nada se perde sem querer).
+  useEffect(() => {
+    if (!aberta) return;
+    const fora = (e: PointerEvent) => {
+      if (!caixa.current?.contains(e.target as Node) && !nome.trim()) fechar();
+    };
+    document.addEventListener("pointerdown", fora);
+    return () => document.removeEventListener("pointerdown", fora);
+  });
+  const criar = async () => {
+    const n = nome.trim();
+    if (!n || trava.current) return;
+    trava.current = true;
+    setGravando(true);
+    try {
+      if (await onCriar(n)) setNome("");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      trava.current = false;
+      setGravando(false);
+    }
+  };
+  return (
+    <div ref={caixa} data-lista="nova" className="w-[min(85vw,19rem)] shrink-0 snap-center lg:w-[19rem]">
+      {aberta ? (
+        <div className="space-y-2 rounded-card border border-border bg-surface-2 p-2">
+          <input
+            // biome-ignore lint/a11y/noAutofocus: abre para digitar depois do toque em "Adicionar outra lista".
+            autoFocus
+            value={nome}
+            maxLength={60}
+            disabled={gravando}
+            aria-label="Nome da lista"
+            placeholder="Nome da lista…"
+            onChange={(e) => setNome(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                criar();
+              } else if (e.key === "Escape") fechar();
+            }}
+            className="h-11 w-full rounded-control border border-accent bg-surface px-3 text-[13px] text-text outline-none ring-4 ring-accent/20 placeholder:text-faint lg:h-[var(--h-control-sm)]"
+          />
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="accent" loading={gravando} disabled={!nome.trim()} onClick={criar}>
+              Adicionar lista
+            </Button>
+            <Button size="sm" variant="ghost" aria-label="Cancelar" disabled={gravando} icon={<IconClose className="h-4 w-4" />} onClick={fechar} />
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAberta(true)}
+          className="flex min-h-11 w-full items-center gap-2 rounded-card bg-surface-2/60 px-3 py-2.5 text-left text-[13px] font-semibold text-text-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <IconPlus className="h-4 w-4" />
+          Adicionar outra lista
+        </button>
+      )}
+    </div>
   );
 }
 

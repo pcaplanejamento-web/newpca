@@ -2265,6 +2265,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     o quadro. Tela: **`ImportarTrello`** (Configuração → "Importar do Trello"): `Dropzone` do .json → prévia (`StatMini`),
     os membros com o `SelectField` da pessoa (pré-casados), "Importar também os arquivados" e "Tirar as listas vazias" →
     `Progress` por etapa; uma falha mostra o motivo e "Tentar de novo" RETOMA (as chaves já criadas ficam guardadas).
+  - **"+ ADICIONAR OUTRA LISTA" no quadro (sem migração):** a última coluna do `QuadroKanban` é a **`NovaLista`** (como no
+    Trello: tocar abre o nome, Enter cria no fim e segue aberta para a próxima; Esc/X/tocar fora fecha; no celular, um
+    ponto "+" na navegação das colunas) — `QuadroKanban.onNovaLista`, ausente com o quadro arquivado; o quadro SEM listas
+    mostra só essa coluna. **Qualquer membro do grupo** cria (`POST /api/tarefas/quadros/[id]/listas` com `exigirUsuario` +
+    `quadroAcessivel`); o limite de cartões, "de concluídas" e a posição (`aposId`) seguem só dos editores, assim como
+    editar/arquivar/excluir/ordenar listas.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
