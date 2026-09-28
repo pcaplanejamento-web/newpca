@@ -2,8 +2,12 @@ import { and, eq, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { trelloFila, trelloVinculos } from "../db/schema.ts";
+import { PRIORIDADE_FILA } from "./trello-sync-core.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
+
+/** A prioridade do tipo (board › listas › etiquetas › campos › cartões) em SQL — constantes do código, sem entrada. */
+const ORDEM_FILA = sql.raw(`CASE tipo ${Object.entries(PRIORIDADE_FILA).map(([t, n]) => `WHEN '${t}' THEN ${n}`).join(" ")} ELSE 9 END`);
 
 /**
  * Os BUILDERS da sincronização com o Trello (testados no driver D1 real, `tests/trello-sql.test.ts`): a fila (entrar,
@@ -27,7 +31,7 @@ export function comandoReivindicar(db: Db, quadroId?: number) {
   return db
     .update(trelloFila)
     .set({ proximaEm: sql`datetime('now', '+120 seconds')`, tentativas: sql`${trelloFila.tentativas} + 1` })
-    .where(eq(trelloFila.id, sql`(SELECT id FROM trello_fila WHERE proxima_em <= CURRENT_TIMESTAMP${filtro} ORDER BY id LIMIT 1)`))
+    .where(eq(trelloFila.id, sql`(SELECT id FROM trello_fila WHERE proxima_em <= CURRENT_TIMESTAMP${filtro} ORDER BY ${ORDEM_FILA}, id LIMIT 1)`))
     .returning();
 }
 

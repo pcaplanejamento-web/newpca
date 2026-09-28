@@ -4,6 +4,7 @@ import { PALETA_ETIQUETAS } from "../src/lib/tarefas-core.ts";
 import {
   campoDoBoard,
   casarPorNome,
+  comentariosPorCartao,
   corCapaTrello,
   corpoValorCampo,
   lerRetratoCartao,
@@ -301,5 +302,17 @@ describe("trello-sync-core — fusão com um board existente", () => {
   it("lerCamposBoard guarda a marca da fusão", () => {
     assert.equal(lerCamposBoard('{"fundir":true}').fundir, true);
     assert.equal(lerCamposBoard("{}").fundir, undefined);
+  });
+});
+
+describe("trello-sync-core — entrada em massa", () => {
+  it("comentariosPorCartao agrupa pelo cartão, na ordem, e ignora ação sem cartão", () => {
+    const m = comentariosPorCartao([
+      { id: "a", data: { card: { id: "c1" } } },
+      { id: "b", data: { card: { id: "c2" } } },
+      { id: "c", data: {} },
+      { id: "d", data: { card: { id: "c1" } } },
+    ]);
+    assert.deepEqual([...m].map(([k, v]) => [k, v.map((x) => x.id)]), [["c1", ["a", "d"]], ["c2", ["b"]]]);
   });
 });

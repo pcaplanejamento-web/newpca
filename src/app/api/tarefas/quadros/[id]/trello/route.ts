@@ -13,9 +13,12 @@ import { quadroAcessivel } from "@/lib/tarefas";
 import { ErroTrello } from "@/lib/trello-api";
 import { trelloDaConfig } from "@/lib/trello-config";
 import { depoisDaResposta } from "@/lib/trello-fila";
-import { avancarCriacao, criarBoard, desligarQuadro, estadoTrello, garantirWebhook, ligacaoDoQuadro, ligarBoard } from "@/lib/trello-vincular";
+import { avancarCriacao, criarBoard, desligarQuadro, estadoTrello, garantirWebhook, ligacaoDoQuadro, ligarBoard, tentarCamposDeNovo } from "@/lib/trello-vincular";
 
 export const dynamic = "force-dynamic";
+
+/** Itens por chamada do "Sincronizar agora" (a tela repete até zerar); com o board lido em lote, cada cartão custa só o D1. */
+const LOTE_SINCRONIZAR = 25;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -38,7 +41,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 }
 
 const acaoSchema = z.object({
-  acao: z.enum(["criar", "ligar", "etapa", "desligar", "sincronizar", "pausar", "retomar"]),
+  acao: z.enum(["criar", "ligar", "etapa", "desligar", "sincronizar", "pausar", "retomar", "campos"]),
+  /** `sincronizar` de novo, na sequência (a tela repete até zerar): sem reativar os com erro nem reconferir o aviso. */
+  continuar: z.boolean().optional(),
   boardId: z
     .string()
     .regex(/^[0-9a-f]{24}$/i)
@@ -49,7 +54,8 @@ const acaoSchema = z.object({
  * `criar` = cria o board ADAPTADO no Trello e liga o quadro; `ligar` = liga a um board EXISTENTE (`boardId`) — a fusão
  * casa listas/etiquetas/campos/cartões pelo nome e o resto vai e vem pela fila; `etapa` = continua a criação (listas, etiquetas, campos,
  * membros, cartões, checklists, comentários — até o orçamento de chamadas); `desligar` = tira a ligação (os dois lados
- * ficam como estão); `sincronizar` = processa agora (reativa os itens com erro); `pausar`/`retomar`.
+ * ficam como estão); `sincronizar` = processa agora, DENTRO da requisição, um lote (a tela repete até zerar — `continuar`
+ * não reativa os com erro); `campos` = tenta de novo os campos personalizados; `pausar`/`retomar`.
  */
 export async function POST(req: Request, ctx: Ctx) {
   const r = await quadroDoEditor(ctx);
@@ -74,15 +80,29 @@ export async function POST(req: Request, ctx: Ctx) {
   if (p.data.acao === "sincronizar") {
     const lig = await ligacaoDoQuadro(r.q.id);
     if (!lig) return erro("Este quadro não está ligado ao Trello.", 409);
-    // Reativa os itens com erro e processa agora (e garante os avisos do Trello).
-    await getDb().update(trelloFila).set({ proximaEm: sql`(CURRENT_TIMESTAMP)`, tentativas: 0 }).where(eq(trelloFila.quadroId, r.q.id));
-    try {
-      await garantirWebhook(t.cliente, lig, lerCamposBoard(lig.campos).origem ?? new URL(req.url).origin, !!t.segredo);
-    } catch {
-      // segue: a saída funciona sem os avisos
+    if (!p.data.continuar) {
+      // Reativa os itens com erro e processa agora (e garante os avisos do Trello).
+      await getDb().update(trelloFila).set({ proximaEm: sql`(CURRENT_TIMESTAMP)`, tentativas: 0 }).where(eq(trelloFila.quadroId, r.q.id));
+      try {
+        await garantirWebhook(t.cliente, lig, lerCamposBoard(lig.campos).origem ?? new URL(req.url).origin, !!t.segredo);
+      } catch {
+        // segue: a saída funciona sem os avisos
+      }
     }
-    const res = await processarFila(8, r.q.id);
+    const res = await processarFila(LOTE_SINCRONIZAR, r.q.id);
     return ok({ ...res, ligacao: await estadoTrello(r.q.id) });
+  }
+  if (p.data.acao === "campos") {
+    const lig = await ligacaoDoQuadro(r.q.id);
+    if (!lig) return erro("Este quadro não está ligado ao Trello.", 409);
+    try {
+      const ok_ = await tentarCamposDeNovo(t.cliente, r.q, lig, new URL(req.url).origin);
+      await registrarAuditoria({ usuario: r.u, acao: "editar", entidade: "tarefa_quadro", entidadeId: r.q.id, origem: "trello", resumo: ok_ ? "Campos personalizados criados no Trello" : "Campos personalizados: o Trello ainda não deixou" });
+      if (ok_) depoisDaResposta(processarFila(8, r.q.id));
+      return ok({ campos: ok_, ligacao: await estadoTrello(r.q.id) });
+    } catch (e) {
+      return erro((e as Error).message, e instanceof ErroTrello && e.transitorio ? 503 : 422);
+    }
   }
   if (r.q.arquivado) return erro("Quadro arquivado — desarquive-o para ligar ao Trello.", 409);
   try {

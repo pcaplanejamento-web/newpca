@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const veio = req.headers.get("x-cron-trello") ?? "";
   if (!chave || !veio || !iguais(veio, await hashToken(`${chave}:cron`))) return erro("Não autorizado.", 401);
   const postos = await reconciliarQuadros(10);
-  const r = await processarFila(10);
+  const r = await processarFila(25);
   return ok({ postos, ...r });
 }
 

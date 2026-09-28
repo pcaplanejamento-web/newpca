@@ -75,6 +75,8 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
   const [falha, setFalha] = useState<string | null>(null);
   const [rodando, setRodando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
+  /** O andamento do "Sincronizar agora" (a tela repete até zerar a fila). */
+  const [sinc, setSinc] = useState<{ feito: number; total: number } | null>(null);
   const [escolha, setEscolha] = useState<{ boards: BoardTrello[] | null; falha: string | null; valor: string } | null>(null);
   const vivo = useRef(true);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -106,8 +108,9 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
         setProgresso(r.progresso);
         setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
         if (!r.restante) {
-          toast.success(acao === "ligar" ? "Quadro ligado ao Trello — o que só existe de um lado está sendo levado ao outro." : "Quadro ligado ao Trello.");
+          toast.success(acao === "ligar" ? "Quadro ligado ao Trello — trazendo o que só existe de um lado para o outro." : "Quadro ligado ao Trello.");
           if (r.aviso) toast.warning(r.aviso);
+          if (r.ligacao?.pendentes) await sincronizarTudo(true);
           break;
         }
       }
@@ -127,13 +130,64 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
       .catch((e) => vivo.current && setEscolha((x) => (x ? { ...x, falha: (e as Error).message } : x)));
   };
 
-  /** Sincronizar agora / pausar / retomar. */
-  const acaoSimples = async (acao: "sincronizar" | "pausar" | "retomar") => {
+  /**
+   * SINCRONIZAR AGORA até o fim: cada chamada trata um lote da fila dentro da requisição e a tela repete enquanto houver
+   * pendentes e o lote andar (sem andar = só erros/esperas — para e mostra). Fechar a tela interrompe.
+   */
+  const sincronizarTudo = async (continuar = false) => {
+    setRodando(true);
+    let feitos = 0;
+    let falhas = 0;
+    let total = 0;
+    try {
+      for (let i = 0; i < 400 && vivo.current; i++) {
+        const r = await chamar<{ ligacao: EstadoTrello; feitos: number; falhas: number }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", {
+          acao: "sincronizar",
+          continuar: continuar || i > 0,
+        });
+        feitos += r.feitos;
+        falhas += r.falhas;
+        const pendentes = r.ligacao?.pendentes ?? 0;
+        total = Math.max(total, feitos + pendentes);
+        setSinc({ feito: feitos, total });
+        setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
+        if (!pendentes || !r.feitos) break;
+      }
+      if (!vivo.current) return;
+      const resta = total - feitos;
+      if (falhas || resta) toast.warning(`${feitos} sincronizado(s)${resta ? `; ${resta} ainda na fila (tentando de novo em instantes)` : ""}${falhas ? `; ${falhas} com erro` : ""}.`);
+      else toast.success(`Sincronizado — ${feitos} item(ns).`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      if (vivo.current) {
+        setRodando(false);
+        setSinc(null);
+      }
+    }
+  };
+
+  /** Os campos personalizados de novo (depois de a conta virar administradora do board ou ligar o Power-Up no Trello). */
+  const camposDeNovo = async () => {
     setRodando(true);
     try {
-      const r = await chamar<{ ligacao: EstadoTrello; feitos?: number; falhas?: number }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao });
+      const r = await chamar<{ ligacao: EstadoTrello; campos: boolean }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao: "campos" });
       setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
-      if (acao === "sincronizar") toast[r.falhas ? "warning" : "success"](r.falhas ? `${r.feitos ?? 0} sincronizado(s); ${r.falhas} com erro.` : "Sincronizado.");
+      if (r.campos) toast.success("Campos personalizados criados no Trello — os valores estão indo para os cartões.");
+      else toast.warning("O Trello ainda não liberou os campos personalizados neste quadro.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      if (vivo.current) setRodando(false);
+    }
+  };
+
+  /** Pausar / retomar. */
+  const acaoSimples = async (acao: "pausar" | "retomar") => {
+    setRodando(true);
+    try {
+      const r = await chamar<{ ligacao: EstadoTrello }>(`/api/tarefas/quadros/${quadroId}/trello`, "POST", { acao });
+      setDados((d) => (d ? { ...d, ligacao: r.ligacao } : d));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -175,7 +229,7 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
           )}
           {dados.pode && l && l.estado !== "vinculando" && (
             <>
-              <Button size="sm" variant="secondary" disabled={rodando || l.estado === "pausado"} loading={rodando} onClick={() => acaoSimples("sincronizar")}>
+              <Button size="sm" variant="secondary" disabled={rodando || l.estado === "pausado"} loading={rodando} onClick={() => sincronizarTudo()}>
                 Sincronizar agora
               </Button>
               <Button size="sm" variant="ghost" disabled={rodando} onClick={() => acaoSimples(l.estado === "pausado" ? "retomar" : "pausar")}>
@@ -209,10 +263,21 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
       {l?.ultimoErro && <Callout kind="danger">{l.ultimoErro}</Callout>}
       {l?.semCampos && (
         <Callout kind="warn">
-          O Trello não liberou os campos personalizados neste quadro: Prioridade, Estimativa, Ticket e os campos do quadro ficam só aqui. O resto sincroniza normalmente.
+          <p>
+            O Trello não liberou os campos personalizados neste quadro: Prioridade, Estimativa, Ticket e os campos do quadro ficam só aqui. O resto sincroniza normalmente.
+            Para liberar, torne a conta institucional ADMINISTRADORA deste quadro no Trello (ou ligue lá o Power-Up “Campos personalizados”) e tente de novo.
+          </p>
+          {dados.pode && (
+            <Button size="sm" variant="secondary" className="mt-2" disabled={rodando} onClick={camposDeNovo}>
+              Tentar de novo
+            </Button>
+          )}
         </Callout>
       )}
-      {progresso && (rodando || feito < total) && (
+      {sinc && (
+        <Progress value={sinc.total ? (sinc.feito / sinc.total) * 100 : 0} label={`Sincronizando ${sinc.feito} de ${sinc.total}…`} />
+      )}
+      {progresso && !sinc && (rodando || feito < total) && (
         <div className="space-y-2">
           <Progress value={total ? (feito / total) * 100 : 0} label="Ligando ao Trello" />
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px] text-muted sm:grid-cols-3">

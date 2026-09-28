@@ -630,3 +630,27 @@ export function campoDoBoard<C extends { id: string; name: string; type: string 
 
 /** O id do Power-Up "Custom Fields" do Trello (o mesmo em todos os boards). */
 export const PLUGIN_CAMPOS_TRELLO = "56d5e249a98895a9797bebb9";
+
+// ─── ENTRADA EM MASSA e ORDEM DA FILA ───────────────────────────────────────────────────────────────────────
+
+/** O teto de comentários lidos do board de uma vez (o máximo da API); chegou nele = pode faltar — cada cartão lê os seus. */
+export const LIMITE_ACOES_BOARD = 1000;
+
+/** Agrupa os comentários do board (`/boards/{id}/actions?filter=commentCard`) pelo cartão, na ordem em que vieram. */
+export function comentariosPorCartao<A extends { data: { card?: { id: string } } }>(acoes: A[]): Map<string, A[]> {
+  const out = new Map<string, A[]>();
+  for (const a of acoes) {
+    const id = a.data.card?.id;
+    if (!id) continue;
+    const l = out.get(id);
+    if (l) l.push(a);
+    else out.set(id, [a]);
+  }
+  return out;
+}
+
+/**
+ * A ORDEM em que a fila é tratada: o board, as listas, as etiquetas e os campos ANTES dos cartões — o cartão nunca espera
+ * pela lista dele (sem isso, cada cartão de uma lista nova falhava uma vez e voltava para o fim da fila).
+ */
+export const PRIORIDADE_FILA: Record<string, number> = { quadro: 0, lista: 1, etiqueta: 2, campo: 3, tarefa: 4 };

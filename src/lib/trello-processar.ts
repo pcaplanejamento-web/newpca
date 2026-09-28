@@ -29,10 +29,12 @@ import {
   type CampoCartao,
   type CamposBoard,
   type CartaoApi,
+  comentariosPorCartao,
   corpoValorCampo,
   dataDoTrello,
   dataParaTrello,
   lerCamposBoard,
+  LIMITE_ACOES_BOARD,
   lerRetratoCartao,
   type MapaQuadro,
   patchDoCartao,
@@ -72,7 +74,13 @@ function contado(c: ClienteTrello) {
 }
 
 /** Contexto de uma passada num quadro ligado. */
-type Ctx = { cliente: ClienteTrello; lig: Ligacao; campos: CamposBoard; mapa: MapaQuadro; contaId: string };
+type Ctx = { cliente: ClienteTrello; lig: Ligacao; campos: CamposBoard; mapa: MapaQuadro; contaId: string; lote?: LoteBoard | null };
+
+/** Os cartões do board lidos DE UMA VEZ (com checklists, anexos e comentários) — a entrada em massa sem um GET por cartão. */
+type LoteBoard = Map<string, CartaoLido>;
+
+/** Acima de quantos cartões pendentes (entrada ou saída) vale ler o board inteiro (2 chamadas) em vez de cartão a cartão. */
+const MIN_LOTE = 5;
 
 /** Adiar sem erro (o quadro está pausado/ainda sendo criado). */
 class Adiar extends Error {}
@@ -89,6 +97,7 @@ export async function processarFila(limite = 5, quadroId?: number): Promise<{ fe
   const db = getDb();
   let feitos = 0;
   let falhas = 0;
+  const lotes = new Map<number, LoteBoard | null>();
   for (let i = 0; i < limite && usadas() < ORCAMENTO_PASSADA; i++) {
     const [item] = await comandoReivindicar(db, quadroId);
     if (!item) break;
@@ -97,7 +106,8 @@ export async function processarFila(limite = 5, quadroId?: number): Promise<{ fe
       if (lig) {
         if (lig.estado !== "ativo" && lig.estado !== "erro") throw new Adiar();
         const campos = lerCamposBoard(lig.campos);
-        const ctx: Ctx = { cliente, lig, campos, mapa: await mapaDoQuadro(lig.quadroId, campos), contaId: t.membroId };
+        if (item.tipo === "tarefa" && !lotes.has(lig.quadroId)) lotes.set(lig.quadroId, await loteDoBoard(cliente, lig));
+        const ctx: Ctx = { cliente, lig, campos, mapa: await mapaDoQuadro(lig.quadroId, campos), contaId: t.membroId, lote: lotes.get(lig.quadroId) };
         await processarItem(ctx, item.direcao, item.tipo, item.alvo);
         await db.update(trelloQuadros).set({ estado: "ativo", ultimoErro: null, sincronizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(trelloQuadros.quadroId, lig.quadroId));
       }
@@ -161,11 +171,56 @@ async function historico(tarefaId: number, resumo: string, antes?: unknown, depo
 // ─── CARTÃO ⇄ TAREFA ───────────────────────────────────────────────────────────────────────────────────────
 
 const CAMPOS_API = "name,desc,idList,idBoard,start,due,dueComplete,dueReminder,closed,isTemplate,cover,idLabels,idMembers,dateLastActivity,shortUrl";
-type CartaoLido = CartaoApi & { idBoard: string; shortUrl: string };
+type CartaoLido = CartaoApi & { idBoard: string; shortUrl: string; checklists?: ChecklistApi[]; attachments?: AnexoApi[]; actions?: ComentarioApi[] };
 
-async function buscarCartao(c: ClienteTrello, id: string): Promise<CartaoLido | null> {
+/**
+ * Lê o board INTEIRO de uma vez (2 chamadas: os cartões com checklists e anexos + os comentários) quando há muitos
+ * CARTÕES na fila (a fusão com um board existente). Sem isso, cada cartão custava 4 chamadas. Os comentários
+ * só valem se vieram todos (menos que o teto) — senão cada cartão lê os seus. Falhou = `null` (segue cartão a cartão).
+ */
+async function loteDoBoard(c: ClienteTrello, lig: Ligacao): Promise<LoteBoard | null> {
+  const [p] = await getDb()
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(trelloFila)
+    .where(and(eq(trelloFila.quadroId, lig.quadroId), eq(trelloFila.tipo, "tarefa")));
+  if ((p?.n ?? 0) <= MIN_LOTE) return null;
   try {
-    return await c.get<CartaoLido>(`/cards/${id}`, { fields: CAMPOS_API, customFieldItems: true });
+    const { fields, customFieldItems, checklists, attachments, attachment_fields } = PARAMS_CARTAO;
+    const [cards, acoes] = await Promise.all([
+      c.get<CartaoLido[]>(`/boards/${lig.boardId}/cards/all`, { fields, customFieldItems, checklists, attachments, attachment_fields }),
+      c.get<(ComentarioApi & { data: { card?: { id: string } } })[]>(`/boards/${lig.boardId}/actions`, {
+        filter: "commentCard",
+        limit: LIMITE_ACOES_BOARD,
+        fields: "id,date,data,idMemberCreator",
+        memberCreator_fields: "fullName",
+      }),
+    ]);
+    const porCartao = acoes.length < LIMITE_ACOES_BOARD ? comentariosPorCartao(acoes) : null;
+    return new Map(cards.map((k) => [k.id, porCartao ? { ...k, actions: porCartao.get(k.id) ?? [] } : k]));
+  } catch (e) {
+    if (e instanceof ErroTrello && e.status === 429) throw e;
+    return null;
+  }
+}
+
+/** O cartão JÁ com o conteúdo (checklists, anexos de URL e os últimos comentários) — UMA chamada em vez de quatro. */
+const PARAMS_CARTAO = {
+  fields: CAMPOS_API,
+  customFieldItems: true,
+  checklists: "all",
+  attachments: true,
+  attachment_fields: "id,url,name,isUpload",
+  actions: "commentCard",
+  actions_limit: 50,
+  action_fields: "id,date,data,idMemberCreator",
+  action_memberCreator_fields: "fullName",
+};
+
+async function buscarCartao(ctx: Ctx, id: string): Promise<CartaoLido | null> {
+  const doLote = ctx.lote?.get(id);
+  if (doLote) return doLote;
+  try {
+    return await ctx.cliente.get<CartaoLido>(`/cards/${id}`, PARAMS_CARTAO);
   } catch (e) {
     if (naoAchou(e)) return null;
     throw e;
@@ -270,7 +325,7 @@ async function sincronizarCartao(ctx: Ctx, alvo: { tarefaId?: number; cardId?: s
   const tarefaId = alvo.tarefaId ?? v?.localId ?? null;
   const cardId = alvo.cardId ?? v?.trelloId ?? null;
   const local = tarefaId != null ? await getTarefa(tarefaId) : null;
-  const card = cardId ? await buscarCartao(ctx.cliente, cardId) : null;
+  const card = cardId ? await buscarCartao(ctx, cardId) : null;
   const q = ctx.lig.quadroId;
   // Movida AQUI para outro quadro: sai deste board (o outro quadro, se ligado, a recebe).
   if (local && local.quadroId !== q) {
@@ -331,7 +386,7 @@ async function criarCartao(ctx: Ctx, t: TarefaCompleta) {
   const r = await ctx.cliente.post<{ id: string; shortUrl: string }>("/cards", { idList, name: val.name, pos: "bottom" });
   await gravarVinculo(ctx.lig.quadroId, "tarefa", t.id, r.id, { pendente: true, url: r.shortUrl });
   await empurrar(ctx, r.id, val, null, ["desc", "start", "due", "dueComplete", "dueReminder", "closed", "isTemplate", "cover", "idLabels", "idMembers", "campos"]);
-  const anexos = await sincronizarConteudo(ctx, t, { ...(r as unknown as CartaoLido), id: r.id }, []);
+  const anexos = await sincronizarConteudo(ctx, t, { id: r.id, checklists: [], attachments: [], actions: [] }, []);
   await gravarVinculo(ctx.lig.quadroId, "tarefa", t.id, r.id, { v: val, url: r.shortUrl, anexos } satisfies RetratoCartao);
 }
 
@@ -373,11 +428,11 @@ type ComentarioApi = { id: string; date: string; data: { text: string }; idMembe
 type AnexoApi = { id: string; url: string; name: string; isUpload: boolean };
 
 /** Sincroniza o conteúdo do cartão; devolve os anexos (URLs) que ficaram — o retrato dos anexos. */
-async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: string }, anexosAntes: string[]): Promise<string[]> {
+async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: Pick<CartaoLido, "id" | "checklists" | "attachments" | "actions">, anexosAntes: string[]): Promise<string[]> {
   const c = ctx.cliente;
   const q = ctx.lig.quadroId;
   // CHECKLISTS e ITENS.
-  const [cls, itens, lados] = await Promise.all([listarChecklists(t.id), itensChecklist(t.id), c.get<ChecklistApi[]>(`/cards/${card.id}/checklists`)]);
+  const [cls, itens, lados] = await Promise.all([listarChecklists(t.id), itensChecklist(t.id), card.checklists ?? c.get<ChecklistApi[]>(`/cards/${card.id}/checklists`)]);
   const vs = await getDb()
     .select()
     .from(trelloVinculos)
@@ -498,7 +553,7 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: stri
   const vCo = vPor("comentario");
   const vCoT = vTrello("comentario");
   const comentarios = await getDb().select().from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, t.id)).orderBy(asc(tarefaComentarios.id));
-  const acoes = await c.get<ComentarioApi[]>(`/cards/${card.id}/actions`, { filter: "commentCard", limit: 50 });
+  const acoes = card.actions ?? (await c.get<ComentarioApi[]>(`/cards/${card.id}/actions`, { filter: "commentCard", limit: 50 }));
   for (const co of comentarios)
     if (!vCo.has(co.id)) {
       // O MESMO comentário já lá (a fusão, ou um que veio do Trello pela importação): liga em vez de repetir.
@@ -523,7 +578,7 @@ async function sincronizarConteudo(ctx: Ctx, t: TarefaCompleta, card: { id: stri
   }
   // ANEXOS (URL): os que a tarefa pede × os do cartão, pelo retrato.
   const querAqui = await anexosDaTarefa(ctx, t);
-  const la = (await c.get<AnexoApi[]>(`/cards/${card.id}/attachments`, { fields: "id,url,name,isUpload" })).filter((x) => !x.isUpload);
+  const la = (card.attachments ?? (await c.get<AnexoApi[]>(`/cards/${card.id}/attachments`, { fields: "id,url,name,isUpload" }))).filter((x) => !x.isUpload);
   const urlsLa = new Set(la.map((x) => x.url));
   const urlsAqui = new Set(querAqui.map((x) => x.url));
   const antes = new Set(anexosAntes);

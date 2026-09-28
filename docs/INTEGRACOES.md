@@ -73,6 +73,11 @@ O token e o segredo ficam cifrados com a `INTEGRACOES_CHAVE` e nunca voltam à t
    quadro existente** (a conta institucional precisa ser membro dele; listas, etiquetas e cartões de mesmo nome são
    casados). Depois disso, as mudanças vão e voltam sozinhas; a cada 5 minutos o sistema confere os dois lados (cron do
    Worker — precisa da `INTEGRACOES_CHAVE`). Sem o **segredo**, as mudanças do Trello só chegam nessa conferência.
+   **Sincronizar agora** vai até zerar a fila, com a barra de andamento.
+6. **Campos personalizados** (Prioridade, Estimativa, Ticket e os campos do quadro): num quadro EXISTENTE, a conta
+   institucional precisa ser **administradora** do quadro no Trello (ou o Power-Up "Campos personalizados" precisa estar
+   ligado lá). Se o aviso "O Trello não liberou os campos personalizados" aparecer, ajuste isso no Trello e clique em
+   **Tentar de novo** (Configuração → Trello).
 
 ## Em breve
 - **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.

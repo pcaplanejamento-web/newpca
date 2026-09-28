@@ -2784,7 +2784,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SHA-256 de `INTEGRACOES_CHAVE:cron`, comparação em tempo constante; 401 sem ele) → **`reconciliarQuadros(10)`** (por
   quadro ligado ativo, UMA leitura dos cartões do board — só `dateLastActivity` — × os vínculos: cartão novo/alterado depois
   da última sincronização (1 s de folga), cartão que sumiu, tarefa criada/alterada/excluída aqui e campo sem par entram na
-  fila; liga o webhook que falta) + `processarFila(10)`. Fila `campo` = **`sincronizarCampo`** (novo = cria no mesmo tipo;
+  fila; liga o webhook que falta) + `processarFila(25)`. **Volume (quadro ligado com centenas de cartões):** o cartão é lido
+  em UM GET já com checklists, anexos e os últimos comentários (`PARAMS_CARTAO`; `sincronizarConteudo` usa o que veio);
+  com mais de `MIN_LOTE`=5 cartões na fila, a passada lê o board INTEIRO uma vez (`loteDoBoard`: `/boards/{id}/cards/all` +
+  os comentários do board agrupados por `comentariosPorCartao` — acima de `LIMITE_ACOES_BOARD`, cada cartão lê os seus) e
+  cada cartão custa só o D1; a fila trata board › listas › etiquetas › campos › cartões (`PRIORIDADE_FILA` → CASE no
+  `comandoReivindicar`); o "Sincronizar agora" processa DENTRO da requisição (lotes de 25; `continuar` não reativa os com
+  erro) e a tela repete até zerar com o `Progress`; logo depois de ligar, roda sozinho. **Campos recusados** (`semCampos`):
+  "Tentar de novo" (`acao:"campos"` → `tentarCamposDeNovo`: esquece a recusa, roda a etapa dos campos e, dando certo, põe
+  todos os cartões ligados na fila de saída). Fila `campo` = **`sincronizarCampo`** (novo = cria no mesmo tipo;
   renomeado; tipo trocado = recria; opção nova na lista = acrescenta; excluído = exclui lá). **`IndicadorTrello`** (ícone +
   ponto do estado na `FaixaQuadro` do quadro ligado — `carregarQuadro` traz `trello` = `estadoTrello`; tocar leva a
   Configuração → `#secao-trello`) e **"Abrir no Trello"** no "…" do detalhe da tarefa (`GET /api/tarefas/[id]` devolve

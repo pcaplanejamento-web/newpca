@@ -520,6 +520,25 @@ async function ligarPluginCampos(chamada: <T>(f: () => Promise<T>) => Promise<T>
   }
 }
 
+/**
+ * TENTA DE NOVO os campos personalizados (depois que a conta virou administradora do board, ou o Power-Up foi ligado no
+ * Trello): esquece a recusa, roda a etapa dos campos e, dando certo, põe TODOS os cartões ligados na fila de saída — os
+ * valores (Prioridade, Estimativa, Ticket e os campos do quadro) vão para os cartões. `false` = o Trello ainda não deixou.
+ */
+export async function tentarCamposDeNovo(cliente: ClienteTrello, q: Quadro, lig: Ligacao, origem: string): Promise<boolean> {
+  const campos = lerCamposBoard(lig.campos);
+  campos.semCampos = undefined;
+  campos.pluginCampos = undefined;
+  await getDb().update(trelloQuadros).set({ campos: JSON.stringify(campos) }).where(eq(trelloQuadros.quadroId, q.id));
+  await avancarCriacao(cliente, q, (await ligacaoDoQuadro(q.id)) as Ligacao, origem);
+  const atual = await ligacaoDoQuadro(q.id);
+  if (!atual || lerCamposBoard(atual.campos).semCampos) return false;
+  await getDb().run(
+    sql`INSERT INTO trello_fila (quadro_id, direcao, tipo, alvo) SELECT ${q.id}, 'saida', 'tarefa', CAST(local_id AS TEXT) FROM trello_vinculos WHERE quadro_id = ${q.id} AND tipo = 'tarefa' ON CONFLICT (direcao, tipo, alvo) DO UPDATE SET proxima_em = CURRENT_TIMESTAMP, tentativas = 0, erro = NULL`,
+  );
+  return true;
+}
+
 /** DESLIGA o quadro do Trello: tira o aviso (webhook) e os vínculos; os dois lados ficam como estão. */
 export async function desligarQuadro(cliente: ClienteTrello | null, quadroId: number) {
   const lig = await ligacaoDoQuadro(quadroId);

@@ -42,6 +42,22 @@ describe("trello — fila e vínculos (builders no D1)", () => {
     assert.equal(c.alvo, "c9");
   });
 
+  it("reivindicar trata o board, as listas, as etiquetas e os campos ANTES dos cartões (o cartão não espera a lista)", async () => {
+    const { orm } = banco();
+    await comandoEnfileirar(orm, 1, "entrada", "tarefa", "c1");
+    await comandoEnfileirar(orm, 1, "entrada", "tarefa", "c2");
+    await comandoEnfileirar(orm, 1, "entrada", "etiqueta", "e1");
+    await comandoEnfileirar(orm, 1, "entrada", "lista", "l1");
+    await comandoEnfileirar(orm, 1, "saida", "quadro", "1");
+    const ordem: string[] = [];
+    for (;;) {
+      const [x] = await comandoReivindicar(orm, 1);
+      if (!x) break;
+      ordem.push(`${x.tipo}:${x.alvo}`);
+    }
+    assert.deepEqual(ordem, ["quadro:1", "lista:l1", "etiqueta:e1", "tarefa:c1", "tarefa:c2"]);
+  });
+
   it("vínculo: grava e atualiza pelo (tipo, id daqui); o id do Trello é único por tipo", async () => {
     const { db, orm } = banco();
     await comandoVinculo(orm, 1, "tarefa", 5, "c5", '{"v":1}');
