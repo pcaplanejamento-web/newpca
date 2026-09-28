@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { configuracoes } from "@/db/schema";
 import { coerceIntegracoes, type Integracoes } from "./integracoes-core.ts";
@@ -36,4 +36,24 @@ export async function getIntegracoes(): Promise<Integracoes> {
 
 export function invalidarIntegracoes() {
   cache = null;
+}
+
+/** O blob INTEIRO de `configuracoes` id=1 (as chaves irmãs — aparência, avaliação — são preservadas por quem grava). */
+export async function lerBlobConfiguracoes(): Promise<Record<string, unknown>> {
+  const [row] = await getDb().select({ dados: configuracoes.dados }).from(configuracoes).where(eq(configuracoes.id, 1)).limit(1);
+  try {
+    return row?.dados ? (JSON.parse(row.dados) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Grava as INTEGRAÇÕES no blob (as irmãs ficam) e invalida o cache. */
+export async function gravarIntegracoes(integ: Integracoes, usuarioId: number) {
+  const blob = await lerBlobConfiguracoes();
+  await getDb()
+    .update(configuracoes)
+    .set({ dados: JSON.stringify({ ...blob, integracoes: integ }), atualizadoPor: usuarioId, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(configuracoes.id, 1));
+  invalidarIntegracoes();
 }

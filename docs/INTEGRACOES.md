@@ -59,6 +59,17 @@ npx wrangler secret put UNSPLASH_ACCESS_KEY
 ```
 As buscas ficam 10 minutos em memória (`src/lib/fotos-fundo.ts`); a tela credita as fotos ao Unsplash.
 
+## Trello (sincronização dos quadros de Tarefas)
+Usa UMA conta institucional do Trello (ex.: "PCA Rio Verde"); tudo o que o sistema grava no Trello sai por ela.
+1. Entre no Trello com a conta institucional e crie uma aplicação em **trello.com/power-ups/admin** (Novo → qualquer
+   área de trabalho). Na aba **API key**, copie a **chave** e o **segredo**.
+2. Na mesma tela, clique em **Token** e autorize (escopo leitura + escrita, sem expiração); copie o **token**.
+3. No sistema: **Administração → Integrações → Trello** → ative, cole chave, token e segredo → **Salvar** →
+   **Testar conexão** (mostra a conta).
+4. Ligue as **pessoas** aos membros do Trello (sugestões pelo nome; ou pelo usuário do Trello). Pessoa sem ligação segue
+   nas tarefas do sistema, mas não aparece como membro no Trello.
+O token e o segredo ficam cifrados com a `INTEGRACOES_CHAVE` e nunca voltam à tela.
+
 ## Em breve
 - **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.
 - **E-mail (Resend)** — envio de avisos (aprovação de cadastro etc.); exigirá domínio verificado no Resend.

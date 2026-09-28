@@ -1,5 +1,6 @@
 // Ícones do sistema — biblioteca padrão (lucide-react), reexportados sob nomes
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
+import type { SVGProps } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -240,3 +241,14 @@ export const IconEstimativa = Hourglass;
 export const IconDescricao = AlignLeft;
 /** CAMPOS PERSONALIZADOS da tarefa. */
 export const IconCampos = SlidersHorizontal;
+
+/** O TRELLO (a marca: o quadro com duas colunas) — no traço dos ícones do lucide. */
+export function IconTrello(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <rect x="7" y="7" width="3.5" height="9" rx="0.8" />
+      <rect x="13.5" y="7" width="3.5" height="5.5" rx="0.8" />
+    </svg>
+  );
+}

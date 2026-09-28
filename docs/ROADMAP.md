@@ -1125,6 +1125,9 @@ feita em "Seus quadros" (sem a imagem de arrasto do navegador).
 ✅ **Tarefas — pastas PÚBLICAS do grupo e PRIVADAS:** a pasta pública é de todo o grupo (os editores organizam); a
 privada só o dono vê e tudo dentro dela é privado (o quadro vira privado ao entrar; ao sair, o dono escolhe se volta ao
 grupo). As pastas antigas viraram pastas públicas do grupo.
+✅ **Trello — fase 1 (base):** a conta institucional do Trello em Integrações (chave, token e segredo cifrados, testar
+conexão) e a ligação das pessoas com os membros do Trello. 🔜 Fases 2–5: criar/ligar o quadro no Trello, sincronização de
+saída e de entrada (a alteração mais recente vence, o valor perdido fica no histórico) e a verificação periódica.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

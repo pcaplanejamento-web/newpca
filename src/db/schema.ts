@@ -1230,3 +1230,84 @@ export const tarefaAutomacoes = sqliteTable(
   },
   (t) => [index("tarefa_automacoes_quadro_idx").on(t.quadroId)],
 );
+
+// ---------------------------------------------------------------------------
+// INTEGRAÇÃO COM O TRELLO (migração `0062`) — sincronização nos dois sentidos pela conta institucional.
+// ---------------------------------------------------------------------------
+/** O quadro do PCA ligado a um board do Trello (`campos` = JSON dos ids dos campos personalizados criados). */
+export const trelloQuadros = sqliteTable(
+  "trello_quadros",
+  {
+    quadroId: integer("quadro_id")
+      .primaryKey()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    boardId: text("board_id").notNull(),
+    boardUrl: text("board_url"),
+    webhookId: text("webhook_id"),
+    webhookTokenHash: text("webhook_token_hash"),
+    campos: text("campos"),
+    /** `ativo` | `pausado` | `erro`. */
+    estado: text("estado").notNull().default("ativo"),
+    ultimoErro: text("ultimo_erro"),
+    sincronizadoEm: text("sincronizado_em"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("trello_quadros_board_uq").on(t.boardId), uniqueIndex("trello_quadros_token_uq").on(t.webhookTokenHash)],
+);
+
+/** Cada item ligado + o RETRATO (JSON) dos valores da última sincronização. */
+export const trelloVinculos = sqliteTable(
+  "trello_vinculos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => trelloQuadros.quadroId, { onDelete: "cascade" }),
+    /** `lista` | `etiqueta` | `tarefa` | `checklist` | `item` | `comentario` | `anexo`. */
+    tipo: text("tipo").notNull(),
+    localId: integer("local_id").notNull(),
+    trelloId: text("trello_id").notNull(),
+    retrato: text("retrato"),
+    sincronizadoEm: text("sincronizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("trello_vinculos_local_uq").on(t.tipo, t.localId),
+    uniqueIndex("trello_vinculos_trello_uq").on(t.tipo, t.trelloId),
+    index("trello_vinculos_quadro_idx").on(t.quadroId),
+  ],
+);
+
+/** A pessoa do sistema ↔ o membro do Trello. */
+export const trelloMembros = sqliteTable(
+  "trello_membros",
+  {
+    usuarioId: integer("usuario_id")
+      .primaryKey()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    membroId: text("membro_id").notNull(),
+    usuarioTrello: text("usuario_trello"),
+    nome: text("nome"),
+  },
+  (t) => [uniqueIndex("trello_membros_membro_uq").on(t.membroId)],
+);
+
+/** O que falta sincronizar — UM item por (direção, tipo, alvo). */
+export const trelloFila = sqliteTable(
+  "trello_fila",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => trelloQuadros.quadroId, { onDelete: "cascade" }),
+    /** `saida` (PCA → Trello) | `entrada` (Trello → PCA). */
+    direcao: text("direcao").notNull(),
+    tipo: text("tipo").notNull(),
+    alvo: text("alvo").notNull(),
+    tentativas: integer("tentativas").notNull().default(0),
+    proximaEm: text("proxima_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    erro: text("erro"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("trello_fila_alvo_uq").on(t.direcao, t.tipo, t.alvo), index("trello_fila_proxima_idx").on(t.proximaEm)],
+);

@@ -50,6 +50,7 @@ const TOM_ORIGEM: Record<OrigemAuditoria, Tone> = {
   vinculo: "amber",
   automacao: "cyan",
   recorrencia: "emerald",
+  trello: "blue",
   exclusao: "red",
 };
 const ROTULOS_HISTORICO = ["Antes", "Depois"] as const;

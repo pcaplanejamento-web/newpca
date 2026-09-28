@@ -15,4 +15,13 @@ export const integracoesSchema = z.object({
   // Monitoramento reusa os Worker Secrets do Cloudflare (CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID),
   // então aqui é só o liga/desliga.
   monitoramento: z.object({ ativo: z.boolean().default(false) }).default({ ativo: false }),
+  // Trello (conta institucional): a chave é pública; token e segredo chegam em texto puro ("" = manter) e são cifrados.
+  trello: z
+    .object({
+      ativo: z.boolean().default(false),
+      apiKey: z.string().trim().max(100).regex(/^[0-9a-f]*$/i, "Chave do Trello inválida.").default(""),
+      token: z.string().trim().max(300).default(""),
+      segredo: z.string().trim().max(300).default(""),
+    })
+    .default({ ativo: false, apiKey: "", token: "", segredo: "" }),
 });

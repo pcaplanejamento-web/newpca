@@ -2691,6 +2691,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
   query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login e Resend
   = cards **"em breve"** (sem lógica). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
+- **TRELLO — sincronização nos DOIS sentidos pela CONTA INSTITUCIONAL (migração `0062`; plano em 5 fases: base ·
+  vincular · saída · entrada · robustez).** **FASE 1 (entregue) — base:** tabelas `trello_quadros` (o quadro ligado ao
+  board + webhook + campos personalizados criados + estado), `trello_vinculos` (cada item ligado + o RETRATO da última
+  sincronização; únicos por (tipo, local) e (tipo, id do Trello)), `trello_membros` (pessoa ↔ membro) e `trello_fila`
+  (saída/entrada; UM item por alvo). Configuração no blob `integracoes.trello` (`TrelloConfig`: chave pública + `token` e
+  `segredo` CIFRADOS e write-only + a conta confirmada `membroId`/`usuario`/`nome`, que o "Testar conexão" grava — trocar a
+  chave/token a esquece; `trelloConfigurado`, `TRELLO_VAZIO`). Cliente **`trello-api.ts`** (puro, `fetch` injetável): host
+  FIXO `api.trello.com/1`, caminho validado (sem SSRF), `Authorization: OAuth` (nunca na URL), 10 s, `ErroTrello` com
+  `status`/`esperarS`/`transitorio` (429/5xx/rede); `eu`, `membro`, `membrosDasAreas`. **`trello-config.ts`**
+  (`trelloDaConfig`: o cliente com o token decifrado). Núcleo **`trello-sync-core.ts`** (`sugerirMembros` — a régua
+  `casarMembro` da importação, só quando casa UMA pessoa); D1 em **`trello-sync.ts`** (`listarLigacoesMembros`,
+  `gravarLigacoesMembros` — um membro em UMA pessoa, no mesmo lote). Rotas: `PATCH /api/admin/integracoes` (`trello`),
+  `POST …/testar` `{alvo:"trello"}` e `GET`/`PUT /api/admin/integracoes/trello/membros` (ADM; auditoria
+  `trello_integracao`). Origem de auditoria `trello`. Tela: cartão **Trello** em Integrações = **`IntegracaoTrello`**
+  (controlado; o Salvar é o da tela) + **`MembrosTrello`** (pessoas ↔ membros das áreas de trabalho da conta, escolher
+  grava na hora, "Aceitar N sugestões", ligar pelo usuário do Trello); ícone **`IconTrello`**.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

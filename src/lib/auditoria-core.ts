@@ -40,6 +40,7 @@ export type EntidadeAuditoria =
   | "tarefa"
   | "tarefa_quadro"
   | "tarefa_pasta"
+  | "trello_integracao"
   | "tarefa_lista"
   | "tarefa_etiqueta"
   | "tarefa_equipe"
@@ -87,6 +88,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   tarefa: "Tarefa",
   tarefa_quadro: "Quadro de tarefas",
   tarefa_pasta: "Pasta de quadros",
+  trello_integracao: "Integração com o Trello",
   tarefa_lista: "Lista de tarefas",
   tarefa_etiqueta: "Etiqueta de tarefa",
   tarefa_equipe: "Equipe de tarefas",
@@ -149,6 +151,7 @@ export type OrigemAuditoria =
   | "vinculo" // vincular/desvincular um DFD a um protocolo
   | "automacao" // ação de uma automação do quadro de tarefas
   | "recorrencia" // próxima ocorrência de uma tarefa recorrente
+  | "trello" // sincronização com o Trello (o que veio de lá e os conflitos resolvidos)
   | "exclusao";
 
 export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
@@ -162,6 +165,7 @@ export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   vinculo: "Vínculo com protocolo",
   automacao: "Automação",
   recorrencia: "Recorrência",
+  trello: "Sincronização com o Trello",
   exclusao: "Exclusão",
 };
 

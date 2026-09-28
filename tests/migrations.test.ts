@@ -758,6 +758,29 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(q(3).p, null);
   });
 
+  it("0062 Trello: vínculos únicos por (tipo, local) e (tipo, id do Trello); fila junta repetições; excluir o quadro limpa tudo", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9620, 'Ana', 'a9620@x', 'h')");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9621, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9622, 9621, 'Q')");
+    a.exec("INSERT INTO trello_quadros (quadro_id, board_id) VALUES (9622, 'b1')");
+    a.exec("INSERT INTO trello_vinculos (quadro_id, tipo, local_id, trello_id) VALUES (9622, 'tarefa', 1, 'c1')");
+    assert.throws(() => a.exec("INSERT INTO trello_vinculos (quadro_id, tipo, local_id, trello_id) VALUES (9622, 'tarefa', 1, 'c2')"));
+    assert.throws(() => a.exec("INSERT INTO trello_vinculos (quadro_id, tipo, local_id, trello_id) VALUES (9622, 'tarefa', 2, 'c1')"));
+    a.exec("INSERT INTO trello_vinculos (quadro_id, tipo, local_id, trello_id) VALUES (9622, 'lista', 1, 'c1')");
+    a.exec("INSERT INTO trello_fila (quadro_id, direcao, tipo, alvo) VALUES (9622, 'saida', 'tarefa', '1')");
+    a.exec("INSERT INTO trello_fila (quadro_id, direcao, tipo, alvo) VALUES (9622, 'saida', 'tarefa', '1') ON CONFLICT DO NOTHING");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM trello_fila").get() as { n: number }).n, 1);
+    a.exec("INSERT INTO trello_membros (usuario_id, membro_id) VALUES (9620, 'm1')");
+    assert.throws(() => a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9623, 'B', 'b9623@x', 'h'); INSERT INTO trello_membros (usuario_id, membro_id) VALUES (9623, 'm1')"));
+    a.exec("DELETE FROM tarefa_quadros WHERE id = 9622");
+    for (const t of ["trello_quadros", "trello_vinculos", "trello_fila"]) assert.equal((a.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n, 0, t);
+    a.exec("DELETE FROM usuarios WHERE id = 9620");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM trello_membros WHERE usuario_id = 9620").get() as { n: number }).n, 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

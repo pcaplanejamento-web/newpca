@@ -5,7 +5,7 @@ import { configuracoes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { invalidarIntegracoes } from "@/lib/integracoes";
-import { coerceIntegracoes, type Integracoes, toView } from "@/lib/integracoes-core";
+import { coerceIntegracoes, type Integracoes, TRELLO_VAZIO, toView } from "@/lib/integracoes-core";
 import { integracoesSchema } from "@/lib/integracoes-validation";
 import { cifrarSegredo, temChaveMestra } from "@/lib/integracoes-segredos";
 
@@ -52,9 +52,26 @@ export async function PATCH(req: Request) {
   const turnstileSecret =
     entrada.turnstile.secret.length > 0 ? await cifrarSegredo(entrada.turnstile.secret) : atual.turnstile.secret;
 
+  // TRELLO: token e segredo novos são cifrados (vazio = mantém); trocar a chave ou o token esquece a conta confirmada
+  // (o "Testar conexão" a confirma de novo).
+  const tr = entrada.trello;
+  if ((tr.token || tr.segredo) && !temChaveMestra()) {
+    return erro("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar segredos.", 400);
+  }
+  const antesTr = atual.trello ?? TRELLO_VAZIO;
+  const mudouConta = tr.apiKey !== antesTr.apiKey || !!tr.token;
   const novoInteg: Integracoes = {
     turnstile: { ativo: entrada.turnstile.ativo, siteKey: entrada.turnstile.siteKey, secret: turnstileSecret },
     monitoramento: { ativo: entrada.monitoramento.ativo },
+    trello: {
+      ativo: tr.ativo,
+      apiKey: tr.apiKey,
+      token: tr.token ? await cifrarSegredo(tr.token) : antesTr.token,
+      segredo: tr.segredo ? await cifrarSegredo(tr.segredo) : antesTr.segredo,
+      membroId: mudouConta ? "" : antesTr.membroId,
+      usuario: mudouConta ? "" : antesTr.usuario,
+      nome: mudouConta ? "" : antesTr.nome,
+    },
   };
 
   const novo = { ...blob, integracoes: novoInteg };

@@ -77,6 +77,7 @@ import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
+import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import {
   IconAlert,
   IconArrowRight,
@@ -3510,6 +3511,10 @@ export function Catalogo() {
       <Secao titulo="PCA — compilação dos DFDs por unidade">
         <PcaCompilacaoView pca={PCA_DEMO} />
       </Secao>
+
+      <Secao titulo="IntegracaoTrello (Integrações → Trello: chave, token e segredo write-only, testar conexão; com a conta confirmada, MembrosTrello liga as pessoas aos membros)">
+        <IntegracaoTrelloDemo />
+      </Secao>
     </>
   );
 
@@ -3569,5 +3574,19 @@ export function Catalogo() {
         </footer>
       </div>
     </div>
+  );
+}
+
+/** Demonstração do cartão do Trello (sem conta confirmada — as ligações de membros aparecem só no sistema). */
+function IntegracaoTrelloDemo() {
+  const [v, setV] = useState<ValorTrello>({ ativo: true, apiKey: "", token: "", segredo: "" });
+  return (
+    <IntegracaoTrello
+      valor={v}
+      onChange={setV}
+      view={{ ativo: true, apiKey: "", tokenDefinido: false, segredoDefinido: false, conta: null }}
+      onTestar={() => {}}
+      testando={false}
+    />
   );
 }
