@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { lembreteDaTarefa } from "../src/lib/calendario-core.ts";
-import { automacoesDoEvento, conclusaoAoMover, estadoPrazo, eventosDoCalendario, rotuloData, type Automacao } from "../src/lib/tarefas-core.ts";
-import { editarTarefaSchema } from "../src/lib/tarefas-validation.ts";
+import { automacoesDoEvento, conclusaoAoMover, estadoPrazo, eventosDoCalendario, notificacaoDePrazoItem, rotuloData, type Automacao } from "../src/lib/tarefas-core.ts";
+import { checklistSchema, criarTarefaSchema, editarChecklistSchema, editarTarefaSchema } from "../src/lib/tarefas-validation.ts";
 
 // As funcionalidades do padrão Trello (FASE 11+): concluir no lugar, prazo com hora e lembrete.
 describe("tarefas — padrão Trello", () => {
@@ -57,5 +57,22 @@ describe("tarefas — padrão Trello", () => {
     assert.ok(editarTarefaSchema.safeParse({ concluida: true, prazoHora: "09:21", lembreteMin: 60 }).success);
     assert.ok(!editarTarefaSchema.safeParse({ prazoHora: "25:00" }).success);
     assert.ok(!editarTarefaSchema.safeParse({ lembreteMin: 99999 }).success);
+  });
+
+  it("F2 aviso de prazo do ITEM (para o responsável): vence amanhã / atrasado, chave própria", () => {
+    const i = { itemId: 5, texto: "Biometria", prazo: "2026-03-22", tarefaId: 7, ticket: 12, titulo: "Cadastro", quadroId: 3 };
+    assert.equal(notificacaoDePrazoItem(i, "2026-03-21")?.chave, "vence-item:5:2026-03-22");
+    assert.equal(notificacaoDePrazoItem(i, "2026-03-25")?.tipo, "atrasada");
+    assert.equal(notificacaoDePrazoItem(i, "2026-03-10"), null);
+    assert.equal(notificacaoDePrazoItem({ ...i, prazo: null }, "2026-03-21"), null);
+  });
+
+  it("F2 schemas: item no checklist dado, prazo/responsável do item, checklists nomeados na tarefa nova", () => {
+    assert.ok(checklistSchema.safeParse({ texto: "x", checklistId: 3 }).success);
+    assert.ok(editarChecklistSchema.safeParse({ prazo: "2026-03-22", responsavelId: 9 }).success);
+    assert.ok(editarChecklistSchema.safeParse({ responsavelId: null }).success);
+    assert.ok(!editarChecklistSchema.safeParse({}).success);
+    assert.ok(criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", checklists: [{ nome: "SERVIDORES", itens: ["a"] }] }).success);
+    assert.ok(!criarTarefaSchema.safeParse({ quadroId: 1, listaId: 1, titulo: "T", checklists: [{ nome: "", itens: [] }] }).success);
   });
 });

@@ -2129,6 +2129,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     UM dia com hora como horário na grade (e no `.ics`). Lembrete do prazo DERIVADO no sino (`lembreteDaTarefa`,
     `calendario-core`: a régua `lembreteDevido`; chave `lembrete-tarefa:id:início:min`) para responsáveis, equipes e
     observadores (`pessoaNaTarefa(u, true)`). Testes: `tests/tarefas-trello.test.ts`, `tarefas-sql` (mover), migração.
+  - **FASE 12 / F2 — CHECKLISTS NOMEADOS (migração `0054`, aditiva):** tabela `tarefa_checklists` (tarefa cascade, nome,
+    ordem) + `tarefa_checklist.checklist_id` (cascade), `prazo` e `responsavel_id` (set null); a migração põe os itens
+    antigos num "Checklist" da própria tarefa. O bloco Checklist mostra TODOS os checklists (`ChecklistTarefa`: nome no
+    lápis, barra em %, "Ocultar itens marcados" — lembrado no aparelho, `tarefas:checklists-ocultos` —, Excluir com
+    confirmação, "Adicionar checklist"; item com prazo no semáforo + foto do responsável e o menu "…" — prazo, responsável,
+    **Converter em tarefa**, Excluir). `useChecklistServidor` (otimista, FILA serial; ids provisórios de item E de
+    checklist) e `acoesChecklistRascunho` (tarefa nova: `checklists [{nome, itens}]` no `POST /api/tarefas`,
+    `comandosChecklistNovo` — itens em INSERTs de 20, ≤ 100 parâmetros). Rotas: `POST /api/tarefas/[id]/checklists`,
+    `PATCH`/`DELETE /api/tarefas/checklists/[id]`, item com `checklistId`/`prazo`/`responsavelId` (pessoa do grupo; o
+    responsável novo é avisado) e `POST /api/tarefas/[id]/checklist/[itemId]/converter` (nova tarefa na MESMA lista com o
+    texto, o prazo e o responsável; o item sai). A recorrência copia os checklists com os nomes (`checklistsParaCopiar`).
+    Aviso de prazo do ITEM ao responsável (`notificacaoDePrazoItem`, derivado com os prazos).
 - **Próximo** (ver `docs/ROADMAP.md`): as fases F2…F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

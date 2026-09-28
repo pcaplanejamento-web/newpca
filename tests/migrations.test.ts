@@ -599,6 +599,24 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(cols.includes("prazo_hora") && cols.includes("lembrete_min"));
   });
 
+  it("0054 checklists nomeados: os itens antigos entram num 'Checklist' da própria tarefa; excluir o checklist leva os itens", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0054")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9540, 'G')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9541, 9540, 'Q')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9542, 9541, 'L')");
+    a.exec("INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo) VALUES (9543, 9541, 9542, 1, 'A'), (9544, 9541, 9542, 2, 'B')");
+    a.exec("INSERT INTO tarefa_checklist (tarefa_id, texto, ordem) VALUES (9543, 'x', 1), (9543, 'y', 2), (9544, 'z', 1)");
+    a.exec(readFileSync(join(DIR, "0054_checklists_nomeados.sql"), "utf8"));
+    const n = (sql: string) => (a.prepare(sql).get() as { n: number }).n;
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_checklists"), 2);
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE checklist_id IS NULL"), 0);
+    assert.equal(n("SELECT COUNT(DISTINCT checklist_id) AS n FROM tarefa_checklist WHERE tarefa_id = 9543"), 1);
+    a.exec("DELETE FROM tarefa_checklists WHERE tarefa_id = 9543");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_checklist WHERE tarefa_id = 9543"), 0);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

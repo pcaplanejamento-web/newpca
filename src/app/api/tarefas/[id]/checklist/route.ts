@@ -7,7 +7,7 @@ import { checklistSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
-/** Acrescenta um item ao CHECKLIST da tarefa (no fim) — qualquer pessoa do grupo do quadro. */
+/** Acrescenta um item ao fim de um CHECKLIST da tarefa (sem `checklistId`, ao 1º) — qualquer pessoa do grupo do quadro. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -16,7 +16,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
   const p = await parseCorpo(checklistSchema, req);
   if ("resp" in p) return p.resp;
-  const itemId = await criarItemChecklist(id, p.data.texto);
+  const novo = await criarItemChecklist(id, p.data.texto, p.data.checklistId);
+  if (!novo) return erro("Checklist não encontrado.", 404);
   await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "tarefa", entidadeId: id, resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)}: item "${p.data.texto}" no checklist` });
-  return ok({ id: itemId });
+  return ok(novo);
 }

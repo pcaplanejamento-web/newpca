@@ -1867,7 +1867,7 @@ function TarefasDemo() {
   const [ocultosDemo, setOcultosDemo] = useState(OCULTOS_VAZIO);
   const [opcoesDemo, setOpcoesDemo] = useState(OPCOES_CALENDARIO_PADRAO);
   const feriadosDemo = feriadosNoIntervalo([{ id: 1, data: "2026-01-20", nome: "Feriado municipal", tipo: "municipal", anual: false }], "2025-12-28", "2026-02-07");
-  const [checkDemo, setCheckDemo] = useState(["Abrir o PDF do protocolo", "Conferir os itens com o catálogo"]);
+  const [checkDemo, setCheckDemo] = useState([{ nome: "SERVIDORES COM FALTA", itens: ["3009540 - STELLA PAULINA DA SILVA: 24 DIAS", "3009865 - THIAGO OLIVEIRA: 2 DIAS"] }]);
   const [blocos, setBlocos] = useState<BlocoTarefa[]>([{ id: "b1", tipo: "nota", texto: "" }]);
   const listasDemo = [
     { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
@@ -1894,7 +1894,7 @@ function TarefasDemo() {
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChecklistTarefa acoes={acoesChecklistRascunho(checkDemo, setCheckDemo)} rascunho />
+        <ChecklistTarefa acoes={acoesChecklistRascunho(checkDemo, setCheckDemo)} hoje="2026-06-01" rascunho />
         <div className="space-y-2">
           {blocos.map((b, i) => (
             <MolduraBloco

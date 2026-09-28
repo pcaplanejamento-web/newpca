@@ -1,12 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { notificacoes, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
+import { notificacoes, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
 import { nomeExibicao, urlFoto } from "./pessoa";
-import { lerRecorrenciaEvento, notificacaoDePrazo, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
+import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, type NovaNotificacao, pessoaNaTarefa } from "./tarefas-sql";
 
 /**
@@ -87,6 +87,38 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
     for (const t of linhas) {
       const n = notificacaoDePrazo(t, hoje);
       if (n) novas.push({ usuarioId: u.id, ...n, tarefaId: t.id, quadroId: t.quadroId });
+    }
+    // Os ITENS de checklist com prazo em que a pessoa é a RESPONSÁVEL (não marcados, tarefa aberta).
+    const itens = await db
+      .select({
+        itemId: tarefaChecklist.id,
+        texto: tarefaChecklist.texto,
+        prazo: tarefaChecklist.prazo,
+        tarefaId: tarefas.id,
+        ticket: tarefas.ticket,
+        titulo: tarefas.titulo,
+        quadroId: tarefas.quadroId,
+      })
+      .from(tarefaChecklist)
+      .innerJoin(tarefas, eq(tarefas.id, tarefaChecklist.tarefaId))
+      .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
+      .where(
+        and(
+          eq(tarefaChecklist.responsavelId, u.id),
+          eq(tarefaChecklist.feito, false),
+          isNull(tarefas.concluidaEm),
+          eq(tarefas.arquivada, false),
+          eq(tarefaQuadros.arquivado, false),
+          listaAtiva,
+          gte(tarefaChecklist.prazo, somarDias(hoje, -30)),
+          lte(tarefaChecklist.prazo, somarDias(hoje, 1)),
+          grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+        ),
+      )
+      .limit(200);
+    for (const i of itens) {
+      const n = notificacaoDePrazoItem(i, hoje);
+      if (n) novas.push({ usuarioId: u.id, ...n, tarefaId: i.tarefaId, quadroId: i.quadroId });
     }
     if (!novas.length) return;
     const cmds = comandosNotificacoes(db, novas);

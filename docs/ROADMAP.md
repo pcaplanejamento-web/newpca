@@ -1069,7 +1069,9 @@ lateral (lembrado no aparelho).
 ✅ **Tarefas no padrão Trello — F1 (migração `0053`):** concluir NO LUGAR pelo círculo do cartão (a tarefa não sai da
 lista do dia; só a lista de concluídas conclui/reabre ao mover), prazo com HORA e LEMBRETE no sino para responsáveis,
 equipes e observadores; o prazo com hora vira horário no calendário.
-🔜 **Tarefas no padrão Trello — próximas fases:** F2 checklists nomeados (itens com prazo e responsável) · F3 copiar/mover
+✅ **Tarefas no padrão Trello — F2 (migração `0054`):** vários CHECKLISTS NOMEADOS por tarefa (os itens antigos viraram o
+"Checklist" de cada uma), barra em %, ocultar marcados, itens com prazo e responsável (aviso no sino) e "Converter em tarefa".
+🔜 **Tarefas no padrão Trello — próximas fases:** F3 copiar/mover
 entre quadros e TEMPLATES (os modelos de tarefa viram cartões-template) · F4 menu da lista, copiar/mover lista, quadro do
 mês com listas por dia útil, favoritos, trocar de quadro · F5 etiquetas no seletor e filtros completos · F6 comentários e
 atividade num fluxo, descrição formatada e o detalhe na distribuição do Trello · F7 campos personalizados com título

@@ -123,17 +123,30 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
 
   it("recorrência: a próxima nasce com checklist e a regra; a MESMA anterior de novo derruba o lote (sem duplicar nem gastar ticket)", async () => {
     const rec = { freq: "diaria" as const, intervalo: 1, base: "prazo" as const };
-    const d = { ...base, listaId: 1, titulo: "Rotina", pessoas: [9501], etiquetas: [], prazo: "2026-09-26", recorrencia: rec, recorrenciaAnteriorId: 2, checklist: ["a", "b"] };
+    const d = { ...base, listaId: 1, titulo: "Rotina", pessoas: [9501], etiquetas: [], prazo: "2026-09-26", recorrencia: rec, recorrenciaAnteriorId: 2, checklists: [{ nome: "Rotina", itens: ["a", "b"] }] };
     const r = await orm.batch(comandosCriarTarefa(orm, d));
     const nova = (r.at(-1) as { id: number; ticket: number }[])[0];
     const t = db.prepare("SELECT recorrencia AS r, recorrencia_anterior_id AS a FROM tarefas WHERE id = ?").get(nova.id) as { r: string; a: number };
     assert.deepEqual([JSON.parse(t.r), t.a], [rec, 2]);
     const itens = db.prepare("SELECT texto, feito, ordem FROM tarefa_checklist WHERE tarefa_id = ? ORDER BY ordem").all(nova.id) as { texto: string; feito: number }[];
     assert.deepEqual(itens.map((i) => [i.texto, i.feito]), [["a", 0], ["b", 0]]);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_checklists WHERE tarefa_id = ? AND nome = 'Rotina'").get(nova.id) as { n: number }).n, 1);
     const prox = (db.prepare("SELECT prox_ticket AS p FROM tarefa_quadros WHERE id = 1").get() as { p: number }).p;
     await assert.rejects(orm.batch(comandosCriarTarefa(orm, d)));
     assert.equal((db.prepare("SELECT prox_ticket AS p FROM tarefa_quadros WHERE id = 1").get() as { p: number }).p, prox);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefas WHERE recorrencia_anterior_id = 2").get() as { n: number }).n, 1);
+  });
+
+  it("CHECKLISTS NOMEADOS: a tarefa nova nasce com vários, 45 itens em INSERTs de até 20 (≤ 100 parâmetros), cada item no seu", async () => {
+    const itens = Array.from({ length: 45 }, (_, i) => `Servidor ${i + 1}`);
+    const cmds = comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Faltas", pessoas: [], etiquetas: [], checklists: [{ nome: "SERVIDORES COM FALTA", itens }, { nome: "BIOMETRIA", itens: ["x"] }] });
+    for (const c of cmds) assert.ok(c.toSQL().params.length <= 100, `${c.toSQL().params.length} parâmetros`);
+    const r = await orm.batch(cmds);
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const porChecklist = db
+      .prepare("SELECT c.nome AS nome, COUNT(i.id) AS n, MAX(i.ordem) AS ultimo FROM tarefa_checklists c LEFT JOIN tarefa_checklist i ON i.checklist_id = c.id WHERE c.tarefa_id = ? GROUP BY c.id ORDER BY c.ordem")
+      .all(id) as { nome: string; n: number; ultimo: number }[];
+    assert.deepEqual(porChecklist.map((x) => [x.nome, x.n, x.ultimo]), [["SERVIDORES COM FALTA", 45, 45], ["BIOMETRIA", 1, 1]]);
   });
 
   it("quadro a partir de modelo: listas na ordem e etiquetas, num lote", async () => {

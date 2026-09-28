@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     estimativaH: d.estimativaH ?? null,
     vinculo: d.vinculo ?? null,
     recorrencia: d.recorrencia ?? null,
-    checklist: d.checklist ?? [],
+    checklists: d.checklists ?? [],
     blocos: d.blocos ? lerBlocos(d.blocos) : null,
     eventos,
   });

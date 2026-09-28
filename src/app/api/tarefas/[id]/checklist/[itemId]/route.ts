@@ -1,7 +1,7 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarItemChecklist, excluirItemChecklist, getItemChecklist, tarefaAcessivel } from "@/lib/tarefas";
+import { atualizarItemChecklist, avisarSobreTarefa, excluirItemChecklist, getItemChecklist, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { editarChecklistSchema } from "@/lib/tarefas-validation";
 
@@ -22,21 +22,29 @@ async function itemDaTarefa(ctx: Ctx) {
   return { u: a.u, r, item };
 }
 
-/** Marca/desmarca, renomeia ou reordena (vizinhos) o item. */
+/** Marca/desmarca, renomeia, reordena (vizinhos) ou muda o PRAZO/RESPONSÁVEL do item (pessoa do grupo do quadro). */
 export async function PATCH(req: Request, ctx: Ctx) {
   const x = await itemDaTarefa(ctx);
   if ("resp" in x) return x.resp;
   const p = await parseCorpo(editarChecklistSchema, req);
   if ("resp" in p) return p.resp;
+  const { responsavelId } = p.data;
+  if (responsavelId != null && !(await pessoasValidas(x.r.quadro.grupoId, [responsavelId], x.item.responsavelId != null ? [x.item.responsavelId] : [])))
+    return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
   await atualizarItemChecklist(x.item, p.data);
-  if (p.data.feito != null || p.data.texto != null)
+  const mudou =
+    p.data.feito === true ? "concluído" : p.data.feito === false ? "reaberto" : p.data.texto != null ? "renomeado" : p.data.prazo !== undefined ? "com prazo alterado" : responsavelId !== undefined ? "com responsável alterado" : null;
+  if (mudou)
     await registrarAuditoria({
       usuario: x.u,
       acao: "editar",
       entidade: "tarefa",
       entidadeId: x.r.tarefa.id,
-      resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: item "${p.data.texto ?? x.item.texto}" ${p.data.feito === true ? "concluído" : p.data.feito === false ? "reaberto" : "renomeado"}`,
+      resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: item "${p.data.texto ?? x.item.texto}" ${mudou}`,
     });
+  // O responsável NOVO do item é avisado.
+  if (responsavelId != null && responsavelId !== x.item.responsavelId)
+    await avisarSobreTarefa(x.u, "atribuida", [responsavelId], x.r.tarefa, x.r.quadro, `Item do checklist atribuído a você: ${x.item.texto}`);
   return ok();
 }
 

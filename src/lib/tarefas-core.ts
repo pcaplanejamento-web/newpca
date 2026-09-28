@@ -754,6 +754,22 @@ export const linkTarefa = (quadroId: number, tarefaId: number) => `/painel/taref
  * passou — até 30 dias; mais antigo não volta a avisar). A `chave` é por tarefa + prazo: avisa UMA vez por prazo (mudou
  * o prazo, avisa de novo). Fora disso, `null`.
  */
+/**
+ * O aviso de PRAZO de um ITEM de checklist (o responsável do item): vence amanhã | atrasado até 30 dias — a MESMA régua
+ * da tarefa, com chave própria (item + prazo).
+ */
+export function notificacaoDePrazoItem(
+  i: { itemId: number; texto: string; prazo: string | null; tarefaId: number; ticket: number; titulo: string; quadroId: number },
+  hoje: string,
+): { tipo: TipoNotificacao; chave: string; titulo: string; texto: string; link: string } | null {
+  if (!dataValida(i.prazo)) return null;
+  const d = diasEntre(hoje, i.prazo);
+  const base = { link: linkTarefa(i.quadroId, i.tarefaId), texto: `${rotuloTicket(i.ticket)} ${i.titulo}` };
+  if (d === 1) return { ...base, tipo: "vence_amanha", chave: `vence-item:${i.itemId}:${i.prazo}`, titulo: `Item vence amanhã: ${i.texto}` };
+  if (d < 0 && d >= -30) return { ...base, tipo: "atrasada", chave: `atrasado-item:${i.itemId}:${i.prazo}`, titulo: `Item atrasado (prazo ${rotuloData(i.prazo, hoje)}): ${i.texto}` };
+  return null;
+}
+
 export function notificacaoDePrazo(
   t: { id: number; ticket: number; titulo: string; prazo: string | null; quadroId: number; quadroNome: string },
   hoje: string,

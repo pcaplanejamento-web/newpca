@@ -10,6 +10,7 @@ const data = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
   .refine((d) => dataValida(d), "Data inválida.");
 const id = z.number().int().positive();
+const nomeChecklist = z.string().trim().min(1, "Dê um nome ao checklist.").max(80, "Nome com até 80 caracteres.");
 const checklistTexto = z.string().trim().min(1, "Escreva o item.").max(300, "Item com até 300 caracteres.");
 const ids = (max: number) => z.array(id).max(max).transform((v) => [...new Set(v)]);
 
@@ -167,7 +168,8 @@ export const criarTarefaSchema = z
     quadroId: id,
     listaId: id,
     ...camposTarefa,
-    checklist: z.array(checklistTexto).max(100).optional(),
+    /** Os checklists nomeados da tarefa nova (itens desmarcados). */
+    checklists: z.array(z.object({ nome: nomeChecklist, itens: z.array(checklistTexto).max(100) })).max(20).optional(),
     eventos: z.array(eventoSchema).max(MAX_EVENTOS_TAREFA).optional(),
   })
   .refine(inicioAntesDoPrazo, MSG_DATAS);
@@ -185,11 +187,24 @@ export const editarTarefaSchema = z
 /** MOVER um cartão: a lista de destino e os VIZINHOS onde ele caiu (`null` = ponta) — o servidor calcula a ordem. */
 export const moverTarefaSchema = z.object({ listaId: id, anteriorId: id.nullable(), proximoId: id.nullable() });
 
-/** Um item do CHECKLIST (criar/editar). */
-export const checklistSchema = z.object({ texto: checklistTexto });
+/** Um item do CHECKLIST (criar — no checklist dado; sem ele, no 1º da tarefa). */
+export const checklistSchema = z.object({ texto: checklistTexto, checklistId: id.optional() });
 export const editarChecklistSchema = z
-  .object({ texto: checklistSchema.shape.texto.optional(), feito: z.boolean().optional(), anteriorId: id.nullable().optional(), proximoId: id.nullable().optional() })
-  .refine((v) => v.texto != null || v.feito != null || v.anteriorId !== undefined || v.proximoId !== undefined, "Nada a alterar.");
+  .object({
+    texto: checklistTexto.optional(),
+    feito: z.boolean().optional(),
+    anteriorId: id.nullable().optional(),
+    proximoId: id.nullable().optional(),
+    /** Prazo e responsável próprios do item (null = tira). */
+    prazo: data.nullable().optional(),
+    responsavelId: id.nullable().optional(),
+  })
+  .refine(
+    (v) => v.texto != null || v.feito != null || v.anteriorId !== undefined || v.proximoId !== undefined || v.prazo !== undefined || v.responsavelId !== undefined,
+    "Nada a alterar.",
+  );
+/** Um CHECKLIST nomeado (criar/renomear). */
+export const checklistNomeSchema = z.object({ nome: nomeChecklist });
 
 export const comentarioSchema = z.object({
   texto: z.string().trim().min(1, "Escreva o comentário.").max(5000, "Comentário com até 5.000 caracteres."),

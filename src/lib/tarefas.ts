@@ -7,6 +7,7 @@ import {
   pcas,
   tarefaAutomacoes,
   tarefaChecklist,
+  tarefaChecklists,
   tarefaComentarios,
   tarefaEquipeMembros,
   tarefaEquipes,
@@ -84,6 +85,7 @@ import {
   comandosMassa,
   comandosMover,
   comandosVinculos,
+  type ChecklistNovo,
   pessoaNaTarefa,
 } from "./tarefas-sql";
 import type { AcaoMassaTarefas } from "./tarefas-validation";
@@ -750,7 +752,9 @@ export async function excluirTarefa(id: number) {
 
 // ─── Conteúdo do cartão (fase 2): checklist · comentários ────────────────────────────────────────────
 
-export type ItemChecklist = { id: number; texto: string; feito: boolean; ordem: number };
+export type ItemChecklist = { id: number; checklistId: number; texto: string; feito: boolean; ordem: number; prazo: string | null; responsavelId: number | null };
+/** Um CHECKLIST nomeado da tarefa (os itens vêm à parte, com `checklistId`). */
+export type ChecklistNomeado = { id: number; nome: string; ordem: number };
 export type ComentarioTarefa = { id: number; usuarioId: number | null; usuarioNome: string; texto: string; mencoes: number[]; criadoEm: string | null; editadoEm: string | null };
 
 export const lerMencoes = (v: string | null): number[] => {
@@ -763,14 +767,13 @@ export const lerMencoes = (v: string | null): number[] => {
 };
 
 /** O CONTEÚDO do cartão (checklist e comentários — mais antigo primeiro). */
-export async function conteudoTarefa(id: number): Promise<{ checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] }> {
+export async function conteudoTarefa(
+  id: number,
+): Promise<{ checklists: ChecklistNomeado[]; checklist: ItemChecklist[]; comentarios: ComentarioTarefa[]; eventos: EventoTarefa[] }> {
   const db = getDb();
-  const [checklist, comentarios, eventos] = await Promise.all([
-    db
-      .select({ id: tarefaChecklist.id, texto: tarefaChecklist.texto, feito: tarefaChecklist.feito, ordem: tarefaChecklist.ordem })
-      .from(tarefaChecklist)
-      .where(eq(tarefaChecklist.tarefaId, id))
-      .orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id)),
+  const [checklists, checklist, comentarios, eventos] = await Promise.all([
+    listarChecklists(id),
+    itensChecklist(id),
     db.select().from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)).orderBy(asc(tarefaComentarios.id)),
     db
       .select(COLS_EVENTO)
@@ -780,6 +783,7 @@ export async function conteudoTarefa(id: number): Promise<{ checklist: ItemCheck
       .then(comConvidados),
   ]);
   return {
+    checklists,
     checklist,
     eventos,
     comentarios: comentarios.map((c) => ({
@@ -910,30 +914,98 @@ export async function tarefasAbertasLeves(quadroIds: number[]): Promise<{ id: nu
   return linhas.slice(0, LIMITE_TAREFAS_CALENDARIO);
 }
 
+/** Os checklists nomeados da tarefa, na ordem. */
+export function listarChecklists(tarefaId: number): Promise<ChecklistNomeado[]> {
+  return getDb()
+    .select({ id: tarefaChecklists.id, nome: tarefaChecklists.nome, ordem: tarefaChecklists.ordem })
+    .from(tarefaChecklists)
+    .where(eq(tarefaChecklists.tarefaId, tarefaId))
+    .orderBy(asc(tarefaChecklists.ordem), asc(tarefaChecklists.id));
+}
+
+/** Os itens de TODOS os checklists da tarefa (o `checklistId` diz de qual), na ordem. */
+export async function itensChecklist(tarefaId: number): Promise<ItemChecklist[]> {
+  const l = await getDb()
+    .select({
+      id: tarefaChecklist.id,
+      checklistId: tarefaChecklist.checklistId,
+      texto: tarefaChecklist.texto,
+      feito: tarefaChecklist.feito,
+      ordem: tarefaChecklist.ordem,
+      prazo: tarefaChecklist.prazo,
+      responsavelId: tarefaChecklist.responsavelId,
+    })
+    .from(tarefaChecklist)
+    .where(eq(tarefaChecklist.tarefaId, tarefaId))
+    .orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id));
+  return l.map((i) => ({ ...i, checklistId: i.checklistId ?? 0 }));
+}
+
+/** Os checklists da tarefa como a CRIAÇÃO os pede (nome + textos, desmarcados) — recorrência e cópia. */
+export async function checklistsParaCopiar(tarefaId: number): Promise<ChecklistNovo[]> {
+  const [cls, itens] = await Promise.all([listarChecklists(tarefaId), itensChecklist(tarefaId)]);
+  return cls.map((c) => ({ nome: c.nome, itens: itens.filter((i) => i.checklistId === c.id).map((i) => i.texto) }));
+}
+
+export async function getChecklist(id: number) {
+  const [c] = await getDb().select().from(tarefaChecklists).where(eq(tarefaChecklists.id, id));
+  return c ?? null;
+}
+
+/** CRIA um checklist nomeado (vazio) no fim da tarefa. */
+export async function criarChecklist(tarefaId: number, nome: string): Promise<number> {
+  const [c] = await getDb()
+    .insert(tarefaChecklists)
+    .values({ tarefaId, nome, ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_checklists WHERE tarefa_id = ${tarefaId})` })
+    .returning({ id: tarefaChecklists.id });
+  return c.id;
+}
+
+export async function renomearChecklist(id: number, nome: string) {
+  await getDb().update(tarefaChecklists).set({ nome }).where(eq(tarefaChecklists.id, id));
+}
+
+/** Exclui o checklist e os itens dele (num lote — não depende do cascade). */
+export async function excluirChecklist(id: number) {
+  const db = getDb();
+  await db.batch([db.delete(tarefaChecklist).where(eq(tarefaChecklist.checklistId, id)), db.delete(tarefaChecklists).where(eq(tarefaChecklists.id, id))]);
+}
+
 export async function getItemChecklist(id: number) {
   const [i] = await getDb().select().from(tarefaChecklist).where(eq(tarefaChecklist.id, id));
   return i ?? null;
 }
 
-export async function criarItemChecklist(tarefaId: number, texto: string): Promise<number> {
-  const [i] = await getDb()
+/** Acrescenta um item ao FIM do checklist dado (da própria tarefa); sem ele, ao 1º — criado ("Checklist") se não houver. */
+export async function criarItemChecklist(tarefaId: number, texto: string, checklistId?: number): Promise<{ id: number; checklistId: number } | null> {
+  const db = getDb();
+  let alvo = checklistId ?? null;
+  if (alvo != null) {
+    const c = await getChecklist(alvo);
+    if (!c || c.tarefaId !== tarefaId) return null;
+  } else alvo = (await listarChecklists(tarefaId))[0]?.id ?? (await criarChecklist(tarefaId, "Checklist"));
+  const [i] = await db
     .insert(tarefaChecklist)
-    .values({ tarefaId, texto, ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_checklist WHERE tarefa_id = ${tarefaId})` })
+    .values({ tarefaId, checklistId: alvo, texto, ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_checklist WHERE checklist_id = ${alvo})` })
     .returning({ id: tarefaChecklist.id });
-  return i.id;
+  return { id: i.id, checklistId: alvo };
 }
 
-/** Edita o item (texto/feito) e, com vizinhos, o REORDENA entre eles (ordem fracionária; sem vão, renumera a lista). */
+/**
+ * Edita o item (texto/feito/prazo/responsável) e, com vizinhos, o REORDENA entre eles DENTRO do checklist dele (ordem
+ * fracionária; sem vão, renumera o checklist).
+ */
 export async function atualizarItemChecklist(
-  item: { id: number; tarefaId: number },
-  d: { texto?: string; feito?: boolean; anteriorId?: number | null; proximoId?: number | null },
+  item: { id: number; tarefaId: number; checklistId: number | null },
+  d: { texto?: string; feito?: boolean; anteriorId?: number | null; proximoId?: number | null; prazo?: string | null; responsavelId?: number | null },
 ) {
   const db = getDb();
   let ordem: number | undefined;
   const renumeros: [number, number][] = [];
   if (d.anteriorId !== undefined || d.proximoId !== undefined) {
+    const doChecklist = item.checklistId != null ? eq(tarefaChecklist.checklistId, item.checklistId) : eq(tarefaChecklist.tarefaId, item.tarefaId);
     const lista = (
-      await db.select({ id: tarefaChecklist.id, ordem: tarefaChecklist.ordem }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, item.tarefaId)).orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id))
+      await db.select({ id: tarefaChecklist.id, ordem: tarefaChecklist.ordem }).from(tarefaChecklist).where(doChecklist).orderBy(asc(tarefaChecklist.ordem), asc(tarefaChecklist.id))
     ).filter((x) => x.id !== item.id);
     const de = (x: number | null | undefined) => (x == null ? null : (lista.find((l) => l.id === x)?.ordem ?? null));
     const r = ordemItem(de(d.anteriorId), de(d.proximoId));
@@ -947,7 +1019,13 @@ export async function atualizarItemChecklist(
       });
     }
   }
-  const set = { ...(d.texto != null ? { texto: d.texto } : {}), ...(d.feito != null ? { feito: d.feito } : {}), ...(ordem != null ? { ordem } : {}) };
+  const set = {
+    ...(d.texto != null ? { texto: d.texto } : {}),
+    ...(d.feito != null ? { feito: d.feito } : {}),
+    ...(ordem != null ? { ordem } : {}),
+    ...(d.prazo !== undefined ? { prazo: d.prazo } : {}),
+    ...(d.responsavelId !== undefined ? { responsavelId: d.responsavelId } : {}),
+  };
   const cmds = [
     ...(Object.keys(set).length ? [db.update(tarefaChecklist).set(set).where(eq(tarefaChecklist.id, item.id))] : []),
     ...renumeros.map(([x, o]) => db.update(tarefaChecklist).set({ ordem: o }).where(eq(tarefaChecklist.id, x))),
@@ -1286,7 +1364,7 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
     const rec = t?.recorrencia;
     if (!t || !rec || !t.concluidaEm) continue;
     const { inicio, prazo } = proximaOcorrencia(rec, t, dataIsoBrasilia(t.concluidaEm) || hoje, hoje);
-    const checklist = (await db.select({ texto: tarefaChecklist.texto }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)).orderBy(asc(tarefaChecklist.ordem))).map((c) => c.texto);
+    const checklists = await checklistsParaCopiar(id);
     try {
       const nova = await criarTarefa({
         quadroId: quadro.id,
@@ -1309,7 +1387,7 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
         vinculo: t.vinculo,
         recorrencia: rec,
         recorrenciaAnteriorId: id,
-        checklist,
+        checklists,
         blocos: t.blocos,
       });
       n++;

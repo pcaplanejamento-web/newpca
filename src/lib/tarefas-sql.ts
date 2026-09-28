@@ -4,6 +4,7 @@ import type * as schema from "../db/schema.ts";
 import {
   notificacoes,
   tarefaChecklist,
+  tarefaChecklists,
   tarefaEquipeMembros,
   tarefaEquipes,
   tarefaEquipesLinks,
@@ -87,7 +88,7 @@ export function comandosAtualizarEvento(db: Db, id: number, d: DadosEvento) {
  */
 
 /** O id da tarefa recém-criada no quadro (o último ticket emitido) — usado DENTRO do mesmo lote. */
-const idDaNova = (quadroId: number) =>
+const idDaNova = (quadroId: number): SQL<number> =>
   sql`(SELECT id FROM tarefas WHERE quadro_id = ${quadroId} AND ticket = (SELECT prox_ticket - 1 FROM tarefa_quadros WHERE id = ${quadroId}))`;
 
 /**
@@ -118,8 +119,8 @@ export function comandosCriarTarefa(
     recorrencia?: Recorrencia | null;
     /** A ocorrência anterior da série (ÚNICA — a 2ª tentativa de gerar a mesma próxima derruba o lote inteiro). */
     recorrenciaAnteriorId?: number | null;
-    /** Itens do checklist (desmarcados), na ordem. */
-    checklist?: string[];
+    /** Os CHECKLISTS nomeados, com os itens (desmarcados), na ordem. */
+    checklists?: ChecklistNovo[];
     /** Os blocos da tarefa (a ordem + notas e links). */
     blocos?: BlocoTarefa[] | null;
     /** Os EVENTOS da tarefa (bloco "Eventos"). */
@@ -159,7 +160,7 @@ export function comandosCriarTarefa(
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
     ...(d.equipes ?? []).map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: idDaNova(d.quadroId), equipeId: e })),
-    ...(d.checklist ?? []).map((texto, i) => db.insert(tarefaChecklist).values({ tarefaId: idDaNova(d.quadroId), texto, ordem: i + 1 })),
+    ...(d.checklists ?? []).flatMap((c, k) => comandosChecklistNovo(db, idDaNova(d.quadroId), c, k + 1)),
     ...(d.eventos ?? []).flatMap((e) => [
       db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
       ...comandosConvidados(db, ultimoEvento, e.convidados ?? []),
@@ -217,6 +218,26 @@ export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number
 export const pessoaNaTarefa = (usuarioId: number, observador = false) =>
   sql`(EXISTS (SELECT 1 FROM tarefa_pessoas tp WHERE tp.tarefa_id = ${tarefas.id} AND tp.usuario_id = ${usuarioId}${observador ? sql`` : sql` AND tp.papel = 'responsavel'`})
     OR EXISTS (SELECT 1 FROM tarefa_equipes_links el JOIN tarefa_equipe_membros em ON em.equipe_id = el.equipe_id WHERE el.tarefa_id = ${tarefas.id} AND em.usuario_id = ${usuarioId}))`;
+
+/** Um checklist a CRIAR: o nome e os itens (desmarcados), na ordem. */
+export type ChecklistNovo = { nome: string; itens: string[] };
+
+/** O id do checklist recém-criado DENTRO do lote (o lote do D1 é sequencial). */
+const ultimoChecklist = sql<number>`(SELECT MAX(id) FROM tarefa_checklists)`;
+/** Itens por INSERT: até 4 parâmetros por linha (a tarefa nova é uma subconsulta com 2, texto, ordem) — 20 × 4 = 80 < 100 do D1. */
+const LOTE_ITENS = 20;
+
+/** CRIA um checklist nomeado na tarefa (`tarefaId` pode ser a subconsulta da tarefa nova) com os itens, em lotes. */
+export function comandosChecklistNovo(db: Db, tarefaId: number | SQL<number>, c: ChecklistNovo, ordem: number) {
+  const lotes: string[][] = [];
+  for (let i = 0; i < c.itens.length; i += LOTE_ITENS) lotes.push(c.itens.slice(i, i + LOTE_ITENS));
+  return [
+    db.insert(tarefaChecklists).values({ tarefaId, nome: c.nome, ordem }),
+    ...lotes.map((l, k) =>
+      db.insert(tarefaChecklist).values(l.map((texto, i) => ({ tarefaId, checklistId: ultimoChecklist, texto, ordem: k * LOTE_ITENS + i + 1 }))),
+    ),
+  ];
+}
 
 /** Linhas por INSERT de membros (2 parâmetros cada — muito abaixo dos 100 do D1). */
 const LOTE_MEMBROS = 30;

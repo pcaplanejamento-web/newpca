@@ -932,6 +932,22 @@ export const tarefaEquipesLinks = sqliteTable(
   (t) => [primaryKey({ columns: [t.tarefaId, t.equipeId] }), index("tarefa_equipes_links_equipe_idx").on(t.equipeId)],
 );
 
+/** Os CHECKLISTS NOMEADOS de uma tarefa (migração `0054`). */
+export const tarefaChecklists = sqliteTable(
+  "tarefa_checklists",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull().default("Checklist"),
+    ordem: real("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("tarefa_checklists_tarefa_idx").on(t.tarefaId, t.ordem)],
+);
+
+/** Os ITENS dos checklists (cada um num checklist nomeado; prazo e responsável próprios — `0054`). */
 export const tarefaChecklist = sqliteTable(
   "tarefa_checklist",
   {
@@ -939,12 +955,19 @@ export const tarefaChecklist = sqliteTable(
     tarefaId: integer("tarefa_id")
       .notNull()
       .references(() => tarefas.id, { onDelete: "cascade" }),
+    checklistId: integer("checklist_id").references(() => tarefaChecklists.id, { onDelete: "cascade" }),
     texto: text("texto").notNull(),
     feito: integer("feito", { mode: "boolean" }).notNull().default(false),
     ordem: real("ordem").notNull().default(0),
+    prazo: text("prazo"),
+    responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("tarefa_checklist_tarefa_idx").on(t.tarefaId, t.ordem)],
+  (t) => [
+    index("tarefa_checklist_tarefa_idx").on(t.tarefaId, t.ordem),
+    index("tarefa_checklist_lista_idx").on(t.checklistId, t.ordem),
+    index("tarefa_checklist_resp_idx").on(t.responsavelId),
+  ],
 );
 
 /** EVENTOS de uma tarefa (migração `0046`) — o bloco "Eventos": data, dia inteiro ou horário ("HH:MM"), local, cor. */
