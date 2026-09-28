@@ -94,6 +94,7 @@ import {
   comandosAtualizarEvento,
   comandosCriarEvento,
   comandosCriarQuadroDoModelo,
+  comandosComentariosImportados,
   comandosCriarTarefa,
   comandosEquipe,
   comandosMassa,
@@ -105,7 +106,7 @@ import {
   type ChecklistNovo,
   pessoaNaTarefa,
 } from "./tarefas-sql";
-import type { AcaoMassaTarefas } from "./tarefas-validation";
+import type { AcaoMassaTarefas, CartaoImportado } from "./tarefas-validation";
 
 /**
  * TAREFAS (migração `0042`) — acesso ao D1 (só escopo de request). O quadro é de UM grupo: vê e edita quem é membro do
@@ -1966,4 +1967,106 @@ async function buscarNoLote(ids: number[], q: string, usuarioId: number, hoje: s
   });
   for (const t of tfs) if (t.prazo) out.push({ tipo: "tarefa", chave: `p${t.id}`, titulo: t.titulo, data: t.prazo, hora: null, local: null, quadroId: t.quadroId, ticket: t.ticket, repete: false });
   return out;
+}
+
+// ─── IMPORTAR DO TRELLO (F9) ──────────────────────────────────────────────────────────────────────────────
+
+const nomeChave = (s: string) => s.trim().toLocaleLowerCase("pt-BR");
+
+/**
+ * A ESTRUTURA da importação: tira as listas VAZIAS do quadro (se pedido — o quadro novo nasce com 3), cria as listas do
+ * Trello no fim (a arquivada, arquivada) e as ETIQUETAS (as de mesmo nome já no quadro são reusadas). Devolve os mapas
+ * chave do Trello → id daqui.
+ */
+export async function importarEstrutura(
+  quadroId: number,
+  d: { listas: { chave: string; nome: string; arquivada: boolean }[]; etiquetas: { chave: string; nome: string; cor: string }[]; limparVazias: boolean },
+): Promise<{ listas: Record<string, number>; etiquetas: Record<string, number> }> {
+  const db = getDb();
+  if (d.limparVazias)
+    await db
+      .delete(tarefaListas)
+      .where(and(eq(tarefaListas.quadroId, quadroId), sql`NOT EXISTS (SELECT 1 FROM tarefas t WHERE t.lista_id = ${tarefaListas.id})`));
+  const listas: Record<string, number> = {};
+  for (const l of d.listas) {
+    const id = await criarLista(quadroId, { nome: l.nome });
+    if (l.arquivada) await atualizarLista(id, { arquivada: true });
+    listas[l.chave] = id;
+  }
+  const existentes = new Map((await etiquetasDoQuadroTodas(quadroId)).map((e) => [nomeChave(e.nome), e.id]));
+  const etiquetas: Record<string, number> = {};
+  for (const e of d.etiquetas) {
+    const ja = existentes.get(nomeChave(e.nome));
+    const id = ja ?? (await criarEtiqueta(quadroId, { nome: e.nome, cor: e.cor }));
+    existentes.set(nomeChave(e.nome), id);
+    etiquetas[e.chave] = id;
+  }
+  return { listas, etiquetas };
+}
+
+/**
+ * Os CARTÕES da importação (um lote atômico por cartão: a tarefa + checklists + comentários com o autor e a data do
+ * Trello). Para no 1º erro e devolve o que já entrou (`ids`) + a falha — a tela retoma dali.
+ */
+export async function importarCartoes(u: UsuarioSessao, quadroId: number, cartoes: CartaoImportado[]): Promise<{ ids: Record<string, number>; falha: { chave: string; erro: string } | null }> {
+  const db = getDb();
+  const ids: Record<string, number> = {};
+  for (const c of cartoes) {
+    try {
+      const comandos = comandosCriarTarefa(db, {
+        quadroId,
+        listaId: c.listaId,
+        titulo: c.titulo,
+        descricao: c.descricao || null,
+        prioridade: "media",
+        inicio: c.inicio,
+        prazo: c.prazo,
+        prazoHora: c.prazoHora,
+        concluida: c.concluida,
+        arquivada: c.arquivada,
+        template: c.template,
+        pessoas: c.pessoas,
+        etiquetas: c.etiquetas,
+        criadoPor: u.id,
+        checklists: c.checklists,
+        blocos: c.links.length ? c.links.map((l, i) => ({ id: `l${i + 1}`, tipo: "link" as const, url: l.url, titulo: l.titulo })) : null,
+        tituloManual: true,
+      });
+      const r = await db.batch(comandos);
+      const [nova] = r[r.length - 1] as { id: number }[];
+      const coment = comandosComentariosImportados(db, nova.id, c.comentarios);
+      if (coment.length) await db.batch(coment as [(typeof coment)[number], ...typeof coment]);
+      ids[c.chave] = nova.id;
+    } catch (e) {
+      return { ids, falha: { chave: c.chave, erro: (e as Error)?.message ?? String(e) } };
+    }
+  }
+  return { ids, falha: null };
+}
+
+/** Os VÍNCULOS tarefa ↔ tarefa da importação — só entre tarefas DESTE quadro; o par repetido (ou o inverso) entra uma vez. */
+export async function importarVinculos(quadroId: number, pares: { de: number; para: number }[]): Promise<number> {
+  const db = getDb();
+  const todos = [...new Set(pares.flatMap((p) => [p.de, p.para]))];
+  const doQuadro = new Set(
+    (
+      await Promise.all(lotesDeIds(todos).map((l) => db.select({ id: tarefas.id }).from(tarefas).where(and(eq(tarefas.quadroId, quadroId), inArray(tarefas.id, l)))))
+    )
+      .flat()
+      .map((x) => x.id),
+  );
+  const vistos = new Set<string>();
+  const validos = pares.filter((p) => {
+    const k = [Math.min(p.de, p.para), Math.max(p.de, p.para)].join(":");
+    if (p.de === p.para || !doQuadro.has(p.de) || !doQuadro.has(p.para) || vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+  if (!validos.length) return 0;
+  const cmds = validos.map((p) => db.insert(tarefaVinculos).values({ tarefaId: p.de, tipo: "tarefa", alvoId: p.para }).onConflictDoNothing());
+  for (let i = 0; i < cmds.length; i += 50) {
+    const l = cmds.slice(i, i + 50);
+    await db.batch(l as [(typeof l)[number], ...typeof l]);
+  }
+  return validos.length;
 }

@@ -15,7 +15,8 @@ import { CamposPersonalizadosQuadro } from "./CamposTarefa";
 import { ColorField } from "./ColorField";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
-import { IconCalendar, IconCheck, IconPencil, IconPlus, IconTrash } from "./icons";
+import { IconCalendar, IconCheck, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
+import { ImportarTrello } from "./ImportarTrello";
 import { Modal } from "./Modal";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro } from "./QuadroCard";
@@ -75,6 +76,7 @@ export function ConfiguracaoQuadro({
   const [etiqueta, setEtiqueta] = useState<RascunhoEtiqueta | null>(null);
   const [equipe, setEquipe] = useState<RascunhoEquipe | null>(null);
   const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
+  const [trello, setTrello] = useState(false);
   const porId = new Map(todas.map((p) => [p.id, p]));
   const [ordem, setOrdem] = useState<number[] | null>(null);
   // A ordem otimista vale até as listas do servidor chegarem.
@@ -218,7 +220,10 @@ export function ConfiguracaoQuadro({
         {podeEditar && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             <Switch checked={quadro.arquivado} disabled={ocupado != null} onChange={arquivarQuadro} label="Quadro arquivado" />
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex flex-wrap justify-end gap-2">
+              <Button variant="ghost" size="sm" disabled={ocupado != null || quadro.arquivado} icon={<IconUpload className="h-4 w-4" />} onClick={() => setTrello(true)}>
+                Importar do Trello
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -524,6 +529,7 @@ export function ConfiguracaoQuadro({
           </div>
         )}
       </Modal>
+      <ImportarTrello aberto={trello} quadroId={quadro.id} pessoas={pessoas} onFechar={() => setTrello(false)} onFeito={onMudou} />
       {confirmacao}
     </div>
   );

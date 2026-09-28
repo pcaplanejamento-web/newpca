@@ -11,6 +11,7 @@ import {
   comandosAtualizarEvento,
   comandosCriarEvento,
   comandosCriarQuadroDoModelo,
+  comandosComentariosImportados,
   comandosCriarTarefa,
   comandosEquipe,
   comandosMassa,
@@ -140,7 +141,7 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefas WHERE recorrencia_anterior_id = 2").get() as { n: number }).n, 1);
   });
 
-  it("CHECKLISTS NOMEADOS: a tarefa nova nasce com vários, 45 itens em INSERTs de até 20 (≤ 100 parâmetros), cada item no seu", async () => {
+  it("CHECKLISTS NOMEADOS: a tarefa nova nasce com vários, 45 itens em INSERTs de até 16 (≤ 100 parâmetros), cada item no seu", async () => {
     const itens = Array.from({ length: 45 }, (_, i) => `Servidor ${i + 1}`);
     const cmds = comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Faltas", pessoas: [], etiquetas: [], checklists: [{ nome: "SERVIDORES COM FALTA", itens }, { nome: "BIOMETRIA", itens: ["x"] }] });
     for (const c of cmds) assert.ok(c.toSQL().params.length <= 100, `${c.toSQL().params.length} parâmetros`);
@@ -274,6 +275,27 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.deepEqual(linhas(), [{ t: a, tipo: "tarefa", a: b }]);
     db.exec(`DELETE FROM tarefas WHERE id = ${a}`);
     assert.deepEqual(linhas(), []);
+  });
+
+  it("IMPORTAÇÃO do Trello: nasce arquivada e com itens MARCADOS; 40 comentários com autor e data em INSERTs de até 16", async () => {
+    const itens = Array.from({ length: 30 }, (_, i) => `i${i}`);
+    const r = await orm.batch(
+      comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Do Trello", pessoas: [], etiquetas: [], arquivada: true, checklists: [{ nome: "S", itens, feitos: itens.map((_, i) => i % 2 === 0) }] }),
+    );
+    const [{ id }] = r.at(-1) as { id: number }[];
+    assert.equal((db.prepare("SELECT arquivada AS a FROM tarefas WHERE id = ?").get(id) as { a: number }).a, 1);
+    assert.equal((db.prepare("SELECT SUM(feito) AS n FROM tarefa_checklist WHERE tarefa_id = ?").get(id) as { n: number }).n, 15);
+    const coment = comandosComentariosImportados(
+      orm,
+      id,
+      Array.from({ length: 40 }, (_, i) => ({ autor: `P${i}`, data: i === 0 ? null : "2026-10-01T13:00:00.000Z", texto: `c${i}` })),
+    );
+    for (const c of coment) assert.ok(c.toSQL().params.length <= 100);
+    await orm.batch(coment as never);
+    const l = db.prepare("SELECT usuario_id AS u, usuario_nome AS n, criado_em AS d FROM tarefa_comentarios WHERE tarefa_id = ? ORDER BY id").all(id) as { u: number | null; n: string; d: string }[];
+    assert.equal(l.length, 40);
+    assert.deepEqual([l[1].u, l[1].n, l[1].d], [null, "P1", "2026-10-01 13:00:00"]);
+    assert.ok(l[0].d);
   });
 
   it("COPIAR para outro quadro (template, no topo, etiqueta nova criada) e MOVER entre quadros (ticket novo, pessoas filtradas)", async () => {

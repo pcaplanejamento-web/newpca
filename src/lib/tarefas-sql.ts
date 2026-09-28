@@ -5,6 +5,7 @@ import {
   notificacoes,
   tarefaCampoValores,
   tarefaChecklist,
+  tarefaComentarios,
   tarefaChecklists,
   tarefaEquipeMembros,
   tarefaEquipes,
@@ -136,6 +137,8 @@ export function comandosCriarTarefa(
     copiadaDe?: number | null;
     /** No TOPO da lista (senão no fim). */
     noInicio?: boolean;
+    /** Nasce ARQUIVADA (a importação do Trello). */
+    arquivada?: boolean;
     /** Os valores dos CAMPOS personalizados (migração `0056`). */
     campos?: { campoId: number; valor: string }[];
     /** O título foi escrito à mão (o automático não o troca). */
@@ -163,6 +166,7 @@ export function comandosCriarTarefa(
         : sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefas WHERE lista_id = ${d.listaId})`,
       concluidaEm: d.concluida && !d.template ? sql`(CURRENT_TIMESTAMP)` : null,
       template: d.template ?? false,
+      arquivada: d.arquivada ?? false,
       copiadaDe: d.copiadaDe ?? null,
       criadoPor: d.criadoPor,
       estimativaH: d.estimativaH ?? null,
@@ -311,6 +315,26 @@ export function comandosVinculosTarefa(db: Db, tarefaId: number, vinculos: { tip
   ];
 }
 
+/** Comentários por INSERT (até 5 parâmetros cada — 16 × 5 = 80). */
+const LOTE_COMENTARIOS = 16;
+
+/** Grava COMENTÁRIOS de fora (a importação do Trello): sem usuário, com o nome e a data originais. */
+export function comandosComentariosImportados(db: Db, tarefaId: number, lista: { autor: string; data: string | null; texto: string }[]) {
+  const lotes: (typeof lista)[] = [];
+  for (let i = 0; i < lista.length; i += LOTE_COMENTARIOS) lotes.push(lista.slice(i, i + LOTE_COMENTARIOS));
+  return lotes.map((l) =>
+    db.insert(tarefaComentarios).values(
+      l.map((c) => ({
+        tarefaId,
+        usuarioId: null,
+        usuarioNome: c.autor,
+        texto: c.texto,
+        criadoEm: c.data ? c.data.replace("T", " ").slice(0, 19) : sql`(CURRENT_TIMESTAMP)`,
+      })),
+    ),
+  );
+}
+
 /** Linhas de valor por INSERT (4 parâmetros cada com o id da tarefa nova em subconsulta — ≤ 100). */
 export const LOTE_VALORES_CAMPO = 20;
 
@@ -343,12 +367,13 @@ export const pessoaNaTarefa = (usuarioId: number, observador = false) =>
     OR EXISTS (SELECT 1 FROM tarefa_equipes_links el JOIN tarefa_equipe_membros em ON em.equipe_id = el.equipe_id WHERE el.tarefa_id = ${tarefas.id} AND em.usuario_id = ${usuarioId}))`;
 
 /** Um checklist a CRIAR: o nome e os itens (desmarcados), na ordem. */
-export type ChecklistNovo = { nome: string; itens: string[] };
+/** Um checklist a CRIAR: o nome e os itens na ordem (`feitos` = os já marcados, na mesma posição — a importação). */
+export type ChecklistNovo = { nome: string; itens: string[]; feitos?: boolean[] };
 
 /** O id do checklist recém-criado DENTRO do lote (o lote do D1 é sequencial). */
 const ultimoChecklist = sql<number>`(SELECT MAX(id) FROM tarefa_checklists)`;
-/** Itens por INSERT: até 4 parâmetros por linha (a tarefa nova é uma subconsulta com 2, texto, ordem) — 20 × 4 = 80 < 100 do D1. */
-const LOTE_ITENS = 20;
+/** Itens por INSERT: até 5 parâmetros por linha (a tarefa nova é uma subconsulta com 2, texto, ordem, feito) — 16 × 5 = 80 < 100 do D1. */
+const LOTE_ITENS = 16;
 
 /** CRIA um checklist nomeado na tarefa (`tarefaId` pode ser a subconsulta da tarefa nova) com os itens, em lotes. */
 export function comandosChecklistNovo(db: Db, tarefaId: number | SQL<number>, c: ChecklistNovo, ordem: number) {
@@ -357,7 +382,9 @@ export function comandosChecklistNovo(db: Db, tarefaId: number | SQL<number>, c:
   return [
     db.insert(tarefaChecklists).values({ tarefaId, nome: c.nome, ordem }),
     ...lotes.map((l, k) =>
-      db.insert(tarefaChecklist).values(l.map((texto, i) => ({ tarefaId, checklistId: ultimoChecklist, texto, ordem: k * LOTE_ITENS + i + 1 }))),
+      db
+        .insert(tarefaChecklist)
+        .values(l.map((texto, i) => ({ tarefaId, checklistId: ultimoChecklist, texto, ordem: k * LOTE_ITENS + i + 1, feito: c.feitos?.[k * LOTE_ITENS + i] ?? false }))),
     ),
   ];
 }

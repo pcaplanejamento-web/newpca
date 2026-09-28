@@ -324,3 +324,50 @@ export const externoSchema = z.object({
   cor: cor.nullable().default(null),
 });
 export const editarExternoSchema = z.object({ nome: externoSchema.shape.nome.optional(), cor: cor.nullable().optional() }).refine((v) => v.nome !== undefined || v.cor !== undefined, "Nada a alterar.");
+
+// ─── Importar do TRELLO (F9) ────────────────────────────────────────────────────────────────────────────────
+
+const chaveTrello = z.string().min(1).max(40);
+const cartaoTrello = z.object({
+  chave: chaveTrello,
+  listaId: id,
+  titulo: z.string().trim().min(1).max(200),
+  descricao: z.string().max(10_000).nullable(),
+  inicio: data.nullable(),
+  prazo: data.nullable(),
+  prazoHora: hora.nullable(),
+  concluida: z.boolean(),
+  arquivada: z.boolean(),
+  template: z.boolean(),
+  etiquetas: ids(20),
+  pessoas: ids(20),
+  checklists: z.array(z.object({ nome: nomeChecklist, itens: z.array(checklistTexto).max(100), feitos: z.array(z.boolean()).max(100) })).max(20),
+  links: z
+    .array(
+      z.object({
+        url: z
+          .string()
+          .trim()
+          .max(MAX_URL)
+          .refine((u) => /^https?:\/\/[^\s]+$/i.test(u), "Link inválido."),
+        titulo: z.string().trim().max(MAX_TITULO_LINK),
+      }),
+    )
+    .max(20),
+  comentarios: z.array(z.object({ autor: z.string().trim().min(1).max(80), data: z.string().max(40).nullable(), texto: z.string().trim().min(1).max(5000) })).max(100),
+});
+/**
+ * IMPORTAR um quadro do Trello em 3 passos: `estrutura` (listas + etiquetas — as etiquetas de mesmo nome são reusadas),
+ * `cartoes` (até 20 por chamada) e `vinculos` (os pares tarefa ↔ tarefa, depois de todos os cartões).
+ */
+export const importarTrelloSchema = z.discriminatedUnion("modo", [
+  z.object({
+    modo: z.literal("estrutura"),
+    listas: z.array(z.object({ chave: chaveTrello, nome: z.string().trim().min(1).max(60), arquivada: z.boolean() })).max(200),
+    etiquetas: z.array(z.object({ chave: chaveTrello, nome: z.string().trim().min(1).max(30), cor })).max(200),
+    limparVazias: z.boolean(),
+  }),
+  z.object({ modo: z.literal("cartoes"), cartoes: z.array(cartaoTrello).min(1).max(20) }),
+  z.object({ modo: z.literal("vinculos"), pares: z.array(z.object({ de: id, para: id })).max(500) }),
+]);
+export type CartaoImportado = z.infer<typeof cartaoTrello>;

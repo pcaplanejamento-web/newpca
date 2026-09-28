@@ -2249,7 +2249,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vínculos. Tela: **`VinculosTarefa`** (ex-`VinculoTarefa`) — a lista de cartões compactos (tarefa com o círculo de
     conclusão, quadro › lista e o prazo no semáforo; os demais com o rótulo) com Desvincular e "Vincular" (tipo + busca);
     o bloco do corpo virou "Vínculos"; o cartão mostra o ícone com a contagem; a Lista, a coluna "Vínculos" multi-valor.
-- **Próximo** (ver `docs/ROADMAP.md`): a fase F9 do padrão Trello, e-mail das notificações (Resend) e relatório de
+  - **FASE 19 / F9 — IMPORTAR DO TRELLO (sem migração):** núcleo PURO **`trello-import.ts`** (testado com um JSON de
+    exemplo): `lerTrello` (o JSON exportado → listas na ordem [a fechada, arquivada], etiquetas [`corTrello`: cor do Trello e
+    variações `_dark/_light` → hex], cartões [título, descrição, prazo com HORA em Brasília (`dataHoraTrello`, UTC−3),
+    início, `dueComplete` = concluída no lugar, `closed` = arquivada, `isTemplate` = template], checklists nomeados com os
+    itens MARCADOS, comentários com autor e data, anexos: link para OUTRO cartão do mesmo quadro = vínculo tarefa ↔ tarefa
+    (`codigoCartaoTrello`), os demais = blocos Link; cartão de lista inexistente sai; tolerante — nada lança), `casarMembro`
+    (membro → pessoa do grupo só quando UMA casa: nome completo, ou usuário/nome = apelido) e `resumoTrello`. Servidor: `POST
+    /api/tarefas/quadros/[id]/importar` (`importarTrelloSchema`, editor, quadro não arquivado, auditoria `importar`) em 3
+    passos — `estrutura` (`importarEstrutura`: tira as listas VAZIAS se pedido, cria as listas no fim e as etiquetas —
+    as de mesmo nome são reusadas), `cartoes` (até `LOTE_IMPORTACAO`=20; `importarCartoes`: um lote atômico por cartão com
+    `comandosCriarTarefa` [+ `arquivada`, `ChecklistNovo.feitos`] e `comandosComentariosImportados` [sem usuário, nome e data
+    do Trello; INSERTs de 16 — testados no D1 real]; para no 1º erro e devolve o que entrou) e `vinculos`
+    (`importarVinculos`: só entre tarefas do quadro, o par e o inverso uma vez). Listas/etiquetas/pessoas conferidas contra
+    o quadro. Tela: **`ImportarTrello`** (Configuração → "Importar do Trello"): `Dropzone` do .json → prévia (`StatMini`),
+    os membros com o `SelectField` da pessoa (pré-casados), "Importar também os arquivados" e "Tirar as listas vazias" →
+    `Progress` por etapa; uma falha mostra o motivo e "Tentar de novo" RETOMA (as chaves já criadas ficam guardadas).
+- **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

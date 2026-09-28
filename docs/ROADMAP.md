@@ -1090,7 +1090,10 @@ título escrito à mão prevalece). Copiar, template, mover e recorrência levam
 ✅ **Tarefas no padrão Trello — F8 (migração `0057`):** VÁRIOS vínculos por tarefa — protocolos, DFDs, PCAs, orçamentos e
 OUTRAS TAREFAS (a ligação entre tarefas aparece nos dois lados, com quadro › lista, prazo e conclusão); o vínculo único
 antigo foi migrado.
-🔜 **Tarefas no padrão Trello — próxima fase:** F9 importar do Trello.
+✅ **Tarefas no padrão Trello — F9:** IMPORTAR DO TRELLO na Configuração do quadro — o JSON exportado vira listas,
+etiquetas (com a cor), cartões (prazo com hora, concluídos, arquivados, templates), checklists com os itens marcados,
+comentários (autor e data), links e vínculos entre cartões; os membros são casados com as pessoas do grupo na prévia; a
+importação é em lotes, com progresso, e retoma de onde parou.
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
