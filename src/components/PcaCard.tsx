@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { brlCompact, num } from "@/lib/format";
 import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { Badge } from "./Badge";
+import { CarregandoLink } from "./CarregandoLink";
 import { IconPlus } from "./icons";
 
 /**
@@ -87,8 +88,9 @@ export function PcaCard({ pca, onClick, href }: { pca: PcaCardDados; onClick?: (
     "group block w-full rounded-card text-left focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25";
   if (href)
     return (
-      <Link href={href} className={cls} aria-label={`Abrir ${pca.nome}`}>
+      <Link href={href} className={`relative ${cls}`} aria-label={`Abrir ${pca.nome}`}>
         {conteudo}
+        <CarregandoLink rotulo="Abrindo o PCA…" />
       </Link>
     );
   return (

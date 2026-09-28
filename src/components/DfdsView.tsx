@@ -193,6 +193,7 @@ export function DfdsView({
   edicoes,
   abrirInicial = null,
   dadosCompletos = false,
+  seletorMesa,
 }: {
   podeEditar: boolean;
   dfds: DfdResumo[];
@@ -224,6 +225,8 @@ export function DfdsView({
   abrirInicial?: AberturaMesa | null;
   /** As tabelas abrem com os DADOS COMPLETOS (a preferência do usuário — o botão da barra a troca e a guarda). */
   dadosCompletos?: boolean;
+  /** O SELETOR DE MESA (Mesa do sistema | Mesa de um PCA) — 1º item da barra, só na Mesa principal (`SeletorMesa`). */
+  seletorMesa?: ReactNode;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -1888,6 +1891,7 @@ export function DfdsView({
           protocolo, que valem para todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de
           protocolos. */}
       <div className="flex flex-wrap items-center gap-2">
+        {seletorMesa}
         <Segmented<Vista>
           value={vista}
           onChange={setVista}

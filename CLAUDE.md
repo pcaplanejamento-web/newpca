@@ -1661,6 +1661,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     PCA" no `PainelPca`/`OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
     protocolos/DFDs da prévia (`escopoConsulta`). Nada é gravado; a tela inicial (só publicados) nunca vê a prévia; o
     Calendário (`cronogramaPcas`) segue só com o incorporado.
+- **MESA DO PCA DENTRO DA MESA DO SISTEMA (seletor de Mesa, sem migração):** o 1º item da barra da Mesa principal é o
+  **`SeletorMesa`** ("Mesa do sistema" | "PCA · nome (ano)" — os PCAs de fonte Protocolos; `DfdsView.seletorMesa`).
+  Escolher um PCA navega para **`/painel/mesa?pca=<id>`**, que renderiza o `MesaPca` com o MESMO loader da aba Mesa do
+  espaço (**`carregarMesaDoPca`**, `mesa-dados.ts` — `carregarMesa(u, pcaId)` + a ação de cada incorporado + os DFDs em
+  outro PCA): escopo, ações, trava, edições `mesa-pca:` e a visão dos marcados conforme a Configuração do PCA (ligada ou
+  desligada). As mesas seguem INDEPENDENTES — é só a troca de visão; PCA inexistente/de lista = a Mesa do sistema.
+- **Entrada no espaço do PCA:** o card (`PcaCard` com `href`) mostra o véu + spinner do **`CarregandoLink`**
+  (`useLinkStatus`) enquanto o servidor monta a aba — sem `loading.tsx` (dispararia também na troca de aba). Em
+  `itensConsolidados` a PREVISÃO sai UMA vez por DFD (o JSON das seções lido por item estourava a CPU do Worker com
+  milhares de itens), os lotes correm em paralelo e os itens trazem só as colunas usadas.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).

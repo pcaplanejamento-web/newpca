@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
@@ -39,6 +40,8 @@ import { AvisoFlutuante } from "@/components/AvisoFlutuante";
 import { PessoaTag } from "@/components/PessoaTag";
 import { SeletorCelula } from "@/components/SeletorCelula";
 import { SeletorFiltro } from "@/components/SeletorFiltro";
+import { SeletorMesa } from "@/components/SeletorMesa";
+import { CarregandoLink } from "@/components/CarregandoLink";
 import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
@@ -240,8 +243,18 @@ function PcaEspacoDemo() {
   const [protoDemo, setProtoDemo] = useState("11");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [capa, setCapa] = useState<string | null>(null);
+  const [mesaDemo, setMesaDemo] = useState<number | null>(null);
   return (
     <div className="space-y-6">
+      {/* SeletorMesa: o 1º item da barra da Mesa principal (Mesa do sistema | Mesa de um PCA). CarregandoLink: o véu +
+          spinner de um Link pendente (o card do PCA com `href` — aqui, um link para esta mesma página). */}
+      <div className="flex flex-wrap items-center gap-3">
+        <SeletorMesa pcas={[{ id: 2, nome: "PCA 2027", ano: 2027 }]} atual={mesaDemo} onEscolher={setMesaDemo} />
+        <Link href="/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
+          Link com CarregandoLink
+          <CarregandoLink />
+        </Link>
+      </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <PcaCard pca={{ id: 1, nome: "PCA 2026", ano: 2026, fonte: "lista", status: "publicado", capa: null, total: 1_390_000_000, itens: 1116, partes: 5 }} onClick={() => {}} />
         <PcaCard pca={{ id: 2, nome: "PCA 2027", ano: 2027, fonte: "protocolo", status: "preview", capa, total: 412_800_000, itens: 1632, partes: 5, previa: true }} onClick={() => {}} />

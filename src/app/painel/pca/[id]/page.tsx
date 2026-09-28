@@ -11,19 +11,16 @@ import { UnitFilter } from "@/components/UnitFilter";
 import { getUsuarioAtual } from "@/lib/auth";
 import { dadosComparativo } from "@/lib/comparativo-dados";
 import { num } from "@/lib/format";
-import { carregarMesa } from "@/lib/mesa-dados";
+import { carregarMesaDoPca } from "@/lib/mesa-dados";
 import { resumoVisao } from "@/lib/orcamento-visao";
-import type { AcaoDfdPca } from "@/lib/pca-core";
 import {
   dashboardDoPca,
-  dfdsEmOutroPca,
   getPcaEspaco,
   listarVisoesOrcamento,
   orcamentoDoAno,
   orcamentoDoPca,
   type PcaEspaco,
   pcaTemDados,
-  vinculosDoPca,
 } from "@/lib/pca-espaco";
 import { getUnidades } from "@/lib/queries";
 
@@ -41,9 +38,8 @@ export default async function PcaEspacoPage({
 }) {
   const id = Number((await params).id);
   const sp = await searchParams;
-  const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
+  const [pca, u] = await Promise.all([Number.isInteger(id) && id > 0 ? getPcaEspaco(id) : null, getUsuarioAtual()]);
   if (!pca) notFound();
-  const u = await getUsuarioAtual();
   const podeEditar = u?.role === "admin" || u?.role === "gestor";
   const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
   const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
@@ -138,38 +134,5 @@ async function abaMesa(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsuarioAt
     const planilhas = await getUnidades(undefined, pca.id);
     return <PlanilhasPca pcaId={pca.id} planilhas={planilhas} podeEditar={podeEditar} />;
   }
-  const [m, vs] = await Promise.all([carregarMesa(u, pca.id), vinculosDoPca(pca.id)]);
-  // Enviados ainda não incorporados: quantos DFDs de cada um já estão em OUTRO PCA (ficam de fora).
-  const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
-  const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
-  const emOutro = await dfdsEmOutroPca(
-    doNaoInc.map((d) => d.id),
-    pca.id,
-  );
-  const emOutroPorProto: Record<number, number> = {};
-  for (const d of doNaoInc) if (d.protocoloId != null && emOutro.has(d.id)) emOutroPorProto[d.protocoloId] = (emOutroPorProto[d.protocoloId] ?? 0) + 1;
-  const acaoPorProtocolo: Record<number, AcaoDfdPca> = {};
-  for (const v of vs) if (v.protocoloId != null && !acaoPorProtocolo[v.protocoloId]) acaoPorProtocolo[v.protocoloId] = v.acao;
-  return (
-    <MesaPca
-      pca={{ id: pca.id, nome: pca.nome, ano: pca.ano }}
-      emOutroPcaPorProtocolo={emOutroPorProto}
-      acaoPorProtocolo={acaoPorProtocolo}
-      marcados={m.anoMarcados != null}
-      podeEditar={m.podeEditar}
-      dfds={m.dfds}
-      protocolos={m.protocolos}
-      reparticoes={m.reparticoes}
-      reparticaoAtivaId={m.reparticaoAtivaId}
-      pcas={m.pcas}
-      regras={m.regras}
-      orgaos={m.orgaos}
-      pessoas={m.pessoas}
-      outrasPessoas={m.outrasPessoas}
-      situacoes={m.situacoes}
-      usuarioId={m.usuarioId}
-      edicoes={m.edicoes}
-      dadosCompletos={m.dadosCompletos}
-    />
-  );
+  return <MesaPca {...await carregarMesaDoPca(u, pca)} />;
 }

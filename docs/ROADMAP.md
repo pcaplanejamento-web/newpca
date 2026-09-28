@@ -996,6 +996,11 @@ principal, editáveis, e nada é gravado no PCA até ser incorporado. Desligado 
 que não foi incorporado). Ligada, o **Dashboard, o Orçamento e o card** do PCA no painel somam, como PRÉVIA, os DFDs ainda
 não incorporados (enviados à Mesa do PCA + marcados na Mesa do sistema), pela mesma consolidação da incorporação — com o
 aviso "Prévia do PCA"; os banners de consulta abrem esses protocolos/DFDs. Migração `0064` (desliga nos já publicados).
+✅ **Mesa do PCA na Mesa do sistema + entrada rápida no PCA:** o 1º item da barra da Mesa principal é o **seletor de Mesa**
+("Mesa do sistema" | "PCA · nome (ano)"): escolher um PCA mostra ali a Mesa daquele PCA — a MESMA da aba do espaço, com os
+marcados ligados ou desligados conforme a Configuração dele (`/painel/mesa?pca=<id>`); as mesas seguem independentes. O card
+do PCA mostra "Abrindo o PCA…" enquanto a tela carrega, e o Dashboard do PCA ficou mais leve (a previsão de entrega é lida
+uma vez por DFD, não por item; lotes em paralelo) — com a prévia ligada, milhares de itens estouravam o limite do servidor.
 
 ### Origem dos dados: linhas do Orçamento do PCA e todos os gráficos dos dashboards — entregue
 Clicar numa **linha do comparativo do Orçamento do PCA** abre o banner **"Origem dos dados"**, com os **lançamentos do CUBO**

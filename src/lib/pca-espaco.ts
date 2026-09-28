@@ -540,8 +540,12 @@ export async function itensConsolidados(pca: PcaEspaco) {
     }
   >();
   const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null })[] = [];
-  for (const lote of lotesDeIds(cons.vigentes)) {
-    const [ds, its] = await Promise.all([
+  // Os lotes em PARALELO (cada um: os DFDs + os itens com SÓ as colunas usadas); a PREVISÃO sai UMA vez por DFD (o JSON
+  // das seções pode ser grande — lido por item, milhares de itens estouravam a CPU do Worker).
+  const previsaoPorDfd = new Map<number, ReturnType<typeof previsaoDoDfd>>();
+  const lotes = await Promise.all(
+    lotesDeIds(cons.vigentes).map((lote) =>
+      Promise.all([
       db
         .select({
           id: dfds.id,
@@ -561,19 +565,41 @@ export async function itensConsolidados(pca: PcaEspaco) {
         .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
         .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
         .where(inArray(dfds.id, lote)),
-      db.select().from(dfdItens).where(inArray(dfdItens.dfdId, lote)).orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial)),
-    ]);
-    for (const d of ds) meta.set(d.id, d);
+      db
+        .select({
+          id: dfdItens.id,
+          dfdId: dfdItens.dfdId,
+          item: dfdItens.item,
+          sequencial: dfdItens.sequencial,
+          codigo: dfdItens.codigo,
+          descricao: dfdItens.descricao,
+          unidade: dfdItens.unidade,
+          quantidade: dfdItens.quantidade,
+          valorUnitario: dfdItens.valorUnitario,
+          valorTotal: dfdItens.valorTotal,
+        })
+        .from(dfdItens)
+        .where(inArray(dfdItens.dfdId, lote))
+        .orderBy(asc(dfdItens.dfdId), asc(dfdItens.sequencial)),
+      ]),
+    ),
+  );
+  for (const [ds] of lotes)
+    for (const d of ds) {
+      meta.set(d.id, d);
+      let secoes: { titulo?: string; texto?: string }[] = [];
+      try {
+        secoes = d.secoes ? (JSON.parse(d.secoes) as typeof secoes) : [];
+      } catch {
+        secoes = [];
+      }
+      previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, d.anoPca ?? pca.ano));
+    }
+  for (const [, its] of lotes)
     for (const it of its) {
       const n = numero.get(it.id);
       if (n && !n.ativo) continue; // retirado do PCA
       const d = meta.get(it.dfdId);
-      let secoes: { titulo?: string; texto?: string }[] = [];
-      try {
-        secoes = d?.secoes ? (JSON.parse(d.secoes) as typeof secoes) : [];
-      } catch {
-        secoes = [];
-      }
       const curto = tipoCurtoDfd(d?.tipo);
       itens.push({
         id: it.id,
@@ -588,12 +614,11 @@ export async function itensConsolidados(pca: PcaEspaco) {
         valorUnitario: it.valorUnitario,
         valorTotal: Number(it.valorTotal ?? 0),
         classificacao: curto && (TIPOS_DFD as readonly string[]).includes(curto) ? TIPO_DFD_ROTULO[curto as (typeof TIPOS_DFD)[number]] : "Sem tipo",
-        previsao: previsaoDoDfd(secoes, d?.anoPca ?? pca.ano),
+        previsao: previsaoPorDfd.get(it.dfdId) ?? previsaoDoDfd([], pca.ano),
         unidade: d?.sigla ?? null,
         origem: d ? `DFD ${d.numero}` : null,
       });
     }
-  }
   const protocolos = new Set(vs.map((v) => v.protocoloId).filter((x): x is number => x != null));
   // Na PRÉVIA: quantos DFDs/protocolos ainda não incorporados entraram (o aviso do Dashboard/Orçamento).
   const vigentes = new Set(cons.vigentes);

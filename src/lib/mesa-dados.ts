@@ -5,7 +5,8 @@ import { carregarEdicoes } from "./edicoes-tabela";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
 import { listarOrgaos } from "./orgaos";
-import { anoMarcadosDoPca } from "./pca-espaco";
+import type { AcaoDfdPca } from "./pca-core";
+import { anoMarcadosDoPca, dfdsEmOutroPca, vinculosDoPca } from "./pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "./pca-filtro";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
@@ -113,5 +114,46 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     edicoes: { prefixo: prefixoEdicoesMesa(pcaId), ...edicoes },
     /** As tabelas abrem com os DADOS COMPLETOS (texto inteiro, todas as listas) — a escolha do usuário no botão da barra. */
     dadosCompletos: (prefCompletos[PREF_DADOS_COMPLETOS] as { ligado?: unknown } | undefined)?.ligado === true,
+  };
+}
+
+/**
+ * Dados da MESA DO PCA (`MesaPca`) — o MESMO carregamento da aba Mesa do espaço do PCA e da Mesa principal com o seletor
+ * de Mesa num PCA (`/painel/mesa?pca=`): a Mesa do PCA (`carregarMesa(u, pcaId)`, com os marcados conforme a
+ * Configuração dele) + a ação de cada protocolo incorporado e, dos enviados ainda não incorporados, quantos DFDs já estão
+ * em OUTRO PCA (ficam de fora da incorporação).
+ */
+export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: number; nome: string; ano: number | null }) {
+  const [m, vs] = await Promise.all([carregarMesa(u, pca.id), vinculosDoPca(pca.id)]);
+  const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
+  const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
+  const emOutro = await dfdsEmOutroPca(
+    doNaoInc.map((d) => d.id),
+    pca.id,
+  );
+  const emOutroPcaPorProtocolo: Record<number, number> = {};
+  for (const d of doNaoInc)
+    if (d.protocoloId != null && emOutro.has(d.id)) emOutroPcaPorProtocolo[d.protocoloId] = (emOutroPcaPorProtocolo[d.protocoloId] ?? 0) + 1;
+  const acaoPorProtocolo: Record<number, AcaoDfdPca> = {};
+  for (const v of vs) if (v.protocoloId != null && !acaoPorProtocolo[v.protocoloId]) acaoPorProtocolo[v.protocoloId] = v.acao;
+  return {
+    pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
+    emOutroPcaPorProtocolo,
+    acaoPorProtocolo,
+    marcados: m.anoMarcados != null,
+    podeEditar: m.podeEditar,
+    dfds: m.dfds,
+    protocolos: m.protocolos,
+    reparticoes: m.reparticoes,
+    reparticaoAtivaId: m.reparticaoAtivaId,
+    pcas: m.pcas,
+    regras: m.regras,
+    orgaos: m.orgaos,
+    pessoas: m.pessoas,
+    outrasPessoas: m.outrasPessoas,
+    situacoes: m.situacoes,
+    usuarioId: m.usuarioId,
+    edicoes: m.edicoes,
+    dadosCompletos: m.dadosCompletos,
   };
 }
