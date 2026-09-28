@@ -7,7 +7,12 @@ import {
   ALTURA_MIN_FUNDO,
   arrastarFundo,
   avaliarImagemFundo,
+  corpoFundo,
+  cssGradiente,
   estiloFundo,
+  fundoDoQuadro,
+  type Gradiente,
+  lerGradiente,
   fundoUrlValida,
   LARGURA_MIN_FUNDO,
   lerAjusteFundo,
@@ -18,6 +23,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { TextField } from "./Field";
 import { IconImage, IconMove, IconTrash, IconZoom } from "./icons";
+import { SeletorFundo } from "./SeletorFundo";
 import { toast } from "./Toast";
 
 /** A imagem carregou? (`null` = ainda carregando; sem link = `false`). A moldura do quadro só a mostra depois. */
@@ -39,19 +45,6 @@ export function useImagemCarrega(url: string | null): boolean | null {
   return ok;
 }
 
-/** Fotos SUGERIDAS (paisagens do Unsplash — uso livre; só o link é guardado). `?w=` = a largura servida. */
-const FOTOS_SUGERIDAS = [
-  "photo-1506905925346-21bda4d32df4",
-  "photo-1469474968028-56623f02e42e",
-  "photo-1501785888041-af3ef285b470",
-  "photo-1470071459604-3b5ec3a7fe05",
-  "photo-1441974231531-c6227db76b6e",
-  "photo-1507525428034-b723cf961d3e",
-  "photo-1447752875215-b2761acb3c5d",
-  "photo-1464822759023-fed622ff2c3b",
-];
-const fotoUnsplash = (id: string, w: number) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
-
 /** O tamanho NATURAL da imagem (px) — `null` enquanto carrega ou se falhar. */
 function useTamanhoImagem(url: string | null): { w: number; h: number } | null {
   const [t, setT] = useState<{ w: number; h: number } | null>(null);
@@ -71,8 +64,9 @@ function useTamanhoImagem(url: string | null): { w: number; h: number } | null {
 }
 
 /**
- * IMAGEM DE FUNDO do quadro por LINK (Configuração; editores): cola-se o link de uma imagem OU de um pin do Pinterest — o
- * servidor tira a imagem da página — ou escolhe-se uma FOTO SUGERIDA. Nada é enviado nem guardado além do link: a imagem
+ * FUNDO do quadro (Configuração; editores): o `SeletorFundo` (fotos com pesquisa, DEGRADÊS em círculos — predefinidos ou
+ * próprio — e "Sem fundo" = o padrão do sistema) ou o LINK de uma imagem/pin do Pinterest — o servidor tira a imagem da
+ * página. Nada é enviado nem guardado além do link: a imagem
  * fica no site de origem (economiza armazenamento). O ENQUADRAMENTO: arrastar a prévia (16:9 — a proporção ideal) escolhe
  * o que fica à vista e o controle dá ZOOM; "Salvar enquadramento" grava (`fundoAjuste`). Avisa a proporção fora do ideal
  * e a resolução baixa (`avaliarImagemFundo`), e quando o site não deixa a imagem aparecer.
@@ -81,11 +75,14 @@ export function FundoQuadro({
   quadroId,
   fundoUrl,
   fundoAjuste = null,
+  fundoGradiente = null,
   podeEditar,
   onMudou,
 }: {
   quadroId: number;
   fundoUrl: string | null;
+  /** O degradê gravado (JSON — `lerGradiente`). */
+  fundoGradiente?: string | null;
   /** O enquadramento gravado (JSON — `lerAjusteFundo`). */
   fundoAjuste?: string | null;
   podeEditar: boolean;
@@ -110,7 +107,7 @@ export function FundoQuadro({
     try {
       await chamar(`/api/tarefas/quadros/${quadroId}`, "PATCH", corpo);
       toast.success(sucesso);
-      if ("fundoUrl" in corpo) setLink("");
+      if ("fundoUrl" in corpo && chave === "link") setLink("");
       onMudou();
     } catch (e) {
       toast.error((e as Error).message);
@@ -169,7 +166,11 @@ export function FundoQuadro({
           )}
         </div>
       ) : (
-        <p className="text-[13px] text-muted">Sem imagem de fundo — o quadro usa um degradê da cor dele.</p>
+        <div
+          aria-hidden
+          className="aspect-video w-full max-w-xl rounded-card border border-border bg-surface-2"
+          style={lerGradiente(fundoGradiente) ? { background: cssGradiente(lerGradiente(fundoGradiente) as Gradiente) } : undefined}
+        />
       )}
       {editar && (
         <div className="flex max-w-xl flex-wrap items-center gap-2">
@@ -212,6 +213,14 @@ export function FundoQuadro({
         </Callout>
       )}
       {podeEditar && (
+        <SeletorFundo
+          previa={false}
+          disabled={gravando != null}
+          valor={fundoDoQuadro({ fundoUrl, fundoGradiente })}
+          onChange={(f) => patch("seletor", corpoFundo(f), f.tipo === "nenhum" ? "Fundo removido — o quadro usa o padrão do sistema." : "Fundo aplicado.")}
+        />
+      )}
+      {podeEditar && (
         <form
           className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-end"
           onSubmit={(e) => {
@@ -241,33 +250,6 @@ export function FundoQuadro({
             )}
           </div>
         </form>
-      )}
-      {podeEditar && (
-        <fieldset>
-          <legend className="mb-1.5 text-[12.5px] font-semibold text-text">Fotos sugeridas</legend>
-          <div className="grid max-w-xl grid-cols-4 gap-2">
-            {FOTOS_SUGERIDAS.map((id) => {
-              const url = fotoUnsplash(id, 1920);
-              const atual = fundoUrl === url;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  disabled={gravando != null || atual}
-                  aria-pressed={atual}
-                  aria-label={atual ? "Foto sugerida (a atual)" : "Usar esta foto sugerida"}
-                  onClick={() => patch(`foto-${id}`, { fundoUrl: url }, "Imagem de fundo aplicada.")}
-                  className={`relative aspect-video overflow-hidden rounded-control bg-surface-2 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                    atual ? "ring-2 ring-accent" : ""
-                  }`}
-                >
-                  {/* biome-ignore lint/performance/noImgElement: miniatura externa. */}
-                  <img alt="" src={fotoUnsplash(id, 320)} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={(e) => e.currentTarget.closest("button")?.classList.add("hidden")} />
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
       )}
       <p className="text-[12px] text-muted">A imagem fica no site de origem — nada é enviado ao servidor, só o link e o enquadramento são guardados.</p>
     </div>

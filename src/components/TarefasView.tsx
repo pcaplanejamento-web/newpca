@@ -14,6 +14,9 @@ import { Checkbox, SelectField } from "./Field";
 import { useFavoritosQuadros } from "./FavoritosQuadros";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
+import { SeletorFundo } from "./SeletorFundo";
+import { Switch } from "./Switch";
+import { corpoFundo, type FundoEscolha } from "@/lib/imagem-fundo-core";
 import { CamposPeriodo, CamposQuadro, type CamposQuadroValor, type PeriodoQuadro, QuadroCard, QuadroNovoCard } from "./QuadroCard";
 
 const NOVO: CamposQuadroValor = { nome: "", cor: "#6366f1", descricao: "" };
@@ -46,6 +49,8 @@ export function TarefasView({
   const [periodo, setPeriodo] = useState<PeriodoQuadro | null>(null);
   const [templatesDe, setTemplatesDe] = useState("");
   const [novo, setNovo] = useState<CamposQuadroValor | null>(null);
+  const [fundo, setFundo] = useState<FundoEscolha>({ tipo: "nenhum" });
+  const [privado, setPrivado] = useState(false);
   const [modeloId, setModeloId] = useState("");
   const modelo = modelos.find((m) => String(m.id) === modeloId);
   const [salvando, setSalvando] = useState(false);
@@ -55,6 +60,8 @@ export function TarefasView({
 
   const abrirNovo = () => {
     setNovo(NOVO);
+    setFundo({ tipo: "nenhum" });
+    setPrivado(false);
     setPeriodo(null);
     setTemplatesDe("");
   };
@@ -71,6 +78,8 @@ export function TarefasView({
         modeloId: modelo?.id ?? null,
         periodo,
         templatesDe: templatesDe ? Number(templatesDe) : null,
+        ...corpoFundo(fundo),
+        privado,
       });
       setNovo(null);
       router.push(`/painel/tarefas/${j.id}`);
@@ -132,7 +141,23 @@ export function TarefasView({
             </SelectField>
           </div>
         )}
+        <div className="mb-4">
+          <SeletorFundo valor={fundo} onChange={setFundo} disabled={salvando} />
+        </div>
         {novo && <CamposQuadro valor={novo} onChange={setNovo} />}
+        <div className="mt-4">
+          <Switch
+            checked={privado}
+            onChange={setPrivado}
+            disabled={salvando}
+            label={
+              <span>
+                <span className="block font-semibold text-text">Quadro privado</span>
+                <span className="block text-[12px] text-muted">Só você vê o quadro — nem o grupo nem os administradores.</span>
+              </span>
+            }
+          />
+        </div>
         <div className="mt-4 space-y-3 border-t border-border pt-3">
           <div className="flex min-h-11 items-center lg:min-h-9">
             <Checkbox label="Listas dos dias de um mês (quadro do período)" checked={periodo != null} disabled={salvando} onChange={(e) => setPeriodo(e.target.checked ? { ...mesSeguinte(hoje), diasUteis: true } : null)} />

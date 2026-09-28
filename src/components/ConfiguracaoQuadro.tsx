@@ -217,6 +217,16 @@ export function ConfiguracaoQuadro({
         {podeEditar && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             <Switch checked={quadro.arquivado} disabled={ocupado != null} onChange={arquivarQuadro} label="Quadro arquivado" />
+            {quadro.criadoPor === usuarioId && (
+              <Switch
+                checked={quadro.privado}
+                disabled={ocupado != null}
+                onChange={(privado) =>
+                  gravar("privado", () => chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { privado }), privado ? "Quadro privado — só você o vê." : "Quadro visível ao grupo.")
+                }
+                label="Privado (só você vê)"
+              />
+            )}
             <div className="ml-auto flex flex-wrap justify-end gap-2">
               <Button variant="ghost" size="sm" disabled={ocupado != null || quadro.arquivado} icon={<IconUpload className="h-4 w-4" />} onClick={() => setTrello(true)}>
                 Importar do Trello
@@ -281,8 +291,8 @@ export function ConfiguracaoQuadro({
           </ul>
         </Secao>
 
-        <Secao id="secao-fundo" titulo="Imagem de fundo">
-          <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} fundoAjuste={quadro.fundoAjuste} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
+        <Secao id="secao-fundo" titulo="Fundo do quadro">
+          <FundoQuadro quadroId={quadro.id} fundoUrl={quadro.fundoUrl} fundoAjuste={quadro.fundoAjuste} fundoGradiente={quadro.fundoGradiente} podeEditar={podeEditar && !quadro.arquivado} onMudou={onMudou} />
         </Secao>
 
         <Secao

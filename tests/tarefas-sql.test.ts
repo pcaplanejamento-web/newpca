@@ -23,6 +23,7 @@ import {
   comandosVinculos,
   comandosVinculosTarefa,
   pessoaNaTarefa,
+  quadroVisivel,
 } from "../src/lib/tarefas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -366,5 +367,20 @@ describe("tarefas — excluir lista movendo os cartões (comandosEsvaziarLista n
     // Saíram de uma lista de CONCLUÍDAS para uma comum: reabrem.
     assert.deepEqual(ts.map((t) => t.c), [null, null, null]);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_listas").get() as { n: number }).n, 1);
+  });
+});
+
+describe("tarefas — quadro PRIVADO (quadroVisivel no driver D1 real)", () => {
+  it("o privado só aparece para quem o criou; os demais, para todos", async () => {
+    const db = aplicarTudo();
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9701, 'Ana', 'a@x', 'h'), (9702, 'Bia', 'b@x', 'h')");
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9700, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, privado, criado_por) VALUES (1, 9700, 'Público', 0, 9701), (2, 9700, 'Da Ana', 1, 9701), (3, 9700, 'Da Bia', 1, 9702)");
+    const ver = async (u: number) =>
+      (await orm.select({ id: schema.tarefaQuadros.id }).from(schema.tarefaQuadros).where(quadroVisivel(u)).orderBy(schema.tarefaQuadros.id)).map((q) => q.id);
+    assert.deepEqual(await ver(9701), [1, 2]);
+    assert.deepEqual(await ver(9702), [1, 3]);
+    assert.deepEqual(await ver(1), [1]);
   });
 });

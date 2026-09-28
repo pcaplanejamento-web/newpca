@@ -47,6 +47,18 @@ npx wrangler secret put CF_ACCOUNT_ID   # (ou como var, se preferir)
 Depois, em `/painel/integracoes` → card **Monitoramento**: marque **Ativar** e **Salvar**. As métricas
 carregam no próprio card (com **Testar conexão** e **Recarregar**).
 
+## Fotos de fundo dos quadros (Unsplash)
+A **Pesquisa de fotos** do fundo dos quadros de Tarefas (Novo quadro e Configuração → Fundo do quadro) busca no
+**Unsplash** quando a chave existe; sem ela, mostra uma seleção fixa de paisagens (Picsum) — tudo segue funcionando.
+
+1. Crie um app em <https://unsplash.com/developers> (gratuito; 50 buscas/hora no modo demo — peça o modo produção
+   depois) e copie a **Access Key**.
+2. Defina o Worker Secret (fora do repositório):
+```bash
+npx wrangler secret put UNSPLASH_ACCESS_KEY
+```
+As buscas ficam 10 minutos em memória (`src/lib/fotos-fundo.ts`); a tela credita as fotos ao Unsplash.
+
 ## Em breve
 - **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.
 - **E-mail (Resend)** — envio de avisos (aprovação de cadastro etc.); exigirá domínio verificado no Resend.

@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useRef } from "react";
-import { AJUSTE_FUNDO_PADRAO, type AjusteFundo, estiloFundo } from "@/lib/imagem-fundo-core";
+import { AJUSTE_FUNDO_PADRAO, type AjusteFundo, cssGradiente, estiloFundo, type Gradiente } from "@/lib/imagem-fundo-core";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { alternarValor, type FiltroTarefas } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
@@ -16,23 +16,25 @@ export const RESERVA_PILULA = 68;
 
 /**
  * A MOLDURA do quadro (como no Trello): UM card grande de cantos arredondados, do topo até o fim do display, com a IMAGEM
- * DE FUNDO NÍTIDA (sem véu — só depois de carregar; sem imagem, um degradê da cor do quadro). Por cima, só ILHAS OPACAS:
+ * DE FUNDO NÍTIDA (sem véu — só depois de carregar) ou o DEGRADÊ escolhido; sem nenhum, o padrão do sistema (a
+ * superfície cinza, sem nada). Por cima, só ILHAS OPACAS:
  * a `faixa` do topo, o conteúdo (as listas, ou um painel opaco nas outras vistas — rola por dentro) e a `pilula` de
  * vistas flutuando no rodapé. A página não rola.
  */
 export function MolduraQuadro({
-  cor,
   fundoUrl,
   ajuste = AJUSTE_FUNDO_PADRAO,
+  gradiente = null,
   faixa,
   pilula,
   alturaFixa,
   children,
 }: {
-  cor: string;
   fundoUrl: string | null;
   /** O ENQUADRAMENTO da imagem (ponto focal + zoom — `lerAjusteFundo`). */
   ajuste?: AjusteFundo;
+  /** O DEGRADÊ de fundo (quando não há imagem). */
+  gradiente?: Gradiente | null;
   faixa: ReactNode;
   pilula: ReactNode;
   /** Altura fixa (px) em vez de ir até o fim do display (a demonstração no catálogo). */
@@ -44,12 +46,13 @@ export function MolduraQuadro({
   const altura = alturaFixa ?? medida;
   const carregou = useImagemCarrega(fundoUrl);
   const comImagem = !!fundoUrl && carregou === true;
-  // Sem imagem (ou enquanto carrega / se falhar), um degradê da cor do quadro.
-  const fundo = { background: `linear-gradient(135deg, color-mix(in srgb, ${cor} 55%, var(--surface-2)), color-mix(in srgb, ${cor} 20%, var(--surface-2)))` };
+  // O degradê escolhido; sem imagem nem degradê, o PADRÃO DO SISTEMA (o cinza de superfície, sem nada).
+  const fundo = !fundoUrl && gradiente ? { background: cssGradiente(gradiente) } : { background: "var(--surface-2)" };
+  const comFundo = comImagem || (!fundoUrl && !!gradiente);
   return (
     <div
       ref={raiz}
-      data-com-imagem={comImagem || undefined}
+      data-com-imagem={comFundo || undefined}
       style={{ ...fundo, ...(altura ? { height: altura } : {}) }}
       className="group/moldura relative isolate flex min-h-[420px] flex-col overflow-hidden rounded-2xl shadow-ring"
     >
@@ -163,7 +166,7 @@ export function MenuQuadro({ onArquivados, onConfiguracao, podeEditar }: { onArq
           <div className="space-y-0.5">
             <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">Menu do quadro</p>
             {item("Itens arquivados", <IconArquivar className="h-4 w-4 text-muted" />, onArquivados)}
-            {podeEditar && item("Imagem de fundo", <IconImage className="h-4 w-4 text-muted" />, () => onConfiguracao("fundo"))}
+            {podeEditar && item("Fundo do quadro", <IconImage className="h-4 w-4 text-muted" />, () => onConfiguracao("fundo"))}
             {podeEditar && item("Automações", <IconAutomacao className="h-4 w-4 text-muted" />, () => onConfiguracao("automacoes"))}
             {item("Configurações", <IconSettings className="h-4 w-4 text-muted" />, () => onConfiguracao())}
             {item("Copiar link do quadro", <IconLink className="h-4 w-4 text-muted" />, () =>

@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { lerAjusteFundo, urlFundoCss } from "@/lib/imagem-fundo-core";
+import { type ReactNode, useState } from "react";
+import { cssGradiente, estiloFundo, lerAjusteFundo, lerGradiente } from "@/lib/imagem-fundo-core";
 import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { Badge } from "./Badge";
@@ -7,75 +10,90 @@ import { ColorField } from "./ColorField";
 import { EstrelaFavorito } from "./FavoritosQuadros";
 import { Checkbox, SelectField, TextArea, TextField } from "./Field";
 import { MESES } from "@/lib/normalize";
-import { IconPlus } from "./icons";
+import { IconLock, IconPlus } from "./icons";
 
 /**
- * Card 4:5 de um QUADRO de tarefas (tela `/painel/tarefas`) — a faixa na COR do quadro, o grupo, o nome e as contagens
- * (abertas em destaque; atrasadas em vermelho; concluídas). Arquivado = esmaecido com o selo. Clicar abre o quadro. A
- * ESTRELA (fora do link, por cima do canto) marca o quadro como FAVORITO.
+ * A CAPA 16:9 de um quadro (dentro do card, como no Trello): a imagem de fundo (com o enquadramento), o degradê, ou — sem
+ * nenhum — a superfície do sistema com a cor do quadro num traço. `children` = o que vai por cima (selos).
  */
-export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: QuadroCardDados; href: string; favorito?: boolean; onFavorito?: () => void }) {
+export function CapaQuadro({ quadro: q, children }: { quadro: Pick<QuadroCardDados, "cor" | "fundoUrl" | "fundoAjuste" | "fundoGradiente">; children?: ReactNode }) {
+  const [falhou, setFalhou] = useState(false);
+  const g = lerGradiente(q.fundoGradiente);
+  const imagem = q.fundoUrl && !falhou ? q.fundoUrl : null;
   return (
-    <div className="relative">
-    <Link
-      href={href}
-      aria-label={`Abrir o quadro ${q.nome}`}
-      className={`group relative flex aspect-[4/5] w-full flex-col overflow-hidden rounded-card border border-border bg-surface p-3 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:p-4 ${q.fundoUrl ? "pt-12 sm:pt-14" : "pt-4 sm:pt-5"} ${
-        q.arquivado ? "opacity-60" : ""
-      }`}
-    >
-      {/* A FAIXA na cor do quadro — com imagem de fundo, a imagem (a cor por baixo, se ela não carregar). */}
-      <span
-        aria-hidden
-        className={`absolute inset-x-0 top-0 ${q.fundoUrl ? "h-9 border-b-4 sm:h-10" : "h-1.5"}`}
-        style={
-          q.fundoUrl
-            ? (() => {
-                const a = lerAjusteFundo(q.fundoAjuste);
-                return { background: `${urlFundoCss(q.fundoUrl)} ${a.x}% ${a.y}% / cover no-repeat, ${q.cor}`, borderColor: q.cor };
-              })()
-            : { background: q.cor }
-        }
-      />
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-faint" title={q.grupoNome}>
-          {q.grupoNome}
-        </span>
-        {q.arquivado && <Badge>Arquivado</Badge>}
-        {onFavorito && <span aria-hidden className="h-8 w-8 shrink-0" />}
-      </div>
-      <h3 className={`mt-1 line-clamp-3 text-sm ${onFavorito ? "pr-6 lg:pr-0" : ""} font-semibold leading-snug text-text group-hover:text-accent`} title={q.nome}>
-        {q.nome}
-      </h3>
-      <div className="mt-auto">
-        <p className="text-[11px] text-muted">Abertas</p>
-        <p className="text-2xl font-bold tabular-nums tracking-tight text-text">{num(q.abertas)}</p>
-        <dl className="mt-2 grid grid-cols-2 gap-x-2 border-t border-border pt-2 text-[11px]">
-          <div className="min-w-0">
-            <dt className="text-muted">Atrasadas</dt>
-            <dd className="font-semibold tabular-nums" style={{ color: q.atrasadas ? "var(--danger)" : "var(--text-2)" }}>
-              {num(q.atrasadas)}
-            </dd>
-          </div>
-          <div className="min-w-0 text-right">
-            <dt className="text-muted">Concluídas</dt>
-            <dd className="font-semibold tabular-nums text-text-2">{num(q.concluidas)}</dd>
-          </div>
-        </dl>
-      </div>
-    </Link>
-    {onFavorito && <EstrelaFavorito ativo={!!favorito} nome={q.nome} onAlternar={onFavorito} className="absolute top-1.5 right-1.5 lg:top-3 lg:right-2" />}
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface-2" style={!imagem && g ? { background: cssGradiente(g) } : undefined}>
+      {imagem && (
+        // biome-ignore lint/performance/noImgElement: imagem externa por link (não passa pelo otimizador).
+        <img alt="" src={imagem} loading="lazy" referrerPolicy="no-referrer" onError={() => setFalhou(true)} className="h-full w-full object-cover transition-transform duration-[var(--motion-duration)] group-hover:scale-[1.03]" style={estiloFundo(lerAjusteFundo(q.fundoAjuste))} />
+      )}
+      {!imagem && !g && <span aria-hidden className="absolute inset-x-0 bottom-0 h-1.5" style={{ background: q.cor }} />}
+      {children}
     </div>
   );
 }
 
-/** Card "+" no MESMO formato 4:5 — cria um quadro novo. */
+/**
+ * Card de um QUADRO de tarefas (tela `/painel/tarefas`) — a CAPA 16:9 dentro do card (imagem, degradê ou a superfície com a
+ * cor), o grupo, o nome e as contagens (abertas · atrasadas em vermelho · concluídas). Privado = cadeado na capa;
+ * arquivado = esmaecido com o selo. Clicar abre o quadro. A ESTRELA (fora do link, sobre a capa) marca o FAVORITO.
+ */
+export function QuadroCard({ quadro: q, href, favorito, onFavorito }: { quadro: QuadroCardDados; href: string; favorito?: boolean; onFavorito?: () => void }) {
+  return (
+    <div className="relative h-full">
+      <Link
+        href={href}
+        aria-label={`Abrir o quadro ${q.nome}${q.privado ? " (privado)" : ""}`}
+        className={`group flex h-full w-full flex-col overflow-hidden rounded-card border border-border bg-surface p-2 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
+          q.arquivado ? "opacity-60" : ""
+        }`}
+      >
+        <CapaQuadro quadro={q}>
+          {q.privado && (
+            <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white" title="Quadro privado — só você o vê">
+              <IconLock className="h-3 w-3" /> Privado
+            </span>
+          )}
+        </CapaQuadro>
+        <div className="flex flex-1 flex-col px-1.5 pt-2 pb-1">
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-faint" title={q.grupoNome}>
+              {q.grupoNome}
+            </span>
+            {q.arquivado && <Badge>Arquivado</Badge>}
+          </div>
+          <h3 className="mt-0.5 line-clamp-2 min-h-[2.5em] text-[14px] font-semibold leading-snug text-text group-hover:text-accent" title={q.nome}>
+            {q.nome}
+          </h3>
+          <dl className="mt-auto grid grid-cols-3 gap-x-2 border-t border-border pt-2 text-[11px]">
+            <div className="min-w-0">
+              <dt className="truncate text-muted">Abertas</dt>
+              <dd className="text-[15px] font-bold tabular-nums text-text">{num(q.abertas)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="truncate text-muted">Atrasadas</dt>
+              <dd className="text-[15px] font-bold tabular-nums" style={{ color: q.atrasadas ? "var(--danger)" : "var(--text-2)" }}>
+                {num(q.atrasadas)}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="truncate text-muted">Concluídas</dt>
+              <dd className="text-[15px] font-bold tabular-nums text-text-2">{num(q.concluidas)}</dd>
+            </div>
+          </dl>
+        </div>
+      </Link>
+      {onFavorito && <EstrelaFavorito ativo={!!favorito} nome={q.nome} onAlternar={onFavorito} className="absolute top-3 right-3 bg-surface/90 shadow-ring backdrop-blur-sm hover:bg-surface lg:top-3.5 lg:right-3.5" />}
+    </div>
+  );
+}
+
+/** Card "+" (a mesma altura dos cards na grade) — cria um quadro novo. */
 export function QuadroNovoCard({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 bg-surface text-muted transition-colors hover:border-accent/50 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
+      className="group flex h-full min-h-[14rem] w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 bg-surface text-muted transition-colors hover:border-accent/50 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
     >
       <span className="grid h-10 w-10 place-items-center rounded-control bg-surface-2 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
         <IconPlus className="h-5 w-5" />

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
-import { lerAjusteFundo } from "@/lib/imagem-fundo-core";
+import { lerAjusteFundo, lerGradiente } from "@/lib/imagem-fundo-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
 import {
@@ -48,7 +48,7 @@ import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
-import { IconArquivar, IconCalendar, IconChevronLeft, IconDashboard, IconDownload, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
+import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconDownload, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
 import { CopiarMoverLista, ExcluirLista, MenuLista, type ModoLista } from "./MenuLista";
 import { useConfirmacao } from "./Confirmacao";
@@ -509,9 +509,9 @@ export function QuadroTarefas({
   return (
     <div>
       <MolduraQuadro
-        cor={quadro.cor}
         fundoUrl={quadro.fundoUrl}
         ajuste={lerAjusteFundo(quadro.fundoAjuste)}
+        gradiente={lerGradiente(quadro.fundoGradiente)}
         faixa={
           <FaixaQuadro
             esquerda={
@@ -534,6 +534,11 @@ export function QuadroTarefas({
                   />
                 </h1>
                 <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
+                {quadro.privado && (
+                  <span className="grid h-11 w-9 shrink-0 place-items-center text-text-2 lg:h-9" title="Quadro privado — só você o vê">
+                    <IconLock className="h-4 w-4" aria-label="Quadro privado" />
+                  </span>
+                )}
                 {quadro.arquivado && <Badge tone="amber">Arquivado</Badge>}
               </>
             }

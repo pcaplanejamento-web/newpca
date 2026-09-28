@@ -109,6 +109,7 @@ import {
   ZoomIn,
   FoldHorizontal,
   UnfoldHorizontal,
+  Ban,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -198,6 +199,8 @@ export const IconZoom = ZoomIn;
 /** Recolher / expandir uma lista do quadro (como no Trello). */
 export const IconRecolher = FoldHorizontal;
 export const IconExpandir = UnfoldHorizontal;
+/** "Nenhum" (sem fundo — o padrão do sistema). */
+export const IconNenhum = Ban;
 export const IconArquivar = Archive;
 export const IconDesarquivar = ArchiveRestore;
 export const IconEtiqueta = Tag;

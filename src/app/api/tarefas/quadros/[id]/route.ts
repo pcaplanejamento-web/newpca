@@ -18,13 +18,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!id || !q) return erro("Quadro não encontrado.", 404);
   const p = await parseCorpo(editarQuadroSchema, req);
   if ("resp" in p) return p.resp;
-  const { fundoAjuste, ...resto } = p.data;
+  const { fundoAjuste, fundoGradiente, ...resto } = p.data;
+  // PRIVADO: só quem criou decide (o ADM, no privado cujo dono não existe mais).
+  if (resto.privado !== undefined && resto.privado !== q.privado && q.criadoPor !== a.u.id && !(q.criadoPor == null && a.u.role === "admin"))
+    return erro("Só quem criou o quadro pode torná-lo privado ou público.", 403);
   const d: Parameters<typeof atualizarQuadro>[1] = {
     ...resto,
     ...(fundoAjuste !== undefined ? { fundoAjuste: fundoAjuste ? JSON.stringify(fundoAjuste) : null } : {}),
     // Uma imagem NOVA começa centralizada (o enquadramento da anterior não vale para ela).
     ...(resto.fundoUrl !== undefined && fundoAjuste === undefined ? { fundoAjuste: null } : {}),
+    ...(fundoGradiente !== undefined ? { fundoGradiente: fundoGradiente ? JSON.stringify(fundoGradiente) : null } : {}),
   };
+  // Imagem e degradê se EXCLUEM: escolher um tira o outro.
+  if (d.fundoUrl) d.fundoGradiente = null;
+  if (fundoGradiente) {
+    d.fundoUrl = null;
+    d.fundoAjuste = null;
+  }
   if (d.fundoUrl) {
     try {
       d.fundoUrl = await resolverImagemFundo(d.fundoUrl);

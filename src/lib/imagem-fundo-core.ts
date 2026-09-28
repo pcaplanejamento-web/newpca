@@ -20,7 +20,7 @@ export function fundoUrlValida(bruta: string): string | null {
 export function pareceImagem(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.hostname === "i.pinimg.com" || /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(u.pathname);
+    return u.hostname === "i.pinimg.com" || u.hostname === "images.unsplash.com" || /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(u.pathname);
   } catch {
     return false;
   }
@@ -127,4 +127,101 @@ export function avaliarImagemFundo(w: number, h: number): string[] {
   if (w < LARGURA_MIN_FUNDO * 0.75 || h < ALTURA_MIN_FUNDO * 0.75)
     avisos.push(`Resolução baixa (${w}×${h} px) — em telas grandes ficará borrada. O ideal é ${LARGURA_MIN_FUNDO}×${ALTURA_MIN_FUNDO} px ou mais.`);
   return avisos;
+}
+
+/**
+ * O DEGRADÊ de fundo do quadro (no lugar de uma imagem): 2 ou 3 cores hex e o ângulo. `cssGradiente` monta o CSS só com
+ * hex validados (nunca texto livre — sem injeção de CSS).
+ */
+export type Gradiente = { cores: string[]; angulo: number };
+export const ANGULOS_GRADIENTE = [0, 45, 90, 135, 180, 225, 270, 315] as const;
+
+/** Os DEGRADÊS predefinidos (como os do Trello) — o nome é o rótulo acessível. */
+export const GRADIENTES_PADRAO: readonly { nome: string; g: Gradiente }[] = [
+  { nome: "Oceano", g: { cores: ["#0c66e4", "#09326c"], angulo: 135 } },
+  { nome: "Aurora", g: { cores: ["#6cc3e0", "#9f8fef"], angulo: 135 } },
+  { nome: "Lavanda", g: { cores: ["#c9a7f5", "#6e5dc6"], angulo: 135 } },
+  { nome: "Pôr do sol", g: { cores: ["#fea362", "#e774bb"], angulo: 135 } },
+  { nome: "Fogo", g: { cores: ["#f87168", "#c25100"], angulo: 135 } },
+  { nome: "Pêssego", g: { cores: ["#fedec8", "#fea362"], angulo: 135 } },
+  { nome: "Floresta", g: { cores: ["#4bce97", "#1f845a"], angulo: 135 } },
+  { nome: "Lima", g: { cores: ["#94c748", "#227d9b"], angulo: 135 } },
+  { nome: "Noite", g: { cores: ["#1d2125", "#626f86"], angulo: 135 } },
+  { nome: "Neblina", g: { cores: ["#dcdfe4", "#8590a2"], angulo: 135 } },
+];
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Lê o degradê gravado (JSON ou objeto): 2–3 cores hex e um ângulo 0–359; qualquer coisa inválida = `null`. */
+export function lerGradiente(v: unknown): Gradiente | null {
+  let o: unknown = v;
+  if (typeof v === "string")
+    try {
+      o = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  if (!o || typeof o !== "object") return null;
+  const g = o as Record<string, unknown>;
+  const cores = Array.isArray(g.cores) ? g.cores.filter((c): c is string => typeof c === "string" && HEX.test(c)).map((c) => c.toLowerCase()) : [];
+  if (cores.length < 2 || cores.length > 3) return null;
+  const a = Number(g.angulo);
+  return { cores, angulo: Number.isFinite(a) ? ((Math.round(a) % 360) + 360) % 360 : 135 };
+}
+
+/** O CSS do degradê (`linear-gradient(…)`) — só com o que `lerGradiente` aceitou. */
+export const cssGradiente = (g: Gradiente) => `linear-gradient(${g.angulo}deg, ${g.cores.join(", ")})`;
+
+/** Dois degradês são o MESMO (o predefinido marcado no seletor)? */
+export const mesmoGradiente = (a: Gradiente | null, b: Gradiente | null) => !!a && !!b && a.angulo === b.angulo && a.cores.join() === b.cores.join();
+
+/** O FUNDO do quadro, como a tela o escolhe: nada (o padrão do sistema), uma imagem (link) ou um degradê. */
+export type FundoEscolha = { tipo: "nenhum" } | { tipo: "imagem"; url: string } | { tipo: "gradiente"; g: Gradiente };
+
+/** O fundo gravado (imagem vence o degradê; os dois ausentes = o padrão do sistema). */
+export function fundoDoQuadro(q: { fundoUrl: string | null; fundoGradiente: string | null }): FundoEscolha {
+  if (q.fundoUrl) return { tipo: "imagem", url: q.fundoUrl };
+  const g = lerGradiente(q.fundoGradiente);
+  return g ? { tipo: "gradiente", g } : { tipo: "nenhum" };
+}
+
+/** O corpo da gravação de um fundo escolhido (`PATCH`/`POST` do quadro) — um exclui o outro. */
+export function corpoFundo(f: FundoEscolha): { fundoUrl: string | null; fundoGradiente: Gradiente | null } {
+  return f.tipo === "imagem" ? { fundoUrl: f.url, fundoGradiente: null } : f.tipo === "gradiente" ? { fundoUrl: null, fundoGradiente: f.g } : { fundoUrl: null, fundoGradiente: null };
+}
+
+/**
+ * FOTOS de fundo (a galeria do "Novo quadro" e da Configuração): com a chave do Unsplash, a BUSCA de verdade (no
+ * servidor); sem ela, uma seleção fixa do Picsum (fotos do Unsplash, links estáveis, sem chave). `miniatura` = 16:9
+ * pequena; `url` = 1920×1080.
+ */
+export type FotoFundo = { id: string; miniatura: string; url: string; autor?: string; link?: string };
+
+/** As PESQUISAS SUGERIDAS (chips — como as do Trello). */
+export const PESQUISAS_SUGERIDAS = ["Natureza", "Montanhas", "Oceano", "Cidades", "Minimalista", "Colorido", "Espaço", "Floresta", "Produtividade", "Negócios"] as const;
+
+/** A seleção FIXA (Picsum) — paisagens 16:9. */
+const IDS_PICSUM = [10, 11, 13, 15, 16, 17, 18, 28, 29, 43, 49, 57, 76, 84, 103, 110, 116, 124, 128, 142, 164, 184, 188, 191];
+export const fotosPicsum = (): FotoFundo[] =>
+  IDS_PICSUM.map((id) => ({ id: `picsum-${id}`, miniatura: `https://picsum.photos/id/${id}/400/225`, url: `https://picsum.photos/id/${id}/1920/1080`, link: "https://picsum.photos" }));
+
+/** Lê a resposta da API do Unsplash (busca ou lista) — tolerante; só fotos com URL https. */
+export function fotosDoUnsplash(json: unknown): FotoFundo[] {
+  const lista = Array.isArray(json) ? json : json && typeof json === "object" && Array.isArray((json as { results?: unknown }).results) ? (json as { results: unknown[] }).results : [];
+  const fotos: FotoFundo[] = [];
+  for (const f of lista) {
+    if (!f || typeof f !== "object") continue;
+    const o = f as { id?: unknown; urls?: Record<string, unknown>; user?: { name?: unknown; links?: { html?: unknown } }; links?: { html?: unknown } };
+    const raw = typeof o.urls?.raw === "string" ? o.urls.raw : null;
+    if (typeof o.id !== "string" || !raw?.startsWith("https://")) continue;
+    const sep = raw.includes("?") ? "&" : "?";
+    fotos.push({
+      id: o.id,
+      miniatura: `${raw}${sep}w=400&h=225&fit=crop&auto=format&q=70`,
+      url: `${raw}${sep}w=1920&h=1080&fit=crop&auto=format&q=80`,
+      autor: typeof o.user?.name === "string" ? o.user.name : undefined,
+      link: typeof o.links?.html === "string" ? o.links.html : undefined,
+    });
+  }
+  return fotos;
 }

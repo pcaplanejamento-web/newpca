@@ -22,7 +22,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   const de = somarDias(hoje, -60);
   const ate = somarDias(hoje, 365);
   const grupos = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
-  const quadros = (await listarQuadros(grupos, hoje)).filter((q) => !q.arquivado);
+  const quadros = (await listarQuadros(grupos, hoje, u.id)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
   const [tarefas, eventos, prefs] = await Promise.all([tarefasDoCalendario(ids, de, ate), eventosDosQuadros(ids, de, ate), listarPreferenciasTabela(u.id, CHAVE_OCULTOS_CALENDARIO)]);
   const ocultos = lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]);

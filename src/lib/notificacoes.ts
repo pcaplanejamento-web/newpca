@@ -7,7 +7,7 @@ import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
 import { nomeExibicao, urlFoto } from "./pessoa";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
-import { comandosNotificacoes, type NovaNotificacao, pessoaNaTarefa } from "./tarefas-sql";
+import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
 
 /**
  * NOTIFICAÇÕES do sino (migração `0044`) — acesso ao D1 (só escopo de request). As de EVENTO (atribuída, menção,
@@ -81,6 +81,7 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
           gte(tarefas.prazo, somarDias(hoje, -30)),
           lte(tarefas.prazo, somarDias(hoje, 1)),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          quadroVisivel(u.id),
         ),
       )
       .limit(200);
@@ -115,6 +116,7 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
           gte(tarefaChecklist.prazo, somarDias(hoje, -30)),
           lte(tarefaChecklist.prazo, somarDias(hoje, 1)),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          quadroVisivel(u.id),
         ),
       )
       .limit(200);
@@ -183,6 +185,7 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           eq(tarefaQuadros.arquivado, false),
           listaAtiva,
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          quadroVisivel(u.id),
           // Quem criou, os convidados que não recusaram e os envolvidos da tarefa (responsáveis + equipes) — o
           // OBSERVADOR só no evento NÃO privado (o privado é só de quem participa: `participaDoEvento`).
           sql`(${tarefaEventos.criadoPor} = ${u.id} OR ${pessoaNaTarefa(u.id)} OR (${tarefaEventos.privado} = 0 AND ${pessoaNaTarefa(u.id, true)}) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
@@ -213,6 +216,7 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           gte(tarefas.prazo, hoje),
           lte(tarefas.prazo, ate),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          quadroVisivel(u.id),
           pessoaNaTarefa(u.id, true),
         ),
       )

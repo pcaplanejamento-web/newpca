@@ -782,6 +782,10 @@ export const tarefaQuadros = sqliteTable(
     fundoUrl: text("fundo_url"),
     /** O ENQUADRAMENTO da imagem de fundo (JSON `{x,y,zoom}` — migração `0059`; NULL = centro, sem zoom). */
     fundoAjuste: text("fundo_ajuste"),
+    /** O DEGRADÊ de fundo (JSON `{cores, angulo}` — migração `0060`; exclui a imagem). */
+    fundoGradiente: text("fundo_gradiente"),
+    /** PRIVADO: só quem criou (`criado_por`) vê o quadro (migração `0060`). */
+    privado: integer("privado", { mode: "boolean" }).notNull().default(false),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),

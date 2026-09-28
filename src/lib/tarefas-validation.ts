@@ -25,7 +25,18 @@ export const periodoSchema = z.object({ ano: z.number().int().min(2000).max(2100
  * Criar um quadro — em branco ou a partir de um MODELO de quadro (`modeloId`); `periodo` = as listas dos dias do mês;
  * `templatesDe` = copia os TEMPLATES daquele quadro.
  */
-export const criarQuadroSchema = quadroSchema.extend({ modeloId: id.nullable().optional(), periodo: periodoSchema.nullable().optional(), templatesDe: id.nullable().optional() });
+/** O DEGRADÊ de fundo: 2–3 cores hex e o ângulo; null = sem degradê. */
+const fundoGradiente = z.object({ cores: z.array(cor).min(2).max(3), angulo: z.number().int().min(0).max(359) }).nullable();
+export const criarQuadroSchema = quadroSchema.extend({
+  modeloId: id.nullable().optional(),
+  periodo: periodoSchema.nullable().optional(),
+  templatesDe: id.nullable().optional(),
+  /** O FUNDO escolhido na criação (imagem por link OU degradê; nenhum = o padrão do sistema). */
+  fundoUrl: z.string().trim().min(1).max(1000).nullable().optional(),
+  fundoGradiente: fundoGradiente.optional(),
+  /** PRIVADO: só quem cria vê. */
+  privado: z.boolean().optional(),
+});
 /** O FORMATO do título automático (`{Campo} - {Campo}`; vazio/null = desligado). */
 const formatoTitulo = z
   .string()
@@ -39,7 +50,14 @@ const fundoUrl = z.string().trim().min(1, "Informe o link.").max(1000, "Link com
 const fundoAjuste = z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100), zoom: z.number().min(1).max(3) }).nullable();
 export const editarQuadroSchema = quadroSchema
   .partial()
-  .extend({ arquivado: z.boolean().optional(), formatoTitulo: formatoTitulo.optional(), fundoUrl: fundoUrl.optional(), fundoAjuste: fundoAjuste.optional() });
+  .extend({
+    arquivado: z.boolean().optional(),
+    formatoTitulo: formatoTitulo.optional(),
+    fundoUrl: fundoUrl.optional(),
+    fundoAjuste: fundoAjuste.optional(),
+    fundoGradiente: fundoGradiente.optional(),
+    privado: z.boolean().optional(),
+  });
 
 /** Um CAMPO personalizado do quadro (as opções só valem para o tipo lista). */
 export const campoSchema = z

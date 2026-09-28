@@ -579,3 +579,10 @@ export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
     );
   return cmds;
 }
+
+/**
+ * O quadro é VISÍVEL para a pessoa? O PRIVADO (migração `0060`) só para quem o criou; os demais, pelo grupo (a condição do
+ * grupo fica com quem consulta). Usado em TODA lista de quadros/tarefas (lista de quadros, calendário, busca de vínculos,
+ * "Tarefas" da Mesa, destinos de copiar/mover, avisos do sino).
+ */
+export const quadroVisivel = (usuarioId: number) => sql`(${tarefaQuadros.privado} = 0 OR ${tarefaQuadros.criadoPor} = ${usuarioId})`;

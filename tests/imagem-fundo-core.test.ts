@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   AJUSTE_FUNDO_PADRAO,
+  corpoFundo,
+  cssGradiente,
+  fotosDoUnsplash,
+  fotosPicsum,
+  fundoDoQuadro,
+  GRADIENTES_PADRAO,
+  lerGradiente,
+  mesmoGradiente,
   arrastarFundo,
   avaliarImagemFundo,
   estiloFundo,
@@ -79,5 +87,35 @@ describe("enquadramento da imagem de fundo", () => {
     assert.equal(avaliarImagemFundo(2160, 3840).length, 1);
     assert.equal(avaliarImagemFundo(800, 800).length, 2);
     assert.equal(avaliarImagemFundo(0, 0).length, 0);
+  });
+});
+
+describe("degradê e fotos de fundo", () => {
+  it("lê o degradê com hex validados (sem injeção) e normaliza o ângulo", () => {
+    assert.deepEqual(lerGradiente('{"cores":["#0C66E4","#09326c"],"angulo":-45}'), { cores: ["#0c66e4", "#09326c"], angulo: 315 });
+    assert.equal(lerGradiente({ cores: ["#fff", "red"], angulo: 0 }), null);
+    assert.equal(lerGradiente({ cores: ["#000000;x", "#ffffff"], angulo: 0 }), null);
+    assert.equal(lerGradiente("lixo"), null);
+    assert.equal(cssGradiente({ cores: ["#000000", "#ffffff"], angulo: 90 }), "linear-gradient(90deg, #000000, #ffffff)");
+    assert.ok(GRADIENTES_PADRAO.every((p) => lerGradiente(p.g)));
+    assert.ok(mesmoGradiente(GRADIENTES_PADRAO[0].g, lerGradiente(JSON.stringify(GRADIENTES_PADRAO[0].g))));
+  });
+
+  it("fundo: imagem vence o degradê; nada = padrão do sistema; gravar um tira o outro", () => {
+    assert.deepEqual(fundoDoQuadro({ fundoUrl: null, fundoGradiente: null }), { tipo: "nenhum" });
+    assert.equal(fundoDoQuadro({ fundoUrl: "https://a.com/x.jpg", fundoGradiente: '{"cores":["#000000","#ffffff"],"angulo":0}' }).tipo, "imagem");
+    assert.equal(fundoDoQuadro({ fundoUrl: null, fundoGradiente: '{"cores":["#000000","#ffffff"],"angulo":0}' }).tipo, "gradiente");
+    assert.deepEqual(corpoFundo({ tipo: "nenhum" }), { fundoUrl: null, fundoGradiente: null });
+    assert.deepEqual(corpoFundo({ tipo: "imagem", url: "u" }), { fundoUrl: "u", fundoGradiente: null });
+  });
+
+  it("fotos: a seleção fixa e a resposta do Unsplash (busca ou lista)", () => {
+    assert.ok(fotosPicsum().every((f) => f.url.startsWith("https://picsum.photos/id/") && f.url.endsWith("/1920/1080")));
+    const r = fotosDoUnsplash({ results: [{ id: "a1", urls: { raw: "https://images.unsplash.com/photo-1?ixid=x" }, user: { name: "Ana" }, links: { html: "https://unsplash.com/photos/a1" } }, { id: "b", urls: { raw: "http://x" } }, null] });
+    assert.equal(r.length, 1);
+    assert.equal(r[0].url, "https://images.unsplash.com/photo-1?ixid=x&w=1920&h=1080&fit=crop&auto=format&q=80");
+    assert.equal(r[0].autor, "Ana");
+    assert.equal(fotosDoUnsplash([{ id: "c", urls: { raw: "https://images.unsplash.com/p" } }])[0].miniatura, "https://images.unsplash.com/p?w=400&h=225&fit=crop&auto=format&q=70");
+    assert.deepEqual(fotosDoUnsplash("x"), []);
   });
 });

@@ -105,6 +105,7 @@ import {
   comandosVinculos,
   comandosVinculosTarefa,
   type ChecklistNovo,
+  quadroVisivel,
   pessoaNaTarefa,
 } from "./tarefas-sql";
 import type { AcaoMassaTarefas, CartaoImportado } from "./tarefas-validation";
@@ -128,6 +129,12 @@ export type Quadro = {
   fundoUrl: string | null;
   /** O ENQUADRAMENTO da imagem (JSON `{x,y,zoom}` — `lerAjusteFundo`; migração `0059`). */
   fundoAjuste: string | null;
+  /** O DEGRADÊ de fundo (JSON — `lerGradiente`; migração `0060`). */
+  fundoGradiente: string | null;
+  /** PRIVADO: só quem criou vê (migração `0060`). */
+  privado: boolean;
+  /** Quem criou (o dono do quadro privado). */
+  criadoPor: number | null;
 };
 export type QuadroCard = Quadro & { abertas: number; atrasadas: number; concluidas: number };
 export type TarefaCompleta = TarefaResumo & { quadroId: number; descricao: string | null; blocos: BlocoTarefa[] | null };
@@ -143,10 +150,13 @@ const COLS_QUADRO = {
   formatoTitulo: tarefaQuadros.formatoTitulo,
   fundoUrl: tarefaQuadros.fundoUrl,
   fundoAjuste: tarefaQuadros.fundoAjuste,
+  fundoGradiente: tarefaQuadros.fundoGradiente,
+  privado: tarefaQuadros.privado,
+  criadoPor: tarefaQuadros.criadoPor,
 };
 
 /** Os quadros dos GRUPOS dados (`null` = todos — o ADM sem grupo), com as contagens do card. `hoje` = "AAAA-MM-DD". */
-export async function listarQuadros(grupoIds: number[] | null, hoje: string): Promise<QuadroCard[]> {
+export async function listarQuadros(grupoIds: number[] | null, hoje: string, usuarioId: number): Promise<QuadroCard[]> {
   if (grupoIds && grupoIds.length === 0) return [];
   const aberta = sql`t.arquivada = 0 AND t.template = 0 AND t.concluida_em IS NULL`;
   return getDb()
@@ -158,7 +168,7 @@ export async function listarQuadros(grupoIds: number[] | null, hoje: string): Pr
     })
     .from(tarefaQuadros)
     .innerJoin(grupos, eq(grupos.id, tarefaQuadros.grupoId))
-    .where(grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds) : undefined)
+    .where(and(grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds) : undefined, quadroVisivel(usuarioId)))
     .orderBy(tarefaQuadros.arquivado, asc(tarefaQuadros.nome));
 }
 
@@ -170,10 +180,15 @@ export async function getQuadro(id: number): Promise<Quadro | null> {
 /** O quadro arquivado é SÓ LEITURA para criar: nada de tarefa, lista, etiqueta ou automação nova até desarquivar. */
 export const MSG_QUADRO_ARQUIVADO = "Quadro arquivado — desarquive-o na Configuração para criar.";
 
-/** O quadro, se o usuário pode vê-lo (membro do grupo do quadro — o ADM, qualquer um); senão `null`. */
+/**
+ * O quadro, se o usuário pode vê-lo (membro do grupo do quadro — o ADM, qualquer um); senão `null`. O PRIVADO é só de quem
+ * o criou — nem o ADM o vê (o ADM só entra no privado cujo dono não existe mais).
+ */
 export async function quadroAcessivel(u: UsuarioSessao, id: number): Promise<Quadro | null> {
   const q = await getQuadro(id);
-  if (!q || u.role === "admin") return q;
+  if (!q) return null;
+  if (q.privado && q.criadoPor !== u.id && !(q.criadoPor == null && u.role === "admin")) return null;
+  if (u.role === "admin") return q;
   return (await gruposDoUsuario(u.id)).some((g) => g.id === q.grupoId) ? q : null;
 }
 
@@ -613,7 +628,7 @@ export async function criarQuadro(grupoId: number, d: { nome: string; cor?: stri
   return q.id;
 }
 
-export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null; fundoUrl?: string | null; fundoAjuste?: string | null }) {
+export async function atualizarQuadro(id: number, d: { nome?: string; cor?: string; descricao?: string | null; arquivado?: boolean; formatoTitulo?: string | null; fundoUrl?: string | null; fundoAjuste?: string | null; fundoGradiente?: string | null; privado?: boolean }) {
   await getDb()
     .update(tarefaQuadros)
     .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
@@ -1387,6 +1402,7 @@ export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: str
           eq(tarefas.template, false),
           eq(tarefaQuadros.arquivado, false),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+          quadroVisivel(u.id),
           ticket != null ? or(eq(tarefas.ticket, ticket), like(tarefas.titulo, termo)) : like(tarefas.titulo, termo),
         ),
       )
@@ -1457,6 +1473,7 @@ export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: 
         eq(tarefas.template, false),
         eq(tarefaQuadros.arquivado, false),
         grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
+        quadroVisivel(u.id),
       ),
     )
     .orderBy(tarefas.arquivada, desc(tarefas.id))
@@ -1867,7 +1884,7 @@ export async function destinosDeTarefa(u: UsuarioSessao) {
     .select({ id: tarefaQuadros.id, nome: tarefaQuadros.nome, cor: tarefaQuadros.cor, grupoNome: grupos.nome })
     .from(tarefaQuadros)
     .innerJoin(grupos, eq(grupos.id, tarefaQuadros.grupoId))
-    .where(and(eq(tarefaQuadros.arquivado, false), grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined))
+    .where(and(eq(tarefaQuadros.arquivado, false), grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined, quadroVisivel(u.id)))
     .orderBy(asc(tarefaQuadros.nome));
   const listas = (
     await Promise.all(

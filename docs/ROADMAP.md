@@ -1108,6 +1108,9 @@ inteiro, fotos dos membros, filtro e menu "…"), listas e painéis opacos e a p
 ✅ **Tarefas — enquadrar o fundo, capa e recolher lista:** a imagem de fundo pode ser reenquadrada (arrastar + zoom), com a
 proporção ideal indicada (16:9, ≥ 1920×1080) e fotos sugeridas; cartões com capa colorida; listas recolhíveis; contagem
 "N de M" com filtro; título do quadro inteiro.
+✅ **Tarefas — fundo por foto/degradê e quadro privado:** seletor de fundo como o do Trello (fotos com pesquisa — Unsplash
+com a chave —, degradês em círculos, degradê próprio e "Sem fundo" = padrão do sistema) no Novo quadro e na
+Configuração; cards dos quadros com a capa 16:9; quadros privados (só quem criou vê).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

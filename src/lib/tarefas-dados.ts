@@ -49,7 +49,7 @@ export async function carregarQuadros(u: UsuarioSessao) {
   const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const [quadros, modelos, favoritos] = await Promise.all([
-    listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje),
+    listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id),
     u.role === "admin" ? listarModelosQuadro(null) : gruposDoUsuario(u.id).then((g) => listarModelosQuadro(g.map((x) => x.id))),
     favoritosDaPessoa(u.id),
   ]);
@@ -77,7 +77,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
   const [prefs, abas] = await Promise.all([preferenciasCalendario(u.id), abasPermitidas(u, grupo)]);
   const inicio = prefs.opcoes.inicioSegunda ? 1 : 0;
   const { de, ate } = intervaloCalendario(mes, inicio, anual);
-  const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
+  const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
   const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas, equipes] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
@@ -191,6 +191,6 @@ export type DadosQuadro = NonNullable<Awaited<ReturnType<typeof carregarQuadro>>
 export async function quadrosDoCalendario(u: UsuarioSessao): Promise<number[]> {
   const grupoAtivo = await getGrupoAtivoId(u);
   const hoje = dataIsoBrasilia(new Date().toISOString());
-  const quadros = await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje);
+  const quadros = await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id);
   return quadros.filter((q) => !q.arquivado).map((q) => q.id);
 }

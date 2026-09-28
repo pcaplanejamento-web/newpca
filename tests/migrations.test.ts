@@ -702,6 +702,16 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("DELETE FROM grupos WHERE id = 9590");
   });
 
+  it("0060 degradê de fundo e quadro privado: privado nasce 0; o degradê é JSON livre", () => {
+    db.exec("INSERT INTO grupos (id, nome) VALUES (9595, 'G')");
+    db.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome) VALUES (9596, 9595, 'Q')");
+    const q = db.prepare("SELECT privado AS p, fundo_gradiente AS g FROM tarefa_quadros WHERE id = 9596").get() as { p: number; g: string | null };
+    assert.deepEqual([q.p, q.g], [0, null]);
+    db.exec(`UPDATE tarefa_quadros SET privado = 1, fundo_gradiente = '{"cores":["#000000","#ffffff"],"angulo":90}' WHERE id = 9596`);
+    db.exec("DELETE FROM tarefa_quadros WHERE id = 9596");
+    db.exec("DELETE FROM grupos WHERE id = 9595");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

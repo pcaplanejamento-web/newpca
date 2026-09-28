@@ -2344,6 +2344,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     - Título do quadro inteiro: o `TextoNoLugar ajustar` não usa margem negativa nem `max-width` (cortavam a largura
       intrínseca — "tes…"); Dashboard e Configuração ficam "vazados" (`PainelMoldura vazado`: os quadros/seções delas já são
       ilhas opacas).
+  - **FUNDO por FOTO/DEGRADÊ/NENHUM + CARD com CAPA 16:9 + QUADRO PRIVADO (migração `0060`, aditiva):**
+    - `tarefa_quadros.fundo_gradiente` (JSON `{cores: 2–3 hex, angulo}`) — imagem e degradê se EXCLUEM (o servidor tira um
+      ao gravar o outro); sem nenhum, o **padrão do sistema** (a moldura na superfície cinza, sem nada — saiu o degradê da
+      cor). Núcleo puro em `imagem-fundo-core.ts`: `lerGradiente` (só hex validados — sem injeção de CSS),
+      `cssGradiente`, `GRADIENTES_PADRAO` (10), `ANGULOS_GRADIENTE`, `mesmoGradiente`, `FundoEscolha`/`fundoDoQuadro`/
+      `corpoFundo`, `PESQUISAS_SUGERIDAS`, `fotosPicsum`, `fotosDoUnsplash` (testados).
+    - **`SeletorFundo`** (o "Tela de fundo" do Trello, no **Novo quadro** e na Configuração → **Fundo do quadro**): prévia do
+      quadro, 4 fotos 16:9 + "…" → **Pesquisa de fotos** (busca, pesquisas sugeridas, principais fotos, crédito) e os
+      DEGRADÊS em CÍRCULOS — "Sem fundo", os predefinidos e "+" = **degradê próprio** (2–3 cores + direção + prévia).
+      Fotos: **`GET /api/tarefas/fotos?q=`** (`buscarFotosFundo`, `fotos-fundo.ts`) — Unsplash com o Worker Secret
+      `UNSPLASH_ACCESS_KEY` (cache 10 min), senão a seleção fixa do Picsum; setup em `docs/INTEGRACOES.md`.
+      `POST /api/tarefas/quadros` aceita `fundoUrl`/`fundoGradiente` (a imagem resolvida ANTES de criar) e `privado`.
+    - **`CapaQuadro`** (`QuadroCard.tsx`): o card do quadro mostra a imagem (com o enquadramento) ou o degradê numa capa
+      16:9 DENTRO do card; sem fundo, a superfície com a cor do quadro num traço; contagens numa linha (abertas ·
+      atrasadas · concluídas); altura igual na grade.
+    - **Quadro PRIVADO** (`tarefa_quadros.privado` + `criado_por` = o dono): só quem criou o vê — NEM o grupo NEM o ADM (o
+      ADM só entra no privado cujo dono não existe mais). `quadroAcessivel` barra; **`quadroVisivel(u)`** (`tarefas-sql`,
+      testado no D1 real) entra em TODA lista: `listarQuadros(grupos, hoje, usuarioId)` (lista de quadros, calendário,
+      busca do calendário, `.ics`, "Tarefas" da Mesa), `buscarVinculos` (tarefa), `tarefasDoVinculo`, `destinosDeTarefa` e
+      os avisos derivados do sino. "Quadro privado" no Novo quadro; na Configuração, só o DONO liga/desliga (403 aos
+      demais). Cadeado na capa do card e na faixa do quadro. Criar quadro segue só para editores.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 
