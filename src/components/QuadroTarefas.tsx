@@ -75,6 +75,7 @@ export function QuadroTarefas({
   listas,
   tarefas: doServidor,
   etiquetas,
+  equipes,
   membros,
   pessoas,
   edicoes,
@@ -161,7 +162,7 @@ export function QuadroTarefas({
   };
 
   const exportar = () =>
-    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje })).catch(() => toast.error("Não foi possível exportar."));
+    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje, equipes })).catch(() => toast.error("Não foi possível exportar."));
 
   const mover = async (id: number, listaId: number, indice: number) => {
     const antes = tarefas;
@@ -428,6 +429,7 @@ export function QuadroTarefas({
             tarefas={naLista}
             listas={listas}
             etiquetas={etiquetas}
+            equipes={equipes}
             pessoas={pessoas}
             hoje={hoje}
             ativa={aberto?.tipo === "editar" ? aberto.id : null}
@@ -461,8 +463,10 @@ export function QuadroTarefas({
             quadro={quadro}
             listas={listas}
             etiquetas={etiquetas}
+            equipes={equipes}
             automacoes={automacoes}
             pessoas={doGrupo}
+            todas={pessoas}
             modelosQuadro={modelosQuadro}
             modelosTarefa={modelosTarefa}
             usuarioId={usuarioId}
@@ -492,7 +496,7 @@ export function QuadroTarefas({
             </span>
           }
         >
-          <BarraEdicaoMassaTarefas listas={ativas} pessoas={doGrupo} etiquetas={etiquetas} arquivadas={arquivadas} aplicando={aplicando} onAplicar={aplicarMassa} />
+          <BarraEdicaoMassaTarefas listas={ativas} pessoas={doGrupo} etiquetas={etiquetas} equipes={equipes} arquivadas={arquivadas} aplicando={aplicando} onAplicar={aplicarMassa} />
         </BarraSelecao>
       )}
 
@@ -502,6 +506,7 @@ export function QuadroTarefas({
         tarefas={tarefas}
         listas={ativas}
         etiquetas={etiquetas}
+        equipes={equipes}
         pessoas={doGrupo}
         todas={pessoas}
         hoje={hoje}

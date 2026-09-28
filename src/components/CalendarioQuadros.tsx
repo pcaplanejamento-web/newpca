@@ -198,7 +198,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
 
   const porQuadro = useMemo(() => new Map(dados.quadros.map((q) => [q.id, q])), [dados.quadros]);
   const membros = useMemo(() => dados.pessoas.filter((p) => dados.membros.includes(p.id)), [dados.pessoas, dados.membros]);
-  const responsaveis = useMemo(() => new Map(tarefas.map((t) => [t.id, t.pessoas])), [tarefas]);
+  // Os ENVOLVIDOS de cada tarefa (responsáveis + membros das equipes) — "pesquisar pessoas" e o banner do evento.
+  const responsaveis = useMemo(() => new Map(tarefas.map((t) => [t.id, t.envolvidos])), [tarefas]);
   const variosQuadros = dados.quadros.length > 1;
   const etiquetas = useMemo(
     () => dados.etiquetas.map((e) => (variosQuadros ? { ...e, nome: `${e.nome} · ${porQuadro.get(e.quadroId)?.nome ?? ""}` } : e)),
@@ -609,6 +610,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       }
       onExcluir={aberto.eventoId ? () => excluir(aberto) : undefined}
       pessoas={dados.pessoas}
+      participantes={aberto.pca || aberto.externo ? undefined : responsaveis.get(aberto.tarefaId)}
       usuarioId={usuarioId}
       onResponder={(r) => r !== "pendente" && responder(aberto, r)}
     />
@@ -819,6 +821,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           tarefas={[ctx.tarefa]}
           listas={ctx.listas.filter((l) => !l.arquivada)}
           etiquetas={ctx.etiquetas}
+          equipes={ctx.equipes}
           pessoas={ctx.pessoas.filter((p) => ctx.membros.includes(p.id))}
           todas={ctx.pessoas}
           hoje={dados.hoje}

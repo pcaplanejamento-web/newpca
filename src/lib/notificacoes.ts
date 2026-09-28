@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { notificacoes, tarefaEventos, tarefaPessoas, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
+import { notificacoes, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
@@ -7,7 +7,7 @@ import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
 import { nomeExibicao, urlFoto } from "./pessoa";
 import { lerRecorrenciaEvento, notificacaoDePrazo, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
-import { comandosNotificacoes, type NovaNotificacao } from "./tarefas-sql";
+import { comandosNotificacoes, type NovaNotificacao, pessoaNaTarefa } from "./tarefas-sql";
 
 /**
  * NOTIFICAÇÕES do sino (migração `0044`) — acesso ao D1 (só escopo de request). As de EVENTO (atribuída, menção,
@@ -68,13 +68,11 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
     const hoje = dataIsoBrasilia(new Date().toISOString());
     const linhas = await db
       .select({ id: tarefas.id, ticket: tarefas.ticket, titulo: tarefas.titulo, prazo: tarefas.prazo, quadroId: tarefas.quadroId, quadroNome: tarefaQuadros.nome })
-      .from(tarefaPessoas)
-      .innerJoin(tarefas, eq(tarefas.id, tarefaPessoas.tarefaId))
+      .from(tarefas)
       .innerJoin(tarefaQuadros, eq(tarefaQuadros.id, tarefas.quadroId))
       .where(
         and(
-          eq(tarefaPessoas.usuarioId, u.id),
-          eq(tarefaPessoas.papel, "responsavel"),
+          pessoaNaTarefa(u.id),
           isNull(tarefas.concluidaEm),
           eq(tarefas.arquivada, false),
           eq(tarefaQuadros.arquivado, false),
@@ -150,9 +148,9 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           eq(tarefaQuadros.arquivado, false),
           listaAtiva,
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
-          // Quem criou, os convidados que não recusaram e as pessoas da tarefa — o OBSERVADOR só no evento NÃO privado
-          // (o privado é só de quem participa: `participaDoEvento`).
-          sql`(${tarefaEventos.criadoPor} = ${u.id} OR EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${u.id} AND (${tarefaEventos.privado} = 0 OR p.papel = 'responsavel')) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
+          // Quem criou, os convidados que não recusaram e os envolvidos da tarefa (responsáveis + equipes) — o
+          // OBSERVADOR só no evento NÃO privado (o privado é só de quem participa: `participaDoEvento`).
+          sql`(${tarefaEventos.criadoPor} = ${u.id} OR ${pessoaNaTarefa(u.id)} OR (${tarefaEventos.privado} = 0 AND ${pessoaNaTarefa(u.id, true)}) OR EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${u.id} AND c.resposta <> 'nao'))`,
         ),
       )
       .orderBy(asc(tarefaEventos.data))

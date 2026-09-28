@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, type SQL, sql } from "drizzle-orm";
 import {
   dfdProtocolos,
   dfds,
@@ -8,6 +8,9 @@ import {
   tarefaAutomacoes,
   tarefaChecklist,
   tarefaComentarios,
+  tarefaEquipeMembros,
+  tarefaEquipes,
+  tarefaEquipesLinks,
   tarefaEventoConvidados,
   tarefaEventos,
   tarefaEtiquetaLinks,
@@ -58,6 +61,9 @@ import {
   rotuloTicket,
   type TipoNotificacao,
   type EtiquetaTarefa,
+  type EquipeQuadro,
+  envolvidosDe,
+  equipesDasLinhas,
   type ListaTarefas,
   ordemEntre,
   ordemEntre as ordemItem,
@@ -74,9 +80,11 @@ import {
   comandosCriarEvento,
   comandosCriarQuadroDoModelo,
   comandosCriarTarefa,
+  comandosEquipe,
   comandosMassa,
   comandosMover,
   comandosVinculos,
+  pessoaNaTarefa,
 } from "./tarefas-sql";
 import type { AcaoMassaTarefas } from "./tarefas-validation";
 
@@ -207,7 +215,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .innerJoin(tarefas, eq(tarefas.id, tabela.tarefaId))
       .where(doQuadro)
       .groupBy(tabela.tarefaId);
-  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos] = await Promise.all([
+  const [listas, cartoes, pessoas, links, etiquetas, checks, comentarios, nEventos, equipes] = await Promise.all([
     listasDoQuadro(quadroId),
     db
       .select({
@@ -255,6 +263,7 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       .groupBy(tarefaChecklist.tarefaId),
     contar(tarefaComentarios),
     contar(tarefaEventos),
+    linhasEquipes(doQuadro),
   ]);
   const agrupar = (pares: { tarefaId: number; v: number }[]) => {
     const m = new Map<number, number[]>();
@@ -267,17 +276,22 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
   const porCheck = new Map(checks.map((c) => [c.tarefaId, { feitos: Number(c.feitos), total: Number(c.total) }]));
   const porComentario = new Map(comentarios.map((c) => [c.tarefaId, Number(c.n)]));
   const porEvento = new Map(nEventos.map((c) => [c.tarefaId, Number(c.n)]));
+  const eqs = equipesDasLinhas(equipes);
   const rotulos = await rotulosVinculos(cartoes.map((t) => vinculoDe(t.vinculoTipo, t.vinculoId)).filter((v): v is VinculoTarefa => !!v));
   return {
     listas,
     etiquetas,
     tarefas: cartoes.map(({ vinculoTipo, vinculoId, ...t }) => {
       const v = vinculoDe(vinculoTipo, vinculoId);
+      const resp = porPessoa.get(t.id) ?? [];
+      const equipesT = eqs.porTarefa.get(t.id) ?? [];
       return {
         ...t,
         prioridade: prioridadeValida(t.prioridade),
-        pessoas: porPessoa.get(t.id) ?? [],
+        pessoas: resp,
         observadores: porObservador.get(t.id) ?? [],
+        equipes: equipesT,
+        envolvidos: envolvidosDe(resp, equipesT, eqs.membros),
         etiquetas: porEtiqueta.get(t.id) ?? [],
         vinculo: v ? { ...v, rotulo: rotulos.get(`${v.tipo}:${v.id}`) ?? null } : null,
         checklist: porCheck.get(t.id) ?? { feitos: 0, total: 0 },
@@ -289,6 +303,19 @@ export async function dadosQuadro(quadroId: number): Promise<{ listas: ListaTare
       };
     }),
   };
+}
+
+/**
+ * As EQUIPES das tarefas que passam em `cond` (sobre `tarefas`): (tarefa, equipe, membro | null) — uma consulta, sem
+ * lista de ids.
+ */
+function linhasEquipes(cond: SQL | undefined) {
+  return getDb()
+    .select({ tarefaId: tarefaEquipesLinks.tarefaId, equipeId: tarefaEquipesLinks.equipeId, usuarioId: tarefaEquipeMembros.usuarioId })
+    .from(tarefaEquipesLinks)
+    .innerJoin(tarefas, eq(tarefas.id, tarefaEquipesLinks.tarefaId))
+    .leftJoin(tarefaEquipeMembros, eq(tarefaEquipeMembros.equipeId, tarefaEquipesLinks.equipeId))
+    .where(cond);
 }
 
 /** Quantos blocos do tipo a tarefa tem (os ícones do cartão) — contado no banco, sem trazer o texto das notas. */
@@ -341,7 +368,7 @@ async function tarefasDoCalendarioLote(ids: number[], de: string, ate: string): 
       sql`EXISTS (SELECT 1 FROM tarefa_eventos e WHERE e.tarefa_id = ${tarefas.id} AND e.data <= ${ate} AND (COALESCE(e.data_fim, e.data) >= ${de} OR (e.recorrencia IS NOT NULL AND COALESCE(json_extract(e.recorrencia, '$.ate'), '9999-12-31') >= ${de})))`,
     ),
   );
-  const [linhas, pessoas, etiquetas] = await Promise.all([
+  const [linhas, pessoas, etiquetas, equipes] = await Promise.all([
     db
       .select({
         id: tarefas.id,
@@ -368,18 +395,26 @@ async function tarefasDoCalendarioLote(ids: number[], de: string, ate: string): 
       .from(tarefaEtiquetaLinks)
       .innerJoin(tarefas, eq(tarefas.id, tarefaEtiquetaLinks.tarefaId))
       .where(noIntervalo),
+    linhasEquipes(noIntervalo),
   ]);
   const porPessoa = new Map<number, number[]>();
   for (const p of pessoas) porPessoa.set(p.tarefaId, [...(porPessoa.get(p.tarefaId) ?? []), p.usuarioId]);
   const porEtiqueta = new Map<number, number[]>();
   for (const e of etiquetas) porEtiqueta.set(e.tarefaId, [...(porEtiqueta.get(e.tarefaId) ?? []), e.etiquetaId]);
-  return linhas.map((t) => ({
-    ...t,
-    prioridade: prioridadeValida(t.prioridade),
-    recorrencia: lerRecorrencia(t.recorrencia),
-    pessoas: porPessoa.get(t.id) ?? [],
-    etiquetas: porEtiqueta.get(t.id) ?? [],
-  }));
+  const eqs = equipesDasLinhas(equipes);
+  return linhas.map((t) => {
+    const resp = porPessoa.get(t.id) ?? [];
+    const equipesT = eqs.porTarefa.get(t.id) ?? [];
+    return {
+      ...t,
+      prioridade: prioridadeValida(t.prioridade),
+      recorrencia: lerRecorrencia(t.recorrencia),
+      pessoas: resp,
+      equipes: equipesT,
+      envolvidos: envolvidosDe(resp, equipesT, eqs.membros),
+      etiquetas: porEtiqueta.get(t.id) ?? [],
+    };
+  });
 }
 
 /** Os NÚMEROS do cabeçalho do calendário de todos os quadros (tarefas abertas): atrasadas, hoje, nesta semana, sem prazo. */
@@ -416,14 +451,18 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
   const db = getDb();
   const [t] = await db.select().from(tarefas).where(eq(tarefas.id, id));
   if (!t) return null;
-  const [pessoas, links, checks, com, ev] = await Promise.all([
+  const [pessoas, links, checks, com, ev, equipes] = await Promise.all([
     db.select({ u: tarefaPessoas.usuarioId, papel: tarefaPessoas.papel }).from(tarefaPessoas).where(eq(tarefaPessoas.tarefaId, id)),
     db.select({ e: tarefaEtiquetaLinks.etiquetaId }).from(tarefaEtiquetaLinks).where(eq(tarefaEtiquetaLinks.tarefaId, id)),
     db.select({ feito: tarefaChecklist.feito }).from(tarefaChecklist).where(eq(tarefaChecklist.tarefaId, id)),
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaComentarios).where(eq(tarefaComentarios.tarefaId, id)),
     db.select({ n: sql<number>`COUNT(*)` }).from(tarefaEventos).where(eq(tarefaEventos.tarefaId, id)),
+    linhasEquipes(eq(tarefas.id, id)),
   ]);
   const v = vinculoDe(t.vinculoTipo, t.vinculoId);
+  const eqs = equipesDasLinhas(equipes);
+  const resp = pessoas.filter((p) => p.papel === "responsavel").map((p) => p.u);
+  const equipesT = eqs.porTarefa.get(id) ?? [];
   const rotulo = v ? (await rotulosVinculos([v])).get(`${v.tipo}:${v.id}`) : null;
   const blocos = lerBlocos(t.blocos);
   return {
@@ -439,8 +478,10 @@ export async function getTarefa(id: number): Promise<TarefaCompleta | null> {
     ordem: t.ordem,
     concluidaEm: t.concluidaEm,
     arquivada: t.arquivada,
-    pessoas: pessoas.filter((p) => p.papel === "responsavel").map((p) => p.u),
+    pessoas: resp,
     observadores: pessoas.filter((p) => p.papel === "observador").map((p) => p.u),
+    equipes: equipesT,
+    envolvidos: envolvidosDe(resp, equipesT, eqs.membros),
     etiquetas: links.map((l) => l.e),
     criadoEm: t.criadoEm,
     atualizadoEm: t.atualizadoEm,
@@ -554,6 +595,63 @@ export async function etiquetasDoQuadro(quadroId: number, ids: number[]): Promis
   return r.map((x) => x.id);
 }
 
+/** As EQUIPES do quadro com os membros (a Configuração, o detalhe e o calendário). */
+export async function listarEquipes(quadroIds: number[]): Promise<(EquipeQuadro & { quadroId: number })[]> {
+  const partes = await porLotesDeQuadros(quadroIds, (ids) =>
+    getDb()
+      .select({ id: tarefaEquipes.id, quadroId: tarefaEquipes.quadroId, nome: tarefaEquipes.nome, cor: tarefaEquipes.cor, ordem: tarefaEquipes.ordem, usuarioId: tarefaEquipeMembros.usuarioId })
+      .from(tarefaEquipes)
+      .leftJoin(tarefaEquipeMembros, eq(tarefaEquipeMembros.equipeId, tarefaEquipes.id))
+      .where(inArray(tarefaEquipes.quadroId, ids))
+      .orderBy(asc(tarefaEquipes.quadroId), asc(tarefaEquipes.ordem), asc(tarefaEquipes.id)),
+  );
+  const m = new Map<number, EquipeQuadro & { quadroId: number }>();
+  for (const l of partes) {
+    const e = m.get(l.id) ?? { id: l.id, quadroId: l.quadroId, nome: l.nome, cor: l.cor, ordem: l.ordem, membros: [] };
+    if (l.usuarioId != null) e.membros.push(l.usuarioId);
+    m.set(l.id, e);
+  }
+  return [...m.values()];
+}
+
+export async function getEquipe(id: number): Promise<(EquipeQuadro & { quadroId: number }) | null> {
+  const [e] = await getDb().select().from(tarefaEquipes).where(eq(tarefaEquipes.id, id));
+  if (!e) return null;
+  const membros = await getDb().select({ u: tarefaEquipeMembros.usuarioId }).from(tarefaEquipeMembros).where(eq(tarefaEquipeMembros.equipeId, id));
+  return { ...e, membros: membros.map((x) => x.u) };
+}
+
+/** Cria (sem `id`) ou atualiza a equipe + os membros num lote atômico; devolve o id. */
+export async function gravarEquipe(d: { id?: number; quadroId: number; nome: string; cor: string; membros: number[] }): Promise<number> {
+  const db = getDb();
+  const cmds = comandosEquipe(db, d);
+  await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  if (d.id != null) return d.id;
+  const [e] = await db.select({ id: sql<number>`MAX(${tarefaEquipes.id})` }).from(tarefaEquipes).where(eq(tarefaEquipes.quadroId, d.quadroId));
+  return Number(e.id);
+}
+
+export async function excluirEquipe(id: number) {
+  await getDb().delete(tarefaEquipes).where(eq(tarefaEquipes.id, id));
+}
+
+/** As equipes pedidas que são DO quadro (as de outro quadro saem). */
+export async function equipesDoQuadro(quadroId: number, ids: number[]): Promise<number[]> {
+  if (!ids.length) return [];
+  const r = await getDb()
+    .select({ id: tarefaEquipes.id })
+    .from(tarefaEquipes)
+    .where(and(eq(tarefaEquipes.quadroId, quadroId), inArray(tarefaEquipes.id, ids)));
+  return r.map((x) => x.id);
+}
+
+/** Os MEMBROS (sem repetir) das equipes dadas — quem passa a ser da tarefa ao ganhar a equipe. */
+export async function membrosDasEquipes(ids: number[]): Promise<number[]> {
+  if (!ids.length) return [];
+  const r = await getDb().select({ u: tarefaEquipeMembros.usuarioId }).from(tarefaEquipeMembros).where(inArray(tarefaEquipeMembros.equipeId, ids.slice(0, 90)));
+  return [...new Set(r.map((x) => x.u))];
+}
+
 /** CRIA a tarefa (ticket + fim da lista + responsáveis + etiquetas, num lote atômico). */
 export async function criarTarefa(d: Parameters<typeof comandosCriarTarefa>[1]): Promise<{ id: number; ticket: number }> {
   const db = getDb();
@@ -577,7 +675,7 @@ export async function atualizarTarefa(
     recorrencia?: Recorrencia | null;
     blocos?: BlocoTarefa[];
   },
-  vinculos: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[] },
+  vinculos: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[]; equipes?: number[] },
 ) {
   const db = getDb();
   const { vinculo, recorrencia, blocos, ...resto } = campos;
@@ -1099,7 +1197,7 @@ export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, ids: numbe
       if (a.tipo === "notificar") {
         for (const t of alvo) {
           const x = await getTarefa(t.id);
-          if (x) await avisarSobreTarefa(u, "automacao", [...x.pessoas, ...x.observadores], t, quadro, `Automação: tarefa ${concluida ? "concluída" : "movida"}`);
+          if (x) await avisarSobreTarefa(u, "automacao", [...x.envolvidos, ...x.observadores], t, quadro, `Automação: tarefa ${concluida ? "concluída" : "movida"}`);
         }
         continue;
       }
@@ -1181,6 +1279,7 @@ export async function gerarRecorrentes(u: UsuarioSessao, quadro: Quadro, ids: nu
         prazo,
         concluida: false,
         pessoas: t.pessoas,
+        equipes: t.equipes,
         observadores: t.observadores,
         etiquetas: t.etiquetas,
         criadoPor: u.id,
@@ -1329,12 +1428,12 @@ async function buscarNoLote(ids: number[], q: string, usuarioId: number, hoje: s
           listaAtiva,
           or(likeEsc(tarefaEventos.titulo), likeEsc(tarefaEventos.local), likeEsc(tarefaEventos.descricao)),
           // O privado só para quem PARTICIPA (a mesma régua de `participaDoEvento`): quem criou, os convidados e os
-          // responsáveis da tarefa.
+          // envolvidos da tarefa (responsáveis + equipes).
           or(
             eq(tarefaEventos.privado, false),
             eq(tarefaEventos.criadoPor, usuarioId),
             sql`EXISTS (SELECT 1 FROM tarefa_evento_convidados c WHERE c.evento_id = ${tarefaEventos.id} AND c.usuario_id = ${usuarioId})`,
-            sql`EXISTS (SELECT 1 FROM tarefa_pessoas p WHERE p.tarefa_id = ${tarefas.id} AND p.usuario_id = ${usuarioId} AND p.papel = 'responsavel')`,
+            pessoaNaTarefa(usuarioId),
           ),
         ),
       )

@@ -6,9 +6,11 @@ import {
   atualizarTarefa,
   avisarAtribuicao,
   conteudoTarefa,
+  equipesDoQuadro,
   etiquetasDoQuadro,
   excluirTarefa,
   getLista,
+  membrosDasEquipes,
   moverTarefa,
   pessoasValidas,
   tarefaAcessivel,
@@ -40,7 +42,7 @@ export async function GET(req: Request, ctx: Ctx) {
   if (!r) return erro("Tarefa não encontrada.", 404);
   if (new URL(req.url).searchParams.get("contexto") === "tarefa") return ok({ tarefa: r.tarefa });
   const conteudo = await conteudoTarefa(r.tarefa.id);
-  return ok({ tarefa: r.tarefa, ...conteudo, eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.pessoas]])) });
+  return ok({ tarefa: r.tarefa, ...conteudo, eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.envolvidos]])) });
 }
 
 /** Edita a tarefa (campos, responsáveis, etiquetas, arquivar; trocar de LISTA a leva ao fim da lista nova). */
@@ -52,13 +54,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
   const p = await parseCorpo(editarTarefaSchema, req);
   if ("resp" in p) return p.resp;
-  const { listaId, pessoas, observadores, etiquetas, blocos: blocosPedidos, ...campos } = p.data;
+  const { listaId, pessoas, observadores, etiquetas, equipes: equipesPedidas, blocos: blocosPedidos, ...campos } = p.data;
   const blocos = blocosPedidos === undefined ? undefined : (lerBlocos(blocosPedidos) ?? []);
   const atuais = [...r.tarefa.pessoas, ...r.tarefa.observadores];
   if (!(await pessoasValidas(r.quadro.grupoId, [...(pessoas ?? []), ...(observadores ?? [])], atuais)))
     return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
   if (campos.vinculo && !(campos.vinculo.tipo === r.tarefa.vinculo?.tipo && campos.vinculo.id === r.tarefa.vinculo.id) && !(await vinculoAcessivel(a.u, campos.vinculo)))
     return erro("Vínculo não encontrado.", 422);
+  const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
   let entrou: { id: number; concluida: boolean } | null = null;
   if (listaId != null && listaId !== r.tarefa.listaId) {
     const lista = await getLista(listaId);
@@ -66,7 +69,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     await moverTarefa(id, lista.id, await ultimoDaLista(lista.id, id), null, lista.concluida);
     entrou = lista;
   }
-  await atualizarTarefa(id, { ...campos, blocos }, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined });
+  await atualizarTarefa(id, { ...campos, blocos }, { pessoas, observadores, etiquetas: etiquetas ? await etiquetasDoQuadro(r.quadro.id, etiquetas) : undefined, equipes });
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",
@@ -76,7 +79,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
     antes: r.tarefa,
     depois: p.data,
   });
-  if (pessoas) await avisarAtribuicao(a.u, r.tarefa.pessoas, pessoas, { ...r.tarefa, titulo: campos.titulo ?? r.tarefa.titulo }, r.quadro);
+  // Quem PASSOU a ser da tarefa (responsável novo ou membro de uma equipe nova) recebe "tarefa atribuída".
+  if (pessoas || equipes) {
+    const depois = [...(pessoas ?? r.tarefa.pessoas), ...(await membrosDasEquipes(equipes ?? r.tarefa.equipes))];
+    await avisarAtribuicao(a.u, r.tarefa.envolvidos, depois, { ...r.tarefa, titulo: campos.titulo ?? r.tarefa.titulo }, r.quadro);
+  }
   // Entrou noutra lista: automações e, concluída, a próxima ocorrência (depois de gravar a regra nova, se veio junto).
   const atualizar = entrou ? await aposMovimento(a.u, r.quadro, [id], entrou) : false;
   return ok({ atualizar });

@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aplicarMassaTarefas, aposMovimento, avisarSobreTarefa, etiquetasDoQuadro, getLista, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
+import { aplicarMassaTarefas, aposMovimento, avisarSobreTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, membrosDasEquipes, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { type AcaoMassaTarefas, massaTarefasSchema } from "@/lib/tarefas-validation";
 
@@ -11,6 +11,7 @@ const DESCREVE: Record<AcaoMassaTarefas["campo"], string> = {
   lista: "movida de lista",
   responsavel: "responsável alterado",
   etiqueta: "etiqueta alterada",
+  equipe: "equipe alterada",
   prazo: "prazo alterado",
   prioridade: "prioridade alterada",
   arquivar: "arquivada/restaurada",
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
   if (acao.campo === "responsavel" && acao.modo === "adicionar" && !(await pessoasValidas(quadro.grupoId, [acao.usuarioId])))
     return erro("Só pessoas do grupo do quadro podem ser responsáveis.", 422);
   if (acao.campo === "etiqueta" && !(await etiquetasDoQuadro(quadro.id, [acao.etiquetaId])).length) return erro("Etiqueta inválida.", 422);
+  if (acao.campo === "equipe" && !(await equipesDoQuadro(quadro.id, [acao.equipeId])).length) return erro("Equipe inválida.", 422);
   if (doQuadro.length) {
     await aplicarMassaTarefas(
       doQuadro.map((t) => t.id),
@@ -70,5 +72,9 @@ export async function POST(req: Request) {
   }
   if (acao.campo === "responsavel" && acao.modo === "adicionar")
     for (const t of doQuadro) await avisarSobreTarefa(a.u, "atribuida", [acao.usuarioId], t, quadro, "Tarefa atribuída a você");
+  if (acao.campo === "equipe" && acao.modo === "adicionar") {
+    const membros = await membrosDasEquipes([acao.equipeId]);
+    for (const t of doQuadro) await avisarSobreTarefa(a.u, "atribuida", membros, t, quadro, "Tarefa atribuída à sua equipe");
+  }
   return ok({ alterados: doQuadro.length, falhas, atualizar });
 }

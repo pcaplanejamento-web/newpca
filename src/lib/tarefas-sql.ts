@@ -4,6 +4,9 @@ import type * as schema from "../db/schema.ts";
 import {
   notificacoes,
   tarefaChecklist,
+  tarefaEquipeMembros,
+  tarefaEquipes,
+  tarefaEquipesLinks,
   tarefaEtiquetaLinks,
   tarefaEtiquetas,
   tarefaEventoConvidados,
@@ -105,6 +108,8 @@ export function comandosCriarTarefa(
     pessoas: number[];
     observadores?: number[];
     etiquetas: number[];
+    /** As EQUIPES do quadro atribuídas (migração `0052`). */
+    equipes?: number[];
     criadoPor: number;
     estimativaH?: number | null;
     vinculo?: { tipo: TipoVinculo; id: number } | null;
@@ -149,6 +154,7 @@ export function comandosCriarTarefa(
       .filter((u) => !d.pessoas.includes(u))
       .map((u) => db.insert(tarefaPessoas).values({ tarefaId: idDaNova(d.quadroId), usuarioId: u, papel: "observador" })),
     ...d.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: idDaNova(d.quadroId), etiquetaId: e })),
+    ...(d.equipes ?? []).map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: idDaNova(d.quadroId), equipeId: e })),
     ...(d.checklist ?? []).map((texto, i) => db.insert(tarefaChecklist).values({ tarefaId: idDaNova(d.quadroId), texto, ordem: i + 1 })),
     ...(d.eventos ?? []).flatMap((e) => [
       db.insert(tarefaEventos).values({ tarefaId: idDaNova(d.quadroId), ...colunasEvento(e), criadoPor: d.criadoPor }),
@@ -166,7 +172,7 @@ export function comandosCriarTarefa(
  * A pessoa é responsável OU observadora (a chave é tarefa + pessoa): virar responsável tira da observação; um observador
  * que já é responsável fica responsável.
  */
-export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[] }) {
+export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number[]; observadores?: number[]; etiquetas?: number[]; equipes?: number[] }) {
   return [
     ...(v.pessoas
       ? [
@@ -191,6 +197,46 @@ export function comandosVinculos(db: Db, tarefaId: number, v: { pessoas?: number
           ...v.etiquetas.map((e) => db.insert(tarefaEtiquetaLinks).values({ tarefaId, etiquetaId: e })),
         ]
       : []),
+    ...(v.equipes
+      ? [
+          db.delete(tarefaEquipesLinks).where(eq(tarefaEquipesLinks.tarefaId, tarefaId)),
+          ...v.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId, equipeId: e })),
+        ]
+      : []),
+  ];
+}
+
+/**
+ * "A pessoa é da tarefa" em SQL (sobre `tarefas`): responsável (ou observador, com `observador`) OU membro de uma equipe
+ * da tarefa — a MESMA régua de `envolvidos`.
+ */
+export const pessoaNaTarefa = (usuarioId: number, observador = false) =>
+  sql`(EXISTS (SELECT 1 FROM tarefa_pessoas tp WHERE tp.tarefa_id = ${tarefas.id} AND tp.usuario_id = ${usuarioId}${observador ? sql`` : sql` AND tp.papel = 'responsavel'`})
+    OR EXISTS (SELECT 1 FROM tarefa_equipes_links el JOIN tarefa_equipe_membros em ON em.equipe_id = el.equipe_id WHERE el.tarefa_id = ${tarefas.id} AND em.usuario_id = ${usuarioId}))`;
+
+/** Linhas por INSERT de membros (2 parâmetros cada — muito abaixo dos 100 do D1). */
+const LOTE_MEMBROS = 30;
+
+/**
+ * Cria (sem `id`) ou atualiza uma EQUIPE do quadro e TROCA os membros dela (apaga e insere em lotes de 30) — num lote
+ * atômico. Na criação, os membros ligam pela equipe recém-criada (`MAX(id)` — o lote do D1 é sequencial).
+ */
+export function comandosEquipe(db: Db, d: { id?: number; quadroId: number; nome: string; cor: string; membros: number[] }) {
+  const alvo = d.id ?? sql<number>`(SELECT MAX(id) FROM tarefa_equipes WHERE quadro_id = ${d.quadroId})`;
+  const membros = [...new Set(d.membros)];
+  const lotes: number[][] = [];
+  for (let i = 0; i < membros.length; i += LOTE_MEMBROS) lotes.push(membros.slice(i, i + LOTE_MEMBROS));
+  return [
+    d.id == null
+      ? db.insert(tarefaEquipes).values({
+          quadroId: d.quadroId,
+          nome: d.nome,
+          cor: d.cor,
+          ordem: sql`(SELECT COALESCE(MAX(ordem), 0) + 1 FROM tarefa_equipes WHERE quadro_id = ${d.quadroId})`,
+        })
+      : db.update(tarefaEquipes).set({ nome: d.nome, cor: d.cor }).where(eq(tarefaEquipes.id, d.id)),
+    db.delete(tarefaEquipeMembros).where(eq(tarefaEquipeMembros.equipeId, alvo)),
+    ...lotes.map((l) => db.insert(tarefaEquipeMembros).values(l.map((u) => ({ equipeId: alvo, usuarioId: u })))),
   ];
 }
 
@@ -255,6 +301,10 @@ export function comandosMassa(db: Db, ids: number[], acao: AcaoMassaTarefas, lis
       return acao.modo === "adicionar"
         ? [...ids.map((id) => db.insert(tarefaEtiquetaLinks).values({ tarefaId: id, etiquetaId: acao.etiquetaId }).onConflictDoNothing()), tocar]
         : [db.delete(tarefaEtiquetaLinks).where(and(inArray(tarefaEtiquetaLinks.tarefaId, ids), eq(tarefaEtiquetaLinks.etiquetaId, acao.etiquetaId))), tocar];
+    case "equipe":
+      return acao.modo === "adicionar"
+        ? [...ids.map((id) => db.insert(tarefaEquipesLinks).values({ tarefaId: id, equipeId: acao.equipeId }).onConflictDoNothing()), tocar]
+        : [db.delete(tarefaEquipesLinks).where(and(inArray(tarefaEquipesLinks.tarefaId, ids), eq(tarefaEquipesLinks.equipeId, acao.equipeId))), tocar];
     case "prazo":
       return [db.update(tarefas).set({ prazo: acao.prazo, atualizadoEm: agora }).where(inArray(tarefas.id, ids))];
     case "prioridade":

@@ -450,13 +450,14 @@ export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplica
 type CampoTarefa = AcaoMassaTarefas["campo"];
 
 /**
- * EDIÇÃO EM MASSA das TAREFAS (aba Lista do quadro): mover de lista, responsável (+/−), etiqueta (+/−), prazo (ou
+ * EDIÇÃO EM MASSA das TAREFAS (aba Lista do quadro): mover de lista, responsável (+/−), etiqueta (+/−), equipe (+/−), prazo (ou
  * limpar), prioridade e arquivar/restaurar — a MESMA moldura dos editores da Mesa (controle em cima; campo + Aplicar).
  */
 export function BarraEdicaoMassaTarefas({
   listas,
   pessoas,
   etiquetas,
+  equipes = [],
   arquivadas = false,
   aplicando = false,
   onAplicar,
@@ -466,6 +467,8 @@ export function BarraEdicaoMassaTarefas({
   /** As pessoas do GRUPO do quadro. */
   pessoas: { id: number; nome: string; apelido?: string | null }[];
   etiquetas: EtiquetaTarefa[];
+  /** As EQUIPES do quadro (sem nenhuma, o campo não aparece). */
+  equipes?: { id: number; nome: string }[];
   /** A seleção é de ARQUIVADAS (a ação vira "Restaurar"). */
   arquivadas?: boolean;
   aplicando?: boolean;
@@ -475,6 +478,7 @@ export function BarraEdicaoMassaTarefas({
     { value: "lista", label: "Lista" },
     { value: "responsavel", label: "Responsável" },
     ...(etiquetas.length ? [{ value: "etiqueta" as const, label: "Etiqueta" }] : []),
+    ...(equipes.length ? [{ value: "equipe" as const, label: "Equipe" }] : []),
     { value: "prazo", label: "Prazo" },
     { value: "prioridade", label: "Prioridade" },
     { value: "arquivar", label: arquivadas ? "Restaurar" : "Arquivar" },
@@ -484,6 +488,7 @@ export function BarraEdicaoMassaTarefas({
   const [modo, setModo] = useState<"adicionar" | "remover">("adicionar");
   const [pessoa, setPessoa] = useState("");
   const [etiqueta, setEtiqueta] = useState("");
+  const [equipe, setEquipe] = useState("");
   const [prazo, setPrazo] = useState("");
   const [limparPrazo, setLimparPrazo] = useState(false);
   const [prioridade, setPrioridade] = useState<PrioridadeTarefa>("media");
@@ -500,6 +505,10 @@ export function BarraEdicaoMassaTarefas({
           ? etiqueta
             ? { campo, modo, etiquetaId: Number(etiqueta) }
             : null
+          : campo === "equipe"
+            ? equipe
+              ? { campo, modo, equipeId: Number(equipe) }
+              : null
           : campo === "prazo"
             ? limparPrazo || prazo
               ? { campo, prazo: limparPrazo ? null : prazo }
@@ -550,6 +559,11 @@ export function BarraEdicaoMassaTarefas({
           <>
             {modoSeg}
             {sel("Etiqueta", etiqueta, setEtiqueta, etiquetas.map((e) => ({ v: String(e.id), r: e.nome })))}
+          </>
+        ) : campo === "equipe" ? (
+          <>
+            {modoSeg}
+            {sel("Equipe", equipe, setEquipe, equipes.map((e) => ({ v: String(e.id), r: e.nome })))}
           </>
         ) : campo === "prazo" ? (
           <>

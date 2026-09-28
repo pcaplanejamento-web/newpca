@@ -135,8 +135,8 @@ export function DashboardTarefas({
         key: "resp",
         header: "Responsáveis",
         nowrap: true,
-        value: (t) => (t.pessoas.length ? t.pessoas.map(nome).join(", ") : "Sem responsável"),
-        render: (t) => (t.pessoas.length ? t.pessoas.map(nome).join(", ") : <span className="text-faint">—</span>),
+        value: (t) => (t.envolvidos.length ? t.envolvidos.map(nome).join(", ") : "Sem responsável"),
+        render: (t) => (t.envolvidos.length ? t.envolvidos.map(nome).join(", ") : <span className="text-faint">—</span>),
       },
     ];
   }, [porLista, porPessoa]);

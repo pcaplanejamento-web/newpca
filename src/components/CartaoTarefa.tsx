@@ -58,7 +58,8 @@ export function CartaoTarefa({
   // No toque, a alça (e o menu) ocupam o canto de cima: o texto não passa por baixo deles.
   const toque = onPegar || acoes ? (acoes && onPegar ? "any-pointer-coarse:pr-[5.25rem]" : "any-pointer-coarse:pr-10") : "";
   const marcas = t.etiquetas.map((e) => etiquetas.get(e)).filter((e): e is EtiquetaTarefa => !!e);
-  const resp = t.pessoas.map((p) => pessoas.get(p)).filter((p): p is Pessoa => !!p);
+  // Os ENVOLVIDOS: os responsáveis + os membros das equipes da tarefa.
+  const resp = t.envolvidos.map((p) => pessoas.get(p)).filter((p): p is Pessoa => !!p);
   const tecla = (e: KeyboardEvent) => {
     if (!onTeclaMover || !e.altKey) return;
     const d = ({ ArrowLeft: "esquerda", ArrowRight: "direita", ArrowUp: "cima", ArrowDown: "baixo" } as const)[e.key as "ArrowLeft"];

@@ -15,14 +15,15 @@ import {
 /** As LINHAS da planilha de tarefas (cabeçalho + uma por tarefa) — puro, testável. */
 export function linhasPlanilhaTarefas(
   tarefas: TarefaResumo[],
-  ctx: { listas: ListaTarefas[]; etiquetas: EtiquetaTarefa[]; pessoas: Pessoa[]; hoje: string },
+  ctx: { listas: ListaTarefas[]; etiquetas: EtiquetaTarefa[]; pessoas: Pessoa[]; hoje: string; equipes?: { id: number; nome: string }[] },
 ): (string | number)[][] {
   const lista = new Map(ctx.listas.map((l) => [l.id, l.nome]));
   const etq = new Map(ctx.etiquetas.map((e) => [e.id, e.nome]));
   const pes = new Map(ctx.pessoas.map((p) => [p.id, nomeExibicao(p)]));
+  const eqs = new Map((ctx.equipes ?? []).map((e) => [e.id, e.nome]));
   const nomes = (ids: number[], m: Map<number, string>) => ids.map((i) => m.get(i) ?? `#${i}`).join(", ");
   return [
-    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada"],
+    ["Ticket", "Título", "Lista", "Prioridade", "Situação do prazo", "Prazo", "Início", "Estimativa (h)", "Responsáveis", "Observadores", "Etiquetas", "Checklist", "Vínculo", "Recorrência", "Criada em", "Concluída em", "Arquivada", "Equipes"],
     ...tarefas.map((t) => [
       rotuloTicket(t.ticket),
       t.titulo,
@@ -41,6 +42,7 @@ export function linhasPlanilhaTarefas(
       t.criadoEm ? dataBR(dataIsoBrasilia(t.criadoEm)) : "",
       t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : "",
       t.arquivada ? "Sim" : "",
+      nomes(t.equipes, eqs),
     ]),
   ];
 }

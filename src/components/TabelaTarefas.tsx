@@ -6,6 +6,7 @@ import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
   COR_ESTADO_PRAZO,
   COR_PRIORIDADE,
+  type EquipeQuadro,
   type EtiquetaTarefa,
   estadoPrazo,
   type ListaTarefas,
@@ -30,6 +31,7 @@ export function TabelaTarefas({
   tarefas,
   listas,
   etiquetas,
+  equipes = [],
   pessoas,
   hoje,
   ativa,
@@ -43,6 +45,8 @@ export function TabelaTarefas({
   /** TODAS as listas (inclusive arquivadas — o nome de qualquer cartão). */
   listas: ListaTarefas[];
   etiquetas: EtiquetaTarefa[];
+  /** As EQUIPES do quadro (a coluna "Equipes"). */
+  equipes?: EquipeQuadro[];
   pessoas: Pessoa[];
   hoje: string;
   ativa: number | null;
@@ -58,8 +62,11 @@ export function TabelaTarefas({
     const lista = new Map(listas.map((l) => [l.id, l]));
     const pessoa = new Map(pessoas.map((p) => [p.id, p]));
     const etiqueta = new Map(etiquetas.map((e) => [e.id, e]));
+    const equipe = new Map(equipes.map((e) => [e.id, e]));
     const estado = (t: TarefaResumo) => estadoPrazo(t.prazo, hoje, t.concluidaEm != null);
-    const responsaveis = (t: TarefaResumo) => t.pessoas.map((p) => pessoa.get(p)).filter((p): p is Pessoa => !!p);
+    // Os ENVOLVIDOS: os responsáveis + os membros das equipes da tarefa.
+    const responsaveis = (t: TarefaResumo) => t.envolvidos.map((p) => pessoa.get(p)).filter((p): p is Pessoa => !!p);
+    const times = (t: TarefaResumo) => t.equipes.map((e) => equipe.get(e)).filter((e): e is EquipeQuadro => !!e);
     const marcas = (t: TarefaResumo) => t.etiquetas.map((e) => etiqueta.get(e)).filter((e): e is EtiquetaTarefa => !!e);
     return [
       {
@@ -147,6 +154,29 @@ export function TabelaTarefas({
           );
         },
       },
+      ...(equipes.length
+        ? [
+            {
+              key: "equipes",
+              header: "Equipes",
+              nowrap: true,
+              value: (t: TarefaResumo) => times(t).map((e) => e.nome).join(", "),
+              valores: (t: TarefaResumo) => {
+                const m = times(t).map((e) => e.nome);
+                return m.length ? m : ["Sem equipe"];
+              },
+              render: (t: TarefaResumo) => (
+                <span className="inline-flex gap-1">
+                  {times(t).map((e) => (
+                    <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+                      {e.nome}
+                    </span>
+                  ))}
+                </span>
+              ),
+            } satisfies Column<TarefaResumo>,
+          ]
+        : []),
       {
         key: "etiquetas",
         header: "Etiquetas",
@@ -232,7 +262,7 @@ export function TabelaTarefas({
         render: (t) => (t.concluidaEm ? dataBR(dataIsoBrasilia(t.concluidaEm)) : <span className="text-faint">—</span>),
       },
     ];
-  }, [listas, pessoas, etiquetas, hoje]);
+  }, [listas, pessoas, etiquetas, equipes, hoje]);
 
   return (
     <DataTable

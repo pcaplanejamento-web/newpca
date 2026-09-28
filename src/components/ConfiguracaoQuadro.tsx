@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
-import type { Pessoa } from "@/lib/pessoa";
+import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { Quadro } from "@/lib/tarefas";
-import type { Automacao, EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
+import type { Automacao, EquipeQuadro, EtiquetaTarefa, ListaTarefas } from "@/lib/tarefas-core";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { AutomacoesQuadro, ModelosQuadro } from "./AutomacoesQuadro";
+import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
@@ -15,25 +16,30 @@ import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
 import { IconCheck, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { SeletorPessoas } from "./SeletorPessoas";
 import { CamposQuadro, type CamposQuadroValor } from "./QuadroCard";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
 type RascunhoLista = { id: number | null; nome: string; limiteWip: string; concluida: boolean; arquivada: boolean };
 type RascunhoEtiqueta = { id: number | null; nome: string; cor: string };
+type RascunhoEquipe = { id: number | null; nome: string; cor: string; membros: number[] };
 
 /**
  * A aba CONFIGURAÇÃO do quadro (editores; os demais só consultam): os dados do quadro (nome · cor · descrição), arquivar
  * e excluir; as LISTAS (ordem ↑/↓, nome, limite de cartões — WIP —, "lista de concluídas" — entrar nela conclui a tarefa —,
- * arquivar; excluir só a vazia), as ETIQUETAS (nome + cor), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
+ * arquivar; excluir só a vazia), as ETIQUETAS (nome + cor), as EQUIPES (nome + cor + pessoas — a tarefa com a equipe
+ * envolve todos os membros), as AUTOMAÇÕES e os MODELOS. Cada alteração grava na hora e
  * recarrega o quadro.
  */
 export function ConfiguracaoQuadro({
   quadro,
   listas,
   etiquetas,
+  equipes = [],
   automacoes,
   pessoas,
+  todas = pessoas,
   modelosQuadro,
   modelosTarefa,
   usuarioId,
@@ -44,9 +50,12 @@ export function ConfiguracaoQuadro({
   /** TODAS as listas (inclusive arquivadas), na ordem. */
   listas: ListaTarefas[];
   etiquetas: EtiquetaTarefa[];
+  equipes?: EquipeQuadro[];
   automacoes: Automacao[];
-  /** As pessoas do grupo (alvo de "atribuir"). */
+  /** As pessoas do grupo (alvo de "atribuir" e membros das equipes). */
   pessoas: Pessoa[];
+  /** Todas as pessoas conhecidas (as de fora do grupo que já estão numa equipe seguem visíveis). */
+  todas?: Pessoa[];
   modelosQuadro: { id: number; nome: string; criadoPor: number | null; listas: string[] }[];
   modelosTarefa: { id: number; nome: string; criadoPor: number | null }[];
   usuarioId: number;
@@ -60,6 +69,8 @@ export function ConfiguracaoQuadro({
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [lista, setLista] = useState<RascunhoLista | null>(null);
   const [etiqueta, setEtiqueta] = useState<RascunhoEtiqueta | null>(null);
+  const [equipe, setEquipe] = useState<RascunhoEquipe | null>(null);
+  const porId = new Map(todas.map((p) => [p.id, p]));
   const [ordem, setOrdem] = useState<number[] | null>(null);
   // A ordem otimista vale até as listas do servidor chegarem.
   // biome-ignore lint/correctness/useExhaustiveDependencies: zera quando as listas do SERVIDOR mudam.
@@ -158,6 +169,23 @@ export function ConfiguracaoQuadro({
   const excluirEtiqueta = async (e: EtiquetaTarefa) => {
     if (!(await confirmar({ titulo: `Excluir a etiqueta "${e.nome}"?`, texto: "Ela sai de todas as tarefas do quadro.", confirmar: "Excluir", perigo: true }))) return;
     await gravar(`etiqueta-${e.id}`, () => chamar(`/api/tarefas/etiquetas/${e.id}`, "DELETE"), "Etiqueta excluída.");
+  };
+
+  const salvarEquipe = async () => {
+    if (!equipe) return;
+    const corpo = { nome: equipe.nome.trim(), cor: equipe.cor, membros: equipe.membros };
+    const ok = await gravar(
+      "equipe",
+      () => (equipe.id == null ? chamar(`/api/tarefas/quadros/${quadro.id}/equipes`, "POST", corpo) : chamar(`/api/tarefas/equipes/${equipe.id}`, "PATCH", corpo)),
+      equipe.id == null ? "Equipe criada." : "Equipe salva.",
+    );
+    if (ok) setEquipe(null);
+  };
+
+  const excluirEquipe = async (e: EquipeQuadro) => {
+    if (!(await confirmar({ titulo: `Excluir a equipe "${e.nome}"?`, texto: "Ela sai de todas as tarefas do quadro (os responsáveis de cada tarefa ficam).", confirmar: "Excluir", perigo: true })))
+      return;
+    await gravar(`equipe-${e.id}`, () => chamar(`/api/tarefas/equipes/${e.id}`, "DELETE"), "Equipe excluída.");
   };
 
   const wipValido = !lista?.limiteWip.trim() || (/^\d+$/.test(lista.limiteWip.trim()) && Number(lista.limiteWip) >= 1 && Number(lista.limiteWip) <= 999);
@@ -264,6 +292,59 @@ export function ConfiguracaoQuadro({
         </Secao>
       </div>
 
+      <Secao
+        titulo="Equipes"
+        acao={
+          podeEditar && (
+            <Button size="sm" variant="secondary" icon={<IconPlus className="h-4 w-4" />} onClick={() => setEquipe({ id: null, nome: "", cor: "#16a34a", membros: [] })}>
+              Nova equipe
+            </Button>
+          )
+        }
+      >
+        {equipes.length === 0 ? (
+          <p className="text-[12.5px] text-muted">Nenhuma equipe — atribua uma equipe à tarefa e todos os membros dela passam a responder por ela (lembretes, calendário e filtros).</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {equipes.map((e) => {
+              const membros = e.membros.map((id) => porId.get(id)).filter((p): p is Pessoa => !!p);
+              return (
+                <li key={e.id} className="flex min-h-11 items-center gap-2 py-1.5">
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: e.cor }} />
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-0 max-w-full truncate text-[13px] font-medium text-text">{e.nome}</span>
+                    <span className="inline-flex items-center gap-1.5" title={membros.map((p) => nomeExibicao(p)).join(", ")}>
+                      <span className="flex -space-x-1.5">
+                        {membros.slice(0, 5).map((p) => (
+                          <Avatar key={p.id} nome={p.nome} foto={p.foto} size="xs" className="ring-2 ring-surface" />
+                        ))}
+                      </span>
+                      <span className="text-[12px] text-muted">
+                        {e.membros.length} {e.membros.length === 1 ? "pessoa" : "pessoas"}
+                      </span>
+                    </span>
+                  </span>
+                  {podeEditar && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="xs" disabled={ocupado != null} aria-label={`Editar ${e.nome}`} icon={<IconPencil className="h-4 w-4" />} onClick={() => setEquipe({ id: e.id, nome: e.nome, cor: e.cor, membros: [...e.membros] })} />
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        disabled={ocupado != null}
+                        aria-label={`Excluir ${e.nome}`}
+                        style={{ color: "var(--danger)" }}
+                        icon={<IconTrash className="h-4 w-4" />}
+                        onClick={() => excluirEquipe(e)}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Secao>
+
       <Secao titulo="Automações">
         <AutomacoesQuadro
           quadroId={quadro.id}
@@ -344,6 +425,40 @@ export function ConfiguracaoQuadro({
           <div className="space-y-4">
             <TextField label="Nome" value={etiqueta.nome} maxLength={30} onChange={(e) => setEtiqueta({ ...etiqueta, nome: e.target.value })} />
             <ColorField label="Cor" value={etiqueta.cor} onChange={(cor) => setEtiqueta({ ...etiqueta, cor })} />
+          </div>
+        )}
+      </Modal>
+      <Modal
+        open={equipe != null}
+        onClose={() => ocupado == null && setEquipe(null)}
+        titulo={equipe?.id == null ? "Nova equipe" : "Editar equipe"}
+        bloqueado={ocupado === "equipe"}
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" disabled={ocupado != null} onClick={() => setEquipe(null)}>
+              Cancelar
+            </Button>
+            <Button loading={ocupado === "equipe"} disabled={!equipe?.nome.trim() || ocupado != null} onClick={salvarEquipe}>
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        {equipe && (
+          <div className="space-y-4">
+            <TextField label="Nome" value={equipe.nome} maxLength={60} onChange={(e) => setEquipe({ ...equipe, nome: e.target.value })} />
+            <ColorField label="Cor" value={equipe.cor} onChange={(cor) => setEquipe({ ...equipe, cor })} />
+            <div className="space-y-1.5">
+              <p className="text-[12.5px] font-medium text-text-2">Pessoas da equipe</p>
+              <SeletorPessoas
+                pessoas={pessoas}
+                fora={todas.filter((p) => !pessoas.some((x) => x.id === p.id))}
+                selecionadas={equipe.membros}
+                usuarioId={usuarioId}
+                onChange={(membros) => setEquipe({ ...equipe, membros })}
+              />
+              <p className="text-[12px] text-muted">Mudar as pessoas da equipe muda todas as tarefas dela.</p>
+            </div>
           </div>
         )}
       </Modal>

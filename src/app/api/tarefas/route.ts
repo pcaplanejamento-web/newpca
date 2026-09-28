@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aposMovimento, avisarAtribuicao, avisarConvite, conteudoTarefa, criarTarefa, etiquetasDoQuadro, getLista, MSG_QUADRO_ARQUIVADO, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
+import { aposMovimento, avisarAtribuicao, avisarConvite, conteudoTarefa, criarTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, membrosDasEquipes, MSG_QUADRO_ARQUIVADO, pessoasValidas, quadroAcessivel, vinculoAcessivel } from "@/lib/tarefas";
 import { eventoParaAuditoria, lerBlocos, rotuloTicket } from "@/lib/tarefas-core";
 import { criarTarefaSchema } from "@/lib/tarefas-validation";
 
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
   const observadores = d.observadores ?? [];
   if (!(await pessoasValidas(q.grupoId, [...pessoas, ...observadores]))) return erro("Só pessoas do grupo do quadro podem ser responsáveis ou observadoras.", 422);
   if (d.vinculo && !(await vinculoAcessivel(a.u, d.vinculo))) return erro("Vínculo não encontrado.", 422);
+  const equipes = await equipesDoQuadro(q.id, d.equipes ?? []);
   const eventos = d.eventos ?? [];
   const convidados = [...new Set(eventos.flatMap((e) => e.convidados ?? []))];
   if (convidados.length && !(await pessoasValidas(q.grupoId, convidados))) return erro("Só pessoas do grupo do quadro podem ser convidadas.", 422);
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
     pessoas,
     observadores,
     etiquetas: await etiquetasDoQuadro(q.id, d.etiquetas ?? []),
+    equipes,
     criadoPor: a.u.id,
     estimativaH: d.estimativaH ?? null,
     vinculo: d.vinculo ?? null,
@@ -55,7 +57,8 @@ export async function POST(req: Request) {
     // Os eventos PRIVADOS não vão ao histórico com o conteúdo.
     depois: { ...d, eventos: eventos.map((e) => eventoParaAuditoria(e).dados) },
   });
-  await avisarAtribuicao(a.u, [], pessoas, { ...nova, titulo: d.titulo }, q);
+  // Os responsáveis e os membros das EQUIPES recebem "tarefa atribuída".
+  await avisarAtribuicao(a.u, [], [...pessoas, ...(await membrosDasEquipes(equipes))], { ...nova, titulo: d.titulo }, q);
   // Os CONVIDADOS dos eventos criados junto com a tarefa recebem o convite.
   if (convidados.length)
     for (const e of (await conteudoTarefa(nova.id)).eventos)

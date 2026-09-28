@@ -887,6 +887,47 @@ export const tarefaEtiquetaLinks = sqliteTable(
   (t) => [primaryKey({ columns: [t.tarefaId, t.etiquetaId] })],
 );
 
+/** EQUIPES do quadro (migração `0052`): um grupo de pessoas; a tarefa com a equipe envolve todos os membros. */
+export const tarefaEquipes = sqliteTable(
+  "tarefa_equipes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quadroId: integer("quadro_id")
+      .notNull()
+      .references(() => tarefaQuadros.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    cor: text("cor").notNull(),
+    ordem: integer("ordem").notNull().default(0),
+  },
+  (t) => [index("tarefa_equipes_quadro_idx").on(t.quadroId)],
+);
+
+export const tarefaEquipeMembros = sqliteTable(
+  "tarefa_equipe_membros",
+  {
+    equipeId: integer("equipe_id")
+      .notNull()
+      .references(() => tarefaEquipes.id, { onDelete: "cascade" }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.equipeId, t.usuarioId] }), index("tarefa_equipe_membros_usuario_idx").on(t.usuarioId)],
+);
+
+export const tarefaEquipesLinks = sqliteTable(
+  "tarefa_equipes_links",
+  {
+    tarefaId: integer("tarefa_id")
+      .notNull()
+      .references(() => tarefas.id, { onDelete: "cascade" }),
+    equipeId: integer("equipe_id")
+      .notNull()
+      .references(() => tarefaEquipes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.tarefaId, t.equipeId] }), index("tarefa_equipes_links_equipe_idx").on(t.equipeId)],
+);
+
 export const tarefaChecklist = sqliteTable(
   "tarefa_checklist",
   {

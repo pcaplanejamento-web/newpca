@@ -56,6 +56,7 @@ export function EventoBanner({
   avisoPrazo,
   tarefaAberta = false,
   pessoas = [],
+  participantes = [],
   usuarioId = null,
   onResponder,
 }: {
@@ -74,6 +75,8 @@ export function EventoBanner({
   tarefaAberta?: boolean;
   /** As pessoas (nome/foto dos convidados). */
   pessoas?: Pessoa[];
+  /** Os ENVOLVIDOS da tarefa (responsáveis + membros das equipes) — todo evento dela os tem como participantes. */
+  participantes?: number[];
   usuarioId?: number | null;
   /** A resposta de quem está vendo (só aparece para um convidado). */
   onResponder?: (r: RespostaConvite) => void;
@@ -162,6 +165,28 @@ export function EventoBanner({
         <LinkExterno href={e.linkReuniao} icon={<IconVideo className="h-4 w-4" />}>
           Entrar na reunião
         </LinkExterno>
+      )}
+      {participantes.length > 0 && (
+        <section className="space-y-2" aria-label="Participantes pela tarefa">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-text-2">
+            <IconUsers className="h-4 w-4 text-muted" />
+            {participantes.length} {participantes.length === 1 ? "participante" : "participantes"} pela tarefa
+          </p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-1">
+            {participantes.map((id) => {
+              const p = porId.get(id);
+              return (
+                <li key={id} className="flex min-w-0 items-center gap-1.5 text-[13px]" title={p?.nome}>
+                  <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" />
+                  <span className="max-w-[12rem] truncate text-text">
+                    {p ? nomeExibicao(p) : `Pessoa #${id}`}
+                    {id === usuarioId ? " (eu)" : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
       {convidados.length > 0 && (
         <section className="space-y-2" aria-label="Convidados">

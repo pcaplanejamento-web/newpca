@@ -1057,8 +1057,15 @@ pela distância; botão carregando fica desabilitado + trava de envio — duplo 
 dados atuais; busca limpa sem resultados antigos; atalhos pausados com a janela de criação aberta, que se reposiciona ao
 crescer; folha "sem prazo" não abre sozinha no celular; vista Ano no quadro com o ano inteiro; excluir série avisa; alvos de
 toque de 44px).
-✅ **Calendário Institucional PCA 2026/2027 cadastrado (migração `0051`):** quadro do grupo Planejamento e Custos com as
-8 etapas + os avisos (9 tarefas) e as 72 datas do documento como eventos no Calendário (27/07 a 01/12/2026).
+✅ **Calendário Institucional PCA 2026/2027 cadastrado:** quadro do grupo Planejamento e Custos com as 8 etapas + os avisos
+(9 tarefas) e as 72 datas do documento como eventos no Calendário (27/07 a 01/12/2026). A carga saiu do repositório (os
+dados ficam); a `0052` deixa as tarefas 8 e 9 só com o prazo (sem a barra longa em todas as semanas).
+✅ **Equipes do quadro (migração `0052`):** grupos de pessoas na Configuração do quadro; a tarefa recebe equipes e os
+membros viram ENVOLVIDOS (filtro "as minhas", carga do Dashboard, cartão, Lista/.xlsx, "Pesquisar pessoas", participantes
+de todos os eventos da tarefa, evento privado, lembretes/prazos e avisos) — mudar a equipe muda todas as tarefas dela; massa
+com "Equipe" +/−.
+✅ **Calendário — conjuntos recolhíveis:** a seção "Conjuntos (tarefas)", cada quadro e o cronograma do PCA recolhem na
+lateral (lembrado no aparelho).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

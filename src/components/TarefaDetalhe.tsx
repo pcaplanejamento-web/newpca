@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
-import type { Pessoa } from "@/lib/pessoa";
+import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { ComentarioTarefa, ItemChecklist } from "@/lib/tarefas";
 import {
   type DadosEvento,
@@ -15,6 +15,7 @@ import {
   blocoTemDado,
   COR_ESTADO_PRAZO,
   type DadosBlocos,
+  type EquipeQuadro,
   MAX_NOTA,
   MAX_TITULO_LINK,
   MAX_URL,
@@ -37,6 +38,7 @@ import {
   type TarefaResumo,
   type VinculoTarefa as Vinculo,
 } from "@/lib/tarefas-core";
+import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { ChipPreso, GuiaBloco, MolduraBloco, PaletaBlocos, useArrastoBlocos } from "./BlocosTarefa";
@@ -73,6 +75,7 @@ type Rascunho = {
   estimativa: string;
   pessoas: number[];
   observadores: number[];
+  equipes: number[];
   etiquetas: number[];
   vinculo: Vinculo | null;
   descricao: string;
@@ -98,6 +101,7 @@ const dadosDoRascunho = (r: Omit<Rascunho, "blocos">, checklist: number, eventos
   prazo: r.prazo || null,
   pessoas: r.pessoas,
   observadores: r.observadores,
+  equipes: r.equipes,
   etiquetas: r.etiquetas,
   vinculo: r.vinculo,
   estimativaH: r.estimativa.trim() ? 1 : null,
@@ -130,6 +134,7 @@ export function TarefaDetalhe({
   tarefas,
   listas,
   etiquetas,
+  equipes = [],
   pessoas,
   todas,
   hoje,
@@ -146,6 +151,8 @@ export function TarefaDetalhe({
   /** As listas ATIVAS (destinos possíveis). */
   listas: ListaTarefas[];
   etiquetas: EtiquetaTarefa[];
+  /** As EQUIPES do quadro (os membros de cada uma passam a ser da tarefa). */
+  equipes?: EquipeQuadro[];
   /** As pessoas do GRUPO (podem ser escolhidas). */
   pessoas: Pessoa[];
   /** Todas as conhecidas (as designadas fora do grupo seguem visíveis). */
@@ -218,6 +225,7 @@ export function TarefaDetalhe({
           estimativa: existente.estimativaH == null ? "" : String(existente.estimativaH).replace(".", ","),
           pessoas: existente.pessoas,
           observadores: existente.observadores,
+          equipes: existente.equipes,
           etiquetas: existente.etiquetas,
           vinculo: existente.vinculo,
           descricao: "",
@@ -235,6 +243,7 @@ export function TarefaDetalhe({
           estimativa: "",
           pessoas: [],
           observadores: [],
+          equipes: [],
           etiquetas: [],
           vinculo: aberto.tipo === "nova" ? (aberto.vinculo ?? null) : null,
           descricao: "",
@@ -270,6 +279,11 @@ export function TarefaDetalhe({
   const concluida = existente?.concluidaEm != null;
   const estado = estadoPrazo(r.prazo || null, hoje, concluida);
   const fora = todas.filter((p) => !pessoas.some((x) => x.id === p.id));
+  // Quem entra na tarefa PELAS EQUIPES escolhidas (além dos responsáveis) — só leitura.
+  const pelaEquipe = [...new Set(equipes.filter((e) => r.equipes.includes(e.id)).flatMap((e) => e.membros))]
+    .filter((id) => !r.pessoas.includes(id))
+    .map((id) => todas.find((p) => p.id === id))
+    .filter((p): p is Pessoa => !!p);
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setR((x) => (x ? { ...x, [k]: v } : x));
 
   /** Uma gravação IMEDIATA de um comentário: o aviso de erro, e o conteúdo + o quadro recarregados. */
@@ -313,6 +327,7 @@ export function TarefaDetalhe({
           estimativaH: est,
           pessoas: r.pessoas,
           observadores: r.observadores,
+          equipes: r.equipes,
           etiquetas: r.etiquetas,
           vinculo: r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null,
           recorrencia: r.recorrencia,
@@ -333,6 +348,7 @@ export function TarefaDetalhe({
         if (!iguais(r.pessoas, inicial.pessoas)) d.pessoas = r.pessoas;
         if (!iguais(r.observadores, inicial.observadores)) d.observadores = r.observadores;
         if (!iguais(r.etiquetas, inicial.etiquetas)) d.etiquetas = r.etiquetas;
+        if (!iguais(r.equipes, inicial.equipes)) d.equipes = r.equipes;
         if (!mesmoVinculo(r.vinculo, inicial.vinculo)) d.vinculo = r.vinculo ? { tipo: r.vinculo.tipo, id: r.vinculo.id } : null;
         if (r.descricao !== inicial.descricao) d.descricao = r.descricao.trim() || null;
         if (JSON.stringify(r.recorrencia) !== JSON.stringify(inicial.recorrencia)) d.recorrencia = r.recorrencia;
@@ -473,7 +489,7 @@ export function TarefaDetalhe({
       if (!x) return x;
       const y = { ...x, blocos: removerBloco(x.blocos, b.id) };
       if (b.tipo === "prazo") Object.assign(y, { inicio: "", prazo: "" });
-      else if (b.tipo === "pessoas") Object.assign(y, { pessoas: [], observadores: [] });
+      else if (b.tipo === "pessoas") Object.assign(y, { pessoas: [], observadores: [], equipes: [] });
       else if (b.tipo === "etiquetas") y.etiquetas = [];
       else if (b.tipo === "vinculo") y.vinculo = null;
       else if (b.tipo === "estimativa") y.estimativa = "";
@@ -549,6 +565,22 @@ export function TarefaDetalhe({
                 onChange={(v) => setR((x) => (x ? { ...x, pessoas: v, observadores: x.observadores.filter((o) => !v.includes(o)) } : x))}
               />
             </Secao>
+            {equipes.length > 0 && (
+              <Secao titulo="Equipes">
+                <ChipsAlternar itens={equipes} marcados={r.equipes} onChange={(v) => set("equipes", v)} rotulo="Equipe" />
+                {pelaEquipe.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+                    <span>Pela equipe:</span>
+                    {pelaEquipe.map((p) => (
+                      <span key={p.id} className="inline-flex items-center gap-1 text-text-2" title={p.nome}>
+                        <Avatar nome={p.nome} foto={p.foto} size="xs" />
+                        {nomeExibicao(p)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </Secao>
+            )}
             <Secao titulo="Observadores (acompanham)">
               <SeletorPessoas pessoas={pessoas.filter((p) => !r.pessoas.includes(p.id))} fora={fora} selecionadas={r.observadores} usuarioId={usuarioId} onChange={(v) => set("observadores", v)} />
             </Secao>
@@ -556,28 +588,7 @@ export function TarefaDetalhe({
         );
       case "etiquetas":
         return etiquetas.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {etiquetas.map((e) => {
-              const ativa = r.etiquetas.includes(e.id);
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  aria-pressed={ativa}
-                  onClick={() => set("etiquetas", ativa ? r.etiquetas.filter((x) => x !== e.id) : [...r.etiquetas, e.id])}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
-                  style={{
-                    color: e.cor,
-                    background: `color-mix(in srgb, ${e.cor} ${ativa ? 18 : 6}%, var(--surface))`,
-                    boxShadow: `inset 0 0 0 ${ativa ? 2 : 1}px color-mix(in srgb, ${e.cor} ${ativa ? 70 : 25}%, transparent)`,
-                  }}
-                >
-                  {ativa && <IconCheck className="h-3.5 w-3.5" />}
-                  {e.nome}
-                </button>
-              );
-            })}
-          </div>
+          <ChipsAlternar itens={etiquetas} marcados={r.etiquetas} onChange={(v) => set("etiquetas", v)} rotulo="Etiqueta" />
         ) : (
           <p className="text-[12.5px] text-muted">O quadro ainda não tem etiquetas — crie na aba Configuração.</p>
         );
@@ -876,5 +887,48 @@ export function TarefaDetalhe({
       </Modal>
       {confirmacao}
     </>
+  );
+}
+
+/**
+ * CHIPS de alternância na COR de cada item (etiquetas e equipes da tarefa): marcado = fundo e contorno mais fortes + ✓.
+ * Alvos de 44px no toque.
+ */
+export function ChipsAlternar({
+  itens,
+  marcados,
+  onChange,
+  rotulo,
+}: {
+  itens: { id: number; nome: string; cor: string }[];
+  marcados: number[];
+  onChange: (ids: number[]) => void;
+  /** O que cada chip é ("Etiqueta", "Equipe") — o nome acessível. */
+  rotulo: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {itens.map((e) => {
+        const ativa = marcados.includes(e.id);
+        return (
+          <button
+            key={e.id}
+            type="button"
+            aria-pressed={ativa}
+            aria-label={`${rotulo}: ${e.nome}`}
+            onClick={() => onChange(ativa ? marcados.filter((x) => x !== e.id) : [...marcados, e.id])}
+            className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+            style={{
+              color: e.cor,
+              background: `color-mix(in srgb, ${e.cor} ${ativa ? 18 : 6}%, var(--surface))`,
+              boxShadow: `inset 0 0 0 ${ativa ? 2 : 1}px color-mix(in srgb, ${e.cor} ${ativa ? 70 : 25}%, transparent)`,
+            }}
+          >
+            {ativa && <IconCheck className="h-3.5 w-3.5" />}
+            {e.nome}
+          </button>
+        );
+      })}
+    </div>
   );
 }

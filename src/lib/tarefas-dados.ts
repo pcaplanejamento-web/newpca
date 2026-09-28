@@ -11,6 +11,7 @@ import {
   listasDoQuadro,
   listasDosQuadros,
   listarAutomacoes,
+  listarEquipes,
   listarModelosQuadro,
   listarModelosTarefa,
   listarQuadros,
@@ -71,7 +72,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
   const { de, ate } = intervaloCalendario(mes, inicio, anual);
   const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
-  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas] = await Promise.all([
+  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas, equipes] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
     eventosDosQuadros(ids, de, ate),
     etiquetasDosQuadros(ids),
@@ -80,17 +81,18 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     assinaturaDaPessoa(u.id),
     abas.has("pca") ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
+    listarEquipes(ids),
   ]);
   // As PESSOAS do grupo ativo (convidar, "pesquisar pessoas") + as das tarefas e dos convites (nomes e fotos).
   const membros = grupoAtivo != null ? await listarPessoasDoGrupo(grupoAtivo) : [];
   const conhecidas = new Set(membros.map((p) => p.id));
-  const faltam = [u.id, ...tarefas.flatMap((t) => t.pessoas), ...eventos.flatMap((e) => [...e.convidados.map((c) => c.usuarioId), ...(e.criadoPor ? [e.criadoPor] : [])])].filter((id) => !conhecidas.has(id));
+  const faltam = [u.id, ...tarefas.flatMap((t) => t.envolvidos), ...eventos.flatMap((e) => [...e.convidados.map((c) => c.usuarioId), ...(e.criadoPor ? [e.criadoPor] : [])])].filter((id) => !conhecidas.has(id));
   const pessoas = [...membros, ...(faltam.length ? await pessoasPorIds([...new Set(faltam)]) : [])];
   return {
     membros: membros.map((p) => p.id),
     tarefas,
     // O PRIVADO de quem a pessoa não participa vem só como "Ocupado".
-    eventos: mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.pessoas]))),
+    eventos: mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.envolvidos]))),
     contadores,
     mes,
     anual,
@@ -99,6 +101,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     pessoas,
     abertas,
     listas,
+    equipes,
     ...prefs,
     pca,
     assinatura: assinatura != null,
@@ -114,19 +117,21 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
 export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
   const r = await tarefaAcessivel(u, tarefaId);
   if (!r) return null;
-  const [listas, etiquetas, membros, modelosTarefa] = await Promise.all([
+  const [listas, etiquetas, membros, modelosTarefa, equipes] = await Promise.all([
     listasDoQuadro(r.quadro.id),
     etiquetasDoQuadroTodas(r.quadro.id),
     listarPessoasDoGrupo(r.quadro.grupoId),
     listarModelosTarefa(r.quadro.id),
+    listarEquipes([r.quadro.id]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
-  const fora = [...r.tarefa.pessoas, ...r.tarefa.observadores].filter((p) => !noGrupo.has(p));
+  const fora = [...new Set([...r.tarefa.envolvidos, ...r.tarefa.observadores, ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
   return {
     quadro: { id: r.quadro.id, nome: r.quadro.nome, cor: r.quadro.cor },
     tarefa: r.tarefa,
     listas,
     etiquetas,
+    equipes,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...(fora.length ? await pessoasPorIds(fora) : [])],
     modelosTarefa,
@@ -144,22 +149,24 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
 export async function carregarQuadro(u: UsuarioSessao, id: number) {
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosTarefa, modelosQuadro] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosTarefa, modelosQuadro, equipes] = await Promise.all([
     dadosQuadro(id),
     listarPessoasDoGrupo(quadro.grupoId),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
     listarAutomacoes(id),
     listarModelosTarefa(id),
     listarModelosQuadro([quadro.grupoId]),
+    listarEquipes([id]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
-  const fora = [...new Set(dados.tarefas.flatMap((t) => t.pessoas))].filter((p) => !noGrupo.has(p));
+  const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
   const extras = fora.length ? await pessoasPorIds(fora) : [];
   return {
     quadro,
     ...dados,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...extras],
+    equipes,
     edicoes,
     automacoes,
     modelosTarefa,

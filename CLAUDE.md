@@ -2088,12 +2088,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Telas:** `Button loading` = desabilitado; travas de envio por ref; as bandeiras "foi arrasto/redimensionamento" duram
     só o clique seguinte; o banner do evento é relido dos dados; `JanelaFlutuante` é `role="dialog"` (atalhos pausados) e se
     reposiciona ao crescer; a folha "sem prazo" do celular não é lembrada. Testes em `tests/auditoria-calendario.test.ts`.
-- **Carga de DADOS — Calendário Institucional PCA 2026/2027 (migração `0051`, só dados):** no grupo "Planejamento e
-  Custos" (casado por `lower(trim(nome))`; sem ele, nada entra), o quadro "Calendário Institucional PCA 2026/2027" (listas A
-  fazer · Em andamento · Concluído) com 9 tarefas — as 8 etapas do documento da Coordenação + "Avisos / Notificações" — no
-  período de cada etapa, e as 72 atividades/avisos como EVENTOS (cor por etapa, datas/períodos do PDF, o aviso de 31/08 às
-  15h, lembrete de 1 dia nos marcos futuros; Etapa 1 concluída). Idempotente (NOT EXISTS em tudo); gerada por script a
-  partir do PDF; testada em `tests/migrations.test.ts`.
+- **FASE 10 — EQUIPES do quadro (migração `0052`, aditiva):** tabelas `tarefa_equipes` (quadro cascade, nome, cor, ordem),
+  `tarefa_equipe_membros` (equipe + usuário, cascade) e `tarefa_equipes_links` (tarefa + equipe, cascade). A EQUIPE é um grupo
+  de pessoas DO GRUPO do quadro, cadastrado na **Configuração** (seção "Equipes": nome + `ColorField` + `SeletorPessoas`;
+  editores; `POST /api/tarefas/quadros/[id]/equipes`, `PATCH`/`DELETE /api/tarefas/equipes/[id]` — `exigirEditor`,
+  `pessoasValidas`, quadro arquivado = 409, auditoria `tarefa_equipe`). A tarefa recebe equipes além das pessoas (bloco
+  **Responsáveis**: `ChipsAlternar` na cor + "Pela equipe:" com as fotos dos membros herdados; `equipes` em `POST`/`PATCH
+  /api/tarefas` e na massa — campo "Equipe" +/−), por REFERÊNCIA: mudar a equipe muda todas as tarefas dela.
+  **`TarefaResumo.equipes` + `envolvidos`** (= responsáveis ∪ membros das equipes — `envolvidosDe`/`equipesDasLinhas` em
+  `tarefas-core`, calculados no servidor em `dadosQuadro`/`getTarefa`/`tarefasDoCalendario` por UMA consulta —
+  `linhasEquipes`) e TUDO o que é "de quem é a tarefa" usa os envolvidos: filtro Responsável (eu/pessoa/sem), carga e
+  recorte do Dashboard, cartão, Lista (+ coluna "Equipes") e .xlsx ("Equipes" no fim), "Pesquisar pessoas" e o banner do
+  evento (**"Participantes pela tarefa"** — todo evento herda os envolvidos), privado (`mascararPrivados`/`participaDoEvento`
+  com os envolvidos), avisos (atribuída — também "à sua equipe" —, comentário, automação) e, em SQL, **`pessoaNaTarefa`**
+  (`tarefas-sql`: responsável OU membro de equipe da tarefa) nas notificações de prazo/lembrete e na busca do calendário. A
+  recorrência copia as equipes; excluir a equipe a tira das tarefas (os responsáveis ficam). Testes: `tarefas-core`
+  (envolvidos, filtro/carga/privado pela equipe), `tarefas-sql` (40 membros em INSERTs ≤ 30, criar/editar/massa/cascade,
+  `pessoaNaTarefa` no driver D1 real), `migrations` (0052).
+- **Lateral do Calendário — conjuntos RECOLHÍVEIS:** na `BarraCalendario`, a seção "Conjuntos (tarefas)", cada QUADRO e o
+  "Cronograma do PCA" recolhem/expandem (`BotaoRecolher`: chevron, `aria-expanded`, 44px no toque; recolhido mostra a
+  contagem); o que está recolhido fica no APARELHO (`localStorage` `calendario:recolhidos`, lido depois da montagem, com
+  try/catch — conveniência).
+- **Dados do Calendário Institucional PCA 2026/2027:** cadastrados em produção (grupo Planejamento e Custos); a antiga carga
+  `0051` saiu do repositório (já aplicada — o wrangler só aplica arquivos novos). A `0052` tira o INÍCIO das tarefas 8 (Etapa
+  8) e 9 (Avisos) daquele quadro — ficam só no prazo, sem a barra longa em todas as semanas.
 - **Próximo** (ver `docs/ROADMAP.md`): e-mail das notificações (Resend) e relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)

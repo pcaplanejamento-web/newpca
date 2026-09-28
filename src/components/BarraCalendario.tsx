@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { diasSemanaCurtos, gradeMes, NOMES_MES, type OcultosCalendario, OCULTOS_VAZIO, ROTULO_TIPO_EVENTO, rotuloTicket, somarMes, TIPOS_COM_CONTROLE, type TipoEvento, temOculto } from "@/lib/tarefas-core";
 import type { MesCalendario, NavCalendario } from "./CalendarioTarefas";
 import { Checkbox } from "./Field";
-import { IconChevronLeft, IconChevronRight } from "./icons";
+import { IconChevronDown, IconChevronLeft, IconChevronRight } from "./icons";
 
 /** Um CONJUNTO de eventos = uma tarefa (com quantos eventos ela tem no período). */
 export type ConjuntoTarefa = { id: number; ticket: number; titulo: string; eventos: number };
@@ -14,6 +14,55 @@ export type GrupoConjuntos = { quadro: { id: number; nome: string; cor: string }
 export type ConjuntoPca = { id: number; nome: string; eventos: number };
 /** Uma AGENDA EXTERNA assinada (.ics por URL — somente leitura); `erro` = a última leitura falhou. */
 export type ConjuntoExterno = { id: number; nome: string; cor: string | null; eventos: number; erro?: string | null };
+
+/** Onde o aparelho lembra o que está RECOLHIDO na lateral (conveniência por aparelho). */
+const CHAVE_RECOLHIDOS = "calendario:recolhidos";
+
+/**
+ * O que está RECOLHIDO na lateral ("conjuntos" = a seção inteira; `q<id>` = um quadro; "pca" = o cronograma) — lembrado no
+ * aparelho (lido depois da montagem: o servidor e a 1ª pintura mostram tudo aberto).
+ */
+function useRecolhidos() {
+  const [recolhidos, setRecolhidos] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(CHAVE_RECOLHIDOS) ?? "[]");
+      if (Array.isArray(v)) setRecolhidos(new Set(v.filter((x): x is string => typeof x === "string").slice(0, 200)));
+    } catch {
+      /* sem armazenamento: tudo aberto */
+    }
+  }, []);
+  const alternar = useCallback((k: string) => {
+    setRecolhidos((r) => {
+      const n = new Set(r);
+      if (!n.delete(k)) n.add(k);
+      try {
+        localStorage.setItem(CHAVE_RECOLHIDOS, JSON.stringify([...n]));
+      } catch {
+        /* sem armazenamento: vale só nesta visita */
+      }
+      return n;
+    });
+  }, []);
+  return { recolhido: (k: string) => recolhidos.has(k), alternar };
+}
+
+/** O botão que RECOLHE/EXPANDE um bloco da lateral (44px no toque). */
+function BotaoRecolher({ aberto, rotulo, onClick, controla }: { aberto: boolean; rotulo: string; onClick: () => void; controla?: string }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={aberto}
+      aria-controls={controla}
+      aria-label={`${aberto ? "Recolher" : "Expandir"} ${rotulo}`}
+      title={aberto ? "Recolher" : "Expandir"}
+      onClick={onClick}
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-7 lg:w-7"
+    >
+      <IconChevronDown className={`h-4 w-4 transition-transform duration-[var(--motion-duration)] ${aberto ? "" : "-rotate-90"}`} />
+    </button>
+  );
+}
 
 /** O MINI-MÊS da barra (ir para qualquer data): hoje marcado, os dias À VISTA (a semana/4 dias/o dia) destacados, ponto
  * nos dias com eventos. */
@@ -110,6 +159,8 @@ export function BarraCalendario({
   const algumOculto = temOculto(ocultos);
   const pcasVisiveis = pcas;
   const pcasOcultos = pcas.length > 0 && pcas.every((p) => ocultos.pcas.includes(p.id));
+  const { recolhido, alternar: alternarRecolhido } = useRecolhidos();
+  const conjuntosAbertos = !recolhido("conjuntos");
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -132,8 +183,9 @@ export function BarraCalendario({
         </div>
       </section>
       <section className="rounded-card border border-border bg-surface p-2" aria-label="Conjuntos de eventos">
-        <div className="flex items-center justify-between gap-2 px-1 pb-1">
-          <p className="text-[12px] font-semibold text-text-2">Conjuntos (tarefas)</p>
+        <div className="flex items-center justify-between gap-1 pb-1 pl-0.5 pr-1">
+          <BotaoRecolher aberto={conjuntosAbertos} rotulo="os conjuntos" controla="conjuntos-calendario" onClick={() => alternarRecolhido("conjuntos")} />
+          <p className="min-w-0 flex-1 text-[12px] font-semibold text-text-2">Conjuntos (tarefas)</p>
           <button
             type="button"
             onClick={() => onOcultos(algumOculto ? OCULTOS_VAZIO : { ...ocultos, tarefas: todasIds, pcas: pcas.map((p) => p.id) })}
@@ -142,22 +194,25 @@ export function BarraCalendario({
             {algumOculto ? "Mostrar todos" : "Ocultar todos"}
           </button>
         </div>
-        {visiveis.length === 0 && pcasVisiveis.length === 0 && (
+        {conjuntosAbertos && visiveis.length === 0 && pcasVisiveis.length === 0 && (
           <p className="px-1 py-3 text-[12px] text-muted">{grupos.length || pcas.length ? "Nada encontrado." : "Nenhum evento no período."}</p>
         )}
-        <div className="space-y-2">
+        <div id="conjuntos-calendario" hidden={!conjuntosAbertos} className="space-y-2">
           {visiveis.map((g) => {
             const quadroOculto = ocultos.quadros.includes(g.quadro.id);
+            const aberto = !recolhido(`q${g.quadro.id}`);
             return (
               <div key={g.quadro.id}>
                 <div className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
                   <Checkbox checked={!quadroOculto} onChange={() => alternar("quadros", g.quadro.id)} label="" aria-label={`Mostrar o quadro ${g.quadro.nome}`} />
                   <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: g.quadro.cor }} />
-                  <span className="min-w-0 truncate text-[12.5px] font-semibold text-text" title={g.quadro.nome}>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text" title={g.quadro.nome}>
                     {g.quadro.nome}
                   </span>
+                  {!aberto && <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{num(g.tarefas.length)}</span>}
+                  <BotaoRecolher aberto={aberto} rotulo={`as tarefas de ${g.quadro.nome}`} controla={`conjuntos-q${g.quadro.id}`} onClick={() => alternarRecolhido(`q${g.quadro.id}`)} />
                 </div>
-                <ul className={`ml-4 border-l border-border pl-1.5 ${quadroOculto ? "opacity-50" : ""}`}>
+                <ul id={`conjuntos-q${g.quadro.id}`} hidden={!aberto} className={`ml-4 border-l border-border pl-1.5 ${quadroOculto ? "opacity-50" : ""}`}>
                   {g.tarefas.map((t) => (
                     <li key={t.id} className="flex min-h-11 items-center gap-1.5 lg:min-h-8">
                       <Checkbox
@@ -188,9 +243,11 @@ export function BarraCalendario({
                   aria-label="Mostrar o cronograma do PCA"
                 />
                 <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[var(--info)]" />
-                <span className="text-[12.5px] font-semibold text-text">Cronograma do PCA</span>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text">Cronograma do PCA</span>
+                {recolhido("pca") && <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{num(pcasVisiveis.length)}</span>}
+                <BotaoRecolher aberto={!recolhido("pca")} rotulo="o cronograma do PCA" controla="conjuntos-pca" onClick={() => alternarRecolhido("pca")} />
               </div>
-              <ul className={`ml-4 border-l border-border pl-1.5 ${pcasOcultos ? "opacity-50" : ""}`}>
+              <ul id="conjuntos-pca" hidden={recolhido("pca")} className={`ml-4 border-l border-border pl-1.5 ${pcasOcultos ? "opacity-50" : ""}`}>
                 {pcasVisiveis.map((p) => (
                   <li key={p.id} className="flex min-h-11 items-center gap-1.5 lg:min-h-8">
                     <Checkbox checked={!ocultos.pcas.includes(p.id)} onChange={() => alternar("pcas", p.id)} label="" aria-label={`Mostrar a previsão do ${p.nome}`} />

@@ -33,6 +33,6 @@ export default async function QuadroTarefasPage({
   const prazoInicial = /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
   // Os eventos cadastrados, as opções da pessoa e os feriados só com a aba Calendário aberta (as demais abas não os usam).
   const [eventosDb, calendario] = aba === "calendario" ? await Promise.all([eventosDosQuadros([dados.quadro.id]), preferenciasCalendario(u.id)]) : [[], undefined];
-  const eventos = mascararPrivados(eventosDb, u.id, new Map(dados.tarefas.map((t) => [t.id, t.pessoas])));
+  const eventos = mascararPrivados(eventosDb, u.id, new Map(dados.tarefas.map((t) => [t.id, t.envolvidos])));
   return <QuadroTarefas {...dados} aba={aba} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />;
 }

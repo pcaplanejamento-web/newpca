@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEMBRETE_MAX_MIN } from "./calendario-core.ts";
-import { dataValida, FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
+import { dataValida, FREQUENCIAS, GATILHOS, MAX_BLOCOS, MAX_EQUIPES_TAREFA, MAX_MEMBROS_EQUIPE, MAX_NOTA, MAX_TITULO_LINK, MAX_URL, PRIORIDADES, TIPOS_BLOCO, TIPOS_VINCULO } from "./tarefas-core.ts";
 
 /** Validação das TAREFAS (quadros, listas, cartões e etiquetas) — só schema (puro/testável). */
 
@@ -34,6 +34,13 @@ export const ordemListasSchema = z.object({ ids: z.array(id).min(1).max(100) }).
 export const etiquetaSchema = z.object({
   nome: z.string().trim().min(1, "Dê um nome à etiqueta.").max(30, "Nome com até 30 caracteres."),
   cor,
+});
+
+/** Uma EQUIPE do quadro: nome, cor e as pessoas (do grupo do quadro — conferidas na rota). */
+export const equipeSchema = z.object({
+  nome: z.string().trim().min(1, "Dê um nome à equipe.").max(60, "Nome com até 60 caracteres."),
+  cor,
+  membros: ids(MAX_MEMBROS_EQUIPE),
 });
 
 /** A regra de REPETIÇÃO (`Recorrencia`, `tarefas-core`). */
@@ -142,6 +149,7 @@ const camposTarefa = {
   pessoas: ids(20).optional(),
   observadores: ids(20).optional(),
   etiquetas: ids(20).optional(),
+  equipes: ids(MAX_EQUIPES_TAREFA).optional(),
   estimativaH: z.number().min(0).max(9999).nullable().optional(),
   vinculo: z.object({ tipo: z.enum(TIPOS_VINCULO), id }).nullable().optional(),
   recorrencia: recorrenciaSchema.nullable().optional(),
@@ -187,6 +195,7 @@ export const massaTarefasSchema = z.object({
     z.object({ campo: z.literal("lista"), listaId: id }),
     z.object({ campo: z.literal("responsavel"), modo: z.enum(["adicionar", "remover"]), usuarioId: id }),
     z.object({ campo: z.literal("etiqueta"), modo: z.enum(["adicionar", "remover"]), etiquetaId: id }),
+    z.object({ campo: z.literal("equipe"), modo: z.enum(["adicionar", "remover"]), equipeId: id }),
     z.object({ campo: z.literal("prazo"), prazo: data.nullable() }),
     z.object({ campo: z.literal("prioridade"), prioridade: z.enum(PRIORIDADES) }),
     z.object({ campo: z.literal("arquivar"), arquivada: z.boolean() }),

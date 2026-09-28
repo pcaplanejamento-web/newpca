@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   diasSemanaCurtos,
+  envolvidosDe,
+  equipesDasLinhas,
+  mascararPrivados,
 
   ocorrenciaPrevista,
   temOculto,
@@ -89,7 +92,10 @@ const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> 
   notas: 0,
   links: 0,
   eventos: 0,
+  equipes: [],
   ...x,
+  // Sem equipes, os envolvidos são os responsáveis (a régua do servidor — `envolvidosDe`).
+  envolvidos: x.envolvidos ?? x.pessoas ?? [],
 });
 const LISTAS = [
   { id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false },
@@ -608,5 +614,39 @@ describe("calendário por eventos", () => {
     const f = faixasDaSemana([{ inicio: "2026-09-19", fim: "2026-09-22" }, { inicio: "2026-09-26", fim: "2026-09-26" }], uteis);
     assert.equal(f.length, 1);
     assert.deepEqual([f[0].coluna, f[0].span, f[0].antes], [0, 2, true]);
+  });
+
+  it("EQUIPES: envolvidos = responsáveis + membros das equipes (sem repetir); linhas da consulta → equipes e membros", () => {
+    const { porTarefa, membros } = equipesDasLinhas([
+      { tarefaId: 1, equipeId: 10, usuarioId: 7 },
+      { tarefaId: 1, equipeId: 10, usuarioId: 8 },
+      { tarefaId: 1, equipeId: 11, usuarioId: null },
+      { tarefaId: 2, equipeId: 10, usuarioId: 7 },
+    ]);
+    assert.deepEqual(porTarefa.get(1), [10, 11]);
+    assert.deepEqual(porTarefa.get(2), [10]);
+    assert.deepEqual(membros.get(10), [7, 8]);
+    assert.deepEqual(membros.get(11), []);
+    assert.deepEqual(envolvidosDe([8, 3], [10, 11], membros), [8, 3, 7]);
+    assert.deepEqual(envolvidosDe([], [], membros), []);
+  });
+
+  it("EQUIPES: o filtro 'as minhas', a carga do painel e o evento privado valem pelos membros da equipe", () => {
+    const hoje = "2026-09-26";
+    const daEquipe = T(1, 1, 1, { pessoas: [], equipes: [10], envolvidos: [7, 8] });
+    const semNinguem = T(2, 1, 2);
+    const ts = [daEquipe, semNinguem];
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsavel: "eu" }, { usuarioId: 7, hoje }).map((t) => t.id), [1]);
+    assert.deepEqual(filtrarTarefas(ts, { ...FILTRO_TAREFAS_PADRAO, responsavel: "sem" }, { usuarioId: 7, hoje }).map((t) => t.id), [2]);
+    const p = painelTarefas(ts, LISTAS, hoje);
+    assert.deepEqual(p.carga.map((c) => c.id).sort(), [7, 8, null].sort());
+    assert.deepEqual(tarefasDoRecorte(ts, { dim: "pessoa", id: 8 } as RecorteTarefas, hoje).map((t) => t.id), [1]);
+    const privado = {
+      id: 5, tarefaId: 1, titulo: "Segredo", data: "2026-09-27", dataFim: null, diaInteiro: true, horaInicio: null, horaFim: null, local: "Sala", descricao: null,
+      cor: null, lembreteMin: null, recorrencia: null, linkReuniao: null, ocupado: true, privado: true, criadoPor: 99, convidados: [],
+    };
+    const env = new Map([[1, daEquipe.envolvidos]]);
+    assert.equal(mascararPrivados([privado], 7, env)[0].titulo, "Segredo");
+    assert.equal(mascararPrivados([privado], 50, env)[0].titulo, "Ocupado");
   });
 });

@@ -18,7 +18,7 @@ async function eventoAcessivel(ctx: Ctx) {
   const evento = id ? await getEvento(id) : null;
   const r = evento ? await tarefaAcessivel(a.u, evento.tarefaId) : null;
   if (!evento || !r) return { resp: erro("Evento não encontrado.", 404) };
-  if (evento.privado && a.u.role !== "admin" && !participaDoEvento(evento, a.u.id, r.tarefa.pessoas)) return { resp: erro("Evento privado — só quem participa pode alterá-lo.", 403) };
+  if (evento.privado && a.u.role !== "admin" && !participaDoEvento(evento, a.u.id, r.tarefa.envolvidos)) return { resp: erro("Evento privado — só quem participa pode alterá-lo.", 403) };
   return { u: a.u, evento, r };
 }
 

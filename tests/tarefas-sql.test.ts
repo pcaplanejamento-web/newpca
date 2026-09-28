@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { coerceModeloQuadro } from "../src/lib/tarefas-core.ts";
@@ -11,10 +12,12 @@ import {
   comandosCriarEvento,
   comandosCriarQuadroDoModelo,
   comandosCriarTarefa,
+  comandosEquipe,
   comandosMassa,
   comandosMover,
   comandosNotificacoes,
   comandosVinculos,
+  pessoaNaTarefa,
 } from "../src/lib/tarefas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -161,5 +164,33 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     const [{ id }] = r.at(-1) as { id: number }[];
     const c = db.prepare("SELECT c.usuario_id AS u FROM tarefa_evento_convidados c JOIN tarefa_eventos e ON e.id = c.evento_id WHERE e.tarefa_id = ?").all(id) as { u: number }[];
     assert.deepEqual(c.map((x) => x.u), [9502]);
+  });
+
+  it("EQUIPES: 40 membros em INSERTs de até 30; criar/editar num lote; a tarefa com a equipe envolve os membros", async () => {
+    const membros = Array.from({ length: 40 }, (_, i) => 9600 + i); // criadas no teste dos convidados
+    const criar = comandosEquipe(orm, { quadroId: 1, nome: "Compras", cor: "#16a34a", membros: [...membros, membros[0]] });
+    for (const c of criar) assert.ok(c.toSQL().params.length <= 100, `${c.toSQL().params.length} parâmetros`);
+    await orm.batch(criar as never);
+    const eqId = (db.prepare("SELECT MAX(id) AS id FROM tarefa_equipes").get() as { id: number }).id;
+    const nMembros = () => (db.prepare("SELECT COUNT(*) AS n FROM tarefa_equipe_membros WHERE equipe_id = ?").get(eqId) as { n: number }).n;
+    assert.equal(nMembros(), 40);
+    // Editar troca os membros (e o nome) no mesmo lote.
+    await orm.batch(comandosEquipe(orm, { id: eqId, quadroId: 1, nome: "Compras 2", cor: "#16a34a", membros: [9600, 9502] }) as never);
+    assert.equal(nMembros(), 2);
+    assert.equal((db.prepare("SELECT nome AS n FROM tarefa_equipes WHERE id = ?").get(eqId) as { n: string }).n, "Compras 2");
+    // A tarefa nasce com a equipe; a pessoa da equipe é "da tarefa" (a mesma régua de `envolvidos`); a de fora não.
+    const r = await orm.batch(comandosCriarTarefa(orm, { ...base, listaId: 1, titulo: "Da equipe", pessoas: [], etiquetas: [], equipes: [eqId] }));
+    const [{ id }] = r.at(-1) as { id: number }[];
+    const da = async (u: number) => (await orm.select({ id: schema.tarefas.id }).from(schema.tarefas).where(pessoaNaTarefa(u))).map((x) => x.id);
+    assert.ok((await da(9600)).includes(id));
+    assert.ok(!(await da(9610)).includes(id));
+    // Tirar a equipe (vínculos) e pôr de novo pela massa.
+    await orm.batch(comandosVinculos(orm, id, { equipes: [] }) as never);
+    assert.ok(!(await da(9600)).includes(id));
+    await orm.batch(comandosMassa(orm, [id], { campo: "equipe", modo: "adicionar", equipeId: eqId }) as never);
+    assert.ok((await da(9600)).includes(id));
+    // Excluir a equipe tira das tarefas (cascade).
+    await orm.delete(schema.tarefaEquipes).where(eq(schema.tarefaEquipes.id, eqId));
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_equipes_links").get() as { n: number }).n, 0);
   });
 });

@@ -27,7 +27,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   const [tarefas, eventos, prefs] = await Promise.all([tarefasDoCalendario(ids, de, ate), eventosDosQuadros(ids, de, ate), listarPreferenciasTabela(u.id, CHAVE_OCULTOS_CALENDARIO)]);
   const ocultos = lerOcultos(prefs[CHAVE_OCULTOS_CALENDARIO]);
   const origem = new URL(req.url).origin;
-  const visiveis = mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.pessoas])));
+  const visiveis = mascararPrivados(eventos, u.id, new Map(tarefas.map((t) => [t.id, t.envolvidos])));
   const lista = eventosDoCalendario(tarefas, visiveis, de, ate, hoje).filter((e) => eventoVisivel(e, ocultos));
   const ics = gerarIcs(lista, { nome: `Calendário — ${u.nome}`, agora: carimboIcs(new Date()), dominio: new URL(req.url).hostname, url: (e) => `${origem}${linkEvento(e.inicio, e.chave)}` });
   return new Response(ics, {

@@ -33,6 +33,10 @@ export type TarefaResumo = {
   pessoas: number[];
   /** Observadores (acompanham, sem ser responsáveis). */
   observadores: number[];
+  /** As EQUIPES do quadro atribuídas à tarefa (migração `0052`). */
+  equipes: number[];
+  /** Quem é DA tarefa: os responsáveis + os membros das equipes (sem repetir) — filtro, carga, calendário e privados. */
+  envolvidos: number[];
   etiquetas: number[];
   criadoEm: string | null;
   atualizadoEm: string | null;
@@ -49,6 +53,35 @@ export type TarefaResumo = {
   /** A regra de repetição (fase 3); `null` = não se repete. */
   recorrencia: Recorrencia | null;
 };
+
+/** Uma EQUIPE do quadro: um grupo de pessoas (a tarefa com a equipe envolve todos os membros). */
+export type EquipeQuadro = { id: number; nome: string; cor: string; ordem: number; membros: number[] };
+export const MAX_EQUIPES_TAREFA = 30;
+export const MAX_MEMBROS_EQUIPE = 100;
+
+/** Os ENVOLVIDOS de uma tarefa: os responsáveis e, depois, os membros das equipes — sem repetir, na ordem. */
+export function envolvidosDe(pessoas: number[], equipes: number[], membrosPorEquipe: Map<number, number[]>): number[] {
+  const out = new Set(pessoas);
+  for (const e of equipes) for (const u of membrosPorEquipe.get(e) ?? []) out.add(u);
+  return [...out];
+}
+
+/** As linhas (tarefa, equipe, membro | null) de uma consulta → por tarefa: as equipes e os membros de cada equipe. */
+export function equipesDasLinhas(linhas: { tarefaId: number; equipeId: number; usuarioId: number | null }[]): {
+  porTarefa: Map<number, number[]>;
+  membros: Map<number, number[]>;
+} {
+  const porTarefa = new Map<number, number[]>();
+  const membros = new Map<number, number[]>();
+  for (const l of linhas) {
+    const eq = porTarefa.get(l.tarefaId) ?? [];
+    if (!eq.includes(l.equipeId)) porTarefa.set(l.tarefaId, [...eq, l.equipeId]);
+    const m = membros.get(l.equipeId) ?? [];
+    if (l.usuarioId != null && !m.includes(l.usuarioId)) membros.set(l.equipeId, [...m, l.usuarioId]);
+    else if (!membros.has(l.equipeId)) membros.set(l.equipeId, m);
+  }
+  return { porTarefa, membros };
+}
 
 /** A que parte do sistema a tarefa se liga. */
 export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento"] as const;
@@ -236,7 +269,7 @@ export const filtroTarefasAtivo = (f: FiltroTarefas) =>
   f.responsavel !== "todos" || f.prazo !== "todos" || f.prioridade !== "todas" || f.etiqueta != null || f.busca.trim() !== "";
 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
-export type TarefaFiltravel = Pick<TarefaResumo, "pessoas" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket">;
+export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket">;
 
 /** Os cartões que passam no filtro (a busca acha título ou nº do ticket — vários termos com ":"). */
 export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: FiltroTarefas, ctx: { usuarioId: number | null; hoje: string }): T[] {
@@ -244,7 +277,8 @@ export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: Filtr
   // "Próximos 7 dias" = hoje + os 6 seguintes.
   const fimSemana = somarDias(ctx.hoje, 6);
   return tarefas.filter((t) => {
-    if (f.responsavel === "eu" ? ctx.usuarioId == null || !t.pessoas.includes(ctx.usuarioId) : f.responsavel === "sem" ? t.pessoas.length > 0 : f.responsavel !== "todos" && !t.pessoas.includes(f.responsavel))
+    const quem = t.envolvidos;
+    if (f.responsavel === "eu" ? ctx.usuarioId == null || !quem.includes(ctx.usuarioId) : f.responsavel === "sem" ? quem.length > 0 : f.responsavel !== "todos" && !quem.includes(f.responsavel))
       return false;
     if (f.prioridade !== "todas" && t.prioridade !== f.prioridade) return false;
     if (f.etiqueta != null && !t.etiquetas.includes(f.etiqueta)) return false;
@@ -302,7 +336,7 @@ export function gradeMes(ano: number, mes: number, inicioSemana: 0 | 1 = 0): str
 /**
  * Uma tarefa como o CALENDÁRIO a usa (o do quadro e o de todos os quadros do grupo — `quadroId` = de qual quadro).
  */
-export type TarefaCalendario = Pick<TarefaResumo, "id" | "listaId" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "etiquetas" | "recorrencia"> & {
+export type TarefaCalendario = Pick<TarefaResumo, "id" | "listaId" | "ticket" | "titulo" | "prioridade" | "inicio" | "prazo" | "concluidaEm" | "pessoas" | "equipes" | "envolvidos" | "etiquetas" | "recorrencia"> & {
   quadroId?: number;
 };
 
@@ -482,6 +516,8 @@ export type DadosBlocos = {
   prazo: string | null;
   pessoas: number[];
   observadores: number[];
+  /** As equipes (o bloco Responsáveis também as guarda). */
+  equipes?: number[];
   etiquetas: number[];
   vinculo: unknown;
   estimativaH: number | null;
@@ -494,7 +530,7 @@ export function blocoTemDado(tipo: TipoBloco, d: DadosBlocos): boolean {
     case "prazo":
       return !!(d.inicio || d.prazo);
     case "pessoas":
-      return d.pessoas.length > 0 || d.observadores.length > 0;
+      return d.pessoas.length > 0 || d.observadores.length > 0 || (d.equipes?.length ?? 0) > 0;
     case "etiquetas":
       return d.etiquetas.length > 0;
     case "vinculo":
@@ -750,7 +786,7 @@ export function tarefasDoRecorte(tarefas: TarefaResumo[], r: RecorteTarefas, hoj
       case "concluidasMes":
         return !!t.concluidaEm && dataIsoBrasilia(t.concluidaEm).startsWith(mes);
       case "pessoa":
-        return aberta(t) && (r.id == null ? t.pessoas.length === 0 : t.pessoas.includes(r.id));
+        return aberta(t) && (r.id == null ? t.envolvidos.length === 0 : t.envolvidos.includes(r.id));
       case "lista":
         return t.listaId === r.id;
       case "prioridade":
@@ -833,8 +869,8 @@ export function painelTarefas(tarefas: TarefaResumo[], listas: ListaTarefas[], h
     const f = faixaPrazo(t, hoje);
     faixas[f]++;
     porPrio.set(t.prioridade, (porPrio.get(t.prioridade) ?? 0) + 1);
-    if (!t.pessoas.length) semResponsavel++;
-    for (const id of t.pessoas.length ? t.pessoas : [null]) {
+    if (!t.envolvidos.length) semResponsavel++;
+    for (const id of t.envolvidos.length ? t.envolvidos : [null]) {
       const c = porPessoa.get(id) ?? { total: 0, faixas: zeroFaixa() };
       c.total++;
       c.faixas[f]++;

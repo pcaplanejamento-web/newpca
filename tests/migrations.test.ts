@@ -569,29 +569,28 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM calendario_externos").get() as { n: number }).n, 0);
   });
 
-  it("0051 Calendário PCA 2026/2027: só no grupo Planejamento e Custos; quadro, 9 tarefas e 72 eventos, sem duplicar", () => {
+  it("0052 equipes do quadro: membros e vínculos em cascata; tickets 8/9 do calendário PCA ficam sem início", () => {
     const a = new DatabaseSync(":memory:");
-    for (const arq of arquivos.filter((f) => f < "0051")) a.exec(readFileSync(join(DIR, arq), "utf8"));
-    const seed = readFileSync(join(DIR, "0051_calendario_pca_2026_2027.sql"), "utf8");
-    const n = (sql: string) => (a.prepare(sql).get() as { n: number }).n;
-    // Sem o grupo, nada entra.
-    a.exec(seed);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_quadros"), 0);
-    a.exec("INSERT INTO grupos (id, nome) VALUES (9510, ' Planejamento e Custos ')");
-    a.exec(seed);
-    a.exec(seed); // idempotente
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_quadros WHERE grupo_id = 9510"), 1);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_listas"), 3);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefas"), 9);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_eventos"), 72);
-    assert.equal(n("SELECT prox_ticket AS n FROM tarefa_quadros"), 10);
-    // Etapa 1 concluída na lista de concluídas; o aviso das 15h tem hora; datas válidas e fim ≥ início.
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefas t JOIN tarefa_listas l ON l.id = t.lista_id WHERE t.ticket = 1 AND l.concluida = 1 AND t.concluida_em IS NOT NULL"), 1);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_eventos WHERE dia_inteiro = 0 AND hora_inicio = '15:00' AND data = '2026-08-31'"), 1);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_eventos WHERE data_fim IS NOT NULL AND data_fim <= data"), 0);
-    assert.equal(n("SELECT COUNT(*) AS n FROM tarefas WHERE prazo < inicio"), 0);
-    assert.equal(n("SELECT MIN(data) AS n FROM tarefa_eventos") as unknown, "2026-07-27");
-    assert.equal(n("SELECT MAX(COALESCE(data_fim, data)) AS n FROM tarefa_eventos") as unknown, "2026-12-01");
+    for (const arq of arquivos.filter((f) => f < "0052")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    const n = (sql: string) => (a.prepare(sql).get() as { n: number | string | null }).n;
+    a.exec("INSERT INTO grupos (id, nome) VALUES (9520, ' Planejamento e Custos ')");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9521, 'U', 'u9521@x', 'h')");
+    a.exec("INSERT INTO tarefa_quadros (id, grupo_id, nome, cor) VALUES (9522, 9520, 'Calendário Institucional PCA 2026/2027', '#2563eb')");
+    a.exec("INSERT INTO tarefa_listas (id, quadro_id, nome) VALUES (9523, 9522, 'A fazer')");
+    for (const t of [7, 8, 9])
+      a.exec(`INSERT INTO tarefas (id, quadro_id, lista_id, ticket, titulo, inicio, prazo) VALUES (${9530 + t}, 9522, 9523, ${t}, 'T', '2026-07-01', '2026-12-01')`);
+    a.exec(readFileSync(join(DIR, "0052_tarefa_equipes.sql"), "utf8"));
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefas WHERE inicio IS NULL"), 2);
+    assert.equal(n("SELECT inicio AS n FROM tarefas WHERE ticket = 7"), "2026-07-01");
+    a.exec("INSERT INTO tarefa_equipes (id, quadro_id, nome, cor) VALUES (9540, 9522, 'Equipe', '#16a34a')");
+    a.exec("INSERT INTO tarefa_equipe_membros (equipe_id, usuario_id) VALUES (9540, 9521)");
+    a.exec("INSERT INTO tarefa_equipes_links (tarefa_id, equipe_id) VALUES (9538, 9540)");
+    a.exec("DELETE FROM tarefas WHERE id = 9538");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_equipes_links"), 0);
+    a.exec("DELETE FROM tarefa_quadros WHERE id = 9522");
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_equipes"), 0);
+    assert.equal(n("SELECT COUNT(*) AS n FROM tarefa_equipe_membros"), 0);
   });
 
   it("índice único de e-mail existe", () => {

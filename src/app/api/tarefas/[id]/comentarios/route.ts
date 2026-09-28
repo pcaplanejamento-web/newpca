@@ -23,7 +23,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "tarefa", entidadeId: id, resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)}: comentário` });
   // Os citados recebem "mencionou você"; os demais responsáveis/observadores, "novo comentário".
   await avisarSobreTarefa(a.u, "mencionada", mencoes, r.tarefa, r.quadro, `${nomeExibicao(a.u)} mencionou você`);
-  const acompanham = [...r.tarefa.pessoas, ...r.tarefa.observadores].filter((p) => !mencoes.includes(p));
+  const acompanham = [...new Set([...r.tarefa.envolvidos, ...r.tarefa.observadores])].filter((p) => !mencoes.includes(p));
   await avisarSobreTarefa(a.u, "comentario", acompanham, r.tarefa, r.quadro, `${nomeExibicao(a.u)} comentou numa tarefa`);
   return ok({ id: cid, mencoes });
 }
