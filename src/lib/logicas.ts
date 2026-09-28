@@ -288,15 +288,31 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "protocolo",
     titulo: "Dashboard de governança da Mesa",
     descricao:
-      "O ícone à esquerda de Protocolos · DFDs · Itens abre o Dashboard da Mesa, calculado sobre os MESMOS protocolos e DFDs da Mesa (com os filtros de Responsável/Assunto do topo): KPIs (protocolos, valor, conformidade, com responsável, tempo médio na Mesa) e seis quadros — saúde (o estado agregado da conferência: capa + DFDs + itens, nas cores das importâncias do ADM), situação (as cadastradas pelo ADM, com as cores dele), tempo na Mesa (dias desde a protocolação), entrada semanal (últimas 12 semanas), carga por responsável (tocar numa pessoa filtra a Mesa) e valor por unidade requisitante.",
+      "O ícone à esquerda de Protocolos · DFDs · Itens abre o Dashboard da Mesa, calculado sobre os MESMOS protocolos e DFDs da Mesa (com os filtros de Responsável/Assunto do topo): KPIs da Mesa agora (protocolos, valor, conformidade, com responsável, tempo médio na Mesa), a barra de métricas logo abaixo (ver “Métricas de governança por usuário”) e os quadros sobre o recorte dela — evolução (Tudo = 12 semanas; Ano = meses; Mês = dias; Dia = a semana), saúde (o estado agregado da conferência: capa + DFDs + itens, nas cores das importâncias do ADM), situação (as cadastradas pelo ADM, com as cores dele), tempo na Mesa (dias desde a protocolação), carga por pessoa (por estado ou situação; pelo Responsável, tocar numa pessoa filtra a Mesa) e valor por unidade requisitante.",
     detalhes: [
-      "Nenhuma consulta nova ao banco: usa as listas já carregadas e o MESMO cache da coluna Estado.",
+      "Os KPIs e os quadros usam as listas já carregadas e o MESMO cache da coluna Estado; só o histórico de execução (correções e ações) é pedido ao abrir o Dashboard.",
       "Datas em dias de calendário de Brasília; o KPI de tempo alerta os protocolos há mais de 30 dias na Mesa.",
       "O código do Dashboard só é baixado quando o ícone é aberto (a Mesa não carrega gráficos à toa).",
       "Na Mesa do PCA não há Dashboard (o espaço do PCA tem o dele).",
     ],
     fonte: "painelMesa (mesa-dashboard) + DashboardMesa",
     configuravelEm: { rotulo: "Configurações → Situações / Avaliação", href: "/painel/configuracoes" },
+  },
+  {
+    id: "proto-metricas-mesa",
+    dominio: "protocolo",
+    titulo: "Métricas de governança por usuário (Dashboard da Mesa)",
+    descricao:
+      "Abaixo das KPIs do Dashboard, uma barra escolhe o período (Tudo, Ano, Mês ou Dia — com as setas e “Hoje”), a medida (protocolos, DFDs, itens ou valor), a pessoa (Responsável ou Distribuição = quem protocolou) e filtra por natureza e tipo de DFD. Ela alimenta a planilha de distribuição em três tabelas — por pessoa, por natureza e por tipo de DFD — com Hoje, o mês, o ano e a Mesa lado a lado (o período escolhido em destaque), o total e as correções, e o desempenho de cada pessoa: protocolos, DFDs, itens, valor, conformidade, erros, atenção, tempo na Mesa, correções e ações.",
+    detalhes: [
+      "Só a execução da Mesa: protocolos enviados a um PCA e DFDs sem protocolo ficam de fora; nada de PCA, orçamento, tarefas ou calendário. Os filtros Responsável e Assunto do topo continuam valendo.",
+      "Natureza = a categoria do assunto (Inclusão, Exclusão, Alteração não onerosa ou Outros) + o ano do PCA — “INCLUSÃO 2027”.",
+      "Datas em dias de Brasília: os protocolos pela protocolação; correções e ações pela data em que aconteceram.",
+      "Correção = o REENVIO do protocolo (o processo devolvido que volta corrigido), atribuída à pessoa do protocolo. Ação = a execução que cada pessoa fez nos protocolos da Mesa (edições no banner, em massa e na tabela, vínculos, exclusões e sobrescritas de DFD), pelo histórico.",
+      "Na medida Protocolos, a tabela por tipo conta o protocolo em cada tipo de DFD que ele tem (o total é de protocolos distintos); nas demais medidas, cada reenvio conta o processo de novo.",
+      "Toque em qualquer número para ver a origem dele (a soma da lista = o número).",
+    ],
+    fonte: "mesa-metricas (recorteMetricas) + GET /api/mesa/execucao (mesa-execucao-sql) + BarraMetricas/TabelaPeriodo",
   },
   {
     id: "mesa-itens-consolidados",

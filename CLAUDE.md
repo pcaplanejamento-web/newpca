@@ -625,18 +625,45 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     carregadas no servidor por `carregarMesa` (`carregarEdicoes`) e guardadas no `DfdsView` (trocar de visão remonta a tabela,
     que volta com as edições novas — `EdicoesDaTabela.onMudar`). Sem migração (a `edicoes_tabela` da `0041`).
   - **DASHBOARD DE GOVERNANÇA da Mesa (o ícone à esquerda das visões; só na Mesa principal):** `DashboardMesa` = 5 KPIs
-    (Protocolos na Mesa [+ sparkline das 7 últimas semanas] · Valor na Mesa [Σ DFDs] · **Conformidade** [% regular dos
-    conferidos] · **Com responsável** · **Tempo médio na Mesa** [+ quantos há mais de `DIAS_ALERTA`=30 dias]) + 6 quadros:
-    **Saúde** (medidor empilhado do ESTADO AGREGADO da conferência — o MESMO cache da coluna Estado, nas cores das
-    importâncias do ADM via `estadoProtocoloCor`; "Conferindo…"/"Não conferido" à parte), **Situação** (as do ADM, na ordem e
-    na cor dele; "Sem situação" no fim), **Tempo na Mesa** (faixas 0–7/8–15/16–30/31–60/61–90/90+ dias desde a
-    protocolação, rampa ordinal do accent), **Entrada de protocolos** (por semana — seg. a dom. —, últimas 12), **Carga por
-    responsável** (barras empilhadas por estado, foto + apelido; **tocar numa pessoa aplica o filtro de Responsável** da
-    Mesa, tocar de novo limpa; top 8 + "Outras N pessoas"; "Sem responsável" por último) e **Valor por unidade** (unidade
-    requisitante dos DFDs + participação %; top 7 + "Outras"). Agregação PURA/testada em **`mesa-dashboard.ts`**
-    (`painelMesa`, `agora` injetado; dias de CALENDÁRIO de Brasília via `dataIsoBrasilia`) sobre as listas JÁ carregadas e
-    filtradas (`protocolosF`/`dfdsF` + a gestão otimista) — **nenhuma consulta nova ao banco**; o efeito da conferência
-    agregada roda também com o Dashboard aberto (mesmo cache). Gráficos em HTML por token (`charts/Barras`: `BarrasH`,
+    (a Mesa AGORA: Protocolos na Mesa [+ sparkline das 7 últimas semanas] · Valor na Mesa [Σ DFDs] · **Conformidade** [% regular
+    dos conferidos] · **Com responsável** · **Tempo médio na Mesa** [+ quantos há mais de `DIAS_ALERTA`=30 dias]) + a **BARRA DE
+    MÉTRICAS** logo abaixo delas (`BarraMetricas` — vale para TUDO abaixo; SÓ a execução da Mesa: nada de PCA, orçamento, tarefas
+    ou calendário): **Período** `Tudo | Ano | Mês | Dia` (`NavegadorPeriodo`: ‹ rótulo › + "Hoje"; o padrão Tudo = o Dashboard de
+    sempre) · **Medida** Protocolos | DFDs | Itens | Valor · **Pessoa** Responsável (padrão) | Distribuição (quem protocolou) ·
+    filtros só-ícone **Natureza** (a categoria do assunto — INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, senão OUTROS — + o ano do
+    PCA: "INCLUSÃO 2027") e **Tipo de DFD** (recorta os protocolos com DFD do tipo e soma só esses DFDs) + Limpar + Ajuda (?); a
+    linha do recorte (janela · protocolos · DFDs · itens · valor · correções · ações) e um aviso quando o Responsável do topo não
+    é "Todos" (as métricas seguem os filtros do topo). Quadros novos: as TABELAS POR PERÍODO da distribuição (`TabelaPeriodo` —
+    a planilha: linhas × **Hoje | Mês | Ano | Na Mesa** da data de referência, a coluna do período em destaque com barra de
+    proporção, TOTAL e, à parte, **"Correções (reenvios)"**) por **pessoa**, **natureza** e **tipo de DFD** (na medida
+    Protocolos, um protocolo com tipos diferentes conta em cada um; o TOTAL é de protocolos distintos) e o **DESEMPENHO POR
+    PESSOA** (`DataTable` compacta: protocolos, DFDs, itens, valor, regulares %, com erro, DFDs com erro, em atenção, tempo
+    médio, +30 dias, **correções** — os reenvios dos protocolos dela — e **ações** — a execução que ELA fez). Os quadros da Mesa
+    passam a valer sobre o RECORTE (os protocolados na janela + natureza/tipo; em Tudo sem filtro, os mesmos de antes, com os DFDs
+    sem protocolo): **Evolução** (substitui a "Entrada de protocolos": Tudo = 12 semanas seg.–dom., Ano = meses, Mês = dias,
+    Dia = a semana do dia), **Saúde** (medidor empilhado do ESTADO AGREGADO da conferência — o MESMO cache da coluna Estado,
+    nas cores das importâncias do ADM via `estadoProtocoloCor`; "Conferindo…"/"Não conferido" à parte), **Situação** (as do
+    ADM, na ordem e na cor dele; "Sem situação" no fim), **Tempo na Mesa** (faixas 0–7/8–15/16–30/31–60/61–90/90+ dias desde a
+    protocolação, rampa ordinal do accent), **Carga por pessoa** (a dimensão da barra; alternador `Estado | Situação`; foto +
+    apelido; pelo Responsável, **tocar numa pessoa aplica o filtro de Responsável** da Mesa, tocar de novo limpa — pela
+    Distribuição abre a origem; top 8 + "Outras N pessoas"; "Sem responsável" por último) e **Valor por unidade** (unidade
+    requisitante dos DFDs + participação %; top 7 + "Outras"). Datas: métricas de protocolo pela PROTOCOLAÇÃO (dia de
+    Brasília), correções/ações pela data do EVENTO; **correção = o REENVIO do protocolo** (a natureza segue o assunto); DFD sem
+    protocolo e protocolo enviado a um PCA ficam fora das métricas de distribuição. Toda célula/coluna/linha abre a ORIGEM (Σ =
+    o número tocado; reenvios com quem e quando). Núcleo PURO/testado **`mesa-metricas.ts`** (`recorteMetricas` = a fonte única:
+    base [natureza + tipo], coorte [+ período], o dia de Brasília de cada protocolo; `tabelaMetricas`/`origemDaCelula`,
+    `correcoesPorColuna`/`origemCorrecoes`, `baldesEvolucao`/`evolucaoMetricas`/`origemDoBalde`, `desempenhoPorPessoa`/
+    `protocolosDaPessoa`, `situacoesPorPessoa`, `resumoMetricas`, `navegarRef` preso ao fim do mês) + **`mesa-dashboard.ts`**
+    (`painelMesa`, `agora` injetado; dias de CALENDÁRIO de Brasília via `dataIsoBrasilia`), sobre as listas JÁ carregadas e
+    filtradas (`protocolosF`/`dfdsF` + a gestão otimista + `dfdsComErro`/`dfdsEmAtencao` da conferência agregada) e o
+    **HISTÓRICO DE EXECUÇÃO** — `GET /api/mesa/execucao?ano=` (`execucaoDaMesa`; builder **`mesa-execucao-sql.ts`**, testado pelo
+    driver D1 real): a `auditoria` SÓ dos protocolos da Mesa (o MESMO escopo das listas: fora de um PCA, unidade ativa, PCA do
+    cabeçalho), agregada por protocolo, pessoa, dia (Brasília) e tipo — `reenvio` (`origem='reenvio'`; nas linhas antigas, o
+    "REENVIADO" do resumo) e `acao` (editar/excluir no banner, em massa, na tabela, vínculo, exclusão e as antigas sem origem +
+    a sobrescrita de DFD; a protocolação e as gravações dela não contam); o protocolo das linhas antigas pelo `entidade_id`/DFD
+    atual, como no `historicoProtocolo`. Pedido SÓ com o Dashboard aberto e guardado no `DfdsView` até a lista recarregar;
+    falhar não derruba nada ("—" e "Tentar de novo"). O filtro das métricas também mora no `DfdsView` (sobrevive às trocas de
+    visão); o efeito da conferência agregada roda também com o Dashboard aberto (mesmo cache). Gráficos em HTML por token (`charts/Barras`: `BarrasH`,
     `Colunas`, `BarraSegmentada` — marcas finas, 2px de respiro, texto em tokens de texto, dica no hover/foco/toque). O código
     do Dashboard é carregado SOB DEMANDA (`next/dynamic`, `ssr:false`, esqueleto da mesma grade) — a Mesa não baixa gráficos à
     toa. A conferência agregada roda com Protocolos OU Dashboard abertos (`precisaConfProto` — alternar entre os dois não
@@ -2522,6 +2549,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +
   `PATCH`/`DELETE /api/admin/situacoes/[id]` + `PATCH /api/admin/situacoes/ordem` (`exigirAdmin`) e `PATCH
   /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA do grupo ou `null`).
+- Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, `exigirUsuario`) — o histórico de execução
+  (reenvios e ações) dos protocolos da Mesa em tuplas `[protocolo, pessoa, dia, tipo, n]` + as pessoas (foto + apelido).
 - Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
   `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000}` → os DFDs já
   cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`), `POST /api/dfd` `start-dfd` com
@@ -2571,7 +2600,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   inteiro não cabe — o nome acessível é sempre o texto À VISTA (quem usa comando de voz diz o que lê) — ex.: as visões do
   Catálogo),
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
-  — arquivo leve, fora do chunk dos gráficos) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
+  — arquivo leve, fora do chunk dos gráficos) + **`BarraMetricas`** (a barra de métricas abaixo das KPIs: período, medida,
+  pessoa, natureza e tipo de DFD) com o **`NavegadorPeriodo`** (`Tudo | Ano | Mês | Dia` + ‹ rótulo › + "Hoje") e a
+  **`TabelaPeriodo`** (linhas × janelas — a planilha de distribuição: coluna do período em destaque com barra de proporção,
+  TOTAL e as linhas à parte; cada número é um botão que abre a origem) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
   **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,

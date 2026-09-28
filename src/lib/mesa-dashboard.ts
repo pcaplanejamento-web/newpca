@@ -27,6 +27,12 @@ export type ProtocoloPainel = {
   responsavelId: number | null;
   situacaoId: number | null;
   estado: EstadoPainel;
+  /** Para as MÉTRICAS da barra (`mesa-metricas`): quem protocolou (a Distribuição), o ano do PCA (a natureza) e os
+   * DFDs com erro/atenção da conferência agregada (`null` enquanto confere). */
+  distribuidorId?: number | null;
+  anoPca?: number | null;
+  dfdsErro?: number | null;
+  dfdsAtencao?: number | null;
 };
 /** DFD como o Dashboard o vê: a unidade requisitante (id + sigla + nome — a sigla pode repetir entre órgãos) e os
  * totais. */
@@ -40,6 +46,9 @@ export type DfdPainel = {
   id?: number;
   numero?: string;
   planejamento?: string | null;
+  /** Para as MÉTRICAS da barra: o protocolo do DFD (`null` = avulso) e o tipo (DFD-S/R/O/E). */
+  protocoloId?: number | null;
+  tipo?: string | null;
 };
 
 /** Quantidade + valor (R$) de um recorte. */

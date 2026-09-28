@@ -27,6 +27,7 @@ import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, juntarParaCopiar, num, num
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, PREF_DADOS_COMPLETOS, passaFiltroMesa } from "@/lib/mesa-filtros";
+import { type Atividade, type AtividadeTupla, atividadeDaTupla, type FiltroMetricas, filtroMetricasPadrao } from "@/lib/mesa-metricas";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import {
   chaveUnidade,
@@ -98,7 +99,7 @@ type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | 
 /** Conferência de UMA linha de DFD (vinda de `/api/dfd/conferencia` — a MESMA da análise). */
 type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; validacao: "auto" | "equipe" | null };
 /** Estado AGREGADO de um protocolo (vindo de `/api/protocolo/conferencia`): capa + problemas dos DFDs/itens. */
-type ConfProto = { id: number; estado: EstadoProtocolo; resumo: ResumoEstado | null };
+type ConfProto = { id: number; estado: EstadoProtocolo; resumo: ResumoEstado | null; dfdsComErro?: number; dfdsEmAtencao?: number };
 /** Campos de GESTÃO editados na célula (valem na hora, até a lista recarregar do servidor). */
 type Gestao = { responsavelId?: number | null; situacaoId?: number | null };
 
@@ -372,6 +373,49 @@ export function DfdsView({
       });
     return () => ac.abort();
   }, [vista, itens, pcaDaMesa, anoFiltro]);
+
+  // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
+  // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
+  const [hojeMetricas, setHojeMetricas] = useState(() => dataIsoBrasilia(new Date().toISOString()));
+  const [filtroMetricas, setFiltroMetricas] = useState<FiltroMetricas>(() => filtroMetricasPadrao(dataIsoBrasilia(new Date().toISOString())));
+  useEffect(() => {
+    if (vista === "dashboard") setHojeMetricas(dataIsoBrasilia(new Date().toISOString()));
+  }, [vista]);
+  // HISTÓRICO DE EXECUÇÃO (correções e ações por pessoa) — pedido SÓ com o Dashboard aberto; vale até a lista da Mesa
+  // recarregar (uma gravação muda `protocolos`) ou o "Tentar de novo". Falhar não derruba o Dashboard.
+  const [execucao, setExecucao] = useState<{ atividades: Atividade[] | null; erro: boolean }>({ atividades: null, erro: false });
+  const [pessoasExec, setPessoasExec] = useState<Pessoa[]>([]);
+  const [tentarExec, setTentarExec] = useState(0);
+  const cacheExec = useRef<{ base: ProtocoloResumo[]; ano: number | undefined; tentativa: number } | null>(null);
+  useEffect(() => {
+    if (vista !== "dashboard" || modoPca) return;
+    const c = cacheExec.current;
+    if (c && c.base === protocolos && c.ano === anoFiltro && c.tentativa === tentarExec) return;
+    const marca = { base: protocolos, ano: anoFiltro, tentativa: tentarExec };
+    cacheExec.current = marca;
+    const ac = new AbortController();
+    let concluido = false;
+    setExecucao({ atividades: null, erro: false });
+    void (async () => {
+      try {
+        const r = await fetch(`/api/mesa/execucao${anoFiltro != null ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal });
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; atividades?: AtividadeTupla[]; pessoas?: Pessoa[] };
+        if (!r.ok || !j.ok) throw new Error("histórico indisponível");
+        concluido = true;
+        setExecucao({ atividades: (j.atividades ?? []).map(atividadeDaTupla), erro: false });
+        setPessoasExec(j.pessoas ?? []);
+      } catch {
+        if (ac.signal.aborted) return;
+        concluido = true;
+        setExecucao({ atividades: null, erro: true });
+      }
+    })();
+    return () => {
+      ac.abort();
+      // Saiu no meio (trocou de visão): a próxima abertura busca de novo.
+      if (!concluido && cacheExec.current === marca) cacheExec.current = null;
+    };
+  }, [vista, modoPca, protocolos, anoFiltro, tentarExec]);
   // Itens seguem o filtro de hierarquia pelo DFD de origem (que segue o do protocolo).
   // No PCA os itens seguem os DFDs VISÍVEIS (o escopo Todos/Enviados/Incorporados filtra os DFDs).
   const emPca = !!modoPca;
@@ -826,6 +870,8 @@ export function DfdsView({
     const protocolosDash = protocolosF.map((p): ProtocoloPainel => {
       const resp = responsavelDe(p);
       if (resp) pessoasDash.set(resp.id, resp);
+      const dist = pessoaDe(p.distribuidorId, p.distribuidorNome);
+      if (dist && !pessoasDash.has(dist.id)) pessoasDash.set(dist.id, dist);
       const { conf, pendente, naoConferido } = estadoDoProtocolo(p);
       const estado: EstadoPainel = pendente ? "conferindo" : naoConferido ? "naoConferido" : conf.estado;
       return {
@@ -838,8 +884,14 @@ export function DfdsView({
         responsavelId: resp?.id ?? null,
         situacaoId: situacaoDe(p),
         estado,
+        distribuidorId: p.distribuidorId,
+        anoPca: p.anoPca,
+        dfdsErro: conf.dfdsComErro ?? null,
+        dfdsAtencao: conf.dfdsEmAtencao ?? null,
       };
     });
+    // Quem AGIU (o histórico): o diretório da Mesa primeiro; o do servidor completa quem não está nele.
+    for (const pe of pessoasExec) if (!pessoasDash.has(pe.id)) pessoasDash.set(pe.id, dirPessoas.get(pe.id) ?? pe);
     const dfdsDash = dfdsF.map(
       (d): DfdPainel => ({
         id: d.id,
@@ -850,10 +902,12 @@ export function DfdsView({
         unidadeNome: d.reparticaoNome,
         valor: d.valorTotal,
         itens: d.totalItens,
+        protocoloId: d.protocoloId,
+        tipo: d.tipo,
       }),
     );
     return { protocolos: protocolosDash, dfds: dfdsDash, pessoas: pessoasDash };
-  }, [vista, protocolosF, dfdsF, gestao, dirPessoas, confProtoVersao, ctxConf, regras]);
+  }, [vista, protocolosF, dfdsF, gestao, dirPessoas, pessoasExec, confProtoVersao, ctxConf, regras]);
 
   const travaResp = filtro.responsavel !== "todos" ? "Filtrado pelo seletor de responsável acima da tabela" : undefined;
   const travaAssunto = filtro.assunto != null ? "Filtrado pelo seletor de assunto acima da tabela" : undefined;
@@ -1972,6 +2026,14 @@ export function DfdsView({
               responsavel={filtro.responsavel}
               onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
               onAbrir={setAberto}
+              metricas={{
+                filtro: filtroMetricas,
+                onFiltro: setFiltroMetricas,
+                hoje: hojeMetricas,
+                atividades: execucao.atividades,
+                erro: execucao.erro,
+                onTentar: () => setTentarExec((t) => t + 1),
+              }}
             />
           ) : vista === "protocolos" ? (
             tabelaProtocolos

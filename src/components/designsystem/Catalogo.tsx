@@ -28,6 +28,10 @@ import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
+import { type Atividade, colunasMetricas, diaDoProtocolo, type FiltroMetricas, filtroMetricasPadrao } from "@/lib/mesa-metricas";
+import { BarraMetricas } from "@/components/BarraMetricas";
+import { NavegadorPeriodo } from "@/components/NavegadorPeriodo";
+import { TabelaPeriodo } from "@/components/TabelaPeriodo";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "@/components/DfdView";
@@ -75,7 +79,7 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
-import { brl, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
+import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
@@ -737,30 +741,63 @@ const SITUACOES_DEMO = [
 const SITUACOES_DASH = SITUACOES_DEMO.map((x, i) => ({ ...x, ordem: i + 1 }));
 const PESSOAS_DASH = new Map(PESSOAS_DEMO.map((x) => [x.id, x.pessoa]));
 const ESTADOS_DASH: EstadoPainel[] = ["regular", "regular", "regular", "atencao", "erro", "regular", "atencao", "conferindo"];
-function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[] } {
+const ASSUNTOS_DASH = ["INCLUSÃO NO PCA", "INCLUSÃO NO PCA", "EXCLUSÃO DE DEMANDA", "ALTERAÇÃO NÃO ONEROSA", "COMUNICAÇÃO INTERNA"];
+const TIPOS_DASH = ["DFD-S", "DFD-R", "DFD-O", "DFD-S", "DFD-E", null];
+function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[]; atividades: Atividade[]; hoje: string } {
   const agora = Date.now();
-  const protocolos = Array.from({ length: 36 }, (_, i): ProtocoloPainel => ({
-    id: i + 1,
-    criadoEm: new Date(agora - ((i * 37) % 97) * 864e5).toISOString().replace("T", " ").slice(0, 19),
-    valor: 20_000 + ((i * 7919) % 600_000),
-    responsavelId: i % 9 === 0 ? null : PESSOAS_DEMO[i % PESSOAS_DEMO.length].id,
-    situacaoId: i % 11 === 0 ? null : SITUACOES_DEMO[i % SITUACOES_DEMO.length].id,
-    estado: ESTADOS_DASH[i % ESTADOS_DASH.length],
-  }));
+  const hoje = dataIsoBrasilia(new Date(agora).toISOString());
+  const protocolos = Array.from({ length: 36 }, (_, i): ProtocoloPainel => {
+    const estado = ESTADOS_DASH[i % ESTADOS_DASH.length];
+    return {
+      id: i + 1,
+      numero: `${144_000 + i * 37}/2026`,
+      assunto: ASSUNTOS_DASH[i % ASSUNTOS_DASH.length],
+      anoPca: i % 3 === 0 ? 2026 : 2027,
+      criadoEm: new Date(agora - ((i * 37) % 97) * 864e5).toISOString().replace("T", " ").slice(0, 19),
+      valor: 20_000 + ((i * 7919) % 600_000),
+      responsavelId: i % 9 === 0 ? null : PESSOAS_DEMO[i % PESSOAS_DEMO.length].id,
+      distribuidorId: PESSOAS_DEMO[(i + 1) % PESSOAS_DEMO.length].id,
+      situacaoId: i % 11 === 0 ? null : SITUACOES_DEMO[i % SITUACOES_DEMO.length].id,
+      estado,
+      dfdsErro: estado === "erro" ? 1 + (i % 3) : 0,
+      dfdsAtencao: estado === "atencao" ? 1 : 0,
+    };
+  });
   const siglas = ["FMS", "SME", "SMA", "SMO", "SEMAS", "SMF", "GAB", "PROC", "SMC"];
   const dfds = Array.from({ length: 90 }, (_, i): DfdPainel => {
     const u = (i * i) % siglas.length;
-    return { unidadeId: u + 1, unidade: siglas[u], unidadeNome: null, valor: 5_000 + ((i * 104_729) % 350_000), itens: 1 + (i % 25) };
+    return {
+      unidadeId: u + 1,
+      unidade: siglas[u],
+      unidadeNome: null,
+      valor: 5_000 + ((i * 104_729) % 350_000),
+      itens: 1 + (i % 25),
+      protocoloId: (i % protocolos.length) + 1,
+      tipo: TIPOS_DASH[i % TIPOS_DASH.length],
+    };
   });
-  return { protocolos, dfds };
+  // O histórico de exemplo: uma ação por protocolo (de alguém da equipe) e um reenvio (correção) a cada 7.
+  const atividades = protocolos.flatMap((x, i): Atividade[] => {
+    const dia = diaDoProtocolo(x.criadoEm) ?? hoje;
+    return [
+      { protocoloId: x.id, usuarioId: PESSOAS_DEMO[i % PESSOAS_DEMO.length].id, dia, tipo: "acao", n: 1 + (i % 4) },
+      ...(i % 7 === 0 ? [{ protocoloId: x.id, usuarioId: x.responsavelId, dia, tipo: "reenvio" as const, n: 1 }] : []),
+    ];
+  });
+  return { protocolos, dfds, atividades, hoje };
 }
 
 /** Demo do DASHBOARD de governança da Mesa (tocar numa pessoa filtra — aqui, os próprios dados do exemplo). */
 function DashboardMesaDemo() {
   const [dados, setDados] = useState<ReturnType<typeof dadosDashDemo> | null>(null);
   const [resp, setResp] = useState<"todos" | "sem" | number>("todos");
-  useEffect(() => setDados(dadosDashDemo()), []);
-  if (!dados) return <Skeleton className="h-72 w-full rounded-card" />;
+  const [filtro, setFiltro] = useState<FiltroMetricas | null>(null);
+  useEffect(() => {
+    const d = dadosDashDemo();
+    setDados(d);
+    setFiltro(filtroMetricasPadrao(d.hoje));
+  }, []);
+  if (!dados || !filtro) return <Skeleton className="h-72 w-full rounded-card" />;
   const protocolos = resp === "todos" ? dados.protocolos : dados.protocolos.filter((x) => (resp === "sem" ? x.responsavelId == null : x.responsavelId === resp));
   return (
     <DashboardMesa
@@ -771,7 +808,56 @@ function DashboardMesaDemo() {
       regras={regrasPadrao()}
       responsavel={resp}
       onResponsavel={setResp}
+      metricas={{ filtro, onFiltro: setFiltro, hoje: dados.hoje, atividades: dados.atividades, erro: false, onTentar: () => undefined }}
     />
+  );
+}
+
+/** Demo das peças da BARRA DE MÉTRICAS da Mesa: o navegador de período, a barra e a tabela por período (a planilha). */
+function MetricasMesaDemo() {
+  const [hoje, setHoje] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<FiltroMetricas | null>(null);
+  useEffect(() => {
+    const h = dataIsoBrasilia(new Date().toISOString());
+    setHoje(h);
+    setFiltro(filtroMetricasPadrao(h));
+  }, []);
+  if (!hoje || !filtro) return <Skeleton className="h-40 w-full rounded-card" />;
+  const v = (dia: number, mes: number, ano: number, tudo: number) => ({ dia, mes, ano, tudo });
+  return (
+    <div className="space-y-5">
+      <div className="space-y-1.5">
+        <p className="text-[12px] font-medium text-muted">NavegadorPeriodo — Tudo | Ano | Mês | Dia, ‹ › e “Hoje”</p>
+        <NavegadorPeriodo periodo={filtro.periodo} data={filtro.ref} hoje={hoje} onChange={({ periodo, data }) => setFiltro({ ...filtro, periodo, ref: data })} />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-[12px] font-medium text-muted">BarraMetricas — período, medida, pessoa, natureza e tipo de DFD (+ Limpar e Ajuda)</p>
+        <BarraMetricas
+          filtro={filtro}
+          onFiltro={setFiltro}
+          hoje={hoje}
+          naturezas={["INCLUSÃO 2027", "INCLUSÃO 2026", "EXCLUSÃO 2026"]}
+          resumo={<span>Setembro de 2026 · 60 protocolos · 412 DFDs · 3.210 itens · R$ 12,3 mi · 1 correção · 45 ações</span>}
+        />
+      </div>
+      <div className="max-w-xl space-y-1.5">
+        <p className="text-[12px] font-medium text-muted">TabelaPeriodo — a coluna do período em destaque, total e a linha à parte</p>
+        <TabelaPeriodo
+          ariaLabel="Distribuição por pessoa (exemplo)"
+          rotuloLinhas="Responsável"
+          colunas={colunasMetricas(filtro.ref, hoje)}
+          destaque={filtro.periodo}
+          linhas={[
+            { chave: "naty", rotulo: "Naty", titulo: "Naty", valores: v(0, 29, 77, 40) },
+            { chave: "cris", rotulo: "Cris", titulo: "Cris", valores: v(0, 31, 65, 38) },
+          ]}
+          total={{ chave: "total", rotulo: "Total", titulo: "Total", valores: v(0, 60, 142, 78) }}
+          extras={[{ chave: "correcoes", rotulo: "Correções (reenvios)", titulo: "Correções", valores: v(0, 1, 4, 2) }]}
+          formatar={(n) => num(n)}
+          onEscolher={(l, c) => toast(`Origem: ${l.titulo} · ${c.titulo}`)}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -2598,8 +2684,12 @@ export function Catalogo() {
         <GraficosGovernancaDemo />
       </Secao>
 
-      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens)">
+      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens: KPIs, a barra de métricas, a distribuição por pessoa/natureza/tipo, o desempenho por pessoa e os quadros sobre o recorte)">
         <DashboardMesaDemo />
+      </Secao>
+
+      <Secao titulo="Métricas da Mesa — NavegadorPeriodo · BarraMetricas · TabelaPeriodo (a planilha de distribuição: Hoje | Mês | Ano | Na Mesa)">
+        <MetricasMesaDemo />
       </Secao>
 
       <Secao titulo="DashboardMesaEsqueleto (enquanto o Dashboard carrega — a MESMA grade)">

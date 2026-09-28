@@ -21,8 +21,11 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   **histórico conectado** (quem, quando, por qual canal e protocolo, o que mudou — no protocolo, no DFD e no item);
   filtros de hierarquia (Responsável e Assunto, só com o ícone — a foto da pessoa escolhida —, na mesma linha das visões;
   a Mesa abre com o responsável escolhido no Perfil: só os meus, por padrão) valem para as três visões e para o
-  **Dashboard de governança** (ícone à esquerda das visões: saúde, situação, tempo na Mesa, entrada semanal, carga por
-  responsável e valor por unidade — tocar numa pessoa filtra a Mesa). "Importar protocolo"/"Importar DFD" ficam no
+  **Dashboard de governança** (ícone à esquerda das visões: saúde, situação, tempo na Mesa, evolução, carga por
+  pessoa e valor por unidade — tocar numa pessoa filtra a Mesa), com a **barra de métricas** abaixo das KPIs (período
+  Tudo/Ano/Mês/Dia, medida protocolos/DFDs/itens/valor, pessoa Responsável/Distribuição, natureza e tipo de DFD): a
+  distribuição por pessoa, natureza e tipo de DFD em Hoje | Mês | Ano | Na Mesa (como a planilha, com as correções =
+  reenvios) e o **desempenho por pessoa** (conformidade, tempo, correções e ações) — só a execução da Mesa. "Importar protocolo"/"Importar DFD" ficam no
   rodapé da tabela. O texto dos DFDs entra em **parágrafos** (sem as quebras da linha do PDF; Órgão/Setor em 2 linhas
   inteiros) e o botão **Atualizar** dos banners (o ícone gira) recarrega e **revisa** o gravado com os mesmos tratamentos
   da importação, para conferir e salvar. Um botão na barra liga os **dados completos** (texto inteiro, listas sem "+N" e

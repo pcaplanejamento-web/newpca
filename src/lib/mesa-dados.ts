@@ -1,9 +1,12 @@
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
+import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
+import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
+import type { AtividadeTupla } from "./mesa-metricas";
 import { listarOrgaos } from "./orgaos";
 import type { AcaoDfdPca } from "./pca-core";
 import { anoMarcadosDoPca, dfdsEmOutroPca, vinculosDoPca } from "./pca-espaco";
@@ -156,4 +159,16 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     edicoes: m.edicoes,
     dadosCompletos: m.dadosCompletos,
   };
+}
+
+/**
+ * HISTÓRICO DE EXECUÇÃO da Mesa principal (as métricas de governança do Dashboard): os REENVIOS (correções) e as AÇÕES
+ * dos protocolos DA MESA — o MESMO escopo das listas (unidade ativa, PCA do cabeçalho, fora de um PCA) —, por protocolo,
+ * pessoa, dia (Brasília) e tipo, em tuplas compactas.
+ */
+export async function execucaoDaMesa(reparticaoId: number | null, anoPca: number | null): Promise<AtividadeTupla[]> {
+  const linhas = await consultaExecucao(getDb(), { reparticaoId, anoPca });
+  return linhas.flatMap((l): AtividadeTupla[] =>
+    l.tipo === "reenvio" || l.tipo === "acao" ? [[l.protocoloId, l.usuarioId ?? null, l.dia, l.tipo, Number(l.n) || 0]] : [],
+  );
 }

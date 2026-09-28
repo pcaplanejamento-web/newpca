@@ -160,6 +160,19 @@ página; as preferências do Perfil não gravam pela metade; o seletor só apare
 controles do cabeçalho com 44px no celular e no tablet (o menu não encolhe em telas de 360px) e o nome acessível diz o valor
 escolhido; o cadastro de PCAs é lido uma vez por página.
 
+### Mesa: métricas de governança por usuário (a planilha de distribuição no Dashboard) — entregue
+✅ **Barra de métricas** logo abaixo das KPIs do Dashboard da Mesa — vale para todos os quadros abaixo: **período**
+(Tudo · Ano · Mês · Dia, com ‹ › e "Hoje"), **medida** (protocolos, DFDs, itens ou valor), **pessoa** (Responsável ou
+Distribuição) e os filtros de **natureza** (categoria do assunto + ano do PCA: "INCLUSÃO 2027") e **tipo de DFD**. ✅ A
+**planilha de distribuição** em três tabelas — por pessoa, por natureza e por tipo de DFD — com **Hoje | Mês | Ano | Na
+Mesa** lado a lado (o período escolhido em destaque), o total e a linha **Correções (reenvios)**. ✅ **Desempenho por
+pessoa**: protocolos, DFDs, itens, valor, conformidade (regulares %), com erro, DFDs com erro, em atenção, tempo médio na
+Mesa, +30 dias, **correções** (os reenvios dos protocolos dela) e **ações** (a execução que ela fez — pelo histórico). ✅ Os
+quadros da Mesa (evolução — antes "entrada semanal" —, saúde, situação, tempo, carga por pessoa com Estado | Situação e
+valor por unidade) passam a valer sobre o recorte. Só a execução da Mesa (nada de PCA, orçamento, tarefas ou calendário);
+toda célula abre a origem dos dados (a soma = o número); o histórico vem de `GET /api/mesa/execucao`, pedido só com o
+Dashboard aberto.
+
 ### Mesa: Dashboard de governança, barra única e importação na tabela + espaçamento do sistema inteiro — entregue
 ✅ **Dashboard de governança** (ícone à esquerda de Protocolos · DFDs · Itens): 5 KPIs (protocolos na Mesa com a
 tendência semanal, valor, **conformidade**, **com responsável**, **tempo médio na Mesa**) e 6 quadros — **saúde** (o estado
