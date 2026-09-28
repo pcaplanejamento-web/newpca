@@ -32,3 +32,382 @@ export function sugerirMembros(
   for (const [id, ms] of porPessoa) if (ms.length === 1) saida[id] = ms[0];
   return saida;
 }
+
+// ─── CORES (a paleta das etiquetas daqui É a do Trello: 10 cores × 3 tons) ─────────────────────────────────
+
+/** Os nomes das cores do Trello, na MESMA ordem das colunas da `PALETA_ETIQUETAS`. */
+export const CORES_TRELLO = ["green", "yellow", "orange", "red", "purple", "blue", "sky", "lime", "pink", "black"] as const;
+const TONS_TRELLO = ["_light", "", "_dark"] as const;
+
+const rgb = (hex: string): [number, number, number] | null => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = Number.parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+/** O índice do hex mais próximo numa lista (distância RGB). */
+function maisProximo(hex: string, lista: readonly string[]): number {
+  const a = rgb(hex);
+  if (!a) return -1;
+  let melhor = -1;
+  let dist = Number.POSITIVE_INFINITY;
+  lista.forEach((h, i) => {
+    const b = rgb(h);
+    if (!b) return;
+    const d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    if (d < dist) {
+      dist = d;
+      melhor = i;
+    }
+  });
+  return melhor;
+}
+
+/** A cor de ETIQUETA do Trello ("green_light", "green", "green_dark"…) para um hex — exata na paleta, senão a mais próxima. */
+export function corTrelloDeHex(hex: string | null | undefined, paleta: readonly string[]): string | null {
+  if (!hex) return null;
+  const i = maisProximo(hex, paleta);
+  return i < 0 ? null : `${CORES_TRELLO[i % 10]}${TONS_TRELLO[Math.floor(i / 10)] ?? ""}`;
+}
+/** O hex da paleta para uma cor de etiqueta do Trello (sem cor = `null`). */
+export function hexDeCorTrello(cor: string | null | undefined, paleta: readonly string[]): string | null {
+  if (!cor) return null;
+  const [base, tom] = cor.split("_");
+  const col = CORES_TRELLO.indexOf(base as (typeof CORES_TRELLO)[number]);
+  if (col < 0) return null;
+  const linha = tom === "light" ? 0 : tom === "dark" ? 2 : 1;
+  return paleta[linha * 10 + col] ?? null;
+}
+/** A cor da CAPA do cartão no Trello (só os nomes base) — a coluna da paleta mais próxima. */
+export function corCapaTrello(hex: string | null | undefined, paleta: readonly string[]): string | null {
+  if (!hex) return null;
+  const i = maisProximo(hex, paleta);
+  return i < 0 ? null : CORES_TRELLO[i % 10];
+}
+
+/** Os FUNDOS de cor do board do Trello (a cor aproximada de cada um). */
+export const FUNDOS_TRELLO: Record<string, string> = {
+  blue: "#0079bf",
+  orange: "#d29034",
+  green: "#519839",
+  red: "#b04632",
+  purple: "#89609e",
+  pink: "#cd5a91",
+  lime: "#4bbf6b",
+  sky: "#00aecc",
+  grey: "#838c91",
+};
+/** O fundo do board mais próximo da cor do quadro (a 1ª cor do degradê, se houver). */
+export function fundoTrello(cor: string, gradiente?: { cores: string[] } | null): string {
+  const base = gradiente?.cores?.[0] ?? cor;
+  const nomes = Object.keys(FUNDOS_TRELLO);
+  const i = maisProximo(base, Object.values(FUNDOS_TRELLO));
+  return i < 0 ? "blue" : nomes[i];
+}
+
+// ─── DATAS (Brasília ↔ UTC) ────────────────────────────────────────────────────────────────────────────────
+
+/** Meio-dia de Brasília: o "dia inteiro" daqui (o Trello sempre guarda data + hora). */
+export const HORA_DIA_INTEIRO = "12:00";
+
+/** O `due`/`start` do Trello (ISO UTC) para a data "AAAA-MM-DD" + hora "HH:MM" de Brasília (sem hora = 12:00). */
+export function dataParaTrello(data: string | null | undefined, hora?: string | null): string | null {
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
+  const h = hora && /^\d{2}:\d{2}$/.test(hora) ? hora : HORA_DIA_INTEIRO;
+  return new Date(`${data}T${h}:00-03:00`).toISOString();
+}
+/** A data + hora de Brasília de um ISO do Trello (inválido = `null`). */
+export function dataDoTrello(iso: string | null | undefined): { data: string; hora: string } | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t - 3 * 3600_000).toISOString();
+  return { data: d.slice(0, 10), hora: d.slice(11, 16) };
+}
+
+// ─── DESCRIÇÃO + NOTAS ─────────────────────────────────────────────────────────────────────────────────────
+
+/** O separador FIXO entre a descrição e as NOTAS da tarefa na descrição do cartão. */
+export const SEPARADOR_NOTAS = "\n\n---\n**Notas (PCA)**\n";
+const ENTRE_NOTAS = "\n\n·\n\n";
+
+/** A descrição do cartão: a da tarefa + as NOTAS numa seção própria, depois do separador. */
+export function descricaoComNotas(descricao: string | null | undefined, notas: string[]): string {
+  const d = (descricao ?? "").trimEnd();
+  const ns = notas.map((n) => n.trim()).filter(Boolean);
+  return ns.length ? `${d}${SEPARADOR_NOTAS}\n${ns.join(ENTRE_NOTAS)}` : d;
+}
+/** A volta: a descrição da tarefa e as notas (sem o separador = tudo é descrição). */
+export function separarNotas(desc: string | null | undefined): { descricao: string; notas: string[] } {
+  const t = desc ?? "";
+  const i = t.indexOf(SEPARADOR_NOTAS);
+  if (i < 0) return { descricao: t.trimEnd(), notas: [] };
+  return {
+    descricao: t.slice(0, i).trimEnd(),
+    notas: t
+      .slice(i + SEPARADOR_NOTAS.length)
+      .split(ENTRE_NOTAS)
+      .map((n) => n.trim())
+      .filter(Boolean),
+  };
+}
+
+// ─── CARTÃO: os valores comparáveis (no "espaço" do Trello) ────────────────────────────────────────────────
+
+/** Prioridade ↔ as opções do campo "Prioridade" do board. */
+export const PRIORIDADE_TRELLO = { baixa: "Baixa", media: "Média", alta: "Alta", urgente: "Urgente" } as const;
+export const CAMPO_PRIORIDADE = "Prioridade";
+export const CAMPO_ESTIMATIVA = "Estimativa (h)";
+export const CAMPO_TICKET = "Ticket";
+
+/**
+ * Os VALORES de um cartão que a sincronização compara — o mesmo formato para a tarefa daqui (convertida) e para o cartão do
+ * Trello (lido), e para o RETRATO. Ids = os do TRELLO (lista, etiquetas, membros, campos). Listas em ordem (comparação
+ * estável).
+ */
+export type ValoresCartao = {
+  name: string;
+  desc: string;
+  idList: string;
+  start: string | null;
+  due: string | null;
+  dueComplete: boolean;
+  dueReminder: number | null;
+  closed: boolean;
+  isTemplate: boolean;
+  cover: string | null;
+  idLabels: string[];
+  idMembers: string[];
+  /** Os campos personalizados: id do campo NO TRELLO → o valor como texto (`null` = vazio). */
+  campos: Record<string, string | null>;
+};
+export type CampoCartao = keyof ValoresCartao;
+export const CAMPOS_CARTAO: CampoCartao[] = ["name", "desc", "idList", "start", "due", "dueComplete", "dueReminder", "closed", "isTemplate", "cover", "idLabels", "idMembers", "campos"];
+
+/** Normaliza (listas ordenadas, campos sem vazios) — a base da comparação. */
+export function normalizarValores(v: ValoresCartao): ValoresCartao {
+  const campos: Record<string, string | null> = {};
+  for (const k of Object.keys(v.campos).sort()) if (v.campos[k] != null && v.campos[k] !== "") campos[k] = v.campos[k];
+  return { ...v, desc: v.desc.trimEnd(), idLabels: [...v.idLabels].sort(), idMembers: [...v.idMembers].sort(), campos };
+}
+const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Os campos em que `a` difere de `b` (os dois normalizados). */
+export function diferencas(a: ValoresCartao, b: ValoresCartao | null): CampoCartao[] {
+  if (!b) return [...CAMPOS_CARTAO];
+  const na = normalizarValores(a);
+  const nb = normalizarValores(b);
+  return CAMPOS_CARTAO.filter((k) => !igual(na[k], nb[k]));
+}
+
+export type Descartado = { campo: CampoCartao; lado: "pca" | "trello"; valor: unknown };
+/**
+ * A RECONCILIAÇÃO campo a campo contra o RETRATO: o que mudou só aqui vai para o Trello; só lá, vem para cá; nos DOIS (com
+ * valores diferentes), VENCE O MAIS RECENTE (`localEm` × `trelloEm`, ISO) e o outro vira `descartados` (para o histórico).
+ * Sem retrato (1ª vez), vence o mais recente inteiro. `retrato` novo = o estado combinado.
+ */
+export function reconciliar(
+  retrato: ValoresCartao | null,
+  local: ValoresCartao,
+  trello: ValoresCartao,
+  localEm: string | null,
+  trelloEm: string | null,
+): { paraTrello: CampoCartao[]; paraLocal: CampoCartao[]; retrato: ValoresCartao; descartados: Descartado[] } {
+  const l = normalizarValores(local);
+  const t = normalizarValores(trello);
+  const base = retrato ? normalizarValores(retrato) : null;
+  const localVence = (Date.parse(localEm ?? "") || 0) >= (Date.parse(trelloEm ?? "") || 0);
+  const paraTrello: CampoCartao[] = [];
+  const paraLocal: CampoCartao[] = [];
+  const descartados: Descartado[] = [];
+  const final = { ...t } as Record<CampoCartao, unknown>;
+  for (const k of CAMPOS_CARTAO) {
+    if (igual(l[k], t[k])) continue;
+    const mudouAqui = !base || !igual(l[k], base[k]);
+    const mudouLa = !base || !igual(t[k], base[k]);
+    const aqui = mudouAqui && (!mudouLa || localVence);
+    if (aqui) {
+      paraTrello.push(k);
+      final[k] = l[k];
+      if (mudouLa && base) descartados.push({ campo: k, lado: "trello", valor: t[k] });
+    } else {
+      paraLocal.push(k);
+      if (mudouAqui && base) descartados.push({ campo: k, lado: "pca", valor: l[k] });
+    }
+  }
+  return { paraTrello, paraLocal, retrato: final as ValoresCartao, descartados };
+}
+
+// ─── MAPA do quadro (ids daqui → ids do Trello) e a conversão tarefa → cartão ──────────────────────────────
+
+/** Tipos dos campos personalizados do Trello (os MESMOS 5 daqui). */
+export const TIPO_CAMPO_TRELLO = { texto: "text", numero: "number", data: "date", lista: "list", checkbox: "checkbox" } as const;
+export type TipoCampoLocal = keyof typeof TIPO_CAMPO_TRELLO;
+
+/** Os campos personalizados criados no board (gravados em `trello_quadros.campos`). */
+export type CamposBoard = {
+  prioridade?: string;
+  estimativa?: string;
+  ticket?: string;
+  /** Campo daqui → campo do Trello. */
+  porCampo: Record<number, string>;
+  /** Campo do Trello → opção (id) → texto — as listas (inclui a Prioridade). */
+  opcoes: Record<string, Record<string, string>>;
+  /** Os membros do Trello já postos no board. */
+  membrosBoard?: string[];
+};
+export const CAMPOS_BOARD_VAZIO: CamposBoard = { porCampo: {}, opcoes: {} };
+export function lerCamposBoard(v: unknown): CamposBoard {
+  try {
+    const o = (typeof v === "string" ? JSON.parse(v) : v) as Partial<CamposBoard> | null;
+    if (!o || typeof o !== "object") return { ...CAMPOS_BOARD_VAZIO };
+    const s = (x: unknown) => (typeof x === "string" && x ? x : undefined);
+    return {
+      prioridade: s(o.prioridade),
+      estimativa: s(o.estimativa),
+      ticket: s(o.ticket),
+      porCampo: o.porCampo && typeof o.porCampo === "object" ? { ...o.porCampo } : {},
+      opcoes: o.opcoes && typeof o.opcoes === "object" ? { ...o.opcoes } : {},
+      membrosBoard: Array.isArray(o.membrosBoard) ? o.membrosBoard.filter((x): x is string => typeof x === "string") : [],
+    };
+  } catch {
+    return { ...CAMPOS_BOARD_VAZIO };
+  }
+}
+
+/** O mapa de ids do quadro ligado. */
+export type MapaQuadro = {
+  listas: Map<number, string>;
+  etiquetas: Map<number, string>;
+  membros: Map<number, string>;
+  campos: CamposBoard;
+};
+
+/** A tarefa como a conversão precisa (o resumo do quadro + a descrição e as notas dos blocos). */
+export type TarefaParaCartao = {
+  titulo: string;
+  descricao: string | null;
+  notas: string[];
+  listaId: number;
+  ticket: number;
+  prioridade: keyof typeof PRIORIDADE_TRELLO;
+  inicio: string | null;
+  prazo: string | null;
+  prazoHora: string | null;
+  lembreteMin: number | null;
+  concluidaEm: string | null;
+  arquivada: boolean;
+  template: boolean;
+  capa?: string | null;
+  etiquetas: number[];
+  pessoas: number[];
+  estimativaH: number | null;
+  campos?: Record<number, string>;
+};
+
+const numeroTexto = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? null : String(Number(n.toFixed(2))));
+
+/** A TAREFA daqui nos valores do cartão (o "espaço" do Trello). Ids sem ligação ficam de fora. */
+export function valoresDaTarefa(t: TarefaParaCartao, m: MapaQuadro, paleta: readonly string[]): ValoresCartao {
+  const campos: Record<string, string | null> = {};
+  if (m.campos.prioridade) campos[m.campos.prioridade] = PRIORIDADE_TRELLO[t.prioridade] ?? null;
+  if (m.campos.estimativa) campos[m.campos.estimativa] = numeroTexto(t.estimativaH);
+  if (m.campos.ticket) campos[m.campos.ticket] = `#${t.ticket}`;
+  for (const [local, valor] of Object.entries(t.campos ?? {})) {
+    const cf = m.campos.porCampo[Number(local)];
+    if (cf) campos[cf] = valor || null;
+  }
+  const ids = <K>(xs: K[], mapa: Map<K, string>) => xs.flatMap((x) => (mapa.has(x) ? [mapa.get(x) as string] : []));
+  return normalizarValores({
+    name: t.titulo,
+    desc: descricaoComNotas(t.descricao, t.notas),
+    idList: m.listas.get(t.listaId) ?? "",
+    start: dataParaTrello(t.inicio),
+    due: dataParaTrello(t.prazo, t.prazoHora),
+    dueComplete: !!t.concluidaEm,
+    dueReminder: t.prazo ? t.lembreteMin : null,
+    closed: t.arquivada,
+    isTemplate: t.template,
+    cover: corCapaTrello(t.capa, paleta),
+    idLabels: ids(t.etiquetas, m.etiquetas),
+    idMembers: ids(t.pessoas, m.membros),
+    campos,
+  });
+}
+
+/** O cartão do Trello como a API devolve (os campos que a sincronização lê). */
+export type CartaoApi = {
+  id: string;
+  name: string;
+  desc: string;
+  idList: string;
+  start: string | null;
+  due: string | null;
+  dueComplete: boolean;
+  dueReminder: number | null;
+  closed: boolean;
+  isTemplate: boolean;
+  cover?: { color?: string | null } | null;
+  idLabels: string[];
+  idMembers: string[];
+  dateLastActivity?: string;
+  customFieldItems?: { idCustomField: string; idValue?: string | null; value?: { text?: string; number?: string; date?: string; checked?: string } | null }[];
+};
+
+/** O CARTÃO do Trello nos valores comparáveis (os campos pelo tipo; lista = o texto da opção). */
+export function valoresDoCartao(c: CartaoApi, m: MapaQuadro): ValoresCartao {
+  const campos: Record<string, string | null> = {};
+  for (const it of c.customFieldItems ?? []) {
+    const v = it.value ?? {};
+    const texto = it.idValue
+      ? (m.campos.opcoes[it.idCustomField]?.[it.idValue] ?? null)
+      : v.text != null
+        ? v.text
+        : v.number != null
+          ? numeroTexto(Number(v.number))
+          : v.date != null
+            ? (dataDoTrello(v.date)?.data ?? null)
+            : v.checked != null
+              ? v.checked === "true"
+                ? "1"
+                : null
+              : null;
+    campos[it.idCustomField] = texto;
+  }
+  return normalizarValores({
+    name: c.name ?? "",
+    desc: c.desc ?? "",
+    idList: c.idList,
+    start: c.start ? dataParaTrello(dataDoTrello(c.start)?.data) : null,
+    due: c.due ? new Date(c.due).toISOString() : null,
+    dueComplete: !!c.dueComplete,
+    dueReminder: c.due && c.dueReminder != null && c.dueReminder >= 0 ? c.dueReminder : null,
+    closed: !!c.closed,
+    isTemplate: !!c.isTemplate,
+    cover: c.cover?.color ?? null,
+    idLabels: c.idLabels ?? [],
+    idMembers: c.idMembers ?? [],
+    campos,
+  });
+}
+
+/** O retrato gravado de um cartão: os valores + o link do cartão + os anexos criados. */
+export type RetratoCartao = { v: ValoresCartao; url: string; anexos: string[] };
+export function lerRetratoCartao(s: string | null | undefined): RetratoCartao | null {
+  try {
+    const o = s ? (JSON.parse(s) as RetratoCartao) : null;
+    return o && typeof o === "object" && o.v ? o : null;
+  } catch {
+    return null;
+  }
+}
+
+/** O corpo do VALOR de um campo personalizado no formato da API de cada tipo (vazio = limpar). */
+export function corpoValorCampo(tipo: string, valor: string | null, opcoes: Record<string, string> | undefined) {
+  if (valor == null || valor === "") return tipo === "list" ? { idValue: "" } : { value: "" };
+  if (tipo === "list") return { idValue: Object.entries(opcoes ?? {}).find(([, t]) => t === valor)?.[0] ?? "" };
+  if (tipo === "number") return { value: { number: valor } };
+  if (tipo === "date") return { value: { date: dataParaTrello(valor) } };
+  if (tipo === "checkbox") return { value: { checked: valor === "1" ? "true" : "false" } };
+  return { value: { text: valor } };
+}

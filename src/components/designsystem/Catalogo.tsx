@@ -78,6 +78,7 @@ import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton"
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
+import { seloTrello } from "@/components/SincronizacaoTrello";
 import {
   IconAlert,
   IconArrowRight,
@@ -3514,6 +3515,25 @@ export function Catalogo() {
 
       <Secao titulo="IntegracaoTrello (Integrações → Trello: chave, token e segredo write-only, testar conexão; com a conta confirmada, MembrosTrello liga as pessoas aos membros)">
         <IntegracaoTrelloDemo />
+      </Secao>
+
+      <Secao titulo="Estado da ligação com o Trello (seloTrello — a seção Trello da Configuração do quadro, SincronizacaoTrello, é um contêiner com dados)">
+        <div className="flex flex-wrap gap-2">
+          {[
+            null,
+            { estado: "vinculando", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 0, erros: 0 },
+            { estado: "ativo", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 3, erros: 0 },
+            { estado: "ativo", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 0, erros: 1 },
+            { estado: "ativo", boardUrl: null, sincronizadoEm: null, ultimoErro: null, pendentes: 0, erros: 0 },
+          ].map((l, i) => {
+            const [tom, rotulo] = seloTrello(l);
+            return (
+              <Badge key={i} tone={tom} dot>
+                {rotulo}
+              </Badge>
+            );
+          })}
+        </div>
       </Secao>
     </>
   );

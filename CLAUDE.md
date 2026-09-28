@@ -2707,6 +2707,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `trello_integracao`). Origem de auditoria `trello`. Tela: cartão **Trello** em Integrações = **`IntegracaoTrello`**
   (controlado; o Salvar é o da tela) + **`MembrosTrello`** (pessoas ↔ membros das áreas de trabalho da conta, escolher
   grava na hora, "Aceitar N sugestões", ligar pelo usuário do Trello); ícone **`IconTrello`**.
+  **FASE 2 (entregue) — criar o board ADAPTADO:** núcleo `trello-sync-core.ts` (testado): cores (a `PALETA_ETIQUETAS` É a
+  do Trello — `corTrelloDeHex`/`hexDeCorTrello` exatos, cor livre = a mais próxima; `corCapaTrello`; `fundoTrello` = o fundo
+  de cor do board mais próximo), datas (`dataParaTrello`/`dataDoTrello`: Brasília ↔ UTC; "dia inteiro" = 12:00 BRT —
+  `HORA_DIA_INTEIRO`), notas na descrição (`descricaoComNotas`/`separarNotas`, separador fixo "Notas (PCA)"), os
+  **`ValoresCartao`** comparáveis (ids do Trello; `valoresDaTarefa`/`valoresDoCartao` — o MESMO formato dos dois lados e do
+  RETRATO), `diferencas`, **`reconciliar`** (só de um lado → vai ao outro; nos dois → vence o mais recente e o outro vira
+  `descartados`), `CamposBoard`/`lerCamposBoard` (Prioridade = campo LISTA Baixa/Média/Alta/Urgente, Estimativa (h) =
+  número, Ticket = texto, os campos do quadro no MESMO tipo — `TIPO_CAMPO_TRELLO`), `corpoValorCampo`, `lerRetratoCartao`.
+  **`trello-vincular.ts`**: `criarBoard` (board PRIVADO da conta institucional, sem listas/etiquetas padrão) e
+  **`avancarCriacao`** — ETAPAS RETOMÁVEIS de no máximo `ORCAMENTO`=25 chamadas: listas (arquivadas nascem fechadas) →
+  etiquetas → campos personalizados → membros ligados do quadro (privado = só o dono; `campos.membrosBoard`) → cartões →
+  detalhes (valores, capa, campos, anexos dos blocos Link e dos vínculos — tarefa = o link do outro cartão, os demais = o
+  link do sistema) → checklists e itens (feito, prazo, responsável) → comentários ("**Nome (PCA):** texto"); cada item
+  criado vira um `trello_vinculos` (o que tem vínculo não é refeito — parar no meio nunca duplica) e o cartão guarda o
+  RETRATO; sem nada faltando, `estado` = `ativo`. `desligarQuadro`, `estadoTrello`. Rota **`GET`/`POST
+  /api/tarefas/quadros/[id]/trello`** (`{acao: criar|etapa|desligar}` — editor; quadro privado só o dono; auditoria
+  origem `trello`). Tela: Configuração → seção **"Trello"** = **`SincronizacaoTrello`** (contêiner: estado — `seloTrello`
+  —, "Criar no Trello" com o `Progress` por tipo, "Continuar", "Abrir no Trello", "Desligar" com confirmação, aviso do
+  quadro privado e a lista do que NÃO sincroniza — `NAO_SINCRONIZA`).
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

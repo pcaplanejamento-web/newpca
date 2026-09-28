@@ -17,6 +17,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
 import { IconCalendar, IconCheck, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { ImportarTrello } from "./ImportarTrello";
+import { SincronizacaoTrello } from "./SincronizacaoTrello";
 import { FundoQuadro } from "./FundoQuadro";
 import { ExcluirLista } from "./MenuLista";
 import { Modal } from "./Modal";
@@ -421,6 +422,10 @@ export function ConfiguracaoQuadro({
           ocupado={ocupado != null}
           gravar={gravar}
         />
+      </Secao>
+
+      <Secao id="secao-trello" titulo="Trello">
+        <SincronizacaoTrello quadroId={quadro.id} privado={quadro.privado} />
       </Secao>
 
       <Secao titulo="Modelos">
