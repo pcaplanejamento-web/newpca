@@ -30,13 +30,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (d.orcamentoVisaoId != null && !(await getVisaoOrcamento(d.orcamentoVisaoId))) return erro("Visão do orçamento não encontrada.", 422);
   await atualizarPcaEspaco(id, d);
   const semCapa = (o: Record<string, unknown>) => ({ ...o, capa: o.capa ? "(imagem)" : null });
-  const dd = diffCampos<Record<string, unknown>>(semCapa(antes), semCapa({ ...antes, ...d }), ["nome", "ano", "fonte", "status", "capa", "orcamentoVisaoId"], {
+  const dd = diffCampos<Record<string, unknown>>(semCapa(antes), semCapa({ ...antes, ...d }), ["nome", "ano", "fonte", "status", "capa", "orcamentoVisaoId", "mesaMarcados"], {
     nome: "nome",
     ano: "ano",
     fonte: "fonte",
     status: "status",
     capa: "capa",
     orcamentoVisaoId: "visão do orçamento",
+    mesaMarcados: "Mesa do PCA com os marcados na Mesa do sistema",
   });
   await registrarAuditoria({
     usuario: a.u,

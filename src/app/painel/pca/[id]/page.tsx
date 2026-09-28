@@ -58,7 +58,7 @@ export default async function PcaEspacoPage({
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (
       <PcaConfiguracao
-        pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId }}
+        pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId, mesaMarcados: pca.mesaMarcados }}
         podeEditar={podeEditar}
         temDados={temDados}
         visoes={visoes.map((v) => ({ id: v.id, nome: v.nome, resumo: resumoVisao(v.filtros) }))}
@@ -154,6 +154,7 @@ async function abaMesa(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsuarioAt
       pca={{ id: pca.id, nome: pca.nome, ano: pca.ano }}
       emOutroPcaPorProtocolo={emOutroPorProto}
       acaoPorProtocolo={acaoPorProtocolo}
+      marcados={m.anoMarcados != null}
       podeEditar={m.podeEditar}
       dfds={m.dfds}
       protocolos={m.protocolos}

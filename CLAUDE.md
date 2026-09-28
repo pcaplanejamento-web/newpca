@@ -1604,6 +1604,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
   protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
   poder ser excluído.
+- **VISÃO DOS MARCADOS (migração `0063`, aditiva — `pcas.mesa_marcados`, default desligado):** em **PCA → Configuração**
+  (`PcaConfiguracao`, `Switch` "Mostrar os marcados da Mesa do sistema"; `PATCH /api/pca/[id]` `{mesaMarcados}` +
+  auditoria), a Mesa do PCA lista também os protocolos MARCADOS com o ano dele (`ano_pca`, a MESMA régua do filtro de PCA do
+  cabeçalho — `filtroAnoPcaProtocolo`/`filtroAnoPcaDfd`) que ainda estão na Mesa do SISTEMA (`pca_id IS NULL`; os de OUTRO
+  PCA não entram). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
+  `listarProtocolosDoPca(pcaId, anoMarcados)` e `listarDfds`/`listarItensDfds(…, anoMarcados)` (`escopoMesa(pcaId, ano)` =
+  `pca_id = P OR (pca_id IS NULL AND ano)`), e o `GET /api/dfd/itens?pca=` lê a mesma configuração. Na `MesaPca`
+  (`marcados`): a coluna **Local** (`localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
+  da coluna, do escopo e das ações; dica com `motivosNaoEnviar`), o escopo **Todos | Na Mesa do sistema | Enviados |
+  Incorporados** e, na seleção, **"Enviar a este PCA (n)"** (o `EnviarAoPca` com **`pcaFixo`** — sem o seletor de PCA);
+  Incorporar/Devolver seguem só para os enviados. Só VISÃO: os da Mesa do sistema seguem na Mesa principal, sem trava
+  (`estaTravado` = só o incorporado), e o Dashboard/Orçamento/numeração contam só o incorporado. `ProtocoloResumo` ganhou
+  `pcaEnviadoEm`.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
   espaço do PCA) ficava relativo a ele — a barra saía deslocada e estourava a tela; o lugar no fluxo segue medido onde está
   (remede no `animationend`).

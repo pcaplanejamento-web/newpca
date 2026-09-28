@@ -974,6 +974,13 @@ planejamento**. Das assinaturas fica só o **Responsável pela solicitação** (
 passou por protocolos incorporados**, **sem o autor**. Os dados são **higienizados no servidor**: sem CPF/e-CPF/CNPJ, e-mail,
 telefone e matrícula (inclusive mascarados no texto livre das seções, da capa e do histórico).
 
+### Mesa do PCA com os marcados da Mesa do sistema (visão completa do PCA) — entregue
+Em **PCA → Configuração**, o `Switch` **"Mostrar os marcados da Mesa do sistema"** (por PCA, migração `0063`) faz a Mesa
+do PCA listar também os protocolos marcados com o ano dele que ainda estão na Mesa do sistema — e os DFDs e itens deles.
+A coluna **Local** diz onde cada um está (Mesa do sistema · Mesa do PCA · Enviado · Incorporado), o escopo ganha **"Na Mesa
+do sistema (N)"** e a seleção ganha **"Enviar a este PCA"** (as mesmas travas do envio). É só uma VISÃO: eles seguem na Mesa
+principal, editáveis, e nada conta no PCA até ser incorporado. Desligado (padrão), a Mesa do PCA fica como antes.
+
 ### Origem dos dados: linhas do Orçamento do PCA e todos os gráficos dos dashboards — entregue
 Clicar numa **linha do comparativo do Orçamento do PCA** abre o banner **"Origem dos dados"**, com os **lançamentos do CUBO**
 daquela unidade (Órgão · Unidade no CUBO · Elemento · Código · Dotação — orçamento/ano, visão e Vínculos informados) e as

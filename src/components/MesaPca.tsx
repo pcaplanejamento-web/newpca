@@ -3,21 +3,30 @@
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
-import { ACOES_DFD_PCA, type AcaoDfdPca, acaoSugerida, motivoNaoDevolver, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
+import {
+  ACOES_DFD_PCA,
+  type AcaoDfdPca,
+  acaoSugerida,
+  localDoProtocolo,
+  motivoNaoDevolver,
+  motivosNaoEnviar,
+  motivosNaoIncorporar,
+  ROTULO_ACAO,
+} from "@/lib/pca-core";
 import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloResumo } from "@/lib/protocolo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
-import { acaoProtocolosPca, type ResultadoAcaoPca } from "./EnviarAoPca";
+import { acaoProtocolosPca, EnviarAoPca, type ResultadoAcaoPca } from "./EnviarAoPca";
 import { selectCls } from "./formStyles";
 import { IconCheck, IconTrash, IconUndo } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 
-type Escopo = "todos" | "enviados" | "incorporados";
+type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
 type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca"> & {
   pca: { id: number; nome: string; ano: number | null };
@@ -25,9 +34,13 @@ type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca"> & {
   emOutroPcaPorProtocolo: Record<number, number>;
   /** Por protocolo incorporado: a ação com que os DFDs dele entraram no PCA. */
   acaoPorProtocolo: Record<number, AcaoDfdPca>;
+  /** A visão dos MARCADOS está ligada (Configuração do PCA): a lista traz também os da Mesa do sistema com o ano do PCA. */
+  marcados?: boolean;
 };
 
-const incorporado = (p: ProtocoloResumo) => p.pcaIncorporadoEm != null;
+const incorporado = (p: ProtocoloResumo) => localDoProtocolo(p) === "incorporado";
+const ROTULO_ESCOPO: Record<Exclude<Escopo, "todos">, string> = { sistema: "Na Mesa do sistema", enviados: "Enviados", incorporados: "Incorporados" };
+const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: "incorporados" } as const;
 
 /**
  * Aba MESA do PCA (fonte protocolo) — INDEPENDENTE da Mesa principal: só os protocolos ENVIADOS a este PCA
@@ -36,8 +49,11 @@ const incorporado = (p: ProtocoloResumo) => p.pcaIncorporadoEm != null;
  * **Incorporar** (PERMANENTE: os DFDs e os itens passam a compor o PCA com a ação por protocolo, cada item ganha
  * o SEQUENCIAL único do PCA e protocolo/DFDs/itens ficam TRAVADOS) e **Devolver à Mesa** (só o não
  * incorporado). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA** (o nº fica inativo).
+ * Com a visão dos **MARCADOS** (Configuração do PCA), a lista traz também os protocolos marcados com o ano do PCA ainda na
+ * Mesa do SISTEMA — só uma visão: seguem na Mesa principal, editáveis, e a seleção os envia ("Enviar a este PCA"). A coluna
+ * **Local** diz onde cada um está (`localDoProtocolo`).
  */
-export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protocolos, dfds, ...mesa }: Props) {
+export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcados = false, protocolos, dfds, ...mesa }: Props) {
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
   const [incorporar, setIncorporar] = useState<ProtocoloResumo[] | null>(null);
@@ -53,24 +69,41 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
   const motivosInc = (p: ProtocoloResumo) =>
     motivosNaoIncorporar({ enviadoAEste: p.pcaId === pca.id, incorporado: incorporado(p), totalDfds: totalDfds(p), dfdsEmOutroPca: emOutroPcaPorProtocolo[p.id] ?? 0 });
 
-  const nIncorporados = useMemo(() => protocolos.filter(incorporado).length, [protocolos]);
+  const motivosEnv = (p: ProtocoloResumo) =>
+    motivosNaoEnviar({ anoProtocolo: p.anoPca, anoPca: pca.ano, totalDfds: totalDfds(p), fonteProtocolo: true, jaEmPca: null });
+  const contagem = useMemo(() => {
+    const c = { sistema: 0, enviados: 0, incorporados: 0 };
+    for (const p of protocolos) c[ESCOPO_DO_LOCAL[localDoProtocolo(p)]]++;
+    return c;
+  }, [protocolos]);
+  // A visão dos marcados desligada (ou recém-desligada) nunca deixa o escopo preso em "Na Mesa do sistema".
+  const escopoEf: Escopo = escopo === "sistema" && !marcados ? "todos" : escopo;
   const protos = useMemo(
-    () => (escopo === "todos" ? protocolos : protocolos.filter((p) => incorporado(p) === (escopo === "incorporados"))),
-    [protocolos, escopo],
+    () => (escopoEf === "todos" ? protocolos : protocolos.filter((p) => ESCOPO_DO_LOCAL[localDoProtocolo(p)] === escopoEf)),
+    [protocolos, escopoEf],
   );
   const dfdsVis = useMemo(() => {
-    if (escopo === "todos") return dfds;
+    if (escopoEf === "todos") return dfds;
     const ids = new Set(protos.map((p) => p.id));
     return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId));
-  }, [dfds, protos, escopo]);
+  }, [dfds, protos, escopoEf]);
 
   const colunaPca: Column<ProtocoloResumo> = {
     key: "pca",
-    header: "PCA",
+    header: marcados ? "Local" : "PCA",
     nowrap: true,
-    value: (r) => (incorporado(r) ? "Incorporado" : "Enviado"),
+    value: (r) => ({ sistema: "Mesa do sistema", enviado: "Enviado", incorporado: "Incorporado" })[localDoProtocolo(r)],
     render: (r) => {
-      if (incorporado(r)) {
+      const local = localDoProtocolo(r);
+      if (local === "sistema") {
+        const m = motivosEnv(r);
+        return (
+          <span title={`Na Mesa do sistema (marcado com ${pca.ano ?? "o ano"}) — ${m.length ? m.join(" · ") : "pronto para enviar a este PCA"}`}>
+            <Badge tone="slate">Mesa do sistema</Badge>
+          </span>
+        );
+      }
+      if (local === "incorporado") {
         const a = acaoPorProtocolo[r.id];
         return (
           <span title="Protocolo, DFDs e itens travados enquanto incorporado">
@@ -84,7 +117,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
       return (
         <span title={m.length ? m.join("\n") : "Pronto para incorporar"}>
           <Badge tone={m.length ? "slate" : "amber"} dot>
-            Enviado
+            {marcados ? "Mesa do PCA · Enviado" : "Enviado"}
           </Badge>
         </span>
       );
@@ -193,13 +226,14 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
           pcaId: pca.id,
           ferramenta: (
             <Segmented<Escopo>
-              value={escopo}
+              value={escopoEf}
               onChange={setEscopo}
               ariaLabel="Protocolos da Mesa do PCA"
               options={[
                 { value: "todos", label: `Todos (${protocolos.length})` },
-                { value: "enviados", label: `Enviados (${protocolos.length - nIncorporados})` },
-                { value: "incorporados", label: `Incorporados (${nIncorporados})` },
+                ...(marcados ? [{ value: "sistema" as const, label: `${ROTULO_ESCOPO.sistema} (${contagem.sistema})` }] : []),
+                { value: "enviados", label: `${ROTULO_ESCOPO.enviados} (${contagem.enviados})` },
+                { value: "incorporados", label: `${ROTULO_ESCOPO.incorporados} (${contagem.incorporados})` },
               ]}
             />
           ),
@@ -210,17 +244,24 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, protoco
             )}`,
           acoesProtocolos: mesa.podeEditar
             ? (sel, limpar) => {
-                const n = sel.filter((p) => !incorporado(p)).length;
-                return n === 0 ? (
-                  <span className="text-xs text-muted">Incorporados não voltam — a incorporação é permanente.</span>
-                ) : (
+                const noSistema = sel.filter((p) => localDoProtocolo(p) === "sistema");
+                const n = sel.filter((p) => localDoProtocolo(p) === "enviado").length;
+                const pcaFixo = mesa.pcas?.find((x) => x.id === pca.id);
+                if (n === 0 && noSistema.length === 0)
+                  return <span className="text-xs text-muted">Incorporados não voltam — a incorporação é permanente.</span>;
+                return (
                   <div className="flex flex-wrap gap-2">
-                    <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
-                      Incorporar ({n})
-                    </Button>
-                    <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
-                      Devolver à Mesa ({n})
-                    </Button>
+                    {noSistema.length > 0 && pcaFixo && <EnviarAoPca selecionados={noSistema} pcas={[pcaFixo]} pcaFixo={pcaFixo} onConcluido={limpar} />}
+                    {n > 0 && (
+                      <>
+                        <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
+                          Incorporar ({n})
+                        </Button>
+                        <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
+                          Devolver à Mesa ({n})
+                        </Button>
+                      </>
+                    )}
                   </div>
                 );
               }

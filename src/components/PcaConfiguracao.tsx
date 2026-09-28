@@ -21,6 +21,8 @@ export type ConfigPca = {
   status: StatusPca;
   capa: string | null;
   orcamentoVisaoId: number | null;
+  /** A Mesa do PCA mostra também os protocolos marcados com o ano dele ainda na Mesa do sistema (visão). */
+  mesaMarcados: boolean;
 };
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -193,6 +195,31 @@ export function PcaConfiguracao({
             label={pca.status === "publicado" ? "Publicado" : "Preview"}
           />
         </section>
+
+        {pca.fonte === "protocolo" && (
+          <section className={`${CARTAO} flex flex-wrap items-center justify-between gap-3`}>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-bold text-text">Mostrar os marcados da Mesa do sistema</h2>
+              <p className="text-sm text-muted">
+                {pca.ano == null
+                  ? "Defina o ano do PCA para usar esta visão."
+                  : `A Mesa do PCA mostra também os protocolos marcados com ${pca.ano} que ainda estão na Mesa do sistema — com a coluna Local, editáveis e prontos para "Enviar a este PCA". Só uma visão: nada é movido e nada conta no PCA até ser incorporado.`}
+              </p>
+            </div>
+            <Switch
+              checked={pca.mesaMarcados}
+              disabled={ro || salvando != null || pca.ano == null}
+              onChange={(v) =>
+                salvar(
+                  { mesaMarcados: v },
+                  "marcados",
+                  v ? "A Mesa do PCA passa a mostrar os marcados da Mesa do sistema." : "A Mesa do PCA volta a mostrar só os enviados a ela.",
+                )
+              }
+              label={pca.mesaMarcados ? "Ligado" : "Desligado"}
+            />
+          </section>
+        )}
 
         {pca.fonte === "protocolo" && (
           <section className={CARTAO}>

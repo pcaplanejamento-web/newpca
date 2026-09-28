@@ -108,6 +108,14 @@ export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: s
  */
 export const CAMPOS_LIVRES_TRAVADO = ["responsavelId", "situacaoId"] as const;
 
+/** ONDE o protocolo está, visto da Mesa de um PCA: na Mesa do SISTEMA (marcado com o ano, ainda não enviado), ENVIADO à
+ * Mesa do PCA ou INCORPORADO a ele — a fonte única da coluna "Local", do escopo e das ações da Mesa do PCA. */
+export type LocalProtocolo = "sistema" | "enviado" | "incorporado";
+export function localDoProtocolo(p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined }): LocalProtocolo {
+  if (p.pcaId == null) return "sistema";
+  return p.pcaIncorporadoEm ? "incorporado" : "enviado";
+}
+
 /** O protocolo está TRAVADO? (incorporado a um PCA que existe — a fonte única da trava, servidor e tela). */
 export function estaTravado(p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined }): boolean {
   return p.pcaId != null && !!p.pcaIncorporadoEm;

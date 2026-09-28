@@ -5,6 +5,7 @@ import { carregarEdicoes } from "./edicoes-tabela";
 import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
 import { FILTRO_MESA_TODOS, filtroInicialMesa } from "./mesa-filtros";
 import { listarOrgaos } from "./orgaos";
+import { anoMarcadosDoPca } from "./pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "./pca-filtro";
 import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
@@ -65,9 +66,11 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   const pcaFiltro = pcaId ? null : await getPcaFiltro(await pcasDoFiltro(ctx.pcas));
   const ano = pcaFiltro?.ano ?? null;
+  // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
+  const anoMarcados = pcaId ? await anoMarcadosDoPca(pcaId) : null;
   const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes] = await Promise.all([
-    pcaId ? listarDfds(undefined, pcaId) : listarDfds(rep?.id, undefined, ano),
-    pcaId ? listarProtocolosDoPca(pcaId) : listarProtocolos(rep?.id, ano),
+    pcaId ? listarDfds(undefined, pcaId, null, anoMarcados) : listarDfds(rep?.id, undefined, ano),
+    pcaId ? listarProtocolosDoPca(pcaId, anoMarcados) : listarProtocolos(rep?.id, ano),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
     getGrupoAtivoId(u).then(listarPessoasDoGrupo),
@@ -102,6 +105,8 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     filtroInicial: pcaId ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
     pcaFiltro,
+    /** Mesa do PCA: o ano dos MARCADOS ainda na Mesa do sistema que ela também mostra (`null` = visão desligada). */
+    anoMarcados,
     edicoes: { prefixo: prefixoEdicoesMesa(pcaId), ...edicoes },
   };
 }

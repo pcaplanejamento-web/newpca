@@ -61,6 +61,8 @@ export type PcaEspaco = {
   capa: string | null;
   publicadoEm: string | null;
   orcamentoVisaoId: number | null;
+  /** A Mesa do PCA mostra também os protocolos MARCADOS com o ano dele que ainda estão na Mesa do sistema (visão). */
+  mesaMarcados: boolean;
 };
 
 export type PcaCard = PcaEspaco & {
@@ -82,6 +84,7 @@ const COLS_PCA = {
   capaVersao: sql<string | null>`CASE WHEN ${pcas.capa} IS NULL OR ${pcas.capa} = '' THEN NULL ELSE COALESCE(${pcas.atualizadoEm}, '') || '-' || LENGTH(${pcas.capa}) END`,
   publicadoEm: pcas.publicadoEm,
   orcamentoVisaoId: pcas.orcamentoVisaoId,
+  mesaMarcados: pcas.mesaMarcados,
 };
 
 type RowPca = { [K in keyof typeof COLS_PCA]: unknown };
@@ -96,7 +99,14 @@ function paraEspaco(r: RowPca): PcaEspaco {
     capa: r.capaVersao ? `/api/pca/${Number(r.id)}/capa?v=${encodeURIComponent(String(r.capaVersao))}` : null,
     publicadoEm: (r.publicadoEm as string | null) ?? null,
     orcamentoVisaoId: r.orcamentoVisaoId == null ? null : Number(r.orcamentoVisaoId),
+    mesaMarcados: !!r.mesaMarcados,
   };
+}
+
+/** O ANO dos marcados que a Mesa do PCA também mostra (a visão ligada na Configuração e o PCA com ano), ou `null`. */
+export async function anoMarcadosDoPca(id: number): Promise<number | null> {
+  const [r] = await getDb().select({ ano: pcas.ano, mesaMarcados: pcas.mesaMarcados, fonte: pcas.fonte }).from(pcas).where(eq(pcas.id, id)).limit(1);
+  return r?.mesaMarcados && r.fonte === "protocolo" && r.ano != null ? r.ano : null;
 }
 
 /** A data-URL da capa (a rota `/api/pca/[id]/capa` a serve como imagem). */
@@ -242,11 +252,12 @@ export type CamposPcaEspaco = Partial<{
   status: StatusPca;
   capa: string | null;
   orcamentoVisaoId: number | null;
+  mesaMarcados: boolean;
 }>;
 
 export async function atualizarPcaEspaco(id: number, c: CamposPcaEspaco): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
-  for (const k of ["nome", "ano", "fonte", "capa", "orcamentoVisaoId"] as const) if (c[k] !== undefined) set[k] = c[k];
+  for (const k of ["nome", "ano", "fonte", "capa", "orcamentoVisaoId", "mesaMarcados"] as const) if (c[k] !== undefined) set[k] = c[k];
   if (c.status !== undefined) {
     set.status = c.status;
     set.publicadoEm = c.status === "publicado" ? sql`(CURRENT_TIMESTAMP)` : null;

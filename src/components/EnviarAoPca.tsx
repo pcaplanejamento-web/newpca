@@ -32,18 +32,21 @@ export async function acaoProtocolosPca(pcaId: number, corpo: Record<string, unk
  * "ENVIAR AO PCA" — a ação da barra de seleção de PROTOCOLOS da Mesa principal: escolhe o PCA (só os de fonte
  * protocolo), mostra por protocolo se pode ir (as MESMAS travas do servidor: ano do PCA, ter DFD, não estar em
  * outro PCA — a situação NÃO interfere) e envia os elegíveis. Enviados SAEM da Mesa principal e vão para a Mesa daquele PCA.
+ * `pcaFixo` = o destino já decidido (a Mesa do PCA, com os marcados da Mesa do sistema): sem o seletor de PCA.
  */
 export function EnviarAoPca({
   selecionados,
   pcas,
+  pcaFixo,
   onConcluido,
 }: {
   selecionados: ProtocoloResumo[];
   pcas: PcaResumo[];
+  pcaFixo?: PcaResumo;
   onConcluido: () => void;
 }) {
   const router = useRouter();
-  const destinos = useMemo(() => pcas.filter((p) => p.fonte === "protocolo"), [pcas]);
+  const destinos = useMemo(() => (pcaFixo ? [pcaFixo] : pcas.filter((p) => p.fonte === "protocolo")), [pcas, pcaFixo]);
   const [aberto, setAberto] = useState(false);
   const [pcaId, setPcaId] = useState<number | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -88,12 +91,12 @@ export function EnviarAoPca({
   return (
     <>
       <Button variant="secondary" icon={<IconBox className="h-4 w-4" />} onClick={abrir} disabled={destinos.length === 0} title={destinos.length === 0 ? "Nenhum PCA de fonte Protocolos cadastrado" : undefined}>
-        Enviar ao PCA
+        {pcaFixo ? `Enviar a este PCA (${num(selecionados.length)})` : "Enviar ao PCA"}
       </Button>
       <Modal
         open={aberto}
         onClose={() => setAberto(false)}
-        titulo="Enviar ao PCA"
+        titulo={pcaFixo ? `Enviar ao ${pcaFixo.nome}` : "Enviar ao PCA"}
         size="lg"
         bloqueado={enviando}
         rodape={
@@ -109,18 +112,22 @@ export function EnviarAoPca({
       >
         <div className="space-y-[var(--gap-block)]">
           <div>
-            <label className={labelCls} htmlFor="enviar-pca">
-              PCA de destino
-            </label>
-            <select id="enviar-pca" className={selectCls} value={pcaId ?? ""} onChange={(e) => setPcaId(e.target.value ? Number(e.target.value) : null)}>
-              {destinos.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nome}
-                  {d.ano ? ` (${d.ano})` : ""}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-xs text-muted">
+            {!pcaFixo && (
+              <>
+                <label className={labelCls} htmlFor="enviar-pca">
+                  PCA de destino
+                </label>
+                <select id="enviar-pca" className={selectCls} value={pcaId ?? ""} onChange={(e) => setPcaId(e.target.value ? Number(e.target.value) : null)}>
+                  {destinos.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nome}
+                      {d.ano ? ` (${d.ano})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <p className={`${pcaFixo ? "" : "mt-1.5 "}text-xs text-muted`}>
               Os enviados saem da Mesa principal e vão para a Mesa do PCA, onde são incorporados (permanente) ou devolvidos.
             </p>
           </div>

@@ -4,6 +4,7 @@ import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
 import { getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
 import { ok } from "@/lib/http";
 import { acessivelNaLista } from "@/lib/mesa-dados";
+import { anoMarcadosDoPca } from "@/lib/pca-espaco";
 import { listarPadronizacao } from "@/lib/padronizacao";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // abrir a visão. Mesa principal: escopada pela unidade ativa (Geral ⇒ todos) e pelo PCA do CABEÇALHO — `?ano=AAAA`, o
 // ano com que a PÁGINA foi carregada (os itens casam com os protocolos/DFDs dela, mesmo que o PCA troque noutra aba;
 // ausente = todos os PCAs) —, sem os DFDs de protocolos enviados a um PCA. `?pca=ID` = a Mesa daquele PCA: as unidades
-// ACESSÍVEIS ao usuário (não só a ativa).
+// ACESSÍVEIS ao usuário (não só a ativa) — com a visão dos MARCADOS do PCA, também os do ano dele na Mesa do sistema.
 // Cada item vem com a CONFORMIDADE com o catálogo (veredito compacto — a coluna "Catálogo"), numa consulta só, e a
 // resposta traz o cadastro da PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações): as colunas "Classificação" e
 // "Unid. cadastrada" — carregado só com a visão Itens aberta.
@@ -25,7 +26,8 @@ export async function GET(req: Request) {
   if (Number.isInteger(pca) && pca > 0) {
     const { lista } = await getReparticaoContexto(g.u);
     const acessivel = acessivelNaLista(lista);
-    itens = (await listarItensDfds(undefined, pca)).filter((it) => acessivel(it.reparticaoId));
+    // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
+    itens = (await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca))).filter((it) => acessivel(it.reparticaoId));
   } else {
     const ano = Number(params.get("ano"));
     const rep = await getReparticaoFiltro(g.u);

@@ -27,6 +27,7 @@ export const editarPcaEspacoSchema = z
     status: z.enum(["preview", "publicado"]).optional(),
     capa: capaSchema.nullable().optional(),
     orcamentoVisaoId: z.number().int().positive().nullable().optional(),
+    mesaMarcados: z.boolean().optional(),
   })
   .refine((o) => Object.values(o).some((v) => v !== undefined), "Nada para alterar.");
 

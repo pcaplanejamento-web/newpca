@@ -356,6 +356,8 @@ describe("pca-espaco-validation", () => {
     assert.equal(editarPcaEspacoSchema.safeParse({}).success, false);
     assert.equal(editarPcaEspacoSchema.safeParse({ status: "publicado" }).success, true);
     assert.equal(editarPcaEspacoSchema.safeParse({ capa: null }).success, true);
+    assert.equal(editarPcaEspacoSchema.safeParse({ mesaMarcados: true }).success, true);
+    assert.equal(editarPcaEspacoSchema.safeParse({ mesaMarcados: "sim" }).success, false);
     assert.equal(capaSchema.safeParse("data:image/webp;base64,AAAA").success, true);
     assert.equal(capaSchema.safeParse("javascript:alert(1)").success, false);
     assert.equal(capaSchema.safeParse("data:image/svg+xml;base64,AAAA").success, false);

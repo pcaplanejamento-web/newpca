@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { dfdPassagens, dfdProtocolos, dfds, pcas, reparticoes, usuarios } from "@/db/schema";
 import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
@@ -57,6 +57,8 @@ export type ProtocoloResumo = {
   pcaId: number | null;
   pcaNome: string | null;
   pcaIncorporadoEm: string | null;
+  /** Quando foi enviado à Mesa do PCA (`null` = na Mesa do sistema). */
+  pcaEnviadoEm: string | null;
 };
 
 /**
@@ -109,8 +111,13 @@ export async function listarProtocolos(reparticaoId?: number, anoPca?: number | 
 }
 
 /** Protocolos da MESA DO PCA (os enviados a ele), com os mesmos totais ao vivo. */
-export async function listarProtocolosDoPca(pcaId: number): Promise<ProtocoloResumo[]> {
-  return consultaProtocolos(eq(dfdProtocolos.pcaId, pcaId));
+export async function listarProtocolosDoPca(pcaId: number, anoMarcados?: number | null): Promise<ProtocoloResumo[]> {
+  // `anoMarcados` (visão ligada na Configuração do PCA) = também os MARCADOS com o ano ainda na Mesa do sistema.
+  return consultaProtocolos(
+    anoMarcados != null
+      ? or(eq(dfdProtocolos.pcaId, pcaId), and(isNull(dfdProtocolos.pcaId), filtroAnoPcaProtocolo(anoMarcados)))
+      : eq(dfdProtocolos.pcaId, pcaId),
+  );
 }
 
 /** Protocolos pelos ids (edição em massa — ≤ 20 por requisição), com os mesmos totais ao vivo. */
@@ -132,6 +139,7 @@ const colunasGestao = {
   pcaId: dfdProtocolos.pcaId,
   pcaNome: pcas.nome,
   pcaIncorporadoEm: dfdProtocolos.pcaIncorporadoEm,
+  pcaEnviadoEm: dfdProtocolos.pcaEnviadoEm,
 };
 
 function consultaProtocolos(onde: SQL | undefined): Promise<ProtocoloResumo[]> {

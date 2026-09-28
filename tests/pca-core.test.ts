@@ -9,6 +9,7 @@ import {
   edicaoPermitidaTravado,
   estaTravado,
   gravacaoParcial,
+  localDoProtocolo,
   mensagemTravaPca,
   motivoNaoDevolver,
   motivoNaoExcluirDfd,
@@ -141,5 +142,15 @@ describe("pca-core — previsão e dashboard", () => {
     assert.equal(d.top[0].valor, 1200);
     assert.deepEqual(d.porUnidadeMedida.map((f) => f.label).sort(), ["CX", "UN"]);
     assert.equal(agregarDashboard([]).resumo.ticket, 0);
+  });
+});
+
+describe("localDoProtocolo (coluna Local da Mesa do PCA)", () => {
+  it("Mesa do sistema, enviado e incorporado", () => {
+    assert.equal(localDoProtocolo({ pcaId: null, pcaIncorporadoEm: null }), "sistema");
+    assert.equal(localDoProtocolo({ pcaId: 3, pcaIncorporadoEm: null }), "enviado");
+    assert.equal(localDoProtocolo({ pcaId: 3, pcaIncorporadoEm: "2026-09-01" }), "incorporado");
+    // O mesmo critério da trava: só o incorporado a um PCA fica travado.
+    assert.equal(estaTravado({ pcaId: null, pcaIncorporadoEm: null }), false);
   });
 });
