@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
@@ -22,10 +22,11 @@ import { ChipsEscolha } from "./ChipsEscolha";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField, TextField } from "./Field";
-import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconMais, IconPencil, IconTrash } from "./icons";
+import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconMais, IconNenhum, IconPencil, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { GradePastas } from "./PastasQuadros";
 import { QuadroCard } from "./QuadroCard";
+import { segurar } from "./segurar";
 import { toast } from "./Toast";
 import { useSetLocal } from "./useSetLocal";
 
@@ -42,6 +43,7 @@ export function GradeQuadros({
   aba,
   onAbrir,
   extra,
+  dicaArrasto = "Para organizar, arraste em “Seus quadros”",
 }: {
   quadros: QuadroCardDados[];
   favoritos: number[];
@@ -52,23 +54,133 @@ export function GradeQuadros({
   aba?: string;
   onAbrir?: () => void;
   extra?: ReactNode;
+  /** O aviso quando alguém tenta ARRASTAR um card daqui (esta grade não se reordena). */
+  dicaArrasto?: string;
 }) {
+  const { negado, iniciar, foiArrasto } = useArrastoNegado();
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
       {quadros.map((q) => (
-        <QuadroCard
+        <div
           key={q.id}
-          quadro={q}
-          href={`/painel/tarefas/${q.id}${aba ? `?aba=${aba}` : ""}`}
-          atual={q.id === atual}
-          favorito={favoritos.includes(q.id)}
-          onFavorito={onFavorito && (() => onFavorito(q.id))}
-          onAbrir={onAbrir}
-        />
+          className={`relative [-webkit-touch-callout:none] ${negado === q.id ? "animate-negar-arrasto" : ""}`}
+          onPointerDown={(e) => iniciar(e, q.id)}
+          onDragStart={(e) => e.preventDefault()}
+          onClickCapture={(e) => {
+            if (foiArrasto()) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
+          <QuadroCard
+            quadro={q}
+            href={`/painel/tarefas/${q.id}${aba ? `?aba=${aba}` : ""}`}
+            atual={q.id === atual}
+            favorito={favoritos.includes(q.id)}
+            onFavorito={onFavorito && (() => onFavorito(q.id))}
+            onAbrir={onAbrir}
+          />
+          {negado === q.id && (
+            <span role="status" className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-card bg-[var(--scrim)] p-3 animate-fade-in-up">
+              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-center text-[12.5px] font-semibold text-text shadow-soft">
+                <IconNenhum className="h-4 w-4 shrink-0" style={{ color: "var(--danger)" }} />
+                {dicaArrasto}
+              </span>
+            </span>
+          )}
+        </div>
       ))}
       {extra}
     </div>
   );
+}
+
+/** Quanto tempo o aviso de arrasto negado fica à vista. */
+const NEGADO_MS = 1600;
+
+/**
+ * O ARRASTO NEGADO de uma grade que não se reordena (Favoritos, Recentes, a busca): a tentativa — o mouse/caneta que anda
+ * 6px segurando, ou o dedo que SEGURA ~400 ms parado (deslizar antes rola a tela) — não arrasta nada: o card SACODE
+ * (`animate-negar-arrasto`), o cursor vira "não permitido" enquanto segura, o toque vibra e aparece o aviso por cima do
+ * card. O arrasto NATIVO do link (a "imagem" do navegador) é bloqueado; o clique que vem depois é engolido.
+ */
+function useArrastoNegado() {
+  const [negado, setNegado] = useState<number | null>(null);
+  const arrastou = useRef(false);
+  const encerrar = useRef<(() => void) | null>(null);
+  const tempo = useRef(0);
+  useEffect(
+    () => () => {
+      encerrar.current?.();
+      window.clearTimeout(tempo.current);
+    },
+    [],
+  );
+  const iniciar = (e: ReactPointerEvent<HTMLElement>, id: number) => {
+    if (!e.isPrimary || e.button > 0) return;
+    encerrar.current?.();
+    arrastou.current = false;
+    const toque = e.pointerType === "touch";
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const ponteiro = e.pointerId;
+    let espera = 0;
+    let soltarCursor: (() => void) | null = null;
+    const negar = () => {
+      arrastou.current = true;
+      if (toque) navigator.vibrate?.([25, 40, 25]);
+      else soltarCursor = segurar("not-allowed");
+      window.getSelection()?.removeAllRanges();
+      // Uma tentativa nova no mesmo card sacode de novo (a classe sai e volta).
+      setNegado(null);
+      requestAnimationFrame(() => setNegado(id));
+      window.clearTimeout(tempo.current);
+      tempo.current = window.setTimeout(() => setNegado(null), NEGADO_MS);
+      if (toque) limpar();
+      else {
+        window.removeEventListener("pointermove", mover);
+      }
+    };
+    const mover = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
+      const d = Math.hypot(ev.clientX - x0, ev.clientY - y0);
+      if (toque) {
+        if (d > 8) limpar();
+      } else if (d >= 6) negar();
+    };
+    const semMenu = (ev: Event) => ev.preventDefault();
+    const limpar = () => {
+      window.clearTimeout(espera);
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", fim);
+      window.removeEventListener("pointercancel", fim);
+      window.removeEventListener("contextmenu", semMenu);
+      soltarCursor?.();
+      soltarCursor = null;
+      encerrar.current = null;
+    };
+    const fim = (ev: PointerEvent) => {
+      if (ev.pointerId !== ponteiro) return;
+      limpar();
+      // Só o clique LOGO depois da tentativa é engolido.
+      if (arrastou.current) window.setTimeout(() => (arrastou.current = false), 0);
+    };
+    if (toque) {
+      espera = window.setTimeout(negar, 400);
+      window.addEventListener("contextmenu", semMenu);
+    }
+    encerrar.current = limpar;
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", fim);
+    window.addEventListener("pointercancel", fim);
+  };
+  const foiArrasto = () => {
+    const f = arrastou.current;
+    arrastou.current = false;
+    return f;
+  };
+  return { negado, iniciar, foiArrasto };
 }
 
 /** Os quadros abertos por ÚLTIMO neste aparelho (conveniência — `localStorage`, com try/catch). */

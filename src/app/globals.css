@@ -301,6 +301,34 @@
   animation: pasta-recebe var(--motion-duration) var(--motion-ease);
 }
 
+/* ARRASTO NEGADO (o card que não se arrasta — Favoritos/Recentes): sacode de lado a lado, como um "não". */
+@keyframes negar-arrasto {
+  15% {
+    translate: -7px 0;
+  }
+  35% {
+    translate: 6px 0;
+  }
+  55% {
+    translate: -4px 0;
+  }
+  75% {
+    translate: 2px 0;
+  }
+}
+.animate-negar-arrasto {
+  animation: negar-arrasto 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-negar-arrasto {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-negar-arrasto,
+[data-motion="reduced"] .animate-negar-arrasto {
+  animation: none;
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o

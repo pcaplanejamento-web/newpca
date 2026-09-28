@@ -1120,6 +1120,8 @@ abre no lugar com animação, arrastar para reordenar e para dentro/fora — tam
 "Mudar de quadros"; no quadro privado só o dono aparece e pode ser escolhido — torná-lo privado tira as outras pessoas.
 ✅ **Tarefas — pasta com cara de pasta:** aba, folhas saindo (as capas dos quadros) e a frente na cor com nome e
 contagens; entreabre ao passar o mouse e abre mais quando aberta ou ao receber um quadro arrastado.
+✅ **Tarefas — arrasto negado em Favoritos/Recentes:** tentar arrastar ali sacode o card e avisa que a organização é
+feita em "Seus quadros" (sem a imagem de arrasto do navegador).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

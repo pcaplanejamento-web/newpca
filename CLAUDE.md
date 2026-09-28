@@ -2386,7 +2386,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `registrarQuadroRecente`/`useQuadrosRecentes`) · **Seus quadros** (com 2+ grupos, `ChipsEscolha` por grupo; o card
     "Novo quadro" no fim). Cada seção é uma **`SecaoQuadros`** que MINIMIZA/MAXIMIZA pelo título (guardado neste aparelho —
     `useSecoesRecolhidas`). Favoritos/Recentes/busca usam a **`GradeQuadros`** (o `QuadroCard` INALTERADO em `auto-fill` ≥
-    15rem); "Seus quadros" usa a **`GradePastas`** (`PastasQuadros.tsx`): as **PASTAS** (os conjuntos) e os quadros soltos na
+    15rem; NÃO se reordena: a tentativa de arrastar — 6px com o mouse ou segurar ~400 ms no toque — vira o **ARRASTO NEGADO**
+    (`useArrastoNegado`): o card sacode (`animate-negar-arrasto`), cursor "não permitido", vibração no toque e o aviso
+    "Para organizar, arraste em “Seus quadros”" por cima; o arrasto nativo do link é bloqueado e o clique seguinte engolido); "Seus quadros" usa a **`GradePastas`** (`PastasQuadros.tsx`): as **PASTAS** (os conjuntos) e os quadros soltos na
     ORDEM da pessoa. **`PastaQuadro`** = o DESENHO DE UMA PASTA na MESMA célula/altura do `QuadroCard`: a ABA com o ícone, as
     COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros, em leque; vazia = folhas lisas) e a FRENTE na cor
     (texto por `textoSobre`) com "Pasta · N quadros", o nome e os chips abertas/atrasadas; ENTREABRE no hover/foco (a frente
