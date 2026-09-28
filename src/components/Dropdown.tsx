@@ -8,7 +8,10 @@ import { createPortal } from "react-dom";
 // recortado por containers com overflow (ex.: cabeçalho de tabela) e é mantido
 // dentro da tela. Fecha no clique-fora e no Esc; sombra suave. `className` = o
 // invólucro (ex.: largura toda num formulário); `id`/`title` = os do gatilho
-// (`<label htmlFor>`; a dica de um gatilho só-ícone).
+// (`<label htmlFor>`; a dica de um gatilho só-ícone). `papel` = o do painel ("menu",
+// o padrão, ou "dialog" — busca/grade: escolher pessoa ou data); `bloqueado` = o
+// gatilho não abre (ex.: gravando) sem perder o foco. O conteúdo em função recebe
+// `fechar` e se o painel foi aberto pelo TECLADO (Enter/Espaço no gatilho).
 export function Dropdown({
   trigger,
   children,
@@ -20,9 +23,11 @@ export function Dropdown({
   ariaLabel,
   id,
   title,
+  papel = "menu",
+  bloqueado = false,
 }: {
   trigger: ReactNode;
-  children: ReactNode | ((close: () => void) => ReactNode);
+  children: ReactNode | ((close: () => void, abertura: { teclado: boolean }) => ReactNode);
   align?: "start" | "end";
   className?: string;
   triggerClassName?: string;
@@ -31,8 +36,12 @@ export function Dropdown({
   ariaLabel?: string;
   id?: string;
   title?: string;
+  papel?: "menu" | "dialog";
+  bloqueado?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Aberto pelo teclado (o clique de Enter/Espaço tem `detail` 0): quem usa leva o foco para dentro do painel.
+  const [teclado, setTeclado] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -98,6 +107,14 @@ export function Dropdown({
     };
   }, [open]);
 
+  const painel = {
+    ref: panelRef,
+    className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
+    style: { top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
+  };
+  // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
+  const conteudo = !open ? null : typeof children === "function" ? children(() => setOpen(false), { teclado }) : children;
+
   return (
     <div className={className}>
       <button
@@ -107,28 +124,29 @@ export function Dropdown({
         title={title}
         aria-label={ariaLabel}
         aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen((o) => !o)}
+        aria-haspopup={papel === "dialog" ? "dialog" : "true"}
+        aria-disabled={bloqueado || undefined}
+        onClick={(e) => {
+          if (bloqueado) return;
+          setTeclado(e.detail === 0);
+          setOpen((o) => !o);
+        }}
         className={`inline-flex max-w-full items-center rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${triggerClassName}`}
       >
         {trigger}
       </button>
       {open &&
         createPortal(
-          <div
-            ref={panelRef}
-            role="menu"
-            className={`fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`}
-            style={{
-              top: pos.top,
-              left: pos.left,
-              width: pos.w,
-              maxWidth: "calc(100vw - 16px)",
-              maxHeight: pos.maxH,
-            }}
-          >
-            {typeof children === "function" ? children(() => setOpen(false)) : children}
-          </div>,
+          // O diálogo tem nome (o do gatilho); o menu, como sempre.
+          papel === "dialog" ? (
+            <div role="dialog" aria-label={ariaLabel} {...painel}>
+              {conteudo}
+            </div>
+          ) : (
+            <div role="menu" {...painel}>
+              {conteudo}
+            </div>
+          ),
           document.body,
         )}
     </div>

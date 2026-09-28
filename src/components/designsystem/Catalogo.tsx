@@ -737,6 +737,8 @@ const EXTRAS_FILTRO_DEMO: ExtraPessoa[] = [
   { valor: "sem", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> },
 ];
 const EXTRAS_CELULA_DEMO: ExtraPessoa[] = [{ valor: "", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> }];
+/** A pessoa já designada que hoje está em OUTRO grupo (`atual`): aparece no gatilho, mas não volta a ser escolhida. */
+const PESSOA_FORA_DEMO: Pessoa = { id: 12, nome: "Beatriz Nunes", apelido: "Bia", foto: null };
 const SITUACOES_DEMO = [
   { id: 1, nome: "Recebido", cor: "#64748b" },
   { id: 2, nome: "Em análise", cor: "#2563eb" },
@@ -1297,6 +1299,7 @@ function SeletoresDemo() {
   const [situacao, setSituacao] = useState<number | null>(2);
   const [pessoa, setPessoa] = useState("");
   const [padrao, setPadrao] = useState("4");
+  const [fora, setFora] = useState(String(PESSOA_FORA_DEMO.id));
   const [vista, setVista] = useState("protocolos");
   const [modoItens, setModoItens] = useState("normal");
   return (
@@ -1367,6 +1370,15 @@ function SeletoresDemo() {
         />
         <SeletorPessoa variante="celula" rotulo="Responsável (salvando)" pessoas={PESSOAS_DEMO} valor="4" extras={EXTRAS_CELULA_DEMO} onChange={() => undefined} salvando />
         <SeletorPessoa variante="celula" rotulo="Responsável (sem permissão)" pessoas={PESSOAS_DEMO} valor="7" extras={EXTRAS_CELULA_DEMO} />
+        <SeletorPessoa
+          variante="celula"
+          rotulo="Responsável (hoje fora do grupo)"
+          pessoas={PESSOAS_DEMO}
+          atual={PESSOA_FORA_DEMO}
+          valor={fora}
+          extras={EXTRAS_CELULA_DEMO}
+          onChange={setFora}
+        />
         <SeletorCelula ariaLabel="Situação (sem permissão)" valor={4} opcoes={SITUACOES_DEMO} />
       </div>
       <div className="max-w-sm space-y-1.5">

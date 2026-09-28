@@ -11,8 +11,8 @@ import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
  * - PERÍODO (dia/semana/mês/ano da data de referência, ou tudo) pela data da PROTOCOLAÇÃO (dia de Brasília); correções
  *   e ações pela data do EVENTO no histórico. A semana vai de segunda a domingo.
  * - PESSOA = o Responsável (padrão) ou a Distribuição (quem protocolou); as AÇÕES são de quem as fez (o ator).
- * - FOCO = o Responsável do topo da Mesa: numa pessoa, só ela, no papel escolhido — a MESMA linha dela na visão da
- *   equipe. As ações de cada pessoa contam em todo o recorte (nunca dependem desse filtro).
+ * - FOCO = o Responsável do topo da Mesa: numa pessoa, só essa pessoa, no papel escolhido — a MESMA linha da pessoa na
+ *   visão da equipe. As ações de cada pessoa contam em todo o recorte (nunca dependem desse filtro).
  * - NATUREZA = a categoria do assunto (INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, senão OUTROS) + o ano do PCA.
  * - CORREÇÃO = o REENVIO do protocolo (o processo devolvido volta corrigido).
  * - Toda célula/coluna tem a sua ORIGEM: a soma da lista = o número tocado (as MESMAS contas).
@@ -189,18 +189,15 @@ export function frasePeriodo(periodo: PeriodoMetricas, ref: string): string {
 
 /** As colunas das tabelas por período (rótulo curto no cabeçalho + o título completo na dica). */
 export function colunasMetricas(ref: string, hoje: string): { chave: PeriodoMetricas; rotulo: string; titulo: string }[] {
-  const p = partesIso(ref) ?? partesIso(hoje) ?? [1970, 1, 1];
-  const [a, m] = p;
-  const [seg, dom] = semanaDoDia(ref) ?? semanaDoDia(hoje) ?? [ref, ref];
+  const r = partesIso(ref) ? ref : hoje;
+  const [a, m] = partesIso(r) ?? [1970, 1, 1];
+  const seg = semanaDoDia(r)?.[0] ?? r;
+  const titulo = (c: PeriodoMetricas) => `Protocolados ${frasePeriodo(c, r)}`;
   return [
-    { chave: "dia", rotulo: ref === hoje ? "Hoje" : dataBR(ref).slice(0, 5), titulo: `Protocolados em ${dataBR(ref)}` },
-    {
-      chave: "semana",
-      rotulo: noPeriodo(hoje, "semana", ref) ? "Semana" : `Sem. ${dataBR(seg).slice(0, 5)}`,
-      titulo: `Protocolados na semana de ${dataBR(seg)} a ${dataBR(dom)}`,
-    },
-    { chave: "mes", rotulo: mesLabel(m, a), titulo: `Protocolados em ${_mesAno.format(new Date(Date.UTC(a, m - 1, 1)))}` },
-    { chave: "ano", rotulo: String(a), titulo: `Protocolados em ${a}` },
+    { chave: "dia", rotulo: r === hoje ? "Hoje" : dataBR(r).slice(0, 5), titulo: titulo("dia") },
+    { chave: "semana", rotulo: noPeriodo(hoje, "semana", r) ? "Semana" : `Sem. ${dataBR(seg).slice(0, 5)}`, titulo: titulo("semana") },
+    { chave: "mes", rotulo: mesLabel(m, a), titulo: titulo("mes") },
+    { chave: "ano", rotulo: String(a), titulo: titulo("ano") },
     { chave: "tudo", rotulo: "Na Mesa", titulo: "Todos os protocolos na Mesa agora" },
   ];
 }
@@ -296,8 +293,8 @@ export type RecorteMetricas<P extends ProtocoloPainel> = {
 
 /**
  * O recorte sobre o UNIVERSO das métricas (a Mesa com o Assunto do topo): natureza e tipo da barra + o FOCO (o
- * Responsável do topo, no papel escolhido). Com o foco numa pessoa, cada número é o MESMO da linha dela na visão da
- * equipe.
+ * Responsável do topo, no papel escolhido). Com o foco numa pessoa, cada número é o MESMO da linha da pessoa na visão
+ * da equipe.
  */
 export function recorteMetricas<P extends ProtocoloPainel>(
   protocolos: readonly P[],
@@ -557,21 +554,21 @@ export type LinhaDesempenho = {
   regulares: number;
   atencao: number;
   erro: number;
-  /** DFDs com erro/atenção nos protocolos dela (a conferência agregada). */
+  /** DFDs com erro/atenção nos protocolos da pessoa (a conferência agregada). */
   dfdsErro: number;
   dfdsAtencao: number;
   /** Tempo na Mesa (dias desde a protocolação): média e quantos passam de `DIAS_ALERTA`. */
   diasMedio: number | null;
   acimaAlerta: number;
-  /** Reenvios dos protocolos dela no período (pela data do reenvio) — `null` enquanto o histórico carrega. */
+  /** Reenvios dos protocolos da pessoa no período (pela data do reenvio) — `null` enquanto o histórico carrega. */
   correcoes: number | null;
-  /** Ações de execução FEITAS por ela no período (em todo o recorte de natureza/tipo) — `null` enquanto carrega. */
+  /** Ações de execução FEITAS pela pessoa no período (em todo o recorte de natureza/tipo) — `null` enquanto carrega. */
   acoes: number | null;
 };
 
 /**
  * De quem as AÇÕES contam (o desempenho e o resumo — a MESMA régua): na visão da equipe, de todos (`null`); com o foco
- * numa pessoa, só dela; no foco "sem", só de quem já tem linha (dono de protocolo da coorte ou de reenvio no período) —
+ * numa pessoa, só dessa pessoa; no foco "sem", só de quem já tem linha (dono de protocolo da coorte ou de reenvio no período) —
  * nunca uma linha feita só das ações de terceiros.
  */
 function atoresContados(rec: RecorteMetricas<ProtocoloPainel>): Set<number> | null {

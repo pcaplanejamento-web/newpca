@@ -613,7 +613,6 @@ export function DfdsView({
   /** A pessoa de um id (do diretório; na falta, o nome gravado — sem foto). */
   const pessoaDe = (id: number | null | undefined, nomeGravado?: string | null): Pessoa | null =>
     id == null ? null : (dirPessoas.get(id) ?? { id, nome: nomeGravado || `#${id}`, apelido: null, foto: null });
-  /** Opções do Responsável (célula): só as pessoas DO GRUPO — foto + apelido na célula, "apelido — nome" na lista. */
 
   const atualizarListas = () => router.refresh();
 
@@ -902,8 +901,11 @@ export function DfdsView({
         dfdsAtencao: conf.dfdsEmAtencao ?? null,
       };
     });
-    // Quem AGIU (o histórico): o diretório da Mesa primeiro; o do servidor completa quem não está nele.
+    // Quem AGIU (o histórico): o diretório da Mesa primeiro; o do servidor completa quem não está nele. A pessoa do FOCO
+    // entra sempre (sem protocolos no universo, a foto e o apelido seguem no aviso e na linha da pessoa).
     for (const pe of pessoasExec) if (!pessoasDash.has(pe.id)) pessoasDash.set(pe.id, dirPessoas.get(pe.id) ?? pe);
+    const foco = typeof filtro.responsavel === "number" && !pessoasDash.has(filtro.responsavel) ? pessoaDe(filtro.responsavel) : null;
+    if (foco) pessoasDash.set(foco.id, foco);
     const paraPainel = (d: DfdResumo): DfdPainel => ({
       id: d.id,
       numero: d.numero,

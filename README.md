@@ -28,7 +28,7 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   valor, pessoa Responsável/Distribuição, natureza e tipo de DFD): a distribuição por pessoa, natureza e tipo de DFD em
   Hoje | Semana | Mês | Ano | Na Mesa (como a planilha, com as correções = reenvios) e o **desempenho por pessoa**
   (conformidade, correções, ações e tempo) — só a execução da Mesa; com o Responsável do topo numa pessoa, as métricas
-  mostram só ela (os mesmos números da linha dela na visão da equipe; pela Distribuição, o que ela protocolou). "Importar protocolo"/"Importar DFD" ficam no
+  mostram só essa pessoa (os mesmos números da linha da pessoa na visão da equipe; pela Distribuição, o que protocolou). "Importar protocolo"/"Importar DFD" ficam no
   rodapé da tabela. O texto dos DFDs entra em **parágrafos** (sem as quebras da linha do PDF; Órgão/Setor em 2 linhas
   inteiros) e o botão **Atualizar** dos banners (o ícone gira) recarrega e **revisa** o gravado com os mesmos tratamentos
   da importação, para conferir e salvar. Um botão na barra liga os **dados completos** (texto inteiro, listas sem "+N" e

@@ -111,13 +111,14 @@ export function BarraMetricas({
               Responsável = quem responde pela execução; Distribuição = quem protocolou. Correção = cada reenvio do protocolo
               (o processo devolvido que volta corrigido), pela data do reenvio. Ações = a execução que cada pessoa fez nos
               protocolos da Mesa (edições no banner, em massa e na tabela, vínculos, exclusões e sobrescritas de DFD) —
-              contadas em toda a Mesa, qualquer que seja o responsável do protocolo.
+              contadas em todos os protocolos do recorte (o Assunto do topo e a natureza/tipo da barra), qualquer que seja o
+              responsável do protocolo.
             </TopicoAjuda>
             <TopicoAjuda icone={<IconInfo className="h-4 w-4" />} titulo="Só a Mesa">
               Tudo vem da execução da Mesa: protocolos enviados a um PCA e DFDs sem protocolo ficam de fora; o Assunto do
-              topo continua valendo. Com o Responsável do topo numa pessoa, as métricas mostram só ela, no papel escolhido
-              em Pessoa (os protocolos dela ou os que protocolou) — os mesmos números da linha dela com “Todos”. Toque num
-              número para ver a origem dele.
+              topo continua valendo. Com uma pessoa no Responsável do topo, as métricas mostram só essa pessoa, no papel
+              escolhido em Pessoa (os protocolos pelos quais responde ou os que protocolou) — os mesmos números da linha da
+              pessoa com “Todos”. Toque num número para ver a origem.
             </TopicoAjuda>
           </Ajuda>
         </div>

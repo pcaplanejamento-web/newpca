@@ -35,12 +35,23 @@ export function urlFoto(id: number, temFoto: boolean, versao: string | null | un
 
 /** Rótulo da pessoa em TEXTO (o valor de filtro/ordem das colunas Responsável/Distribuição — os seletores
  * mostram a foto): o apelido e, quando ele difere do nome, o nome completo para identificar (dois "Ana" não
- * se fundem); "(eu)" para o próprio usuário. */
-export function rotuloOpcaoPessoa(p: { id: number; nome: string; apelido?: string | null }, euId?: number | null): string {
+ * se fundem). */
+export function rotuloOpcaoPessoa(p: { nome: string; apelido?: string | null }): string {
   const exib = nomeExibicao(p);
   const completo = p.nome.trim();
-  const base = exib !== completo && completo ? `${exib} — ${completo}` : exib;
-  return p.id === euId ? `${base} (eu)` : base;
+  return exib !== completo && completo ? `${exib} — ${completo}` : exib;
+}
+
+/** As opções de um seletor de UMA pessoa (a lista mostra a foto ao lado): o próprio usuário PRIMEIRO, com "(eu)"; o
+ * APELIDO no rótulo e o nome completo no detalhe quando difere (dois "Ana" se distinguem); sem nome, o `#id`. */
+export function opcoesPessoa<P extends Pessoa>(pessoas: P[], euId: number | null = null): { pessoa: P; rotulo: string; detalhe?: string }[] {
+  const eu = euId == null ? [] : pessoas.filter((p) => p.id === euId);
+  const ordem = eu.length > 0 ? [...eu, ...pessoas.filter((p) => p.id !== euId)] : pessoas;
+  return ordem.map((p) => {
+    const apelido = nomeExibicao(p) || `#${p.id}`;
+    const completo = p.nome.trim();
+    return { pessoa: p, rotulo: p.id === euId ? `${apelido} (eu)` : apelido, detalhe: completo && completo !== apelido ? completo : undefined };
+  });
 }
 
 /** Decodifica um data-URL base64 gravado em bytes + tipo — só os tipos `aceitos`; `null` se ausente/inválido. */

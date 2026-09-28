@@ -120,7 +120,7 @@ const COLS_DFD: Column<DfdPainel>[] = [
  * - KPIs — a Mesa AGORA (as listas com os filtros Responsável/Assunto do topo);
  * - a BARRA DE MÉTRICAS (período · medida · pessoa · natureza · tipo de DFD) — vale para tudo abaixo dela, sobre o
  *   UNIVERSO (a Mesa com o Assunto do topo) com o Responsável do topo como FOCO: numa pessoa, só ela, no papel escolhido —
- *   os mesmos números da linha dela na visão da equipe;
+ *   os mesmos números da linha da pessoa na visão da equipe;
  * - as tabelas por período da distribuição (pessoa, natureza e tipo × Hoje | Semana | Mês | Ano | Na Mesa + as correções)
  *   e o DESEMPENHO POR PESSOA (conformidade, correções, ações e tempo — como cada usuário está se saindo);
  * - os quadros da Mesa sobre o recorte: evolução, saúde, situação, tempo na Mesa, carga por pessoa (estado ou situação;
@@ -230,7 +230,7 @@ export function DashboardMesa({
   const rotuloMedida = MEDIDAS_METRICAS.find((m) => m.value === filtro.medida)?.label ?? "Protocolos";
   const formatar = (n: number) => (filtro.medida === "valor" ? brlCompact(n) : num(n));
   const janela = (c: PeriodoMetricas) => rotuloPeriodo(c, filtro.ref, hoje);
-  const recortado = filtro.periodo !== "tudo" || recorteFiltrado(filtro);
+  const recortado = filtro.periodo !== "tudo" || recorteFiltrado(filtro) || responsavel !== "todos";
   const semNada = recortado ? "Nenhum protocolo no recorte" : "Nenhum protocolo na Mesa";
 
   const estadoTag = (e: EstadoPainel) => (
@@ -576,7 +576,7 @@ export function DashboardMesa({
       {execucao}
     </>
   );
-  // O FOCO do topo: a pessoa no PAPEL escolhido na barra (os números = a linha dela na visão da equipe).
+  // O FOCO do topo: a pessoa no PAPEL escolhido na barra (os números = a linha da pessoa na visão da equipe).
   const aviso =
     responsavel !== "todos" ? (
       <span className="inline-flex items-center gap-1.5 text-text-2">
@@ -669,7 +669,7 @@ export function DashboardMesa({
             })
           }
           resumo={(ls) =>
-            `${plural(ls.length, "pessoa", "pessoas")} · ${plural(
+            `${plural(ls.filter((l) => l.pessoaId != null).length, "pessoa", "pessoas")} · ${plural(
               ls.reduce((t, l) => t + l.protocolos, 0),
               "protocolo",
               "protocolos",
@@ -750,7 +750,7 @@ export function DashboardMesa({
           )}
         </ChartCard>
 
-        <ChartCard title="Situação" subtitle="As situações cadastradas pelo ADM, na ordem dele">
+        <ChartCard title="Situação" subtitle="As situações cadastradas pelo ADM, na ordem do cadastro">
           {situacoes.length === 0 ? (
             <ChartEmpty label="Nenhuma situação cadastrada (Configurações → Situações)" />
           ) : vazio ? (
@@ -899,12 +899,12 @@ export function DashboardMesa({
         }
         fonte={
           mostrada?.tipo === "dfds"
-            ? "Os DFDs em escopo na Mesa (já filtrados pelo Responsável/Assunto do topo e pelo recorte da barra), pela unidade requisitante — a mesma lista da visão DFDs."
+            ? "Os DFDs dos protocolos do recorte (a Mesa com o Assunto do topo; com uma pessoa no Responsável do topo, só os protocolos da pessoa no papel escolhido; o período e a natureza/tipo da barra), pela unidade requisitante."
             : mostrada?.tipo === "correcoes"
-              ? "O histórico dos protocolos da Mesa: cada reenvio (o processo devolvido que volta corrigido), pela data em que foi reenviado. Em DFDs, itens ou valor, cada reenvio conta o processo de novo."
+              ? "O histórico dos protocolos do recorte: cada reenvio (o processo devolvido que volta corrigido), pela data em que foi reenviado. Em DFDs, itens ou valor, cada reenvio conta o processo de novo."
               : mostrada?.tipo === "metricas"
-                ? "Os protocolos da Mesa (já filtrados pelo Responsável/Assunto do topo e pela natureza/tipo da barra) protocolados na janela, pela data da protocolação (dia de Brasília); DFDs, itens e valor pelos DFDs de cada um — só os do tipo filtrado, quando há."
-                : "Os protocolos em escopo na Mesa (já filtrados pelo Responsável/Assunto do topo e pelo recorte da barra), com o estado AGREGADO da conferência pelas regras do ADM — a mesma lista da visão Protocolos."
+                ? "Os protocolos do recorte (a Mesa com o Assunto do topo; com uma pessoa no Responsável do topo, só os protocolos da pessoa no papel escolhido; a natureza/tipo da barra) protocolados na janela, pela data da protocolação (dia de Brasília); DFDs, itens e valor pelos DFDs de cada um — só os do tipo filtrado, quando há."
+                : "Os protocolos do recorte (a Mesa com o Assunto do topo; com uma pessoa no Responsável do topo, só os protocolos da pessoa no papel escolhido; o período e a natureza/tipo da barra), com o estado AGREGADO da conferência pelas regras do ADM."
         }
       >
         {mostrada?.tipo === "dfds" ? (

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodificarFoto, nomeExibicao, normalizarApelido, rotuloOpcaoPessoa, urlFoto } from "../src/lib/pessoa.ts";
+import { decodificarFoto, nomeExibicao, normalizarApelido, opcoesPessoa, rotuloOpcaoPessoa, urlFoto } from "../src/lib/pessoa.ts";
 
 describe("pessoa — nome de exibição (apelido)", () => {
   it("usa o apelido quando houver; senão o nome", () => {
@@ -16,10 +16,39 @@ describe("pessoa — nome de exibição (apelido)", () => {
     assert.equal(normalizarApelido(undefined), null);
   });
 
-  it("rótulo de opção: apelido — nome completo (quando diferem) e (eu)", () => {
-    assert.equal(rotuloOpcaoPessoa({ id: 1, nome: "Jhone Eduardo Costa", apelido: "Jhone" }), "Jhone — Jhone Eduardo Costa");
-    assert.equal(rotuloOpcaoPessoa({ id: 2, nome: "Ana Souza", apelido: null }), "Ana Souza");
-    assert.equal(rotuloOpcaoPessoa({ id: 2, nome: "Ana Souza", apelido: null }, 2), "Ana Souza (eu)");
+  it("rótulo em texto (filtro/ordem das colunas): apelido — nome completo, quando diferem", () => {
+    assert.equal(rotuloOpcaoPessoa({ nome: "Jhone Eduardo Costa", apelido: "Jhone" }), "Jhone — Jhone Eduardo Costa");
+    assert.equal(rotuloOpcaoPessoa({ nome: "Ana Souza", apelido: null }), "Ana Souza");
+  });
+
+  it("opções do seletor: o próprio usuário primeiro com (eu); apelido no rótulo e o nome completo no detalhe", () => {
+    const pessoas = [
+      { id: 1, nome: "Jhone Eduardo Costa", apelido: "Jhone", foto: null },
+      { id: 2, nome: "Ana Souza", apelido: null, foto: "/api/usuarios/2/foto" },
+      { id: 3, nome: "Ana Lima", apelido: "Ana", foto: null },
+    ];
+    const ops = opcoesPessoa(pessoas, 2);
+    assert.deepEqual(
+      ops.map((o) => [o.pessoa.id, o.rotulo, o.detalhe]),
+      [
+        [2, "Ana Souza (eu)", undefined],
+        [1, "Jhone", "Jhone Eduardo Costa"],
+        [3, "Ana", "Ana Lima"],
+      ],
+    );
+    assert.equal(ops[0].pessoa.foto, "/api/usuarios/2/foto");
+    // Sem o usuário (ou fora da lista): a ordem de chegada, sem (eu).
+    assert.deepEqual(
+      opcoesPessoa(pessoas).map((o) => o.rotulo),
+      ["Jhone", "Ana Souza", "Ana"],
+    );
+    assert.deepEqual(
+      opcoesPessoa(pessoas, 99).map((o) => o.pessoa.id),
+      [1, 2, 3],
+    );
+    // Dado incompleto: sem nome, o #id.
+    assert.deepEqual(opcoesPessoa([{ id: 7, nome: "  ", apelido: null, foto: null }]), [{ pessoa: { id: 7, nome: "  ", apelido: null, foto: null }, rotulo: "#7", detalhe: undefined }]);
+    assert.deepEqual(opcoesPessoa([]), []);
   });
 });
 

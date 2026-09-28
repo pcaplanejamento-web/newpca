@@ -6,7 +6,7 @@ import { Avatar } from "./Avatar";
 /**
  * PESSOA numa célula/linha: FOTO (avatar — iniciais na cor da pessoa quando não há foto) + o APELIDO (o
  * nome de exibição; sem apelido, o nome). O nome completo fica no `title`. Usada nas colunas Responsável
- * e Distribuição da Mesa (e dentro do `SeletorCelula`). Sem pessoa, o texto `vazio` esmaecido.
+ * e Distribuição da Mesa (e no gatilho do `SeletorPessoa`). Sem pessoa, o texto `vazio` esmaecido.
  */
 export function PessoaTag({ pessoa, vazio = "—", className = "" }: { pessoa: Pessoa | null | undefined; vazio?: string; className?: string }) {
   if (!pessoa) return <span className={`text-[12px] text-faint ${className}`}>{vazio}</span>;

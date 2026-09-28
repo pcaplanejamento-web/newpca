@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { navegarRef, noPeriodo, PERIODOS_METRICAS, type PeriodoMetricas, rotuloPeriodo } from "@/lib/mesa-metricas";
 import { NOMES_MES, semanaDe } from "@/lib/tarefas-core";
 import { MiniMes } from "./BarraCalendario";
@@ -21,8 +21,9 @@ const botaoSeta = "grid h-11 w-11 place-items-center rounded-control text-muted 
  * NAVEGADOR DE PERÍODO — `Tudo | Ano | Mês | Semana | Dia` e, fora do Tudo, `‹ rótulo ›` + "Hoje": escolhe a JANELA e
  * anda por ela (o passo segue o período; a semana vai de segunda a domingo; o dia fica preso ao fim do mês). O RÓTULO
  * abre o seletor para SALTAR a qualquer data: o mini-mês do calendário (dia ou semana — a janela destacada), a grade dos
- * meses ou a dos anos, com um ponto onde há dados (`diasComDados`); escolher (ou Esc) devolve o foco ao rótulo. O rótulo
- * é anunciado (`aria-live`); "Hoje" só aparece fora do período atual. Controlado; alvos de 44px no toque.
+ * meses ou a dos anos, com um ponto onde há dados (`diasComDados`); ao abrir, o foco vai para a data escolhida e escolher
+ * (ou Esc) o devolve ao rótulo. O rótulo é anunciado (`aria-live`); "Hoje" só aparece fora do período atual. Controlado;
+ * alvos de 44px no toque (o painel tem a largura para os 7 dias de 44px).
  */
 export function NavegadorPeriodo({
   periodo,
@@ -43,7 +44,7 @@ export function NavegadorPeriodo({
   const passo = periodo === "tudo" ? null : periodo;
   const rotulo = rotuloPeriodo(periodo, data, hoje);
   const idRotulo = useId();
-  const voltarFoco = () => document.getElementById(idRotulo)?.focus();
+  const voltarFoco = () => document.getElementById(idRotulo)?.focus({ preventScroll: true });
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <Segmented<PeriodoMetricas>
@@ -64,8 +65,9 @@ export function NavegadorPeriodo({
           />
           <Dropdown
             id={idRotulo}
+            papel="dialog"
             ariaLabel={`${ESCOLHER[passo]} — ${rotulo}`}
-            width={288}
+            width={344}
             triggerClassName="h-11 min-w-[8.5rem] justify-center gap-1 rounded-control px-2 text-[13px] font-semibold text-text tabular-nums transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
             trigger={
               <>
@@ -81,7 +83,7 @@ export function NavegadorPeriodo({
                 voltarFoco();
               };
               // O MINI-MÊS do calendário no dia/semana (a janela à vista destacada — a semana inteira, de segunda a
-              // domingo); as grades de meses e de anos nos demais. Esc (o Dropdown fecha) devolve o foco ao rótulo.
+              // domingo); as grades de meses e de anos nos demais.
               const nav: NavCalendario = {
                 foco: data,
                 irPara: escolher,
@@ -90,19 +92,15 @@ export function NavegadorPeriodo({
                 destaque: passo === "semana" ? semanaDe(data, 1) : [data],
               };
               return (
-                <div
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") voltarFoco();
-                  }}
-                >
+                <PainelSalto onEsc={voltarFoco}>
                   {passo === "dia" || passo === "semana" ? (
-                    <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComDados} inicioSemana={1} />
+                    <MiniMes nav={nav} hoje={hoje} diasComEvento={diasComDados} inicioSemana={1} semMoldura />
                   ) : passo === "mes" ? (
                     <GradeMeses data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
                   ) : (
                     <GradeAnos data={data} hoje={hoje} diasComDados={diasComDados} onEscolher={escolher} />
                   )}
-                </div>
+                </PainelSalto>
               );
             }}
           </Dropdown>
@@ -121,6 +119,26 @@ export function NavegadorPeriodo({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** O painel do salto: ao abrir, o foco vai para a data escolhida (ou o 1º botão) — o teclado já percorre a grade; Esc (o
+ * Dropdown fecha) devolve o foco ao rótulo. */
+function PainelSalto({ onEsc, children }: { onEsc: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    (el?.querySelector<HTMLElement>('[aria-current="date"]') ?? el?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onEsc();
+      }}
+    >
+      {children}
     </div>
   );
 }

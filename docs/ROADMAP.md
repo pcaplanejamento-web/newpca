@@ -143,7 +143,7 @@ da base da curva ABC.
 
 ### Mesa compacta + PCA no cabeçalho (filtro de todo o sistema) + preferências — entregue
 ✅ **Alturas padronizadas e menores:** a barra da Mesa (visões + filtros) na altura padrão dos controles; os filtros de
-Responsável e Assunto só com o ícone (escolhida uma pessoa, o ícone vira a foto dela); as tabelas de Protocolos, DFDs e Itens
+Responsável e Assunto só com o ícone (escolhida uma pessoa, o ícone vira a foto da pessoa); as tabelas de Protocolos, DFDs e Itens
 com a MESMA altura de linha, menor, e o cabeçalho baixo — mais informação na tela. ✅ **Colunas novas:** **PCA** (o ano do PCA
 do protocolo — nos protocolos, DFDs e itens) e **Prioridade** (ALTA/MÉDIA/BAIXA da seção do DFD — nos DFDs e itens, também nos
 banners do protocolo). ✅ **PCA no cabeçalho:** um seletor à esquerda do topo escolhe o PCA e filtra a Mesa, os cards do PCA
@@ -161,18 +161,21 @@ controles do cabeçalho com 44px no celular e no tablet (o menu não encolhe em 
 escolhido; o cadastro de PCAs é lido uma vez por página.
 
 ### Mesa: filtro por pessoa sem dados quebrados, seletor de pessoa com foto e período por semana/qualquer data — entregue
-✅ **Filtrar pela pessoa = a linha dela na visão da equipe.** Com o Responsável do topo numa pessoa, o Dashboard mostra só
-ela, no papel escolhido na barra (pelo Responsável, os protocolos dela; pela **Distribuição, os que ela protocolou**) — os
-mesmos números da linha dela em "Todos" (coberto por teste para cada pessoa, papel, período e natureza). Saíram as linhas de
-quem só mexeu nos protocolos dela (com 0 protocolos e "—"); as **ações** de cada pessoa contam em toda a Mesa (nunca dependem
-desse filtro) e o "N ações" do resumo é a soma das linhas. As colunas do Desempenho vêm na ordem da governança
+✅ **Filtrar pela pessoa = a linha da pessoa na visão da equipe.** Com o Responsável do topo numa pessoa, o Dashboard mostra
+só essa pessoa, no papel escolhido na barra (pelo Responsável, os protocolos pelos quais responde; pela **Distribuição, os que
+protocolou**) — os mesmos números da linha da pessoa em "Todos" (coberto por teste para cada pessoa, papel, período e
+natureza). Saíram as linhas de quem só mexeu nesses protocolos (com 0 protocolos e "—"); as **ações** de cada pessoa contam
+em todos os protocolos do recorte — o Assunto do topo e a natureza/tipo da barra —, qualquer que seja o responsável (nunca
+dependem do filtro de Responsável), e o resumo (protocolos, DFDs, itens, valor, correções e ações) é a soma das linhas. As colunas do Desempenho vêm na ordem da governança
 (protocolos, regulares, com erro, em atenção, **correções**, **ações**, tempo) — antes as correções/ações ficavam fora da
 tela. ✅ **Seletor de pessoa com FOTO e APELIDO** (`SeletorPessoa`): no filtro Responsável da Mesa, na célula Responsável,
 na edição em massa e no Perfil → Responsável padrão — a lista mostra a foto e o apelido de cada um (o nome completo embaixo),
-o próprio usuário primeiro, busca por apelido ou nome, teclado e 44px no toque. ✅ **Período por Semana e salto a qualquer
-data:** Tudo · Ano · Mês · **Semana** (segunda a domingo) · Dia; tocar no período abre o calendário (o mini-mês do
-calendário no Dia/Semana, a grade de meses e a de anos, com um ponto onde há protocolação); as tabelas ganham a coluna
-**Semana** (Hoje | Semana | Mês | Ano | Na Mesa).
+o próprio usuário primeiro, busca por apelido ou nome, teclado e 44px no toque; o painel é um diálogo (aberto pelo teclado,
+o foco vai para a busca; no toque, o teclado do celular não abre sozinho) e, gravando, o gatilho fica travado com o spinner
+sem perder o foco. ✅ **Período por Semana e salto a qualquer data:** Tudo · Ano · Mês · **Semana** (segunda a domingo) ·
+Dia; tocar no período abre o calendário (o mini-mês do calendário no Dia/Semana, a grade de meses e a de anos, com um ponto
+onde há protocolação; o foco vai para a data escolhida e volta ao período; os 7 dias com 44px no toque); as tabelas ganham
+a coluna **Semana** (Hoje | Semana | Mês | Ano | Na Mesa).
 
 ### Mesa: métricas de governança por usuário (a planilha de distribuição no Dashboard) — entregue
 ✅ **Barra de métricas** logo abaixo das KPIs do Dashboard da Mesa — vale para todos os quadros abaixo: **período**
@@ -181,7 +184,7 @@ Distribuição) e os filtros de **natureza** (categoria do assunto + ano do PCA:
 **planilha de distribuição** em três tabelas — por pessoa, por natureza e por tipo de DFD — com **Hoje | Mês | Ano | Na
 Mesa** lado a lado (o período escolhido em destaque), o total e a linha **Correções (reenvios)**. ✅ **Desempenho por
 pessoa**: protocolos, DFDs, itens, valor, conformidade (regulares %), com erro, DFDs com erro, em atenção, tempo médio na
-Mesa, +30 dias, **correções** (os reenvios dos protocolos dela) e **ações** (a execução que ela fez — pelo histórico). ✅ Os
+Mesa, +30 dias, **correções** (os reenvios dos protocolos da pessoa) e **ações** (a execução feita pela pessoa — pelo histórico). ✅ Os
 quadros da Mesa (evolução — antes "entrada semanal" —, saúde, situação, tempo, carga por pessoa com Estado | Situação e
 valor por unidade) passam a valer sobre o recorte. Só a execução da Mesa (nada de PCA, orçamento, tarefas ou calendário);
 toda célula abre a origem dos dados (a soma = o número); o histórico vem de `GET /api/mesa/execucao`, pedido só com o

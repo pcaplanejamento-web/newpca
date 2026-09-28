@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useId } from "react";
-import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
+import { nomeExibicao, opcoesPessoa, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Dropdown } from "./Dropdown";
 import { IconChevronDown, IconSpinner } from "./icons";
@@ -17,18 +17,19 @@ export type VarianteSeletorPessoa = "filtro" | "celula" | "campo";
 
 /** O círculo do ícone de um extra — do tamanho da foto na lista e no campo. */
 const circulo = (icone: ReactNode) => <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-surface-2 text-muted">{icone}</span>;
-/** No toque a busca não abre o teclado sozinha (cobriria a lista); com mouse, o foco já vai para ela. */
+/** No toque a busca não abre o teclado sozinha (cobriria a lista); com mouse — ou aberto pelo teclado —, o foco já vai para ela. */
 const ponteiroFino = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches === true;
 const CELULA = "min-h-11 gap-1 rounded-control px-2 lg:min-h-[calc(var(--h-control-sm)-6px)]";
 
 /**
- * SELETOR DE PESSOA (uma só): a lista mostra cada pessoa com a FOTO e o APELIDO (o nome completo embaixo quando difere;
- * "(eu)" no próprio usuário, que vem primeiro), as opções especiais no topo (`extras`, com ícone) e a busca por apelido
- * ou nome (vários com ":"). Teclado: ↑/↓ e Enter na busca, Esc fecha — o foco volta ao gatilho. Alvos de 44px no toque;
- * a lista (e as fotos) só existe com o painel aberto. Gatilhos: `filtro` (o quadrado só-ícone das barras, com a foto da
- * escolhida), `celula` (foto + apelido dentro da célula; sem `onChange` ou gravando, só o visual) e `campo` (o campo do
- * formulário, largura toda). O painel PARA o clique — numa tabela, tocar nele nunca abre a linha (o evento atravessa o
- * portal).
+ * SELETOR DE PESSOA (uma só — para VÁRIAS, o `SeletorPessoas` em chips): a lista mostra cada pessoa com a FOTO e o
+ * APELIDO (o nome completo embaixo quando difere; "(eu)" no próprio usuário, que vem primeiro — `opcoesPessoa`), as
+ * opções especiais no topo (`extras`, com ícone) e a busca por apelido ou nome (vários com ":"). Teclado: aberto pelo
+ * teclado, o foco vai para a busca; ↑/↓ e Enter escolhem, Esc fecha — o foco volta ao gatilho. Alvos de 44px no toque; a
+ * lista (e as fotos) só existe com o painel aberto. Gatilhos: `filtro` (o quadrado só-ícone das barras, com a foto da
+ * escolhida), `celula` (foto + apelido dentro da célula) e `campo` (o campo do formulário, largura toda). Sem `onChange`,
+ * só o visual; `salvando` = spinner no lugar da seta e o gatilho travado (o foco fica nele). O painel PARA o clique —
+ * numa tabela, tocar nele nunca abre a linha (o evento atravessa o portal).
  */
 export function SeletorPessoa({
   pessoas,
@@ -55,7 +56,7 @@ export function SeletorPessoa({
   extras?: ExtraPessoa[];
   /** O usuário da sessão — "(eu)" e primeiro da lista. */
   usuarioId?: number | null;
-  /** A pessoa escolhida quando ela NÃO está entre as opções (ex.: de outro grupo) — aparece no gatilho, sem re-escolha. */
+  /** A pessoa escolhida quando NÃO está entre as opções (ex.: de outro grupo) — aparece no gatilho, sem re-escolha. */
   atual?: Pessoa | null;
   variante: VarianteSeletorPessoa;
   /** O que se escolhe (ex.: "Responsável") — o nome acessível e a dica. */
@@ -66,7 +67,7 @@ export function SeletorPessoa({
   ativo?: boolean;
   /** Texto sem ninguém escolhido (célula/campo), quando nenhum extra representa o valor. */
   vazio?: string;
-  /** Gravando (célula): spinner e travado. */
+  /** Gravando (célula/campo): spinner no lugar da seta e travado. */
   salvando?: boolean;
   /** Id do gatilho (`<label htmlFor>`). */
   id?: string;
@@ -78,41 +79,35 @@ export function SeletorPessoa({
   const extra = extras.find((e) => e.valor === valor) ?? null;
   const pessoa = extra ? null : (pessoas.find((p) => String(p.id) === valor) ?? (atual && String(atual.id) === valor ? atual : null));
   const texto = extra ? extra.rotulo : pessoa ? nomeExibicao(pessoa) : vazio;
-  const nome = `${ariaLabel ?? rotulo} — ${texto}`;
+  const nome = `${ariaLabel ?? rotulo} — ${texto}${salvando ? " (salvando)" : ""}`;
 
-  // Célula sem permissão ou gravando: só o visual (com o spinner ao gravar).
-  if (variante === "celula" && (!onChange || salvando)) {
-    const tag = <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />;
-    if (!salvando) return tag;
-    return (
-      <span className={`inline-flex items-center ${CELULA}`} aria-busy="true">
-        {tag}
-        <IconSpinner className="h-3.5 w-3.5 shrink-0 text-accent" />
-      </span>
-    );
-  }
+  // Sem permissão: só o visual.
   if (!onChange) return <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />;
 
+  const seta = (tam: string) => (salvando ? <IconSpinner className={`${tam} shrink-0 text-accent`} /> : <IconChevronDown className={`${tam} shrink-0 text-faint`} />);
   const gatilho =
     variante === "filtro" ? (
       (extra?.icone ?? (pessoa ? <Avatar nome={pessoa.nome} foto={pessoa.foto} size="xs" /> : extras[0]?.icone))
     ) : variante === "celula" ? (
       <>
         <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />
-        <IconChevronDown className="h-3.5 w-3.5 shrink-0 text-faint" />
+        {seta("h-3.5 w-3.5")}
       </>
     ) : (
       <>
         {pessoa ? <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" /> : extra ? circulo(extra.icone) : null}
         <span className={`min-w-0 flex-1 truncate text-left ${pessoa ? "text-text" : "text-muted"}`}>{texto}</span>
-        <IconChevronDown className="h-4 w-4 shrink-0 text-faint" />
+        {seta("h-4 w-4")}
       </>
     );
-  const voltarFoco = () => document.getElementById(idGatilho)?.focus();
+  // O foco volta ao gatilho sem rolar a tela (a linha pode ter mudado de lugar numa tabela ordenada).
+  const voltarFoco = () => document.getElementById(idGatilho)?.focus({ preventScroll: true });
 
   return (
     <Dropdown
       id={idGatilho}
+      papel="dialog"
+      bloqueado={salvando}
       ariaLabel={nome}
       title={variante === "filtro" ? nome : undefined}
       align={variante === "filtro" ? "end" : "start"}
@@ -122,25 +117,21 @@ export function SeletorPessoa({
         variante === "filtro"
           ? classeQuadradoFiltro(ativo)
           : variante === "celula"
-            ? `${CELULA} transition-colors hover:bg-surface-2`
-            : "min-h-[50px] w-full gap-2.5 rounded-control border border-border-2 bg-surface px-3.5 py-2 text-base transition-colors hover:bg-surface-2"
+            ? `${CELULA} transition-colors ${salvando ? "cursor-progress" : "hover:bg-surface-2"}`
+            : `min-h-[50px] w-full gap-2.5 rounded-control border border-border-2 bg-surface px-3.5 py-2 text-base transition-colors ${salvando ? "cursor-progress" : "hover:bg-surface-2"}`
       }
       trigger={gatilho}
     >
-      {(fechar) => {
+      {(fechar, { teclado }) => {
         // A lista só é montada com o painel aberto: o próprio usuário primeiro; a foto no lugar do ícone.
-        const ordem = usuarioId == null ? pessoas : [...pessoas.filter((p) => p.id === usuarioId), ...pessoas.filter((p) => p.id !== usuarioId)];
         const opcoes: OpcaoBusca[] = [
           ...extras.map((e) => ({ valor: e.valor, rotulo: e.rotulo, icone: circulo(e.icone) })),
-          ...ordem.map((p) => {
-            const apelido = nomeExibicao(p);
-            return {
-              valor: String(p.id),
-              rotulo: p.id === usuarioId ? `${apelido} (eu)` : apelido,
-              detalhe: apelido !== p.nome.trim() ? p.nome.trim() : undefined,
-              icone: <Avatar nome={p.nome} foto={p.foto} size="sm" />,
-            };
-          }),
+          ...opcoesPessoa(pessoas, usuarioId).map((o) => ({
+            valor: String(o.pessoa.id),
+            rotulo: o.rotulo,
+            detalhe: o.detalhe,
+            icone: <Avatar nome={o.pessoa.nome} foto={o.pessoa.foto} size="sm" />,
+          })),
         ];
         return (
           // O painel PARA o clique (numa célula, o toque atravessaria o portal e abriria a linha) — e cobre o respiro do
@@ -158,7 +149,7 @@ export function SeletorPessoa({
               ariaLabel={ariaLabel ?? rotulo}
               placeholder="Buscar pelo apelido ou nome"
               vazio="Ninguém encontrado"
-              autoFoco={ponteiroFino()}
+              autoFoco={teclado || ponteiroFino()}
               compacto
               onChange={(v) => {
                 fechar();

@@ -6,7 +6,7 @@ import { predicadoBusca } from "@/lib/tabela-filtros";
 import { SearchField } from "./Field";
 import { IconCheck } from "./icons";
 
-/** `icone` = o que vem antes do texto (ex.: a FOTO da pessoa). */
+/** `icone` = o que vem antes do texto (ex.: a FOTO da pessoa) — decorativo: o nome acessível é o rótulo. */
 export type OpcaoBusca = { valor: string; rotulo: string; detalhe?: string; icone?: ReactNode };
 
 /** Máximo de opções renderizadas de uma vez (a busca restringe o resto) — leve com milhares. */
@@ -115,7 +115,11 @@ export function SeletorBusca({
                 escolhida ? "bg-accent-soft" : i === ativo ? "bg-surface-2" : "hover:bg-surface-2"
               } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
             >
-              {o.icone && <span className="flex shrink-0 items-center">{o.icone}</span>}
+              {o.icone && (
+                <span aria-hidden className="flex shrink-0 items-center">
+                  {o.icone}
+                </span>
+              )}
               <span className="min-w-0 flex-1">
                 <span className={`block truncate text-sm font-semibold ${escolhida ? "text-accent" : "text-text"}`}>{o.rotulo}</span>
                 {o.detalhe && <span className="block truncate text-xs text-muted">{o.detalhe}</span>}

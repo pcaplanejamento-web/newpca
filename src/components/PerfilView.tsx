@@ -46,7 +46,7 @@ export function PerfilView({
 }: {
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
-   * PESSOAS DO GRUPO ativo (`foraDoGrupo` = nome do padrão gravado que não é mais do grupo). */
+   * PESSOAS DO GRUPO ativo (`foraDoGrupo` = o padrão gravado que não é mais do grupo — com a foto, sem re-escolha). */
   protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null } | null;
   /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa; `null` = sem o card). */
   mesaResponsavel?: MesaResponsavel | null;

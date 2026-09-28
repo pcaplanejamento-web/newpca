@@ -592,10 +592,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     /api/perfil/preferencias`) — só num protocolo ainda sem responsável (`COALESCE` no upsert; o reenvio mantém).
     **Distribuição** = `criado_por` (quem protocolou). **Foto + APELIDO nas colunas (migração `0032`):** `usuarios.apelido`
     (Perfil, ≤ 40, `normalizarApelido`) é o NOME DE EXIBIÇÃO no sistema (`nomeExibicao`, `src/lib/pessoa.ts` puro: cabeçalho,
-    colunas, seletores; o valor de filtro/ordem das colunas é "apelido — nome", `rotuloOpcaoPessoa`); as células mostram o
+    colunas, seletores; o valor de filtro/ordem das colunas é "apelido — nome", `rotuloOpcaoPessoa`; as opções dos seletores,
+    `opcoesPessoa`); as células mostram o
     **`PessoaTag`** (avatar com a FOTO + apelido; nome completo no `title`) e TODO seletor de uma pessoa da Mesa e do Perfil é o
     **`SeletorPessoa`** (a lista com a FOTO + o APELIDO de cada um — o nome completo embaixo quando difere —, o próprio usuário
-    primeiro com "(eu)", busca por apelido ou nome, teclado ↑/↓/Enter/Esc, 44px no toque). A foto é servida por **`GET
+    primeiro com "(eu)", busca por apelido ou nome, teclado ↑/↓/Enter/Esc, 44px no toque; gravando, o gatilho fica travado
+    com o spinner e o foco nele). A foto é servida por **`GET
     /api/usuarios/[id]/foto`** (`decodificarFoto`; cache `immutable` pela versão `?v=` = `atualizado_em` — `urlFoto`): a
     sessão, a Mesa e a lista de usuários carregam só a URL (nunca o data-URL — a sessão é lida em toda requisição). As duas
     células — Situação = **`SeletorCelula`** (`<select>` nativo transparente — leve com milhares de linhas, seletor do próprio
@@ -612,7 +614,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ou qualquer DFD muda a chave). A coluna é multi-valor (o filtro acha QUALQUER problema do protocolo).
   - **Filtros de HIERARQUIA da Mesa (na MESMA linha de Protocolos · DFDs · Itens, à direita):** dois filtros SÓ COM O ÍCONE
     (quadrado na altura da barra; ativo = accent; o valor na dica e no nome acessível) — **Responsável** = o **`SeletorPessoa`**
-    (variante `filtro`: escolhida uma PESSOA, o quadrado mostra a FOTO dela; "Todos" = `IconUsers`, "sem responsável" =
+    (variante `filtro`: escolhida uma PESSOA, o quadrado mostra a FOTO da pessoa; "Todos" = `IconUsers`, "sem responsável" =
     `IconUserX`; a LISTA mostra a FOTO + o APELIDO de cada um, o próprio usuário primeiro com "(eu)", busca por apelido ou nome)
     e **Assunto** = o `SeletorFiltro` (assuntos distintos dos protocolos) —
     **Responsável** (todos / sem responsável / uma pessoa) e **Assunto** — filtram as
@@ -636,18 +638,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     dos conferidos] · **Com responsável** · **Tempo médio na Mesa** [+ quantos há mais de `DIAS_ALERTA`=30 dias]) + a **BARRA DE
     MÉTRICAS** logo abaixo delas (`BarraMetricas` — vale para TUDO abaixo; SÓ a execução da Mesa: nada de PCA, orçamento, tarefas
     ou calendário): **Período** `Tudo | Ano | Mês | Semana | Dia` (`NavegadorPeriodo`: ‹ rótulo › + "Hoje"; a semana vai de
-    segunda a domingo; TOCAR NO RÓTULO abre o salto a QUALQUER data — o `MiniMes` do calendário reaproveitado no Dia/Semana,
-    com a janela destacada, a grade dos meses e a dos anos, com um ponto onde há protocolação; o padrão Tudo = o Dashboard de
-    sempre) · **Medida** Protocolos | DFDs | Itens | Valor · **Pessoa** Responsável (padrão) | Distribuição (quem protocolou) ·
+    segunda a domingo; TOCAR NO RÓTULO abre o salto a QUALQUER data — o `MiniMes` do calendário reaproveitado no Dia/Semana
+    [`semMoldura`], com a janela destacada, a grade dos meses e a dos anos, com um ponto onde há protocolação; o foco vai para
+    a data escolhida e volta ao rótulo; o padrão Tudo = o Dashboard de sempre) · **Medida** Protocolos | DFDs | Itens | Valor · **Pessoa** Responsável (padrão) | Distribuição (quem protocolou) ·
     filtros só-ícone **Natureza** (a categoria do assunto — INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA, senão OUTROS — + o ano do
     PCA: "INCLUSÃO 2027") e **Tipo de DFD** (recorta os protocolos com DFD do tipo e soma só esses DFDs) + Limpar + Ajuda (?); a
     linha do recorte (janela · protocolos · DFDs · itens · valor · correções · ações = Σ das linhas do desempenho) e o aviso do
-    FOCO. **FOCO = o Responsável do topo** (regra de ouro, coberta por teste: **filtrar pela pessoa = a linha dela na visão da
-    equipe, no papel escolhido**): as KPIs seguem as listas filtradas (a Mesa agora), mas as métricas usam o **UNIVERSO** — a Mesa
+    FOCO. **FOCO = o Responsável do topo** (regra de ouro, coberta por teste: **filtrar pela pessoa = a linha da pessoa na visão
+    da equipe, no papel escolhido**): as KPIs seguem as listas filtradas (a Mesa agora), mas as métricas usam o **UNIVERSO** — a Mesa
     só com o Assunto do topo (`DfdsView.dash` mapeia UMA vez; sem foco, os mesmos arrays) — com o foco na DIMENSÃO: numa pessoa
-    pelo Responsável, os protocolos dela; pela **Distribuição, os que ela PROTOCOLOU**; "sem" = os sem responsável. As **ações**
+    pelo Responsável, os protocolos pelos quais responde; pela **Distribuição, os que PROTOCOLOU**; "sem" = os sem responsável. As **ações**
     de cada pessoa contam em todo o recorte de natureza/tipo (nunca dependem desse filtro); quem SÓ executou ganha linha apenas
-    na visão da equipe ("Todos") — com o foco numa pessoa, só ela (nenhuma linha de terceiros com zeros); no foco "sem", as ações
+    na visão da equipe ("Todos") — com o foco numa pessoa, só essa pessoa (nenhuma linha de terceiros com zeros); no foco "sem", as ações
     só preenchem linhas que já existem (`atoresContados`, a MESMA régua do desempenho e do resumo). Aviso: "Só Naty, como
     responsável / como quem protocolou (filtro do topo) — escolha “Todos” para comparar a equipe". Quadros novos: as TABELAS POR
     PERÍODO da distribuição (`TabelaPeriodo` —
@@ -655,7 +657,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     proporção, TOTAL e, à parte, **"Correções (reenvios)"**) por **pessoa**, **natureza** e **tipo de DFD** (na medida
     Protocolos, um protocolo com tipos diferentes conta em cada um; o TOTAL é de protocolos distintos) e o **DESEMPENHO POR
     PESSOA** (`DataTable` compacta, GOVERNANÇA PRIMEIRO: protocolos, regulares %, com erro, em atenção, **correções** — os
-    reenvios dos protocolos da pessoa —, **ações** — a execução que ela fez; "—" na linha sem pessoa —, tempo médio, +30 dias e,
+    reenvios dos protocolos da pessoa —, **ações** — a execução feita pela pessoa; "—" na linha sem pessoa —, tempo médio, +30 dias e,
     no fim, DFDs, DFDs com erro, itens e valor). Os quadros da Mesa
     passam a valer sobre o RECORTE (os protocolados na janela + natureza/tipo; em Tudo sem filtro, os mesmos de antes, com os DFDs
     sem protocolo): **Evolução** (substitui a "Entrada de protocolos": Tudo = 12 semanas seg.–dom., Ano = meses, Mês = dias,
@@ -2622,13 +2624,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`DashboardMesa`** (o Dashboard de governança da Mesa) + **`DashboardMesaEsqueleto`** (a mesma grade enquanto ele carrega
   — arquivo leve, fora do chunk dos gráficos) + **`BarraMetricas`** (a barra de métricas abaixo das KPIs: período, medida,
   pessoa, natureza e tipo de DFD) com o **`NavegadorPeriodo`** (`Tudo | Ano | Mês | Semana | Dia` + ‹ rótulo › + "Hoje"; o
-  rótulo abre o salto a qualquer data — o `MiniMes` do calendário no Dia/Semana, as grades de meses e de anos, com o ponto onde
-  há dados — `diasComDados`) e a
+  rótulo abre o salto a qualquer data — o `MiniMes` do calendário no Dia/Semana [`semMoldura` = sem a moldura de cartão,
+  dentro do painel], as grades de meses e de anos, com o ponto onde há dados — `diasComDados`; ao abrir, o foco vai para a data
+  escolhida; o painel tem a largura dos 7 dias de 44px no toque) e a
   **`TabelaPeriodo`** (linhas × janelas — a planilha de distribuição: coluna do período em destaque com barra de proporção,
   TOTAL e as linhas à parte; cada número é um botão que abre a origem) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
   com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos e dica no hover/foco/toque) e
   **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS; `className` do invólucro e `id`/`title` do
-  gatilho opcionais),
+  gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
+  `aria-haspopup="dialog"`]; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
+  conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), `PeriodoPicker`, `MultiSelectHeader`,
   `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
@@ -2711,11 +2716,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   spinner ao salvar, só texto sem permissão; `atual` = valor fora das opções — ex.: a Situação), **`SeletorPessoa`** (UMA
   pessoa — `Dropdown` + `SeletorBusca`: a lista com a FOTO + o APELIDO, o nome completo embaixo quando difere, o próprio
   usuário primeiro "(eu)", os `extras` no topo com ícone — Todos · Sem responsável —, busca por apelido ou nome, ↑/↓/Enter/Esc
-  com o foco de volta ao gatilho, 44px no toque, a busca só ganha o foco com ponteiro fino; gatilhos `filtro` [o quadrado
-  só-ícone com a FOTO da escolhida — classes do `classeQuadradoFiltro`], `celula` [`PessoaTag` + seta; spinner/só texto ao
-  gravar ou sem permissão] e `campo` [o campo do formulário]; `atual` = a pessoa fora do grupo, sem re-escolha; o painel PARA o
-  clique — numa tabela, tocar nele nunca abre a linha; usos: filtro Responsável e célula da Mesa, edição em massa, Perfil →
-  Responsável padrão),
+  com o foco de volta ao gatilho (sem rolar a tela), 44px no toque, a busca ganha o foco com ponteiro fino ou quando o painel
+  abre pelo teclado — no toque, não abre o teclado sozinha; as opções saem do `opcoesPessoa` puro; gatilhos `filtro` [o
+  quadrado só-ícone com a FOTO da escolhida — classes do `classeQuadradoFiltro`], `celula` [`PessoaTag` + seta] e `campo` [o
+  campo do formulário]; sem `onChange`, só o visual; `salvando` = spinner no lugar da seta e o gatilho travado (`bloqueado`),
+  com o foco nele; `atual` = a pessoa fora do grupo, sem re-escolha; o painel é um `role="dialog"` e PARA o clique — numa
+  tabela, tocar nele nunca abre a linha; para VÁRIAS pessoas, o `SeletorPessoas` em chips; usos: filtro Responsável e célula
+  da Mesa, edição em massa, Perfil → Responsável padrão),
   **`PessoaTag`** (FOTO + APELIDO de uma pessoa — colunas Responsável/Distribuição; nome completo no `title`),
   **`TabelaSobrescritos`** (o RASTRO cinza dos DFDs sobrescritos por outro protocolo, com o link ao protocolo atual),
   `Segmented` com **`ariaLabel`** (nome acessível do grupo — ex.: "Escolha: Objeto" na sobrescrita), **`SeletorFiltro`** (filtro de
@@ -2747,7 +2754,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   toque ampliada (44px de altura; 32px de `lg` para cima, onde a linha é baixa) só para cima/baixo/direita — o navegador
   "puxa" o toque para o controle mais próximo: colado ao valor, tocar no número copiaria em vez de abrir a linha. O clique é
   do botão (não abre a linha); ✓ por 1,5 s + aviso "Copiado: …"), **`SeletorBusca`** (seleção ÚNICA com
-  BUSCA — lista rolável rótulo + detalhe [+ `icone` por opção, ex.: a foto], ↑/↓/Enter, alvos ≥44px, até 200 renderizadas;
+  BUSCA — lista rolável rótulo + detalhe [+ `icone` decorativo por opção, ex.: a foto], ↑/↓/Enter, alvos ≥44px, até 200 renderizadas;
   `autoFoco`/`compacto` opcionais; ex.: o protocolo de destino ao vincular/mover um DFD na Mesa, com nº · Id · assunto ·
   interessado · unidade e o "atual" marcado; a lista do `SeletorPessoa`),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
