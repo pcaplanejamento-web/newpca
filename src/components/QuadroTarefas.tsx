@@ -40,6 +40,8 @@ import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalend
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { FundoDoQuadro } from "./FundoQuadro";
+import { ItensArquivados } from "./ItensArquivados";
+import { TextoNoLugar } from "./TextoNoLugar";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
@@ -81,7 +83,7 @@ const LOTE_MASSA = 50;
 export function QuadroTarefas({
   aba,
   quadro,
-  listas,
+  listas: listasDoServidor,
   tarefas: doServidor,
   etiquetas,
   equipes,
@@ -115,6 +117,15 @@ export function QuadroTarefas({
   const pathname = usePathname();
   const [tarefas, setTarefas] = useState(doServidor);
   useEffect(() => setTarefas(doServidor), [doServidor]);
+  // A ORDEM das listas depois de arrastar (otimista) vale até as listas do servidor chegarem.
+  const [ordemListas, setOrdemListas] = useState<number[] | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera quando as listas do SERVIDOR mudam.
+  useEffect(() => setOrdemListas(null), [listasDoServidor]);
+  const listas = useMemo(
+    () => (ordemListas ? ordemListas.map((id) => listasDoServidor.find((l) => l.id === id)).filter((l): l is ListaTarefas => !!l) : listasDoServidor),
+    [listasDoServidor, ordemListas],
+  );
+  const [verArquivados, setVerArquivados] = useState(false);
   const [filtro, setFiltro] = useState<FiltroTarefas>(FILTRO_TAREFAS_PADRAO);
   // A aba Lista mostra as ativas, as arquivadas ou os TEMPLATES.
   const [mostrar, setMostrar] = useState<"ativas" | "arquivadas" | "templates">("ativas");
@@ -434,6 +445,40 @@ export function QuadroTarefas({
   ];
   const semListas = ativas.length === 0;
   /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
+  /**
+   * REORDENA as listas (arrastar pelo cabeçalho): `indice` = a posição entre as ATIVAS sem a própria. As arquivadas ficam
+   * nos lugares delas (a ordem gravada é a de TODAS). Otimista; falhou = volta.
+   */
+  const moverLista = async (id: number, indice: number) => {
+    const outras = ativas.filter((l) => l.id !== id).map((l) => l.id);
+    const novasAtivas = [...outras.slice(0, indice), id, ...outras.slice(indice)];
+    if (novasAtivas.every((x, i) => x === ativas[i]?.id)) return;
+    let k = 0;
+    const ids = listas.map((l) => (l.arquivada ? l.id : novasAtivas[k++]));
+    setOrdemListas(ids);
+    try {
+      await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "PATCH", { ids });
+      router.refresh();
+    } catch (e) {
+      setOrdemListas(null);
+      toast.error((e as Error).message);
+    }
+  };
+
+  /** RENOMEIA a lista no lugar (o clique no nome). */
+  const renomearLista = async (id: number, nome: string) => {
+    await chamar(`/api/tarefas/listas/${id}`, "PATCH", { nome });
+    router.refresh();
+    return true;
+  };
+
+  /** RENOMEIA o quadro no lugar (o clique no nome, no cabeçalho). */
+  const renomearQuadro = async (nome: string) => {
+    await chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { nome });
+    router.refresh();
+    return true;
+  };
+
   const novaLista = async (nome: string) => {
     await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "POST", { nome });
     router.refresh();
@@ -452,12 +497,31 @@ export function QuadroTarefas({
           >
             <IconChevronLeft className="h-4 w-4" />
           </Link>
+          <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: quadro.cor }} />
           <h1 className="min-w-0">
-            <TrocarQuadro quadro={quadro} aba={aba} favoritos={favs.favoritos} />
+            <TextoNoLugar
+              valor={quadro.nome}
+              onSalvar={podeEditar && !quadro.arquivado ? renomearQuadro : undefined}
+              ariaLabel="Nome do quadro"
+              maxLength={80}
+              className="text-lg font-bold text-text"
+            />
           </h1>
+          <TrocarQuadro quadro={quadro} aba={aba} favoritos={favs.favoritos} soSeta />
           <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
           <Badge>{quadro.grupoNome}</Badge>
           {quadro.arquivado && <Badge tone="amber">Arquivado</Badge>}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="max-sm:w-11 max-sm:px-0"
+            icon={<IconArquivar className="h-4 w-4" />}
+            aria-label="Itens arquivados"
+            title="Itens arquivados — cartões e listas"
+            onClick={() => setVerArquivados(true)}
+          >
+            <span className="max-sm:hidden">Arquivados</span>
+          </Button>
         </div>
         <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           {indicadores.map((i) => (
@@ -516,18 +580,6 @@ export function QuadroTarefas({
             {aba === "lista" && arquivadas && (
               <span className="text-[12.5px] text-muted">Mostrando as ARQUIVADAS — restaure pelo detalhe da tarefa ou pela edição em massa.</span>
             )}
-            {aba === "quadro" && nArquivadas > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMostrar("arquivadas");
-                  router.push(`${pathname}?aba=lista`, { scroll: false });
-                }}
-                className="ml-auto min-h-11 rounded-control px-2 text-[12.5px] text-muted underline-offset-2 hover:text-text-2 hover:underline lg:min-h-[var(--h-control-sm)]"
-              >
-                {num(nArquivadas)} arquivada{nArquivadas === 1 ? "" : "s"} — ver na Lista
-              </button>
-            )}
           </div>
         )}
         {aba === "dashboard" ? (
@@ -548,6 +600,8 @@ export function QuadroTarefas({
           ) : (
             <QuadroKanban
               onNovaLista={quadro.arquivado ? undefined : novaLista}
+              onMoverLista={podeEditar && !quadro.arquivado ? moverLista : undefined}
+              onRenomearLista={podeEditar && !quadro.arquivado ? renomearLista : undefined}
               listas={ativas}
               tarefas={noQuadro}
               etiquetas={etiquetas}
@@ -696,6 +750,16 @@ export function QuadroTarefas({
           setCopiaLista(null);
           router.refresh();
         }}
+      />
+      <ItensArquivados
+        aberto={verArquivados}
+        tarefas={tarefas}
+        listas={listas}
+        podeEditar={podeEditar && !quadro.arquivado}
+        onFechar={() => setVerArquivados(false)}
+        onAbrir={(id) => setAberto({ tipo: "editar", id })}
+        onExcluirLista={setExcluindoLista}
+        onMudou={() => router.refresh()}
       />
       <ExcluirLista
         lista={listas.find((x) => x.id === excluindoLista) ?? null}

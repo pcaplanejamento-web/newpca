@@ -2289,6 +2289,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       `urlFundoCss` — testado). **`FundoDoQuadro`** põe a imagem atrás do espaço do quadro (host `relative isolate`, camada
       `-z-10` até a margem do display) com um véu na cor do tema — só depois de carregar; o `QuadroCard` mostra a imagem na
       faixa (a cor por baixo).
+  - **VISUAL DO TRELLO no quadro + ARRASTAR LISTAS + EDIÇÃO NO LUGAR + ITENS ARQUIVADOS (sem migração):**
+    - **`CartaoTarefa`:** etiquetas CHEIAS na cor com o nome (padrão; tocar alterna para faixas — `useEtiquetasComNome`) e
+      o texto pelo contraste (`textoSobre`, `color.ts` → tokens `--sobre-claro`/`--sobre-escuro`; o mesmo no `ChipEtiqueta`
+      do detalhe); selo "Este cartão é um template."; PRAZO em selo (concluída = verde cheio, atrasada = vermelho, vence =
+      âmbar) e CHECKLIST completo em verde cheio. Com o MOUSE sobre o cartão aparecem o CONTORNO de seleção, o CÍRCULO de
+      concluir (o título abre espaço — largura animada; concluída fica à vista) e os botões EDITAR e DUPLICAR; no toque, o
+      círculo, a alça e o menu "⋯" ficam à vista.
+    - **Listas:** `ColunaTarefas` sem borda (`rounded-xl`, 17,5rem), o NOME editável no lugar (**`TextoNoLugar`** — um clique
+      vira campo com o texto selecionado; Enter/tocar fora grava, Esc desfaz; `PATCH /api/tarefas/listas/[id]`, editores) e
+      "Adicionar um cartão". **ARRASTAR LISTAS** pelo cabeçalho (mouse/caneta; no toque, a alça): **`useArrastoListas`**
+      (`ArrastoCartoes.tsx`, o padrão do arrasto de cartões — coluna PRESA inclinada no cursor, `SombraLista` no destino,
+      rolagem nas bordas, pouso; o clique ao soltar é engolido) → `QuadroTarefas.moverLista` otimista (a ordem de TODAS as
+      listas, as arquivadas nos lugares delas) → `PATCH /api/tarefas/quadros/[id]/listas` (editores).
+    - **Quadro:** o NOME no cabeçalho também é `TextoNoLugar` (editores; `PATCH` do quadro) e a troca de quadro virou só a
+      seta (`TrocarQuadro soSeta`). Botão **"Arquivados"** no cabeçalho → **`ItensArquivados`** (`Segmented` Cartões | Listas +
+      busca; restaurar — o cartão, qualquer membro; a lista, editores — e excluir — o cartão direto, a lista pela
+      `ExcluirLista`); saiu o link "N arquivadas — ver na Lista".
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
   produtividade por grupo.
 

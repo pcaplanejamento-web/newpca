@@ -77,3 +77,19 @@ export function hsvToHex(h: number, s: number, v: number): string {
   const [r, g, b] = hsvToRgb(h, s, v);
   return rgbToHex(r, g, b);
 }
+
+/**
+ * O texto que se lê SOBRE uma cor escolhida pelo usuário (etiqueta sólida, como no Trello): escuro sobre cor clara,
+ * branco sobre cor escura — pela luminância relativa (WCAG). Devolve o TOKEN (`--sobre-claro`/`--sobre-escuro`).
+ */
+export function textoSobre(hex: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "var(--sobre-escuro)";
+  const [r, g, b] = rgb.map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contraste com o branco (1,05/(l+0,05)) × com o quase preto ((l+0,05)/0,06): vence o maior.
+  return 1.05 / (l + 0.05) >= (l + 0.05) / 0.06 ? "var(--sobre-escuro)" : "var(--sobre-claro)";
+}

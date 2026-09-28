@@ -1,5 +1,6 @@
 "use client";
 
+import { textoSobre } from "@/lib/color";
 import { useMemo, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -19,8 +20,8 @@ const VISIVEIS = 12;
 export function ChipEtiqueta({ etiqueta: e }: { etiqueta: Pick<EtiquetaTarefa, "nome" | "cor"> }) {
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-control px-2 py-0.5 text-[12px] font-semibold"
-      style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 16%, var(--surface))`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${e.cor} 35%, transparent)` }}
+      className="inline-flex min-h-8 max-w-full items-center truncate rounded-[4px] px-3 text-[13px] font-semibold"
+      style={{ background: e.cor, color: textoSobre(e.cor) }}
       title={e.nome}
     >
       {e.nome}

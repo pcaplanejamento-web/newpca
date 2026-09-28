@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hexToHsv, hexToRgb, hsvToHex, normalizeHex, rgbToHex } from "../src/lib/color.ts";
+import { hexToHsv, hexToRgb, hsvToHex, normalizeHex, rgbToHex, textoSobre } from "../src/lib/color.ts";
 
 describe("color (hex ↔ rgb ↔ hsv)", () => {
   it("normalizeHex aceita #rgb / rrggbb e rejeita inválidos", () => {
@@ -26,3 +26,12 @@ describe("color (hex ↔ rgb ↔ hsv)", () => {
     }
   });
 });
+
+describe("textoSobre", () => it("textoSobre: escuro sobre cor clara, branco sobre cor escura", () => {
+  assert.equal(textoSobre("#ffffff"), "var(--sobre-claro)");
+  assert.equal(textoSobre("#7dd3fc"), "var(--sobre-claro)");
+  assert.equal(textoSobre("#16a34a"), "var(--sobre-claro)");
+  assert.equal(textoSobre("#9333ea"), "var(--sobre-escuro)");
+  assert.equal(textoSobre("#1e3a8a"), "var(--sobre-escuro)");
+  assert.equal(textoSobre("lixo"), "var(--sobre-escuro)");
+}));

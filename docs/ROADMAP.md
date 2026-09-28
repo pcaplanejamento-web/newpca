@@ -1099,6 +1099,9 @@ cria e segue para a próxima), como no Trello.
 ✅ **Tarefas — duplicar cartão, excluir qualquer lista e imagem de fundo:** o ícone de cópia do cartão o DUPLICA logo abaixo
 (com Desfazer); qualquer lista pode ser excluída (mover os cartões para outra ou excluir tudo); o quadro ganha imagem de
 fundo por LINK — imagem ou pin do Pinterest, sem enviar arquivo (migração `0058`).
+✅ **Tarefas — visual do Trello:** cartões com etiquetas cheias, prazo/checklist em selo e, com o mouse, contorno + círculo +
+editar/duplicar; listas arrastáveis pelo cabeçalho; nomes do quadro e da lista editáveis com um clique; botão "Arquivados"
+(cartões e listas — restaurar/excluir).
 🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
 🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue

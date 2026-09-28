@@ -1,15 +1,16 @@
 "use client";
 
-import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Pessoa } from "@/lib/pessoa";
 import { type CampoTarefa, cartoesDaLista, type EtiquetaTarefa, excedeWip, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
-import { CartaoPreso, SombraCartao, useArrastoCartoes } from "./ArrastoCartoes";
+import { CartaoPreso, SombraCartao, SombraLista, useArrastoCartoes, useArrastoListas } from "./ArrastoCartoes";
 import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
 import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
-import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
+import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconGrip, IconMais, IconModelo, IconPencil, IconPlus } from "./icons";
+import { TextoNoLugar } from "./TextoNoLugar";
 import { toast } from "./Toast";
 
 /**
@@ -38,6 +39,8 @@ export function QuadroKanban({
   onDuplicar,
   menuLista,
   onNovaLista,
+  onMoverLista,
+  onRenomearLista,
 }: {
   /** As listas ATIVAS, na ordem. */
   listas: ListaTarefas[];
@@ -67,10 +70,16 @@ export function QuadroKanban({
   menuLista?: (l: ListaTarefas) => ReactNode;
   /** Cria uma LISTA no fim do quadro (a coluna "Adicionar outra lista"); ausente = sem a coluna. */
   onNovaLista?: (nome: string) => Promise<boolean>;
+  /** REORDENA as listas arrastando pelo cabeçalho (`indice` = a posição sem a própria lista); ausente = não arrasta. */
+  onMoverLista?: (id: number, indice: number) => void;
+  /** Renomeia a lista NO LUGAR (clique no nome); ausente = só leitura. */
+  onRenomearLista?: (id: number, nome: string) => Promise<boolean>;
 }) {
   const rolo = useRef<HTMLDivElement>(null);
   const altura = useAlturaAteOFim(rolo, true);
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoCartoes({ quadro: rolo, onMover });
+  const arrastoL = useArrastoListas({ quadro: rolo, onMover: onMoverLista });
+  const presaL = arrastoL.arrasto ? listas.find((l) => l.id === arrastoL.arrasto?.id) : undefined;
   const mEtiquetas = useMemo(() => new Map(etiquetas.map((e) => [e.id, e])), [etiquetas]);
   const mPessoas = useMemo(() => new Map(pessoas.map((p) => [p.id, p])), [pessoas]);
   const porLista = useMemo(() => new Map(listas.map((l) => [l.id, cartoesDaLista(tarefas, l.id)])), [listas, tarefas]);
@@ -148,6 +157,54 @@ export function QuadroKanban({
     else if (d === "direita" && li < listas.length - 1) onMover(t.id, listas[li + 1].id, Number.MAX_SAFE_INTEGER);
   };
 
+  /** Uma coluna do quadro (a real, ou a PRESA ao cursor — `presa`, sem interação). */
+  const coluna = (l: ListaTarefas, presa = false) => {
+    const cartoes = porLista.get(l.id) ?? [];
+    // A SOMBRA do destino entra na posição `indice` entre os cartões SEM o arrastado.
+    const destinoAqui = !presa && arrasto?.listaId === l.id ? arrasto.indice : -1;
+    let j = 0;
+    return (
+      <ColunaTarefas
+        lista={l}
+        qtd={cartoes.filter((c) => !c.template).length}
+        oculto={!presa && arrastoL.arrasto?.id === l.id}
+        onPegar={presa || !onMoverLista ? undefined : (e) => arrastoL.iniciar(e, l.id)}
+        onRenomear={presa || !onRenomearLista ? undefined : (nome) => onRenomearLista(l.id, nome)}
+        onNova={() => !presa && onNova(l.id)}
+        menu={presa ? undefined : menuLista?.(l)}
+        extra={!presa && onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
+      >
+        {cartoes.map((t, pos) => {
+          const sombra = arrasto && destinoAqui >= 0 && t.id !== arrasto.id && j++ === destinoAqui;
+          return (
+            <Fragment key={t.id}>
+              {sombra && <SombraCartao altura={arrasto.altura} />}
+              {presa ? (
+                <CartaoTarefa tarefa={t} etiquetas={mEtiquetas} campos={campos} pessoas={mPessoas} hoje={hoje} />
+              ) : (
+                <CartaoTarefa
+                  tarefa={t}
+                  etiquetas={mEtiquetas}
+                  campos={campos}
+                  pessoas={mPessoas}
+                  hoje={hoje}
+                  oculto={arrasto?.id === t.id}
+                  onAbrir={() => !foiArrasto() && onAbrir(t.id)}
+                  onPegar={(e) => iniciar(e, t.id, l.id)}
+                  onTeclaMover={(d) => teclaMover(t, d)}
+                  acoes={menu(t, l, pos, cartoes.length)}
+                  onConcluir={t.template ? undefined : () => onConcluir(t.id)}
+                  onDuplicar={onDuplicar && (() => onDuplicar(t.id))}
+                />
+              )}
+            </Fragment>
+          );
+        })}
+        {arrasto && destinoAqui >= 0 && destinoAqui >= cartoes.filter((c) => c.id !== arrasto.id).length && <SombraCartao altura={arrasto.altura} />}
+      </ColunaTarefas>
+    );
+  };
+
   return (
     <>
     {listas.length + (onNovaLista ? 1 : 0) > 1 && (
@@ -186,47 +243,33 @@ export function QuadroKanban({
       className="-mx-[var(--pad-canvas)] flex items-start snap-x snap-mandatory gap-[var(--gap-block)] overflow-x-auto px-[var(--pad-canvas)] pb-2 lg:snap-none"
     >
       <AlturaNoHtml />
-      {listas.map((l) => {
-        const cartoes = porLista.get(l.id) ?? [];
-        // A SOMBRA do destino entra na posição `indice` entre os cartões SEM o arrastado.
-        const destinoAqui = arrasto?.listaId === l.id ? arrasto.indice : -1;
-        let j = 0;
+      {(() => {
+        // A SOMBRA da LISTA em arrasto entra na posição `indice` entre as outras listas.
+        const aL = arrastoL.arrasto;
+        let k = 0;
+        const sombraL = aL && <SombraLista key="sombra-lista" largura={aL.largura} altura={aL.altura} />;
+        const colunas = listas.map((l) => {
+          const antes = aL && l.id !== aL.id && k++ === aL.indice ? sombraL : null;
+          return (
+            <Fragment key={l.id}>
+              {antes}
+              {coluna(l)}
+            </Fragment>
+          );
+        });
         return (
-          <ColunaTarefas
-            key={l.id}
-            lista={l}
-            qtd={cartoes.filter((c) => !c.template).length}
-            onNova={() => onNova(l.id)}
-            menu={menuLista?.(l)}
-            extra={onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
-          >
-            {cartoes.map((t, pos) => {
-              const sombra = arrasto && t.id !== arrasto.id && j++ === destinoAqui;
-              return (
-                <Fragment key={t.id}>
-                  {sombra && <SombraCartao altura={arrasto.altura} />}
-                  <CartaoTarefa
-                    tarefa={t}
-                    etiquetas={mEtiquetas}
-                    campos={campos}
-                    pessoas={mPessoas}
-                    hoje={hoje}
-                    oculto={arrasto?.id === t.id}
-                    onAbrir={() => !foiArrasto() && onAbrir(t.id)}
-                    onPegar={(e) => iniciar(e, t.id, l.id)}
-                    onTeclaMover={(d) => teclaMover(t, d)}
-                    acoes={menu(t, l, pos, cartoes.length)}
-                    onConcluir={t.template ? undefined : () => onConcluir(t.id)}
-                    onDuplicar={onDuplicar && (() => onDuplicar(t.id))}
-                  />
-                </Fragment>
-              );
-            })}
-            {arrasto && destinoAqui >= 0 && destinoAqui >= cartoes.filter((c) => c.id !== arrasto.id).length && <SombraCartao altura={arrasto.altura} />}
-          </ColunaTarefas>
+          <>
+            {colunas}
+            {aL && aL.indice >= listas.filter((l) => l.id !== aL.id).length && sombraL}
+          </>
         );
-      })}
+      })()}
       {onNovaLista && <NovaLista onCriar={onNovaLista} />}
+      {arrastoL.arrasto && presaL && (
+        <CartaoPreso arrasto={arrastoL.arrasto} fantasma={arrastoL.fantasma}>
+          {coluna(presaL, true)}
+        </CartaoPreso>
+      )}
       {arrasto && preso && (
         <CartaoPreso arrasto={arrasto} fantasma={fantasma}>
           <CartaoTarefa tarefa={preso} etiquetas={mEtiquetas} campos={campos} pessoas={mPessoas} hoje={hoje} />
@@ -276,7 +319,7 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
     }
   };
   return (
-    <div ref={caixa} data-lista="nova" className="w-[min(85vw,19rem)] shrink-0 snap-center lg:w-[19rem]">
+    <div ref={caixa} data-lista="nova" className="w-[min(85vw,17.5rem)] shrink-0 snap-center lg:w-[17.5rem]">
       {aberta ? (
         <div className="space-y-2 rounded-card border border-border bg-surface-2 p-2">
           <input
@@ -318,9 +361,10 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
 }
 
 /**
- * UMA LISTA do quadro: o nome, a contagem (com o LIMITE — WIP — em âmbar quando passa), a pilha de cartões (rola por
- * dentro no desktop) e, no pé, "Adicionar tarefa" — abre o banner da tarefa nova nesta lista (`onNova`) — e o `extra` (o
- * seletor de templates).
+ * UMA LISTA do quadro (no visual do Trello): o NOME — um clique edita no lugar (`onRenomear`) —, a contagem (com o LIMITE —
+ * WIP — em âmbar quando passa), o menu "…", a pilha de cartões (rola por dentro no desktop) e, no pé, "Adicionar um cartão"
+ * — abre o banner da tarefa nova nesta lista (`onNova`) — e o `extra` (o seletor de templates). O CABEÇALHO arrasta a lista
+ * (`onPegar`; no toque, pela alça); `oculto` = a lista em arrasto (a sombra está no lugar dela).
  */
 export function ColunaTarefas({
   lista: l,
@@ -328,6 +372,9 @@ export function ColunaTarefas({
   onNova,
   extra,
   menu,
+  onPegar,
+  onRenomear,
+  oculto = false,
   children,
 }: {
   lista: ListaTarefas;
@@ -336,6 +383,11 @@ export function ColunaTarefas({
   extra?: ReactNode;
   /** O menu "…" da lista, no cabeçalho. */
   menu?: ReactNode;
+  /** Começa o arrasto da LISTA (o cabeçalho no mouse; a alça no toque). Ausente = não arrasta. */
+  onPegar?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** Renomeia a lista (o nome vira campo com um clique). Ausente = só leitura. */
+  onRenomear?: (nome: string) => Promise<boolean>;
+  oculto?: boolean;
   children: ReactNode;
 }) {
   const passou = excedeWip(qtd, l.limiteWip);
@@ -343,29 +395,47 @@ export function ColunaTarefas({
     <section
       data-lista={l.id}
       aria-label={`Lista ${l.nome}`}
-      className="flex w-[min(85vw,19rem)] shrink-0 snap-center flex-col rounded-card border border-border bg-surface-2 lg:max-h-full lg:w-[19rem]"
+      className={`flex w-[min(85vw,17.5rem)] shrink-0 snap-center flex-col rounded-xl bg-surface-2 shadow-ring lg:max-h-full lg:w-[17.5rem] ${oculto ? "hidden" : ""}`}
     >
-      <header className="flex items-center gap-2 px-3 pt-2.5 pb-2">
+      <header
+        onPointerDown={(e) => {
+          // Mouse/caneta: o cabeçalho inteiro arrasta — menos o campo do nome e o menu.
+          if (!onPegar || e.pointerType === "touch" || (e.target as HTMLElement).closest("input, [data-sem-arrasto]")) return;
+          onPegar(e);
+        }}
+        className={`flex items-center gap-1 py-1.5 pr-1 pl-3 ${onPegar ? "lg:cursor-grab" : ""}`}
+      >
         {l.concluida && <IconCheck className="h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} aria-label="Lista de concluídas" />}
-        <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text" title={l.nome}>
-          {l.nome}
+        <h2 className="min-w-0 flex-1">
+          <TextoNoLugar valor={l.nome} onSalvar={onRenomear} ariaLabel="Nome da lista" className="text-[14px] font-semibold text-text" />
         </h2>
         <span
-          className="shrink-0 rounded-full px-2 py-px text-[11px] font-semibold tabular-nums"
+          className="shrink-0 rounded-full px-1.5 py-px text-[12px] font-semibold tabular-nums"
           title={l.limiteWip ? `Limite de ${l.limiteWip} cartões nesta lista${passou ? " — passou do limite" : ""}` : `${qtd} cartões`}
           style={passou ? { color: "var(--warn)", background: "color-mix(in srgb, var(--warn) 14%, var(--surface))" } : { color: "var(--muted)" }}
         >
           {l.limiteWip ? `${qtd}/${l.limiteWip}` : qtd}
         </span>
-        {menu}
+        {onPegar && (
+          <span
+            role="presentation"
+            data-sem-arrasto
+            onPointerDown={(e) => e.pointerType === "touch" && onPegar(e)}
+            title="Arrastar a lista"
+            className="hidden h-11 w-9 shrink-0 touch-none items-center justify-center text-faint any-pointer-coarse:flex"
+          >
+            <IconGrip className="h-4 w-4" />
+          </span>
+        )}
+        {menu && <span data-sem-arrasto className="shrink-0">{menu}</span>}
       </header>
-      <div data-cartoes className="flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+      <div data-cartoes className="flex min-h-2 flex-1 flex-col gap-2 overflow-y-auto px-2 pt-0.5 pb-1">
         {children}
       </div>
       {onNova && (
-        <div className="flex items-center gap-1 px-2 pb-2">
-          <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-muted" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar tarefa em ${l.nome}`} onClick={onNova}>
-            Adicionar tarefa
+        <div className="flex items-center gap-1 px-2 pt-1 pb-2">
+          <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-text-2" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar um cartão em ${l.nome}`} onClick={onNova}>
+            Adicionar um cartão
           </Button>
           {extra}
         </div>
