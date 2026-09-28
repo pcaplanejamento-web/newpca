@@ -54,7 +54,7 @@ export function PastaQuadro({
   const folhas = quadros.slice(0, 3);
   // Quanto a pasta abre: fechada (entreabre no hover/foco), aberta, alvo de um arrasto.
   const frente = alvo ? "[transform:rotateX(-26deg)]" : aberta ? "[transform:rotateX(-18deg)]" : "group-hover:[transform:rotateX(-10deg)] group-focus-visible:[transform:rotateX(-10deg)]";
-  const sobe = alvo ? "-translate-y-5" : aberta ? "-translate-y-4" : "group-hover:-translate-y-2 group-focus-visible:-translate-y-2";
+  const sobe = alvo || aberta ? "-translate-y-3" : "group-hover:-translate-y-2 group-focus-visible:-translate-y-2";
   const destaque = alvo || aberta;
   const mov = "transition-transform duration-[var(--motion-duration)] ease-[var(--motion-ease)]";
   return (
@@ -77,13 +77,13 @@ export function PastaQuadro({
         </span>
         {/* O corpo em CAMADAS (sem corte): as COSTAS atrás, as FOLHAS por cima — ultrapassando o contorno de cima das
             costas, o efeito 3D — e a FRENTE na frente. */}
-        <span className="relative flex-1 [perspective:900px]">
+        <span className="relative flex-1">
           <span
             aria-hidden
             className={`absolute inset-0 rounded-card rounded-tl-none shadow-ring ${destaque ? "ring-2 ring-accent" : ""}`}
             style={{ background: `color-mix(in srgb, ${pasta.cor} 55%, var(--surface))` }}
           />
-          <span aria-hidden className={`absolute inset-x-[10%] top-1 z-10 h-[58%] ${mov} ${sobe}`}>
+          <span aria-hidden className={`absolute inset-x-[14%] top-3 z-10 h-[58%] ${mov} ${sobe}`}>
             {(folhas.length ? folhas : [null, null]).map((q, i, l) => (
               <span
                 key={q ? q.id : `v${i}`}
