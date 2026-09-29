@@ -12,7 +12,8 @@ import { ChartCard } from "./ChartCard";
 import { MetricasChart } from "./charts/MetricasChart";
 import { type Column, DataTable } from "./DataTable";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconActivity, IconAlert, IconKey, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
+import { IconActivity, IconAlert, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
+import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
 import { KpiStat } from "./KpiStat";
 import { OrigemDados } from "./OrigemDados";
@@ -24,7 +25,8 @@ const COLS_DIA: Column<PontoMetrica>[] = [
   { key: "err", header: "Erros", nowrap: true, filter: "range", numero: (p) => p.errors, render: (p) => num(p.errors) },
 ];
 
-// Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento) e o Trello (conta institucional).
+// Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento), o Trello (conta institucional) e o
+// Resend (e-mails).
 // Segredos são write-only: o secret do Turnstile é cifrado no servidor e nunca reexibido; o
 // monitoramento reusa os Worker Secrets CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID (mesmos do Armazenamento).
 // Só componentes do design-system.
@@ -74,16 +76,22 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
   const [secret, setSecret] = useState(""); // sempre começa vazio (write-only)
   const [monAtivo, setMonAtivo] = useState(integracoes.monitoramento.ativo);
   const [trello, setTrello] = useState<ValorTrello>({ ativo: integracoes.trello.ativo, apiKey: integracoes.trello.apiKey, token: "", segredo: "" });
+  const [resend, setResend] = useState<ValorResend>({
+    ativo: integracoes.resend.ativo,
+    apiKey: "",
+    remetente: integracoes.resend.remetente,
+    urlSistema: integracoes.resend.urlSistema,
+  });
   const [dia, setDia] = useState<PontoMetrica | null>(null);
   const [diaMostrado, setDiaMostrado] = useState<PontoMetrica | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | null>(null);
+  const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | "resend" | null>(null);
 
   const secretDefinido = integracoes.turnstile.secretDefinido;
   const semChaveMestra = !integracoes.temChaveMestra;
 
   async function salvar() {
-    if ((secret.length > 0 || trello.token || trello.segredo) && semChaveMestra) {
+    if ((secret.length > 0 || trello.token || trello.segredo || resend.apiKey) && semChaveMestra) {
       toast.error("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar o segredo.");
       return;
     }
@@ -93,6 +101,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         turnstile: { ativo: tsAtivo, siteKey: siteKey.trim(), secret },
         monitoramento: { ativo: monAtivo },
         trello: { ...trello, apiKey: trello.apiKey.trim() },
+        resend: { ...resend, apiKey: resend.apiKey.trim(), remetente: resend.remetente.trim(), urlSistema: resend.urlSistema.trim() },
       };
       const res = await fetch("/api/admin/integracoes", {
         method: "PATCH",
@@ -103,6 +112,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
       setSecret("");
       setTrello((t) => ({ ...t, token: "", segredo: "" }));
+      setResend((r) => ({ ...r, apiKey: "" }));
       toast.success("Integrações salvas.");
       router.refresh();
     } catch (e) {
@@ -112,7 +122,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     }
   }
 
-  async function testar(alvo: "turnstile" | "monitoramento" | "trello") {
+  async function testar(alvo: "turnstile" | "monitoramento" | "trello" | "resend") {
     setTestando(alvo);
     try {
       const res = await fetch("/api/admin/integracoes/testar", {
@@ -123,7 +133,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
       const j = (await res.json()) as { ok?: boolean; error?: string; detalhe?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Falha no teste.");
       toast.success(j.detalhe ?? "Conexão OK.");
-      if (alvo === "trello") router.refresh();
+      if (alvo === "trello" || alvo === "resend") router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha no teste.");
     } finally {
@@ -162,6 +172,12 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
   const trStatus: [Tone, string] = !trello.ativo
     ? ["slate", "Desativado"]
     : integracoes.trello.conta
+      ? ["emerald", "Conectado"]
+      : ["amber", "Incompleto"];
+
+  const reStatus: [Tone, string] = !resend.ativo
+    ? ["slate", "Desativado"]
+    : integracoes.resend.verificado
       ? ["emerald", "Conectado"]
       : ["amber", "Incompleto"];
 
@@ -318,6 +334,16 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         status={<StatusBadge tone={trStatus[0]}>{trStatus[1]}</StatusBadge>}
       >
         <IntegracaoTrello valor={trello} onChange={setTrello} view={integracoes.trello} onTestar={() => testar("trello")} testando={testando === "trello"} />
+      </Cartao>
+
+      {/* Resend — o envio dos e-mails do sistema (avisos do sino, cadastro, liberação de acesso) */}
+      <Cartao
+        titulo="E-mail (Resend)"
+        provedor="Resend · avisos do sino, cadastro e liberação de acesso por e-mail"
+        icon={<IconMail className="h-5 w-5" />}
+        status={<StatusBadge tone={reStatus[0]}>{reStatus[1]}</StatusBadge>}
+      >
+        <IntegracaoResend valor={resend} onChange={setResend} view={integracoes.resend} onTestar={() => testar("resend")} testando={testando === "resend"} />
       </Cartao>
 
       {/* Em breve (sem lógica — cards informativos) */}

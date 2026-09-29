@@ -1226,8 +1226,12 @@ quadro e o vínculo de um item do Trello nunca vai para dois itens daqui (corrig
 ✅ **Tarefas — Configuração enxuta:** só o que não se faz no quadro (cor/descrição, arquivar, privado, equipes, campos,
 automações, Trello, modelos); limite de cartões e "lista de concluídas" no menu da lista, fundo e listas do mês no menu do
 quadro, excluir etiqueta direto no cartão.
-🔜 **Do Google Agenda — a seguir:** lembrete também por e-mail (Resend).
-🔜 **Próximo:** e-mail das notificações (Resend, quando a integração sair do "em breve") e relatório de produtividade por grupo.
+✅ **Do Google Agenda:** lembrete também por e-mail (Resend).
+✅ **E-mail pelo Resend:** Integrações → E-mail (Resend) com a chave cifrada, o remetente do domínio verificado e o teste
+que envia um e-mail; os avisos do sino (atribuída, menção, convite, prazo, lembrete…) chegam por e-mail — cada pessoa
+escolhe quais no Perfil —, os ADMs recebem o aviso de cadastro novo e a pessoa aprovada, o de acesso liberado. Os de prazo e
+lembrete saem na conferência a cada 5 minutos.
+🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
 Prefeitura (dotação por **Órgão/Unidade/Elemento de despesa**) a partir do **CUBO.XLSX**. **Somente leitura**: importar

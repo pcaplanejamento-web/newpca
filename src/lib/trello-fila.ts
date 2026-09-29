@@ -1,7 +1,7 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, eq } from "drizzle-orm";
 import { tarefaCampos, tarefaEtiquetas, tarefaListas, tarefas, trelloQuadros, trelloVinculos } from "@/db/schema";
 import { getDb } from "./db";
+import { depoisDaResposta as depoisDaRespostaComum } from "./segundo-plano";
 import { comandoEnfileirar } from "./trello-sql";
 
 /**
@@ -49,14 +49,9 @@ export async function enfileirar(quadroId: number, direcao: "saida" | "entrada",
   await comandoEnfileirar(getDb(), quadroId, direcao, tipo, alvo);
 }
 
-/** Roda `p` depois da resposta (o Worker espera) — fora do Worker, só dispara. */
+/** Roda `p` depois da resposta (o utilitário comum de `segundo-plano.ts`, com o rótulo do Trello). */
 export function depoisDaResposta(p: Promise<unknown>) {
-  const seguro = p.catch((e) => console.error("[trello] falha em segundo plano:", e));
-  try {
-    getCloudflareContext().ctx.waitUntil(seguro);
-  } catch {
-    // sem contexto (testes/scripts): segue sozinho
-  }
+  depoisDaRespostaComum(p, "trello");
 }
 
 /**

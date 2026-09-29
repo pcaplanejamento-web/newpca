@@ -1,3 +1,6 @@
+import { enviarEmailDireto, emailsDosAdmins } from "@/lib/email";
+import { emailCadastroPendente } from "@/lib/email-core";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
@@ -91,7 +94,11 @@ export async function POST(req: Request) {
       });
     }
 
-    // Pendente de aprovação por um admin.
+    // Pendente de aprovação por um admin — os ADMs recebem o aviso por e-mail (com o Resend ativo; depois da resposta).
+    depoisDaResposta(
+      emailsDosAdmins().then((admins) => enviarEmailDireto(admins, (ctx) => emailCadastroPendente({ nome, email }, ctx))),
+      "email",
+    );
     return NextResponse.json({ ok: true, autenticado: false, pendente: true });
   } catch (err) {
     console.error("Falha no cadastro:", err);

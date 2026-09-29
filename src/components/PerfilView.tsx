@@ -8,13 +8,15 @@ import { APELIDO_MAX, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { PasswordField } from "./Field";
+import { Checkbox, PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconMail, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
+import { Switch } from "./Switch";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { ThemeToggle } from "./ThemeToggle";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
+import { CHAVE_PREF_EMAIL, type PrefsEmail, ROTULO_TIPO_EMAIL, TIPOS_EMAIL } from "@/lib/email-core";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
   admin: "Administrador",
@@ -43,6 +45,7 @@ export function PerfilView({
   protocolacao = null,
   mesaResponsavel = null,
   semModulos = false,
+  avisosEmail = null,
 }: {
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
@@ -52,6 +55,8 @@ export function PerfilView({
   mesaResponsavel?: MesaResponsavel | null;
   /** O grupo ativo não libera nenhum módulo (Mesa, PCA, Catálogo, Orçamento): avisa o que fazer. */
   semModulos?: boolean;
+  /** Os avisos do sino que chegam por E-MAIL (só com o Resend ativo; `null` = sem o card). */
+  avisosEmail?: PrefsEmail | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -85,6 +90,32 @@ export function PerfilView({
   const [mesaResp, setMesaResp] = useState<MesaResponsavel>(mesaResponsavel ?? "eu");
   const [salvandoMesa, setSalvandoMesa] = useState(false);
   const [msgMesa, setMsgMesa] = useState<Msg>(null);
+
+  // E-mail: quais avisos do sino chegam também por e-mail
+  const [emailPrefs, setEmailPrefs] = useState<PrefsEmail | null>(avisosEmail);
+  const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [msgEmail, setMsgEmail] = useState<Msg>(null);
+
+  async function salvarEmail(e: FormEvent) {
+    e.preventDefault();
+    if (!emailPrefs) return;
+    setSalvandoEmail(true);
+    setMsgEmail(null);
+    try {
+      const res = await fetch("/api/preferencias/tabela", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chave: CHAVE_PREF_EMAIL, valor: emailPrefs }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
+      setMsgEmail({ tipo: "ok", texto: "Preferência salva — vale para os próximos avisos." });
+    } catch (err) {
+      setMsgEmail({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
+    } finally {
+      setSalvandoEmail(false);
+    }
+  }
 
   /** Grava UMA preferência (cada card salva a sua) — mesma rota, mesmo tratamento de erro. */
   async function gravarPreferencia(corpo: Record<string, unknown>): Promise<void> {
@@ -366,6 +397,47 @@ export function PerfilView({
           <Aviso msg={msgPref} />
           <div className="mt-4 flex justify-end">
             <Button type="submit" loading={salvandoPref} icon={<IconSave className="h-[18px] w-[18px]" />}>
+              Salvar preferência
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {/* E-mail: os avisos do sino que chegam também por e-mail (só com o Resend ativo) */}
+      {emailPrefs && (
+        <form onSubmit={salvarEmail} className={`lg:col-span-2 ${cardCls}`}>
+          <h3 className="flex items-center gap-2 text-sm font-bold text-text">
+            <IconMail className="h-4 w-4" /> E-mail
+          </h3>
+          <div className="mt-4 space-y-3">
+            <Switch
+              checked={emailPrefs.ligado}
+              onChange={(ligado) => setEmailPrefs({ ...emailPrefs, ligado })}
+              label={`Receber avisos por e-mail em ${usuario.email}`}
+            />
+            <fieldset disabled={!emailPrefs.ligado} className={emailPrefs.ligado ? "" : "opacity-60"}>
+              <legend className={labelCls}>Quais avisos</legend>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                {TIPOS_EMAIL.map((t) => (
+                  <Checkbox
+                    key={t}
+                    label={ROTULO_TIPO_EMAIL[t]}
+                    checked={emailPrefs.tipos.includes(t)}
+                    onChange={(e) =>
+                      setEmailPrefs({
+                        ...emailPrefs,
+                        tipos: e.target.checked ? TIPOS_EMAIL.filter((x) => x === t || emailPrefs.tipos.includes(x)) : emailPrefs.tipos.filter((x) => x !== t),
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </fieldset>
+            <p className="text-[12px] text-muted">Os avisos continuam no sino do sistema; aqui você escolhe quais também chegam por e-mail.</p>
+          </div>
+          <Aviso msg={msgEmail} />
+          <div className="mt-4 flex justify-end">
+            <Button type="submit" loading={salvandoEmail} icon={<IconSave className="h-[18px] w-[18px]" />}>
               Salvar preferência
             </Button>
           </div>

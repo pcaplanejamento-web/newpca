@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailDoRemetente } from "./integracoes-core.ts";
 
 // Validação do PATCH /api/admin/integracoes. Módulo só-schema (sem getDb) → testável.
 // Segredos chegam em TEXTO PURO novo OU vazio (= manter o atual). A rota cifra antes
@@ -24,4 +25,28 @@ export const integracoesSchema = z.object({
       segredo: z.string().trim().max(300).default(""),
     })
     .default({ ativo: false, apiKey: "", token: "", segredo: "" }),
+  // Resend: a chave chega em texto puro ("" = manter) e é cifrada; o remetente é "Nome <avisos@dominio>" ou só o e-mail.
+  resend: z
+    .object({
+      ativo: z.boolean().default(false),
+      apiKey: z
+        .string()
+        .trim()
+        .max(200)
+        .regex(/^(re_[A-Za-z0-9_]+)?$/, "Chave do Resend inválida (começa com re_).")
+        .default(""),
+      remetente: z
+        .string()
+        .trim()
+        .max(200)
+        .refine((v) => !v || !!emailDoRemetente(v), "Remetente inválido — use Nome <avisos@seudominio> ou só o e-mail.")
+        .default(""),
+      urlSistema: z
+        .string()
+        .trim()
+        .max(200)
+        .refine((v) => !v || /^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(v), "Endereço do sistema inválido (https://…, sem caminho).")
+        .default(""),
+    })
+    .default({ ativo: false, apiKey: "", remetente: "", urlSistema: "" }),
 });

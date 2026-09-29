@@ -3,6 +3,7 @@ import { notificacoes, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, u
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
+import { enviarPendentesDepois } from "./email";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario } from "./grupos";
 import { nomeExibicao, urlFoto } from "./pessoa";
@@ -46,6 +47,8 @@ export async function notificar(linhas: NovaNotificacao[], atorId?: number | nul
     const db = getDb();
     const cmds = comandosNotificacoes(db, validas);
     await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+    // O e-mail dos avisos novos sai DEPOIS da resposta (só com o Resend ativo; a preferência de cada pessoa decide).
+    enviarPendentesDepois();
   } catch (e) {
     console.error("notificar falhou", e);
   }
@@ -237,6 +240,18 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
 const derivar = async (u: UsuarioSessao, grupoIds: number[] | null) => {
   await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds)]);
 };
+
+/**
+ * DERIVA os avisos de prazo e lembrete de uma pessoa FORA da leitura do sino (o cron dos e-mails: o aviso nasce mesmo que
+ * ninguém abra o sistema). Nunca lança.
+ */
+export async function derivarDaPessoa(u: UsuarioSessao): Promise<void> {
+  try {
+    await derivar(u, await gruposDe(u));
+  } catch (e) {
+    console.error("derivar da pessoa falhou", e);
+  }
+}
 
 const gruposDe = async (u: UsuarioSessao, grupoIds?: number[]) => (u.role === "admin" ? null : (grupoIds ?? (await gruposDoUsuario(u.id)).map((g) => g.id)));
 

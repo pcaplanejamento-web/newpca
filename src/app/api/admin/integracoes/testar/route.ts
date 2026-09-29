@@ -3,15 +3,19 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { getMetricasWorker } from "@/lib/cf-analytics";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getIntegracoes, gravarIntegracoes, lerBlobConfiguracoes } from "@/lib/integracoes";
-import { coerceIntegracoes } from "@/lib/integracoes-core";
+import { contextoEmail } from "@/lib/email";
+import { emailTeste } from "@/lib/email-core";
+import { coerceIntegracoes, dominioDoRemetente } from "@/lib/integracoes-core";
+import { ErroResend } from "@/lib/resend-api";
+import { resendDaConfig } from "@/lib/resend-config";
 import { trelloDaConfig } from "@/lib/trello-config";
 import { testarTurnstile } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
-const testarSchema = z.object({ alvo: z.enum(["turnstile", "monitoramento", "trello"]) });
+const testarSchema = z.object({ alvo: z.enum(["turnstile", "monitoramento", "trello", "resend"]) });
 
-/** Testa a conexão de uma integração (usa os segredos JÁ configurados); no Trello, confirma e guarda a conta. */
+/** Testa a conexão de uma integração (usa os segredos JÁ configurados); no Trello, confirma e guarda a conta; no Resend, confere o domínio e envia um e-mail de teste. */
 export async function POST(req: Request) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -30,6 +34,34 @@ export async function POST(req: Request) {
     } catch (e) {
       return erro((e as Error).message, 422);
     }
+  }
+  if (corpo.data.alvo === "resend") {
+    // Confere o DOMÍNIO do remetente no Resend (a chave "só envio" não lista domínios — aí vale o envio) e manda um
+    // e-mail de TESTE a quem testou. Enviou = domínio verificado (o Resend recusa remetente de domínio não verificado).
+    const r = await resendDaConfig();
+    if ("erro" in r) return erro(r.erro, 422);
+    const dominio = dominioDoRemetente(r.remetente);
+    let situacao = "";
+    try {
+      const d = (await r.cliente.dominios()).find((x) => x.name.toLowerCase() === dominio);
+      if (!d) return erro(`O domínio ${dominio} não está cadastrado no Resend (resend.com → Domínios).`, 422);
+      if (d.status !== "verified")
+        return erro(`O domínio ${dominio} ainda não está verificado no Resend (situação: ${d.status}). Confira os registros DNS e clique em "reiniciar verificação".`, 422);
+      situacao = " Domínio verificado.";
+    } catch (e) {
+      // 401 da chave restrita ao envio: segue para o teste de envio.
+      if (!(e instanceof ErroResend) || e.status !== 401) return erro((e as Error).message, 422);
+    }
+    const integ = coerceIntegracoes((await lerBlobConfiguracoes()).integracoes);
+    try {
+      const c = emailTeste(await contextoEmail(r.urlSistema));
+      await r.cliente.enviar({ from: r.remetente, to: [g.u.email], subject: c.assunto, html: c.html, text: c.texto });
+    } catch (e) {
+      if (integ.resend) await gravarIntegracoes({ ...integ, resend: { ...integ.resend, dominio, verificado: false } }, g.u.id);
+      return erro((e as Error).message, 422);
+    }
+    if (integ.resend) await gravarIntegracoes({ ...integ, resend: { ...integ.resend, dominio, verificado: true } }, g.u.id);
+    return ok({ detalhe: `E-mail de teste enviado para ${g.u.email}.${situacao}` });
   }
   if (corpo.data.alvo === "turnstile") {
     const integ = await getIntegracoes({ fresco: true });

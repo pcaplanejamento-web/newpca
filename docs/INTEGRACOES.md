@@ -1,8 +1,8 @@
 # Integrações externas — configuração (ADM)
 
 A tela **Configurações → Integrações** (`/painel/integracoes`, admin) conecta serviços externos.
-Escopo atual: **Cloudflare** (captcha Turnstile + monitoramento). Google login e e-mail (Resend)
-aparecem como **em breve**.
+Integrações: **Cloudflare** (captcha Turnstile + monitoramento), **Trello** e **e-mail (Resend)**. Google login
+aparece como **em breve**.
 
 Tudo começa **desligado** — nada muda no sistema até você ativar e configurar. Os valores secretos
 (chave secreta do Turnstile) são **cifrados** no servidor e **nunca reexibidos**.
@@ -79,13 +79,34 @@ O token e o segredo ficam cifrados com a `INTEGRACOES_CHAVE` e nunca voltam à t
    ligado lá). Se o aviso "O Trello não liberou os campos personalizados" aparecer, ajuste isso no Trello e clique em
    **Tentar de novo** (Configuração → Trello).
 
+## E-mail (Resend)
+Envia por e-mail os avisos do sino (tarefa atribuída, menção, convite, prazo, lembrete…), o aviso de cadastro novo aos
+ADMs e a liberação de acesso à pessoa aprovada.
+1. **Domínio no Resend** (resend.com → Domínios → governarv.com.br, região São Paulo):
+   - **DKIM** (TXT `resend._domainkey`) e **envio** (CNAMEs `send`/`rsend`, "Somente DNS") verificados no Cloudflare.
+   - **Desligue "Ativar recebimento"**: o sistema só ENVIA. O MX `@` do Resend conflita com o e-mail que o domínio já
+     recebe — não troque o MX da raiz. Para receber, use um subdomínio.
+   - "Recurso SES inválido" com os CNAMEs verificados = sobra do setup antigo: apague no Cloudflare os MX/TXT antigos com
+     nome `send`/`rsend` (ex.: `feedback-smtp…amazonses.com`, `v=spf1 include:amazonses.com`) e clique em **reiniciar
+     verificação**. Persistindo, use **Configuração automática** (Cloudflare).
+2. **Chave de API** (resend.com → API Keys): "Full access" deixa o teste conferir o domínio; "Sending access" também
+   funciona (o teste só envia).
+3. No sistema: **Administração → Integrações → E-mail (Resend)** → ative, cole a chave (`re_…`), o **remetente**
+   (`Plataforma PCA <avisos@governarv.com.br>` — do domínio verificado) e o **endereço do sistema** → **Salvar** →
+   **Testar e enviar e-mail de teste** (chega no seu e-mail; o cartão mostra o domínio "Verificado").
+4. Cada pessoa escolhe no **Perfil → E-mail** quais avisos quer receber (padrão: os que pedem ação).
+
+Os avisos de evento saem na hora; os de prazo e lembrete, na conferência a cada 5 minutos (cron do Worker — precisa da
+`INTEGRACOES_CHAVE`). A chave fica cifrada e nunca volta à tela.
+
 ## Em breve
 - **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.
-- **E-mail (Resend)** — envio de avisos (aprovação de cadastro etc.); exigirá domínio verificado no Resend.
 
 ## Notas técnicas
 - Config não-secreta (flags, site key) fica no blob `configuracoes` id=1 (chave `integracoes`, sem migração).
 - Segredo do Turnstile: cifrado em `src/lib/cripto.ts` (AES-GCM), wrapper `src/lib/integracoes-segredos.ts`.
 - Verificação do captcha: `src/lib/turnstile.ts` (+ `cloudflare-core.ts`); métricas: `getMetricasWorker`
   em `src/lib/cf-analytics.ts` (+ `cloudflare-core.ts`).
+- E-mails: cliente `src/lib/resend-api.ts`, modelos/preferências `src/lib/email-core.ts`, envio `src/lib/email.ts`
+  (pendentes em `notificacoes.email_enviado_em`, migração `0065`), cron `/api/integracoes/email/cron`.
 - Deploy é sempre `git push origin main`. Secrets são definidos **fora** do repositório (wrangler/painel).

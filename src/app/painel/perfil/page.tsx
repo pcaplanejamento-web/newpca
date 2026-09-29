@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { PerfilView } from "@/components/PerfilView";
 import { getUsuarioAtual, type UsuarioSessao } from "@/lib/auth";
+import { CHAVE_PREF_EMAIL, lerPrefsEmail } from "@/lib/email-core";
 import { abasPermitidas, getGrupoAtivo } from "@/lib/grupos";
+import { getIntegracoes } from "@/lib/integracoes";
+import { resendConfigurado } from "@/lib/integracoes-core";
+import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -14,15 +18,26 @@ async function protocolacaoDe(u: UsuarioSessao, grupoId: number | null) {
   return { pessoas, responsavelPadraoId, foraDoGrupo: fora ?? null };
 }
 
+/** Os avisos que chegam por e-mail — só com o Resend ativo (sem ele, o card nem aparece). */
+async function avisosEmailDe(usuarioId: number) {
+  try {
+    if (!resendConfigurado(await getIntegracoes())) return null;
+    return lerPrefsEmail((await listarPreferenciasTabela(usuarioId, CHAVE_PREF_EMAIL))[CHAVE_PREF_EMAIL]);
+  } catch {
+    return null;
+  }
+}
+
 export default async function PerfilPage() {
   const u = await getUsuarioAtual();
   if (!u) redirect("/login");
   const grupo = await getGrupoAtivo(u);
   const editor = u.role === "admin" || u.role === "gestor";
-  const [abas, protocolacao, mesaResponsavel] = await Promise.all([
+  const [abas, protocolacao, mesaResponsavel, avisosEmail] = await Promise.all([
     abasPermitidas(u, grupo),
     editor ? protocolacaoDe(u, grupo?.id ?? null) : null,
     mesaResponsavelGravado(u.id),
+    avisosEmailDe(u.id),
   ]);
   // Sem nenhum módulo liberado no grupo ativo, o `/painel` traz para cá — o Perfil diz o que fazer. A preferência da Mesa
   // (com que responsável ela abre) só para quem vê a Mesa.
@@ -32,6 +47,7 @@ export default async function PerfilPage() {
       protocolacao={protocolacao}
       mesaResponsavel={abas.has("dfd") ? mesaResponsavel : null}
       semModulos={abas.size === 0}
+      avisosEmail={avisosEmail}
     />
   );
 }

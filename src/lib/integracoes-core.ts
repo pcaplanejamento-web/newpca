@@ -2,7 +2,7 @@
  * Núcleo PURO das integrações externas (sem `getDb`/env → testável como `avaliacao-core`).
  * Guarda a config no blob `configuracoes` id=1, sob a chave `integracoes` (sem migração).
  * Os SEGREDOS ficam CIFRADOS (blob "<ivHex>:<ctHex>") e nunca são devolvidos ao cliente —
- * o GET usa `toView` (só flags `definido`). Escopo atual: Cloudflare (Turnstile + monitoramento).
+ * o GET usa `toView` (só flags `definido`). Integrações: Turnstile, monitoramento, Trello e Resend.
  */
 
 export type StatusIntegracao = "ativo" | "em-breve";
@@ -22,7 +22,7 @@ export const CATALOGO_INTEGRACOES: IntegracaoCatalogo[] = [
   { id: "monitoramento", nome: "Monitoramento", provedor: "Cloudflare", descricao: "Métricas de requisições, erros e CPU do Worker (via API).", status: "ativo" },
   { id: "trello", nome: "Trello", provedor: "Atlassian", descricao: "Sincroniza os quadros de Tarefas com o Trello, nos dois sentidos, pela conta institucional.", status: "ativo" },
   { id: "google", nome: "Login com Google", provedor: "Google", descricao: "Entrar com a conta Google (OAuth). Em breve.", status: "em-breve" },
-  { id: "resend", nome: "E-mail (Resend)", provedor: "Resend", descricao: "Envio de e-mails (aprovação de cadastro, avisos). Em breve.", status: "em-breve" },
+  { id: "resend", nome: "E-mail (Resend)", provedor: "Resend", descricao: "Envio de e-mails: avisos do sino, cadastro e liberação de acesso.", status: "ativo" },
 ];
 
 /**
@@ -36,24 +36,32 @@ export type Integracoes = {
   /** A conta INSTITUCIONAL do Trello: `token` e `segredo` CIFRADOS ("" = não definido); `membroId`/`usuario`/`nome` = a conta
    *  confirmada no último teste (a sincronização ignora o eco das ações dela). Opcional só para os literais antigos. */
   trello?: TrelloConfig;
+  /** O envio de e-mails pelo Resend: `apiKey` CIFRADA ("" = não definida); `dominio`/`verificado` = o último teste. */
+  resend?: ResendConfig;
 };
 export type TrelloConfig = { ativo: boolean; apiKey: string; token: string; segredo: string; membroId: string; usuario: string; nome: string };
+export type ResendConfig = { ativo: boolean; apiKey: string; remetente: string; urlSistema: string; dominio: string; verificado: boolean };
 
 /** Config para o CLIENTE (sem segredos — só flags `definido`). */
 export type IntegracoesView = {
   turnstile: { ativo: boolean; siteKey: string; secretDefinido: boolean };
   monitoramento: { ativo: boolean };
   trello: { ativo: boolean; apiKey: string; tokenDefinido: boolean; segredoDefinido: boolean; conta: { usuario: string; nome: string } | null };
+  resend: { ativo: boolean; apiKeyDefinida: boolean; remetente: string; urlSistema: string; dominio: string; verificado: boolean };
   temChaveMestra: boolean;
 };
 
 export const TRELLO_VAZIO: TrelloConfig = { ativo: false, apiKey: "", token: "", segredo: "", membroId: "", usuario: "", nome: "" };
+/** O endereço do sistema nos links dos e-mails (o cron não tem requisição de onde tirar a origem). */
+export const URL_SISTEMA_PADRAO = "https://governarv.com.br";
+export const RESEND_VAZIO: ResendConfig = { ativo: false, apiKey: "", remetente: "", urlSistema: URL_SISTEMA_PADRAO, dominio: "", verificado: false };
 
 export function integracoesPadrao(): Integracoes {
   return {
     turnstile: { ativo: false, siteKey: "", secret: "" },
     monitoramento: { ativo: false },
     trello: { ...TRELLO_VAZIO },
+    resend: { ...RESEND_VAZIO },
   };
 }
 
@@ -79,6 +87,14 @@ export function coerceIntegracoes(bruto: unknown): Integracoes {
       usuario: str(r.trello?.usuario, ""),
       nome: str(r.trello?.nome, ""),
     },
+    resend: {
+      ativo: bool(r.resend?.ativo, false),
+      apiKey: str(r.resend?.apiKey, ""),
+      remetente: str(r.resend?.remetente, ""),
+      urlSistema: str(r.resend?.urlSistema, "") || URL_SISTEMA_PADRAO,
+      dominio: str(r.resend?.dominio, ""),
+      verificado: bool(r.resend?.verificado, false),
+    },
   };
 }
 
@@ -94,6 +110,14 @@ export function toView(i: Integracoes, temChaveMestra: boolean): IntegracoesView
       segredoDefinido: !!i.trello?.segredo,
       conta: i.trello?.membroId ? { usuario: i.trello.usuario, nome: i.trello.nome } : null,
     },
+    resend: {
+      ativo: !!i.resend?.ativo,
+      apiKeyDefinida: !!i.resend?.apiKey,
+      remetente: i.resend?.remetente ?? "",
+      urlSistema: i.resend?.urlSistema || URL_SISTEMA_PADRAO,
+      dominio: i.resend?.dominio ?? "",
+      verificado: !!i.resend?.verificado,
+    },
     temChaveMestra,
   };
 }
@@ -101,6 +125,25 @@ export function toView(i: Integracoes, temChaveMestra: boolean): IntegracoesView
 /** Trello utilizável = ativo + chave + token cifrado (o segredo só é exigido para receber os avisos do Trello). */
 export function trelloConfigurado(i: Integracoes): boolean {
   return !!i.trello?.ativo && !!i.trello.apiKey && !!i.trello.token;
+}
+
+/** Resend utilizável = ativo + chave cifrada + remetente com e-mail. */
+export function resendConfigurado(i: Integracoes): boolean {
+  return !!i.resend?.ativo && !!i.resend.apiKey && !!emailDoRemetente(i.resend.remetente);
+}
+
+/** O ENDEREÇO do remetente ("Nome <avisos@dominio>" ou só "avisos@dominio"); "" se não houver um e-mail válido. */
+export function emailDoRemetente(remetente: string): string {
+  const t = remetente.trim();
+  const m = /<([^<>\s]+)>\s*$/.exec(t);
+  const e = (m ? m[1] : t).trim().toLowerCase();
+  return /^[^@\s<>]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(e) ? e : "";
+}
+
+/** O DOMÍNIO do remetente (o que tem de estar verificado no Resend). */
+export function dominioDoRemetente(remetente: string): string {
+  const e = emailDoRemetente(remetente);
+  return e ? e.slice(e.indexOf("@") + 1) : "";
 }
 
 /** Turnstile utilizável = ativo + tem site key + tem secret cifrado. */

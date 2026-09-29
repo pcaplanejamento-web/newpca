@@ -5,7 +5,7 @@ import { configuracoes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { invalidarIntegracoes } from "@/lib/integracoes";
-import { coerceIntegracoes, type Integracoes, TRELLO_VAZIO, toView } from "@/lib/integracoes-core";
+import { coerceIntegracoes, dominioDoRemetente, type Integracoes, RESEND_VAZIO, TRELLO_VAZIO, toView, URL_SISTEMA_PADRAO } from "@/lib/integracoes-core";
 import { integracoesSchema } from "@/lib/integracoes-validation";
 import { cifrarSegredo, temChaveMestra } from "@/lib/integracoes-segredos";
 
@@ -58,6 +58,14 @@ export async function PATCH(req: Request) {
   if ((tr.token || tr.segredo) && !temChaveMestra()) {
     return erro("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar segredos.", 400);
   }
+  // RESEND: a chave nova é cifrada (vazio = mantém); trocar a chave ou o DOMÍNIO do remetente esquece a verificação (o
+  // "Testar" confere de novo).
+  const re = entrada.resend;
+  if (re.apiKey && !temChaveMestra()) {
+    return erro("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar segredos.", 400);
+  }
+  const antesRe = atual.resend ?? RESEND_VAZIO;
+  const mudouDominio = !!re.apiKey || dominioDoRemetente(re.remetente) !== dominioDoRemetente(antesRe.remetente);
   const antesTr = atual.trello ?? TRELLO_VAZIO;
   const mudouConta = tr.apiKey !== antesTr.apiKey || !!tr.token;
   const novoInteg: Integracoes = {
@@ -71,6 +79,14 @@ export async function PATCH(req: Request) {
       membroId: mudouConta ? "" : antesTr.membroId,
       usuario: mudouConta ? "" : antesTr.usuario,
       nome: mudouConta ? "" : antesTr.nome,
+    },
+    resend: {
+      ativo: re.ativo,
+      apiKey: re.apiKey ? await cifrarSegredo(re.apiKey) : antesRe.apiKey,
+      remetente: re.remetente,
+      urlSistema: re.urlSistema.replace(/\/+$/, "") || URL_SISTEMA_PADRAO,
+      dominio: mudouDominio ? "" : antesRe.dominio,
+      verificado: mudouDominio ? false : antesRe.verificado,
     },
   };
 

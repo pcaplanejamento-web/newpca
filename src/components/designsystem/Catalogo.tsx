@@ -85,6 +85,7 @@ import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
+import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
 import {
@@ -3685,6 +3686,9 @@ export function Catalogo() {
       <Secao titulo="IntegracaoTrello (Integrações → Trello: chave, token e segredo write-only, testar conexão; com a conta confirmada, MembrosTrello liga as pessoas aos membros)">
         <IntegracaoTrelloDemo />
       </Secao>
+      <Secao titulo="IntegracaoResend (Integrações → E-mail/Resend: chave write-only, remetente do domínio verificado, endereço do sistema; testar confere o domínio e envia um e-mail de teste)">
+        <IntegracaoResendDemo />
+      </Secao>
 
       <Secao titulo="Estado da ligação com o Trello (seloTrello — a seção Trello da Configuração do quadro, SincronizacaoTrello, é um contêiner com dados)">
         <div className="flex flex-wrap gap-2">
@@ -3776,6 +3780,20 @@ export function Catalogo() {
         </footer>
       </div>
     </div>
+  );
+}
+
+/** Demonstração do cartão do Resend (domínio já verificado). */
+function IntegracaoResendDemo() {
+  const [v, setV] = useState<ValorResend>({ ativo: true, apiKey: "", remetente: "Plataforma PCA <avisos@governarv.com.br>", urlSistema: "https://governarv.com.br" });
+  return (
+    <IntegracaoResend
+      valor={v}
+      onChange={setV}
+      view={{ ativo: true, apiKeyDefinida: true, remetente: v.remetente, urlSistema: v.urlSistema, dominio: "governarv.com.br", verificado: true }}
+      onTestar={() => {}}
+      testando={false}
+    />
   );
 }
 

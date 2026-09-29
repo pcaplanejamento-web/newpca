@@ -1,3 +1,6 @@
+import { enviarEmailDireto } from "@/lib/email";
+import { emailAcessoLiberado } from "@/lib/email-core";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
@@ -57,6 +60,12 @@ export async function PATCH(
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
   await db.update(usuarios).set(set).where(eq(usuarios.id, id));
+  // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo; depois da resposta).
+  if (antes?.status === "pendente" && status === "ativo") {
+    const destino = email ?? antes.email;
+    const quem = nome ?? antes.nome;
+    depoisDaResposta(enviarEmailDireto([destino], (ctx) => emailAcessoLiberado({ nome: quem }, ctx)), "email");
+  }
   // Log com destaque para PAPEL/STATUS (mudança de privilégio = alto valor).
   const cs = (["nome", "email", "matricula", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
   const dd = diffCampos(antes as Record<string, unknown>, corpo.data as Record<string, unknown>, cs, {

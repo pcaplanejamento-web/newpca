@@ -1135,8 +1135,15 @@ export const notificacoes = sqliteTable(
     chave: text("chave"),
     lida: integer("lida", { mode: "boolean" }).notNull().default(false),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** Quando o E-MAIL desta notificação foi tratado (enviado ou pulado — migração `0065`); NULL = pendente. */
+    emailEnviadoEm: text("email_enviado_em"),
+    emailTentativas: integer("email_tentativas").notNull().default(0),
   },
-  (t) => [index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id), uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave)],
+  (t) => [
+    index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id),
+    uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave),
+    index("notificacoes_email_idx").on(t.emailEnviadoEm, t.id),
+  ],
 );
 
 /** Os CONVIDADOS de um evento e a RESPOSTA de cada um (migração `0048`). */

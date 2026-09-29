@@ -2559,8 +2559,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`EditorConjunto`** (nome, cor, o `Switch` "Pasta privada" na criação — travado ligado para quem não é editor — e só os
     quadros que podem entrar; avisa "sai da pasta X"/"vira privado"). O painel do "Mudar de quadros" tem as MESMAS pastas,
     regras e edição (`GET /api/tarefas/quadros` devolve `conjuntos` = `{lista, ordem}` + `ator`).
-- **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9); a seguir, e-mail das notificações (Resend) e relatório de
-  produtividade por grupo.
+- **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
+  Integrações); a seguir, o relatório de produtividade por grupo.
 
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
@@ -2851,8 +2851,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`turnstile.ts`, **fail-open** em erro de infra — não trava login) nas rotas `/api/auth/login|cadastro` (token
   opcional no schema, exigido só quando ativo). **Monitoramento:** **reusa** os Worker Secrets já existentes
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
-  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login e Resend
-  = cards **"em breve"** (sem lógica). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
+  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login
+  ficou **"em breve"** (sem lógica); o Resend é o card de e-mail (abaixo). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
 - **TRELLO — sincronização nos DOIS sentidos pela CONTA INSTITUCIONAL (migração `0062`; plano em 5 fases: base ·
   vincular · saída · entrada · robustez).** **FASE 1 (entregue) — base:** tabelas `trello_quadros` (o quadro ligado ao
   board + webhook + campos personalizados criados + estado), `trello_vinculos` (cada item ligado + o RETRATO da última
@@ -2954,6 +2954,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ponto do estado na `FaixaQuadro` do quadro ligado — `carregarQuadro` traz `trello` = `estadoTrello`; tocar leva a
   Configuração → `#secao-trello`) e **"Abrir no Trello"** no "…" do detalhe da tarefa (`GET /api/tarefas/[id]` devolve
   `trelloUrl` — `urlDoCartao`, só `https://trello.com/`).
+- **E-MAIL pelo RESEND (migração `0065`):** cartão **"E-mail (Resend)"** em Integrações (`IntegracaoResend`, catalogado; o
+  catálogo `resend` virou `ativo`) — no blob `integracoes.resend` (`ResendConfig`: `apiKey` CIFRADA e write-only, `remetente`
+  "Nome <avisos@dominio>", `urlSistema` p/ os links — o cron não tem requisição —, `dominio`/`verificado` gravados pelo teste;
+  trocar a chave ou o DOMÍNIO do remetente esquece a verificação; `resendConfigurado`, `emailDoRemetente`/
+  `dominioDoRemetente`). Cliente PURO **`resend-api.ts`** (host fixo `api.resend.com`, `Authorization: Bearer`, 10 s,
+  `redirect:"manual"`, `ErroResend` com `transitorio`/`esperarS`; `dominios`, `enviar`, `enviarLote` ≤ 100) +
+  **`resend-config.ts`** (`resendDaConfig`, leitura FRESCA). `POST …/testar {alvo:"resend"}`: confere o domínio do remetente
+  (`verified`; a chave "só envio" dá 401 na lista → segue) e manda um e-mail de TESTE a quem testou; enviado = verificado.
+  Núcleo PURO **`email-core.ts`** (modelos com o texto ESCAPADO e link ABSOLUTO — `urlAbsoluta` só aceita caminho interno;
+  `emailDaNotificacao`/`emailCadastroPendente`/`emailAcessoLiberado`/`emailTeste`; preferências `email:notificacoes` em
+  `preferencias_tabela` — `lerPrefsEmail`/`querEmail`, padrão LIGADO só p/ atribuída, menção, convite, vence amanhã,
+  atrasada e lembrete). Envio em **`email.ts`** (BEST-EFFORT, nunca lança): `enviarEmailsPendentes` = as notificações do
+  sino com `email_enviado_em` NULL, < 3 tentativas e das últimas 48 h (`email-sql.ts`, testado no D1 real) → RESERVA
+  (compare-and-set: duas passadas nunca repetem) → envia em LOTE às pessoas ATIVAS que querem o tipo (as demais ficam
+  tratadas sem envio) → falha devolve a pendente com +1 tentativa. Gatilhos: `notificar` (depois da resposta —
+  `depoisDaResposta` agora em **`segundo-plano.ts`**), o **cron** `POST /api/integracoes/email/cron` (o `worker.ts` chama as
+  duas rotas de cron; autenticação comum **`cronAutorizado`**, `cron.ts`) que DERIVA os avisos de prazo/lembrete de 40
+  pessoas ativas por passada em rodízio (`derivarDaPessoa`) e envia os pendentes, o cadastro pendente (e-mail aos ADMs
+  ativos) e a aprovação pendente → ativo (`PATCH /api/admin/usuarios/[id]`, e-mail à pessoa). A `0065` marca o histórico
+  como tratado (nada de enviar o passado). Perfil → **"E-mail"** (só com o Resend ativo): `Switch` + os tipos, gravado pelo
+  `PUT /api/preferencias/tabela`. Setup/DNS em `docs/INTEGRACOES.md` (recebimento DESLIGADO — o MX da raiz é o e-mail do
+  domínio). Testes: `tests/resend-email.test.ts`.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
