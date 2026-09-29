@@ -1231,6 +1231,9 @@ quadro, excluir etiqueta direto no cartão.
 que envia um e-mail; os avisos do sino (atribuída, menção, convite, prazo, lembrete…) chegam por e-mail — cada pessoa
 escolhe quais no Perfil —, os ADMs recebem o aviso de cadastro novo e a pessoa aprovada, o de acesso liberado. Os de prazo e
 lembrete saem na conferência a cada 5 minutos.
+✅ **Login com Google:** Integrações → Login com Google (Client ID + secret cifrado, a URI de redirecionamento a copiar e o
+teste); "Entrar com Google" no login e no cadastro (OAuth + PKCE); e-mail cadastrado entra, e-mail novo vira cadastro
+pendente de aprovação (os ADMs recebem o e-mail).
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

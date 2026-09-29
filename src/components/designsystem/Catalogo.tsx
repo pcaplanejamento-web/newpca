@@ -85,6 +85,7 @@ import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
+import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
@@ -3689,6 +3690,9 @@ export function Catalogo() {
       <Secao titulo="IntegracaoResend (Integrações → E-mail/Resend: chave write-only, remetente do domínio verificado, endereço do sistema; testar confere o domínio e envia um e-mail de teste)">
         <IntegracaoResendDemo />
       </Secao>
+      <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
+        <IntegracaoGoogleDemo />
+      </Secao>
 
       <Secao titulo="Estado da ligação com o Trello (seloTrello — a seção Trello da Configuração do quadro, SincronizacaoTrello, é um contêiner com dados)">
         <div className="flex flex-wrap gap-2">
@@ -3781,6 +3785,12 @@ export function Catalogo() {
       </div>
     </div>
   );
+}
+
+/** Demonstração do cartão do login com Google (segredo já definido). */
+function IntegracaoGoogleDemo() {
+  const [v, setV] = useState<ValorGoogle>({ ativo: true, clientId: "123456789-abc.apps.googleusercontent.com", clientSecret: "" });
+  return <IntegracaoGoogle valor={v} onChange={setV} view={{ ativo: true, clientId: v.clientId, clientSecretDefinido: true }} onTestar={() => {}} testando={false} />;
 }
 
 /** Demonstração do cartão do Resend (domínio já verificado). */

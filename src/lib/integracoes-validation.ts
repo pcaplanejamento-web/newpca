@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { clientIdValido } from "./google-oauth-core.ts";
 import { emailDoRemetente } from "./integracoes-core.ts";
 
 // Validação do PATCH /api/admin/integracoes. Módulo só-schema (sem getDb) → testável.
@@ -49,4 +50,17 @@ export const integracoesSchema = z.object({
         .default(""),
     })
     .default({ ativo: false, apiKey: "", remetente: "", urlSistema: "" }),
+  // Login com Google (OAuth): o client ID é público; o client secret chega em texto puro ("" = manter) e é cifrado.
+  google: z
+    .object({
+      ativo: z.boolean().default(false),
+      clientId: z
+        .string()
+        .trim()
+        .max(200)
+        .refine((v) => !v || clientIdValido(v), "Client ID do Google inválido (termina em .apps.googleusercontent.com).")
+        .default(""),
+      clientSecret: z.string().trim().max(300).default(""),
+    })
+    .default({ ativo: false, clientId: "", clientSecret: "" }),
 });

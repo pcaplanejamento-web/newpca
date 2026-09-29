@@ -12,7 +12,8 @@ import { ChartCard } from "./ChartCard";
 import { MetricasChart } from "./charts/MetricasChart";
 import { type Column, DataTable } from "./DataTable";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconActivity, IconAlert, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
+import { IconActivity, IconAlert, IconGoogle, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
+import { IntegracaoGoogle, type ValorGoogle } from "./IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
 import { KpiStat } from "./KpiStat";
@@ -82,16 +83,17 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     remetente: integracoes.resend.remetente,
     urlSistema: integracoes.resend.urlSistema,
   });
+  const [google, setGoogle] = useState<ValorGoogle>({ ativo: integracoes.google.ativo, clientId: integracoes.google.clientId, clientSecret: "" });
   const [dia, setDia] = useState<PontoMetrica | null>(null);
   const [diaMostrado, setDiaMostrado] = useState<PontoMetrica | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | "resend" | null>(null);
+  const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | "resend" | "google" | null>(null);
 
   const secretDefinido = integracoes.turnstile.secretDefinido;
   const semChaveMestra = !integracoes.temChaveMestra;
 
   async function salvar() {
-    if ((secret.length > 0 || trello.token || trello.segredo || resend.apiKey) && semChaveMestra) {
+    if ((secret.length > 0 || trello.token || trello.segredo || resend.apiKey || google.clientSecret) && semChaveMestra) {
       toast.error("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar o segredo.");
       return;
     }
@@ -102,6 +104,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         monitoramento: { ativo: monAtivo },
         trello: { ...trello, apiKey: trello.apiKey.trim() },
         resend: { ...resend, apiKey: resend.apiKey.trim(), remetente: resend.remetente.trim(), urlSistema: resend.urlSistema.trim() },
+        google: { ...google, clientId: google.clientId.trim(), clientSecret: google.clientSecret.trim() },
       };
       const res = await fetch("/api/admin/integracoes", {
         method: "PATCH",
@@ -113,6 +116,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
       setSecret("");
       setTrello((t) => ({ ...t, token: "", segredo: "" }));
       setResend((r) => ({ ...r, apiKey: "" }));
+      setGoogle((v) => ({ ...v, clientSecret: "" }));
       toast.success("Integrações salvas.");
       router.refresh();
     } catch (e) {
@@ -122,7 +126,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     }
   }
 
-  async function testar(alvo: "turnstile" | "monitoramento" | "trello" | "resend") {
+  async function testar(alvo: "turnstile" | "monitoramento" | "trello" | "resend" | "google") {
     setTestando(alvo);
     try {
       const res = await fetch("/api/admin/integracoes/testar", {
@@ -179,6 +183,12 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     ? ["slate", "Desativado"]
     : integracoes.resend.verificado
       ? ["emerald", "Conectado"]
+      : ["amber", "Incompleto"];
+
+  const goStatus: [Tone, string] = !google.ativo
+    ? ["slate", "Desativado"]
+    : google.clientId.trim() && (integracoes.google.clientSecretDefinido || google.clientSecret)
+      ? ["emerald", "Configurado"]
       : ["amber", "Incompleto"];
 
   const emBreve = CATALOGO_INTEGRACOES.filter((c) => c.status === "em-breve");
@@ -346,7 +356,18 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         <IntegracaoResend valor={resend} onChange={setResend} view={integracoes.resend} onTestar={() => testar("resend")} testando={testando === "resend"} />
       </Cartao>
 
+      {/* Login com Google (OAuth) — e-mail cadastrado entra; e-mail novo vira cadastro pendente */}
+      <Cartao
+        titulo="Login com Google"
+        provedor="Google · entrar com a conta Google (OAuth)"
+        icon={<IconGoogle className="h-5 w-5" />}
+        status={<StatusBadge tone={goStatus[0]}>{goStatus[1]}</StatusBadge>}
+      >
+        <IntegracaoGoogle valor={google} onChange={setGoogle} view={integracoes.google} onTestar={() => testar("google")} testando={testando === "google"} />
+      </Cartao>
+
       {/* Em breve (sem lógica — cards informativos) */}
+      {emBreve.length > 0 && (
       <section>
         <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Em breve</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -361,6 +382,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
           ))}
         </div>
       </section>
+      )}
     </div>
   );
 }

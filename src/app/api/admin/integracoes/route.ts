@@ -5,7 +5,7 @@ import { configuracoes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { invalidarIntegracoes } from "@/lib/integracoes";
-import { coerceIntegracoes, dominioDoRemetente, type Integracoes, RESEND_VAZIO, TRELLO_VAZIO, toView, URL_SISTEMA_PADRAO } from "@/lib/integracoes-core";
+import { coerceIntegracoes, dominioDoRemetente, GOOGLE_VAZIO, type Integracoes, RESEND_VAZIO, TRELLO_VAZIO, toView, URL_SISTEMA_PADRAO } from "@/lib/integracoes-core";
 import { integracoesSchema } from "@/lib/integracoes-validation";
 import { cifrarSegredo, temChaveMestra } from "@/lib/integracoes-segredos";
 
@@ -64,6 +64,12 @@ export async function PATCH(req: Request) {
   if (re.apiKey && !temChaveMestra()) {
     return erro("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar segredos.", 400);
   }
+  // GOOGLE: o client secret novo é cifrado (vazio = mantém).
+  const go = entrada.google;
+  if (go.clientSecret && !temChaveMestra()) {
+    return erro("Defina a chave mestra (INTEGRACOES_CHAVE) no Cloudflare antes de salvar segredos.", 400);
+  }
+  const antesGo = atual.google ?? GOOGLE_VAZIO;
   const antesRe = atual.resend ?? RESEND_VAZIO;
   const mudouDominio = !!re.apiKey || dominioDoRemetente(re.remetente) !== dominioDoRemetente(antesRe.remetente);
   const antesTr = atual.trello ?? TRELLO_VAZIO;
@@ -87,6 +93,11 @@ export async function PATCH(req: Request) {
       urlSistema: re.urlSistema.replace(/\/+$/, "") || URL_SISTEMA_PADRAO,
       dominio: mudouDominio ? "" : antesRe.dominio,
       verificado: mudouDominio ? false : antesRe.verificado,
+    },
+    google: {
+      ativo: go.ativo,
+      clientId: go.clientId,
+      clientSecret: go.clientSecret ? await cifrarSegredo(go.clientSecret) : antesGo.clientSecret,
     },
   };
 

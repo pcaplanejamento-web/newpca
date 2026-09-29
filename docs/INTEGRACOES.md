@@ -99,8 +99,26 @@ ADMs e a liberação de acesso à pessoa aprovada.
 Os avisos de evento saem na hora; os de prazo e lembrete, na conferência a cada 5 minutos (cron do Worker — precisa da
 `INTEGRACOES_CHAVE`). A chave fica cifrada e nunca volta à tela.
 
-## Em breve
-- **Login com Google** (OAuth) — exigirá um app no Google Cloud + ajuste no cadastro de usuários.
+## Login com Google (OAuth)
+Quem pode entrar: o e-mail JÁ cadastrado e ATIVO entra direto; e-mail cadastrado pendente/inativo recebe o aviso na
+tela de login; e-mail NOVO vira cadastro **pendente de aprovação** (os ADMs recebem o e-mail, com o Resend ativo). O 1º
+usuário do sistema nasce pelo cadastro com senha. Quem se cadastra pelo Google não tem senha (entra só pelo Google).
+
+1. **Google Cloud Console** (console.cloud.google.com) → crie/escolha um projeto.
+2. **APIs e serviços → Tela de consentimento OAuth**: tipo **Externo**; nome do app, e-mail de suporte, domínio
+   autorizado `governarv.com.br`; escopos `openid`, `email`, `profile` (não precisam de verificação); **Publicar o app**
+   (em "Teste", só os usuários de teste listados conseguem entrar).
+3. **Credenciais → Criar credenciais → ID do cliente OAuth → Aplicativo da Web**:
+   - Origens JavaScript autorizadas: `https://governarv.com.br`
+   - URIs de redirecionamento autorizados: `https://governarv.com.br/api/auth/google/callback` (o cartão mostra a URI
+     com o botão Copiar).
+4. **Integrações → Login com Google**: marque "Permitir", cole o **Client ID** e o **Client secret** (cifrado; exige a
+   chave mestra) → **Salvar** → **Testar configuração**.
+5. Abra `/login` numa janela anônima: aparece **"Entrar com Google"**.
+
+Segurança: fluxo Authorization Code + **PKCE** + **state** (cookie httpOnly de 10 min); o código é trocado no servidor
+(host fixo `oauth2.googleapis.com`) e o `id_token` é validado (emissor, público = o Client ID, validade, e-mail
+verificado). Erros voltam como `/login?erro=…` (o motivo técnico só no log do Worker).
 
 ## Notas técnicas
 - Config não-secreta (flags, site key) fica no blob `configuracoes` id=1 (chave `integracoes`, sem migração).

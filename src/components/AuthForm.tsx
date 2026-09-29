@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconAlert, IconArrowRight, IconCheck, IconMail, IconUser } from "./icons";
+import { IconAlert, IconArrowRight, IconCheck, IconGoogle, IconMail, IconUser } from "./icons";
 import { Turnstile } from "./Turnstile";
 
 // Tela de acesso (login/cadastro) — referência dos componentes de entrada do
@@ -14,10 +14,16 @@ import { Turnstile } from "./Turnstile";
 export function AuthForm({
   mode,
   turnstile,
+  google = false,
+  erroInicial = null,
 }: {
   mode: "login" | "cadastro";
   /** Captcha do ADM — só renderiza/exige quando ativo E configurado. */
   turnstile?: { enabled: boolean; siteKey: string };
+  /** Login com Google ativo (Integrações) → botão "Entrar com Google". */
+  google?: boolean;
+  /** A mensagem da volta do Google (`/login?erro=`). */
+  erroInicial?: string | null;
 }) {
   const router = useRouter();
   const isCad = mode === "cadastro";
@@ -26,7 +32,7 @@ export function AuthForm({
   const [senha, setSenha] = useState("");
   const [lembrar, setLembrar] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(erroInicial);
   const [pendente, setPendente] = useState(false);
   const [tsToken, setTsToken] = useState<string | null>(null);
   const [tsNonce, setTsNonce] = useState(0); // remonta o widget após erro (re-solve)
@@ -157,6 +163,23 @@ export function AuthForm({
       >
         {isCad ? "Criar conta" : "Entrar"}
       </Button>
+
+      {google && (
+        <>
+          <div className="my-4 flex items-center gap-3 text-[12px] text-faint" aria-hidden="true">
+            <span className="h-px flex-1 bg-border" />
+            ou
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <a
+            href="/api/auth/google"
+            className="flex h-[52px] w-full items-center justify-center gap-2 rounded-control border border-border-2 bg-surface text-[15px] font-semibold text-text transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <IconGoogle className="h-5 w-5" />
+            {isCad ? "Criar conta com Google" : "Entrar com Google"}
+          </a>
+        </>
+      )}
 
       <div className="mt-5 text-center">
         <Link

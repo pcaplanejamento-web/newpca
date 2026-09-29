@@ -2,7 +2,7 @@
  * Núcleo PURO das integrações externas (sem `getDb`/env → testável como `avaliacao-core`).
  * Guarda a config no blob `configuracoes` id=1, sob a chave `integracoes` (sem migração).
  * Os SEGREDOS ficam CIFRADOS (blob "<ivHex>:<ctHex>") e nunca são devolvidos ao cliente —
- * o GET usa `toView` (só flags `definido`). Integrações: Turnstile, monitoramento, Trello e Resend.
+ * o GET usa `toView` (só flags `definido`). Integrações: Turnstile, monitoramento, Trello, Resend e login com Google.
  */
 
 export type StatusIntegracao = "ativo" | "em-breve";
@@ -21,7 +21,7 @@ export const CATALOGO_INTEGRACOES: IntegracaoCatalogo[] = [
   { id: "turnstile", nome: "Captcha (Turnstile)", provedor: "Cloudflare", descricao: "Proteção anti-robô nos formulários de login e cadastro.", status: "ativo" },
   { id: "monitoramento", nome: "Monitoramento", provedor: "Cloudflare", descricao: "Métricas de requisições, erros e CPU do Worker (via API).", status: "ativo" },
   { id: "trello", nome: "Trello", provedor: "Atlassian", descricao: "Sincroniza os quadros de Tarefas com o Trello, nos dois sentidos, pela conta institucional.", status: "ativo" },
-  { id: "google", nome: "Login com Google", provedor: "Google", descricao: "Entrar com a conta Google (OAuth). Em breve.", status: "em-breve" },
+  { id: "google", nome: "Login com Google", provedor: "Google", descricao: "Entrar com a conta Google (OAuth); e-mail novo vira cadastro pendente.", status: "ativo" },
   { id: "resend", nome: "E-mail (Resend)", provedor: "Resend", descricao: "Envio de e-mails: avisos do sino, cadastro e liberação de acesso.", status: "ativo" },
 ];
 
@@ -38,8 +38,11 @@ export type Integracoes = {
   trello?: TrelloConfig;
   /** O envio de e-mails pelo Resend: `apiKey` CIFRADA ("" = não definida); `dominio`/`verificado` = o último teste. */
   resend?: ResendConfig;
+  /** O login com Google (OAuth): `clientSecret` CIFRADO ("" = não definido). */
+  google?: GoogleConfig;
 };
 export type TrelloConfig = { ativo: boolean; apiKey: string; token: string; segredo: string; membroId: string; usuario: string; nome: string };
+export type GoogleConfig = { ativo: boolean; clientId: string; clientSecret: string };
 export type ResendConfig = { ativo: boolean; apiKey: string; remetente: string; urlSistema: string; dominio: string; verificado: boolean };
 
 /** Config para o CLIENTE (sem segredos — só flags `definido`). */
@@ -48,6 +51,7 @@ export type IntegracoesView = {
   monitoramento: { ativo: boolean };
   trello: { ativo: boolean; apiKey: string; tokenDefinido: boolean; segredoDefinido: boolean; conta: { usuario: string; nome: string } | null };
   resend: { ativo: boolean; apiKeyDefinida: boolean; remetente: string; urlSistema: string; dominio: string; verificado: boolean };
+  google: { ativo: boolean; clientId: string; clientSecretDefinido: boolean };
   temChaveMestra: boolean;
 };
 
@@ -56,12 +60,15 @@ export const TRELLO_VAZIO: TrelloConfig = { ativo: false, apiKey: "", token: "",
 export const URL_SISTEMA_PADRAO = "https://governarv.com.br";
 export const RESEND_VAZIO: ResendConfig = { ativo: false, apiKey: "", remetente: "", urlSistema: URL_SISTEMA_PADRAO, dominio: "", verificado: false };
 
+export const GOOGLE_VAZIO: GoogleConfig = { ativo: false, clientId: "", clientSecret: "" };
+
 export function integracoesPadrao(): Integracoes {
   return {
     turnstile: { ativo: false, siteKey: "", secret: "" },
     monitoramento: { ativo: false },
     trello: { ...TRELLO_VAZIO },
     resend: { ...RESEND_VAZIO },
+    google: { ...GOOGLE_VAZIO },
   };
 }
 
@@ -95,6 +102,11 @@ export function coerceIntegracoes(bruto: unknown): Integracoes {
       dominio: str(r.resend?.dominio, ""),
       verificado: bool(r.resend?.verificado, false),
     },
+    google: {
+      ativo: bool(r.google?.ativo, false),
+      clientId: str(r.google?.clientId, ""),
+      clientSecret: str(r.google?.clientSecret, ""),
+    },
   };
 }
 
@@ -118,6 +130,7 @@ export function toView(i: Integracoes, temChaveMestra: boolean): IntegracoesView
       dominio: i.resend?.dominio ?? "",
       verificado: !!i.resend?.verificado,
     },
+    google: { ativo: !!i.google?.ativo, clientId: i.google?.clientId ?? "", clientSecretDefinido: !!i.google?.clientSecret },
     temChaveMestra,
   };
 }
@@ -125,6 +138,11 @@ export function toView(i: Integracoes, temChaveMestra: boolean): IntegracoesView
 /** Trello utilizável = ativo + chave + token cifrado (o segredo só é exigido para receber os avisos do Trello). */
 export function trelloConfigurado(i: Integracoes): boolean {
   return !!i.trello?.ativo && !!i.trello.apiKey && !!i.trello.token;
+}
+
+/** Login com Google utilizável = ativo + client ID + client secret cifrado. */
+export function googleConfigurado(i: Integracoes): boolean {
+  return !!i.google?.ativo && !!i.google.clientId && !!i.google.clientSecret;
 }
 
 /** Resend utilizável = ativo + chave cifrada + remetente com e-mail. */

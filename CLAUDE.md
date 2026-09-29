@@ -2851,8 +2851,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`turnstile.ts`, **fail-open** em erro de infra — não trava login) nas rotas `/api/auth/login|cadastro` (token
   opcional no schema, exigido só quando ativo). **Monitoramento:** **reusa** os Worker Secrets já existentes
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
-  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. Google login
-  ficou **"em breve"** (sem lógica); o Resend é o card de e-mail (abaixo). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
+  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. O **login com Google**
+  e o Resend (e-mail) têm cartões próprios (abaixo). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
 - **TRELLO — sincronização nos DOIS sentidos pela CONTA INSTITUCIONAL (migração `0062`; plano em 5 fases: base ·
   vincular · saída · entrada · robustez).** **FASE 1 (entregue) — base:** tabelas `trello_quadros` (o quadro ligado ao
   board + webhook + campos personalizados criados + estado), `trello_vinculos` (cada item ligado + o RETRATO da última
@@ -2976,6 +2976,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   como tratado (nada de enviar o passado). Perfil → **"E-mail"** (só com o Resend ativo): `Switch` + os tipos, gravado pelo
   `PUT /api/preferencias/tabela`. Setup/DNS em `docs/INTEGRACOES.md` (recebimento DESLIGADO — o MX da raiz é o e-mail do
   domínio). Testes: `tests/resend-email.test.ts`.
+- **LOGIN COM GOOGLE (OAuth, sem migração):** cartão **"Login com Google"** em Integrações (`IntegracaoGoogle`,
+  catalogado): `integracoes.google` = `{ativo, clientId, clientSecret CIFRADO write-only}` (`GoogleConfig`,
+  `googleConfigurado`); o cartão mostra a URI de redirecionamento (`/api/auth/google/callback`, com Copiar) e "Testar"
+  (`alvo:"google"`: segredo legível + o Google responde). Fluxo Authorization Code + **PKCE S256** + **state** — núcleo PURO
+  **`google-oauth-core.ts`** (testado: `urlAutorizacao`, `desafioPkce`, cookie curto `pca_google` 10 min, `lerIdToken` =
+  emissor/público/validade/e-mail verificado, `mensagemErroLogin`, `SENHA_INUTILIZAVEL`) + **`google-oauth.ts`**
+  (`googleDaConfig`, `trocarCodigo` — host fixo, 10 s, sem redirecionamento). `GET /api/auth/google` (inicia) e `GET
+  /api/auth/google/callback`: e-mail cadastrado ATIVO → sessão + auditoria "entrou com o Google"; pendente/inativo → o aviso;
+  e-mail NOVO → usuário `membro`/`pendente` com senha inutilizável + e-mail aos ADMs (o 1º usuário do sistema nunca nasce
+  pelo Google); erro → `/login?erro=<código>`. `AuthForm` ganhou `google` (botão "Entrar/Criar conta com Google",
+  `IconGoogle`) e `erroInicial`; as páginas `login`/`cadastro` leem `?erro=`. Setup em `docs/INTEGRACOES.md`.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

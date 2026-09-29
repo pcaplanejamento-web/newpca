@@ -4,6 +4,8 @@ import { getMetricasWorker } from "@/lib/cf-analytics";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getIntegracoes, gravarIntegracoes, lerBlobConfiguracoes } from "@/lib/integracoes";
 import { contextoEmail } from "@/lib/email";
+import { googleDaConfig } from "@/lib/google-oauth";
+import { DISCOVERY_GOOGLE, redirectUri } from "@/lib/google-oauth-core";
 import { emailTeste } from "@/lib/email-core";
 import { coerceIntegracoes, dominioDoRemetente } from "@/lib/integracoes-core";
 import { ErroResend } from "@/lib/resend-api";
@@ -13,7 +15,7 @@ import { testarTurnstile } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
-const testarSchema = z.object({ alvo: z.enum(["turnstile", "monitoramento", "trello", "resend"]) });
+const testarSchema = z.object({ alvo: z.enum(["turnstile", "monitoramento", "trello", "resend", "google"]) });
 
 /** Testa a conexão de uma integração (usa os segredos JÁ configurados); no Trello, confirma e guarda a conta; no Resend, confere o domínio e envia um e-mail de teste. */
 export async function POST(req: Request) {
@@ -62,6 +64,18 @@ export async function POST(req: Request) {
     }
     if (integ.resend) await gravarIntegracoes({ ...integ, resend: { ...integ.resend, dominio, verificado: true } }, g.u.id);
     return ok({ detalhe: `E-mail de teste enviado para ${g.u.email}.${situacao}` });
+  }
+  if (corpo.data.alvo === "google") {
+    // Confere a configuração (client secret legível) e se o Google responde; a URI de redirecionamento é a deste endereço.
+    const cfg = await googleDaConfig();
+    if ("erro" in cfg) return erro(cfg.erro, 422);
+    try {
+      const r = await fetch(DISCOVERY_GOOGLE, { redirect: "manual", signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return erro(`O Google respondeu ${r.status}. Tente de novo em instantes.`, 422);
+    } catch {
+      return erro("Sem resposta do Google (rede ou tempo esgotado).", 422);
+    }
+    return ok({ detalhe: `Configuração OK. Cadastre no Google a URI ${redirectUri(new URL(req.url).origin)} e teste o botão "Entrar com Google" na tela de login.` });
   }
   if (corpo.data.alvo === "turnstile") {
     const integ = await getIntegracoes({ fresco: true });

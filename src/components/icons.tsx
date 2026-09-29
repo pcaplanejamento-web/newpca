@@ -245,6 +245,18 @@ export const IconDescricao = AlignLeft;
 /** CAMPOS PERSONALIZADOS da tarefa. */
 export const IconCampos = SlidersHorizontal;
 
+/** O GOOGLE (o "G" da marca, monocromático — segue a cor do texto). */
+export function IconGoogle(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M21.6 12.23c0-.68-.06-1.36-.18-2.02H12v3.82h5.4a4.62 4.62 0 0 1-2 3.03v2.5h3.24c1.9-1.75 2.96-4.33 2.96-7.33Z" />
+      <path d="M12 22c2.7 0 4.97-.9 6.63-2.43l-3.24-2.5c-.9.6-2.05.96-3.39.96-2.6 0-4.81-1.76-5.6-4.12H3.07v2.58A10 10 0 0 0 12 22Z" />
+      <path d="M6.4 13.9a6 6 0 0 1 0-3.8V7.52H3.07a10 10 0 0 0 0 8.96L6.4 13.9Z" />
+      <path d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.93 5.52L6.4 10.1C7.19 7.74 9.4 5.98 12 5.98Z" />
+    </svg>
+  );
+}
+
 /** O TRELLO (a marca: o quadro com duas colunas) — no traço dos ícones do lucide. */
 export function IconTrello(props: SVGProps<SVGSVGElement>) {
   return (
