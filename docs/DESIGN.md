@@ -80,10 +80,13 @@ Objetivo: **100% compatível com desktop e mobile**, claro e escuro.
   explica, centrado no que se vê). No celular o rodapé das tabelas da Mesa **gruda** acima da navegação inferior; os
   **avisos flutuantes** sobem acima dele (a tabela publica a altura do rodapé em `--rodape-tabela`) — nunca cobrem o
   "Importar" nem a paginação, no celular e no desktop.
-- **Dashboard (`DashboardMesa`):** KPIs no topo + 6 quadros em grade (1 → 2 → 3 colunas). Gráficos em HTML por token
-  (`charts/Barras`: `BarrasH`, `Colunas`, `BarraSegmentada`): marcas finas, 2px de respiro entre segmentos, texto sempre em
-  tokens de texto (a cor fica na marca), legenda quando há ≥ 2 séries, números visíveis e dica no hover/foco/toque. Estados
-  nas cores das importâncias do ADM; situações nas cores cadastradas pelo ADM; tempo na Mesa em rampa ordinal do accent.
+- **Dashboard (`DashboardMesa`) — minimalista:** KPIs no topo → a barra de métricas (`PeriodoPicker` · `SelectField
+  compacto` Dado e Medida · Ajuda — uma linha no desktop; no celular o período + a ajuda e, embaixo, Dado | Medida) → UM
+  gráfico (`ChartCard` "{Medida} por {dado}" — trocar o Dado replaya o morph) → o desempenho por pessoa (`DataTable`
+  compacta). Gráficos em HTML por token (`charts/Barras`: `BarrasH` nos dados de categoria, `Colunas` no dado Data — no máximo
+  ~8 rótulos no eixo): marcas finas, texto sempre em tokens de texto (a cor fica na marca), números visíveis e dica no
+  hover/foco/toque. Estados nas cores das importâncias do ADM; situações nas cores cadastradas pelo ADM; as demais barras no
+  accent; "Sem …", "Outras N" e as barras zeradas esmaecidas.
 
 ## Catálogo → Padronização (Unidades de medida | Classificações)
 - Duas visões no `Segmented` do Catálogo (o trilho rola na horizontal no celular — nada estoura a página), carregadas só
@@ -141,7 +144,8 @@ componente fixa cor **neutra** (só `var(--token)`); a única hex crua é **sem�
 - **Dropdown** (base de todos os popovers): renderiza em **portal** (`position: fixed`) e
   **abre para cima/baixo** limitando a altura à viewport — filtros/menus **nunca cortados**.
 - **Filtro de data** das tabelas = **mesmo** seletor de Período (`PeriodoCorpo`: presets +
-  ano + meses + intervalo) + ordenar. `DataTable` deriva os anos por coluna.
+  ano + meses + intervalo + Limpar; 44px no toque) + ordenar. `DataTable` deriva os anos por coluna. O `PeriodoPicker` é o
+  mesmo corpo sem a ordenação (a barra de métricas do Dashboard da Mesa).
 - **Gráficos** (`charts/`): eixos/grade/cursor **lidos dos tokens** via `useChartTokens()`
   (reavalia ao trocar tema ou no preview do ADM); séries na paleta `CHART_COLORS`.
 - **Ícones controlados pelo ADM** (`lucide`, renderizam já editados): **espessura** (`--icon-stroke`),

@@ -32,8 +32,10 @@ test("Mesa: ícone do Dashboard abre a governança e a importação fica no roda
   await page.goto("/painel/mesa");
   await expect(page.getByRole("button", { name: "Importar protocolo" })).toBeVisible();
   await page.getByRole("tab", { name: "Dashboard de governança" }).click();
-  await expect(page.getByText("Saúde dos protocolos", { exact: true })).toBeVisible();
-  await expect(page.getByText("Carga por responsável", { exact: true })).toBeVisible();
-  // O Dashboard não tem tabela nem botão de importação.
+  // UM gráfico (o Dado e a Medida escolhidos na barra) e o desempenho por pessoa.
+  await expect(page.getByRole("combobox", { name: "Dado" })).toBeVisible();
+  await expect(page.getByText("Protocolos por responsável", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Desempenho por pessoa" })).toBeVisible();
+  // O Dashboard não tem botão de importação.
   await expect(page.getByRole("button", { name: "Importar protocolo" })).toHaveCount(0);
 });

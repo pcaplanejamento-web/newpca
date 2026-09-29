@@ -12,9 +12,11 @@ ver; sem nenhum, ao Perfil).
 - **Importar / criar:** botão **"Importar protocolo"** no rodapé da tabela de protocolos (à esquerda do seletor de linhas)
   → soltar o PDF do protocolo (capa + DFDs, lido no navegador) **ou** criar o protocolo manualmente. A análise confere
   cada DFD pelas regras do ADM antes de protocolar.
-- **Dashboard de governança:** saúde dos protocolos (estado agregado nas cores do ADM), situação, tempo na Mesa, entrada
-  semanal, carga por responsável (tocar numa pessoa filtra a Mesa) e valor por unidade, com KPIs de conformidade,
-  responsável e tempo médio — sobre os mesmos dados da Mesa.
+- **Dashboard de governança (minimalista):** KPIs de conformidade, responsável e tempo médio; a barra de métricas com o
+  seletor de período (todo o período, hoje, esta semana, este mês, um ano, um mês ou um intervalo), o **Dado** e a
+  **Medida** de UM gráfico (responsável, quem protocolou, natureza, tipo de DFD, situação, estado, unidade, tempo na Mesa ou
+  data × protocolos, DFDs, itens, valor, correções ou ações) e o desempenho por pessoa — sobre os mesmos dados da Mesa;
+  toque numa barra ou linha para ver a origem.
 - **Tabela de protocolos:** Estado (agregado: capa + DFDs + itens) · Situação · Responsável · Distribuição · Data ·
   Nº processo · Id · Assunto · Unidade · DFDs · Itens · Valor — filtros conectados em todas as colunas, seleção com
   somatório e edição em massa (barra fixa no rodapé do display).

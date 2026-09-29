@@ -27,7 +27,7 @@ import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, juntarParaCopiar, num, num
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, PREF_DADOS_COMPLETOS, passaFiltroMesa } from "@/lib/mesa-filtros";
-import { type Atividade, type AtividadeTupla, atividadeDaTupla, type FiltroMetricas, filtroMetricasPadrao } from "@/lib/mesa-metricas";
+import { type Atividade, type AtividadeTupla, atividadeDaTupla, FILTRO_METRICAS_PADRAO, type FiltroMetricas } from "@/lib/mesa-metricas";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import {
   chaveUnidade,
@@ -81,7 +81,7 @@ import { toast } from "./Toast";
  * esqueleto da MESMA grade. */
 const DashboardMesa = dynamic(() => import("./DashboardMesa").then((m) => m.DashboardMesa), {
   ssr: false,
-  loading: DashboardMesaEsqueleto,
+  loading: () => <DashboardMesaEsqueleto metricas />,
 });
 
 type Rep = {
@@ -383,7 +383,7 @@ export function DfdsView({
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
   const [hojeMetricas, setHojeMetricas] = useState(() => dataIsoBrasilia(new Date().toISOString()));
-  const [filtroMetricas, setFiltroMetricas] = useState<FiltroMetricas>(() => filtroMetricasPadrao(dataIsoBrasilia(new Date().toISOString())));
+  const [filtroMetricas, setFiltroMetricas] = useState<FiltroMetricas>(FILTRO_METRICAS_PADRAO);
   useEffect(() => {
     if (vista === "dashboard") setHojeMetricas(dataIsoBrasilia(new Date().toISOString()));
   }, [vista]);
@@ -889,9 +889,7 @@ export function DfdsView({
         id: p.id,
         numero: p.numero,
         assunto: p.assunto,
-        sigla: p.reparticaoCodigo,
         criadoEm: p.criadoEm,
-        valor: p.valorTotal,
         responsavelId: resp?.id ?? null,
         situacaoId: situacaoDe(p),
         estado,
@@ -907,9 +905,6 @@ export function DfdsView({
     const foco = typeof filtro.responsavel === "number" && !pessoasDash.has(filtro.responsavel) ? pessoaDe(filtro.responsavel) : null;
     if (foco) pessoasDash.set(foco.id, foco);
     const paraPainel = (d: DfdResumo): DfdPainel => ({
-      id: d.id,
-      numero: d.numero,
-      planejamento: d.planejamento,
       unidadeId: d.reparticaoId,
       unidade: d.reparticaoCodigo,
       unidadeNome: d.reparticaoNome,
@@ -2041,7 +2036,6 @@ export function DfdsView({
               situacoes={situacoes}
               regras={regras}
               responsavel={filtro.responsavel}
-              onResponsavel={(responsavel) => setFiltro((f) => ({ ...f, responsavel }))}
               onAbrir={setAberto}
               metricas={{
                 filtro: filtroMetricas,

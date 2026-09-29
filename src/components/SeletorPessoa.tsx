@@ -135,14 +135,8 @@ export function SeletorPessoa({
         ];
         return (
           // O painel PARA o clique (numa célula, o toque atravessaria o portal e abriria a linha) — e cobre o respiro do
-          // Dropdown; o Esc (que o Dropdown já trata) devolve o foco ao gatilho.
-          <div
-            className="-m-2 p-2"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") voltarFoco();
-            }}
-          >
+          // Dropdown; o Esc (fechar + foco de volta ao gatilho) é do Dropdown.
+          <div className="-m-2 p-2" onClick={(e) => e.stopPropagation()}>
             <SeletorBusca
               opcoes={opcoes}
               valor={valor}

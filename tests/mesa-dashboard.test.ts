@@ -3,270 +3,79 @@ import { describe, it } from "node:test";
 import {
   type DfdPainel,
   DIAS_ALERTA,
-  dfdsDoRecorte,
-  ESTADOS_PAINEL,
-  FAIXAS_IDADE,
-  protocolosDoRecorte,
   type EstadoPainel,
-  MAX_RESPONSAVEIS,
-  MAX_UNIDADES,
   painelMesa,
   type ProtocoloPainel,
+  ROTULO_ESTADO_PAINEL,
   SEMANAS_PAINEL,
 } from "../src/lib/mesa-dashboard.ts";
 
-// Quinta, 24/09/2026 — 12:00 em Brasília (UTC−3).
+// Quinta, 24/09/2026 — 12:00 em Brasília (UTC−3). A semana vai de domingo 20/09 a sábado 26/09.
 const AGORA = new Date("2026-09-24T15:00:00Z");
 const P = (id: number, criadoEm: string | null, extra: Partial<ProtocoloPainel> = {}): ProtocoloPainel => ({
   id,
   criadoEm,
-  valor: 100,
-  responsavelId: null,
+  responsavelId: 1,
   situacaoId: null,
   estado: "regular",
   ...extra,
 });
-// A sigla identifica a unidade no exemplo (id derivado dela); `unidadeId` explícito testa siglas repetidas.
-const D = (unidade: string | null, valor: number | null, extra: Partial<DfdPainel> = {}): DfdPainel => ({
-  unidadeId: unidade == null ? null : [...unidade].reduce((h, c) => h * 31 + c.charCodeAt(0), 7),
-  unidade,
-  unidadeNome: null,
-  valor,
-  itens: 1,
-  ...extra,
-});
-const vazio = { protocolos: [], dfds: [], situacoes: [] };
+const D = (valor: number | null, itens: number | null = 1): DfdPainel => ({ unidadeId: 1, unidade: "SMS", unidadeNome: null, valor, itens });
+const vazio = { protocolos: [], dfds: [] };
 
-describe("painelMesa — Dashboard de governança da Mesa (puro)", () => {
-  it("sem dados: zeros, sem médias e a série de semanas completa", () => {
+describe("painelMesa — os KPIs da Mesa (puro)", () => {
+  it("sem dados: zeros, sem média e a linha das semanas zerada", () => {
     const r = painelMesa(vazio, AGORA);
-    assert.equal(r.protocolos, 0);
-    assert.equal(r.dfds, 0);
-    assert.equal(r.itens, 0);
-    assert.equal(r.valor, 0);
+    assert.deepEqual([r.protocolos, r.dfds, r.itens, r.valor, r.semResponsavel, r.acimaAlerta], [0, 0, 0, 0, 0, 0]);
     assert.equal(r.diasMedio, null);
-    assert.equal(r.diasMaximo, null);
-    assert.equal(r.acimaAlerta, 0);
-    assert.equal(r.semanas.length, SEMANAS_PAINEL);
-    assert.ok(r.semanas.every((s) => s.n === 0 && s.valor === 0));
-    assert.equal(r.semanas.at(-1)?.atual, true);
-    assert.deepEqual(r.responsaveis, []);
-    assert.deepEqual(r.situacoes, []);
-    assert.deepEqual(r.unidades, []);
-    assert.equal(r.outrosResponsaveis, null);
-    assert.equal(r.outrasUnidades, null);
+    assert.deepEqual(r.semanas, Array.from({ length: SEMANAS_PAINEL }, () => 0));
   });
 
-  it("tempo na Mesa em dias de CALENDÁRIO de Brasília (a madrugada UTC ainda é o dia anterior)", () => {
+  it("tempo na Mesa em dias de CALENDÁRIO de Brasília (a madrugada UTC ainda é o dia anterior) e o alerta", () => {
     const r = painelMesa(
       {
         ...vazio,
         protocolos: [
           P(1, "2026-09-24 10:00:00"), // 07:00 de 24/09 → 0 dia
           P(2, "2026-09-24 02:00:00"), // 23:00 de 23/09 → 1 dia
-          P(3, "2026-09-17 12:00:00"), // 7 dias → ainda "até 7"
-          P(4, "2026-09-16 12:00:00"), // 8 dias
-          P(5, "2026-09-20 12:00:00"), // domingo → 4 dias
-          P(6, "2026-08-01 12:00:00"), // 54 dias
-          P(7, null), // sem data: fora do tempo e da série
-          P(8, "2025-01-10 12:00:00"), // 622 dias
+          P(3, "2026-08-01 12:00:00"), // 54 dias
+          P(4, null), // sem data: fora do tempo e da linha semanal
+          P(5, "2025-01-10 12:00:00"), // 622 dias
         ],
       },
       AGORA,
     );
-    assert.equal(r.diasMaximo, 622);
-    assert.equal(r.diasMedio, (0 + 1 + 7 + 8 + 4 + 54 + 622) / 7);
+    assert.equal(r.diasMedio, (0 + 1 + 54 + 622) / 4);
     assert.equal(r.acimaAlerta, 2, `acima de ${DIAS_ALERTA} dias: 54 e 622`);
-    assert.deepEqual(
-      r.faixasIdade.map((f) => f.n),
-      [4, 1, 0, 1, 0, 1],
-    );
-    assert.equal(r.faixasIdade[0].valor, 400);
   });
 
-  it("série semanal: semanas de segunda a domingo, a atual é a última (parcial) e o antigo demais fica de fora", () => {
+  it("semanas de domingo a sábado: a atual é a última (parcial) e o antigo demais fica de fora", () => {
     const r = painelMesa(
       {
         ...vazio,
         protocolos: [
-          P(1, "2026-09-24 10:00:00", { valor: 10 }),
-          P(2, "2026-09-21 03:30:00", { valor: 20 }), // segunda 00:30 em Brasília → semana atual
-          P(3, "2026-09-21 02:30:00", { valor: 40 }), // domingo 23:30 em Brasília → semana anterior
-          P(4, "2026-08-01 12:00:00", { valor: 80 }),
-          P(5, "2025-01-10 12:00:00", { valor: 160 }),
+          P(1, "2026-09-24 10:00:00"),
+          P(2, "2026-09-20 03:30:00"), // domingo 00:30 em Brasília → semana atual
+          P(3, "2026-09-20 02:30:00"), // sábado 23:30 em Brasília → semana anterior
+          P(4, "2026-08-10 12:00:00"), // semana de 09/08 → a mais antiga das 7
+          P(5, "2026-08-01 12:00:00"), // semana de 26/07 → fora
         ],
       },
       AGORA,
     );
-    const atual = r.semanas.at(-1);
-    assert.equal(atual?.inicio, "2026-09-21");
-    assert.equal(atual?.rotulo, "21/09");
-    assert.deepEqual([atual?.n, atual?.valor], [2, 30]);
-    assert.deepEqual([r.semanas.at(-2)?.inicio, r.semanas.at(-2)?.n, r.semanas.at(-2)?.valor], ["2026-09-14", 1, 40]);
-    assert.equal(r.semanas.find((s) => s.inicio === "2026-07-27")?.n, 1);
-    assert.equal(
-      r.semanas.reduce((s, w) => s + w.n, 0),
-      4,
-      "o de 2025 está fora das 12 semanas",
-    );
-    assert.equal(r.semanas[0].inicio, "2026-07-06");
+    assert.deepEqual(r.semanas, [1, 0, 0, 0, 0, 1, 2]);
   });
 
   it("data futura (relógio adiantado) conta como hoje", () => {
     const r = painelMesa({ ...vazio, protocolos: [P(1, "2026-09-30 12:00:00")] }, AGORA);
-    assert.equal(r.diasMaximo, 0);
-    assert.equal(r.semanas.at(-1)?.n, 1);
+    assert.deepEqual([r.diasMedio, r.semanas.at(-1)], [0, 1]);
   });
 
-  it("saúde: quantidade e valor por estado agregado", () => {
+  it("saúde por estado agregado, sem responsável e os totais dos DFDs (não numérico = 0)", () => {
     const estados: EstadoPainel[] = ["regular", "regular", "atencao", "erro", "conferindo", "naoConferido"];
-    const r = painelMesa({ ...vazio, protocolos: estados.map((estado, i) => P(i + 1, null, { estado, valor: 10 * (i + 1) })) }, AGORA);
-    assert.deepEqual(r.saude.regular, { n: 2, valor: 30 });
-    assert.deepEqual(r.saude.atencao, { n: 1, valor: 30 });
-    assert.deepEqual(r.saude.erro, { n: 1, valor: 40 });
-    assert.deepEqual(r.saude.conferindo, { n: 1, valor: 50 });
-    assert.deepEqual(r.saude.naoConferido, { n: 1, valor: 60 });
-  });
-
-  it("situações: na ORDEM do ADM (inclusive as vazias); desconhecida/sem = 'Sem situação' no fim", () => {
-    const r = painelMesa(
-      {
-        ...vazio,
-        situacoes: [30, 10, 20],
-        protocolos: [P(1, null, { situacaoId: 10 }), P(2, null, { situacaoId: 10 }), P(3, null, { situacaoId: 99 }), P(4, null)],
-      },
-      AGORA,
-    );
-    assert.deepEqual(
-      r.situacoes.map((s) => [s.id, s.n]),
-      [
-        [30, 0],
-        [10, 2],
-        [20, 0],
-        [null, 2],
-      ],
-    );
-    // Sem protocolo sem situação, a linha "Sem situação" não aparece.
-    const r2 = painelMesa({ ...vazio, situacoes: [10], protocolos: [P(1, null, { situacaoId: 10 })] }, AGORA);
-    assert.deepEqual(
-      r2.situacoes.map((s) => s.id),
-      [10],
-    );
-  });
-
-  it("responsáveis: mais carregados primeiro, 'Sem responsável' por último, estados por pessoa", () => {
-    const r = painelMesa(
-      {
-        ...vazio,
-        protocolos: [
-          P(1, null, { responsavelId: 5, estado: "erro" }),
-          P(2, null, { responsavelId: 5, estado: "regular" }),
-          P(3, null, { responsavelId: 5, estado: "atencao" }),
-          P(4, null, { responsavelId: 2, valor: 50 }),
-          P(5, null, { responsavelId: 9, valor: 500 }),
-          P(6, null),
-          P(7, null, { estado: "conferindo" }),
-        ],
-      },
-      AGORA,
-    );
-    assert.deepEqual(
-      r.responsaveis.map((x) => [x.id, x.n]),
-      [
-        [5, 3],
-        [9, 1],
-        [2, 1],
-        [null, 2],
-      ],
-    );
-    assert.deepEqual(r.responsaveis[0].porEstado, { regular: 1, atencao: 1, erro: 1, conferindo: 0, naoConferido: 0 });
-    assert.equal(r.semResponsavel, 2);
-    assert.equal(r.responsaveis.at(-1)?.porEstado.conferindo, 1);
-    assert.equal(r.outrosResponsaveis, null);
-  });
-
-  it("responsáveis além do limite viram 'Outras N pessoas' (o 'sem' continua à parte)", () => {
-    const protocolos = Array.from({ length: MAX_RESPONSAVEIS + 3 }, (_, i) => P(i + 1, null, { responsavelId: i + 1, valor: 1000 - i }));
-    const r = painelMesa({ ...vazio, protocolos: [...protocolos, P(99, null)] }, AGORA);
-    assert.equal(r.responsaveis.length, MAX_RESPONSAVEIS + 1);
-    assert.equal(r.responsaveis.at(-1)?.id, null);
-    assert.equal(r.outrosResponsaveis?.pessoas, 3);
-    assert.equal(r.outrosResponsaveis?.n, 3);
-    assert.equal(r.outrosResponsaveis?.porEstado.regular, 3);
-  });
-
-  it("unidades pelos DFDs: maiores valores primeiro, 'sem unidade' e a cauda em 'Outras'", () => {
-    const dfds = [
-      D("SMS", 300, { itens: 4 }),
-      D("SMS", 200, { unidadeNome: "Secretaria de Saúde" }), // o nome vem de QUALQUER DFD da unidade
-      D("SMS", 1, { unidadeNome: "Outro nome", valor: 0 }),
-      D("SME", 900),
-      D(null, 50, { itens: null }),
-      D("SMA", Number.NaN),
-    ];
-    const r = painelMesa({ ...vazio, dfds }, AGORA);
-    assert.equal(r.dfds, 6);
-    assert.equal(r.itens, 8);
-    assert.equal(r.valor, 1450);
-    assert.deepEqual(
-      r.unidades.map((u) => [u.sigla, u.dfds, u.valor]),
-      [
-        ["SME", 1, 900],
-        ["SMS", 3, 500],
-        ["", 1, 50],
-        ["SMA", 1, 0],
-      ],
-    );
-    assert.equal(r.unidades[1].nome, "Secretaria de Saúde");
-    assert.equal(r.unidades[2].chave, "sem");
-    const muitas = Array.from({ length: MAX_UNIDADES + 2 }, (_, i) => D(`U${i}`, 100 - i));
-    const r2 = painelMesa({ ...vazio, dfds: muitas }, AGORA);
-    assert.equal(r2.unidades.length, MAX_UNIDADES);
-    assert.deepEqual(r2.outrasUnidades, { unidades: 2, dfds: 2, valor: 100 - MAX_UNIDADES + (100 - MAX_UNIDADES - 1) });
-  });
-
-  it("unidades de MESMA sigla em órgãos diferentes ficam em linhas separadas (agrupadas pelo id)", () => {
-    const r = painelMesa({ ...vazio, dfds: [D("GAB", 100, { unidadeId: 1 }), D("GAB", 40, { unidadeId: 2 }), D("GAB", 10, { unidadeId: 1 })] }, AGORA);
-    assert.deepEqual(
-      r.unidades.map((u) => [u.chave, u.sigla, u.valor]),
-      [
-        ["1", "GAB", 110],
-        ["2", "GAB", 40],
-      ],
-    );
-  });
-
-  it("valores não numéricos nos protocolos não viram NaN", () => {
-    const r = painelMesa({ ...vazio, protocolos: [P(1, null, { valor: Number.NaN }), P(2, null, { valor: 5 })] }, AGORA);
-    assert.equal(r.saude.regular.valor, 5);
-  });
-});
-
-describe("origem dos dados do Dashboard da Mesa (a MESMA chave do agregado)", () => {
-  const protos: ProtocoloPainel[] = [
-    P(1, "2026-09-24T12:00:00Z", { estado: "erro", situacaoId: 5 }),
-    P(2, "2026-09-10T12:00:00Z", { estado: "regular", situacaoId: 9 }), // situação apagada → Sem situação
-    P(3, "2026-07-01T12:00:00Z", { estado: "atencao" }),
-    P(4, null, { estado: "conferindo", situacaoId: 5 }),
-    P(5, "2026-09-21T02:00:00Z", { estado: "regular" }), // dia 20/09 em Brasília (domingo)
-  ];
-  const sit = [5, 6];
-  const p = painelMesa({ protocolos: protos, dfds: [], situacoes: sit }, AGORA);
-  it("cada fatia soma exatamente o que o agregado conta", () => {
-    for (const e of ESTADOS_PAINEL) assert.equal(protocolosDoRecorte(protos, { dim: "estado", estado: e }, sit, AGORA).length, p.saude[e].n);
-    for (const s of p.situacoes) assert.equal(protocolosDoRecorte(protos, { dim: "situacao", id: s.id }, sit, AGORA).length, s.n);
-    for (let i = 0; i < FAIXAS_IDADE.length; i++)
-      assert.equal(protocolosDoRecorte(protos, { dim: "idade", faixa: i }, sit, AGORA).length, p.faixasIdade[i].n);
-    for (const w of p.semanas) assert.equal(protocolosDoRecorte(protos, { dim: "semana", inicio: w.inicio }, sit, AGORA).length, w.n);
-  });
-  it("Sem situação inclui a situação apagada; sem data fica fora do tempo/semana", () => {
-    assert.deepEqual(protocolosDoRecorte(protos, { dim: "situacao", id: null }, sit, AGORA).map((x) => x.id), [2, 3, 5]);
-    assert.ok(!protocolosDoRecorte(protos, { dim: "idade", faixa: 0 }, sit, AGORA).some((x) => x.id === 4));
-  });
-  it("unidades: pelas chaves, e a linha 'Outras' = fora das chaves", () => {
-    const ds = [D("SMS", 10), D("SME", 20), D(null, 5)];
-    const q = painelMesa({ protocolos: [], dfds: ds, situacoes: [] }, AGORA);
-    for (const u of q.unidades) assert.equal(dfdsDoRecorte(ds, [u.chave]).length, u.dfds);
-    assert.equal(dfdsDoRecorte(ds, [q.unidades[0].chave], true).length, 2);
+    const r = painelMesa({ protocolos: estados.map((estado, i) => P(i + 1, null, { estado, responsavelId: i % 2 ? null : 1 })), dfds: [D(10, 2), D(Number.NaN, null), D(5)] }, AGORA);
+    assert.deepEqual(r.saude, { regular: 2, atencao: 1, erro: 1, conferindo: 1, naoConferido: 1 });
+    assert.deepEqual([r.semResponsavel, r.dfds, r.itens, r.valor], [3, 3, 3, 15]);
+    assert.equal(ROTULO_ESTADO_PAINEL.conferindo, "Conferindo…");
   });
 });

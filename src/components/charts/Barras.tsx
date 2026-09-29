@@ -151,7 +151,7 @@ function tetoRedondo(v: number): number {
  * COLUNAS verticais (série no tempo ou faixas ordenadas) — grade em linhas finas (o teto do eixo e o zero à
  * esquerda, fora da área do gráfico), colunas de até 24px com a ponta arredondada, o valor no topo (todas com
  * `rotularTodas`; senão só a maior e a última) e a dica ao passar o mouse, focar ou tocar (a coluna é um botão).
- * Com muitas colunas, o eixo rotula uma sim, outra não — sempre a última.
+ * Com muitas colunas, o eixo rotula no máximo ~8 (espaçadas por igual) — sempre a última.
  */
 export function Colunas({
   colunas,
@@ -176,7 +176,8 @@ export function Colunas({
   const teto = tetoRedondo(maior);
   const iMaior = maior > 0 ? colunas.findIndex((c) => c.valor === maior) : -1;
   const n = colunas.length;
-  const passo = n > 8 ? 2 : 1;
+  // No máximo ~8 rótulos no eixo (sempre o último) — 30 dias não viram uma fileira ilegível.
+  const passo = Math.max(1, Math.ceil(n / 8));
   const eixo = "absolute right-full mr-1.5 -translate-y-1/2 text-[10.5px] leading-none text-faint tabular-nums";
   return (
     // `pt-4`: o valor no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro.

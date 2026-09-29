@@ -160,6 +160,20 @@ página; as preferências do Perfil não gravam pela metade; o seletor só apare
 controles do cabeçalho com 44px no celular e no tablet (o menu não encolhe em telas de 360px) e o nome acessível diz o valor
 escolhido; o cadastro de PCAs é lido uma vez por página.
 
+### Mesa: Dashboard minimalista — o período pelo seletor do sistema e UM gráfico com Dado e Medida — entregue
+✅ **Período = o seletor de datas que o sistema já tinha** (`PeriodoPicker`, o MESMO painel do filtro de datas das tabelas:
+Todo o período · Hoje · Esta semana · Este mês, o ano, os meses e o intervalo DE/ATÉ, com "Limpar"), **sem
+Crescente/Decrescente**, no mesmo visual dos campos da barra e com 44px no toque; a semana vai de **domingo a sábado** (a
+tendência semanal das KPIs também). Saíram o navegador ‹ › com o salto de data (`NavegadorPeriodo`) e o mini-mês sem
+moldura. ✅ **UM gráfico só:** a barra tem **Dado** (responsável, quem protocolou, natureza, tipo de DFD, situação, estado,
+unidade, tempo na Mesa ou data) e **Medida** (protocolos, DFDs, itens, valor, correções ou ações) — o MESMO gráfico mostra o
+que se escolhe (barras horizontais; colunas na data, em dias, semanas, meses ou anos conforme o período). Natureza e tipo de
+DFD deixaram de ser filtros da barra e viraram dados; saíram as três tabelas por período (`TabelaPeriodo`) e os seis quadros
+(evolução, saúde, situação, tempo, carga e valor por unidade) — todos cabem no gráfico único. ✅ **Desempenho por pessoa**
+continua abaixo do gráfico (a coluna da pessoa segue o dado: responsável ou quem protocolou). ✅ Tocar numa barra ou numa
+linha abre a origem (a soma da lista = o número — coberto por teste para todo dado × medida × período × foco) e filtrar o
+Responsável do topo segue igual à linha da pessoa na visão da equipe.
+
 ### Mesa: filtro por pessoa sem dados quebrados, seletor de pessoa com foto e período por semana/qualquer data — entregue
 ✅ **Filtrar pela pessoa = a linha da pessoa na visão da equipe.** Com o Responsável do topo numa pessoa, o Dashboard mostra
 só essa pessoa, no papel escolhido na barra (pelo Responsável, os protocolos pelos quais responde; pela **Distribuição, os que

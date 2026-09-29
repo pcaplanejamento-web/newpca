@@ -88,10 +88,13 @@ export function Dropdown({
       const t = e.target as Node;
       if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
-    // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora.
+    // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. Com o
+    // foco DENTRO do painel, ele volta ao gatilho aqui mesmo: o painel é desmontado antes de qualquer `onKeyDown` do
+    // conteúdo rodar (a atualização do React é aplicada logo depois deste ouvinte), e o foco se perderia no `body`.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
+      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
       setOpen(false);
     };
     const onMove = () => reposicionar();

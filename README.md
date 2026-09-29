@@ -22,13 +22,13 @@ Prefeitura de Rio Verde. Roda na **Cloudflare** (Workers) com banco **D1** (SQLi
   filtros de hierarquia (Responsável e Assunto, só com o ícone — a foto da pessoa escolhida —, na mesma linha das visões;
   o seletor de pessoa — no filtro, na célula Responsável, na edição em massa e no Perfil — lista a **foto e o apelido** de
   cada um, com busca; a Mesa abre com o responsável escolhido no Perfil: só os meus, por padrão) valem para as três visões e para o
-  **Dashboard de governança** (ícone à esquerda das visões: saúde, situação, tempo na Mesa, evolução, carga por
-  pessoa e valor por unidade — tocar numa pessoa filtra a Mesa), com a **barra de métricas** abaixo das KPIs (período
-  Tudo/Ano/Mês/Semana/Dia — tocar no período salta para qualquer dia, semana, mês ou ano —, medida protocolos/DFDs/itens/
-  valor, pessoa Responsável/Distribuição, natureza e tipo de DFD): a distribuição por pessoa, natureza e tipo de DFD em
-  Hoje | Semana | Mês | Ano | Na Mesa (como a planilha, com as correções = reenvios) e o **desempenho por pessoa**
-  (conformidade, correções, ações e tempo) — só a execução da Mesa; com o Responsável do topo numa pessoa, as métricas
-  mostram só essa pessoa (os mesmos números da linha da pessoa na visão da equipe; pela Distribuição, o que protocolou). "Importar protocolo"/"Importar DFD" ficam no
+  **Dashboard de governança** (ícone à esquerda das visões — minimalista: os KPIs, a **barra de métricas** com o
+  seletor de período do sistema — todo o período, hoje, esta semana, este mês, um ano, um mês ou um intervalo — + o
+  **Dado** e a **Medida** de **UM gráfico** — responsável, quem protocolou, natureza, tipo de DFD, situação, estado,
+  unidade, tempo na Mesa ou data × protocolos, DFDs, itens, valor, correções = reenvios ou ações —, e o **desempenho por
+  pessoa** (conformidade, correções, ações e tempo); toque numa barra/linha para ver a origem) — só a execução da Mesa;
+  com o Responsável do topo numa pessoa, as métricas mostram só essa pessoa (os mesmos números da linha da pessoa na
+  visão da equipe; com o dado "Quem protocolou", o que ela protocolou). "Importar protocolo"/"Importar DFD" ficam no
   rodapé da tabela. O texto dos DFDs entra em **parágrafos** (sem as quebras da linha do PDF; Órgão/Setor em 2 linhas
   inteiros) e o botão **Atualizar** dos banners (o ícone gira) recarrega e **revisa** o gravado com os mesmos tratamentos
   da importação, para conferir e salvar. Um botão na barra liga os **dados completos** (texto inteiro, listas sem "+N" e

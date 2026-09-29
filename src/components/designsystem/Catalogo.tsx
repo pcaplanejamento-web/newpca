@@ -28,10 +28,9 @@ import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
-import { type Atividade, colunasMetricas, diaDoProtocolo, type FiltroMetricas, filtroMetricasPadrao } from "@/lib/mesa-metricas";
+import { type Atividade, diaDoProtocolo, FILTRO_METRICAS_PADRAO, type FiltroMetricas } from "@/lib/mesa-metricas";
+import { PERIODO_TODO, type Periodo } from "@/lib/periodo";
 import { BarraMetricas } from "@/components/BarraMetricas";
-import { NavegadorPeriodo } from "@/components/NavegadorPeriodo";
-import { TabelaPeriodo } from "@/components/TabelaPeriodo";
 import { ColorField } from "@/components/ColorField";
 import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "@/components/DfdView";
@@ -765,7 +764,6 @@ function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[]; at
       assunto: ASSUNTOS_DASH[i % ASSUNTOS_DASH.length],
       anoPca: i % 3 === 0 ? 2026 : 2027,
       criadoEm: new Date(agora - ((i * 37) % 97) * 864e5).toISOString().replace("T", " ").slice(0, 19),
-      valor: 20_000 + ((i * 7919) % 600_000),
       responsavelId: i % 9 === 0 ? null : PESSOAS_DEMO[i % PESSOAS_DEMO.length].id,
       distribuidorId: PESSOAS_DEMO[(i + 1) % PESSOAS_DEMO.length].id,
       situacaoId: i % 11 === 0 ? null : SITUACOES_DEMO[i % SITUACOES_DEMO.length].id,
@@ -798,86 +796,56 @@ function dadosDashDemo(): { protocolos: ProtocoloPainel[]; dfds: DfdPainel[]; at
   return { protocolos, dfds, atividades, hoje };
 }
 
-/** Demo do DASHBOARD de governança da Mesa (tocar numa pessoa filtra — aqui, os próprios dados do exemplo). */
+/** Demo do DASHBOARD de governança da Mesa — o filtro Responsável do topo (o MESMO `SeletorPessoa` da Mesa) é o FOCO
+ * das métricas: numa pessoa, só ela (a linha dela na visão da equipe). */
 function DashboardMesaDemo() {
   const [dados, setDados] = useState<ReturnType<typeof dadosDashDemo> | null>(null);
   const [resp, setResp] = useState<"todos" | "sem" | number>("todos");
-  const [filtro, setFiltro] = useState<FiltroMetricas | null>(null);
-  useEffect(() => {
-    const d = dadosDashDemo();
-    setDados(d);
-    setFiltro(filtroMetricasPadrao(d.hoje));
-  }, []);
-  if (!dados || !filtro) return <Skeleton className="h-72 w-full rounded-card" />;
+  const [filtro, setFiltro] = useState<FiltroMetricas>(FILTRO_METRICAS_PADRAO);
+  useEffect(() => setDados(dadosDashDemo()), []);
+  if (!dados) return <DashboardMesaEsqueleto metricas />;
   // As KPIs = a Mesa com o filtro do topo; as métricas = o universo (todos os dados), com o responsável como FOCO.
   const protocolos = resp === "todos" ? dados.protocolos : dados.protocolos.filter((x) => (resp === "sem" ? x.responsavelId == null : x.responsavelId === resp));
   const ids = new Set(protocolos.map((x) => x.id));
   return (
-    <DashboardMesa
-      protocolos={protocolos}
-      dfds={resp === "todos" ? dados.dfds : dados.dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId))}
-      universo={dados}
-      situacoes={SITUACOES_DASH}
-      pessoas={PESSOAS_DASH}
-      regras={regrasPadrao()}
-      responsavel={resp}
-      onResponsavel={setResp}
-      metricas={{ filtro, onFiltro: setFiltro, hoje: dados.hoje, atividades: dados.atividades, erro: false, onTentar: () => undefined }}
-    />
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-[12px] text-muted">
+        Responsável do topo:
+        <SeletorPessoa
+          variante="filtro"
+          rotulo="Responsável"
+          ariaLabel="Filtro: Responsável (exemplo)"
+          pessoas={PESSOAS_DEMO}
+          valor={String(resp)}
+          ativo={resp !== "todos"}
+          extras={EXTRAS_FILTRO_DEMO}
+          onChange={(v) => setResp(v === "todos" || v === "sem" ? v : Number(v))}
+        />
+      </div>
+      <DashboardMesa
+        protocolos={protocolos}
+        dfds={resp === "todos" ? dados.dfds : dados.dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId))}
+        universo={dados}
+        situacoes={SITUACOES_DASH}
+        pessoas={PESSOAS_DASH}
+        regras={regrasPadrao()}
+        responsavel={resp}
+        metricas={{ filtro, onFiltro: setFiltro, hoje: dados.hoje, atividades: dados.atividades, erro: false, onTentar: () => undefined }}
+      />
+    </div>
   );
 }
 
-/** Demo das peças da BARRA DE MÉTRICAS da Mesa: o navegador de período, a barra e a tabela por período (a planilha). */
+/** Demo da BARRA DE MÉTRICAS da Mesa: o período (o seletor de período do sistema), o dado e a medida do gráfico. */
 function MetricasMesaDemo() {
-  const [hoje, setHoje] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<FiltroMetricas | null>(null);
-  useEffect(() => {
-    const h = dataIsoBrasilia(new Date().toISOString());
-    setHoje(h);
-    setFiltro(filtroMetricasPadrao(h));
-  }, []);
-  if (!hoje || !filtro) return <Skeleton className="h-40 w-full rounded-card" />;
-  const v = (dia: number, semana: number, mes: number, ano: number, tudo: number) => ({ dia, semana, mes, ano, tudo });
+  const [filtro, setFiltro] = useState<FiltroMetricas>(FILTRO_METRICAS_PADRAO);
   return (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <p className="text-[12px] font-medium text-muted">NavegadorPeriodo — Tudo | Ano | Mês | Semana | Dia, ‹ ›, “Hoje” e o salto (toque no período)</p>
-        <NavegadorPeriodo
-          periodo={filtro.periodo}
-          data={filtro.ref}
-          hoje={hoje}
-          diasComDados={new Set([hoje])}
-          onChange={({ periodo, data }) => setFiltro({ ...filtro, periodo, ref: data })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-[12px] font-medium text-muted">BarraMetricas — período, medida, pessoa, natureza e tipo de DFD (+ Limpar e Ajuda)</p>
-        <BarraMetricas
-          filtro={filtro}
-          onFiltro={setFiltro}
-          hoje={hoje}
-          naturezas={["INCLUSÃO 2027", "INCLUSÃO 2026", "EXCLUSÃO 2026"]}
-          resumo={<span>Setembro de 2026 · 60 protocolos · 412 DFDs · 3.210 itens · R$ 12,3 mi · 1 correção · 45 ações</span>}
-        />
-      </div>
-      <div className="max-w-xl space-y-1.5">
-        <p className="text-[12px] font-medium text-muted">TabelaPeriodo — a coluna do período em destaque, total e a linha à parte</p>
-        <TabelaPeriodo
-          ariaLabel="Distribuição por pessoa (exemplo)"
-          rotuloLinhas="Responsável"
-          colunas={colunasMetricas(filtro.ref, hoje)}
-          destaque={filtro.periodo}
-          linhas={[
-            { chave: "naty", rotulo: "Naty", titulo: "Naty", valores: v(0, 6, 29, 77, 40) },
-            { chave: "cris", rotulo: "Cris", titulo: "Cris", valores: v(0, 8, 31, 65, 38) },
-          ]}
-          total={{ chave: "total", rotulo: "Total", titulo: "Total", valores: v(0, 14, 60, 142, 78) }}
-          extras={[{ chave: "correcoes", rotulo: "Correções (reenvios)", titulo: "Correções", valores: v(0, 0, 1, 4, 2) }]}
-          formatar={(n) => num(n)}
-          onEscolher={(l, c) => toast(`Origem: ${l.titulo} · ${c.titulo}`)}
-        />
-      </div>
-    </div>
+    <BarraMetricas
+      filtro={filtro}
+      onFiltro={setFiltro}
+      anos={[2026, 2025]}
+      resumo={<span>Este mês (01/09 a 30/09/2026) · 60 protocolos · 412 DFDs · 3.210 itens · R$ 12,3 mi · 1 correção · 45 ações</span>}
+    />
   );
 }
 
@@ -2496,6 +2464,7 @@ export function Catalogo() {
   const [mdLateral, setMdLateral] = useState(false);
   const [pilhaDemo, setPilhaDemo] = useState<number>(0); // 0 fechado · 1 item · 2 DFD | item · 3 protocolo | DFD | item
   const [faixaDemo, setFaixaDemo] = useState<{ min?: number; max?: number } | null>(null);
+  const [periodoDemo, setPeriodoDemo] = useState<Periodo>(PERIODO_TODO);
   const [selDemo, setSelDemo] = useState<RegistroSelecao[]>([
     { key: 1, rotulo: "DFD 531" },
     { key: 2, rotulo: "DFD 389" },
@@ -2737,16 +2706,16 @@ export function Catalogo() {
         <GraficosGovernancaDemo />
       </Secao>
 
-      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens: KPIs, a barra de métricas, a distribuição por pessoa/natureza/tipo, o desempenho por pessoa e os quadros sobre o recorte; o Responsável do topo é o FOCO — a linha da pessoa na visão da equipe)">
+      <Secao titulo="DashboardMesa (Dashboard de governança da Mesa — o ícone à esquerda de Protocolos · DFDs · Itens: KPIs, a barra de métricas, UM gráfico com o Dado e a Medida escolhidos e o desempenho por pessoa; o Responsável do topo é o FOCO — a linha da pessoa na visão da equipe)">
         <DashboardMesaDemo />
       </Secao>
 
-      <Secao titulo="Métricas da Mesa — NavegadorPeriodo (Tudo | Ano | Mês | Semana | Dia + o salto a qualquer data) · BarraMetricas · TabelaPeriodo (a planilha de distribuição: Hoje | Semana | Mês | Ano | Na Mesa)">
+      <Secao titulo="BarraMetricas (a barra do Dashboard da Mesa: Período — o PeriodoPicker — · Dado · Medida · Ajuda; no celular, o período + a ajuda numa linha e Dado | Medida na outra)">
         <MetricasMesaDemo />
       </Secao>
 
-      <Secao titulo="DashboardMesaEsqueleto (enquanto o Dashboard carrega — a MESMA grade)">
-        <DashboardMesaEsqueleto />
+      <Secao titulo="DashboardMesaEsqueleto (enquanto um Dashboard carrega — a MESMA grade: `metricas` = a da Mesa; sem, a de Tarefas)">
+        <DashboardMesaEsqueleto metricas />
       </Secao>
 
       <Secao titulo="Avatares">
@@ -2814,7 +2783,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Filtro de cabeçalho & Período">
+      <Secao titulo="Filtro de cabeçalho & Período (PeriodoPicker — atalhos, ano, meses, intervalo DE/ATÉ e Limpar: o MESMO corpo do filtro de datas das tabelas, sem a ordenação)">
         <div className="flex flex-wrap items-center gap-6">
           <div className="rounded-control border border-border bg-surface-2 px-2">
             <MultiSelectHeader label="Órgão" options={ORGAOS} value={orgaos} onApply={setOrgaos} onSort={setSortOrgao} sortDir={sortOrgao} />
@@ -2831,7 +2800,7 @@ export function Catalogo() {
               onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)}
             />
           </div>
-          <PeriodoPicker anos={[2027, 2026, 2025]} value={{ preset: "todo" }} />
+          <PeriodoPicker anos={[2027, 2026, 2025]} value={periodoDemo} onChange={setPeriodoDemo} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-4">
           {/* Gatilho comum dos 3 filtros: coluna FILTRADA = tópico MARCADO (accent + funil). */}

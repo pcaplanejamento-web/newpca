@@ -3,7 +3,9 @@ import { IconArrowDown, IconArrowUp } from "./icons";
 
 // KPI card (spec §6.4): barra de acento à esquerda, número em Geist com
 // tabular-nums, delta com seta (SEM pílula), mini-gráfico de 7 barras (as 2
-// últimas na cor do KPI), sublegenda. Tudo por token; elevação por --ring.
+// últimas na cor do KPI), sublegenda. Tudo por token; elevação por --ring. O
+// número é proporcional à LARGURA do próprio cartão (container query, teto de
+// 2.05rem): cabe no cartão de meia largura do celular e na grade de 5 com o menu.
 export function KpiStat({
   label,
   value,
@@ -21,7 +23,7 @@ export function KpiStat({
 }) {
   return (
     <div
-      className="kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring"
+      className="kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring [container-type:inline-size]"
       style={{ "--kpi-accent": cor } as CSSProperties}
     >
       <span
@@ -46,7 +48,7 @@ export function KpiStat({
         )}
       </div>
       <div
-        className="mt-1 min-w-0 truncate pl-2 text-[clamp(1.4rem,7vw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
+        className="mt-1 min-w-0 truncate pl-2 text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
         title={typeof value === "string" ? value : undefined}
       >
         {value}

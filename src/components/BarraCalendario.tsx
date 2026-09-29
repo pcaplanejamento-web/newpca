@@ -66,20 +66,7 @@ function BotaoRecolher({ aberto, rotulo, onClick, controla }: { aberto: boolean;
 
 /** O MINI-MÊS da barra (ir para qualquer data): hoje marcado, os dias À VISTA (a semana/4 dias/o dia) destacados, ponto
  * nos dias com eventos. */
-export function MiniMes({
-  nav,
-  hoje,
-  diasComEvento,
-  inicioSemana = 0,
-  semMoldura = false,
-}: {
-  nav: NavCalendario;
-  hoje: string;
-  diasComEvento: Set<string>;
-  inicioSemana?: 0 | 1;
-  /** Sem a moldura de cartão (dentro de um painel que já tem a sua — ex.: o salto de data do período). */
-  semMoldura?: boolean;
-}) {
+export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: NavCalendario; hoje: string; diasComEvento: Set<string>; inicioSemana?: 0 | 1 }) {
   const { ano, mes } = nav.mes;
   const [m, setM] = useState<MesCalendario>({ ano, mes });
   // O calendário mudou de mês: o mini-mês acompanha.
@@ -88,7 +75,7 @@ export function MiniMes({
   const prefixo = `${m.ano}-${String(m.mes).padStart(2, "0")}`;
   const aVista = new Set(nav.vista === "mes" || nav.vista === "ano" || nav.vista === "agenda" ? [nav.foco] : nav.destaque);
   return (
-    <div className={semMoldura ? undefined : "rounded-card border border-border bg-surface p-2"}>
+    <div className="rounded-card border border-border bg-surface p-2">
       <div className="mb-1 flex items-center justify-between">
         <button type="button" aria-label="Mês anterior" onClick={() => setM(somarMes(m.ano, m.mes, -1))} className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-8">
           <IconChevronLeft className="h-4 w-4" />
