@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const vincular = url.searchParams.get("vincular") === "1";
   if (vincular && !(await getUsuarioAtual())) return NextResponse.redirect(`${origem}/login`, 303);
   const cfg = await googleDaConfig();
-  if ("erro" in cfg) return NextResponse.redirect(vincular ? `${origem}/painel/perfil?google=erro` : `${origem}/login?erro=google-desligado`, 303);
+  if ("erro" in cfg) return NextResponse.redirect(vincular ? `${origem}/painel/perfil?google=google-desligado` : `${origem}/login?erro=google-desligado`, 303);
 
   const dica = vincular || url.searchParams.get("trocar") === "1" ? null : lerContaLembrada((await cookies()).get(COOKIE_GOOGLE_CONTA)?.value);
   const state = aleatorio();

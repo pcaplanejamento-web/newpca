@@ -8,7 +8,7 @@ import { abasPermitidas, getGrupoAtivo } from "@/lib/grupos";
 import { getIntegracoes } from "@/lib/integracoes";
 import { googleConfigurado, resendConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
-import { MENSAGEM_VINCULO, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
+import { mensagemVinculo, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
 
@@ -43,13 +43,13 @@ async function contaGoogleDe(usuarioId: number) {
   }
 }
 
-export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ google?: string | string[] }> }) {
+export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ google?: string | string[]; motivo?: string | string[] }> }) {
   const u = await getUsuarioAtual();
   if (!u) redirect("/login");
   const grupo = await getGrupoAtivo(u);
   const editor = u.role === "admin" || u.role === "gestor";
-  const codigo = (await searchParams).google;
-  const retornoGoogle = MENSAGEM_VINCULO[Array.isArray(codigo) ? (codigo[0] ?? "") : (codigo ?? "")] ?? null;
+  const sp = await searchParams;
+  const retornoGoogle = mensagemVinculo(sp.google, sp.motivo);
   const [abas, protocolacao, mesaResponsavel, avisosEmail, contaGoogle] = await Promise.all([
     abasPermitidas(u, grupo),
     editor ? protocolacaoDe(u, grupo?.id ?? null) : null,

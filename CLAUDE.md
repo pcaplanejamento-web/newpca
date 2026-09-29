@@ -2996,7 +2996,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   senha). A conta que entrou fica LEMBRADA no aparelho (cookie httpOnly `pca_google_conta`, 1 ano): o login mostra "Continuar
   como <e-mail>" (o Google entra direto nela — `login_hint`, sem a tela de escolher) + "Usar outra conta Google" (`?trocar=1` →
   `select_account`). Erros específicos: `google-estado` (sessão do login expirou/outra aba), `google-token` (Google recusou —
-  Client ID/secret/URI), `google-outra-conta`.
+  Client ID/secret/URI), `google-outra-conta`; a volta leva o `motivo` do Google (`codigoErroGoogle`: `invalid_client`,
+  `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
+  `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
+  (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

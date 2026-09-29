@@ -4,8 +4,8 @@ import { getMetricasWorker } from "@/lib/cf-analytics";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getIntegracoes, gravarIntegracoes, lerBlobConfiguracoes } from "@/lib/integracoes";
 import { contextoEmail } from "@/lib/email";
-import { googleDaConfig } from "@/lib/google-oauth";
-import { DISCOVERY_GOOGLE, redirectUri } from "@/lib/google-oauth-core";
+import { conferirCredenciaisGoogle, googleDaConfig } from "@/lib/google-oauth";
+import { mensagemFalhaGoogle, redirectUri } from "@/lib/google-oauth-core";
 import { emailTeste } from "@/lib/email-core";
 import { coerceIntegracoes, dominioDoRemetente } from "@/lib/integracoes-core";
 import { ErroResend } from "@/lib/resend-api";
@@ -66,16 +66,14 @@ export async function POST(req: Request) {
     return ok({ detalhe: `E-mail de teste enviado para ${g.u.email}.${situacao}` });
   }
   if (corpo.data.alvo === "google") {
-    // Confere a configuração (client secret legível) e se o Google responde; a URI de redirecionamento é a deste endereço.
+    // Confere o Client ID + Client secret JUNTO AO GOOGLE (troca um código inventado: "invalid_grant" = credenciais certas)
+    // com a URI de redirecionamento deste endereço.
     const cfg = await googleDaConfig();
     if ("erro" in cfg) return erro(cfg.erro, 422);
-    try {
-      const r = await fetch(DISCOVERY_GOOGLE, { redirect: "manual", signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return erro(`O Google respondeu ${r.status}. Tente de novo em instantes.`, 422);
-    } catch {
-      return erro("Sem resposta do Google (rede ou tempo esgotado).", 422);
-    }
-    return ok({ detalhe: `Configuração OK. Cadastre no Google a URI ${redirectUri(new URL(req.url).origin)} e teste o botão "Entrar com Google" na tela de login.` });
+    const uri = redirectUri(new URL(req.url).origin);
+    const r = await conferirCredenciaisGoogle({ ...cfg, redirectUri: uri });
+    if (!r.ok) return erro(mensagemFalhaGoogle("O Google recusou a configuração.", r.codigo), 422);
+    return ok({ detalhe: `Client ID e Client secret aceitos pelo Google. Confira que a URI ${uri} está cadastrada no cliente OAuth e teste o "Entrar com Google".` });
   }
   if (corpo.data.alvo === "turnstile") {
     const integ = await getIntegracoes({ fresco: true });

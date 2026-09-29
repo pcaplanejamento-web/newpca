@@ -9,7 +9,9 @@ import {
   lerContaLembrada,
   lerCookieGoogle,
   lerIdToken,
+  codigoErroGoogle,
   mensagemErroLogin,
+  mensagemVinculo,
   podeVincular,
   redirectUri,
   SENHA_INUTILIZAVEL,
@@ -85,6 +87,16 @@ describe("login com Google — núcleo", () => {
   it("a senha de quem entrou pelo Google nunca confere", async () => {
     assert.equal(await verificarSenha("", SENHA_INUTILIZAVEL), false);
     assert.equal(await verificarSenha("google$sem-senha", SENHA_INUTILIZAVEL), false);
+  });
+
+  it("falha com o motivo do Google: explica o que fazer; código estranho não entra na tela", () => {
+    assert.match(mensagemVinculo("google-token", "invalid_client")?.texto ?? "", /Client secret/);
+    assert.equal(mensagemVinculo("google-token", "invalid_client")?.ok, false);
+    assert.match(mensagemErroLogin("google-token", "redirect_uri_mismatch") ?? "", /URI de redirecionamento/);
+    assert.match(mensagemVinculo("google-token", "outro_erro")?.texto ?? "", /Resposta do Google: outro_erro/);
+    assert.equal(codigoErroGoogle("<b>x</b>"), "");
+    assert.equal(mensagemVinculo("vinculado", "invalid_client")?.ok, true);
+    assert.equal(mensagemVinculo("inexistente"), null);
   });
 
   it("mensagens da volta: conhecidas e desconhecidas", () => {

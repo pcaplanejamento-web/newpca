@@ -6,7 +6,6 @@
 
 export const HOST_AUTORIZACAO_GOOGLE = "https://accounts.google.com/o/oauth2/v2/auth";
 export const HOST_TOKEN_GOOGLE = "https://oauth2.googleapis.com/token";
-export const DISCOVERY_GOOGLE = "https://accounts.google.com/.well-known/openid-configuration";
 export const CAMINHO_CALLBACK_GOOGLE = "/api/auth/google/callback";
 /** O cookie curto (10 min) que guarda o state + o verificador do PKCE entre a ida e a volta do Google. */
 export const COOKIE_GOOGLE = "pca_google";
@@ -160,17 +159,51 @@ export const MENSAGEM_ERRO_LOGIN: Record<string, string> = {
   inativo: "Sua conta está inativa. Fale com um administrador.",
 };
 
-/** Os retornos do VÍNCULO no Perfil (`/painel/perfil?google=`): sucesso ou o motivo. */
+/** Os retornos do VÍNCULO no Perfil (`/painel/perfil?google=`): sucesso ou o motivo (as falhas usam os MESMOS códigos do login). */
 export const MENSAGEM_VINCULO: Record<string, { ok: boolean; texto: string }> = {
   vinculado: { ok: true, texto: "Conta Google vinculada. Agora você entra com um clique em “Continuar com Google”." },
   "em-uso": { ok: false, texto: "Esta conta Google já está vinculada a outro usuário do sistema." },
   erro: { ok: false, texto: "Não foi possível vincular a conta Google. Tente de novo." },
+  google: { ok: false, texto: "Não foi possível vincular a conta Google (falha interna). Tente de novo." },
+  "google-estado": { ok: false, texto: "O vínculo com o Google expirou ou foi aberto em outra aba. Tente de novo." },
+  "google-desligado": { ok: false, texto: "O login com Google não está ativo, ou o Client secret não pôde ser lido (salve-o de novo em Integrações)." },
+  "google-token": { ok: false, texto: "O Google recusou a autorização." },
 };
 
-/** A mensagem de um código de `?erro=` (desconhecido = nada). */
-export function mensagemErroLogin(codigo: string | string[] | undefined): string | null {
+/** O código de erro que o Google devolve (`invalid_client`…) — só letras e "_", para ir na URL com segurança. */
+export function codigoErroGoogle(v: unknown): string {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return /^[a-z_]{1,40}$/.test(s) ? s : "";
+}
+
+/** O que fazer para cada código de erro do Google (o `motivo` da volta). */
+export const DETALHE_ERRO_GOOGLE: Record<string, string> = {
+  invalid_client: "O Client ID ou o Client secret estão incorretos — confira em Integrações → Login com Google (copie de novo do Google Cloud).",
+  unauthorized_client: "O Client ID não é do tipo “Aplicativo da Web” ou não está autorizado para este fluxo.",
+  redirect_uri_mismatch: "A URI de redirecionamento deste endereço não está cadastrada no cliente OAuth do Google Cloud.",
+  invalid_grant: "O código do Google expirou ou já foi usado — tente de novo.",
+  interno: "Falha ao gravar no sistema.",
+};
+
+/** A mensagem completa de uma falha: o texto do código + o detalhe do motivo do Google, quando houver. */
+export function mensagemFalhaGoogle(base: string, motivo: string | string[] | undefined): string {
+  const m = codigoErroGoogle(Array.isArray(motivo) ? motivo[0] : motivo);
+  const detalhe = m ? (DETALHE_ERRO_GOOGLE[m] ?? `Resposta do Google: ${m}.`) : "";
+  return detalhe ? `${base} ${detalhe}` : base;
+}
+
+/** A mensagem de um código de `?erro=` (desconhecido = nada), com o detalhe do `motivo` do Google quando houver. */
+export function mensagemErroLogin(codigo: string | string[] | undefined, motivo?: string | string[]): string | null {
   const c = Array.isArray(codigo) ? codigo[0] : codigo;
-  return c ? (MENSAGEM_ERRO_LOGIN[c] ?? null) : null;
+  const base = c ? MENSAGEM_ERRO_LOGIN[c] : undefined;
+  return base ? mensagemFalhaGoogle(base, motivo) : null;
+}
+
+/** O retorno do vínculo (`?google=` + `&motivo=`) → a mensagem do Perfil (desconhecido = nada). */
+export function mensagemVinculo(codigo: string | string[] | undefined, motivo?: string | string[]): { ok: boolean; texto: string } | null {
+  const c = Array.isArray(codigo) ? codigo[0] : codigo;
+  const m = c ? MENSAGEM_VINCULO[c] : undefined;
+  return m ? { ok: m.ok, texto: m.ok ? m.texto : mensagemFalhaGoogle(m.texto, motivo) } : null;
 }
 
 /** Compara dois textos em tempo constante (o state). */

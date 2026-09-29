@@ -43,7 +43,11 @@ export async function GET(req: Request) {
     if (conta) res.cookies.set(COOKIE_GOOGLE_CONTA, conta, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: VALIDADE_COOKIE_CONTA_S });
     return res;
   };
-  const falhou = (codigo: string) => ir(vincular ? "/painel/perfil?google=erro" : `/login?erro=${codigo}`);
+  // A falha volta com o código e, quando houver, o motivo do Google (invalid_client, redirect_uri_mismatch…) — a tela explica.
+  const falhou = (codigo: string, motivo = "") => {
+    const m = motivo ? `&motivo=${encodeURIComponent(motivo)}` : "";
+    return ir(vincular ? `/painel/perfil?google=${codigo}${m}` : `/login?erro=${codigo}${m}`);
+  };
 
   if (url.searchParams.get("error")) return vincular ? ir("/painel/perfil") : ir("/login?erro=google-cancelado");
   const code = url.searchParams.get("code");
@@ -55,7 +59,7 @@ export async function GET(req: Request) {
   const r = await trocarCodigo({ code, verificador: salvo.verificador, redirectUri: redirectUri(origem), ...cfg });
   if (!r.ok) {
     console.error("[google] troca recusada:", r.motivo);
-    return falhou("google-token");
+    return falhou("google-token", r.codigo);
   }
   const { sub, email, nome } = r.identidade;
 
@@ -108,6 +112,6 @@ export async function GET(req: Request) {
     return ir("/login?erro=pendente-novo", email);
   } catch (e) {
     console.error("[google] falha:", (e as Error).message);
-    return falhou("google");
+    return falhou("google", "interno");
   }
 }
