@@ -654,17 +654,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     calendário): **Período** = o seletor de período do sistema (`PeriodoPicker`: o MESMO `PeriodoCorpo` do filtro de datas das
     tabelas, SEM a ordenação — Todo o período | Hoje | Esta semana [domingo a sábado] | Este mês, o ano, os meses e o intervalo
     DE/ATÉ + Limpar; os anos = os com protocolação + o atual, `anosComDados`) · **Dado** · **Medida** (`SelectField compacto`) +
-    Ajuda (?); no celular, o período + a ajuda numa linha e Dado | Medida na outra. Embaixo, a linha do recorte (a janela — "Este
+    Ajuda (?); no celular, o período + a ajuda numa linha e Dado e Medida em linhas próprias — lado a lado a partir de 400px (os
+    rótulos inteiros). Embaixo, a linha do recorte (a janela — "Este
     mês (01/09 a 30/09/2026)" — · protocolos · DFDs · itens · valor · correções · ações) e o aviso do FOCO. Abaixo, **UM gráfico**
     (`ChartCard` "{Medida} por {dado}", o total à direita; trocar o Dado replaya o morph): o **Dado** escolhe as barras —
     Responsável · Quem protocolou · Natureza (a categoria do assunto + o ano do PCA: "INCLUSÃO 2027") · Tipo de DFD · Situação (as
     do ADM, na ordem e na cor dele) · Estado (o AGREGADO da conferência, nas cores das importâncias do ADM) · Unidade (requisitante
     dos DFDs, pelo ID — a sigla pode repetir entre órgãos) · Tempo na Mesa (0–7/8–15/16–30/31–60/61–90/90+ dias + "Sem data") ·
-    Data (`Colunas`: até 31 dias = dias, até 14 semanas = semanas de domingo a sábado, até 36 meses = meses, acima = anos; o balde
-    de hoje em destaque; o sem data fica FORA, com nota) —; a **Medida**, o tamanho: Protocolos · DFDs · Itens · Valor ·
+    Data (`Colunas`: até 31 dias = dias, até 98 dias = semanas de domingo a sábado, até 36 meses = meses, acima = anos — num
+    período de mais de 36 meses, só do 1º ao último dia com dado, nunca colunas vazias sem fim; o balde de hoje em destaque; o
+    valor em cada coluna só quando cabe; o sem data fica FORA, com nota) —; a **Medida**, o tamanho: Protocolos · DFDs · Itens · Valor ·
     **Correções** (os REENVIOS, pela data do reenvio) · **Ações** (a execução, pela data; nos Dados de pessoa, por QUEM FEZ —
     "Ações por quem executou"). Pessoas e unidades pelo valor (10 maiores + "Outras N" — contada UMA vez; "Sem …" por último);
-    domínios fechados (tipo, situação, estado, tempo) com as barras fixas, zeradas também (esmaecidas); Tipo de DFD e Unidade vêm
+    domínios fechados (tipo, situação, estado, tempo) com as barras fixas, zeradas também (esmaecidas, não abrem nada); sem nada na
+    medida, o quadro diz o quê ("Nenhum DFD no período", "Sem valor na Mesa"…); Tipo de DFD e Unidade vêm
     dos DFDs do protocolo — DFDs/itens/valor se dividem, protocolos/correções/ações contam em cada barra e UMA vez no total (nota
     no gráfico). Abaixo, o **DESEMPENHO POR PESSOA** (`DataTable` compacta, GOVERNANÇA PRIMEIRO: protocolos, regulares %, com
     erro, em atenção, **correções** — os reenvios dos protocolos da pessoa —, **ações** — a execução feita pela pessoa; "—" na
@@ -679,14 +682,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     protocolos pela PROTOCOLAÇÃO (dia de Brasília), correções/ações pela data do EVENTO; DFD sem protocolo e protocolo enviado a
     um PCA ficam fora das métricas. Toda barra/linha abre a **ORIGEM** (`OrigemDados`: os protocolos com o valor na medida, ou os
     reenvios/ações com quem e quando; Σ = o número tocado; a linha do desempenho lista os protocolos da pessoa com o R$). Núcleo
-    PURO/testado **`mesa-metricas.ts`**: `recorteMetricas(…, {intervalo, papel, hoje, foco})` = a fonte única (independe do Dado
-    e da Medida — trocar um deles só refaz o gráfico): base [o foco — `noFoco`], coorte [+ o período — `noIntervalo`], o dia de
+    PURO/testado **`mesa-metricas.ts`**: `recorteMetricas(…, {intervalo, papel, hoje, foco})` = a fonte única (trocar a Medida,
+    ou o Dado dentro do mesmo papel, só refaz o gráfico; um protocolo por id): base [o foco — `noFoco`], coorte [+ o período — `noIntervalo`], o dia de
     Brasília de cada protocolo, os reenvios e as ações do período; `graficoMetricas(rec, dado, medida, situacoes)` monta as barras
     e a `origem(chaves)` de UMA lista de lançamentos (Σ = a barra — testado em TODO Dado × Medida × período × foco; o total é o
     mesmo em todo Dado e bate com o resumo); `baldesData`, `tituloGrafico`, `desempenhoPorPessoa`/`protocolosDaPessoa`,
     `resumoMetricas`, `anosComDados` + **`periodo.ts`** (`intervaloDoPeriodo` com o hoje de Brasília, `noIntervalo`,
     `rotuloPeriodo`, `textoIntervalo`) + **`mesa-dashboard.ts`** (`painelMesa` = só os KPIs, `agora` injetado; dias de CALENDÁRIO
-    de Brasília via `dataIsoBrasilia`), sobre as listas JÁ carregadas (`protocolosF`/`dfdsF` nas KPIs, o universo nas métricas + a
+    de Brasília via `dataIsoBrasilia`, que guarda o dia de cada timestamp — recalcular não refaz a conversão de fuso), sobre as listas JÁ carregadas (`protocolosF`/`dfdsF` nas KPIs, o universo nas métricas + a
     gestão otimista + `dfdsComErro`/`dfdsEmAtencao` da conferência agregada, que cobre TODOS os protocolos) e o
     **HISTÓRICO DE EXECUÇÃO** — `GET /api/mesa/execucao?ano=` (`execucaoDaMesa`; builder **`mesa-execucao-sql.ts`**, testado pelo
     driver D1 real): a `auditoria` SÓ dos protocolos da Mesa (o MESMO escopo das listas: fora de um PCA, unidade ativa, PCA do
@@ -697,7 +700,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     falhar não derruba nada (o gráfico e a linha do recorte oferecem "Tentar de novo"). O filtro das métricas também mora no
     `DfdsView` (sobrevive às trocas de visão); o efeito da conferência agregada roda também com o Dashboard aberto (mesmo
     cache). Gráficos em HTML por token (`charts/Barras`: `BarrasH`, `Colunas` — marcas finas, texto em tokens de texto, dica no
-    hover/foco/toque; o eixo das colunas rotula no máximo ~8). O código do Dashboard é carregado SOB DEMANDA (`next/dynamic`,
+    hover/foco/toque; o eixo das colunas rotula no máximo ~8 e a margem cabe o rótulo em R$; a coluna zerada só mostra a dica). O código do Dashboard é carregado SOB DEMANDA (`next/dynamic`,
     `ssr:false`, `DashboardMesaEsqueleto metricas` — a mesma grade) — a Mesa não baixa gráficos à toa. A conferência agregada
     roda com Protocolos OU Dashboard abertos (`precisaConfProto` — alternar entre os dois não reinicia as requisições) e uma nova
     tentativa dos que falharam volta a "Conferindo…" na hora; na KPI de conformidade, "conferindo" (em curso) e "não conferido"
@@ -2633,16 +2636,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`DashboardMesaEsqueleto`** (a mesma grade enquanto um Dashboard carrega — arquivo leve, fora do chunk dos gráficos;
   `metricas` = a grade da Mesa, sem ela a de Tarefas) + **`BarraMetricas`** (a barra de métricas abaixo das KPIs: o
   `PeriodoPicker` + `SelectField compacto` Dado e Medida + Ajuda; no celular o período + a ajuda numa linha, Dado | Medida na
-  outra) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas clicáveis
-  com a ativa marcada), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo — e dica no
-  hover/foco/toque) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS; o Esc fecha e, com o foco dentro do painel, o devolve ao gatilho; `className` do invólucro e `id`/`title` do
+  outra; abaixo de 400px, Dado e Medida em linhas próprias) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas
+  clicáveis — o que o toque faz no nome acessível, `acao`, padrão "ver a origem dos dados"; com `ativa`, a linha marcada é um
+  FILTRO de alternar), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo, a margem do eixo cabe o rótulo
+  em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
   gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
   `aria-haspopup="dialog"`]; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
   `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
   semana | Este mês, o ano, os meses, o intervalo DE/ATÉ e **Limpar** (`onLimpar`) — o MESMO corpo do filtro de datas das
-  tabelas (`DateFilterHeader`, que soma a ordenação); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção marcada
+  tabelas (`DateFilterHeader`, que soma a ordenação e mostra o filtro que vale — o restaurado de uma edição salva aparece no
+  DE/ATÉ); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção marcada
   e volta ao gatilho ao escolher/Esc; a conversão em datas é pura — `intervaloDoPeriodo`, `src/lib/periodo.ts`),
   `MultiSelectHeader`,
   `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,

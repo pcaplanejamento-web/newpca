@@ -120,7 +120,7 @@ export function naturezaDoProtocolo(assunto: string | null | undefined, anoPca: 
 export const pessoaDoProtocolo = (p: ProtocoloPainel, papel: PessoaMetricas): number | null =>
   papel === "distribuicao" ? (p.distribuidorId ?? null) : p.responsavelId;
 /** Chave da pessoa nas linhas (o id, ou "sem"). */
-export const chavePessoa = (id: number | null) => (id != null ? String(id) : "sem");
+const chavePessoa = (id: number | null) => (id != null ? String(id) : "sem");
 
 /** O protocolo está no FOCO? Uma pessoa, no PAPEL (Responsável = responde por ele; Distribuição = protocolou); "sem" =
  * sem responsável (em qualquer papel); "todos" = todos. */
@@ -146,7 +146,7 @@ const CHAVE_SEM_UNIDADE = "sem-unidade";
 /** A linha que junta a cauda (as pessoas/unidades além das `MAX_LINHAS_GRAFICO` maiores). */
 export const CHAVE_OUTRAS = "outras";
 /** Barras listadas nos Dados ordenados pelo valor (pessoas e unidades); o resto vira "Outras N". */
-export const MAX_LINHAS_GRAFICO = 10;
+const MAX_LINHAS_GRAFICO = 10;
 
 /** DFDs, itens e valor de cada protocolo (todos, por tipo e por unidade), a partir dos DFDs da Mesa. */
 function indicePorProtocolo(dfds: readonly DfdPainel[]): Map<number, IndiceProtocolo> {
@@ -224,8 +224,10 @@ function atoresContados<P extends ProtocoloPainel>(foco: FocoMetricas, papel: Pe
 
 /**
  * O recorte sobre o UNIVERSO das métricas (a Mesa com o Assunto do topo): o período (em dias — `intervaloDoPeriodo`) +
- * o FOCO (o Responsável do topo, no papel do Dado). Independe do Dado e da Medida (trocar um deles só refaz o gráfico).
- * Com o foco numa pessoa, cada número é o MESMO da linha da pessoa na visão da equipe.
+ * o FOCO (o Responsável do topo, no PAPEL: o Dado "Quem protocolou" usa a distribuição; os demais, o responsável).
+ * Trocar a Medida, ou o Dado dentro do mesmo papel, só refaz o gráfico. Com o foco numa pessoa, cada número é o MESMO
+ * da linha da pessoa na visão da equipe. Um protocolo por id (a lista da Mesa já vem assim; uma cópia repetida contaria
+ * duas vezes).
  */
 export function recorteMetricas<P extends ProtocoloPainel>(
   protocolos: readonly P[],
@@ -235,12 +237,13 @@ export function recorteMetricas<P extends ProtocoloPainel>(
 ): RecorteMetricas<P> {
   const { intervalo, papel, hoje, foco = "todos" } = o;
   const universo = new Map(protocolos.map((p) => [p.id, p]));
+  const unicos = universo.size === protocolos.length ? protocolos : [...universo.values()];
   const dia = new Map<number, string | null>();
-  for (const p of protocolos) {
+  for (const p of unicos) {
     const d = diaDoProtocolo(p.criadoEm);
     dia.set(p.id, d != null && d > hoje ? hoje : d);
   }
-  const base = foco === "todos" ? [...protocolos] : protocolos.filter((p) => noFoco(p, foco, papel));
+  const base = foco === "todos" ? [...unicos] : unicos.filter((p) => noFoco(p, foco, papel));
   const porId = foco === "todos" ? universo : new Map(base.map((p) => [p.id, p]));
   const coorte = base.filter((p) => noIntervalo(dia.get(p.id), intervalo));
   let reenvios: Atividade[] | null = null;
@@ -277,10 +280,23 @@ export function anosComDados(rec: RecorteMetricas<ProtocoloPainel>): number[] {
 export type GranularidadeData = "dia" | "semana" | "mes" | "ano";
 export type BaldeData = { chave: string; rotulo: string; titulo: string; de: string; ate: string; atual: boolean };
 
+/** Os limites da granularidade da Data: até 31 dias = dias; até 98 dias = semanas; até 36 meses = meses; acima = anos. */
+const LIMITE_DIAS = 31;
+const LIMITE_SEMANAS = 14 * 7;
+const LIMITE_MESES = 36;
+
+/** Quantos meses de calendário [de, ate] toca (a MESMA conta de `baldesData`). */
+function mesesEntre(de: string, ate: string): number {
+  const [a0, m0] = partesIso(de) ?? [1970, 1, 1];
+  const [a1, m1] = partesIso(ate) ?? [1970, 1, 1];
+  return (a1 - a0) * 12 + (m1 - m0) + 1;
+}
+
 /**
- * Os baldes de [de, ate] (dias AAAA-MM-DD): até 31 dias = dias; até 14 semanas (98 dias) = semanas de domingo a
- * sábado, cortadas nas pontas; até 36 meses = meses; acima = anos — nunca colunas demais para o celular. `atual` = o que
- * contém hoje; `chaveDoDia` põe um dia no balde dele por CONTA (sem varrer os baldes) — `null` fora de [de, ate].
+ * Os baldes de [de, ate] (dias AAAA-MM-DD): até 31 dias = dias; até 98 dias = semanas de domingo a sábado, cortadas
+ * nas pontas (até 15 colunas); até 36 meses = meses; acima = anos (o gráfico só chega aqui com dados — ver o corte das
+ * pontas vazias em `graficoMetricas`). `atual` = o que contém hoje; `chaveDoDia` põe um dia no balde dele por CONTA
+ * (sem varrer os baldes) — `null` fora de [de, ate].
  */
 export function baldesData(de: string, ate: string, hoje: string): { granularidade: GranularidadeData; baldes: BaldeData[]; chaveDoDia: (dia: string) => string | null } {
   const n0 = numDia(de) ?? 0;
@@ -288,7 +304,7 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
   const inicio = isoDoNum(n0);
   const fim = isoDoNum(n1);
   const [a0, m0] = partesIso(inicio) ?? [1970, 1, 1];
-  const [a1, m1] = partesIso(fim) ?? [1970, 1, 1];
+  const [a1] = partesIso(fim) ?? [1970, 1, 1];
   const dentro = (d: string) => d >= inicio && d <= fim;
   const balde = (chave: string, rotulo: string, titulo: string, bDe: string, bAte: string): BaldeData => ({
     chave,
@@ -299,8 +315,8 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
     atual: hoje >= (bDe < inicio ? inicio : bDe) && hoje <= (bAte > fim ? fim : bAte),
   });
   const dias = n1 - n0 + 1;
-  const meses = (a1 - a0) * 12 + (m1 - m0) + 1;
-  if (dias <= 31) {
+  const meses = mesesEntre(inicio, fim);
+  if (dias <= LIMITE_DIAS) {
     const baldes = Array.from({ length: dias }, (_, i) => {
       const iso = isoDoNum(n0 + i);
       const rotulo = dias <= 7 ? `${diaSemanaCurto(iso)} ${iso.slice(8)}` : String(Number(iso.slice(8)));
@@ -308,7 +324,7 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
     });
     return { granularidade: "dia", baldes, chaveDoDia: (d) => (dentro(d) ? d : null) };
   }
-  if (dias <= 14 * 7) {
+  if (dias <= LIMITE_SEMANAS) {
     const baldes: BaldeData[] = [];
     for (let s = n0; s <= n1; ) {
       const e = Math.min(n1, domingo(s) + 6);
@@ -326,7 +342,7 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
       },
     };
   }
-  if (meses <= 36) {
+  if (meses <= LIMITE_MESES) {
     const baldes = Array.from({ length: meses }, (_, k) => {
       const a = a0 + Math.floor((m0 - 1 + k) / 12);
       const m = ((m0 - 1 + k) % 12) + 1;
@@ -464,20 +480,31 @@ export function graficoMetricas<P extends ProtocoloPainel>(
   const eventos = (medida === "correcoes" ? rec.reenvios : medida === "acoes" ? rec.acoes : null) ?? [];
   const deProtocolo = (a: Atividade) => (medida === "correcoes" ? rec.porId : rec.universo).get(a.protocoloId);
 
-  // Dado "Data": os baldes sobre o período (sem início, do 1º dia com dado; sem fim, até hoje).
+  // Dado "Data": os baldes sobre o período (sem início, do 1º dia com dado; sem fim, até hoje). Período de mais de
+  // `LIMITE_MESES` meses: só do 1º ao último dia com dado (ou hoje) — as pontas vazias não viram colunas sem fim (um ano
+  // digitado errado no DE/ATÉ); sem nenhum dia com dado, nenhuma coluna.
   let data: ReturnType<typeof baldesData> | null = null;
   if (dado === "data") {
-    let de = rec.intervalo.de;
-    let ate = rec.intervalo.ate;
+    let primeiro: string | undefined;
+    let ultimo: string | undefined;
     const considerar = (d: string | null | undefined) => {
       if (!d) return;
-      if (!rec.intervalo.de && (de == null || d < de)) de = d;
-      if (!rec.intervalo.ate && (ate == null || d > ate)) ate = d;
+      if (primeiro == null || d < primeiro) primeiro = d;
+      if (ultimo == null || d > ultimo) ultimo = d;
     };
     if (evento) for (const a of eventos) considerar(a.dia);
     else for (const p of rec.coorte) considerar(rec.dia.get(p.id));
-    if (!rec.intervalo.ate && de != null && (ate == null || rec.hoje > ate)) ate = rec.hoje;
+    const atual = ultimo == null || rec.hoje > ultimo ? rec.hoje : ultimo;
+    let de = rec.intervalo.de ?? primeiro;
+    let ate = rec.intervalo.ate ?? (de != null ? atual : undefined);
     de ??= ate;
+    if (de && ate && mesesEntre(de, ate) > LIMITE_MESES) {
+      if (primeiro == null) de = ate = undefined;
+      else {
+        if (primeiro > de) de = primeiro;
+        if (atual < ate) ate = atual;
+      }
+    }
     if (de && ate) data = baldesData(de, ate < de ? de : ate, rec.hoje);
   }
   const doDia = (dia: string | null | undefined, totais: Readonly<Totais>): Grupo[] => {

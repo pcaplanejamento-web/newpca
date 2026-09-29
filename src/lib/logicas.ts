@@ -311,7 +311,7 @@ export const LOGICAS: LogicaRef[] = [
       "Natureza = a categoria do assunto (Inclusão, Exclusão, Alteração não onerosa ou Outros) + o ano do PCA — “INCLUSÃO 2027”.",
       "Correção = o REENVIO do protocolo (o processo devolvido que volta corrigido). Ação = a execução que cada pessoa fez nos protocolos da Mesa (edições no banner, em massa e na tabela, vínculos, exclusões e sobrescritas de DFD), pelo histórico — nas barras de pessoa, de quem executou, qualquer que seja o responsável do protocolo.",
       "Em tipo de DFD e unidade, o protocolo com DFDs diferentes conta em cada barra e uma vez só no total (DFDs, itens e valor se dividem entre as barras). Pessoas e unidades: as 10 maiores + “Outras N”.",
-      "O dado Data agrupa pelo tamanho do período: dias (até 31), semanas (até 14), meses (até 36) ou anos.",
+      "O dado Data agrupa pelo tamanho do período: dias (até 31), semanas (até 98 dias), meses (até 36) ou anos — num período de mais de 3 anos, só do primeiro ao último dia com dado (um ano digitado errado não vira colunas vazias sem fim).",
       "Toque em qualquer barra ou linha para ver a origem dela (a soma da lista = o número).",
     ],
     fonte: "mesa-metricas (recorteMetricas + graficoMetricas) + periodo (intervaloDoPeriodo) + GET /api/mesa/execucao (mesa-execucao-sql) + BarraMetricas/PeriodoPicker",

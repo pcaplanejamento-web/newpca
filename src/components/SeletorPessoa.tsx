@@ -100,8 +100,6 @@ export function SeletorPessoa({
         {seta("h-4 w-4")}
       </>
     );
-  // O foco volta ao gatilho sem rolar a tela (a linha pode ter mudado de lugar numa tabela ordenada).
-  const voltarFoco = () => document.getElementById(idGatilho)?.focus({ preventScroll: true });
 
   return (
     <Dropdown
@@ -146,8 +144,9 @@ export function SeletorPessoa({
               autoFoco={teclado || ponteiroFino()}
               compacto
               onChange={(v) => {
+                // Fechar devolve o foco ao gatilho sem rolar a tela (a linha pode ter mudado de lugar numa tabela
+                // ordenada) — o Dropdown cuida.
                 fechar();
-                voltarFoco();
                 if (v !== valor) onChange(v);
               }}
             />

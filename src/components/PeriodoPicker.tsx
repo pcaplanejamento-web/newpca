@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ATALHOS_PERIODO, MESES_PERIODO, PERIODO_TODO, type Periodo, rotuloPeriodo } from "@/lib/periodo";
 import { Dropdown } from "./Dropdown";
 import { IconChevronDown } from "./icons";
@@ -158,12 +158,9 @@ export function PeriodoPicker({
   rotulo?: string;
   className?: string;
 }) {
-  const id = useId();
-  const voltarFoco = () => document.getElementById(id)?.focus({ preventScroll: true });
   const texto = rotuloPeriodo(value);
   return (
     <Dropdown
-      id={id}
       papel="dialog"
       ariaLabel={`${rotulo}: ${texto}`}
       className={className}
@@ -177,30 +174,24 @@ export function PeriodoPicker({
         </>
       }
     >
-      {(fechar, { teclado }) => {
-        const concluir = () => {
-          fechar();
-          voltarFoco();
-        };
-        // O Esc (fechar + foco de volta ao gatilho) é do Dropdown.
-        return (
-          <PeriodoCorpo
-            value={value}
-            anos={anos}
-            onChange={onChange}
-            onClose={concluir}
-            onLimpar={
-              onChange
-                ? () => {
-                    onChange(PERIODO_TODO);
-                    concluir();
-                  }
-                : undefined
-            }
-            autoFoco={teclado}
-          />
-        );
-      }}
+      {(fechar, { teclado }) => (
+        // Fechar (atalho, Limpar, Esc) devolve o foco ao gatilho — o Dropdown cuida.
+        <PeriodoCorpo
+          value={value}
+          anos={anos}
+          onChange={onChange}
+          onClose={fechar}
+          onLimpar={
+            onChange
+              ? () => {
+                  onChange(PERIODO_TODO);
+                  fechar();
+                }
+              : undefined
+          }
+          autoFoco={teclado}
+        />
+      )}
     </Dropdown>
   );
 }

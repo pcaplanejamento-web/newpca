@@ -44,6 +44,18 @@ describe("período → intervalo de dias", () => {
     // O intervalo vale sobre o ano/mês que tenha ficado no valor.
     assert.deepEqual(intervaloDoPeriodo({ ano: 2026, mes: 1, de: "2026-09-10" }, HOJE), { de: "2026-09-10" });
   });
+
+  it("o ano da data na MESMA régua do seletor: o '0202' de quem ainda digita o ano é ignorado", () => {
+    assert.deepEqual(intervaloDoPeriodo({ preset: "custom", de: "0202-09-01" }, HOJE), {});
+    assert.deepEqual(intervaloDoPeriodo({ preset: "custom", de: "0202-09-01", ate: "2026-09-30" }, HOJE), { ate: "2026-09-30" });
+    assert.equal(rotuloPeriodo({ preset: "custom", de: "0202-09-01" }), "Todo o período");
+  });
+
+  it("precedência do seletor e do rótulo: intervalo › ano (e mês) › atalho", () => {
+    assert.deepEqual(intervaloDoPeriodo({ preset: "semana", ano: 2025 }, HOJE), { de: "2025-01-01", ate: "2025-12-31" });
+    assert.equal(rotuloPeriodo({ preset: "semana", ano: 2025 }), "2025");
+    assert.deepEqual(intervaloDoPeriodo({ preset: "mes", ano: 2025, mes: 2 }, HOJE), { de: "2025-02-01", ate: "2025-02-28" });
+  });
 });
 
 describe("dia no intervalo", () => {

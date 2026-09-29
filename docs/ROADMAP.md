@@ -172,7 +172,12 @@ DFD deixaram de ser filtros da barra e viraram dados; saíram as três tabelas p
 (evolução, saúde, situação, tempo, carga e valor por unidade) — todos cabem no gráfico único. ✅ **Desempenho por pessoa**
 continua abaixo do gráfico (a coluna da pessoa segue o dado: responsável ou quem protocolou). ✅ Tocar numa barra ou numa
 linha abre a origem (a soma da lista = o número — coberto por teste para todo dado × medida × período × foco) e filtrar o
-Responsável do topo segue igual à linha da pessoa na visão da equipe.
+Responsável do topo segue igual à linha da pessoa na visão da equipe. ✅ **Revisão independente:** fechar qualquer painel
+pelo teclado (Esc, escolher, limpar, ordenar) devolve o foco ao botão que o abriu; o filtro de data das tabelas mostra o
+intervalo que vale (também o restaurado de uma edição salva) e Crescente/Decrescente têm 44px no toque; o número dos KPIs
+cabe no cartão em qualquer tela; no gráfico, um período de mais de 3 anos vai só do 1º ao último dia com dado (um ano
+digitado errado não vira colunas vazias), a coluna zerada não finge ser botão e o vazio diz o que falta na medida
+("Nenhum DFD no período"); no celular estreito, Dado e Medida ficam em linhas próprias, com os rótulos inteiros.
 
 ### Mesa: filtro por pessoa sem dados quebrados, seletor de pessoa com foto e período por semana/qualquer data — entregue
 ✅ **Filtrar pela pessoa = a linha da pessoa na visão da equipe.** Com o Responsável do topo numa pessoa, o Dashboard mostra

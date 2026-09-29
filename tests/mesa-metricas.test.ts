@@ -146,6 +146,15 @@ describe("natureza, período e recorte", () => {
     );
   });
 
+  it("um protocolo por id: a cópia repetida conta uma vez (gráfico, resumo e desempenho batem)", () => {
+    const x = P("2026-09-10 15:00:00", { responsavelId: 1 });
+    const copia = { ...x, responsavelId: 2 };
+    const r = recDe([x, copia], [D(x.id, "DFD-S", 1, 7)], [{ protocoloId: x.id, usuarioId: 2, dia: "2026-09-11", tipo: "reenvio", n: 1 }], { periodo: MES });
+    const gr = graficoMetricas(r, "responsavel", "protocolos", SIT);
+    assert.deepEqual([resumoMetricas(r).protocolos, gr.total, gr.linhas.reduce((s, l) => s + l.valor, 0)], [1, 1, 1]);
+    assert.equal(desempenhoPorPessoa(r).reduce((s, l) => s + l.protocolos, 0), 1);
+  });
+
   it("o papel segue o Dado e o foco usa o papel", () => {
     assert.equal(papelDoDado("distribuicao"), "distribuicao");
     assert.equal(papelDoDado("natureza"), "responsavel");
@@ -310,6 +319,24 @@ describe("gráfico único: Dado × Medida", () => {
     // Sem nenhum dado e sem limites: nenhum balde; com o início no futuro, um balde só.
     assert.deepEqual(graficoMetricas(recDe([], [], [], { dado: "data" }), "data", "protocolos", SIT).linhas, []);
     assert.equal(graficoMetricas(recDe([], [], [], { periodo: { preset: "custom", de: "2026-12-01" } }), "data", "protocolos", SIT).linhas.length, 1);
+  });
+
+  it("data: período de mais de 3 anos vai só do 1º ao último dia com dado — um ano digitado errado não vira mil colunas", () => {
+    const tudo = grafico({ dado: "data" });
+    const longe = grafico({ periodo: { preset: "custom", de: "1026-01-01" }, dado: "data" });
+    assert.equal(longe.granularidade, "semana"); // 01/07 → hoje, não 1.001 anos
+    assert.deepEqual([longe.linhas[0].chave, longe.linhas.at(-1)?.chave], ["2026-07-01", "2026-09-27"]);
+    // Nada some ao cortar as pontas vazias: as mesmas barras do período sem limites (o sem data fica fora em ambos).
+    assert.deepEqual(valores(longe), valores(tudo));
+    const futuro = grafico({ periodo: { preset: "custom", de: "2026-01-01", ate: "2199-12-31" }, dado: "data", medida: "valor" });
+    assert.equal(futuro.granularidade, "semana"); // corta em hoje (o último dia com dado vem antes)
+    assert.equal(futuro.linhas.at(-1)?.chave, "2026-09-27");
+    assert.equal(somaOrigem(futuro, futuro.linhas.map((l) => l.chave)), futuro.total);
+    // Até 36 meses, o período escolhido inteiro (os meses sem dado, zerados).
+    const ano = grafico({ periodo: { ano: 2026 }, dado: "data" });
+    assert.deepEqual([ano.granularidade, ano.linhas.length], ["mes", 12]);
+    // Período longo sem nenhum dia com dado: nenhuma coluna.
+    assert.deepEqual(graficoMetricas(recDe([], [], [], { periodo: { preset: "custom", de: "1026-01-01", ate: "2199-12-31" } }), "data", "protocolos", SIT).linhas, []);
   });
 
   it("Σ da origem = a barra (e o total) em TODO Dado × Medida, período e foco", () => {

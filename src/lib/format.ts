@@ -64,13 +64,25 @@ export function dataHoraBR(ts?: string | null): string {
   return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 
+/** O dia já calculado de cada timestamp: a conversão de fuso é o custo das listas grandes (Mesa, métricas, filtros de data)
+ * e o mesmo texto dá sempre o mesmo dia. Limitada — cheia, recomeça. */
+const _diaIso = new Map<string, string>();
+const MAX_DIA_ISO = 20_000;
+
 /** Timestamp UTC do banco → data ISO "AAAA-MM-DD" em Brasília (filtro de data das tabelas). */
 export function dataIsoBrasilia(ts?: string | null): string {
   if (!ts) return "";
+  const lembrado = _diaIso.get(ts);
+  if (lembrado !== undefined) return lembrado;
   const d = instanteUtc(ts);
-  if (Number.isNaN(d.getTime())) return "";
-  const p = partes(d);
-  return `${p.year}-${p.month}-${p.day}`;
+  let iso = "";
+  if (!Number.isNaN(d.getTime())) {
+    const p = partes(d);
+    iso = `${p.year}-${p.month}-${p.day}`;
+  }
+  if (_diaIso.size >= MAX_DIA_ISO) _diaIso.clear();
+  _diaIso.set(ts, iso);
+  return iso;
 }
 
 export function pct(part: number, whole: number): string {

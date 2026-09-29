@@ -15,7 +15,11 @@ export function DashboardMesaEsqueleto({ metricas = false }: { metricas?: boolea
       </div>
       {metricas ? (
         <>
-          <Skeleton className="h-[100px] w-full rounded-control sm:h-11 lg:h-[var(--h-control-sm)] lg:max-w-xl" />
+          {/* A barra de métricas (3 linhas abaixo de 400px, 2 até o `sm`, 1 depois) + a linha do recorte. */}
+          <div className="space-y-1.5">
+            <Skeleton className="h-[148px] w-full rounded-control min-[400px]:h-24 sm:h-11 lg:h-[var(--h-control-sm)] lg:max-w-xl" />
+            <Skeleton className="h-9 w-full max-w-md rounded-control sm:h-4" />
+          </div>
           <Skeleton className="h-80 rounded-card" />
           <Skeleton className="h-64 rounded-card" />
         </>

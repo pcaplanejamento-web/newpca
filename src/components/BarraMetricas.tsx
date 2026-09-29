@@ -11,8 +11,8 @@ import { PeriodoPicker } from "./PeriodoPicker";
  * BARRA DE MÉTRICAS do Dashboard da Mesa (logo abaixo das KPIs): o PERÍODO (o seletor de período do sistema — atalhos,
  * ano, mês e intervalo DE/ATÉ), o DADO (o que as barras do gráfico mostram) e a MEDIDA (o tamanho delas) + a Ajuda (?).
  * Vale para o gráfico e para o desempenho por pessoa. Controlada. Embaixo, o `resumo` (a linha do recorte) e o `aviso`
- * (o foco do Responsável do topo). No celular: o período (largura cheia) + a Ajuda numa linha, Dado | Medida na outra
- * (44px); do `sm` em diante, uma linha só.
+ * (o foco do Responsável do topo). No celular: o período (largura cheia) + a Ajuda numa linha e Dado e Medida em linhas
+ * próprias — lado a lado a partir de 400px (os rótulos inteiros, 44px); do `sm` em diante, uma linha só.
  */
 export function BarraMetricas({
   filtro,
@@ -33,7 +33,7 @@ export function BarraMetricas({
     <section aria-label="Filtros das métricas" className="space-y-1.5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
         <PeriodoPicker value={filtro.periodo} anos={anos} onChange={(periodo) => set({ periodo })} className="w-full min-w-0 sm:w-auto" />
-        <div className="col-span-2 row-start-2 grid grid-cols-2 gap-2 sm:contents">
+        <div className="col-span-2 row-start-2 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:contents">
           <SelectField compacto label="Dado" value={filtro.dado} onChange={(e) => set({ dado: e.target.value as DadoMetricas })}>
             {DADOS_METRICAS.map((d) => (
               <option key={d.value} value={d.value}>

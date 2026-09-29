@@ -167,8 +167,9 @@ export function DashboardMesa({
   // A janela à vista: o rótulo do seletor e, nos atalhos, as datas ("Este mês (01/09 a 30/09/2026)").
   const rotuloJanela = rotuloPeriodo(filtro.periodo);
   const janela = ["hoje", "semana", "mes"].includes(filtro.periodo.preset ?? "") ? `${rotuloJanela} (${textoIntervalo(intervalo)})` : rotuloJanela;
-  const semNada =
-    intervalo.de != null || intervalo.ate != null ? "Nenhum protocolo no período" : responsavel !== "todos" ? "Nenhum protocolo no recorte" : "Nenhum protocolo na Mesa";
+  // Onde nada foi achado: no período (com limites), no recorte (o foco do topo) ou na Mesa.
+  const lugar = intervalo.de != null || intervalo.ate != null ? "no período" : responsavel !== "todos" ? "no recorte" : "na Mesa";
+  const semNada = `Nenhum protocolo ${lugar}`;
 
   const estadoTag = (e: EstadoPainel) => (
     <span className="inline-flex items-center gap-1.5 text-[12.5px] text-text-2">
@@ -273,9 +274,20 @@ export function DashboardMesa({
       clicavel: l.valor !== 0,
     };
   });
-  const corpoGrafico = (): ReactNode => {
-    if (deEvento && metricas.atividades == null)
-      return metricas.erro ? (
+  // Nada na MEDIDA (os protocolos podem existir e somar zero nela — ex.: DFDs sem valor): a mensagem diz o quê.
+  const vazioMedida: Record<MedidaMetricas, string> = {
+    protocolos: semNada,
+    dfds: `Nenhum DFD ${lugar}`,
+    itens: `Nenhum item ${lugar}`,
+    valor: `Sem valor ${lugar}`,
+    correcoes: `Nenhuma correção ${lugar}`,
+    acoes: `Nenhuma ação ${lugar}`,
+  };
+  // O que fica no lugar das barras (o histórico carregando ou indisponível, ninguém de quem contar ações, nada na medida)
+  // — sem barras, sem a dica de tocar numa.
+  const semBarras: ReactNode =
+    deEvento && metricas.atividades == null ? (
+      metricas.erro ? (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-[12.5px] text-muted">
           Histórico indisponível
           <Button variant="secondary" size="sm" onClick={metricas.onTentar}>
@@ -284,16 +296,21 @@ export function DashboardMesa({
         </div>
       ) : (
         <ChartEmpty label="Carregando o histórico…" />
-      );
-    if (filtro.medida === "acoes" && rec.semAtores) return <ChartEmpty label="Sem responsável: as ações são de quem as fez — escolha “Todos” ou uma pessoa no topo" />;
-    if (grafico.total === 0 && grafico.fora === 0)
-      return <ChartEmpty label={filtro.medida === "correcoes" ? "Nenhuma correção no período" : filtro.medida === "acoes" ? "Nenhuma ação no período" : semNada} />;
+      )
+    ) : filtro.medida === "acoes" && rec.semAtores ? (
+      <ChartEmpty label="Sem responsável: as ações são de quem as fez — escolha “Todos” ou uma pessoa no topo" />
+    ) : grafico.total === 0 && grafico.fora === 0 ? (
+      <ChartEmpty label={vazioMedida[filtro.medida]} />
+    ) : null;
+  const corpoGrafico = (): ReactNode => {
+    if (semBarras) return semBarras;
     if (filtro.dado === "data")
       return (
         <Colunas
           ariaLabel={titulo}
           formatar={formatar}
-          rotularTodas={grafico.linhas.length <= 12}
+          // O valor em cada coluna só quando cabe (o R$ é largo); senão, o maior e o último — os demais na dica.
+          rotularTodas={grafico.linhas.length <= (filtro.medida === "valor" ? 4 : 7)}
           onEscolher={(k) => {
             const l = grafico.linhas.find((x) => x.chave === k);
             if (l) abrirLinha(l);
@@ -507,7 +524,7 @@ export function DashboardMesa({
 
       <ChartCard
         title={titulo}
-        subtitle={`${janela} · toque numa barra para ver a origem`}
+        subtitle={semBarras ? janela : `${janela} · toque numa barra para ver a origem`}
         action={
           grafico.total > 0 ? (
             <span className="whitespace-nowrap text-[12px] font-semibold text-text-2 tabular-nums">

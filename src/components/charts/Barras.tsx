@@ -69,20 +69,22 @@ export type LinhaBarra = {
 
 /**
  * BARRAS HORIZONTAIS — rótulo | barra | valor, os valores alinhados numa coluna. Com `onEscolher`, cada linha
- * (exceto as apagadas) é um BOTÃO de linha inteira (alvo de 44px no celular) que marca a `ativa` — ex.: filtrar a
- * Mesa pela pessoa. A escala é a MAIOR linha (ou `max`).
+ * (exceto as apagadas) é um BOTÃO de linha inteira (alvo de 44px no celular) — o que ele faz vai no nome acessível
+ * (`acao`); com `ativa`, a linha marcada é um FILTRO (alternar — ex.: a carga por pessoa filtra o quadro de tarefas).
+ * A escala é a MAIOR linha (ou `max`).
  */
 export function BarrasH({
   linhas,
   ariaLabel,
   max,
-  ativa = null,
+  ativa,
   onEscolher,
-  acao = "filtrar a Mesa",
+  acao = "ver a origem dos dados",
 }: {
   linhas: LinhaBarra[];
   ariaLabel: string;
   max?: number;
+  /** A linha marcada de um FILTRO (`null` = nenhuma); sem ela, o botão só age (não é de alternar). */
   ativa?: string | number | null;
   onEscolher?: (chave: string | number) => void;
   /** O que o toque faz (nome acessível do botão da linha). */
@@ -109,7 +111,7 @@ export function BarrasH({
             {onEscolher && (!l.apagada || l.clicavel) ? (
               <button
                 type="button"
-                aria-pressed={marcada}
+                aria-pressed={ativa === undefined ? undefined : marcada}
                 aria-label={`${l.titulo}${marcada ? " (filtro ativo — toque para limpar)" : ` — ${acao}`}`}
                 onClick={() => onEscolher(l.chave)}
                 className={`${grade} min-h-11 rounded-control px-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-9 ${
@@ -149,9 +151,10 @@ function tetoRedondo(v: number): number {
 
 /**
  * COLUNAS verticais (série no tempo ou faixas ordenadas) — grade em linhas finas (o teto do eixo e o zero à
- * esquerda, fora da área do gráfico), colunas de até 24px com a ponta arredondada, o valor no topo (todas com
- * `rotularTodas`; senão só a maior e a última) e a dica ao passar o mouse, focar ou tocar (a coluna é um botão).
- * Com muitas colunas, o eixo rotula no máximo ~8 (espaçadas por igual) — sempre a última.
+ * esquerda, fora da área do gráfico — a margem acompanha o rótulo do eixo), colunas de até 24px com a ponta
+ * arredondada, o valor no topo (todas com `rotularTodas`; senão só a maior e a última) e a dica ao passar o mouse,
+ * focar ou tocar (a coluna é um botão). Com `onEscolher`, tocar abre a origem — a coluna ZERADA só mostra a dica (não
+ * há o que listar). Com muitas colunas, o eixo rotula no máximo ~8 (espaçadas por igual) — sempre a última.
  */
 export function Colunas({
   colunas,
@@ -178,14 +181,16 @@ export function Colunas({
   const n = colunas.length;
   // No máximo ~8 rótulos no eixo (sempre o último) — 30 dias não viram uma fileira ilegível.
   const passo = Math.max(1, Math.ceil(n / 8));
-  const eixo = "absolute right-full mr-1.5 -translate-y-1/2 text-[10.5px] leading-none text-faint tabular-nums";
+  const eixo = "absolute right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-[10.5px] leading-none text-faint tabular-nums";
+  const rotuloTeto = formatar(teto);
   return (
-    // `pt-4`: o valor no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro.
-    <div className="pl-7 pt-4">
+    // `pt-4`: o valor no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro. A
+    // margem esquerda cabe o rótulo do eixo numa linha ("R$ 800 mi" pede mais que "12").
+    <div className={`pt-4 ${rotuloTeto.length > 5 ? "pl-14" : "pl-7"}`}>
       <ul aria-label={ariaLabel} className="relative flex items-end gap-1" style={{ height: altura }}>
         {/* Grade: teto (com o valor), metade e a linha de base (zero) — finas e recessivas. */}
         <li aria-hidden className="pointer-events-none absolute inset-x-0 top-0 border-t border-border">
-          <span className={`${eixo} top-0`}>{formatar(teto)}</span>
+          <span className={`${eixo} top-0`}>{rotuloTeto}</span>
         </li>
         <li aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-border" />
         <li aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-border-2">
@@ -194,12 +199,13 @@ export function Colunas({
         {colunas.map((c, i) => {
           const rotular = rotularTodas || i === iMaior || i === n - 1;
           const alinhar = i < 2 ? "left-0" : i >= n - 2 ? "right-0" : "left-1/2 -translate-x-1/2";
+          const abre = onEscolher != null && c.valor !== 0;
           return (
             <li key={c.chave} className="relative flex h-full min-w-0 flex-1 items-end justify-center">
               <button
                 type="button"
-                aria-label={`${c.dica.rotulo}: ${c.dica.valor}${onEscolher ? " — ver a origem dos dados" : ""}`}
-                onClick={() => (onEscolher ? onEscolher(c.chave) : setAberta((a) => (a === c.chave ? null : c.chave)))}
+                aria-label={`${c.dica.rotulo}: ${c.dica.valor}${abre ? " — ver a origem dos dados" : ""}`}
+                onClick={() => (abre ? onEscolher?.(c.chave) : setAberta((a) => (a === c.chave ? null : c.chave)))}
                 onBlur={() => setAberta((a) => (a === c.chave ? null : a))}
                 className="group flex h-full w-full items-end justify-center focus-visible:outline-none"
               >

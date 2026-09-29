@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brl, brlCompact, dataBR, dec, dicaLista, formatBytes, juntarParaCopiar, mesLabel, num, numeroSemAno, pct } from "../src/lib/format.ts";
+import { brl, brlCompact, dataBR, dataIsoBrasilia, dec, dicaLista, formatBytes, juntarParaCopiar, mesLabel, num, numeroSemAno, pct } from "../src/lib/format.ts";
 
 // Intl insere espaços não-quebráveis (NBSP/narrow) no pt-BR; normalizamos.
 const sp = (s: string) => s.replace(/\s/g, " ");
 
 describe("format (pt-BR)", () => {
+  it("dataIsoBrasilia: o dia de Brasília (a madrugada UTC é o dia anterior), igual a cada chamada; inválido = vazio", () => {
+    for (let i = 0; i < 2; i++) {
+      assert.equal(dataIsoBrasilia("2026-09-29 02:00:00"), "2026-09-28");
+      assert.equal(dataIsoBrasilia("2026-09-29 03:00:00"), "2026-09-29");
+      assert.equal(dataIsoBrasilia("2026-09-29T02:00:00-03:00"), "2026-09-29");
+      assert.equal(dataIsoBrasilia("lixo"), "");
+    }
+    assert.equal(dataIsoBrasilia(null), "");
+    assert.equal(dataIsoBrasilia(""), "");
+  });
+
   it("numeroSemAno: tira só o '/AAAA' do fim do nº do protocolo (zeros à esquerda ficam)", () => {
     assert.equal(numeroSemAno("144756/2026"), "144756");
     assert.equal(numeroSemAno(" 000123 / 2025 "), "000123");

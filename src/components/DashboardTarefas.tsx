@@ -218,6 +218,7 @@ export function DashboardTarefas({
               <BarrasH
                 ariaLabel="Tarefas abertas por pessoa"
                 linhas={linhasCarga}
+                acao="filtrar o quadro"
                 ativa={ativaResp}
                 onEscolher={(k) => onResponsavel(k === ativaResp ? "todos" : k === "sem" ? "sem" : Number(k))}
               />

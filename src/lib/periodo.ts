@@ -34,12 +34,13 @@ const hojeLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
-/** Uma data AAAA-MM-DD que existe no calendário (nada de 30/02 nem texto solto). */
+const anoValido = (a: number | undefined): a is number => Number.isInteger(a) && (a as number) >= 1000 && (a as number) <= 9999;
+/** Uma data AAAA-MM-DD que existe no calendário, com o ano na MESMA régua do seletor (nada de 30/02, texto solto nem o
+ * "0202" que o campo de data manda enquanto o ano é digitado). */
 function dataValida(s: string | undefined): s is string {
   const m = s ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) : null;
-  return !!m && isoUtc(Number(m[1]), Number(m[2]), Number(m[3])) === s;
+  return !!m && anoValido(Number(m[1])) && isoUtc(Number(m[1]), Number(m[2]), Number(m[3])) === s;
 }
-const anoValido = (a: number | undefined): a is number => Number.isInteger(a) && (a as number) >= 1000 && (a as number) <= 9999;
 const mesValido = (m: number | undefined): m is number => Number.isInteger(m) && (m as number) >= 1 && (m as number) <= 12;
 
 /** DE e ATÉ válidos, na ordem (trocados quando vêm invertidos); só as pontas que existem. */
@@ -50,10 +51,13 @@ function limites(v: Periodo): IntervaloData | null {
   return de ? { de } : ate ? { ate } : null;
 }
 
-/** O período como intervalo de dias ({} = sem limites). */
+/** O período como intervalo de dias ({} = sem limites). A precedência é a do seletor e do rótulo: o intervalo DE/ATÉ, o
+ * ano (e o mês), o atalho. */
 export function intervaloDoPeriodo(v: Periodo, hoje: string = hojeLocal()): IntervaloData {
   const i = limites(v);
   if (i) return i;
+  if (anoValido(v.ano) && mesValido(v.mes)) return { de: isoUtc(v.ano, v.mes, 1), ate: isoUtc(v.ano, v.mes + 1, 0) };
+  if (anoValido(v.ano)) return { de: `${v.ano}-01-01`, ate: `${v.ano}-12-31` };
   if (dataValida(hoje)) {
     const [a, m, d] = hoje.split("-").map(Number);
     if (v.preset === "hoje") return { de: hoje, ate: hoje };
@@ -63,8 +67,6 @@ export function intervaloDoPeriodo(v: Periodo, hoje: string = hojeLocal()): Inte
     }
     if (v.preset === "mes") return { de: isoUtc(a, m, 1), ate: isoUtc(a, m + 1, 0) };
   }
-  if (anoValido(v.ano) && mesValido(v.mes)) return { de: isoUtc(v.ano, v.mes, 1), ate: isoUtc(v.ano, v.mes + 1, 0) };
-  if (anoValido(v.ano)) return { de: `${v.ano}-01-01`, ate: `${v.ano}-12-31` };
   return {};
 }
 

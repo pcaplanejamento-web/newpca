@@ -11,7 +11,8 @@ import { createPortal } from "react-dom";
 // (`<label htmlFor>`; a dica de um gatilho só-ícone). `papel` = o do painel ("menu",
 // o padrão, ou "dialog" — busca/grade: escolher pessoa ou data); `bloqueado` = o
 // gatilho não abre (ex.: gravando) sem perder o foco. O conteúdo em função recebe
-// `fechar` e se o painel foi aberto pelo TECLADO (Enter/Espaço no gatilho).
+// `fechar` e se o painel foi aberto pelo TECLADO (Enter/Espaço no gatilho). Fechar pelo `fechar` ou pelo Esc com o foco
+// DENTRO do painel devolve o foco ao gatilho (o botão focado some junto com o painel — o foco cairia no `body`).
 export function Dropdown({
   trigger,
   children,
@@ -88,14 +89,13 @@ export function Dropdown({
       const t = e.target as Node;
       if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
-    // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. Com o
-    // foco DENTRO do painel, ele volta ao gatilho aqui mesmo: o painel é desmontado antes de qualquer `onKeyDown` do
-    // conteúdo rodar (a atualização do React é aplicada logo depois deste ouvinte), e o foco se perderia no `body`.
+    // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. O
+    // foco volta ao gatilho AQUI (`fechar`): o painel é desmontado antes de qualquer `onKeyDown` do conteúdo rodar (a
+    // atualização do React é aplicada logo depois deste ouvinte).
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
-      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
-      setOpen(false);
+      fechar();
     };
     const onMove = () => reposicionar();
     document.addEventListener("pointerdown", onDown);
@@ -110,13 +110,18 @@ export function Dropdown({
     };
   }, [open]);
 
+  // Fecha; com o foco dentro do painel, ele volta ao gatilho (quem usa pode levá-lo a outro lugar logo depois).
+  function fechar() {
+    if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+    setOpen(false);
+  }
   const painel = {
     ref: panelRef,
     className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
     style: { top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
   };
   // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
-  const conteudo = !open ? null : typeof children === "function" ? children(() => setOpen(false), { teclado }) : children;
+  const conteudo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;
 
   return (
     <div className={className}>
