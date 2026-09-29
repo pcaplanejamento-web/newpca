@@ -97,10 +97,13 @@ export const usuarios = sqliteTable(
     }),
     // Responsável com que a MESA abre (perfil, migração `0037`): "eu" (o padrão — NULL), "todos" (geral) ou "sem".
     mesaResponsavel: text("mesa_responsavel", { enum: ["eu", "todos", "sem"] }),
+    // Conta Google VINCULADA (migração `0066`): o `sub` do Google (identificador estável) + o e-mail dela (exibição).
+    googleSub: text("google_sub"),
+    googleEmail: text("google_email"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("usuarios_email_uq").on(t.email)],
+  (t) => [uniqueIndex("usuarios_email_uq").on(t.email), uniqueIndex("usuarios_google_sub_uq").on(t.googleSub)],
 );
 
 /** Sessões (login por cookie). Guardamos apenas o hash do token. */

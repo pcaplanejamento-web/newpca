@@ -3,63 +3,95 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { contarUsuarios, criarSessao, definirCookieSessao } from "@/lib/auth";
+import { contarUsuarios, criarSessao, definirCookieSessao, getUsuarioAtual } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { emailsDosAdmins, enviarEmailDireto } from "@/lib/email";
 import { emailCadastroPendente } from "@/lib/email-core";
-import { COOKIE_GOOGLE, iguaisTexto, lerCookieGoogle, redirectUri, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
+import {
+  COOKIE_GOOGLE,
+  COOKIE_GOOGLE_CONTA,
+  type CandidatoGoogle,
+  decidirLoginGoogle,
+  iguaisTexto,
+  lerCookieGoogle,
+  podeVincular,
+  redirectUri,
+  SENHA_INUTILIZAVEL,
+  VALIDADE_COOKIE_CONTA_S,
+} from "@/lib/google-oauth-core";
 import { googleDaConfig, trocarCodigo } from "@/lib/google-oauth";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 
 export const dynamic = "force-dynamic";
 
+const COLS = { id: usuarios.id, nome: usuarios.nome, email: usuarios.email, status: usuarios.status, googleSub: usuarios.googleSub };
+
 /**
- * Volta do Google: confere o state (cookie curto), troca o código pelo id_token e entra. E-mail já cadastrado e ATIVO =
- * sessão; pendente/inativo = o aviso no login; e-mail NOVO = cadastro PENDENTE (os ADMs recebem o e-mail).
+ * Volta do Google: confere o state (cookie curto), troca o código pelo id_token e — conforme o modo — ENTRA ou VINCULA.
+ * Entrar: a conta Google vinculada (pelo `sub`, mesmo com outro e-mail) → senão o MESMO e-mail (e vincula) → senão cadastro
+ * PENDENTE (os ADMs recebem o e-mail). A conta que entrou fica LEMBRADA neste aparelho ("Continuar como …").
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const origem = url.origin;
-  const voltar = (erro: string | null) => NextResponse.redirect(`${origem}${erro ? `/login?erro=${erro}` : "/painel"}`, 303);
-
   const jar = await cookies();
   const salvo = lerCookieGoogle(jar.get(COOKIE_GOOGLE)?.value);
-  jar.delete({ name: COOKIE_GOOGLE, path: "/api/auth/google" });
+  const vincular = salvo?.modo === "vincular";
+  const ir = (caminho: string, conta?: string) => {
+    const res = NextResponse.redirect(`${origem}${caminho}`, 303);
+    res.cookies.set(COOKIE_GOOGLE, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/api/auth/google", maxAge: 0 });
+    if (conta) res.cookies.set(COOKIE_GOOGLE_CONTA, conta, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: VALIDADE_COOKIE_CONTA_S });
+    return res;
+  };
+  const falhou = (codigo: string) => ir(vincular ? "/painel/perfil?google=erro" : `/login?erro=${codigo}`);
 
-  if (url.searchParams.get("error")) return voltar("google-cancelado");
+  if (url.searchParams.get("error")) return vincular ? ir("/painel/perfil") : ir("/login?erro=google-cancelado");
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state") ?? "";
-  if (!code || !salvo || !iguaisTexto(state, salvo.state)) return voltar("google");
+  if (!code || !salvo || !iguaisTexto(state, salvo.state)) return falhou("google-estado");
 
   const cfg = await googleDaConfig();
-  if ("erro" in cfg) return voltar("google-desligado");
+  if ("erro" in cfg) return falhou("google-desligado");
   const r = await trocarCodigo({ code, verificador: salvo.verificador, redirectUri: redirectUri(origem), ...cfg });
   if (!r.ok) {
-    console.error("[google] login recusado:", r.motivo);
-    return voltar("google");
+    console.error("[google] troca recusada:", r.motivo);
+    return falhou("google-token");
   }
-  const { email, nome } = r.identidade;
+  const { sub, email, nome } = r.identidade;
 
   try {
     const db = getDb();
-    const [u] = await db
-      .select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, status: usuarios.status })
-      .from(usuarios)
-      .where(eq(usuarios.email, email))
-      .limit(1);
+    const [porSub] = await db.select(COLS).from(usuarios).where(eq(usuarios.googleSub, sub)).limit(1);
 
-    if (u) {
-      if (u.status !== "ativo") return voltar(u.status === "pendente" ? "pendente" : "inativo");
+    // VINCULAR a conta Google ao usuário logado (Perfil).
+    if (vincular) {
+      const u = await getUsuarioAtual();
+      if (!u) return ir("/login");
+      if (!podeVincular(u.id, porSub ?? null)) return ir("/painel/perfil?google=em-uso");
+      await db.update(usuarios).set({ googleSub: sub, googleEmail: email }).where(eq(usuarios.id, u.id));
+      await registrarAuditoria({ usuario: u, acao: "editar", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} vinculou a conta Google ${email}` });
+      return ir("/painel/perfil?google=vinculado", email);
+    }
+
+    const [porEmail] = porSub ? [] : await db.select(COLS).from(usuarios).where(eq(usuarios.email, email)).limit(1);
+    const cand = (x: typeof porSub | undefined): CandidatoGoogle | null => (x ? { id: x.id, googleSub: x.googleSub } : null);
+    const decisao = decidirLoginGoogle(sub, cand(porSub), cand(porEmail));
+    if (decisao.tipo === "outra-conta") return ir("/login?erro=google-outra-conta");
+
+    if (decisao.tipo === "entrar") {
+      const u = (porSub ?? porEmail) as NonNullable<typeof porSub>;
+      if (decisao.vincular) await db.update(usuarios).set({ googleSub: sub, googleEmail: email }).where(eq(usuarios.id, u.id));
+      if (u.status !== "ativo") return ir(`/login?erro=${u.status === "pendente" ? "pendente" : "inativo"}`, email);
       await definirCookieSessao(await criarSessao(u.id));
-      await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema com o Google` });
-      return voltar(null);
+      await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema com o Google (${email})` });
+      return ir("/painel", email);
     }
 
     // O 1º usuário do sistema (que vira ADM) nasce pelo cadastro com senha, nunca pelo Google.
-    if ((await contarUsuarios()) === 0) return voltar("google-sem-contas");
+    if ((await contarUsuarios()) === 0) return ir("/login?erro=google-sem-contas");
     const [novo] = await db
       .insert(usuarios)
-      .values({ nome, email, senhaHash: SENHA_INUTILIZAVEL, role: "membro", status: "pendente" })
+      .values({ nome, email, senhaHash: SENHA_INUTILIZAVEL, role: "membro", status: "pendente", googleSub: sub, googleEmail: email })
       .returning({ id: usuarios.id });
     await registrarAuditoria({
       usuario: { id: novo.id, nome, email },
@@ -73,9 +105,9 @@ export async function GET(req: Request) {
       emailsDosAdmins().then((admins) => enviarEmailDireto(admins, (ctx) => emailCadastroPendente({ nome, email }, ctx))),
       "email",
     );
-    return voltar("pendente-novo");
+    return ir("/login?erro=pendente-novo", email);
   } catch (e) {
-    console.error("[google] falha ao entrar:", (e as Error).message);
-    return voltar("google");
+    console.error("[google] falha:", (e as Error).message);
+    return falhou("google");
   }
 }

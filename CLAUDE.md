@@ -2987,6 +2987,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   e-mail NOVO → usuário `membro`/`pendente` com senha inutilizável + e-mail aos ADMs (o 1º usuário do sistema nunca nasce
   pelo Google); erro → `/login?erro=<código>`. `AuthForm` ganhou `google` (botão "Entrar/Criar conta com Google",
   `IconGoogle`) e `erroInicial`; as páginas `login`/`cadastro` leem `?erro=`. Setup em `docs/INTEGRACOES.md`.
+  **VÍNCULO da conta Google + login com um clique (migração `0066`, aditiva — `usuarios.google_sub` ÚNICO + `google_email`):**
+  o login acha o usuário pelo `sub` do Google (mesmo com um e-mail DIFERENTE do cadastro) — regra pura **`decidirLoginGoogle`**:
+  vinculada › mesmo e-mail sem outra conta (vincula na hora) › mesmo e-mail com OUTRA conta = recusa (`google-outra-conta`) ›
+  novo pendente; o cadastro novo já nasce vinculado. Perfil → cartão **"Conta Google"** (só com o Google ativo): "Vincular conta
+  Google" (`/api/auth/google?vincular=1` → o cookie curto leva o MODO `e`/`v`; `podeVincular` recusa a conta de outro usuário →
+  `?google=em-uso`; `MENSAGEM_VINCULO`) e "Desvincular" (`DELETE /api/perfil/google`; recusado a quem só entra pelo Google — sem
+  senha). A conta que entrou fica LEMBRADA no aparelho (cookie httpOnly `pca_google_conta`, 1 ano): o login mostra "Continuar
+  como <e-mail>" (o Google entra direto nela — `login_hint`, sem a tela de escolher) + "Usar outra conta Google" (`?trocar=1` →
+  `select_account`). Erros específicos: `google-estado` (sessão do login expirou/outra aba), `google-token` (Google recusou —
+  Client ID/secret/URI), `google-outra-conta`.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

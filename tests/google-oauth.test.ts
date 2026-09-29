@@ -3,11 +3,14 @@ import { describe, it } from "node:test";
 import {
   base64Url,
   clientIdValido,
+  decidirLoginGoogle,
   desafioPkce,
   iguaisTexto,
+  lerContaLembrada,
   lerCookieGoogle,
   lerIdToken,
   mensagemErroLogin,
+  podeVincular,
   redirectUri,
   SENHA_INUTILIZAVEL,
   urlAutorizacao,
@@ -32,6 +35,26 @@ describe("login com Google — núcleo", () => {
     assert.equal(u.searchParams.get("state"), "s");
   });
 
+  it("conta lembrada: entra direto nela (login_hint, sem escolher); sem ela, escolher a conta", () => {
+    const com = new URL(urlAutorizacao({ clientId: CID, redirectUri: "https://g.com/cb", state: "s", desafio: "d", dica: "ana@gmail.com" }));
+    assert.equal(com.searchParams.get("login_hint"), "ana@gmail.com");
+    assert.equal(com.searchParams.get("prompt"), null);
+    assert.equal(lerContaLembrada(" Ana@Gmail.com "), "ana@gmail.com");
+    assert.equal(lerContaLembrada("<script>@x"), null);
+    assert.equal(lerContaLembrada(undefined), null);
+  });
+
+  it("quem entra: a conta VINCULADA (mesmo com outro e-mail) › o mesmo e-mail (e vincula) › outra conta = recusa › novo", () => {
+    assert.deepEqual(decidirLoginGoogle("42", { id: 7, googleSub: "42" }, null), { tipo: "entrar", id: 7, vincular: false });
+    assert.deepEqual(decidirLoginGoogle("42", null, { id: 3, googleSub: null }), { tipo: "entrar", id: 3, vincular: true });
+    assert.deepEqual(decidirLoginGoogle("42", null, { id: 3, googleSub: "42" }), { tipo: "entrar", id: 3, vincular: false });
+    assert.deepEqual(decidirLoginGoogle("42", null, { id: 3, googleSub: "99" }), { tipo: "outra-conta" });
+    assert.deepEqual(decidirLoginGoogle("42", null, null), { tipo: "novo" });
+    assert.equal(podeVincular(3, null), true);
+    assert.equal(podeVincular(3, { id: 3, googleSub: "42" }), true);
+    assert.equal(podeVincular(3, { id: 9, googleSub: "42" }), false);
+  });
+
   it("PKCE: o desafio do RFC 7636 (exemplo do apêndice B)", async () => {
     assert.equal(await desafioPkce("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
   });
@@ -39,7 +62,10 @@ describe("login com Google — núcleo", () => {
   it("cookie curto: ida e volta; lixo = nulo; state em tempo constante", () => {
     const s = "a".repeat(43);
     const v = "b".repeat(43);
-    assert.deepEqual(lerCookieGoogle(valorCookieGoogle(s, v)), { state: s, verificador: v });
+    assert.deepEqual(lerCookieGoogle(valorCookieGoogle(s, v)), { state: s, verificador: v, modo: "entrar" });
+    assert.deepEqual(lerCookieGoogle(valorCookieGoogle(s, v, "vincular")), { state: s, verificador: v, modo: "vincular" });
+    // o formato antigo (sem o modo) segue valendo como "entrar"
+    assert.deepEqual(lerCookieGoogle(`${s}.${v}`), { state: s, verificador: v, modo: "entrar" });
     assert.equal(lerCookieGoogle("x.y"), null);
     assert.equal(lerCookieGoogle(undefined), null);
     assert.equal(iguaisTexto("abc", "abc"), true);

@@ -1234,6 +1234,9 @@ lembrete saem na conferência a cada 5 minutos.
 ✅ **Login com Google:** Integrações → Login com Google (Client ID + secret cifrado, a URI de redirecionamento a copiar e o
 teste); "Entrar com Google" no login e no cadastro (OAuth + PKCE); e-mail cadastrado entra, e-mail novo vira cadastro
 pendente de aprovação (os ADMs recebem o e-mail).
+✅ **Conta Google vinculada + login com um clique:** Perfil → "Conta Google" vincula a conta (entra mesmo com e-mail diferente
+do cadastro) e desvincula; o login lembra a conta no aparelho ("Continuar como …" entra direto, "Usar outra conta Google") e as
+falhas dizem o motivo (sessão expirada, autorização recusada, e-mail de outra conta).
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

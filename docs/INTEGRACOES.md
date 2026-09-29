@@ -115,6 +115,12 @@ usuário do sistema nasce pelo cadastro com senha. Quem se cadastra pelo Google 
 4. **Integrações → Login com Google**: marque "Permitir", cole o **Client ID** e o **Client secret** (cifrado; exige a
    chave mestra) → **Salvar** → **Testar configuração**.
 5. Abra `/login` numa janela anônima: aparece **"Entrar com Google"**.
+6. **Vincular** (recomendado quando o e-mail Google é diferente do cadastro): entre com e-mail e senha → **Perfil → Conta
+   Google → Vincular conta Google**. Daí em diante o login mostra **"Continuar como …"** e entra direto nessa conta.
+
+Erros na tela de login: "expirou ou foi aberto em outra aba" (tente de novo na mesma aba); "o Google recusou a autorização"
+(Client secret errado, ou a URI de redirecionamento do endereço usado — ex.: com `www.` — não cadastrada); "já está vinculado a
+OUTRA conta Google" (entre com a conta vinculada ou desvincule no Perfil).
 
 Segurança: fluxo Authorization Code + **PKCE** + **state** (cookie httpOnly de 10 min); o código é trocado no servidor
 (host fixo `oauth2.googleapis.com`) e o `id_token` é validado (emissor, público = o Client ID, validade, e-mail

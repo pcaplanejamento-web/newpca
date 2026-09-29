@@ -10,7 +10,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { Checkbox, PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconClipboard, IconInfo, IconKey, IconLogout, IconMail, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
+import { IconAlert, IconCamera, IconCheck, IconClipboard, IconGoogle, IconInfo, IconKey, IconLogout, IconMail, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
 import { Switch } from "./Switch";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
@@ -46,6 +46,8 @@ export function PerfilView({
   mesaResponsavel = null,
   semModulos = false,
   avisosEmail = null,
+  contaGoogle = null,
+  retornoGoogle = null,
 }: {
   usuario: UsuarioSessao;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
@@ -57,6 +59,10 @@ export function PerfilView({
   semModulos?: boolean;
   /** Os avisos do sino que chegam por E-MAIL (só com o Resend ativo; `null` = sem o card). */
   avisosEmail?: PrefsEmail | null;
+  /** A conta Google VINCULADA (só com o login com Google ativo; `null` = sem o card). `soGoogle` = sem senha. */
+  contaGoogle?: { email: string | null; soGoogle: boolean } | null;
+  /** O retorno do vínculo (`?google=` na volta do Google). */
+  retornoGoogle?: { ok: boolean; texto: string } | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -90,6 +96,25 @@ export function PerfilView({
   const [mesaResp, setMesaResp] = useState<MesaResponsavel>(mesaResponsavel ?? "eu");
   const [salvandoMesa, setSalvandoMesa] = useState(false);
   const [msgMesa, setMsgMesa] = useState<Msg>(null);
+
+  // Conta Google: vincular (vai ao Google e volta aqui) / desvincular
+  const [msgGoogle, setMsgGoogle] = useState<Msg>(retornoGoogle ? { tipo: retornoGoogle.ok ? "ok" : "erro", texto: retornoGoogle.texto } : null);
+  const [desvinculando, setDesvinculando] = useState(false);
+  async function desvincularGoogle() {
+    setDesvinculando(true);
+    setMsgGoogle(null);
+    try {
+      const res = await fetch("/api/perfil/google", { method: "DELETE" });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao desvincular.");
+      setMsgGoogle({ tipo: "ok", texto: "Conta Google desvinculada." });
+      router.refresh();
+    } catch (err) {
+      setMsgGoogle({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao desvincular." });
+    } finally {
+      setDesvinculando(false);
+    }
+  }
 
   // E-mail: quais avisos do sino chegam também por e-mail
   const [emailPrefs, setEmailPrefs] = useState<PrefsEmail | null>(avisosEmail);
@@ -401,6 +426,46 @@ export function PerfilView({
             </Button>
           </div>
         </form>
+      )}
+
+      {/* Conta Google: vinculada = entrar com um clique ("Continuar com Google"), mesmo com outro e-mail */}
+      {contaGoogle && (
+        <div className={`lg:col-span-2 ${cardCls}`}>
+          <h3 className="flex items-center gap-2 text-sm font-bold text-text">
+            <IconGoogle className="h-4 w-4" /> Conta Google
+          </h3>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="min-w-0 text-sm text-text-2">
+              {contaGoogle.email ? (
+                <>
+                  Vinculada a <strong className="break-all text-text">{contaGoogle.email}</strong>. Na tela de login, “Continuar com Google” entra
+                  direto nesta conta.
+                </>
+              ) : (
+                "Nenhuma conta vinculada. Vincule sua conta Google para entrar com um clique — mesmo que o e-mail dela seja diferente do cadastro."
+              )}
+            </p>
+            {contaGoogle.email ? (
+              <Button
+                variant="secondary"
+                onClick={desvincularGoogle}
+                loading={desvinculando}
+                disabled={contaGoogle.soGoogle}
+                title={contaGoogle.soGoogle ? "Sua conta entra só pelo Google — sem senha para entrar de outro jeito." : undefined}
+              >
+                Desvincular
+              </Button>
+            ) : (
+              <a
+                href="/api/auth/google?vincular=1"
+                className="inline-flex h-11 items-center gap-2 rounded-control border border-border-2 bg-surface px-4 text-sm font-semibold text-text transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:h-[var(--h-control)]"
+              >
+                <IconGoogle className="h-4 w-4" /> Vincular conta Google
+              </a>
+            )}
+          </div>
+          <Aviso msg={msgGoogle} />
+        </div>
       )}
 
       {/* E-mail: os avisos do sino que chegam também por e-mail (só com o Resend ativo) */}

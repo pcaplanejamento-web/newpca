@@ -15,6 +15,7 @@ export function AuthForm({
   mode,
   turnstile,
   google = false,
+  googleConta = null,
   erroInicial = null,
 }: {
   mode: "login" | "cadastro";
@@ -22,6 +23,8 @@ export function AuthForm({
   turnstile?: { enabled: boolean; siteKey: string };
   /** Login com Google ativo (Integrações) → botão "Entrar com Google". */
   google?: boolean;
+  /** A conta Google LEMBRADA neste aparelho → "Continuar como …" entra direto nela (sem escolher a conta). */
+  googleConta?: string | null;
   /** A mensagem da volta do Google (`/login?erro=`). */
   erroInicial?: string | null;
 }) {
@@ -173,11 +176,27 @@ export function AuthForm({
           </div>
           <a
             href="/api/auth/google"
-            className="flex h-[52px] w-full items-center justify-center gap-2 rounded-control border border-border-2 bg-surface text-[15px] font-semibold text-text transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-control border border-border-2 bg-surface px-3 text-[15px] font-semibold text-text transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <IconGoogle className="h-5 w-5" />
-            {isCad ? "Criar conta com Google" : "Entrar com Google"}
+            <IconGoogle className="h-5 w-5 shrink-0" />
+            {googleConta ? (
+              <span className="min-w-0 truncate">
+                Continuar como <span className="font-normal text-text-2">{googleConta}</span>
+              </span>
+            ) : isCad ? (
+              "Criar conta com Google"
+            ) : (
+              "Entrar com Google"
+            )}
           </a>
+          {googleConta && (
+            <a
+              href="/api/auth/google?trocar=1"
+              className="mx-auto mt-1 flex min-h-11 w-fit items-center px-2 text-[13px] font-semibold text-accent hover:underline"
+            >
+              Usar outra conta Google
+            </a>
+          )}
         </>
       )}
 

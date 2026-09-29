@@ -11,6 +11,10 @@ export const CAMINHO_CALLBACK_GOOGLE = "/api/auth/google/callback";
 /** O cookie curto (10 min) que guarda o state + o verificador do PKCE entre a ida e a volta do Google. */
 export const COOKIE_GOOGLE = "pca_google";
 export const VALIDADE_COOKIE_GOOGLE_S = 600;
+/** O cookie LONGO (1 ano) que lembra, NESTE aparelho, a conta Google que entrou por último — o login oferece
+ *  "Continuar como …" e o Google entra direto nela (`login_hint`), sem a tela de escolher a conta. */
+export const COOKIE_GOOGLE_CONTA = "pca_google_conta";
+export const VALIDADE_COOKIE_CONTA_S = 365 * 86_400;
 /** Senha de quem se cadastrou pelo Google: fora do formato pbkdf2 → `verificarSenha` sempre falso. */
 export const SENHA_INUTILIZAVEL = "google$sem-senha";
 
@@ -42,8 +46,11 @@ export async function desafioPkce(verificador: string): Promise<string> {
   return base64Url(new Uint8Array(h));
 }
 
-/** O endereço do Google para escolher a conta e autorizar. */
-export function urlAutorizacao(p: { clientId: string; redirectUri: string; state: string; desafio: string }): string {
+/**
+ * O endereço do Google para autorizar. Com a conta LEMBRADA (`dica` = o e-mail), vai direto nela (`login_hint`, sem a tela
+ * de escolher); sem ela — ou ao pedir outra conta —, a tela de escolher a conta (`select_account`).
+ */
+export function urlAutorizacao(p: { clientId: string; redirectUri: string; state: string; desafio: string; dica?: string | null }): string {
   const q = new URLSearchParams({
     client_id: p.clientId,
     redirect_uri: p.redirectUri,
@@ -52,18 +59,53 @@ export function urlAutorizacao(p: { clientId: string; redirectUri: string; state
     state: p.state,
     code_challenge: p.desafio,
     code_challenge_method: "S256",
-    prompt: "select_account",
   });
+  if (p.dica) q.set("login_hint", p.dica);
+  else q.set("prompt", "select_account");
   return `${HOST_AUTORIZACAO_GOOGLE}?${q.toString()}`;
 }
 
-/** O conteúdo do cookie curto: "state.verificador" (os dois em base64url — sem ponto). */
-export function valorCookieGoogle(state: string, verificador: string): string {
-  return `${state}.${verificador}`;
+/** O que a ida ao Google vai fazer na volta: ENTRAR ou VINCULAR a conta Google ao usuário logado. */
+export type ModoGoogle = "entrar" | "vincular";
+
+/** O conteúdo do cookie curto: "state.verificador.modo" (base64url — sem ponto; modo e = entrar, v = vincular). */
+export function valorCookieGoogle(state: string, verificador: string, modo: ModoGoogle = "entrar"): string {
+  return `${state}.${verificador}.${modo === "vincular" ? "v" : "e"}`;
 }
-export function lerCookieGoogle(v: string | undefined | null): { state: string; verificador: string } | null {
-  const m = /^([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{43,128})$/.exec(v ?? "");
-  return m ? { state: m[1], verificador: m[2] } : null;
+export function lerCookieGoogle(v: string | undefined | null): { state: string; verificador: string; modo: ModoGoogle } | null {
+  const m = /^([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{43,128})(?:\.([ev]))?$/.exec(v ?? "");
+  return m ? { state: m[1], verificador: m[2], modo: m[3] === "v" ? "vincular" : "entrar" } : null;
+}
+
+/** O e-mail lembrado no cookie da conta (só um e-mail válido; qualquer outra coisa = nada). */
+export function lerContaLembrada(v: string | undefined | null): string | null {
+  const e = (v ?? "").trim().toLowerCase();
+  return e.length <= 160 && /^[^@\s<>"]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(e) ? e : null;
+}
+
+/** Um usuário candidato no banco (pela conta Google vinculada ou pelo e-mail). */
+export type CandidatoGoogle = { id: number; googleSub: string | null };
+
+/**
+ * QUEM entra com esta conta Google (regra única, testada):
+ * 1. a conta Google VINCULADA a um usuário (pelo identificador `sub` — vale mesmo com outro e-mail);
+ * 2. senão, o usuário do MESMO e-mail sem outra conta Google vinculada (e a conta passa a ficar vinculada);
+ * 3. o mesmo e-mail já vinculado a OUTRA conta Google → recusa (`outra-conta`);
+ * 4. ninguém → cadastro NOVO (pendente).
+ */
+export function decidirLoginGoogle(
+  sub: string,
+  porSub: CandidatoGoogle | null,
+  porEmail: CandidatoGoogle | null,
+): { tipo: "entrar"; id: number; vincular: boolean } | { tipo: "outra-conta" } | { tipo: "novo" } {
+  if (porSub) return { tipo: "entrar", id: porSub.id, vincular: false };
+  if (porEmail) return porEmail.googleSub && porEmail.googleSub !== sub ? { tipo: "outra-conta" } : { tipo: "entrar", id: porEmail.id, vincular: !porEmail.googleSub };
+  return { tipo: "novo" };
+}
+
+/** Vincular a conta Google ao usuário logado: recusa a conta que já é de OUTRO usuário. */
+export function podeVincular(usuarioId: number, porSub: CandidatoGoogle | null): boolean {
+  return !porSub || porSub.id === usuarioId;
 }
 
 export type IdentidadeGoogle = { sub: string; email: string; nome: string };
@@ -106,12 +148,23 @@ export function lerIdToken(jwt: string, clientId: string, agoraS: number): { ok:
 /** Os códigos de retorno do login com Google (`/login?erro=`) → a mensagem da tela. */
 export const MENSAGEM_ERRO_LOGIN: Record<string, string> = {
   google: "Não foi possível entrar com o Google. Tente de novo.",
+  "google-estado": "O login com o Google expirou ou foi aberto em outra aba. Tente de novo.",
+  "google-token":
+    "O Google recusou a autorização. Confira em Integrações o Client ID e o Client secret e, no Google Cloud, a URI de redirecionamento deste endereço.",
+  "google-outra-conta": "Este e-mail já está vinculado a OUTRA conta Google. Entre com a conta vinculada ou com e-mail e senha.",
   "google-desligado": "O login com Google não está ativo.",
   "google-cancelado": "O login com Google foi cancelado.",
   "google-sem-contas": "O primeiro acesso do sistema precisa ser feito pelo cadastro com e-mail e senha.",
   pendente: "Sua conta ainda está pendente de aprovação por um administrador.",
   "pendente-novo": "Conta criada com o Google. O acesso está pendente de aprovação por um administrador.",
   inativo: "Sua conta está inativa. Fale com um administrador.",
+};
+
+/** Os retornos do VÍNCULO no Perfil (`/painel/perfil?google=`): sucesso ou o motivo. */
+export const MENSAGEM_VINCULO: Record<string, { ok: boolean; texto: string }> = {
+  vinculado: { ok: true, texto: "Conta Google vinculada. Agora você entra com um clique em “Continuar com Google”." },
+  "em-uso": { ok: false, texto: "Esta conta Google já está vinculada a outro usuário do sistema." },
+  erro: { ok: false, texto: "Não foi possível vincular a conta Google. Tente de novo." },
 };
 
 /** A mensagem de um código de `?erro=` (desconhecido = nada). */
