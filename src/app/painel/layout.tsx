@@ -7,6 +7,7 @@ import { abasPermitidas, getGrupoAtivo, getReparticaoContexto, gruposDoUsuario }
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { contarNaoLidas } from "@/lib/notificacoes";
 import { linhasTabela } from "@/lib/theme";
+import { versaoDados } from "@/lib/versao-dados";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,13 @@ export default async function PainelLayout({
   const usuario = await getUsuarioAtual();
   if (!usuario) redirect("/login");
 
-  const [grupos, ativo, aparencia, pcas] = await Promise.all([
+  const [grupos, ativo, aparencia, pcas, versao] = await Promise.all([
     gruposDoUsuario(usuario.id),
     getGrupoAtivo(usuario),
     getAparencia(),
     pcasDoFiltro(),
+    // A versão dos dados: o `SincronizarDados` só recarrega a tela quando ela muda (falhou = sem sincronização).
+    versaoDados().catch(() => undefined),
   ]);
   const [abas, contexto, pcaFiltro, notificacoes] = await Promise.all([
     abasPermitidas(usuario, ativo).then((s) => [...s]),
@@ -43,6 +46,7 @@ export default async function PainelLayout({
       pcaFiltroId={pcaFiltro?.id ?? null}
       identidade={aparencia.identidade}
       notificacoes={notificacoes}
+      versaoDados={versao}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)}>{children}</ConfigTabelas>

@@ -11,6 +11,7 @@ import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import { filtroAnoPcaProtocolo } from "./dfd-sql";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
+import { memoPorVersao } from "./versao-dados";
 
 /**
  * Acesso a dados do PROTOCOLO (o "processo" que empacota vários DFDs). Escopo por
@@ -100,23 +101,27 @@ const colunasSobrescritos = {
 
 /** Protocolos da MESA PRINCIPAL (os não enviados a um PCA) — opcionalmente filtrados por repartição (Geral passa
  * `undefined`) e pelo PCA do CABEÇALHO (`anoPca`; `null` = todos os PCAs), com totais agregados ao vivo dos DFDs. */
-export async function listarProtocolos(reparticaoId?: number, anoPca?: number | null): Promise<ProtocoloResumo[]> {
-  return consultaProtocolos(
-    and(
-      isNull(dfdProtocolos.pcaId),
-      reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
-      filtroAnoPcaProtocolo(anoPca),
+export function listarProtocolos(reparticaoId?: number, anoPca?: number | null): Promise<ProtocoloResumo[]> {
+  return memoPorVersao(`protocolos:${reparticaoId ?? ""}:${anoPca ?? ""}`, () =>
+    consultaProtocolos(
+      and(
+        isNull(dfdProtocolos.pcaId),
+        reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
+        filtroAnoPcaProtocolo(anoPca),
+      ),
     ),
   );
 }
 
 /** Protocolos da MESA DO PCA (os enviados a ele), com os mesmos totais ao vivo. */
-export async function listarProtocolosDoPca(pcaId: number, anoMarcados?: number | null): Promise<ProtocoloResumo[]> {
+export function listarProtocolosDoPca(pcaId: number, anoMarcados?: number | null): Promise<ProtocoloResumo[]> {
   // `anoMarcados` (visão ligada na Configuração do PCA) = também os MARCADOS com o ano ainda na Mesa do sistema.
-  return consultaProtocolos(
-    anoMarcados != null
-      ? or(eq(dfdProtocolos.pcaId, pcaId), and(isNull(dfdProtocolos.pcaId), filtroAnoPcaProtocolo(anoMarcados)))
-      : eq(dfdProtocolos.pcaId, pcaId),
+  return memoPorVersao(`protocolos-pca:${pcaId}:${anoMarcados ?? ""}`, () =>
+    consultaProtocolos(
+      anoMarcados != null
+        ? or(eq(dfdProtocolos.pcaId, pcaId), and(isNull(dfdProtocolos.pcaId), filtroAnoPcaProtocolo(anoMarcados)))
+        : eq(dfdProtocolos.pcaId, pcaId),
+    ),
   );
 }
 

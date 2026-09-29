@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
   // pois o Turbopack (padrão no Next 16) rejeita um `webpack` config e não
   // aplicaria este alias.
   transpilePackages: ["pdfjs-dist", "tesseract.js"],
+  // DADOS PRONTOS: as telas já vistas (abas do PCA/Orçamento/Quadro, Mesa, voltar/avançar) voltam do cache do navegador
+  // por 5 min, sem refazer a página. Toda gravação já dá `router.refresh()` (limpa o cache) e o `SincronizarDados`
+  // recarrega quando a VERSÃO DOS DADOS muda (gravação de outra pessoa) — nunca se vê dado velho.
+  experimental: { staleTimes: { dynamic: 300, static: 300 } },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = { ...(config.resolve.alias as object), canvas: false };

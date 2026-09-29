@@ -46,6 +46,7 @@ import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "./queries";
 import { getItensTodos, getPorClassificacao, getPorMes, getPorUnidadeMedida, getResumo, getTopItens, getUnidades } from "./queries";
 import { solicitanteDeResultado, validarAssinatura } from "./reparticao-responsaveis";
 import { carregarResponsaveis, lotesDeIds } from "./reparticoes";
+import { memoPorVersao } from "./versao-dados";
 
 /**
  * Acesso a dados do PCA como ESPAÇO (card 4×5 → Dashboard · Orçamento · Mesa/Importação ·
@@ -233,7 +234,11 @@ async function inativosPorDfd(): Promise<Map<string, { n: number; valor: number 
 }
 
 /** Cards da tela `/painel/pca` (totais = os itens ATIVOS dos DFDs vigentes). */
-export async function listarPcasCards(): Promise<PcaCard[]> {
+export function listarPcasCards(): Promise<PcaCard[]> {
+  return memoPorVersao("pcas-cards", calcularPcasCards);
+}
+
+async function calcularPcasCards(): Promise<PcaCard[]> {
   const db = getDb();
   const [rows, porPlanilha, todos, inativos] = await Promise.all([
     db.select(COLS_PCA).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
@@ -663,7 +668,14 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
 }
 
 /** Dados do dashboard do PCA — o MESMO no painel e na tela inicial. */
-export async function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): Promise<DashboardPca> {
+export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): Promise<DashboardPca> {
+  return memoPorVersao(`dash:${chavePca(pca)}:${unidadeIdPedida ?? ""}`, () => calcularDashboardDoPca(pca, unidadeIdPedida));
+}
+
+/** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
+const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}`;
+
+async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
     const us = await getUnidades(undefined, pca.id);
     if (us.length === 0) return vazioDash();
@@ -955,8 +967,12 @@ export async function orcamentoDoAno(ano: number | null): Promise<{ id: number; 
 
 /** `orcDoAno` = o orçamento do ano já buscado (`orcamentoDoAno`) — evita consultá-lo de novo. */
 export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
-  const db = getDb();
   const orc = orcDoAno !== undefined ? orcDoAno : await orcamentoDoAno(pca.ano);
+  return memoPorVersao(`orc:${chavePca(pca)}:${orc?.id ?? ""}`, () => calcularOrcamentoDoPca(pca, orc));
+}
+
+async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
+  const db = getDb();
   const [visao, reps, vincs] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
     db.select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),

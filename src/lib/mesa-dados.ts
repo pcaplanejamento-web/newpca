@@ -69,10 +69,12 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   ]);
   const acessivel = acessivelNaLista(ctx.lista);
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
-  const pcaFiltro = pcaId ? null : await getPcaFiltro(await pcasDoFiltro(ctx.pcas));
-  const ano = pcaFiltro?.ano ?? null;
   // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
-  const anoMarcados = pcaId ? await anoMarcadosDoPca(pcaId) : null;
+  const [pcaFiltro, anoMarcados] = await Promise.all([
+    pcaId ? null : pcasDoFiltro(ctx.pcas).then(getPcaFiltro),
+    pcaId ? anoMarcadosDoPca(pcaId) : null,
+  ]);
+  const ano = pcaFiltro?.ano ?? null;
   const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes, prefCompletos] = await Promise.all([
     pcaId ? listarDfds(undefined, pcaId, null, anoMarcados) : listarDfds(rep?.id, undefined, ano),
     pcaId ? listarProtocolosDoPca(pcaId, anoMarcados) : listarProtocolos(rep?.id, ano),

@@ -253,7 +253,8 @@ function PcaEspacoDemo() {
   return (
     <div className="space-y-6">
       {/* SeletorMesa: o 1º item da barra da Mesa principal (Mesa do sistema | Mesa de um PCA). CarregandoLink: o véu +
-          spinner de um Link pendente (o card do PCA com `href` — aqui, um link para esta mesma página). */}
+          spinner de um Link pendente (o card do PCA com `href` — aqui, um link para esta mesma página). SincronizarDados
+          (infraestrutura, sem UI, no AppShell): as telas voltam do cache e só recarregam quando a versão dos dados muda. */}
       <div className="flex flex-wrap items-center gap-3">
         <SeletorMesa pcas={[{ id: 2, nome: "PCA 2027", ano: 2027 }]} atual={mesaDemo} onEscolher={setMesaDemo} />
         <Link href="/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">

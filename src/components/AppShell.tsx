@@ -7,6 +7,7 @@ import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { NAV_MODULOS } from "./navModulos";
+import { SincronizarDados } from "./SincronizarDados";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -433,6 +434,7 @@ export function AppShell({
   pcaFiltroId = null,
   identidade,
   notificacoes = 0,
+  versaoDados,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -447,6 +449,8 @@ export function AppShell({
   identidade?: Identidade;
   /** Notificações NÃO LIDAS (o número do sino). */
   notificacoes?: number;
+  /** A VERSÃO DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando ela muda. */
+  versaoDados?: string;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -456,6 +460,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-bg text-text lg:flex">
+      {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface lg:flex lg:sticky lg:top-0 lg:h-dvh print:!hidden">
         {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}

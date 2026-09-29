@@ -17,6 +17,7 @@ import type {
   GerarPcaPayload,
 } from "./dfd-validation";
 import { type Assinatura, coerceFonte, coerceValidacao, juntarRefs } from "./parse-dfd-comum";
+import { memoPorVersao } from "./versao-dados";
 
 /**
  * Acesso a dados de DFD/PCA. Escopo por REPARTIÇÃO (como as `unidades`): a
@@ -234,7 +235,13 @@ function comGrupos(r: DfdResumoCru & { assinaturas: string | null }): DfdResumo 
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
 /** `anoPca` = o PCA escolhido no CABEÇALHO (Mesa principal; `null` = todos os PCAs). */
-export async function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdResumo[]> {
+export function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdResumo[]> {
+  return memoPorVersao(`dfds:${reparticaoId ?? ""}:${pcaId ?? ""}:${anoPca ?? ""}:${anoMarcados ?? ""}`, () =>
+    consultarDfds(reparticaoId, pcaId, anoPca, anoMarcados),
+  );
+}
+
+async function consultarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdResumo[]> {
   const rows = await getDb()
     .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
     .from(dfds)
@@ -262,12 +269,18 @@ export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdRes
  * enriquecido com o DFD/unidade/protocolo de origem. Escopado por unidade como `listarDfds`
  * (Geral ⇒ `undefined` = todos). Carregado sob demanda (lazy) só ao abrir a visão Itens.
  */
-export async function listarItensDfds(
+export function listarItensDfds(
   reparticaoId?: number,
   pcaId?: number,
   anoPca?: number | null,
   anoMarcados?: number | null,
 ): Promise<ItemDfdRow[]> {
+  return memoPorVersao(`itens:${reparticaoId ?? ""}:${pcaId ?? ""}:${anoPca ?? ""}:${anoMarcados ?? ""}`, () =>
+    consultarItensDfds(reparticaoId, pcaId, anoPca, anoMarcados),
+  );
+}
+
+function consultarItensDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<ItemDfdRow[]> {
   return getDb()
     .select({
       id: dfdItens.id,

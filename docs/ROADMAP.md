@@ -1032,6 +1032,12 @@ marcados ligados ou desligados conforme a Configuração dele (`/painel/mesa?pca
 do PCA mostra "Abrindo o PCA…" enquanto a tela carrega, e o Dashboard do PCA ficou mais leve (a previsão de entrega é lida
 uma vez por DFD, não por item; lotes em paralelo) — com a prévia ligada, milhares de itens estouravam o limite do servidor.
 
+### Dados prontos: carregar uma vez, recarregar só com dado novo — entregue
+As telas e abas já vistas (PCA, Mesa, Orçamento, Tarefas…) voltam NA HORA do cache do navegador (5 min); o sistema confere
+uma VERSÃO DOS DADOS (o último registro da auditoria + os lotes de itens) ao voltar à janela e a cada navegação e só
+recarrega quando ela muda. No servidor, as cargas pesadas (listas da Mesa, itens, Dashboard/Orçamento/cards do PCA) ficam
+prontas na memória enquanto a versão for a mesma — `memoPorVersao`, o padrão para toda carga pesada nova.
+
 ### Origem dos dados: linhas do Orçamento do PCA e todos os gráficos dos dashboards — entregue
 Clicar numa **linha do comparativo do Orçamento do PCA** abre o banner **"Origem dos dados"**, com os **lançamentos do CUBO**
 daquela unidade (Órgão · Unidade no CUBO · Elemento · Código · Dotação — orçamento/ano, visão e Vínculos informados) e as
