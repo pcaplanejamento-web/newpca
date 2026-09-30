@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { contarUsuarios, criarSessao, definirCookieSessao, hashSenha } from "@/lib/auth";
@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { emailsDosAdmins, enviarEmailDireto } from "@/lib/email";
 import { emailCadastroPendente } from "@/lib/email-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { comandoCadastroPendente, comandoCadastroPrimeiro } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 
@@ -36,20 +37,11 @@ export async function POST(req: Request) {
     const [existe] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, email)).limit(1);
     if (existe) return erro("Este e-mail já está cadastrado.", 409);
 
-    const [u] = await db
-      .insert(usuarios)
-      .values({
-        nome,
-        email,
-        matricula,
-        cargo,
-        reparticaoId,
-        senhaHash: await hashSenha(senha),
-        role: primeiro ? "admin" : "membro",
-        status: primeiro ? "ativo" : "pendente",
-        emailVerificadoEm: primeiro ? null : sql`(CURRENT_TIMESTAMP)`,
-      })
-      .returning({ id: usuarios.id, role: usuarios.role, status: usuarios.status });
+    const dados = { nome, email, matricula, cargo, reparticaoId, senhaHash: await hashSenha(senha) };
+    // O 1º vira Administrador SÓ se a tabela ainda estiver vazia (no próprio INSERT — dois "primeiros" ao mesmo tempo
+    // nunca viram dois ADMs); os demais entram com o papel PADRÃO, pendentes de aprovação.
+    const [u] = primeiro ? await comandoCadastroPrimeiro(db, dados) : await comandoCadastroPendente(db, dados);
+    if (!u) return erro("Outra pessoa acabou de criar a primeira conta. Recarregue a página e confirme o seu e-mail com o código.", 409);
 
     await registrarAuditoria({
       usuario: { id: u.id, nome, email },
