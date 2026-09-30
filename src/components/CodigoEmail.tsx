@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { TextField } from "./Field";
 import { IconChevronLeft, IconMailCheck, IconRefresh } from "./icons";
 import { Turnstile } from "./Turnstile";
+import { VerificacaoRobo } from "./VerificacaoRobo";
 
 // CONFIRMAÇÃO POR CÓDIGO de 6 dígitos enviado ao e-mail — as peças usadas no cadastro, no "Esqueci a senha" e na troca de
 // senha do Perfil: o captcha ANTES de cada envio (`useCaptcha`), o envio com o cronômetro para reenviar
@@ -13,17 +14,25 @@ import { Turnstile } from "./Turnstile";
 
 export type ConfigCaptcha = { enabled: boolean; siteKey: string } | undefined;
 
-/** O captcha (Turnstile) do ADM — só existe quando ativo E configurado. `renovar` remonta o widget (o token vale 1 vez). */
+/**
+ * O CAPTCHA — SEMPRE presente: o Turnstile quando o ADM o configurou, senão a verificação anti-robô própria
+ * (`VerificacaoRobo`). `renovar` remonta o widget (o token vale uma vez); a própria já volta verificando sozinha.
+ */
 export function useCaptcha(turnstile: ConfigCaptcha) {
-  const usa = !!turnstile?.enabled && !!turnstile.siteKey;
+  const usaTurnstile = !!turnstile?.enabled && !!turnstile.siteKey;
   const [token, setToken] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const renovar = useCallback(() => {
     setToken(null);
     setNonce((n) => n + 1);
   }, []);
-  const widget = usa && turnstile ? <Turnstile key={nonce} siteKey={turnstile.siteKey} onToken={setToken} /> : null;
-  return { usa, token, pronto: !usa || !!token, widget, renovar };
+  const widget =
+    usaTurnstile && turnstile ? (
+      <Turnstile key={nonce} siteKey={turnstile.siteKey} onToken={setToken} />
+    ) : (
+      <VerificacaoRobo key={nonce} onToken={setToken} automatico={nonce > 0} />
+    );
+  return { token, pronto: !!token, widget, renovar };
 }
 
 /** Segundos até um instante (0 quando passou), atualizado a cada segundo. */
@@ -54,13 +63,13 @@ export function useCodigoEmail(finalidade: FinalidadeCodigo) {
   const restante = useContagem(reenviarEm);
 
   const enviar = useCallback(
-    async (email: string, token: string | null): Promise<string | null> => {
+    async (email: string, token: string | null, extra?: { matricula?: string }): Promise<string | null> => {
       setEnviando(true);
       try {
         const res = await fetch("/api/auth/codigo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, finalidade, ...(token ? { token } : {}) }),
+          body: JSON.stringify({ email, finalidade, ...extra, ...(token ? { token } : {}) }),
         });
         const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; reenviarS?: number; esperarS?: number };
         if (j.esperarS) setReenviarEm(Date.now() + j.esperarS * 1000);
@@ -127,9 +136,9 @@ export function EtapaCodigo({
   restante: number;
   reenviando: boolean;
   onReenviar: () => void;
-  /** O widget do captcha (só quando ativo) — aparece quando já dá para reenviar. */
+  /** O widget do captcha — aparece quando já dá para reenviar. */
   captcha?: ReactNode;
-  /** O captcha já foi resolvido (sem captcha = sempre). */
+  /** O captcha já foi resolvido. */
   podeReenviar?: boolean;
   onVoltar?: () => void;
   disabled?: boolean;

@@ -12,6 +12,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { comandoEncerrarSessoesSeInativo, comandoExcluirUsuario, comandoTrocarPapel, comandoTrocarStatus, consultaPapelDaChave } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { cargoCadastrado } from "@/lib/cargos";
+import { matriculaEmUso, MSG_MATRICULA_EM_USO, violouMatriculaUnica } from "@/lib/usuarios-unicos";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,9 @@ export async function PATCH(
       .limit(1);
     if (dono) return erro("Este e-mail já está em uso.", 409);
   }
+
+  // Matrícula é única (sem os zeros à esquerda) — a MESMA régua do gatilho do banco.
+  if (matricula && (await matriculaEmUso(matricula, id))) return erro(MSG_MATRICULA_EM_USO, 409);
 
   const [antes] = await db
     .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, cargo: usuarios.cargo, reparticaoId: usuarios.reparticaoId, role: usuarios.role, status: usuarios.status })
@@ -85,7 +89,14 @@ export async function PATCH(
     ...(cargoNovo !== undefined ? { cargo: cargoNovo ? cargoNovo : null } : {}),
     ...(reparticaoId !== undefined ? { reparticaoId } : {}),
   };
-  if (Object.keys(set).length > 0) await db.update(usuarios).set({ ...set, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(usuarios.id, id));
+  if (Object.keys(set).length > 0) {
+    try {
+      await db.update(usuarios).set({ ...set, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(usuarios.id, id));
+    } catch (e) {
+      if (violouMatriculaUnica(e)) return erro(MSG_MATRICULA_EM_USO, 409);
+      throw e;
+    }
+  }
   // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo; depois da resposta).
   if (antes.status === "pendente" && status === "ativo") {
     const destino = email ?? antes.email;

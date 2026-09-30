@@ -8,7 +8,7 @@ import { type ConfigCaptcha, useCaptcha } from "./CodigoEmail";
 import { PasswordField, TextField } from "./Field";
 import { IconArrowRight, IconGoogle, IconMail } from "./icons";
 
-// ENTRAR — e-mail + senha (com o captcha do ADM) ou a conta Google vinculada. Um dos modos da `TelaAcesso` (com Criar
+// ENTRAR — e-mail + senha (com o captcha, sempre) ou a conta Google vinculada. Um dos modos da `TelaAcesso` (com Criar
 // conta e Esqueci a senha — `onEsqueci` troca o modo na MESMA tela).
 export function AuthForm({
   onEsqueci,
@@ -18,7 +18,7 @@ export function AuthForm({
   erroInicial = null,
 }: {
   onEsqueci: () => void;
-  /** Captcha do ADM — só renderiza/exige quando ativo E configurado. */
+  /** O Turnstile do ADM (ativo E configurado); sem ele, a verificação anti-robô própria — o captcha é SEMPRE exigido. */
   turnstile?: ConfigCaptcha;
   /** Login com Google ativo (Integrações) → botão "Entrar com Google". */
   google?: boolean;
@@ -54,7 +54,7 @@ export function AuthForm({
       router.refresh();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Ocorreu um erro.");
-      if (captcha.usa) captcha.renovar();
+      captcha.renovar();
     } finally {
       setLoading(false);
     }
@@ -70,11 +70,12 @@ export function AuthForm({
           inputMode="email"
           placeholder="voce@rioverde.go.gov.br"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))}
           autoComplete="username"
+          maxLength={160}
           required
         />
-        <PasswordField value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
+        <PasswordField value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" maxLength={200} required />
         <div className="-mt-2 flex justify-end">
           <button type="button" onClick={onEsqueci} className="inline-flex min-h-11 items-center text-[13px] font-semibold text-accent hover:underline lg:min-h-0">
             Esqueci a senha

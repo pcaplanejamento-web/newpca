@@ -852,17 +852,17 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(nomes(d, "SELECT name FROM sqlite_master WHERE type='index'").includes("usuarios_papel_idx"));
   });
 
-  it("0071 ressincroniza o papel pelo role (só papéis do sistema; o criado pelo ADM fica); idempotente", () => {
+  it("0072 ressincroniza o papel pelo role (só papéis do sistema; o criado pelo ADM fica); idempotente", () => {
     const d = new DatabaseSync(":memory:");
-    const i71 = arquivos.findIndex((f) => f.startsWith("0071"));
-    assert.ok(i71 > 0, "migração 0071 ausente");
-    for (const arq of arquivos.slice(0, i71)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const i72 = arquivos.findIndex((f) => f.startsWith("0072"));
+    assert.ok(i72 > 0, "migração 0072 ausente");
+    for (const arq of arquivos.slice(0, i72)) d.exec(readFileSync(join(DIR, arq), "utf8"));
     const id = (chave: string) => (d.prepare("SELECT id FROM papeis WHERE chave = ?").get(chave) as { id: number }).id;
     d.exec("INSERT INTO papeis (id, nome) VALUES (9700, 'Consulta')");
     d.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, role, papel_id) VALUES
       (9701, 'a@x', 'A', 'h', 'gestor', ${id("membro")}), (9702, 'b@x', 'B', 'h', 'membro', 9700),
       (9703, 'c@x', 'C', 'h', 'admin', NULL), (9704, 'd@x', 'D', 'h', 'membro', ${id("membro")})`);
-    const sql = readFileSync(join(DIR, arquivos[i71]), "utf8");
+    const sql = readFileSync(join(DIR, arquivos[i72]), "utf8");
     d.exec(sql);
     d.exec(sql);
     const papel = (u: number) => (d.prepare("SELECT papel_id AS p FROM usuarios WHERE id = ?").get(u) as { p: number | null }).p;

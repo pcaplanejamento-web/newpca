@@ -23,7 +23,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula, cargo ou função (seleção da lista
   que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
   já vem preenchido), e-mail **@rioverde.go.gov.br** e
-  senha → captcha (se ativo) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
+  senha → captcha (sempre) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
   conta criada **membro/pendente** com o e-mail confirmado.
 - **1º cadastro** → vira **admin/ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).
 - **Senha obrigatória:** trocar (Perfil), criar (quem só entrava pelo Google) ou redefinir ("Esqueci a senha") vale só com o
@@ -33,11 +33,17 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **Google:** conta nova não nasce pelo Google — cadastre-se e vincule o Google no Perfil. Os avisos por e-mail podem chegar
   no institucional ou na conta Google vinculada.
 - O **admin** aprova (ativa) os pendentes, muda papéis, desativa ou exclui — em `/painel/usuarios`.
-- Login válido → cookie de sessão → acesso ao `/painel`. "Sair" encerra a sessão.
+- Login válido (com o captcha) → cookie de sessão → acesso ao `/painel`. "Sair" encerra a sessão.
+- **Segurança (migração `0071`):** captcha SEMPRE (Turnstile do ADM ou a verificação anti-robô própria); limite de
+  tentativas por IP e por conta (8 senhas erradas em 15 min bloqueiam a conta por 15 min) → 429; campos só com dados
+  permitidos (nome só letras, matrícula só números, usuário do e-mail `a-z 0-9 . _ -`, senha com letras e números);
+  e-mail e **matrícula únicos** (também no banco, por gatilho); cabeçalhos de segurança e recusa de requisição de outro site.
 
 ## Arquivos
 - `src/lib/auth.ts` — hash/verificação, sessões, cookie, `getUsuarioAtual()`.
 - `src/app/api/auth/{cadastro,codigo,senha,login,logout,me}` — autenticação (código por e-mail em `codigo`).
+- `src/lib/seguranca-acesso.ts` (captcha + limite), `desafio-core.ts`, `limite-acesso-core.ts`/`-sql.ts`, `origem.ts`,
+  `usuarios-unicos.ts`; `POST /api/auth/desafio`; `VerificacaoRobo.tsx`.
 - `src/lib/cadastro-core.ts`, `codigo-email-core.ts` (puros, testados) e `codigo-email.ts` (D1) — regras do cadastro e do código.
 - `src/app/api/admin/usuarios` (+ `/[id]`) — listagem e gestão (admin).
 - `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` (+ `ConstelacaoAnimada.tsx`) + `MarcaSistema.tsx`;

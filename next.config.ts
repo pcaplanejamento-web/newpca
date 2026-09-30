@@ -19,6 +19,26 @@ const nextConfig: NextConfig = {
   // por 5 min, sem refazer a página. Toda gravação já dá `router.refresh()` (limpa o cache) e o `SincronizarDados`
   // recarrega quando a VERSÃO DOS DADOS muda (gravação de outra pessoa) — nunca se vê dado velho.
   experimental: { staleTimes: { dynamic: 300, static: 300 } },
+  // CABEÇALHOS DE SEGURANÇA em toda resposta: nenhum site de fora emoldura o sistema (clickjacking — só o próprio, no
+  // simulador do /design-system), o navegador não "adivinha" o tipo dos arquivos, HTTPS sempre (HSTS), sem vazar o
+  // endereço completo a outros sites e sem câmera/microfone/localização. A CSP mínima trava molduras, `<base>`, plugins e
+  // o destino de formulários sem quebrar os scripts do Next nem o Turnstile.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+        ],
+      },
+    ];
+  },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = { ...(config.resolve.alias as object), canvas: false };

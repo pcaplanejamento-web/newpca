@@ -118,9 +118,35 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   puro) é conferido pelo teste estático **`tests/rotas-acesso.test.ts`**: todo método de `src/app/api/**` está no mapa e
   chama a guarda descrita (a do auxiliar do arquivo vale; a ação calculada por regra pura — `acaoDe` — também). **Rota nova
   = entrada no mapa.** `exigirEditor` (o antigo `role`) nenhuma rota usa — sai na limpeza.
+- **SEGURANÇA DO ACESSO (migração `0071`, aditiva — tabelas `limites_acesso` + `desafios_acesso` e os gatilhos de matrícula
+  única):**
+  - **Sem login, nada:** o layout do `/painel` redireciona ao `/login`; TODA rota de API exige a sessão (as guardas acima) —
+    as únicas públicas são as de acesso (`/api/auth/*`), o feed `.ics` por token, o webhook do Trello (token + HMAC), os
+    crons (`cronAutorizado`) e a consulta pública do PCA publicado.
+  - **CAPTCHA SEMPRE** no login, no cadastro (no pedido do código; o 1º acesso sem código, no próprio cadastro), no "Esqueci a
+    senha" e na troca de senha: o **Turnstile** quando o ADM o configurou, senão a **verificação anti-robô própria**
+    (`VerificacaoRobo` — "Não sou um robô": prova de trabalho, núcleo puro **`desafio-core.ts`** com o SHA-256 próprio,
+    `BITS_DESAFIO`=17 ≈ 1 s; o desafio vem de `POST /api/auth/desafio`, vale UMA vez por 10 min — `comandoConsumirDesafio`
+    = DELETE … RETURNING). `useCaptcha` devolve sempre um widget; renovar (o token vale uma vez) já volta verificando.
+    Conferência única: **`verificarCaptcha`** (`seguranca-acesso.ts`).
+  - **LIMITE DE TENTATIVAS** (`limite-acesso-core.ts` — `LIMITES_ACESSO`; contagem num upsert atômico por janela,
+    `limite-acesso-sql.ts`, testado no driver D1 real): login 30/15 min por IP e **8 senhas erradas/15 min por CONTA**
+    (zera ao entrar), código 10/h por IP e 6/h por e-mail, cadastro 10/h por IP, senha 20/15 min por IP, desafio 60/10 min
+    por IP → **429** `{esperarS}` + `Retry-After`. Higiene no cron dos e-mails (`limparSegurancaVencida`).
+  - **Só dados permitidos** (a MESMA régua na tela — filtro ao digitar — e no Zod — `cadastro-core.ts`): nome só letras/
+    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula só dígitos** (1–15), usuário do e-mail `[a-z0-9._-]` sem "..",
+    senha nova 8–128 com **letras e números**, nenhum caractere de controle/invisível (cargo, apelido), nome de cargo com
+    letras/números e `( ) / , . - º ª`.
+  - **Sem duplicidade:** e-mail (índice único) e **MATRÍCULA** — conferida antes de enviar o código e antes de gastar o
+    código (`matriculaEmUso`, sem os zeros à esquerda: "0123" = "123") e garantida no BANCO por gatilhos (`matricula_duplicada`
+    no INSERT e no UPDATE da matrícula; as repetidas antigas ficam) → 409. O ADM também não troca para uma matrícula em uso;
+    a tela do ADM manda só o que MUDOU (dado antigo fora do padrão segue valendo).
+  - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
+    object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
+    cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
-- **PAPÉIS (migrações `0069`/`0071`, aditivas — EM IMPLANTAÇÃO, entrega 2 de 3):** o GRUPO (permissão) decide QUAIS telas; o
+- **PAPÉIS (migrações `0069`/`0072`, aditivas — EM IMPLANTAÇÃO, entrega 2 de 3):** o GRUPO (permissão) decide QUAIS telas; o
   **PAPEL** decide o que a pessoa FAZ em cada uma — **Visualizar · Manipular · Importar · Exportar · Excluir · Configurar**.
   Tabela `papeis` (nome, descrição, `chave` admin|gestor|membro nos do SISTEMA, `capacidades` JSON {tela: ações[]},
   `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado como ESPELHO** (leitores antigos). Núcleo

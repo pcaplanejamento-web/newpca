@@ -91,6 +91,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   // ── Acesso (sem sessão) ─────────────────────────────────────────────────────────────────────────────────
   "auth/cadastro": { POST: publica("criar a conta (código do e-mail)") },
   "auth/codigo": { POST: publica("enviar o código de confirmação (captcha)") },
+  "auth/desafio": { POST: publica("o desafio da verificação anti-robô própria (limite por IP)") },
   "auth/google/callback": { GET: publica("retorno do Google") },
   "auth/google": { GET: publica("ir ao Google") },
   "auth/login": { POST: publica("entrar") },

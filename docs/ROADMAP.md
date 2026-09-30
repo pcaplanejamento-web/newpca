@@ -1265,6 +1265,10 @@ triangulada (vizinhos mais próximos + triângulos), como no Dattago.
 ✅ **Cargos e funções + cadastro sem rolagem:** o ADM cadastra os cargos em Usuários → Cargos e funções (renomear propaga
 para as pessoas); o cadastro escolhe numa seleção; o ADM troca o de qualquer usuário. O cadastro cabe na tela (campos
 densos) e o e-mail pede só o usuário, com o domínio institucional já preenchido.
+✅ **Segurança do acesso:** captcha sempre exigido no login, cadastro e senha (Turnstile ou a verificação anti-robô
+própria); limite de tentativas por IP e por conta; campos só com dados permitidos (nome só letras, matrícula só números,
+senha com letras e números); e-mail e matrícula únicos (também no banco); cabeçalhos de segurança e bloqueio de requisição
+vinda de outro site.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
