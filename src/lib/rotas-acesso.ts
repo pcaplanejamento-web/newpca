@@ -65,7 +65,6 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/feriados": { GET: ADMIN, POST: ADMIN },
   "admin/grupos/[id]": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/grupos": { GET: ADMIN, POST: ADMIN },
-  "admin/integracoes/metricas": { GET: ADMIN },
   "admin/integracoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/integracoes/testar": { POST: ADMIN },
   "admin/integracoes/trello/membros": { GET: ADMIN, PUT: ADMIN },
