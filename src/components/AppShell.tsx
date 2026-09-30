@@ -199,12 +199,15 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
     if (id === ativo.id) return;
     setTrocando(true);
     try {
-      await fetch("/api/grupos/ativo", {
+      const res = await fetch("/api/grupos/ativo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grupoId: id }),
       });
+      if (!res.ok) throw new Error();
       router.refresh();
+    } catch {
+      toast.error("Não foi possível trocar o grupo — tente de novo.");
     } finally {
       setTrocando(false);
     }
@@ -349,12 +352,15 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
     if (id === ativa.id) return;
     setTrocando(true);
     try {
-      await fetch("/api/reparticoes/ativo", {
+      const res = await fetch("/api/reparticoes/ativo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reparticaoId: id }),
       });
+      if (!res.ok) throw new Error();
       router.refresh();
+    } catch {
+      toast.error("Não foi possível trocar a unidade — tente de novo.");
     } finally {
       setTrocando(false);
     }

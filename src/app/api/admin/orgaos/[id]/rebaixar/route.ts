@@ -5,6 +5,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao } from "@/lib/orgaos";
+import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { podeRebaixarOrgao, propriaRebaixada, unidadeDeOrgao } from "@/lib/orgao-unidade-ops";
 import { rebaixarOrgaoSchema } from "@/lib/rbac-validation";
 
@@ -42,6 +43,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .where(eq(orgaos.id, id))
     .limit(1);
   if (!o) return erro("Órgão não encontrado.", 404);
+  // A sigla vira o CÓDIGO da unidade — "GERAL" é o da unidade virtual (todas as unidades).
+  if (ehCodigoGeral(o.sigla)) return erro("A sigla 'GERAL' é reservada à unidade virtual — altere a sigla do órgão antes.", 400);
   const [dest] = await db.select({ id: orgaos.id }).from(orgaos).where(eq(orgaos.id, destino)).limit(1);
   if (!dest) return erro("Órgão de destino não encontrado.", 404);
   // O destino não pode ser um órgão que funciona como unidade (ele não recebe unidades-filhas).

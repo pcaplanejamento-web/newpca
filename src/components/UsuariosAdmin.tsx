@@ -3,16 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert, IconBadgeCheck, IconCheck, IconPencil, IconSave, IconSpinner } from "./icons";
 import { Modal } from "./Modal";
 import { OpcoesUnidades } from "./OpcoesUnidades";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
 
 type Role = "admin" | "gestor" | "membro";
 type Status = "ativo" | "pendente" | "inativo";
@@ -35,6 +38,12 @@ type U = {
 const STATUS_TONE: Record<Status, Tone> = { ativo: "emerald", pendente: "amber", inativo: "slate" };
 const STATUS_LABEL: Record<Status, string> = { ativo: "Ativo", pendente: "Pendente", inativo: "Inativo" };
 const ROLE_LABEL: Record<Role, string> = { admin: "Administrador", gestor: "Gestor", membro: "Membro" };
+/** O que cada papel faz — a confirmação da troca e a ajuda da tela dizem o mesmo. */
+const ROLE_DESCRICAO: Record<Role, string> = {
+  admin: "vê e altera TUDO, inclusive a Administração (usuários, grupos, permissões e configurações)",
+  gestor: "opera e configura as telas que o grupo dele libera (importa, edita, exclui)",
+  membro: "consulta Mesa, PCA, Catálogo e Orçamento; trabalha em Tarefas e no Calendário",
+};
 
 export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [lista, setLista] = useState<U[] | null>(null);
@@ -49,6 +58,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [edUnidade, setEdUnidade] = useState("");
   const [salvandoEd, setSalvandoEd] = useState(false);
   const [erroEd, setErroEd] = useState<string | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -68,33 +78,74 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     carregar();
   }, [carregar]);
 
-  async function acao(id: number, init: RequestInit) {
+  /** Executa a ação na linha (spinner na própria linha) e diz o desfecho num aviso flutuante — o erro não fica
+   * escondido no topo da tabela. */
+  async function acao(id: number, init: RequestInit, sucesso: string) {
     setBusyId(id);
-    setErro(null);
     try {
       const r = await fetch(`/api/admin/usuarios/${id}`, init);
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro na operação.");
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir — tente de novo.");
+      toast.success(sucesso);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro na operação.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível concluir — tente de novo.");
     } finally {
       setBusyId(null);
     }
   }
 
-  const patch = (id: number, dados: { role?: Role; status?: Status }) =>
-    acao(id, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dados),
-    });
+  const patch = (id: number, dados: { role?: Role; status?: Status }, sucesso: string) =>
+    acao(
+      id,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+      },
+      sucesso,
+    );
 
-  const excluir = (id: number) => {
-    if (confirm("Excluir este usuário? Esta ação não pode ser desfeita.")) {
-      acao(id, { method: "DELETE" });
-    }
-  };
+  /** Trocar o PAPEL confirma antes (é mudança de privilégio): dar ou tirar o Administrador em destaque. */
+  async function trocarPapel(u: U, novo: Role) {
+    if (novo === u.role) return;
+    const envolveAdmin = novo === "admin" || u.role === "admin";
+    const ok = await confirmar({
+      titulo:
+        novo === "admin"
+          ? `Tornar ${u.nome} Administrador?`
+          : u.role === "admin"
+            ? `Retirar o Administrador de ${u.nome}?`
+            : `Mudar o papel de ${u.nome} para ${ROLE_LABEL[novo]}?`,
+      texto:
+        u.role === "admin" && novo !== "admin"
+          ? `A pessoa perde a Administração e passa a ${ROLE_LABEL[novo]}: ${ROLE_DESCRICAO[novo]}.`
+          : `${ROLE_LABEL[novo]} ${ROLE_DESCRICAO[novo]}.`,
+      confirmar: novo === "admin" ? "Tornar Administrador" : `Mudar para ${ROLE_LABEL[novo]}`,
+      perigo: envolveAdmin,
+    });
+    if (ok) await patch(u.id, { role: novo }, `${u.nome} agora é ${ROLE_LABEL[novo]}.`);
+  }
+
+  async function desativar(u: U) {
+    const ok = await confirmar({
+      titulo: `Desativar ${u.nome}?`,
+      texto: "A pessoa perde o acesso na hora e não consegue mais entrar. O cadastro e o histórico ficam; dá para reativar depois.",
+      confirmar: "Desativar",
+      perigo: true,
+    });
+    if (ok) await patch(u.id, { status: "inativo" }, `${u.nome} foi desativado(a).`);
+  }
+
+  async function excluir(u: U) {
+    const ok = await confirmar({
+      titulo: `Excluir ${u.nome}?`,
+      texto: "A conta é apagada e a pessoa sai de todos os grupos. O histórico mantém o nome de quem fez cada alteração. Não dá para desfazer — para só tirar o acesso, prefira Desativar.",
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok) await acao(u.id, { method: "DELETE" }, `${u.nome} foi excluído(a).`);
+  }
 
   function abrirEdicao(u: U) {
     setEditando(u);
@@ -188,7 +239,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
         <select
           value={u.role}
           disabled={u.id === meuId || busyId === u.id}
-          onChange={(e) => patch(u.id, { role: e.target.value as Role })}
+          onChange={(e) => trocarPapel(u, e.target.value as Role)}
           className={selectCls}
           aria-label="Papel do usuário"
         >
@@ -221,22 +272,22 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
               Editar
             </Button>
             {u.status === "pendente" && (
-              <Button disabled={busy} onClick={() => patch(u.id, { status: "ativo" })} icon={<IconCheck className="h-3.5 w-3.5" />}>
+              <Button disabled={busy} onClick={() => patch(u.id, { status: "ativo" }, `Acesso de ${u.nome} liberado.`)} icon={<IconCheck className="h-3.5 w-3.5" />}>
                 Aprovar
               </Button>
             )}
             {u.status === "ativo" && !souEu && (
-              <Button variant="secondary" disabled={busy} onClick={() => patch(u.id, { status: "inativo" })}>
+              <Button variant="secondary" disabled={busy} onClick={() => desativar(u)}>
                 Desativar
               </Button>
             )}
             {u.status === "inativo" && (
-              <Button variant="secondary" disabled={busy} onClick={() => patch(u.id, { status: "ativo" })}>
+              <Button variant="secondary" disabled={busy} onClick={() => patch(u.id, { status: "ativo" }, `${u.nome} foi reativado(a).`)}>
                 Reativar
               </Button>
             )}
             {!souEu && (
-              <Button variant="danger" disabled={busy} onClick={() => excluir(u.id)}>
+              <Button variant="danger" disabled={busy} onClick={() => excluir(u)}>
                 Excluir
               </Button>
             )}
@@ -248,6 +299,17 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
+      <div className="flex items-center justify-end">
+        <Ajuda titulo="Usuários e papéis">
+          <p>O GRUPO (com a permissão dele) decide QUAIS telas a pessoa abre; o PAPEL decide o que ela faz nelas.</p>
+          {(["admin", "gestor", "membro"] as const).map((r) => (
+            <TopicoAjuda key={r} titulo={ROLE_LABEL[r]}>
+              {ROLE_DESCRICAO[r][0].toUpperCase() + ROLE_DESCRICAO[r].slice(1)}.
+            </TopicoAjuda>
+          ))}
+          <p>Aprovar libera a entrada; para a pessoa ver dados, ponha-a num grupo em Grupos.</p>
+        </Ajuda>
+      </div>
       {pendentes > 0 && (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
           {pendentes} cadastro(s) aguardando sua aprovação.
@@ -304,6 +366,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
           </div>
         </form>
       </Modal>
+      {confirmacao}
     </div>
   );
 }

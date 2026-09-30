@@ -107,7 +107,8 @@ export async function DELETE(
   if (id === guard.u.id) return erro("Você não pode excluir a si mesmo.");
   const db = getDb();
   const [alvo] = await db.select({ nome: usuarios.nome, email: usuarios.email }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
+  if (!alvo) return erro("Usuário não encontrado.", 404);
   await db.delete(usuarios).where(eq(usuarios.id, id));
-  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo: `Usuário ${alvo?.nome ?? id} excluído`, antes: alvo ?? null });
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo: `Usuário ${alvo.nome} excluído`, antes: alvo });
   return ok();
 }

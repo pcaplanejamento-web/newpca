@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
+import "./zod-config";
 
 // Helpers de resposta para as rotas de API — padronizam o envelope {ok,error}
 // e cortam o boilerplate repetido em src/app/api/**.

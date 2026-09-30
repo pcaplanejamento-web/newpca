@@ -4,6 +4,7 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { contarUnidadesDoOrgao } from "@/lib/orgaos";
 import { podeRemoverUnidadePropria, podeTornarUnidade, unidadePropriaDeOrgao } from "@/lib/orgao-unidade-ops";
 import { unidadePropriaSchema } from "@/lib/rbac-validation";
@@ -36,6 +37,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (corpo.data.ativar) {
     const perm = podeTornarUnidade({ temUnidadesFilhas: contagem.filhas > 0, jaEhDual: contagem.propriaId != null });
     if (!perm.ok) return erro(perm.motivo, 409);
+    // A sigla vira o CÓDIGO da unidade própria — "GERAL" é o da unidade virtual (todas as unidades).
+    if (ehCodigoGeral(o.sigla)) return erro("A sigla 'GERAL' é reservada à unidade virtual — altere a sigla do órgão antes.", 400);
     const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
     await db.insert(reparticoes).values({ ...unidadePropriaDeOrgao(o, id), ordem: Number(max) + 1 });
     await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${o.nome}" passou a funcionar também como unidade`, depois: { tambemUnidade: true } });

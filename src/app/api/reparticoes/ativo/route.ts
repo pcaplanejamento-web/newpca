@@ -1,6 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { definirReparticaoAtiva, getReparticaoContexto } from "@/lib/grupos";
-import { erro, ok } from "@/lib/http";
+import { erro, ok, parseCorpo } from "@/lib/http";
+import { reparticaoAtivaSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const guard = await exigirUsuario();
   if ("erro" in guard) return guard.erro;
-  const body = (await req.json().catch(() => null)) as { reparticaoId?: unknown } | null;
-  const reparticaoId = Number(body?.reparticaoId);
-  if (!Number.isInteger(reparticaoId) || reparticaoId <= 0) return erro("Unidade inválida.");
+  const corpo = await parseCorpo(reparticaoAtivaSchema, req);
+  if ("resp" in corpo) return corpo.resp;
+  const { reparticaoId } = corpo.data;
   const { lista } = await getReparticaoContexto(guard.u);
   if (!lista.some((r) => r.id === reparticaoId)) return erro("Unidade fora do seu grupo.", 403);
   await definirReparticaoAtiva(reparticaoId);

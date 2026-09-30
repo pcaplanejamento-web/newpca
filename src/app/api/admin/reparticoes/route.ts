@@ -3,6 +3,7 @@ import { reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
+import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
@@ -10,16 +11,14 @@ import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-respo
 
 export const dynamic = "force-dynamic";
 
-/** A "Geral" é VIRTUAL (representa todas as unidades) — não entra no CRUD de unidades. */
-const CODIGO_GERAL = "GERAL";
-
 export async function GET(req: Request) {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
   // Escopo opcional por órgão (?orgaoId=): a tela de unidades vive DENTRO de um órgão.
   const orgaoIdParam = new URL(req.url).searchParams.get("orgaoId");
   const orgaoId = orgaoIdParam && /^\d+$/.test(orgaoIdParam) ? Number(orgaoIdParam) : null;
-  const semGeral = ne(reparticoes.codigo, CODIGO_GERAL); // esconde a Geral virtual do cadastro
+  // A "Geral" é VIRTUAL (representa todas as unidades) — não entra no CRUD de unidades.
+  const semGeral = ne(reparticoes.codigo, CODIGO_GERAL);
   const rows = await getDb()
     .select({
       id: reparticoes.id,
@@ -46,8 +45,6 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(reparticaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  if (corpo.data.codigo.trim().toUpperCase() === CODIGO_GERAL)
-    return erro("O código 'GERAL' é reservado à unidade virtual.", 400);
   // Um órgão que já funciona como unidade (tem a "unidade própria") não recebe unidades-filhas.
   if (corpo.data.orgaoId != null && (await contarUnidadesDoOrgao(corpo.data.orgaoId)).propriaId != null)
     return erro("Este órgão funciona como unidade (unidade própria) — não pode ter unidades-filhas. Desligue “Também unidade” no órgão para adicionar unidades.", 409);
