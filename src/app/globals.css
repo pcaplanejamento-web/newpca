@@ -522,33 +522,3 @@
 .rolagem-fina::-webkit-scrollbar-track {
   background: transparent;
 }
-
-/* VITRINE das telas de acesso: a constelação flutua devagar e os pontos cintilam (desligado sem movimento). */
-@keyframes vitrine-flutuar {
-  50% {
-    transform: translate3d(0, -10px, 0);
-  }
-}
-@keyframes vitrine-cintilar {
-  50% {
-    opacity: 0.25;
-  }
-}
-.animate-vitrine-flutuar {
-  animation: vitrine-flutuar 14s ease-in-out infinite;
-}
-.animate-vitrine-cintilar {
-  animation: vitrine-cintilar 4.5s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .animate-vitrine-flutuar,
-  .animate-vitrine-cintilar {
-    animation: none;
-  }
-}
-[data-motion="off"] .animate-vitrine-flutuar,
-[data-motion="off"] .animate-vitrine-cintilar,
-[data-motion="reduced"] .animate-vitrine-flutuar,
-[data-motion="reduced"] .animate-vitrine-cintilar {
-  animation: none;
-}

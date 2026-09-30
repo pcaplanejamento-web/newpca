@@ -12,6 +12,7 @@ import {
 import {
   adminUsuarioSchema,
   cadastroSchema,
+  cargoSchema,
   perfilSchema,
   preferenciasPerfilSchema,
   redefinirSenhaSchema,
@@ -46,7 +47,11 @@ describe("auth-validation", () => {
     assert.equal(r.nome, "Ana Souza");
     assert.equal(r.matricula, "123");
     assert.equal(r.cargo, "Analista");
-    assert.equal(cadastroSchema.safeParse({ ...base, cargo: " " }).success, false);
+    // o cargo vem da lista do ADM (a rota confere); sem lista cadastrada ele é opcional
+    assert.equal(cadastroSchema.safeParse({ ...base, cargo: undefined }).success, true);
+    assert.equal(cargoSchema.safeParse({ nome: "  Analista " }).success, true);
+    assert.equal(cargoSchema.safeParse({ nome: "A" }).success, false);
+    assert.equal(cargoSchema.safeParse({ nome: "x".repeat(81) }).success, false);
     assert.equal(cadastroSchema.safeParse({ ...base, nome: "Ana" }).success, false); // sem sobrenome
     assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@gmail.com" }).success, false);
     assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@rioverde.go.gov.br.com" }).success, false);

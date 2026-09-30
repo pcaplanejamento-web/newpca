@@ -19,6 +19,7 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
   return (
     <ConfiguracoesAdmin
       identidade={aparencia.identidade}
+      acesso={aparencia.acesso}
       linhasTabela={linhasTabela(aparencia)}
       pcas={pcas}
       regras={regras}

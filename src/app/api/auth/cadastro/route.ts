@@ -3,6 +3,7 @@ import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { contarUsuarios, criarSessao, definirCookieSessao, hashSenha } from "@/lib/auth";
 import { cadastroSchema } from "@/lib/auth-validation";
+import { cargoCadastrado, listarCargos } from "@/lib/cargos";
 import { consumirCodigo } from "@/lib/codigo-email";
 import { MENSAGEM_CODIGO } from "@/lib/codigo-email-core";
 import { getDb } from "@/lib/db";
@@ -23,17 +24,22 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const corpo = await parseCorpo(cadastroSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, cargo, reparticaoId, senha, codigo } = corpo.data;
+  const { nome, email, matricula, reparticaoId, senha, codigo } = corpo.data;
   const db = getDb();
 
   try {
-    const primeiro = (await contarUsuarios()) === 0;
+    // Os dados ANTES do código (um erro aqui não gasta o código): a unidade e o cargo/função da lista do ADM — exigido
+    // quando há cargos cadastrados (sem nenhum ainda, o campo não aparece).
+    if (!(await unidadeDeTrabalhoValida(reparticaoId))) return erro("Selecione uma unidade válida.", 422);
+    const [lista, total] = await Promise.all([listarCargos(), contarUsuarios()]);
+    const cargo = corpo.data.cargo ? await cargoCadastrado(corpo.data.cargo) : null;
+    if (lista.length > 0 && !cargo) return erro("Selecione o seu cargo ou função.", 422);
+    const primeiro = total === 0;
     if (!primeiro) {
       if (!codigo) return erro("Informe o código enviado ao seu e-mail.", 422);
       const r = await consumirCodigo(email, "cadastro", codigo);
       if (r !== "ok") return erro(MENSAGEM_CODIGO[r], 422);
     }
-    if (!(await unidadeDeTrabalhoValida(reparticaoId))) return erro("Selecione uma unidade válida.", 422);
     const [existe] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, email)).limit(1);
     if (existe) return erro("Este e-mail já está cadastrado.", 409);
 

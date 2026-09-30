@@ -2,14 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useMemo, useState } from "react";
-import { DOMINIO_INSTITUCIONAL, emailInstitucional, nomeCompleto } from "@/lib/cadastro-core";
+import { DOMINIO_INSTITUCIONAL, emailDaParteLocal, emailInstitucional, nomeCompleto, parteLocalEmail } from "@/lib/cadastro-core";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
 import { OpcoesUnidades } from "./OpcoesUnidades";
 import { PasswordField, SelectField, TextField } from "./Field";
-import { IconArrowRight, IconBriefcase, IconIdCard, IconMail, IconUser } from "./icons";
+import { IconArrowRight, IconIdCard, IconMail, IconUser } from "./icons";
 
 /**
  * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
@@ -19,6 +19,7 @@ import { IconArrowRight, IconBriefcase, IconIdCard, IconMail, IconUser } from ".
 export function CadastroForm({
   onVoltar,
   unidades,
+  cargos,
   turnstile,
   semCodigo = false,
   erroInicial = null,
@@ -26,6 +27,8 @@ export function CadastroForm({
   /** Volta para "Entrar" (fim do cadastro). */
   onVoltar: () => void;
   unidades: UnidadeTrabalho[];
+  /** Os cargos e funções cadastrados pelo ADM (Usuários → Cargos e funções) — vazio = o campo não aparece. */
+  cargos: string[];
   turnstile?: ConfigCaptcha;
   semCodigo?: boolean;
   erroInicial?: string | null;
@@ -35,7 +38,9 @@ export function CadastroForm({
   const [matricula, setMatricula] = useState("");
   const [cargo, setCargo] = useState("");
   const [unidade, setUnidade] = useState("");
-  const [email, setEmail] = useState("");
+  // Só a parte antes do "@" — o domínio institucional é fixo no campo.
+  const [usuarioEmail, setUsuarioEmail] = useState("");
+  const email = emailDaParteLocal(usuarioEmail);
   const [senha, setSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -51,13 +56,13 @@ export function CadastroForm({
     const p: Record<string, string> = {};
     if (!nomeCompleto(nome)) p.nome = "Informe o nome completo (nome e sobrenome).";
     if (!matricula.trim()) p.matricula = "Informe a matrícula.";
-    if (cargo.trim().length < 2) p.cargo = "Informe o cargo ou a função.";
+    if (cargos.length > 0 && !cargo) p.cargo = "Selecione o seu cargo ou função.";
     if (!unidade) p.unidade = "Selecione a unidade em que você trabalha.";
-    if (!emailInstitucional(email)) p.email = `Use o seu e-mail institucional (@${DOMINIO_INSTITUCIONAL}).`;
+    if (!emailInstitucional(email)) p.email = "Informe o seu usuário do e-mail institucional (o que vem antes do @).";
     if (senha.length < 8) p.senha = "A senha deve ter ao menos 8 caracteres.";
     if (confirmar !== senha) p.confirmar = "A confirmação não coincide com a senha.";
     return p;
-  }, [nome, matricula, cargo, unidade, email, senha, confirmar]);
+  }, [nome, matricula, cargo, cargos.length, unidade, email, senha, confirmar]);
   const tocar = (campo: string) => () => setTocados((t) => (t.has(campo) ? t : new Set(t).add(campo)));
   const erroDe = (campo: string) => (tocados.has(campo) ? problemas[campo] : undefined);
 
@@ -149,14 +154,16 @@ export function CadastroForm({
       </CartaoAuth>
     );
 
+  // Tudo DENSO (caixas de 44px, sem dicas soltas): o cadastro cabe na tela do computador sem rolar.
   return (
     <CartaoAuth
       titulo="Criar conta"
       etapa={semCodigo ? undefined : "Etapa 1 de 2"}
       subtitulo="Use os seus dados funcionais. O acesso é liberado pelo administrador."
+      denso
       onSubmit={etapaDados}
     >
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 [@media(max-height:720px)]:gap-2">
         <div className="sm:col-span-2">
           <TextField
             label="Nome completo"
@@ -167,31 +174,44 @@ export function CadastroForm({
             error={erroDe("nome")}
             autoComplete="name"
             maxLength={120}
+            denso
             required
           />
         </div>
-        <TextField
-          label="Matrícula"
-          icon={<IconIdCard className="h-5 w-5" />}
-          value={matricula}
-          onChange={(e) => setMatricula(e.target.value)}
-          onBlur={tocar("matricula")}
-          error={erroDe("matricula")}
-          inputMode="numeric"
-          maxLength={60}
-          required
-        />
-        <TextField
-          label="Cargo ou função"
-          icon={<IconBriefcase className="h-5 w-5" />}
-          value={cargo}
-          onChange={(e) => setCargo(e.target.value)}
-          onBlur={tocar("cargo")}
-          error={erroDe("cargo")}
-          autoComplete="organization-title"
-          maxLength={80}
-          required
-        />
+        <div className={cargos.length ? "" : "sm:col-span-2"}>
+          <TextField
+            label="Matrícula"
+            icon={<IconIdCard className="h-5 w-5" />}
+            value={matricula}
+            onChange={(e) => setMatricula(e.target.value)}
+            onBlur={tocar("matricula")}
+            error={erroDe("matricula")}
+            inputMode="numeric"
+            maxLength={60}
+            denso
+            required
+          />
+        </div>
+        {cargos.length > 0 && (
+          <SelectField
+            label="Cargo ou função"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+            onBlur={tocar("cargo")}
+            error={erroDe("cargo")}
+            denso
+            required
+          >
+            <option value="" disabled>
+              Selecione…
+            </option>
+            {cargos.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </SelectField>
+        )}
         <div className="sm:col-span-2">
           <SelectField
             label="Unidade em que trabalha"
@@ -199,6 +219,7 @@ export function CadastroForm({
             onChange={(e) => setUnidade(e.target.value)}
             onBlur={tocar("unidade")}
             error={erroDe("unidade")}
+            denso
             required
           >
             <option value="" disabled>
@@ -211,16 +232,18 @@ export function CadastroForm({
           <TextField
             label="E-mail institucional"
             icon={<IconMail className="h-5 w-5" />}
-            type="email"
+            trailing={<span className="shrink-0 select-none text-[15px] text-muted">@{DOMINIO_INSTITUCIONAL}</span>}
             inputMode="email"
-            placeholder={`nome@${DOMINIO_INSTITUCIONAL}`}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="nome.sobrenome"
+            value={usuarioEmail}
+            onChange={(e) => setUsuarioEmail(parteLocalEmail(e.target.value))}
             onBlur={tocar("email")}
             error={erroDe("email")}
-            hint={semCodigo ? undefined : "Enviaremos um código de 6 dígitos para confirmar."}
-            autoComplete="email"
-            maxLength={160}
+            autoComplete="username"
+            maxLength={64}
+            denso
             required
           />
         </div>
@@ -229,9 +252,10 @@ export function CadastroForm({
           onChange={(e) => setSenha(e.target.value)}
           onBlur={tocar("senha")}
           error={erroDe("senha")}
-          hint="Mínimo de 8 caracteres."
+          placeholder="Mín. 8 caracteres"
           autoComplete="new-password"
           minLength={8}
+          denso
           required
         />
         <PasswordField
@@ -242,6 +266,7 @@ export function CadastroForm({
           error={erroDe("confirmar")}
           autoComplete="new-password"
           minLength={8}
+          denso
           required
         />
         {!semCodigo && captcha.widget && <div className="sm:col-span-2">{captcha.widget}</div>}
@@ -254,12 +279,11 @@ export function CadastroForm({
         variant="accent"
         loading={cod.enviando || criando}
         icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
-        className="mt-6 h-[52px] w-full text-[15px]"
+        className="mt-4 h-11 w-full text-[15px] [@media(max-height:720px)]:mt-3"
       >
         {semCodigo ? "Criar conta" : "Enviar código de confirmação"}
       </Button>
 
-      <p className="mt-4 text-center text-[12px] text-faint">Depois de aprovado, vincule a sua conta Google no Perfil para entrar com um clique.</p>
     </CartaoAuth>
   );
 }

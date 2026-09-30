@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DOMINIO_INSTITUCIONAL, emailInstitucional, nomeCompleto } from "../src/lib/cadastro-core.ts";
+import { DOMINIO_INSTITUCIONAL, emailDaParteLocal, emailInstitucional, nomeCompleto, parteLocalEmail } from "../src/lib/cadastro-core.ts";
 import {
   conferirCodigoRegistro,
   esperaReenvio,
@@ -20,6 +20,15 @@ describe("cadastro institucional", () => {
     assert.equal(emailInstitucional("ana@rioverde.go.gov.br.evil.com"), false);
     assert.equal(emailInstitucional("@rioverde.go.gov.br"), false);
     assert.equal(emailInstitucional("a b@rioverde.go.gov.br"), false);
+  });
+
+  it("campo do e-mail: só a parte antes do @ (colar o e-mail inteiro também vale)", () => {
+    assert.equal(parteLocalEmail(" Ana.Souza "), "ana.souza");
+    assert.equal(parteLocalEmail("ana.souza@rioverde.go.gov.br"), "ana.souza");
+    assert.equal(parteLocalEmail("ana souza@gmail.com"), "anasouza");
+    assert.equal(emailDaParteLocal("Ana.Souza"), "ana.souza@rioverde.go.gov.br");
+    assert.equal(emailDaParteLocal(""), "");
+    assert.equal(emailInstitucional(emailDaParteLocal("ana")), true);
   });
 
   it("nome completo: nome e sobrenome", () => {

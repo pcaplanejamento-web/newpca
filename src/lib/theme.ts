@@ -2,6 +2,8 @@
 // tokens de uma allowlist recebem valores estritamente hex; raio é número
 // clampado. Nada de string livre entra no CSS injetado. Módulo puro (testável).
 
+import type { TextosAcesso } from "./acesso-core.ts";
+
 /** Tokens de cor que o ADM pode editar (allowlist). Chave = nome do CSS var. */
 export const TOKENS_COR = [
   "bg", "surface", "surface-2", "text", "text-2", "muted", "faint",
@@ -45,6 +47,8 @@ export type Aparencia = {
   identidade?: { nome?: string; subtitulo?: string; favicon?: string };
   /** TABELAS (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna (a Mesa) abrem. */
   tabelas?: { linhas?: LinhasTabela };
+  /** TELA DE ACESSO (Configurações → Tela de acesso): os textos da vitrine e o aviso do login (`textosAcesso`). */
+  acesso?: Partial<TextosAcesso>;
 };
 
 /** Linhas por página das tabelas de rolagem interna (o seletor do rodapé) e o padrão de fábrica. */
@@ -69,8 +73,8 @@ export function semChavesVisuais<T extends Record<string, unknown>>(dados: T): P
   return resto as Partial<T>;
 }
 
-/** Chaves da APARÊNCIA no registro de configurações: as visuais + identidade + tabelas. */
-const CHAVES_APARENCIA: readonly string[] = [...CHAVES_VISUAIS, "identidade", "tabelas"];
+/** Chaves da APARÊNCIA no registro de configurações: as visuais + identidade + tabelas + os textos da tela de acesso. */
+const CHAVES_APARENCIA: readonly string[] = [...CHAVES_VISUAIS, "identidade", "tabelas", "acesso"];
 
 /** Só a APARÊNCIA de um registro de configurações — o que a rota da Aparência devolve: os blocos irmãos do MESMO
  * registro (avaliação, integrações — com o segredo cifrado) nunca saem por ela. */

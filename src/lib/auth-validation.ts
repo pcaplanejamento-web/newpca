@@ -27,7 +27,8 @@ export const cadastroSchema = z.object({
     .transform((n) => n.replace(/\s+/gu, " "))
     .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome)."),
   matricula: z.string().trim().min(1, "Informe a matrícula.").max(60),
-  cargo: z.string().trim().min(2, "Informe o cargo ou a função.").max(80),
+  // O cargo/função escolhido na lista do ADM (o servidor confere; exigido quando há cargos cadastrados).
+  cargo: z.string().trim().max(80).optional(),
   reparticaoId: z.number().int().positive("Selecione a unidade em que você trabalha."),
   email: emailInstitucionalSchema,
   senha: senhaNovaSchema,
@@ -84,6 +85,9 @@ export const adminUsuarioSchema = z.object({
   role: z.enum(["admin", "gestor", "membro"]).optional(),
   status: z.enum(["ativo", "pendente", "inativo"]).optional(),
 });
+
+/** Um CARGO/FUNÇÃO cadastrado pelo ADM (Usuários → Cargos e funções). */
+export const cargoSchema = z.object({ nome: z.string().trim().min(2, "Informe o nome do cargo ou função.").max(80) });
 
 export type CadastroInput = z.infer<typeof cadastroSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

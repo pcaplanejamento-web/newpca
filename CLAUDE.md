@@ -154,14 +154,41 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
     `entrar`|`cadastro`|`senha` — `lerModoAcesso`, puro em **`modo-acesso.ts`**; trocar de modo só faz `replaceState`, sem
-    recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário (`Segmented` Entrar | Criar
-    conta, transição `animate-fade-in-up`; `CadastroForm`/`RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o
-    modo); direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos tokens `--vitrine-*`, a constelação que flutua —
-    `animate-vitrine-flutuar/cintilar`, desligada sem movimento —, a manchete e os módulos; sem números inventados). A logo é a
+    recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário: o `Segmented` Entrar | Criar
+    conta FIXO no alto da coluna — no desktop na MESMA LINHA da logo da vitrine (`lg:pt-12 xl:pt-16` + caixa de 44px = o
+    `p-12 xl:p-16` e a logo `lg` dela; medido: centros iguais de 1024 a 1920px) — (mesma posição nos três modos — no "Esqueci a senha" nenhum fica marcado; não é centralizado
+    na vertical, então nunca pula), o formulário LOGO ABAIXO (transição `animate-fade-in-up`; `CadastroForm`/
+    `RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o modo) e o AVISO do ADM fechando a coluna na MESMA largura
+    (440px); no desktop só essa coluna rola (`lg:h-dvh`). Direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos
+    tokens `--vitrine-*`) com a **`ConstelacaoAnimada`** — um `<canvas>` no estilo "plexo" do Dattago: pontos em
+    profundidades diferentes (os de perto maiores, mais rápidos, com halo) que vagam ao acaso, SURGEM e SOMEM (ciclo de vida) e
+    se ligam aos `VIZINHOS`=3 mais próximos (alcance pela profundidade) — as ligações fecham TRIÂNGULOS, preenchidos com um véu
+    leve (triangulação viva); densidade pela área (40–120; ~60 fps em 1920×1080), DPR ≤ 2, só roda com tamanho (no celular a vitrine não aparece → 0×0, nada
+    roda) e fica num quadro parado sem movimento (sistema ou `data-motion` do ADM). Os TEXTOS (rótulo, manchete, descrição, até
+    3 destaques, rodapé e o aviso) são do ADM: **Configurações → Tela de acesso** (`TextosAcessoAdmin`, com a PRÉVIA ao vivo =
+    a própria `VitrineAcesso previa`), gravados no blob da aparência (`acesso`, sem migração — `aparenciaSchema.acesso`,
+    `soAparencia`), lidos por **`textosAcesso`** (núcleo puro **`acesso-core.ts`**: vazio = o padrão `TEXTOS_ACESSO_PADRAO`;
+    destaque sem título some). Sem números inventados. A logo é a
     **`MarcaSistema`** (o favicon da Identidade do ADM, senão o monograma "RV" + nome/subtítulo) — a MESMA do menu do
     `AppShell` (`Brand` a usa); no celular fica no topo do formulário, no desktop na vitrine.
+  - **Cadastro CABE NA TELA sem rolar (desktop, medido de 1280×650 a 1920×1080):** campos no modo **`denso`** do DS
+    (`TextField`/`SelectField`/`PasswordField denso` = caixa de 44px e rótulo próximo; 40px em telas com altura ≤ 720px),
+    `CartaoAuth denso` (etapa na linha do título; o subtítulo some em tela baixa), sem dicas soltas e respiros menores em
+    telas baixas (`[@media(max-height:820px)]` no topo da coluna E na vitrine — o seletor segue alinhado à logo).
+  - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
+    (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
+  - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já
+    informados):** Usuários → botão **"Cargos e funções"** → `Modal` com **`CargosAdmin`** (cadastrar/renomear no campo do
+    topo, ↑/↓ = a ordem da lista do cadastro — `AcoesCadastro` —, excluir com `useConfirmacao`; quantas pessoas usam cada um).
+    A pessoa guarda o NOME (`usuarios.cargo`): **renomear** renomeia o das pessoas no MESMO lote (`renomearCargo`);
+    **excluir** só tira da lista (as pessoas mantêm até o ADM trocar). D1 em **`cargos.ts`** (`listarCargos`,
+    `cargoCadastrado` — sem caixa, devolve o nome canônico); rotas `GET/POST /api/admin/cargos`, `PATCH/DELETE
+    /api/admin/cargos/[id]`, `PATCH /api/admin/cargos/ordem` (`exigirAdmin`, `cargoSchema`, auditoria `cargo`). O **cadastro**
+    escolhe o cargo numa **seleção** da lista (exigido quando há cargos; sem nenhum, o campo não aparece) — a rota confere a
+    unidade e o cargo ANTES de consumir o código; o ADM troca o de qualquer usuário no "Editar usuário" (`SelectField` da lista
+    + o atual "(fora da lista)"; o `PATCH` só aceita um cadastrado, manter o atual ou nenhum).
   - **Cadastro** (`CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),
-    **matrícula**, **cargo ou função** (`usuarios.cargo`, migração **`0068`**, aditiva), **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
+    **matrícula**, **cargo ou função** (`usuarios.cargo`, migração **`0068`**, aditiva — escolhido na lista acima), **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
     "Geral"; o servidor confere com `unidadeDeTrabalhoValida`), **e-mail INSTITUCIONAL** `@rioverde.go.gov.br`
     (`DOMINIO_INSTITUCIONAL`/`emailInstitucional`, núcleo puro **`cadastro-core.ts`** — sem zod, leve no navegador), senha +
     confirmação → "Enviar código" → o **código de 6 dígitos** confirma o e-mail e cria a conta **pendente** (os ADMs recebem o

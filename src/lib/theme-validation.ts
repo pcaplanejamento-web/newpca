@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LIMITES_ACESSO, MAX_DESTAQUES_ACESSO } from "./acesso-core.ts";
 import { LINHAS_TABELA, type LinhasTabela } from "./theme.ts";
 
 // Validação da aparência enviada pelo ADM (PATCH). Cores só aceitam hex; raio,
@@ -40,6 +41,19 @@ export const aparenciaSchema = z.object({
   // Tabelas (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna abrem.
   tabelas: z
     .object({ linhas: z.custom<LinhasTabela>((v) => LINHAS_TABELA.includes(v as LinhasTabela), "Quantidade de linhas inválida.") })
+    .optional(),
+  // Tela de acesso (Configurações → Tela de acesso): os textos da vitrine e o aviso; vazio = o padrão.
+  acesso: z
+    .object({
+      rotulo: z.string().trim().max(LIMITES_ACESSO.rotulo),
+      titulo: z.string().trim().max(LIMITES_ACESSO.titulo),
+      descricao: z.string().trim().max(LIMITES_ACESSO.descricao),
+      destaques: z
+        .array(z.object({ titulo: z.string().trim().max(LIMITES_ACESSO.destaqueTitulo), texto: z.string().trim().max(LIMITES_ACESSO.destaqueTexto) }))
+        .max(MAX_DESTAQUES_ACESSO),
+      rodape: z.string().trim().max(LIMITES_ACESSO.rodape),
+      aviso: z.string().trim().max(LIMITES_ACESSO.aviso),
+    })
     .optional(),
 });
 

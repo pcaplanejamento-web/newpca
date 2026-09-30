@@ -12,8 +12,11 @@ export function CartaoAuth({
   subtitulo,
   etapa,
   onSubmit,
+  denso = false,
   children,
 }: {
+  /** DENSO: cabeçalho mais baixo (formulários longos que têm de caber na tela — o cadastro). */
+  denso?: boolean;
   titulo: string;
   subtitulo?: ReactNode;
   etapa?: string;
@@ -22,10 +25,17 @@ export function CartaoAuth({
 }) {
   const conteudo = (
     <>
-      <div className="mb-6">
-        {etapa && <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{etapa}</p>}
-        <h1 className="text-[26px] font-bold leading-tight tracking-tight text-text sm:text-[28px]">{titulo}</h1>
-        {subtitulo && <p className="mt-2 text-[14px] leading-relaxed text-muted">{subtitulo}</p>}
+      <div className={denso ? "mb-3" : "mb-6"}>
+        {etapa && !denso && <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{etapa}</p>}
+        {/* DENSO: a etapa vai na MESMA linha do título, à direita. */}
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className={`font-bold leading-tight tracking-tight text-text ${denso ? "text-[24px]" : "text-[26px] sm:text-[28px]"}`}>{titulo}</h1>
+          {etapa && denso && <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{etapa}</span>}
+        </div>
+        {/* DENSO em tela baixa: sem o subtítulo (o formulário cabe sem rolar). */}
+        {subtitulo && (
+          <p className={`${denso ? "mt-1 text-[13px] leading-snug [@media(max-height:720px)]:hidden" : "mt-2 text-[14px] leading-relaxed"} text-muted`}>{subtitulo}</p>
+        )}
       </div>
       {children}
     </>

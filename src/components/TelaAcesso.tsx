@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
+import type { TextosAcesso } from "@/lib/acesso-core";
 import type { ModoAcesso } from "@/lib/modo-acesso";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { AuthForm } from "./AuthForm";
@@ -18,25 +19,32 @@ const RecuperarSenhaForm = dynamic(() => import("./RecuperarSenhaForm").then((m)
 
 /**
  * A TELA ÚNICA de acesso (`/login?modo=`): ENTRAR · CRIAR CONTA · REDEFINIR A SENHA no MESMO lugar — o formulário à
- * esquerda (a marca do ADM no topo, "Entrar | Criar conta" e o modo com a transição padrão) e a VITRINE imersiva à direita
- * (desktop). Trocar de modo não recarrega a página: só atualiza o endereço (voltar/compartilhar o link abre o mesmo modo).
+ * esquerda e a VITRINE imersiva à direita (desktop). "Entrar | Criar conta" fica FIXO no alto da coluna — no desktop na
+ * MESMA LINHA da logo da vitrine (mesmo respiro do topo, `lg:pt-12 xl:pt-16` = o `p-12 xl:p-16` dela) — (nunca pula
+ * quando o formulário muda de altura; no "Esqueci a senha" nenhum dos dois fica marcado) e o formulário vem logo abaixo;
+ * o aviso do ADM fecha a coluna, na MESMA largura. No desktop só a coluna do formulário rola (a vitrine fica parada). Trocar de modo não recarrega a página: só atualiza o endereço (voltar/compartilhar o link abre o mesmo modo).
  */
 export function TelaAcesso({
   modoInicial,
   identidade,
+  textos,
   turnstile,
   google,
   googleConta,
   unidades,
+  cargos,
   semCodigo,
   erroInicial,
 }: {
   modoInicial: ModoAcesso;
   identidade?: Identidade;
+  /** Os textos da vitrine e o aviso (Configurações → Tela de acesso). */
+  textos: TextosAcesso;
   turnstile?: ConfigCaptcha;
   google: boolean;
   googleConta: string | null;
   unidades: UnidadeTrabalho[];
+  cargos: string[];
   semCodigo: boolean;
   erroInicial: string | null;
 }) {
@@ -61,38 +69,39 @@ export function TelaAcesso({
   const erro = erroDoModo?.modo === modo ? erroDoModo.texto : null;
 
   return (
-    <main className="grid min-h-dvh bg-surface lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-      <section className="flex min-h-dvh flex-col px-5 py-6 sm:px-10 lg:px-14 lg:py-10">
+    <main className="grid min-h-dvh bg-surface lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:overflow-hidden">
+      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16 lg:[@media(max-height:820px)]:pt-8">
         {/* No desktop a marca fica na vitrine. */}
         <div className="lg:hidden">
           <MarcaSistema identidade={identidade} />
         </div>
-        <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center py-10">
-          {modo === "senha" ? null : (
+        <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col pt-10 lg:pt-0">
+          {/* No desktop, na MESMA linha da logo da vitrine (o mesmo respiro do topo e a altura da logo). */}
+          <div className="lg:flex lg:h-11 lg:items-center">
             <Segmented<ModoAcesso>
               value={modo}
               onChange={irPara}
               ariaLabel="Entrar ou criar conta"
-              className="mb-8 w-full [&>button]:flex-1"
+              className="w-full shrink-0 [&>button]:flex-1"
               options={[
                 { value: "entrar", label: "Entrar" },
                 { value: "cadastro", label: "Criar conta" },
               ]}
             />
-          )}
-          {modo === "entrar" ? (
-            <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
-          ) : modo === "cadastro" ? (
-            <CadastroForm key="cadastro" onVoltar={() => irPara("entrar")} unidades={unidades} turnstile={turnstile} semCodigo={semCodigo} erroInicial={erro} />
-          ) : (
-            <RecuperarSenhaForm key="senha" onVoltar={() => irPara("entrar")} turnstile={turnstile} />
-          )}
+          </div>
+          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)]">
+            {modo === "entrar" ? (
+              <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
+            ) : modo === "cadastro" ? (
+              <CadastroForm key="cadastro" onVoltar={() => irPara("entrar")} unidades={unidades} cargos={cargos} turnstile={turnstile} semCodigo={semCodigo} erroInicial={erro} />
+            ) : (
+              <RecuperarSenhaForm key="senha" onVoltar={() => irPara("entrar")} turnstile={turnstile} />
+            )}
+          </div>
+          <p className="mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4">{textos.aviso}</p>
         </div>
-        <p className="text-center text-[12px] text-faint lg:text-left">
-          Acesso restrito aos servidores da Prefeitura de Rio Verde. Todo cadastro passa pela aprovação do administrador.
-        </p>
       </section>
-      <VitrineAcesso identidade={identidade} />
+      <VitrineAcesso identidade={identidade} textos={textos} />
     </main>
   );
 }

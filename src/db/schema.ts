@@ -138,6 +138,16 @@ export const usuarios = sqliteTable(
   ],
 );
 
+/** CARGOS E FUNÇÕES cadastrados pelo ADM (migração `0070`) — o cadastro escolhe um; a pessoa guarda o NOME (`usuarios.cargo`).
+ * Nome único sem caixa (índice `lower(nome)` na migração). */
+export const cargos = sqliteTable("cargos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  ordem: integer("ordem").notNull().default(0),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 /** CÓDIGOS de confirmação por e-mail (migração `0067`): só o HASH; UM por e-mail + finalidade (reenviar substitui). */
 export const codigosEmail = sqliteTable(
   "codigos_email",

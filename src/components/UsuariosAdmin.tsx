@@ -11,8 +11,10 @@ import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { inputCls, labelCls, selectCls } from "./formStyles";
-import { IconAlert, IconBadgeCheck, IconCheck, IconPencil, IconSave, IconSpinner } from "./icons";
+import { SelectField } from "./Field";
+import { IconAlert, IconBadgeCheck, IconBriefcase, IconCheck, IconPencil, IconSave, IconSpinner } from "./icons";
 import { Modal } from "./Modal";
+import { CargosAdmin } from "./CargosAdmin";
 import { OpcoesUnidades } from "./OpcoesUnidades";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
@@ -48,6 +50,8 @@ const ROLE_DESCRICAO: Record<Role, string> = {
 export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [lista, setLista] = useState<U[] | null>(null);
   const [unidades, setUnidades] = useState<UnidadeTrabalho[]>([]);
+  const [cargos, setCargos] = useState<string[]>([]);
+  const [verCargos, setVerCargos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [editando, setEditando] = useState<U | null>(null);
@@ -64,10 +68,11 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     setErro(null);
     try {
       const r = await fetch("/api/admin/usuarios");
-      const j = (await r.json()) as { ok?: boolean; error?: string; usuarios?: U[]; unidades?: UnidadeTrabalho[] };
+      const j = (await r.json()) as { ok?: boolean; error?: string; usuarios?: U[]; unidades?: UnidadeTrabalho[]; cargos?: { nome: string }[] };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar usuários.");
       setLista(j.usuarios ?? []);
       setUnidades(j.unidades ?? []);
+      setCargos((j.cargos ?? []).map((c) => c.nome));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
       setLista([]);
@@ -299,7 +304,10 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={() => setVerCargos(true)} icon={<IconBriefcase className="h-4 w-4" />}>
+          Cargos e funções
+        </Button>
         <Ajuda titulo="Usuários e papéis">
           <p>O GRUPO (com a permissão dele) decide QUAIS telas a pessoa abre; o PAPEL decide o que ela faz nelas.</p>
           {(["admin", "gestor", "membro"] as const).map((r) => (
@@ -308,6 +316,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             </TopicoAjuda>
           ))}
           <p>Aprovar libera a entrada; para a pessoa ver dados, ponha-a num grupo em Grupos.</p>
+          <p>Em “Cargos e funções” você cadastra a lista que a pessoa escolhe no cadastro; em “Editar” você troca o de qualquer usuário.</p>
         </Ajuda>
       </div>
       {pendentes > 0 && (
@@ -335,21 +344,24 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
               <label className={labelCls}>Matrícula</label>
               <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
             </div>
-            <div>
-              <label className={labelCls} htmlFor="ed-cargo">Cargo ou função</label>
-              <input id="ed-cargo" className={inputCls} value={edCargo} onChange={(e) => setEdCargo(e.target.value)} maxLength={80} placeholder="Opcional" />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ed-unidade">Unidade em que trabalha</label>
-              <select id="ed-unidade" className={selectCls} value={edUnidade} onChange={(e) => setEdUnidade(e.target.value)}>
-                <option value="">Nenhuma</option>
-                {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
-                {editando?.reparticaoId != null && !unidades.some((x) => x.id === editando.reparticaoId) && (
-                  <option value={editando.reparticaoId}>{editando.unidade ?? `Unidade ${editando.reparticaoId}`}</option>
-                )}
-                <OpcoesUnidades unidades={unidades} />
-              </select>
-            </div>
+            <SelectField id="ed-cargo" label="Cargo ou função" value={edCargo} onChange={(e) => setEdCargo(e.target.value)} denso>
+              <option value="">Nenhum</option>
+                {/* O cargo atual continua na lista mesmo que tenha saído do cadastro. */}
+              {editando?.cargo && !cargos.includes(editando.cargo) && <option value={editando.cargo}>{editando.cargo} (fora da lista)</option>}
+              {cargos.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField id="ed-unidade" label="Unidade em que trabalha" value={edUnidade} onChange={(e) => setEdUnidade(e.target.value)} denso>
+              <option value="">Nenhuma</option>
+              {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
+              {editando?.reparticaoId != null && !unidades.some((x) => x.id === editando.reparticaoId) && (
+                <option value={editando.reparticaoId}>{editando.unidade ?? `Unidade ${editando.reparticaoId}`}</option>
+              )}
+              <OpcoesUnidades unidades={unidades} />
+            </SelectField>
           </div>
           {erroEd && (
             <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />} className="mt-3">
@@ -365,6 +377,10 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             </Button>
           </div>
         </form>
+      </Modal>
+      {/* Cargos e funções: a lista que o cadastro oferece (só o ADM) */}
+      <Modal open={verCargos} onClose={() => setVerCargos(false)} titulo="Cargos e funções" size="md">
+        <CargosAdmin onMudou={carregar} />
       </Modal>
       {confirmacao}
     </div>

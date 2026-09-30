@@ -20,7 +20,9 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **RBAC:** `role` (`admin`|`gestor`|`membro`) + `status` (`ativo`|`pendente`|`inativo`) em `usuarios`.
 
 ## Fluxo de acesso
-- **Cadastro institucional (2 etapas):** nome completo, matrícula, cargo ou função, unidade em que trabalha, e-mail **@rioverde.go.gov.br** e
+- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula, cargo ou função (seleção da lista
+  que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
+  já vem preenchido), e-mail **@rioverde.go.gov.br** e
   senha → captcha (se ativo) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
   conta criada **membro/pendente** com o e-mail confirmado.
 - **1º cadastro** → vira **admin/ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).
@@ -38,7 +40,8 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - `src/app/api/auth/{cadastro,codigo,senha,login,logout,me}` — autenticação (código por e-mail em `codigo`).
 - `src/lib/cadastro-core.ts`, `codigo-email-core.ts` (puros, testados) e `codigo-email.ts` (D1) — regras do cadastro e do código.
 - `src/app/api/admin/usuarios` (+ `/[id]`) — listagem e gestão (admin).
-- `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` + `MarcaSistema.tsx`, `AuthForm.tsx` (entrar), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
+- `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` (+ `ConstelacaoAnimada.tsx`) + `MarcaSistema.tsx`;
+  textos da vitrine e o aviso em Configurações → Tela de acesso (`TextosAcessoAdmin`, `src/lib/acesso-core.ts`); `AuthForm.tsx` (entrar), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
   `UsuariosAdmin.tsx`, `AppShell.tsx` (menu + Sair).
 
 ## Pendente (próximas fases)

@@ -35,6 +35,7 @@ export type EntidadeAuditoria =
   | "orcamento"
   | "orcamento_visao"
   | "situacao_protocolo"
+  | "cargo"
   | "unidade_medida"
   | "classificacao_item"
   | "tarefa"
@@ -84,6 +85,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   orcamento: "Orçamento",
   orcamento_visao: "Visão do orçamento",
   situacao_protocolo: "Situação de protocolo",
+  cargo: "Cargo/função",
   unidade_medida: "Unidade de medida",
   classificacao_item: "Classificação de item",
   tarefa: "Tarefa",
