@@ -45,8 +45,11 @@ Se ainda não os definiu (para o Armazenamento):
 npx wrangler secret put CF_ANALYTICS_TOKEN
 npx wrangler secret put CF_ACCOUNT_ID   # (ou como var, se preferir)
 ```
-Depois, em `/painel/integracoes` → card **Monitoramento**: marque **Ativar** e **Salvar**. As métricas
-carregam no próprio card (com **Testar conexão** e **Recarregar**).
+Depois, em `/painel/integracoes` → card **Monitoramento**: marque **Ativar**, **Salvar** e **Testar conexão**. As
+métricas aparecem na tela **Armazenamento** (`/painel/armazenamento`): requisições de hoje × o teto de 100 mil/dia do
+plano gratuito, os 7 dias, erros, CPU (p50/p99 do período) e o gráfico por dia — só do Worker `newpca`. O botão
+**Recarregar** do Armazenamento ignora o cache de 60 s. Erros comuns: "não tem acesso" = o token precisa de
+**Account Analytics: Read** da conta; "conta não encontrada" = confira o `CF_ACCOUNT_ID`.
 
 ## Fotos de fundo dos quadros (Unsplash)
 A **Pesquisa de fotos** do fundo dos quadros de Tarefas (Novo quadro e Configuração → Fundo do quadro) busca no

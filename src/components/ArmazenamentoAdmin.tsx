@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
-import type { UsoOficial } from "@/lib/cf-analytics";
+import type { MonitoramentoArmazenamento, UsoOficial } from "@/lib/cf-analytics";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -10,6 +10,7 @@ import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { IconDatabase, IconImage, IconLayers, IconRefresh, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
@@ -19,7 +20,7 @@ const CAP_LEITURA = 5_000_000; // linhas lidas/dia
 const CAP_ESCRITA = 100_000; // linhas escritas/dia
 const corUso = (razao: number) => (razao >= 0.9 ? "var(--danger)" : razao >= 0.7 ? "var(--warn)" : "var(--ok)");
 
-type Dados = Armazenamento & { oficial: UsoOficial };
+type Dados = Armazenamento & { oficial: UsoOficial; monitoramento: MonitoramentoArmazenamento };
 
 // Tela de armazenamento do ADM: raio-x do banco (D1). Busca o snapshot no mount
 // (introspecção só roda ao abrir a tela); só componentes do design-system.
@@ -29,10 +30,10 @@ export function ArmazenamentoAdmin() {
   const [recarregando, setRecarregando] = useState(false);
   const [expurgando, setExpurgando] = useState(false);
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (fresco = false) => {
     setErro(null);
     try {
-      const r = await fetch("/api/admin/armazenamento");
+      const r = await fetch(`/api/admin/armazenamento${fresco ? "?fresco=1" : ""}`);
       const j = (await r.json()) as { ok?: boolean; error?: string } & Partial<Dados>;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setDados({
@@ -45,6 +46,7 @@ export function ArmazenamentoAdmin() {
         sessoes: j.sessoes ?? { total: 0, expiradas: 0 },
         fotos: j.fotos ?? { qtd: 0, limiar: 0, maiores: [] },
         oficial: j.oficial ?? { disponivel: false, motivo: "Uso oficial não carregado." },
+        monitoramento: j.monitoramento ?? null,
       });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
@@ -57,7 +59,7 @@ export function ArmazenamentoAdmin() {
 
   async function recarregar() {
     setRecarregando(true);
-    await carregar();
+    await carregar(true);
     setRecarregando(false);
   }
 
@@ -94,7 +96,7 @@ export function ArmazenamentoAdmin() {
           Armazenamento
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Uso do banco de dados (D1): tamanho por tabela, colunas pesadas e manutenção.
+          Uso do banco de dados (D1) e do Worker: tamanho por tabela, consumo diário, monitoramento e manutenção.
         </p>
       </div>
       <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
@@ -233,6 +235,14 @@ export function ArmazenamentoAdmin() {
             Uso oficial (leituras/escritas por dia) indisponível — {dados.oficial.motivo}
           </Callout>
         )}
+      </section>
+
+      {/* Monitoramento do Worker (Cloudflare) — ligado em Integrações */}
+      <section className="space-y-2">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">
+          Monitoramento do Worker — Cloudflare
+        </h2>
+        <MonitoramentoWorker monitoramento={dados.monitoramento} hojeUtc={new Date().toISOString().slice(0, 10)} />
       </section>
 
       {/* Tabelas */}

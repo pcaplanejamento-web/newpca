@@ -633,6 +633,11 @@ esquerda com rótulo abre um campo, linha esquerda sem rótulo é continuação 
 capturando o valor INTEIRO. Validado no `Protocolo 4.pdf` real (Interessado `…E GESTÃO DE CUSTOS`, Observação
 `…2027.` completos). Teste de regressão (capa com Interessado quebrado) em `tests/parse-protocolo-pdf.test.ts`.
 
+### Monitoramento do Worker no Armazenamento — entregue
+✅ Corrigida a consulta das métricas (escalar `string!` do GraphQL da Cloudflare; só o Worker `newpca`; CPU do período) e
+as métricas passaram para a tela **Armazenamento** (`MonitoramentoWorker`: requisições de hoje × teto do plano, 7 dias,
+erros, CPU, gráfico com a origem). Integrações só liga/desliga e testa.
+
 ### Integrações externas (tela do ADM) — Cloudflare captcha + monitoramento — entregue
 ✅ Nova tela **Integrações** (`/painel/integracoes`, admin; nav + atalho em Configurações → Mais) para conectar APIs externas. **Captcha Turnstile** (Cloudflare): liga/desliga pelo ADM, protege login e cadastro (widget só carrega quando ativo+configurado; servidor confere com **fail-open** para nunca travar o login por falha de infra). **Monitoramento** (Cloudflare): painel de métricas do Worker (requisições/erros/CPU, `recharts`) reusando os secrets `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` já existentes (mesmos do Armazenamento). **Segredos write-only cifrados** (AES-GCM, `cripto.ts`) com chave mestra `INTEGRACOES_CHAVE` (Worker Secret); nunca reexibidos. Config no blob `configuracoes` (chave `integracoes`, **sem migração**). **Google login** e **e-mail (Resend)** ficam como **"em breve"** (sem código morto). Tudo começa desligado (login inalterado). Setup em `docs/INTEGRACOES.md`.
 

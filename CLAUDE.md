@@ -62,7 +62,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Schema em `src/db/schema.ts`. Teste da cadeia de migrações: `tests/migrations.test.ts`
   (aplica `drizzle/*.sql` em `node:sqlite`).
 - **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
-  Mais) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
+  Mais) — com o **monitoramento do Worker** (`MonitoramentoWorker`, quando ligado em Integrações — ver Integrações) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
   (`getCloudflareContext().env.DB` → `.meta.size_after` — o Drizzle não expõe `.meta`), enumeração por
   `sqlite_master` (inclui as tabelas **legadas órfãs** — as de `0005`, `tarefa_anexos` (`0045`) e `protocolos`/`protocolo_opcoes` do antigo módulo
   Protocolos, sinalizadas "legado" — e as de sistema) e, por tabela, `COUNT(*)` +
@@ -3068,7 +3068,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`turnstile.ts`, **fail-open** em erro de infra — não trava login) nas rotas `/api/auth/login|cadastro` (token
   opcional no schema, exigido só quando ativo). **Monitoramento:** **reusa** os Worker Secrets já existentes
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
-  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. O **login com Google**
+  query/parse puros em `cloudflare-core.ts` (`queryMetricas` = SÓ o Worker `NOME_WORKER`="newpca" — `scriptName` —, o
+  escalar MINÚSCULO `string!` [o GraphQL da Cloudflare recusa `String!` — era a falha do painel] e o alias `periodo` sem
+  dimensão = CPU p50/p99 EXATOS do período; `motivoErroCloudflare` = o erro em pt-BR com o que fazer); cache 60 s só do
+  sucesso. As métricas são EXIBIDAS no **Armazenamento** (`MonitoramentoWorker`: requisições de hoje × o teto de 100 mil/dia
+  do plano gratuito, 7 dias, erros, CPU e o gráfico `MetricasChart` com a origem) — o `GET /api/admin/armazenamento` as
+  traz quando o monitoramento está ligado (`?fresco=1` no "Recarregar"); o cartão em Integrações só liga/desliga, testa e
+  leva ao Armazenamento (a rota `/api/admin/integracoes/metricas` saiu). O **login com Google**
   e o Resend (e-mail) têm cartões próprios (abaixo). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
 - **TRELLO — sincronização nos DOIS sentidos pela CONTA INSTITUCIONAL (migração `0062`; plano em 5 fases: base ·
   vincular · saída · entrada · robustez).** **FASE 1 (entregue) — base:** tabelas `trello_quadros` (o quadro ligado ao

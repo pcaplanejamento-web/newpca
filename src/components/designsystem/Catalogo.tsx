@@ -30,7 +30,6 @@ import { mensagemTravaPca } from "@/lib/pca-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
-import { MetricasChart } from "@/components/charts/MetricasChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
@@ -202,6 +201,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { duracaoMotionMs, Modal } from "@/components/Modal";
+import { MonitoramentoWorker } from "@/components/MonitoramentoWorker";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -3099,8 +3099,8 @@ export function Catalogo() {
 
       <Secao titulo="Integrações do ADM (Cloudflare)">
         <p className="mb-3 text-sm text-muted">
-          A aba <code>/painel/integracoes</code> conecta serviços externos. Status por card (Badge) e o gráfico de
-          monitoramento (MetricasChart). Segredos são write-only (cifrados no servidor).
+          A aba <code>/painel/integracoes</code> conecta serviços externos. Status por card (Badge); o monitoramento
+          aparece no Armazenamento (MonitoramentoWorker). Segredos são write-only (cifrados no servidor).
         </p>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Badge tone="emerald" dot>
@@ -3117,17 +3117,34 @@ export function Catalogo() {
           </Badge>
           <Badge tone="slate">Em breve</Badge>
         </div>
-        <ChartCard title="Requisições por dia" subtitle="Monitoramento do Worker (exemplo)">
-          <MetricasChart
-            data={[
-              { data: "2026-09-11", requests: 1200, errors: 3 },
-              { data: "2026-09-12", requests: 1580, errors: 0 },
-              { data: "2026-09-13", requests: 990, errors: 12 },
-              { data: "2026-09-14", requests: 1740, errors: 1 },
-              { data: "2026-09-15", requests: 2010, errors: 4 },
-            ]}
-          />
-        </ChartCard>
+        <p className="mb-2 text-[12px] text-muted">
+          MonitoramentoWorker — o monitoramento do Worker exibido na tela de Armazenamento (hoje × teto do plano, 7 dias,
+          erros, CPU e o gráfico por dia com a origem); desligado = aviso com o link para Integrações.
+        </p>
+        <MonitoramentoWorker
+          hojeUtc="2026-09-15"
+          monitoramento={{
+            disponivel: true,
+            metricas: {
+              dias: [
+                { data: "2026-09-11", requests: 1200, errors: 3, subrequests: 400 },
+                { data: "2026-09-12", requests: 1580, errors: 0, subrequests: 520 },
+                { data: "2026-09-13", requests: 990, errors: 12, subrequests: 310 },
+                { data: "2026-09-14", requests: 1740, errors: 1, subrequests: 600 },
+                { data: "2026-09-15", requests: 2010, errors: 4, subrequests: 700 },
+              ],
+              totalRequests: 7520,
+              totalErrors: 20,
+              totalSubrequests: 2530,
+              erroPct: 0.3,
+              cpuP50: 1800,
+              cpuP99: 9400,
+            },
+          }}
+        />
+        <div className="mt-3">
+          <MonitoramentoWorker hojeUtc="2026-09-15" monitoramento={null} />
+        </div>
       </Secao>
 
       <Secao titulo="Referência do sistema (aba read-only)">
