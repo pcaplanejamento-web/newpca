@@ -111,8 +111,60 @@ function coerceFiltro(v: unknown): FiltroValor | null {
 }
 
 /** Qualquer JSON → layout de `DataTable` VÁLIDO e canônico (o salvo nunca quebra a tabela; chaves de colunas que não
- * existem mais são ignoradas por quem usa). */
-export function coerceLayoutTabela(v: unknown): LayoutTabela {
+ * existem mais são ignoradas por quem usa). `sem` = as colunas que o PAPEL não vê (detalhes do papel): saem das larguras,
+ * das congeladas, das ocultas, da ordem, dos FILTROS e da ORDENAÇÃO — quem não vê a coluna nunca filtra nem ordena por
+ * ela (nem pela edição pública de outra pessoa). */
+export function coerceLayoutTabela(v: unknown, sem?: ReadonlySet<string>): LayoutTabela {
+  const l = coerceLayoutTabelaCompleto(v);
+  return sem?.size ? semColunas(l, sem) : l;
+}
+
+/** O layout sem as colunas `sem`. */
+function semColunas(l: LayoutTabela, sem: ReadonlySet<string>): LayoutTabela {
+  const fora = (k: string) => !sem.has(k);
+  return {
+    ...l,
+    larguras: Object.fromEntries(Object.entries(l.larguras).filter(([k]) => fora(k))),
+    fixadas: l.fixadas.filter(fora),
+    ocultas: l.ocultas.filter(fora),
+    ordemManual: l.ordemManual.filter(fora),
+    ordem: l.ordem && sem.has(l.ordem.key) ? null : l.ordem,
+    filtros: Object.fromEntries(Object.entries(l.filtros).filter(([k]) => fora(k))),
+  };
+}
+
+/** Recoloca, na lista `nova`, as chaves ocultas (`sem`) da `gravada` na MESMA posição que tinham. */
+function mesclarLista(gravada: string[], nova: string[], sem: ReadonlySet<string>): string[] {
+  const out = nova.filter((k) => !sem.has(k));
+  gravada.forEach((k, i) => {
+    if (sem.has(k) && !out.includes(k)) out.splice(Math.min(i, out.length), 0, k);
+  });
+  return out;
+}
+
+/**
+ * GRAVAR POR CIMA de uma edição (atualizar a própria, moderar a pública de outra pessoa) quando o papel não vê algumas
+ * colunas (`sem`): o que é dessas colunas fica COMO ESTAVA no gravado — quem não vê a coluna não apaga o ajuste dela (a
+ * largura, o lugar, o filtro e a ordenação que as outras pessoas usam). O resto vem do `novo`.
+ */
+export function mesclarLayoutOculto(gravado: unknown, novo: unknown, sem: ReadonlySet<string>): LayoutTabela {
+  const g = coerceLayoutTabelaCompleto(gravado);
+  const n = coerceLayoutTabela(novo, sem);
+  if (!sem.size) return n;
+  const soOcultas = <T>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).filter(([k]) => sem.has(k)));
+  return coerceLayoutTabelaCompleto({
+    ...n,
+    larguras: { ...n.larguras, ...soOcultas(g.larguras) },
+    fixadas: mesclarLista(g.fixadas, n.fixadas, sem),
+    ocultas: [...n.ocultas, ...g.ocultas.filter((k) => sem.has(k))],
+    ordemManual: mesclarLista(g.ordemManual, n.ordemManual, sem),
+    // A ordenação por uma coluna oculta segue a do gravado enquanto a pessoa não escolher outra.
+    ordem: n.ordem ?? (g.ordem && sem.has(g.ordem.key) ? g.ordem : null),
+    filtros: { ...n.filtros, ...soOcultas(g.filtros) },
+  });
+}
+
+function coerceLayoutTabelaCompleto(v: unknown): LayoutTabela {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const s = o.ordem as { key?: unknown; dir?: unknown } | null | undefined;
   const filtros: Record<string, FiltroValor> = {};

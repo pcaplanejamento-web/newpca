@@ -1,4 +1,5 @@
 import type { Tela } from "./papeis-core.ts";
+import { type OperacaoEdicao, TABELAS_MESA, type TabelaMesa, type TelaEdicoes } from "./papeis-detalhes-core.ts";
 
 /**
  * EDIÇÕES SALVAS de tabela — núcleo PURO (testável). Cada edição tem nome, dono e visibilidade (só do dono ou PÚBLICA);
@@ -64,4 +65,33 @@ export function acaoParaGravar(e: { dono: boolean; publicoAntes: boolean; public
   if (!e.dono) return "configurar";
   if (e.excluir || (e.publicoAntes && !e.publicoDepois)) return null;
   return e.publicoDepois ? "configurar" : "visualizar";
+}
+
+/**
+ * A OPERAÇÃO que gravar uma edição exige (os DETALHES do papel dividem o acesso às edições): a sua, só para ela =
+ * PERSONALIZAR; o que fica PÚBLICO depois = PUBLICAR; a de OUTRA pessoa = MODERAR. `null` = nada a conferir: o dono sempre
+ * DESPUBLICA ou EXCLUI a sua. A ação do papel na tela segue a de `acaoParaGravar` (personalizar = Visualizar; publicar e
+ * moderar = Configurar) — o detalhe só RETIRA.
+ */
+export function operacaoParaGravar(e: { dono: boolean; publicoAntes: boolean; publicoDepois: boolean; excluir: boolean }): OperacaoEdicao | null {
+  if (!e.dono) return "moderar";
+  if (e.excluir || (e.publicoAntes && !e.publicoDepois)) return null;
+  return e.publicoDepois ? "publicar" : "personalizar";
+}
+
+/** A tela das EDIÇÕES (a do detalhe do papel) de uma chave: a Mesa do sistema, a do PCA, o Comparativo (Orçamento — no
+ * espaço do PCA, a tela do PCA) e a Lista de um quadro de tarefas. `null` = chave de outra tabela. */
+export function telaDetalheDaChave(chave: string, telaAtual?: Tela): TelaEdicoes | null {
+  if (chave.startsWith("mesa-pca:")) return "pca";
+  if (chave.startsWith("mesa:")) return "dfd";
+  if (chave.startsWith("orcamento-comparativo:")) return telaAtual === "pca" ? "pca" : "orcamento";
+  if (/^tarefas:[1-9]\d{0,8}:/.test(chave)) return "tarefas";
+  return null;
+}
+
+/** A TABELA da Mesa de uma chave (`mesa:protocolos`, `mesa-pca:itens`…) — a das colunas do detalhe do papel; `null` =
+ * outra tabela (o Comparativo, a Lista de tarefas). */
+export function tabelaMesaDaChave(chave: string): TabelaMesa | null {
+  const m = /^mesa(?:-pca)?:(\w+)$/.exec(chave);
+  return m && (TABELAS_MESA as readonly string[]).includes(m[1]) ? (m[1] as TabelaMesa) : null;
 }

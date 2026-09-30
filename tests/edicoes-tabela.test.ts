@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { acaoParaGravar, chavePadrao, type EdicaoTabela, edicaoInicial, edicoesDaChave, idPadrao, telasDaChave } from "../src/lib/edicoes-tabela-core.ts";
+import {
+  acaoParaGravar,
+  chavePadrao,
+  type EdicaoTabela,
+  edicaoInicial,
+  edicoesDaChave,
+  idPadrao,
+  operacaoParaGravar,
+  tabelaMesaDaChave,
+  telaDetalheDaChave,
+  telasDaChave,
+} from "../src/lib/edicoes-tabela-core.ts";
 import { criarEdicaoSchema, editarEdicaoSchema } from "../src/lib/preferencias-validation.ts";
 
 const K = "orcamento-comparativo:unidade:nomeElemento";
@@ -57,5 +68,38 @@ describe("edicoes-tabela", () => {
     assert.ok(!criarEdicaoSchema.safeParse({ chave: K, nome: "a", publico: true, valor: { g: "a".repeat(40_000) } }).success);
     assert.ok(editarEdicaoSchema.safeParse({ publico: true }).success);
     assert.ok(!editarEdicaoSchema.safeParse({}).success);
+  });
+
+  it("OPERAÇÃO do detalhe do papel: personalizar (a sua), publicar (fica pública), moderar (a de outra pessoa)", () => {
+    const g = (dono: boolean, publicoAntes: boolean, publicoDepois: boolean, excluir = false) => operacaoParaGravar({ dono, publicoAntes, publicoDepois, excluir });
+    assert.equal(g(true, false, false), "personalizar");
+    assert.equal(g(true, false, true), "publicar");
+    assert.equal(g(true, true, true), "publicar");
+    assert.equal(g(true, true, false), null, "despublicar a sua: nunca recusado");
+    assert.equal(g(true, true, true, true), null, "excluir a sua: nunca recusado");
+    assert.equal(g(false, true, true), "moderar");
+    assert.equal(g(false, true, true, true), "moderar");
+    // A operação e a ação do papel andam juntas: personalizar = Visualizar; publicar/moderar = Configurar.
+    for (const [d, a, b, x] of [
+      [true, false, false, false],
+      [true, false, true, false],
+      [false, true, true, true],
+    ] as const) {
+      const op = g(d, a, b, x);
+      assert.equal(acaoParaGravar({ dono: d, publicoAntes: a, publicoDepois: b, excluir: x }), op === "personalizar" ? "visualizar" : "configurar");
+    }
+  });
+
+  it("a tela do detalhe e a tabela da Mesa de uma chave", () => {
+    assert.equal(telaDetalheDaChave("mesa:protocolos"), "dfd");
+    assert.equal(telaDetalheDaChave("mesa-pca:itens"), "pca");
+    assert.equal(telaDetalheDaChave(K), "orcamento");
+    assert.equal(telaDetalheDaChave(K, "pca"), "pca");
+    assert.equal(telaDetalheDaChave("tarefas:12:lista"), "tarefas");
+    assert.equal(telaDetalheDaChave("x"), null);
+    assert.equal(tabelaMesaDaChave("mesa:protocolos"), "protocolos");
+    assert.equal(tabelaMesaDaChave("mesa-pca:consolidada"), "consolidada");
+    assert.equal(tabelaMesaDaChave("mesa:outra"), null);
+    assert.equal(tabelaMesaDaChave(K), null);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   alternarOculta,
   coerceLayoutTabela,
@@ -102,7 +102,7 @@ const SOMBRA = "!bg-accent/10 !text-transparent [&>*]:invisible";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
 export function DataTable<R>({
-  columns,
+  columns: todasColunas,
   rows,
   getKey,
   selectable = false,
@@ -122,6 +122,7 @@ export function DataTable<R>({
   vazio,
   edicoes,
   exportar,
+  ocultas,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -179,7 +180,18 @@ export function DataTable<R>({
    * (`linhasPlanilhaTabela`); `nome` = o nome do arquivo e da aba.
    */
   exportar?: { nome: string };
+  /**
+   * As colunas que o PAPEL não vê (os DETALHES do papel — as chaves das `Column`): somem da tabela, dos filtros, da
+   * ordenação, da exportação e da edição, e o layout de uma edição salva (inclusive a pública de outra pessoa) chega SEM
+   * elas — nunca se filtra nem se ordena por uma coluna que não se vê.
+   */
+  ocultas?: ReadonlySet<string>;
 }) {
+  // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
+  const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
+  const semCols = useMemo(() => new Set(chaveOcultas ? chaveOcultas.split("|") : []), [chaveOcultas]);
+  const columns = useMemo(() => (semCols.size ? todasColunas.filter((c) => !semCols.has(c.key)) : todasColunas), [todasColunas, semCols]);
+  const coerceLayout = useCallback((v: unknown) => coerceLayoutTabela(v, semCols), [semCols]);
   // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
   // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
   const editor = useEditorEdicoes<LayoutTabela>({
@@ -188,7 +200,7 @@ export function DataTable<R>({
     padroes: edicoes?.padroes ?? SEM_PADROES,
     onMudar: edicoes?.onMudar,
     podePublicar: edicoes?.podePublicar ?? false,
-    coerce: coerceLayoutTabela,
+    coerce: coerceLayout,
     igual: layoutTabelaIgual,
     padrao: LAYOUT_TABELA_PADRAO,
     paraSalvar: (l: LayoutTabela): LayoutTabela => ({ ...l, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, filtros: filters }),

@@ -9,6 +9,7 @@ import {
   LARGURA_MIN,
   LAYOUT_TABELA_PADRAO,
   layoutTabelaIgual,
+  mesclarLayoutOculto,
 } from "../src/lib/colunas-layout.ts";
 
 describe("colunas-layout (DataTable)", () => {
@@ -59,5 +60,58 @@ describe("colunas-layout (DataTable)", () => {
     const b = coerceLayoutTabela({ larguras: { b: 200, a: 100 }, filtros: { y: ["2"], x: ["1"] } });
     assert.ok(layoutTabelaIgual(a, b));
     assert.ok(!layoutTabelaIgual(a, coerceLayoutTabela({ larguras: { a: 100 } })));
+  });
+
+  it("sem as colunas que o papel não vê: saem de larguras, congeladas, ocultas, ordem, filtros e ordenação", () => {
+    const bruto = {
+      larguras: { responsavel: 200, valor: 120 },
+      fixadas: ["responsavel", "numero"],
+      ocultas: ["distribuicao", "idExterno"],
+      ordemManual: ["valor", "responsavel"],
+      ordem: { key: "responsavel", dir: "desc" },
+      filtros: { responsavel: ["Ana"], assunto: ["INCLUSÃO"] },
+    };
+    const sem = new Set(["responsavel", "distribuicao"]);
+    const l = coerceLayoutTabela(bruto, sem);
+    assert.deepEqual(l.larguras, { valor: 120 });
+    assert.deepEqual(l.fixadas, ["numero"]);
+    assert.deepEqual(l.ocultas, ["idExterno"]);
+    assert.deepEqual(l.ordemManual, ["valor"]);
+    assert.equal(l.ordem, null, "não ordena por coluna que não vê");
+    assert.deepEqual(l.filtros, { assunto: ["INCLUSÃO"] });
+    // Sem restrição, o mesmo de sempre.
+    assert.deepEqual(coerceLayoutTabela(bruto, new Set()), coerceLayoutTabela(bruto));
+  });
+
+  it("gravar por cima com colunas ocultas: o ajuste delas fica como estava no gravado", () => {
+    const gravado = {
+      larguras: { responsavel: 200, valor: 120 },
+      fixadas: ["numero", "responsavel"],
+      ocultas: ["distribuicao"],
+      ordemManual: ["responsavel", "valor", "assunto"],
+      ordem: { key: "responsavel", dir: "asc" },
+      filtros: { responsavel: ["Ana"], assunto: ["INCLUSÃO"] },
+    };
+    const sem = new Set(["responsavel", "distribuicao"]);
+    // A pessoa (sem ver Responsável/Distribuição) mexeu no valor e no assunto, e tentou (em vão) mexer no responsável.
+    const novo = {
+      larguras: { valor: 150, responsavel: 60 },
+      fixadas: ["numero"],
+      ocultas: [],
+      ordemManual: ["assunto", "valor"],
+      ordem: null,
+      filtros: { assunto: ["EXCLUSÃO"], responsavel: ["Beto"] },
+    };
+    const m = mesclarLayoutOculto(gravado, novo, sem);
+    assert.deepEqual(m.larguras, { responsavel: 200, valor: 150 });
+    assert.deepEqual(m.fixadas, ["numero", "responsavel"]);
+    assert.deepEqual(m.ocultas, ["distribuicao"]);
+    assert.deepEqual(m.ordemManual, ["responsavel", "assunto", "valor"]);
+    assert.deepEqual(m.ordem, { key: "responsavel", dir: "asc" }, "a ordenação por coluna oculta segue enquanto a pessoa não escolhe outra");
+    assert.deepEqual(m.filtros, { assunto: ["EXCLUSÃO"], responsavel: ["Ana"] });
+    // Escolhendo uma ordenação visível, vale a da pessoa.
+    assert.deepEqual(mesclarLayoutOculto(gravado, { ...novo, ordem: { key: "valor", dir: "desc" } }, sem).ordem, { key: "valor", dir: "desc" });
+    // Sem restrição, vale o novo.
+    assert.deepEqual(mesclarLayoutOculto(gravado, novo, new Set()), coerceLayoutTabela(novo));
   });
 });
