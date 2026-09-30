@@ -21,6 +21,9 @@
   --text: #0f1626;
   --text-2: #2d3644;
   --muted: #586173;
+  /* A SETA dos <select> (a nativa varia por navegador — no Mac fica serrilhada e colada na borda): o chevron do sistema na cor
+     de --muted do tema. */
+  --seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586173' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --faint: #8a93a3;
   --border: #ebeef2;
   --border-2: #dee2e8;
@@ -125,6 +128,9 @@
   --text: #f4f6f9;
   --text-2: #cbd2dd;
   --muted: #98a1b2;
+  /* A SETA dos <select> (a nativa varia por navegador — no Mac fica serrilhada e colada na borda): o chevron do sistema na cor
+     de --muted do tema. */
+  --seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398a1b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --faint: #6d7585;
   --border: #232834;
   --border-2: #2c3340;
@@ -521,4 +527,19 @@
 }
 .rolagem-fina::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
+   chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale
+   sobre os utilitários de padding das telas). Os <select> invisíveis sobre um visual próprio (opacity-0 — SeletorCelula,
+   SeletorFiltro) não mostram nada. */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: var(--seta-select);
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2.25rem;
+  text-overflow: ellipsis;
 }

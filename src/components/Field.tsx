@@ -73,6 +73,8 @@ function Rodape({ denso, error, hint, errId }: { denso?: boolean; error?: string
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
+/** A seta dos selects DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim do select, o texto antes dela. */
+const SETA_NA_CAIXA = "![background-position:right_center] !pr-6";
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 
@@ -142,7 +144,7 @@ export function SelectField({
             {label}
           </label>
         )}
-        <select id={fid} className={`${INPUT} h-full min-w-0 cursor-pointer !text-[13px] font-semibold disabled:cursor-default disabled:opacity-60`} {...rest}>
+        <select id={fid} className={`${INPUT} ${SETA_NA_CAIXA} h-full min-w-0 cursor-pointer !text-[13px] font-semibold disabled:cursor-default disabled:opacity-60`} {...rest}>
           {children}
         </select>
       </div>
@@ -162,7 +164,7 @@ export function SelectField({
         )}
         <select
           id={fid}
-          className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60 ${textoEscolhido ? "!text-transparent [&_optgroup]:text-text [&_option]:text-text" : ""}`}
+          className={`${INPUT} ${SETA_NA_CAIXA} h-full cursor-pointer disabled:cursor-default disabled:opacity-60 ${textoEscolhido ? "!text-transparent [&_optgroup]:text-text [&_option]:text-text" : ""}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errId : undefined}
           {...rest}
