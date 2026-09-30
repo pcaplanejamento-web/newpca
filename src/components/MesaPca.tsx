@@ -242,9 +242,10 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
             `${linhas.length} protocolo${linhas.length === 1 ? "" : "s"} · ${num(linhas.reduce((s, p) => s + p.totalDfds, 0))} DFDs · ${brl(
               linhas.reduce((s, p) => s + p.valorTotal, 0),
             )}`,
-          acoesProtocolos: mesa.podeEditar
+          // Incorporar/Devolver = Manipular no PCA; "Enviar a este PCA" (os marcados da Mesa do sistema) = Manipular nas duas.
+          acoesProtocolos: mesa.pode.pca.manipular
             ? (sel, limpar) => {
-                const noSistema = sel.filter((p) => localDoProtocolo(p) === "sistema");
+                const noSistema = mesa.pode.sistema.manipular ? sel.filter((p) => localDoProtocolo(p) === "sistema") : [];
                 const n = sel.filter((p) => localDoProtocolo(p) === "enviado").length;
                 const pcaFixo = mesa.pcas?.find((x) => x.id === pca.id);
                 if (n === 0 && noSistema.length === 0)
@@ -267,7 +268,8 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
               }
             : undefined,
           colunasItens: [colunaSeq],
-          acoesItens: mesa.podeEditar
+          // Retirar itens do PCA = Excluir no PCA.
+          acoesItens: mesa.pode.pca.excluir
             ? (sel, limpar) => {
                 const n = sel.filter((it) => it.pcaSequencial != null && it.pcaAtivo).length;
                 return n > 0 ? (

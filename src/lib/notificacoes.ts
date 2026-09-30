@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { notificacoes, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
+import { type GrupoAcesso, gruposComAbas } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
 import { enviarPendentesDepois } from "./email";
 import { dataIsoBrasilia } from "./format";
-import { gruposDoUsuario } from "./grupos";
+import { podeNaTela } from "./papeis-core";
 import { nomeExibicao, urlFoto } from "./pessoa";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
@@ -253,12 +254,21 @@ export async function derivarDaPessoa(u: UsuarioSessao): Promise<void> {
   }
 }
 
-const gruposDe = async (u: UsuarioSessao, grupoIds?: number[]) => (u.role === "admin" ? null : (grupoIds ?? (await gruposDoUsuario(u.id)).map((g) => g.id)));
+/** Os grupos dos avisos DERIVADOS (prazo, lembrete): só onde a pessoa abre Tarefas ou o Calendário (grupo libera +
+ * papel visualiza). `null` = o Administrador (todos). */
+export function gruposDosAvisos(u: UsuarioSessao, lista: readonly GrupoAcesso[]): number[] | null {
+  if (u.admin) return null;
+  const abre = (g: GrupoAcesso) =>
+    (["tarefas", "calendario"] as const).some((t) => podeNaTela({ admin: false, capacidades: u.papel.capacidades, abas: g.abas }, t).visualizar);
+  return lista.filter(abre).map((g) => g.id);
+}
+
+const gruposDe = async (u: UsuarioSessao, lista?: readonly GrupoAcesso[]) => gruposDosAvisos(u, lista ?? (await gruposComAbas(u.id)));
 
 /** Quantas NÃO LIDAS (o número do sino — o layout passa os grupos que já carregou). Falha = 0. */
-export async function contarNaoLidas(u: UsuarioSessao, grupoIds?: number[]): Promise<number> {
+export async function contarNaoLidas(u: UsuarioSessao, grupos?: readonly GrupoAcesso[]): Promise<number> {
   try {
-    await derivar(u, await gruposDe(u, grupoIds));
+    await derivar(u, await gruposDe(u, grupos));
     const [r] = await getDb()
       .select({ n: sql<number>`COUNT(*)` })
       .from(notificacoes)

@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarEtiqueta, excluirEtiqueta, getEtiqueta, quadroAcessivel } from "@/lib/tarefas";
@@ -9,12 +9,14 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 async function etiquetaDoEditor(ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const e = id ? await getEtiqueta(id) : null;
   const q = e ? await quadroAcessivel(a.u, e.quadroId) : null;
   if (!e || !q) return { resp: erro("Etiqueta não encontrada.", 404) };
+  const negado = recusaNoQuadro(a.acesso, q, "configurar");
+  if (negado) return { resp: negado };
   return { u: a.u, e };
 }
 

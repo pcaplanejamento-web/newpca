@@ -125,7 +125,7 @@ export function SincronizacaoTrello({ quadroId, privado }: { quadroId: number; p
   /** Abre a escolha do quadro existente (os boards da conta institucional). */
   const abrirEscolha = () => {
     setEscolha({ boards: null, falha: null, valor: "" });
-    chamar<{ boards: BoardTrello[] }>("/api/integracoes/trello/boards")
+    chamar<{ boards: BoardTrello[] }>(`/api/integracoes/trello/boards?quadro=${quadroId}`)
       .then((r) => vivo.current && setEscolha((e) => (e ? { ...e, boards: r.boards } : e)))
       .catch((e) => vivo.current && setEscolha((x) => (x ? { ...x, falha: (e as Error).message } : x)));
   };

@@ -28,6 +28,7 @@ import {
   TRATAVEIS,
 } from "@/lib/dfd-tratamento";
 import { DOMINIOS, type DominioLogica, LOGICAS, type LogicaRef } from "@/lib/logicas";
+import { ACOES_PAPEL, aplicavel, CATALOGO_PAPEIS, PAPEIS_SISTEMA, ROTULO_ACAO } from "@/lib/papeis-core";
 import { norm } from "@/lib/parse-dfd-comum";
 import { TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import type { Aparencia } from "@/lib/theme";
@@ -216,18 +217,25 @@ export function ReferenciaSistema({
     }
     if (d === "acesso") {
       return (
-        <Derivado titulo="Abas, papéis e status">
-          <p className="mb-1 text-[12px] font-semibold text-muted">Abas de módulo</p>
-          <div className="mb-3 flex flex-wrap gap-1.5">
+        <Derivado titulo="Telas, ações dos papéis e status" nota="Os papéis e as ações de cada um se ajustam na aba Papéis; as telas de cada grupo, em Permissões.">
+          <p className="mb-1 text-[12px] font-semibold text-muted">O que cada ação cobre em cada tela</p>
+          <div className="mb-3 space-y-2">
             {ABAS.map((a) => (
-              <span key={a.key} className="rounded-pill border border-border px-2.5 py-0.5 text-[12px] text-text-2">
-                {a.label}
-              </span>
+              <div key={a.key}>
+                <p className="text-[12.5px] font-semibold text-text-2">{a.label}</p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {ACOES_PAPEL.filter((ac) => aplicavel(a.key, ac)).map((ac) => (
+                    <li key={ac} className="text-[12px] text-muted">
+                      <span className="font-medium text-text-2">{ROTULO_ACAO[ac]}:</span> {CATALOGO_PAPEIS[a.key].acoes[ac]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </div>
           <p className="text-[12px] text-muted">
-            Papéis: <strong className="text-text-2">Administrador · Gestor · Membro</strong>. Status do usuário:{" "}
-            <strong className="text-text-2">Ativo · Pendente · Inativo</strong>.
+            Papéis do sistema: <strong className="text-text-2">{PAPEIS_SISTEMA.map((p) => p.nome).join(" · ")}</strong> (o ADM cria outros).
+            Status do usuário: <strong className="text-text-2">Ativo · Pendente · Inativo</strong>.
           </p>
         </Derivado>
       );

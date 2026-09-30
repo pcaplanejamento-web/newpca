@@ -26,11 +26,12 @@ import {
   tarefaVinculos,
   tarefas,
 } from "@/db/schema";
+import { type Acesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
-import { getReparticaoContexto, gruposDoUsuario } from "./grupos";
+import { gruposDoUsuario, unidadesDaSessao } from "./grupos";
 import { lotesDeIds } from "./reparticoes";
 import { linkEvento } from "./calendario-core";
 import { atorDe, notificar } from "./notificacoes";
@@ -205,8 +206,8 @@ export const MSG_QUADRO_ARQUIVADO = "Quadro arquivado — desarquive-o na Config
 export async function quadroAcessivel(u: UsuarioSessao, id: number): Promise<Quadro | null> {
   const q = await getQuadro(id);
   if (!q) return null;
-  if (q.privado && q.criadoPor !== u.id && !(q.criadoPor == null && u.role === "admin")) return null;
-  if (u.role === "admin") return q;
+  if (q.privado && q.criadoPor !== u.id && !(q.criadoPor == null && u.admin)) return null;
+  if (u.admin) return q;
   return (await gruposDoUsuario(u.id)).some((g) => g.id === q.grupoId) ? q : null;
 }
 
@@ -679,9 +680,6 @@ export async function tornarQuadroPrivado(id: number, dono: number) {
 
 // ─── PASTAS de quadros (migração `0061`) ────────────────────────────────────────────────────────────────────
 
-/** Quem mexe nas pastas (a regra pura `motivoNaoMoverParaPasta`). */
-export const atorPasta = (u: UsuarioSessao): AtorPasta => ({ id: u.id, editor: u.role !== "membro", admin: u.role === "admin" });
-
 const COLS_PASTA = { id: tarefaPastas.id, nome: tarefaPastas.nome, cor: tarefaPastas.cor, privado: tarefaPastas.privado, criadoPor: tarefaPastas.criadoPor, grupoId: tarefaPastas.grupoId };
 
 /** As PASTAS dos grupos (`null` = todos — o ADM) que a pessoa vê: as públicas + as privadas DELA. */
@@ -690,7 +688,7 @@ export async function listarPastas(grupoIds: number[] | null, u: UsuarioSessao):
   return getDb()
     .select(COLS_PASTA)
     .from(tarefaPastas)
-    .where(and(grupoIds ? inArray(tarefaPastas.grupoId, grupoIds) : undefined, pastaVisivel(u.id, u.role === "admin")))
+    .where(and(grupoIds ? inArray(tarefaPastas.grupoId, grupoIds) : undefined, pastaVisivel(u.id, u.admin)))
     .orderBy(asc(tarefaPastas.ordem), asc(tarefaPastas.id));
 }
 
@@ -701,9 +699,9 @@ export async function pastasDaGrade(grupoIds: number[] | null, u: UsuarioSessao,
 
 /** A pasta (com os quadros dela, na ordem), se a pessoa a vê (membro do grupo — o ADM, qualquer um); senão `null`. */
 export async function pastaAcessivel(u: UsuarioSessao, id: number): Promise<ConjuntoQuadros | null> {
-  const [p] = await getDb().select(COLS_PASTA).from(tarefaPastas).where(and(eq(tarefaPastas.id, id), pastaVisivel(u.id, u.role === "admin")));
+  const [p] = await getDb().select(COLS_PASTA).from(tarefaPastas).where(and(eq(tarefaPastas.id, id), pastaVisivel(u.id, u.admin)));
   if (!p) return null;
-  if (u.role !== "admin" && !(await gruposDoUsuario(u.id)).some((g) => g.id === p.grupoId)) return null;
+  if (!u.admin && !(await gruposDoUsuario(u.id)).some((g) => g.id === p.grupoId)) return null;
   const qs = await getDb().select({ id: tarefaQuadros.id, pastaId: tarefaQuadros.pastaId, pastaOrdem: tarefaQuadros.pastaOrdem }).from(tarefaQuadros).where(eq(tarefaQuadros.pastaId, id));
   return pastasDosQuadros([p], qs)[0];
 }
@@ -739,8 +737,7 @@ export async function excluirPastaDoBanco(id: number) {
  * saindo da pasta em que estava); na PRIVADA, os públicos viram privados do dono. Os que saem ficam soltos. Devolve o
  * motivo da recusa (nada gravado) ou `null`.
  */
-export async function definirQuadrosDaPasta(u: UsuarioSessao, pasta: ConjuntoQuadros, ids: number[]): Promise<string | null> {
-  const ator = atorPasta(u);
+export async function definirQuadrosDaPasta(u: UsuarioSessao, ator: AtorPasta, pasta: ConjuntoQuadros, ids: number[]): Promise<string | null> {
   const novos = ids.filter((id) => !pasta.quadros.includes(id));
   const qs = new Map<number, Quadro>();
   for (const lote of lotesDeIds(novos)) {
@@ -752,7 +749,7 @@ export async function definirQuadrosDaPasta(u: UsuarioSessao, pasta: ConjuntoQua
     const q = qs.get(id);
     if (!q) return "Quadro não encontrado.";
     if (q.pastaId != null && !origens.has(q.pastaId)) origens.set(q.pastaId, await pastaAcessivel(u, q.pastaId));
-    const motivo = motivoNaoMoverParaPasta(q, q.pastaId != null ? (origens.get(q.pastaId) ?? { id: String(q.pastaId), privado: true, criadoPor: null }) : null, pasta, ator);
+    const motivo = motivoNaoMoverParaPasta(q, q.pastaId != null ? (origens.get(q.pastaId) ?? { id: String(q.pastaId), privado: true, criadoPor: null, grupoId: q.grupoId }) : null, pasta, ator);
     if (motivo) return `${q.nome}: ${motivo}`;
   }
   const publicos = pasta.privado && pasta.criadoPor != null ? novos.filter((id) => !qs.get(id)?.privado) : [];
@@ -768,6 +765,7 @@ export async function definirQuadrosDaPasta(u: UsuarioSessao, pasta: ConjuntoQua
  */
 export async function moverQuadroParaPasta(
   u: UsuarioSessao,
+  ator: AtorPasta,
   q: Quadro,
   destino: ConjuntoQuadros | null,
   vizinhos: { antesDe?: number | null; depoisDe?: number | null },
@@ -775,7 +773,7 @@ export async function moverQuadroParaPasta(
 ): Promise<string | null> {
   const origem = q.pastaId != null ? ((await pastaAcessivel(u, q.pastaId)) ?? { id: String(q.pastaId), privado: true, criadoPor: null, nome: "", cor: "", quadros: [], grupoId: q.grupoId }) : null;
   const publicar = tornarPublico && !!origem?.privado && !destino?.privado && q.criadoPor === u.id;
-  const motivo = motivoNaoMoverParaPasta(q, origem, destino, atorPasta(u), publicar);
+  const motivo = motivoNaoMoverParaPasta(q, origem, destino, ator, publicar);
   if (motivo) return motivo;
   let pastaOrdem = 0;
   if (destino) {
@@ -806,8 +804,8 @@ export async function soltarSeIncompativel(q: Pick<Quadro, "id" | "pastaId">, pr
   if (p && p.privado !== privado) await getDb().update(tarefaQuadros).set({ pastaId: null, pastaOrdem: 0 }).where(eq(tarefaQuadros.id, q.id));
 }
 
-/** Pode ORGANIZAR a pasta? (a regra pura, com o usuário da sessão) */
-export const podeOrganizarPasta = (u: UsuarioSessao, p: Pick<ConjuntoQuadros, "privado" | "criadoPor">) => podeEditarPasta(p, atorPasta(u));
+/** Pode ORGANIZAR a pasta? (a regra pura, com o ator da sessão — `atorPasta` do acesso) */
+export const podeOrganizarPasta = (ator: AtorPasta, p: Pick<ConjuntoQuadros, "privado" | "criadoPor" | "grupoId">) => podeEditarPasta(p, ator);
 
 export async function excluirQuadro(id: number) {
   await getDb().delete(tarefaQuadros).where(eq(tarefaQuadros.id, id));
@@ -1557,13 +1555,20 @@ export async function aplicarMassaTarefas(ids: number[], acao: AcaoMassaTarefas,
 
 /** Opções para VINCULAR uma tarefa (até 50 por busca): protocolos e DFDs no escopo de unidade do usuário; PCAs e
  * orçamentos (globais); TAREFAS dos quadros dos grupos do usuário. `q` casa nº/Id/assunto (protocolo), nº/planejamento (DFD) ou nome/ano (PCA/orçamento). */
-export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: string): Promise<{ id: number; rotulo: string; detalhe: string }[]> {
+export async function buscarVinculos(
+  u: UsuarioSessao,
+  tipo: TipoVinculo,
+  q: string,
+  /** Os grupos em que a pessoa VÊ as tarefas (`null` = todos, o ADM) — a busca de TAREFA. */
+  gruposTarefas: number[] | null,
+): Promise<{ id: number; rotulo: string; detalhe: string }[]> {
   const db = getDb();
   const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
   const LIMITE = 50;
   if (tipo === "tarefa") {
-    // As tarefas (não templates) dos quadros ATIVOS dos grupos do usuário — o ADM, todos; `q` casa o título ou o nº do ticket.
-    const grupoIds = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
+    // As tarefas (não templates) dos quadros ATIVOS dos grupos em que a pessoa vê as tarefas — o ADM, todos; `q` casa o
+    // título ou o nº do ticket.
+    const grupoIds = gruposTarefas;
     if (grupoIds && !grupoIds.length) return [];
     const ticket = /^#?\d{1,9}$/.test(q.trim()) ? Number(q.trim().replace("#", "")) : null;
     const linhas = await db
@@ -1597,9 +1602,10 @@ export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: str
       tipo === "orcamento" ? { id: l.id, rotulo: `${l.nome} ${l.ano ?? ""}`.trim(), detalhe: "" } : { id: l.id, rotulo: l.nome, detalhe: l.ano ? String(l.ano) : "" },
     );
   }
-  const reps = (await getReparticaoContexto(u)).lista.map((r) => r.id);
+  // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma).
+  const { escopo: esc } = await unidadesDaSessao(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
-    u.role === "admin" ? undefined : reps.length ? or(sql`${col} IS NULL`, inArray(col, reps.slice(0, 90))) : sql`${col} IS NULL`;
+    esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   if (tipo === "protocolo") {
     const linhas = await db
       .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto })
@@ -1618,10 +1624,10 @@ export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: str
   return linhas.map((l) => ({ id: l.id, rotulo: `DFD ${l.numero}`, detalhe: [l.planejamento ? `Planej. ${l.planejamento}` : "", l.objeto ?? ""].filter(Boolean).join(" · ") }));
 }
 
-/** As tarefas LIGADAS a um alvo (protocolo/DFD/…) nos quadros que o usuário vê — o botão "Tarefas" dos banners da Mesa. */
-export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: number) {
+/** As tarefas LIGADAS a um alvo (protocolo/DFD/…) nos quadros que o usuário vê — o botão "Tarefas" dos banners da Mesa.
+ * `grupoIds` = os grupos em que a pessoa vê as tarefas (`null` = todos, o ADM). */
+export async function tarefasDoVinculo(u: UsuarioSessao, grupoIds: number[] | null, tipo: TipoVinculo, id: number) {
   const db = getDb();
-  const grupoIds = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
   if (grupoIds && !grupoIds.length) return [];
   return db
     .select({
@@ -1654,19 +1660,27 @@ export async function tarefasDoVinculo(u: UsuarioSessao, tipo: TipoVinculo, id: 
     .limit(200);
 }
 
-/** O alvo do vínculo existe e o usuário o vê (protocolo/DFD no escopo de unidade dele; PCA/orçamento, globais). */
-export async function vinculoAcessivel(u: UsuarioSessao, v: { tipo: TipoVinculo; id: number }): Promise<boolean> {
+/**
+ * O alvo do vínculo existe e a pessoa o VÊ: a tarefa, pelo papel no grupo DO QUADRO dela (Tarefas ou Calendário); o PCA e o
+ * orçamento, a tela deles aberta; o protocolo e o DFD, uma das Mesas aberta + a unidade no escopo dela.
+ */
+export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: number }): Promise<boolean> {
   const db = getDb();
-  if (v.tipo === "tarefa") return (await tarefaAcessivel(u, v.id)) != null;
+  const u = a.u;
+  if (v.tipo === "tarefa") {
+    const alvo = await tarefaAcessivel(u, v.id);
+    return alvo != null && podeNoQuadro(a, alvo.quadro.grupoId, true).visualizar;
+  }
   if (v.tipo === "pca" || v.tipo === "orcamento") {
+    if (!podeTela(a, v.tipo).visualizar) return false;
     const t = v.tipo === "pca" ? pcas : orcamentos;
     return (await db.select({ id: t.id }).from(t).where(eq(t.id, v.id))).length > 0;
   }
+  if (!podeTela(a, "dfd").visualizar && !podeTela(a, "pca").visualizar) return false;
   const t = v.tipo === "protocolo" ? dfdProtocolos : dfds;
   const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(eq(t.id, v.id));
   if (!r) return false;
-  if (u.role === "admin" || r.rep == null) return true;
-  return (await getReparticaoContexto(u)).lista.some((x) => x.id === r.rep);
+  return (await unidadesDaSessao(u)).acessivel(r.rep);
 }
 
 // ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────
@@ -2049,9 +2063,9 @@ export async function moverTarefaDeQuadro(r: { tarefa: TarefaCompleta; quadro: Q
   return x;
 }
 
-/** Os QUADROS de destino de copiar/mover: os ativos que o usuário vê, com as listas ativas (e o grupo). */
-export async function destinosDeTarefa(u: UsuarioSessao) {
-  const grupoIds = u.role === "admin" ? null : (await gruposDoUsuario(u.id)).map((g) => g.id);
+/** Os QUADROS de destino de copiar/mover: os ativos dos grupos em que o papel MEXE nas tarefas (`grupoIds`; `null` =
+ * todos, o ADM), com as listas ativas (e o grupo). */
+export async function destinosDeTarefa(u: UsuarioSessao, grupoIds: number[] | null) {
   if (grupoIds && !grupoIds.length) return [];
   const db = getDb();
   const qs = await db

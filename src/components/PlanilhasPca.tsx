@@ -7,6 +7,7 @@ import { normalizarLinha } from "@/lib/normalize";
 import { parsePlanilha } from "@/lib/parse-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { Dropzone } from "./Dropzone";
 import { IconFile, IconTrash, IconUpload } from "./icons";
 import { Progress } from "./Progress";
@@ -59,12 +60,25 @@ async function enviarPlanilha(file: File, pcaId: number, onProgresso: (p: number
 /**
  * Aba IMPORTAÇÃO do PCA de lista pronta: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — uma por
  * unidade; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
- * planilhas deste PCA (itens · data · Σ), com exclusão para editores.
+ * planilhas deste PCA (itens · data · Σ); importar e excluir seguem o papel.
  */
-export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; planilhas: PlanilhaPca[]; podeEditar: boolean }) {
+export function PlanilhasPca({
+  pcaId,
+  planilhas,
+  podeImportar,
+  podeExcluir,
+}: {
+  pcaId: number;
+  planilhas: PlanilhaPca[];
+  /** O papel importa planilhas no PCA. */
+  podeImportar: boolean;
+  /** O papel exclui planilhas do PCA. */
+  podeExcluir: boolean;
+}) {
   const router = useRouter();
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   async function importar(files: File[]) {
     const xs = files.filter((f) => /\.xlsx?$/i.test(f.name));
@@ -94,7 +108,13 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
   }
 
   async function excluir(p: PlanilhaPca) {
-    if (!confirm(`Excluir a planilha ${p.codigo} deste PCA? Os ${num(p.totalItens ?? 0)} itens saem do PCA.`)) return;
+    const sim = await confirmar({
+      titulo: `Excluir a planilha ${p.codigo}?`,
+      texto: `Os ${num(p.totalItens ?? 0)} itens saem deste PCA. Não pode ser desfeito.`,
+      confirmar: "Excluir planilha",
+      perigo: true,
+    });
+    if (!sim) return;
     const r = await fetch(`/api/pca/${pcaId}/planilhas/${p.id}`, { method: "DELETE" });
     const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     if (!r.ok || !j.ok) setAviso({ kind: "danger", texto: j.error ?? "Não foi possível excluir." });
@@ -103,7 +123,7 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {podeEditar &&
+      {podeImportar &&
         (fila ? (
           <div className="rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-8">
             <Progress
@@ -146,7 +166,7 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
                       {p.nomeArquivo ?? p.municipio}
                     </p>
                   </div>
-                  {podeEditar && (
+                  {podeExcluir && (
                     <Button
                       variant="ghost"
                       aria-label={`Excluir ${p.codigo}`}
@@ -166,6 +186,7 @@ export function PlanilhasPca({ pcaId, planilhas, podeEditar }: { pcaId: number; 
           </div>
         )}
       </section>
+      {confirmacao}
     </div>
   );
 }

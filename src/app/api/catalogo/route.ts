@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import {
   atualizarCatalogo,
@@ -28,12 +28,18 @@ function mensagemConflito(conf: { codigo: string; catalogoNome: string }[]): str
 }
 
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "visualizar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(catalogoOpSchema, req);
   if ("resp" in p) return p.resp;
   const d = p.data;
+  // Criar o catálogo à mão = Manipular; importar/atualizar = Importar (+ Excluir quando "substitui" itens de outro catálogo).
+  const negado =
+    d.mode === "criar-catalogo"
+      ? recusa(a.acesso, "catalogo", "manipular")
+      : (recusa(a.acesso, "catalogo", "importar") ?? (d.mode === "start-catalogo" && d.excluirItens.length > 0 ? recusa(a.acesso, "catalogo", "excluir") : null));
+  if (negado) return negado;
 
   // Criar catálogo VAZIO (manual) — só nome + tipos, sem itens.
   if (d.mode === "criar-catalogo") {
@@ -51,7 +57,9 @@ export async function POST(req: Request) {
     return ok({ catalogoId: d.catalogoId, inserted: r.inserted });
   }
 
-  // start-catalogo — novo (catalogoId nulo) ou atualização de um existente.
+  // start-catalogo — novo (catalogoId nulo) ou atualização de um existente. Sem itens novos, só quando compartilha os
+  // existentes (o "só compartilhar" também é importação).
+  if (d.rows.length === 0 && d.compartilharItens.length === 0) return erro("Nada para importar.", 422);
   const alvo = d.catalogoId;
   if (alvo != null && !(await getCatalogo(alvo))) return erro("Catálogo a atualizar não encontrado.", 404);
   // Guarda da unicidade global: ignora os conflitos que o usuário RESOLVEU com "substituir"

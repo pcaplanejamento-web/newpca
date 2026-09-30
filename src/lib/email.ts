@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
-import { usuarios } from "@/db/schema";
+import { papeis, usuarios } from "@/db/schema";
 import { getAparencia } from "./aparencia";
+import { papelDoUsuarioSql } from "./auth";
 import { getDb } from "./db";
 import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, enderecoDosAvisos, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail } from "./email-core";
 import { comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "./email-sql";
@@ -114,11 +115,12 @@ export async function enviarEmailDireto(para: string[], montar: (ctx: ContextoEm
   }
 }
 
-/** Os e-mails dos ADMs ativos (avisos de cadastro). */
+/** Os e-mails dos ADMs ativos (avisos de cadastro) — pelo PAPEL Administrador. */
 export async function emailsDosAdmins(): Promise<string[]> {
   const linhas = await getDb()
     .select({ email: usuarios.email })
     .from(usuarios)
-    .where(and(eq(usuarios.role, "admin"), eq(usuarios.status, "ativo")));
+    .innerJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
+    .where(and(eq(papeis.chave, "admin"), eq(usuarios.status, "ativo")));
   return linhas.map((l) => l.email);
 }

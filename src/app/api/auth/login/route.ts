@@ -36,7 +36,6 @@ export async function POST(req: Request) {
         id: usuarios.id,
         nome: usuarios.nome,
         email: usuarios.email,
-        role: usuarios.role,
         status: usuarios.status,
         senhaHash: usuarios.senhaHash,
       })
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
     await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema` });
     return NextResponse.json({
       ok: true,
-      usuario: { nome: u.nome, email: u.email, role: u.role },
+      usuario: { nome: u.nome, email: u.email },
     });
   } catch (err) {
     console.error("Falha no login:", err);

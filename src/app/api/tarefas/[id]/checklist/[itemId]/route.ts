@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarItemChecklist, avisarSobreTarefa, excluirItemChecklist, getItemChecklist, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
 /** O item do checklist DESTA tarefa, se o usuário vê a tarefa. */
 async function itemDaTarefa(ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const ps = await ctx.params;
   const id = intId(ps.id);
@@ -19,6 +19,8 @@ async function itemDaTarefa(ctx: Ctx) {
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   const item = r && itemId ? await getItemChecklist(itemId) : null;
   if (!r || !item || item.tarefaId !== r.tarefa.id) return { resp: erro("Item não encontrado.", 404) };
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return { resp: negado };
   return { u: a.u, r, item };
 }
 

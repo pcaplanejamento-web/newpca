@@ -17,11 +17,12 @@ import { Segmented } from "./Segmented";
  * Mesa/Importação · Configuração).
  */
 export function PcaModuleView({
-  podeEditar,
+  podeCriar,
   pcas,
   filtro = null,
 }: {
-  podeEditar: boolean;
+  /** O papel cria PCA (Configurar) — o card "+ Novo PCA". */
+  podeCriar: boolean;
   pcas: PcaCardDados[];
   /** Nome do PCA escolhido no CABEÇALHO (filtro global) — só o card dele aparece. */
   filtro?: string | null;
@@ -68,7 +69,7 @@ export function PcaModuleView({
         </p>
       </div>
 
-      {pcas.length === 0 && !podeEditar ? (
+      {pcas.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
@@ -78,7 +79,7 @@ export function PcaModuleView({
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}
-          {podeEditar && (
+          {podeCriar && (
             <PcaNovoCard
               onClick={() => {
                 setErro(null);

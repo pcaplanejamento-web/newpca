@@ -5,7 +5,7 @@ import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
-import { getUsuarioAtual } from "@/lib/auth";
+import { acessoPagina } from "@/lib/acesso-pagina";
 import { dadosComparativo } from "@/lib/comparativo-dados";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
 import { DIMENSOES_ORCAMENTO, type LinhaOrcamentoVisao } from "@/lib/orcamento-visao";
@@ -24,12 +24,13 @@ export default async function OrcamentoEspacoPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ aba?: string }>;
 }) {
+  const r = await acessoPagina("orcamento");
+  if (r.bloqueio) return r.bloqueio;
+  const { pode, acesso } = r;
   const id = Number((await params).id);
   const sp = await searchParams;
   const orcamento = Number.isInteger(id) && id > 0 ? await getOrcamento(id) : null;
   if (!orcamento) notFound();
-  const u = await getUsuarioAtual();
-  const podeEditar = u?.role === "admin" || u?.role === "gestor";
   const aba: AbaOrcamento = ABAS.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : "lancamentos";
   let conteudo: ReactNode;
   if (aba === "visoes") {
@@ -40,9 +41,11 @@ export default async function OrcamentoEspacoPage({
       for (const d of DIMENSOES_ORCAMENTO) l[d.key] = i[d.key];
       return l;
     });
-    conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={podeEditar} />;
+    conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={pode.configurar} />;
   } else if (aba === "comparativo") {
-    conteudo = <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, u?.id ?? null)} />;
+    conteudo = (
+      <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, acesso.u.id)} podeExportar={pode.exportar} podePublicar={pode.configurar} />
+    );
   } else {
     const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
     conteudo =
@@ -51,15 +54,15 @@ export default async function OrcamentoEspacoPage({
           itens={itens.map((i) => ({ orgao: i.orgao, unidade: i.unidade, valorInicial: i.valorInicial }))}
           vinculos={vinculos}
           alvos={alvos}
-          podeEditar={podeEditar}
+          podeEditar={pode.configurar}
         />
       ) : (
-        <OrcamentoLancamentos orcamento={orcamento} podeEditar={podeEditar} itens={itens} vinculos={vinculos} alvos={alvos} />
+        <OrcamentoLancamentos orcamento={orcamento} pode={pode} itens={itens} vinculos={vinculos} alvos={alvos} />
       );
   }
 
   return (
-    <OrcamentoEspacoView orcamento={orcamento} aba={aba} podeEditar={podeEditar}>
+    <OrcamentoEspacoView orcamento={orcamento} aba={aba} podeExcluir={pode.excluir}>
       {conteudo}
     </OrcamentoEspacoView>
   );

@@ -108,11 +108,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (não aumente; `deriveBits` falha acima disso).
 - Sessão/cookie em `src/lib/auth.ts` (D1 guarda só o hash do token; cookie `pca_session`
   httpOnly+Secure). `getUsuarioAtual()` retorna o usuário ativo ou `null`.
-- **Guardas** em `src/lib/api-auth.ts`: `exigirUsuario`, `exigirEditor` (admin/gestor),
-  `exigirAdmin`. Uso: `const g = await exigirX(); if ("erro" in g) return g.erro;`.
+- **Guardas** em `src/lib/api-auth.ts` — TODA rota confere o PAPEL na TELA: **`exigirAcesso(telas, acao)`** (a ação numa
+  das telas, no grupo ATIVO do cabeçalho — várias telas = basta uma); **`exigirSessao()`** + a recusa pela tela do RECURSO —
+  **`recusa(acesso, tela, acao, grupoId?)`** (Mesa: protocolo num PCA → `pca`, senão `dfd` — `telaDoRecurso`/`podeNoRecurso`),
+  **`recusaNoQuadro(acesso, quadro, acao, pelaAgenda?)`** (Tarefas: o papel no GRUPO DO QUADRO; `pelaAgenda` = a tela
+  Calendário também vale para ver/mexer/excluir a tarefa e os eventos), `motivoRecusa`/`motivoNoQuadro` (o texto — a massa
+  o põe na falha de cada alvo) —; `exigirUsuario` (o que é da própria pessoa) e `exigirAdmin` (a Administração). Uso:
+  `const g = await exigirX(); if ("erro" in g) return g.erro;`. O MAPA **`rotas-acesso.ts`** (rota → método → tela + ação,
+  puro) é conferido pelo teste estático **`tests/rotas-acesso.test.ts`**: todo método de `src/app/api/**` está no mapa e
+  chama a guarda descrita (a do auxiliar do arquivo vale; a ação calculada por regra pura — `acaoDe` — também). **Rota nova
+  = entrada no mapa.** O `role` antigo não decide mais nada: o Administrador vem do PAPEL (`u.admin` — `exigirAdmin`, as
+  páginas da Administração) e o teste estático PROÍBE `exigirEditor(`, o `role` da sessão e comparações com gestor/membro.
 - **SEGURANÇA DO ACESSO (migração `0071`, aditiva — tabelas `limites_acesso` + `desafios_acesso` e os gatilhos de matrícula
   única):**
-  - **Sem login, nada:** o layout do `/painel` redireciona ao `/login`; TODA rota de API usa `exigirUsuario/Editor/Admin` —
+  - **Sem login, nada:** o layout do `/painel` redireciona ao `/login`; TODA rota de API exige a sessão (as guardas acima) —
     as únicas públicas são as de acesso (`/api/auth/*`), o feed `.ics` por token, o webhook do Trello (token + HMAC), os
     crons (`cronAutorizado`) e a consulta pública do PCA publicado.
   - **CAPTCHA SEMPRE** no login, no cadastro (no pedido do código; o 1º acesso sem código, no próprio cadastro), no "Esqueci a
@@ -138,10 +147,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
-- **PAPÉIS (migração `0069`, aditiva — EM IMPLANTAÇÃO, entrega 1 de 3):** o GRUPO (permissão) decide QUAIS telas; o
+- **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
   **PAPEL** decide o que a pessoa FAZ em cada uma — **Visualizar · Manipular · Importar · Exportar · Excluir · Configurar**.
   Tabela `papeis` (nome, descrição, `chave` admin|gestor|membro nos do SISTEMA, `capacidades` JSON {tela: ações[]},
-  `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado como ESPELHO** (leitores antigos). Núcleo
+  `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado só como ESPELHO** (a sessão não o lê
+  mais; o aviso de cadastro aos ADMs acha o Administrador pelo papel). Núcleo
   PURO **`papeis-core.ts`** (`CATALOGO_PAPEIS` = o que cada ação cobre por tela — Manipular no Orçamento e Configurar no
   Calendário "não se aplicam"; `coerceCapacidades` com as implicações — qualquer ação ⇒ Visualizar; **`podeNaTela`** = o
   grupo libera **E** o papel visualiza, o Administrador tudo; `PAPEIS_SISTEMA` — Gestor = tudo, Membro = consulta + exporta
@@ -149,8 +159,49 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   todas · unidades · nenhuma). Comandos com a TRAVA NO PRÓPRIO SQL em **`papeis-sql.ts`** (testados no driver D1 real):
   cadastro atômico (o 1º vira Administrador SÓ com a tabela vazia — `INSERT … SELECT … WHERE NOT EXISTS`; os demais, o
   papel PADRÃO, pendentes), troca de papel/status e exclusão NUNCA tiram o último Administrador ATIVO (409), desativar
-  encerra as sessões no mesmo lote. Nesta etapa as guardas ainda são as do `role` (`exigirEditor`); as próximas ligam as
-  guardas por tela + ação e a tela **Configurações → Papéis**.
+  encerra as sessões no mesmo lote. **Acesso EFETIVO** (`acesso.ts`): `getAcesso()` (UMA consulta grupos ⨝ permissões + o
+  grupo ativo, memorizada por requisição) → `telas` (as que ABREM: o grupo libera **e** o papel visualiza — o menu, a porta
+  de entrada e o Perfil usam elas) e **`podeTela(acesso, tela, grupoId?)`** (as 6 ações; `grupoId` = o grupo do RECURSO).
+  **Páginas:** toda página de módulo chama **`acessoPagina(tela)`** (`acesso-pagina.tsx`: sem sessão → `/login`; tela
+  fechada → o card **`AcessoRestrito`** com o caminho de volta) e passa às telas as capacidades (`pode: PodeTela`; a Mesa,
+  `PodeMesa` {sistema, pca}) — o que o papel não permite SOME da tela (importar, seleção/massa, excluir, exportar) ou vira
+  SÓ-LEITURA (o detalhe da tarefa — `TarefaDetalhe.somenteLeitura` —, o quadro — `QuadroKanban.somenteLeitura` —, o
+  comentário). **Escopo de unidades** em 3 estados (`escopo-unidades-core.ts`): todas (ADM ou grupo com a "Geral" — também
+  no detalhe e na escrita) · as do grupo · **nenhuma** (sem grupo não vê dado). **Regras por módulo:** a Mesa segue a tela
+  do RECURSO (LER = uma das duas Mesas + o escopo; ESCREVER = a ação na Mesa em que o protocolo está); Tarefas seguem o
+  GRUPO DO QUADRO (o link de um aviso de outro grupo vale), a tarefa e os eventos também pelo Calendário, e as PASTAS por
+  grupo (`atorPasta`: a pública = Configurar no grupo; a privada = o dono com Manipular); o Calendário pelo grupo ativo (o
+  feed .ics exige Exportar e só traz os grupos que abrem o Calendário; o evento PRIVADO só para quem participa — também para
+  o ADM); os VÍNCULOS de tarefa exigem ver a tela do alvo (`vinculoAcessivel`); as **EDIÇÕES SALVAS de tabela** seguem a
+  tela da tabela da chave (`telasDaChave`: `mesa:` → Mesa · `mesa-pca:` → PCA · `orcamento-comparativo:` → Orçamento ou
+  PCA · `tarefas:<quadro>:` → o grupo do quadro; outra chave = 422) — salvar a sua = Visualizar, **publicar ou moderar a
+  pública de outra pessoa = Configurar** (`acaoParaGravar`, puro; o dono sempre despublica/exclui a sua; auditoria
+  `edicao_tabela`); a tela: `SalvarEdicao.podePublicar`/`SeletorEdicoes.podeModerar` (`EdicoesDaTabela.podePublicar`).
+  **Configurações → Papéis** (`PapeisAdmin`, contêiner; rotas `GET/POST /api/admin/papeis` e `PATCH/DELETE
+  /api/admin/papeis/[id]`, `exigirAdmin`, Zod `papeis-validation.ts` — capacidades normalizadas por `coerceCapacidades`,
+  tela/ação fora do catálogo = 422; D1 `papeis.ts` + os comandos com trava em `papeis-sql.ts`): lista (nome + selos
+  Fixo/Sistema/Padrão dos cadastros, `ResumoPapel`, quantas pessoas), criar/editar/duplicar/excluir (só o criado pelo ADM, que
+  ninguém tem e que não é o padrão — 409 com o motivo), o editor com **`MatrizCapacidades`** (DS — Telas × Ações, marcar
+  linha/coluna com a caixa PARCIAL, "—" onde não se aplica, células alteradas destacadas; no celular, um cartão por tela com
+  chaves), "Começar de" (`MODELOS_PAPEL`) e o `Switch` "Padrão para novos cadastros" (há sempre um — marcar um desmarca o
+  outro NO MESMO comando); nome único sem caixa (409, também pelo índice); o Administrador é só consulta (403); retirar
+  capacidades de um papel EM USO confirma (vale na hora); auditoria `papel` com o diff por tela (`textoDiffCapacidades`).
+  **Usuários** (`UsuariosAdmin`): o papel vem do banco (`opcoesPapel`; `PATCH /api/admin/usuarios/[id]` `{papelId}` →
+  `comandoTrocarPapel` com a trava do último ADM; confirmação — dar/tirar o Administrador em destaque), a coluna **Grupos**
+  (`CelulaLista`; "Sem grupo" em âmbar) e os grupos editados num LOTE só (`{grupos}` → `comandosGruposDoUsuario`,
+  `rbac-sql.ts`, INSERTs ≤ 40, ids conferidos antes — 422), **Aprovar** num modal com o papel (o padrão vem escolhido) e os
+  grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
+  cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
+  `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
+  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar da Mesa:**
+  as 4 tabelas (Protocolos, DFDs, Itens, Consolidada) ganham o **Exportar .xlsx** no rodapé (`DataTable.exportar` — as linhas
+  filtradas e as colunas à vista da edição em uso; núcleo puro `exportar-tabela.ts`, SheetJS só no clique) para quem tem a
+  ação Exportar na Mesa em que está. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
+  orçamento e o catálogo que a PRÓPRIA pessoa CRIOU por importação na última hora (`?origem=desfazer` →
+  `criadoPorImportacaoRecente`: o 1º registro do histórico é o "importar" dela — o reenvio/atualização de um cadastro que já
+  existia nunca; builder `auditoria-sql.ts`, testado no driver D1 real) e o DFD pela metade (`gravacaoParcial`); fora disso,
+  Excluir. Sair de uma Mesa: reimportar um DFD que está em OUTRA Mesa (ex.: num protocolo enviado a um PCA) exige Importar
+  também nela (e a análise já o marca "Não sobrescrevível").
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
@@ -226,7 +277,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Aparência saiu — o tema está no cabeçalho); `UsuariosAdmin` ganhou a coluna
     **Unidade** e o cargo/unidade no ADM (`adminUsuarioSchema.cargo/reparticaoId`; a unidade atual oculta continua valendo — só
     a que MUDOU é validada).
-  - **CONTATO + CONTROLE DO ADM (migração `0072`, aditiva — `usuarios.telefone` [só dígitos], `telefone_whatsapp`,
+  - **CONTATO + CONTROLE DO ADM (migração `0073`, aditiva — `usuarios.telefone` [só dígitos], `telefone_whatsapp`,
     `dados_validados_em`/`dados_validados_por` [o NOME de quem validou], `trocar_senha`):**
     - **Cadastro:** **Matrícula** no **`CampoMatricula`** (as 6 posições desenhadas no FUNDO do campo — "0" apagado sobre um
       traço, preenchidas ao digitar; `TextField.fundo` + `classeEntrada` monoespaçada) e **Telefone** no **`CampoTelefone`**
@@ -236,15 +287,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       E-mail · Senha|Confirmar — segue cabendo na tela sem rolar (medido 1280×650 a 1920×1080). Núcleo puro em
       `cadastro-core.ts`: `filtrarTelefone` (tira o 55 colado), `telefoneValido`, `formatarTelefone`, `linkWhatsapp`.
     - **Usuários (`UsuariosAdmin`) = a TABELA PADRÃO** (`DataTable scrollInterno density="compact"`, filtros por coluna,
-      `onRowClick` + `activeKey`): Usuário (foto + nome) · Unidade · Papel · Status (+ ícone "senha nova exigida") · Dados
+      `onRowClick` + `activeKey`): Usuário (foto + nome) · Unidade · Papel · Grupos · Status (+ ícone "senha nova exigida") · Dados
       (Validados/A validar) · **WhatsApp** (**`BotaoWhatsapp`** — link `wa.me/55…` no tamanho de ação de linha, `LinkExterno
       size="xs"`; o toque não abre a linha; sem WhatsApp, o número em cinza). "Cargos e funções" e a Ajuda no rodapé da tabela.
     - **Tocar na linha = o BANNER do usuário (`UsuarioDetalhe`, `Modal` xl, rodapé fixo):** todos os dados; cada um com o
       CADEADO (`useCadeados` + `LinhaCampo`) para editar; "Salvar alterações" manda SÓ o que mudou (fechar com alteração
       confirma); WhatsApp no cabeçalho. **Validar dados** carimba quem/quando ("Salvar e validar" com edição pendente;
       "Desfazer validação") — o SERVIDOR desfaz a validação quando um dado MUDA de fato. **Exigir nova senha**
-      (`trocarSenha`; recusado sem o Resend — 409 — e para o próprio ADM; "Dispensar"). Papel (com a confirmação), Aprovar/
-      Desativar/Reativar e Excluir. Auditoria registra os fatos ("dados validados", "senha nova exigida").
+      (`trocarSenha`; recusado sem o Resend — 409 — e para o próprio ADM; "Dispensar"). Seção **Acesso**: o papel do banco
+      (com a confirmação), os **grupos** por cadeado (`GruposDaPessoa`), **Aprovar** (o modal com papel + grupos) / **Recusar**
+      (pendente), Desativar/Reativar e **"Ver acesso"** (`AcessoDaPessoa`); Excluir no rodapé. Auditoria registra os fatos ("dados validados", "senha nova exigida").
     - **Troca de senha OBRIGATÓRIA:** `UsuarioSessao.trocarSenha` → o layout do `/painel` redireciona a **`/nova-senha`**
       (fora do painel: `NovaSenhaObrigatoria` = senha nova + captcha → código no e-mail → `POST /api/perfil/senha`; "Sair");
       `/api/perfil/senha` e `/api/auth/senha` zeram a exigência.
@@ -282,7 +334,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (aditiva, idempotente — espelho da `0015`) dá a Mesa (`dfd`) a toda permissão que tinha `protocolos`; as chaves antigas
   (`dashboard`/`protocolos`) ficam no JSON e **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
   /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A permissão é
-  gate de NAVEGAÇÃO (as páginas/rotas dos módulos não conferem a aba — como sempre foi). As tabelas
+  PORTÃO REAL: as páginas (`acessoPagina`) e as rotas (`exigirAcesso`/`recusa*` — ver "Guardas") conferem a tela aberta pelo
+  grupo **e** o que o PAPEL permite nela; pela URL, a tela fechada mostra o `AcessoRestrito`. As tabelas
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
   migração de DROP).
 - **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
@@ -1556,7 +1609,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de Itens** (todos os itens numa tabela única, com coluna Catálogo; clique abre o detalhe num banner). A troca de visão
   anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
   `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`, `/item`), `PATCH`/`DELETE /api/catalogo/[id]`,
-  `PATCH /api/catalogo/itens`, `PATCH`/`DELETE /api/catalogo/item/[id]` — todas `exigirEditor`.
+  `PATCH /api/catalogo/itens`, `PATCH`/`DELETE /api/catalogo/item/[id]` — pelo papel no Catálogo (criar/editar = Manipular,
+  importar = Importar, excluir = Excluir — o mapa `rotas-acesso.ts`).
 - **Novo catálogo por card "+" + CRUD manual de item + resolução de conflitos (sem migração):** no lugar do botão
   "Importar", um **card "+"** (tracejado, no formato do card de catálogo) fecha a grade; clicá-lo abre **"Novo catálogo"**
   (`Segmented` **Criar manualmente** [nome+tipos → catálogo VAZIO via modo `criar-catalogo` do `catalogoOpSchema`, que abre p/
@@ -1603,7 +1657,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `catalogo-sql.ts`: UMA consulta com os códigos num só parâmetro JSON — `IN (SELECT value FROM json_each(?))`, testada pelo
   driver D1 real; guard "catálogo vazio ⇒ nada") e,
   p/ não catalogados, propõe semelhante via `LIKE` por token distintivo — NÃO baixa o catálogo. Rota **`POST /api/catalogo/conferir`**
-  (`exigirUsuario`) devolve o veredito por código (Map serializado em entries); cliente único **`catalogo-conferir-cliente.ts`**
+  (Visualizar numa das Mesas ou no Catálogo) devolve o veredito por código (Map serializado em entries); cliente único **`catalogo-conferir-cliente.ts`**
   (`conferirItensCliente`, silencioso em erro — conferência é auxiliar). **Threading via `ctx`** (mesmo padrão de
   `orgaoUnidadeDivergente`, avaliadores seguem PUROS): `avaliarDfd`/`mensagensDfd`/`faltasObrigatorias` recebem
   `ctx.conformidade` (pré-computada pelo chamador) — `veredictoLinhaCatalogo`/`bloqueantesCatalogo`/`algumCatalogoFundamental`
@@ -1697,7 +1751,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Normal, **Consolidada** (listas + filtros no nível do ITEM — `atributoItem.classificacao`/`unidCad`) e no detalhe
   (`ComposicaoItem`). Sem cadastro, as colunas nem existem. A unidade é memorizada pela GRAFIA (poucas distintas entre
   milhares de itens) e a classificação por item (`WeakMap`).
-- **Rotas** (envelope `http.ts`; leitura `exigirUsuario`, escrita `exigirEditor` + auditoria `unidade_medida`/
+- **Rotas** (envelope `http.ts`; leitura = Visualizar o Catálogo, escrita = Configurar o Catálogo + auditoria `unidade_medida`/
   `classificacao_item`): `GET`/`POST /api/catalogo/unidades-medida` (GET = cadastro + classificações + o USO das grafias;
   `?uso=0` = só o cadastro), `PATCH`/`DELETE /api/catalogo/unidades-medida/[id]`, `PATCH /api/catalogo/unidades-medida/ordem`,
   `POST /api/catalogo/unidades-medida/sinonimos` (`{itens ≤ 200}` → as grafias viram sinônimos num lote atômico e
@@ -1807,7 +1861,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Métricas das Integrações** (`MetricasChart.onSelecionar`): o dia + a tabela dos 7 dias + a fonte (Cloudflare GraphQL).
 - **Rotas:** `POST /api/pca` (com `fonte` = espaço; com `dfdIds` = edição legada), `PATCH /api/pca/[id]` (nome/ano/fonte/status/
   capa/visão), `POST /api/pca/[id]/protocolos` (enviar · devolver · incorporar), `POST /api/pca/[id]/itens` (retirar), `GET /api/pca/[id]/capa`
-  (`exigirUsuario`), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita `exigirEditor` + auditoria `pca`.
+  (Visualizar o PCA), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita pelo papel no PCA (criar/Configuração =
+  Configurar; excluir o PCA, a planilha e retirar itens = Excluir; importar planilhas = Importar) + auditoria `pca`.
 
 ### Mesa do PCA INDEPENDENTE + incorporação com TRAVA — migração `0034`
 - **Modelo (aditivo):** `dfd_protocolos` ganhou `pca_id` (FK `pcas` **set null** — o protocolo está na Mesa desse PCA),
@@ -1822,7 +1877,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico — **PERMANENTE**: não
   há desincorporar) e **Devolver à Mesa** (só o NÃO incorporado) — a barra de seleção de protocolos do PCA tem SÓ essas duas
   ações (sem o editor de massa). Só o incorporado conta no
-  Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, `exigirEditor`,
+  Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, Manipular no PCA — enviar também na Mesa,
   escopo por unidade, `{alterados, falhas}`, auditoria por protocolo com a ação REAL).
 - **TRAVA (profissional, servidor + tela):** protocolo INCORPORADO ⇒ protocolo, DFDs e itens **somente leitura**; só a GESTÃO
   (`responsavelId`/`situacaoId`) passa. Servidor: `src/lib/trava-pca.ts`
@@ -1842,8 +1897,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
   `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
   importação que falhou no meio (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — só a gravação NOVA
-  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele e com menos itens gravados que o total declarado
-  no `start-dfd`; um DFD completo nunca, qualquer que seja a hora) sai de um protocolo ENVIADO; do incorporado, nunca (o
+  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele HÁ POUCO — `JANELA_DESFAZER_MIN`=60, pela criação
+  do DFD, que a sobrescrita mantém — e com menos itens gravados que o total declarado no `start-dfd`; um DFD completo ou
+  antigo nunca — um `start-dfd` forjado sobre um DFD antigo da pessoa não vira "desfazer") sai de um protocolo ENVIADO; do
+  incorporado, nunca (o
   histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
   protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
   poder ser excluído.
@@ -1894,7 +1951,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   item. Os dois rodam no MESMO `db.batch` da incorporação (transação sequencial — sem corrida no MAX). Depois,
   `sincronizarAtivosPca` inativa os números dos DFDs que deixaram de ser vigentes (substituídos/excluídos por outro protocolo).
 - **Retirar item do PCA:** Mesa do PCA → Itens → seleção → **"Retirar do PCA"** (`modoPca.acoesItens`) → `POST
-  /api/pca/[id]/itens` (`acaoItensPcaSchema` `{acao:"retirar", ids ≤ 100}`, `exigirEditor`, escopo por unidade, auditoria com os
+  /api/pca/[id]/itens` (`acaoItensPcaSchema` `{acao:"retirar", ids ≤ 100}`, Excluir no PCA, escopo por unidade, auditoria com os
   nºs): o nº fica **INATIVO** (riscado na coluna **"Seq. PCA"** — `modoPca.colunasItens`) e o item sai do Dashboard/Orçamento/cards
   (`itensConsolidados` pula os inativos; `listarPcasCards` desconta via `inativosPorDfd`). O editor de massa da seleção de itens
   só aparece com itens NÃO incorporados. Excluir o PCA zera `dfd_itens.pca_id/pca_sequencial` no mesmo lote.
@@ -1924,7 +1981,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (espelha `importar-catalogo`: retry de transitório, all-or-nothing — cada import cria um orçamento NOVO; falha apaga o
   parcial). Insert PURO em lotes de **5×17=85** params (< 100 do D1); recomputa `total_itens` + `valor_inicial`. `append`
   é IDEMPOTENTE (apaga `sequencial >= desde` antes de reinserir). Rotas `POST /api/orcamento` + `PATCH`/`DELETE
-  /api/orcamento/[id]` (renomear/ano, excluir) — `exigirEditor`, envelope `http.ts`, **auditoria** (`registrarAuditoria`,
+  /api/orcamento/[id]` (renomear/ano = Configurar, excluir = Excluir; importar = Importar) — envelope `http.ts`, **auditoria** (`registrarAuditoria`,
   entidade `orcamento`).
 - **UI — LISTA (`/painel/orcamento` = `OrcamentoView`) + TELA DO ORÇAMENTO (`/painel/orcamento/[id]`):** a lista mostra
   SÓ os **cards 4:5** (`OrcamentoCard` — SÓ INFORMAÇÃO, sem imagem: ano + nome; **dotação ATUALIZADA** (inicial +
@@ -1948,7 +2005,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SÓ-leitura `OrcamentoItemDetalhe`; no RODAPÉ da tabela (`acoesRodape`, como o "Importar" da Mesa; editor) o botão
   **"Reenviar planilha"** → `ImportarOrcamento alvo`: a prévia compara atual × nova (nome/ano travados), confirma e
   `substituirOrcamentoEmLotes` grava a planilha nova num orçamento TEMPORÁRIO (os mesmos lotes all-or-nothing) e só então
-  `POST /api/orcamento/[id]/substituir` `{origemId}` (`exigirEditor`, auditoria "planilha reenviada — N → M") troca os
+  `POST /api/orcamento/[id]/substituir` `{origemId}` (Importar no Orçamento, auditoria "planilha reenviada — N → M") troca os
   lançamentos num LOTE ATÔMICO (`comandosSubstituirLancamentos`, **`orcamento-sql.ts`** — builders testados pelo driver D1
   REAL no `db.batch`: apaga os do alvo, move os da origem, recalcula os totais, apaga a origem); qualquer falha deixa o
   orçamento anterior intacto e apaga o temporário. O orçamento mantém id/nome/ano (vínculos e visões seguem pelo texto).
@@ -1992,7 +2049,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   rodapé [seletor | barra da edição] e as camadas; os MESMOS no Comparativo e na `DataTable` da Mesa) + núcleo puro
   **`edicoes-tabela-core.ts`** (`edicoesDaChave`/`edicaoInicial`/`idPadrao`/`chavePadrao`, testado) + D1 em
   **`edicoes-tabela.ts`** (`listarEdicoesTabela` = as minhas + as públicas, com o autor) + rotas **`POST
-  /api/tabela/edicoes`** e **`PATCH`/`DELETE /api/tabela/edicoes/[id]`** (`exigirUsuario`; só o DONO ou o ADM altera/exclui;
+  /api/tabela/edicoes`** e **`PATCH`/`DELETE /api/tabela/edicoes/[id]`** (a tela da tabela da chave: a sua = Visualizar; publicar ou moderar a pública de outra pessoa = Configurar — ver "PAPÉIS";
   `criarEdicaoSchema`/`editarEdicaoSchema`: nome ≤ 60, layout ≤ 32 KB). A `0041` converte os ajustes salvos antes (um por
   usuário e par em `preferencias_tabela`) na edição pessoal "Minha edição" — e a torna a padrão dele. Confirmações e erros
   em CARD FLUTUANTE (`useConfirmacao` + `AvisoFlutuante`), nunca no alerta do navegador; a explicação de tudo na **AJUDA
@@ -2025,7 +2082,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ignora ocultos; `linhasVinculo` agrupa os textos distintos com nº de lançamentos + Σ dotação + contexto do órgão;
   `mapaVinculos`/`alvoDoTexto`). Acesso em `orcamento.ts` (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — órgãos +
   unidades sem a "Geral", `definirVinculosOrcamento` = UPSERT `ON CONFLICT(tipo,chave)` em lotes de 16 linhas (80 params),
-  conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (`exigirEditor`, `vinculosOrcamentoSchema` ≤ 200,
+  conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (Configurar no Orçamento, `vinculosOrcamentoSchema` ≤ 200,
   auditoria). UI: aba **"Vínculos"** da tela do orçamento → componente **`OrcamentoVinculos`** (DS,
   catalogado): tabela filtrável Estado (Vinculado/Sugestão/Sem vínculo) · Tipo · No orçamento · **No sistema** (`select`,
   unidades por `optgroup` de órgão, ocultos só se já vinculados; alvo ≥44px no mobile) · Lançamentos · Dotação, com
@@ -2116,7 +2173,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Rotas novas:** `POST /api/tarefas/[id]/checklist` + `PATCH`/`DELETE …/checklist/[itemId]`, `POST …/comentarios` +
     `PATCH`/`DELETE …/comentarios/[cid]`, `GET …/historico`,
     `POST /api/tarefas/massa`, `GET /api/tarefas/vinculos?tipo=&q=`, `GET /api/tarefas/do-vinculo?tipo=&id=` — todas
-    `exigirUsuario` + membro do grupo do quadro (`tarefaAcessivel`), vínculo conferido por `vinculoAcessivel`, auditoria.
+    pelo papel no grupo do quadro (`tarefaAcessivel` + `recusaNoQuadro`), vínculo conferido por `vinculoAcessivel` (a tela do alvo), auditoria.
 - **FASE 3 — recorrência, Dashboard, notificações, modelos e automações (migração `0044`, aditiva):** `tarefas` +
   `recorrencia` (JSON `Recorrencia` {freq diaria|semanal|mensal|anual, intervalo 1–365, dias 0–6 na semanal, base prazo|
   conclusao}) + `recorrencia_anterior_id` (FK set null, **ÚNICO** — a mesma anterior de novo derruba o lote inteiro: concluir,
@@ -2367,7 +2424,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **FASE 10 — EQUIPES do quadro (migração `0052`, aditiva):** tabelas `tarefa_equipes` (quadro cascade, nome, cor, ordem),
   `tarefa_equipe_membros` (equipe + usuário, cascade) e `tarefa_equipes_links` (tarefa + equipe, cascade). A EQUIPE é um grupo
   de pessoas DO GRUPO do quadro, cadastrado na **Configuração** (seção "Equipes": nome + `ColorField` + `SeletorPessoas`;
-  editores; `POST /api/tarefas/quadros/[id]/equipes`, `PATCH`/`DELETE /api/tarefas/equipes/[id]` — `exigirEditor`,
+  Configurar Tarefas no grupo do quadro; `POST /api/tarefas/quadros/[id]/equipes`, `PATCH`/`DELETE /api/tarefas/equipes/[id]` —
   `pessoasValidas`, quadro arquivado = 409, auditoria `tarefa_equipe`). A tarefa recebe equipes além das pessoas (bloco
   **Responsáveis**: `ChipsAlternar` na cor + "Pela equipe:" com as fotos dos membros herdados; `equipes` em `POST`/`PATCH
   /api/tarefas` e na massa — campo "Equipe" +/−), por REFERÊNCIA: mudar a equipe muda todas as tarefas dela.
@@ -2545,8 +2602,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **"+ ADICIONAR OUTRA LISTA" no quadro (sem migração):** a última coluna do `QuadroKanban` é a **`NovaLista`** (como no
     Trello: tocar abre o nome, Enter cria no fim e segue aberta para a próxima; Esc/X/tocar fora fecha; no celular, um
     ponto "+" na navegação das colunas) — `QuadroKanban.onNovaLista`, ausente com o quadro arquivado; o quadro SEM listas
-    mostra só essa coluna. **Qualquer membro do grupo** cria (`POST /api/tarefas/quadros/[id]/listas` com `exigirUsuario` +
-    `quadroAcessivel`); o limite de cartões, "de concluídas" e a posição (`aposId`) seguem só dos editores, assim como
+    mostra só essa coluna. Quem MANIPULA Tarefas no grupo do quadro cria (`POST /api/tarefas/quadros/[id]/listas` —
+    `recusaNoQuadro`); o limite de cartões, "de concluídas" e a posição (`aposId`) seguem de quem CONFIGURA, assim como
     editar/arquivar/excluir/ordenar listas.
   - **DUPLICAR cartão · EXCLUIR QUALQUER LISTA · IMAGEM DE FUNDO por link (migração `0058`, aditiva):**
     - **Duplicar** (o "Copiar cartão" do Trello): o ícone de cópia ao lado do `#ticket` do `CartaoTarefa` (`onDuplicar`), o
@@ -2718,19 +2775,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Validação de entrada sempre com **Zod** (`src/lib/*-validation`).
 - DFD/protocolo (além das já citadas): `GET /api/protocolo/[id]?completo=1` (protocolo + DFDs COMPLETOS + unidades com
   responsáveis — banner gravado), `GET /api/dfd/[id]` (DFD + `unidade`), `POST /api/dfd/conferencia` (`{ids ≤ 200}` →
-  estado/resumo/validação por DFD, `exigirUsuario`), `POST /api/dfd/massa` (`{ids ≤ 500, acao}` → edição em massa,
-  `exigirEditor`), `POST /api/protocolo/massa` (`massaProtocolosSchema`: `{ids ≤ 20, acao reparticao|assunto|valorCapa}`,
-  `exigirEditor`, escopo por protocolo, `{alterados, falhas}`), `POST /api/dfd/itens/massa` (`massaItensSchema`: `{ids ≤ 100
+  estado/resumo/validação por DFD, Visualizar numa das Mesas + o escopo), `POST /api/dfd/massa` (`{ids ≤ 500, acao}` → edição em massa,
+  Manipular na Mesa de cada DFD), `POST /api/protocolo/massa` (`massaProtocolosSchema`: `{ids ≤ 20, acao reparticao|assunto|valorCapa}`,
+  Manipular na Mesa de cada protocolo, escopo por protocolo, `{alterados, falhas}`), `POST /api/dfd/itens/massa` (`massaItensSchema`: `{ids ≤ 100
   de ≤ 5 DFDs, acao catalogo|unidade|quantidade|valorUnitario|remover}`, lote atômico por DFD) e `POST /api/protocolo`
   `start-protocolo` com **`reenvio {protocoloId, resumo}`** (sobrescrita do MESMO protocolo — 422 se nº/Id não conferem).
   IN (...) sempre em lotes de ≤ 90 ids (`LOTE_IDS`/`lotesDeIds`) — limite de 100 parâmetros do D1.
 - Gestão/histórico (migração `0031`): `POST /api/protocolo/conferencia` (`{ids ≤ 50}` → estado AGREGADO por protocolo,
-  `exigirUsuario`), `PATCH /api/protocolo/[id]` também com `responsavelId`/`situacaoId` (+ `origem` banner|celula),
+  Visualizar numa das Mesas), `PATCH /api/protocolo/[id]` também com `responsavelId`/`situacaoId` (+ `origem` banner|celula),
   `POST /api/protocolo/massa` com as ações `responsavel`/`situacao`, `GET /api/protocolo/[id]/historico` e
   `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +
   `PATCH`/`DELETE /api/admin/situacoes/[id]` + `PATCH /api/admin/situacoes/ordem` (`exigirAdmin`) e `PATCH
   /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA do grupo ou `null`).
-- Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, `exigirUsuario`) — o histórico de execução
+- Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, Visualizar a Mesa do sistema) — o histórico de execução
   (reenvios e ações) dos protocolos da Mesa em tuplas `[protocolo, pessoa, dia, tipo, n]` + as pessoas (foto + apelido).
 - Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
   `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000}` → os DFDs já
@@ -2829,6 +2886,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
+  **`exportar`** (`{nome}`, opt-in) = o botão **Exportar** (.xlsx) no rodapé: as linhas À VISTA (filtros das colunas, na ordem,
+  todas as páginas) e as colunas visíveis da edição em uso — o número como número, os vários valores unidos, as datas em
+  dd/mm/aaaa (`linhasPlanilhaTabela`, `exportar-tabela.ts`);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
@@ -2922,7 +2982,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   interessado · unidade e o "atual" marcado; a lista do `SeletorPessoa`),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
-  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox/**`CampoLista`** [lista em chips — várias referências da
+  **`MatrizCapacidades`** (a matriz Telas × Ações de um papel — editável ou só-leitura), **`ResumoPapel`** (o resumo das telas e
+  ações), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
+  a pessoa abre e faz em cada grupo),
+  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
   renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
   indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
@@ -2977,7 +3040,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   blocos irmãos do MESMO registro (`avaliacao`, `integracoes`) ficam (antes o registro inteiro virava "{}").
 - **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
-  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Tabelas** (as LINHAS POR PÁGINA com que as
+  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Papéis** (`PapeisAdmin` — ver "PAPÉIS"),
+  **Tabelas** (as LINHAS POR PÁGINA com que as
   tabelas da Mesa abrem — 30/50/100/200; slot `tabelas` do mesmo `aparenciaSchema`, `linhasTabela`), **PCAs** (cadastrar/editar/ativar/excluir
   via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
   de DFD e categoria de protocolo; ver "Avaliação configurável"), **Situações** (`SituacoesAdmin` — as situações do

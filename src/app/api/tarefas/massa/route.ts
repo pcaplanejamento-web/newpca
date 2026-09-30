@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirSessao, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aplicarMassaTarefas, aposMovimento, avisarSobreTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, membrosDasEquipes, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
@@ -22,7 +22,7 @@ const DESCREVE: Record<AcaoMassaTarefas["campo"], string> = {
  * `falhas`; o destino (lista/pessoa/etiqueta) é conferido UMA vez contra o quadro; tudo num lote atômico.
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(massaTarefasSchema, req);
   if ("resp" in p) return p.resp;
@@ -31,6 +31,8 @@ export async function POST(req: Request) {
   if (!achadas.length) return erro("Tarefas não encontradas.", 404);
   const quadro = await quadroAcessivel(a.u, achadas[0].quadroId);
   if (!quadro) return erro("Quadro não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, quadro, "manipular", true);
+  if (negado) return negado;
   const falhas: { id: number; ticket: number | null; motivo: string }[] = [];
   for (const id of ids) if (!achadas.some((t) => t.id === id)) falhas.push({ id, ticket: null, motivo: "Tarefa não encontrada." });
   const doQuadro = achadas.filter((t) => {

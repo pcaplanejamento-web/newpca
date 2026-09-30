@@ -14,14 +14,14 @@ import { toast } from "./Toast";
 
 /**
  * ITENS ARQUIVADOS do quadro (o "Itens arquivados" do Trello, pelo botão no cabeçalho do quadro): `Segmented` **Cartões |
- * Listas**, busca e, por item, RESTAURAR (o cartão volta à lista dele; a lista volta ao quadro) e EXCLUIR (editores — o
- * cartão direto; a lista pela exclusão com escolha, `onExcluirLista`). Qualquer membro restaura um cartão; lista, só editor.
+ * Listas**, busca e, por item, pelo PAPEL no quadro: RESTAURAR o cartão (Manipular) ou a lista (Configurar) e EXCLUIR
+ * (Excluir — o cartão direto; a lista pela exclusão com escolha, `onExcluirLista`).
  */
 export function ItensArquivados({
   aberto,
   tarefas,
   listas,
-  podeEditar,
+  pode,
   onFechar,
   onAbrir,
   onExcluirLista,
@@ -32,7 +32,8 @@ export function ItensArquivados({
   tarefas: TarefaResumo[];
   /** TODAS as listas (as arquivadas são filtradas aqui). */
   listas: ListaTarefas[];
-  podeEditar: boolean;
+  /** O que o papel permite no quadro. */
+  pode: { manipular: boolean; configurar: boolean; excluir: boolean };
   onFechar: () => void;
   /** Abre o detalhe de um cartão arquivado. */
   onAbrir: (id: number) => void;
@@ -93,17 +94,19 @@ export function ItensArquivados({
                       {rotuloTicket(t.ticket)} · {nomeLista.get(t.listaId)?.nome ?? "Lista"}
                     </span>
                   </button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={ocupado === `c${t.id}`}
-                    disabled={ocupado != null}
-                    icon={<IconDesarquivar className="h-4 w-4" />}
-                    onClick={() => agir(`c${t.id}`, () => chamar(`/api/tarefas/${t.id}`, "PATCH", { arquivada: false }), `${rotuloTicket(t.ticket)} restaurada.`)}
-                  >
-                    Restaurar
-                  </Button>
-                  {podeEditar && (
+                  {pode.manipular && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={ocupado === `c${t.id}`}
+                      disabled={ocupado != null}
+                      icon={<IconDesarquivar className="h-4 w-4" />}
+                      onClick={() => agir(`c${t.id}`, () => chamar(`/api/tarefas/${t.id}`, "PATCH", { arquivada: false }), `${rotuloTicket(t.ticket)} restaurada.`)}
+                    >
+                      Restaurar
+                    </Button>
+                  )}
+                  {pode.excluir && (
                     <Button
                       size="sm"
                       variant="icon"
@@ -129,27 +132,27 @@ export function ItensArquivados({
                     <span className="block truncate text-[13.5px] font-medium text-text">{l.nome}</span>
                     <span className="block text-[12px] text-muted">{num(n)} cartão(ões)</span>
                   </span>
-                  {podeEditar && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={ocupado === `l${l.id}`}
-                        disabled={ocupado != null}
-                        icon={<IconDesarquivar className="h-4 w-4" />}
-                        onClick={() => agir(`l${l.id}`, () => chamar(`/api/tarefas/listas/${l.id}`, "PATCH", { arquivada: false }), `Lista "${l.nome}" restaurada.`)}
-                      >
-                        Restaurar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="icon"
-                        aria-label={`Excluir a lista ${l.nome}`}
-                        disabled={ocupado != null}
-                        icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-                        onClick={() => onExcluirLista(l.id)}
-                      />
-                    </>
+                  {pode.configurar && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={ocupado === `l${l.id}`}
+                      disabled={ocupado != null}
+                      icon={<IconDesarquivar className="h-4 w-4" />}
+                      onClick={() => agir(`l${l.id}`, () => chamar(`/api/tarefas/listas/${l.id}`, "PATCH", { arquivada: false }), `Lista "${l.nome}" restaurada.`)}
+                    >
+                      Restaurar
+                    </Button>
+                  )}
+                  {pode.excluir && (
+                    <Button
+                      size="sm"
+                      variant="icon"
+                      aria-label={`Excluir a lista ${l.nome}`}
+                      disabled={ocupado != null}
+                      icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                      onClick={() => onExcluirLista(l.id)}
+                    />
                   )}
                 </li>
               );

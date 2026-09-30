@@ -585,27 +585,53 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "rbac-grupo",
     dominio: "acesso",
-    titulo: "Grupo ativo define as abas e as repartições",
+    titulo: "O grupo decide QUAIS telas; o papel decide o que se faz nelas",
     descricao:
-      "Um usuário pertence a vários grupos e escolhe o grupo ativo no cabeçalho. Cada grupo tem 1 permissão (quais módulos vê: Mesa, PCA, Catálogo, Orçamento — a mesma lista na barra lateral e na barra inferior do celular) e acessa um conjunto de repartições. Ao entrar no painel, o sistema abre a Mesa — onde ficam os protocolos, os DFDs e os itens — ou o 1º módulo liberado; sem nenhum, o Perfil. Quem tinha a aba Protocolos (tela legada, removida) passou a ter a Mesa; o Dashboard antigo também saiu — o do PCA segue na tela inicial. Sem nenhum módulo, o Perfil avisa para trocar de grupo ou pedir acesso ao administrador.",
-    fonte: "grupos / permissoes / abas (abasConhecidas, rotaInicial)",
-    configuravelEm: { rotulo: "Grupos", href: "/painel/grupos" },
+      "Um usuário pertence a vários grupos e escolhe o grupo ativo no cabeçalho. Cada grupo tem 1 permissão — as telas que ele abre (Mesa, PCA, Catálogo, Orçamento, Tarefas, Calendário) — e acessa um conjunto de unidades. O PAPEL da pessoa diz o que ela faz em cada tela: Visualizar, Manipular, Importar, Exportar, Excluir e Configurar. A tela só abre quando o grupo a libera E o papel a visualiza; ao entrar no painel, o sistema abre a 1ª tela que abre (sem nenhuma, o Perfil explica por quê).",
+    detalhes: [
+      "O que o papel não permite some da tela (importar, seleção e edição em massa, excluir, exportar) ou vira só-leitura — e o servidor recusa (403) do mesmo jeito.",
+      "Pela URL, a tela que o grupo ou o papel não abre mostra 'Acesso restrito'.",
+    ],
+    fonte: "acesso (getAcesso / podeTela) + papeis-core (podeNaTela)",
+    configuravelEm: { rotulo: "Papéis" },
+  },
+  {
+    id: "rbac-papel",
+    dominio: "acesso",
+    titulo: "Papéis: criados pelo ADM, com as ações de cada tela",
+    descricao:
+      "Em Configurações → Papéis o ADM cria e edita papéis numa matriz Telas × Ações. Qualquer ação liga o Visualizar; sem Visualizar, a tela fica fechada. O Administrador é fixo (tudo, inclusive a Administração); Gestor e Membro são do sistema (editáveis, não excluíveis). Um papel é o PADRÃO dos novos cadastros; o que alguém tem não se exclui.",
+    detalhes: [
+      "Alterar um papel vale na hora para todas as pessoas dele; retirar capacidades de um papel em uso pede confirmação.",
+      "Em Usuários, o ADM troca o papel (com confirmação), marca os grupos, aprova o cadastro já com papel e grupos e vê o acesso efetivo de cada pessoa em cada grupo ('Ver acesso').",
+      "O sistema nunca fica sem Administrador ativo: trocar o papel, desativar ou excluir o último é recusado.",
+    ],
+    fonte: "papeis-core (CATALOGO_PAPEIS / coerceCapacidades) + papeis-sql (travas no comando)",
+    configuravelEm: { rotulo: "Papéis" },
+  },
+  {
+    id: "rbac-recurso",
+    dominio: "acesso",
+    titulo: "Cada registro segue a tela em que está",
+    descricao:
+      "Na Mesa, o protocolo (e os DFDs e itens dele) que está num PCA segue a tela PCA; os demais, a Mesa do sistema. Uma tarefa segue o papel no GRUPO DO QUADRO dela (um aviso de outro grupo abre normalmente); a tarefa e os eventos também valem pelo Calendário. As edições públicas das tabelas exigem Configurar na tela da tabela.",
+    fonte: "podeNoRecurso / recusaNoQuadro / recusaNaChave",
   },
   {
     id: "rbac-admin",
     dominio: "acesso",
-    titulo: "Admin sempre vê TODAS as abas/telas",
+    titulo: "O Administrador sempre vê TODAS as telas",
     descricao:
-      "Regra firme: o administrador nunca é bloqueado por nível de acesso — vê todas as abas e telas, ignorando as permissões de grupo. O primeiro usuário cadastrado vira admin/ativo.",
-    fonte: "api-auth / grupos",
+      "Regra firme: o papel Administrador nunca é bloqueado — vê e faz tudo em todas as telas, com ou sem grupo, e só ele entra na Administração (usuários, grupos, permissões, papéis e configurações). O primeiro usuário cadastrado vira Administrador ativo.",
+    fonte: "api-auth (exigirAdmin) / papeis-core (podeNaTela)",
   },
   {
     id: "rbac-reparticao",
     dominio: "acesso",
-    titulo: "A repartição ativa escopa os dados",
+    titulo: "As unidades do grupo escopam os dados",
     descricao:
-      "A repartição ativa do cabeçalho filtra protocolos e PCA. Em 'Geral' (sem repartição) mostra tudo. Toda ESCRITA de DFD/protocolo é escopada por repartição (403 fora do escopo), com anti-sequestro por número.",
-    fonte: "getReparticaoContexto / getReparticaoFiltro",
+      "O acesso às unidades tem 3 estados: TODAS (Administrador, ou grupo com a 'Geral' — também no detalhe e na escrita), as UNIDADES do grupo, ou NENHUMA (sem grupo, a pessoa não vê dado nenhum). A unidade ativa do cabeçalho filtra a Mesa e o PCA; toda escrita de DFD/protocolo confere a unidade (403 fora do escopo), com anti-sequestro por número.",
+    fonte: "escopo-unidades-core / getReparticaoContexto / getReparticaoFiltro",
     configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
   },
 

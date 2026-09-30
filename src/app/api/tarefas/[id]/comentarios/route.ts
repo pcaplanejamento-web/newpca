@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { nomeExibicao } from "@/lib/pessoa";
@@ -10,11 +10,13 @@ export const dynamic = "force-dynamic";
 
 /** COMENTA a tarefa — as @menções são resolvidas no servidor entre as pessoas do grupo do quadro. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   const p = await parseCorpo(comentarioSchema, req);
   if ("resp" in p) return p.resp;
   const mencoes = mencoesDoTexto(p.data.texto, await pessoasDoQuadro(r.quadro));

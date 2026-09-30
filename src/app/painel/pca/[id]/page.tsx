@@ -8,7 +8,9 @@ import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { UnitFilter } from "@/components/UnitFilter";
-import { getUsuarioAtual } from "@/lib/auth";
+import { acessoPagina } from "@/lib/acesso-pagina";
+import type { UsuarioSessao } from "@/lib/auth";
+import type { PodeTela } from "@/lib/papeis-core";
 import { dadosComparativo } from "@/lib/comparativo-dados";
 import { num } from "@/lib/format";
 import { carregarMesaDoPca } from "@/lib/mesa-dados";
@@ -36,26 +38,30 @@ export default async function PcaEspacoPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ aba?: string; unidade?: string }>;
 }) {
+  const r = await acessoPagina("pca");
+  if (r.bloqueio) return r.bloqueio;
+  const { pode, acesso } = r;
+  const u = acesso.u;
   const id = Number((await params).id);
   const sp = await searchParams;
-  const [pca, u] = await Promise.all([Number.isInteger(id) && id > 0 ? getPcaEspaco(id) : null, getUsuarioAtual()]);
+  const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
   if (!pca) notFound();
-  const podeEditar = u?.role === "admin" || u?.role === "gestor";
   const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
   const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
-  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u?.id ?? null);
-  else if (aba === "mesa") conteudo = await abaMesa(pca, u, podeEditar);
+  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode);
+  else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (
       <PcaConfiguracao
         pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId, mesaMarcados: pca.mesaMarcados }}
-        podeEditar={podeEditar}
+        podeEditar={pode.configurar}
+        podeExcluir={pode.excluir}
         temDados={temDados}
         visoes={visoes.map((v) => ({ id: v.id, nome: v.nome, resumo: resumoVisao(v.filtros) }))}
       />
@@ -106,7 +112,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
  * Aba ORÇAMENTO: os KPIs (dotação do CUBO do ANO do PCA × planejado) e, abaixo, o COMPARATIVO — a MESMA tabela cruzada da
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
-async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null) {
+async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela) {
   const ref = await orcamentoDoAno(pca.ano);
   const [orc, comp] = await Promise.all([orcamentoDoPca(pca, ref), ref ? dadosComparativo(ref.id, usuarioId) : null]);
   return (
@@ -124,15 +130,17 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null) {
         unidades: orc.unidades,
       }}
       comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}
+      podeExportar={pode.exportar}
+      podePublicar={pode.configurar}
     />
   );
 }
 
 /** Aba MESA (fonte protocolo — só os protocolos ENVIADOS a este PCA) | IMPORTAÇÃO (fonte lista). */
-async function abaMesa(pca: PcaEspaco, u: Awaited<ReturnType<typeof getUsuarioAtual>>, podeEditar: boolean) {
+async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, pode: PodeTela) {
   if (pca.fonte === "lista") {
     const planilhas = await getUnidades(undefined, pca.id);
-    return <PlanilhasPca pcaId={pca.id} planilhas={planilhas} podeEditar={podeEditar} />;
+    return <PlanilhasPca pcaId={pca.id} planilhas={planilhas} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
   }
   return <MesaPca {...await carregarMesaDoPca(u, pca)} />;
 }

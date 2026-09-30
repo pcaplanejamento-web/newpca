@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /** Unidades de UM órgão (`/painel/orgaos/[id]`) — drill-down a partir da lista de órgãos. */
 export default async function OrgaoUnidadesPage({ params }: { params: Promise<{ id: string }> }) {
   const atual = await getUsuarioAtual();
-  if (atual?.role !== "admin") {
+  if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar unidades." />;
   }
   const orgaoId = Number((await params).id);

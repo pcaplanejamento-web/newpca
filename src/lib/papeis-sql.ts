@@ -142,3 +142,67 @@ export function comandoExcluirUsuario(db: Db, usuarioId: number) {
 export function consultaPapelDaChave(db: Db, chave: "admin" | "gestor" | "membro") {
   return db.select({ id: papeis.id }).from(papeis).where(eq(papeis.chave, chave)).limit(1);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// O CADASTRO dos papéis (Configurações → Papéis — só o ADM). As travas no próprio comando: o Administrador (fixo) nunca
+// é alterado nem excluído; há sempre UM papel padrão dos novos cadastros (marcar um desmarca o outro no mesmo comando);
+// o papel em uso (ou do sistema, ou o padrão) não se exclui.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type DadosPapel = { nome: string; descricao: string | null; capacidades: string; padraoCadastro: boolean };
+
+/** Cria o papel no FIM da ordem; `padraoCadastro` = passa a ser o padrão (o anterior deixa de ser, no mesmo lote). */
+export function comandosCriarPapel(db: Db, d: DadosPapel) {
+  const criar = db
+    .insert(papeis)
+    .values({
+      nome: d.nome,
+      descricao: d.descricao,
+      capacidades: d.capacidades,
+      padraoCadastro: d.padraoCadastro,
+      ordem: sql`(SELECT COALESCE(MAX(${papeis.ordem}), 0) + 1 FROM ${papeis})`,
+    })
+    .returning({ id: papeis.id });
+  // O nome é único (índice): o papel novo é o único com ele — os demais deixam de ser o padrão.
+  const soEste = db.update(papeis).set({ padraoCadastro: false }).where(and(eq(papeis.padraoCadastro, true), sql`${papeis.nome} <> ${d.nome}`));
+  return d.padraoCadastro ? ([criar, soEste] as const) : ([criar] as const);
+}
+
+/** Altera o papel (nunca o Administrador). Devolve as linhas alteradas: nenhuma = inexistente ou o Administrador. */
+export function comandoAtualizarPapel(db: Db, id: number, d: Partial<Omit<DadosPapel, "padraoCadastro">>) {
+  return db
+    .update(papeis)
+    .set({ ...d, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(and(eq(papeis.id, id), sql`(${papeis.chave} IS NULL OR ${papeis.chave} <> 'admin')`))
+    .returning({ id: papeis.id });
+}
+
+/** Marca o papel como o PADRÃO dos novos cadastros e desmarca o anterior — num comando só (nunca o Administrador). */
+export function comandoMarcarPadrao(db: Db, id: number) {
+  return db
+    .update(papeis)
+    .set({ padraoCadastro: sql`(${papeis.id} = ${id})` })
+    .where(
+      and(
+        sql`(${papeis.padraoCadastro} = 1 OR ${papeis.id} = ${id})`,
+        sql`EXISTS (SELECT 1 FROM ${papeis} AS p WHERE p.id = ${id} AND (p.chave IS NULL OR p.chave <> 'admin'))`,
+      ),
+    )
+    .returning({ id: papeis.id, padrao: papeis.padraoCadastro });
+}
+
+/** Exclui o papel — só o criado pelo ADM, que não é o padrão e que NINGUÉM tem (conferido no comando). Nenhuma linha =
+ * recusado (a rota diz o motivo). */
+export function comandoExcluirPapel(db: Db, id: number) {
+  return db
+    .delete(papeis)
+    .where(
+      and(
+        eq(papeis.id, id),
+        sql`${papeis.chave} IS NULL`,
+        eq(papeis.padraoCadastro, false),
+        sql`NOT EXISTS (SELECT 1 FROM ${usuarios} WHERE ${usuarios.papelId} = ${id})`,
+      ),
+    )
+    .returning({ id: papeis.id });
+}

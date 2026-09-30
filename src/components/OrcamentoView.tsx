@@ -9,17 +9,18 @@ import { OrcamentoCard, OrcamentoNovoCard } from "./OrcamentoCard";
 
 /**
  * Módulo ORÇAMENTO (relatório CUBO) — a LISTA: um card 4:5 por orçamento importado (`OrcamentoCard`: ano, nome,
- * indicadores) + o card "+" (editor) que abre a importação (`ImportarOrcamento`: `.xlsx` lido no cliente + o ANO). Clicar
+ * indicadores) + o card "+" (quem importa) que abre a importação (`ImportarOrcamento`: `.xlsx` lido no cliente + o ANO). Clicar
  * num card abre a TELA DO ORÇAMENTO (`/painel/orcamento/[id]`: Lançamentos · Vínculos · Visões); ao importar, a
  * tela do orçamento novo abre sozinha. 100% design-system.
  */
 export function OrcamentoView({
   orcamentos,
-  podeEditar,
+  podeImportar,
   filtro = null,
 }: {
   orcamentos: OrcamentoResumo[];
-  podeEditar: boolean;
+  /** O papel importa no Orçamento (o card "+" e a importação). */
+  podeImportar: boolean;
   /** PCA escolhido no CABEÇALHO (filtro global) — só os orçamentos do ano dele vieram. */
   filtro?: string | null;
 }) {
@@ -37,7 +38,7 @@ export function OrcamentoView({
         </p>
       </div>
 
-      {orcamentos.length === 0 && !podeEditar ? (
+      {orcamentos.length === 0 && !podeImportar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">{filtro ? `Nenhum orçamento do ano do ${filtro}.` : "Nenhum orçamento ainda."}</p>
@@ -47,11 +48,11 @@ export function OrcamentoView({
           {orcamentos.map((o) => (
             <OrcamentoCard key={o.id} orcamento={o} href={`/painel/orcamento/${o.id}`} />
           ))}
-          {podeEditar && <OrcamentoNovoCard onClick={() => setImportar((n) => n + 1)} />}
+          {podeImportar && <OrcamentoNovoCard onClick={() => setImportar((n) => n + 1)} />}
         </div>
       )}
 
-      {podeEditar && <ImportarOrcamento iniciar={importar} />}
+      {podeImportar && <ImportarOrcamento iniciar={importar} />}
     </div>
   );
 }

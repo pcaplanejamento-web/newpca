@@ -138,6 +138,7 @@ export function PlanilhaDfds({
   vazio,
   acaoDescartados,
   edicoes,
+  exportar,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -168,6 +169,8 @@ export function PlanilhaDfds({
   acaoDescartados?: ReactNode;
   /** EDIÇÕES SALVAS da tabela principal (ex.: a Mesa) — repassadas ao `DataTable`. */
   edicoes?: EdicoesDaTabela;
+  /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
+  exportar?: { nome: string };
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -371,7 +374,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

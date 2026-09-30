@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { definirVinculosOrcamento } from "@/lib/orcamento";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * existente / unidade existente, nunca a "Geral"). Global: vale para todos os orçamentos.
  */
 export async function PUT(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("orcamento", "configurar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(vinculosOrcamentoSchema, req);
   if ("resp" in p) return p.resp;

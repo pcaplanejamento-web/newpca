@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { resolverImagemFundo } from "@/lib/imagem-fundo";
@@ -11,16 +11,19 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** Edita o quadro (nome, cor, descrição, arquivado, formato do título, IMAGEM DE FUNDO — o link resolvido para o da imagem). */
 export async function PATCH(req: Request, ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!id || !q) return erro("Quadro não encontrado.", 404);
+  // CONFIGURAR o quadro (nome, cor, fundo, formato, arquivar, privado) = Configurar Tarefas no grupo dele.
+  const negado = recusaNoQuadro(a.acesso, q, "configurar");
+  if (negado) return negado;
   const p = await parseCorpo(editarQuadroSchema, req);
   if ("resp" in p) return p.resp;
   const { fundoAjuste, fundoGradiente, ...resto } = p.data;
   // PRIVADO: só quem criou decide (o ADM, no privado cujo dono não existe mais).
-  if (resto.privado !== undefined && resto.privado !== q.privado && q.criadoPor !== a.u.id && !(q.criadoPor == null && a.u.role === "admin"))
+  if (resto.privado !== undefined && resto.privado !== q.privado && q.criadoPor !== a.u.id && !(q.criadoPor == null && a.u.admin))
     return erro("Só quem criou o quadro pode torná-lo privado ou público.", 403);
   const d: Parameters<typeof atualizarQuadro>[1] = {
     ...resto,
@@ -65,11 +68,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
 /** Exclui o quadro (listas, cartões e etiquetas vão junto). */
 export async function DELETE(_req: Request, ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!id || !q) return erro("Quadro não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, q, "excluir");
+  if (negado) return negado;
   await excluirQuadro(id);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "tarefa_quadro", entidadeId: id, resumo: `Quadro "${q.nome}" excluído` });
   return ok();

@@ -54,6 +54,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Minus,
   Merge,
   Moon,
   Package,
@@ -141,6 +142,8 @@ export const IconChevronRight = ChevronRight;
 export const IconSort = ArrowUpDown;
 export const IconInbox = Inbox;
 export const IconCheck = Check;
+/** O traço da caixa PARCIAL (marcar a linha/coluna quando só parte está marcada). */
+export const IconMenos = Minus;
 export const IconAlert = AlertTriangle;
 export const IconFile = FileText;
 export const IconUsers = Users;

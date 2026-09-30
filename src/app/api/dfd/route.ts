@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
@@ -8,9 +8,10 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo, semValorUnitario } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { categoriaDoProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
 import { listaCurta } from "@/lib/sobrescrita-dfd";
@@ -30,20 +31,22 @@ export const dynamic = "force-dynamic";
  *   que a unidade do DFD seja acessível ao editor.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "importar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(dfdOpSchema, req);
   if ("resp" in p) return p.resp;
   const d = p.data;
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (id: number | null | undefined) => id == null || lista.some((r) => r.id === id);
+  const { acessivel } = await unidadesDaSessao(a.u);
 
   if (d.mode === "append-dfd-itens") {
     const dfd = await getDfdReparticao(d.dfdId);
     if (!dfd) return erro("DFD não encontrado para acrescentar itens.", 404);
     if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à unidade deste DFD.", 403);
+    // O PAPEL importa na Mesa em que o DFD ficou (a do protocolo dele).
+    const negadoLote = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "importar");
+    if (negadoLote) return negadoLote;
     const travaLote = await travaDoDfd(d.dfdId);
     if (travaLote) return respostaTravado(travaLote);
     // Os LOTES seguintes seguem a MESMA régua do `start-dfd` e da análise (o nível do ADM): o valor unitário só
@@ -74,6 +77,17 @@ export async function POST(req: Request) {
   const regras = await getRegrasAvaliacao();
   const destino = d.protocoloId != null ? await getProtocoloReparticao(d.protocoloId) : null;
   const existente = await getReparticaoDfdNumero(d.numero);
+  // O PAPEL importa na Mesa de DESTINO: a do protocolo de destino; sem ele (o avulso, ou a sobrescrita que mantém o DFD
+  // no protocolo dele), a do protocolo do DFD existente; o DFD novo avulso fica na Mesa do sistema.
+  const telaDestino = telaDoRecurso(d.protocoloId != null ? destino?.pcaId : existente?.pcaId);
+  const negado = recusa(a.acesso, telaDestino, "importar");
+  if (negado) return negado;
+  // O DFD que já existe em OUTRA Mesa (ex.: num protocolo enviado a um PCA) só SAI dela com o Importar também nela — a
+  // mesma régua do "vincular", que confere as duas Mesas.
+  if (existente && telaDoRecurso(existente.pcaId) !== telaDestino) {
+    const negadoOrigem = recusa(a.acesso, telaDoRecurso(existente.pcaId), "importar");
+    if (negadoOrigem) return negadoOrigem;
+  }
   const categoria =
     d.protocoloId != null ? classificarAssunto(destino?.assunto ?? null) : await categoriaDoProtocolo(existente?.protocoloId);
   const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo), categoria };

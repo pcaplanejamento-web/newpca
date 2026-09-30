@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { type AbaQuadro, QuadroTarefas } from "@/components/QuadroTarefas";
-import { getUsuarioAtual } from "@/lib/auth";
-import { eventosDosQuadros, rotulosVinculos } from "@/lib/tarefas";
+import { getAcesso } from "@/lib/acesso";
+import { acessoPagina } from "@/lib/acesso-pagina";
+import { eventosDosQuadros, quadroAcessivel, rotulosVinculos } from "@/lib/tarefas";
 import { lerVinculo, mascararPrivados } from "@/lib/tarefas-core";
 import { carregarQuadro, preferenciasCalendario } from "@/lib/tarefas-dados";
 
@@ -20,17 +21,24 @@ export default async function QuadroTarefasPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ aba?: string; nova?: string; tarefa?: string; prazo?: string }>;
 }) {
-  const u = await getUsuarioAtual();
-  if (!u) redirect("/login");
+  const acesso = await getAcesso();
+  if (!acesso) redirect("/login");
+  const u = acesso.u;
   const id = Number((await params).id);
-  const dados = Number.isInteger(id) && id > 0 ? await carregarQuadro(u, id) : null;
+  // O portão pelo GRUPO DO QUADRO (o link de um aviso de outro grupo da pessoa segue valendo).
+  const quadro = Number.isInteger(id) && id > 0 ? await quadroAcessivel(u, id) : null;
+  if (!quadro) notFound();
+  const r = await acessoPagina("tarefas", quadro.grupoId);
+  if (r.bloqueio) return r.bloqueio;
+  const dados = await carregarQuadro(r.acesso, id);
   if (!dados) notFound();
   const sp = await searchParams;
   const aba: AbaQuadro = ABAS.includes(sp.aba as AbaQuadro) ? (sp.aba as AbaQuadro) : "quadro";
-  const nova = lerVinculo(sp.nova);
+  // Criar tarefa (`?nova=`/`?prazo=`) só com Manipular — sem ela, a chegada só abre o quadro.
+  const nova = dados.pode.manipular ? lerVinculo(sp.nova) : null;
   const novaInicial = nova ? { ...nova, rotulo: null, ...(await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) } : null;
   const tarefaInicial = dados.tarefas.find((t) => String(t.id) === sp.tarefa)?.id ?? null;
-  const prazoInicial = /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
+  const prazoInicial = dados.pode.manipular && /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
   // Os eventos cadastrados, as opções da pessoa e os feriados só com a aba Calendário aberta (as demais abas não os usam).
   const [eventosDb, calendario] = aba === "calendario" ? await Promise.all([eventosDosQuadros([dados.quadro.id]), preferenciasCalendario(u.id)]) : [[], undefined];
   const eventos = mascararPrivados(eventosDb, u.id, new Map(dados.tarefas.map((t) => [t.id, t.envolvidos])));

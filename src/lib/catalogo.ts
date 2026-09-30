@@ -437,6 +437,16 @@ export async function compartilharItensNoCatalogo(catalogoId: number, itemIds: n
  * item está em OUTROS, REATRIBUI a origem; se era o ÚNICO catálogo, EXCLUI o item. Recalcula
  * os totais das origens afetadas. `null`-safe se o item não existir.
  */
+/** Tirar o item deste catálogo o EXCLUI? (era o único catálogo dele — a rota exige Excluir). */
+export async function remocaoExcluiItem(itemId: number, catalogoId: number): Promise<boolean> {
+  const [item] = await getDb()
+    .select({ catalogoId: catalogoItens.catalogoId, catalogosExtra: catalogoItens.catalogosExtra })
+    .from(catalogoItens)
+    .where(eq(catalogoItens.id, itemId))
+    .limit(1);
+  return !!item && resolverRemocao(item.catalogoId, parseIds(item.catalogosExtra), catalogoId) === "excluir";
+}
+
 export async function removerItemDoCatalogo(itemId: number, catalogoId: number): Promise<void> {
   const db = getDb();
   const [item] = await db

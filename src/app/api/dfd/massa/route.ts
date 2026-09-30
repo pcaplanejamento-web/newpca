@@ -1,4 +1,6 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { motivoRecusa } from "@/lib/acesso";
+import { pcaDosProtocolos } from "@/lib/acesso-mesa";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { type ChaveAvaliacao, comportamentoNo, editavelDe } from "@/lib/avaliacao-core";
@@ -6,13 +8,14 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, listarCamposMassa } from "@/lib/dfd";
 import { aplicarMassaDfd, type CampoMassa } from "@/lib/dfd-tratamento";
 import { massaDfdsSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { categoriaDoProtocolo } from "@/lib/protocolo";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { mensagemTravaPca } from "@/lib/pca-core";
 import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
@@ -40,7 +43,7 @@ const ROTULO_CAMPO: Record<CampoMassa, string> = {
  * Devolve quantos mudaram + as falhas (com o motivo) — os demais seguem.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(massaDfdsSchema, req);
   if ("resp" in p) return p.resp;
@@ -48,13 +51,12 @@ export async function POST(req: Request) {
 
   const regras = await getRegrasAvaliacao();
   if (!editavelDe(regras, CHAVE_CAMPO[acao.campo])) return erro("Campo travado nas Configurações → Avaliação.", 403);
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (acao.campo === "reparticao" && !acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 
   const dfds = await listarCamposMassa(ids);
-  const travas = await travaDeDfds(dfds.map((d) => d.id));
+  const [travas, pcaDe] = await Promise.all([travaDeDfds(dfds.map((d) => d.id)), pcaDosProtocolos(dfds.map((d) => d.protocoloId))]);
   // Siglas das unidades (histórico) — UMA consulta para o lote inteiro (≤ 50 DFDs + o destino).
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
@@ -70,6 +72,12 @@ export async function POST(req: Request) {
     try {
       if (!acessivel(d.reparticaoId)) {
         falhas.push({ id: d.id, numero: d.numero, motivo: "Sem acesso à unidade deste DFD." });
+        continue;
+      }
+      // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).
+      const semPapel = motivoRecusa(a.acesso, telaDoRecurso(d.protocoloId != null ? pcaDe.get(d.protocoloId) : null), "manipular");
+      if (semPapel) {
+        falhas.push({ id: d.id, numero: d.numero, motivo: semPapel });
         continue;
       }
       const trava = travas.get(d.id);

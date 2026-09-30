@@ -1,15 +1,23 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos } from "@/db/schema";
-import { ABAS, abasConhecidas } from "./abas";
+import { grupoReparticoes, grupos, reparticoes, usuarioGrupos } from "@/db/schema";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
+import {
+  type EscopoUnidades,
+  ESCOPO_NENHUMA,
+  escopoDeAcesso,
+  FILTRO_NENHUMA,
+  type FiltroLista,
+  filtroDeLista,
+  unidadeNoEscopo,
+} from "./escopo-unidades-core";
 
 /**
  * RBAC por grupo. Um usuário pode estar em vários grupos e escolhe o ativo no
- * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais abas de
- * módulo) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam os dados da
- * Mesa e do PCA. Admin ignora a permissão de abas e acessa todas as unidades.
+ * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais telas — o que se faz
+ * nelas é do PAPEL: `acesso.ts`) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam
+ * os dados da Mesa e do PCA. O Administrador abre todas as telas e acessa todas as unidades.
  */
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
@@ -54,26 +62,6 @@ export async function definirGrupoAtivo(grupoId: number): Promise<void> {
   });
 }
 
-/** Abas liberadas para o usuário no grupo ativo. Admin vê todas (regra firme). */
-export async function abasPermitidas(
-  usuario: UsuarioSessao,
-  grupo?: GrupoResumo | null,
-): Promise<Set<string>> {
-  if (usuario.role === "admin") return new Set(ABAS.map((a) => a.key));
-  const g = grupo === undefined ? await getGrupoAtivo(usuario) : grupo;
-  if (!g?.permissaoId) return new Set();
-  const [p] = await getDb()
-    .select({ abas: permissoes.abas })
-    .from(permissoes)
-    .where(eq(permissoes.id, g.permissaoId))
-    .limit(1);
-  try {
-    return new Set(abasConhecidas(JSON.parse(p?.abas ?? "[]"))); // chaves de módulos removidos não valem
-  } catch {
-    return new Set();
-  }
-}
-
 /** Repartições que um grupo acessa (ordenadas pela ordem da tela de repartições). */
 export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoResumo[]> {
   return getDb()
@@ -103,7 +91,7 @@ export async function getReparticaoContexto(
 ): Promise<{ lista: ReparticaoResumo[]; ativa: ReparticaoResumo | null }> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   let lista: ReparticaoResumo[];
-  if (u?.role === "admin") {
+  if (u?.admin) {
     lista = await listarReparticoes();
   } else {
     const grupo = grupoAtivo === undefined ? await getGrupoAtivo(u) : grupoAtivo;
@@ -116,18 +104,35 @@ export async function getReparticaoContexto(
   return { lista, ativa: lista.find((r) => r.id === escolhida) ?? lista[0] };
 }
 
+export type UnidadesDaSessao = {
+  /** As unidades do grupo ativo (o ADM: todas) — o seletor do cabeçalho. */
+  lista: ReparticaoResumo[];
+  /** A unidade ATIVA do cabeçalho. */
+  ativa: ReparticaoResumo | null;
+  /** O ESCOPO de acesso (detalhe e escrita): todas (ADM ou a "Geral" no grupo) · as do grupo · nenhuma. */
+  escopo: EscopoUnidades;
+  /** O filtro das LISTAS (a unidade ativa): todas · uma · nenhuma (sem grupo/unidade — a lista fica vazia). */
+  filtro: FiltroLista;
+  /** O registro está no escopo de acesso? (o sem unidade fica com quem tem alguma unidade). */
+  acessivel: (reparticaoId: number | null | undefined) => boolean;
+};
+
 /**
- * Repartição de FILTRO ativa: `{id, codigo}` quando é uma específica; `null` quando
- * é "Geral" (código GERAL) ou não há — Geral = todas as permitidas (sem filtro por
- * repartição). Usada para escopar a Mesa (protocolos/DFDs/itens) e o PCA por unidade.
+ * As UNIDADES da sessão numa chamada (antes, "sem unidade" virava `null` = sem filtro: quem não tinha grupo via a Mesa
+ * inteira, e a "Geral" valia na lista mas era recusada no detalhe).
  */
-export async function getReparticaoFiltro(
-  usuario?: UsuarioSessao | null,
-  grupoAtivo?: GrupoResumo | null,
-): Promise<{ id: number; codigo: string } | null> {
-  const { ativa } = await getReparticaoContexto(usuario, grupoAtivo);
-  if (!ativa || ativa.codigo.trim().toUpperCase() === "GERAL") return null;
-  return { id: ativa.id, codigo: ativa.codigo };
+export async function unidadesDaSessao(usuario?: UsuarioSessao | null, grupoAtivo?: GrupoResumo | null): Promise<UnidadesDaSessao> {
+  const u = usuario === undefined ? await getUsuarioAtual() : usuario;
+  if (!u) return { lista: [], ativa: null, escopo: ESCOPO_NENHUMA, filtro: FILTRO_NENHUMA, acessivel: () => false };
+  const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo);
+  const escopo = escopoDeAcesso(u.admin, lista);
+  return { lista, ativa, escopo, filtro: filtroDeLista(u.admin, ativa), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
+}
+
+/** As unidades que a pessoa ACESSA, para os banners (conferência e escolha): com o escopo "todas" (o ADM ou a "Geral"),
+ * todas as cadastradas; senão as do grupo. */
+export async function unidadesAcessiveis(un: UnidadesDaSessao): Promise<ReparticaoResumo[]> {
+  return un.escopo.tipo === "todas" ? listarReparticoes() : un.lista;
 }
 
 export async function definirReparticaoAtiva(reparticaoId: number): Promise<void> {

@@ -17,15 +17,19 @@ A proteção é feita no **layout** `src/app/painel/layout.tsx` (`getUsuarioAtua
 Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no Cloudflare Workers):
 - **Senhas:** PBKDF2-SHA256, **100.000 iterações** (teto do Workers), salt aleatório.
 - **Sessão:** token de 32 bytes; guardamos só o **hash** no D1 (`sessoes`); cookie `httpOnly`+`Secure`+`SameSite=Lax`.
-- **RBAC:** `role` (`admin`|`gestor`|`membro`) + `status` (`ativo`|`pendente`|`inativo`) em `usuarios`.
+- **RBAC:** o GRUPO (a permissão dele) decide QUAIS telas a pessoa abre e o **PAPEL** (`usuarios.papel_id` → `papeis`,
+  cadastrados em Configurações → Papéis) decide o que ela faz em cada uma — Visualizar · Manipular · Importar · Exportar ·
+  Excluir · Configurar; o Administrador (fixo) faz tudo. `status` (`ativo`|`pendente`|`inativo`) em `usuarios`; o `role`
+  antigo segue gravado só como espelho (nada decide por ele).
 
 ## Fluxo de acesso
 - **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula (**exatamente 6 números**, com as 6 posições desenhadas no campo e um "(?)"), telefone de contato institucional (com o "(?)" e a marca de WhatsApp), cargo ou função (seleção da lista
   que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
   já vem preenchido), e-mail **@rioverde.go.gov.br** e
   senha → captcha (sempre) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
-  conta criada **membro/pendente** com o e-mail confirmado.
-- **1º cadastro** → vira **admin/ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).
+  conta criada **pendente**, com o papel PADRÃO dos cadastros e o e-mail confirmado; o ADM aprova já escolhendo o papel
+  e os grupos (sem grupo, a pessoa entra mas não vê dados).
+- **1º cadastro** → vira **Administrador ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).
 - **Senha obrigatória:** trocar (Perfil), criar (quem só entrava pelo Google) ou redefinir ("Esqueci a senha") vale só com o
   código enviado ao e-mail; as outras sessões são encerradas.
 - **Nome, e-mail, matrícula, cargo e unidade** só o **admin** altera (Usuários → Editar); no Perfil ficam só-leitura (apelido e foto
@@ -35,7 +39,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - O **admin** aprova (ativa) os pendentes, muda papéis, desativa ou exclui — em `/painel/usuarios` (tabela padrão; tocar na
   linha abre o banner do usuário com todos os dados, edição por cadeado, **Validar dados** e **Exigir nova senha**; coluna com o
   botão do WhatsApp).
-- **Senha nova exigida pelo ADM (migração `0072`):** no próximo acesso a pessoa vai para `/nova-senha` e só entra no painel
+- **Senha nova exigida pelo ADM (migração `0073`):** no próximo acesso a pessoa vai para `/nova-senha` e só entra no painel
   depois de criar a senha (confirmada pelo código no e-mail).
 - Login válido (com o captcha) → cookie de sessão → acesso ao `/painel`. "Sair" encerra a sessão.
 - **Segurança (migração `0071`):** captcha SEMPRE (Turnstile do ADM ou a verificação anti-robô própria); limite de
@@ -57,11 +61,12 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
   `UsuariosAdmin.tsx`, `AppShell.tsx` (menu + Sair).
 
 ## Pendente (próximas fases)
-- Permissões/times (RBAC completo) e módulo **Protocolos** (plano).
+- ✅ RBAC completo: grupos + permissões (telas) + papéis (ações por tela), com a Administração só do Administrador.
 - Convite por e-mail (hoje o cadastro é auto-serviço com aprovação do admin).
 
 ## Verificação (produção)
 1. `/` pública; `/painel` sem login → redireciona para `/login`.
 2. Cadastro do 1º usuário → admin, cai no `/painel`. Os seguintes: e-mail institucional + código → pendente.
-3. `/painel/usuarios` lista e aprova/gerencia; não-admin vê "acesso restrito".
+3. `/painel/usuarios` lista e aprova (com papel e grupos)/gerencia; "Ver acesso" mostra o que cada pessoa abre; quem não é
+   Administrador vê "acesso restrito".
 4. "Sair" volta ao login.

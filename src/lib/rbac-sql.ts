@@ -3,6 +3,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import {
   grupoReparticoes,
+  grupos,
   permissoes,
   reparticoes,
   tarefaModelos,
@@ -40,6 +41,17 @@ export function comandosMembros(db: Db, grupoId: number, usuarioIds: readonly nu
   ];
 }
 
+/** Troca os GRUPOS de uma pessoa (Usuários → Editar/Aprovar): apaga os vínculos dela e grava os novos (para o
+ * `db.batch` — tudo ou nada). */
+export function comandosGruposDoUsuario(db: Db, usuarioId: number, grupoIds: readonly number[]) {
+  return [
+    db.delete(usuarioGrupos).where(eq(usuarioGrupos.usuarioId, usuarioId)),
+    ...lotes([...new Set(grupoIds)], LINHAS_POR_INSERT).map((l) =>
+      db.insert(usuarioGrupos).values(l.map((grupoId) => ({ usuarioId, grupoId }))),
+    ),
+  ];
+}
+
 /** Troca as UNIDADES do grupo: apaga os vínculos e grava os novos (para o `db.batch`). */
 export function comandosUnidades(db: Db, grupoId: number, reparticaoIds: readonly number[]) {
   return [
@@ -54,9 +66,10 @@ const TABELAS = {
   usuarios: { tabela: usuarios, id: usuarios.id },
   reparticoes: { tabela: reparticoes, id: reparticoes.id },
   permissoes: { tabela: permissoes, id: permissoes.id },
+  grupos: { tabela: grupos, id: grupos.id },
 } as const;
 
-/** Os ids que NÃO existem (pessoas, unidades ou permissão) — a rota recusa antes de gravar, com a lista. */
+/** Os ids que NÃO existem (pessoas, unidades, permissão ou grupos) — a rota recusa antes de gravar, com a lista. */
 export async function idsInexistentes(db: Db, qual: keyof typeof TABELAS, ids: readonly number[]): Promise<number[]> {
   const unicos = [...new Set(ids)];
   if (unicos.length === 0) return [];

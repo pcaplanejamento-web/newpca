@@ -1,5 +1,6 @@
 "use client";
 
+import type { PodeTela } from "@/lib/papeis-core";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -96,6 +97,10 @@ export type DadosCalendarioQuadros = {
   truncado: boolean;
   /** `dono` = quadro PRIVADO: só o dono pode estar nele (convidados etc.). */
   quadros: { id: number; nome: string; cor: string; dono: number | null }[];
+  /** O que o PAPEL permite nas tarefas e nos eventos pelo Calendário (Tarefas ou Calendário no grupo ativo). */
+  pode: PodeTela;
+  /** As ações da tela Calendário: Importar (agendas externas) e Exportar (.ics, assinatura, imprimir). */
+  podeCalendario: PodeTela;
 };
 
 /** Grava uma preferência do calendário (PUT) — `sair` = a página está sendo fechada (`keepalive`, sem aviso). */
@@ -593,7 +598,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       onAbrirPca={aberto.pca ? () => router.push(`/painel/pca/${aberto.pca?.pcaId}?aba=mesa`) : undefined}
       avisoPrazo={aberto.pca || aberto.externo || aberto.concluida ? null : avisoDiaNaoUtil(aberto.tarefaPrazo, feriadosPeriodo)}
       onDuplicar={
-        aberto.eventoId
+        // Duplicar CRIA um evento — Manipular (como Editar e Excluir ao lado).
+        aberto.eventoId && dados.pode.manipular
           ? () => {
               const ev = eventosDb.find((x) => x.id === aberto.eventoId);
               if (ev) setEdicao({ eventoId: null, tarefaId: String(ev.tarefaId), r: rascunhoEvento(ev) });
@@ -601,14 +607,14 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           : undefined
       }
       onEditar={
-        aberto.eventoId
+        aberto.eventoId && dados.pode.manipular
           ? () => {
               const ev = eventosDb.find((x) => x.id === aberto.eventoId);
               if (ev) setEdicao({ eventoId: ev.id, tarefaId: String(ev.tarefaId), r: rascunhoEvento(ev) });
             }
           : undefined
       }
-      onExcluir={aberto.eventoId ? () => excluir(aberto) : undefined}
+      onExcluir={aberto.eventoId && dados.pode.manipular ? () => excluir(aberto) : undefined}
       pessoas={dados.pessoas}
       participantes={aberto.pca || aberto.externo ? undefined : responsaveis.get(aberto.tarefaId)}
       usuarioId={usuarioId}
@@ -641,10 +647,11 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           setVerTarefa(false);
           setAberto(e);
         }}
-        onCriar={dados.quadros.length ? abrirCriar : undefined}
-        onMover={mover}
-        onRedimensionar={redimensionar}
-        onConcluir={concluir}
+        // O PAPEL mexe nas tarefas e nos eventos (Tarefas ou Calendário no grupo ativo): criar, arrastar e concluir.
+        onCriar={dados.quadros.length && dados.pode.manipular ? abrirCriar : undefined}
+        onMover={dados.pode.manipular ? mover : undefined}
+        onRedimensionar={dados.pode.manipular ? redimensionar : undefined}
+        onConcluir={dados.pode.manipular ? concluir : undefined}
         opcoes={opcoes}
         onOpcoes={mudarOpcoes}
         feriados={feriadosVisiveis}
@@ -655,7 +662,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           setAberto(null);
           setTarefaSolta(id);
         }}
-        configuracoes={<AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} />}
+        // Exportar (.ics, imprimir) e assinar = Exportar no Calendário.
+        configuracoes={dados.podeCalendario.exportar ? <AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} /> : undefined}
         rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
           <div className="space-y-[var(--gap-block)]">
@@ -691,7 +699,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
               grupos={grupos}
               pcas={pcasConjuntos}
               externos={externosConjuntos}
-              onGerirExternos={() => setGerirExternas(true)}
+              onGerirExternos={dados.podeCalendario.importar ? () => setGerirExternas(true) : undefined}
               porTipo={porTipo}
               feriadosNoPeriodo={feriadosPeriodo.size}
               ocultos={ocultos}
@@ -828,7 +836,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           todas={ctx.pessoas}
           hoje={dados.hoje}
           usuarioId={usuarioId}
-          podeExcluir={ctx.podeEditar}
+          podeExcluir={ctx.pode.excluir}
+          somenteLeitura={!ctx.pode.manipular}
           onFechar={() => {
             setVerTarefa(false);
             setTarefaSolta(null);

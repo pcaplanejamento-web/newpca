@@ -307,9 +307,9 @@ export async function iniciarProtocolo(
 }
 
 /** Protocolo de mesmo `numero` — anti-sequestro: protocolar SOBRESCREVE a capa do de mesmo nº. */
-export async function getProtocoloPorNumero(numero: string): Promise<{ id: number; reparticaoId: number | null } | null> {
+export async function getProtocoloPorNumero(numero: string): Promise<{ id: number; reparticaoId: number | null; pcaId: number | null } | null> {
   const [r] = await getDb()
-    .select({ id: dfdProtocolos.id, reparticaoId: dfdProtocolos.reparticaoId })
+    .select({ id: dfdProtocolos.id, reparticaoId: dfdProtocolos.reparticaoId, pcaId: dfdProtocolos.pcaId })
     .from(dfdProtocolos)
     .where(eq(dfdProtocolos.numero, numero))
     .limit(1);
@@ -417,9 +417,9 @@ export async function vincularDfd(dfdId: number, protocoloId: number | null, num
  * acesso nas escritas; `null` se não existe. */
 export async function getProtocoloReparticao(
   id: number,
-): Promise<{ reparticaoId: number | null; numero: string; assunto: string | null } | null> {
+): Promise<{ reparticaoId: number | null; numero: string; assunto: string | null; pcaId: number | null } | null> {
   const [r] = await getDb()
-    .select({ reparticaoId: dfdProtocolos.reparticaoId, numero: dfdProtocolos.numero, assunto: dfdProtocolos.assunto })
+    .select({ reparticaoId: dfdProtocolos.reparticaoId, numero: dfdProtocolos.numero, assunto: dfdProtocolos.assunto, pcaId: dfdProtocolos.pcaId })
     .from(dfdProtocolos)
     .where(eq(dfdProtocolos.id, id))
     .limit(1);

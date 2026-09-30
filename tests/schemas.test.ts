@@ -85,10 +85,15 @@ describe("auth-validation", () => {
     assert.equal(solicitarCodigoSchema.safeParse({ email: "a@x.com", finalidade: "outra" }).success, false);
   });
 
-  it("adminUsuarioSchema: todos opcionais, role/status por enum", () => {
+  it("adminUsuarioSchema: todos opcionais, papel e grupos por id, status por enum", () => {
     assert.equal(adminUsuarioSchema.safeParse({}).success, true);
-    assert.equal(adminUsuarioSchema.safeParse({ role: "gestor" }).success, true);
-    assert.equal(adminUsuarioSchema.safeParse({ role: "root" }).success, false);
+    assert.equal(adminUsuarioSchema.safeParse({ papelId: 3 }).success, true);
+    assert.equal(adminUsuarioSchema.safeParse({ papelId: 0 }).success, false);
+    assert.equal(adminUsuarioSchema.safeParse({ papelId: "gestor" }).success, false);
+    assert.equal(adminUsuarioSchema.safeParse({ grupos: [] }).success, true);
+    assert.equal(adminUsuarioSchema.safeParse({ grupos: [1, 2] }).success, true);
+    assert.equal(adminUsuarioSchema.safeParse({ grupos: [-1] }).success, false);
+    assert.equal(adminUsuarioSchema.safeParse({ status: "banido" }).success, false);
     assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: null }).success, true);
     assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: 3 }).success, true);
     assert.equal(adminUsuarioSchema.safeParse({ cargo: "Diretor" }).success, true);

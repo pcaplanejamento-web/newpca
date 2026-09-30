@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function IntegracoesPage() {
   const atual = await getUsuarioAtual();
-  if (atual?.role !== "admin") {
+  if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem acessar as integrações." />;
   }
   const integracoes = toView(await getIntegracoes(), temChaveMestra());

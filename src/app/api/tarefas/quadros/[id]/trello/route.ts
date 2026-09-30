@@ -4,7 +4,8 @@ import { trelloFila, trelloQuadros } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { comTravaDoQuadro, processarFila } from "@/lib/trello-processar";
 import { lerCamposBoard } from "@/lib/trello-sync-core";
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { podeLigarTrello } from "@/lib/acesso";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getIntegracoes } from "@/lib/integracoes";
 import { trelloConfigurado } from "@/lib/integracoes-core";
@@ -24,14 +25,17 @@ const MSG_OCUPADO = "Há uma sincronização em andamento neste quadro — tente
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** O quadro, se a pessoa pode LIGÁ-LO ao Trello: editor (ADM/gestor) — no quadro PRIVADO, só o dono. */
+/** O quadro (visto pelo papel) e se a pessoa pode LIGÁ-LO ao Trello: Configurar Tarefas no grupo dele — no quadro PRIVADO,
+ * só o dono (`podeLigarTrello`). */
 async function quadroDoEditor(ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!q) return { resp: erro("Quadro não encontrado.", 404) };
-  const pode = q.privado && q.criadoPor != null ? q.criadoPor === a.u.id : a.u.role !== "membro";
+  const negado = recusaNoQuadro(a.acesso, q, "visualizar");
+  if (negado) return { resp: negado };
+  const pode = podeLigarTrello(a.acesso, q);
   return { u: a.u, q, pode };
 }
 
@@ -62,7 +66,7 @@ const acaoSchema = z.object({
 export async function POST(req: Request, ctx: Ctx) {
   const r = await quadroDoEditor(ctx);
   if ("resp" in r) return r.resp;
-  if (!r.pode) return erro(r.q.privado ? "Só o dono liga o quadro privado ao Trello." : "Só editores ligam o quadro ao Trello.", 403);
+  if (!r.pode) return erro(r.q.privado ? "Só o dono liga o quadro privado ao Trello." : "Seu papel não permite configurar em Tarefas — ligar o quadro ao Trello é configuração.", 403);
   const p = await parseCorpo(acaoSchema, req);
   if ("resp" in p) return p.resp;
   const t = await trelloDaConfig();

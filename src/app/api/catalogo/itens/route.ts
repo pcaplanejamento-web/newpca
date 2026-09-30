@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { definirTiposItens, mesclarTiposEmItens } from "@/lib/catalogo";
 import { patchItensTiposSchema } from "@/lib/catalogo-validation";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * já tinha; usado quando um item idêntico é importado com um tipo novo).
  */
 export async function PATCH(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(patchItensTiposSchema, req);
   if ("resp" in p) return p.resp;

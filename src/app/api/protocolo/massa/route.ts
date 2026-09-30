@@ -1,14 +1,16 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { motivoRecusa } from "@/lib/acesso";
+import { exigirAcesso } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { somatorioProcesso } from "@/lib/conferencia-dfd";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
-import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
@@ -21,19 +23,19 @@ export const dynamic = "force-dynamic";
  * em `falhas` com o motivo; o que já confere é pulado.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(massaProtocolosSchema, req);
   if ("resp" in p) return p.resp;
   const { ids, acao } = p.data;
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (acao.campo === "reparticao") {
     if (!editavelDe(await getRegrasAvaliacao(), "protocolo.reparticao")) return erro("Campo travado nas Configurações → Avaliação.", 403);
     if (!acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   }
-  if (acao.campo === "responsavel" && acao.responsavelId != null && !(await pessoaDoGrupo(acao.responsavelId, await getGrupoAtivoId(a.u))))
+  const grupoAtivo = await getGrupoAtivoId(a.u);
+  if (acao.campo === "responsavel" && acao.responsavelId != null && ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(acao.responsavelId, grupoAtivo))))
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (acao.campo === "situacao" && acao.situacaoId != null && !(await getSituacao(acao.situacaoId)))
     return erro("Situação não encontrada (Configurações → Situações).", 422);
@@ -44,6 +46,12 @@ export async function POST(req: Request) {
     try {
       if (!acessivel(pr.reparticaoId)) {
         falhas.push({ id: pr.id, numero: pr.numero, motivo: "Sem acesso à unidade deste protocolo." });
+        continue;
+      }
+      // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
+      const semPapel = motivoRecusa(a.acesso, telaDoRecurso(pr.pcaId), "manipular");
+      if (semPapel) {
+        falhas.push({ id: pr.id, numero: pr.numero, motivo: semPapel });
         continue;
       }
       // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.

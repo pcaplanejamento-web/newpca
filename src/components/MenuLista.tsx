@@ -22,16 +22,16 @@ import { toast } from "./Toast";
 export type ModoLista = "copiar" | "mover";
 
 /**
- * O MENU "…" de uma LISTA do quadro (como o do Trello): adicionar tarefa · ordenar por (prazo, criação, título,
- * prioridade) · mover todos os cartões para outra lista · arquivar todos os cartões · e, para editores, o LIMITE de
- * cartões (WIP), marcar como LISTA DE CONCLUÍDAS (o cartão que entra nela é concluído), copiar a lista, movê-la para outro
- * quadro, arquivá-la e EXCLUÍ-LA. As ações ficam com o host (o quadro).
+ * O MENU "…" de uma LISTA do quadro (como o do Trello), pelo PAPEL no quadro: com Manipular, adicionar tarefa · ordenar
+ * por (prazo, criação, título, prioridade) · mover todos os cartões para outra lista · arquivar todos os cartões; com
+ * Configurar, o LIMITE de cartões (WIP), marcar como LISTA DE CONCLUÍDAS (o cartão que entra nela é concluído), copiar a
+ * lista, arquivá-la e — com Excluir também — movê-la para outro quadro; com Excluir, EXCLUÍ-LA. As ações ficam com o host.
  */
 export function MenuLista({
   lista,
   outras,
   qtd,
-  podeEditar,
+  pode,
   disabled = false,
   onNova,
   onOrdenar,
@@ -48,7 +48,8 @@ export function MenuLista({
   outras: ListaTarefas[];
   /** Quantos cartões ativos a lista tem. */
   qtd: number;
-  podeEditar: boolean;
+  /** O que o papel permite no quadro (as ações que o menu oferece). */
+  pode: { manipular: boolean; configurar: boolean; excluir: boolean };
   disabled?: boolean;
   onNova: () => void;
   onOrdenar: (por: OrdenacaoLista) => void;
@@ -107,22 +108,27 @@ export function MenuLista({
         return (
           <div className="space-y-0.5">
             <p className="truncate px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">{lista.nome}</p>
-            {item("Adicionar tarefa", <IconPlus className="h-4 w-4 text-muted" />, onNova)}
-            {grupo("ordenar", "Ordenar por…", <IconSort className="h-4 w-4 text-muted" />, qtd < 2)}
-            {secao === "ordenar" && <div className="pl-4">{ORDENACOES_LISTA.map((o) => item(ROTULO_ORDENACAO[o], null, () => onOrdenar(o)))}</div>}
-            {grupo("mover", "Mover todos os cartões para…", <IconArrowRight className="h-4 w-4 text-muted" />, qtd === 0 || outras.length === 0)}
-            {secao === "mover" && <div className="pl-4">{outras.map((l) => item(l.nome, null, () => onMoverCartoes(l.id)))}</div>}
-            {item(`Arquivar todos os cartões${qtd ? ` (${num(qtd)})` : ""}`, <IconArquivar className="h-4 w-4 text-muted" />, onArquivarCartoes, qtd === 0)}
-            {podeEditar && (
+            {pode.manipular && (
               <>
-                <div className="my-1 border-t border-border" />
-                {onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
-                {onConcluidas &&
+                {item("Adicionar tarefa", <IconPlus className="h-4 w-4 text-muted" />, onNova)}
+                {grupo("ordenar", "Ordenar por…", <IconSort className="h-4 w-4 text-muted" />, qtd < 2)}
+                {secao === "ordenar" && <div className="pl-4">{ORDENACOES_LISTA.map((o) => item(ROTULO_ORDENACAO[o], null, () => onOrdenar(o)))}</div>}
+                {grupo("mover", "Mover todos os cartões para…", <IconArrowRight className="h-4 w-4 text-muted" />, qtd === 0 || outras.length === 0)}
+                {secao === "mover" && <div className="pl-4">{outras.map((l) => item(l.nome, null, () => onMoverCartoes(l.id)))}</div>}
+                {item(`Arquivar todos os cartões${qtd ? ` (${num(qtd)})` : ""}`, <IconArquivar className="h-4 w-4 text-muted" />, onArquivarCartoes, qtd === 0)}
+              </>
+            )}
+            {(pode.configurar || pode.excluir) && (
+              <>
+                {pode.manipular && <div className="my-1 border-t border-border" />}
+                {pode.configurar && onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
+                {pode.configurar &&
+                  onConcluidas &&
                   item(lista.concluida ? "Deixar de ser lista de concluídas" : "Marcar como lista de concluídas", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, onConcluidas)}
-                {item("Copiar lista…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover("copiar"))}
-                {item("Mover lista para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover("mover"))}
-                {item("Arquivar lista", <IconArquivar className="h-4 w-4 text-muted" />, onArquivarLista)}
-                {onExcluirLista && item("Excluir lista…", <IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />, onExcluirLista)}
+                {pode.configurar && item("Copiar lista…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover("copiar"))}
+                {pode.configurar && pode.excluir && item("Mover lista para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover("mover"))}
+                {pode.configurar && item("Arquivar lista", <IconArquivar className="h-4 w-4 text-muted" />, onArquivarLista)}
+                {pode.excluir && onExcluirLista && item("Excluir lista…", <IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />, onExcluirLista)}
               </>
             )}
           </div>

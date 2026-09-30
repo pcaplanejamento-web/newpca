@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { conferirCatalogoSchema } from "@/lib/catalogo-validation";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * de `avaliarDfd`/`mensagensDfd` (níveis do ADM decidem se avisa ou bloqueia). Só usuário.
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca", "catalogo"], "visualizar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(conferirCatalogoSchema, req);

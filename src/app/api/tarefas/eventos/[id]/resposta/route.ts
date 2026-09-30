@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { avisarResposta, getEvento, responderConvite, tarefaAcessivel } from "@/lib/tarefas";
@@ -9,12 +9,14 @@ export const dynamic = "force-dynamic";
 
 /** A RESPOSTA ao convite (Vai · Não vai · Talvez) — só o próprio convidado; quem criou é avisado no sino. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const evento = id ? await getEvento(id) : null;
   const r = evento ? await tarefaAcessivel(a.u, evento.tarefaId) : null;
   if (!evento || !r) return erro("Evento não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "visualizar", true);
+  if (negado) return negado;
   if (!evento.convidados.some((c) => c.usuarioId === a.u.id)) return erro("Você não foi convidado para este evento.", 403);
   const p = await parseCorpo(respostaConviteSchema, req);
   if ("resp" in p) return p.resp;

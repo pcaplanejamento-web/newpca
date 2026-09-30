@@ -1,4 +1,4 @@
-import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { urlDoCartao } from "@/lib/trello-fila";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -35,7 +35,7 @@ type Ctx = { params: Promise<{ id: string }> };
  * `?contexto=tarefa` = só o resumo atualizado da tarefa (o Calendário depois de salvar — sem reler o quadro).
  */
 export async function GET(req: Request, ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (id && new URL(req.url).searchParams.get("contexto") === "1") {
@@ -44,6 +44,8 @@ export async function GET(req: Request, ctx: Ctx) {
   }
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "visualizar", true);
+  if (negado) return negado;
   if (new URL(req.url).searchParams.get("contexto") === "tarefa") return ok({ tarefa: r.tarefa });
   const conteudo = await conteudoTarefa(r.tarefa.id);
   return ok({ tarefa: r.tarefa, ...conteudo, trelloUrl: await urlDoCartao(r.tarefa.id), eventos: mascararPrivados(conteudo.eventos, a.u.id, new Map([[r.tarefa.id, r.tarefa.envolvidos]])) });
@@ -51,11 +53,13 @@ export async function GET(req: Request, ctx: Ctx) {
 
 /** Edita a tarefa (campos, responsáveis, etiquetas, arquivar; trocar de LISTA a leva ao fim da lista nova). */
 export async function PATCH(req: Request, ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   const p = await parseCorpo(editarTarefaSchema, req);
   if ("resp" in p) return p.resp;
   const { listaId, pessoas, observadores, etiquetas, equipes: equipesPedidas, blocos: blocosPedidos, campos: valoresPedidos, ...campos } = p.data;
@@ -67,7 +71,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (campos.vinculos) {
     const antes = new Set(r.tarefa.vinculos.map(chaveVinculo));
     if (campos.vinculos.some((v) => v.tipo === "tarefa" && v.id === id)) return erro("A tarefa não se vincula a ela mesma.", 422);
-    for (const v of campos.vinculos) if (!antes.has(chaveVinculo(v)) && !(await vinculoAcessivel(a.u, v))) return erro("Vínculo não encontrado.", 422);
+    for (const v of campos.vinculos) if (!antes.has(chaveVinculo(v)) && !(await vinculoAcessivel(a.acesso, v))) return erro("Vínculo não encontrado.", 422);
   }
   if (campos.concluida === true && r.tarefa.template) return erro("Um template não se conclui — crie uma tarefa a partir dele.", 422);
   const equipes = equipesPedidas ? await equipesDoQuadro(r.quadro.id, equipesPedidas) : undefined;
@@ -122,11 +126,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
 /** Exclui a tarefa (editores) — no dia a dia, prefira arquivar. */
 export async function DELETE(_req: Request, ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "excluir", true);
+  if (negado) return negado;
   await excluirTarefa(id);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "tarefa", entidadeId: id, resumo: `Tarefa ${rotuloTicket(r.tarefa.ticket)} "${r.tarefa.titulo}" excluída`, antes: r.tarefa });
   return ok();

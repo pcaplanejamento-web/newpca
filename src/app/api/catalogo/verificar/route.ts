@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { codigosEmConflito } from "@/lib/catalogo";
 import { verificarCatalogoSchema } from "@/lib/catalogo-validation";
 import { ok, parseCorpo } from "@/lib/http";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * O servidor reconfere no `POST /api/catalogo` (fonte da verdade). Só editor.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "importar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(verificarCatalogoSchema, req);

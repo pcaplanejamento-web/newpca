@@ -69,7 +69,9 @@ import {
   type PastasQuadros,
   motivoNaoMoverParaPasta,
   pastasDosQuadros,
+  podeCriarPasta,
   podeEditarPasta,
+  podePastaPublica,
   itensDaGrade,
   moverNaGrade,
   excluirPasta,
@@ -682,9 +684,10 @@ describe("paleta de etiquetas (a do Trello)", () => {
 describe("pastas de quadros — públicas do grupo e privadas do dono", () => {
   const pub = { id: "1", privado: false, criadoPor: 7, grupoId: 10 };
   const priv = { id: "2", privado: true, criadoPor: 7, grupoId: 10 };
-  const editor = { id: 8, editor: true };
-  const membro = { id: 9, editor: false };
-  const dono = { id: 7, editor: false };
+  // O papel por GRUPO: quem CONFIGURA Tarefas no grupo 10 organiza a pública; o dono (que MANIPULA lá), a privada.
+  const editor = { id: 8, configuraEm: [10], manipulaEm: [10] };
+  const membro = { id: 9, configuraEm: [], manipulaEm: [10] };
+  const dono = { id: 7, configuraEm: [], manipulaEm: [10] };
 
   it("monta as pastas pelos quadros, na ordem de dentro — só os quadros recebidos", () => {
     const l = pastasDosQuadros(
@@ -703,27 +706,48 @@ describe("pastas de quadros — públicas do grupo e privadas do dono", () => {
     assert.deepEqual(quadrosDoConjunto(l[0], [{ id: 5 }]), [{ id: 5 }]);
   });
 
-  it("quem organiza: a pública, os editores; a privada, só o dono (a órfã, o ADM)", () => {
+  it("quem organiza: a pública, quem configura no GRUPO dela; a privada, só o dono que manipula lá (a órfã, o ADM)", () => {
     assert.equal(podeEditarPasta(pub, editor), true);
     assert.equal(podeEditarPasta(pub, membro), false);
+    // Configurar em OUTRO grupo não vale para a pasta deste.
+    assert.equal(podeEditarPasta(pub, { id: 8, configuraEm: [11], manipulaEm: [11] }), false);
     assert.equal(podeEditarPasta(priv, dono), true);
+    // O dono sem Manipular no grupo não organiza nem a própria pasta.
+    assert.equal(podeEditarPasta(priv, { id: 7, configuraEm: [], manipulaEm: [] }), false);
     assert.equal(podeEditarPasta(priv, editor), false);
-    assert.equal(podeEditarPasta({ privado: true, criadoPor: null }, { id: 1, editor: true, admin: true }), true);
+    assert.equal(podeEditarPasta({ privado: true, criadoPor: null, grupoId: 10 }, { id: 1, configuraEm: null, manipulaEm: null, admin: true }), true);
+    // `null` = todos os grupos (o ADM).
+    assert.equal(podeEditarPasta(pub, { id: 1, configuraEm: null, manipulaEm: null, admin: true }), true);
+  });
+
+  it("pasta pública nova: no grupo dela ou, sem ele, em algum grupo em que o papel configura", () => {
+    assert.equal(podePastaPublica(editor, 10), true);
+    assert.equal(podePastaPublica(editor, 11), false);
+    assert.equal(podePastaPublica(editor), true);
+    assert.equal(podePastaPublica(membro), false);
+    assert.equal(podePastaPublica({ id: 1, configuraEm: null, manipulaEm: null }), true);
+  });
+
+  it("\"Nova pasta\" só para quem cria alguma: a pública (Configurar) ou a privada (Manipular) em algum grupo", () => {
+    assert.equal(podeCriarPasta(editor), true);
+    assert.equal(podeCriarPasta(membro), true); // o Membro manipula: cria a privada
+    assert.equal(podeCriarPasta({ id: 9, configuraEm: [], manipulaEm: [] }), false); // só Visualizar
+    assert.equal(podeCriarPasta({ id: 1, configuraEm: null, manipulaEm: null, admin: true }), true);
   });
 
   it("regras de mover: pública só quadro público do grupo; privada só quadro do dono; tirar exige poder na origem", () => {
     const q = { grupoId: 10, privado: false, criadoPor: 7 };
     assert.equal(motivoNaoMoverParaPasta(q, null, pub, editor), null);
-    assert.match(motivoNaoMoverParaPasta(q, null, pub, membro) ?? "", /editores/);
+    assert.match(motivoNaoMoverParaPasta(q, null, pub, membro) ?? "", /configura Tarefas/);
     assert.match(motivoNaoMoverParaPasta({ ...q, grupoId: 11 }, null, pub, editor) ?? "", /outro grupo/);
     assert.match(motivoNaoMoverParaPasta({ ...q, privado: true }, null, pub, editor) ?? "", /privada/);
     assert.equal(motivoNaoMoverParaPasta(q, null, priv, dono), null);
     assert.match(motivoNaoMoverParaPasta({ ...q, criadoPor: 8 }, null, priv, dono) ?? "", /criados por você/);
     assert.match(motivoNaoMoverParaPasta(q, null, priv, editor) ?? "", /dono/);
-    assert.match(motivoNaoMoverParaPasta(q, pub, null, membro) ?? "", /editores/);
+    assert.match(motivoNaoMoverParaPasta(q, pub, null, membro) ?? "", /configura Tarefas/);
     assert.equal(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, null, dono), null);
-    // Da privada direto para a pública: só tornando público (o dono, editor).
-    const donoEditor = { id: 7, editor: true };
+    // Da privada direto para a pública: só tornando público (o dono que também configura).
+    const donoEditor = { id: 7, configuraEm: [10], manipulaEm: [10] };
     assert.match(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, pub, donoEditor) ?? "", /privada/);
     assert.equal(motivoNaoMoverParaPasta({ ...q, privado: true }, priv, pub, donoEditor, true), null);
   });

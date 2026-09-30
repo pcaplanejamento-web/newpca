@@ -1,8 +1,7 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { acessivelNaLista } from "@/lib/mesa-dados";
 import { getPcaEspaco, itensNumeradosDoPca, retirarItensDoPca } from "@/lib/pca-espaco";
 import { acaoItensPcaSchema } from "@/lib/pca-espaco-validation";
 
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
  * Auditoria com os números retirados.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "excluir");
   if ("erro" in a) return a.erro;
   const pcaId = intId((await ctx.params).id);
   if (!pcaId) return erro("ID inválido.");
@@ -24,8 +23,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("resp" in p) return p.resp;
   const ids = [...new Set(p.data.ids)];
 
-  const [{ lista }, numerados] = await Promise.all([getReparticaoContexto(a.u), itensNumeradosDoPca(pca.id, ids)]);
-  const acessivel = acessivelNaLista(lista);
+  const [{ acessivel }, numerados] = await Promise.all([unidadesDaSessao(a.u), itensNumeradosDoPca(pca.id, ids)]);
   const porItem = new Map(numerados.map((n) => [n.dfdItemId, n]));
   const alvo: typeof numerados = [];
   const falhas: { id: number; motivo: string }[] = [];

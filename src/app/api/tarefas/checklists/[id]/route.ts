@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { excluirChecklist, getChecklist, renomearChecklist, tarefaAcessivel } from "@/lib/tarefas";
@@ -11,12 +11,14 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** O checklist, se o usuário vê a tarefa dele. */
 async function checklistAcessivel(ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const c = id ? await getChecklist(id) : null;
   const r = c ? await tarefaAcessivel(a.u, c.tarefaId) : null;
   if (!c || !r) return { resp: erro("Checklist não encontrado.", 404) };
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return { resp: negado };
   return { u: a.u, c, r };
 }
 

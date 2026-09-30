@@ -10,6 +10,7 @@ import {
   type OrigemAuditoria,
   semDuplicatas,
 } from "./auditoria-core";
+import { consultaPrimeiroRegistro, criadoPorImportacaoDe } from "./auditoria-sql";
 import { getDb } from "./db";
 import { marcarSaidaTrello, TIPO_DA_ENTIDADE } from "./trello-fila";
 
@@ -107,6 +108,16 @@ const consultaHist = () =>
 /** Histórico de UM DFD (mais recente primeiro): toda alteração dele — campos, seções, assinaturas e ITENS
  * (logados sob `entidade:"dfd"`), cada uma com a ORIGEM e o protocolo por onde passou. O mesmo evento
  * logado para os dois protocolos (DFD movido) aparece UMA vez (`semDuplicatas`). */
+/**
+ * O registro foi CRIADO por esta pessoa, por IMPORTAÇÃO, na última hora? — o 1º registro dele no histórico (o da criação)
+ * é o "importar" dela. É o que o DESFAZER de uma importação que falhou no meio pode apagar só com Importar: um registro
+ * que já existia (atualizado ou com a planilha reenviada — também registram "importar") nunca se desfaz por aqui.
+ */
+export async function criadoPorImportacaoRecente(entidade: EntidadeAuditoria, entidadeId: number, usuarioId: number): Promise<boolean> {
+  const [primeiro] = await consultaPrimeiroRegistro(getDb(), entidade, entidadeId);
+  return criadoPorImportacaoDe(primeiro, usuarioId);
+}
+
 export async function historicoDfd(dfdId: number, limite = 300): Promise<LinhaHistorico[]> {
   const linhas = await consultaHist()
     .where(and(eq(auditoria.entidade, "dfd"), eq(auditoria.entidadeId, dfdId)))

@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { coerceFiltros, resumoVisao } from "@/lib/orcamento-visao";
@@ -8,7 +8,7 @@ import { visaoOrcamentoSchema } from "@/lib/pca-espaco-validation";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("orcamento", "configurar");
   if ("erro" in g) return g.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -30,7 +30,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /** Excluir a visão — os PCAs que a usavam ficam sem visão (orçamento inteiro; FK set null). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("orcamento", "configurar");
   if ("erro" in g) return g.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");

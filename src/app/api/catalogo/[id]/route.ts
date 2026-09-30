@@ -1,5 +1,5 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
+import { criadoPorImportacaoRecente, registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { atualizarCatalogo, excluirCatalogo, getCatalogo } from "@/lib/catalogo";
 import { patchCatalogoSchema } from "@/lib/catalogo-validation";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** Edita (nome/tipos padrão) ou EXCLUI um catálogo — só editor. Excluir apaga os itens. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -28,13 +28,26 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return ok();
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+/** Excluir = Excluir (os itens compartilhados com outros catálogos ficam). `?origem=desfazer` = o DESFAZER da importação
+ * que falhou no meio: o catálogo que ESTA pessoa CRIOU por importação na última hora sai só com Importar
+ * (`criadoPorImportacaoRecente` — um catálogo que já existia, mesmo atualizado agora, nunca). */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const a = await exigirAcesso("catalogo", "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const desfazer = new URL(req.url).searchParams.get("origem") === "desfazer" && (await criadoPorImportacaoRecente("catalogo", id, a.u.id));
+  const negado = recusa(a.acesso, "catalogo", desfazer ? "importar" : "excluir");
+  if (negado) return negado;
   const alvo = await getCatalogo(id);
+  if (!alvo) return erro("Catálogo não encontrado.", 404);
   await excluirCatalogo(id);
-  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "catalogo", entidadeId: id, resumo: `Catálogo "${alvo?.nome ?? id}" excluído` });
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "excluir",
+    entidade: "catalogo",
+    entidadeId: id,
+    resumo: `Catálogo "${alvo.nome}" excluído${desfazer ? " (importação desfeita após falha)" : ""}`,
+  });
   return ok();
 }

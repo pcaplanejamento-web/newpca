@@ -5,6 +5,7 @@ import { problemaSenha } from "@/lib/cadastro-core";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
 import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
+import type { Capacidades } from "@/lib/papeis-core";
 import { APELIDO_MAX, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
@@ -29,21 +30,17 @@ import {
   IconLogout,
   IconMail,
   IconSave,
+  IconShield,
   IconTrash,
   IconUser,
   IconUserX,
 } from "./icons";
 import { Switch } from "./Switch";
+import { ResumoPapel } from "./ResumoPapel";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { CHAVE_PREF_EMAIL, type DestinoEmail, type PrefsEmail, ROTULO_TIPO_EMAIL, TIPOS_EMAIL } from "@/lib/email-core";
-
-const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
-  admin: "Administrador",
-  gestor: "Gestor",
-  membro: "Membro",
-};
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
 
@@ -120,7 +117,8 @@ export function PerfilView({
   turnstile,
   protocolacao = null,
   mesaResponsavel = null,
-  semModulos = false,
+  semModulos = null,
+  seuAcesso = null,
   avisosEmail = null,
   contaGoogle = null,
   retornoGoogle = null,
@@ -134,8 +132,11 @@ export function PerfilView({
   protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null } | null;
   /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa; `null` = sem o card). */
   mesaResponsavel?: MesaResponsavel | null;
-  /** O grupo ativo não libera nenhum módulo (Mesa, PCA, Catálogo, Orçamento): avisa o que fazer. */
-  semModulos?: boolean;
+  /** Por que a pessoa não abre NENHUMA tela (sem grupo, grupo sem telas ou papel sem Visualizar) — `null` = abre. */
+  semModulos?: string | null;
+  /** O ACESSO efetivo no grupo ativo: as telas que abre e as ações em cada uma (o grupo decide as telas; o papel, as
+   * ações). `null` = sem o card. */
+  seuAcesso?: { grupo: string | null; capacidades: Capacidades } | null;
   /** Os avisos do sino que chegam por E-MAIL (só com o Resend ativo; `null` = sem o card). */
   avisosEmail?: PrefsEmail | null;
   /** A conta Google VINCULADA (só com o login com Google ativo; `null` = sem o card). `soGoogle` = sem senha. */
@@ -413,8 +414,7 @@ export function PerfilView({
     <div className="space-y-[var(--gap-block)]">
       {semModulos && (
         <Callout kind="info" icon={<IconInfo className="h-4 w-4" />}>
-          Nenhum módulo liberado para o seu grupo ativo. Se você tem outro grupo, troque no cabeçalho; senão, peça ao
-          administrador para liberar o acesso.
+          {semModulos}
         </Callout>
       )}
 
@@ -440,7 +440,7 @@ export function PerfilView({
             {[usuario.apelido && `“${usuario.apelido}”`, identidade.cargo].filter(Boolean).join(" · ") || "Sem cargo informado"}
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-            <Badge tone="violet">{ROLE_LABEL[usuario.role]}</Badge>
+            <Badge tone="violet">{usuario.papel.nome}</Badge>
             {identidade.unidade && (
               <Badge tone="slate">
                 <IconBuilding className="h-3 w-3" /> {identidade.unidade}
@@ -558,8 +558,22 @@ export function PerfilView({
           )}
         </div>
 
-        {/* Coluna das PREFERÊNCIAS: e-mail, Mesa e protocolação */}
+        {/* Coluna das PREFERÊNCIAS: o acesso, e-mail, Mesa e protocolação */}
         <div className="space-y-[var(--gap-block)]">
+          {seuAcesso && (
+            <SecaoPerfil
+              icone={<IconShield className="h-4 w-4" />}
+              titulo="Seu acesso"
+              descricao={
+                <>
+                  {seuAcesso.grupo ? `No grupo ${seuAcesso.grupo}: ` : ""}as telas que você abre e o que pode fazer em cada uma. O grupo
+                  decide as telas; o papel ({usuario.papel.nome}), as ações.
+                </>
+              }
+            >
+              <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
+            </SecaoPerfil>
+          )}
           {emailPrefs && (
             <SecaoPerfil
               icone={<IconBell className="h-4 w-4" />}

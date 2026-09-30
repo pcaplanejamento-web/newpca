@@ -10,6 +10,7 @@ import {
   aplicavel,
   CAPACIDADES_MEMBRO,
   CATALOGO_PAPEIS,
+  capacidadesEfetivas,
   capacidadesTudo,
   coerceCapacidades,
   diffCapacidades,
@@ -20,13 +21,18 @@ import {
   mensagemTelaFechada,
   motivoSemModulos,
   PAPEIS_SISTEMA,
+  PODE_MESA_NADA,
   PODE_NADA,
   PODE_TUDO,
   papelSistema,
   podeNaTela,
+  podeNoRecurso,
   resumoCapacidades,
   retiraAlgo,
+  telasFechadasPeloPapel,
+  textoResumoCapacidades,
   roleEspelho,
+  telaDoRecurso,
   telasAbertas,
   textoDiffCapacidades,
 } from "../src/lib/papeis-core.ts";
@@ -247,5 +253,54 @@ describe("mensagens", () => {
     assert.match(motivoSemModulos({ ...base, abasDoGrupo: ["nao-existe"] }) ?? "", /não libera nenhuma tela/);
     assert.match(motivoSemModulos({ ...base, capacidades: { pca: ["visualizar"] } }) ?? "", /Seu papel não permite visualizar/);
     assert.equal(motivoSemModulos(base), null);
+  });
+});
+
+describe("as duas Mesas — cada recurso segue a Mesa em que está", () => {
+  it("protocolo num PCA (enviado ou incorporado) é da Mesa do PCA; fora dele, da Mesa do sistema", () => {
+    assert.equal(telaDoRecurso(7), "pca");
+    assert.equal(telaDoRecurso(null), "dfd");
+    assert.equal(telaDoRecurso(undefined), "dfd");
+  });
+
+  it("o papel de cada Mesa vale só nos recursos dela", () => {
+    const ctx = { admin: false, capacidades: coerceCapacidades({ dfd: ["visualizar", "manipular"], pca: ["visualizar"] }), abas: ["dfd", "pca"] };
+    const pode = { sistema: podeNaTela(ctx, "dfd"), pca: podeNaTela(ctx, "pca") };
+    assert.equal(podeNoRecurso(pode, null).manipular, true);
+    assert.equal(podeNoRecurso(pode, 3).manipular, false);
+    assert.equal(podeNoRecurso(pode, 3).visualizar, true);
+    assert.deepEqual(podeNoRecurso(PODE_MESA_NADA, null), PODE_NADA);
+  });
+});
+
+describe("o acesso EFETIVO de uma pessoa num grupo (\"Ver acesso\" em Usuários)", () => {
+  const membro = { admin: false, capacidades: CAPACIDADES_MEMBRO };
+
+  it("só as telas que o grupo libera E o papel visualiza, com as ações do papel nelas", () => {
+    const efetivo = capacidadesEfetivas({ ...membro, abas: ["dfd", "tarefas", "orcamento"] });
+    assert.deepEqual(efetivo, { dfd: ["visualizar", "exportar"], orcamento: ["visualizar", "exportar"], tarefas: ["visualizar", "manipular", "exportar"] });
+    // O mesmo que podeNaTela diz, tela a tela.
+    for (const tela of ABA_KEYS) {
+      const pode = podeNaTela({ ...membro, abas: ["dfd", "tarefas", "orcamento"] }, tela);
+      assert.deepEqual(efetivo[tela] ?? [], pode.visualizar ? ACOES_PAPEL.filter((a) => pode[a]) : []);
+    }
+  });
+
+  it("sem grupo (nenhuma tela liberada) = nada; o ADM = tudo o que se aplica, sem as ações que não se aplicam", () => {
+    assert.deepEqual(capacidadesEfetivas({ ...membro, abas: [] }), {});
+    assert.deepEqual(capacidadesEfetivas({ admin: true, capacidades: {}, abas: [] }), capacidadesTudo());
+    assert.equal(capacidadesEfetivas({ admin: true, capacidades: {}, abas: [] }).orcamento?.includes("manipular"), false);
+  });
+
+  it("aponta as telas que o grupo libera mas o papel deixa fechadas (nunca para o ADM)", () => {
+    const consulta = { admin: false, capacidades: coerceCapacidades({ dfd: ["visualizar"] }) };
+    assert.deepEqual(telasFechadasPeloPapel({ ...consulta, abas: ["dfd", "pca", "catalogo"] }), ["pca", "catalogo"]);
+    assert.deepEqual(telasFechadasPeloPapel({ ...consulta, abas: ["dfd"] }), []);
+    assert.deepEqual(telasFechadasPeloPapel({ admin: true, capacidades: {}, abas: ["dfd", "pca"] }), []);
+  });
+
+  it("o resumo numa linha: \"tudo\" quando a tela tem todas as ações; sem telas, diz", () => {
+    assert.equal(textoResumoCapacidades({}), "nenhuma tela");
+    assert.equal(textoResumoCapacidades(coerceCapacidades({ dfd: acoesDaTela("dfd"), pca: ["exportar"] })), "Mesa: tudo; PCA: Visualizar, Exportar");
   });
 });

@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { gerarPca } from "@/lib/dfd";
 import { gerarPcaSchema } from "@/lib/dfd-validation";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * `dfdIds` = a edição LEGADA que une DFDs selecionados.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "configurar");
   if ("erro" in a) return a.erro;
 
   const corpo = (await req.clone().json().catch(() => null)) as Record<string, unknown> | null;

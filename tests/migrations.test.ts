@@ -799,11 +799,11 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT cargo AS c FROM usuarios WHERE id = 9671").get() as { c: string }).c, "Analista");
   });
 
-  it("0072 contato do usuário: telefone + WhatsApp, validação dos dados e troca de senha obrigatória (padrões desligados)", () => {
+  it("0073 contato do usuário: telefone + WhatsApp, validação dos dados e troca de senha obrigatória (padrões desligados)", () => {
     const a = new DatabaseSync(":memory:");
-    for (const arq of arquivos.filter((f) => f < "0072")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    for (const arq of arquivos.filter((f) => f < "0073")) a.exec(readFileSync(join(DIR, arq), "utf8"));
     a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9721, 'Ana Souza', 'a9721@x', 'h')");
-    for (const arq of arquivos.filter((f) => f >= "0072")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    for (const arq of arquivos.filter((f) => f >= "0073")) a.exec(readFileSync(join(DIR, arq), "utf8"));
     const r = a.prepare("SELECT telefone AS t, telefone_whatsapp AS w, dados_validados_em AS v, trocar_senha AS s FROM usuarios WHERE id = 9721").get() as Record<string, unknown>;
     assert.deepEqual({ ...r }, { t: null, w: 0, v: null, s: 0 });
   });
@@ -859,6 +859,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     d.exec("DELETE FROM papeis WHERE id = 9695");
     assert.equal(papelDe(9693), null);
     assert.ok(nomes(d, "SELECT name FROM sqlite_master WHERE type='index'").includes("usuarios_papel_idx"));
+  });
+
+  it("0072 ressincroniza o papel pelo role (só papéis do sistema; o criado pelo ADM fica); idempotente", () => {
+    const d = new DatabaseSync(":memory:");
+    const i72 = arquivos.findIndex((f) => f.startsWith("0072"));
+    assert.ok(i72 > 0, "migração 0072 ausente");
+    for (const arq of arquivos.slice(0, i72)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const id = (chave: string) => (d.prepare("SELECT id FROM papeis WHERE chave = ?").get(chave) as { id: number }).id;
+    d.exec("INSERT INTO papeis (id, nome) VALUES (9700, 'Consulta')");
+    d.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, role, papel_id) VALUES
+      (9701, 'a@x', 'A', 'h', 'gestor', ${id("membro")}), (9702, 'b@x', 'B', 'h', 'membro', 9700),
+      (9703, 'c@x', 'C', 'h', 'admin', NULL), (9704, 'd@x', 'D', 'h', 'membro', ${id("membro")})`);
+    const sql = readFileSync(join(DIR, arquivos[i72]), "utf8");
+    d.exec(sql);
+    d.exec(sql);
+    const papel = (u: number) => (d.prepare("SELECT papel_id AS p FROM usuarios WHERE id = ?").get(u) as { p: number | null }).p;
+    assert.equal(papel(9701), id("gestor"), "trocado só no role pelo código antigo");
+    assert.equal(papel(9702), 9700, "papel criado pelo ADM não é tocado");
+    assert.equal(papel(9703), id("admin"), "sem papel ganha o do role");
+    assert.equal(papel(9704), id("membro"));
   });
 
   it("índice único de e-mail existe", () => {

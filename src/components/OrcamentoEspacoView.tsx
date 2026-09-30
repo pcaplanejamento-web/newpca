@@ -24,12 +24,13 @@ export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes"
 export function OrcamentoEspacoView({
   orcamento: o,
   aba,
-  podeEditar,
+  podeExcluir,
   children,
 }: {
   orcamento: OrcamentoResumo;
   aba: AbaOrcamento;
-  podeEditar: boolean;
+  /** O papel exclui orçamentos (a lixeira do cabeçalho). */
+  podeExcluir: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -88,7 +89,7 @@ export function OrcamentoEspacoView({
             </div>
           ))}
         </dl>
-        {podeEditar && (
+        {podeExcluir && (
           <Button
             size="sm"
             variant="icon"

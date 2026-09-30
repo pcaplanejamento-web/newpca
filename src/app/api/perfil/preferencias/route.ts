@@ -19,7 +19,9 @@ export async function PATCH(req: Request) {
   // Valida TUDO antes de gravar qualquer coisa (nada salvo pela metade). Salvar de novo o MESMO padrão (hoje fora do
   // grupo) não é uma escolha nova — nada muda.
   const padraoMuda = alvo !== undefined && (alvo == null || alvo !== (await responsavelPadraoGravado(a.u.id)));
-  if (padraoMuda && alvo != null && !(await pessoaDoGrupo(alvo, await getGrupoAtivoId(a.u)))) return erro("Escolha uma pessoa ativa do seu grupo.", 422);
+  const grupoAtivo = await getGrupoAtivoId(a.u);
+  if (padraoMuda && alvo != null && ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(alvo, grupoAtivo))))
+    return erro("Escolha uma pessoa ativa do seu grupo.", 422);
   if (mesa !== undefined) {
     await definirMesaResponsavel(a.u.id, mesa);
     await registrarAuditoria({

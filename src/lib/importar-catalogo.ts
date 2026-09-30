@@ -45,9 +45,11 @@ async function postCatalogo(body: unknown): Promise<{ catalogoId?: number }> {
   throw ultimo ?? new Error("Falha ao gravar o catálogo.");
 }
 
+/** Desfaz o catálogo CRIADO por esta importação que falhou no meio (`?origem=desfazer`: basta o Importar — o servidor
+ * confere que foi esta pessoa quem o criou agora há pouco). */
 async function apagarCatalogo(id: number): Promise<void> {
   try {
-    await fetch(`/api/catalogo/${id}`, { method: "DELETE" });
+    await fetch(`/api/catalogo/${id}?origem=desfazer`, { method: "DELETE" });
   } catch {
     // best-effort
   }

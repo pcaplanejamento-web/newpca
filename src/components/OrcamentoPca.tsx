@@ -186,7 +186,19 @@ function BarraPct({ l }: { l: LinhaComparativo }) {
  * unidade (a primeira, aberta) e a tabela cruzada da tela do orçamento (`OrcamentoComparativo`, abrindo na visão do PCA) (os lançamentos chegam à
  * unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo"). Sem orçamento do ano, só o por unidade.
  */
-export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcamentoPca; comparativo?: ComparativoPca | null }) {
+export function OrcamentoPca({
+  dados,
+  comparativo = null,
+  podeExportar = true,
+  podePublicar = false,
+}: {
+  dados: DadosOrcamentoPca;
+  comparativo?: ComparativoPca | null;
+  /** O papel exporta no PCA (o XLSX do comparativo). */
+  podeExportar?: boolean;
+  /** O papel CONFIGURA o PCA: publica edições do layout do comparativo para todos. */
+  podePublicar?: boolean;
+}) {
   const [vista, setVista] = useState<Vista>("unidade");
   // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
   const [edicoesComp, setEdicoesComp] = useState(() => (comparativo ? { lista: comparativo.edicoes, padroes: comparativo.padroes } : null));
@@ -278,14 +290,18 @@ export function OrcamentoPca({ dados, comparativo = null }: { dados: DadosOrcame
           padroes={edicoesComp?.padroes ?? comparativo.padroes}
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
           inicio={trocaVista}
+          podeExportar={podeExportar}
+          podePublicar={podePublicar}
         />
       ) : (
         <>
-          <FerramentasAba>
-            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={vis.length === 0}>
-              XLSX
-            </Button>
-          </FerramentasAba>
+          {podeExportar && (
+            <FerramentasAba>
+              <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={vis.length === 0}>
+                XLSX
+              </Button>
+            </FerramentasAba>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
             <Segmented<Filtro>

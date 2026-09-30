@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarCampo, excluirCampo, getCampo, listarCampos, quadroAcessivel } from "@/lib/tarefas";
@@ -9,12 +9,14 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 async function campoDoEditor(ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const c = id ? await getCampo(id) : null;
   const q = c ? await quadroAcessivel(a.u, c.quadroId) : null;
   if (!c || !q) return { resp: erro("Campo não encontrado.", 404) };
+  const negado = recusaNoQuadro(a.acesso, q, "configurar");
+  if (negado) return { resp: negado };
   return { u: a.u, c };
 }
 

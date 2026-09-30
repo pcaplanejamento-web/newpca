@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function ConfiguracoesPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const { aba } = await searchParams;
   const u = await getUsuarioAtual();
-  if (u?.role !== "admin") {
+  if (!u?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem acessar as configurações." />;
   }
 

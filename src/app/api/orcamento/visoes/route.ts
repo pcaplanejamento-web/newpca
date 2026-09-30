@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ok, parseCorpo } from "@/lib/http";
 import { coerceFiltros, resumoVisao } from "@/lib/orcamento-visao";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Cria uma VISÃO SALVA do orçamento (filtro por vários valores de cada dimensão do CUBO). A lista vem do servidor
  * (página do orçamento / Configuração do PCA). */
 export async function POST(req: Request) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("orcamento", "configurar");
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(visaoOrcamentoSchema, req);
   if ("resp" in p) return p.resp;

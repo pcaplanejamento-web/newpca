@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { erro } from "@/lib/http";
 import { capaDoPca } from "@/lib/pca-espaco";
 import { decodificarFoto } from "@/lib/pessoa";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * data-URL não pesa em cada página e o navegador guarda a imagem em cache longo e imutável. Só logado.
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso("pca", "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");

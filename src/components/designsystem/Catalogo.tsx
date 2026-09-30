@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
+import { AcessoDaPessoa } from "@/components/AcessoDaPessoa";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
 import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
@@ -88,6 +89,10 @@ import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
+import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
+import { MatrizCapacidades } from "@/components/MatrizCapacidades";
+import { ResumoPapel } from "@/components/ResumoPapel";
+import { CAPACIDADES_MEMBRO, type Capacidades } from "@/lib/papeis-core";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -308,7 +313,8 @@ const USUARIO_DEMO: UsuarioAdmin = {
   reparticaoId: 1,
   unidade: "Secretaria de Planejamento",
   foto: null,
-  role: "membro",
+  papelId: 3,
+  grupos: [1],
   status: "ativo",
   dadosValidadosEm: null,
   dadosValidadosPor: null,
@@ -339,6 +345,8 @@ function DemoUsuario() {
         meuId={1}
         unidades={[{ id: 1, codigo: "SEPLAN", nome: "Secretaria de Planejamento", orgao: "Prefeitura Municipal de Rio Verde" }]}
         cargos={["Analista de Planejamento", "Diretor"]}
+        papeis={[{ id: 3, nome: "Membro", descricao: null, chave: "membro", padraoCadastro: true, capacidades: {} }]}
+        grupos={[{ id: 1, nome: "Planejamento e Custos", abas: ["dfd", "pca"] }]}
         envioEmail
         ocupado={false}
         onFechar={() => setAberto(false)}
@@ -354,6 +362,9 @@ function DemoUsuario() {
         }}
         onPapel={() => undefined}
         onStatus={() => undefined}
+        onAprovar={() => undefined}
+        onRecusar={() => undefined}
+        onVerAcesso={() => undefined}
         onExcluir={() => setAberto(false)}
       />
     </div>
@@ -1069,10 +1080,47 @@ function TabelaCruzadaDemo() {
   );
 }
 
+const GRUPOS_DEMO: GrupoOpcao[] = [
+  { id: 1, nome: "Planejamento e Custos", abas: ["dfd", "pca", "orcamento", "tarefas", "calendario"] },
+  { id: 2, nome: "Compras", abas: ["dfd", "catalogo"] },
+  { id: 3, nome: "Sem permissão", abas: [] },
+];
+
+function PapeisDemo() {
+  const [caps, setCaps] = useState<Capacidades>(CAPACIDADES_MEMBRO);
+  const [grupos, setGrupos] = useState<number[]>([1]);
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <p className="text-[12.5px] text-muted">
+        MatrizCapacidades editável (as células alteradas em relação ao gravado ficam destacadas; a caixa da linha/coluna fica
+        PARCIAL — <code>Checkbox indeterminado</code> — quando só parte está marcada). No celular, um cartão por tela com chaves.
+      </p>
+      <MatrizCapacidades valor={caps} original={CAPACIDADES_MEMBRO} onChange={setCaps} />
+      <div className="grid gap-[var(--gap-block)] md:grid-cols-2">
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">ResumoPapel (compacto — a célula da lista de papéis)</p>
+          <ResumoPapel capacidades={caps} compacto />
+          <p className="pt-2 text-[12.5px] font-semibold text-text-2">ResumoPapel (por extenso — o Perfil)</p>
+          <ResumoPapel capacidades={caps} />
+        </div>
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">GruposDaPessoa (Usuários → Editar/Aprovar)</p>
+          <GruposDaPessoa grupos={GRUPOS_DEMO} selecionados={grupos} onChange={setGrupos} />
+          <Checkbox label="Caixa parcial (indeterminado)" indeterminado checked={false} onChange={() => {}} />
+        </div>
+      </div>
+      <p className="text-[12.5px] font-semibold text-text-2">AcessoDaPessoa (&quot;Ver acesso&quot;: o papel acima nos grupos marcados)</p>
+      <AcessoDaPessoa admin={false} papel={{ nome: "Membro (editado)", capacidades: caps }} grupos={GRUPOS_DEMO.filter((g) => grupos.includes(g.id))} />
+    </div>
+  );
+}
+
 function EdicoesTabelaDemo() {
   const [atual, setAtual] = useState<number | null>(2);
   const [padraoId, setPadraoId] = useState<number | null>(2);
   const [salvar, setSalvar] = useState(false);
+  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a edição é só da pessoa.
+  const [configura, setConfigura] = useState(true);
   const { confirmar, confirmacao } = useConfirmacao();
   const e = (id: number, nome: string, minha: boolean, publico: boolean) => ({ id, chave: "k", nome, publico, minha, autor: "Ana", valor: {} });
   const minhas = [e(1, "Pessoal", true, false), e(2, "Por elemento", true, true)];
@@ -1089,9 +1137,19 @@ function EdicoesTabelaDemo() {
         onPadrao={() => setPadraoId(atual)}
         onExcluir={() => void confirmar({ titulo: "Excluir a edição?", confirmar: "Excluir", perigo: true })}
         onEditar={() => setSalvar(true)}
+        podeModerar={configura}
       />
+      <Checkbox checked={configura} onChange={(ev) => setConfigura(ev.target.checked)} label="O papel configura a tela (publica e modera)" />
       {salvar && (
-        <SalvarEdicao aberto atual={escolhida} ehPadrao={atual === padraoId} gravando={false} onFechar={() => setSalvar(false)} onSalvar={() => setSalvar(false)} />
+        <SalvarEdicao
+          aberto
+          atual={escolhida}
+          ehPadrao={atual === padraoId}
+          gravando={false}
+          podePublicar={configura}
+          onFechar={() => setSalvar(false)}
+          onSalvar={() => setSalvar(false)}
+        />
       )}
       {confirmacao}
     </div>
@@ -1535,7 +1593,7 @@ function TabelaHierarquiaDemo() {
         footer={`${sel.size} de ${linhas.length} selecionada(s) — o "selecionar todos" marca todas as filtradas, não só a página`}
         // EDIÇÃO da tabela (lápis no rodapé): arrastar, congelar, ocultar, ordenar, largura — e salvar (colunas + ordenação +
         // filtros), só para mim ou pública (salvar exige login).
-        edicoes={{ chave: "design-system:demo", lista: [], padroes: {} }}
+        edicoes={{ chave: "design-system:demo", lista: [], padroes: {}, podePublicar: true }}
       />
     </div>
   );
@@ -2192,7 +2250,7 @@ function TarefasDemo() {
     ],
     ordem: [],
   });
-  const atorDemo = { id: 1, editor: true };
+  const atorDemo = { id: 1, configuraEm: null, manipulaEm: null };
   const quadroDemo = {
     id: 1,
     grupoId: 1,
@@ -2254,7 +2312,7 @@ function TarefasDemo() {
           lista={{ id: 1, nome: "05 - OUTUBRO - 2026", ordem: 1, limiteWip: null, concluida: false, arquivada: false }}
           outras={[{ id: 2, nome: "06 - OUTUBRO - 2026", ordem: 2, limiteWip: null, concluida: false, arquivada: false }]}
           qtd={3}
-          podeEditar
+          pode={{ manipular: true, configurar: true, excluir: true }}
           onNova={() => {}}
           onOrdenar={() => {}}
           onMoverCartoes={() => {}}
@@ -2341,7 +2399,7 @@ function TarefasDemo() {
           aberto={arquivadosDemo}
           tarefas={cartoes.map((t, i) => ({ ...t, arquivada: i === 0 }))}
           listas={[{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: null, concluida: false, arquivada: false }, { id: 9, nome: "Antiga", ordem: 2, limiteWip: null, concluida: false, arquivada: true }]}
-          podeEditar
+          pode={{ manipular: true, configurar: true, excluir: true }}
           onFechar={() => setArquivadosDemo(false)}
           onAbrir={() => {}}
           onExcluirLista={() => {}}
@@ -2827,7 +2885,7 @@ export function Catalogo() {
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
-      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir) + SalvarEdicao (só para mim ou pública) + confirmação em card flutuante (useConfirmacao)">
+      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
@@ -3117,6 +3175,10 @@ export function Catalogo() {
         <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
       </Secao>
 
+      <Secao titulo="Papéis — MatrizCapacidades (Telas × Ações; marcar a linha/coluna; &quot;—&quot; = não se aplica) · ResumoPapel · GruposDaPessoa · AcessoDaPessoa (&quot;Ver acesso&quot;) · Checkbox parcial">
+        <PapeisDemo />
+      </Secao>
+
       <Secao titulo="Sombra suave (contorno suave)">
         <div className="flex flex-wrap gap-4">
           <div className="rounded-card bg-surface p-5 shadow-soft">
@@ -3272,11 +3334,12 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha)">
+      <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha + Exportar .xlsx — as linhas filtradas e as colunas à vista)">
         <DataTable
           columns={COLUNAS}
           rows={PROTOS}
           getKey={(r) => r.id}
+          exportar={{ nome: "Protocolos (demonstração)" }}
           selectable
           selected={tsel}
           onSelected={setTsel}

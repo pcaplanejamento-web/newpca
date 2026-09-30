@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const ROTULOS = { nome: "nome", cor: "cor", palavras: "palavras-chave" };
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("catalogo", "configurar");
   if ("erro" in g) return g.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -37,7 +37,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 /** Exclui a classificação — as unidades que a indicavam ficam sem classificação (cada uma registrada no histórico); os
  * itens passam a ser classificados pelas demais. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("catalogo", "configurar");
   if ("erro" in g) return g.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");

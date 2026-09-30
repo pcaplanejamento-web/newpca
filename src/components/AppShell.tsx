@@ -34,19 +34,12 @@ import {
 import type { UsuarioSessao } from "@/lib/auth";
 import { nomeExibicao } from "@/lib/pessoa";
 
-type Role = UsuarioSessao["role"];
-
-const ROLE_LABEL: Record<Role, string> = {
-  admin: "Administrador",
-  gestor: "Gestor",
-  membro: "Membro",
-};
-
 type NavItem = {
   href: string;
   label: string;
   Icon: typeof IconSettings;
-  roles?: Role[];
+  /** Só o papel Administrador (a Administração). */
+  soAdmin?: boolean;
   /** Chave de aba gerenciável por permissão (só nos módulos). */
   aba?: string;
 };
@@ -58,26 +51,24 @@ const SECOES: NavSecao[] = [
   {
     titulo: "Administração",
     itens: [
-      { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings, roles: ["admin"] },
-      { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, roles: ["admin"] },
-      { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, roles: ["admin"] },
-      { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark, roles: ["admin"] },
-      { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, roles: ["admin"] },
-      { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug, roles: ["admin"] },
-      { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, roles: ["admin"] },
-      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock, roles: ["admin"] },
-      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, roles: ["admin"] },
+      { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings, soAdmin: true },
+      { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, soAdmin: true },
+      { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, soAdmin: true },
+      { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark, soAdmin: true },
+      { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, soAdmin: true },
+      { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug, soAdmin: true },
+      { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, soAdmin: true },
+      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock, soAdmin: true },
+      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, soAdmin: true },
     ],
   },
 ];
 
-/** Seções/itens visíveis para o papel + permissão de abas do grupo ativo. */
-function secoesVisiveis(role: Role, abas: Set<string>): NavSecao[] {
+/** Seções/itens visíveis: as telas EFETIVAS (o grupo ativo libera e o papel visualiza) + a Administração (só o ADM). */
+function secoesVisiveis(admin: boolean, abas: Set<string>): NavSecao[] {
   return SECOES.map((s) => ({
     ...s,
-    itens: s.itens.filter(
-      (i) => (!i.roles || i.roles.includes(role)) && (!i.aba || abas.has(i.aba)),
-    ),
+    itens: s.itens.filter((i) => (!i.soAdmin || admin) && (!i.aba || abas.has(i.aba))),
   })).filter((s) => s.itens.length > 0);
 }
 
@@ -94,18 +85,18 @@ function Brand({ compact = false, identidade }: { compact?: boolean; identidade?
 }
 
 function NavLinks({
-  role,
+  admin,
   abas,
   onNavigate,
 }: {
-  role: Role;
+  admin: boolean;
   abas: Set<string>;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   return (
     <div className="flex flex-col gap-4">
-      {secoesVisiveis(role, abas).map((secao) => (
+      {secoesVisiveis(admin, abas).map((secao) => (
         <div key={secao.titulo}>
           <p className="mb-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
@@ -169,7 +160,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
           <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
             {nomeExibicao(usuario)}
           </div>
-          <div className="text-[11px] text-muted">{ROLE_LABEL[usuario.role]}</div>
+          <div className="text-[11px] text-muted">{usuario.papel.nome}</div>
         </div>
       </Link>
       <button
@@ -452,7 +443,7 @@ export function AppShell({
           <Brand identidade={identidade} />
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-4">
-          <NavLinks role={usuario.role} abas={abasSet} />
+          <NavLinks admin={usuario.admin} abas={abasSet} />
         </div>
         <div className="p-2 pt-0">
           <UserMenu usuario={usuario} />
@@ -482,7 +473,7 @@ export function AppShell({
               </div>
             )}
             <div className="flex-1 overflow-y-auto px-2 py-4">
-              <NavLinks role={usuario.role} abas={abasSet} onNavigate={fecharMenu} />
+              <NavLinks admin={usuario.admin} abas={abasSet} onNavigate={fecharMenu} />
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />

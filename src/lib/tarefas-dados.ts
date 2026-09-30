@@ -1,8 +1,9 @@
+import { type Acesso, atorPasta, getAcesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { estadoTrello } from "./trello-vincular";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { dataIsoBrasilia } from "./format";
-import { abasPermitidas, getGrupoAtivo, getGrupoAtivoId, gruposDoUsuario } from "./grupos";
+import { PODE_NADA, PODE_TUDO } from "./papeis-core";
 import {
   contadoresDosQuadros,
   dadosQuadro,
@@ -15,7 +16,6 @@ import {
   listarCampos,
   listarEquipes,
   listarModelosQuadro,
-  atorPasta,
   listarPastas,
   listarQuadros,
   pessoasDoQuadro,
@@ -45,19 +45,22 @@ export async function preferenciasCalendario(usuarioId: number) {
 }
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
+/** Os quadros do GRUPO ATIVO do cabeçalho (o ADM sem grupo ativo, todos; sem grupo, nenhum). */
+const escopoAtivo = (a: Acesso): number[] | null => (a.grupoAtivo ? [a.grupoAtivo.id] : a.u.admin ? null : []);
+
 /**
- * A LISTA de quadros (`/painel/tarefas`): os do GRUPO ATIVO do cabeçalho; o ADM sem grupo ativo vê todos. `grupoAtivo`
- * = onde um quadro NOVO nasce (sem grupo, não se cria). `modelos` = os modelos de quadro dos grupos da pessoa (o ADM,
- * todos) — o "Novo quadro" pode partir de um deles. Os FAVORITOS da pessoa vêm primeiro; `conjuntos` = as PASTAS que ela
- * vê (públicas do grupo + as privadas dela) e a ORDEM pessoal da grade.
+ * A LISTA de quadros (`/painel/tarefas`): os do GRUPO ATIVO do cabeçalho; o ADM sem grupo ativo vê todos. `podeCriar` =
+ * o papel CONFIGURA Tarefas no grupo ativo (onde um quadro NOVO nasce — sem grupo, não se cria). `modelos` = os modelos de
+ * quadro dos grupos da pessoa (o ADM, todos) — o "Novo quadro" pode partir de um deles. Os FAVORITOS da pessoa vêm
+ * primeiro; `conjuntos` = as PASTAS que ela vê (públicas do grupo + as privadas dela) e a ORDEM pessoal da grade.
  */
-export async function carregarQuadros(u: UsuarioSessao) {
-  const grupoAtivo = await getGrupoAtivoId(u);
+export async function carregarQuadros(a: Acesso) {
+  const u = a.u;
   const hoje = dataIsoBrasilia(new Date().toISOString());
-  const escopo = grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo];
+  const escopo = escopoAtivo(a);
   const [quadros, modelos, favoritos, ordem, pastas] = await Promise.all([
     listarQuadros(escopo, hoje, u.id),
-    u.role === "admin" ? listarModelosQuadro(null) : gruposDoUsuario(u.id).then((g) => listarModelosQuadro(g.map((x) => x.id))),
+    listarModelosQuadro(u.admin ? null : a.grupos.map((g) => g.id)),
     favoritosDaPessoa(u.id),
     ordemDaGrade(u.id),
     listarPastas(escopo, u),
@@ -67,8 +70,8 @@ export async function carregarQuadros(u: UsuarioSessao) {
     quadros: favoritosPrimeiro(quadros, favoritos),
     favoritos,
     conjuntos,
-    ator: atorPasta(u),
-    grupoAtivo,
+    ator: atorPasta(a),
+    podeCriar: a.grupoAtivo != null && podeTela(a, "tarefas").configurar,
     modelos: modelos.map((m) => ({ id: m.id, nome: m.nome, listas: m.conteudo.listas.map((l) => l.nome) })),
   };
 }
@@ -92,15 +95,15 @@ export async function favoritosDaPessoa(usuarioId: number): Promise<number[]> {
  * "Criar" escolhe a tarefa), as preferências (ocultos + opções), os FERIADOS cadastrados, o CRONOGRAMA do PCA (quem vê o
  * módulo PCA), se a pessoa tem LINK DE ASSINATURA e `truncado` (alguma carga bateu no teto — a tela avisa).
  */
-export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, anual = false) {
-  const grupo = await getGrupoAtivo(u);
-  const grupoAtivo = grupo?.id ?? null;
+export async function carregarCalendario(a: Acesso, mesPedido?: string, anual = false) {
+  const u = a.u;
+  const grupoAtivo = a.grupoAtivo?.id ?? null;
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const mes = lerMes(mesPedido, hoje);
-  const [prefs, abas] = await Promise.all([preferenciasCalendario(u.id), abasPermitidas(u, grupo)]);
+  const prefs = await preferenciasCalendario(u.id);
   const inicio = prefs.opcoes.inicioSegunda ? 1 : 0;
   const { de, ate } = intervaloCalendario(mes, inicio, anual);
-  const quadros = (await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id)).filter((q) => !q.arquivado);
+  const quadros = (await listarQuadros(escopoAtivo(a), hoje, u.id)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
   const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas, equipes] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
@@ -109,7 +112,7 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     contadoresDosQuadros(ids, hoje, semanaDe(hoje, inicio)[6]),
     tarefasAbertasLeves(ids),
     assinaturaDaPessoa(u.id),
-    abas.has("pca") ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
+    podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
     listarEquipes(ids),
   ]);
@@ -137,6 +140,10 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
     assinatura: assinatura != null,
     truncado: tarefas.length >= LIMITE_TAREFAS_CALENDARIO || eventos.length >= LIMITE_EVENTOS_CALENDARIO || abertas.length >= LIMITE_TAREFAS_CALENDARIO,
     quadros: quadros.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, dono: soDoDono(q) ? q.criadoPor : null })),
+    /** O que o papel permite nas tarefas e nos eventos pelo Calendário (Tarefas ou Calendário no grupo ativo; o ADM, tudo). */
+    pode: u.admin ? PODE_TUDO : grupoAtivo != null ? podeNoQuadro(a, grupoAtivo, true) : PODE_NADA,
+    /** Importar agendas externas e exportar/assinar (.ics) — as ações da tela Calendário. */
+    podeCalendario: podeTela(a, "calendario"),
   };
 }
 
@@ -147,6 +154,10 @@ export async function carregarCalendario(u: UsuarioSessao, mesPedido?: string, a
 export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
   const r = await tarefaAcessivel(u, tarefaId);
   if (!r) return null;
+  // O papel nas tarefas do quadro (Tarefas ou Calendário, no GRUPO dele) — sem ver, nada.
+  const acesso = await getAcesso();
+  const pode = acesso ? podeNoQuadro(acesso, r.quadro.grupoId, true) : PODE_NADA;
+  if (!pode.visualizar) return null;
   const [listas, etiquetas, membros, equipes, campos] = await Promise.all([
     listasDoQuadro(r.quadro.id),
     etiquetasDoQuadroTodas(r.quadro.id),
@@ -165,7 +176,7 @@ export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
     campos,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...(fora.length ? await pessoasPorIds(fora) : [])],
-    podeEditar: u.role === "admin" || u.role === "gestor",
+    pode,
   };
 }
 export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTarefa>>>;
@@ -176,7 +187,8 @@ export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTaref
  * salvas da aba Lista, as AUTOMAÇÕES e os MODELOS de quadro do grupo dele. `null` = sem acesso
  * (ou inexistente).
  */
-export async function carregarQuadro(u: UsuarioSessao, id: number) {
+export async function carregarQuadro(a: Acesso, id: number) {
+  const u = a.u;
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
   const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello] = await Promise.all([
@@ -206,16 +218,16 @@ export async function carregarQuadro(u: UsuarioSessao, id: number) {
     trello,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),
     hoje: dataIsoBrasilia(new Date().toISOString()),
-    podeEditar: u.role === "admin" || u.role === "gestor",
+    /** O que o PAPEL permite neste quadro (a tela Tarefas no GRUPO dele). */
+    pode: podeNoQuadro(a, quadro.grupoId),
   };
 }
 
 export type DadosQuadro = NonNullable<Awaited<ReturnType<typeof carregarQuadro>>>;
 
 /** Os quadros (não arquivados) do CALENDÁRIO da pessoa — os do grupo ativo; o ADM sem grupo, todos. */
-export async function quadrosDoCalendario(u: UsuarioSessao): Promise<number[]> {
-  const grupoAtivo = await getGrupoAtivoId(u);
+export async function quadrosDoCalendario(a: Acesso): Promise<number[]> {
   const hoje = dataIsoBrasilia(new Date().toISOString());
-  const quadros = await listarQuadros(grupoAtivo == null ? (u.role === "admin" ? null : []) : [grupoAtivo], hoje, u.id);
+  const quadros = await listarQuadros(escopoAtivo(a), hoje, a.u.id);
   return quadros.filter((q) => !q.arquivado).map((q) => q.id);
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId, useState } from "react";
-import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconSearch } from "./icons";
+import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId, useRef, useState } from "react";
+import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconMenos, IconSearch } from "./icons";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
 // rótulo forte, superfície preenchida, ícone à esquerda, **anel de foco accent**
@@ -225,27 +225,35 @@ export function Checkbox({
   checked,
   id,
   alvo = false,
+  indeterminado = false,
   ...rest
 }: {
   label?: ReactNode;
   checked?: boolean;
   /** Sem rótulo ao lado (ex.: numa linha de lista): a área de toque vira um quadrado de 44px no celular. */
   alvo?: boolean;
+  /** PARCIAL (só parte marcada — ex.: marcar a linha/coluna inteira): o traço no lugar do ✓ e `aria-checked="mixed"`. */
+  indeterminado?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "type" | "checked">) {
   const auto = useId();
   const cid = id ?? auto;
+  const ref = useRef<HTMLInputElement>(null);
+  const parcial = indeterminado && !checked;
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = parcial;
+  }, [parcial]);
   return (
     <label
       htmlFor={cid}
-      className={`inline-flex cursor-pointer select-none items-center gap-2.5 ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
+      className={`inline-flex select-none items-center gap-2.5 ${rest.disabled ? "cursor-default opacity-60" : "cursor-pointer"} ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
     >
-      <input id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
+      <input ref={ref} id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span
         className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
-          checked ? "border-accent bg-accent text-white" : "border-border-2 bg-surface"
+          checked || parcial ? "border-accent bg-accent text-white" : "border-border-2 bg-surface"
         }`}
       >
-        {checked && <IconCheck className="h-3.5 w-3.5" />}
+        {checked ? <IconCheck className="h-3.5 w-3.5" /> : parcial ? <IconMenos className="h-3.5 w-3.5" /> : null}
       </span>
       {label && <span className="text-[14px] text-text-2">{label}</span>}
     </label>

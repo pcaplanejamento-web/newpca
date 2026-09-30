@@ -102,7 +102,7 @@ export function QuadroTarefas({
   trello,
   modelosQuadro,
   hoje,
-  podeEditar,
+  pode,
   usuarioId,
   eventos = [],
   calendario,
@@ -122,6 +122,11 @@ export function QuadroTarefas({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  // O PAPEL neste quadro (a tela Tarefas no grupo dele): Manipular = as tarefas (criar, editar, mover, concluir, comentar);
+  // Configurar = o quadro (nome, listas, etiquetas, fundo…); Excluir = apagar; Importar/Exportar = Trello e .xlsx. O quadro
+  // ARQUIVADO não cria nada.
+  const podeManipular = pode.manipular && !quadro.arquivado;
+  const podeConfigurar = pode.configurar && !quadro.arquivado;
   const [tarefas, setTarefas] = useState(doServidor);
   useEffect(() => setTarefas(doServidor), [doServidor]);
   // A ORDEM das listas depois de arrastar (otimista) vale até as listas do servidor chegarem.
@@ -451,8 +456,8 @@ export function QuadroTarefas({
       });
       router.refresh();
       toast.desfazer(`${rotuloTicket(r.ticket)} criada — cópia de ${rotuloTicket(t.ticket)}.`, () => {
-        // Excluir é do editor; os demais desfazem ARQUIVANDO a cópia.
-        chamar(`/api/tarefas/${r.id}`, podeEditar ? "DELETE" : "PATCH", podeEditar ? undefined : { arquivada: true })
+        // Com Excluir, desfaz apagando a cópia; sem, ARQUIVANDO-a.
+        chamar(`/api/tarefas/${r.id}`, pode.excluir ? "DELETE" : "PATCH", pode.excluir ? undefined : { arquivada: true })
           .then(() => router.refresh())
           .catch((err) => toast.error((err as Error).message));
       });
@@ -481,6 +486,8 @@ export function QuadroTarefas({
     lista: ed.lista,
     padroes: ed.padroes,
     onMudar: (lista, padroes) => setEd({ lista, padroes }),
+    // Publicar uma edição da Lista (todos do quadro veem) = Configurar Tarefas no grupo do quadro.
+    podePublicar: pode.configurar,
   };
 
   // Os NÚMEROS do quadro ficam na dica do título (a faixa do topo é minimalista, como no Trello).
@@ -547,7 +554,7 @@ export function QuadroTarefas({
                 <h1 className="min-w-0 max-w-[min(100%,32rem)]" title={dicaQuadro}>
                   <TextoNoLugar
                     valor={quadro.nome}
-                    onSalvar={podeEditar && !quadro.arquivado ? renomearQuadro : undefined}
+                    onSalvar={podeConfigurar ? renomearQuadro : undefined}
                     ariaLabel="Nome do quadro"
                     maxLength={80}
                     ajustar
@@ -572,7 +579,7 @@ export function QuadroTarefas({
                 <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
                 {trello && <IndicadorTrello ligacao={trello} onAbrir={() => irConfiguracao("trello")} />}
                 <MenuQuadro
-                  podeEditar={podeEditar && !quadro.arquivado}
+                  podeEditar={podeConfigurar}
                   onArquivados={() => setVerArquivados(true)}
                   onConfiguracao={irConfiguracao}
                   onFundo={() => setVerFundo(true)}
@@ -635,10 +642,12 @@ export function QuadroTarefas({
                   { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
                 ]}
               />
-              <Button size="sm" variant="secondary" className="w-11 px-0 lg:w-auto lg:px-3" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
-                <span className="max-lg:hidden">XLSX</span>
-              </Button>
-              {mostrar === "ativas" && (
+              {pode.exportar && (
+                <Button size="sm" variant="secondary" className="w-11 px-0 lg:w-auto lg:px-3" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
+                  <span className="max-lg:hidden">XLSX</span>
+                </Button>
+              )}
+              {mostrar === "ativas" && podeManipular && (
                 <Button size="sm" variant="accent" className="w-11 px-0 lg:w-auto lg:px-3" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
                   <span className="max-lg:hidden">Adicionar tarefa</span>
                 </Button>
@@ -668,9 +677,10 @@ export function QuadroTarefas({
               reservaInferior={RESERVA_PILULA}
               chaveRecolhidas={`tarefas:recolhidas:${quadro.id}`}
               totais={totaisListas}
-              onNovaLista={quadro.arquivado ? undefined : novaLista}
-              onMoverLista={podeEditar && !quadro.arquivado ? moverLista : undefined}
-              onRenomearLista={podeEditar && !quadro.arquivado ? renomearLista : undefined}
+              onNovaLista={podeManipular ? novaLista : undefined}
+              onMoverLista={podeConfigurar ? moverLista : undefined}
+              onRenomearLista={podeConfigurar ? renomearLista : undefined}
+              somenteLeitura={!podeManipular}
               listas={ativas}
               tarefas={noQuadro}
               etiquetas={etiquetas}
@@ -682,16 +692,18 @@ export function QuadroTarefas({
               onNova={(listaId) => nova(listaId)}
               onArquivar={arquivar}
               onConcluir={concluir}
-              onDuplicar={quadro.arquivado ? undefined : duplicar}
+              onDuplicar={podeManipular ? duplicar : undefined}
               templates={templates}
-              onDoTemplate={doTemplate}
-              onCopiarMover={(id, modo) => setCopia({ id, modo })}
-              menuLista={(l) => (
+              onDoTemplate={podeManipular ? doTemplate : undefined}
+              onCopiarMover={podeManipular ? (id, modo) => setCopia({ id, modo }) : undefined}
+              menuLista={
+                podeManipular || podeConfigurar || (pode.excluir && !quadro.arquivado)
+                  ? (l) => (
                 <MenuLista
                   lista={l}
                   outras={ativas.filter((x) => x.id !== l.id)}
                   qtd={ativosDaLista(l.id).length}
-                  podeEditar={podeEditar && !quadro.arquivado}
+                  pode={{ manipular: podeManipular, configurar: podeConfigurar, excluir: pode.excluir && !quadro.arquivado }}
                   disabled={aplicando}
                   onNova={() => nova(l.id)}
                   onOrdenar={(por) => ordenarLista(l, por)}
@@ -703,7 +715,9 @@ export function QuadroTarefas({
                   onLimite={() => setLimiteLista(l.id)}
                   onConcluidas={() => alternarConcluidas(l)}
                 />
-              )}
+                    )
+                  : undefined
+              }
             />
           )
         ) : aba === "lista" ? (
@@ -719,8 +733,8 @@ export function QuadroTarefas({
             ativa={aberto?.tipo === "editar" ? aberto.id : null}
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
             edicoes={edicoesLista}
-            selecao={sel}
-            onSelecao={setSel}
+            selecao={podeManipular ? sel : undefined}
+            onSelecao={podeManipular ? setSel : undefined}
             reservaInferior={RESERVA_PILULA + 12 + (alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0)}
           />
           </PainelMoldura>
@@ -735,10 +749,10 @@ export function QuadroTarefas({
             onAno={setAnualCal}
             contadores={contadoresCalendario(trabalho, hoje, opcoesCal.inicioSegunda ? 1 : 0)}
             onAbrir={(e) => setAberto({ tipo: "editar", id: e.tarefaId })}
-            onCriar={semListas ? undefined : (slot) => nova(undefined, slot.data)}
-            onMover={moverNoCalendario}
-            onRedimensionar={redimensionarNoCalendario}
-            onConcluir={concluirNoCalendario}
+            onCriar={semListas || !podeManipular ? undefined : (slot) => nova(undefined, slot.data)}
+            onMover={podeManipular ? moverNoCalendario : undefined}
+            onRedimensionar={podeManipular ? redimensionarNoCalendario : undefined}
+            onConcluir={podeManipular ? concluirNoCalendario : undefined}
             opcoes={opcoesCal}
             onOpcoes={mudarOpcoesCal}
             feriados={feriadosCal}
@@ -759,7 +773,7 @@ export function QuadroTarefas({
             todas={pessoas}
             modelosQuadro={modelosQuadro}
             usuarioId={usuarioId}
-            podeEditar={podeEditar}
+            pode={{ configurar: pode.configurar, importar: pode.importar && !quadro.arquivado, excluir: pode.excluir }}
             onMudou={() => router.refresh()}
           />
           </PainelMoldura>
@@ -767,7 +781,7 @@ export function QuadroTarefas({
         </ConteudoAba>
       </MolduraQuadro>
 
-      {aba === "lista" && (sel.size > 0 || aplicando) && (
+      {aba === "lista" && podeManipular && (sel.size > 0 || aplicando) && (
         <BarraSelecao
           fixa
           onAltura={setAlturaBarra}
@@ -804,9 +818,10 @@ export function QuadroTarefas({
         todas={pessoas}
         hoje={hoje}
         usuarioId={usuarioId}
-        podeExcluir={podeEditar}
-        onCopiarMover={(id, modo) => setCopia({ id, modo })}
-        onDuplicar={quadro.arquivado ? undefined : duplicar}
+        podeExcluir={pode.excluir}
+        somenteLeitura={!pode.manipular}
+        onCopiarMover={podeManipular ? (id, modo) => setCopia({ id, modo }) : undefined}
+        onDuplicar={podeManipular ? duplicar : undefined}
         onFechar={() => setAberto(null)}
         onSalvo={() => router.refresh()}
       />
@@ -834,7 +849,7 @@ export function QuadroTarefas({
         aberto={verArquivados}
         tarefas={tarefas}
         listas={listas}
-        podeEditar={podeEditar && !quadro.arquivado}
+        pode={{ manipular: podeManipular, configurar: podeConfigurar, excluir: pode.excluir && !quadro.arquivado }}
         onFechar={() => setVerArquivados(false)}
         onAbrir={(id) => setAberto({ tipo: "editar", id })}
         onExcluirLista={setExcluindoLista}
@@ -872,7 +887,7 @@ export function QuadroTarefas({
           fundoUrl={quadro.fundoUrl}
           fundoAjuste={quadro.fundoAjuste}
           fundoGradiente={quadro.fundoGradiente}
-          podeEditar={podeEditar && !quadro.arquivado}
+          podeEditar={podeConfigurar}
           onMudou={() => router.refresh()}
         />
       </Modal>

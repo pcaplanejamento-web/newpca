@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { criarOrcamento, excluirOrcamento, getOrcamento, inserirOrcamentoItens } from "@/lib/orcamento";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * demais. Somente leitura na UI — não há edição de lançamento.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("orcamento", "importar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(orcamentoOpSchema, req);

@@ -1,14 +1,17 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { motivoRecusa } from "@/lib/acesso";
+import { pcaDosProtocolos } from "@/lib/acesso-mesa";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { entradasCatalogo } from "@/lib/catalogo";
 import { aplicarPlanoItens, dfdsParaMassa, itensParaMassa } from "@/lib/dfd";
 import { MASSA_ITENS_MAX_DFDS, massaItensSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type DiffItemDfd, diffItem } from "@/lib/comparar-protocolo";
 import { descreverAcaoItem, type ItemMassa, type PlanoMassaItens, planejarMassaItens } from "@/lib/massa-itens";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { mensagemTravaPca } from "@/lib/pca-core";
 import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
@@ -21,7 +24,7 @@ export const dynamic = "force-dynamic";
  * mudaram + as recusas/falhas com o motivo (os demais seguem).
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(massaItensSchema, req);
   if ("resp" in p) return p.resp;
@@ -36,11 +39,10 @@ export async function POST(req: Request) {
     else porDfd.set(dfdId, [it]);
   }
   if (porDfd.size > MASSA_ITENS_MAX_DFDS) return erro(`No máximo ${MASSA_ITENS_MAX_DFDS} DFDs por requisição.`, 422);
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
 
   const dfds = await dfdsParaMassa([...porDfd.keys()]);
-  const travas = await travaDeDfds(dfds.map((d) => d.id));
+  const [travas, pcaDe] = await Promise.all([travaDeDfds(dfds.map((d) => d.id)), pcaDosProtocolos(dfds.map((d) => d.protocoloId))]);
   // Catálogo só quando a ação depende dele (padronizar / trava da unidade) — só os códigos envolvidos.
   const alvos = new Set(ids);
   const catalogo =
@@ -52,6 +54,12 @@ export async function POST(req: Request) {
     const sel = porDfd.get(d.id) ?? [];
     if (!acessivel(d.reparticaoId)) {
       for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: "sem acesso à unidade deste DFD" });
+      continue;
+    }
+    // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).
+    const semPapel = motivoRecusa(a.acesso, telaDoRecurso(d.protocoloId != null ? pcaDe.get(d.protocoloId) : null), "manipular");
+    if (semPapel) {
+      for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: semPapel });
       continue;
     }
     const trava = travas.get(d.id);

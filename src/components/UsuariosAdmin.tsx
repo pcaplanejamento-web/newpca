@@ -2,40 +2,55 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatarTelefone } from "@/lib/cadastro-core";
+import type { OpcaoPapel } from "@/lib/papeis";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
+import { AcessoDaPessoa } from "./AcessoDaPessoa";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { CargosAdmin } from "./CargosAdmin";
 import { Callout } from "./Callout";
+import { CelulaLista } from "./CelulaLista";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { IconAlert, IconBriefcase, IconSenhaNova, IconShieldCheck } from "./icons";
+import { SelectField } from "./Field";
+import { labelCls } from "./formStyles";
+import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
+import { IconAlert, IconBriefcase, IconCheck, IconSenhaNova, IconShieldCheck } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
 import { BotaoWhatsapp } from "./Telefone";
 import { toast } from "./Toast";
-import { type PatchUsuario, ROLE_LABEL, type Role, STATUS_LABEL, STATUS_TONE, type Status, UsuarioDetalhe, type UsuarioAdmin as U } from "./UsuarioDetalhe";
-
-/** O que cada papel faz — a confirmação da troca e a ajuda da tela dizem o mesmo. */
-const ROLE_DESCRICAO: Record<Role, string> = {
-  admin: "vê e altera TUDO, inclusive a Administração (usuários, grupos, permissões e configurações)",
-  gestor: "opera e configura as telas que o grupo dele libera (importa, edita, exclui)",
-  membro: "consulta Mesa, PCA, Catálogo e Orçamento; trabalha em Tarefas e no Calendário",
-};
+import {
+  DESCRICAO_ADMIN,
+  descricaoPapel,
+  type PatchUsuario,
+  STATUS_LABEL,
+  STATUS_TONE,
+  type Status,
+  UsuarioDetalhe,
+  type UsuarioAdmin as U,
+} from "./UsuarioDetalhe";
 
 /**
- * USUÁRIOS (ADM): a tabela padrão do sistema — foto + nome, unidade, papel, status, a validação dos dados e o contato
- * pelo WhatsApp. Tocar numa linha abre o BANNER do usuário (`UsuarioDetalhe`) com todos os dados, a edição por cadeado e
- * as ações (validar, exigir nova senha, papel, status, excluir).
+ * USUÁRIOS (ADM): a tabela padrão do sistema — foto + nome, unidade, papel, grupos, status, a validação dos dados e o
+ * contato pelo WhatsApp. Tocar numa linha abre o BANNER do usuário (`UsuarioDetalhe`) com todos os dados, a edição por
+ * cadeado e as ações (validar, exigir nova senha, papel e grupos, aprovar/recusar, status, ver acesso, excluir).
  */
 export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [lista, setLista] = useState<U[] | null>(null);
   const [unidades, setUnidades] = useState<UnidadeTrabalho[]>([]);
   const [cargos, setCargos] = useState<string[]>([]);
+  const [papeis, setPapeis] = useState<OpcaoPapel[]>([]);
+  const [grupos, setGrupos] = useState<GrupoOpcao[]>([]);
   const [envioEmail, setEnvioEmail] = useState(false);
   const [verCargos, setVerCargos] = useState(false);
+  const [verAcesso, setVerAcesso] = useState<U | null>(null);
+  const [aprovando, setAprovando] = useState<U | null>(null);
+  const [apPapel, setApPapel] = useState("");
+  const [apGrupos, setApGrupos] = useState<number[]>([]);
+  const [erroAp, setErroAp] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [abertoId, setAbertoId] = useState<number | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -51,12 +66,16 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
         usuarios?: U[];
         unidades?: UnidadeTrabalho[];
         cargos?: { nome: string }[];
+        papeis?: OpcaoPapel[];
+        grupos?: GrupoOpcao[];
         envioEmail?: boolean;
       };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar usuários.");
       setLista(j.usuarios ?? []);
       setUnidades(j.unidades ?? []);
       setCargos((j.cargos ?? []).map((c) => c.nome));
+      setPapeis(j.papeis ?? []);
+      setGrupos(j.grupos ?? []);
       setEnvioEmail(!!j.envioEmail);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
@@ -69,6 +88,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   }, [carregar]);
 
   const aberto = lista?.find((u) => u.id === abertoId) ?? null;
+  const papelDe = (u: U) => papeis.find((p) => p.id === u.papelId) ?? null;
+  const gruposDe = (u: U) => u.grupos.map((id) => grupos.find((g) => g.id === id)).filter((g): g is GrupoOpcao => !!g);
 
   /** Executa a ação (o banner fica travado enquanto grava) e diz o desfecho num aviso flutuante. */
   async function acao(id: number, init: RequestInit, sucesso: string): Promise<boolean> {
@@ -92,23 +113,46 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     acao(id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados) }, sucesso);
 
   /** Trocar o PAPEL confirma antes (é mudança de privilégio): dar ou tirar o Administrador em destaque. */
-  async function trocarPapel(u: U, novo: Role) {
-    if (novo === u.role) return;
+  async function trocarPapel(u: U, novoId: number) {
+    const novo = papeis.find((p) => p.id === novoId);
+    if (!novo || novoId === u.papelId) return;
+    const eraAdmin = papelDe(u)?.chave === "admin";
+    const vaiAdmin = novo.chave === "admin";
     const ok = await confirmar({
-      titulo:
-        novo === "admin"
-          ? `Tornar ${u.nome} Administrador?`
-          : u.role === "admin"
-            ? `Retirar o Administrador de ${u.nome}?`
-            : `Mudar o papel de ${u.nome} para ${ROLE_LABEL[novo]}?`,
-      texto:
-        u.role === "admin" && novo !== "admin"
-          ? `A pessoa perde a Administração e passa a ${ROLE_LABEL[novo]}: ${ROLE_DESCRICAO[novo]}.`
-          : `${ROLE_LABEL[novo]} ${ROLE_DESCRICAO[novo]}.`,
-      confirmar: novo === "admin" ? "Tornar Administrador" : `Mudar para ${ROLE_LABEL[novo]}`,
-      perigo: novo === "admin" || u.role === "admin",
+      titulo: vaiAdmin ? `Tornar ${u.nome} Administrador?` : eraAdmin ? `Retirar o Administrador de ${u.nome}?` : `Mudar o papel de ${u.nome} para ${novo.nome}?`,
+      texto: vaiAdmin
+        ? `O Administrador ${DESCRICAO_ADMIN}.`
+        : `${eraAdmin ? "A pessoa perde a Administração. " : ""}${novo.nome}: ${descricaoPapel(novo)}. As telas continuam as que os grupos da pessoa liberam.`,
+      confirmar: vaiAdmin ? "Tornar Administrador" : `Mudar para ${novo.nome}`,
+      perigo: vaiAdmin || eraAdmin,
     });
-    if (ok) await patch(u.id, { role: novo }, `${u.nome} agora é ${ROLE_LABEL[novo]}.`);
+    if (ok) await patch(u.id, { papelId: novo.id }, `${u.nome} agora é ${novo.nome}.`);
+  }
+
+  /** APROVAR = liberar a entrada já com o papel (o de cadastro vem escolhido) e os grupos (sem grupo, não vê dados). */
+  function abrirAprovacao(u: U) {
+    setAprovando(u);
+    setApPapel(String(u.papelId ?? papeis.find((p) => p.padraoCadastro)?.id ?? ""));
+    setApGrupos(u.grupos);
+    setErroAp(null);
+  }
+
+  async function aprovar() {
+    if (!aprovando || !apPapel) return;
+    setErroAp(null);
+    const ok = await patch(aprovando.id, { status: "ativo", papelId: Number(apPapel), grupos: apGrupos }, `Acesso de ${aprovando.nome} liberado.`);
+    if (ok) setAprovando(null);
+    else setErroAp("Não foi possível aprovar — confira o aviso e tente de novo.");
+  }
+
+  async function recusar(u: U) {
+    const ok = await confirmar({
+      titulo: `Recusar o cadastro de ${u.nome}?`,
+      texto: "O cadastro é apagado e a pessoa não entra. Ela pode se cadastrar de novo, se for o caso.",
+      confirmar: "Recusar",
+      perigo: true,
+    });
+    if (ok && (await acao(u.id, { method: "DELETE" }, `Cadastro de ${u.nome} recusado.`))) setAbertoId(null);
   }
 
   async function trocarStatus(u: U, novo: Status) {
@@ -121,8 +165,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       });
       if (!ok) return;
     }
-    const msg = novo === "inativo" ? `${u.nome} foi desativado(a).` : u.status === "pendente" ? `Acesso de ${u.nome} liberado.` : `${u.nome} foi reativado(a).`;
-    await patch(u.id, { status: novo }, msg);
+    await patch(u.id, { status: novo }, novo === "inativo" ? `${u.nome} foi desativado(a).` : `${u.nome} foi reativado(a).`);
   }
 
   async function excluir(u: U) {
@@ -176,8 +219,41 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       key: "papel",
       header: "Papel",
       nowrap: true,
-      value: (u) => ROLE_LABEL[u.role],
-      render: (u) => <span className="text-text-2">{ROLE_LABEL[u.role]}</span>,
+      value: (u) => papelDe(u)?.nome ?? "Sem papel",
+      render: (u) => {
+        const p = papelDe(u);
+        return p ? (
+          <span className="text-text-2" title={descricaoPapel(p)}>
+            {p.nome}
+          </span>
+        ) : (
+          <Badge tone="amber">Sem papel</Badge>
+        );
+      },
+    },
+    {
+      key: "grupos",
+      header: "Grupos",
+      minWidth: 160,
+      value: (u) => gruposDe(u).map((g) => g.nome).join(", ") || "Sem grupo",
+      valores: (u) => {
+        const nomes = gruposDe(u).map((g) => g.nome);
+        return nomes.length ? nomes : ["Sem grupo"];
+      },
+      render: (u) => {
+        const nomes = gruposDe(u).map((g) => g.nome);
+        if (nomes.length) return <CelulaLista valores={nomes} max={2} />;
+        // O Administrador vê tudo sem grupo; para os demais, sem grupo = não vê dado nenhum.
+        return papelDe(u)?.chave === "admin" ? (
+          <span className="text-faint" title="O Administrador vê tudo, com ou sem grupo">
+            —
+          </span>
+        ) : (
+          <span title="Sem grupo, a pessoa não abre nenhuma tela nem vê dados">
+            <Badge tone="amber">Sem grupo</Badge>
+          </span>
+        );
+      },
     },
     {
       key: "status",
@@ -225,6 +301,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     },
   ];
 
+  const apEscolhido = papeis.find((p) => String(p.id) === apPapel) ?? null;
+
   return (
     <div className="space-y-[var(--gap-block)]">
       {pendentes > 0 && (
@@ -250,15 +328,18 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             </Button>
             <Ajuda titulo="Usuários e papéis">
               <p>Toque numa linha para ver TODOS os dados da pessoa: o cadeado libera a edição de cada dado.</p>
-              <p>O GRUPO (com a permissão dele) decide QUAIS telas a pessoa abre; o PAPEL decide o que ela faz nelas.</p>
-              {(["admin", "gestor", "membro"] as const).map((r) => (
-                <TopicoAjuda key={r} titulo={ROLE_LABEL[r]}>
-                  {ROLE_DESCRICAO[r][0].toUpperCase() + ROLE_DESCRICAO[r].slice(1)}.
+              <p>
+                O GRUPO (com a permissão dele) decide QUAIS telas a pessoa abre e as unidades que ela vê; o PAPEL decide o que ela faz
+                nelas. Os papéis se criam e se editam em Configurações → Papéis.
+              </p>
+              {papeis.map((p) => (
+                <TopicoAjuda key={p.id} titulo={p.nome}>
+                  {p.chave === "admin" ? `O Administrador ${DESCRICAO_ADMIN}.` : `${p.descricao ? `${p.descricao} ` : ""}(${descricaoPapel(p)})`}
                 </TopicoAjuda>
               ))}
               <TopicoAjuda titulo="Validar dados">Confira os dados com a pessoa e valide: fica registrado quem validou e quando. Alterar um dado desfaz a validação.</TopicoAjuda>
               <TopicoAjuda titulo="Exigir nova senha">No próximo acesso, a pessoa cria uma senha nova (confirmada por código no e-mail) antes de usar o sistema.</TopicoAjuda>
-              <p>Aprovar libera a entrada; para a pessoa ver dados, ponha-a num grupo em Grupos. Em “Cargos e funções” você cadastra a lista que o cadastro oferece.</p>
+              <p>Aprovar libera a entrada já com o papel e os grupos (sem grupo, ela entra mas não vê dados). “Ver acesso” mostra o que ela abre e faz em cada grupo.</p>
             </Ajuda>
           </>
         }
@@ -266,10 +347,12 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
       <UsuarioDetalhe
         usuario={aberto}
-        aberto={abertoId != null}
+        aberto={abertoId != null && !aprovando && !verAcesso}
         meuId={meuId}
         unidades={unidades}
         cargos={cargos}
+        papeis={papeis}
+        grupos={grupos}
         envioEmail={envioEmail}
         ocupado={ocupado}
         onFechar={() => setAbertoId(null)}
@@ -279,8 +362,63 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
         onSalvar={(p, sucesso) => (aberto ? patch(aberto.id, p, sucesso) : Promise.resolve(false))}
         onPapel={(novo) => aberto && void trocarPapel(aberto, novo)}
         onStatus={(novo) => aberto && void trocarStatus(aberto, novo)}
+        onAprovar={() => aberto && abrirAprovacao(aberto)}
+        onRecusar={() => aberto && void recusar(aberto)}
+        onVerAcesso={() => aberto && setVerAcesso(aberto)}
         onExcluir={() => aberto && void excluir(aberto)}
       />
+      {/* Aprovar: libera a entrada com o papel e os grupos (numa gravação só) */}
+      <Modal
+        open={!!aprovando}
+        onClose={() => setAprovando(null)}
+        bloqueado={ocupado}
+        titulo={aprovando ? `Aprovar o cadastro de ${aprovando.nome}` : "Aprovar o cadastro"}
+        size="md"
+        rodape={
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setAprovando(null)} disabled={ocupado}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={() => void aprovar()} loading={ocupado} disabled={!apPapel} icon={<IconCheck className="h-4 w-4" />}>
+              Aprovar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-[var(--gap-block)]">
+          <p className="text-[13.5px] text-muted">A pessoa passa a entrar com o papel e os grupos escolhidos — dá para mudar depois.</p>
+          <div>
+            <SelectField id="ap-papel" label="Papel" value={apPapel} onChange={(e) => setApPapel(e.target.value)} disabled={ocupado}>
+              {!apEscolhido && <option value="">Escolha o papel</option>}
+              {papeis.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                  {p.padraoCadastro ? " (padrão dos cadastros)" : ""}
+                </option>
+              ))}
+            </SelectField>
+            {apEscolhido && <p className="mt-1 text-[12.5px] text-muted">{descricaoPapel(apEscolhido)}</p>}
+          </div>
+          <fieldset>
+            <legend className={labelCls}>Grupos</legend>
+            <GruposDaPessoa grupos={grupos} selecionados={apGrupos} onChange={setApGrupos} disabled={ocupado} />
+          </fieldset>
+          {apGrupos.length === 0 && apEscolhido?.chave !== "admin" && (
+            <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />}>
+              Sem grupo, a pessoa entra mas não abre nenhuma tela nem vê dados. Dá para incluí-la num grupo depois, no banner do usuário.
+            </Callout>
+          )}
+          {erroAp && (
+            <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
+              {erroAp}
+            </Callout>
+          )}
+        </div>
+      </Modal>
+      {/* Ver acesso: o que a pessoa abre e faz, grupo a grupo (só leitura) */}
+      <Modal open={!!verAcesso} onClose={() => setVerAcesso(null)} titulo={verAcesso ? `Acesso de ${verAcesso.nome}` : "Acesso"} size="xl">
+        {verAcesso && <AcessoDaPessoa admin={papelDe(verAcesso)?.chave === "admin"} papel={papelDe(verAcesso)} grupos={gruposDe(verAcesso)} />}
+      </Modal>
       {/* Cargos e funções: a lista que o cadastro oferece (só o ADM) */}
       <Modal open={verCargos} onClose={() => setVerCargos(false)} titulo="Cargos e funções" size="md">
         <CargosAdmin onMudou={carregar} />
